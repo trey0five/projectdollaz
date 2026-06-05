@@ -21,7 +21,7 @@ export const auditData = sampleRows.auditData as NormalizedRow[]
 
 export const school = {
   name: 'Sample 01 High School',
-  netAssetsBegin: 1_000_000.0,
-  pyNetAssetsBegin: 850_000.0,
-  auditNetAssetsBegin: 850_000.0,
+  netAssetsBegin: 7_870_000.0,
+  pyNetAssetsBegin: 7_500_000.0,
+  auditNetAssetsBegin: 7_500_000.0,
 }

@@ -1,10 +1,13 @@
 // ─────────────────────────────────────────────────────────────
-// Regression truth: locks the SOA/SFP/SCF/netAssets/unmapped numbers
-// produced by the engine on sample-data with CY+PY+Audit and
-// school.netAssetsBegin = 1,000,000.
+// Regression truth: locks the SOA/SFP/SCF/netAssets numbers produced by
+// the engine on sample-data (CY FY26 + PY/Audit FY25). The sample data is
+// internally consistent (see the "internal consistency" block): each TB's
+// imbalance == its opening net assets, the balance sheet balances, FY25
+// rolls forward into FY26, and the cash-flow statement reconciles.
+// Regenerate sample-data + fixture with: node scripts/gen-sample-data.mjs
 // ─────────────────────────────────────────────────────────────
 import { describe, it, expect } from 'vitest'
-import { generateReports, validateDataset } from '../src/index.js'
+import { generateReports, validateDataset, deriveOpeningNetAssets } from '../src/index.js'
 import { cyData, pyData, auditData, school } from './fixtures.js'
 
 const out = generateReports({ cyData, pyData, auditData, school })
@@ -12,81 +15,95 @@ const out = generateReports({ cyData, pyData, auditData, school })
 describe('SOA regression', () => {
   const { cy, py, audit, cyNAEnd } = out.soaResults
   it('cy totals', () => {
-    expect(cy.totalRev).toBe(10342000)
-    expect(cy.totalExp).toBe(8359000)
-    expect(cy.netChange).toBe(1983000)
-    expect(cyNAEnd).toBe(2983000)
+    expect(cy.totalRev).toBe(10850000)
+    expect(cy.totalExp).toBe(10420000)
+    expect(cy.netChange).toBe(430000)
+    expect(cyNAEnd).toBe(8300000)
   })
   it('py / audit net change', () => {
-    expect(py!.netChange).toBe(1903680)
-    expect(audit!.netChange).toBe(1824360)
+    expect(py!.netChange).toBe(370000)
+    expect(audit!.netChange).toBe(370000)
   })
 })
 
 describe('SFP regression (cy)', () => {
   const cy = out.sfpResults.cy!
   it('asset/liability/NA lines', () => {
-    expect(cy.cash).toBe(1450000)
-    expect(cy.tuitionRec).toBe(480000)
-    expect(cy.prepaid).toBe(121000)
-    expect(cy.totalCurrentA).toBe(2433000)
-    expect(cy.ppNet).toBe(8470000)
-    expect(cy.totalAssets).toBe(13243000)
-    expect(cy.totalLiab).toBe(1402000)
-    expect(cy.totalNA).toBe(2983000)
+    expect(cy.cash).toBe(1230000)
+    expect(cy.tuitionRec).toBe(650000)
+    expect(cy.prepaid).toBe(160000)
+    expect(cy.totalCurrentA).toBe(2040000)
+    expect(cy.ppNet).toBe(5980000)
+    expect(cy.totalAssets).toBe(9620000)
+    expect(cy.totalLiab).toBe(1320000)
+    expect(cy.totalNA).toBe(8300000)
   })
 })
 
 describe('SCF regression', () => {
   const s = out.scf!
   it('cash flow sections', () => {
-    expect(s.operatingCash).toBe(2420100)
-    expect(s.investingCash).toBe(-1061000)
-    expect(s.financingCash).toBe(79000)
-    expect(s.netCashChange).toBe(1438100)
-    expect(s.cashBegin).toBe(1630800)
-    expect(s.cashEnd).toBe(1812000)
+    expect(s.depr).toBe(520000)
+    expect(s.operatingCash).toBe(960000)
+    expect(s.investingCash).toBe(-100000)
+    expect(s.financingCash).toBe(-50000)
+    expect(s.netCashChange).toBe(810000)
+    expect(s.cashBegin).toBe(420000)
+    expect(s.cashEnd).toBe(1230000)
   })
 })
 
 describe('Net Assets statement', () => {
   it('cy begin + change -> end with donor split', () => {
     const cy = out.netAssets.cy
-    expect(cy.begin).toBe(1000000)
-    expect(cy.change).toBe(1983000)
-    expect(cy.end).toBe(2983000)
+    expect(cy.begin).toBe(7870000)
+    expect(cy.change).toBe(430000)
+    expect(cy.end).toBe(8300000)
     expect(cy.withoutDonor + cy.withDonor).toBe(cy.end)
     expect(cy.end).toBe(out.sfpResults.cy!.totalNA)
   })
   it('py / audit change pulled from SOA net change', () => {
-    expect(out.netAssets.py!.change).toBe(1903680)
-    expect(out.netAssets.audit!.change).toBe(1824360)
+    expect(out.netAssets.py!.change).toBe(370000)
+    expect(out.netAssets.audit!.change).toBe(370000)
   })
 })
 
-describe('unmapped + validation', () => {
-  it('unmapped includes account 462', () => {
-    expect(out.unmapped.some((r) => r.acct === 462)).toBe(true)
+describe('internal consistency (articulation)', () => {
+  it('each TB imbalance equals its opening net assets (recoverable)', () => {
+    expect(deriveOpeningNetAssets(cyData).value).toBe(school.netAssetsBegin)
+    expect(deriveOpeningNetAssets(pyData).value).toBe(school.pyNetAssetsBegin)
+    expect(deriveOpeningNetAssets(auditData).value).toBe(school.auditNetAssetsBegin)
   })
-  it('validation surfaces 462 as an unmapped issue', () => {
-    expect(
-      out.validation.issues.some(
-        (i) => i.code === 'UNMAPPED_ACCOUNT' && i.acct === 462
-      )
-    ).toBe(true)
+  it('the balance sheet balances for every year', () => {
+    for (const sfp of [out.sfpResults.cy, out.sfpResults.py, out.sfpResults.audit]) {
+      expect(sfp!.totalAssets).toBe(sfp!.totalLiabNA)
+    }
   })
-  it('validation result is structured and lineage-locked', () => {
+  it('FY25 ending net assets rolls forward into FY26 opening', () => {
+    expect(out.soaResults.pyNAEnd).toBe(out.soaResults.cyNABegin)
+  })
+  it('the cash-flow statement reconciles', () => {
+    const s = out.scf!
+    expect(s.netCashChange).toBe(s.cashEnd - s.cashBegin)
+  })
+})
+
+describe('validation', () => {
+  it('clean sample data has no unmapped accounts', () => {
+    expect(out.unmapped).toHaveLength(0)
+    expect(out.validation.issues.some((i) => i.code === 'UNMAPPED_ACCOUNT')).toBe(false)
+  })
+  it('management TBs omit opening equity — reported, not a false alarm', () => {
     const v = out.validation
     // The sample management TBs OMIT the opening net-assets/equity row
-    // (beginning balance supplied out-of-band), so the engine does NOT
-    // raise a false UNBALANCED alarm: balanced is TRUE and the banner stays
-    // off. The raw debit/credit totals are still reported for transparency.
+    // (beginning balance supplied out-of-band), so the engine does NOT raise a
+    // false UNBALANCED alarm: balanced is TRUE. Raw totals report the residual
+    // (the difference == the opening net assets).
     expect(v.balanced).toBe(true)
-    expect(v.totalDebits).toBe(26802000)
-    expect(v.totalCredits).toBe(16959000)
-    expect(v.difference).toBe(9843000)
+    expect(v.totalDebits).toBe(23060000)
+    expect(v.totalCredits).toBe(15190000)
+    expect(v.difference).toBe(7870000)
     expect(v.difference).toBeCloseTo(v.totalDebits - v.totalCredits, 6)
-    // No UNBALANCED issue; an informational note explains the external equity.
     expect(v.issues.some((i) => i.code === 'UNBALANCED')).toBe(false)
     expect(
       v.issues.some((i) => i.code === 'OPENING_EQUITY_EXTERNAL' && i.severity === 'info')
@@ -101,8 +118,9 @@ describe('unmapped + validation', () => {
     expect(v.balanced).toBe(false)
     expect(v.issues.some((i) => i.code === 'UNBALANCED' && i.severity === 'error')).toBe(true)
 
-    // And it reports balanced=true when the equity row makes it net to zero.
-    const balancedTB = [...cyData, { acct: 350, desc: 'Net assets — opening', total: -9843000 }]
+    // And it reports balanced=true when the equity row makes it net to zero
+    // (the offsetting credit equals the imbalance == the opening net assets).
+    const balancedTB = [...cyData, { acct: 350, desc: 'Net assets — opening', total: -7870000 }]
     const vb = validateDataset(balancedTB)
     expect(vb.balanced).toBe(true)
     expect(vb.difference).toBeCloseTo(0, 6)

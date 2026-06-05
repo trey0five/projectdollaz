@@ -53,6 +53,11 @@ export { calcSFP } from './calc/sfp.js'
 export { calcSCF } from './calc/scf.js'
 export { calcNetAssets } from './calc/netAssets.js'
 export { validateDataset, findUnmapped, hasEquityRow } from './calc/validate.js'
+export { deriveOpeningNetAssets } from './calc/openingNetAssets.js'
+export type {
+  OpeningNetAssetsResult,
+  OpeningNetAssetsSource,
+} from './calc/openingNetAssets.js'
 export { generateReports } from './calc/generateReports.js'
 
 // School data (begin balances)

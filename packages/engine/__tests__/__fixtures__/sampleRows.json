@@ -1,34 +1,64 @@
 {
   "cyData": [
     {
+      "acct": 100,
+      "desc": "Operating cash",
+      "total": 1230000
+    },
+    {
+      "acct": 120,
+      "desc": "Tuition receivable",
+      "total": 650000
+    },
+    {
+      "acct": 125,
+      "desc": "Prepaid expenses",
+      "total": 160000
+    },
+    {
+      "acct": 135,
+      "desc": "Restricted investments",
+      "total": 1600000
+    },
+    {
+      "acct": 150,
+      "desc": "Buildings & improvements",
+      "total": 9000000
+    },
+    {
+      "acct": 170,
+      "desc": "Accumulated depreciation",
+      "total": -3020000
+    },
+    {
+      "acct": 200,
+      "desc": "Accounts payable & accrued",
+      "total": -750000
+    },
+    {
+      "acct": 230,
+      "desc": "Deferred international tuition",
+      "total": -220000
+    },
+    {
+      "acct": 260,
+      "desc": "Lease liability — noncurrent",
+      "total": -350000
+    },
+    {
       "acct": 401,
-      "desc": "Tuition - net of discounts",
-      "total": -8500000
-    },
-    {
-      "acct": 402,
-      "desc": "Registration fees",
-      "total": -150000
-    },
-    {
-      "acct": 405,
-      "desc": "Application fees",
-      "total": -45000
+      "desc": "Tuition — net of discounts",
+      "total": -9400000
     },
     {
       "acct": 407,
       "desc": "International program tuition",
-      "total": -320000
+      "total": -650000
     },
     {
       "acct": 410,
       "desc": "Textbook leasing income",
-      "total": -210000
-    },
-    {
-      "acct": 419,
-      "desc": "Other income",
-      "total": -38000
+      "total": -130000
     },
     {
       "acct": 440,
@@ -36,798 +66,333 @@
       "total": -85000
     },
     {
-      "acct": 450,
-      "desc": "Student club revenue",
-      "total": -42000
-    },
-    {
       "acct": 453,
-      "desc": "Net gain (loss) on investments",
-      "total": -130000
+      "desc": "Investment income",
+      "total": -100000
     },
     {
       "acct": 470,
       "desc": "Interest income",
-      "total": -22000
-    },
-    {
-      "acct": 475,
-      "desc": "Development - contributions",
-      "total": -560000
+      "total": -35000
     },
     {
       "acct": 480,
-      "desc": "Annual fund support",
-      "total": -240000
-    },
-    {
-      "acct": 462,
-      "desc": "Miscellaneous grant revenue",
-      "total": -15000
+      "desc": "Contributions & support",
+      "total": -450000
     },
     {
       "acct": 500,
-      "desc": "Teacher salaries",
-      "total": 4200000
-    },
-    {
-      "acct": 510,
-      "desc": "Substitute salaries",
-      "total": 95000
+      "desc": "Instructional salaries",
+      "total": 4700000
     },
     {
       "acct": 520,
       "desc": "Instructional supplies",
-      "total": 180000
-    },
-    {
-      "acct": 525,
-      "desc": "Classroom technology",
-      "total": 120000
-    },
-    {
-      "acct": 530,
-      "desc": "Library books and media",
-      "total": 35000
+      "total": 640000
     },
     {
       "acct": 600,
       "desc": "Administrative salaries",
-      "total": 1150000
+      "total": 1560000
     },
     {
       "acct": 620,
-      "desc": "Office expense",
-      "total": 88000
-    },
-    {
-      "acct": 630,
-      "desc": "Professional fees",
-      "total": 140000
-    },
-    {
-      "acct": 660,
-      "desc": "Insurance",
-      "total": 175000
+      "desc": "Administrative costs",
+      "total": 840000
     },
     {
       "acct": 700,
       "desc": "Facilities salaries",
-      "total": 380000
+      "total": 520000
     },
     {
-      "acct": 730,
-      "desc": "Utilities",
-      "total": 240000
-    },
-    {
-      "acct": 740,
-      "desc": "Repairs and maintenance",
-      "total": 165000
-    },
-    {
-      "acct": 750,
-      "desc": "Custodial supplies",
-      "total": 48000
-    },
-    {
-      "acct": 820,
-      "desc": "Equipment expense",
-      "total": 60000
+      "acct": 720,
+      "desc": "Facilities & maintenance",
+      "total": 950000
     },
     {
       "acct": 865,
       "desc": "Depreciation expense",
-      "total": 420000
-    },
-    {
-      "acct": 880,
-      "desc": "Interest expense",
-      "total": 35000
+      "total": 520000
     },
     {
       "acct": 925,
-      "desc": "Pupil transportation",
-      "total": 210000
+      "desc": "Transportation",
+      "total": 160000
     },
     {
       "acct": 935,
-      "desc": "Food service costs",
-      "total": 165000
-    },
-    {
-      "acct": 950,
-      "desc": "Athletics - operations",
-      "total": 145000
-    },
-    {
-      "acct": 952,
-      "desc": "Athletics - equipment",
-      "total": 38000
-    },
-    {
-      "acct": 988,
-      "desc": "International program expense",
-      "total": 180000
-    },
-    {
-      "acct": 960,
-      "desc": "Restricted program expenditures",
-      "total": 90000
-    },
-    {
-      "acct": 100,
-      "desc": "Operating cash",
-      "total": 1250000
-    },
-    {
-      "acct": 101,
-      "desc": "Payroll cash",
-      "total": 180000
-    },
-    {
-      "acct": 110,
-      "desc": "Region endowment savings",
-      "total": 340000
-    },
-    {
-      "acct": 112,
-      "desc": "Student club cash",
-      "total": 42000
-    },
-    {
-      "acct": 120,
-      "desc": "Tuition receivable",
-      "total": 480000
-    },
-    {
-      "acct": 120,
-      "desc": "Prepaid TMS Fees",
-      "total": 26000
-    },
-    {
-      "acct": 120,
-      "desc": "TMS Suspense",
-      "total": 12000
-    },
-    {
-      "acct": 120,
-      "desc": "TMS Payment at Institution",
-      "total": 8000
-    },
-    {
-      "acct": 125,
-      "desc": "Prepaid insurance",
-      "total": 95000
-    },
-    {
-      "acct": 135,
-      "desc": "Restricted investments",
-      "total": 1800000
-    },
-    {
-      "acct": 150,
-      "desc": "Buildings",
-      "total": 12500000
-    },
-    {
-      "acct": 151,
-      "desc": "Land improvements",
-      "total": 850000
-    },
-    {
-      "acct": 165,
-      "desc": "Vehicles",
+      "desc": "Food service",
       "total": 320000
     },
     {
-      "acct": 160,
-      "desc": "Right-to-use lease asset",
-      "total": 540000
-    },
-    {
-      "acct": 170,
-      "desc": "Accumulated depreciation",
-      "total": -5200000
-    },
-    {
-      "acct": 200,
-      "desc": "Accounts payable and accrued",
-      "total": -420000
-    },
-    {
-      "acct": 200,
-      "desc": "Lease obligation - current portion",
-      "total": -180000
-    },
-    {
-      "acct": 230,
-      "desc": "Deferred international program fees",
-      "total": -150000
-    },
-    {
-      "acct": 240,
-      "desc": "Due to student clubs",
-      "total": -42000
-    },
-    {
-      "acct": 260,
-      "desc": "Lease obligation - noncurrent",
-      "total": -610000
+      "acct": 950,
+      "desc": "Athletics",
+      "total": 210000
     }
   ],
   "pyData": [
     {
-      "acct": 401,
-      "desc": "Tuition - net of discounts",
-      "total": -8160000
-    },
-    {
-      "acct": 402,
-      "desc": "Registration fees",
-      "total": -144000
-    },
-    {
-      "acct": 405,
-      "desc": "Application fees",
-      "total": -43200
-    },
-    {
-      "acct": 407,
-      "desc": "International program tuition",
-      "total": -307200
-    },
-    {
-      "acct": 410,
-      "desc": "Textbook leasing income",
-      "total": -201600
-    },
-    {
-      "acct": 419,
-      "desc": "Other income",
-      "total": -36480
-    },
-    {
-      "acct": 440,
-      "desc": "Student activity fees",
-      "total": -81600
-    },
-    {
-      "acct": 450,
-      "desc": "Student club revenue",
-      "total": -40320
-    },
-    {
-      "acct": 453,
-      "desc": "Net gain (loss) on investments",
-      "total": -124800
-    },
-    {
-      "acct": 470,
-      "desc": "Interest income",
-      "total": -21120
-    },
-    {
-      "acct": 475,
-      "desc": "Development - contributions",
-      "total": -537600
-    },
-    {
-      "acct": 480,
-      "desc": "Annual fund support",
-      "total": -230400
-    },
-    {
-      "acct": 462,
-      "desc": "Miscellaneous grant revenue",
-      "total": -14400
-    },
-    {
-      "acct": 500,
-      "desc": "Teacher salaries",
-      "total": 4032000
-    },
-    {
-      "acct": 510,
-      "desc": "Substitute salaries",
-      "total": 91200
-    },
-    {
-      "acct": 520,
-      "desc": "Instructional supplies",
-      "total": 172800
-    },
-    {
-      "acct": 525,
-      "desc": "Classroom technology",
-      "total": 115200
-    },
-    {
-      "acct": 530,
-      "desc": "Library books and media",
-      "total": 33600
-    },
-    {
-      "acct": 600,
-      "desc": "Administrative salaries",
-      "total": 1104000
-    },
-    {
-      "acct": 620,
-      "desc": "Office expense",
-      "total": 84480
-    },
-    {
-      "acct": 630,
-      "desc": "Professional fees",
-      "total": 134400
-    },
-    {
-      "acct": 660,
-      "desc": "Insurance",
-      "total": 168000
-    },
-    {
-      "acct": 700,
-      "desc": "Facilities salaries",
-      "total": 364800
-    },
-    {
-      "acct": 730,
-      "desc": "Utilities",
-      "total": 230400
-    },
-    {
-      "acct": 740,
-      "desc": "Repairs and maintenance",
-      "total": 158400
-    },
-    {
-      "acct": 750,
-      "desc": "Custodial supplies",
-      "total": 46080
-    },
-    {
-      "acct": 820,
-      "desc": "Equipment expense",
-      "total": 57600
-    },
-    {
-      "acct": 865,
-      "desc": "Depreciation expense",
-      "total": 403200
-    },
-    {
-      "acct": 880,
-      "desc": "Interest expense",
-      "total": 33600
-    },
-    {
-      "acct": 925,
-      "desc": "Pupil transportation",
-      "total": 201600
-    },
-    {
-      "acct": 935,
-      "desc": "Food service costs",
-      "total": 158400
-    },
-    {
-      "acct": 950,
-      "desc": "Athletics - operations",
-      "total": 139200
-    },
-    {
-      "acct": 952,
-      "desc": "Athletics - equipment",
-      "total": 36480
-    },
-    {
-      "acct": 988,
-      "desc": "International program expense",
-      "total": 172800
-    },
-    {
-      "acct": 960,
-      "desc": "Restricted program expenditures",
-      "total": 86400
-    },
-    {
       "acct": 100,
       "desc": "Operating cash",
-      "total": 1212500
-    },
-    {
-      "acct": 101,
-      "desc": "Payroll cash",
-      "total": 174600
-    },
-    {
-      "acct": 110,
-      "desc": "Region endowment savings",
-      "total": 329800
-    },
-    {
-      "acct": 112,
-      "desc": "Student club cash",
-      "total": 40740
+      "total": 420000
     },
     {
       "acct": 120,
       "desc": "Tuition receivable",
-      "total": 465600
-    },
-    {
-      "acct": 120,
-      "desc": "Prepaid TMS Fees",
-      "total": 25220
-    },
-    {
-      "acct": 120,
-      "desc": "TMS Suspense",
-      "total": 11640
-    },
-    {
-      "acct": 120,
-      "desc": "TMS Payment at Institution",
-      "total": 7760
+      "total": 600000
     },
     {
       "acct": 125,
-      "desc": "Prepaid insurance",
-      "total": 92150
+      "desc": "Prepaid expenses",
+      "total": 150000
     },
     {
       "acct": 135,
       "desc": "Restricted investments",
-      "total": 1746000
+      "total": 1500000
     },
     {
       "acct": 150,
-      "desc": "Buildings",
-      "total": 12125000
-    },
-    {
-      "acct": 151,
-      "desc": "Land improvements",
-      "total": 824500
-    },
-    {
-      "acct": 165,
-      "desc": "Vehicles",
-      "total": 310400
-    },
-    {
-      "acct": 160,
-      "desc": "Right-to-use lease asset",
-      "total": 523800
+      "desc": "Buildings & improvements",
+      "total": 9000000
     },
     {
       "acct": 170,
       "desc": "Accumulated depreciation",
-      "total": -5044000
+      "total": -2500000
     },
     {
       "acct": 200,
-      "desc": "Accounts payable and accrued",
-      "total": -407400
-    },
-    {
-      "acct": 200,
-      "desc": "Lease obligation - current portion",
-      "total": -174600
+      "desc": "Accounts payable & accrued",
+      "total": -700000
     },
     {
       "acct": 230,
-      "desc": "Deferred international program fees",
-      "total": -145500
-    },
-    {
-      "acct": 240,
-      "desc": "Due to student clubs",
-      "total": -40740
+      "desc": "Deferred international tuition",
+      "total": -200000
     },
     {
       "acct": 260,
-      "desc": "Lease obligation - noncurrent",
-      "total": -591700
+      "desc": "Lease liability — noncurrent",
+      "total": -400000
+    },
+    {
+      "acct": 401,
+      "desc": "Tuition — net of discounts",
+      "total": -9000000
+    },
+    {
+      "acct": 407,
+      "desc": "International program tuition",
+      "total": -600000
+    },
+    {
+      "acct": 410,
+      "desc": "Textbook leasing income",
+      "total": -120000
+    },
+    {
+      "acct": 440,
+      "desc": "Student activity fees",
+      "total": -80000
+    },
+    {
+      "acct": 453,
+      "desc": "Investment income",
+      "total": -90000
+    },
+    {
+      "acct": 470,
+      "desc": "Interest income",
+      "total": -30000
+    },
+    {
+      "acct": 480,
+      "desc": "Contributions & support",
+      "total": -400000
+    },
+    {
+      "acct": 500,
+      "desc": "Instructional salaries",
+      "total": 4500000
+    },
+    {
+      "acct": 520,
+      "desc": "Instructional supplies",
+      "total": 600000
+    },
+    {
+      "acct": 600,
+      "desc": "Administrative salaries",
+      "total": 1500000
+    },
+    {
+      "acct": 620,
+      "desc": "Administrative costs",
+      "total": 800000
+    },
+    {
+      "acct": 700,
+      "desc": "Facilities salaries",
+      "total": 500000
+    },
+    {
+      "acct": 720,
+      "desc": "Facilities & maintenance",
+      "total": 900000
+    },
+    {
+      "acct": 865,
+      "desc": "Depreciation expense",
+      "total": 500000
+    },
+    {
+      "acct": 925,
+      "desc": "Transportation",
+      "total": 150000
+    },
+    {
+      "acct": 935,
+      "desc": "Food service",
+      "total": 300000
+    },
+    {
+      "acct": 950,
+      "desc": "Athletics",
+      "total": 200000
     }
   ],
   "auditData": [
     {
-      "acct": 401,
-      "desc": "Tuition - net of discounts",
-      "total": -7820000
-    },
-    {
-      "acct": 402,
-      "desc": "Registration fees",
-      "total": -138000
-    },
-    {
-      "acct": 405,
-      "desc": "Application fees",
-      "total": -41400
-    },
-    {
-      "acct": 407,
-      "desc": "International program tuition",
-      "total": -294400
-    },
-    {
-      "acct": 410,
-      "desc": "Textbook leasing income",
-      "total": -193200
-    },
-    {
-      "acct": 419,
-      "desc": "Other income",
-      "total": -34960
-    },
-    {
-      "acct": 440,
-      "desc": "Student activity fees",
-      "total": -78200
-    },
-    {
-      "acct": 450,
-      "desc": "Student club revenue",
-      "total": -38640
-    },
-    {
-      "acct": 453,
-      "desc": "Net gain (loss) on investments",
-      "total": -119600
-    },
-    {
-      "acct": 470,
-      "desc": "Interest income",
-      "total": -20240
-    },
-    {
-      "acct": 475,
-      "desc": "Development - contributions",
-      "total": -515200
-    },
-    {
-      "acct": 480,
-      "desc": "Annual fund support",
-      "total": -220800
-    },
-    {
-      "acct": 462,
-      "desc": "Miscellaneous grant revenue",
-      "total": -13800
-    },
-    {
-      "acct": 500,
-      "desc": "Teacher salaries",
-      "total": 3864000
-    },
-    {
-      "acct": 510,
-      "desc": "Substitute salaries",
-      "total": 87400
-    },
-    {
-      "acct": 520,
-      "desc": "Instructional supplies",
-      "total": 165600
-    },
-    {
-      "acct": 525,
-      "desc": "Classroom technology",
-      "total": 110400
-    },
-    {
-      "acct": 530,
-      "desc": "Library books and media",
-      "total": 32200
-    },
-    {
-      "acct": 600,
-      "desc": "Administrative salaries",
-      "total": 1058000
-    },
-    {
-      "acct": 620,
-      "desc": "Office expense",
-      "total": 80960
-    },
-    {
-      "acct": 630,
-      "desc": "Professional fees",
-      "total": 128800
-    },
-    {
-      "acct": 660,
-      "desc": "Insurance",
-      "total": 161000
-    },
-    {
-      "acct": 700,
-      "desc": "Facilities salaries",
-      "total": 349600
-    },
-    {
-      "acct": 730,
-      "desc": "Utilities",
-      "total": 220800
-    },
-    {
-      "acct": 740,
-      "desc": "Repairs and maintenance",
-      "total": 151800
-    },
-    {
-      "acct": 750,
-      "desc": "Custodial supplies",
-      "total": 44160
-    },
-    {
-      "acct": 820,
-      "desc": "Equipment expense",
-      "total": 55200
-    },
-    {
-      "acct": 865,
-      "desc": "Depreciation expense",
-      "total": 386400
-    },
-    {
-      "acct": 880,
-      "desc": "Interest expense",
-      "total": 32200
-    },
-    {
-      "acct": 925,
-      "desc": "Pupil transportation",
-      "total": 193200
-    },
-    {
-      "acct": 935,
-      "desc": "Food service costs",
-      "total": 151800
-    },
-    {
-      "acct": 950,
-      "desc": "Athletics - operations",
-      "total": 133400
-    },
-    {
-      "acct": 952,
-      "desc": "Athletics - equipment",
-      "total": 34960
-    },
-    {
-      "acct": 988,
-      "desc": "International program expense",
-      "total": 165600
-    },
-    {
-      "acct": 960,
-      "desc": "Restricted program expenditures",
-      "total": 82800
-    },
-    {
       "acct": 100,
       "desc": "Operating cash",
-      "total": 1125000
-    },
-    {
-      "acct": 101,
-      "desc": "Payroll cash",
-      "total": 162000
-    },
-    {
-      "acct": 110,
-      "desc": "Region endowment savings",
-      "total": 306000
-    },
-    {
-      "acct": 112,
-      "desc": "Student club cash",
-      "total": 37800
+      "total": 420000
     },
     {
       "acct": 120,
       "desc": "Tuition receivable",
-      "total": 432000
-    },
-    {
-      "acct": 120,
-      "desc": "Prepaid TMS Fees",
-      "total": 23400
-    },
-    {
-      "acct": 120,
-      "desc": "TMS Suspense",
-      "total": 10800
-    },
-    {
-      "acct": 120,
-      "desc": "TMS Payment at Institution",
-      "total": 7200
+      "total": 600000
     },
     {
       "acct": 125,
-      "desc": "Prepaid insurance",
-      "total": 85500
+      "desc": "Prepaid expenses",
+      "total": 150000
     },
     {
       "acct": 135,
       "desc": "Restricted investments",
-      "total": 1620000
+      "total": 1500000
     },
     {
       "acct": 150,
-      "desc": "Buildings",
-      "total": 11250000
-    },
-    {
-      "acct": 151,
-      "desc": "Land improvements",
-      "total": 765000
-    },
-    {
-      "acct": 165,
-      "desc": "Vehicles",
-      "total": 288000
-    },
-    {
-      "acct": 160,
-      "desc": "Right-to-use lease asset",
-      "total": 486000
+      "desc": "Buildings & improvements",
+      "total": 9000000
     },
     {
       "acct": 170,
       "desc": "Accumulated depreciation",
-      "total": -4680000
+      "total": -2500000
     },
     {
       "acct": 200,
-      "desc": "Accounts payable and accrued",
-      "total": -378000
-    },
-    {
-      "acct": 200,
-      "desc": "Lease obligation - current portion",
-      "total": -162000
+      "desc": "Accounts payable & accrued",
+      "total": -700000
     },
     {
       "acct": 230,
-      "desc": "Deferred international program fees",
-      "total": -135000
-    },
-    {
-      "acct": 240,
-      "desc": "Due to student clubs",
-      "total": -37800
+      "desc": "Deferred international tuition",
+      "total": -200000
     },
     {
       "acct": 260,
-      "desc": "Lease obligation - noncurrent",
-      "total": -549000
+      "desc": "Lease liability — noncurrent",
+      "total": -400000
+    },
+    {
+      "acct": 401,
+      "desc": "Tuition — net of discounts",
+      "total": -9000000
+    },
+    {
+      "acct": 407,
+      "desc": "International program tuition",
+      "total": -600000
+    },
+    {
+      "acct": 410,
+      "desc": "Textbook leasing income",
+      "total": -120000
+    },
+    {
+      "acct": 440,
+      "desc": "Student activity fees",
+      "total": -80000
+    },
+    {
+      "acct": 453,
+      "desc": "Investment income",
+      "total": -90000
+    },
+    {
+      "acct": 470,
+      "desc": "Interest income",
+      "total": -30000
+    },
+    {
+      "acct": 480,
+      "desc": "Contributions & support",
+      "total": -400000
+    },
+    {
+      "acct": 500,
+      "desc": "Instructional salaries",
+      "total": 4500000
+    },
+    {
+      "acct": 520,
+      "desc": "Instructional supplies",
+      "total": 600000
+    },
+    {
+      "acct": 600,
+      "desc": "Administrative salaries",
+      "total": 1500000
+    },
+    {
+      "acct": 620,
+      "desc": "Administrative costs",
+      "total": 800000
+    },
+    {
+      "acct": 700,
+      "desc": "Facilities salaries",
+      "total": 500000
+    },
+    {
+      "acct": 720,
+      "desc": "Facilities & maintenance",
+      "total": 900000
+    },
+    {
+      "acct": 865,
+      "desc": "Depreciation expense",
+      "total": 500000
+    },
+    {
+      "acct": 925,
+      "desc": "Transportation",
+      "total": 150000
+    },
+    {
+      "acct": 935,
+      "desc": "Food service",
+      "total": 300000
+    },
+    {
+      "acct": 950,
+      "desc": "Athletics",
+      "total": 200000
     }
   ]
 }

@@ -154,7 +154,7 @@ describe('ingest() attaches metadata for the three samples', () => {
 
   it('keeps rows identical (metadata is additive)', () => {
     const res = ingest('TB_CurrentYear_FY26.xlsx', load('TB_CurrentYear_FY26.xlsx'))
-    expect(res.rows.some((r) => r.acct === 462)).toBe(true)
+    expect(res.rows.some((r) => r.acct === 401)).toBe(true)
     for (const r of res.rows) {
       expect(typeof r.acct).toBe('number')
       expect(typeof r.desc).toBe('string')

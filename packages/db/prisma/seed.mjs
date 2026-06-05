@@ -1,6 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Idempotent seed: an Organization + the demo 'Sample 01 High School'
-// (begin-balances 1000000/850000/850000) + a verified OWNER dev user so a
+// (begin-balances 7870000/7500000/7500000, matching sample-data) + a verified
+// OWNER dev user so a
 // reviewer can log in immediately and the report preview works end to end.
 //
 // PBKDF2 is inlined (node:crypto) to keep @finrep/db dependency-free and avoid a
@@ -37,9 +38,9 @@ async function main() {
     where: { organizationId: org.id, name: 'Sample 01 High School' },
   })
   const beginBalances = {
-    netAssetsBegin: 1000000,
-    pyNetAssetsBegin: 850000,
-    auditNetAssetsBegin: 850000,
+    netAssetsBegin: 7870000,
+    pyNetAssetsBegin: 7500000,
+    auditNetAssetsBegin: 7500000,
   }
   if (!school) {
     school = await prisma.school.create({

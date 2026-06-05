@@ -55,11 +55,11 @@ if (!res.ok) {
 const out = await res.json()
 
 const checks = [
-  ['soaResults.cy.totalRev', out.soaResults.cy.totalRev, 10342000],
-  ['soaResults.cy.totalExp', out.soaResults.cy.totalExp, 8359000],
-  ['soaResults.cyNAEnd', out.soaResults.cyNAEnd, 2983000],
-  ['sfpResults.cy.totalAssets', out.sfpResults.cy.totalAssets, 13243000],
-  ['scf.operatingCash', out.scf.operatingCash, 2420100],
+  ['soaResults.cy.totalRev', out.soaResults.cy.totalRev, 10850000],
+  ['soaResults.cy.totalExp', out.soaResults.cy.totalExp, 10420000],
+  ['soaResults.cyNAEnd', out.soaResults.cyNAEnd, 8300000],
+  ['sfpResults.cy.totalAssets', out.sfpResults.cy.totalAssets, 9620000],
+  ['scf.operatingCash', out.scf.operatingCash, 960000],
 ]
 
 let ok = true

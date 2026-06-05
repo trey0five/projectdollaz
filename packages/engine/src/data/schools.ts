@@ -10,9 +10,9 @@ export const SCHOOLS: Record<string, SchoolConfig> = {
   school01: {
     name: 'Sample 01 High School',
     pin: '1234',
-    netAssetsBegin: 1_000_000.0, // FY26 — Jul 1, 2025
-    pyNetAssetsBegin: 850_000.0, // FY25 — Jul 1, 2024 (unaudited)
-    auditNetAssetsBegin: 850_000.0, // FY25 — Jul 1, 2024 (audited)
+    netAssetsBegin: 7_870_000.0, // FY26 opening = FY25 ending (roll-forward)
+    pyNetAssetsBegin: 7_500_000.0, // FY25 opening (unaudited)
+    auditNetAssetsBegin: 7_500_000.0, // FY25 opening (audited)
   },
 }
 

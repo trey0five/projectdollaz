@@ -77,16 +77,16 @@ export default function CreateSchoolForm() {
         </div>
         <div className="mb-5">
           <label className={labelCls}>Net assets — beginning (CY)</label>
-          <input className={inputCls} inputMode="decimal" value={begin} placeholder="1000000" onChange={(e) => setBegin(e.target.value)} />
+          <input className={inputCls} inputMode="decimal" value={begin} placeholder="7870000" onChange={(e) => setBegin(e.target.value)} />
         </div>
         <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
           <div className="mb-5">
             <label className={labelCls}>Prior-year begin</label>
-            <input className={inputCls} inputMode="decimal" value={pyBegin} placeholder="850000" onChange={(e) => setPyBegin(e.target.value)} />
+            <input className={inputCls} inputMode="decimal" value={pyBegin} placeholder="7500000" onChange={(e) => setPyBegin(e.target.value)} />
           </div>
           <div className="mb-5">
             <label className={labelCls}>Audited begin</label>
-            <input className={inputCls} inputMode="decimal" value={auditBegin} placeholder="850000" onChange={(e) => setAuditBegin(e.target.value)} />
+            <input className={inputCls} inputMode="decimal" value={auditBegin} placeholder="7500000" onChange={(e) => setAuditBegin(e.target.value)} />
           </div>
         </div>
 
