@@ -1,0 +1,10 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/engine" },
+    { "path": "packages/ingestion" },
+    { "path": "packages/db" },
+    { "path": "apps/web" },
+    { "path": "apps/api" }
+  ]
+}

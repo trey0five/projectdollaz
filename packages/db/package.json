@@ -1,0 +1,46 @@
+{
+  "name": "@finrep/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./json-types": {
+      "types": "./dist/json-types.d.ts",
+      "import": "./dist/json-types.js",
+      "default": "./dist/json-types.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "prisma": {
+    "seed": "node prisma/seed.mjs"
+  },
+  "scripts": {
+    "generate": "prisma generate",
+    "migrate:dev": "prisma migrate dev",
+    "migrate:deploy": "prisma migrate deploy",
+    "db:seed": "prisma db seed",
+    "studio": "prisma studio",
+    "build": "prisma generate && tsup",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo \"@finrep/db: no lint\""
+  },
+  "dependencies": {
+    "@finrep/engine": "workspace:*",
+    "@prisma/client": "^5.22.0"
+  },
+  "devDependencies": {
+    "prisma": "^5.22.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.6.3"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "allowJs": true,
+    "checkJs": false,
+    "moduleResolution": "Bundler",
+    "types": [],
+    "paths": {
+      "@finrep/engine": ["../../packages/engine/src/index.ts"],
+      "@finrep/ingestion": ["../../packages/ingestion/src/index.ts"]
+    }
+  },
+  "include": ["src"]
+}

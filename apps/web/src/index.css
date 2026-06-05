@@ -1,0 +1,167 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    @apply bg-cream text-ink font-sans;
+    margin: 0;
+    min-height: 100vh;
+  }
+  /* faint gold halo behind the report area */
+  #report-container {
+    @apply bg-page-glow bg-no-repeat;
+  }
+}
+
+@layer components {
+  /* ── Gold gradient text accent ───────────────────────── */
+  .gold-text {
+    @apply bg-gold-gradient bg-clip-text text-transparent;
+  }
+
+  /* ── Buttons (bigger + gradient + animated sheen) ─────── */
+  .btn-primary {
+    @apply relative inline-flex min-h-[44px] items-center justify-center gap-2.5 overflow-hidden rounded-xl
+           bg-navy-gradient px-5 py-3 text-[13px] font-semibold uppercase tracking-[0.16em] text-white
+           shadow-navy-glow transition-all duration-300
+           hover:-translate-y-0.5 hover:shadow-lift active:translate-y-0 active:scale-[0.98]
+           disabled:cursor-not-allowed disabled:translate-y-0 disabled:bg-none
+           disabled:bg-gray-300 disabled:text-gray-500 disabled:shadow-none
+           sm:px-8 sm:py-4 sm:text-sm;
+  }
+  /* sweeping highlight on hover */
+  .btn-primary::before {
+    content: '';
+    @apply pointer-events-none absolute inset-0 bg-sheen;
+    transform: translateX(-160%);
+    transition: transform 0.7s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .btn-primary:hover::before {
+    transform: translateX(160%);
+  }
+  .btn-primary:disabled::before {
+    content: none;
+  }
+
+  .btn-ghost {
+    @apply relative inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border-2 border-navy/70 bg-transparent
+           px-4 py-3 text-[13px] font-semibold uppercase tracking-[0.12em] text-navy
+           transition-all duration-300 hover:-translate-y-0.5 hover:border-navy
+           hover:bg-navy hover:text-white hover:shadow-lift
+           disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:bg-transparent
+           disabled:hover:text-navy disabled:hover:shadow-none
+           sm:px-6 sm:py-3.5 sm:text-sm;
+  }
+  /* ── Report paper ────────────────────────────────────── */
+  /* Responsive padding: tight on phones, full bleed on desktop. The print
+     media block below still overrides to 20px so printed pages stay compact. */
+  .report-paper {
+    @apply rounded-2xl border border-rule bg-white p-5 shadow-paper sm:p-8 lg:px-16 lg:py-[60px];
+  }
+
+  /* ── Report typography (responsive scale; legacy sizes at sm+) ────── */
+  .rpt-school {
+    @apply text-center font-serif text-xl font-semibold text-navy sm:text-2xl lg:text-[26px];
+  }
+  .rpt-title {
+    @apply mt-1.5 text-center font-serif text-base font-normal text-ink sm:text-[17px] lg:text-[18px];
+  }
+  .rpt-period {
+    @apply mt-1 text-center text-xs text-muted sm:text-[13px];
+  }
+  .rpt-internal {
+    @apply mt-0.5 text-center font-sans text-[10px] italic text-muted sm:text-[11px];
+  }
+  .rpt-rule {
+    @apply mt-5 border-t-2 border-navy;
+  }
+  .section-header {
+    @apply pt-[18px] pb-1.5 font-serif text-[13px] font-semibold italic text-navy sm:text-[14px];
+  }
+  .col-hdr {
+    @apply pr-2 text-right font-sans text-[10px] font-semibold uppercase tracking-wide text-muted sm:text-[11px];
+  }
+  .col-hdr-sub {
+    @apply mt-0.5 block text-[8px] font-normal normal-case tracking-normal text-gray-400 sm:text-[9px];
+  }
+
+  /* numeric cells — the KEY density change so columns fit the scroll min-width */
+  .amt {
+    @apply pr-2 text-right font-sans text-[12px] sm:text-[13px] lg:text-[14px];
+  }
+  .amt-ph {
+    @apply text-gray-300;
+  }
+  .amt-zero {
+    @apply text-gray-400;
+  }
+  .amt-neg {
+    @apply text-danger;
+  }
+}
+
+@layer utilities {
+  /* Hide the scrollbar on horizontally-scrollable strips (tabs, report
+     scroller) while keeping them scrollable. */
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ── Tabular line shimmer used during generation ───────── */
+.shimmer-bar {
+  background: linear-gradient(90deg, #eee 25%, #f5f5f5 37%, #eee 63%);
+  background-size: 400% 100%;
+  @apply animate-shimmer rounded;
+}
+
+/* ── Reduced motion: tame always-on CSS keyframe loops ─── */
+/* framer-motion JS animations are gated via useReducedMotion in the
+   components; this covers the CSS-driven loops (parsing spinner + shimmer
+   skeleton) that aren't under framer's control. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-spin,
+  .animate-shimmer,
+  .shimmer-bar {
+    animation: none !important;
+  }
+}
+
+/* ── Print ─────────────────────────────────────────────── */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  #report-container {
+    margin: 0;
+    padding: 0;
+    max-width: 100%;
+  }
+  .report-paper {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 20px !important;
+    min-width: 0 !important;
+  }
+  /* Never print the mobile fit-to-width scale transform — print at full size. */
+  .fit-outer {
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .fit-inner {
+    transform: none !important;
+    width: auto !important;
+  }
+  body {
+    background: white;
+  }
+}

@@ -1,0 +1,153 @@
+import { Injectable, UnauthorizedException } from '@nestjs/common'
+import { JwtService } from '@nestjs/jwt'
+import { ConfigService } from '@nestjs/config'
+import { randomBytes } from 'node:crypto'
+import { PrismaService } from '../prisma/prisma.service.js'
+
+export interface AccessPayload {
+  sub: string
+  type: 'access'
+  // Session id: the jti of the refresh token this access token was issued
+  // alongside. Lets activity-touch target the correct session in multi-session
+  // scenarios. Optional for backward compatibility with older tokens.
+  sid?: string
+}
+
+interface RefreshPayload {
+  sub: string
+  type: 'refresh'
+  jti: string
+}
+
+/**
+ * Access (~15m) + refresh (~30d) JWTs. Refresh tokens are persisted in the
+ * refresh_tokens table and ROTATED on use (old revoked, new issued), with an
+ * inactivity window (ported from smartbot) and revoke-all on logout/reset.
+ */
+@Injectable()
+export class TokenService {
+  private readonly accessTtl: string
+  private readonly refreshTtl: string
+  // Inactivity timeout: a refresh token unused for this long is rejected.
+  private readonly inactivityMs = 1000 * 60 * 60 * 24 * 7 // 7 days
+
+  constructor(
+    private readonly jwt: JwtService,
+    private readonly prisma: PrismaService,
+    config: ConfigService,
+  ) {
+    this.accessTtl = config.get<string>('jwt.accessTtl') ?? '900s'
+    this.refreshTtl = config.get<string>('jwt.refreshTtl') ?? '30d'
+  }
+
+  signAccess(userId: string, sid?: string): string {
+    const payload: AccessPayload = { sub: userId, type: 'access', ...(sid ? { sid } : {}) }
+    // `expiresIn` accepts a vercel/ms string (e.g. '900s', '30d') at runtime;
+    // the jsonwebtoken types model it as a narrow `StringValue`, so cast.
+    return this.jwt.sign(payload, { expiresIn: this.accessTtl as unknown as number })
+  }
+
+  verifyAccess(token: string): AccessPayload {
+    let payload: AccessPayload
+    try {
+      payload = this.jwt.verify<AccessPayload>(token)
+    } catch {
+      throw new UnauthorizedException('Invalid or expired access token.')
+    }
+    if (payload.type !== 'access') {
+      throw new UnauthorizedException('Wrong token type.')
+    }
+    return payload
+  }
+
+  /** Issue a fresh refresh token row + signed JWT. Returns the token and its jti. */
+  async issueRefresh(userId: string): Promise<{ token: string; jti: string }> {
+    const jti = randomBytes(24).toString('hex')
+    const payload: RefreshPayload = { sub: userId, type: 'refresh', jti }
+    const token = this.jwt.sign(payload, {
+      expiresIn: this.refreshTtl as unknown as number,
+    })
+    const expiresAt = this.decodeExpiry(token)
+    await this.prisma.refreshToken.create({
+      data: { userId, token, jti, expiresAt, lastActivityAt: new Date() },
+    })
+    return { token, jti }
+  }
+
+  /**
+   * Validate + ROTATE a refresh token. Returns a new {access, refresh} pair.
+   * Rejects if: bad JWT, wrong type, DB row missing/revoked/expired, or the
+   * token has been inactive beyond the inactivity window.
+   */
+  async rotateRefresh(token: string): Promise<{ access: string; refresh: string }> {
+    let payload: RefreshPayload
+    try {
+      payload = this.jwt.verify<RefreshPayload>(token)
+    } catch {
+      throw new UnauthorizedException('Invalid or expired refresh token.')
+    }
+    if (payload.type !== 'refresh') {
+      throw new UnauthorizedException('Wrong token type.')
+    }
+
+    const row = await this.prisma.refreshToken.findUnique({ where: { token } })
+    if (!row || row.revokedAt) {
+      throw new UnauthorizedException('Refresh token revoked.')
+    }
+    if (row.expiresAt.getTime() < Date.now()) {
+      throw new UnauthorizedException('Refresh token expired.')
+    }
+    const last = row.lastActivityAt?.getTime() ?? row.createdAt.getTime()
+    if (Date.now() - last > this.inactivityMs) {
+      throw new UnauthorizedException('Session expired due to inactivity.')
+    }
+
+    // Rotate: revoke the old row, issue a new one.
+    await this.prisma.refreshToken.update({
+      where: { id: row.id },
+      data: { revokedAt: new Date() },
+    })
+    const { token: refresh, jti } = await this.issueRefresh(payload.sub)
+    const access = this.signAccess(payload.sub, jti)
+    return { access, refresh }
+  }
+
+  /**
+   * Bump last activity. If the access token carried a session id (`sid` = the
+   * paired refresh token's jti), touch THAT specific session's row; otherwise
+   * fall back to the user's most-recent active refresh token (legacy tokens).
+   */
+  async touchActivity(userId: string, sid?: string): Promise<void> {
+    if (sid) {
+      const updated = await this.prisma.refreshToken.updateMany({
+        where: { userId, jti: sid, revokedAt: null },
+        data: { lastActivityAt: new Date() },
+      })
+      if (updated.count > 0) return
+    }
+    const row = await this.prisma.refreshToken.findFirst({
+      where: { userId, revokedAt: null },
+      orderBy: { createdAt: 'desc' },
+    })
+    if (row) {
+      await this.prisma.refreshToken.update({
+        where: { id: row.id },
+        data: { lastActivityAt: new Date() },
+      })
+    }
+  }
+
+  async revokeAll(userId: string): Promise<void> {
+    await this.prisma.refreshToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    })
+  }
+
+  private decodeExpiry(token: string): Date {
+    const decoded = this.jwt.decode(token) as { exp?: number } | null
+    if (decoded?.exp) return new Date(decoded.exp * 1000)
+    // Fallback: 30 days out.
+    return new Date(Date.now() + 1000 * 60 * 60 * 24 * 30)
+  }
+}

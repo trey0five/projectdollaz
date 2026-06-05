@@ -1,0 +1,21 @@
+{
+  "name": "@finrep/monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "packageManager": "pnpm@11.5.1",
+  "scripts": {
+    "dev": "turbo run dev --filter=@finrep/web",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "verify:engine": "node scripts/verify-engine.mjs"
+  },
+  "devDependencies": {
+    "@finrep/engine": "workspace:*",
+    "@finrep/ingestion": "workspace:*",
+    "turbo": "^2.5.0",
+    "typescript": "^5.6.3"
+  }
+}

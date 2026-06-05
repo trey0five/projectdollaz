@@ -1,0 +1,322 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// @finrep/db — Phase-1 data model (Prisma + Postgres).
+//
+// TENANT ISOLATION CONTRACT:
+//   organizations 1─< schools (THE TENANT) 1─< every domain table (school_id).
+//   Users are GLOBAL identities; their access to a tenant is granted via
+//   `memberships (user_id, school_id, role)`. Every domain table therefore
+//   carries `school_id`, and `schools` carries `organization_id`.
+//
+// REPRODUCIBILITY CONTRACT:
+//   A statement_snapshot is a DERIVED artifact. It is fully reproducible from:
+//     (1) the IMMUTABLE `imports.rows` JSONB snapshot (the parsed NormalizedRow[]
+//         captured at upload time and never mutated), PLUS
+//     (2) the `mappings.version` used (account -> SCoA category), PLUS
+//     (3) the `standard_chart_versions.version` (the SCoA chart), PLUS
+//     (4) the `engine_version` (the @finrep/engine semver that produced it).
+//   Re-running generateReports(import.rows, mapping@version, chart@version) on the
+//   same engine_version MUST yield byte-identical `payload`. Imports are append-
+//   only and never edited; corrections create a NEW import. Mappings and charts
+//   are versioned (never updated in place) so historical snapshots stay valid.
+// ─────────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+  // Pin the engine binary target to the container runtime (node:22-slim =
+  // Debian, OpenSSL 3.x). Deterministic: the build stage downloads exactly the
+  // engine the runner needs, avoiding a "native" target mismatch and shipping
+  // only the one binary. Local dev on the same platform still works; add your
+  // platform here if generating on a different OS.
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Enums ────────────────────────────────────────────────────────────────────
+
+enum MembershipRole {
+  owner
+  accountant
+  viewer
+}
+
+enum MembershipStatus {
+  active
+  invited
+}
+
+enum ImportRole {
+  cy
+  py
+  audit
+}
+
+enum SubscriptionStatus {
+  trialing
+  active
+  past_due
+  canceled
+  none
+}
+
+// ── Tenancy ──────────────────────────────────────────────────────────────────
+
+model Organization {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  schools  School[]
+  auditLog AuditLog[]
+
+  @@map("organizations")
+}
+
+/// The TENANT. Every domain table below is scoped by school_id.
+model School {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String
+  // Beginning net-asset balances the engine needs to roll the SOA forward
+  // (per-school). Decimal in the DB; converted to plain `number` at the API
+  // boundary to match the engine's SchoolConfig (which uses number).
+  netAssetsBegin      Decimal @default(0) @map("net_assets_begin") @db.Decimal(18, 2)
+  pyNetAssetsBegin    Decimal @default(0) @map("py_net_assets_begin") @db.Decimal(18, 2)
+  auditNetAssetsBegin Decimal @default(0) @map("audit_net_assets_begin") @db.Decimal(18, 2)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  fiscalPeriods      FiscalPeriod[]
+  memberships        Membership[]
+  invitations        Invitation[]
+  imports            Import[]
+  mappings           Mapping[]
+  statementSnapshots StatementSnapshot[]
+  subscription       Subscription?
+  auditLog           AuditLog[]
+
+  @@index([organizationId])
+  @@map("schools")
+}
+
+model FiscalPeriod {
+  id            String   @id @default(uuid()) @db.Uuid
+  schoolId      String   @map("school_id") @db.Uuid
+  label         String
+  periodEndDate DateTime @map("period_end_date") @db.Date
+  periodType    String   @map("period_type")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  imports            Import[]
+  statementSnapshots StatementSnapshot[]
+
+  @@index([schoolId])
+  @@map("fiscal_periods")
+}
+
+// ── Identity & access (SCHEMA ONLY — auth LOGIC is Phase 1B) ──────────────────
+
+model User {
+  id                         String    @id @default(uuid()) @db.Uuid
+  email                      String    @unique
+  firstName                  String?   @map("first_name")
+  lastName                   String?   @map("last_name")
+  // PBKDF2 credential material (algo/iters/salt/hash). Hashing LOGIC = Phase 1B.
+  passwordAlgo               String?   @map("password_algo")
+  passwordIters              Int?      @map("password_iters")
+  passwordSalt               Bytes?    @map("password_salt")
+  passwordHash               Bytes?    @map("password_hash")
+  emailVerified              Boolean   @default(false) @map("email_verified")
+  emailVerificationToken     String?   @map("email_verification_token")
+  emailVerificationExpiresAt DateTime? @map("email_verification_expires_at")
+  passwordResetCode          String?   @map("password_reset_code")
+  passwordResetExpiresAt     DateTime? @map("password_reset_expires_at")
+  failedLoginAttempts        Int       @default(0) @map("failed_login_attempts")
+  lockedUntil                DateTime? @map("locked_until")
+  createdAt                  DateTime  @default(now()) @map("created_at")
+
+  memberships   Membership[]
+  refreshTokens RefreshToken[]
+  imports       Import[]       @relation("ImportUploadedBy")
+  invitedMemberships Membership[] @relation("MembershipInvitedBy")
+  auditLog      AuditLog[]
+
+  @@index([email])
+  @@map("users")
+}
+
+model Membership {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @map("user_id") @db.Uuid
+  schoolId  String           @map("school_id") @db.Uuid
+  role      MembershipRole
+  status    MembershipStatus @default(active)
+  invitedBy String?          @map("invited_by") @db.Uuid
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  user           User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  school         School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  invitedByUser  User?  @relation("MembershipInvitedBy", fields: [invitedBy], references: [id], onDelete: SetNull)
+
+  @@unique([userId, schoolId])
+  @@index([schoolId])
+  @@index([userId])
+  @@map("memberships")
+}
+
+model Invitation {
+  id         String         @id @default(uuid()) @db.Uuid
+  schoolId   String         @map("school_id") @db.Uuid
+  email      String
+  role       MembershipRole
+  token      String         @unique
+  expiresAt  DateTime       @map("expires_at")
+  acceptedAt DateTime?      @map("accepted_at")
+  createdAt  DateTime       @default(now()) @map("created_at")
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+  @@index([email])
+  @@map("invitations")
+}
+
+model RefreshToken {
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  token          String    @unique
+  /// Refresh token JWT id. Surfaced in the paired access token's `sid` claim so
+  /// activity-touch can target the exact session (precise multi-session accounting).
+  jti            String?   @unique
+  expiresAt      DateTime  @map("expires_at")
+  revokedAt      DateTime? @map("revoked_at")
+  lastActivityAt DateTime? @map("last_activity_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+// ── Ingest & derivation ───────────────────────────────────────────────────────
+
+/// IMMUTABLE raw snapshot. `rows` is the parsed NormalizedRow[] captured at
+/// upload time and never mutated — the reproducibility anchor.
+model Import {
+  id             String     @id @default(uuid()) @db.Uuid
+  schoolId       String     @map("school_id") @db.Uuid
+  fiscalPeriodId String     @map("fiscal_period_id") @db.Uuid
+  role           ImportRole
+  sourceName     String     @map("source_name")
+  rows           Json       @db.JsonB // NormalizedRow[] — immutable snapshot
+  metadata       Json?      @db.JsonB // SheetMetadata from @finrep/ingestion
+  rowCount       Int        @map("row_count")
+  uploadedBy     String?    @map("uploaded_by") @db.Uuid
+  createdAt      DateTime   @default(now()) @map("created_at")
+
+  school         School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  fiscalPeriod   FiscalPeriod @relation(fields: [fiscalPeriodId], references: [id], onDelete: Cascade)
+  uploadedByUser User?        @relation("ImportUploadedBy", fields: [uploadedBy], references: [id], onDelete: SetNull)
+
+  @@index([schoolId])
+  @@index([fiscalPeriodId])
+  @@map("imports")
+}
+
+/// Versioned global SCoA chart. Never updated in place — new version = new row.
+model StandardChartVersion {
+  id            String   @id @default(uuid()) @db.Uuid
+  version       String   @unique
+  effectiveDate DateTime @map("effective_date") @db.Date
+  chart         Json     @db.JsonB // StandardChart from @finrep/engine
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@map("standard_chart_versions")
+}
+
+/// Per-school, versioned account -> SCoA category mapping. Append-only by
+/// (school_id, version) so historical snapshots remain reproducible.
+model Mapping {
+  id            String   @id @default(uuid()) @db.Uuid
+  schoolId      String   @map("school_id") @db.Uuid
+  version       String
+  effectiveDate DateTime @map("effective_date") @db.Date
+  entries       Json     @db.JsonB // account -> SCoA category
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, version])
+  @@index([schoolId])
+  @@map("mappings")
+}
+
+/// DERIVED, reproducible artifact. payload = generateReports() ReportBundle.
+/// Reproducible from import.rows + mappingVersion + standardChartVersion +
+/// engineVersion (see reproducibility contract at top of file).
+model StatementSnapshot {
+  id                   String   @id @default(uuid()) @db.Uuid
+  schoolId             String   @map("school_id") @db.Uuid
+  fiscalPeriodId       String   @map("fiscal_period_id") @db.Uuid
+  mappingVersion       String   @map("mapping_version")
+  standardChartVersion String   @map("standard_chart_version")
+  engineVersion        String   @map("engine_version")
+  payload              Json     @db.JsonB // ReportBundle from @finrep/engine
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  school       School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  fiscalPeriod FiscalPeriod @relation(fields: [fiscalPeriodId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+  @@index([fiscalPeriodId])
+  @@map("statement_snapshots")
+}
+
+// ── Billing (SCHEMA ONLY — Stripe LOGIC is Phase 1D) ──────────────────────────
+
+model Subscription {
+  id                   String             @id @default(uuid()) @db.Uuid
+  schoolId             String             @unique @map("school_id") @db.Uuid
+  stripeCustomerId     String?            @map("stripe_customer_id")
+  stripeSubscriptionId String?            @map("stripe_subscription_id")
+  plan                 String?
+  status               SubscriptionStatus @default(none)
+  currentPeriodEnd     DateTime?          @map("current_period_end")
+  trialEnd             DateTime?          @map("trial_end")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt           DateTime           @updatedAt @map("updated_at")
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
+
+// ── Audit ─────────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String?  @map("organization_id") @db.Uuid
+  schoolId       String?  @map("school_id") @db.Uuid
+  userId         String?  @map("user_id") @db.Uuid
+  action         String
+  targetType     String?  @map("target_type")
+  targetId       String?  @map("target_id")
+  metadata       Json?    @db.JsonB
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  school       School?       @relation(fields: [schoolId], references: [id], onDelete: SetNull)
+  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([schoolId])
+  @@index([organizationId])
+  @@index([userId])
+  @@map("audit_log")
+}

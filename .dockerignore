@@ -1,0 +1,20 @@
+# Keep the (repo-root) Docker build context lean. Applies to api + web builds.
+node_modules
+**/node_modules
+dist
+**/dist
+.turbo
+**/.turbo
+.vite
+**/.vite
+**/*.tsbuildinfo
+.git
+.gitignore
+*.log
+.env
+.env.*
+!.env.example
+coverage
+**/coverage
+sample-data
+**/.DS_Store
