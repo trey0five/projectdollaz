@@ -103,6 +103,7 @@ model School {
   scholarshipDisbursements ScholarshipDisbursement[]
   correctiveActions  PeriodCorrectiveAction[]
   checklistItems     PeriodChecklistItem[]
+  insights           PeriodInsight[]
   analyticsDashboard AnalyticsDashboard?
 
   @@index([organizationId])
@@ -126,6 +127,7 @@ model FiscalPeriod {
   scholarshipDisbursements ScholarshipDisbursement[]
   correctiveActions  PeriodCorrectiveAction[]
   checklistItems     PeriodChecklistItem[]
+  insights           PeriodInsight[]
 
   // Phase 1C: DB-level idempotency for create-or-get under concurrency. The
   // natural key of a period is (school, period-end, type).
@@ -505,6 +507,26 @@ model PeriodChecklistItem {
   @@unique([schoolId, fiscalPeriodId, itemId])
   @@index([schoolId, fiscalPeriodId])
   @@map("period_checklist_items")
+}
+
+/// Cache of the generated AI/rule insight for a period. Keyed by a fingerprint of
+/// the metrics that produced it, so repeated dashboard loads reuse the stored text
+/// (no LLM re-bill, stable wording) and it regenerates only when the data changes.
+model PeriodInsight {
+  id             String   @id @default(uuid()) @db.Uuid
+  schoolId       String   @map("school_id") @db.Uuid
+  fiscalPeriodId String   @map("fiscal_period_id") @db.Uuid
+  fingerprint    String
+  text           String
+  source         String // 'rule' | 'llm'
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  school       School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  fiscalPeriod FiscalPeriod @relation(fields: [fiscalPeriodId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, fiscalPeriodId])
+  @@map("period_insights")
 }
 
 // ── Dashboard customization (Phase 4C) ────────────────────────────────────────

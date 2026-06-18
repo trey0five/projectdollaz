@@ -1,7 +1,9 @@
+import { createHash } from 'node:crypto'
 import { Injectable, Logger } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { generateInsight, type MetricResult } from '@finrep/analytics'
 import { AnalyticsService } from './analytics.service.js'
+import { PrismaService } from '../prisma/prisma.service.js'
 
 /** The insight endpoint response: the summary text + which path produced it. */
 export interface InsightResponse {
@@ -29,6 +31,7 @@ export class InsightService {
   constructor(
     private readonly analytics: AnalyticsService,
     private readonly config: ConfigService,
+    private readonly prisma: PrismaService,
   ) {}
 
   /** True when any LLM provider key is configured (OpenRouter or Anthropic). */
@@ -45,20 +48,59 @@ export class InsightService {
   }
 
   /**
-   * Build the insight for a period. Computes metrics via the SAME tenant-isolated
-   * path as the metrics endpoint, runs the deterministic rule generator, then
-   * optionally upgrades with Claude. Always resolves; never throws on LLM errors.
+   * Insight for a period, CACHED by a fingerprint of the metrics. Repeated loads
+   * with unchanged data reuse the stored text (no LLM re-bill, stable wording); a
+   * data change (new snapshot, edited operational inputs) changes the fingerprint
+   * and regenerates. computeMetricsResponse enforces tenant isolation + 404.
    */
   async insightFor(schoolId: string, periodId: string): Promise<InsightResponse> {
-    // computeMetricsResponse enforces tenant isolation (getOwnedPeriod) + 404 on
-    // no snapshot, exactly like the metrics endpoint.
-    const { metrics } = await this.analytics.computeMetricsResponse(schoolId, periodId)
-    const ruleText = generateInsight(metrics)
+    const { periodId: fiscalPeriodId, metrics } =
+      await this.analytics.computeMetricsResponse(schoolId, periodId)
+    const fingerprint = this.fingerprint(metrics)
 
+    const cached = await this.prisma.periodInsight.findUnique({
+      where: { schoolId_fiscalPeriodId: { schoolId, fiscalPeriodId } },
+    })
+    if (cached && cached.fingerprint === fingerprint) {
+      return { text: cached.text, source: cached.source === 'llm' ? 'llm' : 'rule' }
+    }
+
+    const result = await this.generate(metrics)
+
+    // Best-effort cache write — never fail the response on a write error.
+    try {
+      await this.prisma.periodInsight.upsert({
+        where: { schoolId_fiscalPeriodId: { schoolId, fiscalPeriodId } },
+        create: { schoolId, fiscalPeriodId, fingerprint, text: result.text, source: result.source },
+        update: { fingerprint, text: result.text, source: result.source },
+      })
+    } catch (err) {
+      this.logger.warn(
+        `insight cache write failed: ${err instanceof Error ? err.message : String(err)}`,
+      )
+    }
+    return result
+  }
+
+  /** Deterministic hash of the metric values that drive the insight. Includes the
+   * active provider so toggling an LLM key also invalidates the cache. */
+  private fingerprint(metrics: MetricResult[]): string {
+    const compact = metrics
+      .map(
+        (m) =>
+          `${m.key}:${m.available ? m.value : 'x'}:${m.status}:${m.periodOverPeriodDelta ?? 'x'}`,
+      )
+      .join('|')
+    const provider = this.isConfigured() ? (this.openrouterKey() ? 'or' : 'an') : 'rule'
+    return createHash('sha256').update(`${provider}::${compact}`).digest('hex')
+  }
+
+  /** Generate fresh: deterministic rule text, optionally upgraded by an LLM. */
+  private async generate(metrics: MetricResult[]): Promise<InsightResponse> {
+    const ruleText = generateInsight(metrics)
     if (!this.isConfigured()) {
       return { text: ruleText, source: 'rule' }
     }
-
     try {
       const llmText = await this.callLlm(metrics)
       if (llmText && llmText.trim().length > 0) {
