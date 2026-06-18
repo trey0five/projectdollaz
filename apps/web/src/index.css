@@ -395,6 +395,112 @@
   }
 }
 
+/* ── Board / Finance-Committee packet print document (Phase 3) ─────────────
+   Scoped under `.board-print`. Executive summary — legible black-on-white with
+   subtle gold accents; each section avoids breaking across pages. */
+.board-print {
+  color: #1a2233;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.board-print-kicker {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: #c9a227;
+  margin: 0 0 2px;
+}
+.board-print-header h1 {
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 26px;
+  font-weight: 600;
+  color: #11192b;
+  margin: 0 0 4px;
+}
+.board-print-meta {
+  display: flex;
+  gap: 14px;
+  font-size: 12.5px;
+  color: #6b7280;
+}
+.board-print-disclaimer {
+  margin: 14px 0 4px;
+  padding: 10px 14px;
+  border-left: 4px solid #c9a227;
+  background: #faf6ea;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+.board-print-section {
+  margin-top: 22px;
+  page-break-inside: avoid;
+}
+.board-print-section h2 {
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 17px;
+  font-weight: 600;
+  color: #11192b;
+  margin: 0 0 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #e3e6ec;
+}
+.board-print-signals {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.board-print-signals li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 6px 0;
+}
+.board-print-tag {
+  flex: 0 0 70px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.board-print-tag.tag-risk {
+  color: #b42318;
+}
+.board-print-tag.tag-watch {
+  color: #b54708;
+}
+.board-print-tag.tag-strength {
+  color: #157347;
+}
+.board-print-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.board-print-table td {
+  padding: 5px 0;
+  border-bottom: 1px solid #eceef3;
+}
+.board-print-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.board-print-muted {
+  color: #6b7280;
+  font-size: 11.5px;
+  text-align: right;
+  width: 84px;
+}
+.board-print-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+.board-print-list li {
+  margin: 3px 0;
+}
+
 /* ── Workpapers Packet print document (Phase 2C) ──────────────────────────
    Scoped under `.packet-print` so it never collides with the report or
    `.cap-print` blocks. Legible black-on-white; on-theme gold accents kept

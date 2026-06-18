@@ -13,6 +13,7 @@ import AnalyticsPage from './pages/AnalyticsPage.jsx'
 import ReadinessPage from './pages/ReadinessPage.jsx'
 import CapPrintPage from './pages/CapPrintPage.jsx'
 import WorkpapersPrintPage from './pages/WorkpapersPrintPage.jsx'
+import BoardPacketPrintPage from './pages/BoardPacketPrintPage.jsx'
 import SettingsPage from './pages/SettingsPage.jsx'
 import AccountSection from './components/settings/AccountSection.jsx'
 import MembersSection from './components/settings/MembersSection.jsx'
@@ -85,6 +86,7 @@ export default function App() {
         <Route path="/readiness" element={<ReadinessPage />} />
         <Route path="/readiness/cap/print" element={<CapPrintPage />} />
         <Route path="/readiness/workpapers/print" element={<WorkpapersPrintPage />} />
+        <Route path="/board-packet/print" element={<BoardPacketPrintPage />} />
         {/* History folded into Statements & Periods — keep old links working. */}
         <Route path="/history" element={<Navigate to="/statements" replace />} />
         <Route path="/settings" element={<SettingsPage />}>

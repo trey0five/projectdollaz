@@ -21,6 +21,7 @@ import { analyticsApi } from '../../lib/api.js'
 import EntitlementPausedPanel from '../analytics/EntitlementPausedPanel.jsx'
 import { HeadlineSkeleton, MetricCardSkeleton } from '../analytics/skeletons.jsx'
 import HomeHero from './HomeHero.jsx'
+import BoardPacketExportButton from '../reports/BoardPacketExportButton.jsx'
 import HomeVitals from './HomeVitals.jsx'
 import FeatureGateway from './FeatureGateway.jsx'
 import RecentPeriods from './RecentPeriods.jsx'
@@ -242,6 +243,12 @@ export default function HomeDashboard() {
         billing={billing}
         isOwner={isOwner}
       />
+
+      {selectedPeriodId && (
+        <div className="flex justify-end">
+          <BoardPacketExportButton periodId={selectedPeriodId} />
+        </div>
+      )}
 
       <HomeVitals
         metricsByKey={metricsByKey}
