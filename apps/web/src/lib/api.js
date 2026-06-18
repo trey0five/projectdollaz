@@ -224,10 +224,22 @@ export const analyticsApi = {
     api.get(`/schools/${schoolId}/periods/${periodId}/operational`),
   saveOperational: (schoolId, periodId, body) =>
     api.put(`/schools/${schoolId}/periods/${periodId}/operational`, body),
+  // ── Phase 3: per-period budget (budget-vs-actual) ─────────────────────────
+  budget: (schoolId, periodId) =>
+    api.get(`/schools/${schoolId}/periods/${periodId}/budget`),
+  saveBudget: (schoolId, periodId, body) =>
+    api.put(`/schools/${schoolId}/periods/${periodId}/budget`, body),
   // ── Phase 4C: per-school dashboard layout (owner customizes; all roles read) ──
   dashboard: (schoolId) => api.get(`/schools/${schoolId}/dashboard`),
   saveDashboard: (schoolId, body) => api.put(`/schools/${schoolId}/dashboard`, body),
   resetDashboard: (schoolId) => api.delete(`/schools/${schoolId}/dashboard`),
+}
+
+// ── Phase 3: recurring board-summary delivery (per school) ───────────────────
+export const reportScheduleApi = {
+  get: (schoolId) => api.get(`/schools/${schoolId}/report-schedule`),
+  save: (schoolId, body) => api.put(`/schools/${schoolId}/report-schedule`, body),
+  sendNow: (schoolId) => api.post(`/schools/${schoolId}/report-schedule/send-now`),
 }
 
 // ── Phase 2A: Florida scholarship AUP — Review Readiness ─────────────────────

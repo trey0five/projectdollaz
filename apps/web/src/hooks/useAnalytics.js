@@ -110,6 +110,62 @@ export function useOperational(schoolId, periodId) {
   return { operational: data, loading, error, notEntitled, reload }
 }
 
+// ── Phase 3: per-period budget (budget-vs-actual). Mirrors useOperational. ─────
+export function useBudget(schoolId, periodId) {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [notEntitled, setNotEntitled] = useState(false)
+
+  const load = useCallback(async (sid, pid) => {
+    setError('')
+    setNotEntitled(false)
+    try {
+      const res = await analyticsApi.budget(sid, pid)
+      setData(res.data)
+    } catch (e) {
+      if (isPaymentRequired(e)) {
+        setNotEntitled(true)
+        setData(null)
+      } else {
+        setError('Could not load the budget.')
+        setData(null)
+      }
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.resolve().then(() => {
+      if (cancelled) return
+      if (schoolId && periodId) {
+        setLoading(true)
+        load(schoolId, periodId)
+      } else {
+        setData(null)
+        setLoading(false)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [schoolId, periodId, load])
+
+  const save = useCallback(
+    async (body) => {
+      if (!schoolId || !periodId) return
+      const res = await analyticsApi.saveBudget(schoolId, periodId, body)
+      setData(res.data)
+      return res.data
+    },
+    [schoolId, periodId],
+  )
+
+  return { budget: data, loading, error, notEntitled, save }
+}
+
 // ── Phase 4C: per-school dashboard layout (order + visibility + chart variant) ─
 // Fetches GET /dashboard on schoolId change (same microtask-defer + cancelled
 // pattern). Exposes the layout plus save/reset actions for customize mode. A 402

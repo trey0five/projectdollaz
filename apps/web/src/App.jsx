@@ -19,6 +19,7 @@ import AccountSection from './components/settings/AccountSection.jsx'
 import MembersSection from './components/settings/MembersSection.jsx'
 import SchoolSection from './components/settings/SchoolSection.jsx'
 import OrgSection from './components/settings/OrgSection.jsx'
+import ReportScheduleSection from './components/settings/ReportScheduleSection.jsx'
 import BillingSection from './components/settings/BillingSection.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import RegisterPage from './pages/RegisterPage.jsx'
@@ -95,6 +96,7 @@ export default function App() {
           <Route path="members" element={<MembersSection />} />
           <Route path="school" element={<SchoolSection />} />
           <Route path="organization" element={<OrgSection />} />
+          <Route path="reports" element={<ReportScheduleSection />} />
           <Route path="billing" element={<BillingSection />} />
         </Route>
       </Route>

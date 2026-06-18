@@ -104,7 +104,9 @@ model School {
   correctiveActions  PeriodCorrectiveAction[]
   checklistItems     PeriodChecklistItem[]
   insights           PeriodInsight[]
+  budgets            PeriodBudget[]
   analyticsDashboard AnalyticsDashboard?
+  reportSchedule     ReportSchedule?
 
   @@index([organizationId])
   @@map("schools")
@@ -128,6 +130,7 @@ model FiscalPeriod {
   correctiveActions  PeriodCorrectiveAction[]
   checklistItems     PeriodChecklistItem[]
   insights           PeriodInsight[]
+  budgets            PeriodBudget[]
 
   // Phase 1C: DB-level idempotency for create-or-get under concurrency. The
   // natural key of a period is (school, period-end, type).
@@ -527,6 +530,46 @@ model PeriodInsight {
 
   @@unique([schoolId, fiscalPeriodId])
   @@map("period_insights")
+}
+
+/// Phase 3 — a period's budgeted top-line figures, for budget-vs-actual. Actuals
+/// come from the statement snapshot (total revenue / expenses), so only the
+/// budget is stored here. owner/accountant edit; one row per (school, period).
+model PeriodBudget {
+  id              String   @id @default(uuid()) @db.Uuid
+  schoolId        String   @map("school_id") @db.Uuid
+  fiscalPeriodId  String   @map("fiscal_period_id") @db.Uuid
+  totalRevenue    Decimal? @map("total_revenue") @db.Decimal(18, 2)
+  totalExpenses   Decimal? @map("total_expenses") @db.Decimal(18, 2)
+  notes           String?
+  updatedByUserId String?  @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  school       School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  fiscalPeriod FiscalPeriod @relation(fields: [fiscalPeriodId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, fiscalPeriodId])
+  @@map("period_budgets")
+}
+
+/// Phase 3 — recurring board-summary email delivery for a school. One per school.
+/// A dependency-free interval in ReportScheduleService sends to `recipients` when
+/// due (by cadence vs lastSentAt), composing a self-contained board summary.
+model ReportSchedule {
+  id              String    @id @default(uuid()) @db.Uuid
+  schoolId        String    @unique @map("school_id") @db.Uuid
+  cadence         String    @default("monthly") // 'weekly' | 'monthly'
+  recipients      String    @default("") // comma/newline-separated emails
+  enabled         Boolean   @default(false)
+  lastSentAt      DateTime? @map("last_sent_at")
+  updatedByUserId String?   @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@map("report_schedules")
 }
 
 // ── Dashboard customization (Phase 4C) ────────────────────────────────────────

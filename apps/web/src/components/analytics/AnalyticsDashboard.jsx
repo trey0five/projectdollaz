@@ -13,11 +13,13 @@ import { analyticsApi, apiErrorMessage } from '../../lib/api.js'
 import { isMixMetric } from '../../lib/metricMeta.js'
 import ContextBar from './ContextBar.jsx'
 import HeroVitals from './HeroVitals.jsx'
+import PeriodComparison from './PeriodComparison.jsx'
 import MetricGrid from './MetricGrid.jsx'
 import MetricSection from './MetricSection.jsx'
 import MetricDrawer from './MetricDrawer.jsx'
 import MixDonut from './MixDonut.jsx'
 import OperationalDataPanel from './OperationalDataPanel.jsx'
+import BudgetVsActual from './BudgetVsActual.jsx'
 import EntitlementPausedPanel from './EntitlementPausedPanel.jsx'
 import ReservedSlotCard from './ReservedSlotCard.jsx'
 import CustomizeBar from './CustomizeBar.jsx'
@@ -392,6 +394,18 @@ export default function AnalyticsDashboard() {
             </div>
           )}
 
+          {/* Budget vs. actual (Phase 3) */}
+          {selectedPeriodId && (
+            <div className={dimWhileCustomizing}>
+              <BudgetVsActual
+                schoolId={schoolId}
+                periodId={selectedPeriodId}
+                canEdit={canEditOperational}
+                metrics={metrics}
+              />
+            </div>
+          )}
+
           {/* HERO VITALS */}
           {vitalKeys.length > 0 && (
             <div className={dimWhileCustomizing}>
@@ -404,6 +418,11 @@ export default function AnalyticsDashboard() {
               />
             </div>
           )}
+
+          {/* Period-over-period comparison table (Phase 3) */}
+          <div className={dimWhileCustomizing}>
+            <PeriodComparison metrics={metrics} />
+          </div>
 
           {/* TUITION & AID + OTHER compact metrics */}
           {sectionItems.length > 0 && (

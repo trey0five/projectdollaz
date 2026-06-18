@@ -45,6 +45,20 @@ export class MailerService {
     )
   }
 
+  async sendBoardSummary(
+    email: string,
+    opts: { schoolName: string; periodLabel: string | null; body: string; link: string },
+  ): Promise<void> {
+    const { schoolName, periodLabel, body, link } = opts
+    const subject = `${schoolName} — board financial summary${
+      periodLabel ? ` (${periodLabel})` : ''
+    }`
+    const text =
+      `${schoolName}${periodLabel ? ` · ${periodLabel}` : ''}\n\n${body}\n\n` +
+      `View the full board packet: ${link}\n`
+    await this.deliver(email, subject, text, `Board summary for ${email}: ${link}`)
+  }
+
   async sendPasswordResetEmail(email: string, code: string): Promise<void> {
     await this.deliver(
       email,

@@ -8,6 +8,8 @@ import { AnalyticsService } from './analytics.service.js'
 import { InsightService } from './insight.service.js'
 import { OperationalController } from './operational.controller.js'
 import { OperationalService } from './operational.service.js'
+import { BudgetController } from './budget.controller.js'
+import { BudgetService } from './budget.service.js'
 import { DashboardController } from './dashboard.controller.js'
 import { DashboardService } from './dashboard.service.js'
 
@@ -20,7 +22,19 @@ import { DashboardService } from './dashboard.service.js'
  */
 @Module({
   imports: [AuthModule, PeriodsModule, BillingModule, AuditModule],
-  controllers: [AnalyticsController, OperationalController, DashboardController],
-  providers: [AnalyticsService, InsightService, OperationalService, DashboardService],
+  controllers: [
+    AnalyticsController,
+    OperationalController,
+    BudgetController,
+    DashboardController,
+  ],
+  providers: [
+    AnalyticsService,
+    InsightService,
+    OperationalService,
+    BudgetService,
+    DashboardService,
+  ],
+  exports: [InsightService],
 })
 export class AnalyticsModule {}
