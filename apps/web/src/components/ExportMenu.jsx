@@ -56,7 +56,7 @@ export default function ExportMenu() {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="btn-ghost w-full justify-center sm:w-auto"
+        className="btn-ghost w-full justify-center sm:w-[176px]"
         disabled={!reports}
       >
         Export <ChevronDown size={16} className={`transition-transform ${open ? 'rotate-180' : ''}`} />

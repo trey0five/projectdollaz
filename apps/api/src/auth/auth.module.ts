@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common'
 import { JwtModule } from '@nestjs/jwt'
 import { ConfigModule, ConfigService } from '@nestjs/config'
 import { PrismaModule } from '../prisma/prisma.module.js'
+import { AuditModule } from '../common/audit/audit.module.js'
 import { AuthController } from './auth.controller.js'
 import { AuthService } from './auth.service.js'
 import { PasswordService } from './password.service.js'
@@ -13,6 +14,7 @@ import { RolesGuard } from '../common/guards/roles.guard.js'
 @Module({
   imports: [
     PrismaModule,
+    AuditModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

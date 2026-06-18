@@ -24,6 +24,93 @@
     @apply bg-gold-gradient bg-clip-text text-transparent;
   }
 
+  /* ── Soft elevated card (Phase 4D lighter language) ──────
+     Replaces the heavy border-2 boxes: a hairline rule + soft shadow, larger
+     radius. .card-soft-hover adds a restrained gold ring + lift on hover. */
+  .card-soft {
+    @apply rounded-2xl border border-rule/50 bg-white shadow-card;
+  }
+  .card-soft-hover {
+    @apply transition-all duration-300 hover:-translate-y-0.5 hover:border-gold/40 hover:shadow-paper;
+  }
+
+  /* Flashy showcase card: a gold→navy gradient ring (masked to the border) with a
+     gold highlight that slowly rotates around it, brightening into a gold glow on
+     hover. Used for the home Explore tiles + Recent-periods chips. Rotation is
+     disabled under prefers-reduced-motion (the static gradient ring remains). */
+  .card-flashy {
+    @apply relative rounded-2xl bg-white shadow-card transition-shadow duration-300;
+  }
+  .card-flashy::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1.5px;
+    background: conic-gradient(
+      from var(--cf-angle),
+      rgba(184, 150, 80, 0.18),
+      rgba(184, 150, 80, 0.95) 12%,
+      rgba(26, 39, 68, 0.35) 36%,
+      rgba(184, 150, 80, 0.18) 58%,
+      rgba(214, 178, 110, 0.75) 84%,
+      rgba(184, 150, 80, 0.18)
+    );
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+    animation: cf-rotate 7s linear infinite;
+    transition: padding 0.3s ease, filter 0.3s ease;
+  }
+  .card-flashy:hover {
+    box-shadow:
+      0 14px 34px -10px rgba(184, 150, 80, 0.45),
+      0 4px 14px rgba(26, 39, 68, 0.08);
+  }
+  .card-flashy:hover::before {
+    padding: 2.25px;
+    filter: brightness(1.18) drop-shadow(0 0 7px rgba(184, 150, 80, 0.55));
+  }
+
+  /* Flashy border for the home vital tiles — distinct from .card-flashy: a
+     gold↔navy gradient ring that FLOWS side-to-side (vs. the rotating Explore
+     ring), brightening with a soft glow on hover. Pairs with the status rail. */
+  .card-vital {
+    @apply relative rounded-2xl bg-white shadow-card transition-shadow duration-300;
+  }
+  .card-vital::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1.5px;
+    background: linear-gradient(
+      110deg,
+      rgba(184, 150, 80, 0.85) 0%,
+      rgba(26, 39, 68, 0.4) 28%,
+      rgba(214, 178, 110, 0.95) 52%,
+      rgba(26, 39, 68, 0.4) 76%,
+      rgba(184, 150, 80, 0.85) 100%
+    );
+    background-size: 250% 100%;
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+    animation: cf-flow 5.5s ease-in-out infinite;
+    transition: padding 0.3s ease, filter 0.3s ease;
+  }
+  .card-vital:hover {
+    box-shadow:
+      0 14px 34px -10px rgba(26, 39, 68, 0.22),
+      0 0 18px -3px rgba(184, 150, 80, 0.4);
+  }
+  .card-vital:hover::before {
+    padding: 2.25px;
+    filter: brightness(1.15);
+  }
+
   /* ── Buttons (bigger + gradient + animated sheen) ─────── */
   .btn-primary {
     @apply relative inline-flex min-h-[44px] items-center justify-center gap-2.5 overflow-hidden rounded-xl
@@ -124,6 +211,29 @@
   @apply animate-shimmer rounded;
 }
 
+/* Animated angle for the .card-flashy rotating gradient border. Registered so it
+   can be transitioned/animated; falls back to a static gradient ring if a browser
+   doesn't support @property. */
+@property --cf-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+@keyframes cf-rotate {
+  to {
+    --cf-angle: 360deg;
+  }
+}
+@keyframes cf-flow {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
 /* ── Reduced motion: tame always-on CSS keyframe loops ─── */
 /* framer-motion JS animations are gated via useReducedMotion in the
    components; this covers the CSS-driven loops (parsing spinner + shimmer
@@ -131,7 +241,9 @@
 @media (prefers-reduced-motion: reduce) {
   .animate-spin,
   .animate-shimmer,
-  .shimmer-bar {
+  .shimmer-bar,
+  .card-flashy::before,
+  .card-vital::before {
     animation: none !important;
   }
 }
@@ -163,5 +275,276 @@
   }
   body {
     background: white;
+  }
+}
+
+/* ── Corrective Action Plan print document (Phase 2D) ──────────────────────
+   Scoped under `.cap-print` so it never collides with the report print block.
+   Legible black-on-white; on-theme accents kept subtle for ink economy. */
+.cap-print {
+  color: #1a2233;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.cap-print-header h1 {
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 24px;
+  font-weight: 600;
+  color: #11192b;
+  margin: 0 0 4px;
+}
+.cap-print-meta {
+  font-size: 12.5px;
+}
+.cap-print-muted {
+  color: #6b7280;
+}
+.cap-print-disclaimer {
+  margin: 14px 0 20px;
+  padding: 10px 14px;
+  border-left: 4px solid #c9a227;
+  background: #faf6ea;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.cap-print-empty,
+.cap-print-entry {
+  margin-top: 14px;
+}
+.cap-print-entry {
+  border: 1px solid #e3e6ec;
+  border-radius: 8px;
+  padding: 14px 16px;
+  page-break-inside: avoid;
+}
+.cap-print-entry-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid #eceef3;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+}
+.cap-print-entry-head h2 {
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+  flex: 1;
+  min-width: 180px;
+}
+.cap-print-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #11192b;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+.cap-print-sev {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+}
+.cap-print-sev-material {
+  color: #b42318;
+}
+.cap-print-sev-reportable {
+  color: #b54708;
+}
+.cap-print-cite {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: #6b7280;
+}
+.cap-print-field {
+  margin-top: 8px;
+}
+.cap-print-field-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #6b7280;
+}
+.cap-print-field-value {
+  margin-top: 2px;
+  white-space: pre-wrap;
+}
+.cap-print-row {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.cap-print-row .cap-print-field {
+  flex: 1;
+  min-width: 150px;
+}
+@media print {
+  .cap-print-entry {
+    border-color: #cbd0da;
+  }
+}
+
+/* ── Workpapers Packet print document (Phase 2C) ──────────────────────────
+   Scoped under `.packet-print` so it never collides with the report or
+   `.cap-print` blocks. Legible black-on-white; on-theme gold accents kept
+   subtle for ink economy. */
+.packet-print {
+  color: #1a2233;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.packet-print-cover h1 {
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 26px;
+  font-weight: 600;
+  color: #11192b;
+  margin: 0 0 6px;
+}
+.packet-print-meta {
+  font-size: 12.5px;
+}
+.packet-print-muted {
+  color: #6b7280;
+}
+.packet-print-disclaimer {
+  margin: 14px 0 20px;
+  padding: 10px 14px;
+  border-left: 4px solid #c9a227;
+  background: #faf6ea;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.packet-print-section {
+  margin-top: 20px;
+  page-break-before: always;
+}
+.packet-print-section:first-of-type {
+  page-break-before: avoid;
+}
+.packet-print-section > h2 {
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 19px;
+  font-weight: 600;
+  color: #11192b;
+  margin: 0 0 10px;
+  border-bottom: 2px solid #c9a227;
+  padding-bottom: 4px;
+}
+.packet-print-schedule,
+.packet-print-findings-group {
+  margin-top: 12px;
+  page-break-inside: avoid;
+}
+.packet-print-schedule h3,
+.packet-print-findings-group h3,
+.packet-print-anomalies h3 {
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 4px;
+  color: #1a2233;
+}
+.packet-print table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.packet-print td {
+  padding: 3px 6px;
+  border-bottom: 1px solid #e3e6ec;
+  vertical-align: top;
+}
+.packet-print-amt {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: nowrap;
+}
+.packet-print-total td {
+  font-weight: 700;
+  border-top: 1px solid #1a2233;
+  border-bottom: 2px solid #1a2233;
+}
+.packet-print-status {
+  margin-top: 8px;
+  font-size: 12px;
+}
+.packet-print-fstatus {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.packet-print-cite {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  color: #6b7280;
+}
+.packet-print-anomalies ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+}
+.packet-print-cap-entry {
+  margin-top: 12px;
+  border: 1px solid #e3e6ec;
+  border-radius: 8px;
+  padding: 12px 14px;
+  page-break-inside: avoid;
+}
+.packet-print-cap-entry p {
+  margin: 4px 0;
+}
+.packet-print-cap-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid #eceef3;
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+}
+.packet-print-cap-head h3 {
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+  flex: 1;
+  min-width: 160px;
+}
+.packet-print-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #11192b;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+.packet-print-sev {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid #b54708;
+  color: #b54708;
+}
+@media print {
+  .packet-print-cap-entry,
+  .packet-print td {
+    border-color: #cbd0da;
   }
 }

@@ -41,9 +41,28 @@ const body = {
   },
 }
 
+// /reports/generate is JWT-guarded. Supply a token via API_TOKEN, or let the
+// script log in with API_EMAIL/API_PASSWORD (defaults to the dev seed owner).
+async function resolveToken() {
+  if (process.env.API_TOKEN) return process.env.API_TOKEN
+  const email = process.env.API_EMAIL ?? 'owner@finrep.dev'
+  const password = process.env.API_PASSWORD ?? 'Password123!'
+  const r = await fetch(`${API_URL}/auth/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  })
+  if (!r.ok) return null
+  return (await r.json()).access_token ?? null
+}
+const token = await resolveToken()
+
 const res = await fetch(`${API_URL}/reports/generate`, {
   method: 'POST',
-  headers: { 'content-type': 'application/json' },
+  headers: {
+    'content-type': 'application/json',
+    ...(token ? { authorization: `Bearer ${token}` } : {}),
+  },
   body: JSON.stringify(body),
 })
 

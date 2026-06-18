@@ -46,9 +46,18 @@ export class RolesGuard implements CanActivate {
       throw new ForbiddenException('Target school id is required.')
     }
 
-    const membership = await this.prisma.membership.findUnique({
-      where: { userId_schoolId: { userId: user.id, schoolId } },
-    })
+    // A malformed (non-UUID) schoolId would make Prisma throw an unhandled error
+    // and surface as a 500. Treat any lookup failure as "no membership" (403) —
+    // semantically identical to a school you cannot belong to, and consistent
+    // across all tenant-isolated controllers (analytics/operational/compliance).
+    let membership: Awaited<ReturnType<typeof this.prisma.membership.findUnique>> = null
+    try {
+      membership = await this.prisma.membership.findUnique({
+        where: { userId_schoolId: { userId: user.id, schoolId } },
+      })
+    } catch {
+      throw new ForbiddenException('You are not a member of this school.')
+    }
     if (!membership || membership.status !== 'active') {
       throw new ForbiddenException('You are not a member of this school.')
     }

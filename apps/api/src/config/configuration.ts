@@ -24,10 +24,32 @@ export interface AppConfig {
     pass: string
     from: string
   }
-  // Reserved placeholders — read but UNUSED until Phase 1D.
+  // Phase 1D — Stripe subscription billing. All env-driven with safe empty
+  // defaults so the api BOOTS with no Stripe key set (checkout/portal then
+  // return a clear error; the webhook still verifies if a webhookSecret exists).
   stripe: {
     secretKey: string
     webhookSecret: string
+    priceMonthly: string
+    priceYearly: string
+    trialDays: number
+    successUrl: string
+    cancelUrl: string
+    portalReturnUrl: string
+  }
+  // Phase 4D — optional Claude upgrade for the AI insight summary. Empty by
+  // default so the api BOOTS with no key and insights fall back to the pure
+  // deterministic rule-based summary (never throws when unset).
+  anthropic: {
+    apiKey: string
+    model: string
+  }
+  // Alternative LLM provider for the insight upgrade: OpenRouter (OpenAI-compatible,
+  // routes to Claude). Preferred over the native Anthropic path when its key is set.
+  openrouter: {
+    apiKey: string
+    model: string
+    baseUrl: string
   }
 }
 
@@ -66,10 +88,11 @@ export function configuration(): AppConfig {
   }
 
   const nodeEnv = process.env.NODE_ENV ?? 'development'
+  const webOrigin = process.env.WEB_ORIGIN ?? 'http://localhost:5173'
 
   return {
     port: parseInt(process.env.PORT ?? '8000', 10),
-    webOrigin: process.env.WEB_ORIGIN ?? 'http://localhost:5173',
+    webOrigin,
     database: { url },
     nodeEnv,
     jwt: {
@@ -87,6 +110,23 @@ export function configuration(): AppConfig {
     stripe: {
       secretKey: process.env.STRIPE_SECRET_KEY ?? '',
       webhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? '',
+      priceMonthly: process.env.STRIPE_PRICE_MONTHLY ?? '',
+      priceYearly: process.env.STRIPE_PRICE_YEARLY ?? '',
+      trialDays: parseInt(process.env.STRIPE_TRIAL_DAYS ?? '14', 10),
+      successUrl:
+        process.env.STRIPE_SUCCESS_URL ?? `${webOrigin}/settings/billing?checkout=success`,
+      cancelUrl:
+        process.env.STRIPE_CANCEL_URL ?? `${webOrigin}/settings/billing?checkout=cancel`,
+      portalReturnUrl: process.env.STRIPE_PORTAL_RETURN_URL ?? `${webOrigin}/settings/billing`,
+    },
+    anthropic: {
+      apiKey: process.env.ANTHROPIC_API_KEY ?? '',
+      model: process.env.ANTHROPIC_MODEL ?? 'claude-haiku-4-5',
+    },
+    openrouter: {
+      apiKey: process.env.OPENROUTER_API_KEY ?? '',
+      model: process.env.OPENROUTER_MODEL ?? 'anthropic/claude-haiku-4.5',
+      baseUrl: process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1',
     },
   }
 }

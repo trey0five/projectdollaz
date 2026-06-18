@@ -151,6 +151,8 @@ export const authApi = {
   login: (data) => api.post('/auth/login', data),
   logout: () => api.post('/auth/logout'),
   me: () => api.get('/auth/me'),
+  updateMe: (data) => api.patch('/auth/me', data),
+  changePassword: (data) => api.post('/auth/change-password', data),
   verifyEmail: (token) => api.post('/auth/verify-email', { token }),
   resendVerification: (email) => api.post('/auth/resend-verification', { email }),
   forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
@@ -161,7 +163,165 @@ export const authApi = {
 export const schoolsApi = {
   list: () => api.get('/schools'),
   create: (data) => api.post('/schools', data),
+  update: (schoolId, data) => api.patch(`/schools/${schoolId}`, data),
   members: (schoolId) => api.get(`/schools/${schoolId}/members`),
+  updateMemberRole: (schoolId, userId, data) =>
+    api.patch(`/schools/${schoolId}/members/${userId}`, data),
+  removeMember: (schoolId, userId) => api.delete(`/schools/${schoolId}/members/${userId}`),
   invite: (schoolId, data) => api.post(`/schools/${schoolId}/invitations`, data),
+  listInvitations: (schoolId) => api.get(`/schools/${schoolId}/invitations`),
+  revokeInvitation: (schoolId, invitationId) =>
+    api.delete(`/schools/${schoolId}/invitations/${invitationId}`),
   acceptInvite: (token) => api.post('/invitations/accept', { token }),
+}
+
+export const orgsApi = {
+  me: () => api.get('/organizations/me'),
+  update: (orgId, data) => api.patch(`/organizations/${orgId}`, data),
+}
+
+// ── Phase 1C: persistence / history / comparatives ───────────────────────────
+export const periodsApi = {
+  list: (schoolId) => api.get(`/schools/${schoolId}/periods`),
+  createOrGet: (schoolId, data) => api.post(`/schools/${schoolId}/periods`, data),
+}
+
+export const importsApi = {
+  create: (schoolId, data) => api.post(`/schools/${schoolId}/imports`, data),
+  listForPeriod: (schoolId, periodId) =>
+    api.get(`/schools/${schoolId}/periods/${periodId}/imports`),
+  get: (schoolId, importId) => api.get(`/schools/${schoolId}/imports/${importId}`),
+}
+
+export const statementsApi = {
+  generate: (schoolId, periodId, body = {}) =>
+    api.post(`/schools/${schoolId}/periods/${periodId}/statements`, body),
+  latest: (schoolId, periodId) =>
+    api.get(`/schools/${schoolId}/periods/${periodId}/statements`),
+  list: (schoolId, periodId) =>
+    api.get(`/schools/${schoolId}/periods/${periodId}/statements/history`),
+}
+
+export const mappingApi = {
+  get: (schoolId) => api.get(`/schools/${schoolId}/mapping`),
+}
+
+// ── Phase 4A: analytics & insights ───────────────────────────────────────────
+// Same axios `api` instance, so these inherit the Bearer + proactive-refresh
+// interceptors and surface the entitlement 402 (isPaymentRequired) like every
+// other paid read.
+export const analyticsApi = {
+  metrics: (schoolId, periodId) =>
+    api.get(`/schools/${schoolId}/periods/${periodId}/metrics`),
+  trends: (schoolId, metric) =>
+    api.get(`/schools/${schoolId}/metrics/trends`, { params: { metric } }),
+  // ── Phase 4D: AI insight summary + static metric metadata ─────────────────
+  insights: (schoolId, periodId) =>
+    api.get(`/schools/${schoolId}/periods/${periodId}/insights`),
+  meta: (schoolId) => api.get(`/schools/${schoolId}/metrics/meta`),
+  // ── Phase 4B: per-period operational data (enrollment + aid) ──────────────
+  operational: (schoolId, periodId) =>
+    api.get(`/schools/${schoolId}/periods/${periodId}/operational`),
+  saveOperational: (schoolId, periodId, body) =>
+    api.put(`/schools/${schoolId}/periods/${periodId}/operational`, body),
+  // ── Phase 4C: per-school dashboard layout (owner customizes; all roles read) ──
+  dashboard: (schoolId) => api.get(`/schools/${schoolId}/dashboard`),
+  saveDashboard: (schoolId, body) => api.put(`/schools/${schoolId}/dashboard`, body),
+  resetDashboard: (schoolId) => api.delete(`/schools/${schoolId}/dashboard`),
+}
+
+// ── Phase 2A: Florida scholarship AUP — Review Readiness ─────────────────────
+// Same axios `api` instance: inherits Bearer + proactive-refresh and surfaces the
+// entitlement 402 (isPaymentRequired) like every other paid read.
+export const complianceApi = {
+  // GET grouped findings + summary for a period.
+  get: (schoolId, periodId) =>
+    api.get(`/schools/${schoolId}/periods/${periodId}/compliance`),
+  // GET the saved intake row (or all-nulls).
+  getInputs: (schoolId, periodId) =>
+    api.get(`/schools/${schoolId}/periods/${periodId}/compliance/inputs`),
+  // PUT the intake (owner/accountant). Re-run GET /compliance after to refresh badges.
+  saveInputs: (schoolId, periodId, body) =>
+    api.put(`/schools/${schoolId}/periods/${periodId}/compliance/inputs`, body),
+}
+
+// ── Phase 2B: scholarship reconciliation (funding-org disbursements) ──────────
+// Same axios `api` instance -> Bearer + proactive-refresh + the entitlement 402
+// (isPaymentRequired). The web parses the funding-org CSV/XLSX IN-BROWSER and
+// PUTs the parsed rows (mirrors the Phase-1C immutable-rows intake pattern).
+export const reconciliationApi = {
+  // GET the period's disbursement rows (all roles).
+  listDisbursements: (schoolId, periodId) =>
+    api.get(`/schools/${schoolId}/periods/${periodId}/disbursements`),
+  // PUT replaces the whole set with the parsed rows (owner/accountant).
+  saveDisbursements: (schoolId, periodId, rows) =>
+    api.put(`/schools/${schoolId}/periods/${periodId}/disbursements`, { rows }),
+  // DELETE clears the set (owner/accountant).
+  clearDisbursements: (schoolId, periodId) =>
+    api.delete(`/schools/${schoolId}/periods/${periodId}/disbursements`),
+  // GET the pure reconciliation result + recorded-figure echo (all roles).
+  get: (schoolId, periodId) =>
+    api.get(`/schools/${schoolId}/periods/${periodId}/reconciliation`),
+}
+
+// ── Phase 2D: Corrective Action Plan (CAP) ───────────────────────────────────
+// Same axios `api` instance -> Bearer + proactive-refresh + the entitlement 402
+// (isPaymentRequired). GET recomputes the 2A findings, scaffolds, and merges saved
+// edits; PUT upserts the editable rows (owner/accountant), keyed by ruleId.
+export const correctiveActionApi = {
+  // GET the merged CAP (scaffold + saved edits) + summary (all roles).
+  get: (schoolId, periodId) =>
+    api.get(`/schools/${schoolId}/periods/${periodId}/corrective-action-plan`),
+  // PUT a mergeable set of editable rows (owner/accountant). Returns the fresh plan.
+  save: (schoolId, periodId, entries) =>
+    api.put(`/schools/${schoolId}/periods/${periodId}/corrective-action-plan`, { entries }),
+  // Dismiss (soft-archive) or restore a resolved row (owner/accountant). Fresh plan.
+  setArchived: (schoolId, periodId, ruleId, archived) =>
+    api.put(
+      `/schools/${schoolId}/periods/${periodId}/corrective-action-plan/${ruleId}/archived`,
+      { archived },
+    ),
+}
+
+// ── Phase 2C: Year-End checklist + Workpapers Packet ─────────────────────────
+// Same axios `api` instance -> Bearer + proactive-refresh + the entitlement 402
+// (isPaymentRequired). GET /checklist builds the pure checklist + merges saved
+// state + a readiness rollup + live-finding context; PUT upserts item state
+// (owner/accountant) keyed by itemId. GET /workpapers returns the aggregated
+// packet (statements/reconciliation/findings/CAP/rollup) the print route renders.
+export const checklistApi = {
+  // GET the merged checklist (groups + rollup) — all roles.
+  get: (schoolId, periodId) =>
+    api.get(`/schools/${schoolId}/periods/${periodId}/checklist`),
+  // PUT a mergeable set of item states (owner/accountant). Returns the fresh checklist.
+  save: (schoolId, periodId, items) =>
+    api.put(`/schools/${schoolId}/periods/${periodId}/checklist`, { items }),
+}
+
+export const workpapersApi = {
+  // GET the aggregated workpapers packet payload (all roles).
+  get: (schoolId, periodId) =>
+    api.get(`/schools/${schoolId}/periods/${periodId}/workpapers`),
+}
+
+// ── Phase 1D: subscription billing ───────────────────────────────────────────
+export const billingApi = {
+  get: (schoolId) => api.get(`/schools/${schoolId}/billing`),
+  checkout: (schoolId, plan) =>
+    api.post(`/schools/${schoolId}/billing/checkout`, { plan }),
+  portal: (schoolId) => api.post(`/schools/${schoolId}/billing/portal`),
+}
+
+// The backend signals a lapsed trial / inactive subscription on a paid write
+// (statement generate, import create) with HTTP 402 + code SUBSCRIPTION_REQUIRED.
+export function isPaymentRequired(err) {
+  return (
+    err?.response?.status === 402 ||
+    err?.response?.data?.code === 'SUBSCRIPTION_REQUIRED'
+  )
+}
+
+// Extract a Nest error response's `code` field (e.g. LAST_OWNER) if present.
+export function apiErrorCode(err) {
+  return err?.response?.data?.code || null
 }

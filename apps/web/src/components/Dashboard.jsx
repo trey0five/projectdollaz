@@ -2,9 +2,9 @@ import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { FileText, Maximize2 } from 'lucide-react'
 import { useApp } from '../context/AppContext.jsx'
-import TopBar from './TopBar.jsx'
 import IntakeBar from './IntakeBar.jsx'
 import MappingPanel from './MappingPanel.jsx'
+import OpeningBalances from './OpeningBalances.jsx'
 import ValidationBanner from './ValidationBanner.jsx'
 import StatementOfActivities from './reports/StatementOfActivities.jsx'
 import StatementOfFinancialPosition from './reports/StatementOfFinancialPosition.jsx'
@@ -14,10 +14,10 @@ import ReportExpandOverlay from './reports/ReportExpandOverlay.jsx'
 import ReportPicker from './reports/ReportPicker.jsx'
 
 const TABS = [
-  { key: 'soa', label: 'Statement of Activities', Component: StatementOfActivities },
-  { key: 'sfp', label: 'Statement of Financial Position', Component: StatementOfFinancialPosition },
-  { key: 'scf', label: 'Statement of Cash Flows', Component: StatementOfCashFlows },
-  { key: 'na', label: 'Net Assets', Component: StatementOfNetAssets },
+  { key: 'soa', label: 'Statement of Activities', short: 'Activities', Component: StatementOfActivities },
+  { key: 'sfp', label: 'Statement of Financial Position', short: 'Financial Position', Component: StatementOfFinancialPosition },
+  { key: 'scf', label: 'Statement of Cash Flows', short: 'Cash Flows', Component: StatementOfCashFlows },
+  { key: 'na', label: 'Net Assets', short: 'Net Assets', Component: StatementOfNetAssets },
 ]
 
 export default function Dashboard() {
@@ -37,30 +37,25 @@ export default function Dashboard() {
   const Active = activeTab.Component
 
   return (
-    <div className="min-h-screen">
-      <TopBar />
+    <div>
       <IntakeBar />
 
-      {/* tab bar — horizontally scrollable on narrow screens; the active
-          underline (framer layoutId) is preserved. An Expand control opens the
-          active statement full-screen. */}
-      <div className="no-print border-b-2 border-rule bg-white">
-        <div className="mx-auto flex w-full max-w-[980px] items-stretch sm:px-10">
-        {/* mobile: dropdown picker (cleaner than a swipeable tab strip) */}
-        <div className="flex flex-1 items-stretch sm:hidden">
-          <ReportPicker tabs={TABS} value={tab} onChange={setTab} />
-        </div>
-        {/* desktop: segmented tabs with the animated gold underline */}
-        <nav className="scrollbar-none hidden flex-1 overflow-x-auto sm:flex">
+      {/* Desktop tab bar — segmented tabs with the animated gold underline.
+          (On mobile the statement switcher is a dropdown placed directly above
+          the document preview below, so this bar is desktop-only. Full-screen
+          zoom is available by tapping a statement.) */}
+      <div className="no-print hidden border-b-2 border-rule bg-white sm:block">
+        <div className="mx-auto flex w-full max-w-[980px] items-stretch px-4 sm:px-10">
+        <nav className="scrollbar-none flex flex-1 items-stretch gap-1 overflow-x-auto">
           {TABS.map((t) => (
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
-              className={`relative -mb-0.5 shrink-0 whitespace-nowrap rounded-t-lg px-3 py-4 text-[13px] font-semibold uppercase tracking-wide transition-colors ${
+              className={`relative -mb-0.5 shrink-0 whitespace-nowrap rounded-t-lg px-3.5 py-4 text-[13px] font-semibold uppercase tracking-wide transition-colors ${
                 tab === t.key ? 'text-navy' : 'text-muted hover:bg-section/60 hover:text-navy'
               }`}
             >
-              {t.label}
+              {t.short}
               {tab === t.key && (
                 <motion.span
                   layoutId="tab-underline"
@@ -70,17 +65,6 @@ export default function Dashboard() {
             </button>
           ))}
         </nav>
-        {reports && (
-          <button
-            type="button"
-            onClick={() => setExpanded(true)}
-            className="flex h-11 shrink-0 items-center gap-1.5 self-center px-4 text-sm font-semibold uppercase tracking-wide text-muted transition-colors hover:text-navy"
-            aria-label="Expand report to full screen"
-          >
-            <Maximize2 size={16} />
-            <span className="hidden sm:inline">Expand</span>
-          </button>
-        )}
         </div>
       </div>
 
@@ -106,7 +90,14 @@ export default function Dashboard() {
         ) : (
           <>
             <ValidationBanner validation={reports.validation} />
+            <OpeningBalances />
             <MappingPanel unmapped={reports.unmapped} />
+            {/* mobile: statement switcher sits directly above the document preview.
+                No overflow-hidden (it would clip the dropdown menu); relative z-20
+                keeps the open menu above the statement preview below. */}
+            <div className="relative z-20 mb-4 rounded-xl border-2 border-rule bg-white shadow-card sm:hidden">
+              <ReportPicker tabs={TABS} value={tab} onChange={setTab} />
+            </div>
             <AnimatePresence mode="wait">
               <motion.div
                 key={tab}

@@ -79,6 +79,15 @@ export function SchoolProvider({ children }) {
     return created
   }, [])
 
+  // Persist a partial school update (e.g. confirmed opening balances) and
+  // reflect the returned record in local state so the engine input updates.
+  const updateSchool = useCallback(async (id, patch) => {
+    const res = await schoolsApi.update(id, patch)
+    const updated = res.data
+    setSchools((prev) => prev.map((s) => (s.id === id ? updated : s)))
+    return updated
+  }, [])
+
   const activeSchool = schools.find((s) => s.id === activeId) || null
 
   const value = {
@@ -89,6 +98,7 @@ export function SchoolProvider({ children }) {
     error,
     setActiveSchool,
     createSchool,
+    updateSchool,
     reloadSchools: loadSchools,
   }
 

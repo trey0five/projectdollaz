@@ -2,10 +2,18 @@ import 'reflect-metadata'
 import { NestFactory } from '@nestjs/core'
 import { ConfigService } from '@nestjs/config'
 import { ValidationPipe } from '@nestjs/common'
+import type { NestExpressApplication } from '@nestjs/platform-express'
 import { AppModule } from './app.module.js'
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule)
+  // rawBody:true makes Nest's express adapter retain the RAW request buffer on
+  // req.rawBody (in ADDITION to the parsed JSON on req.body). The Stripe webhook
+  // controller verifies the signature against req.rawBody, so every other route
+  // keeps normal JSON parsing untouched and we avoid a direct `express` import
+  // (express is only a transitive dep of @nestjs/platform-express).
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    rawBody: true,
+  })
 
   app.useGlobalPipes(
     new ValidationPipe({

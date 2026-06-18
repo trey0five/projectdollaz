@@ -12,9 +12,16 @@ export default function PeriodControls() {
     byRole,
   } = useApp()
 
+  // `periodDate` from context is the EFFECTIVE date (detected-until-touched).
   const cyMeta = byRole.cy?.metadata
   const detected = cyMeta ? inferPeriod(cyMeta) : null
   const detectedDate = detected?.periodEndDate
+
+  // The date is auto-filled from the CY-slot file ONLY when the user hasn't
+  // touched it AND that file actually supplied a detected date (which the
+  // effective value is now showing). Truthful — never claims an auto-fill when
+  // the field is empty.
+  const autoFilled = !periodTouched && !!detectedDate && periodDate === detectedDate
   const showReset = periodTouched && detectedDate && detectedDate !== periodDate
 
   return (
@@ -49,7 +56,7 @@ export default function PeriodControls() {
       </div>
 
       <div className="flex flex-col pb-1 text-[12px] text-muted">
-        {detectedDate && !periodTouched && (
+        {autoFilled && (
           <span className="italic">
             Auto-filled from {byRole.cy?.fileName}
           </span>

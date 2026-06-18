@@ -2,15 +2,44 @@
 // existing smart-intake Dashboard, scoped to the selected school) lives behind
 // ProtectedRoute. SchoolProvider wraps the authed branch so the switcher +
 // report preview can read the user's schools.
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { SchoolProvider } from './context/SchoolContext.jsx'
+import { BillingProvider } from './context/BillingContext.jsx'
+import { PersistenceProvider } from './context/PersistenceContext.jsx'
 import { ProtectedRoute, PublicOnlyRoute } from './components/auth/RouteGuards.jsx'
-import AuthedShell from './components/AuthedShell.jsx'
+import HomePage from './pages/HomePage.jsx'
+import StatementsPage from './pages/StatementsPage.jsx'
+import AnalyticsPage from './pages/AnalyticsPage.jsx'
+import ReadinessPage from './pages/ReadinessPage.jsx'
+import CapPrintPage from './pages/CapPrintPage.jsx'
+import WorkpapersPrintPage from './pages/WorkpapersPrintPage.jsx'
+import SettingsPage from './pages/SettingsPage.jsx'
+import AccountSection from './components/settings/AccountSection.jsx'
+import MembersSection from './components/settings/MembersSection.jsx'
+import SchoolSection from './components/settings/SchoolSection.jsx'
+import OrgSection from './components/settings/OrgSection.jsx'
+import BillingSection from './components/settings/BillingSection.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import RegisterPage from './pages/RegisterPage.jsx'
 import VerifyEmailPage from './pages/VerifyEmailPage.jsx'
 import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx'
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx'
+
+// Shared authed layout: a single SchoolProvider wraps BOTH the dashboard and the
+// settings routes so the active school + role context is consistent across them.
+function AuthedLayout() {
+  return (
+    <ProtectedRoute>
+      <SchoolProvider>
+        <BillingProvider>
+          <PersistenceProvider>
+            <Outlet />
+          </PersistenceProvider>
+        </BillingProvider>
+      </SchoolProvider>
+    </ProtectedRoute>
+  )
+}
 
 export default function App() {
   return (
@@ -49,16 +78,24 @@ export default function App() {
           </PublicOnlyRoute>
         }
       />
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <SchoolProvider>
-              <AuthedShell />
-            </SchoolProvider>
-          </ProtectedRoute>
-        }
-      />
+      <Route element={<AuthedLayout />}>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/statements" element={<StatementsPage />} />
+        <Route path="/analytics" element={<AnalyticsPage />} />
+        <Route path="/readiness" element={<ReadinessPage />} />
+        <Route path="/readiness/cap/print" element={<CapPrintPage />} />
+        <Route path="/readiness/workpapers/print" element={<WorkpapersPrintPage />} />
+        {/* History folded into Statements & Periods — keep old links working. */}
+        <Route path="/history" element={<Navigate to="/statements" replace />} />
+        <Route path="/settings" element={<SettingsPage />}>
+          <Route index element={<Navigate to="account" replace />} />
+          <Route path="account" element={<AccountSection />} />
+          <Route path="members" element={<MembersSection />} />
+          <Route path="school" element={<SchoolSection />} />
+          <Route path="organization" element={<OrgSection />} />
+          <Route path="billing" element={<BillingSection />} />
+        </Route>
+      </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

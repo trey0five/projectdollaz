@@ -9,12 +9,13 @@ import { useApp } from '../context/AppContext.jsx'
  * flicker). Hidden + pointer-events-none unless a drag is active.
  */
 export default function DragOverlay() {
-  const { loadFiles } = useApp()
+  const { loadFiles, canEdit } = useApp()
   const reduce = useReducedMotion()
   const [active, setActive] = useState(false)
   const depth = useRef(0)
 
   useEffect(() => {
+    if (!canEdit) return undefined
     const hasFiles = (e) =>
       e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files')
 
@@ -32,24 +33,37 @@ export default function DragOverlay() {
       depth.current = Math.max(0, depth.current - 1)
       if (depth.current === 0) setActive(false)
     }
-    const onDrop = (e) => {
-      e.preventDefault()
+    // CAPTURE-phase reset: always tears the overlay down on ANY drop/dragend,
+    // even when a child target (e.g. EmptySlotCard) calls stopPropagation on
+    // its synthetic drop to suppress the bubble-phase auto-classify load below.
+    // The HTML DnD spec fires no final dragleave after a successful drop, so
+    // without this the overlay could stay stuck after dropping into a slot.
+    const onReset = () => {
       depth.current = 0
       setActive(false)
+    }
+    // BUBBLE-phase load: a child slot's stopPropagation prevents this from
+    // firing, so a file dropped INTO a slot is NOT also auto-classified here.
+    const onDrop = (e) => {
+      e.preventDefault()
       if (e.dataTransfer?.files?.length) loadFiles(e.dataTransfer.files)
     }
 
     window.addEventListener('dragenter', onEnter)
     window.addEventListener('dragover', onOver)
     window.addEventListener('dragleave', onLeave)
+    window.addEventListener('drop', onReset, true)
+    window.addEventListener('dragend', onReset, true)
     window.addEventListener('drop', onDrop)
     return () => {
       window.removeEventListener('dragenter', onEnter)
       window.removeEventListener('dragover', onOver)
       window.removeEventListener('dragleave', onLeave)
+      window.removeEventListener('drop', onReset, true)
+      window.removeEventListener('dragend', onReset, true)
       window.removeEventListener('drop', onDrop)
     }
-  }, [loadFiles])
+  }, [loadFiles, canEdit])
 
   return (
     <AnimatePresence>

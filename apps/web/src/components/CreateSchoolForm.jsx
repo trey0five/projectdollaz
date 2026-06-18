@@ -17,28 +17,17 @@ export default function CreateSchoolForm() {
   const { createSchool } = useSchools()
   const { logout } = useAuth()
   const [name, setName] = useState('')
-  const [begin, setBegin] = useState('')
-  const [pyBegin, setPyBegin] = useState('')
-  const [auditBegin, setAuditBegin] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-
-  const num = (v) => {
-    const n = Number(v)
-    return Number.isFinite(n) ? n : 0
-  }
 
   const submit = async () => {
     if (!name.trim() || busy) return
     setError('')
     setBusy(true)
     try {
-      await createSchool({
-        name: name.trim(),
-        netAssetsBegin: num(begin),
-        pyNetAssetsBegin: num(pyBegin),
-        auditNetAssetsBegin: num(auditBegin),
-      })
+      // Name only — opening net-asset balances are derived from the uploaded
+      // trial balances (see OpeningBalances / AppContext), not entered here.
+      await createSchool({ name: name.trim() })
     } catch (err) {
       setError(apiErrorMessage(err, 'Could not create the school.'))
     } finally {
@@ -62,7 +51,7 @@ export default function CreateSchoolForm() {
             <h1 className="font-serif text-[26px] font-semibold leading-tight text-navy">
               Create your school
             </h1>
-            <p className="text-[13px] text-muted">Set the beginning net-asset balances the engine needs.</p>
+            <p className="text-[13px] text-muted">Just a name to start — opening balances are read from your first trial-balance upload.</p>
           </div>
         </div>
 
@@ -75,21 +64,6 @@ export default function CreateSchoolForm() {
             onChange={(e) => setName(e.target.value)}
           />
         </div>
-        <div className="mb-5">
-          <label className={labelCls}>Net assets — beginning (CY)</label>
-          <input className={inputCls} inputMode="decimal" value={begin} placeholder="7870000" onChange={(e) => setBegin(e.target.value)} />
-        </div>
-        <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
-          <div className="mb-5">
-            <label className={labelCls}>Prior-year begin</label>
-            <input className={inputCls} inputMode="decimal" value={pyBegin} placeholder="7500000" onChange={(e) => setPyBegin(e.target.value)} />
-          </div>
-          <div className="mb-5">
-            <label className={labelCls}>Audited begin</label>
-            <input className={inputCls} inputMode="decimal" value={auditBegin} placeholder="7500000" onChange={(e) => setAuditBegin(e.target.value)} />
-          </div>
-        </div>
-
         {error && (
           <div className="mb-3 rounded-md bg-danger/10 px-3 py-2 text-center text-[13px] text-danger">
             {error}

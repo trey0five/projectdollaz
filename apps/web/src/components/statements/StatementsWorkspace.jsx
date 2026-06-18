@@ -1,0 +1,205 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Statements & Periods workspace (the merge). Combines the saved-periods list
+// (the old HistoryPanel) with the live statements workspace (the old AuthedShell
+// AppProvider -> Dashboard tree). The two-mode model is PRESERVED, not rewritten:
+//   • The NEWEST/active period IS the live editable workspace (intake -> generate
+//     -> save) via AppProvider seeded with the hydrated files (verbatim wiring).
+//   • Any OTHER saved period opens its stored canonical snapshot READ-ONLY via
+//     reopenPeriod() -> ReportTabs (reproducibility preserved, no recompute).
+// A `?period=<id>` deep link (from the home recent-periods strip) preselects a
+// saved period on mount.
+// ─────────────────────────────────────────────────────────────────────────────
+import { useEffect, useRef, useState } from 'react'
+import { motion } from 'framer-motion'
+import { Link, useSearchParams } from 'react-router-dom'
+import { ArrowLeft, FileStack } from 'lucide-react'
+import { useSchools } from '../../context/SchoolContext.jsx'
+import { AppProvider } from '../../context/AppContext.jsx'
+import { usePersistence } from '../../context/PersistenceContext.jsx'
+import { formatShortDate, PERIOD_LABELS } from '../../lib/format.js'
+import CreateSchoolForm from '../CreateSchoolForm.jsx'
+import Dashboard from '../Dashboard.jsx'
+import ReportTabs from '../reports/ReportTabs.jsx'
+import SavedPeriodsRail from './SavedPeriodsRail.jsx'
+
+function Splash() {
+  return (
+    <div className="flex min-h-[60vh] items-center justify-center">
+      <motion.div
+        className="h-10 w-10 rounded-full border-4 border-gold/30 border-t-gold"
+        animate={{ rotate: 360 }}
+        transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
+      />
+    </div>
+  )
+}
+
+export default function StatementsWorkspace() {
+  const { schools, activeSchool, loading } = useSchools()
+  const { periods, hydrating, hydratedFiles, activePeriod, hydrationToken, reopenPeriod } =
+    usePersistence()
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  // Read-only reopen state for non-active saved periods.
+  const [openId, setOpenId] = useState(null)
+  const [openBundle, setOpenBundle] = useState(null)
+  const [openPeriod, setOpenPeriod] = useState(null)
+  const [loadingId, setLoadingId] = useState(null)
+
+  const workspaceRef = useRef(null)
+
+  const showLive = (period) => {
+    setOpenId(null)
+    setOpenBundle(null)
+    setOpenPeriod(null)
+    if (typeof window !== 'undefined') {
+      requestAnimationFrame(() => {
+        workspaceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      })
+    }
+    if (period) void period
+  }
+
+  const openReadOnly = async (period) => {
+    if (!period.hasSnapshot) return
+    setLoadingId(period.id)
+    const snapshot = await reopenPeriod(period.id)
+    setLoadingId(null)
+    if (snapshot) {
+      setOpenBundle(snapshot.payload)
+      setOpenId(period.id)
+      setOpenPeriod(period)
+      if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  }
+
+  const onSelectPeriod = (period) => {
+    // Active/newest period -> the live editable workspace; others -> read-only.
+    if (period.id === activePeriod?.id) showLive(period)
+    else openReadOnly(period)
+  }
+
+  // Deep link: ?period=<id> preselects a saved period once hydration settles.
+  // Side effects run in a deferred microtask (await-before-setState pattern) so
+  // no setState is called synchronously inside the effect body.
+  const deepLinkHandled = useRef(false)
+  useEffect(() => {
+    if (hydrating || deepLinkHandled.current) return
+    const wanted = searchParams.get('period')
+    if (!wanted) return
+    deepLinkHandled.current = true
+    let cancelled = false
+    Promise.resolve().then(() => {
+      if (cancelled) return
+      const target = (periods || []).find((p) => p.id === wanted)
+      const next = new URLSearchParams(searchParams)
+      next.delete('period')
+      setSearchParams(next, { replace: true })
+      if (!target) return
+      if (target.id === activePeriod?.id) showLive(target)
+      else openReadOnly(target)
+    })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrating, periods, activePeriod, searchParams])
+
+  if (loading) return <Splash />
+  if (schools.length === 0) return <CreateSchoolForm />
+  if (hydrating) return <Splash />
+
+  const canEdit = activeSchool?.role !== 'viewer'
+
+  // The live workspace — AppProvider props/key preserved VERBATIM from AuthedShell
+  // so intake/generate/save and refresh-restore behave exactly as before.
+  const liveWorkspace = (
+    <AppProvider
+      key={`${activeSchool?.id ?? 'none'}:${hydrationToken}`}
+      school={activeSchool}
+      initialFiles={hydratedFiles}
+      initialPeriod={activePeriod}
+      readOnly={!canEdit}
+    >
+      <Dashboard />
+    </AppProvider>
+  )
+
+  return (
+    <div className="mx-auto max-w-[1180px] px-4 py-6 sm:px-10">
+      <Link
+        to="/"
+        className="mb-4 inline-flex items-center gap-1.5 text-[13px] font-semibold text-muted transition-colors hover:text-gold"
+      >
+        <ArrowLeft size={15} /> Back to dashboard
+      </Link>
+      <div className="mb-5 flex items-center gap-2.5">
+        <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gold-gradient text-white shadow-glow">
+          <FileStack size={22} />
+        </span>
+        <div>
+          <h1 className="font-serif text-xl font-semibold text-navy sm:text-2xl">
+            Statements &amp; Periods
+          </h1>
+          <p className="text-[13px] text-muted">
+            Upload a trial balance, generate the four statements, and reopen any saved period.
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-6">
+        {/* Saved-periods rail */}
+        <aside className="w-full shrink-0 lg:sticky lg:top-24 lg:w-[300px]">
+          <h2 className="mb-2.5 px-1 font-sans text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+            Saved periods
+          </h2>
+          {periods.length === 0 ? (
+            <div className="rounded-xl border-2 border-dashed border-border bg-section px-4 py-8 text-center">
+              <p className="font-serif text-[15px] italic text-muted">No saved periods yet.</p>
+              <p className="mt-1 text-[12px] text-muted">
+                Upload a trial balance and save to build your history.
+              </p>
+            </div>
+          ) : (
+            <SavedPeriodsRail
+              periods={periods}
+              activePeriodId={activePeriod?.id ?? null}
+              selectedId={openId ?? activePeriod?.id ?? null}
+              loadingId={loadingId}
+              onSelect={onSelectPeriod}
+            />
+          )}
+        </aside>
+
+        {/* Workspace: live editable (newest) OR a read-only stored snapshot. */}
+        <section ref={workspaceRef} className="min-w-0 flex-1">
+          {openId && openBundle ? (
+            <div className="card-soft overflow-hidden">
+              <div className="flex items-center justify-between gap-3 border-b border-rule px-4 py-3 sm:px-6">
+                <div className="min-w-0">
+                  <h2 className="truncate font-serif text-lg font-semibold text-navy">
+                    {openPeriod?.label || 'Saved statements'}
+                  </h2>
+                  <p className="text-[12px] text-muted">
+                    {formatShortDate(openPeriod?.periodEndDate)} · stored snapshot (read-only)
+                  </p>
+                </div>
+                <button type="button" onClick={() => showLive(null)} className="btn-ghost shrink-0">
+                  Back to workspace
+                </button>
+              </div>
+              <ReportTabs
+                bundle={openBundle}
+                school={activeSchool}
+                dateLabel={formatShortDate(openPeriod?.periodEndDate)}
+                periodLabel={PERIOD_LABELS[openPeriod?.periodType] || ''}
+              />
+            </div>
+          ) : (
+            liveWorkspace
+          )}
+        </section>
+      </div>
+    </div>
+  )
+}

@@ -38,7 +38,10 @@ export default function ReportPicker({ tabs, value, onChange }) {
         aria-expanded={open}
         className="flex min-h-[44px] w-full items-center justify-between gap-2 px-4 py-3 text-left text-sm font-semibold uppercase tracking-wide text-navy"
       >
-        <span className="truncate">{current?.label}</span>
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="truncate">{current?.label}</span>
+          {current?.badge}
+        </span>
         <ChevronDown
           size={18}
           className={`shrink-0 text-gold transition-transform ${open ? 'rotate-180' : ''}`}
@@ -69,7 +72,10 @@ export default function ReportPicker({ tabs, value, onChange }) {
                       active ? 'bg-section font-semibold text-navy' : 'text-ink hover:bg-section/60'
                     }`}
                   >
-                    <span>{t.label}</span>
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="truncate">{t.label}</span>
+                      {t.badge}
+                    </span>
                     {active && <Check size={16} className="shrink-0 text-gold" />}
                   </button>
                 </li>

@@ -6,6 +6,14 @@ import { HealthModule } from './health/health.module.js'
 import { ReportsModule } from './reports/reports.module.js'
 import { AuthModule } from './auth/auth.module.js'
 import { SchoolsModule } from './schools/schools.module.js'
+import { OrganizationsModule } from './organizations/organizations.module.js'
+import { PeriodsModule } from './periods/periods.module.js'
+import { ImportsModule } from './imports/imports.module.js'
+import { MappingModule } from './mapping/mapping.module.js'
+import { StatementsModule } from './statements/statements.module.js'
+import { BillingModule } from './billing/billing.module.js'
+import { AnalyticsModule } from './analytics/analytics.module.js'
+import { ComplianceModule } from './compliance/compliance.module.js'
 
 @Module({
   imports: [
@@ -23,6 +31,14 @@ import { SchoolsModule } from './schools/schools.module.js'
     ReportsModule,
     AuthModule,
     SchoolsModule,
+    OrganizationsModule,
+    PeriodsModule,
+    ImportsModule,
+    MappingModule,
+    StatementsModule,
+    BillingModule,
+    AnalyticsModule,
+    ComplianceModule,
   ],
 })
 export class AppModule {}

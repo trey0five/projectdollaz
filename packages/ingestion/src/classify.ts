@@ -147,12 +147,15 @@ export function classifyRole({ fileName, metadata }: ClassifyInput): RoleClassif
 }
 
 // ── Batch resolution ──────────────────────────────────────────
-// CONTENT-FIRST and BATCH-AWARE: the audited flag picks the audit slot, then
-// among the remaining (unaudited) files the LATEST in-sheet period-end date
-// becomes cy and the earlier becomes py. The filename/title keyword is kept
-// only as corroboration. This differentiates all three sample files even when
-// their filenames carry NO role keyword (because PY and Audit share FY25, the
-// keyword used to be the only separator — now the audited flag + dates are).
+// ROLE-FIRST and BATCH-AWARE: a file is placed by its DETECTED ROLE — a file
+// classified 'py' goes to the PY slot, an audited file to the AUDIT slot, a
+// 'cy' file to the CY slot. (Recall classifyRole already fuses filename + sheet
+// title + the audited flag into that per-file role, so "content-first" is baked
+// INTO the role.) Only files with NO role signal at all ('unknown') fall back to
+// the date/audit ordering, and ONLY to fill slots still left empty. This means a
+// LONE prior-year file lands in PY (not CY) and the required CY slot surfaces as
+// missing-current — the user is never shown a card whose slot contradicts its
+// role chip.
 export interface ResolvedFile {
   id: string
   /** Per-file keyword-derived role (corroboration only). */
@@ -191,20 +194,30 @@ function isAuditCandidate(f: ResolvedFile): boolean {
 }
 
 /**
- * Resolve a batch of files into single cy/py/audit slots, CONTENT-FIRST.
+ * Resolve a batch of files into single cy/py/audit slots, ROLE-FIRST.
  *
- * Algorithm:
- *  A. AUDIT: files marked audited (or keyword 'audit') claim the audit slot.
- *     0 -> audit simply empty (audit is optional); 1 -> assigned; >1 -> duplicate.
- *  B. Among the remaining NON-audit, non-ignore files, rank those that carry a
- *     usable period-end date DESC. The latest -> cy, the next-latest -> py.
- *     - two newest share the SAME date -> 'ambiguous-period' (slots empty).
- *     - exactly one dated file -> it is cy (no py).
- *  C. Files with neither a date NOR a usable keyword -> 'unresolved'.
- *  D. If still no cy (and no duplicate/ambiguous covering it) -> 'missing-current'.
+ * Algorithm (placement order — each file is claimed by the FIRST phase that
+ * applies, so a file never competes for two slots):
  *
- * Back-compat: callers passing bare { id, role } (no dates) fall back to the
- * original keyword mapping, so existing behavior is preserved verbatim.
+ *  P0. USER OVERRIDES win (hard assignment): a file flagged `override` with a
+ *      concrete role (cy/py/audit) claims that slot. Two overrides on the same
+ *      slot -> 'duplicate' (slot stays empty). User intent always wins.
+ *  PA. AUDIT by signal: files that are audit candidates (auditStatus 'audited'
+ *      OR role 'audit') claim the audit slot. 1 -> assigned; >1 -> 'duplicate'.
+ *      Claimed here so an audited file NEVER also competes for cy/py.
+ *  PB. DETECTED ROLE: among the rest, files whose detected role is 'cy' claim
+ *      cy, files whose role is 'py' claim py. 1 -> assigned; >1 -> 'duplicate'.
+ *  PC. DATE/AUDIT FALLBACK for SIGNAL-LESS files only ('unknown'): fill any
+ *      STILL-EMPTY cy/py slots from the unknown cohort's period-end dates —
+ *      latest -> cy, earlier -> py. Two newest share a date -> 'ambiguous-period'
+ *      (slots stay empty). Then, per the DECISION, a LONE remaining signal-less
+ *      file (even DATELESS) defaults to the required cy slot if it is still empty.
+ *  PD. UNRESOLVED: any remaining file that found no slot (e.g. an unknown file
+ *      with no date, or a surplus) -> 'unresolved'. Never dropped silently.
+ *  PE. MISSING-CURRENT: if cy is still empty and nothing is contesting it.
+ *
+ * Files classified 'ignore' are never slotted. The never-silently-misassign
+ * contract is preserved: any collision leaves the slot EMPTY and is surfaced.
  */
 export function resolveRoles(files: ResolvedFile[]): ResolveResult {
   const slots: { cy?: string; py?: string; audit?: string } = {}
@@ -212,51 +225,60 @@ export function resolveRoles(files: ResolvedFile[]): ResolveResult {
 
   const active = files.filter((f) => f.role !== 'ignore')
 
-  // ── 0. USER OVERRIDES win first (hard assignments) ────────────
-  // A confirmed override claims its slot and is removed from auto-resolution.
-  // Duplicate overrides on the same slot surface as a conflict (empty slot).
-  const overridden = new Set<string>()
-  for (const role of ['cy', 'py', 'audit'] as const) {
-    const claimants = active.filter((f) => f.override && f.role === role)
-    for (const c of claimants) overridden.add(c.id)
-    if (claimants.length === 1) {
-      slots[role] = claimants[0]!.id
-    } else if (claimants.length > 1) {
-      conflicts.push({ kind: 'duplicate', role, fileIds: claimants.map((f) => f.id) })
+  // Tracks every file that has already been claimed by an earlier phase so it
+  // never competes again. (`unresolved` is computed from what's left over.)
+  const claimed = new Set<string>()
+
+  // Claim a single slot from a set of candidates, emitting a duplicate conflict
+  // (and leaving the slot empty) when more than one file contends.
+  const claimSlot = (
+    role: 'cy' | 'py' | 'audit',
+    candidates: ResolvedFile[]
+  ): void => {
+    // If the slot is already filled by a higher-priority phase (e.g. a P0
+    // override or PA audit claim), do NOT mark these losing candidates as
+    // claimed — that would silently drop them. Let them fall through to PD so
+    // they surface as 'unresolved' (the never-drop / "Needs a role" contract).
+    if (slots[role]) return
+    for (const c of candidates) claimed.add(c.id)
+    if (candidates.length === 1) {
+      slots[role] = candidates[0]!.id
+    } else if (candidates.length > 1) {
+      conflicts.push({ kind: 'duplicate', role, fileIds: candidates.map((f) => f.id) })
     }
   }
-  // Files the user explicitly set to 'ignore'/'unknown' as an override are
-  // simply withheld from auto-resolution (no conflict raised for them).
-  for (const f of active) if (f.override) overridden.add(f.id)
 
-  const auto = active.filter((f) => !overridden.has(f.id))
-
-  // ── A. AUDIT slot (content audited flag OR keyword) ──────────
-  const auditCandidates = slots.audit ? [] : auto.filter(isAuditCandidate)
-  if (auditCandidates.length === 1) {
-    slots.audit = auditCandidates[0]!.id
-  } else if (auditCandidates.length > 1) {
-    conflicts.push({
-      kind: 'duplicate',
-      role: 'audit',
-      fileIds: auditCandidates.map((f) => f.id),
-    })
+  // ── P0. USER OVERRIDES (hard assignments) ─────────────────────
+  // A confirmed override claims its slot and is removed from auto-resolution.
+  // Overrides without a concrete cy/py/audit role (ignore/unknown) are simply
+  // withheld from auto-resolution — the user deliberately parked the file.
+  for (const role of ['cy', 'py', 'audit'] as const) {
+    claimSlot(role, active.filter((f) => f.override && f.role === role))
   }
-  const auditIds = new Set(auditCandidates.map((f) => f.id))
+  for (const f of active) if (f.override) claimed.add(f.id)
 
-  // ── B. cy / py among the remaining (non-audit) auto cohort ────
-  const cohort = auto.filter((f) => !auditIds.has(f.id))
+  // ── PA. AUDIT by signal (audited flag OR keyword) ─────────────
+  // Claimed before cy/py so an audited file never also contends for them.
+  claimSlot('audit', active.filter((f) => !claimed.has(f.id) && isAuditCandidate(f)))
 
-  // Files that carry a usable in-sheet date drive the content-first split.
-  // Slots already filled by a user override are respected: if cy is taken,
-  // the newest dated file becomes py; if py is taken, newest becomes cy.
-  const dated = cohort
-    .filter((f) => !!f.periodEndDate)
-    .sort((a, b) => (a.periodEndDate! < b.periodEndDate! ? 1 : a.periodEndDate! > b.periodEndDate! ? -1 : 0))
+  // ── PB. DETECTED ROLE -> its own slot ─────────────────────────
+  for (const role of ['cy', 'py'] as const) {
+    claimSlot(role, active.filter((f) => !claimed.has(f.id) && f.role === role))
+  }
 
+  // ── PC. DATE/AUDIT FALLBACK for SIGNAL-LESS files only ────────
+  // Only 'unknown' files reach here (cy/py/audit were claimed above). Use their
+  // in-sheet period-end dates to fill whatever cy/py slots remain empty: latest
+  // -> cy, earlier -> py. This is the ONLY place ordering is used.
   let cyResolvedByDate = false
-  const openSlots = (['cy', 'py'] as const).filter((r) => !slots[r])
+  const unknownPool = active.filter((f) => !claimed.has(f.id))
+  const dated = unknownPool
+    .filter((f) => !!f.periodEndDate)
+    .sort((a, b) =>
+      a.periodEndDate! < b.periodEndDate! ? 1 : a.periodEndDate! > b.periodEndDate! ? -1 : 0
+    )
 
+  const openSlots = (['cy', 'py'] as const).filter((r) => !slots[r])
   if (openSlots.length === 2 && dated.length >= 2) {
     const [newest, second] = dated
     if (newest!.periodEndDate === second!.periodEndDate) {
@@ -264,51 +286,51 @@ export function resolveRoles(files: ResolvedFile[]): ResolveResult {
       const tiedIds = dated
         .filter((f) => f.periodEndDate === newest!.periodEndDate)
         .map((f) => f.id)
+      for (const id of tiedIds) claimed.add(id)
       conflicts.push({ kind: 'ambiguous-period', fileIds: tiedIds })
     } else {
       slots.cy = newest!.id
       slots.py = second!.id
+      claimed.add(newest!.id)
+      claimed.add(second!.id)
       cyResolvedByDate = true
     }
   } else if (openSlots.length === 2 && dated.length === 1) {
     slots.cy = dated[0]!.id
+    claimed.add(dated[0]!.id)
     cyResolvedByDate = true
   } else if (openSlots.length === 1 && dated.length >= 1) {
-    // One slot pre-filled by an override; assign the newest remaining dated file.
+    // One slot pre-filled above; give the newest remaining dated file the other.
     slots[openSlots[0]!] = dated[0]!.id
+    claimed.add(dated[0]!.id)
     if (openSlots[0] === 'cy') cyResolvedByDate = true
   }
 
-  // ── B'. Keyword fallback for the OPEN slots when NO date is present ──
-  // (Pure back-compat path: bare { id, role } callers map keywords directly.)
-  if (dated.length === 0) {
-    for (const role of (['cy', 'py'] as const).filter((r) => !slots[r])) {
-      const claimants = cohort.filter((f) => f.role === role)
-      if (claimants.length === 1) {
-        slots[role] = claimants[0]!.id
-      } else if (claimants.length > 1) {
-        conflicts.push({ kind: 'duplicate', role, fileIds: claimants.map((f) => f.id) })
-      }
+  // ── PC.2 LONE SIGNAL-LESS file defaults to CY (per the DECISION) ──
+  // "A file with NO role signal still defaults to Current Year." If cy is STILL
+  // empty and exactly ONE unknown file remains unclaimed — even with no date —
+  // it fills the required cy slot. (With 2+ dateless unknowns we can't pick, so
+  // they fall through to 'unresolved' below.)
+  if (!slots.cy) {
+    // Only truly SIGNAL-LESS leftovers default to cy. A file carrying a real
+    // signal that merely lost its slot (e.g. an audited file beaten by an
+    // override) is NOT silently repurposed as cy — it falls through to
+    // 'unresolved' so the user can re-place it.
+    const remaining = active.filter(
+      (f) => !claimed.has(f.id) && f.role === 'unknown' && !isAuditCandidate(f)
+    )
+    if (remaining.length === 1) {
+      slots.cy = remaining[0]!.id
+      claimed.add(remaining[0]!.id)
+      cyResolvedByDate = true
     }
   }
 
-  // ── C. Unresolved: a cohort file that landed in no slot and is not already
-  //    flagged. Covers (a) keywordless/dateless files and (b) surplus dated
-  //    files beyond cy/py (e.g. a 3rd unaudited statement) — never dropped
-  //    silently; the user resolves via chips.
-  const placed = new Set<string>([slots.cy, slots.py, slots.audit].filter(Boolean) as string[])
-  const tiedAmbig = new Set(
-    conflicts.flatMap((c) => (c.kind === 'ambiguous-period' ? c.fileIds : []))
-  )
-  const dupIds = new Set(
-    conflicts.flatMap((c) => (c.kind === 'duplicate' ? c.fileIds : []))
-  )
-  const unresolved = cohort
-    .filter((f) => !placed.has(f.id) && !tiedAmbig.has(f.id) && !dupIds.has(f.id))
-    .map((f) => f.id)
+  // ── PD. UNRESOLVED: anything still unclaimed (no slot, no signal) ──
+  const unresolved = active.filter((f) => !claimed.has(f.id)).map((f) => f.id)
   if (unresolved.length) conflicts.push({ kind: 'unresolved', fileIds: unresolved })
 
-  // ── D. Missing current year ───────────────────────────────────
+  // ── PE. MISSING CURRENT YEAR ──────────────────────────────────
   const cyHasConflict =
     conflicts.some((c) => c.kind === 'duplicate' && c.role === 'cy') ||
     (!cyResolvedByDate && conflicts.some((c) => c.kind === 'ambiguous-period'))

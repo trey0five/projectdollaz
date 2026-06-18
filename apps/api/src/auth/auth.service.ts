@@ -14,9 +14,12 @@ import { PasswordService } from './password.service.js'
 import { TokenService } from './token.service.js'
 import { MailerService } from './mailer.service.js'
 import { toUserPublic, type UserPublic } from './user-public.js'
+import { AuditService } from '../common/audit/audit.service.js'
 import type { RegisterDto } from './dto/register.dto.js'
 import type { LoginDto } from './dto/login.dto.js'
 import type { ResetPasswordDto } from './dto/reset-password.dto.js'
+import type { UpdateProfileDto } from './dto/update-profile.dto.js'
+import type { ChangePasswordDto } from './dto/change-password.dto.js'
 
 const MAX_FAILED = 6
 const LOCK_MS = 1000 * 60 * 30 // 30 minutes
@@ -32,6 +35,7 @@ export class AuthService {
     private readonly passwords: PasswordService,
     private readonly tokens: TokenService,
     private readonly mailer: MailerService,
+    private readonly audit: AuditService,
     config: ConfigService,
   ) {
     this.isProd = (config.get<string>('nodeEnv') ?? 'development') === 'production'
@@ -201,6 +205,74 @@ export class AuthService {
         role: m.role,
       })),
     }
+  }
+
+  /** Self-service profile update (first/last name). Email stays read-only. */
+  async updateProfile(user: User, dto: UpdateProfileDto): Promise<{ user: UserPublic }> {
+    if (dto.first_name === undefined && dto.last_name === undefined) {
+      throw new BadRequestException('No fields to update.')
+    }
+    const data: { firstName?: string; lastName?: string } = {}
+    if (dto.first_name !== undefined) data.firstName = dto.first_name
+    if (dto.last_name !== undefined) data.lastName = dto.last_name
+
+    const updated = await this.prisma.user.update({ where: { id: user.id }, data })
+    await this.audit.write({
+      userId: user.id,
+      action: 'profile.updated',
+      targetType: 'user',
+      targetId: user.id,
+      metadata: { fields: Object.keys(data) },
+    })
+    return { user: toUserPublic(updated) }
+  }
+
+  /**
+   * Change the caller's password: verify current (constant-time), enforce
+   * strength on the new one, rehash, and revoke every OTHER refresh session
+   * (keep the current one alive via `sid`). Never logs or returns secrets.
+   */
+  async changePassword(
+    user: User,
+    sid: string | undefined,
+    dto: ChangePasswordDto,
+  ): Promise<{ message: string }> {
+    const ok = this.passwords.verify(
+      dto.current_password,
+      user.passwordAlgo,
+      user.passwordIters,
+      user.passwordSalt,
+      user.passwordHash,
+    )
+    if (!ok) {
+      throw new UnauthorizedException('Current password is incorrect.')
+    }
+
+    const strengthError = this.passwords.validateStrength(dto.new_password)
+    if (strengthError) throw new BadRequestException(strengthError)
+
+    const { algo, iters, salt, hash } = this.passwords.hash(dto.new_password)
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordAlgo: algo,
+        passwordIters: iters,
+        passwordSalt: salt,
+        passwordHash: hash,
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+      },
+    })
+    // Invalidate other sessions; keep the current one (falls back to revokeAll
+    // when sid is absent on legacy access tokens).
+    await this.tokens.revokeAllExcept(user.id, sid)
+    await this.audit.write({
+      userId: user.id,
+      action: 'password.changed',
+      targetType: 'user',
+      targetId: user.id,
+    })
+    return { message: 'Password changed.' }
   }
 
   async forgotPassword(email: string): Promise<{ message: string }> {

@@ -20,6 +20,26 @@ npm run lint     # eslint
 Sign in with school **Sample 01 High School** and PIN **1234** (configured in
 `src/data/schools.js`).
 
+## Running the full stack (monorepo)
+
+```bash
+corepack enable pnpm
+pnpm install
+docker compose up -d --build    # postgres + api (api on http://localhost:8000)
+```
+
+The API container listens on `8000` internally and publishes to host port
+`8000` by default. If `8000` is already occupied on your host, override it:
+
+```bash
+API_HOST_PORT=8001 docker compose up -d --build
+# point the regression harness at the same port:
+API_URL=http://localhost:8001 node scripts/verify-engine.mjs
+```
+
+`scripts/verify-engine.mjs` defaults to `http://localhost:8000` and honors the
+`API_URL` env var. Tear the stack down with `docker compose down`.
+
 ## How it works
 
 1. **Sign in** — select a school and enter its PIN.

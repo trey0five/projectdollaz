@@ -53,3 +53,26 @@ export const PERIOD_LABELS = {
   mtd: 'Month-to-Date',
   fy: 'Full Fiscal Year',
 }
+
+/**
+ * Relative "updated N ago" for the freshness bar. PURE per render — reads
+ * Date.now() once when called (no setInterval/clock loop, so reduced-motion is
+ * respected and there's no churn). Returns "today" / "1 day ago" / "N days ago"
+ * / "N months ago" / "N years ago". Empty/invalid → null.
+ */
+export function formatRelative(iso) {
+  if (!iso) return null
+  const then = new Date(iso).getTime()
+  if (Number.isNaN(then)) return null
+  const diffMs = Date.now() - then
+  const day = 24 * 60 * 60 * 1000
+  const days = Math.floor(diffMs / day)
+  if (days <= 0) return 'today'
+  if (days === 1) return '1 day ago'
+  if (days < 30) return `${days} days ago`
+  const months = Math.floor(days / 30)
+  if (months === 1) return '1 month ago'
+  if (months < 12) return `${months} months ago`
+  const years = Math.floor(days / 365)
+  return years === 1 ? '1 year ago' : `${years} years ago`
+}

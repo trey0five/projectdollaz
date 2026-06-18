@@ -144,6 +144,23 @@ export class TokenService {
     })
   }
 
+  /**
+   * Revoke all of a user's active refresh tokens EXCEPT the one identified by
+   * `keepJti` (the caller's current session). Used after a password change so
+   * other sessions are invalidated while the current one survives. If `keepJti`
+   * is undefined (legacy token without `sid`), falls back to revoking ALL.
+   */
+  async revokeAllExcept(userId: string, keepJti?: string): Promise<void> {
+    if (!keepJti) {
+      await this.revokeAll(userId)
+      return
+    }
+    await this.prisma.refreshToken.updateMany({
+      where: { userId, revokedAt: null, jti: { not: keepJti } },
+      data: { revokedAt: new Date() },
+    })
+  }
+
   private decodeExpiry(token: string): Date {
     const decoded = this.jwt.decode(token) as { exp?: number } | null
     if (decoded?.exp) return new Date(decoded.exp * 1000)

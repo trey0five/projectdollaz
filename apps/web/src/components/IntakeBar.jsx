@@ -5,9 +5,12 @@ import { useApp } from '../context/AppContext.jsx'
 import DragOverlay from './DragOverlay.jsx'
 import HeroDropzone from './HeroDropzone.jsx'
 import FileStatusCard from './FileStatusCard.jsx'
+import EmptySlotCard from './EmptySlotCard.jsx'
 import PeriodControls from './PeriodControls.jsx'
 import SummaryStrip from './SummaryStrip.jsx'
 import ExportMenu from './ExportMenu.jsx'
+import SaveBar from './SaveBar.jsx'
+import { SLOT_ROLES, ROLE_META } from '../lib/roleMeta.js'
 
 const ACCEPT = '.xlsx,.xls,.csv'
 
@@ -21,8 +24,17 @@ const CONFLICT_COPY = {
 }
 
 export default function IntakeBar() {
-  const { files, intakeMode, conflicts, loadFiles, status, collapse } = useApp()
+  const { files, byRole, intakeMode, conflicts, loadFiles, loadFilesForRole, status, collapse, canEdit } =
+    useApp()
   const inputRef = useRef(null)
+  // Override-upload plumbing: a hidden input whose next selection is pinned to
+  // the role captured here (used by a history-filled slot's "Upload to override").
+  const overrideInputRef = useRef(null)
+  const overrideRoleRef = useRef(null)
+  const overrideRef = useRef((role) => {
+    overrideRoleRef.current = role
+    overrideInputRef.current?.click()
+  })
 
   // Which file ids need user attention: any file in a duplicate/unresolved
   // conflict, plus any low-confidence unconfirmed suggestion.
@@ -49,13 +61,53 @@ export default function IntakeBar() {
     return ids
   }, [files, conflicts])
 
+  // The ids that cleanly resolved into a single role slot (via the existing
+  // resolveRoles-derived byRole). Any other file — duplicate-role claimant,
+  // unknown/unresolved, 'ignore', extra, or still-parsing/errored — is NOT in
+  // a slot and must surface in the "Needs a role" overflow row rather than be
+  // silently dropped or overwrite a slot.
+  const slottedIds = useMemo(() => {
+    const ids = new Set()
+    for (const role of SLOT_ROLES) {
+      const f = byRole[role]
+      if (f) ids.add(f.id)
+    }
+    return ids
+  }, [byRole])
+
+  const unslotted = useMemo(
+    () => files.filter((f) => !slottedIds.has(f.id)),
+    [files, slottedIds]
+  )
+
   const onBrowse = (e) => {
     if (e.target.files?.length) loadFiles(e.target.files)
     e.target.value = ''
   }
 
+  // The set of roles that have a live duplicate conflict. resolveRoles leaves
+  // such a slot empty (claimants surface in "Needs a role"); we mark the slot
+  // as conflicted so it reads "resolve below" instead of "missing — add one".
+  const duplicateRoles = useMemo(() => {
+    const s = new Set()
+    for (const c of conflicts) {
+      if (c.kind === 'duplicate' && c.role) s.add(c.role)
+    }
+    return s
+  }, [conflicts])
+
+  // Dropping/browsing N files INTO one slot should pin only the FIRST file to
+  // that slot's role (one file per slot); any extras go through the normal
+  // auto-classify path rather than all being force-stamped to the same role.
+  const assignToSlot = (role, list) => {
+    const arr = Array.from(list)
+    if (arr.length === 0) return
+    loadFilesForRole(role, [arr[0]])
+    if (arr.length > 1) loadFiles(arr.slice(1))
+  }
+
   return (
-    <section className="no-print relative border-b border-rule bg-section py-6 sm:py-7">
+    <section className="no-print relative border-b border-rule bg-section py-4 sm:py-7">
       <DragOverlay />
 
       <div className="mx-auto max-w-[980px] px-4 sm:px-10">
@@ -75,7 +127,18 @@ export default function IntakeBar() {
             <div className="mb-3 flex justify-end">
               <ExportMenu />
             </div>
-            <HeroDropzone />
+            {canEdit ? (
+              <HeroDropzone />
+            ) : (
+              <div className="rounded-2xl border-2 border-dashed border-border bg-white px-6 py-12 text-center">
+                <p className="font-serif text-lg italic text-muted">
+                  No saved statements yet for this school.
+                </p>
+                <p className="mt-1 text-[13px] text-muted">
+                  You have view-only access. Saved periods appear in History.
+                </p>
+              </div>
+            )}
           </motion.div>
         )}
 
@@ -87,12 +150,13 @@ export default function IntakeBar() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4"
+            className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:gap-4"
           >
             <div className="flex-1">
               <SummaryStrip />
             </div>
-            <div className="w-full sm:w-auto">
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+              <SaveBar />
               <ExportMenu />
             </div>
           </motion.div>
@@ -112,13 +176,16 @@ export default function IntakeBar() {
                 Imported trial balances
               </h2>
               <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
-                <button
-                  type="button"
-                  onClick={() => inputRef.current?.click()}
-                  className="btn-ghost w-full justify-center sm:w-auto"
-                >
-                  <Plus size={16} /> Add files
-                </button>
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => inputRef.current?.click()}
+                    className="btn-ghost w-full justify-center sm:w-auto"
+                  >
+                    <Plus size={16} /> Add files
+                  </button>
+                )}
+                <SaveBar />
                 <button
                   type="button"
                   onClick={collapse}
@@ -147,13 +214,75 @@ export default function IntakeBar() {
               </div>
             )}
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <AnimatePresence mode="popLayout">
-                {files.map((f) => (
-                  <FileStatusCard key={f.id} file={f} needsReview={reviewIds.has(f.id)} />
-                ))}
-              </AnimatePresence>
+            {/* THREE ROLE SLOTS — Current Year / Prior Year / Audited FY End.
+                Each slot is either a filled FileStatusCard (resolved via
+                byRole) or a draggable + clickable EmptySlotCard placeholder. */}
+            <div className="grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {SLOT_ROLES.map((role) => {
+                const filled = byRole[role]
+                const meta = ROLE_META[role]
+                return (
+                  <div key={role} className="flex flex-col">
+                    <p className="mb-2 text-[12px] font-semibold uppercase tracking-[0.1em] text-muted">
+                      {meta.label}
+                    </p>
+                    <AnimatePresence mode="popLayout" initial={false}>
+                      {filled ? (
+                        <FileStatusCard
+                          key={filled.id}
+                          file={filled}
+                          needsReview={reviewIds.has(filled.id)}
+                          onOverride={
+                            filled.fromHistory
+                              ? () => overrideRef.current?.(role)
+                              : undefined
+                          }
+                        />
+                      ) : canEdit ? (
+                        <EmptySlotCard
+                          key={`empty-${role}`}
+                          role={role}
+                          needsAttention={role === 'cy' && !duplicateRoles.has(role)}
+                          conflicted={duplicateRoles.has(role)}
+                          assignFiles={(list) => assignToSlot(role, list)}
+                        />
+                      ) : (
+                        <div
+                          key={`empty-ro-${role}`}
+                          className="flex min-h-[196px] w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border bg-section px-4 py-8 text-center"
+                        >
+                          <p className="font-serif text-base font-semibold text-navy">{meta.label}</p>
+                          <p className="text-[12px] italic text-muted">Not provided</p>
+                        </div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                )
+              })}
             </div>
+
+            {/* NEEDS A ROLE — overflow for files that didn't resolve to a single
+                slot: duplicate-role claimants, unknown/unresolved, 'ignore',
+                extras, plus parsing/error cards. Each keeps its editable
+                RoleChip + remove; confirming a role promotes it into its slot. */}
+            {unslotted.length > 0 && (
+              <div className="mt-6">
+                <p className="mb-3 flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.1em] text-[#7a5e00]">
+                  <AlertTriangle size={14} className="text-gold" /> Needs a role
+                </p>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <AnimatePresence mode="popLayout">
+                    {unslotted.map((f) => (
+                      <FileStatusCard
+                        key={f.id}
+                        file={f}
+                        needsReview={reviewIds.has(f.id)}
+                      />
+                    ))}
+                  </AnimatePresence>
+                </div>
+              </div>
+            )}
 
             <div className="mt-5">
               <PeriodControls />
@@ -169,6 +298,18 @@ export default function IntakeBar() {
         multiple
         className="hidden"
         onChange={onBrowse}
+      />
+      <input
+        ref={overrideInputRef}
+        type="file"
+        accept={ACCEPT}
+        className="hidden"
+        onChange={(e) => {
+          const role = overrideRoleRef.current
+          if (role && e.target.files?.length) assignToSlot(role, e.target.files)
+          overrideRoleRef.current = null
+          e.target.value = ''
+        }}
       />
 
       {status && (

@@ -7,6 +7,7 @@ import { apiErrorMessage } from '../lib/api.js'
 import AuthLayout from '../components/auth/AuthLayout.jsx'
 import { TextField, PasswordField, FormError } from '../components/auth/fields.jsx'
 import PasswordRequirements, { allRequirementsMet } from '../components/auth/PasswordRequirements.jsx'
+import { sanitizeInteger } from '../lib/numericInput.js'
 
 export default function ResetPasswordPage() {
   const { resetPassword } = useAuth()
@@ -70,7 +71,7 @@ export default function ResetPasswordPage() {
         inputMode="numeric"
         value={code}
         placeholder="6-digit code"
-        onChange={(e) => setCode(e.target.value)}
+        onChange={(e) => setCode(sanitizeInteger(e.target.value))}
       />
       <div className="mb-1">
         <PasswordField

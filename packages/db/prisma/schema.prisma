@@ -98,6 +98,12 @@ model School {
   statementSnapshots StatementSnapshot[]
   subscription       Subscription?
   auditLog           AuditLog[]
+  operationalData    PeriodOperationalData[]
+  complianceInputs   PeriodComplianceInputs[]
+  scholarshipDisbursements ScholarshipDisbursement[]
+  correctiveActions  PeriodCorrectiveAction[]
+  checklistItems     PeriodChecklistItem[]
+  analyticsDashboard AnalyticsDashboard?
 
   @@index([organizationId])
   @@map("schools")
@@ -115,7 +121,15 @@ model FiscalPeriod {
 
   imports            Import[]
   statementSnapshots StatementSnapshot[]
+  operationalData    PeriodOperationalData[]
+  complianceInputs   PeriodComplianceInputs[]
+  scholarshipDisbursements ScholarshipDisbursement[]
+  correctiveActions  PeriodCorrectiveAction[]
+  checklistItems     PeriodChecklistItem[]
 
+  // Phase 1C: DB-level idempotency for create-or-get under concurrency. The
+  // natural key of a period is (school, period-end, type).
+  @@unique([schoolId, periodEndDate, periodType])
   @@index([schoolId])
   @@map("fiscal_periods")
 }
@@ -146,6 +160,11 @@ model User {
   imports       Import[]       @relation("ImportUploadedBy")
   invitedMemberships Membership[] @relation("MembershipInvitedBy")
   auditLog      AuditLog[]
+  operationalUpdates PeriodOperationalData[] @relation("OperationalUpdatedBy")
+  complianceInputsUpdates PeriodComplianceInputs[] @relation("ComplianceInputsUpdatedBy")
+  correctiveActionUpdates PeriodCorrectiveAction[] @relation("CorrectiveActionUpdatedBy")
+  checklistUpdates   PeriodChecklistItem[]  @relation("ChecklistUpdatedBy")
+  dashboardUpdates   AnalyticsDashboard[]   @relation("DashboardUpdatedBy")
 
   @@index([email])
   @@map("users")
@@ -227,6 +246,8 @@ model Import {
 
   @@index([schoolId])
   @@index([fiscalPeriodId])
+  // Phase 1C: fast latest-active-per-role lookups for comparative resolution.
+  @@index([fiscalPeriodId, role, createdAt])
   @@map("imports")
 }
 
@@ -287,9 +308,11 @@ model Subscription {
   stripeCustomerId     String?            @map("stripe_customer_id")
   stripeSubscriptionId String?            @map("stripe_subscription_id")
   plan                 String?
+  stripePriceId        String?            @map("stripe_price_id")
   status               SubscriptionStatus @default(none)
   currentPeriodEnd     DateTime?          @map("current_period_end")
   trialEnd             DateTime?          @map("trial_end")
+  cancelAtPeriodEnd    Boolean            @default(false) @map("cancel_at_period_end")
   createdAt            DateTime           @default(now()) @map("created_at")
   updatedAt           DateTime           @updatedAt @map("updated_at")
 
@@ -319,4 +342,190 @@ model AuditLog {
   @@index([organizationId])
   @@index([userId])
   @@map("audit_log")
+}
+
+// ── Operational data (Phase 4B) ───────────────────────────────────────────────
+
+/// MUTABLE reference data (unlike immutable imports/snapshots): enrollment + aid
+/// figures per (school, fiscal period) that don't live in the trial balance.
+/// One upserted row per period; audited via audit_log + updated_by/updated_at.
+/// Powers the Tier-2 operational analytics metrics (cost per pupil, aid metrics,
+/// tuition discount rate). Decimals are converted to plain `number` at the API
+/// boundary to match the engine/analytics number convention.
+model PeriodOperationalData {
+  id                String   @id @default(uuid()) @db.Uuid
+  schoolId          String   @map("school_id") @db.Uuid
+  fiscalPeriodId    String   @map("fiscal_period_id") @db.Uuid
+  enrollment        Int?
+  enrollmentFte     Decimal? @map("enrollment_fte") @db.Decimal(10, 2)
+  studentsOnAid     Int?     @map("students_on_aid")
+  financialAidTotal Decimal? @map("financial_aid_total") @db.Decimal(18, 2)
+  notes             String?
+  updatedByUserId   String?  @map("updated_by_user_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  school        School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  fiscalPeriod  FiscalPeriod @relation(fields: [fiscalPeriodId], references: [id], onDelete: Cascade)
+  updatedByUser User?        @relation("OperationalUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([schoolId, fiscalPeriodId])
+  @@index([schoolId])
+  @@index([fiscalPeriodId])
+  @@map("period_operational_data")
+}
+
+// ── Phase 2A: per-period compliance intake (Florida scholarship AUP) ──────────
+
+/// MUTABLE reference data (one row per school+period, like period_operational_data)
+/// holding the short AUP compliance intake — attestation inputs the API passes
+/// into the pure @finrep/compliance package to produce the Review Readiness
+/// pre-flag. Additive only. `programs` is a Postgres scalar string list (subset of
+/// FTC/FES_EO/FES_UA, validated in the DTO + service before it reaches the package).
+model PeriodComplianceInputs {
+  id                                  String   @id @default(uuid()) @db.Uuid
+  schoolId                            String   @map("school_id") @db.Uuid
+  fiscalPeriodId                      String   @map("fiscal_period_id") @db.Uuid
+  scholarshipFundsReceived            Decimal? @map("scholarship_funds_received") @db.Decimal(18, 2)
+  programs                            String[] @default([])
+  fundsAtInsuredInstitution           Boolean? @map("funds_at_insured_institution")
+  avgDailyBalanceOver250k             Boolean? @map("avg_daily_balance_over_250k")
+  bankRatingReviewedTopTwo            Boolean? @map("bank_rating_reviewed_top_two")
+  reconciledWithin60Days              Boolean? @map("reconciled_within_60_days")
+  reconciliationIndependentlyReviewed Boolean? @map("reconciliation_independently_reviewed")
+  doeStatusApproved                   Boolean? @map("doe_status_approved")
+  yearsInOperation                    Int?     @map("years_in_operation")
+  suretyBondPosted                    Boolean? @map("surety_bond_posted")
+  fesuaAnyAccountOver50k              Boolean? @map("fesua_any_account_over_50k")
+  notes                               String?
+  updatedByUserId                     String?  @map("updated_by_user_id") @db.Uuid
+  createdAt                           DateTime @default(now()) @map("created_at")
+  updatedAt                           DateTime @updatedAt @map("updated_at")
+
+  school        School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  fiscalPeriod  FiscalPeriod @relation(fields: [fiscalPeriodId], references: [id], onDelete: Cascade)
+  updatedByUser User?        @relation("ComplianceInputsUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([schoolId, fiscalPeriodId])
+  @@index([schoolId])
+  @@index([fiscalPeriodId])
+  @@map("period_compliance_inputs")
+}
+
+// ── Scholarship disbursements (Phase 2B) ──────────────────────────────────────
+
+/// Funding-organization (Step Up For Students) per-disbursement detail for one
+/// (school, period). ONE row per disbursement. Unlike the immutable Phase-1C
+/// import rows, this is a REPLACEABLE set (clear-and-reimport + manual add/edit):
+/// PUT replaces the whole set, DELETE clears it. The SUM of `amount` is the
+/// funding-org's stated "scholarship funds disbursed to the school", reconciled
+/// against the recorded scholarshipFundsReceived (Phase 2A) by the pure
+/// @finrep/compliance reconcileScholarships(). `program` is one of FTC/FES_EO/
+/// FES_UA or null (flagged downstream). `source` is 'upload' | 'manual'.
+model ScholarshipDisbursement {
+  id             String   @id @default(uuid()) @db.Uuid
+  schoolId       String   @map("school_id") @db.Uuid
+  fiscalPeriodId String   @map("fiscal_period_id") @db.Uuid
+  studentRef     String?  @map("student_ref")
+  program        String?
+  payDate        DateTime? @map("pay_date") @db.Date
+  amount         Decimal  @db.Decimal(18, 2)
+  term           String?
+  batchRef       String?  @map("batch_ref")
+  source         String   @default("upload")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  school       School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  fiscalPeriod FiscalPeriod @relation(fields: [fiscalPeriodId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, fiscalPeriodId])
+  @@map("scholarship_disbursements")
+}
+
+// ── Corrective Action Plan (Phase 2D) ─────────────────────────────────────────
+
+/// User-editable Corrective Action Plan entries — one row per (school, period,
+/// ruleId) keyed by the 2A finding's ruleId. The GET endpoint recomputes the live
+/// 2A findings, runs the pure scaffoldCorrectiveActionPlan(), and MERGES these
+/// saved edits over the scaffold (saved non-null fields win; the scaffold supplies
+/// suggested* defaults). A saved row whose finding is no longer material/reportable
+/// is flagged resolved/stale (never deleted), so user edits never vanish when a
+/// finding self-heals. `status` is 'open' | 'in_progress' | 'complete'.
+model PeriodCorrectiveAction {
+  id               String    @id @default(uuid()) @db.Uuid
+  schoolId         String    @map("school_id") @db.Uuid
+  fiscalPeriodId   String    @map("fiscal_period_id") @db.Uuid
+  ruleId           String    @map("rule_id")
+  observation      String?
+  rootCause        String?   @map("root_cause")
+  correctiveAction String?   @map("corrective_action")
+  responsibleParty String?   @map("responsible_party")
+  targetDate       DateTime? @map("target_date") @db.Date
+  status           String    @default("open")
+  // Soft-archive: a user "dismissed" a resolved/self-healed row so it stops
+  // cluttering the plan. Non-null = hidden from the active resolved list (kept
+  // for audit / restore). Live (re-flagged) rows ignore this.
+  archivedAt       DateTime? @map("archived_at")
+  updatedByUserId  String?   @map("updated_by_user_id") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  school        School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  fiscalPeriod  FiscalPeriod @relation(fields: [fiscalPeriodId], references: [id], onDelete: Cascade)
+  updatedByUser User?        @relation("CorrectiveActionUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([schoolId, fiscalPeriodId, ruleId])
+  @@index([schoolId, fiscalPeriodId])
+  @@map("period_corrective_actions")
+}
+
+// ── Phase 2C — Year-End Review Readiness checklist STATE ──────────────────────
+//
+/// One row per (school, period, item_id) holding the user-editable checklist
+/// state. The checklist ITEM definitions are derived purely in @finrep/compliance
+/// (buildYearEndChecklist); this table stores only the saved status/notes layered
+/// on top. item_id is a built id ('chk_<ruleId>' | 'doc_<slug>') validated by the
+/// API against the builder's known ids. Additive only.
+model PeriodChecklistItem {
+  id              String   @id @default(uuid()) @db.Uuid
+  schoolId        String   @map("school_id") @db.Uuid
+  fiscalPeriodId  String   @map("fiscal_period_id") @db.Uuid
+  itemId          String   @map("item_id")
+  status          String   @default("pending") // 'pending' | 'done' | 'na'
+  notes           String?
+  updatedByUserId String?  @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  school        School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  fiscalPeriod  FiscalPeriod @relation(fields: [fiscalPeriodId], references: [id], onDelete: Cascade)
+  updatedByUser User?        @relation("ChecklistUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([schoolId, fiscalPeriodId, itemId])
+  @@index([schoolId, fiscalPeriodId])
+  @@map("period_checklist_items")
+}
+
+// ── Dashboard customization (Phase 4C) ────────────────────────────────────────
+
+/// PER-SCHOOL dashboard layout config (one row per school; per-user layouts are
+/// out of scope for Phase 4). `layout` is an ordered JSONB array of
+/// { metricKey, visible, chart?, span? } items validated by
+/// @finrep/analytics' validateDashboardLayout before persistence (never stored
+/// free-form). When no row exists the API returns a DEFAULT layout (registry
+/// canonical order, all visible) with isDefault:true, so the dashboard works out
+/// of the box. Owner-only mutation; audited via audit_log.
+model AnalyticsDashboard {
+  id              String   @id @default(uuid()) @db.Uuid
+  schoolId        String   @unique @map("school_id") @db.Uuid
+  layout          Json     @db.JsonB // DashboardLayout — ordered, validated array
+  updatedByUserId String?  @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  school        School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  updatedByUser User?  @relation("DashboardUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@map("analytics_dashboard")
 }

@@ -1,7 +1,8 @@
-import { Body, Controller, Get, HttpCode, Post, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, HttpCode, Patch, Post, UseGuards } from '@nestjs/common'
 import type { User } from '@finrep/db'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js'
 import { CurrentUser } from '../common/decorators/current-user.decorator.js'
+import { CurrentSession } from '../common/decorators/current-session.decorator.js'
 import { AuthService } from './auth.service.js'
 import { RegisterDto } from './dto/register.dto.js'
 import { LoginDto } from './dto/login.dto.js'
@@ -10,6 +11,8 @@ import { ResendVerificationDto } from './dto/resend-verification.dto.js'
 import { ForgotPasswordDto } from './dto/forgot-password.dto.js'
 import { ResetPasswordDto } from './dto/reset-password.dto.js'
 import { RefreshDto } from './dto/refresh.dto.js'
+import { UpdateProfileDto } from './dto/update-profile.dto.js'
+import { ChangePasswordDto } from './dto/change-password.dto.js'
 
 @Controller('auth')
 export class AuthController {
@@ -55,6 +58,23 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   me(@CurrentUser() user: User) {
     return this.auth.me(user)
+  }
+
+  @Patch('me')
+  @UseGuards(JwtAuthGuard)
+  updateMe(@CurrentUser() user: User, @Body() dto: UpdateProfileDto) {
+    return this.auth.updateProfile(user, dto)
+  }
+
+  @Post('change-password')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard)
+  changePassword(
+    @CurrentUser() user: User,
+    @CurrentSession() sid: string | undefined,
+    @Body() dto: ChangePasswordDto,
+  ) {
+    return this.auth.changePassword(user, sid, dto)
   }
 
   @Post('forgot-password')

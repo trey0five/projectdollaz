@@ -9,16 +9,25 @@
 // no setState-in-effect. This gives a live preview and stays clean under
 // the repo's react-hooks lint rule. The engine remains pure/untouched.
 // ─────────────────────────────────────────────────────────────
-import { createContext, useContext, useState, useCallback, useMemo, useRef, useEffect } from 'react'
+import { createContext, useContext, useState, useCallback, useMemo, useRef } from 'react'
 import {
   generateReports,
   validateDataset,
   findUnmapped,
+  deriveOpeningNetAssets,
 } from '@finrep/engine'
 import { ingest, classifyRole, resolveRoles, inferPeriod } from '@finrep/ingestion'
 import { formatDate, formatShortDate, PERIOD_LABELS } from '../lib/format.js'
+import { usePersistence } from './PersistenceContext.jsx'
 
 const AppContext = createContext(null)
+
+// Which SchoolConfig opening-balance field each uploaded role supplies.
+const OPENING_FIELD_BY_ROLE = {
+  cy: 'netAssetsBegin',
+  py: 'pyNetAssetsBegin',
+  audit: 'auditNetAssetsBegin',
+}
 
 const uid = () =>
   typeof crypto !== 'undefined' && crypto.randomUUID
@@ -34,15 +43,31 @@ function readBytes(file) {
   })
 }
 
-export function AppProvider({ children, school = null }) {
+export function AppProvider({
+  children,
+  school = null,
+  // Phase 1C: hydration seed. AppProvider is remounted (via a key including the
+  // hydration token) whenever a hydrate completes, so these are consumed once at
+  // mount through lazy useState init — never injected via an effect.
+  initialFiles = [],
+  initialPeriod = null,
+  readOnly = false,
+}) {
   // `school` is the SELECTED school (from SchoolContext) — it carries the engine
   // begin-balance fields. The old PIN login is gone; auth is handled upstream.
-  const [files, setFiles] = useState([]) // ordered FileEntry[]
-  const [periodType, setPeriodType] = useState('ytd')
-  const [periodDate, setPeriodDate] = useState('')
+  const persistence = usePersistence()
+  const [files, setFiles] = useState(() => initialFiles) // ordered FileEntry[]
+  // Seed the period from the hydrated period when present; otherwise default. The
+  // user-entered value still wins once periodTouched flips.
+  const [periodType, setPeriodType] = useState(() => initialPeriod?.periodType || 'ytd')
+  const [periodDate, setPeriodDate] = useState(() => initialPeriod?.periodEndDate || '')
   const [periodTouched, setPeriodTouched] = useState(false)
   const [intakeExpanded, setIntakeExpanded] = useState(true)
   const [status, setStatus] = useState('')
+  // Opening net-asset balances are DERIVED from the uploaded trial balances
+  // (deriveOpeningNetAssets) rather than typed at school creation. A user may
+  // override a derived value; overrides are keyed by role ('cy'|'py'|'audit').
+  const [openingOverrides, setOpeningOverrides] = useState({})
   // Auto-collapse the intake panel once exactly: the first time a valid,
   // conflict-free setup exists. After that, expand/collapse is user-driven
   // (this ref keeps us from fighting a manual re-expand on every recompute).
@@ -59,22 +84,21 @@ export function AppProvider({ children, school = null }) {
     setPeriodType('ytd')
     setPeriodTouched(false)
     setIntakeExpanded(true)
+    setOpeningOverrides({})
     autoCollapsedRef.current = false
   }, [])
 
-  const schoolId = school?.id ?? null
-  useEffect(() => {
-    // Reset when the active school changes (including first selection / clear).
-    resetIntake()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [schoolId])
+  // NOTE: the old schoolId-change reset effect is gone. AppProvider is remounted
+  // (AuthedShell keys it by `${schoolId}:${hydrationToken}`) on every school
+  // switch AND every completed hydrate, so intake state can't leak across
+  // schools and the hydrated seed is never clobbered by a reset.
 
   // ── Smart-intake file loading (event handler, not an effect) ───
   // Each dropped/browsed file: insert a 'parsing' entry immediately, then
   // ingest -> validate -> classify, and replace it with a 'ready'/'error'
   // entry. Files resolve independently and concurrently.
   const loadFiles = useCallback(
-    (fileList) => {
+    (fileList, forcedRole = null) => {
       const list = Array.from(fileList || [])
       if (!list.length) return
       setStatus(`Reading ${list.length} file${list.length > 1 ? 's' : ''}…`)
@@ -94,6 +118,10 @@ export function AppProvider({ children, school = null }) {
           const balance = validateDataset(rows)
           const unmappedCount = findUnmapped(rows).length
 
+          // When a file is dropped/browsed INTO a specific empty slot, honor
+          // that intent: stamp the slot's role as a confirmed override instead
+          // of using the auto-classification. The classification ALGORITHM is
+          // untouched — we just pin the resolved role for this entry.
           const entry = {
             id,
             fileName: file.name,
@@ -102,29 +130,19 @@ export function AppProvider({ children, school = null }) {
             rows,
             metadata,
             suggestion,
-            role: suggestion.role,
-            roleConfirmed: false,
+            role: forcedRole ?? suggestion.role,
+            roleConfirmed: forcedRole != null,
             balance,
             unmappedCount,
           }
 
           setFiles((prev) => prev.map((f) => (f.id === id ? entry : f)))
 
-          // CY date auto-fill — done HERE in the handler (not an effect) so
-          // it never fights the lint rule. Only seeds while the user hasn't
-          // edited the date, and only from a confident CY classification.
-          if (
-            suggestion.role === 'cy' &&
-            suggestion.confidence >= 0.6 &&
-            metadata?.periodEndDate
-          ) {
-            const inferred = inferPeriod(metadata)
-            setPeriodDate((cur) => {
-              if (periodTouched) return cur
-              return inferred.periodEndDate || cur
-            })
-            setPeriodType((cur) => (periodTouched ? cur : inferred.periodType))
-          }
+          // NOTE: the period date/type are NO LONGER stamped here. They are
+          // PURELY DERIVED from whichever file ends up occupying the CY slot
+          // (see effectivePeriodDate/effectivePeriodType below) until the user
+          // edits them. Stamping at load time fought that derivation and could
+          // not see the FINAL slot assignment, so it is removed.
 
           setStatus(
             `✓ ${file.name} — ${rows.length} accounts (${suggestion.role.toUpperCase()})`
@@ -141,7 +159,13 @@ export function AppProvider({ children, school = null }) {
         }
       })
     },
-    [periodTouched]
+    []
+  )
+
+  // Load files PINNED to a specific role (drop/browse into an empty slot).
+  const loadFilesForRole = useCallback(
+    (role, fileList) => loadFiles(fileList, role),
+    [loadFiles]
   )
 
   const setFileRole = useCallback((id, role) => {
@@ -184,20 +208,137 @@ export function AppProvider({ children, school = null }) {
     )
   }, [files])
 
-  const byRole = useMemo(() => {
+  // Resolved slots from uploaded files. History-derived comparatives are layered
+  // on AFTER (uploadedByRole), so an explicit upload ALWAYS beats a history fill.
+  const uploadedByRole = useMemo(() => {
     const find = (id) => files.find((f) => f.id === id) || null
     return { cy: find(slots.cy), py: find(slots.py), audit: find(slots.audit) }
   }, [files, slots])
+
+  // AUTO-COMPARATIVES: when a CY is present but a PY/Audited slot is genuinely
+  // empty, fall back to the history-derived entry ("from saved history"). The
+  // engine consumes its rows exactly like an uploaded file's. A later upload into
+  // the slot overrides automatically (uploadedByRole wins).
+  const history = persistence.historyComparatives
+  const byRole = useMemo(() => {
+    const next = { ...uploadedByRole }
+    if (next.cy) {
+      if (!next.py && history.py) next.py = history.py
+      if (!next.audit && history.audit) next.audit = history.audit
+    }
+    return next
+  }, [uploadedByRole, history])
 
   const cyCollision = useMemo(
     () => conflicts.some((c) => c.kind === 'duplicate' && c.role === 'cy'),
     [conflicts]
   )
 
-  const canGenerate = useMemo(
-    () => !!byRole.cy && byRole.cy.status === 'ready' && !!periodDate && !cyCollision,
-    [byRole, periodDate, cyCollision]
+  // ── EFFECTIVE period date/type (pure derivation, source of truth) ──
+  // Until the user touches the controls, the period date AND type are inferred
+  // from the file that actually occupies the CY slot (byRole.cy) — NOT from a
+  // load-time classification check. Once the user edits, their value wins. This
+  // is a pure derivation (no setState-in-effect), so a CY-slot file that was
+  // classified 'py' (and thus never triggered the old load-time auto-fill) now
+  // still pre-fills the date, and the field shows the detected date.
+  const inferredCy = useMemo(
+    () => (byRole.cy?.metadata ? inferPeriod(byRole.cy.metadata) : null),
+    [byRole]
   )
+
+  const effectivePeriodDate = useMemo(
+    () => (periodTouched ? periodDate : inferredCy?.periodEndDate || periodDate),
+    [periodTouched, periodDate, inferredCy]
+  )
+  const effectivePeriodType = useMemo(
+    () => (periodTouched ? periodType : inferredCy?.periodType || periodType),
+    [periodTouched, periodType, inferredCy]
+  )
+
+  const canGenerate = useMemo(
+    () =>
+      !!byRole.cy && byRole.cy.status === 'ready' && !!effectivePeriodDate && !cyCollision,
+    [byRole, effectivePeriodDate, cyCollision]
+  )
+
+  // ── Derived opening net assets ──────────────────────────────
+  // Each uploaded TB yields its own opening via deriveOpeningNetAssets (the
+  // imbalance for a management TB, or the equity row for a complete one). A
+  // user override wins; otherwise the derived value is used. This replaces the
+  // numbers that used to be hand-typed at school creation.
+  const openings = useMemo(() => {
+    const out = {}
+    for (const role of ['cy', 'py', 'audit']) {
+      const entry = byRole[role]
+      if (!entry || !entry.rows?.length) {
+        out[role] = null
+        continue
+      }
+      const derived = deriveOpeningNetAssets(entry.rows)
+      const override = openingOverrides[role]
+      const hasOverride = typeof override === 'number' && Number.isFinite(override)
+      out[role] = {
+        role,
+        fileName: entry.fileName,
+        derived,
+        override: hasOverride ? override : null,
+        effective: hasOverride ? override : derived.value,
+      }
+    }
+    return out
+  }, [byRole, openingOverrides])
+
+  // The school config fed to the engine, with opening balances replaced by the
+  // derived/overridden values (falling back to the stored value when a given
+  // role hasn't been uploaded).
+  const effectiveSchool = useMemo(() => {
+    if (!school) return school
+    const next = { ...school }
+    for (const role of ['cy', 'py', 'audit']) {
+      const o = openings[role]
+      if (o) next[OPENING_FIELD_BY_ROLE[role]] = o.effective
+    }
+    return next
+  }, [school, openings])
+
+  const setOpening = useCallback((role, value) => {
+    setOpeningOverrides((prev) => {
+      const next = { ...prev }
+      const n = Number(value)
+      if (value === '' || value == null || Number.isNaN(n)) delete next[role]
+      else next[role] = n
+      return next
+    })
+  }, [])
+
+  // ── SAVE (Phase 1C): persist the slotted, newly-uploaded imports + request the
+  // canonical server snapshot. History-filled slots already exist as imports and
+  // are NOT re-POSTed. The live useMemo preview stays the fast path; this is a
+  // separate async action so the preview never blocks.
+  const save = useCallback(async () => {
+    if (readOnly) return null
+    if (!byRole.cy || byRole.cy.status !== 'ready' || !effectivePeriodDate) return null
+    const imports = []
+    for (const role of ['cy', 'py', 'audit']) {
+      const entry = byRole[role]
+      if (!entry || entry.status !== 'ready') continue
+      // Skip history-filled (already-persisted, foreign-period) slots.
+      if (entry.fromHistory || entry.persisted) continue
+      imports.push({
+        role,
+        sourceName: entry.fileName,
+        rows: entry.rows,
+        metadata: entry.metadata || {},
+      })
+    }
+    if (imports.length === 0) return null
+    return persistence.savePeriod({
+      periodEndDate: effectivePeriodDate,
+      periodType: effectivePeriodType,
+      label: undefined,
+      imports,
+    })
+  }, [readOnly, byRole, effectivePeriodDate, effectivePeriodType, persistence])
 
   // ── LIVE PREVIEW: reports derived over the pure engine ──────
   // `generatedAt` is intentionally OMITTED so re-renders never thrash a
@@ -209,12 +350,12 @@ export function AppProvider({ children, school = null }) {
         cyData: byRole.cy.rows,
         pyData: byRole.py?.rows ?? [],
         auditData: byRole.audit?.rows ?? [],
-        school,
+        school: effectiveSchool,
       })
     } catch {
       return null
     }
-  }, [byRole, school, canGenerate])
+  }, [byRole, effectiveSchool, canGenerate])
 
   // ── Intake mode (empty | review | collapsed) ────────────────
   const hasUnresolved = conflicts.length > 0
@@ -236,9 +377,25 @@ export function AppProvider({ children, school = null }) {
     return 'review'
   }, [files.length, intakeExpanded, reports, hasUnresolved])
 
-  const dateLabel = useMemo(() => formatDate(periodDate), [periodDate])
-  const shortDateLabel = useMemo(() => formatShortDate(periodDate), [periodDate])
-  const periodLabel = PERIOD_LABELS[periodType]
+  // Labels read the EFFECTIVE (inferred-until-touched) values so the rendered
+  // statements match the date/type actually feeding canGenerate + the engine.
+  const dateLabel = useMemo(() => formatDate(effectivePeriodDate), [effectivePeriodDate])
+  const shortDateLabel = useMemo(
+    () => formatShortDate(effectivePeriodDate),
+    [effectivePeriodDate]
+  )
+  const periodLabel = PERIOD_LABELS[effectivePeriodType]
+
+  // Dirty = at least one slotted, newly-uploaded (non-history) ready file exists
+  // that hasn't been persisted yet. Drives the Save control's enabled state.
+  const dirty = useMemo(
+    () =>
+      ['cy', 'py', 'audit'].some((role) => {
+        const e = byRole[role]
+        return e && e.status === 'ready' && !e.fromHistory && !e.persisted
+      }),
+    [byRole],
+  )
 
   const value = {
     school,
@@ -247,10 +404,20 @@ export function AppProvider({ children, school = null }) {
     conflicts,
     cyCollision,
     intakeMode,
+    readOnly,
+    canEdit: !readOnly,
+    // Persistence surface (Phase 1C).
+    save,
+    saveState: persistence.saveState,
+    savedPeriodLabel: persistence.savedPeriodLabel,
+    dirty,
     intakeExpanded,
-    periodType,
+    // Expose the EFFECTIVE (inferred-until-touched) period as periodDate/Type so
+    // the input SHOWS the detected date and everything downstream agrees. The
+    // raw setters still flip periodTouched so a user edit takes over.
+    periodType: effectivePeriodType,
     setPeriodType: onSetPeriodType,
-    periodDate,
+    periodDate: effectivePeriodDate,
     setPeriodDate: onSetPeriodDate,
     periodTouched,
     dateLabel,
@@ -258,10 +425,13 @@ export function AppProvider({ children, school = null }) {
     periodLabel,
     status,
     setStatus,
+    openings,
+    setOpening,
     reports,
     canGenerate,
     resetIntake,
     loadFiles,
+    loadFilesForRole,
     setFileRole,
     removeFile,
     expand,
@@ -275,4 +445,24 @@ export function useApp() {
   const ctx = useContext(AppContext)
   if (!ctx) throw new Error('useApp must be used within an AppProvider')
   return ctx
+}
+
+// ── Read-only report view (Phase 1C History) ─────────────────────────────────
+// Feeds the SAME report components a STORED snapshot bundle instead of the live
+// intake-derived `reports`. The four statement components only read
+// { reports, school, dateLabel, periodLabel } from useApp(), so a minimal value
+// suffices — no intake state, no engine recompute. readOnly flags the consumer.
+export function ReportViewProvider({ children, bundle, school = null, dateLabel = '', periodLabel = '' }) {
+  const value = useMemo(
+    () => ({
+      reports: bundle,
+      school,
+      dateLabel,
+      periodLabel,
+      readOnly: true,
+      canEdit: false,
+    }),
+    [bundle, school, dateLabel, periodLabel],
+  )
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>
 }

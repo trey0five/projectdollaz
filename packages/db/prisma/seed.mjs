@@ -81,7 +81,13 @@ async function main() {
     create: { userId: user.id, schoolId: school.id, role: 'owner', status: 'active' },
   })
 
-  console.log(`[seed] org=${org.id} school=${school.id} owner=${ownerEmail} (password: ${ownerPassword})`)
+  // Never log the plaintext credential. In non-production we hint where to
+  // find it (the .env default); production deploys should set a real password.
+  const isProd = process.env.NODE_ENV === 'production'
+  console.log(`[seed] org=${org.id} school=${school.id} owner=${ownerEmail}`)
+  if (!isProd) {
+    console.log('[seed] dev owner password: DEV_OWNER_PASSWORD (default in .env.example)')
+  }
 }
 
 main()

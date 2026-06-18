@@ -20,6 +20,7 @@ export default function ZoomPan({ children }) {
   const gesture = useRef(null)
   const [tf, setTfState] = useState({ s: 1, x: 0, y: 0 })
   const [fitScale, setFitScale] = useState(1) // mirror of fitRef for render
+  const [dragging, setDragging] = useState(false) // mouse drag-to-pan active
 
   const setTf = (next) => {
     tfRef.current = next
@@ -121,6 +122,28 @@ export default function ZoomPan({ children }) {
     zoomAround(zoomedIn ? fitRef.current : Math.min(fitRef.current * 2.2, MAX), x, y)
   }
 
+  // ── mouse drag-to-pan (desktop) ── window-listened so the drag continues
+  // even if the cursor leaves the element.
+  const onMouseDown = (e) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    const start = { px: e.clientX, py: e.clientY, tf0: { ...tfRef.current } }
+    setDragging(true)
+    const move = (ev) =>
+      setTf({
+        s: start.tf0.s,
+        x: start.tf0.x + (ev.clientX - start.px),
+        y: start.tf0.y + (ev.clientY - start.py),
+      })
+    const up = () => {
+      window.removeEventListener('mousemove', move)
+      window.removeEventListener('mouseup', up)
+      setDragging(false)
+    }
+    window.addEventListener('mousemove', move)
+    window.addEventListener('mouseup', up)
+  }
+
   const buttonZoom = (factor) => {
     const wrap = wrapRef.current
     if (!wrap) return
@@ -132,7 +155,8 @@ export default function ZoomPan({ children }) {
       <div
         ref={wrapRef}
         className="h-full w-full touch-none select-none"
-        style={{ cursor: tf.s > fitScale * 1.02 ? 'grab' : 'zoom-in' }}
+        style={{ cursor: dragging ? 'grabbing' : tf.s > fitScale * 1.02 ? 'grab' : 'zoom-in' }}
+        onMouseDown={onMouseDown}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}

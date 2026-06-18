@@ -40,14 +40,18 @@ export default function RoleChip({ role, confirmed, needsReview, onChange }) {
   const isUnknown = role === 'unknown'
   const showAuto = !confirmed && !isUnknown && !needsReview
   const label = LABELS[role] ?? LABELS.unknown
+  // No onChange => read-only chip (viewer or a history-filled slot).
+  const editable = typeof onChange === 'function'
 
   const select = (value) => {
+    if (!editable) return
     onChange(value)
     setOpen(false)
     btnRef.current?.focus()
   }
 
   const onKeyDown = (e) => {
+    if (!editable) return
     if (!open) {
       if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
         e.preventDefault()
@@ -81,15 +85,18 @@ export default function RoleChip({ role, confirmed, needsReview, onChange }) {
       <button
         ref={btnRef}
         type="button"
+        disabled={!editable}
         aria-haspopup="listbox"
         aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => editable && setOpen((o) => !o)}
         onKeyDown={onKeyDown}
-        className={`inline-flex items-center gap-1.5 rounded-full border-2 px-3 py-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] outline-none transition-all focus-visible:ring-2 focus-visible:ring-gold ${tone}`}
+        className={`inline-flex items-center gap-1.5 rounded-full border-2 px-3 py-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] outline-none transition-all focus-visible:ring-2 focus-visible:ring-gold ${tone} ${editable ? '' : 'cursor-default opacity-90'}`}
       >
         {showAuto && <Sparkles size={13} className="text-gold" aria-hidden />}
         <span>{label}</span>
-        <ChevronDown size={13} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+        {editable && (
+          <ChevronDown size={13} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+        )}
       </button>
       {showAuto && (
         <span className="sr-only">Auto-detected — confirm or change.</span>

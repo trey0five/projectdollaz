@@ -139,6 +139,70 @@ describe('resolveRoles', () => {
     expect(conflicts).toContainEqual({ kind: 'missing-current' })
   })
 
+  // ── ROLE-FIRST placement (regression locks for the date-first bug) ──
+  it('places a LONE prior-year file in PY (not CY), even with a date', () => {
+    // The headline bug: a single TB_PriorYear_FY25 (role py) used to land in CY
+    // because it was the only dated file. Role-first now sends it to PY and
+    // surfaces the still-required CY slot as missing-current.
+    const { slots, conflicts } = resolveRoles([
+      { id: 'py1', role: 'py', periodEndDate: '2025-06-30' },
+    ])
+    expect(slots.py).toBe('py1')
+    expect(slots.cy).toBeUndefined()
+    expect(conflicts).toContainEqual({ kind: 'missing-current' })
+  })
+
+  it('places a lone audited file in AUDIT (not CY), and reports missing-current', () => {
+    const { slots, conflicts } = resolveRoles([
+      { id: 'aud', role: 'unknown', periodEndDate: '2025-06-30', auditStatus: 'audited' },
+    ])
+    expect(slots.audit).toBe('aud')
+    expect(slots.cy).toBeUndefined()
+    expect(slots.py).toBeUndefined()
+    expect(conflicts).toContainEqual({ kind: 'missing-current' })
+  })
+
+  it('a lone SIGNAL-LESS (unknown) file with a date still defaults to CY', () => {
+    const { slots, conflicts } = resolveRoles([
+      { id: 'u', role: 'unknown', periodEndDate: '2026-06-30' },
+    ])
+    expect(slots.cy).toBe('u')
+    expect(conflicts.some((c) => c.kind === 'missing-current')).toBe(false)
+  })
+
+  it('detected role beats date order: older cy stays cy, newer unknown does not steal it', () => {
+    // The cy-classified file has the EARLIER date; a newer unknown file would
+    // have won cy under date-first. Role-first keeps cy where it belongs and
+    // the newer unknown falls into the still-empty py slot.
+    const { slots } = resolveRoles([
+      { id: 'cyfile', role: 'cy', periodEndDate: '2025-06-30' },
+      { id: 'newer', role: 'unknown', periodEndDate: '2026-06-30' },
+    ])
+    expect(slots.cy).toBe('cyfile')
+    expect(slots.py).toBe('newer')
+  })
+
+  it('an audited file never also competes for cy; the detected cy file wins cy', () => {
+    const { slots, conflicts } = resolveRoles([
+      { id: 'cyfile', role: 'cy' },
+      { id: 'aud', role: 'audit', auditStatus: 'audited' },
+    ])
+    expect(slots.cy).toBe('cyfile')
+    expect(slots.audit).toBe('aud')
+    expect(conflicts.some((c) => c.kind === 'missing-current')).toBe(false)
+  })
+
+  it('two files with the SAME detected role collide -> duplicate, slot empty', () => {
+    const { slots, conflicts } = resolveRoles([
+      { id: 'a', role: 'py', periodEndDate: '2025-06-30' },
+      { id: 'b', role: 'py', periodEndDate: '2024-06-30' },
+      { id: 'c', role: 'cy', periodEndDate: '2026-06-30' },
+    ])
+    expect(slots.cy).toBe('c')
+    expect(slots.py).toBeUndefined()
+    expect(conflicts).toContainEqual({ kind: 'duplicate', role: 'py', fileIds: ['a', 'b'] })
+  })
+
   it('ignores files marked ignore', () => {
     const { slots, conflicts } = resolveRoles([
       { id: 'a', role: 'cy' },
@@ -146,6 +210,36 @@ describe('resolveRoles', () => {
     ])
     expect(slots.cy).toBe('a')
     expect(conflicts).toHaveLength(0)
+  })
+
+  // ── NEVER-DROP: a detected file that loses a slot must SURFACE ──
+  it('a CY override + a competing detected-cy file: the loser surfaces (never dropped)', () => {
+    // 'ovr' hard-claims cy via override. 'det' is also detected cy but the slot
+    // is taken — it must NOT vanish; it surfaces as unresolved so the UI can
+    // show it in the "Needs a role" row.
+    const { slots, conflicts } = resolveRoles([
+      { id: 'ovr', role: 'cy', override: true },
+      { id: 'det', role: 'cy' },
+    ])
+    expect(slots.cy).toBe('ovr')
+    expect(conflicts).toContainEqual({ kind: 'unresolved', fileIds: ['det'] })
+  })
+
+  it('an audit override + a competing detected-audit file: the loser surfaces', () => {
+    const { slots, conflicts } = resolveRoles([
+      { id: 'ovr', role: 'audit', override: true },
+      { id: 'det', role: 'unknown', auditStatus: 'audited' },
+    ])
+    expect(slots.audit).toBe('ovr')
+    expect(conflicts).toContainEqual({ kind: 'unresolved', fileIds: ['det'] })
+  })
+
+  // ── LONE signal-less file defaults to CY (per the DECISION) ──
+  it('a lone DATELESS + keywordless file defaults to CY', () => {
+    const { slots, conflicts } = resolveRoles([{ id: 'u', role: 'unknown' }])
+    expect(slots.cy).toBe('u')
+    expect(conflicts.some((c) => c.kind === 'missing-current')).toBe(false)
+    expect(conflicts.some((c) => c.kind === 'unresolved')).toBe(false)
   })
 })
 

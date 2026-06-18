@@ -5,6 +5,7 @@ import {
   CalendarDays,
   CheckCircle2,
   FileSpreadsheet,
+  History,
   Loader2,
   X,
 } from 'lucide-react'
@@ -14,11 +15,12 @@ import RoleChip from './RoleChip.jsx'
 import CountUp from './CountUp.jsx'
 
 /** One status card per imported file. */
-export default function FileStatusCard({ file, needsReview }) {
-  const { setFileRole, removeFile } = useApp()
+export default function FileStatusCard({ file, needsReview, onOverride }) {
+  const { setFileRole, removeFile, canEdit } = useApp()
   const reduce = useReducedMotion()
 
   const { id, fileName, status } = file
+  const fromHistory = !!file.fromHistory
   const ring =
     status === 'error'
       ? 'border-[#e0a0a0]'
@@ -53,15 +55,36 @@ export default function FileStatusCard({ file, needsReview }) {
             <p className="mt-0.5 text-[12px] text-danger">{file.error}</p>
           )}
         </div>
-        <button
-          type="button"
-          aria-label={`Remove ${fileName}`}
-          onClick={() => removeFile(id)}
-          className="rounded-md p-1 text-muted transition-colors hover:bg-section hover:text-danger"
-        >
-          <X size={16} />
-        </button>
+        {canEdit && !fromHistory && (
+          <button
+            type="button"
+            aria-label={`Remove ${fileName}`}
+            onClick={() => removeFile(id)}
+            className="rounded-md p-1 text-muted transition-colors hover:bg-section hover:text-danger"
+          >
+            <X size={16} />
+          </button>
+        )}
       </div>
+
+      {/* "from saved history" indicator for an auto-loaded comparative slot. */}
+      {fromHistory && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg bg-gold/10 px-3 py-2 text-[12px] font-medium text-[#7a5e00]">
+          <span className="inline-flex items-center gap-1.5">
+            <History size={13} className="text-gold" /> From saved history
+            {file.historyPeriodLabel ? ` · ${file.historyPeriodLabel}` : ''}
+          </span>
+          {canEdit && onOverride && (
+            <button
+              type="button"
+              onClick={onOverride}
+              className="font-semibold text-gold hover:underline"
+            >
+              Upload to override
+            </button>
+          )}
+        </div>
+      )}
 
       {/* parsing skeleton */}
       {status === 'parsing' && (
@@ -118,7 +141,7 @@ export default function FileStatusCard({ file, needsReview }) {
               role={file.role}
               confirmed={file.roleConfirmed}
               needsReview={needsReview}
-              onChange={(role) => setFileRole(id, role)}
+              onChange={canEdit && !fromHistory ? (role) => setFileRole(id, role) : undefined}
             />
           </div>
         </>

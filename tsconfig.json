@@ -2,6 +2,7 @@
   "files": [],
   "references": [
     { "path": "packages/engine" },
+    { "path": "packages/analytics" },
     { "path": "packages/ingestion" },
     { "path": "packages/db" },
     { "path": "apps/web" },
