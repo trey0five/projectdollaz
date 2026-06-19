@@ -3,10 +3,11 @@
 // ProtectedRoute. SchoolProvider wraps the authed branch so the switcher +
 // report preview can read the user's schools.
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom'
-import { SchoolProvider } from './context/SchoolContext.jsx'
+import { SchoolProvider, useSchools } from './context/SchoolContext.jsx'
 import { BillingProvider } from './context/BillingContext.jsx'
 import { PersistenceProvider } from './context/PersistenceContext.jsx'
 import { ProtectedRoute, PublicOnlyRoute } from './components/auth/RouteGuards.jsx'
+import Onboarding from './components/onboarding/Onboarding.jsx'
 import HomePage from './pages/HomePage.jsx'
 import StatementsPage from './pages/StatementsPage.jsx'
 import AnalyticsPage from './pages/AnalyticsPage.jsx'
@@ -29,6 +30,17 @@ import VerifyEmailPage from './pages/VerifyEmailPage.jsx'
 import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx'
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx'
 
+// First-login gate: once the user's schools have loaded, a user with none is sent
+// to onboarding (create your first school) instead of an empty dashboard. The QB
+// OAuth callback is exempt so an in-flight connect can still complete.
+function OnboardingGate({ children }) {
+  const { schools, loading } = useSchools()
+  const onCallback =
+    typeof window !== 'undefined' && window.location.pathname.startsWith('/integrations/qb/callback')
+  if (!loading && schools.length === 0 && !onCallback) return <Onboarding />
+  return children
+}
+
 // Shared authed layout: a single SchoolProvider wraps BOTH the dashboard and the
 // settings routes so the active school + role context is consistent across them.
 function AuthedLayout() {
@@ -37,7 +49,9 @@ function AuthedLayout() {
       <SchoolProvider>
         <BillingProvider>
           <PersistenceProvider>
-            <Outlet />
+            <OnboardingGate>
+              <Outlet />
+            </OnboardingGate>
           </PersistenceProvider>
         </BillingProvider>
       </SchoolProvider>
