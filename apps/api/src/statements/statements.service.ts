@@ -22,6 +22,8 @@ import { PrismaService } from '../prisma/prisma.service.js'
 import { AuditService } from '../common/audit/audit.service.js'
 import { PeriodsService } from '../periods/periods.service.js'
 import { MappingService } from '../mapping/mapping.service.js'
+import { ComplianceService } from '../compliance/compliance.service.js'
+import { ReconciliationService } from '../compliance/reconciliation.service.js'
 import {
   resolveComparatives,
   type ResolverPeriod,
@@ -37,6 +39,8 @@ export interface SnapshotPublic {
   engineVersion: string
   payload: ReportBundle
   createdAt: string
+  /** Phase 6 — exception/reconciliation scan run automatically on this import. */
+  scanSummary?: { material: number; reportable: number; reconStatus: string | null } | null
 }
 
 @Injectable()
@@ -46,7 +50,43 @@ export class StatementsService {
     private readonly audit: AuditService,
     private readonly periods: PeriodsService,
     private readonly mapping: MappingService,
+    private readonly compliance: ComplianceService,
+    private readonly reconciliation: ReconciliationService,
   ) {}
+
+  /**
+   * Phase 6 — auto-scan on import: after a snapshot is generated, run the exception
+   * + reconciliation evaluators so issues surface immediately (not just on demand).
+   * Best-effort: never fails the generate on a scan error.
+   */
+  private async autoScan(
+    schoolId: string,
+    periodId: string,
+    userId: string,
+  ): Promise<SnapshotPublic['scanSummary']> {
+    try {
+      const compliance = await this.compliance.evaluateForPeriod(schoolId, periodId)
+      const material = compliance.summary?.counts?.material ?? 0
+      const reportable = compliance.summary?.counts?.reportable ?? 0
+      let reconStatus: string | null = null
+      try {
+        const recon = await this.reconciliation.reconcileForPeriod(schoolId, periodId)
+        reconStatus = recon?.result?.status ?? null
+      } catch {
+        // reconciliation needs disbursement/recorded inputs — fine if absent.
+      }
+      await this.audit.write({
+        schoolId,
+        userId,
+        action: 'import.scanned',
+        targetType: 'statement_snapshot',
+        metadata: { periodId, material, reportable, reconStatus },
+      })
+      return { material, reportable, reconStatus }
+    } catch {
+      return null
+    }
+  }
 
   private toPublic(s: StatementSnapshot): SnapshotPublic {
     return {
@@ -174,7 +214,8 @@ export class StatementsService {
       },
     })
 
-    return this.toPublic(snapshot)
+    const scanSummary = await this.autoScan(schoolId, period.id, actor.id)
+    return { ...this.toPublic(snapshot), scanSummary }
   }
 
   /** Latest snapshot for a period (404 if none). Any active member. */

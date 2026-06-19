@@ -4,6 +4,7 @@ import { AuditModule } from '../common/audit/audit.module.js'
 import { PeriodsModule } from '../periods/periods.module.js'
 import { MappingModule } from '../mapping/mapping.module.js'
 import { BillingModule } from '../billing/billing.module.js'
+import { ComplianceModule } from '../compliance/compliance.module.js'
 import { StatementsController } from './statements.controller.js'
 import { StatementsService } from './statements.service.js'
 
@@ -13,7 +14,7 @@ import { StatementsService } from './statements.service.js'
  * @finrep/engine, and AuditService.
  */
 @Module({
-  imports: [AuthModule, AuditModule, PeriodsModule, MappingModule, BillingModule],
+  imports: [AuthModule, AuditModule, PeriodsModule, MappingModule, BillingModule, ComplianceModule],
   controllers: [StatementsController],
   providers: [StatementsService],
   exports: [StatementsService],

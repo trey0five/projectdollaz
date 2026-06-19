@@ -107,6 +107,7 @@ model School {
   budgets            PeriodBudget[]
   analyticsDashboard AnalyticsDashboard?
   reportSchedule     ReportSchedule?
+  qboConnection      QboConnection?
 
   @@index([organizationId])
   @@map("schools")
@@ -570,6 +571,25 @@ model ReportSchedule {
   school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
   @@map("report_schedules")
+}
+
+/// Phase 6 — a school's QuickBooks Online OAuth connection (one per school). Tokens
+/// are refreshed on use. NOTE: stored as-is here; encrypt at rest before production.
+model QboConnection {
+  id                String   @id @default(uuid()) @db.Uuid
+  schoolId          String   @unique @map("school_id") @db.Uuid
+  realmId           String   @map("realm_id")
+  accessToken       String   @map("access_token")
+  refreshToken      String   @map("refresh_token")
+  expiresAt         DateTime @map("expires_at")
+  environment       String   @default("sandbox")
+  connectedByUserId String?  @map("connected_by_user_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@map("qbo_connections")
 }
 
 // ── Dashboard customization (Phase 4C) ────────────────────────────────────────

@@ -20,7 +20,9 @@ import MembersSection from './components/settings/MembersSection.jsx'
 import SchoolSection from './components/settings/SchoolSection.jsx'
 import OrgSection from './components/settings/OrgSection.jsx'
 import ReportScheduleSection from './components/settings/ReportScheduleSection.jsx'
+import IntegrationsSection from './components/settings/IntegrationsSection.jsx'
 import BillingSection from './components/settings/BillingSection.jsx'
+import QbCallbackPage from './pages/QbCallbackPage.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import RegisterPage from './pages/RegisterPage.jsx'
 import VerifyEmailPage from './pages/VerifyEmailPage.jsx'
@@ -88,6 +90,7 @@ export default function App() {
         <Route path="/readiness/cap/print" element={<CapPrintPage />} />
         <Route path="/readiness/workpapers/print" element={<WorkpapersPrintPage />} />
         <Route path="/board-packet/print" element={<BoardPacketPrintPage />} />
+        <Route path="/integrations/qb/callback" element={<QbCallbackPage />} />
         {/* History folded into Statements & Periods — keep old links working. */}
         <Route path="/history" element={<Navigate to="/statements" replace />} />
         <Route path="/settings" element={<SettingsPage />}>
@@ -97,6 +100,7 @@ export default function App() {
           <Route path="school" element={<SchoolSection />} />
           <Route path="organization" element={<OrgSection />} />
           <Route path="reports" element={<ReportScheduleSection />} />
+          <Route path="integrations" element={<IntegrationsSection />} />
           <Route path="billing" element={<BillingSection />} />
         </Route>
       </Route>

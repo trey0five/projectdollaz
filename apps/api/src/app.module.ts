@@ -15,6 +15,7 @@ import { BillingModule } from './billing/billing.module.js'
 import { AnalyticsModule } from './analytics/analytics.module.js'
 import { ComplianceModule } from './compliance/compliance.module.js'
 import { ReportScheduleModule } from './report-schedule/report-schedule.module.js'
+import { IntegrationsModule } from './integrations/integrations.module.js'
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { ReportScheduleModule } from './report-schedule/report-schedule.module.j
     AnalyticsModule,
     ComplianceModule,
     ReportScheduleModule,
+    IntegrationsModule,
   ],
 })
 export class AppModule {}

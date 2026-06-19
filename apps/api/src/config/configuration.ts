@@ -51,6 +51,14 @@ export interface AppConfig {
     model: string
     baseUrl: string
   }
+  // Phase 6 — QuickBooks Online connector (optional). Empty clientId = connector
+  // disabled (the Connect button 501s); the app boots and file upload still works.
+  quickbooks: {
+    clientId: string
+    clientSecret: string
+    environment: 'sandbox' | 'production'
+    redirectUri: string
+  }
 }
 
 const DEFAULT_DEV_SECRET = 'changeme-dev-only'
@@ -127,6 +135,12 @@ export function configuration(): AppConfig {
       apiKey: process.env.OPENROUTER_API_KEY ?? '',
       model: process.env.OPENROUTER_MODEL ?? 'anthropic/claude-haiku-4.5',
       baseUrl: process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1',
+    },
+    quickbooks: {
+      clientId: process.env.QB_OAUTH_CLIENT_ID ?? '',
+      clientSecret: process.env.QB_OAUTH_CLIENT_SECRET ?? '',
+      environment: (process.env.QB_ENVIRONMENT ?? 'sandbox') as 'sandbox' | 'production',
+      redirectUri: process.env.QB_REDIRECT_URI ?? `${webOrigin}/integrations/qb/callback`,
     },
   }
 }

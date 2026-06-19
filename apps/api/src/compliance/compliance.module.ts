@@ -43,5 +43,6 @@ import { WorkpapersService } from './workpapers.service.js'
     ChecklistService,
     WorkpapersService,
   ],
+  exports: [ComplianceService, ReconciliationService],
 })
 export class ComplianceModule {}

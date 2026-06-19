@@ -242,6 +242,15 @@ export const reportScheduleApi = {
   sendNow: (schoolId) => api.post(`/schools/${schoolId}/report-schedule/send-now`),
 }
 
+// ── Phase 6: QuickBooks Online connector (per school) ────────────────────────
+export const qboApi = {
+  status: (schoolId) => api.get(`/schools/${schoolId}/integrations/qb/status`),
+  connectUrl: (schoolId) => api.get(`/schools/${schoolId}/integrations/qb/connect`),
+  callback: (schoolId, body) => api.post(`/schools/${schoolId}/integrations/qb/callback`, body),
+  disconnect: (schoolId) => api.delete(`/schools/${schoolId}/integrations/qb`),
+  sync: (schoolId, periodId) => api.post(`/schools/${schoolId}/integrations/qb/sync`, { periodId }),
+}
+
 // ── Phase 2A: Florida scholarship AUP — Review Readiness ─────────────────────
 // Same axios `api` instance: inherits Bearer + proactive-refresh and surfaces the
 // entitlement 402 (isPaymentRequired) like every other paid read.
