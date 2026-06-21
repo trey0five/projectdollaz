@@ -16,6 +16,7 @@ import { AnalyticsModule } from './analytics/analytics.module.js'
 import { ComplianceModule } from './compliance/compliance.module.js'
 import { ReportScheduleModule } from './report-schedule/report-schedule.module.js'
 import { IntegrationsModule } from './integrations/integrations.module.js'
+import { AssistantModule } from './assistant/assistant.module.js'
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { IntegrationsModule } from './integrations/integrations.module.js'
     ComplianceModule,
     ReportScheduleModule,
     IntegrationsModule,
+    AssistantModule,
   ],
 })
 export class AppModule {}

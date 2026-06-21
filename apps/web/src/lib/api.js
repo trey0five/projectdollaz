@@ -242,6 +242,11 @@ export const reportScheduleApi = {
   sendNow: (schoolId) => api.post(`/schools/${schoolId}/report-schedule/send-now`),
 }
 
+// ── AI assistant (agentic, tool-calling, read-only) ──────────────────────────
+export const assistantApi = {
+  chat: (schoolId, body) => api.post(`/schools/${schoolId}/assistant/chat`, body),
+}
+
 // ── Phase 6: QuickBooks Online connector (per school) ────────────────────────
 export const qboApi = {
   status: (schoolId) => api.get(`/schools/${schoolId}/integrations/qb/status`),
