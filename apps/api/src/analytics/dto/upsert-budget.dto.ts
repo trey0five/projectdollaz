@@ -1,4 +1,4 @@
-import { IsNumber, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator'
+import { IsNumber, IsObject, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator'
 
 /**
  * Upsert a period's budgeted top-line figures (budget-vs-actual). All optional so
@@ -22,4 +22,9 @@ export class UpsertBudgetDto {
   @IsString()
   @MaxLength(2000)
   notes?: string | null
+
+  /** Per-category budget lines + forecast assumption: { revenue, expense, growthPct }. */
+  @IsOptional()
+  @IsObject()
+  lines?: Record<string, unknown> | null
 }

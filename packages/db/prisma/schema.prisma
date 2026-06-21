@@ -542,6 +542,9 @@ model PeriodBudget {
   fiscalPeriodId  String   @map("fiscal_period_id") @db.Uuid
   totalRevenue    Decimal? @map("total_revenue") @db.Decimal(18, 2)
   totalExpenses   Decimal? @map("total_expenses") @db.Decimal(18, 2)
+  // Phase 3 (robust) — per-category budget lines + forecast assumption.
+  // { revenue: {key:amt}, expense: {key:amt}, growthPct: number }
+  lines           Json?
   notes           String?
   updatedByUserId String?  @map("updated_by_user_id") @db.Uuid
   createdAt       DateTime @default(now()) @map("created_at")

@@ -1,7 +1,7 @@
-// Phase 3 — budget vs. actual. Owner/accountant enter budgeted revenue + expenses
-// (autosaved); actuals come from the period's metrics (revenue_mix / expense_mix
-// = total revenue / expenses), so no snapshot re-fetch. Variance is favourable
-// when actual revenue ≥ budget and actual expenses ≤ budget.
+// Phase 3 (robust) — budget vs. actual by category. Budget each revenue/expense
+// line (the revenue_mix / expense_mix breakdown components), with variance $ and
+// %, subtotals, net surplus/(deficit), and a simple next-year forecast from a
+// growth assumption. Budgets autosave into the period_budgets `lines` JSON.
 import { useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { Scale } from 'lucide-react'
@@ -12,86 +12,146 @@ import { fmtDollar } from '../../lib/format.js'
 import { FormError } from '../auth/fields.jsx'
 import { AutosaveBar } from '../AutosaveIndicator.jsx'
 
-const toStr = (v) => (v == null ? '' : String(v))
-const labelCls = 'mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.12em] text-muted'
-const inputCls =
-  'w-full rounded-lg border border-border bg-white px-3 py-2 text-[14px] text-ink outline-none transition-all focus:border-gold focus:ring-2 focus:ring-gold/20 disabled:cursor-not-allowed disabled:bg-navy/[0.04] disabled:text-muted'
-
-const numEq = (a, b) => {
-  if (a == null && b == null) return true
-  if (a == null || b == null) return false
-  return Math.round(Number(a) * 100) === Math.round(Number(b) * 100)
-}
 const parseNum = (s) => {
   const t = String(s).trim()
   if (t === '') return null
   const n = Number(t)
   return Number.isFinite(n) ? n : NaN
 }
+const toStrMap = (m) => {
+  const o = {}
+  if (m && typeof m === 'object') for (const [k, v] of Object.entries(m)) o[k] = v == null ? '' : String(v)
+  return o
+}
+const toNumMap = (draft) => {
+  const o = {}
+  for (const [k, v] of Object.entries(draft)) {
+    const n = parseNum(v)
+    if (n != null && !Number.isNaN(n)) o[k] = n
+  }
+  return o
+}
+const variancePct = (v, bud) => (bud ? `${v >= 0 ? '+' : '−'}${Math.abs((v / bud) * 100).toFixed(1)}%` : '—')
 
 export default function BudgetVsActual({ schoolId, periodId, canEdit, metrics }) {
   const reduce = useReducedMotion()
   const { budget, save } = useBudget(schoolId, periodId)
 
-  const [rev, setRev] = useState('')
-  const [exp, setExp] = useState('')
+  const [revDraft, setRevDraft] = useState({})
+  const [expDraft, setExpDraft] = useState({})
+  const [growth, setGrowth] = useState('')
 
-  // Sync from the saved row when school/period changes (render-time).
+  // Sync drafts from the saved row on school/period change (render-time).
   const syncKey = `${schoolId}:${periodId}`
   const [syncedKey, setSyncedKey] = useState(null)
   if (budget && syncedKey !== syncKey) {
     setSyncedKey(syncKey)
-    setRev(toStr(budget.totalRevenue))
-    setExp(toStr(budget.totalExpenses))
+    const L = budget.lines || {}
+    setRevDraft(toStrMap(L.revenue))
+    setExpDraft(toStrMap(L.expense))
+    setGrowth(L.growthPct != null ? String(L.growthPct) : '')
   }
 
-  const revNum = parseNum(rev)
-  const expNum = parseNum(exp)
-  const invalid = [revNum, expNum].some(
-    (v) => Number.isNaN(v) || (typeof v === 'number' && v < 0),
-  )
+  const metric = (k) => (metrics ?? []).find((x) => x.key === k)
+  const revM = metric('revenue_mix')
+  const expM = metric('expense_mix')
+  const revLines = revM?.components ?? []
+  const expLines = expM?.components ?? []
+  const hasLines = revLines.length > 0 || expLines.length > 0
+  const actRevTotal = revM?.available ? revM.value : null
+  const actExpTotal = expM?.available ? expM.value : null
+
+  const budRevTotal = Object.values(toNumMap(revDraft)).reduce((a, b) => a + b, 0)
+  const budExpTotal = Object.values(toNumMap(expDraft)).reduce((a, b) => a + b, 0)
+
+  const buildLines = () => ({
+    revenue: toNumMap(revDraft),
+    expense: toNumMap(expDraft),
+    ...(parseNum(growth) != null && !Number.isNaN(parseNum(growth))
+      ? { growthPct: parseNum(growth) }
+      : {}),
+  })
+
+  // Dirty vs. saved (compared as numeric maps so formatting can't loop autosave).
+  const savedLines = budget?.lines || {}
+  const sameMap = (a, b) => {
+    const an = toNumMap(a)
+    const bn = b && typeof b === 'object' ? b : {}
+    const keys = new Set([...Object.keys(an), ...Object.keys(bn)])
+    for (const k of keys) if (Math.round((an[k] ?? 0) * 100) !== Math.round((bn[k] ?? 0) * 100)) return false
+    return true
+  }
+  const growthNum = parseNum(growth)
   const dirty =
     canEdit &&
-    !invalid &&
     budget != null &&
-    (!numEq(revNum, budget.totalRevenue) || !numEq(expNum, budget.totalExpenses))
+    (!sameMap(revDraft, savedLines.revenue) ||
+      !sameMap(expDraft, savedLines.expense) ||
+      (growthNum ?? null) !== (savedLines.growthPct ?? null))
 
   const { saving, error: err, saveNow } = useAutosave({
     enabled: canEdit,
     dirty,
-    signal: `${rev}|${exp}`,
+    signal: JSON.stringify([revDraft, expDraft, growth]),
     delay: 1000,
     save: async () => {
-      await save({ totalRevenue: revNum, totalExpenses: expNum })
+      await save({ lines: buildLines() })
     },
   })
 
-  // Actuals from the period's metrics.
-  const metricVal = (key) => {
-    const m = (metrics ?? []).find((x) => x.key === key)
-    return m && m.available && m.value != null ? m.value : null
-  }
-  const actRev = metricVal('revenue_mix')
-  const actExp = metricVal('expense_mix')
-  const budRev = budget?.totalRevenue ?? null
-  const budExp = budget?.totalExpenses ?? null
+  const inputCls =
+    'w-28 rounded border border-border bg-white px-2 py-1 text-right text-[13px] tabular-nums text-ink outline-none transition-colors focus:border-gold disabled:cursor-not-allowed disabled:bg-navy/[0.04]'
 
-  const mkRow = (label, bud, act, favHigher) => {
+  const renderRow = ({ rowKey, label, bud, act, favHigher, isTotal, budInput }) => {
     const variance = bud != null && act != null ? act - bud : null
     const favorable = variance == null ? null : favHigher ? variance >= 0 : variance <= 0
-    return { label, bud, act, variance, favorable }
+    return (
+      <tr
+        key={rowKey}
+        className={isTotal ? 'border-t border-rule font-semibold' : 'border-b border-rule/40'}
+      >
+        <td className={`py-1.5 pr-2 ${isTotal ? 'text-navy' : 'text-ink'}`}>{label}</td>
+        <td className="px-2 py-1.5 text-right">
+          {budInput ?? (bud != null ? <span className="tabular-nums text-muted">{fmtDollar(bud)}</span> : '—')}
+        </td>
+        <td className="px-2 py-1.5 text-right tabular-nums text-navy">
+          {act != null ? fmtDollar(act) : '—'}
+        </td>
+        <td
+          className={`px-2 py-1.5 text-right tabular-nums ${
+            favorable == null ? 'text-muted' : favorable ? 'text-[#7a5e00]' : 'text-danger'
+          }`}
+        >
+          {variance != null ? fmtDollar(variance) : '—'}
+        </td>
+        <td
+          className={`py-1.5 pl-2 text-right tabular-nums text-[12px] ${
+            favorable == null ? 'text-muted' : favorable ? 'text-[#7a5e00]' : 'text-danger'
+          }`}
+        >
+          {variance != null ? variancePct(variance, bud) : '—'}
+        </td>
+      </tr>
+    )
   }
-  const rows = [
-    mkRow('Revenue', budRev, actRev, true),
-    mkRow('Expenses', budExp, actExp, false),
-    mkRow(
-      'Net surplus / (deficit)',
-      budRev != null && budExp != null ? budRev - budExp : null,
-      actRev != null && actExp != null ? actRev - actExp : null,
-      true,
-    ),
-  ]
-  const anyActual = actRev != null || actExp != null
+
+  const lineInput = (draft, setDraft, key) => (
+    <input
+      className={inputCls}
+      inputMode="decimal"
+      value={draft[key] ?? ''}
+      disabled={!canEdit}
+      onChange={(e) =>
+        setDraft((p) => ({ ...p, [key]: sanitizeDecimal(e.target.value, { allowNegative: true }) }))
+      }
+      placeholder="—"
+    />
+  )
+
+  // Forecast (next year) = actual × (1 + growth%).
+  const g = growthNum != null && !Number.isNaN(growthNum) ? growthNum / 100 : null
+  const projRev = actRevTotal != null && g != null ? actRevTotal * (1 + g) : null
+  const projExp = actExpTotal != null && g != null ? actExpTotal * (1 + g) : null
 
   return (
     <motion.div
@@ -107,90 +167,135 @@ export default function BudgetVsActual({ schoolId, periodId, canEdit, metrics })
           <h3 className="font-serif text-lg font-semibold text-navy">Budget vs. actual</h3>
           <p className="text-[12px] text-muted">
             {canEdit
-              ? 'Enter the period budget — actuals come from your statements.'
+              ? 'Budget each line — actuals come from your statements.'
               : 'Budget vs. actual for this period.'}
           </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div>
-          <label className={labelCls}>Budgeted revenue</label>
-          <div className="relative">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted">$</span>
-            <input
-              className={`${inputCls} pl-7`}
-              inputMode="decimal"
-              value={rev}
-              disabled={!canEdit}
-              onChange={(e) => setRev(sanitizeDecimal(e.target.value))}
-              placeholder="e.g. 10800000"
-            />
-          </div>
-        </div>
-        <div>
-          <label className={labelCls}>Budgeted expenses</label>
-          <div className="relative">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted">$</span>
-            <input
-              className={`${inputCls} pl-7`}
-              inputMode="decimal"
-              value={exp}
-              disabled={!canEdit}
-              onChange={(e) => setExp(sanitizeDecimal(e.target.value))}
-              placeholder="e.g. 10400000"
-            />
-          </div>
-        </div>
-      </div>
+      {!hasLines ? (
+        <p className="rounded-lg border border-dashed border-border bg-section px-4 py-6 text-center text-[13px] italic text-muted">
+          Category budgeting unlocks once this period has generated statements (it needs the
+          revenue &amp; expense breakdown).
+        </p>
+      ) : (
+        <>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="border-b border-rule text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+                  <th className="py-2 pr-2 text-left font-semibold"> </th>
+                  <th className="px-2 py-2 text-right font-semibold">Budget</th>
+                  <th className="px-2 py-2 text-right font-semibold">Actual</th>
+                  <th className="px-2 py-2 text-right font-semibold">Var $</th>
+                  <th className="py-2 pl-2 text-right font-semibold">Var %</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td colSpan={5} className="pt-2 text-[10px] font-bold uppercase tracking-[0.1em] text-gold">
+                    Revenue
+                  </td>
+                </tr>
+                {revLines.map((c) =>
+                  renderRow({
+                    rowKey: `r-${c.key}`,
+                    label: c.label,
+                    bud: parseNum(revDraft[c.key]),
+                    act: c.value,
+                    favHigher: true,
+                    budInput: lineInput(revDraft, setRevDraft, c.key),
+                  }),
+                )}
+                {renderRow({
+                  rowKey: 'rev-total',
+                  label: 'Total revenue',
+                  bud: budRevTotal,
+                  act: actRevTotal,
+                  favHigher: true,
+                  isTotal: true,
+                })}
 
-      <div className="mt-4 overflow-x-auto">
-        <table className="w-full text-[13px]">
-          <thead>
-            <tr className="border-b border-rule text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">
-              <th className="py-2 pr-3 text-left font-semibold"> </th>
-              <th className="px-3 py-2 text-right font-semibold">Budget</th>
-              <th className="px-3 py-2 text-right font-semibold">Actual</th>
-              <th className="py-2 pl-3 text-right font-semibold">Variance</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.label} className="border-b border-rule/50 last:border-0">
-                <td className="py-2 pr-3 text-navy">{r.label}</td>
-                <td className="px-3 py-2 text-right tabular-nums text-muted">
-                  {r.bud != null ? fmtDollar(r.bud) : '—'}
-                </td>
-                <td className="px-3 py-2 text-right font-semibold tabular-nums text-navy">
-                  {r.act != null ? fmtDollar(r.act) : '—'}
-                </td>
-                <td
-                  className={`py-2 pl-3 text-right tabular-nums ${
-                    r.favorable == null ? 'text-muted' : r.favorable ? 'text-[#7a5e00]' : 'text-danger'
-                  }`}
-                >
-                  {r.variance != null ? fmtDollar(r.variance) : '—'}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {!anyActual && (
-          <p className="mt-2 text-[11px] italic text-muted">
-            Actuals appear once this period has a generated statement snapshot.
-          </p>
-        )}
-      </div>
+                <tr>
+                  <td colSpan={5} className="pt-3 text-[10px] font-bold uppercase tracking-[0.1em] text-gold">
+                    Expenses
+                  </td>
+                </tr>
+                {expLines.map((c) =>
+                  renderRow({
+                    rowKey: `e-${c.key}`,
+                    label: c.label,
+                    bud: parseNum(expDraft[c.key]),
+                    act: c.value,
+                    favHigher: false,
+                    budInput: lineInput(expDraft, setExpDraft, c.key),
+                  }),
+                )}
+                {renderRow({
+                  rowKey: 'exp-total',
+                  label: 'Total expenses',
+                  bud: budExpTotal,
+                  act: actExpTotal,
+                  favHigher: false,
+                  isTotal: true,
+                })}
 
-      {err && <div className="mt-3"><FormError>{err}</FormError></div>}
-      {canEdit && (
-        <AutosaveBar
-          saving={saving}
-          dirty={dirty}
-          error={!!err}
-          onSaveNow={saveNow}
-          className="mt-3"
-        />
+                {renderRow({
+                  rowKey: 'net',
+                  label: 'Net surplus / (deficit)',
+                  bud: budRevTotal - budExpTotal,
+                  act: actRevTotal != null && actExpTotal != null ? actRevTotal - actExpTotal : null,
+                  favHigher: true,
+                  isTotal: true,
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Forecast */}
+          <div className="mt-4 rounded-lg border border-gold/25 bg-gold/[0.04] p-3">
+            <div className="flex flex-wrap items-center gap-2 text-[13px]">
+              <span className="font-semibold text-navy">Forecast (next year)</span>
+              <span className="text-muted">at</span>
+              <input
+                className="w-16 rounded border border-border bg-white px-2 py-1 text-right text-[13px] tabular-nums outline-none focus:border-gold disabled:bg-navy/[0.04]"
+                inputMode="decimal"
+                value={growth}
+                disabled={!canEdit}
+                onChange={(e) => setGrowth(sanitizeDecimal(e.target.value, { allowNegative: true }))}
+                placeholder="0"
+              />
+              <span className="text-muted">% growth on actuals</span>
+            </div>
+            <div className="mt-2 grid grid-cols-3 gap-2 text-[13px]">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">Revenue</p>
+                <p className="tabular-nums text-navy">{projRev != null ? fmtDollar(projRev) : '—'}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">Expenses</p>
+                <p className="tabular-nums text-navy">{projExp != null ? fmtDollar(projExp) : '—'}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">Net</p>
+                <p className="tabular-nums text-navy">
+                  {projRev != null && projExp != null ? fmtDollar(projRev - projExp) : '—'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {err && <div className="mt-3"><FormError>{err}</FormError></div>}
+          {canEdit && (
+            <AutosaveBar
+              saving={saving}
+              dirty={dirty}
+              error={!!err}
+              onSaveNow={saveNow}
+              className="mt-3"
+            />
+          )}
+        </>
       )}
     </motion.div>
   )

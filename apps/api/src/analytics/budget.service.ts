@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common'
-import type { PeriodBudget, Prisma } from '@finrep/db'
+import { Prisma } from '@finrep/db'
+import type { PeriodBudget } from '@finrep/db'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { PeriodsService } from '../periods/periods.service.js'
 import { AuditService } from '../common/audit/audit.service.js'
@@ -9,6 +10,7 @@ export interface BudgetPublic {
   totalRevenue: number | null
   totalExpenses: number | null
   notes: string | null
+  lines: Record<string, unknown> | null
 }
 
 function dec(v: Prisma.Decimal | null | undefined): number | null {
@@ -33,6 +35,7 @@ export class BudgetService {
       totalRevenue: dec(row?.totalRevenue),
       totalExpenses: dec(row?.totalExpenses),
       notes: row?.notes ?? null,
+      lines: (row?.lines as Record<string, unknown> | null) ?? null,
     }
   }
 
@@ -58,11 +61,15 @@ export class BudgetService {
     const pick = <T>(dtoVal: T | undefined, current: T): T =>
       dtoVal === undefined ? current : dtoVal
 
+    // Only touch `lines` when provided; null clears it (Json column → JsonNull).
     const data = {
       totalRevenue: pick(dto.totalRevenue, existing ? dec(existing.totalRevenue) : null),
       totalExpenses: pick(dto.totalExpenses, existing ? dec(existing.totalExpenses) : null),
       notes: pick(dto.notes, existing?.notes ?? null),
       updatedByUserId: userId,
+      ...(dto.lines !== undefined
+        ? { lines: dto.lines === null ? Prisma.JsonNull : (dto.lines as Prisma.InputJsonValue) }
+        : {}),
     }
 
     const row = await this.prisma.periodBudget.upsert({
