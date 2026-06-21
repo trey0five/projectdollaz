@@ -1,11 +1,12 @@
-// Floating "Ask FinRep" assistant — available on every authed page. Sends the
-// conversation to the agentic, tool-calling backend (read-only over the active
-// school's data) and renders the answer plus any charts the AI drew on the fly.
+// Floating "Ask FinRep" assistant — available on every authed page. Streams the
+// agentic, tool-calling backend (read-only over the active school's data) over SSE:
+// content tokens arrive live, tool-status lines show what it's doing, and any charts
+// it draws render inline. Scopes to the on-screen period (recorded by PeriodSelector).
 import { Suspense, lazy, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Sparkles, X, Send, Loader2 } from 'lucide-react'
 import { useSchools } from '../../context/SchoolContext.jsx'
-import { assistantApi, apiErrorMessage } from '../../lib/api.js'
+import { tokenStore, apiErrorMessage } from '../../lib/api.js'
 
 const ChartRenderer = lazy(() => import('./ChartRenderer.jsx'))
 
@@ -19,12 +20,11 @@ const SUGGESTIONS = [
 export default function AssistantWidget() {
   const { activeId } = useSchools()
   const [open, setOpen] = useState(false)
-  const [messages, setMessages] = useState([]) // { role, content, charts? }
+  const [messages, setMessages] = useState([]) // { role, content, charts?, status? }
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const scrollRef = useRef(null)
 
-  // Keep the transcript scrolled to the latest (DOM-only side effect).
   useEffect(() => {
     const el = scrollRef.current
     if (el) el.scrollTop = el.scrollHeight
@@ -33,31 +33,88 @@ export default function AssistantWidget() {
   const send = async (text) => {
     const q = (text ?? input).trim()
     if (!q || busy || !activeId) return
-    const next = [...messages, { role: 'user', content: q }]
-    setMessages(next)
+    const history = [...messages, { role: 'user', content: q }].map((m) => ({
+      role: m.role,
+      content: m.content,
+    }))
+    setMessages((m) => [...m, { role: 'user', content: q }, { role: 'assistant', content: '', charts: [], status: '' }])
     setInput('')
     setBusy(true)
+
+    let content = ''
+    let charts = []
+    let status = ''
+    const update = () =>
+      setMessages((m) => {
+        const copy = [...m]
+        copy[copy.length - 1] = { role: 'assistant', content, charts, status }
+        return copy
+      })
+
     try {
-      const history = next.map((m) => ({ role: m.role, content: m.content }))
-      const res = await assistantApi.chat(activeId, { messages: history })
-      const d = res.data
-      setMessages((m) => [
-        ...m,
-        d?.configured === false
-          ? { role: 'assistant', content: 'The assistant isn’t configured on this server yet.' }
-          : { role: 'assistant', content: d?.answer || '(no answer)', charts: d?.charts || [] },
-      ])
+      let periodId = null
+      try {
+        periodId = localStorage.getItem('finrep_active_period') || null
+      } catch {
+        periodId = null
+      }
+      const token = tokenStore.getAccess()
+      const res = await fetch(`/api/schools/${activeId}/assistant/chat/stream`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ messages: history, ...(periodId ? { periodId } : {}) }),
+      })
+      if (!res.ok || !res.body) {
+        content = 'Sorry — I hit an error answering that.'
+        update()
+        return
+      }
+      const reader = res.body.getReader()
+      const dec = new TextDecoder()
+      let buf = ''
+      for (;;) {
+        const { value, done } = await reader.read()
+        if (done) break
+        buf += dec.decode(value, { stream: true })
+        const parts = buf.split('\n\n')
+        buf = parts.pop() ?? ''
+        for (const part of parts) {
+          const line = part.split('\n').find((l) => l.startsWith('data:'))
+          if (!line) continue
+          let ev
+          try {
+            ev = JSON.parse(line.slice(5).trim())
+          } catch {
+            continue
+          }
+          if (ev.type === 'delta') {
+            status = ''
+            content += ev.text
+            update()
+          } else if (ev.type === 'status') {
+            status = ev.text
+            update()
+          } else if (ev.type === 'chart') {
+            charts = [...charts, ev.spec]
+            update()
+          } else if (ev.type === 'error') {
+            content = content || ev.text
+            status = ''
+            update()
+          }
+        }
+      }
+      status = ''
+      update()
     } catch (e) {
-      setMessages((m) => [
-        ...m,
-        { role: 'assistant', content: apiErrorMessage(e, 'Sorry — I hit an error answering that.') },
-      ])
+      content = content || apiErrorMessage(e, 'Sorry — I hit an error answering that.')
+      status = ''
+      update()
     } finally {
       setBusy(false)
     }
   }
 
-  // No school yet (onboarding) → don't show the assistant.
   if (!activeId) return null
 
   return (
@@ -111,12 +168,17 @@ export default function AssistantWidget() {
                 <div key={i} className={m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
                   <div
                     className={`max-w-[88%] rounded-2xl px-3.5 py-2 text-[13px] leading-relaxed ${
-                      m.role === 'user'
-                        ? 'bg-navy text-white'
-                        : 'border border-rule/70 bg-white text-ink'
+                      m.role === 'user' ? 'bg-navy text-white' : 'border border-rule/70 bg-white text-ink'
                     }`}
                   >
-                    <p className="whitespace-pre-wrap">{m.content}</p>
+                    {m.role === 'assistant' && !m.content ? (
+                      <p className="inline-flex items-center gap-2 italic text-muted">
+                        <Loader2 size={13} className="animate-spin text-gold" />
+                        {m.status || 'Thinking…'}
+                      </p>
+                    ) : (
+                      <p className="whitespace-pre-wrap">{m.content}</p>
+                    )}
                     {m.charts?.map((c, ci) => (
                       <Suspense key={ci} fallback={<p className="mt-2 text-[11px] text-muted">Rendering chart…</p>}>
                         <ChartRenderer spec={c} />
@@ -125,14 +187,6 @@ export default function AssistantWidget() {
                   </div>
                 </div>
               ))}
-
-              {busy && (
-                <div className="flex justify-start">
-                  <div className="inline-flex items-center gap-2 rounded-2xl border border-rule/70 bg-white px-3.5 py-2 text-[12px] text-muted">
-                    <Loader2 size={13} className="animate-spin text-gold" /> Thinking…
-                  </div>
-                </div>
-              )}
             </div>
 
             <form

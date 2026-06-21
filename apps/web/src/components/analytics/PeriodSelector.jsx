@@ -22,7 +22,15 @@ export default function PeriodSelector({ periods, activeId, onSelect, light = fa
           <button
             key={p.id}
             type="button"
-            onClick={() => onSelect(p.id)}
+            onClick={() => {
+              // Record the on-screen period so the floating assistant can scope to it.
+              try {
+                localStorage.setItem('finrep_active_period', p.id)
+              } catch {
+                /* ignore */
+              }
+              onSelect(p.id)
+            }}
             className={`flex min-h-[36px] items-center gap-2 rounded-lg border px-3 py-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] transition-all ${cls}`}
             title={`Period end ${formatShortDate(p.periodEndDate)}`}
           >

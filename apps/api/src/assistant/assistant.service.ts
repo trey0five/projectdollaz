@@ -15,6 +15,23 @@ import { TOOL_SCHEMAS } from './assistant.tools.js'
 
 const MAX_TURNS = 6
 
+const TOOL_LABELS: Record<string, string> = {
+  list_periods: 'Looking up periods…',
+  get_metrics: 'Reading the financial metrics…',
+  get_compliance: 'Checking compliance findings…',
+  get_reconciliation: 'Reviewing the reconciliation…',
+  get_budget_vs_actual: 'Pulling budget vs. actual…',
+  get_trend: 'Loading the trend…',
+  render_chart: 'Drawing a chart…',
+}
+
+export type StreamEvent =
+  | { type: 'delta'; text: string }
+  | { type: 'status'; text: string }
+  | { type: 'chart'; spec: ChartSpec }
+  | { type: 'error'; text: string }
+  | { type: 'done' }
+
 interface Ctx {
   schoolId: string
   periodId: string | null
@@ -94,6 +111,63 @@ export class AssistantService {
       configured: true,
       answer: 'I gathered the data but ran out of steps — try asking something more specific.',
       charts,
+    }
+  }
+
+  /** Streaming variant — emits content tokens, tool-status, and chart events. */
+  async chatStream(
+    schoolId: string,
+    periodId: string | null,
+    history: { role: 'user' | 'assistant'; content: string }[],
+    emit: (ev: StreamEvent) => void,
+  ): Promise<void> {
+    if (!this.client.isConfigured()) {
+      emit({ type: 'error', text: 'The assistant isn’t configured on this server yet.' })
+      emit({ type: 'done' })
+      return
+    }
+    const ctx: Ctx = { schoolId, periodId }
+    const system = await this.systemPrompt(ctx)
+    const messages: unknown[] = [{ role: 'system', content: system }, ...history]
+
+    try {
+      for (let turn = 0; turn < MAX_TURNS; turn++) {
+        const msg = await this.client.streamChat(messages, TOOL_SCHEMAS, (text) =>
+          emit({ type: 'delta', text }),
+        )
+        messages.push({
+          role: 'assistant',
+          content: msg.content ?? '',
+          ...(msg.tool_calls?.length ? { tool_calls: msg.tool_calls } : {}),
+        })
+        if (!msg.tool_calls?.length) {
+          emit({ type: 'done' })
+          return
+        }
+        for (const tc of msg.tool_calls) {
+          emit({ type: 'status', text: TOOL_LABELS[tc.function.name] ?? 'Working…' })
+          let result: unknown
+          try {
+            const args = this.parseArgs(tc.function.arguments)
+            result = await this.execute(tc.function.name, args, ctx)
+            if (tc.function.name === 'render_chart' && result && !(result as { error?: unknown }).error) {
+              emit({ type: 'chart', spec: result as ChartSpec })
+            }
+          } catch (e) {
+            result = { error: e instanceof Error ? e.message : String(e) }
+          }
+          messages.push({
+            role: 'tool',
+            tool_call_id: tc.id,
+            content: JSON.stringify(result).slice(0, 8000),
+          })
+        }
+      }
+      emit({ type: 'done' })
+    } catch (e) {
+      this.logger.warn(`assistant stream failed: ${e instanceof Error ? e.message : String(e)}`)
+      emit({ type: 'error', text: 'Sorry — I hit an error answering that.' })
+      emit({ type: 'done' })
     }
   }
 
