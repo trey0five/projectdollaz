@@ -81,6 +81,60 @@ export const TOOL_SCHEMAS = [
   {
     type: 'function',
     function: {
+      name: 'get_corrective_action_plan',
+      description:
+        'The corrective action plan for a period: each entry’s ruleId, title, severity, status, and current/suggested root cause + corrective action. Use this to find the ruleId before drafting an entry.',
+      parameters: {
+        type: 'object',
+        properties: { periodId: { type: 'string' } },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'set_budget',
+      description:
+        'PROPOSE a budget change (does NOT apply — the user must confirm). Set a single category line (categoryKey + categoryType + amount) and/or the top-line totalRevenue/totalExpenses for a period.',
+      parameters: {
+        type: 'object',
+        properties: {
+          periodId: { type: 'string' },
+          categoryKey: { type: 'string', description: 'Budget line key, e.g. tuition.' },
+          categoryType: { type: 'string', enum: ['revenue', 'expense'] },
+          amount: { type: 'number' },
+          totalRevenue: { type: 'number' },
+          totalExpenses: { type: 'number' },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'draft_cap_entry',
+      description:
+        'PROPOSE filling a corrective-action-plan entry (does NOT apply — the user must confirm). Provide the ruleId (from get_corrective_action_plan) and the fields to draft.',
+      parameters: {
+        type: 'object',
+        properties: {
+          periodId: { type: 'string' },
+          ruleId: { type: 'string' },
+          rootCause: { type: 'string' },
+          correctiveAction: { type: 'string' },
+          responsibleParty: { type: 'string' },
+          targetDate: { type: 'string', description: 'YYYY-MM-DD' },
+          status: { type: 'string', enum: ['open', 'in_progress', 'complete'] },
+        },
+        required: ['ruleId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'render_chart',
       description:
         'Draw a chart for the user. Call this to visualize numbers you have already fetched (a trend, a comparison, a breakdown). Pick the chart type that fits and give a clear title.',

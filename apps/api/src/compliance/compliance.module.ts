@@ -43,6 +43,6 @@ import { WorkpapersService } from './workpapers.service.js'
     ChecklistService,
     WorkpapersService,
   ],
-  exports: [ComplianceService, ReconciliationService],
+  exports: [ComplianceService, ReconciliationService, CorrectiveActionService],
 })
 export class ComplianceModule {}

@@ -6,7 +6,7 @@ import { Suspense, lazy, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Sparkles, X, Send, Loader2 } from 'lucide-react'
 import { useSchools } from '../../context/SchoolContext.jsx'
-import { tokenStore, apiErrorMessage } from '../../lib/api.js'
+import { tokenStore, apiErrorMessage, assistantApi } from '../../lib/api.js'
 
 const ChartRenderer = lazy(() => import('./ChartRenderer.jsx'))
 
@@ -43,11 +43,12 @@ export default function AssistantWidget() {
 
     let content = ''
     let charts = []
+    let proposals = []
     let status = ''
     const update = () =>
       setMessages((m) => {
         const copy = [...m]
-        copy[copy.length - 1] = { role: 'assistant', content, charts, status }
+        copy[copy.length - 1] = { role: 'assistant', content, charts, proposals, status }
         return copy
       })
 
@@ -97,6 +98,9 @@ export default function AssistantWidget() {
           } else if (ev.type === 'chart') {
             charts = [...charts, ev.spec]
             update()
+          } else if (ev.type === 'proposal') {
+            proposals = [...proposals, { action: ev.action, status: 'pending' }]
+            update()
           } else if (ev.type === 'error') {
             content = content || ev.text
             status = ''
@@ -112,6 +116,27 @@ export default function AssistantWidget() {
       update()
     } finally {
       setBusy(false)
+    }
+  }
+
+  const setProposalStatus = (mi, pi, status) =>
+    setMessages((m) => {
+      const copy = [...m]
+      const msg = { ...copy[mi] }
+      const props = [...(msg.proposals || [])]
+      props[pi] = { ...props[pi], status }
+      msg.proposals = props
+      copy[mi] = msg
+      return copy
+    })
+
+  const confirmProposal = async (mi, pi, action) => {
+    setProposalStatus(mi, pi, 'applying')
+    try {
+      await assistantApi.apply(activeId, action)
+      setProposalStatus(mi, pi, 'applied')
+    } catch {
+      setProposalStatus(mi, pi, 'error')
     }
   }
 
@@ -183,6 +208,40 @@ export default function AssistantWidget() {
                       <Suspense key={ci} fallback={<p className="mt-2 text-[11px] text-muted">Rendering chart…</p>}>
                         <ChartRenderer spec={c} />
                       </Suspense>
+                    ))}
+                    {m.proposals?.map((p, pi) => (
+                      <div key={`p${pi}`} className="mt-2 rounded-lg border border-gold/40 bg-gold/[0.07] p-2.5">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-gold">
+                          Proposed change
+                        </p>
+                        <p className="mt-0.5 text-[12.5px] text-ink">{p.action?.summary}</p>
+                        {p.status === 'pending' ? (
+                          <div className="mt-2 flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => confirmProposal(i, pi, p.action)}
+                              className="rounded-lg bg-gold-gradient px-3 py-1 text-[12px] font-semibold text-navy"
+                            >
+                              Confirm
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setProposalStatus(i, pi, 'cancelled')}
+                              className="rounded-lg border border-border px-3 py-1 text-[12px] font-semibold text-muted transition-colors hover:text-navy"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : p.status === 'applying' ? (
+                          <p className="mt-1 text-[12px] text-muted">Applying…</p>
+                        ) : p.status === 'applied' ? (
+                          <p className="mt-1 text-[12px] font-semibold text-[#7a5e00]">✓ Applied</p>
+                        ) : p.status === 'error' ? (
+                          <p className="mt-1 text-[12px] text-danger">Couldn’t apply — try again.</p>
+                        ) : (
+                          <p className="mt-1 text-[12px] text-muted">Cancelled.</p>
+                        )}
+                      </div>
                     ))}
                   </div>
                 </div>

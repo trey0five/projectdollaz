@@ -1,11 +1,14 @@
 import { Body, Controller, Param, Post, Res, UseGuards } from '@nestjs/common'
 import type { Response } from 'express'
+import type { User } from '@finrep/db'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js'
 import { RolesGuard } from '../common/guards/roles.guard.js'
 import { Roles } from '../common/decorators/roles.decorator.js'
+import { CurrentUser } from '../common/decorators/current-user.decorator.js'
 import { EntitlementGuard } from '../billing/entitlement.guard.js'
 import { AssistantService } from './assistant.service.js'
 import { ChatDto } from './dto/chat.dto.js'
+import { ApplyActionDto } from './dto/apply-action.dto.js'
 
 /**
  * Phase 4D+ — AI assistant. Read-only Q&A over the school's financial data via a
@@ -44,5 +47,12 @@ export class AssistantController {
     }
     await this.assistant.chatStream(schoolId, dto.periodId ?? null, dto.messages, emit)
     if (!closed) res.end()
+  }
+
+  /** Apply a user-confirmed proposal (deterministic write). Owner/accountant only. */
+  @Post('apply')
+  @Roles('owner', 'accountant')
+  apply(@Param('schoolId') schoolId: string, @Body() dto: ApplyActionDto, @CurrentUser() user: User) {
+    return this.assistant.applyAction(schoolId, user.id, dto)
   }
 }
