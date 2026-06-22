@@ -166,6 +166,44 @@ export function useBudget(schoolId, periodId) {
   return { budget: data, loading, error, notEntitled, save }
 }
 
+// ── Budget builder context: prior actuals + history + drivers (read-only) ─────
+// Loads alongside useBudget; never blocks the budget UI (failure just disables
+// the smart build methods, leaving manual entry working).
+export function useBudgetContext(schoolId, periodId) {
+  const [context, setContext] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  const load = useCallback(async (sid, pid) => {
+    try {
+      const res = await analyticsApi.budgetContext(sid, pid)
+      setContext(res.data)
+    } catch {
+      setContext(null)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.resolve().then(() => {
+      if (cancelled) return
+      if (schoolId && periodId) {
+        setLoading(true)
+        load(schoolId, periodId)
+      } else {
+        setContext(null)
+        setLoading(false)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [schoolId, periodId, load])
+
+  return { context, loading }
+}
+
 // ── Phase 4C: per-school dashboard layout (order + visibility + chart variant) ─
 // Fetches GET /dashboard on schoolId change (same microtask-defer + cancelled
 // pattern). Exposes the layout plus save/reset actions for customize mode. A 402

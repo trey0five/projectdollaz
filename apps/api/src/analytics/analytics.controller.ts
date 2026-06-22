@@ -53,6 +53,17 @@ export class AnalyticsController {
     return this.insights.insightFor(schoolId, periodId)
   }
 
+  // Builder context for a period's budget: prior-year category actuals, the
+  // multi-year history series, and enrollment/aid drivers (driver-based tuition).
+  @Get('periods/:periodId/budget-context')
+  @Roles('owner', 'accountant', 'viewer')
+  budgetContext(
+    @Param('schoolId') schoolId: string,
+    @Param('periodId') periodId: string,
+  ) {
+    return this.analytics.budgetContext(schoolId, periodId)
+  }
+
   // A single metric's trend across the school's periods.
   @Get('metrics/trends')
   @Roles('owner', 'accountant', 'viewer')

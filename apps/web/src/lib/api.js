@@ -229,6 +229,9 @@ export const analyticsApi = {
     api.get(`/schools/${schoolId}/periods/${periodId}/budget`),
   saveBudget: (schoolId, periodId, body) =>
     api.put(`/schools/${schoolId}/periods/${periodId}/budget`, body),
+  // Builder context: prior actuals + multi-year history + enrollment/aid drivers.
+  budgetContext: (schoolId, periodId) =>
+    api.get(`/schools/${schoolId}/periods/${periodId}/budget-context`),
   // ── Phase 4C: per-school dashboard layout (owner customizes; all roles read) ──
   dashboard: (schoolId) => api.get(`/schools/${schoolId}/dashboard`),
   saveDashboard: (schoolId, body) => api.put(`/schools/${schoolId}/dashboard`, body),

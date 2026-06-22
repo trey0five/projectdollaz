@@ -37,6 +37,57 @@ export interface MetricsResponse {
   freshness: MetricsFreshness
 }
 
+/** One historical period's category actuals + operational drivers. */
+export interface BudgetHistoryPoint {
+  periodId: string
+  label: string
+  periodEndDate: string
+  revenue: Record<string, number>
+  expense: Record<string, number>
+  enrollment: number | null
+  enrollmentFte: number | null
+  studentsOnAid: number | null
+  financialAidTotal: number | null
+}
+
+/**
+ * Everything the budget builder needs to compute lines from real history instead
+ * of a blank column: the immediately-prior period's category actuals (the default
+ * baseline), the full multi-year series (for trend/CAGR + build-from-history), and
+ * enrollment/aid drivers with derived per-student figures (driver-based tuition).
+ */
+export interface BudgetContext {
+  periodEndDate: string
+  prior: {
+    periodId: string
+    label: string
+    periodEndDate: string
+    revenue: Record<string, number>
+    expense: Record<string, number>
+  } | null
+  history: BudgetHistoryPoint[]
+  drivers: {
+    current: BudgetDrivers
+    prior: BudgetDrivers
+    /** Prior-year tuition actual (revenue.tuition) — copy/grow baseline. */
+    priorTuitionActual: number | null
+    /** Net tuition per student from the most recent period that has enrollment. */
+    priorNetTuitionPerStudent: number | null
+    /** Avg award from the most recent period that has aid + students-on-aid. */
+    priorAvgAward: number | null
+    /** Enrollment + label of the period the per-student driver was derived from. */
+    baselineEnrollment: number | null
+    baselineLabel: string | null
+  }
+}
+
+interface BudgetDrivers {
+  enrollment: number | null
+  enrollmentFte: number | null
+  studentsOnAid: number | null
+  financialAidTotal: number | null
+}
+
 @Injectable()
 export class AnalyticsService {
   constructor(
@@ -156,6 +207,137 @@ export class AnalyticsService {
       freshness: {
         dataAsOf: snapshot.createdAt.toISOString(),
         periodEndDate,
+      },
+    }
+  }
+
+  /** Category actuals ({key: amount}) from a bundle, via the revenue/expense mix
+   * components. prior/operational are irrelevant to the mix values, so pass null. */
+  private categoryActuals(bundle: ReportBundle): {
+    revenue: Record<string, number>
+    expense: Record<string, number>
+  } {
+    const metrics = computeMetricsForPeriod({
+      current: bundle,
+      prior: null,
+      currentOperational: null,
+      priorOperational: null,
+    })
+    const mix = (key: string): Record<string, number> => {
+      const m = metrics.find((x) => x.key === key)
+      const out: Record<string, number> = {}
+      for (const c of m?.components ?? []) out[c.key] = c.value
+      return out
+    }
+    return { revenue: mix('revenue_mix'), expense: mix('expense_mix') }
+  }
+
+  /**
+   * Context for the budget builder: prior-year category actuals, the multi-year
+   * history series, and enrollment/aid drivers (+ derived per-student figures).
+   * Read-only; tenant-isolated via getOwnedPeriod. Empty-but-shaped when the
+   * school has no prior snapshots yet (builder falls back to manual entry).
+   */
+  async budgetContext(schoolId: string, periodId: string): Promise<BudgetContext> {
+    const period = await this.periods.getOwnedPeriod(schoolId, periodId)
+    const activeEnd = period.periodEndDate.toISOString().slice(0, 10)
+
+    const periods = await this.prisma.fiscalPeriod.findMany({
+      where: { schoolId },
+      orderBy: { periodEndDate: 'asc' },
+    })
+    const ids = periods.map((p) => p.id)
+
+    const snapshots = await this.prisma.statementSnapshot.findMany({
+      where: { schoolId, fiscalPeriodId: { in: ids } },
+      orderBy: { createdAt: 'desc' },
+    })
+    const latestByPeriod = new Map<string, ReportBundle>()
+    for (const s of snapshots) {
+      if (!latestByPeriod.has(s.fiscalPeriodId)) {
+        latestByPeriod.set(s.fiscalPeriodId, s.payload as unknown as ReportBundle)
+      }
+    }
+
+    const opRows = await this.prisma.periodOperationalData.findMany({
+      where: { schoolId, fiscalPeriodId: { in: ids } },
+    })
+    const opByPeriod = new Map<string, BudgetDrivers>()
+    for (const r of opRows) {
+      opByPeriod.set(r.fiscalPeriodId, {
+        enrollment: r.enrollment,
+        enrollmentFte: dec(r.enrollmentFte),
+        studentsOnAid: r.studentsOnAid,
+        financialAidTotal: dec(r.financialAidTotal),
+      })
+    }
+    const noDrivers: BudgetDrivers = {
+      enrollment: null,
+      enrollmentFte: null,
+      studentsOnAid: null,
+      financialAidTotal: null,
+    }
+
+    const history: BudgetHistoryPoint[] = periods
+      .filter((p) => latestByPeriod.has(p.id))
+      .map((p) => {
+        const { revenue, expense } = this.categoryActuals(latestByPeriod.get(p.id) as ReportBundle)
+        const op = opByPeriod.get(p.id) ?? noDrivers
+        return {
+          periodId: p.id,
+          label: p.label,
+          periodEndDate: p.periodEndDate.toISOString().slice(0, 10),
+          revenue,
+          expense,
+          enrollment: op.enrollment,
+          enrollmentFte: op.enrollmentFte,
+          studentsOnAid: op.studentsOnAid,
+          financialAidTotal: op.financialAidTotal,
+        }
+      })
+
+    // Immediately-prior period that has a snapshot (history is ascending).
+    const priorPoint = [...history].reverse().find((h) => h.periodEndDate < activeEnd) ?? null
+    const priorDrivers = priorPoint ? (opByPeriod.get(priorPoint.periodId) ?? noDrivers) : noDrivers
+    const currentDrivers = opByPeriod.get(period.id) ?? noDrivers
+
+    const priorTuitionActual = priorPoint?.revenue.tuition ?? null
+    // Driver baselines come from the most recent period that actually has the
+    // inputs — enrollment is often only captured on the latest period, so strict
+    // prior-year would leave the per-student driver empty.
+    const tuitionBasis = [...history]
+      .reverse()
+      .find((h) => h.enrollment && Number.isFinite(h.revenue.tuition))
+    const priorNetTuitionPerStudent = tuitionBasis
+      ? (tuitionBasis.revenue.tuition as number) / (tuitionBasis.enrollment as number)
+      : null
+    const aidBasis = [...history]
+      .reverse()
+      .find((h) => h.studentsOnAid && Number.isFinite(h.financialAidTotal))
+    const priorAvgAward = aidBasis
+      ? (aidBasis.financialAidTotal as number) / (aidBasis.studentsOnAid as number)
+      : null
+
+    return {
+      periodEndDate: activeEnd,
+      prior: priorPoint
+        ? {
+            periodId: priorPoint.periodId,
+            label: priorPoint.label,
+            periodEndDate: priorPoint.periodEndDate,
+            revenue: priorPoint.revenue,
+            expense: priorPoint.expense,
+          }
+        : null,
+      history,
+      drivers: {
+        current: currentDrivers,
+        prior: priorDrivers,
+        priorTuitionActual,
+        priorNetTuitionPerStudent,
+        priorAvgAward,
+        baselineEnrollment: tuitionBasis?.enrollment ?? null,
+        baselineLabel: tuitionBasis?.label ?? null,
       },
     }
   }
