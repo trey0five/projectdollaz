@@ -54,11 +54,11 @@ export default function HeroDropzone() {
 
       <div>
         <h2 className="font-serif text-xl font-semibold text-navy sm:text-2xl">
-          Drop your trial balances
+          Start with this year’s trial balance
         </h2>
         <p className="mx-auto mt-2 max-w-md font-serif text-base italic text-muted">
-          Drag in Current Year, Prior Year, and Audited files together — we&rsquo;ll
-          detect each one. Accepts .xlsx, .xls, and .csv.
+          Drop it here — that’s all you need to preview statements. You can add last
+          year’s files afterward. Accepts .xlsx, .xls, and .csv.
         </p>
       </div>
 

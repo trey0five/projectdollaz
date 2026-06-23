@@ -113,7 +113,7 @@ export default function EmptySlotCard({
         {conflicted ? <AlertTriangle size={22} /> : <Plus size={22} />}
       </motion.span>
 
-      <p className="font-serif text-base font-semibold text-navy">{meta.label}</p>
+      <p className="font-serif text-base font-semibold text-navy">{meta.plainLabel}</p>
 
       <span
         className={`inline-flex items-center rounded-full border-2 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] ${
@@ -128,13 +128,14 @@ export default function EmptySlotCard({
       {conflicted ? (
         <>
           <p className="text-[12px] font-medium text-[#7a5e00]">
-            Two files claim this role
+            Two files claim this slot
           </p>
           <p className="text-[11px] text-muted">Resolve below to fill this slot</p>
         </>
       ) : (
         <>
-          <p className="text-[12px] italic text-muted">{meta.unlock}</p>
+          <p className="text-[12px] leading-snug text-muted">{meta.blurb}</p>
+          <p className="text-[11px] italic text-muted">{meta.source}</p>
           <p className="text-[11px] text-muted">Drop a file or click to add</p>
         </>
       )}

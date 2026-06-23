@@ -1,11 +1,12 @@
 import { useMemo, useRef } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { AlertTriangle, ChevronUp, Plus } from 'lucide-react'
+import { AlertTriangle, ChevronUp, Files, Plus } from 'lucide-react'
 import { useApp } from '../context/AppContext.jsx'
 import DragOverlay from './DragOverlay.jsx'
 import HeroDropzone from './HeroDropzone.jsx'
 import FileStatusCard from './FileStatusCard.jsx'
 import EmptySlotCard from './EmptySlotCard.jsx'
+import IntakeGuide from './IntakeGuide.jsx'
 import PeriodControls from './PeriodControls.jsx'
 import SummaryStrip from './SummaryStrip.jsx'
 import ExportMenu from './ExportMenu.jsx'
@@ -80,6 +81,26 @@ export default function IntakeBar() {
     [files, slottedIds]
   )
 
+  // Same-document guard: a new user can drop the SAME trial balance into every
+  // slot. Flag the EXACT same uploaded file (name + size) appearing in 2+ slots —
+  // a precise signal of the mistake with no false positives (two genuinely
+  // different docs won't share name+size; a legit audited-current-year shares a
+  // period-end but not the file). History-loaded comparatives are excluded — they
+  // aren't a user upload mistake.
+  const duplicateSlots = useMemo(() => {
+    const slotted = SLOT_ROLES.map((role) => ({ role, f: byRole[role] })).filter(
+      (x) => x.f && x.f.status === 'ready' && !x.f.fromHistory
+    )
+    const groups = new Map()
+    for (const { role, f } of slotted) {
+      const key = `${f.fileName ?? ''}|${f.fileSize ?? 0}`
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key).push(role)
+    }
+    for (const roles of groups.values()) if (roles.length >= 2) return roles
+    return null
+  }, [byRole])
+
   const onBrowse = (e) => {
     if (e.target.files?.length) loadFiles(e.target.files)
     e.target.value = ''
@@ -128,7 +149,12 @@ export default function IntakeBar() {
               <ExportMenu />
             </div>
             {canEdit ? (
-              <HeroDropzone />
+              <>
+                <HeroDropzone />
+                <div className="mt-4">
+                  <IntakeGuide />
+                </div>
+              </>
             ) : (
               <div className="rounded-2xl border-2 border-dashed border-border bg-white px-6 py-12 text-center">
                 <p className="font-serif text-lg italic text-muted">
@@ -199,6 +225,27 @@ export default function IntakeBar() {
               </div>
             </div>
 
+            {/* plain-English explainer of the three slots */}
+            <div className="mb-5">
+              <IntakeGuide />
+            </div>
+
+            {/* same-document warning (e.g. the same TB dropped into every slot) */}
+            {duplicateSlots && (
+              <div className="mb-5 flex items-start gap-2.5 rounded-lg border border-l-4 border-[#e8c96a] border-l-gold bg-[#fff8e6] px-4 py-3 text-[13px] text-[#7a5e00]">
+                <Files size={16} className="mt-0.5 shrink-0" />
+                <div>
+                  <p className="font-semibold">The same file looks like it’s in more than one slot.</p>
+                  <p className="mt-0.5">
+                    {duplicateSlots.map((r) => ROLE_META[r].plainLabel).join(' and ')} appear to be
+                    the same document. Each slot needs a <em>different</em> file — see “What goes
+                    where” above. If you only have this year’s books, remove the others and keep just{' '}
+                    <span className="font-semibold">#1</span>.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* conflict banners */}
             {conflicts.length > 0 && (
               <div className="mb-5 space-y-2">
@@ -223,8 +270,11 @@ export default function IntakeBar() {
                 const meta = ROLE_META[role]
                 return (
                   <div key={role} className="flex flex-col">
-                    <p className="mb-2 text-[12px] font-semibold uppercase tracking-[0.1em] text-muted">
-                      {meta.label}
+                    <p className="mb-2 flex items-center gap-1.5 text-[12px] font-semibold text-navy">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gold/15 text-[11px] font-bold text-gold">
+                        {meta.step}
+                      </span>
+                      {meta.plainLabel}
                     </p>
                     <AnimatePresence mode="popLayout" initial={false}>
                       {filled ? (
@@ -251,7 +301,7 @@ export default function IntakeBar() {
                           key={`empty-ro-${role}`}
                           className="flex min-h-[196px] w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border bg-section px-4 py-8 text-center"
                         >
-                          <p className="font-serif text-base font-semibold text-navy">{meta.label}</p>
+                          <p className="font-serif text-base font-semibold text-navy">{meta.plainLabel}</p>
                           <p className="text-[12px] italic text-muted">Not provided</p>
                         </div>
                       )}
