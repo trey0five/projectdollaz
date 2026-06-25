@@ -5,12 +5,14 @@
 // Flow states are derived from local state at render (no effects, no in-render
 // component definitions). The parser runs in a try/catch so a malformed file
 // shows a friendly inline error instead of crashing the page.
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { UploadCloud, FileSpreadsheet, X, CheckCircle2, Loader2 } from 'lucide-react'
 import { parseBudgetSpread } from '@finrep/ingestion'
 import { analyticsApi, apiErrorMessage } from '../../lib/api.js'
 import BudgetSpreadPreview from './BudgetSpreadPreview.jsx'
+import SufficiencyPanel from './SufficiencyPanel.jsx'
+import { useBudgetAssessment } from '../../hooks/useBudgetAssessment.js'
 
 function readBytes(file) {
   return new Promise((resolve, reject) => {
@@ -31,6 +33,23 @@ export default function BudgetImport({ schoolId, periodId, canEdit, onImported }
   const [parseError, setParseError] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
+
+  // ── Sufficiency check on the PARSED spread (before Confirm) ────────────────
+  // A parsed spread is immutable per drop, so a cheap signature (format + row
+  // count + summed annuals) keys it: one assess per file, none on re-render.
+  const assessBody = useMemo(() => (spread ? { spread } : null), [spread])
+  const assessKey = useMemo(() => {
+    if (!spread) return ''
+    const accounts = spread.accounts || []
+    const sum = accounts.reduce((s, a) => s + (Number(a?.annual) || 0), 0)
+    return `${spread.format}:${accounts.length}:${Math.round(sum)}`
+  }, [spread])
+  const { assessment, loading: assessLoading } = useBudgetAssessment(
+    schoolId,
+    periodId,
+    assessBody,
+    canEdit ? assessKey : '',
+  )
 
   const reset = () => {
     setFileName('')
@@ -165,6 +184,8 @@ export default function BudgetImport({ schoolId, periodId, canEdit, onImported }
       {spread && (
         <>
           <BudgetSpreadPreview spread={spread} />
+
+          <SufficiencyPanel assessment={assessment} loading={assessLoading} />
 
           {saveError && (
             <div className="rounded-xl border border-rose-300 bg-rose-50 px-4 py-3 text-[13px] font-medium text-rose-700">

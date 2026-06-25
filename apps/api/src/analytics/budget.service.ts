@@ -1,19 +1,28 @@
-import { Injectable } from '@nestjs/common'
+import { BadRequestException, Injectable, Optional } from '@nestjs/common'
 import { Prisma } from '@finrep/db'
 import type { PeriodBudget } from '@finrep/db'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { PeriodsService } from '../periods/periods.service.js'
 import { AuditService } from '../common/audit/audit.service.js'
 import type { UpsertBudgetDto } from './dto/upsert-budget.dto.js'
-import type { ImportBudgetSpreadDto } from './dto/import-budget-spread.dto.js'
+import type { ImportBudgetSpreadDto, AssessBudgetDto } from './dto/import-budget-spread.dto.js'
 import { rollupSpread, type SpreadRollup } from './budget.spread.js'
+import {
+  assessBudget,
+  sumMap,
+  type NormalizedBudget,
+  type AssessResult,
+} from './budget.assess.js'
 import type { BudgetSpread } from '@finrep/ingestion'
 import {
   computeDriverBudget,
   toDriverPriorContext,
+  REVENUE_LINE_LABELS,
+  EXPENSE_LINE_LABELS,
   type DriverBudgetResult,
 } from '@finrep/analytics'
 import { AnalyticsService } from './analytics.service.js'
+import { AssistantClient } from '../assistant/assistant.client.js'
 import { buildDriverSpread, deriveFiscalYearStart } from './budget.driver.js'
 import type { SaveDriverBudgetDto } from './dto/save-driver-budget.dto.js'
 
@@ -34,6 +43,13 @@ export interface DriverBudgetResultPublic extends BudgetPublic {
   kpis: DriverBudgetResult['kpis']
 }
 
+/** ASSESS endpoint response (the frozen ENG-API ↔ ENG-WEB contract). */
+export interface AssessResponse {
+  status: AssessResult['status']
+  checks: AssessResult['checks']
+  ai: { configured: boolean; summary?: string }
+}
+
 function dec(v: Prisma.Decimal | null | undefined): number | null {
   return v == null ? null : Number(v)
 }
@@ -50,6 +66,9 @@ export class BudgetService {
     private readonly periods: PeriodsService,
     private readonly audit: AuditService,
     private readonly analytics: AnalyticsService,
+    // Optional so existing BudgetService unit tests (which don't provide it)
+    // keep constructing; the advise() path guards on `?.isConfigured()`.
+    @Optional() private readonly assistant?: AssistantClient,
   ) {}
 
   private toPublic(row: PeriodBudget | null): BudgetPublic {
@@ -283,5 +302,119 @@ export class BudgetService {
     })
 
     return { ...this.toPublic(row), kpis: result.kpis }
+  }
+
+  /**
+   * ADVISORY budget sufficiency check. Read-only (no persistence, no audit) —
+   * the only DB touch is the tenant gate getOwnedPeriod. Body is EXACTLY one of
+   * { spread } or { draft }. Normalizes to category totals, runs the pure
+   * deterministic assessBudget (Layer 1, always on), then an optional LLM
+   * advisor (Layer 2) that degrades gracefully when not configured.
+   */
+  async assess(
+    schoolId: string,
+    periodId: string,
+    dto: AssessBudgetDto,
+  ): Promise<AssessResponse> {
+    await this.periods.getOwnedPeriod(schoolId, periodId) // tenant gate; throws 404 cross-tenant
+
+    const hasSpread = !!dto.spread
+    const hasDraft = !!dto.draft
+    if (hasSpread === hasDraft) {
+      throw new BadRequestException('Provide exactly one of spread or draft.')
+    }
+
+    let normalized: NormalizedBudget
+    let source: 'driver' | 'import'
+
+    if (dto.spread) {
+      const r = rollupSpread(dto.spread as unknown as BudgetSpread)
+      // Unmapped dollars/count derived from annotated accounts (NOT unmappedAccts,
+      // which is GL-number only and misses label-only acct=0 rows).
+      const unmapped = r.accounts.filter((a) => a.category === 'unmapped')
+      const unmappedDollars = unmapped.reduce((s, a) => s + Math.abs(a.annual || 0), 0)
+      normalized = {
+        revenue: r.revenue,
+        expense: r.expense,
+        totalRevenue: r.totalRevenue,
+        totalExpenses: r.totalExpenses,
+        unmappedDollars,
+        unmappedCount: unmapped.length,
+      }
+      source = 'import'
+    } else {
+      const d = dto.draft!
+      normalized = {
+        revenue: d.revenue,
+        expense: d.expense,
+        totalRevenue: sumMap(d.revenue),
+        totalExpenses: sumMap(d.expense),
+        unmappedDollars: 0,
+        unmappedCount: 0,
+        stats: d.stats,
+      }
+      source = d.stats?.source ?? 'driver'
+    }
+
+    const det = assessBudget(normalized, source) // Layer 1 — always
+    const ai = await this.advise(normalized, det) // Layer 2 — graceful
+    return { status: det.status, checks: det.checks, ai }
+  }
+
+  /**
+   * Optional LLM advisor (Layer 2). Single completion, NO tools. Sends only the
+   * normalized category totals + the deterministic checks (no raw account labels
+   * — token-lean, no PII) and asks for a 2–3 sentence board-appropriate verdict
+   * that NARRATES the checks without inventing figures. Never throws: not
+   * configured / error / timeout / empty all degrade to no summary.
+   */
+  private async advise(
+    n: NormalizedBudget,
+    det: AssessResult,
+  ): Promise<{ configured: boolean; summary?: string }> {
+    if (!this.assistant?.isConfigured()) return { configured: false }
+    try {
+      const labelize = (m: Record<string, number>, labels: Record<string, string>): string =>
+        Object.entries(m)
+          .filter(([, v]) => Number(v))
+          .map(([k, v]) => `${labels[k] ?? k}: ${Math.round(Number(v))}`)
+          .join(', ')
+
+      const facts = [
+        `Total revenue: ${Math.round(n.totalRevenue)}`,
+        `Total expenses: ${Math.round(n.totalExpenses)}`,
+        `Revenue lines: ${labelize(n.revenue, REVENUE_LINE_LABELS as Record<string, string>) || 'none'}`,
+        `Expense lines: ${labelize(n.expense, EXPENSE_LINE_LABELS as Record<string, string>) || 'none'}`,
+        `Automated checks: ${det.checks.map((c) => c.message).join(' | ') || 'none flagged'}`,
+      ].join('\n')
+
+      const messages = [
+        {
+          role: 'system',
+          content:
+            'You review a school operating budget for COMPLETENESS for a non-profit ' +
+            'school board audience. In 2-3 short plain-language sentences, give a verdict ' +
+            '(complete enough, or not) then name the top 1-2 concrete fixes. Use ONLY the ' +
+            'numbers provided; never invent or restate figures that are not given. No ' +
+            'markdown, no headers, no lists.',
+        },
+        { role: 'user', content: facts },
+      ]
+
+      // [] = no tools, single completion. Cap the wait at 12s so a slow LLM never
+      // hangs the (advisory) assess response — Layer 1 already returned its checks.
+      const summaryPromise = this.assistant
+        .chat(messages, [])
+        .then((m) => (m.content ?? '').trim().slice(0, 800))
+        .catch(() => '')
+      const summary = await Promise.race([
+        summaryPromise,
+        new Promise<string>((resolve) => setTimeout(() => resolve(''), 12_000)),
+      ])
+      return summary ? { configured: true, summary } : { configured: true }
+    } catch {
+      // Any error/timeout: still "configured", just no summary. Layer 1 already returned.
+      return { configured: true }
+    }
   }
 }

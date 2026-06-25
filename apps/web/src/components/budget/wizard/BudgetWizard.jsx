@@ -34,6 +34,8 @@ import { analyticsApi } from '../../../lib/api.js'
 import DriverAssumptionsForm from '../DriverAssumptionsForm.jsx'
 import DriverPreview from '../DriverPreview.jsx'
 import BudgetImport from '../BudgetImport.jsx'
+import SufficiencyPanel from '../SufficiencyPanel.jsx'
+import { useBudgetAssessment } from '../../../hooks/useBudgetAssessment.js'
 import { seedAssumptions, toDriverPriorContext, programSplitSum } from '../driverModel.js'
 import { WizardProgress, MiniPreview, WizardStep, WizardNav, OverwriteNotice } from './WizardChrome.jsx'
 
@@ -120,6 +122,43 @@ export default function BudgetWizard({
   const result = useMemo(() => safeCompute(assumptions, prior), [assumptions, prior])
 
   const splitOk = Math.abs(programSplitSum(assumptions.tuitionProgramSplit) - 100) < 0.01
+
+  // ── Sufficiency check (Review step only) ───────────────────────────────────
+  // Build the driver `draft` body from the in-scope computeDriverBudget result.
+  // The assessment fires only when ON the Review step (gated below), and only
+  // re-fires when the ROUNDED totals change — so tweaking a line that doesn't
+  // move whole dollars (or just navigating) never re-hits the LLM.
+  const reviewActive = stepIdx >= REVIEW_IDX
+  const assessDraft = useMemo(() => {
+    if (!result) return null
+    return {
+      draft: {
+        revenue: result.revenue,
+        expense: result.expense,
+        stats: {
+          salariesTotal: result.detail?.salaries?.total ?? 0,
+          enrollmentTotal: result.kpis?.enrollmentTotal ?? 0,
+          splitSum: programSplitSum(assumptions.tuitionProgramSplit),
+          source: 'driver',
+        },
+      },
+    }
+  }, [result, assumptions.tuitionProgramSplit])
+  const assessKey = useMemo(() => {
+    if (!reviewActive || !result) return ''
+    return [
+      Math.round(result.kpis?.totalRevenue ?? 0),
+      Math.round(result.kpis?.totalExpense ?? 0),
+      Math.round(result.detail?.salaries?.total ?? 0),
+      Math.round(programSplitSum(assumptions.tuitionProgramSplit)),
+    ].join('|')
+  }, [reviewActive, result, assumptions.tuitionProgramSplit])
+  const { assessment, loading: assessLoading } = useBudgetAssessment(
+    schoolId,
+    periodId,
+    assessDraft,
+    assessKey,
+  )
 
   // Apply state machine (questions path) — same shape as DriverModel.
   const [applyState, setApplyState] = useState('idle') // idle | saving | success | error
@@ -297,6 +336,7 @@ export default function BudgetWizard({
         onOverrideChange={onOverridesChange}
         disabled={!canEdit}
       />
+      <SufficiencyPanel assessment={assessment} loading={assessLoading} />
       <WizardNav
         onBack={goBack}
         onNext={onApply}

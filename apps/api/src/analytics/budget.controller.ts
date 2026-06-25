@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Put, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Param, Post, Put, UseGuards } from '@nestjs/common'
 import type { User } from '@finrep/db'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js'
 import { RolesGuard } from '../common/guards/roles.guard.js'
@@ -7,7 +7,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator.js'
 import { EntitlementGuard } from '../billing/entitlement.guard.js'
 import { BudgetService } from './budget.service.js'
 import { UpsertBudgetDto } from './dto/upsert-budget.dto.js'
-import { ImportBudgetSpreadDto } from './dto/import-budget-spread.dto.js'
+import { ImportBudgetSpreadDto, AssessBudgetDto } from './dto/import-budget-spread.dto.js'
 import { SaveDriverBudgetDto } from './dto/save-driver-budget.dto.js'
 
 /**
@@ -62,5 +62,20 @@ export class BudgetController {
     @CurrentUser() user: User,
   ) {
     return this.budget.upsertDriver(schoolId, periodId, dto, user.id)
+  }
+
+  /**
+   * ADVISORY budget sufficiency check. Read-only (no persistence) so ALL roles
+   * may call it; tenant-isolated via getOwnedPeriod inside the service. Body is
+   * exactly one of { spread } or { draft }. Never blocks Apply/Confirm.
+   */
+  @Post('periods/:periodId/budget/assess')
+  @Roles('owner', 'accountant', 'viewer')
+  assess(
+    @Param('schoolId') schoolId: string,
+    @Param('periodId') periodId: string,
+    @Body() dto: AssessBudgetDto,
+  ) {
+    return this.budget.assess(schoolId, periodId, dto)
   }
 }

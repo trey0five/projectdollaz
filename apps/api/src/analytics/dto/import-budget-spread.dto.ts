@@ -146,3 +146,96 @@ export class ImportBudgetSpreadDto {
   @MaxLength(255)
   fileName?: string
 }
+
+// ─────────────────────────────────────────────────────────────
+// ASSESS body — Layer-1/Layer-2 budget sufficiency check. The body is ONE of
+// two shapes: { spread } (reuses BudgetSpreadDto above) OR { draft } (category
+// maps + optional stats). The global forbidNonWhitelisted pipe means EVERY
+// top-level field must be declared; the service enforces the XOR.
+// ─────────────────────────────────────────────────────────────
+
+/** A finite-number map within ±max, capped at maxKeys keys. revenue/expense are
+ * open-keyed (category-key → amount) so per-key class-validator decorators can't
+ * apply; this custom validator keeps a malformed {x: NaN | "5" | {…}} out of the
+ * pure function. Mirrors the IsNumberOrNullArray pattern above. */
+function IsFiniteNumberMap(max: number, maxKeys: number, options?: ValidationOptions) {
+  return function (object: object, propertyName: string): void {
+    registerDecorator({
+      name: 'isFiniteNumberMap',
+      target: object.constructor,
+      propertyName,
+      options,
+      validator: {
+        validate(value: unknown): boolean {
+          if (value == null || typeof value !== 'object' || Array.isArray(value)) return false
+          const entries = Object.entries(value as Record<string, unknown>)
+          if (entries.length > maxKeys) return false
+          return entries.every(
+            ([, v]) => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= max,
+          )
+        },
+        defaultMessage(): string {
+          return `${propertyName} must be a map of finite numbers (within ±${max}, ≤${maxKeys} keys)`
+        },
+      },
+    })
+  }
+}
+
+/** Optional driver stats accompanying a draft assess. */
+export class AssessDraftStatsDto {
+  @IsOptional()
+  @IsNumber()
+  @Min(-1_000_000_000_000)
+  @Max(1_000_000_000_000)
+  salariesTotal?: number
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1_000_000_000)
+  enrollmentTotal?: number
+
+  @IsOptional()
+  @IsNumber()
+  @Min(-100_000)
+  @Max(100_000)
+  splitSum?: number
+
+  @IsOptional()
+  @IsIn(['driver', 'import'])
+  source?: 'driver' | 'import'
+}
+
+/** A category-budget draft (driver or pre-mapped import) to assess. */
+export class AssessDraftDto {
+  @IsObject()
+  @IsFiniteNumberMap(1_000_000_000_000, 200)
+  revenue!: Record<string, number>
+
+  @IsObject()
+  @IsFiniteNumberMap(1_000_000_000_000, 200)
+  expense!: Record<string, number>
+
+  @IsOptional()
+  @IsObject()
+  @ValidateNested()
+  @Type(() => AssessDraftStatsDto)
+  stats?: AssessDraftStatsDto
+}
+
+/** Request body for POST .../budget/assess — exactly one of spread|draft.
+ * The XOR is enforced in the service (class-validator can't express it cleanly). */
+export class AssessBudgetDto {
+  @IsOptional()
+  @IsObject()
+  @ValidateNested()
+  @Type(() => BudgetSpreadDto)
+  spread?: BudgetSpreadDto
+
+  @IsOptional()
+  @IsObject()
+  @ValidateNested()
+  @Type(() => AssessDraftDto)
+  draft?: AssessDraftDto
+}

@@ -243,6 +243,11 @@ export const analyticsApi = {
   // returns the saved budget. Owner/accountant only (server-enforced).
   saveBudgetSpread: (schoolId, periodId, body) =>
     api.put(`/schools/${schoolId}/periods/${periodId}/budget/spread`, body),
+  // ── AI-assisted budget sufficiency check (read-only, all roles) ────────────
+  // POST exactly one of { spread } or { draft: { revenue, expense, stats? } };
+  // server returns { status, checks, ai }. ADVISORY only — never blocks Apply.
+  assessBudget: (schoolId, periodId, body) =>
+    api.post(`/schools/${schoolId}/periods/${periodId}/budget/assess`, body),
   // Organization roll-up: consolidated per-school + org category totals for a fiscal
   // year. Kept here as the SINGLE call site so the route is trivial to retune in
   // integration if Engineer 1's path differs (e.g. a school-anchored variant).
