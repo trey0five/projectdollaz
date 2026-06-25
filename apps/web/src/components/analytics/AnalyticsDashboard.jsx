@@ -19,7 +19,6 @@ import MetricSection from './MetricSection.jsx'
 import MetricDrawer from './MetricDrawer.jsx'
 import MixDonut from './MixDonut.jsx'
 import OperationalDataPanel from './OperationalDataPanel.jsx'
-import BudgetVsActual from './BudgetVsActual.jsx'
 import EntitlementPausedPanel from './EntitlementPausedPanel.jsx'
 import ReservedSlotCard from './ReservedSlotCard.jsx'
 import CustomizeBar from './CustomizeBar.jsx'
@@ -394,17 +393,6 @@ export default function AnalyticsDashboard() {
             </div>
           )}
 
-          {/* Budget vs. actual (Phase 3) */}
-          {selectedPeriodId && (
-            <div className={dimWhileCustomizing}>
-              <BudgetVsActual
-                schoolId={schoolId}
-                periodId={selectedPeriodId}
-                canEdit={canEditOperational}
-                metrics={metrics}
-              />
-            </div>
-          )}
 
           {/* HERO VITALS */}
           {vitalKeys.length > 0 && (

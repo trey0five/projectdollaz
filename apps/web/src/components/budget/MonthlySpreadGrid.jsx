@@ -8,9 +8,11 @@
 // and ancillary accounts (flagged), so nothing is silently dropped. All grouping
 // and subtotals are derived AT RENDER from the spread prop (no effects, no
 // in-render component definitions — React-Compiler safe).
+import { useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
-import { Table2, AlertTriangle } from 'lucide-react'
+import { Table2, AlertTriangle, Maximize2, MoveHorizontal } from 'lucide-react'
 import { fmt } from '../../lib/format.js'
+import ReportExpandOverlay from '../reports/ReportExpandOverlay.jsx'
 
 // Title-case a rollupLine/category key for a group heading (e.g. 'instructional'
 // -> 'Instructional', 'studActExp' -> 'Stud Act Exp'). Pure display helper.
@@ -146,6 +148,7 @@ function renderSubtotalRow(label, total, annual, cols, opts = {}) {
 
 export default function MonthlySpreadGrid({ spread }) {
   const reduce = useReducedMotion()
+  const [expanded, setExpanded] = useState(false)
 
   if (!spread || !Array.isArray(spread.accounts) || spread.accounts.length === 0) {
     return null
@@ -179,78 +182,105 @@ export default function MonthlySpreadGrid({ spread }) {
     )
   }
 
+  // The full table (accounts × 12 months + annual). Rendered fresh in both the
+  // inline card and the full-screen zoom overlay (returns a new tree each call).
+  const renderTable = () => (
+    <table className="w-full border-collapse text-[13px]">
+      <thead>
+        <tr className="bg-cream">
+          <th className="sticky left-0 z-20 bg-cream px-2.5 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+            Acct
+          </th>
+          <th className="sticky left-[64px] z-20 bg-cream px-2.5 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+            Description
+          </th>
+          {monthLabels.map((m, i) => (
+            <th
+              key={`${m}-${i}`}
+              className="whitespace-nowrap px-2.5 py-2 text-right text-[11px] font-semibold uppercase tracking-[0.06em] text-muted"
+            >
+              {m}
+            </th>
+          ))}
+          <th className="whitespace-nowrap px-2.5 py-2 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-gold">
+            Annual
+          </th>
+        </tr>
+      </thead>
+
+      {renderSection(sections.revenue)}
+      {renderSection(sections.expense)}
+
+      {/* Surplus / (Deficit) footer — revenue net of expense. */}
+      <tbody>
+        <tr className="border-t-2 border-gold/60 bg-gold/10">
+          <td className="sticky left-0 z-10 bg-gold/10 px-2.5 py-2.5" />
+          <td className="sticky left-[64px] z-10 bg-gold/10 px-2.5 py-2.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-navy">
+            Surplus / (Deficit)
+          </td>
+          {Array.from({ length: cols }, (_, i) => moneyCell(surplus[i], { bold: true }))}
+          {moneyCell(surplusAnnual, { bold: true })}
+        </tr>
+      </tbody>
+    </table>
+  )
+
   return (
-    <motion.div
-      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      className="card-soft overflow-hidden p-0"
-    >
-      <div className="flex items-center gap-2.5 border-b border-rule bg-cream/50 px-4 py-3">
-        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gold/15 text-gold">
-          <Table2 size={17} />
-        </span>
-        <div>
-          <h3 className="font-serif text-base font-semibold text-navy sm:text-lg">Monthly Spread</h3>
-          <p className="text-[12px] text-muted">
-            {spread.accounts.length} accounts · {cols} months · annual
-            {spread.fileName ? ` · imported from ${spread.fileName}` : ''}
-          </p>
+    <>
+      <motion.div
+        initial={reduce ? { opacity: 0 } : { opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="card-soft overflow-hidden p-0"
+      >
+        <div className="flex items-center justify-between gap-3 border-b border-rule bg-cream/50 px-4 py-3">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gold/15 text-gold">
+              <Table2 size={17} />
+            </span>
+            <div>
+              <h3 className="font-serif text-base font-semibold text-navy sm:text-lg">Monthly Spread</h3>
+              <p className="flex flex-wrap items-center gap-1.5 text-[12px] text-muted">
+                {spread.accounts.length} accounts · {cols} months · annual
+                {spread.fileName ? ` · imported from ${spread.fileName}` : ''}
+                <span className="inline-flex items-center gap-1 text-gold">
+                  <MoveHorizontal size={12} /> scroll across, or expand for the full year
+                </span>
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setExpanded(true)}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-rule bg-white px-3 py-1.5 text-[12px] font-semibold text-navy transition-colors hover:border-gold hover:text-gold"
+          >
+            <Maximize2 size={14} /> Expand
+          </button>
         </div>
-      </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-[13px]">
-          <thead>
-            <tr className="bg-cream">
-              <th className="sticky left-0 z-20 bg-cream px-2.5 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
-                Acct
-              </th>
-              <th className="sticky left-[64px] z-20 bg-cream px-2.5 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
-                Description
-              </th>
-              {monthLabels.map((m, i) => (
-                <th
-                  key={`${m}-${i}`}
-                  className="whitespace-nowrap px-2.5 py-2 text-right text-[11px] font-semibold uppercase tracking-[0.06em] text-muted"
-                >
-                  {m}
-                </th>
-              ))}
-              <th className="whitespace-nowrap px-2.5 py-2 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-gold">
-                Annual
-              </th>
-            </tr>
-          </thead>
+        <div className="overflow-x-auto">{renderTable()}</div>
 
-          {renderSection(sections.revenue)}
-          {renderSection(sections.expense)}
+        {excluded.accounts.length > 0 && (
+          <div className="border-t border-rule bg-amber-50/60 px-4 py-3">
+            <p className="flex items-center gap-1.5 text-[12px] font-semibold text-amber-700">
+              <AlertTriangle size={13} />
+              {excluded.accounts.length} account
+              {excluded.accounts.length === 1 ? '' : 's'} excluded from totals (unmapped or
+              ancillary) — shown for reference, not rolled into the surplus.
+            </p>
+          </div>
+        )}
+      </motion.div>
 
-          {/* Surplus / (Deficit) footer — revenue net of expense. */}
-          <tbody>
-            <tr className="border-t-2 border-gold/60 bg-gold/10">
-              <td className="sticky left-0 z-10 bg-gold/10 px-2.5 py-2.5" />
-              <td className="sticky left-[64px] z-10 bg-gold/10 px-2.5 py-2.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-navy">
-                Surplus / (Deficit)
-              </td>
-              {Array.from({ length: cols }, (_, i) => moneyCell(surplus[i], { bold: true }))}
-              {moneyCell(surplusAnnual, { bold: true })}
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      {excluded.accounts.length > 0 && (
-        <div className="border-t border-rule bg-amber-50/60 px-4 py-3">
-          <p className="flex items-center gap-1.5 text-[12px] font-semibold text-amber-700">
-            <AlertTriangle size={13} />
-            {excluded.accounts.length} account
-            {excluded.accounts.length === 1 ? '' : 's'} excluded from totals (unmapped or
-            ancillary) — shown for reference, not rolled into the surplus.
-          </p>
-        </div>
-      )}
-    </motion.div>
+      {/* Full-screen zoom/pan view (reuses the statements-page lightbox). */}
+      <ReportExpandOverlay
+        open={expanded}
+        title="Monthly Spread"
+        onClose={() => setExpanded(false)}
+      >
+        <div className="inline-block rounded-xl bg-white p-2 shadow-2xl">{renderTable()}</div>
+      </ReportExpandOverlay>
+    </>
   )
 }
 
