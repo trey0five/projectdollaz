@@ -157,31 +157,55 @@ const SECTION_LABEL = /^\s*(operating|restricted|ancillary)\b/i
 export function parseBudgetSpread(arrayBuffer: ArrayBuffer, opts?: { sheet?: string }): BudgetSpread {
   const wb = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array', cellDates: false })
 
-  // Sheet selection: explicit opt -> /budget spread/i (diocesan signal) -> first.
-  const presetName = wb.SheetNames.find((n) => /budget\s*spread/i.test(n))
-  const sheetName =
-    (opts?.sheet && wb.SheetNames.includes(opts.sheet) ? opts.sheet : undefined) ??
-    presetName ??
-    wb.SheetNames[0]!
-  const ws = wb.Sheets[sheetName]!
-  const raw = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null }) as any[][]
+  if (wb.SheetNames.length === 0) throw new Error('File appears empty or unreadable.')
 
-  if (!raw || raw.length < 3) throw new Error('File appears empty or unreadable.')
+  // Sheet selection: prefer an explicit opt / a /budget spread/i sheet, then fall
+  // back to scanning EVERY sheet for one that actually has a month-header row, so
+  // a multi-tab workbook whose spread isn't the first sheet still imports.
+  const preset = wb.SheetNames.find((n) => /budget\s*spread/i.test(n))
+  const ordered = [
+    ...(opts?.sheet && wb.SheetNames.includes(opts.sheet) ? [opts.sheet] : []),
+    ...(preset ? [preset] : []),
+    ...wb.SheetNames,
+  ].filter((n, i, a) => a.indexOf(n) === i)
 
-  // ── Month-header row: the top row (first ~15) with the MOST date-like cells. ──
+  let sheetName = ''
+  let raw: any[][] = []
   let headerRowIndex = -1
-  let bestCount = 0
-  for (let i = 0; i < Math.min(15, raw.length); i++) {
-    const r = raw[i]
-    if (!r) continue
-    const count = r.filter(isDateLike).length
-    if (count > bestCount) {
-      bestCount = count
-      headerRowIndex = i
+  for (const name of ordered) {
+    const grid = XLSX.utils.sheet_to_json(wb.Sheets[name]!, {
+      header: 1,
+      raw: true,
+      defval: null,
+    }) as any[][]
+    if (!grid || grid.length < 3) continue
+    // The top row (first ~15) with the MOST date-like cells is the month header.
+    let bestCount = 0
+    let bestRow = -1
+    for (let i = 0; i < Math.min(15, grid.length); i++) {
+      const r = grid[i]
+      if (!r) continue
+      const count = r.filter(isDateLike).length
+      if (count > bestCount) {
+        bestCount = count
+        bestRow = i
+      }
+    }
+    if (bestRow >= 0 && bestCount >= 3) {
+      sheetName = name
+      raw = grid
+      headerRowIndex = bestRow
+      break
     }
   }
-  if (headerRowIndex < 0 || bestCount < 3) {
-    throw new Error('Could not find a month-header row (need >= 3 month/date columns).')
+  if (headerRowIndex < 0) {
+    throw new Error(
+      'This file doesn’t look like a monthly budget spread. The importer needs a ' +
+        'sheet with about 12 month columns across the top (e.g. Jul–Jun) and ' +
+        'account rows down the side. ' +
+        `Sheet(s) found: ${wb.SheetNames.join(', ')}. ` +
+        '(Driver-style budget-builder workbooks aren’t supported yet.)',
+    )
   }
   const headerRow = raw[headerRowIndex]!
 
