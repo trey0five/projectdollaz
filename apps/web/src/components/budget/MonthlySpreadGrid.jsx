@@ -10,9 +10,27 @@
 // in-render component definitions — React-Compiler safe).
 import { useState, useRef, useLayoutEffect } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
-import { Table2, AlertTriangle, Maximize2, UploadCloud } from 'lucide-react'
+import { Table2, AlertTriangle, Maximize2, UploadCloud, Sparkles, FileSpreadsheet, PencilRuler } from 'lucide-react'
 import { fmt } from '../../lib/format.js'
+import { describeBudgetSource } from './budgetSource.js'
 import ReportExpandOverlay from '../reports/ReportExpandOverlay.jsx'
+
+// Source badge for the spread header. Prefers an explicit `source` prop from the
+// parent (which knows the full budget — including driver-built spreads that have
+// no fileName); falls back to inferring from the spread itself so the grid stays
+// standalone-safe. Pure render helper (no component def in render).
+const SOURCE_ICONS = { driver: Sparkles, import: FileSpreadsheet, manual: PencilRuler }
+function renderSourceBadge(source) {
+  if (!source || source.kind === 'none') return null
+  const Icon = SOURCE_ICONS[source.kind] || FileSpreadsheet
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-gold/40 bg-navy px-2 py-0.5 text-[11px] font-semibold text-gold-light">
+      <Icon size={11} />
+      {source.label}
+      {source.fileName ? ` · ${source.fileName}` : ''}
+    </span>
+  )
+}
 
 // Fit-to-width: render the (wide) table at natural size and scale it DOWN so the
 // ENTIRE sheet — all 12 months + Annual — is visible with no horizontal scroll
@@ -190,13 +208,17 @@ function renderSubtotalRow(label, total, annual, cols, opts = {}) {
   )
 }
 
-export default function MonthlySpreadGrid({ spread, onReimport }) {
+export default function MonthlySpreadGrid({ spread, source, onReimport }) {
   const reduce = useReducedMotion()
   const [expanded, setExpanded] = useState(false)
 
   if (!spread || !Array.isArray(spread.accounts) || spread.accounts.length === 0) {
     return null
   }
+
+  // Source badge: prefer the parent-supplied source (knows driver origin); else
+  // infer from the spread object alone so this grid is standalone-safe.
+  const badgeSource = source ?? describeBudgetSource({ lines: { spread } })
 
   const monthLabels =
     spread.monthLabels && spread.monthLabels.length
@@ -287,7 +309,7 @@ export default function MonthlySpreadGrid({ spread, onReimport }) {
               <p className="flex flex-wrap items-center gap-1.5 text-[12px] text-muted">
                 {spread.accounts.length} accounts ·{' '}
                 {cols === 0 ? 'annual only' : `${cols} months · annual`}
-                {spread.fileName ? ` · imported from ${spread.fileName}` : ''}
+                {renderSourceBadge(badgeSource)}
                 {cols > 0 && (
                   <span className="inline-flex items-center gap-1 text-gold">
                     <Maximize2 size={11} /> full year shown — expand to zoom in

@@ -90,8 +90,15 @@ function renderEnrollmentCell(grade, value, onCell, disabled) {
   )
 }
 
-export default function DriverAssumptionsForm({ assumptions, onChange, disabled }) {
+// Section ids (stable keys for the optional `sections` filter). The wizard shows
+// one topic per step by passing a single-id array; the full Driver Model tab
+// passes nothing and gets all sections (default), so it keeps working unchanged.
+export const ASSUMPTION_SECTIONS = ['enrollment', 'tuition', 'split', 'staffing', 'inflation']
+
+export default function DriverAssumptionsForm({ assumptions, onChange, disabled, sections }) {
   const a = assumptions
+  // `sections` undefined → show all (backward compatible). Otherwise only the ids listed.
+  const show = (id) => sections == null || sections.includes(id)
 
   // Immutable patch helpers — each returns a fresh assumptions object so the
   // parent's useMemo preview recomputes. No mutation of the prop.
@@ -123,6 +130,7 @@ export default function DriverAssumptionsForm({ assumptions, onChange, disabled 
       transition={{ duration: 0.25 }}
       className="space-y-4"
     >
+      {show('enrollment') && (
       <Section
         icon={Users}
         title="Students in each grade"
@@ -137,7 +145,9 @@ export default function DriverAssumptionsForm({ assumptions, onChange, disabled 
           {GRADE_ROW.map((g) => renderEnrollmentCell(g, a.enrollmentByGrade[g] ?? 0, setEnrollment, disabled))}
         </div>
       </Section>
+      )}
 
+      {show('tuition') && (
       <Section icon={DollarSign} title="Tuition price per grade" hint="The yearly tuition you charge each grade group.">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {bands.map((b) => (
@@ -161,7 +171,9 @@ export default function DriverAssumptionsForm({ assumptions, onChange, disabled 
           />
         </div>
       </Section>
+      )}
 
+      {show('split') && (
       <Section
         icon={PieChart}
         title="How tuition gets paid"
@@ -201,7 +213,9 @@ export default function DriverAssumptionsForm({ assumptions, onChange, disabled 
           </p>
         )}
       </Section>
+      )}
 
+      {show('staffing') && (
       <Section icon={Briefcase} title="Staff & pay" hint="How many staff in each role and their average pay. We add benefits on top.">
         <div className="space-y-3">
           {ROLE_ORDER.map((role) => (
@@ -231,7 +245,9 @@ export default function DriverAssumptionsForm({ assumptions, onChange, disabled 
           />
         </div>
       </Section>
+      )}
 
+      {show('inflation') && (
       <Section
         icon={TrendingUp}
         title="Everything else"
@@ -245,6 +261,7 @@ export default function DriverAssumptionsForm({ assumptions, onChange, disabled 
           disabled={disabled}
         />
       </Section>
+      )}
     </motion.div>
   )
 }

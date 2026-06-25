@@ -1,33 +1,46 @@
-// Budget workspace (v1) — a clean, TABBED page that imports monthly budget
-// spreadsheets and shows them as a monthly spread, with multi-school support and
-// an organization-wide roll-up.
+// Budget workspace (v2) — a clean, TABBED page with a beginner-friendly Budget
+// area that toggles between a GUIDED experience (a step-by-step wizard / a
+// friendly summary) and an ADVANCED experience (the granular monthly spread).
 //
 // LAYOUT: the school switcher (reused from SchoolContext) + the period selector
 // (reused PeriodSelector, persists to localStorage 'finrep_active_period') are
 // PINNED in the page header ABOVE the tab bar, so context survives tab switches.
 //
-// TABS: Monthly Spread · Driver Model · Budget vs. Actual · Organizational Roll-up. The
-// import flow is folded INTO the Monthly Spread tab (empty-state CTA + a
-// Replace / re-import button once a budget exists) rather than a standalone tab.
+// TABS: Budget · Budget vs. Actual · Organizational Roll-up. The old standalone
+// "Monthly Spread", "Driver Model", and "Import" tabs are gone — they fold into
+// the single Budget tab's Guided/Advanced toggle (Guided = wizard/summary which
+// embeds the driver + import flows; Advanced = the monthly spread grid). BvA +
+// Roll-up are UNCHANGED.
 //
-// React-Compiler safety: tab panels are produced by render-HELPER functions
-// (renderSpread/renderBva/renderRollup) returning JSX with a key on the root —
-// NOT nested component definitions. The `importing` boolean is read at render and
-// set only from event handlers. The only setState-in-effect is the established
-// microtask-deferred sync-on-key for the selected period (mirrors
-// AnalyticsDashboard) and the org-id fetch.
+// TOGGLE STATE MACHINE (React-Compiler safe — no setState in render/effect):
+//   mode:       'guided' | 'advanced'          — the segmented control
+//   guidedView: 'auto' | 'wizard'              — 'auto' DERIVES the effective view
+//                                                 (summary when a budget exists,
+//                                                 wizard otherwise). It only flips
+//                                                 to 'wizard' from the Edit handler.
+//   effectiveGuided is a PURE render derivation, never stored — so we never need a
+//   setState-in-effect to "open the summary when a budget appears."
+// onApplied (driver save OR import confirm, fired by the wizard) re-pulls the
+// budget and resets guidedView to 'auto' so the user lands on the fresh summary.
+//
+// React-Compiler safety: tab panels + the Budget surface are produced by
+// render-HELPER functions returning JSX with a key on the root — NOT nested
+// component definitions. `mode`/`guidedView` are read at render and set only from
+// event handlers. The only setState-in-effect is the established microtask-
+// deferred sync-on-key (selected period, surface reset) and the org-id fetch.
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Wallet, Table2, UploadCloud, Scale, Building2, Calculator } from 'lucide-react'
+import { Wallet, Scale, Building2, Sparkles, Table2 } from 'lucide-react'
 import TopBar from '../components/TopBar.jsx'
 import BillingBanner from '../components/BillingBanner.jsx'
 import PeriodSelector from '../components/analytics/PeriodSelector.jsx'
 import BudgetTabs from '../components/budget/BudgetTabs.jsx'
 import MonthlySpreadGrid from '../components/budget/MonthlySpreadGrid.jsx'
-import BudgetImport from '../components/budget/BudgetImport.jsx'
 import DioceseRollup from '../components/budget/DioceseRollup.jsx'
 import BudgetVsActual from '../components/analytics/BudgetVsActual.jsx'
-import DriverModel from '../components/budget/DriverModel.jsx'
+import BudgetWizard from '../components/budget/wizard/BudgetWizard.jsx'
+import BudgetSummary from '../components/budget/BudgetSummary.jsx'
+import { describeBudgetSource } from '../components/budget/budgetSource.js'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { usePersistence } from '../context/PersistenceContext.jsx'
 import {
@@ -39,10 +52,16 @@ import {
 import { orgsApi } from '../lib/api.js'
 
 const TABS = [
-  { id: 'spread', label: 'Monthly Spread', Icon: Table2 },
-  { id: 'driver', label: 'Driver Model', Icon: Calculator },
+  { id: 'budget', label: 'Budget', Icon: Wallet },
   { id: 'bva', label: 'Budget vs. Actual', Icon: Scale },
   { id: 'rollup', label: 'Organizational Roll-up', Icon: Building2 },
+]
+
+// Guided ⇄ Advanced segmented control options (module-scope so the React Compiler
+// treats them as stable; the control itself is rendered via a render-helper).
+const MODE_OPTIONS = [
+  { id: 'guided', label: 'Guided', Icon: Sparkles },
+  { id: 'advanced', label: 'Advanced', Icon: Table2 },
 ]
 
 // FL dioceses budget on a Jul–Jun fiscal year. Derive the 'YYYY-MM' fiscal-year
@@ -86,34 +105,44 @@ export default function BudgetPage() {
     }
   }, [periods])
 
-  const [activeTab, setActiveTab] = useState('spread')
+  const [activeTab, setActiveTab] = useState('budget')
 
-  // Inline import mode for the Monthly Spread tab (the standalone Import tab is
-  // gone). A plain boolean toggled only from event handlers — no setState in
-  // render or effect, so the React Compiler is happy.
-  const [importing, setImporting] = useState(false)
-  // Close the inline import form when the school/period changes (microtask-
-  // deferred to satisfy the no-setState-in-effect rule, like the period sync).
+  // ── Budget surface state machine ────────────────────────────────────────────
+  // `mode` is the Guided/Advanced segmented control. `guidedView` is 'auto'
+  // (derive summary-vs-wizard from whether a budget exists) or 'wizard' (forced
+  // open for an Edit). Both are read at render and set only from event handlers.
+  const [mode, setMode] = useState('guided')
+  const [guidedView, setGuidedView] = useState('auto')
+
+  // Reset the Budget surface to its default when the school/period changes
+  // (microtask-deferred to satisfy the no-setState-in-effect rule, like the
+  // period sync). This also handles switching school/period mid-wizard: the
+  // wizard unmounts and the surface re-derives for the new key. The wizard is
+  // additionally keyed by school:period below to force a clean remount so no
+  // in-flight answers carry across periods.
   useEffect(() => {
     let cancelled = false
     Promise.resolve().then(() => {
-      if (!cancelled) setImporting(false)
+      if (cancelled) return
+      setMode('guided')
+      setGuidedView('auto')
     })
     return () => {
       cancelled = true
     }
   }, [schoolId, selectedPeriodId])
 
-  // Saved budget for the active school+period (spread + BvA both read this).
+  // Saved budget for the active school+period (the wizard, summary, spread, and
+  // BvA all derive from this).
   const { budget, loading: budgetLoading, reload: reloadBudget } = useBudget(
     schoolId,
     selectedPeriodId,
   )
   const spread = budget?.lines?.spread ?? null
 
-  // Prior actuals + enrollment/aid drivers — seeds the Driver Model assumptions
-  // (prefill) and feeds its live preview. Never blocks the page; a failure just
-  // leaves the form at neutral defaults.
+  // Prior actuals + enrollment/aid drivers — seeds the wizard's driver questions
+  // (prefill) and feeds its live mini-preview. Never blocks the page; a failure
+  // just leaves the form at neutral defaults.
   const { context: budgetContext } = useBudgetContext(schoolId, selectedPeriodId)
 
   // Period actuals so the Budget-vs-Actual tab shows real variances (the
@@ -155,157 +184,156 @@ export default function BudgetPage() {
     fiscalYearStart,
   )
 
-  // After a successful import, leave import mode, re-pull the saved budget (the
-  // import PUT hits a different endpoint than useBudget reads) and stay on the
-  // Monthly Spread tab so the freshly-imported grid is shown.
-  const onImported = () => {
-    setImporting(false)
+  // The source of the currently-saved budget — passed to the wizard (overwrite
+  // notice) and the spread grid (header badge). Memoized on the budget.
+  const priorSource = useMemo(() => describeBudgetSource(budget), [budget])
+
+  // Does a budget exist for this period? (drives the auto guided view + the
+  // advanced empty note). A budget "exists" if it has a spread or rev/exp lines.
+  const hasBudget = !!(
+    budget?.lines &&
+    (budget.lines.spread || budget.lines.revenue || budget.lines.expense)
+  )
+
+  // After a successful apply (driver save OR import confirm, fired by the
+  // wizard), re-pull the saved budget and return to the auto guided view — which
+  // now derives to the friendly summary, since hasBudget is true.
+  const onBudgetApplied = () => {
     reloadBudget()
-    setActiveTab('spread')
+    setGuidedView('auto')
+    setMode('guided')
   }
 
   // ── Render helpers (NOT components) ─────────────────────────────────────────
-  const renderSpread = () => {
-    if (!selectedPeriodId) {
-      return (
-        <div key="spread" className="card-soft border-dashed px-6 py-14 text-center">
-          <p className="font-serif text-lg italic text-muted">Select a period to view its budget.</p>
-        </div>
-      )
-    }
-    // Inline import flow (replaces the old standalone Import tab). Reuses the
-    // BudgetImport component as-is; only the entry point moved here.
-    if (importing) {
-      return (
-        <div key="spread-import" className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 className="font-serif text-lg font-semibold text-navy">Import a spreadsheet</h3>
-              <p className="text-[13px] text-muted">
-                Upload this period&rsquo;s budget spreadsheet — monthly spread or annual-only.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setImporting(false)}
-              className="btn-ghost"
-            >
-              Back
-            </button>
-          </div>
-          <BudgetImport
-            schoolId={schoolId}
-            periodId={selectedPeriodId}
-            canEdit={canEdit}
-            onImported={onImported}
-          />
-        </div>
-      )
-    }
+
+  // The Guided/Advanced segmented control (pinned at the top of the Budget tab).
+  const renderModeToggle = () => (
+    <div
+      role="tablist"
+      aria-label="Budget view mode"
+      className="inline-flex items-center gap-1 rounded-2xl border border-gold/25 bg-navy-gradient p-1 shadow-navy-glow"
+    >
+      {MODE_OPTIONS.map((opt) => {
+        const isActive = opt.id === mode
+        const Icon = opt.Icon
+        return (
+          <button
+            key={opt.id}
+            type="button"
+            role="tab"
+            aria-selected={isActive}
+            onClick={() => setMode(opt.id)}
+            className={`relative flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.1em] outline-none ring-gold/50 transition-colors focus-visible:ring-2 ${
+              isActive ? 'text-navy' : 'text-white/70 hover:text-white'
+            }`}
+          >
+            {isActive && (
+              <motion.span
+                layoutId="budget-mode-pill"
+                className="absolute inset-0 rounded-xl bg-gold-gradient shadow-glow"
+                transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+              />
+            )}
+            <span className="relative z-10 flex items-center gap-1.5">
+              <Icon size={14} />
+              {opt.label}
+            </span>
+          </button>
+        )
+      })}
+    </div>
+  )
+
+  // Advanced view body — the granular monthly spread (with a source badge), or a
+  // short empty note pointing back to Guided when there's nothing to show.
+  const renderAdvanced = () => {
     if (budgetLoading) {
       return (
-        <div key="spread" className="card-soft animate-pulse px-6 py-14 text-center">
+        <div className="card-soft animate-pulse px-6 py-14 text-center">
           <p className="font-serif text-base italic text-muted">Loading the monthly spread…</p>
         </div>
       )
     }
     if (!spread) {
       return (
-        <div key="spread" className="card-soft px-5 py-10 sm:px-8">
-          <div className="text-center">
-            <h3 className="font-serif text-xl font-semibold text-navy">No budget yet for this period</h3>
-            <p className="mx-auto mt-1.5 max-w-xl text-[13.5px] text-muted">
-              There are two ways to get one — pick whichever matches where you&rsquo;re starting from.
-            </p>
-          </div>
-          <div className="mx-auto mt-6 grid max-w-3xl grid-cols-1 gap-4 sm:grid-cols-2">
-            {/* Import: bring in numbers you already have */}
-            <div className="flex flex-col rounded-2xl border border-rule bg-white p-5 text-left">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gold/15 text-gold">
-                <UploadCloud size={22} />
-              </span>
-              <h4 className="mt-3 font-serif text-lg font-semibold text-navy">Import a spreadsheet</h4>
-              <p className="mt-1 flex-1 text-[13px] leading-relaxed text-muted">
-                <span className="font-semibold text-navy">You already have a budget</span> in Excel.
-                We read it in and organize it as-is — we don&rsquo;t calculate anything, just total
-                and display the numbers you give us.
-              </p>
-              <button
-                type="button"
-                onClick={() => setImporting(true)}
-                className="btn-primary mt-4 inline-flex items-center justify-center gap-2"
-                disabled={!canEdit}
-              >
-                <UploadCloud size={16} /> Import a spreadsheet
-              </button>
-            </div>
-            {/* Driver Model: we calculate it from assumptions */}
-            <div className="flex flex-col rounded-2xl border border-rule bg-white p-5 text-left">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-navy-gradient text-gold-light">
-                <Calculator size={22} />
-              </span>
-              <h4 className="mt-3 font-serif text-lg font-semibold text-navy">Build with Driver Model</h4>
-              <p className="mt-1 flex-1 text-[13px] leading-relaxed text-muted">
-                <span className="font-semibold text-navy">You don&rsquo;t have a budget yet</span>{' '}
-                (or want to rebuild one). Answer a few questions about students, tuition, and staff,
-                and <span className="font-semibold text-navy">we calculate the budget for you</span>.
-              </p>
-              <button
-                type="button"
-                onClick={() => setActiveTab('driver')}
-                className="btn-ghost mt-4 inline-flex items-center justify-center gap-2"
-              >
-                <Calculator size={16} /> Build with Driver Model
-              </button>
-            </div>
-          </div>
-          <p className="mx-auto mt-5 max-w-2xl text-center text-[12px] text-muted">
-            In short: <span className="font-semibold text-navy">Import</span> shows the numbers you
-            already decided; <span className="font-semibold text-navy">Driver Model</span> figures
-            the numbers out from your assumptions.
-            {!canEdit && ' Importing is available to owners and accountants.'}
+        <div className="card-soft border-dashed px-6 py-12 text-center">
+          <p className="font-serif text-lg italic text-muted">
+            No spreadsheet view for this budget yet.
           </p>
+          <p className="mx-auto mt-1.5 max-w-md text-[13px] text-muted">
+            Switch to <span className="font-semibold text-navy">Guided</span> to set one up — once a
+            budget exists, the full accounts-by-month spread appears here.
+          </p>
+          <button
+            type="button"
+            onClick={() => setMode('guided')}
+            className="btn-ghost mt-4 inline-flex items-center gap-2"
+          >
+            <Sparkles size={15} /> Go to Guided
+          </button>
         </div>
       )
     }
-    return (
-      <div key="spread">
-        <MonthlySpreadGrid
-          spread={spread}
-          onReimport={canEdit ? () => setImporting(true) : undefined}
+    return <MonthlySpreadGrid spread={spread} source={priorSource} />
+  }
+
+  // Guided view body — the friendly summary when a budget exists (unless an Edit
+  // forced the wizard open), else the step-by-step wizard.
+  const renderGuided = () => {
+    if (budgetLoading) {
+      return (
+        <div className="card-soft animate-pulse px-6 py-14 text-center">
+          <p className="font-serif text-base italic text-muted">Loading your budget…</p>
+        </div>
+      )
+    }
+    const effectiveGuided =
+      guidedView === 'auto' ? (hasBudget ? 'summary' : 'wizard') : 'wizard'
+
+    if (effectiveGuided === 'summary') {
+      return (
+        <BudgetSummary
+          budget={budget}
+          canEdit={canEdit}
+          onEdit={() => setGuidedView('wizard')}
+          onViewAdvanced={() => setMode('advanced')}
         />
-      </div>
+      )
+    }
+    return (
+      <BudgetWizard
+        key={`${schoolId}:${selectedPeriodId}`}
+        schoolId={schoolId}
+        periodId={selectedPeriodId}
+        canEdit={canEdit}
+        budgetContext={budgetContext}
+        savedAssumptions={budget?.lines?.driverModel?.assumptions ?? null}
+        budget={budget}
+        priorSource={priorSource}
+        onApplied={onBudgetApplied}
+      />
     )
   }
 
-  // After a driver apply, re-pull the saved budget (the driver PUT hits a
-  // different endpoint than useBudget reads) and jump to the Monthly Spread tab
-  // so the freshly-computed spread is front and center.
-  const onDriverApplied = () => {
-    reloadBudget()
-    setActiveTab('spread')
-  }
-
-  const renderDriver = () => {
+  const renderBudget = () => {
     if (!selectedPeriodId) {
       return (
-        <div key="driver" className="card-soft border-dashed px-6 py-14 text-center">
-          <p className="font-serif text-lg italic text-muted">
-            Select a period to build a driver-based budget.
-          </p>
+        <div key="budget" className="card-soft border-dashed px-6 py-14 text-center">
+          <p className="font-serif text-lg italic text-muted">Select a period to set up its budget.</p>
         </div>
       )
     }
     return (
-      <div key="driver">
-        <DriverModel
-          schoolId={schoolId}
-          periodId={selectedPeriodId}
-          canEdit={canEdit}
-          budgetContext={budgetContext}
-          savedAssumptions={budget?.lines?.driverModel?.assumptions ?? null}
-          onApplied={onDriverApplied}
-        />
+      <div key="budget" className="space-y-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {renderModeToggle()}
+          <p className="max-w-md text-[12px] text-muted">
+            {mode === 'guided'
+              ? 'A friendly, step-by-step setup — answer a few questions or upload what you have.'
+              : 'The full accounts-by-month spread for accountants and power users.'}
+          </p>
+        </div>
+        {mode === 'advanced' ? renderAdvanced() : renderGuided()}
       </div>
     )
   }
@@ -338,15 +366,13 @@ export default function BudgetPage() {
 
   const renderActivePanel = () => {
     switch (activeTab) {
-      case 'driver':
-        return renderDriver()
       case 'bva':
         return renderBva()
       case 'rollup':
         return renderRollup()
-      case 'spread':
+      case 'budget':
       default:
-        return renderSpread()
+        return renderBudget()
     }
   }
 
@@ -367,7 +393,7 @@ export default function BudgetPage() {
                   Budget Workspace
                 </h1>
                 <p className="text-[13px] text-muted">
-                  Import monthly budget spreads, review the spread, and consolidate across your organization.
+                  Set up a budget the guided way or the advanced way, compare it to actuals, and consolidate across your organization.
                 </p>
               </div>
             </div>
