@@ -22,8 +22,8 @@ export class AssistantController {
 
   @Post('chat')
   @Roles('owner', 'accountant', 'viewer')
-  chat(@Param('schoolId') schoolId: string, @Body() dto: ChatDto) {
-    return this.assistant.chat(schoolId, dto.periodId ?? null, dto.messages)
+  chat(@Param('schoolId') schoolId: string, @Body() dto: ChatDto, @CurrentUser() user: User) {
+    return this.assistant.chat(schoolId, dto.periodId ?? null, dto.messages, user.id)
   }
 
   /** Streaming variant — Server-Sent Events (delta / status / chart / done). */
@@ -33,6 +33,7 @@ export class AssistantController {
     @Param('schoolId') schoolId: string,
     @Body() dto: ChatDto,
     @Res() res: Response,
+    @CurrentUser() user: User,
   ): Promise<void> {
     res.setHeader('Content-Type', 'text/event-stream')
     res.setHeader('Cache-Control', 'no-cache, no-transform')
@@ -45,7 +46,7 @@ export class AssistantController {
     const emit = (ev: unknown) => {
       if (!closed) res.write(`data: ${JSON.stringify(ev)}\n\n`)
     }
-    await this.assistant.chatStream(schoolId, dto.periodId ?? null, dto.messages, emit)
+    await this.assistant.chatStream(schoolId, dto.periodId ?? null, dto.messages, emit, user.id)
     if (!closed) res.end()
   }
 

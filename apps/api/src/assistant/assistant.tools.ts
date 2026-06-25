@@ -135,6 +135,66 @@ export const TOOL_SCHEMAS = [
   {
     type: 'function',
     function: {
+      name: 'get_budget',
+      description:
+        "The current saved BUDGET PLAN for a period (not actuals): where it came from (imported monthly spread, driver model, or manual), budgeted revenue/expense by category, totals, surplus/(deficit), and — if a driver model was applied — its assumptions and KPIs (enrollment, cost per pupil, net tuition per student).",
+      parameters: {
+        type: 'object',
+        properties: { periodId: { type: 'string' } },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_budget_rollup',
+      description:
+        "The diocese-wide CONSOLIDATED budget across every school in this organization the user can see: each school's budgeted revenue/expense and the consolidated category totals for the fiscal year. Use for 'across the diocese' / 'all our schools' budget questions.",
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'apply_driver_budget',
+      description:
+        'PROPOSE building the budget from driver assumptions (does NOT apply — the user must confirm). Provide ONLY the levers the user mentioned; everything else keeps its current value. Enrollment drives tuition; staffing drives salaries; other lines grow from last year by inflationPct.',
+      parameters: {
+        type: 'object',
+        properties: {
+          periodId: { type: 'string' },
+          enrollmentTotal: {
+            type: 'number',
+            description: 'Total students; spread evenly across grades. Use this OR enrollmentByGrade.',
+          },
+          enrollmentByGrade: {
+            type: 'object',
+            description: 'Students per grade, e.g. {"K":50,"1":48}. Keys: PK0–PK4, K, 1–8.',
+          },
+          tuitionRates: {
+            type: 'object',
+            description: 'Annual tuition by band: {prek3, prek5, elem, middle}.',
+          },
+          tuitionProgramSplit: {
+            type: 'object',
+            description: 'How tuition is paid, summing to 100: {parent, ftc, fes}.',
+          },
+          feePerStudent: { type: 'number' },
+          staffing: {
+            type: 'object',
+            description:
+              '{teachers:{count,avgSalary}, admin:{count,avgSalary}, facilities:{count,avgSalary}, benefitsPct}.',
+          },
+          inflationPct: { type: 'number', description: 'Growth % applied to all non-driver lines.' },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'render_chart',
       description:
         'Draw a chart for the user. Call this to visualize numbers you have already fetched (a trend, a comparison, a breakdown). Pick the chart type that fits and give a clear title.',

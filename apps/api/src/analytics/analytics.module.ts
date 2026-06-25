@@ -39,6 +39,6 @@ import { DashboardService } from './dashboard.service.js'
     BudgetRollupService,
     DashboardService,
   ],
-  exports: [InsightService, AnalyticsService, BudgetService],
+  exports: [InsightService, AnalyticsService, BudgetService, BudgetRollupService],
 })
 export class AnalyticsModule {}

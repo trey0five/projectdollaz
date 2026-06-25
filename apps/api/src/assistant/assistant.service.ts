@@ -4,10 +4,18 @@
 // execute each tool, feed results back, and repeat until it answers. Tenant-scoped
 // to the school (the controller's RolesGuard) and the period (getOwnedPeriod).
 import { Injectable, Logger } from '@nestjs/common'
+import {
+  computeDriverBudget,
+  defaultAssumptions,
+  toDriverPriorContext,
+  type DriverAssumptions,
+} from '@finrep/analytics'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { PeriodsService } from '../periods/periods.service.js'
 import { AnalyticsService } from '../analytics/analytics.service.js'
 import { BudgetService } from '../analytics/budget.service.js'
+import { BudgetRollupService } from '../analytics/budget-rollup.service.js'
+import { deriveFiscalYearStart } from '../analytics/budget.driver.js'
 import { ComplianceService } from '../compliance/compliance.service.js'
 import { ReconciliationService } from '../compliance/reconciliation.service.js'
 import { CorrectiveActionService } from '../compliance/corrective-action.service.js'
@@ -22,21 +30,56 @@ const TOOL_LABELS: Record<string, string> = {
   get_compliance: 'Checking compliance findings…',
   get_reconciliation: 'Reviewing the reconciliation…',
   get_budget_vs_actual: 'Pulling budget vs. actual…',
+  get_budget: 'Reading the budget…',
+  get_budget_rollup: 'Consolidating the diocese budget…',
   get_corrective_action_plan: 'Reading the corrective action plan…',
   get_trend: 'Loading the trend…',
   set_budget: 'Preparing a budget change…',
+  apply_driver_budget: 'Building a driver budget…',
   draft_cap_entry: 'Drafting a corrective action…',
   render_chart: 'Drawing a chart…',
 }
 
 // Tools that propose a write — never applied in the loop; the user confirms first.
-const WRITE_TOOLS = new Set(['set_budget', 'draft_cap_entry'])
+const WRITE_TOOLS = new Set(['set_budget', 'draft_cap_entry', 'apply_driver_budget'])
 
 export interface ProposedAction {
-  kind: 'set_budget' | 'draft_cap_entry'
+  kind: 'set_budget' | 'draft_cap_entry' | 'apply_driver_budget'
   periodId: string
   summary: string
   payload: Record<string, unknown>
+}
+
+// Driver-assumption fields the LLM may supply (anything else is ignored).
+const DRIVER_FIELDS = [
+  'enrollmentByGrade',
+  'tuitionRates',
+  'tuitionProgramSplit',
+  'feePerStudent',
+  'staffing',
+  'inflationPct',
+  'overrides',
+] as const
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return !!v && typeof v === 'object' && !Array.isArray(v)
+}
+
+/** Deep-merge `override` onto a clone of `base` (plain objects recurse; arrays/scalars replace). */
+function deepMerge<T>(base: T, override: Record<string, unknown>): T {
+  const out: Record<string, unknown> = isPlainObject(base) ? { ...(base as Record<string, unknown>) } : {}
+  for (const [k, v] of Object.entries(override)) {
+    if (v === undefined) continue
+    out[k] = isPlainObject(v) && isPlainObject(out[k]) ? deepMerge(out[k], v) : v
+  }
+  return out as T
+}
+
+/** Keep only known driver-assumption fields from arbitrary LLM args. */
+function pickDriverFields(args: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const f of DRIVER_FIELDS) if (args[f] !== undefined) out[f] = args[f]
+  return out
 }
 
 export type StreamEvent =
@@ -50,6 +93,7 @@ export type StreamEvent =
 interface Ctx {
   schoolId: string
   periodId: string | null
+  userId?: string | null
 }
 
 export interface ChartSpec {
@@ -73,6 +117,7 @@ export class AssistantService {
     private readonly periods: PeriodsService,
     private readonly analytics: AnalyticsService,
     private readonly budget: BudgetService,
+    private readonly rollup: BudgetRollupService,
     private readonly compliance: ComplianceService,
     private readonly reconciliation: ReconciliationService,
     private readonly correctiveAction: CorrectiveActionService,
@@ -87,11 +132,12 @@ export class AssistantService {
     schoolId: string,
     periodId: string | null,
     history: { role: 'user' | 'assistant'; content: string }[],
+    userId?: string | null,
   ): Promise<AssistantReply> {
     if (!this.client.isConfigured()) {
       return { configured: false, answer: '', charts: [], proposals: [] }
     }
-    const ctx: Ctx = { schoolId, periodId }
+    const ctx: Ctx = { schoolId, periodId, userId: userId ?? null }
     const system = await this.systemPrompt(ctx)
     const messages: unknown[] = [{ role: 'system', content: system }, ...history]
     const charts: ChartSpec[] = []
@@ -134,13 +180,14 @@ export class AssistantService {
     periodId: string | null,
     history: { role: 'user' | 'assistant'; content: string }[],
     emit: (ev: StreamEvent) => void,
+    userId?: string | null,
   ): Promise<void> {
     if (!this.client.isConfigured()) {
       emit({ type: 'error', text: 'The assistant isn’t configured on this server yet.' })
       emit({ type: 'done' })
       return
     }
-    const ctx: Ctx = { schoolId, periodId }
+    const ctx: Ctx = { schoolId, periodId, userId: userId ?? null }
     const system = await this.systemPrompt(ctx)
     const messages: unknown[] = [{ role: 'system', content: system }, ...history]
 
@@ -231,6 +278,20 @@ export class AssistantService {
         payload: { categoryKey: key, categoryType: type, amount, totalRevenue, totalExpenses },
       }
     }
+    if (name === 'apply_driver_budget') {
+      const merged = await this.mergedDriverAssumptions(ctx.schoolId, periodId, args)
+      const prior = toDriverPriorContext(await this.analytics.budgetContext(ctx.schoolId, periodId))
+      const r = computeDriverBudget(merged, prior)
+      const usd = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`
+      return {
+        kind: 'apply_driver_budget',
+        periodId,
+        summary:
+          `Build a driver budget for ${r.kpis.enrollmentTotal} students — revenue ${usd(r.kpis.totalRevenue)}, ` +
+          `expenses ${usd(r.kpis.totalExpense)}, net ${usd(r.kpis.netIncome)}.`,
+        payload: { assumptions: merged as unknown as Record<string, unknown> },
+      }
+    }
     // draft_cap_entry
     const ruleId = typeof args.ruleId === 'string' ? args.ruleId : ''
     if (!ruleId) throw new Error('draft_cap_entry needs a ruleId (from get_corrective_action_plan).')
@@ -251,6 +312,39 @@ export class AssistantService {
     }
   }
 
+  /**
+   * Build a COMPLETE DriverAssumptions from the LLM's partial args: defaults <-
+   * the period's saved driver assumptions (if any) <- the user's specified levers.
+   * `enrollmentTotal` is a convenience that spreads evenly across grades when no
+   * per-grade map is given. Always returns a full, valid shape for computeDriverBudget.
+   */
+  private async mergedDriverAssumptions(
+    schoolId: string,
+    periodId: string,
+    args: Record<string, unknown>,
+  ): Promise<DriverAssumptions> {
+    const b = await this.budget.get(schoolId, periodId)
+    const lines = (b.lines as Record<string, unknown> | null) ?? {}
+    const saved = (lines.driverModel as { assumptions?: Record<string, unknown> } | undefined)?.assumptions
+    const base = deepMerge(defaultAssumptions(), saved ?? {})
+
+    const overrides = pickDriverFields(args)
+    // enrollmentTotal → even per-grade distribution (only when no explicit grid).
+    if (typeof args.enrollmentTotal === 'number' && overrides.enrollmentByGrade === undefined) {
+      const keys = Object.keys((base as { enrollmentByGrade: Record<string, number> }).enrollmentByGrade)
+      const total = Math.max(0, Math.round(args.enrollmentTotal))
+      const per = Math.floor(total / keys.length)
+      let rem = total - per * keys.length
+      const ebg: Record<string, number> = {}
+      for (const k of keys) {
+        ebg[k] = per + (rem > 0 ? 1 : 0)
+        if (rem > 0) rem -= 1
+      }
+      overrides.enrollmentByGrade = ebg
+    }
+    return deepMerge(base, overrides)
+  }
+
   /** Apply a user-confirmed proposal. Deterministic — no LLM. owner/accountant only. */
   async applyAction(
     schoolId: string,
@@ -259,6 +353,16 @@ export class AssistantService {
   ): Promise<{ applied: boolean; summary: string }> {
     const periodId = action.periodId
     const p = action.payload ?? {}
+    if (action.kind === 'apply_driver_budget') {
+      const assumptions = (p.assumptions ?? {}) as Record<string, unknown>
+      await this.budget.upsertDriver(
+        schoolId,
+        periodId,
+        { assumptions } as unknown as Parameters<BudgetService['upsertDriver']>[2],
+        userId,
+      )
+      return { applied: true, summary: action.summary }
+    }
     if (action.kind === 'set_budget') {
       const dto: Record<string, unknown> = {}
       if (typeof p.totalRevenue === 'number') dto.totalRevenue = p.totalRevenue
@@ -325,9 +429,14 @@ export class AssistantService {
       'budget vs. actual, and scholarship reconciliation. ALWAYS use the tools to fetch real numbers ' +
       'before answering — never invent or estimate figures. When a comparison, breakdown, or trend ' +
       'would help, call render_chart to visualize it. ' +
-      'You may also help make changes: set_budget (set a budget figure) and draft_cap_entry (fill a ' +
-      'corrective-action-plan entry). These do NOT apply immediately — they propose a change the user ' +
-      'confirms; after calling one, tell the user what you’ve prepared and that they can confirm or cancel. ' +
+      'For budget questions use get_budget (this school’s budget plan — imported spread, driver model, or ' +
+      'manual), get_budget_vs_actual (budget vs. actuals), and get_budget_rollup (the diocese-wide ' +
+      'consolidation across the organization’s schools). ' +
+      'You may also help make changes: set_budget (set a budget figure), apply_driver_budget (build the ' +
+      'budget from enrollment / tuition / staffing assumptions — provide ONLY the levers the user mentions; ' +
+      'the rest keep their current values), and draft_cap_entry (fill a corrective-action-plan entry). ' +
+      'These do NOT apply immediately — they propose a change the user confirms; after calling one, tell the ' +
+      'user what you’ve prepared and that they can confirm or cancel. ' +
       'For draft_cap_entry, first call get_corrective_action_plan to get the ruleId. ' +
       'Be concise and board-appropriate; format money as USD. Only this school’s data is available. ' +
       'If a tool returns an error or needs data, say so plainly.'
@@ -409,6 +518,56 @@ export class AssistantService {
           actualRevenueByCategory: rev?.components?.map((c) => ({ label: c.label, value: c.value })) ?? [],
           actualExpenseByCategory: exp?.components?.map((c) => ({ label: c.label, value: c.value })) ?? [],
         }
+      }
+      case 'get_budget': {
+        const pid = await this.resolvePeriod(args, ctx)
+        const b = await this.budget.get(ctx.schoolId, pid)
+        const lines = (b.lines as Record<string, any> | null) ?? {}
+        const source = lines.driverModel
+          ? 'driver model'
+          : lines.spread
+            ? `imported spread (${lines.spread.format})`
+            : lines.revenue || lines.expense
+              ? 'manual'
+              : 'none'
+        return {
+          source,
+          totalRevenue: b.totalRevenue,
+          totalExpenses: b.totalExpenses,
+          surplus: (b.totalRevenue ?? 0) - (b.totalExpenses ?? 0),
+          revenueByCategory: lines.revenue ?? {},
+          expenseByCategory: lines.expense ?? {},
+          ...(lines.driverModel
+            ? { driver: { kpis: lines.driverModel.kpis, assumptions: lines.driverModel.assumptions } }
+            : {}),
+          ...(lines.spread
+            ? {
+                spread: {
+                  format: lines.spread.format,
+                  fileName: lines.spread.fileName ?? null,
+                  months: lines.spread.monthKeys?.length ?? 0,
+                  accountCount: lines.spread.accounts?.length ?? 0,
+                },
+              }
+            : {}),
+        }
+      }
+      case 'get_budget_rollup': {
+        if (!ctx.userId) return { error: 'No user context for the diocese roll-up.' }
+        const school = await this.prisma.school.findUnique({ where: { id: ctx.schoolId } })
+        if (!school?.organizationId) return { error: 'This school is not part of an organization.' }
+        const user = await this.prisma.user.findUnique({ where: { id: ctx.userId } })
+        if (!user) return { error: 'User not found.' }
+        let fys: string | null = null
+        try {
+          const pid = await this.resolvePeriod(args, ctx)
+          const p = await this.periods.getOwnedPeriod(ctx.schoolId, pid)
+          fys = deriveFiscalYearStart(p.periodEndDate.toISOString().slice(0, 10))
+        } catch {
+          /* fall back to each school's most-recent budget */
+        }
+        const r = await this.rollup.getRollup(user, school.organizationId, fys)
+        return { fiscalYearStart: r.fiscalYearStart, schools: r.schools, consolidated: r.consolidated }
       }
       case 'get_corrective_action_plan': {
         const pid = await this.resolvePeriod(args, ctx)
