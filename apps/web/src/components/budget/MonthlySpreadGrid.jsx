@@ -8,11 +8,52 @@
 // and ancillary accounts (flagged), so nothing is silently dropped. All grouping
 // and subtotals are derived AT RENDER from the spread prop (no effects, no
 // in-render component definitions — React-Compiler safe).
-import { useState } from 'react'
+import { useState, useRef, useLayoutEffect } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
-import { Table2, AlertTriangle, Maximize2, MoveHorizontal } from 'lucide-react'
+import { Table2, AlertTriangle, Maximize2 } from 'lucide-react'
 import { fmt } from '../../lib/format.js'
 import ReportExpandOverlay from '../reports/ReportExpandOverlay.jsx'
+
+// Fit-to-width: render the (wide) table at natural size and scale it DOWN so the
+// ENTIRE sheet — all 12 months + Annual — is visible with no horizontal scroll
+// (mirrors the statements page). Module-scope component (React-Compiler safe);
+// re-measures on container/content resize. The Expand button zooms back in.
+function FitWidth({ children }) {
+  const outer = useRef(null)
+  const inner = useRef(null)
+  const [scale, setScale] = useState(1)
+  const [height, setHeight] = useState(undefined)
+
+  useLayoutEffect(() => {
+    const measure = () => {
+      const o = outer.current
+      const i = inner.current
+      if (!o || !i) return
+      const cw = o.clientWidth
+      const nw = i.scrollWidth || i.offsetWidth || 1
+      const s = nw > cw ? cw / nw : 1
+      setScale(s)
+      setHeight(i.offsetHeight * s)
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    if (outer.current) ro.observe(outer.current)
+    if (inner.current) ro.observe(inner.current)
+    return () => ro.disconnect()
+  }, [children])
+
+  return (
+    <div ref={outer} className="overflow-hidden" style={{ height }}>
+      <div
+        ref={inner}
+        className="inline-block origin-top-left will-change-transform"
+        style={{ width: 'max-content', transform: `scale(${scale})` }}
+      >
+        {children}
+      </div>
+    </div>
+  )
+}
 
 // Title-case a rollupLine/category key for a group heading (e.g. 'instructional'
 // -> 'Instructional', 'studActExp' -> 'Stud Act Exp'). Pure display helper.
@@ -185,7 +226,7 @@ export default function MonthlySpreadGrid({ spread }) {
   // The full table (accounts × 12 months + annual). Rendered fresh in both the
   // inline card and the full-screen zoom overlay (returns a new tree each call).
   const renderTable = () => (
-    <table className="w-full border-collapse text-[13px]">
+    <table className="w-max border-collapse text-[13px]">
       <thead>
         <tr className="bg-cream">
           <th className="sticky left-0 z-20 bg-cream px-2.5 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
@@ -244,7 +285,7 @@ export default function MonthlySpreadGrid({ spread }) {
                 {spread.accounts.length} accounts · {cols} months · annual
                 {spread.fileName ? ` · imported from ${spread.fileName}` : ''}
                 <span className="inline-flex items-center gap-1 text-gold">
-                  <MoveHorizontal size={12} /> scroll across, or expand for the full year
+                  <Maximize2 size={11} /> full year shown — expand to zoom in
                 </span>
               </p>
             </div>
@@ -258,7 +299,9 @@ export default function MonthlySpreadGrid({ spread }) {
           </button>
         </div>
 
-        <div className="overflow-x-auto">{renderTable()}</div>
+        <div className="px-2 pb-1">
+          <FitWidth>{renderTable()}</FitWidth>
+        </div>
 
         {excluded.accounts.length > 0 && (
           <div className="border-t border-rule bg-amber-50/60 px-4 py-3">
