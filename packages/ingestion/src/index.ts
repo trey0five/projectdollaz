@@ -38,3 +38,12 @@ export {
   isFiscalYearEnd,
   FL_FISCAL_YEAR_END,
 } from './classify.js'
+
+// Budget-spread parser (format-agnostic; diocesan preset). Browser + node.
+export type {
+  BudgetSpread,
+  BudgetSpreadAccount,
+  BudgetSpreadFormat,
+  BudgetSpreadSkippedRow,
+} from './budget/budgetSpread.js'
+export { parseBudgetSpread } from './budget/budgetSpread.js'

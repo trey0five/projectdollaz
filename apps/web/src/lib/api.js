@@ -232,6 +232,18 @@ export const analyticsApi = {
   // Builder context: prior actuals + multi-year history + enrollment/aid drivers.
   budgetContext: (schoolId, periodId) =>
     api.get(`/schools/${schoolId}/periods/${periodId}/budget-context`),
+  // ── v1 Budget workspace: import a monthly budget spread (client-parsed) ────
+  // PUT the parsed BudgetSpread JSON; server stores lines.spread + rollups and
+  // returns the saved budget. Owner/accountant only (server-enforced).
+  saveBudgetSpread: (schoolId, periodId, body) =>
+    api.put(`/schools/${schoolId}/periods/${periodId}/budget/spread`, body),
+  // Diocese roll-up: consolidated per-school + org category totals for a fiscal
+  // year. Kept here as the SINGLE call site so the route is trivial to retune in
+  // integration if Engineer 1's path differs (e.g. a school-anchored variant).
+  budgetRollup: (orgId, fiscalYearStart) =>
+    api.get(`/organizations/${orgId}/budget/rollup`, {
+      params: fiscalYearStart ? { fiscalYearStart } : {},
+    }),
   // ── Phase 4C: per-school dashboard layout (owner customizes; all roles read) ──
   dashboard: (schoolId) => api.get(`/schools/${schoolId}/dashboard`),
   saveDashboard: (schoolId, body) => api.put(`/schools/${schoolId}/dashboard`, body),

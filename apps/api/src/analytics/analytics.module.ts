@@ -10,6 +10,8 @@ import { OperationalController } from './operational.controller.js'
 import { OperationalService } from './operational.service.js'
 import { BudgetController } from './budget.controller.js'
 import { BudgetService } from './budget.service.js'
+import { BudgetRollupController } from './budget-rollup.controller.js'
+import { BudgetRollupService } from './budget-rollup.service.js'
 import { DashboardController } from './dashboard.controller.js'
 import { DashboardService } from './dashboard.service.js'
 
@@ -26,6 +28,7 @@ import { DashboardService } from './dashboard.service.js'
     AnalyticsController,
     OperationalController,
     BudgetController,
+    BudgetRollupController,
     DashboardController,
   ],
   providers: [
@@ -33,6 +36,7 @@ import { DashboardService } from './dashboard.service.js'
     InsightService,
     OperationalService,
     BudgetService,
+    BudgetRollupService,
     DashboardService,
   ],
   exports: [InsightService, AnalyticsService, BudgetService],

@@ -163,7 +163,69 @@ export function useBudget(schoolId, periodId) {
     [schoolId, periodId],
   )
 
-  return { budget: data, loading, error, notEntitled, save }
+  // Imperative refresh used after a spread import lands (the import PUT goes
+  // through a different endpoint, so the budget read must be re-pulled).
+  const reload = useCallback(
+    () => (schoolId && periodId ? load(schoolId, periodId) : Promise.resolve()),
+    [schoolId, periodId, load],
+  )
+
+  return { budget: data, loading, error, notEntitled, save, reload }
+}
+
+// ── v1 Budget workspace: diocese-wide consolidated roll-up (read-only) ───────
+// Same microtask-defer + cancelled-flag pattern as the other reads. Keyed on the
+// caller's org + the active fiscal-year start. A 402 flips notEntitled so the
+// roll-up tab can show the paused panel instead of a raw error. Never throws to
+// render; a missing/forbidden org just yields a friendly error string.
+export function useBudgetRollup(orgId, fiscalYearStart) {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [notEntitled, setNotEntitled] = useState(false)
+
+  const load = useCallback(async (oid, fys) => {
+    setError('')
+    setNotEntitled(false)
+    try {
+      const res = await analyticsApi.budgetRollup(oid, fys)
+      setData(res.data)
+    } catch (e) {
+      if (isPaymentRequired(e)) {
+        setNotEntitled(true)
+        setData(null)
+      } else {
+        setError('Could not load the diocese roll-up.')
+        setData(null)
+      }
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.resolve().then(() => {
+      if (cancelled) return
+      if (orgId) {
+        setLoading(true)
+        load(orgId, fiscalYearStart)
+      } else {
+        setData(null)
+        setLoading(false)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [orgId, fiscalYearStart, load])
+
+  const reload = useCallback(
+    () => (orgId ? load(orgId, fiscalYearStart) : Promise.resolve()),
+    [orgId, fiscalYearStart, load],
+  )
+
+  return { rollup: data, loading, error, notEntitled, reload }
 }
 
 // ── Budget builder context: prior actuals + history + drivers (read-only) ─────

@@ -7,6 +7,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator.js'
 import { EntitlementGuard } from '../billing/entitlement.guard.js'
 import { BudgetService } from './budget.service.js'
 import { UpsertBudgetDto } from './dto/upsert-budget.dto.js'
+import { ImportBudgetSpreadDto } from './dto/import-budget-spread.dto.js'
 
 /**
  * Phase 3 budget intake. Same guard stack as OperationalController: reads open to
@@ -32,5 +33,17 @@ export class BudgetController {
     @CurrentUser() user: User,
   ) {
     return this.budget.upsert(schoolId, periodId, dto, user.id)
+  }
+
+  /** Import a parsed budget spread (re-mapped + re-rolled server-side). */
+  @Put('periods/:periodId/budget/spread')
+  @Roles('owner', 'accountant')
+  importSpread(
+    @Param('schoolId') schoolId: string,
+    @Param('periodId') periodId: string,
+    @Body() dto: ImportBudgetSpreadDto,
+    @CurrentUser() user: User,
+  ) {
+    return this.budget.upsertSpread(schoolId, periodId, dto, user.id)
   }
 }

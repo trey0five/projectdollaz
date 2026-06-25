@@ -12,6 +12,7 @@ import AssistantWidget from './components/assistant/AssistantWidget.jsx'
 import HomePage from './pages/HomePage.jsx'
 import StatementsPage from './pages/StatementsPage.jsx'
 import AnalyticsPage from './pages/AnalyticsPage.jsx'
+import BudgetPage from './pages/BudgetPage.jsx'
 import ReadinessPage from './pages/ReadinessPage.jsx'
 import CapPrintPage from './pages/CapPrintPage.jsx'
 import WorkpapersPrintPage from './pages/WorkpapersPrintPage.jsx'
@@ -102,6 +103,7 @@ export default function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/statements" element={<StatementsPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
+        <Route path="/budget" element={<BudgetPage />} />
         <Route path="/readiness" element={<ReadinessPage />} />
         <Route path="/readiness/cap/print" element={<CapPrintPage />} />
         <Route path="/readiness/workpapers/print" element={<WorkpapersPrintPage />} />

@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { LogOut, LineChart, Settings, FileStack, BarChart3, ShieldCheck, LayoutDashboard } from 'lucide-react'
+import { LogOut, LineChart, Settings, FileStack, BarChart3, ShieldCheck, LayoutDashboard, Wallet } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import SchoolSwitcher from './SchoolSwitcher.jsx'
@@ -14,6 +14,7 @@ export default function TopBar() {
   // the /history -> /statements redirect target still lights up correctly.
   const onStatements = path.startsWith('/statements') || path.startsWith('/history')
   const onAnalytics = path.startsWith('/analytics')
+  const onBudget = path.startsWith('/budget')
   const onReadiness = path.startsWith('/readiness')
 
   // Self-describing IA: a native tooltip (title) mirrors the aria-label for
@@ -30,6 +31,7 @@ export default function TopBar() {
     { to: '/', label: 'Home', Icon: LayoutDashboard, active: onHome },
     { to: '/statements', label: 'Statements', Icon: FileStack, active: onStatements },
     { to: '/analytics', label: 'Analytics', Icon: BarChart3, active: onAnalytics },
+    { to: '/budget', label: 'Budget', Icon: Wallet, active: onBudget },
     { to: '/readiness', label: 'Readiness', Icon: ShieldCheck, active: onReadiness },
     { to: '/settings', label: 'Settings', Icon: Settings, active: onSettings },
   ]
