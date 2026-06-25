@@ -199,12 +199,22 @@ export function parseBudgetSpread(arrayBuffer: ArrayBuffer, opts?: { sheet?: str
     }
   }
   if (headerRowIndex < 0) {
+    // Recognize a driver-style budget-builder workbook (Assumptions / Enrollment /
+    // Tuition Est / Salary sheets) and route the user to the Driver Model tab —
+    // that format is built there, not imported here.
+    const driverish = wb.SheetNames.some((n) =>
+      /assumption|enrollment|tuition\s*est|salary|payroll/i.test(n),
+    )
     throw new Error(
-      'This file doesn’t look like a monthly budget spread. The importer needs a ' +
-        'sheet with about 12 month columns across the top (e.g. Jul–Jun) and ' +
-        'account rows down the side. ' +
-        `Sheet(s) found: ${wb.SheetNames.join(', ')}. ` +
-        '(Driver-style budget-builder workbooks aren’t supported yet.)',
+      driverish
+        ? 'This looks like a driver-style budget workbook (it has Assumptions / ' +
+          'Enrollment / Tuition sheets), not a monthly spread. Build this kind of ' +
+          'budget on the “Driver Model” tab instead — Import is only for monthly ' +
+          'spreads (accounts down the side, ~12 month columns across the top).'
+        : 'This file doesn’t look like a monthly budget spread. The importer needs a ' +
+          'sheet with about 12 month columns across the top (e.g. Jul–Jun) and ' +
+          'account rows down the side. ' +
+          `Sheet(s) found: ${wb.SheetNames.join(', ')}.`,
     )
   }
   const headerRow = raw[headerRowIndex]!
