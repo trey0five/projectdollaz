@@ -150,6 +150,165 @@ function monthFromHeader(v: unknown): { key: string; label: string } | null {
 const SUBTOTAL_LABEL = /^\s*(total|subtotal|net (assets|income)|surplus|deficit)\b/i
 const SECTION_LABEL = /^\s*(operating|restricted|ancillary)\b/i
 
+/** Header cell that names a single annual/budget amount column (not a date). */
+const AMOUNT_HEADER = /budget|annual|amount|projected|forecast|proposed|fy|year|total/i
+
+/**
+ * ANNUAL-ONLY fallback parser. Fires only when NO sheet has a >=3-date month
+ * header. Looks for a single amount column (a non-date header matching
+ * AMOUNT_HEADER with >=2 numeric data rows below it) and imports each row as an
+ * annual-only account: monthKeys=[], months=[], annual = that cell. Numeric GL
+ * sheets keep acct>0 (categoryOf maps them); label-only sheets get acct=0
+ * (labelToCategory maps them server-side). Returns null if no amount column.
+ */
+function tryAnnualOnly(wb: XLSX.WorkBook, ordered: string[]): BudgetSpread | null {
+  for (const name of ordered) {
+    const grid = XLSX.utils.sheet_to_json(wb.Sheets[name]!, {
+      header: 1,
+      raw: true,
+      defval: null,
+    }) as any[][]
+    if (!grid || grid.length < 3) continue
+
+    // Find the amount column + its header row within the first ~15 rows.
+    let amountCol = -1
+    let headerRowIndex = -1
+    for (let i = 0; i < Math.min(15, grid.length) && amountCol < 0; i++) {
+      const r = grid[i]
+      if (!r) continue
+      for (let c = 0; c < r.length; c++) {
+        const v = r[c]
+        if (typeof v !== 'string' || !AMOUNT_HEADER.test(v) || isDateLike(v)) continue
+        // Require >=2 numeric data rows below this column.
+        let numericRows = 0
+        for (let j = i + 1; j < grid.length; j++) {
+          if (toNumOrNull(grid[j]?.[c]) != null) numericRows++
+        }
+        if (numericRows >= 2) {
+          amountCol = c
+          headerRowIndex = i
+          break
+        }
+      }
+    }
+    if (amountCol < 0) continue
+
+    // Account column scan (left of the amount column): GL integers in [100,9999].
+    const intCount: Record<number, number> = {}
+    for (let c = 0; c < amountCol; c++) intCount[c] = 0
+    for (let i = headerRowIndex + 1; i < grid.length; i++) {
+      const r = grid[i]
+      if (!r) continue
+      for (let c = 0; c < amountCol; c++) {
+        const n = toNumOrNull(r[c])
+        if (n != null && Number.isInteger(n) && n >= 100 && n <= 9999) intCount[c]!++
+      }
+    }
+    let acctCol = -1
+    let acctBest = 0
+    for (let c = 0; c < amountCol; c++) {
+      if (intCount[c]! > acctBest) {
+        acctBest = intCount[c]!
+        acctCol = c
+      }
+    }
+    const labelOnly = acctBest === 0
+
+    // Label column = the column (left of amount) with the most non-empty text.
+    let labelCol = 0
+    let bestTexts = -1
+    for (let c = 0; c < amountCol; c++) {
+      let texts = 0
+      for (let i = headerRowIndex + 1; i < grid.length; i++) {
+        const v = grid[i]?.[c]
+        if (typeof v === 'string' && v.trim() && toNumOrNull(v) == null) texts++
+      }
+      if (texts > bestTexts) {
+        bestTexts = texts
+        labelCol = c
+      }
+    }
+
+    const labelOf = (r: any[] | undefined): string => {
+      const v = r?.[labelCol]
+      return typeof v === 'string' ? v.trim() : v != null ? String(v).trim() : ''
+    }
+
+    const accounts: BudgetSpreadAccount[] = []
+    const skippedRows: BudgetSpreadSkippedRow[] = []
+    for (let i = headerRowIndex + 1; i < grid.length; i++) {
+      const r = grid[i]
+      if (!r) continue
+      const amount = toNumOrNull(r[amountCol])
+      const label = labelOf(r)
+      const acctRaw = acctCol >= 0 ? toNumOrNull(r[acctCol]) : null
+      const isAcct =
+        acctRaw != null && Number.isInteger(acctRaw) && acctRaw >= 100 && acctRaw <= 9999
+
+      if (!labelOnly) {
+        // Numeric annual-only sheet: GL code is the discriminator (diocesan-like).
+        if (isAcct) {
+          accounts.push({ acct: acctRaw!, label, months: [], annual: amount ?? 0 })
+          continue
+        }
+        const blankRow = label === '' && amount == null
+        skippedRows.push({
+          rowIndex: i,
+          reason: blankRow
+            ? 'blank'
+            : SUBTOTAL_LABEL.test(label)
+              ? 'subtotal'
+              : SECTION_LABEL.test(label)
+                ? 'section'
+                : 'no-acct',
+          text: label || undefined,
+        })
+        continue
+      }
+
+      // Label-only annual sheet: label is the identity; acct=0 sentinel.
+      const isTotalish =
+        SUBTOTAL_LABEL.test(label) ||
+        SECTION_LABEL.test(label) ||
+        /\b(total|subtotal|grand\s*total)\b/i.test(label) ||
+        /^\s*(total|net)\b/i.test(label)
+      if (label !== '' && amount != null && !isTotalish) {
+        accounts.push({ acct: 0, label, months: [], annual: amount })
+        continue
+      }
+      const blankRow = label === '' && amount == null
+      skippedRows.push({
+        rowIndex: i,
+        reason: blankRow
+          ? 'blank'
+          : SUBTOTAL_LABEL.test(label) || /\b(total|subtotal|grand\s*total)\b/i.test(label)
+            ? 'subtotal'
+            : SECTION_LABEL.test(label)
+              ? 'section'
+              : 'no-acct',
+        text: label || undefined,
+      })
+    }
+
+    if (accounts.length === 0) continue
+
+    return {
+      format: 'generic',
+      sheetName: name,
+      monthKeys: [],
+      monthLabels: [],
+      fiscalYearStart: null,
+      headerRowIndex,
+      columns: { acct: acctCol >= 0 ? acctCol : labelCol, label: labelCol, months: [], annual: amountCol },
+      accounts,
+      skippedRows,
+      sheetTotals: { revenue: null, expense: null },
+      warnings: ['No monthly columns found — imported as an annual budget.'],
+    }
+  }
+  return null
+}
+
 /**
  * Parse the byte payload of an Excel budget-spread file into a BudgetSpread.
  * Throws a clear Error if no month-header row can be located.
@@ -201,20 +360,31 @@ export function parseBudgetSpread(arrayBuffer: ArrayBuffer, opts?: { sheet?: str
   if (headerRowIndex < 0) {
     // Recognize a driver-style budget-builder workbook (Assumptions / Enrollment /
     // Tuition Est / Salary sheets) and route the user to the Driver Model tab —
-    // that format is built there, not imported here.
+    // that format is built there, not imported here. Driver detection runs FIRST
+    // (before the annual-only fallback) because a driver workbook's "Salary"
+    // sheet "Annual" column would otherwise be mis-read as an annual budget.
     const driverish = wb.SheetNames.some((n) =>
       /assumption|enrollment|tuition\s*est|salary|payroll/i.test(n),
     )
-    throw new Error(
-      driverish
-        ? 'This looks like a driver-style budget workbook (it has Assumptions / ' +
+    if (driverish) {
+      throw new Error(
+        'This looks like a driver-style budget workbook (it has Assumptions / ' +
           'Enrollment / Tuition sheets), not a monthly spread. Build this kind of ' +
           'budget on the “Driver Model” tab instead — Import is only for monthly ' +
-          'spreads (accounts down the side, ~12 month columns across the top).'
-        : 'This file doesn’t look like a monthly budget spread. The importer needs a ' +
-          'sheet with about 12 month columns across the top (e.g. Jul–Jun) and ' +
-          'account rows down the side. ' +
-          `Sheet(s) found: ${wb.SheetNames.join(', ')}.`,
+          'spreads (accounts down the side, ~12 month columns across the top).',
+      )
+    }
+    // ANNUAL-ONLY fallback: no month header anywhere, but the file may still be a
+    // budget with a single Budget/Annual/Amount column. Returns a complete
+    // BudgetSpread (monthKeys=[], months=[]) or null if it doesn't look like one.
+    const annualOnly = tryAnnualOnly(wb, ordered)
+    if (annualOnly) return annualOnly
+
+    throw new Error(
+      'This file doesn’t look like a monthly budget spread. The importer needs a ' +
+        'sheet with about 12 month columns across the top (e.g. Jul–Jun) and ' +
+        'account rows down the side. ' +
+        `Sheet(s) found: ${wb.SheetNames.join(', ')}.`,
     )
   }
   const headerRow = raw[headerRowIndex]!
@@ -281,17 +451,39 @@ export function parseBudgetSpread(arrayBuffer: ArrayBuffer, opts?: { sheet?: str
       acctCol = c
     }
   }
-  // Label = first text-bearing column to the RIGHT of acctCol (else col 0).
+  // LABEL-ONLY discriminator: when NO column has any GL integer in [100,9999]
+  // (acctBest === 0), the sheet has account NAMES but no GL codes. The diocesan
+  // sample has acctBest === 131, so it can NEVER enter this branch — the
+  // numeric path below stays byte-identical for it.
+  const labelOnly = acctBest === 0
   let labelCol = acctCol + 1 < firstMonthCol ? acctCol + 1 : Math.max(0, acctCol - 1)
-  for (let c = acctCol + 1; c < firstMonthCol; c++) {
-    let texts = 0
-    for (let i = headerRowIndex + 1; i < raw.length; i++) {
-      const v = raw[i]?.[c]
-      if (typeof v === 'string' && v.trim() && toNumOrNull(v) == null) texts++
+  if (labelOnly) {
+    // Robust label detection: the column (left of the month run) with the MOST
+    // non-empty TEXT values that aren't numeric. acctCol is irrelevant here.
+    let bestTexts = -1
+    for (let c = 0; c < firstMonthCol; c++) {
+      let texts = 0
+      for (let i = headerRowIndex + 1; i < raw.length; i++) {
+        const v = raw[i]?.[c]
+        if (typeof v === 'string' && v.trim() && toNumOrNull(v) == null) texts++
+      }
+      if (texts > bestTexts) {
+        bestTexts = texts
+        labelCol = c
+      }
     }
-    if (texts > 0) {
-      labelCol = c
-      break
+  } else {
+    // Label = first text-bearing column to the RIGHT of acctCol (else col 0).
+    for (let c = acctCol + 1; c < firstMonthCol; c++) {
+      let texts = 0
+      for (let i = headerRowIndex + 1; i < raw.length; i++) {
+        const v = raw[i]?.[c]
+        if (typeof v === 'string' && v.trim() && toNumOrNull(v) == null) texts++
+      }
+      if (texts > 0) {
+        labelCol = c
+        break
+      }
     }
   }
 
@@ -335,7 +527,7 @@ export function parseBudgetSpread(arrayBuffer: ArrayBuffer, opts?: { sheet?: str
 
     const isAcct = acctRaw != null && Number.isInteger(acctRaw) && acctRaw >= 100 && acctRaw <= 9999
 
-    if (isAcct) {
+    if (!labelOnly && isAcct) {
       // DISCRIMINATOR is the account code; keep the row even if label ~ "Total".
       const months: (number | null)[] = monthCols.map((c) => toNumOrNull(r[c]))
       const annual =
@@ -343,6 +535,39 @@ export function parseBudgetSpread(arrayBuffer: ArrayBuffer, opts?: { sheet?: str
           ? annualCell
           : months.reduce<number>((s, v) => s + (v ?? 0), 0)
       accounts.push({ acct: acctRaw, label, months, annual })
+      continue
+    }
+
+    if (labelOnly) {
+      // LABEL-ONLY discriminator: a row is an account IFF it has a non-empty
+      // label, at least one numeric value, and is NOT a total/section row.
+      const months: (number | null)[] = monthCols.map((c) => toNumOrNull(r[c]))
+      const hasValue = annualCell != null || months.some((v) => v != null)
+      const isTotalish =
+        SUBTOTAL_LABEL.test(label) ||
+        SECTION_LABEL.test(label) ||
+        /\b(total|subtotal|grand\s*total)\b/i.test(label) ||
+        /^\s*(total|net)\b/i.test(label)
+      if (label !== '' && hasValue && !isTotalish) {
+        const annual =
+          annualCell != null
+            ? annualCell
+            : months.reduce<number>((s, v) => s + (v ?? 0), 0)
+        // acct=0 sentinel: the label is the identity (mapped server-side).
+        accounts.push({ acct: 0, label, months, annual })
+        continue
+      }
+      // Skipped label-only row: record with the best-guess reason.
+      const blankRow =
+        label === '' && annualCell == null && months.every((v) => v == null)
+      const skipReason: BudgetSpreadSkippedRow['reason'] = blankRow
+        ? 'blank'
+        : SUBTOTAL_LABEL.test(label) || /\b(total|subtotal|grand\s*total)\b/i.test(label)
+          ? 'subtotal'
+          : SECTION_LABEL.test(label)
+            ? 'section'
+            : 'no-acct'
+      skippedRows.push({ rowIndex: i, reason: skipReason, text: label || undefined })
       continue
     }
 

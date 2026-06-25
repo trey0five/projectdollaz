@@ -2,7 +2,7 @@
 // Driver-budget spread builder. Turns a computed DriverBudgetResult into the
 // EXACT synthetic-account spread shape MonthlySpreadGrid + budget-rollup
 // consume ({acct,label,category,section,rollupLine,includedInTotals,months,
-// annual}), so the Monthly Spread grid + Diocese Roll-up populate from a driver
+// annual}), so the Monthly Spread grid + Organizational Roll-up populate from a driver
 // budget with zero per-consumer code.
 //
 // Each category becomes ONE synthetic GL row whose `acct` is a representative

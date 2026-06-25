@@ -173,7 +173,7 @@ export function useBudget(schoolId, periodId) {
   return { budget: data, loading, error, notEntitled, save, reload }
 }
 
-// ── v1 Budget workspace: diocese-wide consolidated roll-up (read-only) ───────
+// ── v1 Budget workspace: organization-wide consolidated roll-up (read-only) ───────
 // Same microtask-defer + cancelled-flag pattern as the other reads. Keyed on the
 // caller's org + the active fiscal-year start. A 402 flips notEntitled so the
 // roll-up tab can show the paused panel instead of a raw error. Never throws to
@@ -195,7 +195,7 @@ export function useBudgetRollup(orgId, fiscalYearStart) {
         setNotEntitled(true)
         setData(null)
       } else {
-        setError('Could not load the diocese roll-up.')
+        setError('Could not load the organization roll-up.')
         setData(null)
       }
     } finally {

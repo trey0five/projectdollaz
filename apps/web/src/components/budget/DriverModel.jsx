@@ -2,7 +2,7 @@
 // Driver Model tab — assumptions in → computed category budget out, with a LIVE
 // preview and an "Apply to budget" action that PUTs to the server (authoritative
 // recompute) and refreshes the budget so the Monthly Spread / Budget-vs-Actual /
-// Diocese Roll-up tabs reflect it.
+// Organizational Roll-up tabs reflect it.
 //
 // SINGLE SOURCE OF TRUTH for the math: computeDriverBudget from @finrep/analytics
 // is imported and used for the live preview, so the on-screen numbers match what

@@ -10,7 +10,7 @@
 // in-render component definitions — React-Compiler safe).
 import { useState, useRef, useLayoutEffect } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
-import { Table2, AlertTriangle, Maximize2 } from 'lucide-react'
+import { Table2, AlertTriangle, Maximize2, UploadCloud } from 'lucide-react'
 import { fmt } from '../../lib/format.js'
 import ReportExpandOverlay from '../reports/ReportExpandOverlay.jsx'
 
@@ -138,12 +138,15 @@ function buildModel(spread) {
 
 // ── Render helpers (NOT components — called as {renderX()} with keys) ─────────
 
-function renderAccountRow(a, cols) {
+function renderAccountRow(a, cols, idx = 0) {
   const flagged = a.category === 'unmapped'
+  // Label-only imports carry acct=0 (the label is the identity); show a dash
+  // rather than a meaningless "0" in the account column. idx keeps the key unique
+  // when two label-only rows share the same name.
   return (
-    <tr key={`acct-${a.acct}-${a.label}`} className="border-t border-rule/40 hover:bg-gold/[0.04]">
+    <tr key={`acct-${a.acct}-${idx}-${a.label}`} className="border-t border-rule/40 hover:bg-gold/[0.04]">
       <td className="sticky left-0 z-10 whitespace-nowrap bg-white px-2.5 py-1.5 text-[12px] font-semibold tabular-nums text-muted">
-        {a.acct}
+        {a.acct ? a.acct : '—'}
       </td>
       <td className="sticky left-[64px] z-10 max-w-[260px] truncate bg-white px-2.5 py-1.5 text-ink">
         {a.label}
@@ -187,7 +190,7 @@ function renderSubtotalRow(label, total, annual, cols, opts = {}) {
   )
 }
 
-export default function MonthlySpreadGrid({ spread }) {
+export default function MonthlySpreadGrid({ spread, onReimport }) {
   const reduce = useReducedMotion()
   const [expanded, setExpanded] = useState(false)
 
@@ -282,21 +285,35 @@ export default function MonthlySpreadGrid({ spread }) {
             <div>
               <h3 className="font-serif text-base font-semibold text-navy sm:text-lg">Monthly Spread</h3>
               <p className="flex flex-wrap items-center gap-1.5 text-[12px] text-muted">
-                {spread.accounts.length} accounts · {cols} months · annual
+                {spread.accounts.length} accounts ·{' '}
+                {cols === 0 ? 'annual only' : `${cols} months · annual`}
                 {spread.fileName ? ` · imported from ${spread.fileName}` : ''}
-                <span className="inline-flex items-center gap-1 text-gold">
-                  <Maximize2 size={11} /> full year shown — expand to zoom in
-                </span>
+                {cols > 0 && (
+                  <span className="inline-flex items-center gap-1 text-gold">
+                    <Maximize2 size={11} /> full year shown — expand to zoom in
+                  </span>
+                )}
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setExpanded(true)}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-rule bg-white px-3 py-1.5 text-[12px] font-semibold text-navy transition-colors hover:border-gold hover:text-gold"
-          >
-            <Maximize2 size={14} /> Expand
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {onReimport && (
+              <button
+                type="button"
+                onClick={onReimport}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-rule bg-white px-3 py-1.5 text-[12px] font-semibold text-navy transition-colors hover:border-gold hover:text-gold"
+              >
+                <UploadCloud size={14} /> Replace / re-import
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setExpanded(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-rule bg-white px-3 py-1.5 text-[12px] font-semibold text-navy transition-colors hover:border-gold hover:text-gold"
+            >
+              <Maximize2 size={14} /> Expand
+            </button>
+          </div>
         </div>
 
         <div className="px-2 pb-1">
@@ -340,7 +357,7 @@ function SpreadGroupFragment({ group, cols }) {
         </td>
         <td colSpan={cols + 1} className="bg-white" />
       </tr>
-      {group.accounts.map((a) => renderAccountRow(a, cols))}
+      {group.accounts.map((a, idx) => renderAccountRow(a, cols, idx))}
       {renderSubtotalRow(`Subtotal ${titleizeKey(group.key)}`, group.total, group.annual, cols)}
     </>
   )

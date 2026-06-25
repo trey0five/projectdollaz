@@ -6,7 +6,7 @@ import { BudgetRollupService } from './budget-rollup.service.js'
 import { BudgetRollupQueryDto } from './dto/budget-rollup-query.dto.js'
 
 /**
- * Diocese-wide budget roll-up. JwtAuthGuard ONLY — this mirrors the org-scoped
+ * Organization-wide budget roll-up. JwtAuthGuard ONLY — this mirrors the org-scoped
  * read pattern in OrganizationsController (RolesGuard can't resolve a schoolId
  * for an org route, and EntitlementGuard gates only paid WRITES + would 402 with
  * no school context). Org isolation is enforced in the service via the caller's

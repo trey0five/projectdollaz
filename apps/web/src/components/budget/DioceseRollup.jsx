@@ -1,4 +1,4 @@
-// Diocese Roll-up tab — the consolidated, multi-school budget view for the
+// Organizational Roll-up tab — the consolidated, multi-school budget view for the
 // caller's organization. Reads the rollup endpoint (one call site in api.js) and
 // renders a per-school totals table plus a consolidated category table. Strict
 // org isolation is enforced server-side; the web just renders what it gets.
@@ -32,7 +32,7 @@ export default function DioceseRollup({ rollup, loading, error }) {
   if (loading) {
     return (
       <div className="card-soft animate-pulse px-6 py-14 text-center">
-        <p className="font-serif text-base italic text-muted">Consolidating the diocese…</p>
+        <p className="font-serif text-base italic text-muted">Consolidating your organization…</p>
       </div>
     )
   }

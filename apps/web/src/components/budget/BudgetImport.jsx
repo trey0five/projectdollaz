@@ -125,7 +125,7 @@ export default function BudgetImport({ schoolId, periodId, canEdit, onImported }
             Drop your budget spreadsheet
           </div>
           <p className="mt-0.5 text-[13px] text-muted">
-            .xlsx · the diocesan template or a generic accounts-down / months-across layout
+            .xlsx · a standard template or a generic accounts-down / months-across layout
           </p>
         </div>
         <span className="btn-ghost mt-1 text-[12px]">Browse files</span>

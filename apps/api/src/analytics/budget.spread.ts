@@ -16,6 +16,7 @@
 // parser captured them, else fall back to the computed rollup sum.
 // ─────────────────────────────────────────────────────────────
 import { categoryOf, categoryDef } from '@finrep/engine'
+import type { SCoaCategory } from '@finrep/engine'
 import type { BudgetSpread } from '@finrep/ingestion'
 
 export interface SpreadAccountAnnotated {
@@ -27,6 +28,61 @@ export interface SpreadAccountAnnotated {
   includedInTotals: boolean
   months: (number | null)[]
   annual: number
+  /** How this row's category was resolved: GL account number vs. label keyword. */
+  mappedBy?: 'acct' | 'keyword'
+}
+
+/**
+ * Guess a SCoA category from an account NAME (label-only / acct=0 rows from
+ * QuickBooks-style exports). First match wins; ORDER matters (specific terms
+ * before generic so e.g. "interest expense" doesn't match revenue "interest").
+ * Returns null when nothing matches — the line stays visible but unmapped.
+ */
+export function labelToCategory(label: string): SCoaCategory | null {
+  const s = label.toLowerCase()
+
+  // ── EXPENSE intercepts FIRST — these share keywords with revenue rules, so a
+  // naive order would mis-route an expense into revenue (the worst error: it
+  // distorts the revenue/expense split). Run them before any revenue test.
+  // Compensation is always an expense — route by role.
+  if (/salar|salaries|\bwage|payroll|stipend|\bpay\b/.test(s)) {
+    if (/admin|office|principal|business\s*manager|clerical|secretar|bookkeep|development\s*(office|director|officer)/.test(s))
+      return 'adminSal'
+    if (/facilit|plant|maintenance|custodial|janitor|grounds|security|operations/.test(s))
+      return 'facilSal'
+    return 'instrSal' // teachers / faculty / aides / substitutes / default comp
+  }
+  if (/professional\s*development|staff\s*development|faculty\s*development|continuing\s*ed/.test(s))
+    return 'instrSup'
+  if (/development\s*(office|director|officer|department)/.test(s)) return 'adminCost'
+  if (/interest\s*expense/.test(s)) return 'fixedOther'
+  if (/depreciation|amortization|\bdebt\b|mortgage|\bloan\b|capital\s*(expenditure|outlay|expense|improvement)/.test(s))
+    return 'fixedOther'
+  if (/benefit|pension|payroll\s*tax|health\s*insurance|\bdental\b|retirement/.test(s)) return 'fixedOther'
+
+  // ── REVENUE ──
+  if (/tuition|registration/.test(s)) return 'tuition'
+  if (/fundrais|donation|gift|gala|annual\s*fund|advancement|capital\s*campaign|\bdevelopment\s*(income|revenue|fund)\b|^development$/.test(s))
+    return 'development'
+  if (/support|parish|grant|subsid|diocesan|offertory/.test(s)) return 'support'
+  if (/interest|dividend/.test(s)) return 'interest'
+  if (/investment|endowment/.test(s)) return 'investments'
+  if (/textbook/.test(s)) return 'textbook'
+
+  // ── EXPENSE (non-compensation) ──
+  if (/athletic|\bsports?\b/.test(s)) return 'athletics' // anchored so "transport" can't match
+  if (/food|cafeteria|lunch|meal|nutrition/.test(s)) return 'food'
+  if (/transport|\bbus(es)?\b/.test(s)) return 'bus'
+  if (/facilit|plant|maintenance|utilit|janitor|custodial|building|repair|grounds|security|rent|lease/.test(s))
+    return 'facilCost'
+  if (/instruction|classroom|curriculum|teaching|\bbook/.test(s)) return 'instrSup'
+  if (/admin|office|principal|management|legal|accounting|\baudit|professional\s*fee|\bdues\b|postage|advertis|marketing|insurance/.test(s))
+    return 'adminCost'
+  if (/restricted/.test(s)) return 'restricted'
+  if (/international/.test(s)) return 'other'
+  // NOTE: deliberately NO bare "fee" → tuition fallback — "bank/late/audit fees"
+  // are expenses and would inflate revenue. Education fees say "registration".
+  return null
 }
 
 export interface SpreadRollup {
@@ -63,7 +119,10 @@ export function rollupSpread(spread: BudgetSpread): SpreadRollup {
   const unmappedAccts: number[] = []
 
   for (const a of spread.accounts) {
-    const cat = categoryOf(a.acct)
+    // acct>0  -> map by GL number (categoryOf), UNCHANGED (diocesan path).
+    // acct===0 -> label-only row; guess the category from the account NAME.
+    const mappedBy: 'acct' | 'keyword' = a.acct > 0 ? 'acct' : 'keyword'
+    const cat = a.acct > 0 ? categoryOf(a.acct) : labelToCategory(a.label)
     if (!cat) {
       // Keep the line visible on the spread; exclude from rollup totals.
       accounts.push({
@@ -75,8 +134,10 @@ export function rollupSpread(spread: BudgetSpread): SpreadRollup {
         includedInTotals: false,
         months: a.months,
         annual: a.annual,
+        mappedBy,
       })
-      if (a.annual) unmappedAccts.push(a.acct)
+      // unmappedAccts is a GL-number list; skip the meaningless 0 for label-only.
+      if (a.annual && a.acct > 0) unmappedAccts.push(a.acct)
       continue
     }
     const def = categoryDef(cat)!
@@ -89,6 +150,7 @@ export function rollupSpread(spread: BudgetSpread): SpreadRollup {
       includedInTotals: def.includedInTotals,
       months: a.months,
       annual: a.annual,
+      mappedBy,
     })
     if (!def.includedInTotals || !def.rollupLine) continue
     const bucket = def.section === 'revenue' ? revenue : expense

@@ -150,7 +150,7 @@ export const TOOL_SCHEMAS = [
     function: {
       name: 'get_budget_rollup',
       description:
-        "The diocese-wide CONSOLIDATED budget across every school in this organization the user can see: each school's budgeted revenue/expense and the consolidated category totals for the fiscal year. Use for 'across the diocese' / 'all our schools' budget questions.",
+        "The organization-wide CONSOLIDATED budget across every school in this organization the user can see: each school's budgeted revenue/expense and the consolidated category totals for the fiscal year. Use for 'across your organization' / 'all our schools' budget questions.",
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },

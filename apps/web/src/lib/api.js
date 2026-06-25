@@ -243,7 +243,7 @@ export const analyticsApi = {
   // returns the saved budget. Owner/accountant only (server-enforced).
   saveBudgetSpread: (schoolId, periodId, body) =>
     api.put(`/schools/${schoolId}/periods/${periodId}/budget/spread`, body),
-  // Diocese roll-up: consolidated per-school + org category totals for a fiscal
+  // Organization roll-up: consolidated per-school + org category totals for a fiscal
   // year. Kept here as the SINGLE call site so the route is trivial to retune in
   // integration if Engineer 1's path differs (e.g. a school-anchored variant).
   budgetRollup: (orgId, fiscalYearStart) =>

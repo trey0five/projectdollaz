@@ -51,7 +51,7 @@ export class BudgetController {
   /**
    * Apply a Phase-2 DRIVER MODEL: recompute the category budget authoritatively
    * from { assumptions } and overwrite lines.revenue/expense + lines.spread so
-   * Monthly Spread / Budget-vs-Actual / Diocese Roll-up all reflect it.
+   * Monthly Spread / Budget-vs-Actual / Organizational Roll-up all reflect it.
    */
   @Put('periods/:periodId/budget/driver')
   @Roles('owner', 'accountant')

@@ -129,14 +129,14 @@ export default function BudgetSpreadPreview({ spread }) {
               </tr>
             </thead>
             <tbody>
-              {preview.map((a) => {
+              {preview.map((a, idx) => {
                 const annual =
                   a.annual != null
                     ? Number(a.annual)
                     : (a.months || []).reduce((s, m) => s + (Number(m) || 0), 0)
                 return (
-                  <tr key={`${a.acct}-${a.label}`} className="border-t border-rule/40">
-                    <td className="px-2.5 py-1.5 font-semibold tabular-nums text-muted">{a.acct}</td>
+                  <tr key={`${idx}-${a.acct}-${a.label}`} className="border-t border-rule/40">
+                    <td className="px-2.5 py-1.5 font-semibold tabular-nums text-muted">{a.acct || '—'}</td>
                     <td className="max-w-[220px] truncate px-2.5 py-1.5 text-ink">{a.label}</td>
                     {Array.from({ length: 3 }, (_, i) => (
                       <td key={i} className="px-2.5 py-1.5 text-right tabular-nums text-ink">

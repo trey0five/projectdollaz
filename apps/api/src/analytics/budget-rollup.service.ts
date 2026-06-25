@@ -45,7 +45,7 @@ function addRecord(acc: Record<string, number>, src: unknown): void {
 }
 
 /**
- * Diocese-wide budget consolidation. STRICT org isolation: the roll-up only ever
+ * Organization-wide budget consolidation. STRICT org isolation: the roll-up only ever
  * spans the schools that BOTH (a) belong to :orgId and (b) the CALLER has an
  * active membership on. Cross-org schools — and even in-org schools the caller
  * cannot see — are never summed or leaked.

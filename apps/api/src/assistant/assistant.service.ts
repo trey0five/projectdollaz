@@ -31,7 +31,7 @@ const TOOL_LABELS: Record<string, string> = {
   get_reconciliation: 'Reviewing the reconciliation…',
   get_budget_vs_actual: 'Pulling budget vs. actual…',
   get_budget: 'Reading the budget…',
-  get_budget_rollup: 'Consolidating the diocese budget…',
+  get_budget_rollup: 'Consolidating your organization budget…',
   get_corrective_action_plan: 'Reading the corrective action plan…',
   get_trend: 'Loading the trend…',
   set_budget: 'Preparing a budget change…',
@@ -430,7 +430,7 @@ export class AssistantService {
       'before answering — never invent or estimate figures. When a comparison, breakdown, or trend ' +
       'would help, call render_chart to visualize it. ' +
       'For budget questions use get_budget (this school’s budget plan — imported spread, driver model, or ' +
-      'manual), get_budget_vs_actual (budget vs. actuals), and get_budget_rollup (the diocese-wide ' +
+      'manual), get_budget_vs_actual (budget vs. actuals), and get_budget_rollup (the organization-wide ' +
       'consolidation across the organization’s schools). ' +
       'You may also help make changes: set_budget (set a budget figure), apply_driver_budget (build the ' +
       'budget from enrollment / tuition / staffing assumptions — provide ONLY the levers the user mentions; ' +
@@ -553,7 +553,7 @@ export class AssistantService {
         }
       }
       case 'get_budget_rollup': {
-        if (!ctx.userId) return { error: 'No user context for the diocese roll-up.' }
+        if (!ctx.userId) return { error: 'No user context for the organization roll-up.' }
         const school = await this.prisma.school.findUnique({ where: { id: ctx.schoolId } })
         if (!school?.organizationId) return { error: 'This school is not part of an organization.' }
         const user = await this.prisma.user.findUnique({ where: { id: ctx.userId } })
