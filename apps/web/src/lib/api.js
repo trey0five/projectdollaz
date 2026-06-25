@@ -232,6 +232,12 @@ export const analyticsApi = {
   // Builder context: prior actuals + multi-year history + enrollment/aid drivers.
   budgetContext: (schoolId, periodId) =>
     api.get(`/schools/${schoolId}/periods/${periodId}/budget-context`),
+  // ── Phase 2: enrollment×tuition Driver Model. PUT { assumptions }; the server
+  // recomputes authoritatively (computeDriverBudget) and overwrites lines.revenue/
+  // expense + lines.spread, then returns the saved budget + kpis. Owner/accountant
+  // only (server-enforced). Single call site so the route is trivial to retune.
+  saveDriverBudget: (schoolId, periodId, body) =>
+    api.put(`/schools/${schoolId}/periods/${periodId}/budget/driver`, body),
   // ── v1 Budget workspace: import a monthly budget spread (client-parsed) ────
   // PUT the parsed BudgetSpread JSON; server stores lines.spread + rollups and
   // returns the saved budget. Owner/accountant only (server-enforced).

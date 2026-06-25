@@ -15,7 +15,7 @@
 // for the selected period (mirrors AnalyticsDashboard) and the org-id fetch.
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Wallet, Table2, UploadCloud, Scale, Building2 } from 'lucide-react'
+import { Wallet, Table2, UploadCloud, Scale, Building2, Calculator } from 'lucide-react'
 import TopBar from '../components/TopBar.jsx'
 import BillingBanner from '../components/BillingBanner.jsx'
 import PeriodSelector from '../components/analytics/PeriodSelector.jsx'
@@ -24,13 +24,20 @@ import MonthlySpreadGrid from '../components/budget/MonthlySpreadGrid.jsx'
 import BudgetImport from '../components/budget/BudgetImport.jsx'
 import DioceseRollup from '../components/budget/DioceseRollup.jsx'
 import BudgetVsActual from '../components/analytics/BudgetVsActual.jsx'
+import DriverModel from '../components/budget/DriverModel.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { usePersistence } from '../context/PersistenceContext.jsx'
-import { useAnalytics, useBudget, useBudgetRollup } from '../hooks/useAnalytics.js'
+import {
+  useAnalytics,
+  useBudget,
+  useBudgetContext,
+  useBudgetRollup,
+} from '../hooks/useAnalytics.js'
 import { orgsApi } from '../lib/api.js'
 
 const TABS = [
   { id: 'spread', label: 'Monthly Spread', Icon: Table2 },
+  { id: 'driver', label: 'Driver Model', Icon: Calculator },
   { id: 'import', label: 'Import', Icon: UploadCloud },
   { id: 'bva', label: 'Budget vs. Actual', Icon: Scale },
   { id: 'rollup', label: 'Diocese Roll-up', Icon: Building2 },
@@ -85,6 +92,11 @@ export default function BudgetPage() {
     selectedPeriodId,
   )
   const spread = budget?.lines?.spread ?? null
+
+  // Prior actuals + enrollment/aid drivers — seeds the Driver Model assumptions
+  // (prefill) and feeds its live preview. Never blocks the page; a failure just
+  // leaves the form at neutral defaults.
+  const { context: budgetContext } = useBudgetContext(schoolId, selectedPeriodId)
 
   // Period actuals so the Budget-vs-Actual tab shows real variances (the
   // existing component reads `metrics`). Empty until a snapshot exists — the
@@ -172,6 +184,38 @@ export default function BudgetPage() {
     )
   }
 
+  // After a driver apply, re-pull the saved budget (the driver PUT hits a
+  // different endpoint than useBudget reads) and jump to the Monthly Spread tab
+  // so the freshly-computed spread is front and center.
+  const onDriverApplied = () => {
+    reloadBudget()
+    setActiveTab('spread')
+  }
+
+  const renderDriver = () => {
+    if (!selectedPeriodId) {
+      return (
+        <div key="driver" className="card-soft border-dashed px-6 py-14 text-center">
+          <p className="font-serif text-lg italic text-muted">
+            Select a period to build a driver-based budget.
+          </p>
+        </div>
+      )
+    }
+    return (
+      <div key="driver">
+        <DriverModel
+          schoolId={schoolId}
+          periodId={selectedPeriodId}
+          canEdit={canEdit}
+          budgetContext={budgetContext}
+          savedAssumptions={budget?.lines?.driverModel?.assumptions ?? null}
+          onApplied={onDriverApplied}
+        />
+      </div>
+    )
+  }
+
   const renderImport = () => (
     <div key="import">
       <BudgetImport
@@ -211,6 +255,8 @@ export default function BudgetPage() {
 
   const renderActivePanel = () => {
     switch (activeTab) {
+      case 'driver':
+        return renderDriver()
       case 'import':
         return renderImport()
       case 'bva':

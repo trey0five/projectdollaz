@@ -8,6 +8,7 @@ import { EntitlementGuard } from '../billing/entitlement.guard.js'
 import { BudgetService } from './budget.service.js'
 import { UpsertBudgetDto } from './dto/upsert-budget.dto.js'
 import { ImportBudgetSpreadDto } from './dto/import-budget-spread.dto.js'
+import { SaveDriverBudgetDto } from './dto/save-driver-budget.dto.js'
 
 /**
  * Phase 3 budget intake. Same guard stack as OperationalController: reads open to
@@ -45,5 +46,21 @@ export class BudgetController {
     @CurrentUser() user: User,
   ) {
     return this.budget.upsertSpread(schoolId, periodId, dto, user.id)
+  }
+
+  /**
+   * Apply a Phase-2 DRIVER MODEL: recompute the category budget authoritatively
+   * from { assumptions } and overwrite lines.revenue/expense + lines.spread so
+   * Monthly Spread / Budget-vs-Actual / Diocese Roll-up all reflect it.
+   */
+  @Put('periods/:periodId/budget/driver')
+  @Roles('owner', 'accountant')
+  applyDriver(
+    @Param('schoolId') schoolId: string,
+    @Param('periodId') periodId: string,
+    @Body() dto: SaveDriverBudgetDto,
+    @CurrentUser() user: User,
+  ) {
+    return this.budget.upsertDriver(schoolId, periodId, dto, user.id)
   }
 }

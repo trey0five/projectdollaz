@@ -8,6 +8,14 @@ import type { UpsertBudgetDto } from './dto/upsert-budget.dto.js'
 import type { ImportBudgetSpreadDto } from './dto/import-budget-spread.dto.js'
 import { rollupSpread, type SpreadRollup } from './budget.spread.js'
 import type { BudgetSpread } from '@finrep/ingestion'
+import {
+  computeDriverBudget,
+  toDriverPriorContext,
+  type DriverBudgetResult,
+} from '@finrep/analytics'
+import { AnalyticsService } from './analytics.service.js'
+import { buildDriverSpread, deriveFiscalYearStart } from './budget.driver.js'
+import type { SaveDriverBudgetDto } from './dto/save-driver-budget.dto.js'
 
 export interface BudgetPublic {
   totalRevenue: number | null
@@ -20,6 +28,10 @@ export interface BudgetSpreadImportResult extends BudgetPublic {
   reconciliation: SpreadRollup['reconciliation']
   accountCount: number
   unmappedAccts: number[]
+}
+
+export interface DriverBudgetResultPublic extends BudgetPublic {
+  kpis: DriverBudgetResult['kpis']
 }
 
 function dec(v: Prisma.Decimal | null | undefined): number | null {
@@ -37,6 +49,7 @@ export class BudgetService {
     private readonly prisma: PrismaService,
     private readonly periods: PeriodsService,
     private readonly audit: AuditService,
+    private readonly analytics: AnalyticsService,
   ) {}
 
   private toPublic(row: PeriodBudget | null): BudgetPublic {
@@ -70,15 +83,28 @@ export class BudgetService {
     const pick = <T>(dtoVal: T | undefined, current: T): T =>
       dtoVal === undefined ? current : dtoVal
 
-    // Only touch `lines` when provided; null clears it (Json column → JsonNull).
+    // Merge incoming `lines` over the existing row, carrying forward sibling fields
+    // the caller omitted (spread, driverModel) so a category-level save — e.g.
+    // Budget-vs-Actual or the manual builder, which only send revenue/expense/
+    // methods — never wipes an imported spread or an applied driver model living
+    // on the same period budget. undefined = don't touch; null = clear.
+    const existingLines = (existing?.lines as Record<string, unknown> | null) ?? {}
+    const nextLines = ((): Prisma.InputJsonValue | typeof Prisma.JsonNull | undefined => {
+      if (dto.lines === undefined) return undefined
+      if (dto.lines === null) return Prisma.JsonNull
+      return {
+        ...(existingLines.spread !== undefined ? { spread: existingLines.spread } : {}),
+        ...(existingLines.driverModel !== undefined ? { driverModel: existingLines.driverModel } : {}),
+        ...(dto.lines as Record<string, unknown>),
+      } as Prisma.InputJsonValue
+    })()
+
     const data = {
       totalRevenue: pick(dto.totalRevenue, existing ? dec(existing.totalRevenue) : null),
       totalExpenses: pick(dto.totalExpenses, existing ? dec(existing.totalExpenses) : null),
       notes: pick(dto.notes, existing?.notes ?? null),
       updatedByUserId: userId,
-      ...(dto.lines !== undefined
-        ? { lines: dto.lines === null ? Prisma.JsonNull : (dto.lines as Prisma.InputJsonValue) }
-        : {}),
+      ...(nextLines !== undefined ? { lines: nextLines } : {}),
     }
 
     const row = await this.prisma.periodBudget.upsert({
@@ -120,12 +146,15 @@ export class BudgetService {
     const spread = dto.spread as unknown as BudgetSpread
     const rolled = rollupSpread(spread)
 
-    // Preserve the manual per-line method builder state if present.
+    // Preserve the manual per-line method builder state AND any applied driver
+    // model (so importing a spread doesn't drop the round-trippable assumptions).
     const prevLines = (existing?.lines as Record<string, unknown> | null) ?? {}
     const methods = prevLines.methods
+    const driverModel = prevLines.driverModel
 
     const lines: Record<string, unknown> = {
       ...(methods !== undefined ? { methods } : {}),
+      ...(driverModel !== undefined ? { driverModel } : {}),
       revenue: rolled.revenue,
       expense: rolled.expense,
       spread: {
@@ -177,5 +206,82 @@ export class BudgetService {
       accountCount: rolled.accounts.length,
       unmappedAccts: rolled.unmappedAccts,
     }
+  }
+
+  /**
+   * Apply a Phase-2 DRIVER MODEL. Recomputes the category budget AUTHORITATIVELY
+   * server-side via the pure computeDriverBudget (never trusts a client preview),
+   * folding prior-year actuals (budgetContext) into the auto-grown non-driver
+   * lines. OVERWRITES lines.revenue/lines.expense (so Budget-vs-Actual + Diocese
+   * Roll-up read the driver numbers) and writes lines.spread (format:'driver',
+   * 12 even months) so the Monthly Spread grid populates — while PRESERVING the
+   * manual lines.methods builder state. Stores lines.driverModel (the assumptions
+   * + computedAt + kpis) for round-tripping the form.
+   */
+  async upsertDriver(
+    schoolId: string,
+    periodId: string,
+    dto: SaveDriverBudgetDto,
+    userId: string,
+  ): Promise<DriverBudgetResultPublic> {
+    const period = await this.periods.getOwnedPeriod(schoolId, periodId)
+
+    // Authoritative prior-actuals context (tenant-isolated; same path the builder uses).
+    const ctx = await this.analytics.budgetContext(schoolId, periodId)
+    const result = computeDriverBudget(
+      dto.assumptions as unknown as Parameters<typeof computeDriverBudget>[0],
+      toDriverPriorContext(ctx),
+      { includeMonths: true },
+    )
+
+    const existing = await this.prisma.periodBudget.findUnique({
+      where: { schoolId_fiscalPeriodId: { schoolId, fiscalPeriodId: period.id } },
+    })
+    const prevLines = (existing?.lines as Record<string, unknown> | null) ?? {}
+    const methods = prevLines.methods
+
+    const fiscalYearStart = deriveFiscalYearStart(ctx.periodEndDate)
+    const spread = buildDriverSpread(result, fiscalYearStart)
+
+    const lines: Record<string, unknown> = {
+      ...(methods !== undefined ? { methods } : {}),
+      revenue: result.revenue,
+      expense: result.expense,
+      spread,
+      driverModel: {
+        assumptions: dto.assumptions,
+        computedAt: new Date().toISOString(),
+        kpis: result.kpis,
+      },
+    }
+
+    const data = {
+      totalRevenue: result.kpis.totalRevenue,
+      totalExpenses: result.kpis.totalExpense,
+      notes: existing?.notes ?? null,
+      updatedByUserId: userId,
+      lines: lines as Prisma.InputJsonValue,
+    }
+
+    const row = await this.prisma.periodBudget.upsert({
+      where: { schoolId_fiscalPeriodId: { schoolId, fiscalPeriodId: period.id } },
+      create: { schoolId, fiscalPeriodId: period.id, ...data },
+      update: data,
+    })
+
+    await this.audit.write({
+      schoolId,
+      userId,
+      action: 'budget.driver.applied',
+      targetType: 'period_budgets',
+      metadata: {
+        fiscalPeriodId: period.id,
+        enrollmentTotal: result.kpis.enrollmentTotal,
+        totalRevenue: result.kpis.totalRevenue,
+        totalExpense: result.kpis.totalExpense,
+      },
+    })
+
+    return { ...this.toPublic(row), kpis: result.kpis }
   }
 }

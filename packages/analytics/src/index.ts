@@ -77,5 +77,28 @@ export type {
   ValidateLayoutResult,
 } from './dashboard.js'
 
+// Driver model (Phase 2) — pure enrollment×tuition budget contract. Single
+// source of truth for the math; imported by the API (authoritative save) AND
+// the web (live preview), so they never drift.
+export {
+  GRADE_KEYS,
+  TUITION_BANDS,
+  bandOf,
+  evenMonths,
+  toDriverPriorContext,
+  defaultAssumptions,
+  computeDriverBudget,
+} from './driver.js'
+export type {
+  GradeKey,
+  TuitionBand,
+  RevenueKey,
+  ExpenseKey,
+  DriverAssumptions,
+  DriverPriorContext,
+  DriverBudgetResult,
+  ComputeDriverOptions,
+} from './driver.js'
+
 // Version
 export { ANALYTICS_VERSION } from './version.js'
