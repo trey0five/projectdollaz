@@ -36,7 +36,7 @@ export default function SummaryStrip() {
     <motion.div
       initial={{ opacity: 0, height: 0 }}
       animate={{ opacity: 1, height: 'auto' }}
-      className="overflow-hidden"
+      className="flex w-full overflow-hidden"
     >
       <div
         role="button"
@@ -48,9 +48,9 @@ export default function SummaryStrip() {
             expand()
           }
         }}
-        className="group flex cursor-pointer flex-wrap items-center justify-between gap-x-5 gap-y-2.5 rounded-2xl border border-border bg-white px-4 py-3 shadow-card outline-none transition-all hover:border-gold/70 hover:shadow-glow focus-visible:border-gold focus-visible:shadow-glow"
+        className="group flex h-full w-full cursor-pointer flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-2xl border border-border bg-white px-4 py-2.5 shadow-card outline-none transition-all hover:border-gold/70 hover:shadow-glow focus-visible:border-gold focus-visible:shadow-glow"
       >
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <SlotChip label="CY" entry={byRole.cy} />
           <SlotChip label="PY" entry={byRole.py} />
           <SlotChip label="Audited" entry={byRole.audit} />
@@ -64,7 +64,7 @@ export default function SummaryStrip() {
           )}
         </div>
         <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-gold/40 bg-gold/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-gold transition-colors group-hover:border-gold group-hover:bg-gold/10">
-          <PencilLine size={13} /> Add / replace
+          <PencilLine size={13} /> Edit
         </span>
       </div>
     </motion.div>

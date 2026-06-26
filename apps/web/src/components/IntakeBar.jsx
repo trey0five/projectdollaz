@@ -176,12 +176,12 @@ export default function IntakeBar() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:gap-4"
+            className="flex flex-col gap-2.5 sm:flex-row sm:items-stretch sm:gap-4"
           >
-            <div className="flex-1">
+            <div className="flex flex-1">
               <SummaryStrip />
             </div>
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-stretch">
               <SaveBar />
               <ExportMenu />
             </div>

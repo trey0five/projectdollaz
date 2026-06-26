@@ -52,11 +52,11 @@ export default function ExportMenu() {
   }
 
   return (
-    <div ref={wrapRef} className="relative inline-block w-full sm:w-auto">
+    <div ref={wrapRef} className="relative w-full sm:h-full sm:w-auto">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="btn-ghost w-full justify-center sm:w-[176px]"
+        className="btn-ghost min-h-[44px] w-full justify-center sm:h-full sm:w-[120px]"
         disabled={!reports}
       >
         Export <ChevronDown size={16} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
