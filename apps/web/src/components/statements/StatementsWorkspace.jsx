@@ -126,7 +126,7 @@ export default function StatementsWorkspace() {
   )
 
   return (
-    <div className="mx-auto max-w-[1180px] px-4 py-6 sm:px-10">
+    <div className="mx-auto max-w-[1460px] px-4 py-6 sm:px-10">
       <Link
         to="/"
         className="mb-4 inline-flex items-center gap-1.5 text-[13px] font-semibold text-muted transition-colors hover:text-gold"
@@ -149,7 +149,7 @@ export default function StatementsWorkspace() {
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-6">
         {/* Saved-periods rail */}
-        <aside className="w-full shrink-0 lg:sticky lg:top-24 lg:w-[300px]">
+        <aside className="w-full shrink-0 lg:sticky lg:top-24 lg:w-[224px]">
           <h2 className="mb-2.5 px-1 font-sans text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
             Saved periods
           </h2>

@@ -45,7 +45,7 @@ export default function Dashboard() {
           the document preview below, so this bar is desktop-only. Full-screen
           zoom is available by tapping a statement.) */}
       <div className="no-print hidden border-b-2 border-rule bg-white sm:block">
-        <div className="mx-auto flex w-full max-w-[980px] items-stretch px-4 sm:px-10">
+        <div className="mx-auto flex w-full max-w-[1120px] items-stretch px-4 sm:px-10">
         <nav className="scrollbar-none flex flex-1 items-stretch gap-1 overflow-x-auto">
           {TABS.map((t) => (
             <button
@@ -69,7 +69,7 @@ export default function Dashboard() {
       </div>
 
       {/* report container */}
-      <main id="report-container" className="mx-auto max-w-[980px] px-4 pb-20 pt-8 sm:px-10 sm:pb-24 sm:pt-10">
+      <main id="report-container" className="mx-auto max-w-[1120px] px-4 pb-20 pt-8 sm:px-10 sm:pb-24 sm:pt-10">
         {!reports ? (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
