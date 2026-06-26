@@ -176,12 +176,12 @@ export default function IntakeBar() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="flex flex-col gap-2.5 sm:flex-row sm:items-stretch sm:gap-4"
+            className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:gap-4"
           >
             <div className="flex flex-1">
               <SummaryStrip />
             </div>
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-stretch">
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
               <SaveBar />
               <ExportMenu />
             </div>
@@ -201,25 +201,27 @@ export default function IntakeBar() {
               <h2 className="font-serif text-lg font-semibold text-navy sm:text-xl">
                 Imported trial balances
               </h2>
-              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end sm:gap-2">
                 {canEdit && (
                   <button
                     type="button"
                     onClick={() => inputRef.current?.click()}
-                    className="btn-ghost w-full justify-center sm:w-auto"
+                    className="btn-ghost w-full shrink-0 justify-center whitespace-nowrap sm:h-[52px] sm:w-[120px]"
                   >
-                    <Plus size={16} /> Add files
+                    <Plus size={16} /> Add
                   </button>
                 )}
                 <SaveBar />
                 <button
                   type="button"
                   onClick={collapse}
-                  className="inline-flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-[12px] font-semibold uppercase tracking-[0.1em] text-muted transition-colors hover:text-navy sm:w-auto"
+                  title="Collapse"
+                  aria-label="Collapse"
+                  className="inline-flex min-h-[44px] w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-2 text-[12px] font-semibold uppercase tracking-[0.1em] text-muted transition-colors hover:text-navy sm:h-[52px] sm:w-auto"
                 >
-                  <ChevronUp size={15} /> Collapse
+                  <ChevronUp size={15} /> <span className="sm:hidden">Collapse</span>
                 </button>
-                <div className="w-full sm:w-auto">
+                <div className="w-full shrink-0 sm:w-auto">
                   <ExportMenu />
                 </div>
               </div>

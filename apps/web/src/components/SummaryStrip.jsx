@@ -48,7 +48,7 @@ export default function SummaryStrip() {
             expand()
           }
         }}
-        className="group flex h-full w-full cursor-pointer flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-2xl border border-border bg-white px-4 py-2.5 shadow-card outline-none transition-all hover:border-gold/70 hover:shadow-glow focus-visible:border-gold focus-visible:shadow-glow"
+        className="group flex w-full cursor-pointer flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-2xl border border-border bg-white px-4 py-2.5 shadow-card outline-none transition-all hover:border-gold/70 hover:shadow-glow focus-visible:border-gold focus-visible:shadow-glow sm:h-[52px]"
       >
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <SlotChip label="CY" entry={byRole.cy} />

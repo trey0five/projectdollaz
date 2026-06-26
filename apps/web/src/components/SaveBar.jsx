@@ -16,7 +16,7 @@ export default function SaveBar() {
 
   if (saved) {
     return (
-      <span className="inline-flex min-h-[44px] w-full items-center sm:h-full justify-center gap-1.5 rounded-xl bg-emerald-50 px-4 py-2 text-[13px] font-semibold uppercase tracking-[0.12em] text-emerald-700 sm:w-[120px]">
+      <span className="inline-flex min-h-[44px] w-full shrink-0 items-center sm:h-[52px] justify-center gap-1.5 rounded-xl bg-emerald-50 px-4 py-2 text-[13px] font-semibold uppercase tracking-[0.12em] text-emerald-700 sm:w-[120px]">
         <Check size={14} /> Saved
       </span>
     )
@@ -27,7 +27,7 @@ export default function SaveBar() {
     return (
       <Link
         to="/settings/billing"
-        className="inline-flex min-h-[44px] w-full items-center sm:h-full justify-center gap-1.5 rounded-xl bg-red-600 px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.1em] text-white transition-colors hover:bg-red-700 sm:min-w-[120px]"
+        className="inline-flex min-h-[44px] w-full shrink-0 items-center sm:h-[52px] justify-center gap-1.5 rounded-xl bg-red-600 px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.1em] text-white transition-colors hover:bg-red-700 sm:min-w-[120px]"
       >
         <Lock size={14} /> Subscribe to generate
       </Link>
@@ -39,7 +39,7 @@ export default function SaveBar() {
       type="button"
       onClick={save}
       disabled={busy || !canGenerate || !dirty}
-      className={`inline-flex min-h-[44px] w-full items-center sm:h-full justify-center gap-1.5 rounded-xl px-4 py-2 text-[13px] font-semibold uppercase tracking-[0.12em] transition-colors disabled:cursor-not-allowed sm:w-[120px] ${
+      className={`inline-flex min-h-[44px] w-full shrink-0 items-center sm:h-[52px] justify-center gap-1.5 rounded-xl px-4 py-2 text-[13px] font-semibold uppercase tracking-[0.12em] transition-colors disabled:cursor-not-allowed sm:w-[120px] ${
         canGenerate && dirty && !busy
           ? 'bg-gold-gradient text-white hover:opacity-90'
           : 'border-2 border-border text-muted'
