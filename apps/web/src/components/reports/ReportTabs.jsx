@@ -26,7 +26,7 @@ export default function ReportTabs({ bundle, school, dateLabel = '', periodLabel
   return (
     <ReportViewProvider bundle={bundle} school={school} dateLabel={dateLabel} periodLabel={periodLabel}>
       <div className="no-print border-b-2 border-rule bg-white">
-        <nav className="scrollbar-none mx-auto flex w-full max-w-[1120px] items-stretch overflow-x-auto sm:px-10">
+        <nav className="scrollbar-none mx-auto flex w-full max-w-[1120px] items-stretch justify-center overflow-x-auto sm:px-10">
           {TABS.map((t) => (
             <button
               key={t.key}

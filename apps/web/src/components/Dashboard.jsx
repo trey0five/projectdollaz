@@ -46,7 +46,7 @@ export default function Dashboard() {
           zoom is available by tapping a statement.) */}
       <div className="no-print hidden border-b-2 border-rule bg-white sm:block">
         <div className="mx-auto flex w-full max-w-[1120px] items-stretch px-4 sm:px-10">
-        <nav className="scrollbar-none flex flex-1 items-stretch gap-1 overflow-x-auto">
+        <nav className="scrollbar-none flex flex-1 items-stretch justify-center gap-1 overflow-x-auto">
           {TABS.map((t) => (
             <button
               key={t.key}
