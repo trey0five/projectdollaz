@@ -1,6 +1,6 @@
 import { useMemo, useRef } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { AlertTriangle, ChevronUp, Files, Plus } from 'lucide-react'
+import { AlertTriangle, Files, Plus, X } from 'lucide-react'
 import { useApp } from '../context/AppContext.jsx'
 import DragOverlay from './DragOverlay.jsx'
 import HeroDropzone from './HeroDropzone.jsx'
@@ -215,11 +215,10 @@ export default function IntakeBar() {
                 <button
                   type="button"
                   onClick={collapse}
-                  title="Collapse"
-                  aria-label="Collapse"
+                  title="Cancel"
                   className="inline-flex min-h-[44px] w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-2 text-[12px] font-semibold uppercase tracking-[0.1em] text-muted transition-colors hover:text-navy sm:h-[52px] sm:w-auto"
                 >
-                  <ChevronUp size={15} /> <span className="sm:hidden">Collapse</span>
+                  <X size={15} /> Cancel
                 </button>
                 <div className="w-full shrink-0 sm:w-auto">
                   <ExportMenu />
