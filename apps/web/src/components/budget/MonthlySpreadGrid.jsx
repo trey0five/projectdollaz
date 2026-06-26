@@ -10,7 +10,7 @@
 // in-render component definitions — React-Compiler safe).
 import { useState, useRef, useLayoutEffect } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
-import { Table2, AlertTriangle, Maximize2, UploadCloud, Sparkles, FileSpreadsheet, PencilRuler } from 'lucide-react'
+import { Table2, AlertTriangle, Maximize2, UploadCloud, Trash2, Sparkles, FileSpreadsheet, PencilRuler } from 'lucide-react'
 import { fmt } from '../../lib/format.js'
 import { describeBudgetSource } from './budgetSource.js'
 import ReportExpandOverlay from '../reports/ReportExpandOverlay.jsx'
@@ -208,9 +208,10 @@ function renderSubtotalRow(label, total, annual, cols, opts = {}) {
   )
 }
 
-export default function MonthlySpreadGrid({ spread, source, onReimport }) {
+export default function MonthlySpreadGrid({ spread, source, onReimport, onClear }) {
   const reduce = useReducedMotion()
   const [expanded, setExpanded] = useState(false)
+  const [clearConfirm, setClearConfirm] = useState(false)
 
   if (!spread || !Array.isArray(spread.accounts) || spread.accounts.length === 0) {
     return null
@@ -318,16 +319,47 @@ export default function MonthlySpreadGrid({ spread, source, onReimport }) {
               </p>
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
             {onReimport && (
               <button
                 type="button"
                 onClick={onReimport}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-rule bg-white px-3 py-1.5 text-[12px] font-semibold text-navy transition-colors hover:border-gold hover:text-gold"
               >
-                <UploadCloud size={14} /> Replace / re-import
+                <UploadCloud size={14} /> Replace
               </button>
             )}
+            {onClear &&
+              (clearConfirm ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="text-[12px] font-medium text-rose-700">Clear this budget?</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setClearConfirm(false)
+                      onClear()
+                    }}
+                    className="rounded-lg bg-rose-600 px-2.5 py-1.5 text-[12px] font-semibold text-white transition-colors hover:bg-rose-700"
+                  >
+                    Yes, clear
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setClearConfirm(false)}
+                    className="rounded-lg border border-rule bg-white px-2.5 py-1.5 text-[12px] font-semibold text-navy transition-colors hover:border-gold"
+                  >
+                    Cancel
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setClearConfirm(true)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-rule bg-white px-3 py-1.5 text-[12px] font-semibold text-navy transition-colors hover:border-rose-400 hover:text-rose-600"
+                >
+                  <Trash2 size={14} /> Clear
+                </button>
+              ))}
             <button
               type="button"
               onClick={() => setExpanded(true)}

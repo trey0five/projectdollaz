@@ -49,7 +49,7 @@ import {
   useBudgetContext,
   useBudgetRollup,
 } from '../hooks/useAnalytics.js'
-import { orgsApi } from '../lib/api.js'
+import { orgsApi, analyticsApi } from '../lib/api.js'
 
 const TABS = [
   { id: 'budget', label: 'Budget', Icon: Wallet },
@@ -244,6 +244,29 @@ export default function BudgetPage() {
     </div>
   )
 
+  // Replace from Advanced → open the Guided wizard (Step 0 lets the user upload a
+  // different file or answer questions). Clear → wipe this period's budget (lines +
+  // totals) and drop back to Guided, which then shows the fresh wizard.
+  const onReplaceBudget = () => {
+    setMode('guided')
+    setGuidedView('wizard')
+  }
+  const onClearBudget = async () => {
+    if (!schoolId || !selectedPeriodId) return
+    try {
+      await analyticsApi.saveBudget(schoolId, selectedPeriodId, {
+        lines: null,
+        totalRevenue: null,
+        totalExpenses: null,
+      })
+      await reloadBudget()
+      setMode('guided')
+      setGuidedView('auto')
+    } catch {
+      /* best-effort; the grid stays as-is on failure */
+    }
+  }
+
   // Advanced view body — the granular monthly spread (with a source badge), or a
   // short empty note pointing back to Guided when there's nothing to show.
   const renderAdvanced = () => {
@@ -274,7 +297,14 @@ export default function BudgetPage() {
         </div>
       )
     }
-    return <MonthlySpreadGrid spread={spread} source={priorSource} />
+    return (
+      <MonthlySpreadGrid
+        spread={spread}
+        source={priorSource}
+        onReimport={canEdit ? onReplaceBudget : undefined}
+        onClear={canEdit ? onClearBudget : undefined}
+      />
+    )
   }
 
   // Guided view body — the friendly summary when a budget exists (unless an Edit
