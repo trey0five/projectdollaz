@@ -216,7 +216,7 @@ export default function IntakeBar() {
                   type="button"
                   onClick={collapse}
                   title="Cancel"
-                  className="inline-flex min-h-[44px] w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-2 text-[12px] font-semibold uppercase tracking-[0.1em] text-muted transition-colors hover:text-navy sm:h-[52px] sm:w-auto"
+                  className="inline-flex min-h-[44px] w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border-2 border-border px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.1em] text-muted transition-colors hover:border-navy hover:text-navy sm:h-[52px] sm:w-auto"
                 >
                   <X size={15} /> Cancel
                 </button>
