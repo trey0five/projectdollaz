@@ -35,6 +35,8 @@ export default function OperationalDataPanel({
   const [fte, setFte] = useState('')
   const [onAid, setOnAid] = useState('')
   const [aidTotal, setAidTotal] = useState('')
+  const [teachingFte, setTeachingFte] = useState('')
+  const [totalStaffFte, setTotalStaffFte] = useState('')
   const [notes, setNotes] = useState('')
 
   // Sync from the loaded row when school/period changes (render-time, per React
@@ -47,6 +49,8 @@ export default function OperationalDataPanel({
     setFte(toStr(operational.enrollmentFte))
     setOnAid(toStr(operational.studentsOnAid))
     setAidTotal(toStr(operational.financialAidTotal))
+    setTeachingFte(toStr(operational.teachingFte))
+    setTotalStaffFte(toStr(operational.totalStaffFte))
     setNotes(toStr(operational.notes))
   }
 
@@ -71,15 +75,29 @@ export default function OperationalDataPanel({
       ? `Can't exceed enrollment (${enrollNum}).`
       : ''
 
+  // STAFF FTE cross-field: teaching <= total staff (mirror of the server rule).
+  const teachNum = parseNum(teachingFte, false)
+  const totalStaffNum = parseNum(totalStaffFte, false)
+  const staffCrossFieldError =
+    typeof teachNum === 'number' &&
+    !Number.isNaN(teachNum) &&
+    typeof totalStaffNum === 'number' &&
+    !Number.isNaN(totalStaffNum) &&
+    teachNum > totalStaffNum
+      ? `Can't exceed total staff (${totalStaffNum}).`
+      : ''
+
   const fieldValues = [
     parseNum(enrollment, true),
     parseNum(fte, false),
     parseNum(onAid, true),
     parseNum(aidTotal, false),
+    parseNum(teachingFte, false),
+    parseNum(totalStaffFte, false),
   ]
   const hasNaN = fieldValues.some((v) => Number.isNaN(v))
   const hasNegative = fieldValues.some((v) => typeof v === 'number' && v < 0)
-  const invalid = !!crossFieldError || hasNaN || hasNegative
+  const invalid = !!crossFieldError || !!staffCrossFieldError || hasNaN || hasNegative
 
   // Live preview of how many of the 6 Tier-2 metrics the current inputs unlock —
   // mirrors the pure available/inputsMissing contract (enrollment/studentsOnAid
@@ -106,6 +124,8 @@ export default function OperationalDataPanel({
     enrollmentFte: parseNum(fte, false),
     studentsOnAid: parseNum(onAid, true),
     financialAidTotal: parseNum(aidTotal, false),
+    teachingFte: parseNum(teachingFte, false),
+    totalStaffFte: parseNum(totalStaffFte, false),
     notes: notes.trim() === '' ? null : notes.trim(),
   })
 
@@ -132,12 +152,14 @@ export default function OperationalDataPanel({
       !numEq(p.enrollmentFte, operational.enrollmentFte) ||
       !numEq(p.studentsOnAid, operational.studentsOnAid) ||
       !numEq(p.financialAidTotal, operational.financialAidTotal) ||
+      !numEq(p.teachingFte, operational.teachingFte) ||
+      !numEq(p.totalStaffFte, operational.totalStaffFte) ||
       p.notes !== serverNotes)
 
   const { saving, error: err, saveNow } = useAutosave({
     enabled: canEdit,
     dirty,
-    signal: `${enrollment}|${fte}|${onAid}|${aidTotal}|${notes}`,
+    signal: `${enrollment}|${fte}|${onAid}|${aidTotal}|${teachingFte}|${totalStaffFte}|${notes}`,
     delay: 1000,
     save: async () => {
       await analyticsApi.saveOperational(schoolId, periodId, buildPayload())
@@ -268,6 +290,39 @@ export default function OperationalDataPanel({
                   placeholder="e.g. 1200000"
                 />
               </div>
+            </div>
+            <div>
+              <label className={labelCls}>Teaching FTE</label>
+              <input
+                className={inputCls}
+                inputMode="decimal"
+                value={teachingFte}
+                disabled={!canEdit}
+                onChange={(e) => setTeachingFte(sanitizeDecimal(e.target.value))}
+                placeholder="e.g. 42.5"
+              />
+              <p className="mt-1.5 hidden text-[11px] italic text-muted sm:block">
+                Staff FTE (instructional) — distinct from the student FTE above.
+              </p>
+              {staffCrossFieldError && (
+                <p className="mt-1.5 text-[11px] font-semibold text-danger">
+                  {staffCrossFieldError}
+                </p>
+              )}
+            </div>
+            <div>
+              <label className={labelCls}>Total staff FTE</label>
+              <input
+                className={inputCls}
+                inputMode="decimal"
+                value={totalStaffFte}
+                disabled={!canEdit}
+                onChange={(e) => setTotalStaffFte(sanitizeDecimal(e.target.value))}
+                placeholder="e.g. 61"
+              />
+              <p className="mt-1.5 hidden text-[11px] italic text-muted sm:block">
+                All staff FTE; drives the Teacher Ratio key indicator.
+              </p>
             </div>
             <div className="sm:col-span-2">
               <label className={labelCls}>Notes (optional)</label>

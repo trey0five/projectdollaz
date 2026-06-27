@@ -159,6 +159,7 @@ function renderOperations(data) {
         <thead>
           <tr>
             <th className="brd-l">Line</th>
+            <th>Prior Year</th>
             <th>Actual</th>
             <th>Budget</th>
             <th>Over (Under)</th>
@@ -168,13 +169,13 @@ function renderOperations(data) {
         </thead>
         <tbody>
           <tr className="brd-group">
-            <td colSpan={6}>Revenue</td>
+            <td colSpan={7}>Revenue</td>
           </tr>
           {(ops.revenue || []).map((r) => opRow(r))}
           {totalRow('Total revenue', ops.revenueTotals)}
 
           <tr className="brd-group">
-            <td colSpan={6}>Expenses</td>
+            <td colSpan={7}>Expenses</td>
           </tr>
           {(ops.expense || []).map((r) => opRow(r))}
           {totalRow('Total expenses', ops.expenseTotals)}
@@ -204,6 +205,9 @@ function opRow(r) {
   return (
     <tr key={r.key}>
       <td className="brd-l">{r.label}</td>
+      <td className={r.priorYear == null ? '' : cellNeg(r.priorYear)}>
+        {r.priorYear == null ? '—' : money(r.priorYear)}
+      </td>
       <td className={cellNeg(r.actual)}>{money(r.actual)}</td>
       <td className={r.budget == null ? '' : cellNeg(r.budget)}>{r.budget == null ? '—' : money(r.budget)}</td>
       <td className={r.variance == null ? '' : cellNeg(r.variance)}>
@@ -220,6 +224,9 @@ function totalRow(label, t, isNet = false) {
   return (
     <tr className={isNet ? 'brd-total brd-net' : 'brd-total'}>
       <td className="brd-l">{label}</td>
+      <td className={t.priorYear == null ? '' : cellNeg(t.priorYear)}>
+        {t.priorYear == null ? '—' : money(t.priorYear)}
+      </td>
       <td className={cellNeg(t.actual)}>{money(t.actual)}</td>
       <td className={t.budget == null ? '' : cellNeg(t.budget)}>{t.budget == null ? '—' : money(t.budget)}</td>
       <td className={t.variance == null ? '' : cellNeg(t.variance)}>

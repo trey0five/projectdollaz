@@ -227,6 +227,14 @@ export class AnalyticsService {
     dataAsOf: string | null
     metrics: MetricResult[]
     categoryActuals: { revenue: Record<string, number>; expense: Record<string, number> }
+    /**
+     * Phase 5 — prior-year category actuals derived read-only from the SAME
+     * snapshot bundle's PY trial-balance side (soaResults.py). null when the
+     * bundle has no PY snapshot. Keys are byte-identical to categoryActuals.
+     */
+    categoryActualsPY:
+      | { revenue: Record<string, number>; expense: Record<string, number> }
+      | null
   }> {
     const snapshot = await this.latestSnapshot(schoolId, fiscalPeriodId)
     if (!snapshot) {
@@ -235,6 +243,7 @@ export class AnalyticsService {
         dataAsOf: null,
         metrics: [],
         categoryActuals: { revenue: {}, expense: {} },
+        categoryActualsPY: null,
       }
     }
     const currentOperational = await this.operational.operationalFor(schoolId, fiscalPeriodId)
@@ -249,7 +258,28 @@ export class AnalyticsService {
       dataAsOf: snapshot.createdAt.toISOString(),
       metrics,
       categoryActuals: this.categoryActuals(snapshot.bundle),
+      categoryActualsPY: this.categoryActualsPY(snapshot.bundle),
     }
+  }
+
+  /**
+   * Phase 5 — prior-year category actuals from the SAME bundle's PY side, with
+   * NO statement recompute. Returns null when the bundle has no PY snapshot.
+   * Synthesizes a shallow PY-as-CY bundle (soaResults.cy := soaResults.py) and
+   * reuses categoryActuals verbatim: fromBundle reads only soaResults.cy, so the
+   * PY mix keys are byte-identical to the CY keys — no parallel pick table, no
+   * risk of row misalignment on the OperationsLine.key union.
+   */
+  private categoryActualsPY(bundle: ReportBundle): {
+    revenue: Record<string, number>
+    expense: Record<string, number>
+  } | null {
+    if (!bundle.soaResults?.hasPY || !bundle.soaResults.py) return null
+    const pyBundle: ReportBundle = {
+      ...bundle,
+      soaResults: { ...bundle.soaResults, cy: bundle.soaResults.py },
+    }
+    return this.categoryActuals(pyBundle)
   }
 
   /** Category actuals ({key: amount}) from a bundle, via the revenue/expense mix

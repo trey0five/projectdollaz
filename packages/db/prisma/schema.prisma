@@ -381,6 +381,12 @@ model PeriodOperationalData {
   enrollmentFte     Decimal? @map("enrollment_fte") @db.Decimal(10, 2)
   studentsOnAid     Int?     @map("students_on_aid")
   financialAidTotal Decimal? @map("financial_aid_total") @db.Decimal(18, 2)
+  /// Phase 5 — actual STAFF FTEs (NOT the student-side enrollmentFte). teachingFte
+  /// is the instructional/teaching subset of totalStaffFte. Drives the board KPIs
+  /// teachingFte / totalStaffFte / teacherRatio. NULL = not entered. Cross-field
+  /// teachingFte <= totalStaffFte enforced in OperationalService.upsert.
+  teachingFte       Decimal? @map("teaching_fte") @db.Decimal(10, 2)
+  totalStaffFte     Decimal? @map("total_staff_fte") @db.Decimal(10, 2)
   notes             String?
   /// Phase 2 — anticipated INCOMING (net-new) students by grade from feeder
   /// sources. JSON object keyed by GradeKey (PK0–PK4, K, 1–8) → non-negative

@@ -51,6 +51,24 @@ export class UpsertOperationalDto {
   @Max(1_000_000_000_000)
   financialAidTotal?: number | null
 
+  /**
+   * Phase 5 — actual STAFF FTEs (distinct from the student-side enrollmentFte).
+   * teachingFte is the instructional subset of totalStaffFte; the cross-field
+   * teachingFte <= totalStaffFte is enforced in the service AFTER merge (a partial
+   * PUT can't see the persisted row). Explicit null clears; omitted keeps stored.
+   */
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(1_000_000)
+  teachingFte?: number | null
+
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(1_000_000)
+  totalStaffFte?: number | null
+
   @IsOptional()
   @IsString()
   @MaxLength(2000)

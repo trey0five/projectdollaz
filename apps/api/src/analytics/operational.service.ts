@@ -14,6 +14,9 @@ export interface OperationalPublic {
   enrollmentFte: number | null
   studentsOnAid: number | null
   financialAidTotal: number | null
+  /** Phase 5 — actual STAFF FTEs (distinct from the student-side enrollmentFte). */
+  teachingFte: number | null
+  totalStaffFte: number | null
   notes: string | null
   /** Phase 2 — anticipated incoming feeder students by grade; null when none. */
   feederEnrollmentByGrade: Record<string, number> | null
@@ -55,6 +58,8 @@ export class OperationalService {
         enrollmentFte: null,
         studentsOnAid: null,
         financialAidTotal: null,
+        teachingFte: null,
+        totalStaffFte: null,
         notes: null,
         feederEnrollmentByGrade: null,
         updatedAt: null,
@@ -65,6 +70,8 @@ export class OperationalService {
       enrollmentFte: dec(row.enrollmentFte),
       studentsOnAid: row.studentsOnAid,
       financialAidTotal: dec(row.financialAidTotal),
+      teachingFte: dec(row.teachingFte),
+      totalStaffFte: dec(row.totalStaffFte),
       notes: row.notes,
       feederEnrollmentByGrade: coerceFeeder(row.feederEnrollmentByGrade),
       updatedAt: row.updatedAt.toISOString(),
@@ -146,6 +153,20 @@ export class OperationalService {
       dto.financialAidTotal,
       existing ? dec(existing.financialAidTotal) : null,
     )
+
+    // Phase 5 — STAFF FTEs (distinct from enrollmentFte). Cross-field on the
+    // RESULTING row, mirroring the students_on_aid <= enrollment rule above.
+    const teachingFte = pick(dto.teachingFte, existing ? dec(existing.teachingFte) : null)
+    const totalStaffFte = pick(
+      dto.totalStaffFte,
+      existing ? dec(existing.totalStaffFte) : null,
+    )
+    if (teachingFte !== null && totalStaffFte !== null && teachingFte > totalStaffFte) {
+      throw new BadRequestException(
+        `teaching_fte (${teachingFte}) cannot exceed total_staff_fte (${totalStaffFte}).`,
+      )
+    }
+
     const notes = pick(dto.notes, existing?.notes ?? null)
 
     // Feeder column: merge-pick (omitted keeps stored, explicit null clears).
@@ -164,6 +185,8 @@ export class OperationalService {
       enrollmentFte,
       studentsOnAid,
       financialAidTotal,
+      teachingFte,
+      totalStaffFte,
       notes,
       feederEnrollmentByGrade: feederWrite,
       updatedByUserId: userId,

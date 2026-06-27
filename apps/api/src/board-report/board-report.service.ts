@@ -37,6 +37,8 @@ interface OperationsLine {
   variance: number | null
   variancePct: number | null
   favorable: boolean
+  /** Phase 5 — prior-year actual (informational reference column; no variance vs PY). null when no PY snapshot. */
+  priorYear: number | null
   explanation: string | null
 }
 interface OperationsTotals {
@@ -45,6 +47,8 @@ interface OperationsTotals {
   variance: number | null
   variancePct: number | null
   favorable: boolean
+  /** Phase 5 — prior-year total; null when no PY snapshot. */
+  priorYear: number | null
 }
 interface Operations {
   revenue: OperationsLine[]
@@ -56,6 +60,8 @@ interface Operations {
     budget: number | null
     variance: number | null
     variancePct: number | null
+    /** Phase 5 — prior-year net surplus/(deficit); null when no PY snapshot. */
+    priorYear: number | null
   }
 }
 
@@ -275,7 +281,7 @@ export class BoardReportService {
     const row = await this.findRow(schoolId, period.id)
     const explanations = this.readExplanations(row)
 
-    const { bundle, dataAsOf, metrics, categoryActuals } =
+    const { bundle, dataAsOf, metrics, categoryActuals, categoryActualsPY } =
       await this.analytics.getBoardReportData(schoolId, period.id)
     const budgetPublic = await this.budget.get(schoolId, period.id)
     const budgetLines = (budgetPublic.lines as Record<string, unknown> | null) ?? null
@@ -322,7 +328,13 @@ export class BoardReportService {
         source: (row?.mdaSource as BoardReportBundle['mda']['source']) ?? null,
       },
       operations: bundle
-        ? this.buildOperations(categoryActuals, budgetRevenue, budgetExpense, explanations)
+        ? this.buildOperations(
+            categoryActuals,
+            categoryActualsPY,
+            budgetRevenue,
+            budgetExpense,
+            explanations,
+          )
         : null,
       forecast: this.buildForecastSection(
         (budgetLines?.forecast as Record<string, unknown> | undefined) ?? null,
@@ -341,6 +353,7 @@ export class BoardReportService {
 
   private buildOperations(
     actuals: { revenue: Record<string, number>; expense: Record<string, number> },
+    actualsPY: { revenue: Record<string, number>; expense: Record<string, number> } | null,
     budgetRevenue: Record<string, number> | null,
     budgetExpense: Record<string, number> | null,
     explanations: ExplanationMap,
@@ -348,6 +361,7 @@ export class BoardReportService {
     const revenue = this.buildLines(
       actuals.revenue,
       budgetRevenue,
+      actualsPY?.revenue ?? null,
       REVENUE_LINE_LABELS as Record<string, string>,
       explanations.revenue,
       'revenue',
@@ -355,13 +369,16 @@ export class BoardReportService {
     const expense = this.buildLines(
       actuals.expense,
       budgetExpense,
+      actualsPY?.expense ?? null,
       EXPENSE_LINE_LABELS as Record<string, string>,
       explanations.expense,
       'expense',
     )
 
-    const revenueTotals = this.totals(revenue, 'revenue', budgetRevenue !== null)
-    const expenseTotals = this.totals(expense, 'expense', budgetExpense !== null)
+    // hasPY drives both totals and net (a PY map present ⇒ informational PY column).
+    const hasPY = actualsPY !== null
+    const revenueTotals = this.totals(revenue, 'revenue', budgetRevenue !== null, hasPY)
+    const expenseTotals = this.totals(expense, 'expense', budgetExpense !== null, hasPY)
 
     const netActual = revenueTotals.actual - expenseTotals.actual
     const hasBudgetForNet = revenueTotals.budget !== null && expenseTotals.budget !== null
@@ -369,6 +386,10 @@ export class BoardReportService {
       ? (revenueTotals.budget as number) - (expenseTotals.budget as number)
       : null
     const netVar = computeVariance(netActual, netBudget)
+    const netPriorYear =
+      revenueTotals.priorYear !== null && expenseTotals.priorYear !== null
+        ? revenueTotals.priorYear - expenseTotals.priorYear
+        : null
 
     return {
       revenue,
@@ -380,6 +401,7 @@ export class BoardReportService {
         budget: netBudget,
         variance: netVar.variance,
         variancePct: netVar.variancePct,
+        priorYear: netPriorYear,
       },
     }
   }
@@ -392,10 +414,14 @@ export class BoardReportService {
   private buildLines(
     actuals: Record<string, number>,
     budget: Record<string, number> | null,
+    priorYearMap: Record<string, number> | null,
     labels: Record<string, string>,
     explanations: Record<string, string>,
     type: 'revenue' | 'expense',
   ): OperationsLine[] {
+    // Key union stays actual ∪ budget — the PY column does NOT introduce new line
+    // keys (it is an informational reference only). A PY value for a key absent
+    // from both actual and budget is intentionally dropped.
     const keys = new Set<string>([...Object.keys(actuals), ...Object.keys(budget ?? {})])
     const lines: OperationsLine[] = []
     for (const key of keys) {
@@ -410,6 +436,7 @@ export class BoardReportService {
         variance,
         variancePct,
         favorable: this.isFavorable(type, variance),
+        priorYear: priorYearMap ? Number(priorYearMap[key] ?? 0) : null,
         explanation: explanations[key] ?? null,
       })
     }
@@ -436,11 +463,20 @@ export class BoardReportService {
     lines: OperationsLine[],
     type: 'revenue' | 'expense',
     hasBudget: boolean,
+    hasPY: boolean,
   ): OperationsTotals {
     const actual = lines.reduce((s, l) => s + l.actual, 0)
     const budget = hasBudget ? lines.reduce((s, l) => s + (l.budget ?? 0), 0) : null
+    const priorYear = hasPY ? lines.reduce((s, l) => s + (l.priorYear ?? 0), 0) : null
     const { variance, variancePct } = computeVariance(actual, budget)
-    return { actual, budget, variance, variancePct, favorable: this.isFavorable(type, variance) }
+    return {
+      actual,
+      budget,
+      variance,
+      variancePct,
+      favorable: this.isFavorable(type, variance),
+      priorYear,
+    }
   }
 
   // ── Forecast (Forecast vs Budget — read-only reshape of stored lines.forecast) ─
@@ -734,7 +770,14 @@ export class BoardReportService {
 
   private buildKeyIndicators(
     metrics: MetricResult[],
-    operationalRow: { enrollment: number | null; enrollmentFte: Prisma.Decimal | null } | null,
+    operationalRow:
+      | {
+          enrollment: number | null
+          enrollmentFte: Prisma.Decimal | null
+          teachingFte: Prisma.Decimal | null
+          totalStaffFte: Prisma.Decimal | null
+        }
+      | null,
   ): KeyIndicator[] {
     const enrollment = operationalRow?.enrollment ?? null
     const fte = operationalRow?.enrollmentFte != null ? Number(operationalRow.enrollmentFte) : null
@@ -783,6 +826,42 @@ export class BoardReportService {
         'days',
       ),
     ]
+
+    // Phase 5 — STAFF-FTE KPIs (Teaching / Total Staff / Teacher Ratio), appended
+    // AFTER the existing 6. available:false / value:null when inputs absent so the
+    // web's `k.available && k.value != null` filter drops them and the prior 6 KPIs
+    // stay byte-identical. teacherRatio unit:'ratio' renders as a percent via the
+    // existing formatIndicator (same path as operating_margin — no web change).
+    const teaching =
+      operationalRow?.teachingFte != null ? Number(operationalRow.teachingFte) : null
+    const totalStaff =
+      operationalRow?.totalStaffFte != null ? Number(operationalRow.totalStaffFte) : null
+    const teacherRatio =
+      teaching != null && totalStaff != null && totalStaff > 0 ? teaching / totalStaff : null
+    rows.push(
+      {
+        key: 'teachingFte',
+        label: 'FTEs — Teaching',
+        value: teaching,
+        unit: 'count',
+        available: teaching != null,
+      },
+      {
+        key: 'totalStaffFte',
+        label: 'FTEs — Total Staff',
+        value: totalStaff,
+        unit: 'count',
+        available: totalStaff != null,
+      },
+      {
+        key: 'teacherRatio',
+        label: 'Teacher Ratio',
+        value: teacherRatio,
+        unit: 'ratio',
+        available: teacherRatio != null,
+      },
+    )
+
     return rows
   }
 
