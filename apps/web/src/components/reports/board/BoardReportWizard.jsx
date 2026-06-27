@@ -49,6 +49,9 @@ const initialDraft = {
   explanations: { revenue: {}, expense: {} },
   // Sync bookkeeping (render-time sync-on-key).
   syncedKey: null,
+  // The dirty-signal captured at the last sync/save. Autosave only fires when the
+  // live signal diverges from this, so merely OPENING the wizard never PUTs.
+  syncedSignal: null,
 }
 
 function reducer(state, action) {
@@ -58,9 +61,9 @@ function reducer(state, action) {
     case 'setPeriod':
       // New period -> jump to step 1's selection, reset sync so the next bundle hydrates.
       return { ...state, periodId: action.periodId, syncedKey: null }
-    case 'sync':
+    case 'sync': {
       // Render-time hydrate from a freshly-assembled bundle (sync-on-key).
-      return {
+      const next = {
         ...state,
         syncedKey: action.key,
         reportTitle: action.reportTitle,
@@ -69,6 +72,9 @@ function reducer(state, action) {
         mdaSource: action.mdaSource,
         explanations: action.explanations,
       }
+      // Baseline the autosave signal so opening the wizard (no edits) never PUTs.
+      return { ...next, syncedSignal: dirtySignal(next) }
+    }
     case 'setField':
       return { ...state, [action.field]: action.value }
     case 'setExplanation': {
@@ -83,9 +89,30 @@ function reducer(state, action) {
     }
     case 'setMda':
       return { ...state, mdaText: action.text, mdaSource: action.source }
+    case 'saved':
+      // After a successful PUT: adopt the server's authoritative mdaSource (it
+      // forces 'user' whenever mdaText is set) so the badge reflects persisted
+      // state immediately, and re-baseline the signal so a clean draft is quiet.
+      return {
+        ...state,
+        mdaSource: action.mdaSource ?? state.mdaSource,
+        syncedSignal: action.savedSignal ?? state.syncedSignal,
+      }
     default:
       return state
   }
+}
+
+// The change-signal that drives autosave. EXCLUDES mdaSource on purpose: the
+// server derives it from mdaText (forces 'user' when text is present), so the
+// post-save mdaSource sync must NOT read as a fresh edit and re-fire the PUT.
+function dirtySignal(d) {
+  return JSON.stringify({
+    reportTitle: d.reportTitle?.trim() ? d.reportTitle.trim() : null,
+    committeeName: d.committeeName?.trim() ? d.committeeName.trim() : null,
+    mdaText: d.mdaText?.trim() ? d.mdaText : null,
+    explanations: d.explanations,
+  })
 }
 
 // Editable fields the autosave PUT sends. Numbers are NEVER part of this.
@@ -133,15 +160,19 @@ export default function BoardReportWizard({ schoolId, school, periods, initialPe
   }
 
   // ── Debounced autosave of editable state (PUT) ──────────────────────────────
-  const signal = JSON.stringify(editablePayload(draft))
+  const signal = dirtySignal(draft)
   const synced = data && draft.syncedKey === loadKey
   const { saving, error: saveError, saveNow } = useAutosave({
     enabled: canEdit && !!schoolId && !!draft.periodId && synced,
-    dirty: synced,
+    // Dirty only once the draft actually diverges from the synced baseline, so
+    // opening the wizard with no edits never writes an empty row + audit entry.
+    dirty: synced && signal !== draft.syncedSignal,
     signal,
     delay: 900,
     save: async () => {
-      await save(editablePayload(draft))
+      const savedSignal = dirtySignal(draft)
+      const row = await save(editablePayload(draft))
+      dispatch({ type: 'saved', mdaSource: row?.mdaSource, savedSignal })
     },
   })
 
