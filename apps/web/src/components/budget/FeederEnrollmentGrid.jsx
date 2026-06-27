@@ -37,9 +37,14 @@ function renderFeederCell(grade, value, onCell, disabled) {
   )
 }
 
-export default function FeederEnrollmentGrid({ feeder, onChange, disabled }) {
+export default function FeederEnrollmentGrid({ feeder, onChange, disabled, mode }) {
   const grid = feeder || {}
   const total = gradeGridTotal(grid)
+
+  // In roll-forward mode the SAME feeder field is the "New entrants by grade"
+  // input (no second field, same operational persistence) — only the copy changes.
+  const rollforward = mode === 'rollforward'
+  const title = rollforward ? 'New entrants by grade' : 'Anticipated incoming students (feeder)'
 
   const setCell = (grade, v) => onChange({ ...grid, [grade]: v })
 
@@ -55,13 +60,20 @@ export default function FeederEnrollmentGrid({ feeder, onChange, disabled }) {
           <Sprout size={16} />
         </span>
         <div className="flex-1">
-          <h4 className="font-serif text-[15px] font-semibold text-navy">
-            Anticipated incoming students (feeder)
-          </h4>
+          <h4 className="font-serif text-[15px] font-semibold text-navy">{title}</h4>
           <p className="text-[12px] text-muted">
-            New students you expect from feeder schools/programs, added{' '}
-            <span className="font-semibold text-navy">on top</span> of your projected enrollment
-            (do not also add them to the grade grid).
+            {rollforward ? (
+              <>
+                Students entering fresh at any grade — entry grades{' '}
+                <span className="font-semibold text-navy">(PK, K)</span> plus transfers anywhere.
+              </>
+            ) : (
+              <>
+                New students you expect from feeder schools/programs, added{' '}
+                <span className="font-semibold text-navy">on top</span> of your projected enrollment
+                (do not also add them to the grade grid).
+              </>
+            )}
           </p>
         </div>
         <span className="rounded-full bg-gold/15 px-2.5 py-1 text-[12px] font-semibold tabular-nums text-gold">

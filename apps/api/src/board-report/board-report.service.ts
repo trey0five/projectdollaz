@@ -106,6 +106,10 @@ interface ForecastSection {
     tuitionRates: { prek3: number; prek5: number; elem: number; middle: number }
     inflationPct: number
     programSplit: { parent: number; ftc: number; fes: number }
+    /** Phase 4 — 'manual' (legacy/default) | 'rollforward'. */
+    projectionMethod: 'manual' | 'rollforward'
+    /** Phase 4 — default retention %, 0 when manual. feederTotal doubles as the new-entrants total. */
+    retentionPct: number
   }
 }
 
@@ -500,6 +504,14 @@ export class BoardReportService {
     const feederTotal = Object.values(feeder).reduce((s, v) => s + (Number(v) || 0), 0)
     const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
 
+    // Phase 4 — projection method (absent ⇒ 'manual' back-compat). retentionPct
+    // 0 when manual. In rollforward context feederTotal IS the new-entrants total.
+    const projectionMethod: 'manual' | 'rollforward' =
+      forecast.projectionMethod === 'rollforward' ? 'rollforward' : 'manual'
+    const rollForward =
+      (forecast.rollForward as Record<string, unknown> | undefined) ?? {}
+    const retentionPct = projectionMethod === 'rollforward' ? num(rollForward.retentionPct) : 0
+
     return {
       available: true,
       computedAt: typeof forecast.computedAt === 'string' ? forecast.computedAt : '',
@@ -530,6 +542,8 @@ export class BoardReportService {
           ftc: num(split.ftc),
           fes: num(split.fes),
         },
+        projectionMethod,
+        retentionPct,
       },
     }
   }

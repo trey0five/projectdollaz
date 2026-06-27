@@ -17,13 +17,15 @@ import type { BudgetSpread } from '@finrep/ingestion'
 import {
   computeDriverBudget,
   toDriverPriorContext,
-  mergeFeederEnrollment,
+  effectiveEnrollment,
   REVENUE_LINE_KEYS,
   EXPENSE_LINE_KEYS,
   REVENUE_LINE_LABELS,
   EXPENSE_LINE_LABELS,
   type DriverBudgetResult,
   type GradeKey,
+  type ProjectionMethod,
+  type RollForwardConfig,
 } from '@finrep/analytics'
 import { AnalyticsService } from './analytics.service.js'
 import { OperationalService } from './operational.service.js'
@@ -63,6 +65,13 @@ export interface ForecastObject {
   variance: { revenue: Record<string, number>; expense: Record<string, number> }
   explanations: { revenue: Record<string, string>; expense: Record<string, string> }
   computedAt: string
+  /**
+   * Phase 4 — projection method. ALWAYS written ('manual' | 'rollforward');
+   * absence on legacy forecasts is semantically identical to 'manual'.
+   */
+  projectionMethod?: ProjectionMethod
+  /** Phase 4 — roll-forward config; present ONLY in rollforward mode. */
+  rollForward?: RollForwardConfig
 }
 
 /** GET /budget/forecast envelope (sharedShapes SEAM 2). */
@@ -380,9 +389,10 @@ export class BudgetService {
 
   /**
    * Apply / recompute the FY-End FORECAST. AUTHORITATIVE: re-projects via the pure
-   * computeDriverBudget with feeder enrollment merged ADDITIVELY into the driver's
-   * per-grade enrollment (the shared mergeFeederEnrollment helper), compares the
-   * result against the ACTIVE budget (lines.revenue/expense) for per-category
+   * computeDriverBudget, deriving the effective per-grade roster through the SHARED
+   * effectiveEnrollment helper (manual = feeder merged additively, byte-identical to
+   * before; rollforward = cohort roll-forward + new entrants + overrides), compares
+   * the result against the ACTIVE budget (lines.revenue/expense) for per-category
    * variance, and stores the result under lines.forecast — a sibling that NEVER
    * clobbers the official budget (lines.revenue/expense/spread/driverModel/methods
    * and totalRevenue/totalExpenses are untouched). When the DTO carries feeder
@@ -420,12 +430,27 @@ export class BudgetService {
       feeder = op.feederEnrollmentByGrade ?? {}
     }
 
-    // 2. Merge feeder additively into the revised enrollment, then re-project.
+    // 2. Resolve projectionMethod (absent/unknown ⇒ 'manual', back-compat) and
+    //    enforce the cross-field requirement class-validator cannot express.
+    const method: ProjectionMethod =
+      dto.projectionMethod === 'rollforward' ? 'rollforward' : 'manual'
+    if (method === 'rollforward' && !dto.rollForward) {
+      throw new BadRequestException(
+        'rollForward config required for rollforward projection method.',
+      )
+    }
+
+    // 3. Compute the effective per-grade roster via the SHARED helper — the ONE
+    //    source of effectiveEnrollmentByGrade for BOTH this save and the web
+    //    preview. Manual mode routes through mergeFeederEnrollment (unchanged);
+    //    rollforward ages the current roster + new entrants (= feeder) + overrides.
     const assumptions = dto.assumptions as unknown as Parameters<typeof computeDriverBudget>[0]
-    const effective = mergeFeederEnrollment(
-      assumptions.enrollmentByGrade as Partial<Record<GradeKey, number>>,
-      feeder as Partial<Record<GradeKey, number>>,
-    )
+    const effective = effectiveEnrollment({
+      projectionMethod: method,
+      enrollmentByGrade: assumptions.enrollmentByGrade as Partial<Record<GradeKey, number>>,
+      feederEnrollmentByGrade: feeder as Partial<Record<GradeKey, number>>,
+      rollForward: (dto.rollForward as unknown as RollForwardConfig | undefined) ?? null,
+    })
     const mergedAssumptions = { ...assumptions, enrollmentByGrade: effective }
 
     const ctx = await this.analytics.budgetContext(schoolId, periodId)
@@ -472,6 +497,12 @@ export class BudgetService {
       variance: { revenue: varRevenue, expense: varExpense },
       explanations,
       computedAt: new Date().toISOString(),
+      // Phase 4 — projectionMethod ALWAYS written; rollForward ONLY in
+      // rollforward mode (manual saves OMIT it → no shape churn vs. legacy).
+      projectionMethod: method,
+      ...(method === 'rollforward'
+        ? { rollForward: dto.rollForward as unknown as RollForwardConfig }
+        : {}),
     }
 
     // 6. Preserve EVERY sibling key verbatim; do NOT touch totalRevenue/Expenses
@@ -505,6 +536,10 @@ export class BudgetService {
         fiscalPeriodId: period.id,
         enrollmentTotal: projected.kpis.enrollmentTotal,
         feederTotal,
+        projectionMethod: method,
+        ...(method === 'rollforward'
+          ? { retentionPct: Number(dto.rollForward?.retentionPct) || 0 }
+          : {}),
         projectedRevenue: projected.kpis.totalRevenue,
         projectedExpense: projected.kpis.totalExpense,
       },

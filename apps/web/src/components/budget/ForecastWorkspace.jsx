@@ -42,10 +42,14 @@ import {
 import { analyticsApi } from '../../lib/api.js'
 import { useForecast } from '../../hooks/useAnalytics.js'
 import { useAutosave } from '../../hooks/useAutosave.js'
-import { mergeFeederEnrollment, gradeGridTotal } from '../../lib/mergeFeeder.js'
+import { effectiveEnrollment, gradeGridTotal } from '../../lib/mergeFeeder.js'
 import DriverAssumptionsForm from './DriverAssumptionsForm.jsx'
 import FeederEnrollmentGrid from './FeederEnrollmentGrid.jsx'
-import { seedAssumptions, toDriverPriorContext } from './driverModel.js'
+import MethodToggle from './MethodToggle.jsx'
+import CurrentRosterGrid, { seedCurrentRoster } from './CurrentRosterGrid.jsx'
+import RetentionControl from './RetentionControl.jsx'
+import ProjectedRosterGrid from './ProjectedRosterGrid.jsx'
+import { seedAssumptions, toDriverPriorContext, GRADE_ROW } from './driverModel.js'
 
 // computeDriverBudget is shared with the API; if it's not yet a function in the
 // consumed build, degrade gracefully (no throw) — server save still authoritative.
@@ -168,6 +172,70 @@ function sumKeys(map, keys) {
   return t
 }
 
+// ── Phase 4 — roll-forward state normalization ────────────────────────────────
+// Normalize the projectionMethod to the two valid values (missing/unknown ⇒
+// 'manual', matching the shared dispatcher + server back-compat).
+function normMethod(m) {
+  return m === 'rollforward' ? 'rollforward' : 'manual'
+}
+
+const DEFAULT_RETENTION = 93
+
+// Canonical, FIXED-KEY rollForward object. Both the seed baseline AND doSave
+// serialize through THIS, so key order is deterministic and opening a forecast is
+// never falsely dirty (the known exNorm key-order gotcha, mirrored). currentByGrade
+// is a fixed 14-key grid; retentionByGrade / projectedOverrideByGrade are sparse
+// (only present keys), each with a stable GRADE_ROW iteration order.
+function canonicalRollForward(rf) {
+  const src = rf || {}
+  const cur = src.currentByGrade || {}
+  const currentByGrade = {}
+  for (const g of GRADE_ROW) currentByGrade[g] = Number(cur[g]) || 0
+
+  const retSrc = src.retentionByGrade || {}
+  const retentionByGrade = {}
+  for (const g of GRADE_ROW) {
+    const v = retSrc[g]
+    if (v !== undefined && v !== null && v !== '') retentionByGrade[g] = Number(v)
+  }
+
+  const ovSrc = src.projectedOverrideByGrade || {}
+  const projectedOverrideByGrade = {}
+  for (const g of GRADE_ROW) {
+    const v = ovSrc[g]
+    if (v !== undefined && v !== null && v !== '') projectedOverrideByGrade[g] = Number(v)
+  }
+
+  const pct = src.retentionPct
+  return {
+    currentByGrade,
+    retentionPct: Number.isFinite(Number(pct)) && pct !== '' && pct != null ? Number(pct) : DEFAULT_RETENTION,
+    retentionByGrade,
+    graduatingGrade: GRADE_ROW.includes(src.graduatingGrade) ? src.graduatingGrade : '8',
+    projectedOverrideByGrade,
+  }
+}
+
+// Build the initial canonical rollForward for a forecast: saved config if present,
+// else seed currentByGrade from saved driver assumptions / operational total.
+function initialRollForward({ savedForecast, budget, budgetContext }) {
+  if (savedForecast?.rollForward) return canonicalRollForward(savedForecast.rollForward)
+  const driverAssumptions = budget?.lines?.driverModel?.assumptions ?? null
+  return canonicalRollForward({
+    currentByGrade: seedCurrentRoster({ driverAssumptions, budgetContext }),
+    retentionPct: DEFAULT_RETENTION,
+    graduatingGrade: '8',
+  })
+}
+
+// The ONE serialization used for BOTH the autosave change-signal and the synced
+// baseline. rollForward rides along ONLY in rollforward mode (manual omits it).
+function serializeDraft({ method, assumptions, feeder, rollForward, explanations }) {
+  return normMethod(method) === 'rollforward'
+    ? JSON.stringify({ projectionMethod: 'rollforward', assumptions, feeder, rollForward, explanations })
+    : JSON.stringify({ projectionMethod: 'manual', assumptions, feeder, explanations })
+}
+
 export default function ForecastWorkspace({ schoolId, periodId, canEdit, budget, budgetContext }) {
   const {
     forecast: savedForecast,
@@ -190,6 +258,11 @@ export default function ForecastWorkspace({ schoolId, periodId, canEdit, budget,
   const [explanations, setExplanations] = useState(
     () => savedForecast?.explanations ?? { revenue: {}, expense: {} },
   )
+  // Phase 4 — projection method + canonical roll-forward config.
+  const [projectionMethod, setProjectionMethod] = useState(() => normMethod(savedForecast?.projectionMethod))
+  const [rollForward, setRollForward] = useState(() => initialRollForward({ savedForecast, budget, budgetContext }))
+  // Which projected-roster grade is being inline-overridden (UI-only, not saved).
+  const [editingGrade, setEditingGrade] = useState(null)
 
   // Change-signal vs synced-baseline: opening writes nothing. `baseline` holds the
   // serialized draft last SYNCED from the server (seed or save result); the save
@@ -200,9 +273,18 @@ export default function ForecastWorkspace({ schoolId, periodId, canEdit, budget,
   const [baseline, setBaseline] = useState('')
 
   // Serialize the saveable draft (the change-signal for autosave + dirty check).
+  // rollForward is included ONLY in rollforward mode — manual saves OMIT it, so
+  // the manual draft shape is byte-identical to pre-Phase-4 (no shape churn). Both
+  // the canonical baseline (seed effect) and doSave serialize through this same
+  // shape, so opening either mode is never falsely dirty.
   const draftKey = useMemo(
-    () => JSON.stringify({ assumptions, feeder, explanations }),
-    [assumptions, feeder, explanations],
+    () =>
+      JSON.stringify(
+        normMethod(projectionMethod) === 'rollforward'
+          ? { projectionMethod: 'rollforward', assumptions, feeder, rollForward, explanations }
+          : { projectionMethod: 'manual', assumptions, feeder, explanations },
+      ),
+    [projectionMethod, assumptions, feeder, rollForward, explanations],
   )
 
   // Seed / re-seed on key change OR when saved data first arrives for this key,
@@ -222,10 +304,21 @@ export default function ForecastWorkspace({ schoolId, periodId, canEdit, budget,
         // autosave baseline — otherwise a shape/key-order mismatch makes draftKey
         // diverge from baseline on a fresh open and fires a no-op PUT.
         const exNorm = { revenue: { ...(ex.revenue || {}) }, expense: { ...(ex.expense || {}) } }
+        // Phase 4 — seed method + CANONICAL rollForward (fixed-key, deterministic
+        // order). The baseline serializes through the IDENTICAL serializeDraft so
+        // opening either mode (incl. legacy manual forecasts, which omit
+        // rollForward in the draft) is never dirty and writes nothing.
+        const m = normMethod(savedForecast?.projectionMethod)
+        const rf = initialRollForward({ savedForecast, budget, budgetContext })
         setAssumptions(a)
         setFeeder(f)
         setExplanations(exNorm)
-        setBaseline(JSON.stringify({ assumptions: a, feeder: f, explanations: exNorm }))
+        setProjectionMethod(m)
+        setRollForward(rf)
+        setEditingGrade(null)
+        setBaseline(
+          serializeDraft({ method: m, assumptions: a, feeder: f, rollForward: rf, explanations: exNorm }),
+        )
       }
       if (key !== seedKeyRef.current) {
         seedKeyRef.current = key
@@ -256,11 +349,70 @@ export default function ForecastWorkspace({ schoolId, periodId, canEdit, budget,
     }))
   }, [])
 
+  // ── Phase 4 change handlers (all set touchedRef like onFeederChange) ───────
+  const onMethodChange = useCallback((next) => {
+    touchedRef.current = true
+    setProjectionMethod(normMethod(next))
+  }, [])
+  const onCurrentRosterChange = useCallback((nextGrid) => {
+    touchedRef.current = true
+    setRollForward((cur) => ({ ...cur, currentByGrade: nextGrid }))
+  }, [])
+  const onRetentionDefaultChange = useCallback((pct) => {
+    touchedRef.current = true
+    setRollForward((cur) => ({ ...cur, retentionPct: pct }))
+  }, [])
+  const onRetentionOverrideChange = useCallback((grade, value) => {
+    touchedRef.current = true
+    setRollForward((cur) => {
+      const next = { ...(cur.retentionByGrade || {}) }
+      if (value === undefined) delete next[grade]
+      else next[grade] = value
+      return { ...cur, retentionByGrade: next }
+    })
+  }, [])
+  const onGraduatingChange = useCallback((grade) => {
+    touchedRef.current = true
+    setRollForward((cur) => ({ ...cur, graduatingGrade: grade }))
+  }, [])
+  const onProjectedOverrideChange = useCallback((grade, value) => {
+    touchedRef.current = true
+    setRollForward((cur) => {
+      const next = { ...(cur.projectedOverrideByGrade || {}) }
+      next[grade] = value
+      return { ...cur, projectedOverrideByGrade: next }
+    })
+  }, [])
+  const onProjectedOverrideClear = useCallback((grade) => {
+    touchedRef.current = true
+    setRollForward((cur) => {
+      const next = { ...(cur.projectedOverrideByGrade || {}) }
+      delete next[grade]
+      return { ...cur, projectedOverrideByGrade: next }
+    })
+  }, [])
+  // Seed currentByGrade from saved driver assumptions / operational total.
+  const onSeedCurrentRoster = useCallback(() => {
+    touchedRef.current = true
+    const driverAssumptions = budget?.lines?.driverModel?.assumptions ?? null
+    const seeded = seedCurrentRoster({ driverAssumptions, budgetContext })
+    setRollForward((cur) => ({ ...cur, currentByGrade: seeded }))
+  }, [budget, budgetContext])
+
   // ── Live preview (DERIVED) ────────────────────────────────────────────────
   const prior = useMemo(() => toDriverPriorContext(budgetContext), [budgetContext])
+  // The ONE source of effectiveEnrollmentByGrade for BOTH the preview and the
+  // server save (same @finrep/analytics helper) — so they can never drift. Manual
+  // mode routes to the unchanged mergeFeederEnrollment path inside the dispatcher.
   const effective = useMemo(
-    () => mergeFeederEnrollment(assumptions.enrollmentByGrade, feeder),
-    [assumptions.enrollmentByGrade, feeder],
+    () =>
+      effectiveEnrollment({
+        projectionMethod: normMethod(projectionMethod),
+        enrollmentByGrade: assumptions.enrollmentByGrade,
+        feederEnrollmentByGrade: feeder,
+        rollForward,
+      }),
+    [projectionMethod, assumptions.enrollmentByGrade, feeder, rollForward],
   )
   const merged = useMemo(
     () => ({ ...assumptions, enrollmentByGrade: effective }),
@@ -276,6 +428,7 @@ export default function ForecastWorkspace({ schoolId, periodId, canEdit, budget,
     [budget],
   )
 
+  const isRollforward = normMethod(projectionMethod) === 'rollforward'
   const feederTotal = gradeGridTotal(feeder)
   const projectedRevenue = projected?.revenue ?? {}
   const projectedExpense = projected?.expense ?? {}
@@ -290,17 +443,23 @@ export default function ForecastWorkspace({ schoolId, periodId, canEdit, budget,
   const dirty = canEdit && baseline !== '' && draftKey !== baseline
   const doSave = useCallback(async () => {
     if (!schoolId || !periodId) return
+    const method = normMethod(projectionMethod)
     const body = {
+      projectionMethod: method,
       assumptions,
       feederEnrollmentByGrade: feeder && Object.keys(feeder).length ? feeder : null,
       explanations,
     }
+    // rollForward is sent ONLY in rollforward mode (the server requires it there
+    // and OMITS it in manual — keeping manual stored shape byte-identical).
+    if (method === 'rollforward') body.rollForward = rollForward
     await analyticsApi.saveForecast(schoolId, periodId, body)
     // The server recomputed authoritatively — re-pull so the preview shows the
-    // canonical figures + computedAt, and reset the dirty baseline.
+    // canonical figures + computedAt, and reset the dirty baseline (through the
+    // IDENTICAL serializer so the post-save state is clean).
     await refetch()
-    setBaseline(JSON.stringify({ assumptions, feeder, explanations }))
-  }, [schoolId, periodId, assumptions, feeder, explanations, refetch])
+    setBaseline(serializeDraft({ method, assumptions, feeder, rollForward, explanations }))
+  }, [schoolId, periodId, projectionMethod, assumptions, feeder, rollForward, explanations, refetch])
 
   const { saving, error: saveError, saveNow } = useAutosave({
     enabled: canEdit,
@@ -315,7 +474,11 @@ export default function ForecastWorkspace({ schoolId, periodId, canEdit, budget,
   const renderKpiStrip = () => {
     const k = projected?.kpis ?? {}
     const cards = [
-      { label: 'Projected students', value: (k.enrollmentTotal ?? 0).toLocaleString('en-US'), hint: 'Base enrollment + feeder' },
+      {
+        label: 'Projected students',
+        value: (k.enrollmentTotal ?? 0).toLocaleString('en-US'),
+        hint: isRollforward ? 'Rolled-forward roster + new entrants' : 'Base enrollment + feeder',
+      },
       { label: 'Forecast revenue', value: money(k.totalRevenue), hint: 'Total projected revenue' },
       { label: 'Forecast expense', value: money(k.totalExpense), hint: 'Total projected expense' },
       {
@@ -494,8 +657,9 @@ export default function ForecastWorkspace({ schoolId, periodId, canEdit, budget,
         <div>
           <h3 className="font-serif text-lg font-semibold text-navy">Fiscal-year-end forecast</h3>
           <p className="text-[13px] text-muted">
-            Revise your assumptions and add anticipated feeder students to project where the year lands
-            — then compare it to the budget you set.
+            {isRollforward
+              ? 'Roll this year’s roster forward a grade with retention, add new entrants, then compare where the year lands to the budget you set.'
+              : 'Revise your assumptions and add anticipated feeder students to project where the year lands — then compare it to the budget you set.'}
           </p>
         </div>
       </div>
@@ -524,10 +688,62 @@ export default function ForecastWorkspace({ schoolId, periodId, canEdit, budget,
 
       {renderKpiStrip()}
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(340px,420px)_1fr]">
+      <MethodToggle
+        projectionMethod={projectionMethod}
+        onMethodChange={onMethodChange}
+        disabled={!canEdit}
+      />
+
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(340px,460px)_1fr]">
         <div className="space-y-4">
-          <FeederEnrollmentGrid feeder={feeder} onChange={onFeederChange} disabled={!canEdit} />
-          <DriverAssumptionsForm assumptions={assumptions} onChange={onAssumptionsChange} disabled={!canEdit} />
+          {isRollforward ? (
+            <>
+              <CurrentRosterGrid
+                current={rollForward.currentByGrade}
+                onChange={onCurrentRosterChange}
+                onSeed={onSeedCurrentRoster}
+                disabled={!canEdit}
+              />
+              <RetentionControl
+                retentionPct={rollForward.retentionPct}
+                retentionByGrade={rollForward.retentionByGrade}
+                graduatingGrade={rollForward.graduatingGrade}
+                onDefaultChange={onRetentionDefaultChange}
+                onOverrideChange={onRetentionOverrideChange}
+                onGraduatingChange={onGraduatingChange}
+                disabled={!canEdit}
+              />
+              <FeederEnrollmentGrid
+                feeder={feeder}
+                onChange={onFeederChange}
+                disabled={!canEdit}
+                mode="rollforward"
+              />
+              <ProjectedRosterGrid
+                effective={effective}
+                overrides={rollForward.projectedOverrideByGrade}
+                editingGrade={editingGrade}
+                onStartEdit={setEditingGrade}
+                onSetOverride={onProjectedOverrideChange}
+                onClearOverride={onProjectedOverrideClear}
+                disabled={!canEdit}
+              />
+              {/* enrollmentByGrade is DERIVED in roll-forward mode (the projected
+                  roster drives tuition), so hide the manual enrollment grid and
+                  keep only the rate / split / staffing / inflation assumptions. */}
+              <DriverAssumptionsForm
+                assumptions={assumptions}
+                onChange={onAssumptionsChange}
+                disabled={!canEdit}
+                sections={['tuition', 'split', 'staffing', 'inflation']}
+              />
+            </>
+          ) : (
+            <>
+              <FeederEnrollmentGrid feeder={feeder} onChange={onFeederChange} disabled={!canEdit} />
+              <DriverAssumptionsForm assumptions={assumptions} onChange={onAssumptionsChange} disabled={!canEdit} />
+            </>
+          )}
         </div>
         <div className="space-y-4">{renderTable()}</div>
       </div>
@@ -536,9 +752,19 @@ export default function ForecastWorkspace({ schoolId, periodId, canEdit, budget,
 
       {feederTotal > 0 && (
         <p className="text-[12px] text-muted">
-          {feederTotal} anticipated feeder student{feederTotal === 1 ? '' : 's'} added on top of your
-          projected enrollment ({(projected?.kpis?.enrollmentTotal ?? 0).toLocaleString('en-US')}{' '}
-          total).
+          {isRollforward ? (
+            <>
+              {feederTotal} new entrant{feederTotal === 1 ? '' : 's'} included in the projected roster
+              of {(projected?.kpis?.enrollmentTotal ?? 0).toLocaleString('en-US')} student
+              {(projected?.kpis?.enrollmentTotal ?? 0) === 1 ? '' : 's'}.
+            </>
+          ) : (
+            <>
+              {feederTotal} anticipated feeder student{feederTotal === 1 ? '' : 's'} added on top of
+              your projected enrollment (
+              {(projected?.kpis?.enrollmentTotal ?? 0).toLocaleString('en-US')} total).
+            </>
+          )}
         </p>
       )}
     </motion.div>

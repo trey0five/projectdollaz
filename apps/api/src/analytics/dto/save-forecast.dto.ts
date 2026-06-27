@@ -9,7 +9,18 @@
 // the per-line explanations map (mirroring OverridesDto — NO @Allow free-form).
 // ─────────────────────────────────────────────────────────────
 import { Type } from 'class-transformer'
-import { IsObject, IsOptional, IsString, MaxLength, ValidateNested } from 'class-validator'
+import {
+  IsIn,
+  IsNumber,
+  IsObject,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+  ValidateNested,
+} from 'class-validator'
+import { GRADE_KEYS } from '@finrep/analytics'
 import { DriverAssumptionsDto, EnrollmentByGradeDto } from './save-driver-budget.dto.js'
 
 const MAX_EXPLANATION_CHARS = 2000
@@ -52,10 +63,68 @@ export class ForecastExplanationsDto {
   expense?: ExplanationMapDto
 }
 
+/**
+ * Per-grade retention percentages, keyed by the SOURCE grade (the grade students
+ * are leaving). All 14 keys explicit, each 0..100 — a SEPARATE class from
+ * EnrollmentByGradeDto because retention is a 0..100 percent, not a 0..100000 count.
+ */
+export class RetentionByGradeDto {
+  @IsOptional() @IsNumber() @Min(0) @Max(100) PK0?: number
+  @IsOptional() @IsNumber() @Min(0) @Max(100) PK1?: number
+  @IsOptional() @IsNumber() @Min(0) @Max(100) PK2?: number
+  @IsOptional() @IsNumber() @Min(0) @Max(100) PK3?: number
+  @IsOptional() @IsNumber() @Min(0) @Max(100) PK4?: number
+  @IsOptional() @IsNumber() @Min(0) @Max(100) K?: number
+  @IsOptional() @IsNumber() @Min(0) @Max(100) '1'?: number
+  @IsOptional() @IsNumber() @Min(0) @Max(100) '2'?: number
+  @IsOptional() @IsNumber() @Min(0) @Max(100) '3'?: number
+  @IsOptional() @IsNumber() @Min(0) @Max(100) '4'?: number
+  @IsOptional() @IsNumber() @Min(0) @Max(100) '5'?: number
+  @IsOptional() @IsNumber() @Min(0) @Max(100) '6'?: number
+  @IsOptional() @IsNumber() @Min(0) @Max(100) '7'?: number
+  @IsOptional() @IsNumber() @Min(0) @Max(100) '8'?: number
+}
+
+/**
+ * Roll-forward (cohort) projection config, stored inside lines.forecast.rollForward.
+ * currentByGrade + projectedOverrideByGrade are enrollment COUNTS (reuse
+ * EnrollmentByGradeDto, 0..100000); retentionPct/retentionByGrade are PERCENTS
+ * (0..100); graduatingGrade is one of the 14 GRADE_KEYS (the single source of order).
+ */
+export class RollForwardConfigDto {
+  @IsObject() @ValidateNested() @Type(() => EnrollmentByGradeDto)
+  currentByGrade!: EnrollmentByGradeDto
+
+  @IsNumber() @Min(0) @Max(100)
+  retentionPct!: number
+
+  @IsOptional() @IsObject() @ValidateNested() @Type(() => RetentionByGradeDto)
+  retentionByGrade?: RetentionByGradeDto
+
+  @IsOptional() @IsIn([...GRADE_KEYS])
+  graduatingGrade?: string
+
+  @IsOptional() @IsObject() @ValidateNested() @Type(() => EnrollmentByGradeDto)
+  projectedOverrideByGrade?: EnrollmentByGradeDto
+}
+
 export class SaveForecastDto {
   /** Revised driver assumptions (PRE-feeder). Reused verbatim from the driver DTO. */
   @IsObject() @ValidateNested() @Type(() => DriverAssumptionsDto)
   assumptions!: DriverAssumptionsDto
+
+  /**
+   * Projection method. Absent/'manual' ⇒ today's behavior (enrollmentByGrade +
+   * feeder, byte-identical). 'rollforward' ⇒ cohort roll-forward (rollForward
+   * config required; enforced at the service level as class-validator cannot
+   * express a cross-field requirement).
+   */
+  @IsOptional() @IsIn(['manual', 'rollforward'])
+  projectionMethod?: 'manual' | 'rollforward'
+
+  /** Roll-forward config — required only when projectionMethod === 'rollforward'. */
+  @IsOptional() @IsObject() @ValidateNested() @Type(() => RollForwardConfigDto)
+  rollForward?: RollForwardConfigDto | null
 
   /**
    * Anticipated incoming feeder students by grade (net-new, additive). Optional;

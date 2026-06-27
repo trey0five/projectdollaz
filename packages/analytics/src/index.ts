@@ -103,7 +103,17 @@ export type {
 // FY-End Forecast (Phase 2) — the ONE shared addition: feeder enrollment merge.
 // driver.ts stays byte-for-byte unchanged; the feeder is folded in here before
 // computeDriverBudget. Imported by the API (server save) AND web (live preview).
-export { mergeFeederEnrollment } from './forecast.js'
+export {
+  mergeFeederEnrollment,
+  rollForwardEnrollment,
+  effectiveEnrollment,
+} from './forecast.js'
+export type {
+  ProjectionMethod,
+  RollForwardInput,
+  RollForwardConfig,
+  EffectiveEnrollmentInput,
+} from './forecast.js'
 
 // Version
 export { ANALYTICS_VERSION } from './version.js'
