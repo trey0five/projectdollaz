@@ -57,12 +57,13 @@ function EmptyOnboarding({ schoolName, billing, isOwner }) {
         <div>
           <h2 className="font-serif text-2xl font-semibold text-navy">Get started</h2>
           <p className="mx-auto mt-2 max-w-md text-[14px] leading-relaxed text-muted">
-            Upload your first trial balance to generate the four financial statements,
-            unlock analytics, and run your review-readiness checks.
+            Head to the Data hub to add your trial balance — we’ll turn it into your four
+            financial statements — then it walks you through everything else (monthly numbers,
+            budget, enrollment and more), all in one place.
           </p>
         </div>
-        <Link to="/statements" className="btn-primary inline-flex items-center gap-2">
-          Upload your first trial balance <ArrowRight size={16} />
+        <Link to="/data" className="btn-primary inline-flex items-center gap-2">
+          Go to the Data hub <ArrowRight size={16} />
         </Link>
       </motion.div>
     </div>
@@ -245,9 +246,6 @@ export default function HomeDashboard() {
     return (
       <div className="mx-auto max-w-[1100px] px-4 py-6 sm:px-10 sm:py-8">
         <EmptyOnboarding schoolName={activeSchool?.name} billing={billing} isOwner={isOwner} />
-        <div className="mt-6">
-          <DataHubBanner />
-        </div>
         <div className="mt-8">
           <FeatureGateway
             savedPeriodCount={0}
