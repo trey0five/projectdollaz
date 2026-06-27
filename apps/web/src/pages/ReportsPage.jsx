@@ -32,9 +32,12 @@ const REPORTS = [
   {
     id: 'forecast',
     title: 'FYE Forecast',
-    blurb: 'Project the full fiscal year from year-to-date actuals.',
-    live: false,
+    blurb:
+      'Project where the year lands — driver assumptions with cohort grade roll-forward and anticipated feeder enrollment. On the Budget page’s Forecast tab; it also flows into your board packet.',
+    live: true,
     Icon: FileBarChart2,
+    action: 'navigate',
+    to: '/budget',
   },
   {
     id: 'monthly',
@@ -72,8 +75,12 @@ export default function ReportsPage() {
   // Card select: the Board Report opens the inline 5-step wizard; Supporting
   // Schedules NAVIGATES to its own surface (carrying the live snapshot period).
   const onSelect = (report) => {
-    if (report.action === 'navigate' && report.id === 'schedules') {
-      navigate(defaultPeriodId ? `/reports/schedules?period=${defaultPeriodId}` : '/reports/schedules')
+    if (report.action === 'navigate') {
+      if (report.id === 'schedules') {
+        navigate(defaultPeriodId ? `/reports/schedules?period=${defaultPeriodId}` : '/reports/schedules')
+      } else if (report.to) {
+        navigate(report.to)
+      }
       return
     }
     setOpenReport(report.id)
