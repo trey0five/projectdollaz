@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { Link } from 'react-router-dom'
-import { FileText, ArrowRight, Compass } from 'lucide-react'
+import { FileText, ArrowRight, Compass, Database } from 'lucide-react'
 import { useSchools } from '../../context/SchoolContext.jsx'
 import { useBilling } from '../../context/BillingContext.jsx'
 import { usePersistence } from '../../context/PersistenceContext.jsx'
@@ -71,6 +71,34 @@ function EmptyOnboarding({ schoolName, billing, isOwner }) {
 
 // Fancy on-theme divider that visually separates the Explore and Recent-periods
 // sections — a gold gradient hairline fading into a small diamond at center.
+// Prominent pointer to the unified Data hub — the one place to import/enter every
+// kind of data. Shown on the home page so users always know where to add data.
+function DataHubBanner() {
+  return (
+    <Link
+      to="/data"
+      className="group flex items-center gap-4 rounded-2xl border-2 border-gold/40 bg-gradient-to-r from-gold/[0.08] to-transparent px-5 py-4 shadow-card transition-all hover:border-gold/70 hover:shadow-glow"
+    >
+      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gold-gradient text-white shadow-glow">
+        <Database size={24} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="font-serif text-base font-semibold text-navy">
+          Get all your numbers in one place
+        </p>
+        <p className="mt-0.5 text-[13px] leading-relaxed text-muted">
+          Trial balances, monthly actuals, budget, enrollment and more — the Data hub walks you
+          through exactly what to add, with a friendly guide to help.
+        </p>
+      </div>
+      <span className="hidden shrink-0 items-center gap-1.5 whitespace-nowrap text-[12px] font-bold uppercase tracking-[0.08em] text-gold sm:inline-flex">
+        Go to Data hub
+        <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" />
+      </span>
+    </Link>
+  )
+}
+
 function SectionDivider() {
   return (
     <div className="flex items-center gap-3 py-1" aria-hidden>
@@ -217,6 +245,9 @@ export default function HomeDashboard() {
     return (
       <div className="mx-auto max-w-[1100px] px-4 py-6 sm:px-10 sm:py-8">
         <EmptyOnboarding schoolName={activeSchool?.name} billing={billing} isOwner={isOwner} />
+        <div className="mt-6">
+          <DataHubBanner />
+        </div>
         <div className="mt-8">
           <FeatureGateway
             savedPeriodCount={0}
@@ -249,6 +280,8 @@ export default function HomeDashboard() {
           <BoardPacketExportButton periodId={selectedPeriodId} />
         </div>
       )}
+
+      <DataHubBanner />
 
       <HomeVitals
         metricsByKey={metricsByKey}

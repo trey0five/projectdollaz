@@ -63,7 +63,7 @@ const CELEBRATE_COPY =
   "That's everything we need — your statements are ready to roll. You can always come back to add more anytime."
 const ADVANCE_PREFIX = 'Nice, that one is in. '
 
-const GuideMascot = forwardRef(function GuideMascot({ summary }, ref) {
+const GuideMascot = forwardRef(function GuideMascot({ summary, onActiveStep }, ref) {
   const reduce = useReducedMotion()
   const nextStep = summary?.nextStep ?? null
   const allReady = !!summary?.allReady
@@ -77,30 +77,42 @@ const GuideMascot = forwardRef(function GuideMascot({ summary }, ref) {
   const chevronTargetRef = useRef({ x: 0, y: 0, visible: false })
   const [chevron, setChevron] = useState({ x: 0, y: 0, visible: false })
 
+  // Guided "Show me around" walkthrough — step through every card in order. Works
+  // even when everything is already done (the old replay just re-set intro, which
+  // the celebrate phase swallowed — so the button looked broken).
+  const order = useMemo(() => summary?.order || [], [summary])
+  const [tourIndex, setTourIndex] = useState(null) // null = not touring
+  const touring = tourIndex != null && tourIndex >= 0 && tourIndex < order.length
+  const activeStep = touring ? order[tourIndex] : allReady ? null : nextStep
+  const startTour = () => {
+    setDismissed(false)
+    writeLS(DISMISS_KEY, false)
+    setIntroActive(false)
+    setTourIndex(order.length ? 0 : null)
+  }
+  const tourNext = () =>
+    setTourIndex((i) => (i == null || i + 1 >= order.length ? null : i + 1))
+
   // Imperative replay handle for the hub header's "Show me around" button.
-  useImperativeHandle(ref, () => ({
-    replay() {
-      setDismissed(false)
-      writeLS(DISMISS_KEY, false)
-      setIntroActive(true)
-    },
-  }))
+  useImperativeHandle(ref, () => ({ replay: startTour }))
 
   // PHASE is a pure function of summary + intro/dismiss flags (no setState here).
   const phase = useMemo(() => {
     if (introActive && !allReady) return 'intro'
+    if (touring) return 'tour'
     if (allReady) return 'celebrate'
     if (nextStep) return 'pointing'
     return 'idle'
-  }, [introActive, allReady, nextStep])
+  }, [introActive, touring, allReady, nextStep])
 
   // Bubble copy derived from phase + active step.
   const bubble = useMemo(() => {
     if (phase === 'intro') return INTRO_COPY
     if (phase === 'celebrate') return CELEBRATE_COPY
+    if (phase === 'tour') return HINTS[activeStep] || 'Here’s where this one goes.'
     if (phase === 'pointing') return HINTS[nextStep] || 'Let’s get this one in next.'
     return 'You’re all set here.'
-  }, [phase, nextStep])
+  }, [phase, nextStep, activeStep])
 
   // Detect an advance (nextStep changed to a new value) -> quick pop + sparkle.
   useEffect(() => {
@@ -110,6 +122,12 @@ const GuideMascot = forwardRef(function GuideMascot({ summary }, ref) {
     }
     prevStepRef.current = nextStep
   }, [nextStep])
+
+  // Tell the hub which card to highlight during the walkthrough so the card's glow
+  // ring follows Penny; null when not touring (ring falls back to summary.nextStep).
+  useEffect(() => {
+    onActiveStep?.(touring ? activeStep : null)
+  }, [touring, activeStep, onActiveStep])
 
   // Idle blink (randomized so multiple mounts don't sync). Skipped in reduced-motion.
   useEffect(() => {
@@ -132,13 +150,13 @@ const GuideMascot = forwardRef(function GuideMascot({ summary }, ref) {
   // Measure the active card & (optionally) scroll it into view, then aim the chevron.
   // Microtask-deferred write; reduced-motion skips the scroll hijack + chevron.
   useEffect(() => {
-    if (dismissed || phase === 'celebrate' || phase === 'idle' || !nextStep) {
+    if (dismissed || !activeStep || (phase !== 'pointing' && phase !== 'tour')) {
       setChevron((c) => (c.visible ? { ...c, visible: false } : c))
       return undefined
     }
     let cancelled = false
     const aim = () => {
-      const el = document.getElementById(`datahub-card-${nextStep}`)
+      const el = document.getElementById(`datahub-card-${activeStep}`)
       if (!el || cancelled) return
       const r = el.getBoundingClientRect()
       const onScreen = r.top >= 0 && r.bottom <= window.innerHeight
@@ -159,14 +177,14 @@ const GuideMascot = forwardRef(function GuideMascot({ summary }, ref) {
       window.clearTimeout(id)
       window.removeEventListener('resize', onResize)
     }
-  }, [nextStep, phase, dismissed, reduce])
+  }, [activeStep, phase, dismissed, reduce])
 
   const advanceFromIntro = () => {
-    setIntroActive(false)
     if (!introSeen) {
       setIntroSeen(true)
       writeLS(INTRO_KEY, true)
     }
+    startTour()
   }
 
   const onDismiss = () => {
@@ -198,7 +216,7 @@ const GuideMascot = forwardRef(function GuideMascot({ summary }, ref) {
   return (
     <>
       {/* Floating directional chevron (accent; decorative). */}
-      {!reduce && chevron.visible && phase === 'pointing' && (
+      {!reduce && chevron.visible && (phase === 'pointing' || phase === 'tour') && (
         <motion.div
           aria-hidden="true"
           className="pointer-events-none fixed z-30 text-gold drop-shadow"
@@ -239,7 +257,7 @@ const GuideMascot = forwardRef(function GuideMascot({ summary }, ref) {
         {/* Speech bubble (the meaning carrier). */}
         <AnimatePresence>
           <motion.div
-            key={`${phase}-${nextStep}`}
+            key={`${phase}-${activeStep}`}
             role="status"
             aria-live="polite"
             initial={reduce ? false : { opacity: 0, y: 8, scale: 0.96 }}
@@ -264,6 +282,20 @@ const GuideMascot = forwardRef(function GuideMascot({ summary }, ref) {
               >
                 Show me <ChevronRight size={14} />
               </button>
+            )}
+            {phase === 'tour' && (
+              <div className="mt-2.5 flex items-center justify-between gap-2">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+                  Step {tourIndex + 1} of {order.length}
+                </span>
+                <button
+                  type="button"
+                  onClick={tourNext}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-gold-gradient px-3 py-1.5 text-[12px] font-bold uppercase tracking-[0.08em] text-navy shadow-glow transition-transform hover:-translate-y-0.5"
+                >
+                  {tourIndex + 1 >= order.length ? 'Done' : 'Next'} <ChevronRight size={14} />
+                </button>
+              </div>
             )}
           </motion.div>
         </AnimatePresence>

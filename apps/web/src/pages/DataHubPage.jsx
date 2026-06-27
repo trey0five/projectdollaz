@@ -9,8 +9,8 @@
 // (NOT setState-in-effect). SOURCES is a module-scope config array (like
 // ReportsPage's REPORTS) — never an in-render component def.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useMemo, useRef, useState } from 'react'
-import { motion } from 'framer-motion'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import {
   FileSpreadsheet,
   CalendarClock,
@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   Sparkles,
   CircleCheck,
+  X,
 } from 'lucide-react'
 import TopBar from '../components/TopBar.jsx'
 import BillingBanner from '../components/BillingBanner.jsx'
@@ -124,10 +125,9 @@ export default function DataHubPage() {
   const sources = data?.sources || null
   const summary = data?.summary || null
 
-  const [expanded, setExpanded] = useState(null) // which embed card is open
+  const [modalKey, setModalKey] = useState(null) // which embed panel is open in the modal
+  const [tourKey, setTourKey] = useState(null) // card Penny is highlighting during the walkthrough
   const mascotRef = useRef(null)
-
-  const toggle = (key) => setExpanded((cur) => (cur === key ? null : key))
 
   // No-period state: nothing to work on yet.
   const noPeriods = (periods || []).length === 0
@@ -241,33 +241,15 @@ export default function DataHubPage() {
                 </button>
               </div>
             ) : (
-              <div className="grid items-start gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {SOURCES.map((s) => (
                   <SourceCard
                     key={s.key}
                     source={s}
                     status={sources?.[s.key]}
-                    isActive={summary?.nextStep === s.key}
-                    expanded={expanded === s.key}
-                    onToggle={() => toggle(s.key)}
-                  >
-                    {s.key === 'monthly' && periodId && (
-                      <MonthlyActualsPanel
-                        schoolId={schoolId}
-                        periodId={periodId}
-                        canEdit={isOwnerOrAccountant}
-                      />
-                    )}
-                    {s.key === 'operational' && periodId && (
-                      <OperationalDataPanel
-                        schoolId={schoolId}
-                        periodId={periodId}
-                        periodLabel={periodLabel}
-                        canEdit={isOwnerOrAccountant}
-                        onSaved={refetch}
-                      />
-                    )}
-                  </SourceCard>
+                    isActive={(tourKey ?? summary?.nextStep) === s.key}
+                    onOpen={() => setModalKey(s.key)}
+                  />
                 ))}
               </div>
             )}
@@ -275,9 +257,93 @@ export default function DataHubPage() {
         )}
       </main>
 
+      {/* Embed modal (Monthly / Operational) — opens instead of expanding inline. */}
+      <DataEmbedModal
+        openKey={modalKey}
+        onClose={() => setModalKey(null)}
+        schoolId={schoolId}
+        periodId={periodId}
+        periodLabel={periodLabel}
+        canEdit={isOwnerOrAccountant}
+        onSaved={refetch}
+      />
+
       {/* The star — Penny. Renders once summary is known (and not on empty-school). */}
-      {!noPeriods && summary && <GuideMascot ref={mascotRef} summary={summary} />}
+      {!noPeriods && summary && (
+        <GuideMascot ref={mascotRef} summary={summary} onActiveStep={setTourKey} />
+      )}
     </div>
+  )
+}
+
+// Embed modal (render-helper, module scope — not a nested component def). Shows the
+// Monthly or Operational panel in a centered popup instead of expanding the card.
+function DataEmbedModal({ openKey, onClose, schoolId, periodId, periodLabel, canEdit, onSaved }) {
+  const isOpen = openKey === 'monthly' || openKey === 'operational'
+  const title = openKey === 'monthly' ? 'Monthly numbers' : 'Enrollment & aid'
+
+  useEffect(() => {
+    if (!isOpen) return undefined
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [isOpen, onClose])
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <div
+            className="absolute inset-0 bg-navy/40 backdrop-blur-sm"
+            onClick={onClose}
+            aria-hidden="true"
+          />
+          <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-label={title}
+            initial={{ opacity: 0, y: 16, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 16, scale: 0.98 }}
+            transition={{ duration: 0.2 }}
+            className="relative z-10 flex max-h-[88vh] w-full max-w-[760px] flex-col overflow-hidden rounded-2xl border-2 border-gold/30 bg-section shadow-2xl"
+          >
+            <div className="flex items-center justify-between border-b border-rule/60 bg-white px-5 py-3.5">
+              <h2 className="font-serif text-lg font-semibold text-navy">{title}</h2>
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-section hover:text-navy"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="overflow-y-auto p-5">
+              {openKey === 'monthly' && periodId && (
+                <MonthlyActualsPanel schoolId={schoolId} periodId={periodId} canEdit={canEdit} />
+              )}
+              {openKey === 'operational' && periodId && (
+                <OperationalDataPanel
+                  schoolId={schoolId}
+                  periodId={periodId}
+                  periodLabel={periodLabel}
+                  canEdit={canEdit}
+                  onSaved={onSaved}
+                />
+              )}
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }
 
