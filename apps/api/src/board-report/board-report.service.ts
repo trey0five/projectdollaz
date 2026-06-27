@@ -145,6 +145,35 @@ interface CapitalBudgetSection {
   grandTotal: CapitalBudgetSubtotal
 }
 
+// ── Capital Campaign (Phase 6 — server-computed; null when no items) ───────────
+// Mirrors CapitalBudget* with estimate replacing actual and difference (= budget
+// − estimate; positive = UNDER budget = favorable) replacing overUnder. `group`
+// is its own display label (free-text), so there is NO key/label split.
+
+interface CapitalCampaignLine {
+  id: string
+  label: string
+  budget: number
+  estimate: number
+  difference: number
+  comment: string
+}
+interface CapitalCampaignTotal {
+  budget: number
+  estimate: number
+  difference: number
+}
+interface CapitalCampaignGroup {
+  group: string
+  lines: CapitalCampaignLine[]
+  subtotal: CapitalCampaignTotal
+}
+interface CapitalCampaignSection {
+  campaignName: string | null
+  groups: CapitalCampaignGroup[]
+  grandTotal: CapitalCampaignTotal
+}
+
 // ── Cash & Investments Summary (Phase 3 — server-computed; null when no accounts) ─
 
 interface CashInvestmentsAccount {
@@ -196,6 +225,7 @@ export interface BoardReportBundle {
   forecast: ForecastSection | null
   capitalBudget: CapitalBudgetSection | null
   cashInvestments: CashInvestmentsSection | null
+  capitalCampaign: CapitalCampaignSection | null
   keyIndicators: KeyIndicator[]
   financialPosition: { hasPY: boolean; cy: SFPResult; py: SFPResult | null } | null
   changesInNetAssets: { hasPY: boolean; cy: NetAssetsColumn; py: NetAssetsColumn | null } | null
@@ -295,6 +325,7 @@ export class BoardReportService {
 
     const capRow = await this.schedules.getCapital(schoolId, period.id)
     const cashRow = await this.schedules.getCash(schoolId, period.id)
+    const campRow = await this.schedules.getCampaign(schoolId, period.id)
 
     const periodEndDate = period.periodEndDate.toISOString().slice(0, 10)
 
@@ -341,6 +372,10 @@ export class BoardReportService {
       ),
       capitalBudget: this.buildCapitalBudget(capRow?.items ?? null),
       cashInvestments: this.buildCashInvestments(cashRow?.accounts ?? null),
+      capitalCampaign: this.buildCapitalCampaign(
+        campRow?.campaignName ?? null,
+        campRow?.items ?? null,
+      ),
       keyIndicators: bundle ? this.buildKeyIndicators(metrics, operationalRow) : [],
       financialPosition: bundle ? this.buildFinancialPosition(bundle) : null,
       changesInNetAssets: bundle ? this.buildChangesInNetAssets(bundle) : null,
@@ -763,6 +798,76 @@ export class BoardReportService {
       grandTotal: { balance: gBal, insuredPortion: gIns, uninsuredPortion: gUnins },
       totalInsured: gIns,
       totalUninsured: gUnins,
+    }
+  }
+
+  // ── Capital Campaign (Phase 6 — reshape stored items → grouped totals) ────────
+
+  /**
+   * Reshape the stored CampaignSchedule.items into grouped display rows with
+   * server-computed difference (= budget − estimate per line/subtotal/grand
+   * total). DIFFERENCE SIGN: positive = UNDER budget = favorable (NBOA
+   * "Difference to Budget") — the OPPOSITE sense of capital's overUnder. Groups
+   * are discovered from the items in FIRST-SEEN order (free-text group; NOT
+   * iterated over a constant). grandTotal sums ALL lines. Returns null when there
+   * are zero items. ZERO client math.
+   */
+  private buildCapitalCampaign(
+    campaignName: string | null,
+    items: unknown,
+  ): CapitalCampaignSection | null {
+    if (!Array.isArray(items) || items.length === 0) return null
+
+    const order: string[] = []
+    const byGroup = new Map<string, Record<string, unknown>[]>()
+    for (const raw of items) {
+      const r = (raw ?? {}) as Record<string, unknown>
+      const group = typeof r.group === 'string' ? r.group : ''
+      if (!byGroup.has(group)) {
+        byGroup.set(group, [])
+        order.push(group)
+      }
+      byGroup.get(group)!.push(r)
+    }
+
+    const groups: CapitalCampaignGroup[] = []
+    let gBudget = 0
+    let gEstimate = 0
+
+    for (const group of order) {
+      const rows = byGroup.get(group)!
+      let sBudget = 0
+      let sEstimate = 0
+      const lines: CapitalCampaignLine[] = rows.map((r) => {
+        const budget = Number(r.budget) || 0
+        const estimate = Number(r.estimate) || 0
+        sBudget += budget
+        sEstimate += estimate
+        return {
+          id: typeof r.id === 'string' ? r.id : '',
+          label: typeof r.label === 'string' ? r.label : '',
+          budget,
+          estimate,
+          difference: budget - estimate,
+          comment: typeof r.comment === 'string' ? r.comment : '',
+        }
+      })
+      gBudget += sBudget
+      gEstimate += sEstimate
+
+      groups.push({
+        group,
+        lines,
+        subtotal: { budget: sBudget, estimate: sEstimate, difference: sBudget - sEstimate },
+      })
+    }
+
+    if (groups.length === 0) return null
+
+    return {
+      campaignName,
+      groups,
+      grandTotal: { budget: gBudget, estimate: gEstimate, difference: gBudget - gEstimate },
     }
   }
 

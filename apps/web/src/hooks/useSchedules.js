@@ -61,6 +61,60 @@ export function useCapitalSchedule(schoolId, periodId) {
   return { items, updatedAt, loading, error, notEntitled, refetch }
 }
 
+export function useCampaignSchedule(schoolId, periodId) {
+  const [campaignName, setCampaignName] = useState(null)
+  const [items, setItems] = useState([])
+  const [updatedAt, setUpdatedAt] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [notEntitled, setNotEntitled] = useState(false)
+
+  const load = useCallback(async (sid, pid) => {
+    setError('')
+    setNotEntitled(false)
+    try {
+      const res = await schedulesApi.getCampaign(sid, pid)
+      setCampaignName(res.data?.campaignName ?? null)
+      setItems(Array.isArray(res.data?.items) ? res.data.items : [])
+      setUpdatedAt(res.data?.updatedAt ?? null)
+    } catch (e) {
+      if (isPaymentRequired(e)) setNotEntitled(true)
+      else setError('Could not load the capital campaign.')
+      setCampaignName(null)
+      setItems([])
+      setUpdatedAt(null)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.resolve().then(() => {
+      if (cancelled) return
+      if (schoolId && periodId) {
+        setLoading(true)
+        load(schoolId, periodId)
+      } else {
+        setCampaignName(null)
+        setItems([])
+        setUpdatedAt(null)
+        setLoading(false)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [schoolId, periodId, load])
+
+  const refetch = useCallback(
+    () => (schoolId && periodId ? load(schoolId, periodId) : Promise.resolve()),
+    [schoolId, periodId, load],
+  )
+
+  return { campaignName, items, updatedAt, loading, error, notEntitled, refetch }
+}
+
 export function useCashSchedule(schoolId, periodId) {
   const [accounts, setAccounts] = useState([])
   const [updatedAt, setUpdatedAt] = useState(null)

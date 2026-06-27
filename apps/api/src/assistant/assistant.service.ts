@@ -48,6 +48,7 @@ const TOOL_LABELS: Record<string, string> = {
   get_forecast: 'Reading the FY-end forecast…',
   get_capital_schedule: 'Reading the capital budget…',
   get_cash_schedule: 'Reading cash & investments…',
+  get_campaign_schedule: 'Reading the capital campaign…',
   apply_forecast: 'Re-projecting the FY-end forecast…',
   set_feeder_enrollment: 'Preparing the feeder enrollment…',
   render_chart: 'Drawing a chart…',
@@ -619,6 +620,7 @@ export class AssistantService {
       'For draft_cap_entry, first call get_corrective_action_plan to get the ruleId. ' +
       'For set_explanation, first call get_board_report to see the category keys. ' +
       'For capital spend use get_capital_schedule; for cash/liquidity & insured exposure use get_cash_schedule. ' +
+      'For capital-campaign tracking / budget-vs-estimate (is the campaign tracking to budget?) use get_campaign_schedule. ' +
       'Be concise and board-appropriate; format money as USD. Only this school’s data is available. ' +
       'If a tool returns an error or needs data, say so plainly.'
     )
@@ -855,6 +857,16 @@ export class AssistantService {
           b.cashInvestments ?? {
             exists: false,
             note: 'No cash & investment accounts entered for this period.',
+          }
+        )
+      }
+      case 'get_campaign_schedule': {
+        const pid = await this.resolvePeriod(args, ctx)
+        const b = await this.boardReport.assemble(ctx.schoolId, pid, 'annual')
+        return (
+          b.capitalCampaign ?? {
+            exists: false,
+            note: 'No capital campaign entered for this period.',
           }
         )
       }

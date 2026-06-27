@@ -304,6 +304,10 @@ export const schedulesApi = {
     api.get(`/schools/${schoolId}/periods/${periodId}/cash-schedule`),
   saveCash: (schoolId, periodId, body) =>
     api.put(`/schools/${schoolId}/periods/${periodId}/cash-schedule`, body),
+  getCampaign: (schoolId, periodId) =>
+    api.get(`/schools/${schoolId}/periods/${periodId}/campaign-schedule`),
+  saveCampaign: (schoolId, periodId, body) =>
+    api.put(`/schools/${schoolId}/periods/${periodId}/campaign-schedule`, body),
 }
 
 // ── Phase 3: recurring board-summary delivery (per school) ───────────────────

@@ -15,19 +15,21 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Landmark, Banknote } from 'lucide-react'
+import { ArrowLeft, Landmark, Banknote, Target } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import TopBar from '../components/TopBar.jsx'
 import BillingBanner from '../components/BillingBanner.jsx'
 import PeriodSelector from '../components/analytics/PeriodSelector.jsx'
 import CapitalScheduleWorkspace from '../components/reports/schedules/CapitalScheduleWorkspace.jsx'
 import CashScheduleWorkspace from '../components/reports/schedules/CashScheduleWorkspace.jsx'
+import CampaignScheduleWorkspace from '../components/reports/schedules/CampaignScheduleWorkspace.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { usePersistence } from '../context/PersistenceContext.jsx'
 
 const TABS = [
   { id: 'capital', label: 'Capital Budget', Icon: Landmark },
   { id: 'cash', label: 'Cash & Investments', Icon: Banknote },
+  { id: 'campaign', label: 'Capital Campaign', Icon: Target },
 ]
 
 export default function SchedulesPage() {
@@ -132,16 +134,25 @@ export default function SchedulesPage() {
               })}
             </div>
 
-            {tab === 'capital' ? (
+            {tab === 'capital' && (
               <CapitalScheduleWorkspace
                 key={`cap:${schoolId}:${periodId}`}
                 schoolId={schoolId}
                 periodId={periodId}
                 canEdit={canEdit}
               />
-            ) : (
+            )}
+            {tab === 'cash' && (
               <CashScheduleWorkspace
                 key={`cash:${schoolId}:${periodId}`}
+                schoolId={schoolId}
+                periodId={periodId}
+                canEdit={canEdit}
+              />
+            )}
+            {tab === 'campaign' && (
+              <CampaignScheduleWorkspace
+                key={`camp:${schoolId}:${periodId}`}
                 schoolId={schoolId}
                 periodId={periodId}
                 canEdit={canEdit}

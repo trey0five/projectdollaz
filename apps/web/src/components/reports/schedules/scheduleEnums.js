@@ -27,3 +27,20 @@ export const CASH_RESTRICTION_LABELS = {
   temporarily_restricted: 'Temporarily Restricted',
   permanently_restricted: 'Permanently Restricted',
 }
+
+// Capital Campaign tracker — per-line column headers (editor display only).
+export const CAMPAIGN_COLUMN_LABELS = {
+  budget: 'Budget',
+  estimate: 'Estimate',
+  difference: 'Difference to Budget',
+}
+
+// Free-text division names; these are a datalist HINT only — NOT validated and
+// NOT a fixed enum (campaigns name their own divisions). The group string is its
+// own display label, so there is intentionally no *_LABELS map.
+export const CAMPAIGN_GROUP_SUGGESTIONS = [
+  'Upper Division',
+  'Middle Division',
+  'Lower Division',
+  'Fundraising',
+]

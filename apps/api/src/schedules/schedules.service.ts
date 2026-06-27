@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common'
 import { Prisma } from '@finrep/db'
-import type { CapitalSchedule, CashSchedule } from '@finrep/db'
+import type { CapitalSchedule, CashSchedule, CampaignSchedule } from '@finrep/db'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { PeriodsService } from '../periods/periods.service.js'
 import { AuditService } from '../common/audit/audit.service.js'
 import type { SaveCapitalScheduleDto } from './dto/save-capital-schedule.dto.js'
 import type { SaveCashScheduleDto } from './dto/save-cash-schedule.dto.js'
+import type { SaveCampaignScheduleDto } from './dto/save-campaign-schedule.dto.js'
 
 // ── The stored row shapes (PUT validates + persists verbatim; GET returns raw) ──
 
@@ -32,8 +33,23 @@ export interface CashAccount {
   comment: string
 }
 
+export interface CampaignItem {
+  id: string
+  group: string
+  label: string
+  budget: number
+  estimate: number
+  comment: string
+}
+
 export interface CapitalScheduleResult {
   items: CapitalItem[]
+  updatedAt: string | null
+}
+
+export interface CampaignScheduleResult {
+  campaignName: string | null
+  items: CampaignItem[]
   updatedAt: string | null
 }
 
@@ -205,6 +221,84 @@ export class SchedulesService {
         balance: num(o.balance),
         insuredPortion: num(o.insuredPortion),
         uninsuredPortion: num(o.uninsuredPortion),
+        comment: typeof o.comment === 'string' ? o.comment : '',
+      }
+    })
+  }
+
+  // ── Capital Campaign (Phase 6) ────────────────────────────────────────────────
+
+  async getCampaignSchedule(
+    schoolId: string,
+    periodId: string,
+  ): Promise<CampaignScheduleResult> {
+    const period = await this.periods.getOwnedPeriod(schoolId, periodId)
+    const row = await this.prisma.campaignSchedule.findUnique({
+      where: { schoolId_fiscalPeriodId: { schoolId, fiscalPeriodId: period.id } },
+    })
+    return {
+      campaignName: row?.campaignName ?? null,
+      items: this.normalizeCampaignItems(row?.items),
+      updatedAt: row?.updatedAt ? row.updatedAt.toISOString() : null,
+    }
+  }
+
+  async saveCampaignSchedule(
+    schoolId: string,
+    periodId: string,
+    dto: SaveCampaignScheduleDto,
+    userId: string,
+  ): Promise<CampaignScheduleResult> {
+    const period = await this.periods.getOwnedPeriod(schoolId, periodId)
+    const items = this.normalizeCampaignItems(dto.items)
+    const campaignName = dto.campaignName?.trim() || null
+
+    const data = {
+      campaignName,
+      items: items as unknown as Prisma.InputJsonValue,
+      updatedByUserId: userId,
+    }
+    const row = await this.prisma.campaignSchedule.upsert({
+      where: { schoolId_fiscalPeriodId: { schoolId, fiscalPeriodId: period.id } },
+      create: { schoolId, fiscalPeriodId: period.id, ...data },
+      update: data,
+    })
+
+    await this.audit.write({
+      schoolId,
+      userId,
+      action: 'campaign_schedule.saved',
+      targetType: 'campaign_schedules',
+      targetId: row.id,
+      metadata: { fiscalPeriodId: period.id, count: items.length },
+    })
+
+    return {
+      campaignName: row.campaignName ?? null,
+      items: this.normalizeCampaignItems(row.items),
+      updatedAt: row.updatedAt.toISOString(),
+    }
+  }
+
+  /** Thin finder for BoardReportService.assemble — raw row or null. */
+  async getCampaign(schoolId: string, periodId: string): Promise<CampaignSchedule | null> {
+    return this.prisma.campaignSchedule.findUnique({
+      where: { schoolId_fiscalPeriodId: { schoolId, fiscalPeriodId: periodId } },
+    })
+  }
+
+  private normalizeCampaignItems(raw: unknown): CampaignItem[] {
+    if (!Array.isArray(raw)) return []
+    return raw.map((r) => {
+      const o = (r ?? {}) as Record<string, unknown>
+      return {
+        id: typeof o.id === 'string' && o.id.length > 0 ? o.id : randomId(),
+        // FREE-TEXT group — NO enum clamp. Trimmed so the web autosave baseline
+        // (which also trims) round-trips byte-identically and OPENING writes nothing.
+        group: String(o.group ?? '').trim(),
+        label: String(o.label ?? ''),
+        budget: num(o.budget),
+        estimate: num(o.estimate),
         comment: typeof o.comment === 'string' ? o.comment : '',
       }
     })

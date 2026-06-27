@@ -25,6 +25,7 @@ const TOC = [
   'Capital Budget Summary',
   'Statement of Financial Position',
   'Cash & Investments Summary',
+  'Capital Campaign',
   'Statement of Changes in Net Assets',
   'Statement of Cash Flows',
 ]
@@ -44,6 +45,7 @@ export default function BoardReportPrintDocument({ data }) {
       {renderCapitalBudget(data)}
       {renderFinancialPosition(data)}
       {renderCashInvestments(data)}
+      {renderCapitalCampaign(data)}
       {renderChangesInNetAssets(data)}
       {renderCashFlows(data)}
     </div>
@@ -614,6 +616,88 @@ function CashGroup({ group }) {
         <td className={cellNeg(sub.insuredPortion)}>{money(sub.insuredPortion)}</td>
         <td className={cellNeg(sub.uninsuredPortion)}>{money(sub.uninsuredPortion)}</td>
         <td className="brd-l" />
+      </tr>
+    </>
+  )
+}
+
+// ── 5c. Capital Campaign ──────────────────────────────────────────────────────
+// PURE presentational: every figure (line difference, subtotals, campaign total)
+// comes verbatim from the server-assembled bundle.capitalCampaign (sharedShapes).
+// difference = budget − estimate (NBOA "Difference to Budget"): positive = UNDER
+// budget = favorable. The reused overUnder()/cellNeg() formatter+class is
+// sign-agnostic, so an under-budget (positive) difference reads positive / not-red
+// — NBOA-faithful. Groups are server-discovered in first-seen order; the group
+// string is its own display label (no key/label split). ZERO client arithmetic —
+// null section ⇒ "Not available" placeholder.
+function renderCapitalCampaign(data) {
+  const cc = data.capitalCampaign
+  if (!cc) {
+    return (
+      <section className="brd-section">
+        <h2>Capital Campaign</h2>
+        <p className="brd-placeholder">
+          Not available — no capital campaign entered for this period.
+        </p>
+      </section>
+    )
+  }
+  const gt = cc.grandTotal || {}
+  return (
+    <section className="brd-section">
+      <h2>Capital Campaign</h2>
+      {cc.campaignName ? <p className="brd-subnote">{cc.campaignName}</p> : null}
+      <table className="brd-table">
+        <thead>
+          <tr>
+            <th className="brd-l">Line</th>
+            <th>Budget</th>
+            <th>Estimate</th>
+            <th>Difference to Budget</th>
+            <th className="brd-l brd-explain">Comment</th>
+          </tr>
+        </thead>
+        <tbody>
+          {(cc.groups || []).map((g) => (
+            <CampaignGroup key={g.group} group={g} />
+          ))}
+          <tr className="brd-total brd-net">
+            <td className="brd-l">Campaign Total</td>
+            <td className={cellNeg(gt.budget)}>{money(gt.budget)}</td>
+            <td className={cellNeg(gt.estimate)}>{money(gt.estimate)}</td>
+            <td className={cellNeg(gt.difference)}>{overUnder(gt.difference)}</td>
+            <td className="brd-l brd-explain" />
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  )
+}
+
+// One campaign group: header + its lines + subtotal (all verbatim from assemble).
+// group is its own display label (no key/label split).
+function CampaignGroup({ group }) {
+  const sub = group.subtotal || {}
+  return (
+    <>
+      <tr className="brd-group">
+        <td colSpan={5}>{group.group}</td>
+      </tr>
+      {(group.lines || []).map((l) => (
+        <tr key={l.id}>
+          <td className="brd-l">{l.label}</td>
+          <td className={cellNeg(l.budget)}>{money(l.budget)}</td>
+          <td className={cellNeg(l.estimate)}>{money(l.estimate)}</td>
+          <td className={cellNeg(l.difference)}>{overUnder(l.difference)}</td>
+          <td className="brd-l brd-explain">{l.comment || ''}</td>
+        </tr>
+      ))}
+      <tr className="brd-total">
+        <td className="brd-l">Subtotal</td>
+        <td className={cellNeg(sub.budget)}>{money(sub.budget)}</td>
+        <td className={cellNeg(sub.estimate)}>{money(sub.estimate)}</td>
+        <td className={cellNeg(sub.difference)}>{overUnder(sub.difference)}</td>
+        <td className="brd-l brd-explain" />
       </tr>
     </>
   )

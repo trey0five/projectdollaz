@@ -24,3 +24,16 @@ export const CASH_RESTRICTION_LABELS: Record<CashRestriction, string> = {
   temporarily_restricted: 'Temporarily Restricted',
   permanently_restricted: 'Permanently Restricted',
 }
+
+// ── Phase 6 — Capital Campaign caps ───────────────────────────────────────────
+// Field length/array caps for SaveCampaignScheduleDto, mirroring the capital
+// DTO's inline caps (label 200, comment 500, id 64, items 200). NOTE: the
+// campaign `group` is FREE-TEXT (campaigns name their own divisions, e.g.
+// "Upper Division", "Fundraising") — there is intentionally NO CAMPAIGN_GROUPS
+// enum (unlike CAPITAL_GROUPS); board-report groups are discovered from the
+// stored items in first-seen order.
+export const CAMPAIGN_NAME_MAX = 200
+export const CAMPAIGN_GROUP_MAX = 120
+export const CAMPAIGN_LABEL_MAX = 200
+export const CAMPAIGN_COMMENT_MAX = 500
+export const CAMPAIGN_ITEMS_MAX = 200

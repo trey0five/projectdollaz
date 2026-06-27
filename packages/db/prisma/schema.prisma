@@ -117,6 +117,7 @@ model School {
   boardReports       BoardReport[]
   capitalSchedules   CapitalSchedule[]
   cashSchedules      CashSchedule[]
+  campaignSchedules  CampaignSchedule[]
 
   @@index([organizationId])
   @@map("schools")
@@ -144,6 +145,7 @@ model FiscalPeriod {
   boardReports       BoardReport[]
   capitalSchedules   CapitalSchedule[]
   cashSchedules      CashSchedule[]
+  campaignSchedules  CampaignSchedule[]
 
   // Phase 1C: DB-level idempotency for create-or-get under concurrency. The
   // natural key of a period is (school, period-end, type).
@@ -186,6 +188,7 @@ model User {
   boardReportUpdates BoardReport[]          @relation("BoardReportUpdatedBy")
   capitalSchedulesUpdated CapitalSchedule[] @relation("CapitalScheduleUpdatedBy")
   cashSchedulesUpdated    CashSchedule[]    @relation("CashScheduleUpdatedBy")
+  campaignSchedulesUpdated CampaignSchedule[] @relation("CampaignScheduleUpdatedBy")
 
   @@index([email])
   @@map("users")
@@ -718,4 +721,29 @@ model CashSchedule {
   @@index([schoolId])
   @@index([fiscalPeriodId])
   @@map("cash_schedules")
+}
+
+// Phase 6 — Capital Campaign tracker. Mirrors CapitalSchedule exactly plus a
+// nullable campaignName header. One JSON-array row per (school, period); items is
+// CampaignItem[] (free-text group, original budget vs current estimate). Server
+// reshapes these into the board-report capitalCampaign section (difference =
+// budget − estimate; positive = under budget / favorable; all totals server-side).
+model CampaignSchedule {
+  id              String   @id @default(uuid()) @db.Uuid
+  schoolId        String   @map("school_id") @db.Uuid
+  fiscalPeriodId  String   @map("fiscal_period_id") @db.Uuid
+  campaignName    String?  @map("campaign_name")
+  items           Json     @default("[]") // CampaignItem[] (ordered, see sharedShapes)
+  updatedByUserId String?  @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  school        School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  fiscalPeriod  FiscalPeriod @relation(fields: [fiscalPeriodId], references: [id], onDelete: Cascade)
+  updatedByUser User?        @relation("CampaignScheduleUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([schoolId, fiscalPeriodId])
+  @@index([schoolId])
+  @@index([fiscalPeriodId])
+  @@map("campaign_schedules")
 }

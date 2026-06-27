@@ -8,6 +8,7 @@ import { EntitlementGuard } from '../billing/entitlement.guard.js'
 import { SchedulesService } from './schedules.service.js'
 import { SaveCapitalScheduleDto } from './dto/save-capital-schedule.dto.js'
 import { SaveCashScheduleDto } from './dto/save-cash-schedule.dto.js'
+import { SaveCampaignScheduleDto } from './dto/save-campaign-schedule.dto.js'
 
 /**
  * Phase 3 — Capital Budget + Cash & Investments supporting schedules. IDENTICAL
@@ -55,5 +56,24 @@ export class SchedulesController {
     @CurrentUser() user: User,
   ) {
     return this.schedules.saveCashSchedule(schoolId, periodId, dto, user.id)
+  }
+
+  // ── Capital Campaign ──────────────────────────────────────────────────────────
+
+  @Get('periods/:periodId/campaign-schedule')
+  @Roles('owner', 'accountant', 'viewer')
+  getCampaign(@Param('schoolId') schoolId: string, @Param('periodId') periodId: string) {
+    return this.schedules.getCampaignSchedule(schoolId, periodId)
+  }
+
+  @Put('periods/:periodId/campaign-schedule')
+  @Roles('owner', 'accountant')
+  saveCampaign(
+    @Param('schoolId') schoolId: string,
+    @Param('periodId') periodId: string,
+    @Body() dto: SaveCampaignScheduleDto,
+    @CurrentUser() user: User,
+  ) {
+    return this.schedules.saveCampaignSchedule(schoolId, periodId, dto, user.id)
   }
 }

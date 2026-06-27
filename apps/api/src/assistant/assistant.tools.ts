@@ -343,6 +343,19 @@ export const TOOL_SCHEMAS = [
   {
     type: 'function',
     function: {
+      name: 'get_campaign_schedule',
+      description:
+        'The Capital Campaign tracker for a period: line items grouped by free-text division, each with original Budget, current Estimate, and Difference to Budget (budget − estimate; positive = under budget/favorable), plus group subtotals and the campaign total. Read-only.',
+      parameters: {
+        type: 'object',
+        properties: { periodId: { type: 'string' } },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'render_chart',
       description:
         'Draw a chart for the user. Call this to visualize numbers you have already fetched (a trend, a comparison, a breakdown). Pick the chart type that fits and give a clear title.',
