@@ -9,6 +9,12 @@ import type {
 } from '@finrep/engine'
 import type { MetricResult } from '@finrep/analytics'
 import { REVENUE_LINE_LABELS, EXPENSE_LINE_LABELS } from '@finrep/analytics'
+import { MonthlyActualsService } from '../monthly/monthly-actuals.service.js'
+import type { CategoryActuals } from '../analytics/category-actuals.js'
+import {
+  rollupMonthlyBudget,
+  type MonthlyBudgetColumn,
+} from './monthly-budget-rollup.js'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { PeriodsService } from '../periods/periods.service.js'
 import { AnalyticsService } from '../analytics/analytics.service.js'
@@ -63,6 +69,53 @@ interface Operations {
     /** Phase 5 — prior-year net surplus/(deficit); null when no PY snapshot. */
     priorYear: number | null
   }
+}
+
+// ── Monthly column-group primitives (NBOA MTD + YTD) — additive sibling shape ──
+// PURELY ADDITIVE: annual `operations` is never reshaped. Monthly responses carry
+// a separate `monthlyOperations` field; annual responses OMIT the monthly-only
+// keys entirely (byte-identity).
+
+/** One MTD or YTD measurement for a line/total. */
+interface OpCell {
+  actual: number
+  budget: number | null
+  variance: number | null
+  variancePct: number | null
+  favorable: boolean
+}
+interface MonthlyOperationsLine {
+  key: string
+  label: string
+  mtd: OpCell
+  ytd: OpCell
+  /** Phase 5 — DEFERRED for monthly (month bundles are CY-only) -> always null. */
+  priorYear: number | null
+  explanation: string | null
+}
+interface MonthlyOperationsTotals {
+  mtd: OpCell
+  ytd: OpCell
+  priorYear: number | null
+}
+/** netSurplus cells OMIT favorable, mirroring the annual netSurplus shape. */
+interface MonthlyNetCell {
+  actual: number
+  budget: number | null
+  variance: number | null
+  variancePct: number | null
+}
+interface MonthlyOperations {
+  granularity: 'monthly'
+  monthKey: string
+  monthLabel: string
+  priorMonthKey: string | null
+  hasBudget: boolean
+  revenue: MonthlyOperationsLine[]
+  revenueTotals: MonthlyOperationsTotals
+  expense: MonthlyOperationsLine[]
+  expenseTotals: MonthlyOperationsTotals
+  netSurplus: { mtd: MonthlyNetCell; ytd: MonthlyNetCell; priorYear: number | null }
 }
 
 interface KeyIndicator {
@@ -211,7 +264,11 @@ export interface BoardReportBundle {
   label: string
   periodEndDate: string
   fiscalYearStart: string
-  granularity: 'annual'
+  granularity: 'annual' | 'monthly'
+  /** MONTHLY ONLY — OMITTED entirely on the annual branch (byte-identity). */
+  monthKey?: string
+  /** MONTHLY ONLY — OMITTED entirely on the annual branch (byte-identity). */
+  monthsAvailable?: string[]
   availability: {
     hasSnapshot: boolean
     hasBudget: boolean
@@ -221,7 +278,10 @@ export interface BoardReportBundle {
   branding: { schoolName: string; logoBase64: string | null; brandColor: string | null }
   settings: { reportTitle: string | null; committeeName: string | null; generatedAt: string | null }
   mda: { text: string | null; source: 'rule' | 'llm' | 'user' | null }
+  /** ANNUAL ONLY — null when monthly. */
   operations: Operations | null
+  /** MONTHLY ONLY — null/omitted when annual. */
+  monthlyOperations?: MonthlyOperations | null
   forecast: ForecastSection | null
   capitalBudget: CapitalBudgetSection | null
   cashInvestments: CashInvestmentsSection | null
@@ -274,6 +334,26 @@ function round1(n: number): number {
   return Math.round(n * 10) / 10
 }
 
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+]
+
+/** Last calendar day of a 'YYYY-MM' monthKey as 'YYYY-MM-DD' (month-end, UTC). */
+function monthEndIso(monthKey: string): string {
+  const [y, m] = monthKey.split('-').map((s) => Number(s))
+  // Day 0 of the NEXT month = last day of this month.
+  const d = new Date(Date.UTC(y, m, 0))
+  return d.toISOString().slice(0, 10)
+}
+
+/** NBOA-style 'For the period ended <Month DD, YYYY>' for a 'YYYY-MM' monthKey. */
+function monthLabel(monthKey: string): string {
+  const iso = monthEndIso(monthKey)
+  const [y, m, d] = iso.split('-').map((s) => Number(s))
+  return `For the period ended ${MONTH_NAMES[m - 1]} ${d}, ${y}`
+}
+
 @Injectable()
 export class BoardReportService {
   constructor(
@@ -283,6 +363,7 @@ export class BoardReportService {
     private readonly budget: BudgetService,
     private readonly audit: AuditService,
     private readonly schedules: SchedulesService,
+    private readonly monthlyActuals: MonthlyActualsService,
     // Optional so the service constructs without the LLM (rule baseline only).
     @Optional() private readonly assistant?: AssistantClient,
   ) {}
@@ -298,13 +379,17 @@ export class BoardReportService {
     schoolId: string,
     periodId: string,
     granularity = 'annual',
+    monthKey?: string,
   ): Promise<BoardReportBundle> {
     const period = await this.periods.getOwnedPeriod(schoolId, periodId) // 404 cross-tenant
-    if (granularity !== 'annual') {
+    if (granularity !== 'annual' && granularity !== 'monthly') {
       throw new BadRequestException({
         code: 'granularity_unsupported',
         message: 'Only annual granularity is supported.',
       })
+    }
+    if (granularity === 'monthly') {
+      return this.assembleMonthly(schoolId, period, monthKey)
     }
 
     const school = await this.prisma.school.findUnique({ where: { id: schoolId } })
@@ -382,6 +467,314 @@ export class BoardReportService {
       cashFlows: bundle ? this.buildCashFlows(bundle) : null,
     }
     return bundleOut
+  }
+
+  // ── Assemble (monthly — NBOA MTD + YTD column groups) ────────────────────────
+
+  /**
+   * Monthly branch. Actuals come from MonthlyActualsService (reused, never
+   * recomputed); the monthly budget is rolled up INDEPENDENTLY from the persisted
+   * lines.spread via rollupMonthlyBudget (engine ACCT_MAP). The annual `operations`
+   * field is null; a separate `monthlyOperations` sibling carries the MTD/YTD
+   * groups. monthKey/monthsAvailable are attached ONLY here (annual omits them).
+   */
+  private async assembleMonthly(
+    schoolId: string,
+    period: { id: string; label: string; periodEndDate: Date },
+    monthKey?: string,
+  ): Promise<BoardReportBundle> {
+    if (!monthKey) {
+      throw new BadRequestException({
+        code: 'month_required',
+        message: 'granularity=monthly requires a month (YYYY-MM).',
+      })
+    }
+
+    // Actuals — MonthlyActualsService throws a PLAIN-message 400 when the month is
+    // not loaded; CATCH and re-emit the coded {month_not_loaded, monthsAvailable}
+    // contract shape so the inner message isn't leaked.
+    let ma: Awaited<ReturnType<MonthlyActualsService['actuals']>>
+    try {
+      ma = await this.monthlyActuals.actuals(schoolId, period.id, monthKey)
+    } catch (e) {
+      // Only the "month not loaded" 400 is re-emitted with the coded contract
+      // shape; any other error (DB 500, tenancy 404) must propagate untouched so
+      // real faults aren't masked as a benign month_not_loaded.
+      if (!(e instanceof BadRequestException)) throw e
+      const available = await this.monthlyMonthsAvailable(schoolId, period.id)
+      throw new BadRequestException({
+        code: 'month_not_loaded',
+        message: `Month ${monthKey} is not loaded for this period.`,
+        monthsAvailable: available,
+      })
+    }
+    // No months loaded at all => the service returns an empty-but-shaped response
+    // (monthsAvailable=[]); treat as not-loaded for the requested month.
+    if (ma.monthsAvailable.length === 0) {
+      throw new BadRequestException({
+        code: 'month_not_loaded',
+        message: `Month ${monthKey} is not loaded for this period.`,
+        monthsAvailable: [],
+      })
+    }
+
+    const school = await this.prisma.school.findUnique({ where: { id: schoolId } })
+    const row = await this.findRow(schoolId, period.id)
+    const explanations = this.readExplanations(row)
+
+    // Budget — read-only via the existing BudgetService.get; roll up INDEPENDENTLY.
+    const budgetPublic = await this.budget.get(schoolId, period.id)
+    const budgetLines = (budgetPublic.lines as Record<string, unknown> | null) ?? null
+    const spread = (budgetLines?.spread as unknown) ?? null
+    const mb = rollupMonthlyBudget(spread)
+    const budgetYtd = mb?.budgetYtd(monthKey) ?? null
+    const budgetMtd = mb?.budgetMtd(monthKey) ?? null
+    const hasBudget = budgetYtd !== null
+
+    const monthlyOperations = this.buildMonthlyOperations(
+      ma.ytd,
+      ma.mtd,
+      budgetYtd,
+      budgetMtd,
+      explanations,
+      monthKey,
+      ma.priorMonthKey,
+    )
+
+    // periodEndDate = last-day-of-month derived from monthKey; monthLabel NBOA-style.
+    const periodEndDate = monthEndIso(monthKey)
+
+    // Non-Operations sections reuse the month-end bundle point-in-time data + the
+    // partial-year metrics. priorYear/PY DEFERRED (month bundles are CY-only).
+    const operationalRow = await this.prisma.periodOperationalData.findUnique({
+      where: { schoolId_fiscalPeriodId: { schoolId, fiscalPeriodId: period.id } },
+    })
+    const capRow = await this.schedules.getCapital(schoolId, period.id)
+    const cashRow = await this.schedules.getCash(schoolId, period.id)
+    const campRow = await this.schedules.getCampaign(schoolId, period.id)
+
+    const settingsCommittee = row?.committeeName ?? school?.defaultCommittee ?? null
+
+    const bundleOut: BoardReportBundle = {
+      periodId: period.id,
+      label: period.label,
+      periodEndDate,
+      fiscalYearStart: deriveFiscalYearStart(periodEndDate),
+      granularity: 'monthly',
+      monthKey,
+      monthsAvailable: ma.monthsAvailable,
+      availability: {
+        hasSnapshot: true,
+        hasBudget,
+        hasOperational: !!operationalRow,
+        dataAsOf: periodEndDate,
+      },
+      branding: {
+        schoolName: school?.name ?? '',
+        logoBase64: school?.logoBase64 ?? null,
+        brandColor: school?.brandColor ?? null,
+      },
+      settings: {
+        reportTitle: row?.reportTitle ?? null,
+        committeeName: settingsCommittee,
+        generatedAt: row?.generatedAt ? row.generatedAt.toISOString() : null,
+      },
+      mda: {
+        text: row?.mdaText ?? null,
+        source: (row?.mdaSource as BoardReportBundle['mda']['source']) ?? null,
+      },
+      operations: null,
+      monthlyOperations,
+      forecast: this.buildForecastSection(
+        (budgetLines?.forecast as Record<string, unknown> | undefined) ?? null,
+      ),
+      capitalBudget: this.buildCapitalBudget(capRow?.items ?? null),
+      cashInvestments: this.buildCashInvestments(cashRow?.accounts ?? null),
+      capitalCampaign: this.buildCapitalCampaign(
+        campRow?.campaignName ?? null,
+        campRow?.items ?? null,
+      ),
+      keyIndicators: this.buildMonthlyKeyIndicators(ma.metrics, operationalRow),
+      financialPosition: this.buildMonthlyFinancialPosition(ma.balanceSheet),
+      // CY-only month snapshots — no PY change-in-net-assets / cash-flow comparatives.
+      changesInNetAssets: null,
+      cashFlows: null,
+    }
+    return bundleOut
+  }
+
+  /** monthsAvailable for the coded month_not_loaded re-emit (cheap, ascending). */
+  private async monthlyMonthsAvailable(schoolId: string, periodId: string): Promise<string[]> {
+    const snaps = await this.prisma.monthlySnapshot.findMany({
+      where: { schoolId, fiscalPeriodId: periodId },
+      orderBy: { monthKey: 'asc' },
+      select: { monthKey: true },
+    })
+    return snaps.map((s) => s.monthKey)
+  }
+
+  /**
+   * Build the MTD + YTD Operations groups. Mirrors buildOperations/buildLines but
+   * emits an OpCell per side. Actuals from MonthlyActualsService; budget from the
+   * per-month rollup (null when hasBudget:false => every budget/variance null,
+   * favorable:true). priorYear DEFERRED -> null.
+   *
+   * NBOA MTD note: actuals MTD = YTD(M) - YTD(priorLoaded) (prior = largest LOADED
+   * month < M, possibly sparse), whereas budget MTD uses the single calendar-month
+   * column. For v1 this apples-to-oranges MTD on sparse months is ACCEPTED and
+   * documented here; the YTD columns are always correct. Refining budget MTD to
+   * sum priorLoaded+1..M is DEFERRED.
+   */
+  private buildMonthlyOperations(
+    ytd: CategoryActuals,
+    mtd: CategoryActuals,
+    budgetYtd: MonthlyBudgetColumn | null,
+    budgetMtd: MonthlyBudgetColumn | null,
+    explanations: ExplanationMap,
+    monthKey: string,
+    priorMonthKey: string | null,
+  ): MonthlyOperations {
+    const revenue = this.buildMonthlyLines(
+      mtd.revenue,
+      ytd.revenue,
+      budgetMtd?.revenue ?? null,
+      budgetYtd?.revenue ?? null,
+      REVENUE_LINE_LABELS as Record<string, string>,
+      explanations.revenue,
+      'revenue',
+    )
+    const expense = this.buildMonthlyLines(
+      mtd.expense,
+      ytd.expense,
+      budgetMtd?.expense ?? null,
+      budgetYtd?.expense ?? null,
+      EXPENSE_LINE_LABELS as Record<string, string>,
+      explanations.expense,
+      'expense',
+    )
+
+    const revenueTotals = this.monthlyTotals(revenue, 'revenue', budgetMtd !== null, budgetYtd !== null)
+    const expenseTotals = this.monthlyTotals(expense, 'expense', budgetMtd !== null, budgetYtd !== null)
+
+    const netCell = (rev: OpCell, exp: OpCell): MonthlyNetCell => {
+      const actual = rev.actual - exp.actual
+      const hasB = rev.budget !== null && exp.budget !== null
+      const budget = hasB ? (rev.budget as number) - (exp.budget as number) : null
+      const { variance, variancePct } = computeVariance(actual, budget)
+      return { actual, budget, variance, variancePct }
+    }
+
+    return {
+      granularity: 'monthly',
+      monthKey,
+      monthLabel: monthLabel(monthKey),
+      priorMonthKey,
+      hasBudget: budgetYtd !== null,
+      revenue,
+      revenueTotals,
+      expense,
+      expenseTotals,
+      netSurplus: {
+        mtd: netCell(revenueTotals.mtd, expenseTotals.mtd),
+        ytd: netCell(revenueTotals.ytd, expenseTotals.ytd),
+        priorYear: null,
+      },
+    }
+  }
+
+  /**
+   * One ordered set of monthly operations lines, each with an MTD + YTD OpCell.
+   * Key union per section = actual(mtd∪ytd) ∪ budget(mtd∪ytd), sorted by the
+   * canonical label ordering (same sort as buildLines). null budget side => null
+   * variance/variancePct, favorable true (matches isFavorable(null)).
+   */
+  private buildMonthlyLines(
+    mtdActual: Record<string, number>,
+    ytdActual: Record<string, number>,
+    mtdBudget: Record<string, number> | null,
+    ytdBudget: Record<string, number> | null,
+    labels: Record<string, string>,
+    explanations: Record<string, string>,
+    type: 'revenue' | 'expense',
+  ): MonthlyOperationsLine[] {
+    const keys = new Set<string>([
+      ...Object.keys(mtdActual),
+      ...Object.keys(ytdActual),
+      ...Object.keys(mtdBudget ?? {}),
+      ...Object.keys(ytdBudget ?? {}),
+    ])
+    const lines: MonthlyOperationsLine[] = []
+    for (const key of keys) {
+      lines.push({
+        key,
+        label: labels[key] ?? key,
+        mtd: this.opCell(Number(mtdActual[key] ?? 0), mtdBudget ? Number(mtdBudget[key] ?? 0) : null, type),
+        ytd: this.opCell(Number(ytdActual[key] ?? 0), ytdBudget ? Number(ytdBudget[key] ?? 0) : null, type),
+        priorYear: null,
+        explanation: explanations[key] ?? null,
+      })
+    }
+    const order = Object.keys(labels)
+    lines.sort((a, b) => {
+      const ia = order.indexOf(a.key)
+      const ib = order.indexOf(b.key)
+      if (ia !== -1 && ib !== -1) return ia - ib
+      if (ia !== -1) return -1
+      if (ib !== -1) return 1
+      return a.label.localeCompare(b.label)
+    })
+    return lines
+  }
+
+  /** One OpCell — variance/variancePct via computeVariance; favorable per column. */
+  private opCell(actual: number, budget: number | null, type: 'revenue' | 'expense'): OpCell {
+    const { variance, variancePct } = computeVariance(actual, budget)
+    return { actual, budget, variance, variancePct, favorable: this.isFavorable(type, variance) }
+  }
+
+  private monthlyTotals(
+    lines: MonthlyOperationsLine[],
+    type: 'revenue' | 'expense',
+    hasMtdBudget: boolean,
+    hasYtdBudget: boolean,
+  ): MonthlyOperationsTotals {
+    const sum = (
+      pick: (l: MonthlyOperationsLine) => OpCell,
+      hasBudget: boolean,
+    ): OpCell => {
+      const actual = lines.reduce((s, l) => s + pick(l).actual, 0)
+      const budget = hasBudget ? lines.reduce((s, l) => s + (pick(l).budget ?? 0), 0) : null
+      const { variance, variancePct } = computeVariance(actual, budget)
+      return { actual, budget, variance, variancePct, favorable: this.isFavorable(type, variance) }
+    }
+    return {
+      mtd: sum((l) => l.mtd, hasMtdBudget),
+      ytd: sum((l) => l.ytd, hasYtdBudget),
+      priorYear: null,
+    }
+  }
+
+  /** Point-in-time financial position from the month-end bundle (CY-only, no PY). */
+  private buildMonthlyFinancialPosition(
+    balanceSheet: import('../monthly/monthly-actuals.service.js').MonthlyBalanceSheet,
+  ): BoardReportBundle['financialPosition'] {
+    if (!balanceSheet) return null
+    return { hasPY: false, cy: balanceSheet as unknown as SFPResult, py: null }
+  }
+
+  /** Monthly key indicators — straight from the partial-year-flagged ma.metrics. */
+  private buildMonthlyKeyIndicators(
+    metrics: import('../monthly/monthly-actuals.service.js').MonthlyMetric[],
+    operationalRow:
+      | {
+          enrollment: number | null
+          enrollmentFte: Prisma.Decimal | null
+          teachingFte: Prisma.Decimal | null
+          totalStaffFte: Prisma.Decimal | null
+        }
+      | null,
+  ): KeyIndicator[] {
+    return this.buildKeyIndicators(metrics, operationalRow)
   }
 
   // ── Operations (Statement of Operations — budget vs actual) ──────────────────

@@ -71,7 +71,12 @@ function renderCover(data, accent) {
       </p>
       <p className="brd-cover-title">{title}</p>
       <p className="brd-cover-committee">{committee}</p>
-      {data.periodEndDate ? (
+      {data.granularity === 'monthly' && data.monthlyOperations ? (
+        <p className="brd-cover-fye">
+          {data.monthlyOperations.monthLabel ||
+            (data.periodEndDate ? `For the period ended ${longDate(data.periodEndDate)}` : '')}
+        </p>
+      ) : data.periodEndDate ? (
         <p className="brd-cover-fye">For the fiscal year ending {longDate(data.periodEndDate)}</p>
       ) : null}
       {generated ? <p className="brd-cover-generated">Generated {dateTime(generated)}</p> : null}
@@ -143,6 +148,11 @@ function renderInline(s) {
 
 // ── 4. Statement of Operations (Budget vs Actual) + Key Indicators ────────────
 function renderOperations(data) {
+  // Monthly granularity surfaces NBOA MTD + YTD column groups in a separate sibling
+  // field (`monthlyOperations`); annual keeps the existing single-actual table.
+  if (data.granularity === 'monthly' && data.monthlyOperations) {
+    return renderMonthlyOperations(data)
+  }
   const ops = data.operations
   if (!ops) {
     return (
@@ -235,6 +245,138 @@ function totalRow(label, t, isNet = false) {
         {t.variance == null ? '—' : overUnder(t.variance)}
       </td>
       <td>{pct(t.variancePct)}</td>
+      <td className="brd-l brd-explain" />
+    </tr>
+  )
+}
+
+// ── 4a. Statement of Operations — MONTHLY (NBOA MTD + YTD column groups) ───────
+// PURE presentational: every figure comes verbatim from bundle.monthlyOperations
+// (sharedShapes). Two stacked header rows: a top row grouping Month-to-Date and
+// Year-to-Date over their 4 sub-columns (Actual / Budget / Over(Under) / %), and a
+// second row naming the sub-columns. Each line emits an OpCell per side; every null
+// budget / variance / variancePct guards to an em-dash. Prior-year is deferred in
+// monthly bundles, so the PY column is omitted entirely (kept annual-only).
+function renderMonthlyOperations(data) {
+  const mo = data.monthlyOperations
+  const kpis = (data.keyIndicators || []).filter((k) => k.available && k.value != null)
+  // monthLabel ("For the period ended November 30, 2025") is server-derived; fall
+  // back to deriving from periodEndDate if absent.
+  const heading = mo.monthLabel || (data.periodEndDate ? `For the period ended ${longDate(data.periodEndDate)}` : null)
+  return (
+    <section className="brd-section">
+      <h2>Statement of Operations</h2>
+      <p className="brd-subnote">
+        {heading ? `${heading}. ` : ''}Month-to-date and year-to-date actual vs. budget.
+      </p>
+      <table className="brd-table brd-table-wide">
+        <thead>
+          <tr>
+            <th className="brd-l" rowSpan={2}>Line</th>
+            <th colSpan={4}>Month to Date</th>
+            <th colSpan={4}>Year to Date</th>
+            <th className="brd-l brd-explain" rowSpan={2}>Explanation</th>
+          </tr>
+          <tr>
+            <th>Actual</th>
+            <th>Budget</th>
+            <th>Over (Under)</th>
+            <th>%</th>
+            <th>Actual</th>
+            <th>Budget</th>
+            <th>Over (Under)</th>
+            <th>%</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr className="brd-group">
+            <td colSpan={10}>Revenue</td>
+          </tr>
+          {(mo.revenue || []).map((r) => moRow(r))}
+          {moTotalRow('Total revenue', mo.revenueTotals)}
+
+          <tr className="brd-group">
+            <td colSpan={10}>Expenses</td>
+          </tr>
+          {(mo.expense || []).map((r) => moRow(r))}
+          {moTotalRow('Total expenses', mo.expenseTotals)}
+
+          {moNetRow('Net surplus / (deficit)', mo.netSurplus)}
+        </tbody>
+      </table>
+
+      {kpis.length > 0 && (
+        <div className="brd-kpi-block">
+          <h3 className="brd-narrative-head">Key Indicators</h3>
+          <div className="brd-kpi-grid">
+            {kpis.map((k) => (
+              <div key={k.key} className="brd-kpi">
+                <span className="brd-kpi-label">
+                  {k.label}
+                  {k.partialYear ? ' (partial year)' : ''}
+                </span>
+                <span className="brd-kpi-value">{formatIndicator(k.value, k.unit)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
+  )
+}
+
+// Render the 4 cells of one OpCell (Actual / Budget / Over(Under) / %); every null
+// budget/variance/variancePct → em-dash. Returns an array of <td> for spreading.
+function opCellTds(cell, keyPrefix) {
+  const c = cell || {}
+  return [
+    <td key={`${keyPrefix}-a`} className={cellNeg(c.actual)}>
+      {c.actual == null ? '—' : money(c.actual)}
+    </td>,
+    <td key={`${keyPrefix}-b`} className={c.budget == null ? '' : cellNeg(c.budget)}>
+      {c.budget == null ? '—' : money(c.budget)}
+    </td>,
+    <td key={`${keyPrefix}-v`} className={c.variance == null ? '' : cellNeg(c.variance)}>
+      {c.variance == null ? '—' : overUnder(c.variance)}
+    </td>,
+    <td key={`${keyPrefix}-p`}>{pct(c.variancePct)}</td>,
+  ]
+}
+
+// One monthly line: MTD group + YTD group + explanation.
+function moRow(r) {
+  return (
+    <tr key={r.key}>
+      <td className="brd-l">{r.label}</td>
+      {opCellTds(r.mtd, `${r.key}-mtd`)}
+      {opCellTds(r.ytd, `${r.key}-ytd`)}
+      <td className="brd-l brd-explain">{r.explanation || ''}</td>
+    </tr>
+  )
+}
+
+// Totals row (revenue/expense subtotal): MTD + YTD groups, empty explanation.
+function moTotalRow(label, t) {
+  if (!t) return null
+  return (
+    <tr className="brd-total">
+      <td className="brd-l">{label}</td>
+      {opCellTds(t.mtd, `${label}-mtd`)}
+      {opCellTds(t.ytd, `${label}-ytd`)}
+      <td className="brd-l brd-explain" />
+    </tr>
+  )
+}
+
+// Net surplus row — netSurplus cells omit `favorable`, mirroring annual netSurplus;
+// the cell formatter is favorable-agnostic so this renders identically.
+function moNetRow(label, n) {
+  if (!n) return null
+  return (
+    <tr className="brd-total brd-net">
+      <td className="brd-l">{label}</td>
+      {opCellTds(n.mtd, `${label}-mtd`)}
+      {opCellTds(n.ytd, `${label}-ytd`)}
       <td className="brd-l brd-explain" />
     </tr>
   )

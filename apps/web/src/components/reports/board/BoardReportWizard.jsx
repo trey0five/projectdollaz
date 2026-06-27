@@ -41,6 +41,10 @@ const initialDraft = {
   step: 1,
   periodId: null,
   granularity: 'annual',
+  // Monthly read-state (NBOA MTD/YTD view). null = annual / no month chosen. Like
+  // granularity, this is READ state — excluded from dirtySignal/editablePayload so
+  // it never triggers autosave traffic.
+  monthKey: null,
   // Editable BoardReport state (synced from the bundle on load).
   reportTitle: '',
   committeeName: '',
@@ -59,8 +63,10 @@ function reducer(state, action) {
     case 'setStep':
       return { ...state, step: action.step }
     case 'setPeriod':
-      // New period -> jump to step 1's selection, reset sync so the next bundle hydrates.
-      return { ...state, periodId: action.periodId, syncedKey: null }
+      // New period -> jump to step 1's selection, reset sync so the next bundle
+      // hydrates. The chosen month belongs to the old period's loaded snapshots,
+      // so clear it (the picker re-lists this period's months).
+      return { ...state, periodId: action.periodId, monthKey: null, syncedKey: null }
     case 'sync': {
       // Render-time hydrate from a freshly-assembled bundle (sync-on-key).
       const next = {
@@ -135,11 +141,20 @@ export default function BoardReportWizard({ schoolId, school, periods, initialPe
     periodId: initialPeriodId ?? null,
   }))
 
-  const { data, loading, notEntitled, save } = useBoardReport(schoolId, draft.periodId)
+  const { data, loading, monthError, notEntitled, save } = useBoardReport(
+    schoolId,
+    draft.periodId,
+    draft.granularity,
+    draft.monthKey,
+  )
 
   // ── Render-time sync-on-key: fold the bundle's editable fields into the draft
-  // exactly once per (period + load). No setState-in-effect. ──────────────────
-  const loadKey = data ? `${data.periodId}` : null
+  // exactly once per (period + granularity + month + load). No setState-in-effect.
+  // Including granularity/monthKey in the key re-hydrates when the user switches
+  // month so saved annual explanations don't leak into a monthly view. ─────────
+  const loadKey = data
+    ? `${data.periodId}:${data.granularity ?? 'annual'}:${data.monthKey ?? ''}`
+    : null
   if (data && draft.syncedKey !== loadKey) {
     const expl = { revenue: {}, expense: {} }
     for (const r of data.operations?.revenue || []) {
@@ -188,6 +203,7 @@ export default function BoardReportWizard({ schoolId, school, periods, initialPe
     draft,
     data,
     loading,
+    monthError,
     canEdit,
     isOwner,
     saving,
