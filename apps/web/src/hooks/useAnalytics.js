@@ -173,6 +173,70 @@ export function useBudget(schoolId, periodId) {
   return { budget: data, loading, error, notEntitled, save, reload }
 }
 
+// ── Phase 2 (FY-End Forecast): GET /budget/forecast. Mirrors useBudget — same
+// microtask-defer + cancelled-flag pattern. Returns the stored forecast object
+// (or null), the live feeder grid read straight off the operational row (so the
+// form prefills feeder even before any forecast was saved), hasBudget (is there a
+// base budget to vary against), and a refetch used after a save replaces the
+// optimistic preview with the server-recomputed result. A 402 leaves everything
+// null + notEntitled so the tab can show the paused panel.
+export function useForecast(schoolId, periodId) {
+  const [forecast, setForecast] = useState(null)
+  const [feederEnrollmentByGrade, setFeeder] = useState(null)
+  const [hasBudget, setHasBudget] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [notEntitled, setNotEntitled] = useState(false)
+
+  const load = useCallback(async (sid, pid) => {
+    setError('')
+    setNotEntitled(false)
+    try {
+      const res = await analyticsApi.getForecast(sid, pid)
+      setForecast(res.data?.forecast ?? null)
+      setFeeder(res.data?.feederEnrollmentByGrade ?? null)
+      setHasBudget(Boolean(res.data?.hasBudget))
+    } catch (e) {
+      if (isPaymentRequired(e)) {
+        setNotEntitled(true)
+      } else {
+        setError('Could not load the forecast.')
+      }
+      setForecast(null)
+      setFeeder(null)
+      setHasBudget(false)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.resolve().then(() => {
+      if (cancelled) return
+      if (schoolId && periodId) {
+        setLoading(true)
+        load(schoolId, periodId)
+      } else {
+        setForecast(null)
+        setFeeder(null)
+        setHasBudget(false)
+        setLoading(false)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [schoolId, periodId, load])
+
+  const refetch = useCallback(
+    () => (schoolId && periodId ? load(schoolId, periodId) : Promise.resolve()),
+    [schoolId, periodId, load],
+  )
+
+  return { forecast, feederEnrollmentByGrade, hasBudget, loading, error, notEntitled, refetch }
+}
+
 // ── v1 Budget workspace: organization-wide consolidated roll-up (read-only) ───────
 // Same microtask-defer + cancelled-flag pattern as the other reads. Keyed on the
 // caller's org + the active fiscal-year start. A 402 flips notEntitled so the

@@ -21,6 +21,7 @@ import {
 const TOC = [
   'Management Discussion & Analysis',
   'Statement of Operations (Budget vs Actual)',
+  'Forecast for Fiscal Year End (Forecast vs Budget)',
   'Statement of Financial Position',
   'Statement of Changes in Net Assets',
   'Statement of Cash Flows',
@@ -37,6 +38,7 @@ export default function BoardReportPrintDocument({ data }) {
       {renderToc()}
       {renderMda(data)}
       {renderOperations(data)}
+      {renderForecast(data)}
       {renderFinancialPosition(data)}
       {renderChangesInNetAssets(data)}
       {renderCashFlows(data)}
@@ -223,6 +225,180 @@ function totalRow(label, t, isNet = false) {
       <td className="brd-l brd-explain" />
     </tr>
   )
+}
+
+// ── 4b. Forecast for Fiscal Year End (Forecast vs Budget) ─────────────────────
+// PURE presentational: every figure comes verbatim from the server-assembled
+// bundle.forecast (sharedShapes SEAM 3) — zero math. Clones renderOperations'
+// table with the Actual column swapped for Forecast, then prints an assumptions
+// summary (projected enrollment, feeder, tuition rates, inflation, program split).
+function renderForecast(data) {
+  const fc = data.forecast
+  if (!fc || fc.available === false) {
+    return (
+      <section className="brd-section">
+        <h2>Forecast for FYE</h2>
+        <p className="brd-placeholder">
+          No fiscal-year-end forecast has been prepared for this period.
+        </p>
+      </section>
+    )
+  }
+  const a = fc.assumptionsSummary || {}
+  const feeder = a.feederByGrade || {}
+  const feederKeys = Object.keys(feeder).filter((g) => Number(feeder[g]) > 0)
+  const rates = a.tuitionRates || {}
+  const split = a.programSplit || {}
+  return (
+    <section className="brd-section">
+      <h2>Forecast for Fiscal Year End</h2>
+      <p className="brd-subnote">
+        Assumption-driven re-projection vs. the active budget
+        {fc.computedAt ? ` · prepared ${dateTime(fc.computedAt)}` : ''}.
+      </p>
+      <table className="brd-table">
+        <thead>
+          <tr>
+            <th className="brd-l">Line</th>
+            <th>Forecast</th>
+            <th>Budget</th>
+            <th>Variance</th>
+            <th>%</th>
+            <th className="brd-l brd-explain">Explanation</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr className="brd-group">
+            <td colSpan={6}>Revenue</td>
+          </tr>
+          {(fc.revenue || []).map((r) => fcRow(r))}
+          {fcTotalRow('Total revenue', fc.revenueTotals)}
+
+          <tr className="brd-group">
+            <td colSpan={6}>Expenses</td>
+          </tr>
+          {(fc.expense || []).map((r) => fcRow(r))}
+          {fcTotalRow('Total expenses', fc.expenseTotals)}
+
+          {fcNetRow('Net surplus / (deficit)', fc.netSurplus)}
+        </tbody>
+      </table>
+
+      <div className="brd-kpi-block">
+        <h3 className="brd-narrative-head">Forecast Assumptions</h3>
+        <div className="brd-kpi-grid">
+          <div className="brd-kpi">
+            <span className="brd-kpi-label">Projected enrollment</span>
+            <span className="brd-kpi-value">
+              {a.enrollmentTotal == null ? '—' : Number(a.enrollmentTotal).toLocaleString('en-US')}
+            </span>
+          </div>
+          <div className="brd-kpi">
+            <span className="brd-kpi-label">Anticipated feeder students</span>
+            <span className="brd-kpi-value">
+              {a.feederTotal == null ? '—' : `+${Number(a.feederTotal).toLocaleString('en-US')}`}
+            </span>
+          </div>
+          <div className="brd-kpi">
+            <span className="brd-kpi-label">Inflation applied</span>
+            <span className="brd-kpi-value">
+              {a.inflationPct == null ? '—' : `${a.inflationPct}%`}
+            </span>
+          </div>
+          <div className="brd-kpi">
+            <span className="brd-kpi-label">Tuition (PreK part / full)</span>
+            <span className="brd-kpi-value">
+              {money(rates.prek3)} / {money(rates.prek5)}
+            </span>
+          </div>
+          <div className="brd-kpi">
+            <span className="brd-kpi-label">Tuition (Elem / Middle)</span>
+            <span className="brd-kpi-value">
+              {money(rates.elem)} / {money(rates.middle)}
+            </span>
+          </div>
+          <div className="brd-kpi">
+            <span className="brd-kpi-label">Program split (Parent/FTC/FES)</span>
+            <span className="brd-kpi-value">
+              {fmtPct(split.parent)} / {fmtPct(split.ftc)} / {fmtPct(split.fes)}
+            </span>
+          </div>
+        </div>
+        {feederKeys.length > 0 ? (
+          <p className="brd-subnote">
+            Feeder by grade:{' '}
+            {feederKeys.map((g, i) => (
+              <span key={g}>
+                {i > 0 ? ' · ' : ''}
+                {g} +{Number(feeder[g]).toLocaleString('en-US')}
+              </span>
+            ))}
+          </p>
+        ) : null}
+      </div>
+    </section>
+  )
+}
+
+// Forecast detail row — clone of opRow with r.actual → r.forecast.
+function fcRow(r) {
+  return (
+    <tr key={r.key}>
+      <td className="brd-l">{r.label}</td>
+      <td className={cellNeg(r.forecast)}>{money(r.forecast)}</td>
+      <td className={r.budget == null ? '' : cellNeg(r.budget)}>
+        {r.budget == null ? '—' : money(r.budget)}
+      </td>
+      <td className={r.variance == null ? '' : cellNeg(r.variance)}>
+        {r.variance == null ? '—' : overUnder(r.variance)}
+      </td>
+      <td>{pct(r.variancePct)}</td>
+      <td className="brd-l brd-explain">{r.explanation || ''}</td>
+    </tr>
+  )
+}
+
+function fcTotalRow(label, t) {
+  if (!t) return null
+  return (
+    <tr className="brd-total">
+      <td className="brd-l">{label}</td>
+      <td className={cellNeg(t.forecast)}>{money(t.forecast)}</td>
+      <td className={t.budget == null ? '' : cellNeg(t.budget)}>
+        {t.budget == null ? '—' : money(t.budget)}
+      </td>
+      <td className={t.variance == null ? '' : cellNeg(t.variance)}>
+        {t.variance == null ? '—' : overUnder(t.variance)}
+      </td>
+      <td>{pct(t.variancePct)}</td>
+      <td className="brd-l brd-explain" />
+    </tr>
+  )
+}
+
+// Net surplus row — netSurplus has no `favorable` flag; show forecast/budget/var.
+function fcNetRow(label, n) {
+  if (!n) return null
+  return (
+    <tr className="brd-total brd-net">
+      <td className="brd-l">{label}</td>
+      <td className={cellNeg(n.forecast)}>{money(n.forecast)}</td>
+      <td className={n.budget == null ? '' : cellNeg(n.budget)}>
+        {n.budget == null ? '—' : money(n.budget)}
+      </td>
+      <td className={n.variance == null ? '' : cellNeg(n.variance)}>
+        {n.variance == null ? '—' : overUnder(n.variance)}
+      </td>
+      <td>{pct(n.variancePct)}</td>
+      <td className="brd-l brd-explain" />
+    </tr>
+  )
+}
+
+// Whole-percent for the assumptions summary (program split / inflation echoes).
+function fmtPct(n) {
+  if (n == null || Number.isNaN(n)) return '—'
+  return `${Number(n)}%`
 }
 
 // ── 5. Statement of Financial Position (balance sheet) ────────────────────────

@@ -1,4 +1,16 @@
-import { IsInt, IsNumber, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator'
+import { Type } from 'class-transformer'
+import {
+  IsInt,
+  IsNumber,
+  IsObject,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+  ValidateNested,
+} from 'class-validator'
+import { EnrollmentByGradeDto } from './save-driver-budget.dto.js'
 
 /**
  * Upsert per-period operational data (enrollment + financial aid). All fields are
@@ -43,4 +55,15 @@ export class UpsertOperationalDto {
   @IsString()
   @MaxLength(2000)
   notes?: string | null
+
+  /**
+   * Phase 2 — anticipated incoming (net-new) students by grade from feeder
+   * sources. All 14 grade keys explicit (reuses the driver DTO's per-grade
+   * @Min(0) validation). Explicit null clears the stored map; omitted keeps it.
+   */
+  @IsOptional()
+  @IsObject()
+  @ValidateNested()
+  @Type(() => EnrollmentByGradeDto)
+  feederEnrollmentByGrade?: EnrollmentByGradeDto | null
 }

@@ -7,13 +7,17 @@ import { Injectable, Logger } from '@nestjs/common'
 import {
   computeDriverBudget,
   defaultAssumptions,
+  mergeFeederEnrollment,
   toDriverPriorContext,
+  GRADE_KEYS,
   type DriverAssumptions,
+  type GradeKey,
 } from '@finrep/analytics'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { PeriodsService } from '../periods/periods.service.js'
 import { AnalyticsService } from '../analytics/analytics.service.js'
 import { BudgetService } from '../analytics/budget.service.js'
+import { OperationalService } from '../analytics/operational.service.js'
 import { BudgetRollupService } from '../analytics/budget-rollup.service.js'
 import { deriveFiscalYearStart } from '../analytics/budget.driver.js'
 import { ComplianceService } from '../compliance/compliance.service.js'
@@ -41,14 +45,30 @@ const TOOL_LABELS: Record<string, string> = {
   get_board_report: 'Reading the board report…',
   generate_board_narrative: 'Drafting the board narrative…',
   set_explanation: 'Preparing a variance explanation…',
+  get_forecast: 'Reading the FY-end forecast…',
+  apply_forecast: 'Re-projecting the FY-end forecast…',
+  set_feeder_enrollment: 'Preparing the feeder enrollment…',
   render_chart: 'Drawing a chart…',
 }
 
 // Tools that propose a write — never applied in the loop; the user confirms first.
-const WRITE_TOOLS = new Set(['set_budget', 'draft_cap_entry', 'apply_driver_budget', 'set_explanation'])
+const WRITE_TOOLS = new Set([
+  'set_budget',
+  'draft_cap_entry',
+  'apply_driver_budget',
+  'set_explanation',
+  'apply_forecast',
+  'set_feeder_enrollment',
+])
 
 export interface ProposedAction {
-  kind: 'set_budget' | 'draft_cap_entry' | 'apply_driver_budget' | 'set_explanation'
+  kind:
+    | 'set_budget'
+    | 'draft_cap_entry'
+    | 'apply_driver_budget'
+    | 'set_explanation'
+    | 'apply_forecast'
+    | 'set_feeder_enrollment'
   periodId: string
   summary: string
   payload: Record<string, unknown>
@@ -83,6 +103,17 @@ function deepMerge<T>(base: T, override: Record<string, unknown>): T {
 function pickDriverFields(args: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const f of DRIVER_FIELDS) if (args[f] !== undefined) out[f] = args[f]
+  return out
+}
+
+/** Clamp arbitrary LLM feeder args to the 14 GRADE_KEYS with non-negative ints. */
+function clampFeeder(v: unknown): Record<string, number> {
+  if (!isPlainObject(v)) return {}
+  const out: Record<string, number> = {}
+  for (const g of GRADE_KEYS) {
+    const n = v[g]
+    if (typeof n === 'number' && Number.isFinite(n) && n > 0) out[g] = Math.round(n)
+  }
   return out
 }
 
@@ -126,6 +157,7 @@ export class AssistantService {
     private readonly reconciliation: ReconciliationService,
     private readonly correctiveAction: CorrectiveActionService,
     private readonly boardReport: BoardReportService,
+    private readonly operational: OperationalService,
     private readonly client: AssistantClient,
   ) {}
 
@@ -311,6 +343,52 @@ export class AssistantService {
         payload: { categoryType, categoryKey, text },
       }
     }
+    if (name === 'apply_forecast') {
+      // Base assumptions come from the saved forecast (then driverModel, then
+      // defaults); the LLM's levers merge on top, feeder is merged additively.
+      const merged = await this.mergedForecastAssumptions(ctx.schoolId, periodId, args)
+      const op = await this.operational.get(ctx.schoolId, periodId)
+      const feeder =
+        args.feederEnrollmentByGrade !== undefined
+          ? clampFeeder(args.feederEnrollmentByGrade)
+          : op.feederEnrollmentByGrade ?? {}
+      const effective = mergeFeederEnrollment(
+        merged.enrollmentByGrade as Partial<Record<GradeKey, number>>,
+        feeder as Partial<Record<GradeKey, number>>,
+      )
+      const prior = toDriverPriorContext(await this.analytics.budgetContext(ctx.schoolId, periodId))
+      const r = computeDriverBudget({ ...merged, enrollmentByGrade: effective }, prior)
+      const usd = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`
+      const feederTotal = Object.values(feeder).reduce((s, v) => s + (Number(v) || 0), 0)
+      return {
+        kind: 'apply_forecast',
+        periodId,
+        summary:
+          `Re-project the FY-end forecast for ${r.kpis.enrollmentTotal} students ` +
+          `(incl. ${feederTotal} anticipated feeder) — revenue ${usd(r.kpis.totalRevenue)}, ` +
+          `expenses ${usd(r.kpis.totalExpense)}, net ${usd(r.kpis.netIncome)}.`,
+        payload: {
+          assumptions: merged as unknown as Record<string, unknown>,
+          feederEnrollmentByGrade: feeder,
+        },
+      }
+    }
+    if (name === 'set_feeder_enrollment') {
+      const feeder = clampFeeder(args.feederEnrollmentByGrade)
+      if (Object.keys(feeder).length === 0) {
+        throw new Error('set_feeder_enrollment needs feederEnrollmentByGrade with at least one grade.')
+      }
+      const total = Object.values(feeder).reduce((s, v) => s + v, 0)
+      const grades = Object.entries(feeder)
+        .map(([g, n]) => `${g}: ${n}`)
+        .join(', ')
+      return {
+        kind: 'set_feeder_enrollment',
+        periodId,
+        summary: `Set anticipated feeder enrollment to ${total} incoming students (${grades}).`,
+        payload: { feederEnrollmentByGrade: feeder },
+      }
+    }
     // draft_cap_entry
     const ruleId = typeof args.ruleId === 'string' ? args.ruleId : ''
     if (!ruleId) throw new Error('draft_cap_entry needs a ruleId (from get_corrective_action_plan).')
@@ -349,6 +427,39 @@ export class AssistantService {
 
     const overrides = pickDriverFields(args)
     // enrollmentTotal → even per-grade distribution (only when no explicit grid).
+    if (typeof args.enrollmentTotal === 'number' && overrides.enrollmentByGrade === undefined) {
+      const keys = Object.keys((base as { enrollmentByGrade: Record<string, number> }).enrollmentByGrade)
+      const total = Math.max(0, Math.round(args.enrollmentTotal))
+      const per = Math.floor(total / keys.length)
+      let rem = total - per * keys.length
+      const ebg: Record<string, number> = {}
+      for (const k of keys) {
+        ebg[k] = per + (rem > 0 ? 1 : 0)
+        if (rem > 0) rem -= 1
+      }
+      overrides.enrollmentByGrade = ebg
+    }
+    return deepMerge(base, overrides)
+  }
+
+  /**
+   * Like mergedDriverAssumptions but seeds from the saved FORECAST assumptions
+   * first (so re-projecting keeps the last forecast's levers), falling back to the
+   * driver model, then defaults. The LLM's specified levers merge on top.
+   */
+  private async mergedForecastAssumptions(
+    schoolId: string,
+    periodId: string,
+    args: Record<string, unknown>,
+  ): Promise<DriverAssumptions> {
+    const b = await this.budget.get(schoolId, periodId)
+    const lines = (b.lines as Record<string, unknown> | null) ?? {}
+    const forecast = lines.forecast as { assumptions?: Record<string, unknown> } | undefined
+    const driver = lines.driverModel as { assumptions?: Record<string, unknown> } | undefined
+    const saved = forecast?.assumptions ?? driver?.assumptions
+    const base = deepMerge(defaultAssumptions(), saved ?? {})
+
+    const overrides = pickDriverFields(args)
     if (typeof args.enrollmentTotal === 'number' && overrides.enrollmentByGrade === undefined) {
       const keys = Object.keys((base as { enrollmentByGrade: Record<string, number> }).enrollmentByGrade)
       const total = Math.max(0, Math.round(args.enrollmentTotal))
@@ -413,6 +524,31 @@ export class AssistantService {
       )
       return { applied: true, summary: action.summary }
     }
+    if (action.kind === 'apply_forecast') {
+      const assumptions = (p.assumptions ?? {}) as Record<string, unknown>
+      const feeder = (p.feederEnrollmentByGrade ?? {}) as Record<string, number>
+      await this.budget.upsertForecast(
+        schoolId,
+        periodId,
+        { assumptions, feederEnrollmentByGrade: feeder } as unknown as Parameters<
+          BudgetService['upsertForecast']
+        >[2],
+        userId,
+      )
+      return { applied: true, summary: action.summary }
+    }
+    if (action.kind === 'set_feeder_enrollment') {
+      const feeder = (p.feederEnrollmentByGrade ?? {}) as Record<string, number>
+      await this.operational.upsert(
+        schoolId,
+        periodId,
+        { feederEnrollmentByGrade: feeder } as unknown as Parameters<
+          OperationalService['upsert']
+        >[2],
+        userId,
+      )
+      return { applied: true, summary: action.summary }
+    }
     // draft_cap_entry
     await this.correctiveAction.upsertEntries(
       schoolId,
@@ -472,6 +608,12 @@ export class AssistantService {
       'save). set_explanation proposes a per-line variance explanation/comment (provide categoryType + categoryKey + text). ' +
       'These do NOT apply immediately — they propose a change the user confirms; after calling one, tell the ' +
       'user what you’ve prepared and that they can confirm or cancel. ' +
+      'For the FY-end forecast (a forward re-projection vs the budget) use get_forecast (read the saved ' +
+      'forecast, its KPIs and forecast-vs-budget variances); apply_forecast re-projects it from revised ' +
+      'driver assumptions plus anticipated feeder enrollment (net-new incoming students ADDED ON TOP of ' +
+      'projected enrollment, which raises forecast tuition); set_feeder_enrollment sets only that feeder ' +
+      'input (run apply_forecast afterwards to re-project). Call get_forecast (and get_budget) before ' +
+      'proposing a forecast change. These also propose-then-confirm. ' +
       'For draft_cap_entry, first call get_corrective_action_plan to get the ruleId. ' +
       'For set_explanation, first call get_board_report to see the category keys. ' +
       'Be concise and board-appropriate; format money as USD. Only this school’s data is available. ' +
@@ -652,6 +794,46 @@ export class AssistantService {
           : undefined
         const r = await this.boardReport.generateMda(ctx.schoolId, pid, { tone })
         return r
+      }
+      case 'get_forecast': {
+        const pid = await this.resolvePeriod(args, ctx)
+        const env = await this.budget.getForecast(ctx.schoolId, pid)
+        const feederTotal = Object.values(env.feederEnrollmentByGrade ?? {}).reduce(
+          (s, v) => s + (Number(v) || 0),
+          0,
+        )
+        if (!env.forecast) {
+          return {
+            exists: false,
+            hasBudget: env.hasBudget,
+            feederTotal,
+            note: 'No FY-end forecast has been saved yet. Use apply_forecast to create one.',
+          }
+        }
+        const f = env.forecast
+        // Top forecast-vs-budget variances by absolute magnitude (across both types).
+        const variances = [
+          ...Object.entries(f.variance.revenue).map(([key, v]) => ({ type: 'revenue', key, variance: v })),
+          ...Object.entries(f.variance.expense).map(([key, v]) => ({ type: 'expense', key, variance: v })),
+        ]
+          .filter((x) => Number(x.variance) !== 0)
+          .sort((a, b) => Math.abs(Number(b.variance)) - Math.abs(Number(a.variance)))
+          .slice(0, 6)
+        const a = (f.assumptions ?? {}) as Record<string, unknown>
+        return {
+          exists: true,
+          hasBudget: env.hasBudget,
+          computedAt: f.computedAt,
+          projectedKpis: f.projected.kpis,
+          topVariances: variances,
+          feederTotal,
+          feederByGrade: f.feederEnrollmentByGrade,
+          assumptionsSummary: {
+            tuitionRates: a.tuitionRates ?? {},
+            inflationPct: a.inflationPct ?? 0,
+            tuitionProgramSplit: a.tuitionProgramSplit ?? {},
+          },
+        }
       }
       case 'render_chart': {
         const chartType = ['bar', 'line', 'pie'].includes(String(args.chartType))

@@ -17,14 +17,20 @@ import type { BudgetSpread } from '@finrep/ingestion'
 import {
   computeDriverBudget,
   toDriverPriorContext,
+  mergeFeederEnrollment,
+  REVENUE_LINE_KEYS,
+  EXPENSE_LINE_KEYS,
   REVENUE_LINE_LABELS,
   EXPENSE_LINE_LABELS,
   type DriverBudgetResult,
+  type GradeKey,
 } from '@finrep/analytics'
 import { AnalyticsService } from './analytics.service.js'
+import { OperationalService } from './operational.service.js'
 import { AssistantClient } from '../assistant/assistant.client.js'
 import { buildDriverSpread, deriveFiscalYearStart } from './budget.driver.js'
 import type { SaveDriverBudgetDto } from './dto/save-driver-budget.dto.js'
+import type { SaveForecastDto } from './dto/save-forecast.dto.js'
 
 export interface BudgetPublic {
   totalRevenue: number | null
@@ -42,6 +48,38 @@ export interface BudgetSpreadImportResult extends BudgetPublic {
 export interface DriverBudgetResultPublic extends BudgetPublic {
   kpis: DriverBudgetResult['kpis']
 }
+
+/** The stored lines.forecast object (sharedShapes SEAM 1). */
+export interface ForecastObject {
+  assumptions: Record<string, unknown>
+  feederEnrollmentByGrade: Record<string, number>
+  effectiveEnrollmentByGrade: Record<string, number>
+  projected: {
+    revenue: DriverBudgetResult['revenue']
+    expense: DriverBudgetResult['expense']
+    kpis: DriverBudgetResult['kpis']
+  }
+  baseBudget: { revenue: Record<string, number>; expense: Record<string, number> }
+  variance: { revenue: Record<string, number>; expense: Record<string, number> }
+  explanations: { revenue: Record<string, string>; expense: Record<string, string> }
+  computedAt: string
+}
+
+/** GET /budget/forecast envelope (sharedShapes SEAM 2). */
+export interface ForecastEnvelope {
+  forecast: ForecastObject | null
+  feederEnrollmentByGrade: Record<string, number> | null
+  hasBudget: boolean
+  exists: boolean
+}
+
+/** PUT /budget/forecast response (sharedShapes SEAM 2). */
+export interface ForecastSaveResult {
+  forecast: ForecastObject
+  kpis: DriverBudgetResult['kpis']
+}
+
+const MAX_FORECAST_EXPLANATION_CHARS = 2000
 
 /** ASSESS endpoint response (the frozen ENG-API ↔ ENG-WEB contract). */
 export interface AssessResponse {
@@ -66,6 +104,7 @@ export class BudgetService {
     private readonly periods: PeriodsService,
     private readonly audit: AuditService,
     private readonly analytics: AnalyticsService,
+    private readonly operational: OperationalService,
     // Optional so existing BudgetService unit tests (which don't provide it)
     // keep constructing; the advise() path guards on `?.isConfigured()`.
     @Optional() private readonly assistant?: AssistantClient,
@@ -114,6 +153,9 @@ export class BudgetService {
       return {
         ...(existingLines.spread !== undefined ? { spread: existingLines.spread } : {}),
         ...(existingLines.driverModel !== undefined ? { driverModel: existingLines.driverModel } : {}),
+        // Never silently drop a saved FY-End forecast on a budget edit — the
+        // forecast value is only ever produced by an explicit upsertForecast.
+        ...(existingLines.forecast !== undefined ? { forecast: existingLines.forecast } : {}),
         ...(dto.lines as Record<string, unknown>),
       } as Prisma.InputJsonValue
     })()
@@ -174,6 +216,8 @@ export class BudgetService {
     const lines: Record<string, unknown> = {
       ...(methods !== undefined ? { methods } : {}),
       ...(driverModel !== undefined ? { driverModel } : {}),
+      // Preserve any saved FY-End forecast (never auto-carried, never dropped).
+      ...(prevLines.forecast !== undefined ? { forecast: prevLines.forecast } : {}),
       revenue: rolled.revenue,
       expense: rolled.expense,
       spread: {
@@ -264,6 +308,8 @@ export class BudgetService {
 
     const lines: Record<string, unknown> = {
       ...(methods !== undefined ? { methods } : {}),
+      // Preserve any saved FY-End forecast (never auto-carried, never dropped).
+      ...(prevLines.forecast !== undefined ? { forecast: prevLines.forecast } : {}),
       revenue: result.revenue,
       expense: result.expense,
       spread,
@@ -302,6 +348,200 @@ export class BudgetService {
     })
 
     return { ...this.toPublic(row), kpis: result.kpis }
+  }
+
+  // ── FY-End Forecast (Phase 2 — assumption-driven re-projection) ──────────────
+
+  /**
+   * GET the saved forecast envelope. `forecast` is the stored lines.forecast
+   * verbatim (or null). `feederEnrollmentByGrade` is read LIVE from the
+   * operational row so the form prefills feeder even before any forecast is saved.
+   * `hasBudget` = a base budget exists (so the web can warn 'variance is vs $0').
+   */
+  async getForecast(schoolId: string, periodId: string): Promise<ForecastEnvelope> {
+    const period = await this.periods.getOwnedPeriod(schoolId, periodId)
+    const row = await this.prisma.periodBudget.findUnique({
+      where: { schoolId_fiscalPeriodId: { schoolId, fiscalPeriodId: period.id } },
+    })
+    const lines = (row?.lines as Record<string, unknown> | null) ?? {}
+    const forecast = (lines.forecast as ForecastObject | undefined) ?? null
+    const hasBudget = !!(lines.revenue || lines.expense)
+
+    // Live feeder from the operational row (single source of truth for the input).
+    const op = await this.operational.get(schoolId, periodId)
+
+    return {
+      forecast,
+      feederEnrollmentByGrade: op.feederEnrollmentByGrade,
+      hasBudget,
+      exists: forecast !== null,
+    }
+  }
+
+  /**
+   * Apply / recompute the FY-End FORECAST. AUTHORITATIVE: re-projects via the pure
+   * computeDriverBudget with feeder enrollment merged ADDITIVELY into the driver's
+   * per-grade enrollment (the shared mergeFeederEnrollment helper), compares the
+   * result against the ACTIVE budget (lines.revenue/expense) for per-category
+   * variance, and stores the result under lines.forecast — a sibling that NEVER
+   * clobbers the official budget (lines.revenue/expense/spread/driverModel/methods
+   * and totalRevenue/totalExpenses are untouched). When the DTO carries feeder
+   * inline, it is ALSO persisted through to PeriodOperationalData so the two agree.
+   */
+  async upsertForecast(
+    schoolId: string,
+    periodId: string,
+    dto: SaveForecastDto,
+    userId: string,
+  ): Promise<ForecastSaveResult> {
+    const period = await this.periods.getOwnedPeriod(schoolId, periodId)
+
+    // 1. Resolve the feeder source: DTO inline (if present) else the operational row.
+    let feeder: Record<string, number>
+    if (dto.feederEnrollmentByGrade !== undefined && dto.feederEnrollmentByGrade !== null) {
+      feeder = dto.feederEnrollmentByGrade as unknown as Record<string, number>
+      // Persist the inline feeder through to the operational row (single source).
+      await this.operational.upsert(
+        schoolId,
+        periodId,
+        { feederEnrollmentByGrade: dto.feederEnrollmentByGrade },
+        userId,
+      )
+    } else if (dto.feederEnrollmentByGrade === null) {
+      feeder = {}
+      await this.operational.upsert(
+        schoolId,
+        periodId,
+        { feederEnrollmentByGrade: null },
+        userId,
+      )
+    } else {
+      const op = await this.operational.get(schoolId, periodId)
+      feeder = op.feederEnrollmentByGrade ?? {}
+    }
+
+    // 2. Merge feeder additively into the revised enrollment, then re-project.
+    const assumptions = dto.assumptions as unknown as Parameters<typeof computeDriverBudget>[0]
+    const effective = mergeFeederEnrollment(
+      assumptions.enrollmentByGrade as Partial<Record<GradeKey, number>>,
+      feeder as Partial<Record<GradeKey, number>>,
+    )
+    const mergedAssumptions = { ...assumptions, enrollmentByGrade: effective }
+
+    const ctx = await this.analytics.budgetContext(schoolId, periodId)
+    const projected = computeDriverBudget(mergedAssumptions, toDriverPriorContext(ctx))
+
+    // 3. Snapshot the active budget + per-category variance over ALL line keys.
+    const existing = await this.prisma.periodBudget.findUnique({
+      where: { schoolId_fiscalPeriodId: { schoolId, fiscalPeriodId: period.id } },
+    })
+    const prevLines = (existing?.lines as Record<string, unknown> | null) ?? {}
+    const baseRevenue = (prevLines.revenue as Record<string, number> | undefined) ?? {}
+    const baseExpense = (prevLines.expense as Record<string, number> | undefined) ?? {}
+
+    const round2 = (n: number): number => Math.round((Number.isFinite(n) ? n : 0) * 100) / 100
+    const varRevenue: Record<string, number> = {}
+    for (const k of REVENUE_LINE_KEYS) {
+      varRevenue[k] = round2((projected.revenue[k] ?? 0) - (baseRevenue[k] ?? 0))
+    }
+    const varExpense: Record<string, number> = {}
+    for (const k of EXPENSE_LINE_KEYS) {
+      varExpense[k] = round2((projected.expense[k] ?? 0) - (baseExpense[k] ?? 0))
+    }
+
+    // 4. Deep-merge incoming explanations over the prior forecast's (undefined
+    //    keeps, null clears) — a private copy of the board-report merge pattern.
+    const prevForecast = (prevLines.forecast as ForecastObject | undefined) ?? null
+    const explanations = this.mergeForecastExplanations(
+      prevForecast?.explanations ?? { revenue: {}, expense: {} },
+      dto.explanations as Record<string, unknown> | undefined,
+    )
+
+    // 5. Assemble lines.forecast — assumptions stored PRE-feeder (round-trips the
+    //    form's base + feeder separately); effective is the audited post-merge grid.
+    const forecast: ForecastObject = {
+      assumptions: dto.assumptions as unknown as Record<string, unknown>,
+      feederEnrollmentByGrade: feeder,
+      effectiveEnrollmentByGrade: effective as Record<string, number>,
+      projected: {
+        revenue: projected.revenue,
+        expense: projected.expense,
+        kpis: projected.kpis,
+      },
+      baseBudget: { revenue: baseRevenue, expense: baseExpense },
+      variance: { revenue: varRevenue, expense: varExpense },
+      explanations,
+      computedAt: new Date().toISOString(),
+    }
+
+    // 6. Preserve EVERY sibling key verbatim; do NOT touch totalRevenue/Expenses
+    //    (those track the OFFICIAL budget — never auto-carry the forecast forward).
+    const nextLines: Record<string, unknown> = { ...prevLines, forecast }
+
+    await this.prisma.periodBudget.upsert({
+      where: { schoolId_fiscalPeriodId: { schoolId, fiscalPeriodId: period.id } },
+      create: {
+        schoolId,
+        fiscalPeriodId: period.id,
+        totalRevenue: existing ? dec(existing.totalRevenue) : null,
+        totalExpenses: existing ? dec(existing.totalExpenses) : null,
+        notes: existing?.notes ?? null,
+        updatedByUserId: userId,
+        lines: nextLines as Prisma.InputJsonValue,
+      },
+      update: {
+        updatedByUserId: userId,
+        lines: nextLines as Prisma.InputJsonValue,
+      },
+    })
+
+    const feederTotal = Object.values(feeder).reduce((s, v) => s + (Number(v) || 0), 0)
+    await this.audit.write({
+      schoolId,
+      userId,
+      action: 'budget.forecast.applied',
+      targetType: 'period_budgets',
+      metadata: {
+        fiscalPeriodId: period.id,
+        enrollmentTotal: projected.kpis.enrollmentTotal,
+        feederTotal,
+        projectedRevenue: projected.kpis.totalRevenue,
+        projectedExpense: projected.kpis.totalExpense,
+      },
+    })
+
+    return { forecast, kpis: projected.kpis }
+  }
+
+  /**
+   * Deep-merge incoming forecast explanations over the existing map, per category,
+   * clamping to 2000 chars. undefined patch keeps existing; null clears both maps.
+   * A PRIVATE copy of BoardReportService.mergeExplanations (no cross-import).
+   */
+  private mergeForecastExplanations(
+    existing: { revenue: Record<string, string>; expense: Record<string, string> },
+    patch: Record<string, unknown> | null | undefined,
+  ): { revenue: Record<string, string>; expense: Record<string, string> } {
+    if (patch === undefined) return existing
+    if (patch === null) return { revenue: {}, expense: {} }
+    const coerce = (v: unknown): Record<string, string> => {
+      if (!v || typeof v !== 'object' || Array.isArray(v)) return {}
+      const out: Record<string, string> = {}
+      for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+        if (typeof val === 'string' && val.length > 0) {
+          out[k] = val.slice(0, MAX_FORECAST_EXPLANATION_CHARS)
+        }
+      }
+      return out
+    }
+    const incoming = {
+      revenue: coerce((patch as Record<string, unknown>).revenue),
+      expense: coerce((patch as Record<string, unknown>).expense),
+    }
+    return {
+      revenue: { ...existing.revenue, ...incoming.revenue },
+      expense: { ...existing.expense, ...incoming.expense },
+    }
   }
 
   /**

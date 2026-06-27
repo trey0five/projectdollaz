@@ -238,6 +238,15 @@ export const analyticsApi = {
   // only (server-enforced). Single call site so the route is trivial to retune.
   saveDriverBudget: (schoolId, periodId, body) =>
     api.put(`/schools/${schoolId}/periods/${periodId}/budget/driver`, body),
+  // ── Phase 2 (FY-End Forecast): assumption-driven RE-PROJECTION vs the active
+  // budget. GET returns { forecast|null, feederEnrollmentByGrade, hasBudget,
+  // exists }. PUT { assumptions, feederEnrollmentByGrade?, explanations? } —
+  // server RECOMPUTES authoritatively (computeDriverBudget) and returns the
+  // recomputed { forecast, kpis }. Owner/accountant only (server-enforced).
+  getForecast: (schoolId, periodId) =>
+    api.get(`/schools/${schoolId}/periods/${periodId}/budget/forecast`),
+  saveForecast: (schoolId, periodId, body) =>
+    api.put(`/schools/${schoolId}/periods/${periodId}/budget/forecast`, body),
   // ── v1 Budget workspace: import a monthly budget spread (client-parsed) ────
   // PUT the parsed BudgetSpread JSON; server stores lines.spread + rollups and
   // returns the saved budget. Owner/accountant only (server-enforced).

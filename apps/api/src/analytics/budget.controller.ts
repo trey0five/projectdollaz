@@ -9,6 +9,7 @@ import { BudgetService } from './budget.service.js'
 import { UpsertBudgetDto } from './dto/upsert-budget.dto.js'
 import { ImportBudgetSpreadDto, AssessBudgetDto } from './dto/import-budget-spread.dto.js'
 import { SaveDriverBudgetDto } from './dto/save-driver-budget.dto.js'
+import { SaveForecastDto } from './dto/save-forecast.dto.js'
 
 /**
  * Phase 3 budget intake. Same guard stack as OperationalController: reads open to
@@ -62,6 +63,31 @@ export class BudgetController {
     @CurrentUser() user: User,
   ) {
     return this.budget.upsertDriver(schoolId, periodId, dto, user.id)
+  }
+
+  /**
+   * GET the saved FY-End FORECAST envelope (forecast object + live feeder + flags).
+   */
+  @Get('periods/:periodId/budget/forecast')
+  @Roles('owner', 'accountant', 'viewer')
+  getForecast(@Param('schoolId') schoolId: string, @Param('periodId') periodId: string) {
+    return this.budget.getForecast(schoolId, periodId)
+  }
+
+  /**
+   * Save / recompute the FY-End FORECAST: re-project from { assumptions } with
+   * feeder enrollment merged additively, compare against the active budget for
+   * per-category variance, and store lines.forecast WITHOUT clobbering the budget.
+   */
+  @Put('periods/:periodId/budget/forecast')
+  @Roles('owner', 'accountant')
+  saveForecast(
+    @Param('schoolId') schoolId: string,
+    @Param('periodId') periodId: string,
+    @Body() dto: SaveForecastDto,
+    @CurrentUser() user: User,
+  ) {
+    return this.budget.upsertForecast(schoolId, periodId, dto, user.id)
   }
 
   /**

@@ -242,6 +242,81 @@ export const TOOL_SCHEMAS = [
   {
     type: 'function',
     function: {
+      name: 'get_forecast',
+      description:
+        "The current saved FY-END FORECAST for a period (an assumption-driven re-projection, NOT actuals-to-date): whether one exists, its projected revenue/expense KPIs, the largest forecast-vs-budget variances, the anticipated feeder enrollment total, and the assumptions summary. Read-only. Call this (and get_budget) before proposing a forecast change.",
+      parameters: {
+        type: 'object',
+        properties: { periodId: { type: 'string' } },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'apply_forecast',
+      description:
+        'PROPOSE recomputing the FY-end forecast from revised driver assumptions plus anticipated feeder enrollment (does NOT apply — the user must confirm). Provide ONLY the levers the user mentioned; everything else keeps the saved forecast / driver values. feederEnrollmentByGrade is anticipated INCOMING students ADDED ON TOP of projected enrollment, which raises projected tuition. The result is compared to the active budget for variance.',
+      parameters: {
+        type: 'object',
+        properties: {
+          periodId: { type: 'string' },
+          enrollmentTotal: {
+            type: 'number',
+            description: 'Total base students; spread evenly across grades. Use this OR enrollmentByGrade.',
+          },
+          enrollmentByGrade: {
+            type: 'object',
+            description: 'Base students per grade, e.g. {"K":50,"1":48}. Keys: PK0–PK4, K, 1–8.',
+          },
+          tuitionRates: {
+            type: 'object',
+            description: 'Annual tuition by band: {prek3, prek5, elem, middle}.',
+          },
+          tuitionProgramSplit: {
+            type: 'object',
+            description: 'How tuition is paid, summing to 100: {parent, ftc, fes}.',
+          },
+          feePerStudent: { type: 'number' },
+          staffing: {
+            type: 'object',
+            description:
+              '{teachers:{count,avgSalary}, admin:{count,avgSalary}, facilities:{count,avgSalary}, benefitsPct}.',
+          },
+          inflationPct: { type: 'number', description: 'Growth % applied to all non-driver lines.' },
+          feederEnrollmentByGrade: {
+            type: 'object',
+            description:
+              'Anticipated INCOMING (net-new) students per grade, e.g. {"PK4":12,"K":8}. Added ON TOP of the base enrollment to drive forecast tuition. Keys: PK0–PK4, K, 1–8.',
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'set_feeder_enrollment',
+      description:
+        'PROPOSE setting the anticipated feeder enrollment (net-new incoming students by grade) for a period (does NOT apply — the user must confirm). This sets the INPUT only; run apply_forecast afterwards to re-project the forecast tuition from it.',
+      parameters: {
+        type: 'object',
+        properties: {
+          periodId: { type: 'string' },
+          feederEnrollmentByGrade: {
+            type: 'object',
+            description: 'Incoming students per grade, e.g. {"PK4":12,"K":8}. Keys: PK0–PK4, K, 1–8.',
+          },
+        },
+        required: ['feederEnrollmentByGrade'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'render_chart',
       description:
         'Draw a chart for the user. Call this to visualize numbers you have already fetched (a trend, a comparison, a breakdown). Pick the chart type that fits and give a clear title.',

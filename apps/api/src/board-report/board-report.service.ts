@@ -60,6 +60,48 @@ interface KeyIndicator {
   available: boolean
 }
 
+// ── Forecast (Forecast vs Budget — clones the operations shape) ────────────────
+
+interface ForecastLine {
+  key: string
+  label: string
+  forecast: number
+  budget: number | null
+  variance: number | null
+  variancePct: number | null
+  favorable: boolean
+  explanation: string | null
+}
+interface ForecastTotals {
+  forecast: number
+  budget: number | null
+  variance: number | null
+  variancePct: number | null
+  favorable: boolean
+}
+interface ForecastSection {
+  available: boolean
+  computedAt: string
+  revenue: ForecastLine[]
+  revenueTotals: ForecastTotals
+  expense: ForecastLine[]
+  expenseTotals: ForecastTotals
+  netSurplus: {
+    forecast: number
+    budget: number | null
+    variance: number | null
+    variancePct: number | null
+  }
+  assumptionsSummary: {
+    enrollmentTotal: number
+    feederTotal: number
+    feederByGrade: Record<string, number>
+    tuitionRates: { prek3: number; prek5: number; elem: number; middle: number }
+    inflationPct: number
+    programSplit: { parent: number; ftc: number; fes: number }
+  }
+}
+
 export interface BoardReportBundle {
   periodId: string
   label: string
@@ -76,6 +118,7 @@ export interface BoardReportBundle {
   settings: { reportTitle: string | null; committeeName: string | null; generatedAt: string | null }
   mda: { text: string | null; source: 'rule' | 'llm' | 'user' | null }
   operations: Operations | null
+  forecast: ForecastSection | null
   keyIndicators: KeyIndicator[]
   financialPosition: { hasPY: boolean; cy: SFPResult; py: SFPResult | null } | null
   changesInNetAssets: { hasPY: boolean; cy: NetAssetsColumn; py: NetAssetsColumn | null } | null
@@ -206,6 +249,9 @@ export class BoardReportService {
       operations: bundle
         ? this.buildOperations(categoryActuals, budgetRevenue, budgetExpense, explanations)
         : null,
+      forecast: this.buildForecastSection(
+        (budgetLines?.forecast as Record<string, unknown> | undefined) ?? null,
+      ),
       keyIndicators: bundle ? this.buildKeyIndicators(metrics, operationalRow) : [],
       financialPosition: bundle ? this.buildFinancialPosition(bundle) : null,
       changesInNetAssets: bundle ? this.buildChangesInNetAssets(bundle) : null,
@@ -318,6 +364,154 @@ export class BoardReportService {
     const budget = hasBudget ? lines.reduce((s, l) => s + (l.budget ?? 0), 0) : null
     const { variance, variancePct } = computeVariance(actual, budget)
     return { actual, budget, variance, variancePct, favorable: this.isFavorable(type, variance) }
+  }
+
+  // ── Forecast (Forecast vs Budget — read-only reshape of stored lines.forecast) ─
+
+  /**
+   * Reshape the STORED lines.forecast into a Forecast-vs-Budget section. NEVER
+   * recomputes the forecast (that's BudgetService.upsertForecast's job) — it only
+   * reshapes the persisted projected/baseBudget/variance into ordered table rows,
+   * reusing computeVariance/round1/isFavorable + the canonical label ordering.
+   * Returns null when no forecast has been saved.
+   */
+  private buildForecastSection(
+    forecast: Record<string, unknown> | null,
+  ): ForecastSection | null {
+    if (!forecast) return null
+
+    const projected = (forecast.projected as Record<string, unknown> | undefined) ?? {}
+    const projectedRevenue = (projected.revenue as Record<string, number> | undefined) ?? {}
+    const projectedExpense = (projected.expense as Record<string, number> | undefined) ?? {}
+    const projectedKpis = (projected.kpis as Record<string, number> | undefined) ?? {}
+    const baseBudget = (forecast.baseBudget as Record<string, unknown> | undefined) ?? {}
+    const baseRevenue = (baseBudget.revenue as Record<string, number> | undefined) ?? {}
+    const baseExpense = (baseBudget.expense as Record<string, number> | undefined) ?? {}
+    const explanations = (forecast.explanations as Record<string, unknown> | undefined) ?? {}
+    const explRevenue = this.coerceCatMap(explanations.revenue)
+    const explExpense = this.coerceCatMap(explanations.expense)
+    // A base budget existed at compute time iff either snapshot map has any keys.
+    const hadBudget = Object.keys(baseRevenue).length > 0 || Object.keys(baseExpense).length > 0
+
+    const revenue = this.buildForecastLines(
+      projectedRevenue,
+      baseRevenue,
+      hadBudget,
+      REVENUE_LINE_LABELS as Record<string, string>,
+      explRevenue,
+      'revenue',
+    )
+    const expense = this.buildForecastLines(
+      projectedExpense,
+      baseExpense,
+      hadBudget,
+      EXPENSE_LINE_LABELS as Record<string, string>,
+      explExpense,
+      'expense',
+    )
+
+    const revenueTotals = this.forecastTotals(revenue, 'revenue', hadBudget)
+    const expenseTotals = this.forecastTotals(expense, 'expense', hadBudget)
+
+    const netForecast = revenueTotals.forecast - expenseTotals.forecast
+    const hasBudgetForNet = revenueTotals.budget !== null && expenseTotals.budget !== null
+    const netBudget = hasBudgetForNet
+      ? (revenueTotals.budget as number) - (expenseTotals.budget as number)
+      : null
+    const netVar = computeVariance(netForecast, netBudget)
+
+    const assumptions = (forecast.assumptions as Record<string, unknown> | undefined) ?? {}
+    const rates = (assumptions.tuitionRates as Record<string, number> | undefined) ?? {}
+    const split = (assumptions.tuitionProgramSplit as Record<string, number> | undefined) ?? {}
+    const feeder = (forecast.feederEnrollmentByGrade as Record<string, number> | undefined) ?? {}
+    const feederTotal = Object.values(feeder).reduce((s, v) => s + (Number(v) || 0), 0)
+    const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
+
+    return {
+      available: true,
+      computedAt: typeof forecast.computedAt === 'string' ? forecast.computedAt : '',
+      revenue,
+      revenueTotals,
+      expense,
+      expenseTotals,
+      netSurplus: {
+        forecast: netForecast,
+        budget: netBudget,
+        variance: netVar.variance,
+        variancePct: netVar.variancePct,
+      },
+      assumptionsSummary: {
+        // POST-merge enrollment total (base+feeder) per the projected KPIs.
+        enrollmentTotal: num(projectedKpis.enrollmentTotal),
+        feederTotal,
+        feederByGrade: feeder,
+        tuitionRates: {
+          prek3: num(rates.prek3),
+          prek5: num(rates.prek5),
+          elem: num(rates.elem),
+          middle: num(rates.middle),
+        },
+        inflationPct: num(assumptions.inflationPct),
+        programSplit: {
+          parent: num(split.parent),
+          ftc: num(split.ftc),
+          fes: num(split.fes),
+        },
+      },
+    }
+  }
+
+  /** Forecast-vs-budget rows, keyed by the canonical label ordering. */
+  private buildForecastLines(
+    projected: Record<string, number>,
+    budget: Record<string, number>,
+    hadBudget: boolean,
+    labels: Record<string, string>,
+    explanations: Record<string, string>,
+    type: 'revenue' | 'expense',
+  ): ForecastLine[] {
+    const keys = new Set<string>([
+      ...Object.keys(labels),
+      ...Object.keys(projected),
+      ...Object.keys(budget),
+    ])
+    const lines: ForecastLine[] = []
+    for (const key of keys) {
+      const fc = Number(projected[key] ?? 0)
+      const budgetVal = hadBudget ? Number(budget[key] ?? 0) : null
+      const { variance, variancePct } = computeVariance(fc, budgetVal)
+      lines.push({
+        key,
+        label: labels[key] ?? key,
+        forecast: fc,
+        budget: budgetVal,
+        variance,
+        variancePct,
+        favorable: this.isFavorable(type, variance),
+        explanation: explanations[key] ?? null,
+      })
+    }
+    const order = Object.keys(labels)
+    lines.sort((a, b) => {
+      const ia = order.indexOf(a.key)
+      const ib = order.indexOf(b.key)
+      if (ia !== -1 && ib !== -1) return ia - ib
+      if (ia !== -1) return -1
+      if (ib !== -1) return 1
+      return a.label.localeCompare(b.label)
+    })
+    return lines
+  }
+
+  private forecastTotals(
+    lines: ForecastLine[],
+    type: 'revenue' | 'expense',
+    hadBudget: boolean,
+  ): ForecastTotals {
+    const forecast = lines.reduce((s, l) => s + l.forecast, 0)
+    const budget = hadBudget ? lines.reduce((s, l) => s + (l.budget ?? 0), 0) : null
+    const { variance, variancePct } = computeVariance(forecast, budget)
+    return { forecast, budget, variance, variancePct, favorable: this.isFavorable(type, variance) }
   }
 
   // ── Key Indicators (the 6 sourceable now) ────────────────────────────────────

@@ -376,6 +376,11 @@ model PeriodOperationalData {
   studentsOnAid     Int?     @map("students_on_aid")
   financialAidTotal Decimal? @map("financial_aid_total") @db.Decimal(18, 2)
   notes             String?
+  /// Phase 2 — anticipated INCOMING (net-new) students by grade from feeder
+  /// sources. JSON object keyed by GradeKey (PK0–PK4, K, 1–8) → non-negative
+  /// count. Drives the FY-End Forecast's tuition (merged additively into the
+  /// driver enrollmentByGrade). NULL = none entered. A free input, NOT a linked school.
+  feederEnrollmentByGrade Json? @map("feeder_enrollment_by_grade") @db.JsonB
   updatedByUserId   String?  @map("updated_by_user_id") @db.Uuid
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")

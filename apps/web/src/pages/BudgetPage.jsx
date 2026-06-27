@@ -30,7 +30,7 @@
 // deferred sync-on-key (selected period, surface reset) and the org-id fetch.
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Wallet, Scale, Building2, Sparkles, Table2 } from 'lucide-react'
+import { Wallet, Scale, Building2, Sparkles, Table2, TrendingUp } from 'lucide-react'
 import TopBar from '../components/TopBar.jsx'
 import BillingBanner from '../components/BillingBanner.jsx'
 import PeriodSelector from '../components/analytics/PeriodSelector.jsx'
@@ -40,6 +40,7 @@ import DioceseRollup from '../components/budget/DioceseRollup.jsx'
 import BudgetVsActual from '../components/analytics/BudgetVsActual.jsx'
 import BudgetWizard from '../components/budget/wizard/BudgetWizard.jsx'
 import BudgetSummary from '../components/budget/BudgetSummary.jsx'
+import ForecastWorkspace from '../components/budget/ForecastWorkspace.jsx'
 import { describeBudgetSource } from '../components/budget/budgetSource.js'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { usePersistence } from '../context/PersistenceContext.jsx'
@@ -53,6 +54,7 @@ import { orgsApi, analyticsApi } from '../lib/api.js'
 
 const TABS = [
   { id: 'budget', label: 'Budget', Icon: Wallet },
+  { id: 'forecast', label: 'Forecast', Icon: TrendingUp },
   { id: 'bva', label: 'Budget vs. Actual', Icon: Scale },
   { id: 'rollup', label: 'Organizational Roll-up', Icon: Building2 },
 ]
@@ -368,6 +370,30 @@ export default function BudgetPage() {
     )
   }
 
+  const renderForecast = () => {
+    if (!selectedPeriodId) {
+      return (
+        <div key="forecast" className="card-soft border-dashed px-6 py-14 text-center">
+          <p className="font-serif text-lg italic text-muted">
+            Select a period to project its fiscal-year-end forecast.
+          </p>
+        </div>
+      )
+    }
+    return (
+      <div key="forecast">
+        <ForecastWorkspace
+          key={`${schoolId}:${selectedPeriodId}`}
+          schoolId={schoolId}
+          periodId={selectedPeriodId}
+          canEdit={canEdit}
+          budget={budget}
+          budgetContext={budgetContext}
+        />
+      </div>
+    )
+  }
+
   const renderBva = () => {
     if (!selectedPeriodId) {
       return (
@@ -396,6 +422,8 @@ export default function BudgetPage() {
 
   const renderActivePanel = () => {
     switch (activeTab) {
+      case 'forecast':
+        return renderForecast()
       case 'bva':
         return renderBva()
       case 'rollup':

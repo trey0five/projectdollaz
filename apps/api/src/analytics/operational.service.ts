@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable } from '@nestjs/common'
-import type { PeriodOperationalData, Prisma } from '@finrep/db'
+import { Prisma } from '@finrep/db'
+import type { PeriodOperationalData } from '@finrep/db'
 import type { PeriodOperational } from '@finrep/analytics'
+import { GRADE_KEYS } from '@finrep/analytics'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { PeriodsService } from '../periods/periods.service.js'
 import { AuditService } from '../common/audit/audit.service.js'
@@ -13,11 +15,29 @@ export interface OperationalPublic {
   studentsOnAid: number | null
   financialAidTotal: number | null
   notes: string | null
+  /** Phase 2 — anticipated incoming feeder students by grade; null when none. */
+  feederEnrollmentByGrade: Record<string, number> | null
   updatedAt: string | null
 }
 
 function dec(v: Prisma.Decimal | null): number | null {
   return v === null ? null : Number(v)
+}
+
+/**
+ * Coerce the stored feeder JSON column into a clean per-grade number map, keeping
+ * only the 14 known GRADE_KEYS with finite non-negative values. Returns null when
+ * nothing usable remains (so the form/print show "none entered" rather than {}).
+ */
+function coerceFeeder(v: unknown): Record<string, number> | null {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null
+  const src = v as Record<string, unknown>
+  const out: Record<string, number> = {}
+  for (const g of GRADE_KEYS) {
+    const n = src[g]
+    if (typeof n === 'number' && Number.isFinite(n) && n > 0) out[g] = n
+  }
+  return Object.keys(out).length ? out : null
 }
 
 @Injectable()
@@ -36,6 +56,7 @@ export class OperationalService {
         studentsOnAid: null,
         financialAidTotal: null,
         notes: null,
+        feederEnrollmentByGrade: null,
         updatedAt: null,
       }
     }
@@ -45,6 +66,7 @@ export class OperationalService {
       studentsOnAid: row.studentsOnAid,
       financialAidTotal: dec(row.financialAidTotal),
       notes: row.notes,
+      feederEnrollmentByGrade: coerceFeeder(row.feederEnrollmentByGrade),
       updatedAt: row.updatedAt.toISOString(),
     }
   }
@@ -126,12 +148,24 @@ export class OperationalService {
     )
     const notes = pick(dto.notes, existing?.notes ?? null)
 
+    // Feeder column: merge-pick (omitted keeps stored, explicit null clears).
+    // Write Prisma.JsonNull when null else the object, like other JSON columns.
+    const feederMerged = pick(
+      dto.feederEnrollmentByGrade as Record<string, number> | null | undefined,
+      (existing?.feederEnrollmentByGrade as Record<string, number> | null) ?? null,
+    )
+    const feederWrite =
+      feederMerged === null || feederMerged === undefined
+        ? Prisma.JsonNull
+        : (feederMerged as Prisma.InputJsonValue)
+
     const data = {
       enrollment,
       enrollmentFte,
       studentsOnAid,
       financialAidTotal,
       notes,
+      feederEnrollmentByGrade: feederWrite,
       updatedByUserId: userId,
     }
 
