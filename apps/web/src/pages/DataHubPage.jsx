@@ -32,6 +32,8 @@ import SourceCard from '../components/datahub/SourceCard.jsx'
 import GuideMascot from '../components/datahub/GuideMascot.jsx'
 import MonthlyActualsPanel from '../components/monthly/MonthlyActualsPanel.jsx'
 import OperationalDataPanel from '../components/analytics/OperationalDataPanel.jsx'
+import { AppProvider } from '../context/AppContext.jsx'
+import IntakeBar from '../components/IntakeBar.jsx'
 
 // Module-scope checklist config (NOT in-render). The `key` matches the
 // dataStatusContract `sources` keys + `summary.order`; SourceCard reads
@@ -43,8 +45,7 @@ const SOURCES = [
     Icon: FileSpreadsheet,
     what:
       'Your trial balance is the list of every account and its balance. It’s the one thing we truly need — we turn it into your four financial statements automatically.',
-    action: 'link',
-    to: '/statements',
+    action: 'embed',
     cta: 'Add trial balance',
   },
   {
@@ -98,7 +99,7 @@ const SOURCES = [
 
 export default function DataHubPage() {
   const { activeSchool } = useSchools()
-  const { periods } = usePersistence()
+  const { periods, hydratedFiles, activePeriod, hydrationToken } = usePersistence()
   const schoolId = activeSchool?.id ?? null
   const isOwnerOrAccountant =
     activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'
@@ -108,7 +109,11 @@ export default function DataHubPage() {
     () => (periods || []).filter((p) => p.hasSnapshot),
     [periods],
   )
-  const defaultPeriodId = snapshotPeriods[0]?.id ?? (periods || [])[0]?.id ?? null
+  // The hub is about getting data IN, so default to the live/active period (the one
+  // you're building) — which is also the period the trial-balance intake uploads to,
+  // keeping the card status and the modal in sync. Falls back to newest-with-snapshot.
+  const defaultPeriodId =
+    activePeriod?.id ?? snapshotPeriods[0]?.id ?? (periods || [])[0]?.id ?? null
 
   // Local selection. Adopt the default once it resolves (periods load async),
   // render-time per React docs — NOT setState-in-effect. The user's explicit
@@ -123,6 +128,18 @@ export default function DataHubPage() {
 
   const { data, loading, error, notEntitled, refetch } = useDataStatus(schoolId, periodId)
   const sources = data?.sources || null
+
+  // After a trial-balance save inside the modal, PersistenceContext bumps
+  // hydrationToken — re-pull the data-status so the Trial balance card flips to
+  // Done (skip the initial mount; useDataStatus already loads then).
+  const firstTokenRef = useRef(true)
+  useEffect(() => {
+    if (firstTokenRef.current) {
+      firstTokenRef.current = false
+      return
+    }
+    refetch()
+  }, [hydrationToken, refetch])
   const summary = data?.summary || null
 
   const [modalKey, setModalKey] = useState(null) // which embed panel is open in the modal
@@ -266,6 +283,10 @@ export default function DataHubPage() {
         periodLabel={periodLabel}
         canEdit={isOwnerOrAccountant}
         onSaved={refetch}
+        school={activeSchool}
+        hydratedFiles={hydratedFiles}
+        activePeriod={activePeriod}
+        hydrationToken={hydrationToken}
       />
 
       {/* The star — Penny. Renders once summary is known (and not on empty-school). */}
@@ -278,9 +299,26 @@ export default function DataHubPage() {
 
 // Embed modal (render-helper, module scope — not a nested component def). Shows the
 // Monthly or Operational panel in a centered popup instead of expanding the card.
-function DataEmbedModal({ openKey, onClose, schoolId, periodId, periodLabel, canEdit, onSaved }) {
-  const isOpen = openKey === 'monthly' || openKey === 'operational'
-  const title = openKey === 'monthly' ? 'Monthly numbers' : 'Enrollment & aid'
+function DataEmbedModal({
+  openKey,
+  onClose,
+  schoolId,
+  periodId,
+  periodLabel,
+  canEdit,
+  onSaved,
+  school,
+  hydratedFiles,
+  activePeriod,
+  hydrationToken,
+}) {
+  const isTb = openKey === 'trialBalances'
+  const isOpen = isTb || openKey === 'monthly' || openKey === 'operational'
+  const title = isTb
+    ? 'Add your trial balance'
+    : openKey === 'monthly'
+      ? 'Monthly numbers'
+      : 'Enrollment & aid'
 
   useEffect(() => {
     if (!isOpen) return undefined
@@ -313,7 +351,7 @@ function DataEmbedModal({ openKey, onClose, schoolId, periodId, periodLabel, can
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 16, scale: 0.98 }}
             transition={{ duration: 0.2 }}
-            className="relative z-10 flex max-h-[88vh] w-full max-w-[760px] flex-col overflow-hidden rounded-2xl border-2 border-gold/30 bg-section shadow-2xl"
+            className={`relative z-10 flex max-h-[90vh] w-full flex-col overflow-hidden rounded-2xl border-2 border-gold/30 bg-section shadow-2xl ${isTb ? 'max-w-[1040px]' : 'max-w-[760px]'}`}
           >
             <div className="flex items-center justify-between border-b border-rule/60 bg-white px-5 py-3.5">
               <h2 className="font-serif text-lg font-semibold text-navy">{title}</h2>
@@ -326,7 +364,21 @@ function DataEmbedModal({ openKey, onClose, schoolId, periodId, periodLabel, can
                 <X size={18} />
               </button>
             </div>
-            <div className="overflow-y-auto p-5">
+            <div className={`overflow-y-auto ${isTb ? 'p-0' : 'p-5'}`}>
+              {isTb && (
+                // The full trial-balance intake, standalone — upload CY/PY/Audited,
+                // assign roles, and save. Saving bumps PersistenceContext's
+                // hydrationToken, which the hub watches to refresh the card status.
+                <AppProvider
+                  key={`tb-${school?.id ?? 'none'}:${hydrationToken}`}
+                  school={school}
+                  initialFiles={hydratedFiles}
+                  initialPeriod={activePeriod}
+                  readOnly={!canEdit}
+                >
+                  <IntakeBar />
+                </AppProvider>
+              )}
               {openKey === 'monthly' && periodId && (
                 <MonthlyActualsPanel schoolId={schoolId} periodId={periodId} canEdit={canEdit} />
               )}

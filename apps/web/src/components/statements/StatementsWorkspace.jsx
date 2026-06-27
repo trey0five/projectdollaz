@@ -12,15 +12,63 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Link, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, FileStack } from 'lucide-react'
+import { ArrowLeft, ArrowRight, FileStack, Database } from 'lucide-react'
 import { useSchools } from '../../context/SchoolContext.jsx'
-import { AppProvider } from '../../context/AppContext.jsx'
 import { usePersistence } from '../../context/PersistenceContext.jsx'
 import { formatShortDate, PERIOD_LABELS } from '../../lib/format.js'
 import CreateSchoolForm from '../CreateSchoolForm.jsx'
-import Dashboard from '../Dashboard.jsx'
 import ReportTabs from '../reports/ReportTabs.jsx'
 import SavedPeriodsRail from './SavedPeriodsRail.jsx'
+
+// Read-only statements view for one period (module scope — not an in-render def).
+function StatementsView({ bundle, label, periodEndDate, periodType, school, onBack }) {
+  return (
+    <div className="card-soft overflow-hidden">
+      <div className="flex items-center justify-between gap-3 border-b border-rule px-4 py-3 sm:px-6">
+        <div className="min-w-0">
+          <h2 className="truncate font-serif text-lg font-semibold text-navy">
+            {label || 'Statements'}
+          </h2>
+          <p className="text-[12px] text-muted">
+            {formatShortDate(periodEndDate)} · generated statements (read-only)
+          </p>
+        </div>
+        {onBack && (
+          <button type="button" onClick={onBack} className="btn-ghost shrink-0">
+            Back to current
+          </button>
+        )}
+      </div>
+      <ReportTabs
+        bundle={bundle}
+        school={school}
+        dateLabel={formatShortDate(periodEndDate)}
+        periodLabel={PERIOD_LABELS[periodType] || ''}
+      />
+    </div>
+  )
+}
+
+// Empty state — no snapshot for the active period yet; send them to the Data hub.
+function NoStatementsCard() {
+  return (
+    <div className="card-soft flex flex-col items-center gap-4 px-6 py-14 text-center">
+      <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gold-gradient text-white shadow-glow">
+        <Database size={28} />
+      </span>
+      <div>
+        <h2 className="font-serif text-xl font-semibold text-navy">No statements yet</h2>
+        <p className="mx-auto mt-1.5 max-w-sm text-[13px] leading-relaxed text-muted">
+          Add your trial balance in the Data hub and we’ll generate your four financial statements
+          right here.
+        </p>
+      </div>
+      <Link to="/data" className="btn-primary inline-flex items-center gap-2">
+        Go to the Data hub <ArrowRight size={16} />
+      </Link>
+    </div>
+  )
+}
 
 function Splash() {
   return (
@@ -36,8 +84,7 @@ function Splash() {
 
 export default function StatementsWorkspace() {
   const { schools, activeSchool, loading } = useSchools()
-  const { periods, hydrating, hydratedFiles, activePeriod, hydrationToken, reopenPeriod } =
-    usePersistence()
+  const { periods, hydrating, activePeriod, latestSnapshot, reopenPeriod } = usePersistence()
   const [searchParams, setSearchParams] = useSearchParams()
 
   // Read-only reopen state for non-active saved periods.
@@ -109,22 +156,6 @@ export default function StatementsWorkspace() {
   if (schools.length === 0) return <CreateSchoolForm />
   if (hydrating) return <Splash />
 
-  const canEdit = activeSchool?.role !== 'viewer'
-
-  // The live workspace — AppProvider props/key preserved VERBATIM from AuthedShell
-  // so intake/generate/save and refresh-restore behave exactly as before.
-  const liveWorkspace = (
-    <AppProvider
-      key={`${activeSchool?.id ?? 'none'}:${hydrationToken}`}
-      school={activeSchool}
-      initialFiles={hydratedFiles}
-      initialPeriod={activePeriod}
-      readOnly={!canEdit}
-    >
-      <Dashboard />
-    </AppProvider>
-  )
-
   return (
     <div className="mx-auto max-w-[1460px] px-4 py-6 sm:px-10">
       <Link
@@ -133,18 +164,27 @@ export default function StatementsWorkspace() {
       >
         <ArrowLeft size={15} /> Back to dashboard
       </Link>
-      <div className="mb-5 flex items-center gap-2.5">
-        <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gold-gradient text-white shadow-glow">
-          <FileStack size={22} />
-        </span>
-        <div>
-          <h1 className="font-serif text-xl font-semibold text-navy sm:text-2xl">
-            Statements &amp; Periods
-          </h1>
-          <p className="text-[13px] text-muted">
-            Upload a trial balance, generate the four statements, and reopen any saved period.
-          </p>
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gold-gradient text-white shadow-glow">
+            <FileStack size={22} />
+          </span>
+          <div>
+            <h1 className="font-serif text-xl font-semibold text-navy sm:text-2xl">
+              Statements &amp; Periods
+            </h1>
+            <p className="text-[13px] text-muted">
+              Your generated financial statements — view any period here. Add or update data in the
+              Data hub.
+            </p>
+          </div>
         </div>
+        <Link
+          to="/data"
+          className="btn-ghost inline-flex shrink-0 items-center gap-1.5 self-start sm:self-auto"
+        >
+          <Database size={15} /> Go to Data hub
+        </Link>
       </div>
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-6">
@@ -171,32 +211,28 @@ export default function StatementsWorkspace() {
           )}
         </aside>
 
-        {/* Workspace: live editable (newest) OR a read-only stored snapshot. */}
+        {/* Read-only statements: a reopened older period, the active period's saved
+            snapshot, or an empty state pointing to the Data hub. */}
         <section ref={workspaceRef} className="min-w-0 flex-1">
           {openId && openBundle ? (
-            <div className="card-soft overflow-hidden">
-              <div className="flex items-center justify-between gap-3 border-b border-rule px-4 py-3 sm:px-6">
-                <div className="min-w-0">
-                  <h2 className="truncate font-serif text-lg font-semibold text-navy">
-                    {openPeriod?.label || 'Saved statements'}
-                  </h2>
-                  <p className="text-[12px] text-muted">
-                    {formatShortDate(openPeriod?.periodEndDate)} · stored snapshot (read-only)
-                  </p>
-                </div>
-                <button type="button" onClick={() => showLive(null)} className="btn-ghost shrink-0">
-                  Back to workspace
-                </button>
-              </div>
-              <ReportTabs
-                bundle={openBundle}
-                school={activeSchool}
-                dateLabel={formatShortDate(openPeriod?.periodEndDate)}
-                periodLabel={PERIOD_LABELS[openPeriod?.periodType] || ''}
-              />
-            </div>
+            <StatementsView
+              bundle={openBundle}
+              label={openPeriod?.label}
+              periodEndDate={openPeriod?.periodEndDate}
+              periodType={openPeriod?.periodType}
+              school={activeSchool}
+              onBack={() => showLive(null)}
+            />
+          ) : latestSnapshot?.payload ? (
+            <StatementsView
+              bundle={latestSnapshot.payload}
+              label={activePeriod?.label}
+              periodEndDate={activePeriod?.periodEndDate}
+              periodType={activePeriod?.periodType}
+              school={activeSchool}
+            />
           ) : (
-            liveWorkspace
+            <NoStatementsCard />
           )}
         </section>
       </div>
