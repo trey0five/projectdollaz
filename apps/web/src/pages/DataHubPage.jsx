@@ -222,7 +222,7 @@ export default function DataHubPage() {
         </motion.header>
 
         {noPeriods ? (
-          <NoPeriodCard />
+          <NoPeriodCard onAdd={() => setModalKey('trialBalances')} />
         ) : (
           <>
             {/* QuickBooks fast-path (top). */}
@@ -372,8 +372,8 @@ function DataEmbedModal({
                 <AppProvider
                   key={`tb-${school?.id ?? 'none'}:${hydrationToken}`}
                   school={school}
-                  initialFiles={hydratedFiles}
-                  initialPeriod={activePeriod}
+                  initialFiles={hydratedFiles || []}
+                  initialPeriod={activePeriod || null}
                   readOnly={!canEdit}
                 >
                   <IntakeBar />
@@ -400,7 +400,7 @@ function DataEmbedModal({
 }
 
 // Render-helper (not a nested component def): no reporting period yet.
-function NoPeriodCard() {
+function NoPeriodCard({ onAdd }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -417,12 +417,13 @@ function NoPeriodCard() {
         Start by adding a trial balance — we&apos;ll set up the period and turn it into your financial
         statements automatically.
       </p>
-      <a
-        href="/statements"
+      <button
+        type="button"
+        onClick={onAdd}
         className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-gold-gradient px-4 py-2.5 text-[13px] font-bold uppercase tracking-[0.08em] text-navy shadow-glow transition-transform hover:-translate-y-0.5"
       >
         Add a trial balance
-      </a>
+      </button>
     </motion.div>
   )
 }
