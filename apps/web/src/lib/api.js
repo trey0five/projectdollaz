@@ -352,6 +352,11 @@ export const assistantApi = {
   apply: (schoolId, action) => api.post(`/schools/${schoolId}/assistant/apply`, action),
 }
 
+// ── Data hub: unified data-status aggregation (read-only) ────────────────────
+export const dataHubApi = {
+  status: (schoolId, periodId) => api.get(`/schools/${schoolId}/periods/${periodId}/data-status`),
+}
+
 // ── Phase 6: QuickBooks Online connector (per school) ────────────────────────
 export const qboApi = {
   status: (schoolId) => api.get(`/schools/${schoolId}/integrations/qb/status`),

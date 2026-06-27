@@ -18,5 +18,6 @@ import { QboClient } from './qbo.client.js'
   imports: [AuthModule, PeriodsModule, BillingModule, AuditModule, ImportsModule, StatementsModule],
   controllers: [QboController],
   providers: [QboService, QboClient],
+  exports: [QboService],
 })
 export class IntegrationsModule {}

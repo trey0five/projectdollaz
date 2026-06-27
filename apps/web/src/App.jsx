@@ -10,6 +10,7 @@ import { ProtectedRoute, PublicOnlyRoute } from './components/auth/RouteGuards.j
 import Onboarding from './components/onboarding/Onboarding.jsx'
 import AssistantWidget from './components/assistant/AssistantWidget.jsx'
 import HomePage from './pages/HomePage.jsx'
+import DataHubPage from './pages/DataHubPage.jsx'
 import StatementsPage from './pages/StatementsPage.jsx'
 import AnalyticsPage from './pages/AnalyticsPage.jsx'
 import BudgetPage from './pages/BudgetPage.jsx'
@@ -104,6 +105,7 @@ export default function App() {
       />
       <Route element={<AuthedLayout />}>
         <Route path="/" element={<HomePage />} />
+        <Route path="/data" element={<DataHubPage />} />
         <Route path="/statements" element={<StatementsPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/budget" element={<BudgetPage />} />

@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { LogOut, LineChart, Settings, FileStack, BarChart3, ShieldCheck, LayoutDashboard, Wallet, FileBarChart2 } from 'lucide-react'
+import { LogOut, LineChart, Settings, FileStack, BarChart3, ShieldCheck, LayoutDashboard, Wallet, FileBarChart2, Database } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import SchoolSwitcher from './SchoolSwitcher.jsx'
@@ -9,6 +9,7 @@ export default function TopBar() {
   const location = useLocation()
   const path = location.pathname
   const onHome = path === '/'
+  const onData = path.startsWith('/data')
   const onSettings = path.startsWith('/settings')
   // Statements & Periods absorbs the old History route — highlight on both so
   // the /history -> /statements redirect target still lights up correctly.
@@ -30,6 +31,7 @@ export default function TopBar() {
 
   const NAV = [
     { to: '/', label: 'Home', Icon: LayoutDashboard, active: onHome },
+    { to: '/data', label: 'Data', Icon: Database, active: onData },
     { to: '/statements', label: 'Statements', Icon: FileStack, active: onStatements },
     { to: '/analytics', label: 'Analytics', Icon: BarChart3, active: onAnalytics },
     { to: '/budget', label: 'Budget', Icon: Wallet, active: onBudget },

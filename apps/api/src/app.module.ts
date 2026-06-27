@@ -20,6 +20,7 @@ import { IntegrationsModule } from './integrations/integrations.module.js'
 import { BoardReportModule } from './board-report/board-report.module.js'
 import { SchedulesModule } from './schedules/schedules.module.js'
 import { AssistantModule } from './assistant/assistant.module.js'
+import { DataHubModule } from './data-hub/data-hub.module.js'
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { AssistantModule } from './assistant/assistant.module.js'
     BoardReportModule,
     SchedulesModule,
     AssistantModule,
+    DataHubModule,
   ],
 })
 export class AppModule {}
