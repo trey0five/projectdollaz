@@ -52,6 +52,10 @@ export function AppProvider({
   initialFiles = [],
   initialPeriod = null,
   readOnly = false,
+  // When false, the intake never auto-collapses to the slim summary after a valid
+  // setup — it stays in the 3-slot review so adding PY/Audited is obvious (used by
+  // the Data hub modal, where the collapse-to-summary is confusing).
+  autoCollapse = true,
 }) {
   // `school` is the SELECTED school (from SchoolContext) — it carries the engine
   // begin-balance fields. The old PIN login is gone; auth is handled upstream.
@@ -365,7 +369,7 @@ export function AppProvider({
   // render-time state transition (the pattern this repo already uses for
   // tab reset) — NOT a setState-in-effect — so it stays clean under the
   // react-hooks lint rule. Subsequent expand/collapse is fully user-driven.
-  if (reports && !hasUnresolved && !autoCollapsedRef.current) {
+  if (autoCollapse && reports && !hasUnresolved && !autoCollapsedRef.current) {
     autoCollapsedRef.current = true
     if (intakeExpanded) setIntakeExpanded(false)
   }

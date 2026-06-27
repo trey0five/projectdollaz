@@ -375,6 +375,7 @@ function DataEmbedModal({
                   initialFiles={hydratedFiles || []}
                   initialPeriod={activePeriod || null}
                   readOnly={!canEdit}
+                  autoCollapse={false}
                 >
                   <IntakeBar />
                 </AppProvider>
