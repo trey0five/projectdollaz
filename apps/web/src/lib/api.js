@@ -287,6 +287,25 @@ export const boardReportApi = {
     api.post(`/schools/${schoolId}/periods/${periodId}/board-report/mda`, body),
 }
 
+// ── Phase 3: supporting schedules (Capital Budget + Cash & Investments) ──────
+// Period-scoped, user-maintained JSON-array schedules. GET never 404s on a
+// missing row (returns { items: [] } / { accounts: [] }, updatedAt: null). PUT
+// is a BULK REPLACE of the whole array (matches the editable-table "save" UX);
+// the server normalizes + persists order, then echoes the GET shape. Read
+// owner/accountant/viewer, write owner/accountant (server-enforced). These flow
+// into the board packet indirectly: saving here feeds the next board-report
+// assemble()'s capitalBudget / cashInvestments sections.
+export const schedulesApi = {
+  getCapital: (schoolId, periodId) =>
+    api.get(`/schools/${schoolId}/periods/${periodId}/capital-schedule`),
+  saveCapital: (schoolId, periodId, body) =>
+    api.put(`/schools/${schoolId}/periods/${periodId}/capital-schedule`, body),
+  getCash: (schoolId, periodId) =>
+    api.get(`/schools/${schoolId}/periods/${periodId}/cash-schedule`),
+  saveCash: (schoolId, periodId, body) =>
+    api.put(`/schools/${schoolId}/periods/${periodId}/cash-schedule`, body),
+}
+
 // ── Phase 3: recurring board-summary delivery (per school) ───────────────────
 export const reportScheduleApi = {
   get: (schoolId) => api.get(`/schools/${schoolId}/report-schedule`),

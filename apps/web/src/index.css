@@ -818,6 +818,31 @@
 .brd-table .brd-neg {
   color: #b14b3f;
 }
+/* ── Wide 9-column schedule table (Cash & Investments) ─────────────────────────
+   Lighter than the default .brd-table: smaller font, tighter padding, repeating
+   header on page break, and group blocks that avoid breaking mid-row. Scoped to
+   .brd-print only — does NOT touch the compliance .board-print packet. */
+.brd-table.brd-table-wide {
+  font-size: 10.5px;
+  table-layout: fixed;
+}
+.brd-table.brd-table-wide th,
+.brd-table.brd-table-wide td {
+  padding: 4px 5px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.brd-table.brd-table-wide th {
+  font-size: 8.5px;
+}
+.brd-table.brd-table-wide thead {
+  display: table-header-group;
+}
+.brd-table.brd-table-wide tr {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
 /* ── Key indicators ────────────────────────────────────────────────────────── */
 .brd-kpi-block {
   margin-top: 18px;

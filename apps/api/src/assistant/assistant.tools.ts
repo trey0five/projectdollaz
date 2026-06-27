@@ -317,6 +317,32 @@ export const TOOL_SCHEMAS = [
   {
     type: 'function',
     function: {
+      name: 'get_capital_schedule',
+      description:
+        'The Capital Budget Summary for a period: capital projects grouped (prior-year rollover/construction vs current-year), each with actual YTD, budget, and over/(under), plus group subtotals and the capital grand total. Read-only.',
+      parameters: {
+        type: 'object',
+        properties: { periodId: { type: 'string' } },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_cash_schedule',
+      description:
+        'The Cash & Investments Summary for a period: bank/investment accounts grouped by restriction (unrestricted / temporarily / permanently restricted) with balances, insured vs uninsured portions, vehicle, maturity, and rate, plus subtotals, grand total, and total insured/uninsured. Read-only.',
+      parameters: {
+        type: 'object',
+        properties: { periodId: { type: 'string' } },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'render_chart',
       description:
         'Draw a chart for the user. Call this to visualize numbers you have already fetched (a trend, a comparison, a breakdown). Pick the chart type that fits and give a clear title.',

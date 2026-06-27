@@ -115,6 +115,8 @@ model School {
   reportSchedule     ReportSchedule?
   qboConnection      QboConnection?
   boardReports       BoardReport[]
+  capitalSchedules   CapitalSchedule[]
+  cashSchedules      CashSchedule[]
 
   @@index([organizationId])
   @@map("schools")
@@ -140,6 +142,8 @@ model FiscalPeriod {
   insights           PeriodInsight[]
   budgets            PeriodBudget[]
   boardReports       BoardReport[]
+  capitalSchedules   CapitalSchedule[]
+  cashSchedules      CashSchedule[]
 
   // Phase 1C: DB-level idempotency for create-or-get under concurrency. The
   // natural key of a period is (school, period-end, type).
@@ -180,6 +184,8 @@ model User {
   checklistUpdates   PeriodChecklistItem[]  @relation("ChecklistUpdatedBy")
   dashboardUpdates   AnalyticsDashboard[]   @relation("DashboardUpdatedBy")
   boardReportUpdates BoardReport[]          @relation("BoardReportUpdatedBy")
+  capitalSchedulesUpdated CapitalSchedule[] @relation("CapitalScheduleUpdatedBy")
+  cashSchedulesUpdated    CashSchedule[]    @relation("CashScheduleUpdatedBy")
 
   @@index([email])
   @@map("users")
@@ -662,4 +668,48 @@ model BoardReport {
   @@index([schoolId])
   @@index([fiscalPeriodId])
   @@map("board_reports")
+}
+
+// ── Phase 3: Supporting schedules (period-scoped, user-maintained) ────────────
+// One JSON-array row per (school, period), mirroring BoardReport. Bulk-replace
+// PUT (no per-row CRUD). The Json default '[]' means a never-saved period reads
+// as an empty array without null-guards. Server reshapes these into the
+// capitalBudget / cashInvestments board-report sections (all totals server-side).
+
+model CapitalSchedule {
+  id              String   @id @default(uuid()) @db.Uuid
+  schoolId        String   @map("school_id") @db.Uuid
+  fiscalPeriodId  String   @map("fiscal_period_id") @db.Uuid
+  items           Json     @default("[]") // CapitalItem[] (ordered, see sharedShapes)
+  updatedByUserId String?  @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  school        School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  fiscalPeriod  FiscalPeriod @relation(fields: [fiscalPeriodId], references: [id], onDelete: Cascade)
+  updatedByUser User?        @relation("CapitalScheduleUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([schoolId, fiscalPeriodId])
+  @@index([schoolId])
+  @@index([fiscalPeriodId])
+  @@map("capital_schedules")
+}
+
+model CashSchedule {
+  id              String   @id @default(uuid()) @db.Uuid
+  schoolId        String   @map("school_id") @db.Uuid
+  fiscalPeriodId  String   @map("fiscal_period_id") @db.Uuid
+  accounts        Json     @default("[]") // CashAccount[] (ordered, see sharedShapes)
+  updatedByUserId String?  @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  school        School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  fiscalPeriod  FiscalPeriod @relation(fields: [fiscalPeriodId], references: [id], onDelete: Cascade)
+  updatedByUser User?        @relation("CashScheduleUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([schoolId, fiscalPeriodId])
+  @@index([schoolId])
+  @@index([fiscalPeriodId])
+  @@map("cash_schedules")
 }

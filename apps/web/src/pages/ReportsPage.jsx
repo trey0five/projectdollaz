@@ -7,8 +7,9 @@
 // polish. Distinct from the compliance "board packet" (/board-packet/print).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { FileBarChart2, ArrowRight, ArrowLeft, Lock } from 'lucide-react'
+import { FileBarChart2, Landmark, ArrowRight, ArrowLeft, Lock } from 'lucide-react'
 import TopBar from '../components/TopBar.jsx'
 import BillingBanner from '../components/BillingBanner.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
@@ -24,24 +25,31 @@ const REPORTS = [
     blurb:
       'A branded finance-committee packet: budget vs. actual, key indicators, MD&A narrative, and the three core statements — ready to print or save as PDF.',
     live: true,
+    Icon: FileBarChart2,
+    action: 'wizard',
   },
   {
     id: 'forecast',
     title: 'FYE Forecast',
     blurb: 'Project the full fiscal year from year-to-date actuals.',
     live: false,
+    Icon: FileBarChart2,
   },
   {
-    id: 'capital',
-    title: 'Capital Budget Summary',
-    blurb: 'Capital projects, funding sources, and reserve impact.',
-    live: false,
+    id: 'schedules',
+    title: 'Supporting Schedules',
+    blurb:
+      'Capital projects and cash & investment accounts that flow into your board packet.',
+    live: true,
+    Icon: Landmark,
+    action: 'navigate',
   },
 ]
 
 export default function ReportsPage() {
   const { activeSchool } = useSchools()
   const { periods } = usePersistence()
+  const navigate = useNavigate()
   const [openReport, setOpenReport] = useState(null)
 
   // Preselect the newest period that actually has a snapshot (the "live" period).
@@ -50,6 +58,16 @@ export default function ReportsPage() {
     [periods],
   )
   const defaultPeriodId = snapshotPeriods[0]?.id ?? (periods || [])[0]?.id ?? null
+
+  // Card select: the Board Report opens the inline 5-step wizard; Supporting
+  // Schedules NAVIGATES to its own surface (carrying the live snapshot period).
+  const onSelect = (report) => {
+    if (report.action === 'navigate' && report.id === 'schedules') {
+      navigate(defaultPeriodId ? `/reports/schedules?period=${defaultPeriodId}` : '/reports/schedules')
+      return
+    }
+    setOpenReport(report.id)
+  }
 
   return (
     <div className="min-h-screen bg-section">
@@ -73,7 +91,7 @@ export default function ReportsPage() {
             />
           </>
         ) : (
-          renderHub(setOpenReport)
+          renderHub(onSelect)
         )}
       </main>
     </div>
@@ -81,7 +99,7 @@ export default function ReportsPage() {
 }
 
 // Render-helper (not a nested component def) for the report catalog grid.
-function renderHub(setOpenReport) {
+function renderHub(onSelect) {
   return (
     <div key="hub">
       <motion.header
@@ -98,12 +116,14 @@ function renderHub(setOpenReport) {
       </motion.header>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {REPORTS.map((r, i) => (
+        {REPORTS.map((r, i) => {
+          const Icon = r.Icon || FileBarChart2
+          return (
           <motion.button
             key={r.id}
             type="button"
             disabled={!r.live}
-            onClick={() => r.live && setOpenReport(r.id)}
+            onClick={() => r.live && onSelect(r)}
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.05 * i }}
@@ -119,14 +139,14 @@ function renderHub(setOpenReport) {
                 r.live ? 'bg-gold/15 text-gold' : 'bg-navy/[0.06] text-muted'
               }`}
             >
-              <FileBarChart2 size={22} />
+              <Icon size={22} />
             </span>
             <h2 className="font-serif text-lg font-semibold text-navy">{r.title}</h2>
             <p className="mt-1.5 flex-1 text-[13px] leading-relaxed text-muted">{r.blurb}</p>
             <span className="mt-4 inline-flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.08em]">
               {r.live ? (
                 <span className="inline-flex items-center gap-1.5 text-gold">
-                  Build report
+                  {r.action === 'navigate' ? 'Open schedules' : 'Build report'}
                   <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
                 </span>
               ) : (
@@ -136,7 +156,8 @@ function renderHub(setOpenReport) {
               )}
             </span>
           </motion.button>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

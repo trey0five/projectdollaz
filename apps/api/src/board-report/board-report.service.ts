@@ -15,6 +15,13 @@ import { AnalyticsService } from '../analytics/analytics.service.js'
 import { BudgetService } from '../analytics/budget.service.js'
 import { AuditService } from '../common/audit/audit.service.js'
 import { AssistantClient } from '../assistant/assistant.client.js'
+import { SchedulesService } from '../schedules/schedules.service.js'
+import {
+  CAPITAL_GROUPS,
+  CAPITAL_GROUP_LABELS,
+  CASH_RESTRICTIONS,
+  CASH_RESTRICTION_LABELS,
+} from '../schedules/schedule.constants.js'
 import type { SaveBoardReportDto } from './dto/save-board-report.dto.js'
 import type { MdaBoardReportDto } from './dto/mda-board-report.dto.js'
 
@@ -102,6 +109,64 @@ interface ForecastSection {
   }
 }
 
+// ── Capital Budget Summary (Phase 3 — server-computed; null when no items) ─────
+
+interface CapitalBudgetLine {
+  id: string
+  label: string
+  actual: number
+  budget: number
+  overUnder: number
+  comment: string
+}
+interface CapitalBudgetSubtotal {
+  actual: number
+  budget: number
+  overUnder: number
+}
+interface CapitalBudgetGroup {
+  key: string
+  label: string
+  lines: CapitalBudgetLine[]
+  subtotal: CapitalBudgetSubtotal
+}
+interface CapitalBudgetSection {
+  groups: CapitalBudgetGroup[]
+  grandTotal: CapitalBudgetSubtotal
+}
+
+// ── Cash & Investments Summary (Phase 3 — server-computed; null when no accounts) ─
+
+interface CashInvestmentsAccount {
+  id: string
+  institution: string
+  accountDescription: string
+  vehicle: string
+  maturity: string
+  interestRate: number | null
+  balance: number
+  insuredPortion: number
+  uninsuredPortion: number
+  comment: string
+}
+interface CashInvestmentsSubtotal {
+  balance: number
+  insuredPortion: number
+  uninsuredPortion: number
+}
+interface CashInvestmentsGroup {
+  key: string
+  label: string
+  accounts: CashInvestmentsAccount[]
+  subtotal: CashInvestmentsSubtotal
+}
+interface CashInvestmentsSection {
+  groups: CashInvestmentsGroup[]
+  grandTotal: CashInvestmentsSubtotal
+  totalInsured: number
+  totalUninsured: number
+}
+
 export interface BoardReportBundle {
   periodId: string
   label: string
@@ -119,6 +184,8 @@ export interface BoardReportBundle {
   mda: { text: string | null; source: 'rule' | 'llm' | 'user' | null }
   operations: Operations | null
   forecast: ForecastSection | null
+  capitalBudget: CapitalBudgetSection | null
+  cashInvestments: CashInvestmentsSection | null
   keyIndicators: KeyIndicator[]
   financialPosition: { hasPY: boolean; cy: SFPResult; py: SFPResult | null } | null
   changesInNetAssets: { hasPY: boolean; cy: NetAssetsColumn; py: NetAssetsColumn | null } | null
@@ -175,6 +242,7 @@ export class BoardReportService {
     private readonly analytics: AnalyticsService,
     private readonly budget: BudgetService,
     private readonly audit: AuditService,
+    private readonly schedules: SchedulesService,
     // Optional so the service constructs without the LLM (rule baseline only).
     @Optional() private readonly assistant?: AssistantClient,
   ) {}
@@ -215,6 +283,9 @@ export class BoardReportService {
       where: { schoolId_fiscalPeriodId: { schoolId, fiscalPeriodId: period.id } },
     })
 
+    const capRow = await this.schedules.getCapital(schoolId, period.id)
+    const cashRow = await this.schedules.getCash(schoolId, period.id)
+
     const periodEndDate = period.periodEndDate.toISOString().slice(0, 10)
 
     const settingsCommittee =
@@ -252,6 +323,8 @@ export class BoardReportService {
       forecast: this.buildForecastSection(
         (budgetLines?.forecast as Record<string, unknown> | undefined) ?? null,
       ),
+      capitalBudget: this.buildCapitalBudget(capRow?.items ?? null),
+      cashInvestments: this.buildCashInvestments(cashRow?.accounts ?? null),
       keyIndicators: bundle ? this.buildKeyIndicators(metrics, operationalRow) : [],
       financialPosition: bundle ? this.buildFinancialPosition(bundle) : null,
       changesInNetAssets: bundle ? this.buildChangesInNetAssets(bundle) : null,
@@ -512,6 +585,135 @@ export class BoardReportService {
     const budget = hadBudget ? lines.reduce((s, l) => s + (l.budget ?? 0), 0) : null
     const { variance, variancePct } = computeVariance(forecast, budget)
     return { forecast, budget, variance, variancePct, favorable: this.isFavorable(type, variance) }
+  }
+
+  // ── Capital Budget Summary (Phase 3 — reshape stored items → grouped totals) ──
+
+  /**
+   * Reshape the stored CapitalSchedule.items into grouped display rows with
+   * server-computed over-under (= actual - budget per line/subtotal/grand total).
+   * Groups emitted in canonical enum order; an empty group is OMITTED. grandTotal
+   * sums ALL lines. Returns null when there are zero items at all. ZERO client math.
+   */
+  private buildCapitalBudget(items: unknown): CapitalBudgetSection | null {
+    if (!Array.isArray(items) || items.length === 0) return null
+
+    const groups: CapitalBudgetGroup[] = []
+    let gActual = 0
+    let gBudget = 0
+
+    for (const key of CAPITAL_GROUPS) {
+      const rows = items.filter(
+        (r) => (r as Record<string, unknown>)?.group === key,
+      ) as Record<string, unknown>[]
+      if (rows.length === 0) continue
+
+      let sActual = 0
+      let sBudget = 0
+      const lines: CapitalBudgetLine[] = rows.map((r) => {
+        const actual = Number(r.actual) || 0
+        const budget = Number(r.budget) || 0
+        sActual += actual
+        sBudget += budget
+        return {
+          id: typeof r.id === 'string' ? r.id : '',
+          label: typeof r.label === 'string' ? r.label : '',
+          actual,
+          budget,
+          overUnder: actual - budget,
+          comment: typeof r.comment === 'string' ? r.comment : '',
+        }
+      })
+      gActual += sActual
+      gBudget += sBudget
+
+      groups.push({
+        key,
+        label: CAPITAL_GROUP_LABELS[key],
+        lines,
+        subtotal: { actual: sActual, budget: sBudget, overUnder: sActual - sBudget },
+      })
+    }
+
+    if (groups.length === 0) return null
+
+    return {
+      groups,
+      grandTotal: { actual: gActual, budget: gBudget, overUnder: gActual - gBudget },
+    }
+  }
+
+  // ── Cash & Investments Summary (Phase 3 — grouped by restriction) ─────────────
+
+  /**
+   * Reshape the stored CashSchedule.accounts into restriction-grouped display
+   * rows with server-computed subtotals/grandTotal of balance/insured/uninsured.
+   * totalInsured/totalUninsured are emitted as explicit top-level keys for the
+   * board's uninsured-exposure callout. interestRate passes through verbatim
+   * (PERCENT; null when absent — no weighted aggregation). Groups in canonical
+   * order; empty groups omitted; null when zero accounts. ZERO client math.
+   */
+  private buildCashInvestments(accounts: unknown): CashInvestmentsSection | null {
+    if (!Array.isArray(accounts) || accounts.length === 0) return null
+
+    const groups: CashInvestmentsGroup[] = []
+    let gBal = 0
+    let gIns = 0
+    let gUnins = 0
+
+    for (const key of CASH_RESTRICTIONS) {
+      const rows = accounts.filter(
+        (r) => (r as Record<string, unknown>)?.restriction === key,
+      ) as Record<string, unknown>[]
+      if (rows.length === 0) continue
+
+      let sBal = 0
+      let sIns = 0
+      let sUnins = 0
+      const accts: CashInvestmentsAccount[] = rows.map((r) => {
+        const balance = Number(r.balance) || 0
+        const insuredPortion = Number(r.insuredPortion) || 0
+        const uninsuredPortion = Number(r.uninsuredPortion) || 0
+        sBal += balance
+        sIns += insuredPortion
+        sUnins += uninsuredPortion
+        const rate =
+          r.interestRate === undefined || r.interestRate === null || r.interestRate === ''
+            ? null
+            : Number(r.interestRate)
+        return {
+          id: typeof r.id === 'string' ? r.id : '',
+          institution: typeof r.institution === 'string' ? r.institution : '',
+          accountDescription: typeof r.accountDescription === 'string' ? r.accountDescription : '',
+          vehicle: typeof r.vehicle === 'string' ? r.vehicle : '',
+          maturity: typeof r.maturity === 'string' ? r.maturity : '',
+          interestRate: rate !== null && Number.isFinite(rate) ? rate : null,
+          balance,
+          insuredPortion,
+          uninsuredPortion,
+          comment: typeof r.comment === 'string' ? r.comment : '',
+        }
+      })
+      gBal += sBal
+      gIns += sIns
+      gUnins += sUnins
+
+      groups.push({
+        key,
+        label: CASH_RESTRICTION_LABELS[key],
+        accounts: accts,
+        subtotal: { balance: sBal, insuredPortion: sIns, uninsuredPortion: sUnins },
+      })
+    }
+
+    if (groups.length === 0) return null
+
+    return {
+      groups,
+      grandTotal: { balance: gBal, insuredPortion: gIns, uninsuredPortion: gUnins },
+      totalInsured: gIns,
+      totalUninsured: gUnins,
+    }
   }
 
   // ── Key Indicators (the 6 sourceable now) ────────────────────────────────────

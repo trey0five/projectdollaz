@@ -46,6 +46,8 @@ const TOOL_LABELS: Record<string, string> = {
   generate_board_narrative: 'Drafting the board narrative…',
   set_explanation: 'Preparing a variance explanation…',
   get_forecast: 'Reading the FY-end forecast…',
+  get_capital_schedule: 'Reading the capital budget…',
+  get_cash_schedule: 'Reading cash & investments…',
   apply_forecast: 'Re-projecting the FY-end forecast…',
   set_feeder_enrollment: 'Preparing the feeder enrollment…',
   render_chart: 'Drawing a chart…',
@@ -616,6 +618,7 @@ export class AssistantService {
       'proposing a forecast change. These also propose-then-confirm. ' +
       'For draft_cap_entry, first call get_corrective_action_plan to get the ruleId. ' +
       'For set_explanation, first call get_board_report to see the category keys. ' +
+      'For capital spend use get_capital_schedule; for cash/liquidity & insured exposure use get_cash_schedule. ' +
       'Be concise and board-appropriate; format money as USD. Only this school’s data is available. ' +
       'If a tool returns an error or needs data, say so plainly.'
     )
@@ -834,6 +837,26 @@ export class AssistantService {
             tuitionProgramSplit: a.tuitionProgramSplit ?? {},
           },
         }
+      }
+      case 'get_capital_schedule': {
+        const pid = await this.resolvePeriod(args, ctx)
+        const b = await this.boardReport.assemble(ctx.schoolId, pid, 'annual')
+        return (
+          b.capitalBudget ?? {
+            exists: false,
+            note: 'No capital budget entered for this period.',
+          }
+        )
+      }
+      case 'get_cash_schedule': {
+        const pid = await this.resolvePeriod(args, ctx)
+        const b = await this.boardReport.assemble(ctx.schoolId, pid, 'annual')
+        return (
+          b.cashInvestments ?? {
+            exists: false,
+            note: 'No cash & investment accounts entered for this period.',
+          }
+        )
       }
       case 'render_chart': {
         const chartType = ['bar', 'line', 'pie'].includes(String(args.chartType))

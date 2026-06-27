@@ -22,7 +22,9 @@ const TOC = [
   'Management Discussion & Analysis',
   'Statement of Operations (Budget vs Actual)',
   'Forecast for Fiscal Year End (Forecast vs Budget)',
+  'Capital Budget Summary',
   'Statement of Financial Position',
+  'Cash & Investments Summary',
   'Statement of Changes in Net Assets',
   'Statement of Cash Flows',
 ]
@@ -39,7 +41,9 @@ export default function BoardReportPrintDocument({ data }) {
       {renderMda(data)}
       {renderOperations(data)}
       {renderForecast(data)}
+      {renderCapitalBudget(data)}
       {renderFinancialPosition(data)}
+      {renderCashInvestments(data)}
       {renderChangesInNetAssets(data)}
       {renderCashFlows(data)}
     </div>
@@ -401,6 +405,82 @@ function fmtPct(n) {
   return `${Number(n)}%`
 }
 
+// ── 4c. Capital Budget Summary ────────────────────────────────────────────────
+// PURE presentational: every figure (line over-under, subtotals, grand total)
+// comes verbatim from the server-assembled bundle.capitalBudget (sharedShapes).
+// ZERO client arithmetic — null section ⇒ "Not available" placeholder.
+function renderCapitalBudget(data) {
+  const cap = data.capitalBudget
+  if (!cap) {
+    return (
+      <section className="brd-section">
+        <h2>Capital Budget Summary</h2>
+        <p className="brd-placeholder">
+          Not available — no capital projects entered for this period.
+        </p>
+      </section>
+    )
+  }
+  const gt = cap.grandTotal || {}
+  return (
+    <section className="brd-section">
+      <h2>Capital Budget Summary</h2>
+      <p className="brd-subnote">Capital projects: actual year-to-date vs. budget.</p>
+      <table className="brd-table">
+        <thead>
+          <tr>
+            <th className="brd-l">Project</th>
+            <th>Actual YTD</th>
+            <th>Budget</th>
+            <th>Over (Under)</th>
+            <th className="brd-l brd-explain">Comment</th>
+          </tr>
+        </thead>
+        <tbody>
+          {(cap.groups || []).map((g) => (
+            <CapitalGroup key={g.key} group={g} />
+          ))}
+          <tr className="brd-total brd-net">
+            <td className="brd-l">Total Capital</td>
+            <td className={cellNeg(gt.actual)}>{money(gt.actual)}</td>
+            <td className={cellNeg(gt.budget)}>{money(gt.budget)}</td>
+            <td className={cellNeg(gt.overUnder)}>{overUnder(gt.overUnder)}</td>
+            <td className="brd-l brd-explain" />
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  )
+}
+
+// One capital group: header + its lines + subtotal (all verbatim from assemble).
+function CapitalGroup({ group }) {
+  const sub = group.subtotal || {}
+  return (
+    <>
+      <tr className="brd-group">
+        <td colSpan={5}>{group.label}</td>
+      </tr>
+      {(group.lines || []).map((l) => (
+        <tr key={l.id}>
+          <td className="brd-l">{l.label}</td>
+          <td className={cellNeg(l.actual)}>{money(l.actual)}</td>
+          <td className={cellNeg(l.budget)}>{money(l.budget)}</td>
+          <td className={cellNeg(l.overUnder)}>{overUnder(l.overUnder)}</td>
+          <td className="brd-l brd-explain">{l.comment || ''}</td>
+        </tr>
+      ))}
+      <tr className="brd-total">
+        <td className="brd-l">Subtotal</td>
+        <td className={cellNeg(sub.actual)}>{money(sub.actual)}</td>
+        <td className={cellNeg(sub.budget)}>{money(sub.budget)}</td>
+        <td className={cellNeg(sub.overUnder)}>{overUnder(sub.overUnder)}</td>
+        <td className="brd-l brd-explain" />
+      </tr>
+    </>
+  )
+}
+
 // ── 5. Statement of Financial Position (balance sheet) ────────────────────────
 function renderFinancialPosition(data) {
   const fp = data.financialPosition
@@ -431,6 +511,104 @@ function renderFinancialPosition(data) {
       <h2>Statement of Financial Position</h2>
       {twoColTable(ROWS, cy, py)}
     </section>
+  )
+}
+
+// ── 5b. Cash & Investments Summary ────────────────────────────────────────────
+// PURE presentational: balances / insured / uninsured subtotals, grand total,
+// and totalInsured / totalUninsured all come verbatim from the server-assembled
+// bundle.cashInvestments (sharedShapes). interestRate is a PERCENT — printed as
+// `${rate}%` (em-dash when null). Uses the wider 9-column .brd-table-wide class.
+// ZERO client arithmetic — null section ⇒ "Not available" placeholder.
+function renderCashInvestments(data) {
+  const cash = data.cashInvestments
+  if (!cash) {
+    return (
+      <section className="brd-section">
+        <h2>Cash &amp; Investments Summary</h2>
+        <p className="brd-placeholder">
+          Not available — no cash or investment accounts entered for this period.
+        </p>
+      </section>
+    )
+  }
+  const gt = cash.grandTotal || {}
+  return (
+    <section className="brd-section">
+      <h2>Cash &amp; Investments Summary</h2>
+      <p className="brd-subnote">
+        Bank and investment accounts by restriction, with insured vs. uninsured exposure.
+      </p>
+      <table className="brd-table brd-table-wide">
+        <thead>
+          <tr>
+            <th className="brd-l">Institution</th>
+            <th className="brd-l">Account</th>
+            <th className="brd-l">Type</th>
+            <th className="brd-l">Maturity</th>
+            <th>Rate</th>
+            <th>Balance</th>
+            <th>Insured</th>
+            <th>Uninsured</th>
+            <th className="brd-l">Comment</th>
+          </tr>
+        </thead>
+        <tbody>
+          {(cash.groups || []).map((g) => (
+            <CashGroup key={g.key} group={g} />
+          ))}
+          <tr className="brd-total brd-net">
+            <td className="brd-l" colSpan={5}>
+              Total Cash &amp; Investments
+            </td>
+            <td className={cellNeg(gt.balance)}>{money(gt.balance)}</td>
+            <td className={cellNeg(cash.totalInsured)}>{money(cash.totalInsured)}</td>
+            <td className={cellNeg(cash.totalUninsured)}>{money(cash.totalUninsured)}</td>
+            <td className="brd-l" />
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  )
+}
+
+// Print a percent rate verbatim (server passes interestRate through as a percent).
+function rateText(r) {
+  if (r == null || Number.isNaN(Number(r))) return '—'
+  return `${r}%`
+}
+
+// One restriction group: header + its accounts + subtotal (all from assemble).
+function CashGroup({ group }) {
+  const sub = group.subtotal || {}
+  return (
+    <>
+      <tr className="brd-group">
+        <td colSpan={9}>{group.label}</td>
+      </tr>
+      {(group.accounts || []).map((a) => (
+        <tr key={a.id}>
+          <td className="brd-l">{a.institution || ''}</td>
+          <td className="brd-l">{a.accountDescription || ''}</td>
+          <td className="brd-l">{a.vehicle || ''}</td>
+          <td className="brd-l">{a.maturity || '—'}</td>
+          <td>{rateText(a.interestRate)}</td>
+          <td className={cellNeg(a.balance)}>{money(a.balance)}</td>
+          <td className={cellNeg(a.insuredPortion)}>{money(a.insuredPortion)}</td>
+          <td className={cellNeg(a.uninsuredPortion)}>{money(a.uninsuredPortion)}</td>
+          <td className="brd-l">{a.comment || ''}</td>
+        </tr>
+      ))}
+      <tr className="brd-total">
+        <td className="brd-l" colSpan={5}>
+          Subtotal
+        </td>
+        <td className={cellNeg(sub.balance)}>{money(sub.balance)}</td>
+        <td className={cellNeg(sub.insuredPortion)}>{money(sub.insuredPortion)}</td>
+        <td className={cellNeg(sub.uninsuredPortion)}>{money(sub.uninsuredPortion)}</td>
+        <td className="brd-l" />
+      </tr>
+    </>
   )
 }
 

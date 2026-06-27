@@ -4,6 +4,7 @@ import { PeriodsModule } from '../periods/periods.module.js'
 import { BillingModule } from '../billing/billing.module.js'
 import { AuditModule } from '../common/audit/audit.module.js'
 import { AnalyticsModule } from '../analytics/analytics.module.js'
+import { SchedulesModule } from '../schedules/schedules.module.js'
 import { AssistantClient } from '../assistant/assistant.client.js'
 import { BoardReportController } from './board-report.controller.js'
 import { BoardReportService } from './board-report.service.js'
@@ -21,7 +22,7 @@ import { BoardReportService } from './board-report.service.js'
  * harmless, exactly as AnalyticsModule does for BudgetService.advise().
  */
 @Module({
-  imports: [AuthModule, PeriodsModule, BillingModule, AuditModule, AnalyticsModule],
+  imports: [AuthModule, PeriodsModule, BillingModule, AuditModule, AnalyticsModule, SchedulesModule],
   controllers: [BoardReportController],
   providers: [BoardReportService, AssistantClient],
   exports: [BoardReportService],

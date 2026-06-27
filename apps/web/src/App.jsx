@@ -18,6 +18,7 @@ import CapPrintPage from './pages/CapPrintPage.jsx'
 import WorkpapersPrintPage from './pages/WorkpapersPrintPage.jsx'
 import BoardPacketPrintPage from './pages/BoardPacketPrintPage.jsx'
 import ReportsPage from './pages/ReportsPage.jsx'
+import SchedulesPage from './pages/SchedulesPage.jsx'
 import BoardReportPrintPage from './pages/BoardReportPrintPage.jsx'
 import SettingsPage from './pages/SettingsPage.jsx'
 import AccountSection from './components/settings/AccountSection.jsx'
@@ -111,6 +112,7 @@ export default function App() {
         <Route path="/readiness/workpapers/print" element={<WorkpapersPrintPage />} />
         <Route path="/board-packet/print" element={<BoardPacketPrintPage />} />
         <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/reports/schedules" element={<SchedulesPage />} />
         <Route path="/reports/board/print" element={<BoardReportPrintPage />} />
         <Route path="/integrations/qb/callback" element={<QbCallbackPage />} />
         {/* History folded into Statements & Periods — keep old links working. */}
