@@ -4,6 +4,7 @@ import { PeriodsModule } from '../periods/periods.module.js'
 import { BillingModule } from '../billing/billing.module.js'
 import { AnalyticsModule } from '../analytics/analytics.module.js'
 import { ComplianceModule } from '../compliance/compliance.module.js'
+import { BoardReportModule } from '../board-report/board-report.module.js'
 import { AssistantController } from './assistant.controller.js'
 import { AssistantService } from './assistant.service.js'
 import { AssistantClient } from './assistant.client.js'
@@ -14,7 +15,7 @@ import { AssistantClient } from './assistant.client.js'
  * PeriodsService for period resolution. AuthModule guards; BillingModule entitlement.
  */
 @Module({
-  imports: [AuthModule, PeriodsModule, BillingModule, AnalyticsModule, ComplianceModule],
+  imports: [AuthModule, PeriodsModule, BillingModule, AnalyticsModule, ComplianceModule, BoardReportModule],
   controllers: [AssistantController],
   providers: [AssistantService, AssistantClient],
 })

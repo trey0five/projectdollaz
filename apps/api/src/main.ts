@@ -15,6 +15,12 @@ async function bootstrap(): Promise<void> {
     rawBody: true,
   })
 
+  // Raise the JSON body limit above the ~100kb express default so the board-report
+  // logo upload (base64 data URL, guarded to 400KB decoded in SchoolsService) is
+  // gated by that friendly 400 check rather than a generic 413 from the parser.
+  app.useBodyParser('json', { limit: '2mb' })
+  app.useBodyParser('urlencoded', { limit: '2mb', extended: true })
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

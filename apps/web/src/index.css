@@ -654,3 +654,216 @@
     border-color: #cbd0da;
   }
 }
+
+/* ── Board Report (NBOA finance-committee packet) — Phase 1 ────────────────────
+   A NEW print scope, fully SEPARATE from the compliance `.board-print` packet.
+   Multi-page presentational document: a centered cover, a TOC, the MD&A, and lean
+   statement tables rendered straight from the assembled bundle. Accent color is
+   driven by the inline `--brd-accent` custom property (school brandColor). */
+.brd-print {
+  --brd-accent: #0b1f3a;
+  color: #1a2233;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.brd-print h2 {
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--brd-accent);
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 2px solid var(--brd-accent);
+}
+.brd-print h3.brd-narrative-head {
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a2233;
+  margin: 14px 0 4px;
+}
+/* Each statement section starts on a fresh page; the cover (first) does not. */
+.brd-section {
+  break-before: page;
+  page-break-before: always;
+  margin-top: 24px;
+}
+/* ── Cover ─────────────────────────────────────────────────────────────────── */
+.brd-cover {
+  text-align: center;
+  padding: 90px 24px 40px;
+  position: relative;
+}
+.brd-cover-rule {
+  height: 5px;
+  width: 120px;
+  margin: 0 auto 36px;
+  border-radius: 999px;
+}
+.brd-cover .brd-logo {
+  display: block;
+  margin: 0 auto 26px;
+  max-height: 140px;
+  max-width: 280px;
+  object-fit: contain;
+}
+.brd-cover h1 {
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 32px;
+  font-weight: 600;
+  margin: 0 0 6px;
+  color: #1a2233;
+}
+.brd-cover-period {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  margin: 0 0 28px;
+}
+.brd-cover-title {
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 18px;
+  margin: 0 0 4px;
+  color: #1a2233;
+}
+.brd-cover-committee {
+  font-size: 13.5px;
+  color: #51596b;
+  margin: 0;
+}
+.brd-cover-fye {
+  margin: 22px 0 0;
+  font-size: 12px;
+  color: #6b7280;
+}
+.brd-cover-generated {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: #8a93a6;
+}
+/* ── TOC ───────────────────────────────────────────────────────────────────── */
+.brd-toc ol {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 13.5px;
+}
+.brd-toc li {
+  padding: 5px 0;
+  border-bottom: 1px dotted #d4d8e0;
+}
+/* ── Narrative (MD&A) ──────────────────────────────────────────────────────── */
+.brd-narrative-p {
+  margin: 0 0 9px;
+}
+.brd-placeholder {
+  color: #8a93a6;
+  font-style: italic;
+}
+.brd-subnote {
+  color: #6b7280;
+  font-size: 11.5px;
+  margin: 0 0 8px;
+}
+/* ── Tables ────────────────────────────────────────────────────────────────── */
+.brd-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.brd-table th,
+.brd-table td {
+  padding: 5px 8px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  border-bottom: 1px solid #eceef3;
+}
+.brd-table th {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6b7280;
+  border-bottom: 1.5px solid #cbd0da;
+}
+.brd-table .brd-l {
+  text-align: left;
+  white-space: normal;
+}
+.brd-table .brd-explain {
+  width: 28%;
+  font-size: 11px;
+  color: #51596b;
+  white-space: normal;
+}
+.brd-table tr.brd-group td {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--brd-accent);
+  padding-top: 11px;
+  border-bottom: none;
+}
+.brd-table tr.brd-total td {
+  font-weight: 700;
+  color: #1a2233;
+  border-top: 1.5px solid #cbd0da;
+  border-bottom: none;
+}
+.brd-table tr.brd-net td {
+  border-top: 2px solid var(--brd-accent);
+}
+.brd-table .brd-neg {
+  color: #b14b3f;
+}
+/* ── Key indicators ────────────────────────────────────────────────────────── */
+.brd-kpi-block {
+  margin-top: 18px;
+}
+.brd-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.brd-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid #e3e6ec;
+  border-radius: 8px;
+  background: #fafbfc;
+}
+.brd-kpi-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b7280;
+}
+.brd-kpi-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1a2233;
+  font-variant-numeric: tabular-nums;
+}
+/* ── Running head + print page geometry ────────────────────────────────────── */
+.brd-running-head {
+  font-size: 10px;
+  color: #8a93a6;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+@media print {
+  .brd-print .no-print {
+    display: none !important;
+  }
+  .brd-table th,
+  .brd-table td {
+    border-color: #d4d8e0;
+  }
+  @page {
+    margin: 0.6in;
+  }
+}

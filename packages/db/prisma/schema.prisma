@@ -86,6 +86,12 @@ model School {
   netAssetsBegin      Decimal @default(0) @map("net_assets_begin") @db.Decimal(18, 2)
   pyNetAssetsBegin    Decimal @default(0) @map("py_net_assets_begin") @db.Decimal(18, 2)
   auditNetAssetsBegin Decimal @default(0) @map("audit_net_assets_begin") @db.Decimal(18, 2)
+  // Phase-1 Board Report branding (all nullable, additive). logoBase64 holds the
+  // full data URL (size-guarded in the DTO + service); brandColor an optional hex
+  // accent; defaultCommittee the committee-name prefill for new board reports.
+  logoBase64       String? @map("logo_base64") @db.Text
+  brandColor       String? @map("brand_color")
+  defaultCommittee String? @map("default_committee")
   createdAt      DateTime @default(now()) @map("created_at")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -108,6 +114,7 @@ model School {
   analyticsDashboard AnalyticsDashboard?
   reportSchedule     ReportSchedule?
   qboConnection      QboConnection?
+  boardReports       BoardReport[]
 
   @@index([organizationId])
   @@map("schools")
@@ -132,6 +139,7 @@ model FiscalPeriod {
   checklistItems     PeriodChecklistItem[]
   insights           PeriodInsight[]
   budgets            PeriodBudget[]
+  boardReports       BoardReport[]
 
   // Phase 1C: DB-level idempotency for create-or-get under concurrency. The
   // natural key of a period is (school, period-end, type).
@@ -171,6 +179,7 @@ model User {
   correctiveActionUpdates PeriodCorrectiveAction[] @relation("CorrectiveActionUpdatedBy")
   checklistUpdates   PeriodChecklistItem[]  @relation("ChecklistUpdatedBy")
   dashboardUpdates   AnalyticsDashboard[]   @relation("DashboardUpdatedBy")
+  boardReportUpdates BoardReport[]          @relation("BoardReportUpdatedBy")
 
   @@index([email])
   @@map("users")
@@ -616,4 +625,36 @@ model AnalyticsDashboard {
   updatedByUser User?  @relation("DashboardUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
 
   @@map("analytics_dashboard")
+}
+
+// ── Board Report (Phase 1 — NBOA-style finance-committee packet) ──────────────
+//
+/// Period-scoped EDITABLE state for the "Board Report" (one row per school+period,
+/// mirroring PeriodBudget). The financial numbers are NOT stored here — they are
+/// recomputed on every GET .../board-report from the StatementSnapshot + budget +
+/// analytics. Only the user's edits live here: per-line variance explanations, the
+/// MD&A narrative, the title/committee settings, and the generated stamp.
+model BoardReport {
+  id              String    @id @default(uuid()) @db.Uuid
+  schoolId        String    @map("school_id") @db.Uuid
+  fiscalPeriodId  String    @map("fiscal_period_id") @db.Uuid
+  reportTitle     String?   @map("report_title")
+  committeeName   String?   @map("committee_name")
+  granularity     String    @default("annual")
+  mdaText         String?   @map("mda_text")
+  mdaSource       String?   @map("mda_source") // 'rule' | 'llm' | 'user'
+  explanations    Json? // { revenue: {catKey: text}, expense: {catKey: text} }
+  generatedAt     DateTime? @map("generated_at")
+  updatedByUserId String?   @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  school        School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  fiscalPeriod  FiscalPeriod @relation(fields: [fiscalPeriodId], references: [id], onDelete: Cascade)
+  updatedByUser User?        @relation("BoardReportUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([schoolId, fiscalPeriodId])
+  @@index([schoolId])
+  @@index([fiscalPeriodId])
+  @@map("board_reports")
 }

@@ -261,6 +261,23 @@ export const analyticsApi = {
   resetDashboard: (schoolId) => api.delete(`/schools/${schoolId}/dashboard`),
 }
 
+// ── Phase 1 (Board Report): NBOA-style finance-committee packet ──────────────
+// ONE server-side "assemble" GET returns a fully-computed BoardReportBundle; the
+// web layer does ZERO financial math. PUT saves only editable state (per-line
+// variance explanations, MD&A, title/committee, markGenerated). POST mda drafts
+// a narrative (rule baseline + optional LLM). Branding (logo/brandColor/
+// defaultCommittee) goes through the EXISTING schoolsApi.update PATCH.
+export const boardReportApi = {
+  assemble: (schoolId, periodId, granularity = 'annual') =>
+    api.get(`/schools/${schoolId}/periods/${periodId}/board-report`, {
+      params: { granularity },
+    }),
+  save: (schoolId, periodId, body) =>
+    api.put(`/schools/${schoolId}/periods/${periodId}/board-report`, body),
+  mda: (schoolId, periodId, body = {}) =>
+    api.post(`/schools/${schoolId}/periods/${periodId}/board-report/mda`, body),
+}
+
 // ── Phase 3: recurring board-summary delivery (per school) ───────────────────
 export const reportScheduleApi = {
   get: (schoolId) => api.get(`/schools/${schoolId}/report-schedule`),

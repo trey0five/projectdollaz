@@ -16,6 +16,7 @@ import { AnalyticsModule } from './analytics/analytics.module.js'
 import { ComplianceModule } from './compliance/compliance.module.js'
 import { ReportScheduleModule } from './report-schedule/report-schedule.module.js'
 import { IntegrationsModule } from './integrations/integrations.module.js'
+import { BoardReportModule } from './board-report/board-report.module.js'
 import { AssistantModule } from './assistant/assistant.module.js'
 
 @Module({
@@ -44,6 +45,7 @@ import { AssistantModule } from './assistant/assistant.module.js'
     ComplianceModule,
     ReportScheduleModule,
     IntegrationsModule,
+    BoardReportModule,
     AssistantModule,
   ],
 })

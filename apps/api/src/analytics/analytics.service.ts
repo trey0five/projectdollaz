@@ -211,6 +211,47 @@ export class AnalyticsService {
     }
   }
 
+  /**
+   * Public reuse seam for the Board Report (single source of truth for budget-vs-
+   * actual). Resolves the period's latest snapshot ONCE and returns the raw
+   * bundle, its createdAt (data-as-of), the full MetricResult set (for KPIs), and
+   * the category actuals (revenue/expense mix). NEVER throws on a missing snapshot
+   * — returns nulls so the assemble endpoint stays 200 with availability flags.
+   * Tenant isolation is the CALLER's responsibility (getOwnedPeriod).
+   */
+  async getBoardReportData(
+    schoolId: string,
+    fiscalPeriodId: string,
+  ): Promise<{
+    bundle: ReportBundle | null
+    dataAsOf: string | null
+    metrics: MetricResult[]
+    categoryActuals: { revenue: Record<string, number>; expense: Record<string, number> }
+  }> {
+    const snapshot = await this.latestSnapshot(schoolId, fiscalPeriodId)
+    if (!snapshot) {
+      return {
+        bundle: null,
+        dataAsOf: null,
+        metrics: [],
+        categoryActuals: { revenue: {}, expense: {} },
+      }
+    }
+    const currentOperational = await this.operational.operationalFor(schoolId, fiscalPeriodId)
+    const metrics = computeMetricsForPeriod({
+      current: snapshot.bundle,
+      prior: null,
+      currentOperational,
+      priorOperational: null,
+    })
+    return {
+      bundle: snapshot.bundle,
+      dataAsOf: snapshot.createdAt.toISOString(),
+      metrics,
+      categoryActuals: this.categoryActuals(snapshot.bundle),
+    }
+  }
+
   /** Category actuals ({key: amount}) from a bundle, via the revenue/expense mix
    * components. prior/operational are irrelevant to the mix values, so pass null. */
   private categoryActuals(bundle: ReportBundle): {

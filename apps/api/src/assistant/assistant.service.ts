@@ -19,6 +19,7 @@ import { deriveFiscalYearStart } from '../analytics/budget.driver.js'
 import { ComplianceService } from '../compliance/compliance.service.js'
 import { ReconciliationService } from '../compliance/reconciliation.service.js'
 import { CorrectiveActionService } from '../compliance/corrective-action.service.js'
+import { BoardReportService } from '../board-report/board-report.service.js'
 import { AssistantClient } from './assistant.client.js'
 import { TOOL_SCHEMAS } from './assistant.tools.js'
 
@@ -37,14 +38,17 @@ const TOOL_LABELS: Record<string, string> = {
   set_budget: 'Preparing a budget change…',
   apply_driver_budget: 'Building a driver budget…',
   draft_cap_entry: 'Drafting a corrective action…',
+  get_board_report: 'Reading the board report…',
+  generate_board_narrative: 'Drafting the board narrative…',
+  set_explanation: 'Preparing a variance explanation…',
   render_chart: 'Drawing a chart…',
 }
 
 // Tools that propose a write — never applied in the loop; the user confirms first.
-const WRITE_TOOLS = new Set(['set_budget', 'draft_cap_entry', 'apply_driver_budget'])
+const WRITE_TOOLS = new Set(['set_budget', 'draft_cap_entry', 'apply_driver_budget', 'set_explanation'])
 
 export interface ProposedAction {
-  kind: 'set_budget' | 'draft_cap_entry' | 'apply_driver_budget'
+  kind: 'set_budget' | 'draft_cap_entry' | 'apply_driver_budget' | 'set_explanation'
   periodId: string
   summary: string
   payload: Record<string, unknown>
@@ -121,6 +125,7 @@ export class AssistantService {
     private readonly compliance: ComplianceService,
     private readonly reconciliation: ReconciliationService,
     private readonly correctiveAction: CorrectiveActionService,
+    private readonly boardReport: BoardReportService,
     private readonly client: AssistantClient,
   ) {}
 
@@ -292,6 +297,20 @@ export class AssistantService {
         payload: { assumptions: merged as unknown as Record<string, unknown> },
       }
     }
+    if (name === 'set_explanation') {
+      const categoryType = args.categoryType === 'expense' ? 'expense' : 'revenue'
+      const categoryKey = typeof args.categoryKey === 'string' ? args.categoryKey.trim() : ''
+      const text = typeof args.text === 'string' ? args.text.trim() : ''
+      if (!categoryKey || !text) {
+        throw new Error('set_explanation needs a categoryKey and explanation text.')
+      }
+      return {
+        kind: 'set_explanation',
+        periodId,
+        summary: `Add a board-report explanation for ${categoryType} “${categoryKey}”: “${text.slice(0, 120)}”.`,
+        payload: { categoryType, categoryKey, text },
+      }
+    }
     // draft_cap_entry
     const ruleId = typeof args.ruleId === 'string' ? args.ruleId : ''
     if (!ruleId) throw new Error('draft_cap_entry needs a ruleId (from get_corrective_action_plan).')
@@ -381,6 +400,19 @@ export class AssistantService {
       await this.budget.upsert(schoolId, periodId, dto, userId)
       return { applied: true, summary: action.summary }
     }
+    if (action.kind === 'set_explanation') {
+      const type = p.categoryType === 'expense' ? 'expense' : 'revenue'
+      const key = String(p.categoryKey)
+      const text = String(p.text)
+      // Single-key merged patch — the service deep-merges per category so siblings survive.
+      await this.boardReport.save(
+        schoolId,
+        periodId,
+        { explanations: { [type]: { [key]: text } } },
+        userId,
+      )
+      return { applied: true, summary: action.summary }
+    }
     // draft_cap_entry
     await this.correctiveAction.upsertEntries(
       schoolId,
@@ -435,9 +467,13 @@ export class AssistantService {
       'You may also help make changes: set_budget (set a budget figure), apply_driver_budget (build the ' +
       'budget from enrollment / tuition / staffing assumptions — provide ONLY the levers the user mentions; ' +
       'the rest keep their current values), and draft_cap_entry (fill a corrective-action-plan entry). ' +
+      'For the board report (finance-committee packet) use get_board_report (its settings, MD&A, budget-vs-actual ' +
+      'variances and key indicators) and generate_board_narrative (draft the MD&A narrative — returns text, does not ' +
+      'save). set_explanation proposes a per-line variance explanation/comment (provide categoryType + categoryKey + text). ' +
       'These do NOT apply immediately — they propose a change the user confirms; after calling one, tell the ' +
       'user what you’ve prepared and that they can confirm or cancel. ' +
       'For draft_cap_entry, first call get_corrective_action_plan to get the ruleId. ' +
+      'For set_explanation, first call get_board_report to see the category keys. ' +
       'Be concise and board-appropriate; format money as USD. Only this school’s data is available. ' +
       'If a tool returns an error or needs data, say so plainly.'
     )
@@ -522,11 +558,17 @@ export class AssistantService {
       case 'get_budget': {
         const pid = await this.resolvePeriod(args, ctx)
         const b = await this.budget.get(ctx.schoolId, pid)
-        const lines = (b.lines as Record<string, any> | null) ?? {}
-        const source = lines.driverModel
+        const lines = (b.lines as Record<string, unknown> | null) ?? {}
+        const driverModel = lines.driverModel as
+          | { kpis?: unknown; assumptions?: unknown }
+          | undefined
+        const spread = lines.spread as
+          | { format?: unknown; fileName?: unknown; monthKeys?: unknown[]; accounts?: unknown[] }
+          | undefined
+        const source = driverModel
           ? 'driver model'
-          : lines.spread
-            ? `imported spread (${lines.spread.format})`
+          : spread
+            ? `imported spread (${String(spread.format)})`
             : lines.revenue || lines.expense
               ? 'manual'
               : 'none'
@@ -537,16 +579,16 @@ export class AssistantService {
           surplus: (b.totalRevenue ?? 0) - (b.totalExpenses ?? 0),
           revenueByCategory: lines.revenue ?? {},
           expenseByCategory: lines.expense ?? {},
-          ...(lines.driverModel
-            ? { driver: { kpis: lines.driverModel.kpis, assumptions: lines.driverModel.assumptions } }
+          ...(driverModel
+            ? { driver: { kpis: driverModel.kpis, assumptions: driverModel.assumptions } }
             : {}),
-          ...(lines.spread
+          ...(spread
             ? {
                 spread: {
-                  format: lines.spread.format,
-                  fileName: lines.spread.fileName ?? null,
-                  months: lines.spread.monthKeys?.length ?? 0,
-                  accountCount: lines.spread.accounts?.length ?? 0,
+                  format: spread.format,
+                  fileName: spread.fileName ?? null,
+                  months: spread.monthKeys?.length ?? 0,
+                  accountCount: spread.accounts?.length ?? 0,
                 },
               }
             : {}),
@@ -590,6 +632,26 @@ export class AssistantService {
         const metricKey = typeof args.metricKey === 'string' ? args.metricKey : ''
         const t = await this.analytics.trends(ctx.schoolId, metricKey)
         return t
+      }
+      case 'get_board_report': {
+        const pid = await this.resolvePeriod(args, ctx)
+        const b = await this.boardReport.assemble(ctx.schoolId, pid, 'annual')
+        // Trim to the parts the assistant reasons over (settings, mda, variances, KPIs).
+        return {
+          settings: b.settings,
+          mda: b.mda,
+          availability: b.availability,
+          operations: b.operations,
+          keyIndicators: b.keyIndicators.filter((k) => k.available),
+        }
+      }
+      case 'generate_board_narrative': {
+        const pid = await this.resolvePeriod(args, ctx)
+        const tone = ['concise', 'standard', 'detailed'].includes(String(args.tone))
+          ? (args.tone as 'concise' | 'standard' | 'detailed')
+          : undefined
+        const r = await this.boardReport.generateMda(ctx.schoolId, pid, { tone })
+        return r
       }
       case 'render_chart': {
         const chartType = ['bar', 'line', 'pie'].includes(String(args.chartType))

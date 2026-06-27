@@ -24,9 +24,17 @@ interface SchoolPublic {
   netAssetsBegin: number
   pyNetAssetsBegin: number
   auditNetAssetsBegin: number
+  logoBase64: string | null
+  brandColor: string | null
+  defaultCommittee: string | null
   role: string
   created_at: string
 }
+
+/** Max decoded logo bytes (~400KB). The DTO @MaxLength is a coarse pre-gate; this
+ * is the authoritative guard on the actual image payload. */
+const MAX_LOGO_BYTES = 400 * 1024
+const LOGO_DATA_URL = /^data:image\/(png|jpeg|jpg|svg\+xml);base64,([A-Za-z0-9+/=]+)$/
 
 @Injectable()
 export class SchoolsService {
@@ -52,8 +60,30 @@ export class SchoolsService {
       netAssetsBegin: Number(school.netAssetsBegin),
       pyNetAssetsBegin: Number(school.pyNetAssetsBegin),
       auditNetAssetsBegin: Number(school.auditNetAssetsBegin),
+      logoBase64: school.logoBase64 ?? null,
+      brandColor: school.brandColor ?? null,
+      defaultCommittee: school.defaultCommittee ?? null,
       role,
       created_at: school.createdAt.toISOString(),
+    }
+  }
+
+  /**
+   * Authoritative logo guard. The DTO already validated the data-URL prefix +
+   * coarse length; here we decode the base64 payload and reject when the actual
+   * bytes exceed ~400KB. Throws a friendly 400 the wizard surfaces verbatim.
+   */
+  private assertLogoWithinLimit(dataUrl: string): void {
+    const m = LOGO_DATA_URL.exec(dataUrl)
+    if (!m) {
+      throw new BadRequestException('Logo must be a PNG/JPG/SVG under 400KB.')
+    }
+    // Decoded byte length without materializing the buffer twice.
+    const b64 = m[2]
+    const padding = b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0
+    const bytes = Math.floor((b64.length * 3) / 4) - padding
+    if (bytes > MAX_LOGO_BYTES) {
+      throw new BadRequestException('Logo must be a PNG/JPG/SVG under 400KB.')
     }
   }
 
@@ -309,11 +339,21 @@ export class SchoolsService {
       netAssetsBegin?: number
       pyNetAssetsBegin?: number
       auditNetAssetsBegin?: number
+      logoBase64?: string | null
+      brandColor?: string | null
+      defaultCommittee?: string | null
     } = {}
     if (dto.name !== undefined) data.name = dto.name
     if (dto.netAssetsBegin !== undefined) data.netAssetsBegin = dto.netAssetsBegin
     if (dto.pyNetAssetsBegin !== undefined) data.pyNetAssetsBegin = dto.pyNetAssetsBegin
     if (dto.auditNetAssetsBegin !== undefined) data.auditNetAssetsBegin = dto.auditNetAssetsBegin
+    // Branding: null clears; a non-null logo is hard-guarded on decoded byte size.
+    if (dto.logoBase64 !== undefined) {
+      if (dto.logoBase64 !== null) this.assertLogoWithinLimit(dto.logoBase64)
+      data.logoBase64 = dto.logoBase64
+    }
+    if (dto.brandColor !== undefined) data.brandColor = dto.brandColor
+    if (dto.defaultCommittee !== undefined) data.defaultCommittee = dto.defaultCommittee
 
     if (Object.keys(data).length === 0) {
       throw new BadRequestException('No fields to update.')

@@ -195,6 +195,53 @@ export const TOOL_SCHEMAS = [
   {
     type: 'function',
     function: {
+      name: 'get_board_report',
+      description:
+        "The current Board Report (NBOA-style finance-committee packet) for a period: title/committee settings, the MD&A narrative + source, the budget-vs-actual operations variances (revenue/expense lines with budget/variance/explanation, totals, net surplus), and the key indicators. Read-only.",
+      parameters: {
+        type: 'object',
+        properties: { periodId: { type: 'string' } },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'generate_board_narrative',
+      description:
+        'Draft the Management Discussion & Analysis (MD&A) narrative for a period from its real financials (rule baseline, optionally upgraded by the LLM). Returns the text only — it does NOT save it; the user reviews/edits, then saves.',
+      parameters: {
+        type: 'object',
+        properties: {
+          periodId: { type: 'string' },
+          tone: { type: 'string', enum: ['concise', 'standard', 'detailed'] },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'set_explanation',
+      description:
+        'PROPOSE a per-line variance explanation/comment for the Board Report (does NOT apply — the user must confirm). Provide the period, the category type (revenue or expense), the category key (e.g. tuition, instructional), and the explanation text.',
+      parameters: {
+        type: 'object',
+        properties: {
+          periodId: { type: 'string' },
+          categoryType: { type: 'string', enum: ['revenue', 'expense'] },
+          categoryKey: { type: 'string', description: 'Budget line key, e.g. tuition or instructional.' },
+          text: { type: 'string' },
+        },
+        required: ['categoryType', 'categoryKey', 'text'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'render_chart',
       description:
         'Draw a chart for the user. Call this to visualize numbers you have already fetched (a trend, a comparison, a breakdown). Pick the chart type that fits and give a clear title.',
