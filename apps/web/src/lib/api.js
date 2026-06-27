@@ -193,6 +193,31 @@ export const importsApi = {
   get: (schoolId, importId) => api.get(`/schools/${schoolId}/imports/${importId}`),
 }
 
+// ── Monthly Actuals Foundation: per-period monthly trial-balance snapshots ────
+// Additive "Option B" slice — completely separate from the annual import flow.
+// The web parses an .xlsx monthly TB CLIENT-SIDE (the SAME @finrep/ingestion
+// `ingest()` the annual intake uses) into MonthlyRow[] = NormalizedRow[], then
+// POSTs { monthKey, sourceName, rows }. Same axios `api` instance → inherits the
+// Bearer + proactive-refresh interceptors and surfaces the entitlement 402.
+//   • list    → { fiscalYearStart, months: MonthlySnapshotSummary[] }
+//   • upload  → 201 CreateMonthlySnapshotResponse (payload/rows NOT echoed)
+//   • remove  → 204 (404 when that month isn't loaded)
+//   • actuals → MonthlyActualsResponse (YTD/MTD/balanceSheet/metrics). Wired now
+//     even though the consuming MTD/YTD board view is deferred, so the full seam
+//     is smoke-testable end to end.
+export const monthlyApi = {
+  list: (schoolId, periodId) =>
+    api.get(`/schools/${schoolId}/periods/${periodId}/monthly-snapshots`),
+  upload: (schoolId, periodId, body) =>
+    api.post(`/schools/${schoolId}/periods/${periodId}/monthly-snapshots`, body),
+  remove: (schoolId, periodId, monthKey) =>
+    api.delete(`/schools/${schoolId}/periods/${periodId}/monthly-snapshots/${monthKey}`),
+  actuals: (schoolId, periodId, month) =>
+    api.get(`/schools/${schoolId}/periods/${periodId}/monthly-actuals`, {
+      params: month ? { month } : {},
+    }),
+}
+
 export const statementsApi = {
   generate: (schoolId, periodId, body = {}) =>
     api.post(`/schools/${schoolId}/periods/${periodId}/statements`, body),
@@ -204,6 +229,9 @@ export const statementsApi = {
 
 export const mappingApi = {
   get: (schoolId) => api.get(`/schools/${schoolId}/mapping`),
+  // Merge Resolve-unmatched picks into the school's mapping (owner/accountant).
+  // `entries` is keyed by each unmatched row's `key` (echoed verbatim) → SCoA key.
+  mergeEntries: (schoolId, entries) => api.patch(`/schools/${schoolId}/mapping`, { entries }),
 }
 
 // ── Phase 4A: analytics & insights ───────────────────────────────────────────

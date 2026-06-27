@@ -14,6 +14,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service.js'
 import { PeriodsService } from '../periods/periods.service.js'
 import { OperationalService } from './operational.service.js'
+import { categoryActualsFromBundle } from './category-actuals.js'
 
 /** Prisma Decimal -> plain number (null-safe), for the pure analytics layer. */
 function dec(v: Prisma.Decimal | null): number | null {
@@ -283,24 +284,14 @@ export class AnalyticsService {
   }
 
   /** Category actuals ({key: amount}) from a bundle, via the revenue/expense mix
-   * components. prior/operational are irrelevant to the mix values, so pass null. */
+   * components. prior/operational are irrelevant to the mix values, so pass null.
+   * Delegates to the shared pure helper (also used by the monthly-actuals
+   * service) — output is byte-identical to the prior inline implementation. */
   private categoryActuals(bundle: ReportBundle): {
     revenue: Record<string, number>
     expense: Record<string, number>
   } {
-    const metrics = computeMetricsForPeriod({
-      current: bundle,
-      prior: null,
-      currentOperational: null,
-      priorOperational: null,
-    })
-    const mix = (key: string): Record<string, number> => {
-      const m = metrics.find((x) => x.key === key)
-      const out: Record<string, number> = {}
-      for (const c of m?.components ?? []) out[c.key] = c.value
-      return out
-    }
-    return { revenue: mix('revenue_mix'), expense: mix('expense_mix') }
+    return categoryActualsFromBundle(bundle)
   }
 
   /**

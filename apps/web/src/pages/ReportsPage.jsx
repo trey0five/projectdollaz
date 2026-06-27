@@ -9,12 +9,13 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { FileBarChart2, Landmark, ArrowRight, ArrowLeft, Lock } from 'lucide-react'
+import { FileBarChart2, Landmark, ArrowRight, ArrowLeft, Lock, CalendarClock } from 'lucide-react'
 import TopBar from '../components/TopBar.jsx'
 import BillingBanner from '../components/BillingBanner.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { usePersistence } from '../context/PersistenceContext.jsx'
 import BoardReportWizard from '../components/reports/board/BoardReportWizard.jsx'
+import MonthlyActualsSection from '../components/monthly/MonthlyActualsSection.jsx'
 
 // Catalog of report types. Phase 1 ships only the Board Report live; the rest are
 // listed as "coming soon" placeholders so the IA reads as a growing hub.
@@ -34,6 +35,15 @@ const REPORTS = [
     blurb: 'Project the full fiscal year from year-to-date actuals.',
     live: false,
     Icon: FileBarChart2,
+  },
+  {
+    id: 'monthly',
+    title: 'Monthly Actuals',
+    blurb:
+      'Upload month-end trial balances to build year-to-date actuals — the foundation for month-to-date board columns.',
+    live: true,
+    Icon: CalendarClock,
+    action: 'inline',
   },
   {
     id: 'schedules',
@@ -89,6 +99,17 @@ export default function ReportsPage() {
               periods={periods || []}
               initialPeriodId={defaultPeriodId}
             />
+          </>
+        ) : openReport === 'monthly' ? (
+          <>
+            <button
+              type="button"
+              onClick={() => setOpenReport(null)}
+              className="mb-5 inline-flex items-center gap-1.5 text-[13px] font-semibold text-muted transition-colors hover:text-gold"
+            >
+              <ArrowLeft size={15} /> All reports
+            </button>
+            <MonthlyActualsSection periods={periods || []} initialPeriodId={defaultPeriodId} />
           </>
         ) : (
           renderHub(onSelect)
@@ -146,7 +167,11 @@ function renderHub(onSelect) {
             <span className="mt-4 inline-flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.08em]">
               {r.live ? (
                 <span className="inline-flex items-center gap-1.5 text-gold">
-                  {r.action === 'navigate' ? 'Open schedules' : 'Build report'}
+                  {r.action === 'navigate'
+                    ? 'Open schedules'
+                    : r.action === 'inline'
+                      ? 'Manage months'
+                      : 'Build report'}
                   <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
                 </span>
               ) : (

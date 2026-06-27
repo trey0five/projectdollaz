@@ -11,6 +11,7 @@ import { PeriodsModule } from './periods/periods.module.js'
 import { ImportsModule } from './imports/imports.module.js'
 import { MappingModule } from './mapping/mapping.module.js'
 import { StatementsModule } from './statements/statements.module.js'
+import { MonthlyModule } from './monthly/monthly.module.js'
 import { BillingModule } from './billing/billing.module.js'
 import { AnalyticsModule } from './analytics/analytics.module.js'
 import { ComplianceModule } from './compliance/compliance.module.js'
@@ -41,6 +42,7 @@ import { AssistantModule } from './assistant/assistant.module.js'
     ImportsModule,
     MappingModule,
     StatementsModule,
+    MonthlyModule,
     BillingModule,
     AnalyticsModule,
     ComplianceModule,

@@ -29,9 +29,13 @@ export const daysCashOnHand: MetricDef = {
     if (missing.length > 0) {
       return { value: null, available: false, inputsMissing: missing, inputs }
     }
-    // cur.cash is non-null here (guarded above).
+    // cur.cash is non-null here (guarded above). For a partial-year (monthly)
+    // YTD, totalExp covers only the elapsed days, so annualize off elapsedDays
+    // instead of 365 to keep the run-rate honest. Annual path: elapsedDays is
+    // undefined => `?? 365` => exact same expression as before (byte-identical).
+    const days = cur.elapsedDays ?? 365
     return {
-      value: (cur.cash as number) / (cur.totalExp / 365),
+      value: (cur.cash as number) / (cur.totalExp / days),
       available: true,
       inputsMissing: [],
       inputs,

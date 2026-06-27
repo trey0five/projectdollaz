@@ -118,6 +118,7 @@ model School {
   capitalSchedules   CapitalSchedule[]
   cashSchedules      CashSchedule[]
   campaignSchedules  CampaignSchedule[]
+  monthlySnapshots   MonthlySnapshot[]
 
   @@index([organizationId])
   @@map("schools")
@@ -146,6 +147,7 @@ model FiscalPeriod {
   capitalSchedules   CapitalSchedule[]
   cashSchedules      CashSchedule[]
   campaignSchedules  CampaignSchedule[]
+  monthlySnapshots   MonthlySnapshot[]
 
   // Phase 1C: DB-level idempotency for create-or-get under concurrency. The
   // natural key of a period is (school, period-end, type).
@@ -189,6 +191,7 @@ model User {
   capitalSchedulesUpdated CapitalSchedule[] @relation("CapitalScheduleUpdatedBy")
   cashSchedulesUpdated    CashSchedule[]    @relation("CashScheduleUpdatedBy")
   campaignSchedulesUpdated CampaignSchedule[] @relation("CampaignScheduleUpdatedBy")
+  monthlySnapshotsUploaded MonthlySnapshot[]  @relation("MonthlySnapshotUploadedBy")
 
   @@index([email])
   @@map("users")
@@ -322,6 +325,38 @@ model StatementSnapshot {
   @@index([schoolId])
   @@index([fiscalPeriodId])
   @@map("statement_snapshots")
+}
+
+/// MONTHLY actuals (additive "Option B"). One row per (fiscalPeriod, monthKey
+/// 'YYYY-MM'), upsert-REPLACE on re-upload. Fuses Import (immutable sourceRows)
+/// + StatementSnapshot (derived CY-only ReportBundle payload) because there is
+/// exactly one snapshot per (period, monthKey). A monthly TB is AS-OF month-END
+/// = cumulative YTD within the fiscal year (Jul–Jun). The annual path is
+/// untouched — this model never participates in the annual generate flow.
+model MonthlySnapshot {
+  id                   String   @id @default(uuid()) @db.Uuid
+  schoolId             String   @map("school_id") @db.Uuid
+  fiscalPeriodId       String   @map("fiscal_period_id") @db.Uuid
+  monthKey             String   @map("month_key") // 'YYYY-MM' (month-END = cumulative YTD)
+  sourceName           String   @map("source_name")
+  sourceRows           Json     @map("source_rows") @db.JsonB // NormalizedRow[] — immutable input
+  rowCount             Int      @map("row_count")
+  payload              Json     @db.JsonB // CY-only ReportBundle (generateReports)
+  mappingVersion       String   @map("mapping_version")
+  standardChartVersion String   @map("standard_chart_version")
+  engineVersion        String   @map("engine_version")
+  uploadedBy           String?  @map("uploaded_by") @db.Uuid
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  school         School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  fiscalPeriod   FiscalPeriod @relation(fields: [fiscalPeriodId], references: [id], onDelete: Cascade)
+  uploadedByUser User?        @relation("MonthlySnapshotUploadedBy", fields: [uploadedBy], references: [id], onDelete: SetNull)
+
+  @@unique([fiscalPeriodId, monthKey]) // upsert key: re-upload a month REPLACES it
+  @@index([schoolId])
+  @@index([fiscalPeriodId])
+  @@map("monthly_snapshots")
 }
 
 // ── Billing (SCHEMA ONLY — Stripe LOGIC is Phase 1D) ──────────────────────────

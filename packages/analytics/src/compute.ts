@@ -82,6 +82,18 @@ export interface ComputeMetricsArgs {
   currentOperational?: PeriodOperational | null
   /** The nearest-prior period's operational data, for Tier-2 PoP deltas. */
   priorOperational?: PeriodOperational | null
+  /**
+   * Partial-year (monthly) basis: days elapsed from FY-start through the as-of
+   * month-end, inclusive. When provided, days_cash_on_hand annualizes off this
+   * instead of 365. Omit (the annual path) => byte-identical to today.
+   */
+  elapsedDays?: number | null
+  /**
+   * Partial-year (monthly) basis: months elapsed from FY-start (Jul=1..Jun=12).
+   * When provided, months_operating_reserve annualizes off this instead of 12.
+   * Omit (the annual path) => byte-identical to today.
+   */
+  elapsedMonths?: number | null
 }
 
 /**
@@ -91,6 +103,11 @@ export interface ComputeMetricsArgs {
  */
 export function computeMetricsForPeriod(args: ComputeMetricsArgs): MetricResult[] {
   const cur = fromBundle(args.current)
+  // Partial-year (monthly) basis, threaded onto the CURRENT period only. Annual
+  // callers pass neither, so these stay undefined and the metric denominators
+  // fall back to the full-year 365/12 constants (byte-identical to today).
+  cur.elapsedDays = args.elapsedDays ?? undefined
+  cur.elapsedMonths = args.elapsedMonths ?? undefined
   const prior = args.prior ? fromBundle(args.prior) : undefined
   const curOp = args.currentOperational ?? undefined
   const priorOp = args.priorOperational ?? undefined

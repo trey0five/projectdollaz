@@ -24,8 +24,13 @@ export const monthsOperatingReserve: MetricDef = {
     if (missing.length > 0) {
       return { value: null, available: false, inputsMissing: missing, inputs }
     }
+    // For a partial-year (monthly) YTD, totalExp covers only the elapsed months,
+    // so annualize off elapsedMonths instead of 12 to keep the run-rate honest.
+    // Annual path: elapsedMonths is undefined => `?? 12` => exact same expression
+    // as before (byte-identical).
+    const months = cur.elapsedMonths ?? 12
     return {
-      value: (cur.naWithout as number) / (cur.totalExp / 12),
+      value: (cur.naWithout as number) / (cur.totalExp / months),
       available: true,
       inputsMissing: [],
       inputs,

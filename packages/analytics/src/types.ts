@@ -99,6 +99,18 @@ export interface PeriodFinancials {
   naWith: number | null
   /** Whether the snapshot carried a current-year SFP. */
   hasSFP: boolean
+  /**
+   * Days elapsed from FY-start (Jul 1) through the data's as-of month-end,
+   * inclusive. ONLY set for partial-year (monthly) computes; undefined for the
+   * annual path (defaults to 365 in the denominator, byte-identical to today).
+   */
+  elapsedDays?: number | null
+  /**
+   * Months elapsed from FY-start (Jul=1 .. Jun=12) for the data's as-of
+   * month-end. ONLY set for partial-year (monthly) computes; undefined for the
+   * annual path (defaults to 12 in the denominator, byte-identical to today).
+   */
+  elapsedMonths?: number | null
 }
 
 /** Revenue rollup line keys (mirror the SOAResult revenue fields). */
