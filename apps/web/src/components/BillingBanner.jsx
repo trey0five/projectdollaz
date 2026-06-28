@@ -24,7 +24,7 @@ export default function BillingBanner() {
           className="no-print border-b border-red-200 bg-red-50"
         >
           <div className="mx-auto flex w-full max-w-[980px] flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-10">
-            <div className="flex items-start gap-2 text-[13px] font-medium text-red-700">
+            <div className="flex items-start gap-2 text-[15px] font-medium text-red-700">
               <AlertTriangle size={16} className="mt-0.5 shrink-0" />
               <span>
                 Generation is paused — your{' '}
@@ -36,7 +36,7 @@ export default function BillingBanner() {
             </div>
             <Link
               to="/settings/billing"
-              className="inline-flex min-h-[40px] shrink-0 items-center justify-center rounded-lg bg-red-600 px-4 py-2 text-[12px] font-semibold uppercase tracking-wide text-white transition-colors hover:bg-red-700"
+              className="inline-flex min-h-[40px] shrink-0 items-center justify-center rounded-lg bg-red-600 px-4 py-2 text-[14px] font-semibold uppercase tracking-wide text-white transition-colors hover:bg-red-700"
             >
               {isOwner ? 'Subscribe now' : 'View billing'}
             </Link>
@@ -51,7 +51,7 @@ export default function BillingBanner() {
     return (
       <div className="no-print border-b border-gold/30 bg-gold/10">
         <div className="mx-auto flex w-full max-w-[980px] flex-col gap-2 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:px-10">
-          <div className="flex items-center gap-2 text-[13px] font-medium text-navy">
+          <div className="flex items-center gap-2 text-[15px] font-medium text-navy">
             <Clock size={15} className="shrink-0 text-gold" />
             <span>
               {typeof daysLeft === 'number'
@@ -62,7 +62,7 @@ export default function BillingBanner() {
           {isOwner && (
             <Link
               to="/settings/billing"
-              className="inline-flex min-h-[36px] shrink-0 items-center justify-center rounded-lg border border-gold/50 px-3 py-1.5 text-[12px] font-semibold uppercase tracking-wide text-navy transition-colors hover:bg-gold/20"
+              className="inline-flex min-h-[36px] shrink-0 items-center justify-center rounded-lg border border-gold/50 px-3 py-1.5 text-[14px] font-semibold uppercase tracking-wide text-navy transition-colors hover:bg-gold/20"
             >
               Subscribe
             </Link>

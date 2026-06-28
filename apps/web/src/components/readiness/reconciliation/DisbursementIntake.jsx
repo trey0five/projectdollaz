@@ -130,7 +130,7 @@ export default function DisbursementIntake({ existing, onSave, onClear, saving }
         <p className="font-serif text-base font-semibold text-navy">
           Drop the funding-org disbursement export
         </p>
-        <p className="text-[12px] text-muted">
+        <p className="text-[14px] text-muted">
           CSV or Excel from Step Up For Students · parsed in your browser, columns mapped next
         </p>
       </div>
@@ -150,14 +150,14 @@ export default function DisbursementIntake({ existing, onSave, onClear, saving }
             type="button"
             onClick={onClear}
             disabled={saving}
-            className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[12px] font-semibold text-muted transition-colors hover:text-danger disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[14px] font-semibold text-muted transition-colors hover:text-danger disabled:opacity-50"
           >
             <Trash2 size={15} /> Clear set
           </button>
         )}
       </div>
 
-      {error && <p className="text-[12px] text-danger">{error}</p>}
+      {error && <p className="text-[14px] text-danger">{error}</p>}
 
       <input
         ref={inputRef}

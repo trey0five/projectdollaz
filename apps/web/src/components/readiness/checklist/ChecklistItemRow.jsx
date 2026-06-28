@@ -17,7 +17,7 @@ import {
 import { activePillCls } from '../../../lib/activePill.js'
 
 const inputCls =
-  'w-full rounded-lg border border-border bg-white px-3.5 py-2.5 text-[13px] text-ink outline-none transition-all focus:border-gold focus:ring-2 focus:ring-gold/20 disabled:cursor-not-allowed disabled:bg-navy/[0.04] disabled:text-muted'
+  'w-full rounded-lg border border-border bg-white px-3.5 py-2.5 text-[15px] text-ink outline-none transition-all focus:border-gold focus:ring-2 focus:ring-gold/20 disabled:cursor-not-allowed disabled:bg-navy/[0.04] disabled:text-muted'
 
 
 export default function ChecklistItemRow({ item, draft, onChange, canEdit, index = 0 }) {
@@ -46,7 +46,7 @@ export default function ChecklistItemRow({ item, draft, onChange, canEdit, index
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex flex-wrap items-center gap-2">
             <span
-              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${
+              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[12px] font-semibold uppercase tracking-[0.08em] ${
                 item.kind === 'document'
                   ? 'border-navy/20 bg-navy/[0.04] text-navy'
                   : 'border-gold/30 bg-gold/10 text-gold'
@@ -56,17 +56,17 @@ export default function ChecklistItemRow({ item, draft, onChange, canEdit, index
             </span>
             {findingMeta && (
               <span
-                className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${findingMeta.meta.chip}`}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[12px] font-semibold uppercase tracking-[0.08em] ${findingMeta.meta.chip}`}
                 title="Live compliance status for this rule (context only)"
               >
                 <Activity size={10} /> Live: {findingMeta.label}
               </span>
             )}
           </div>
-          <h4 className="font-serif text-[15px] font-semibold text-navy">{item.label}</h4>
-          <p className="mt-1 text-[12.5px] leading-relaxed text-muted">{item.guidance}</p>
+          <h4 className="font-serif text-[16px] font-semibold text-navy">{item.label}</h4>
+          <p className="mt-1 text-[14.5px] leading-relaxed text-muted">{item.guidance}</p>
           {item.relatedRuleId && (
-            <p className="mt-1 inline-flex items-center gap-1.5 text-[11px] text-muted/80">
+            <p className="mt-1 inline-flex items-center gap-1.5 text-[13px] text-muted/80">
               <BookOpen size={12} className="text-gold" />
               <span className="font-mono">{item.relatedRuleId}</span>
             </p>
@@ -88,7 +88,7 @@ export default function ChecklistItemRow({ item, draft, onChange, canEdit, index
               whileTap={reduce || disabled ? undefined : { scale: 0.96 }}
               disabled={disabled}
               onClick={() => onChange(item.id, 'status', opt.value)}
-              className={`inline-flex items-center gap-1.5 rounded-lg border-2 px-3 py-1.5 text-[12px] font-semibold uppercase tracking-[0.06em] transition-all ${
+              className={`inline-flex items-center gap-1.5 rounded-lg border-2 px-3 py-1.5 text-[14px] font-semibold uppercase tracking-[0.06em] transition-all ${
                 active ? activeCls : 'border-border bg-section text-muted'
               } ${disabled ? 'cursor-not-allowed opacity-60' : 'hover:border-gold/40'}`}
             >

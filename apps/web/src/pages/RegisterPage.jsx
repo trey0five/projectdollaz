@@ -59,18 +59,18 @@ export default function RegisterPage() {
           <span className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gold/15 text-gold">
             <MailCheck size={30} />
           </span>
-          <p className="text-[15px] leading-relaxed text-ink">
+          <p className="text-[16px] leading-relaxed text-ink">
             We sent a verification link to <strong>{email}</strong>. Click it to activate your
             account, then sign in.
           </p>
           <button
             onClick={resend}
             disabled={resent}
-            className="mt-6 text-[13px] font-semibold text-gold hover:underline disabled:text-muted"
+            className="mt-6 text-[15px] font-semibold text-gold hover:underline disabled:text-muted"
           >
             {resent ? 'Verification email re-sent' : "Didn't get it? Resend"}
           </button>
-          <div className="mt-6 text-[13px] text-muted">
+          <div className="mt-6 text-[15px] text-muted">
             <Link to="/login" className="font-semibold text-gold hover:underline">
               Back to sign in
             </Link>
@@ -124,7 +124,7 @@ export default function RegisterPage() {
           onEnter={submit}
         />
         {confirm.length > 0 && !matches && (
-          <p className="-mt-3 mb-2 text-[12px] text-danger">Passwords do not match.</p>
+          <p className="-mt-3 mb-2 text-[14px] text-danger">Passwords do not match.</p>
         )}
       </div>
 
@@ -139,7 +139,7 @@ export default function RegisterPage() {
         {busy ? 'Creating account…' : 'Create Account'}
       </motion.button>
 
-      <div className="mt-6 text-center text-[13px] text-muted">
+      <div className="mt-6 text-center text-[15px] text-muted">
         Already have an account?{' '}
         <Link to="/login" className="font-semibold text-gold hover:underline">
           Sign in

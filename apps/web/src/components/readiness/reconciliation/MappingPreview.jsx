@@ -14,7 +14,7 @@ export default function MappingPreview({ disbursements, limit = 6 }) {
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-3 text-[12px]">
+      <div className="flex flex-wrap items-center gap-3 text-[14px]">
         <span className="font-semibold text-navy">
           {disbursements.length} row{disbursements.length === 1 ? '' : 's'}
         </span>
@@ -22,15 +22,15 @@ export default function MappingPreview({ disbursements, limit = 6 }) {
           mapped total <span className="font-semibold text-navy tabular-nums">{fmtDollar(mappedTotal)}</span>
         </span>
         {badAmount > 0 && (
-          <span className="rounded-full bg-danger/10 px-2 py-0.5 text-[11px] font-semibold text-danger">
+          <span className="rounded-full bg-danger/10 px-2 py-0.5 text-[13px] font-semibold text-danger">
             {badAmount} row{badAmount === 1 ? '' : 's'} with no parseable amount
           </span>
         )}
       </div>
       <div className="overflow-hidden rounded-lg border border-rule/60">
-        <table className="w-full text-[12px]">
+        <table className="w-full text-[14px]">
           <thead>
-            <tr className="border-b border-rule bg-section text-left text-[10px] uppercase tracking-[0.08em] text-muted">
+            <tr className="border-b border-rule bg-section text-left text-[12px] uppercase tracking-[0.08em] text-muted">
               <th className="px-3 py-1.5 font-semibold">Student</th>
               <th className="px-3 py-1.5 font-semibold">Program</th>
               <th className="px-3 py-1.5 font-semibold">Date</th>
@@ -52,7 +52,7 @@ export default function MappingPreview({ disbursements, limit = 6 }) {
         </table>
       </div>
       {disbursements.length > limit && (
-        <p className="text-[11px] italic text-muted">…and {disbursements.length - limit} more.</p>
+        <p className="text-[13px] italic text-muted">…and {disbursements.length - limit} more.</p>
       )}
     </div>
   )

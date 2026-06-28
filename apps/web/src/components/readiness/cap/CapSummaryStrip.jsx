@@ -18,7 +18,7 @@ export default function CapSummaryStrip({ summary }) {
 
   const chip = (n, label, palette) => (
     <span
-      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[12px] font-semibold ${
+      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[14px] font-semibold ${
         capStatusMeta(palette).meta.chip
       } ${n === 0 ? 'opacity-50' : ''}`}
     >
@@ -35,12 +35,12 @@ export default function CapSummaryStrip({ summary }) {
       className="card-soft p-5"
     >
       <div className="flex flex-wrap items-center gap-2.5">
-        <span className="inline-flex items-center gap-2 rounded-full border border-red-200 bg-red-50 px-3 py-1 text-[12px] font-semibold text-red-700">
+        <span className="inline-flex items-center gap-2 rounded-full border border-red-200 bg-red-50 px-3 py-1 text-[14px] font-semibold text-red-700">
           <ShieldAlert size={13} />
           <span className="tabular-nums">{summary.materialCount ?? 0}</span>
           <span className="uppercase tracking-[0.06em]">Material</span>
         </span>
-        <span className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[12px] font-semibold text-amber-700">
+        <span className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[14px] font-semibold text-amber-700">
           <AlertTriangle size={13} />
           <span className="tabular-nums">{summary.reportableCount ?? 0}</span>
           <span className="uppercase tracking-[0.06em]">Reportable</span>
@@ -52,7 +52,7 @@ export default function CapSummaryStrip({ summary }) {
         {(summary.resolvedCount ?? 0) > 0 && (
           <>
             <span className="h-5 w-px bg-border" aria-hidden />
-            <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[12px] font-semibold text-emerald-700">
+            <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[14px] font-semibold text-emerald-700">
               <span className="tabular-nums">{summary.resolvedCount}</span>
               <span className="uppercase tracking-[0.06em]">Resolved</span>
             </span>
@@ -62,7 +62,7 @@ export default function CapSummaryStrip({ summary }) {
 
       {/* Completion progress bar (gold gradient). */}
       <div className="mt-4">
-        <div className="mb-1.5 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
+        <div className="mb-1.5 flex items-center justify-between text-[13px] font-semibold uppercase tracking-[0.1em] text-muted">
           <span>Remediation progress</span>
           <span className="tabular-nums text-navy">{pct}%</span>
         </div>
@@ -79,7 +79,7 @@ export default function CapSummaryStrip({ summary }) {
       {(summary.materialCount ?? 0) > 0 && (
         <div className="mt-4 flex items-start gap-3 rounded-xl border-2 border-red-200 bg-red-50 px-4 py-3">
           <ShieldAlert size={18} className="mt-0.5 shrink-0 text-red-600" />
-          <p className="text-[13px] leading-relaxed text-red-800">
+          <p className="text-[15px] leading-relaxed text-red-800">
             <span className="font-semibold">A material exception requires a Corrective Action Plan.</span>{' '}
             A material exception must be remediated with a written plan submitted to /
             forwarded to the DOE. Repeated material exceptions in consecutive years can

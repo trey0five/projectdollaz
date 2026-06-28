@@ -34,13 +34,13 @@ export default function HeadlineBand({
       <div className="relative flex flex-col gap-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="font-sans text-[11px] font-semibold uppercase tracking-[0.18em] text-gold/80">
+            <p className="font-sans text-[13px] font-semibold uppercase tracking-[0.18em] text-gold/80">
               Financial Insights
             </p>
             <h2 className="mt-1 font-serif text-2xl font-semibold text-gold-light sm:text-[28px]">
               {periodLabel || 'Latest period'}
             </h2>
-            <p className="mt-0.5 text-[13px] text-white/60">
+            <p className="mt-0.5 text-[15px] text-white/60">
               Period end {formatShortDate(periodEndDate)}
             </p>
           </div>
@@ -58,7 +58,7 @@ export default function HeadlineBand({
             const fmt = metricFormat(m.key, m.unit)
             return (
               <div key={k} className="rounded-xl bg-white/5 px-4 py-3.5 backdrop-blur-sm">
-                <p className="font-sans text-[10px] font-semibold uppercase tracking-[0.12em] text-white/50">
+                <p className="font-sans text-[12px] font-semibold uppercase tracking-[0.12em] text-white/50">
                   {m.label}
                 </p>
                 <div className="mt-1.5 flex items-end gap-2">

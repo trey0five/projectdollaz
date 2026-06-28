@@ -93,7 +93,7 @@ export default function YearEndChecklistSection({ schoolId, periodId, canEdit })
           </span>
           <div>
             <h2 className="font-serif text-xl font-semibold text-navy">Year-End Review Checklist</h2>
-            <p className="text-[13px] text-muted">
+            <p className="text-[15px] text-muted">
               {canEdit
                 ? 'Walk each AUP procedure + gather the documents the reviewer will request. Changes autosave.'
                 : 'Read-only — only an owner or accountant can update the checklist.'}
@@ -104,7 +104,7 @@ export default function YearEndChecklistSection({ schoolId, periodId, canEdit })
       </div>
 
       {loading && !data ? (
-        <div className="card-soft p-8 text-center text-[14px] text-muted">
+        <div className="card-soft p-8 text-center text-[16px] text-muted">
           Loading the year-end checklist…
         </div>
       ) : error ? (

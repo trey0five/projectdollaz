@@ -9,13 +9,14 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { FileBarChart2, Landmark, ArrowRight, ArrowLeft, Lock, CalendarClock } from 'lucide-react'
+import { FileBarChart2, Landmark, ArrowRight, ArrowLeft, Lock, CalendarClock, TrendingUp } from 'lucide-react'
 import TopBar from '../components/TopBar.jsx'
 import BillingBanner from '../components/BillingBanner.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { usePersistence } from '../context/PersistenceContext.jsx'
 import BoardReportWizard from '../components/reports/board/BoardReportWizard.jsx'
 import MonthlyActualsSection from '../components/monthly/MonthlyActualsSection.jsx'
+import ForecastView from '../components/reports/ForecastView.jsx'
 
 // Catalog of report types. Phase 1 ships only the Board Report live; the rest are
 // listed as "coming soon" placeholders so the IA reads as a growing hub.
@@ -33,11 +34,10 @@ const REPORTS = [
     id: 'forecast',
     title: 'FYE Forecast',
     blurb:
-      'Project where the year lands — driver assumptions with cohort grade roll-forward and anticipated feeder enrollment. On the Budget page’s Forecast tab; it also flows into your board packet.',
+      'Project where the year lands — driver assumptions, cohort roll-forward, and feeder enrollment. Enter it in the Data hub; it also flows into your board packet.',
     live: true,
-    Icon: FileBarChart2,
-    action: 'navigate',
-    to: '/budget',
+    Icon: TrendingUp,
+    action: 'inline',
   },
   {
     id: 'monthly',
@@ -96,7 +96,7 @@ export default function ReportsPage() {
             <button
               type="button"
               onClick={() => setOpenReport(null)}
-              className="mb-5 inline-flex items-center gap-1.5 text-[13px] font-semibold text-muted transition-colors hover:text-gold"
+              className="mb-5 inline-flex items-center gap-1.5 text-[15px] font-semibold text-muted transition-colors hover:text-gold"
             >
               <ArrowLeft size={15} /> All reports
             </button>
@@ -112,11 +112,26 @@ export default function ReportsPage() {
             <button
               type="button"
               onClick={() => setOpenReport(null)}
-              className="mb-5 inline-flex items-center gap-1.5 text-[13px] font-semibold text-muted transition-colors hover:text-gold"
+              className="mb-5 inline-flex items-center gap-1.5 text-[15px] font-semibold text-muted transition-colors hover:text-gold"
             >
               <ArrowLeft size={15} /> All reports
             </button>
             <MonthlyActualsSection periods={periods || []} initialPeriodId={defaultPeriodId} />
+          </>
+        ) : openReport === 'forecast' ? (
+          <>
+            <button
+              type="button"
+              onClick={() => setOpenReport(null)}
+              className="mb-5 inline-flex items-center gap-1.5 text-[15px] font-semibold text-muted transition-colors hover:text-gold"
+            >
+              <ArrowLeft size={15} /> All reports
+            </button>
+            <ForecastView
+              key={`${activeSchool?.id}:${defaultPeriodId}`}
+              schoolId={activeSchool?.id ?? null}
+              periodId={defaultPeriodId}
+            />
           </>
         ) : (
           renderHub(onSelect)
@@ -135,15 +150,15 @@ function renderHub(onSelect) {
         animate={{ opacity: 1, y: 0 }}
         className="mb-7"
       >
-        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">Reports</p>
-        <h1 className="mt-1 font-serif text-3xl font-semibold text-navy">Board &amp; finance reports</h1>
-        <p className="mt-1.5 max-w-2xl text-[14px] text-muted">
+        <p className="text-[13px] font-bold uppercase tracking-[0.18em] text-gold">Reports</p>
+        <h1 className="mt-1 font-serif text-2xl font-semibold text-navy sm:text-3xl">Board &amp; finance reports</h1>
+        <p className="mt-1.5 max-w-2xl text-[16px] text-muted">
           Assemble polished, board-ready packets straight from your saved statements and budget. No
           spreadsheets — pick a period, review the numbers, add your narrative, and print.
         </p>
       </motion.header>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-3">
         {REPORTS.map((r, i) => {
           const Icon = r.Icon || FileBarChart2
           return (
@@ -156,29 +171,34 @@ function renderHub(onSelect) {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.05 * i }}
             whileHover={r.live ? { y: -3 } : undefined}
-            className={`group relative flex flex-col rounded-2xl border-2 p-5 text-left transition-all ${
+            className={`group relative flex flex-col rounded-2xl border-2 p-3.5 text-left transition-all sm:p-5 ${
               r.live
                 ? 'border-gold/30 bg-white shadow-card hover:border-gold/60 hover:shadow-glow'
                 : 'cursor-not-allowed border-rule/60 bg-white/60 opacity-70'
             }`}
           >
             <span
-              className={`mb-3 flex h-11 w-11 items-center justify-center rounded-xl ${
+              className={`mb-2.5 flex h-9 w-9 items-center justify-center rounded-xl sm:mb-3 sm:h-11 sm:w-11 ${
                 r.live ? 'bg-gold/15 text-gold' : 'bg-navy/[0.06] text-muted'
               }`}
             >
-              <Icon size={22} />
+              <Icon size={20} className="sm:hidden" />
+              <Icon size={22} className="hidden sm:block" />
             </span>
-            <h2 className="font-serif text-lg font-semibold text-navy">{r.title}</h2>
-            <p className="mt-1.5 flex-1 text-[13px] leading-relaxed text-muted">{r.blurb}</p>
-            <span className="mt-4 inline-flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.08em]">
+            <h2 className="font-serif text-base font-bold text-navy sm:text-xl">{r.title}</h2>
+            <p className="mt-1 flex-1 text-[12.5px] leading-relaxed text-muted sm:mt-1.5 sm:text-[15px]">
+              {r.blurb}
+            </p>
+            <span className="mt-3 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] sm:mt-4 sm:text-[14px]">
               {r.live ? (
                 <span className="inline-flex items-center gap-1.5 text-gold">
                   {r.action === 'navigate'
                     ? 'Open schedules'
-                    : r.action === 'inline'
-                      ? 'Manage months'
-                      : 'Build report'}
+                    : r.id === 'forecast'
+                      ? 'View forecast'
+                      : r.action === 'inline'
+                        ? 'Manage months'
+                        : 'Build report'}
                   <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
                 </span>
               ) : (

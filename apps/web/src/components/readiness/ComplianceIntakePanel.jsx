@@ -14,7 +14,7 @@ import { AutosaveBar } from '../AutosaveIndicator.jsx'
 import TierSelector from './TierSelector.jsx'
 
 const labelCls =
-  'mb-2 block text-[12px] font-semibold uppercase tracking-[0.14em] text-muted'
+  'mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-muted'
 const inputCls =
   'w-full rounded-lg border border-border bg-white px-4 py-3 text-base text-ink outline-none transition-all focus:border-gold focus:ring-2 focus:ring-gold/20 disabled:cursor-not-allowed disabled:bg-navy/[0.04] disabled:text-muted'
 
@@ -26,7 +26,7 @@ function YesNo({ label, value, onChange, disabled, hint }) {
   // Selected = solid fill (the prior 10%-opacity tint read as barely selected).
   // Yes → gold, No → navy, so the chosen answer is unmistakable at a glance.
   const pill = (active, tone) =>
-    `flex-1 rounded-lg border-2 px-3 py-2 text-[12px] font-semibold uppercase tracking-[0.08em] transition-all ${
+    `flex-1 rounded-lg border-2 px-3 py-2 text-[14px] font-semibold uppercase tracking-[0.08em] transition-all ${
       active
         ? tone === 'yes'
           ? 'border-gold bg-gold text-white shadow-[0_3px_12px_-3px_rgba(184,150,80,0.65)]'
@@ -56,7 +56,7 @@ function YesNo({ label, value, onChange, disabled, hint }) {
           No
         </motion.button>
       </div>
-      {hint && <p className="mt-1.5 text-[11px] italic text-muted">{hint}</p>}
+      {hint && <p className="mt-1.5 text-[13px] italic text-muted">{hint}</p>}
     </div>
   )
 }
@@ -198,7 +198,7 @@ export default function ComplianceIntakePanel({
         </span>
         <div>
           <h3 className="font-serif text-lg font-semibold text-navy">Compliance intake</h3>
-          <p className="text-[12px] text-muted">
+          <p className="text-[14px] text-muted">
             {periodLabel ? `${periodLabel} · ` : ''}
             {canEdit
               ? 'Attestation inputs that turn most AUP sections into a real verdict.'
@@ -234,7 +234,7 @@ export default function ComplianceIntakePanel({
                   placeholder="e.g. 300000"
                 />
               </div>
-              <p className="mt-1.5 text-[11px] italic text-muted">
+              <p className="mt-1.5 text-[13px] italic text-muted">
                 Drives the $250k AUP trigger and the §V coverage check.
               </p>
             </div>
@@ -245,7 +245,7 @@ export default function ComplianceIntakePanel({
                 onChange={canEdit ? setPrograms : undefined}
                 disabled={!canEdit}
               />
-              <p className="mt-1.5 text-[11px] italic text-muted">
+              <p className="mt-1.5 text-[13px] italic text-muted">
                 Scopes the FES-UA-only checks.
               </p>
             </div>

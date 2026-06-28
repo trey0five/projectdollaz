@@ -10,7 +10,7 @@ export default function DisbursementsTable({ disbursements }) {
 
   if (!disbursements || disbursements.length === 0) {
     return (
-      <p className="rounded-xl border border-dashed border-rule px-4 py-6 text-center text-[13px] italic text-muted">
+      <p className="rounded-xl border border-dashed border-rule px-4 py-6 text-center text-[15px] italic text-muted">
         No disbursements imported for this period yet.
       </p>
     )
@@ -21,9 +21,9 @@ export default function DisbursementsTable({ disbursements }) {
   return (
     <div className="overflow-hidden rounded-xl border border-rule/60">
       <div className="overflow-x-auto">
-        <table className="w-full text-[12px]">
+        <table className="w-full text-[14px]">
           <thead>
-            <tr className="border-b border-rule bg-section text-left text-[10px] uppercase tracking-[0.08em] text-muted">
+            <tr className="border-b border-rule bg-section text-left text-[12px] uppercase tracking-[0.08em] text-muted">
               <th className="px-3 py-2 font-semibold">Student</th>
               <th className="px-3 py-2 font-semibold">Program</th>
               <th className="px-3 py-2 font-semibold">Pay date</th>
@@ -38,7 +38,7 @@ export default function DisbursementsTable({ disbursements }) {
                 <td className="px-3 py-2 text-navy">{d.studentRef ?? '—'}</td>
                 <td className="px-3 py-2">
                   {d.program ? (
-                    <span className="rounded-full bg-gold/10 px-2 py-0.5 text-[10px] font-semibold text-[#7a5e00]">
+                    <span className="rounded-full bg-gold/10 px-2 py-0.5 text-[12px] font-semibold text-[#7a5e00]">
                       {programLabel(d.program)}
                     </span>
                   ) : (
@@ -60,7 +60,7 @@ export default function DisbursementsTable({ disbursements }) {
         <button
           type="button"
           onClick={() => setShown((s) => s + PAGE)}
-          className="w-full border-t border-rule bg-section py-2 text-[12px] font-semibold text-gold hover:bg-gold/5"
+          className="w-full border-t border-rule bg-section py-2 text-[14px] font-semibold text-gold hover:bg-gold/5"
         >
           Show more ({disbursements.length - shown} remaining)
         </button>

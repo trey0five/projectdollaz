@@ -9,7 +9,7 @@ import { useSchools } from '../context/SchoolContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { apiErrorMessage } from '../lib/api.js'
 
-const labelCls = 'mb-2 block text-[12px] font-semibold uppercase tracking-[0.14em] text-muted'
+const labelCls = 'mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-muted'
 const inputCls =
   'w-full rounded-lg border-2 border-border bg-white px-4 py-3 text-base text-ink outline-none transition-colors focus:border-gold'
 
@@ -51,7 +51,7 @@ export default function CreateSchoolForm() {
             <h1 className="font-serif text-[26px] font-semibold leading-tight text-navy">
               Create your school
             </h1>
-            <p className="text-[13px] text-muted">Just a name to start — opening balances are read from your first trial-balance upload.</p>
+            <p className="text-[15px] text-muted">Just a name to start — opening balances are read from your first trial-balance upload.</p>
           </div>
         </div>
 
@@ -65,7 +65,7 @@ export default function CreateSchoolForm() {
           />
         </div>
         {error && (
-          <div className="mb-3 rounded-md bg-danger/10 px-3 py-2 text-center text-[13px] text-danger">
+          <div className="mb-3 rounded-md bg-danger/10 px-3 py-2 text-center text-[15px] text-danger">
             {error}
           </div>
         )}
@@ -81,7 +81,7 @@ export default function CreateSchoolForm() {
 
         <button
           onClick={logout}
-          className="mt-4 w-full text-center text-[13px] font-semibold text-muted hover:text-gold"
+          className="mt-4 w-full text-center text-[15px] font-semibold text-muted hover:text-gold"
         >
           Sign out
         </button>

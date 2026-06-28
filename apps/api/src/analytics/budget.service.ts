@@ -6,7 +6,13 @@ import { PeriodsService } from '../periods/periods.service.js'
 import { AuditService } from '../common/audit/audit.service.js'
 import type { UpsertBudgetDto } from './dto/upsert-budget.dto.js'
 import type { ImportBudgetSpreadDto, AssessBudgetDto } from './dto/import-budget-spread.dto.js'
-import { rollupSpread, type SpreadRollup } from './budget.spread.js'
+import {
+  rollupSpread,
+  spreadRowKey,
+  type SpreadMappingOverrides,
+  type SpreadRollup,
+} from './budget.spread.js'
+import { MappingService } from '../mapping/mapping.service.js'
 import {
   assessBudget,
   sumMap,
@@ -90,11 +96,23 @@ export interface ForecastSaveResult {
 
 const MAX_FORECAST_EXPLANATION_CHARS = 2000
 
-/** ASSESS endpoint response (the frozen ENG-API ↔ ENG-WEB contract). */
+/** One still-unmatched spread line surfaced to the Resolve-unmatched UI. `key` is
+ * the spreadRowKey the client echoes back verbatim in the PATCH /mapping body. */
+export interface UnmatchedLine {
+  key: string
+  acct: number
+  label: string
+  annual: number
+}
+
+/** ASSESS endpoint response (the frozen ENG-API ↔ ENG-WEB contract). The
+ * `unmatched` array is purely ADDITIVE (always present; [] for draft / nothing
+ * unmatched) — status/checks/ai are unchanged. */
 export interface AssessResponse {
   status: AssessResult['status']
   checks: AssessResult['checks']
   ai: { configured: boolean; summary?: string }
+  unmatched: UnmatchedLine[]
 }
 
 function dec(v: Prisma.Decimal | null | undefined): number | null {
@@ -117,7 +135,17 @@ export class BudgetService {
     // Optional so existing BudgetService unit tests (which don't provide it)
     // keep constructing; the advise() path guards on `?.isConfigured()`.
     @Optional() private readonly assistant?: AssistantClient,
+    // Optional for the same reason — the school's saved Resolve-unmatched picks.
+    // When absent, schoolOverrides() returns {} ⇒ rollupSpread is byte-identical.
+    @Optional() private readonly mapping?: MappingService,
   ) {}
+
+  /** The school's saved per-row category overrides (Resolve-unmatched picks),
+   * keyed by spreadRowKey. Empty when MappingService isn't wired (unit tests). */
+  private async schoolOverrides(schoolId: string): Promise<SpreadMappingOverrides> {
+    if (!this.mapping) return {}
+    return this.mapping.getSpreadOverrides(schoolId)
+  }
 
   private toPublic(row: PeriodBudget | null): BudgetPublic {
     return {
@@ -214,7 +242,10 @@ export class BudgetService {
     })
 
     const spread = dto.spread as unknown as BudgetSpread
-    const rolled = rollupSpread(spread)
+    // Apply the school's saved Resolve-unmatched picks so the persisted spread
+    // reflects them even when the user confirms without explicitly resolving.
+    const overrides = await this.schoolOverrides(schoolId)
+    const rolled = rollupSpread(spread, overrides)
 
     // Preserve the manual per-line method builder state AND any applied driver
     // model (so importing a spread doesn't drop the round-trippable assumptions).
@@ -601,13 +632,23 @@ export class BudgetService {
 
     let normalized: NormalizedBudget
     let source: 'driver' | 'import'
+    let unmatched: UnmatchedLine[] = []
 
     if (dto.spread) {
-      const r = rollupSpread(dto.spread as unknown as BudgetSpread)
+      // Re-roll with the school's saved picks so resolved lines drop OUT of the
+      // unmatched set on the re-assess that follows a save.
+      const overrides = await this.schoolOverrides(schoolId)
+      const r = rollupSpread(dto.spread as unknown as BudgetSpread, overrides)
       // Unmapped dollars/count derived from annotated accounts (NOT unmappedAccts,
       // which is GL-number only and misses label-only acct=0 rows).
       const unmapped = r.accounts.filter((a) => a.category === 'unmapped')
       const unmappedDollars = unmapped.reduce((s, a) => s + Math.abs(a.annual || 0), 0)
+      unmatched = unmapped.map((a) => ({
+        key: spreadRowKey(a),
+        acct: a.acct,
+        label: a.label,
+        annual: a.annual,
+      }))
       normalized = {
         revenue: r.revenue,
         expense: r.expense,
@@ -633,7 +674,7 @@ export class BudgetService {
 
     const det = assessBudget(normalized, source) // Layer 1 — always
     const ai = await this.advise(normalized, det) // Layer 2 — graceful
-    return { status: det.status, checks: det.checks, ai }
+    return { status: det.status, checks: det.checks, ai, unmatched }
   }
 
   /**

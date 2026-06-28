@@ -227,9 +227,9 @@ export default function BudgetVsActual({ schoolId, periodId, canEdit, metrics })
   }
 
   const selectCls =
-    'rounded border border-border bg-white px-1.5 py-1 text-[11px] text-ink outline-none focus:border-gold disabled:bg-navy/[0.04]'
+    'rounded border border-border bg-white px-1.5 py-1 text-[13px] text-ink outline-none focus:border-gold disabled:bg-navy/[0.04]'
   const numCls =
-    'w-20 rounded border border-border bg-white px-1.5 py-1 text-right text-[12px] tabular-nums text-ink outline-none focus:border-gold disabled:bg-navy/[0.04]'
+    'w-20 rounded border border-border bg-white px-1.5 py-1 text-right text-[14px] tabular-nums text-ink outline-none focus:border-gold disabled:bg-navy/[0.04]'
 
   // The method-specific control(s) shown in the Budget cell.
   const planControl = (kind, key, plan) => {
@@ -248,29 +248,29 @@ export default function BudgetVsActual({ schoolId, periodId, canEdit, metrics })
       return (
         <span className="inline-flex items-center gap-1">
           <input
-            className="w-14 rounded border border-border bg-white px-1.5 py-1 text-right text-[12px] tabular-nums outline-none focus:border-gold"
+            className="w-14 rounded border border-border bg-white px-1.5 py-1 text-right text-[14px] tabular-nums outline-none focus:border-gold"
             inputMode="decimal"
             value={plan.pct ?? ''}
             onChange={(e) => setPlan(kind, key, { pct: sanitizeDecimal(e.target.value, { allowNegative: true }) })}
             placeholder="0"
           />
-          <span className="text-[11px] text-muted">%</span>
+          <span className="text-[13px] text-muted">%</span>
         </span>
       )
     if (plan.method === 'driver')
       return (
         <span className="inline-flex items-center gap-1">
           <input
-            className="w-16 rounded border border-border bg-white px-1.5 py-1 text-right text-[12px] tabular-nums outline-none focus:border-gold"
+            className="w-16 rounded border border-border bg-white px-1.5 py-1 text-right text-[14px] tabular-nums outline-none focus:border-gold"
             inputMode="decimal"
             value={plan.enrollment ?? ''}
             onChange={(e) => setPlan(kind, key, { enrollment: sanitizeDecimal(e.target.value) })}
             placeholder="students"
             title="Projected enrollment"
           />
-          <span className="text-[11px] text-muted">×</span>
+          <span className="text-[13px] text-muted">×</span>
           <input
-            className="w-20 rounded border border-border bg-white px-1.5 py-1 text-right text-[12px] tabular-nums outline-none focus:border-gold"
+            className="w-20 rounded border border-border bg-white px-1.5 py-1 text-right text-[14px] tabular-nums outline-none focus:border-gold"
             inputMode="decimal"
             value={plan.perStudent ?? ''}
             onChange={(e) => setPlan(kind, key, { perStudent: sanitizeDecimal(e.target.value) })}
@@ -280,7 +280,7 @@ export default function BudgetVsActual({ schoolId, periodId, canEdit, metrics })
         </span>
       )
     // copy / trend — no inputs; value is derived.
-    return <span className="text-[11px] italic text-muted">auto</span>
+    return <span className="text-[13px] italic text-muted">auto</span>
   }
 
   const renderLine = ({ kind, key, label, act, favHigher }) => {
@@ -327,12 +327,12 @@ export default function BudgetVsActual({ schoolId, periodId, canEdit, metrics })
           {variance != null ? (
             <span className="inline-flex items-center justify-end gap-1.5">
               <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: color }} />
-              <span className="tabular-nums text-[12px]" style={{ color }}>
+              <span className="tabular-nums text-[14px]" style={{ color }}>
                 {variancePct(variance, bud)}
               </span>
             </span>
           ) : (
-            <span className="text-[12px] text-muted">—</span>
+            <span className="text-[14px] text-muted">—</span>
           )}
         </td>
       </tr>
@@ -351,7 +351,7 @@ export default function BudgetVsActual({ schoolId, periodId, canEdit, metrics })
         </td>
         <td className="px-2 py-1.5 text-right tabular-nums text-navy">{bud != null ? fmtDollar(bud) : '—'}</td>
         <td className="px-2 py-1.5 text-right tabular-nums text-navy">{act != null ? fmtDollar(act) : '—'}</td>
-        <td className="py-1.5 pl-2 text-right tabular-nums text-[12px]" style={{ color }}>
+        <td className="py-1.5 pl-2 text-right tabular-nums text-[14px]" style={{ color }}>
           {variance != null ? `${variance >= 0 ? '+' : '−'}${fmtDollar(Math.abs(variance))}` : '—'}
         </td>
       </tr>
@@ -400,7 +400,7 @@ export default function BudgetVsActual({ schoolId, periodId, canEdit, metrics })
           </span>
           <div>
             <h3 className="font-serif text-lg font-semibold text-navy">Budget vs. actual</h3>
-            <p className="text-[12px] text-muted">
+            <p className="text-[14px] text-muted">
               {canEdit
                 ? 'Build each line from history — actuals come from your statements.'
                 : 'Budget vs. actual for this period.'}
@@ -409,7 +409,7 @@ export default function BudgetVsActual({ schoolId, periodId, canEdit, metrics })
         </div>
         {canEdit && hasLines && (
           <div className="flex items-center gap-1.5">
-            <span className="inline-flex items-center gap-1 rounded-lg border border-border bg-white px-1.5 py-1 text-[11px] text-muted">
+            <span className="inline-flex items-center gap-1 rounded-lg border border-border bg-white px-1.5 py-1 text-[13px] text-muted">
               <input
                 className="w-9 bg-transparent text-right tabular-nums text-ink outline-none"
                 inputMode="decimal"
@@ -424,7 +424,7 @@ export default function BudgetVsActual({ schoolId, periodId, canEdit, metrics })
               onClick={buildFromHistory}
               disabled={!ctx?.prior}
               title={ctx?.prior ? `Pre-fill from ${ctx.prior.label}` : 'No prior-year actuals yet'}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-gold/40 bg-gold/10 px-2.5 py-1.5 text-[12px] font-semibold text-navy transition-colors hover:bg-gold/20 disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gold/40 bg-gold/10 px-2.5 py-1.5 text-[14px] font-semibold text-navy transition-colors hover:bg-gold/20 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Wand2 size={13} className="text-gold" />
               Build from history
@@ -434,14 +434,14 @@ export default function BudgetVsActual({ schoolId, periodId, canEdit, metrics })
       </div>
 
       {!hasLines ? (
-        <p className="rounded-lg border border-dashed border-border bg-section px-4 py-6 text-center text-[13px] italic text-muted">
+        <p className="rounded-lg border border-dashed border-border bg-section px-4 py-6 text-center text-[15px] italic text-muted">
           Category budgeting unlocks once this period has generated statements (it needs the
           revenue &amp; expense breakdown).
         </p>
       ) : (
         <>
           {canEdit && ctx?.prior && (
-            <p className="mb-2 text-[11px] text-muted">
+            <p className="mb-2 text-[13px] text-muted">
               Methods build off <span className="font-semibold text-navy">{ctx.prior.label}</span>{' '}
               actuals
               {ctx.drivers?.priorNetTuitionPerStudent != null && ctx.drivers?.baselineEnrollment != null && (
@@ -456,9 +456,9 @@ export default function BudgetVsActual({ schoolId, periodId, canEdit, metrics })
           )}
 
           <div className="overflow-x-auto">
-            <table className="w-full text-[13px]">
+            <table className="w-full text-[15px]">
               <thead>
-                <tr className="border-b border-rule text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+                <tr className="border-b border-rule text-[12px] font-semibold uppercase tracking-[0.08em] text-muted">
                   <th className="py-2 pr-2 text-left font-semibold">Line / method</th>
                   <th className="px-2 py-2 text-right font-semibold">Budget</th>
                   <th className="px-2 py-2 text-right font-semibold">$ </th>
@@ -468,7 +468,7 @@ export default function BudgetVsActual({ schoolId, periodId, canEdit, metrics })
               </thead>
               <tbody>
                 <tr>
-                  <td colSpan={5} className="pt-2 text-[10px] font-bold uppercase tracking-[0.1em] text-gold">
+                  <td colSpan={5} className="pt-2 text-[12px] font-bold uppercase tracking-[0.1em] text-gold">
                     Revenue
                   </td>
                 </tr>
@@ -478,7 +478,7 @@ export default function BudgetVsActual({ schoolId, periodId, canEdit, metrics })
                 {totalRow('Total revenue', budRevTotal, actRevTotal, true)}
 
                 <tr>
-                  <td colSpan={5} className="pt-3 text-[10px] font-bold uppercase tracking-[0.1em] text-gold">
+                  <td colSpan={5} className="pt-3 text-[12px] font-bold uppercase tracking-[0.1em] text-gold">
                     Expenses
                   </td>
                 </tr>
@@ -504,12 +504,12 @@ export default function BudgetVsActual({ schoolId, periodId, canEdit, metrics })
 
           {notes.length > 0 && (
             <div className="mt-3 rounded-lg border border-gold/25 bg-gold/[0.04] p-3">
-              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-gold">
+              <p className="mb-1.5 text-[12px] font-bold uppercase tracking-[0.1em] text-gold">
                 What moved vs. budget
               </p>
               <ul className="space-y-1">
                 {notes.map((n) => (
-                  <li key={n.label} className="flex items-start gap-1.5 text-[12.5px] text-ink">
+                  <li key={n.label} className="flex items-start gap-1.5 text-[14.5px] text-ink">
                     <span
                       className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
                       style={{ backgroundColor: ragColor(n.favorable, Math.abs(n.pct)) }}

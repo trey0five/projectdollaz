@@ -12,6 +12,7 @@ import { parseBudgetSpread } from '@finrep/ingestion'
 import { analyticsApi, apiErrorMessage } from '../../lib/api.js'
 import BudgetSpreadPreview from './BudgetSpreadPreview.jsx'
 import SufficiencyPanel from './SufficiencyPanel.jsx'
+import ResolveUnmatched from './ResolveUnmatched.jsx'
 import { useBudgetAssessment } from '../../hooks/useBudgetAssessment.js'
 
 function readBytes(file) {
@@ -33,6 +34,10 @@ export default function BudgetImport({ schoolId, periodId, canEdit, onImported }
   const [parseError, setParseError] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
+  // Bumped after a Resolve-unmatched save to FORCE a re-assessment (the throttled
+  // hook only re-fetches when its key changes); the server then re-rolls with the
+  // freshly-saved mapping overrides and resolved lines drop out of `unmatched`.
+  const [resolveNonce, setResolveNonce] = useState(0)
 
   // ── Sufficiency check on the PARSED spread (before Confirm) ────────────────
   // A parsed spread is immutable per drop, so a cheap signature (format + row
@@ -42,8 +47,8 @@ export default function BudgetImport({ schoolId, periodId, canEdit, onImported }
     if (!spread) return ''
     const accounts = spread.accounts || []
     const sum = accounts.reduce((s, a) => s + (Number(a?.annual) || 0), 0)
-    return `${spread.format}:${accounts.length}:${Math.round(sum)}`
-  }, [spread])
+    return `${spread.format}:${accounts.length}:${Math.round(sum)}:${resolveNonce}`
+  }, [spread, resolveNonce])
   const { assessment, loading: assessLoading } = useBudgetAssessment(
     schoolId,
     periodId,
@@ -186,6 +191,12 @@ export default function BudgetImport({ schoolId, periodId, canEdit, onImported }
           <BudgetSpreadPreview spread={spread} />
 
           <SufficiencyPanel assessment={assessment} loading={assessLoading} />
+
+          <ResolveUnmatched
+            schoolId={schoolId}
+            unmatched={assessment?.unmatched ?? []}
+            onResolved={() => setResolveNonce((n) => n + 1)}
+          />
 
           {saveError && (
             <div className="rounded-xl border border-rose-300 bg-rose-50 px-4 py-3 text-[13px] font-medium text-rose-700">

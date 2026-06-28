@@ -126,7 +126,7 @@ export default function MembersSection() {
   if (!activeSchool) {
     return (
       <SettingsCard title="Members & Roles">
-        <p className="text-[14px] text-muted">Select a school first.</p>
+        <p className="text-[16px] text-muted">Select a school first.</p>
       </SettingsCard>
     )
   }
@@ -134,7 +134,7 @@ export default function MembersSection() {
   if (!canView) {
     return (
       <SettingsCard title="Members & Roles" description={activeSchool.name}>
-        <div className="flex items-center gap-2 text-[14px] text-muted">
+        <div className="flex items-center gap-2 text-[16px] text-muted">
           <ShieldAlert size={16} /> You do not have permission to manage members for this
           school.
         </div>
@@ -152,12 +152,12 @@ export default function MembersSection() {
         description={`Active school: ${activeSchool.name}`}
       >
         {loading ? (
-          <p className="text-[14px] text-muted">Loading…</p>
+          <p className="text-[16px] text-muted">Loading…</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-[14px]">
+            <table className="w-full text-left text-[16px]">
               <thead>
-                <tr className="border-b border-border text-[12px] uppercase tracking-[0.1em] text-muted">
+                <tr className="border-b border-border text-[14px] uppercase tracking-[0.1em] text-muted">
                   <th className="py-2 pr-3 font-semibold">Name</th>
                   <th className="py-2 pr-3 font-semibold">Email</th>
                   <th className="py-2 pr-3 font-semibold">Role</th>
@@ -174,7 +174,7 @@ export default function MembersSection() {
                       <td className="py-3 pr-3 text-ink">
                         {name}
                         {m.id === user?.id && (
-                          <span className="ml-1 text-[12px] text-muted">(you)</span>
+                          <span className="ml-1 text-[14px] text-muted">(you)</span>
                         )}
                       </td>
                       <td className="py-3 pr-3 text-muted">{m.email}</td>
@@ -189,7 +189,7 @@ export default function MembersSection() {
                                 ? 'A school must keep at least one owner'
                                 : undefined
                             }
-                            className="min-h-[40px] rounded-lg border-2 border-border bg-white px-3 py-1.5 text-[13px] capitalize text-ink outline-none focus:border-gold disabled:cursor-not-allowed disabled:opacity-60"
+                            className="min-h-[40px] rounded-lg border-2 border-border bg-white px-3 py-1.5 text-[15px] capitalize text-ink outline-none focus:border-gold disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {ROLES.map((r) => (
                               <option key={r} value={r}>
@@ -201,7 +201,7 @@ export default function MembersSection() {
                           <span className="capitalize text-ink">{m.role}</span>
                         )}
                         {rowErr[m.id] && (
-                          <p className="mt-1 text-[12px] text-danger">{rowErr[m.id]}</p>
+                          <p className="mt-1 text-[14px] text-danger">{rowErr[m.id]}</p>
                         )}
                       </td>
                       {isOwner && (
@@ -214,7 +214,7 @@ export default function MembersSection() {
                                 ? 'A school must keep at least one owner'
                                 : 'Remove member'
                             }
-                            className="inline-flex min-h-[40px] items-center gap-1 rounded-lg border border-danger/30 px-3 py-1.5 text-[13px] font-semibold text-danger transition-colors hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-40"
+                            className="inline-flex min-h-[40px] items-center gap-1 rounded-lg border border-danger/30 px-3 py-1.5 text-[15px] font-semibold text-danger transition-colors hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-40"
                           >
                             <Trash2 size={14} /> Remove
                           </button>
@@ -233,7 +233,7 @@ export default function MembersSection() {
         <SettingsCard title="Invite a member" description="They receive an email invitation.">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="flex-1">
-              <label className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.14em] text-muted">
+              <label className="mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-muted">
                 Email
               </label>
               <input
@@ -245,7 +245,7 @@ export default function MembersSection() {
               />
             </div>
             <div className="sm:w-44">
-              <label className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.14em] text-muted">
+              <label className="mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-muted">
                 Role
               </label>
               <select
@@ -284,7 +284,7 @@ export default function MembersSection() {
 
       <SettingsCard title="Pending invitations" description="Unaccepted, unexpired invites.">
         {invites.length === 0 ? (
-          <p className="text-[14px] text-muted">No pending invitations.</p>
+          <p className="text-[16px] text-muted">No pending invitations.</p>
         ) : (
           <ul className="space-y-2">
             {invites.map((inv) => (
@@ -292,21 +292,21 @@ export default function MembersSection() {
                 key={inv.id}
                 className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-navy/[0.02] px-4 py-3"
               >
-                <div className="flex items-center gap-2 text-[14px] text-ink">
+                <div className="flex items-center gap-2 text-[16px] text-ink">
                   <Mail size={15} className="text-gold" />
                   <span>{inv.email}</span>
-                  <span className="rounded bg-gold/15 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-navy">
+                  <span className="rounded bg-gold/15 px-2 py-0.5 text-[13px] font-semibold uppercase tracking-[0.08em] text-navy">
                     {inv.role}
                   </span>
                 </div>
                 <div className="flex items-center gap-3">
                   {rowErr[inv.id] && (
-                    <span className="text-[12px] text-danger">{rowErr[inv.id]}</span>
+                    <span className="text-[14px] text-danger">{rowErr[inv.id]}</span>
                   )}
                   {isOwner && (
                     <button
                       onClick={() => revoke(inv)}
-                      className="inline-flex min-h-[40px] items-center gap-1 rounded-lg border border-danger/30 px-3 py-1.5 text-[13px] font-semibold text-danger transition-colors hover:bg-danger/10"
+                      className="inline-flex min-h-[40px] items-center gap-1 rounded-lg border border-danger/30 px-3 py-1.5 text-[15px] font-semibold text-danger transition-colors hover:bg-danger/10"
                     >
                       <Trash2 size={14} /> Revoke
                     </button>

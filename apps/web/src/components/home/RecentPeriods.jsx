@@ -20,7 +20,7 @@ export default function RecentPeriods({ periods }) {
         </h2>
         <Link
           to="/statements"
-          className="inline-flex items-center gap-1 text-[12px] font-semibold uppercase tracking-[0.06em] text-muted transition-colors hover:text-gold"
+          className="inline-flex items-center gap-1 text-[14px] font-semibold uppercase tracking-[0.06em] text-muted transition-colors hover:text-gold"
         >
           View all <ChevronRight size={14} />
         </Link>
@@ -39,9 +39,9 @@ export default function RecentPeriods({ periods }) {
               to={`/statements?period=${encodeURIComponent(p.id)}`}
               className="card-flashy flex w-[180px] flex-col gap-1 p-4 outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
             >
-              <span className="font-serif text-[15px] font-semibold text-navy">{p.label}</span>
-              <span className="text-[12px] text-muted">Ends {formatShortDate(p.periodEndDate)}</span>
-              <span className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-gold">
+              <span className="font-serif text-[16px] font-semibold text-navy">{p.label}</span>
+              <span className="text-[14px] text-muted">Ends {formatShortDate(p.periodEndDate)}</span>
+              <span className="mt-1.5 inline-flex items-center gap-1 text-[13px] font-semibold uppercase tracking-[0.06em] text-gold">
                 Open <ChevronRight size={13} />
               </span>
             </Link>

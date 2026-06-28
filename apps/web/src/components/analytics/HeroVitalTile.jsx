@@ -51,14 +51,14 @@ export default function HeroVitalTile({ metric, index = 0, trend, periodKey, onO
       </div>
 
       {/* Row 2: full-width title (never squeezed by the chip). */}
-      <h3 className="mt-2.5 line-clamp-2 font-sans text-[11px] font-semibold uppercase leading-snug tracking-[0.1em] text-muted">
+      <h3 className="mt-2.5 line-clamp-2 font-sans text-[13px] font-semibold uppercase leading-snug tracking-[0.1em] text-muted">
         {metric.label}
       </h3>
 
       {unavailable ? (
         <div className="mt-5">
           <div className="font-serif text-4xl font-semibold text-gray-300">—</div>
-          <p className="mt-2 text-[11px] italic text-muted">
+          <p className="mt-2 text-[13px] italic text-muted">
             {metric.inputsMissing?.length
               ? `Needs: ${metric.inputsMissing.join(', ')}`
               : 'Not enough data for this period.'}

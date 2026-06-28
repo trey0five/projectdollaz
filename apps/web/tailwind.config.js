@@ -5,9 +5,9 @@ export default {
     extend: {
       colors: {
         navy: {
-          DEFAULT: '#1a2744',
-          deep: '#111c33',
-          soft: '#253460',
+          DEFAULT: '#1f3d72',
+          deep: '#16284f',
+          soft: '#2e508f',
         },
         gold: {
           DEFAULT: '#b89650',
@@ -18,13 +18,13 @@ export default {
         section: '#f4f1eb',
         rule: '#d0c8b8',
         border: '#c8bfaa',
-        muted: '#6b6457',
+        muted: '#5a5244',
         ink: '#1e1e1e',
         danger: '#8b1a1a',
       },
       fontFamily: {
         serif: ['"EB Garamond"', 'Georgia', 'serif'],
-        sans: ['Jost', 'system-ui', 'sans-serif'],
+        sans: ['Montserrat', 'system-ui', 'sans-serif'],
       },
       boxShadow: {
         card: '0 4px 24px rgba(0,0,0,0.06)',
@@ -38,7 +38,7 @@ export default {
       backgroundImage: {
         'navy-radial':
           'radial-gradient(ellipse at 30% 20%, rgba(184,150,80,0.16) 0%, transparent 60%), radial-gradient(ellipse at 80% 80%, rgba(184,150,80,0.10) 0%, transparent 50%)',
-        'navy-gradient': 'linear-gradient(135deg, #111c33 0%, #1a2744 58%, #253460 120%)',
+        'navy-gradient': 'linear-gradient(135deg, #16284f 0%, #1f3d72 58%, #2e508f 120%)',
         'gold-gradient': 'linear-gradient(135deg, #e8d4a8 0%, #d4b47a 45%, #b89650 100%)',
         'page-glow':
           'radial-gradient(900px circle at 50% -120px, rgba(184,150,80,0.10) 0%, transparent 70%)',

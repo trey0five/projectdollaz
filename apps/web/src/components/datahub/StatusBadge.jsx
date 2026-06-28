@@ -32,9 +32,9 @@ export default function StatusBadge({ status }) {
   return (
     <span
       aria-label={`Status: ${cfg.label}`}
-      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-[0.08em] ${cfg.cls}`}
+      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-[0.06em] sm:px-2.5 sm:text-[13px] sm:tracking-[0.08em] ${cfg.cls}`}
     >
-      <Icon size={12} strokeWidth={2.5} aria-hidden="true" />
+      <Icon size={11} strokeWidth={2.5} aria-hidden="true" className="hidden sm:block" />
       {cfg.label}
     </span>
   )

@@ -34,7 +34,7 @@ const STATUS_META = {
 function Figure({ label, value, accent }) {
   return (
     <div className="flex-1">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">{label}</p>
+      <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-muted">{label}</p>
       <p className={`mt-0.5 font-serif text-lg font-semibold tabular-nums ${accent ?? 'text-navy'}`}>
         {value == null ? '—' : fmtDollar(value)}
       </p>
@@ -62,7 +62,7 @@ function AgreementMeter({ totalDisbursed, recorded, status }) {
   return (
     <div className="mt-4 space-y-2.5 border-t border-rule/50 pt-4">
       {rows.map((r, i) => (
-        <div key={r.key} className="flex items-center gap-3 text-[11px]">
+        <div key={r.key} className="flex items-center gap-3 text-[13px]">
           <span className="w-40 shrink-0 font-semibold text-muted">{r.label}</span>
           <div className="relative h-3 flex-1 overflow-hidden rounded-full bg-section">
             <motion.div
@@ -102,16 +102,16 @@ export default function ReconciliationHeadline({ result }) {
             <Icon size={22} />
           </span>
           <div>
-            <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${meta.pill}`}>
+            <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[12px] font-semibold uppercase tracking-[0.08em] ${meta.pill}`}>
               <span className={`inline-block h-1.5 w-1.5 rounded-full ${meta.dot}`} />
               {meta.label}
             </span>
-            <p className="mt-1 max-w-xl text-[12px] text-muted">{meta.blurb}</p>
+            <p className="mt-1 max-w-xl text-[14px] text-muted">{meta.blurb}</p>
           </div>
         </div>
         {result.variancePct != null && (
           <div className="text-right">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">Variance %</p>
+            <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-muted">Variance %</p>
             <p className={`font-serif text-xl font-semibold tabular-nums ${varianceAccent}`}>
               {result.variancePct > 0 ? '+' : ''}
               {result.variancePct.toFixed(2)}%
@@ -129,7 +129,7 @@ export default function ReconciliationHeadline({ result }) {
           accent={varianceAccent}
         />
         <div className="flex-1">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">Disbursements</p>
+          <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-muted">Disbursements</p>
           <p className="mt-0.5 font-serif text-lg font-semibold tabular-nums text-navy">{result.count}</p>
         </div>
       </div>

@@ -24,10 +24,10 @@ export default function ReservedSlotCard({ title, subtitle, phase }) {
         <Sparkles size={20} />
       </span>
       <p className="font-serif text-base font-semibold text-navy">{title}</p>
-      <span className="inline-flex items-center rounded-full border-2 border-gold bg-[#fff8e6] px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#7a5e00]">
+      <span className="inline-flex items-center rounded-full border-2 border-gold bg-[#fff8e6] px-2.5 py-0.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-[#7a5e00]">
         {phase}
       </span>
-      <p className="text-[12px] italic text-muted">{subtitle}</p>
+      <p className="text-[14px] italic text-muted">{subtitle}</p>
     </motion.div>
   )
 }

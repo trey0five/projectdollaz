@@ -38,7 +38,7 @@ export default function SourceCard({
       data-card={source.key}
       initial={reduce ? false : { opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`relative flex h-full flex-col rounded-2xl border-2 bg-white p-5 shadow-card transition-colors ${ringCls}`}
+      className={`relative flex h-full flex-col rounded-2xl border-2 bg-white p-3.5 shadow-card transition-colors sm:p-5 ${ringCls}`}
     >
       {/* Animated spotlight pulse (decorative; pointer-events none). */}
       {isActive && !reduce && (
@@ -51,27 +51,34 @@ export default function SourceCard({
       )}
 
       <div className="relative flex items-start justify-between gap-3">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold/15 text-gold">
-          <Icon size={22} />
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gold/15 text-gold sm:h-11 sm:w-11">
+          <Icon size={20} className="sm:hidden" />
+          <Icon size={22} className="hidden sm:block" />
         </span>
         <StatusBadge status={st} />
       </div>
 
-      <h3 className="relative mt-3 font-serif text-lg font-semibold text-navy">{source.title}</h3>
-      <p className="relative mt-1.5 text-[13px] leading-relaxed text-muted">{source.what}</p>
+      <h3 className="relative mt-2.5 font-serif text-base font-bold text-navy sm:mt-3 sm:text-xl">
+        {source.title}
+      </h3>
+      <p className="relative mt-1 text-[12.5px] leading-relaxed text-muted sm:mt-1.5 sm:text-[15px]">
+        {source.what}
+      </p>
 
       {detail && (
-        <p className="relative mt-2.5 text-[12.5px] font-medium text-navy/80">{detail}</p>
+        <p className="relative mt-2 text-[12px] font-medium text-navy/80 sm:mt-2.5 sm:text-[14.5px]">
+          {detail}
+        </p>
       )}
 
       {isActive && (
-        <p className="relative mt-2 inline-flex items-center gap-1 self-start rounded-full bg-gold/15 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-[0.08em] text-gold">
+        <p className="relative mt-2 inline-flex items-center gap-1 self-start rounded-full bg-gold/15 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.08em] text-gold sm:px-2.5 sm:text-[13px]">
           <Sparkles size={12} aria-hidden="true" /> Start here
         </p>
       )}
 
       {/* Flex spacer pins the action to the bottom so every card is the same height. */}
-      <div className="relative mt-4 flex-1" />
+      <div className="relative mt-3 flex-1 sm:mt-4" />
 
       {/* Action: open the embed in a modal OR link out. */}
       <div className="relative">
@@ -79,7 +86,7 @@ export default function SourceCard({
           <button
             type="button"
             onClick={onOpen}
-            className="inline-flex items-center gap-1.5 rounded-lg border-2 border-gold/40 px-3.5 py-2 text-[12px] font-bold uppercase tracking-[0.08em] text-gold transition-all hover:border-gold/70 hover:bg-gold/5"
+            className="inline-flex items-center gap-1.5 rounded-lg border-2 border-gold/40 px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-gold transition-all hover:border-gold/70 hover:bg-gold/5 sm:px-3.5 sm:py-2 sm:text-[14px]"
           >
             {source.cta}
             <Maximize2 size={14} />
@@ -87,7 +94,7 @@ export default function SourceCard({
         ) : (
           <Link
             to={source.to}
-            className="group inline-flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-[0.08em] text-gold transition-colors hover:text-gold-light"
+            className="group inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-gold transition-colors hover:text-gold-light sm:text-[14px]"
           >
             {source.cta}
             <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />

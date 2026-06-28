@@ -19,7 +19,7 @@ export default function MixDonut({ metric }) {
 
   if (!metric || !metric.available || !metric.components) {
     return (
-      <div className="flex h-48 items-center justify-center text-[13px] italic text-muted">
+      <div className="flex h-48 items-center justify-center text-[15px] italic text-muted">
         Not enough data to chart.
       </div>
     )
@@ -31,7 +31,7 @@ export default function MixDonut({ metric }) {
 
   if (data.length === 0) {
     return (
-      <div className="flex h-48 items-center justify-center text-[13px] italic text-muted">
+      <div className="flex h-48 items-center justify-center text-[15px] italic text-muted">
         No positive categories to chart.
       </div>
     )
@@ -45,7 +45,7 @@ export default function MixDonut({ metric }) {
       <div className="relative h-52 w-full">
         {/* Center total — premium donut treatment, sits behind the slices. */}
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-          <span className="font-sans text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
+          <span className="font-sans text-[12px] font-semibold uppercase tracking-[0.14em] text-muted">
             Total
           </span>
           <span className="gold-text font-serif text-lg font-semibold leading-tight">
@@ -89,7 +89,7 @@ export default function MixDonut({ metric }) {
       </div>
       <ul className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5">
         {data.map((d, i) => (
-          <li key={d.name} className="flex items-center gap-2 text-[12px]">
+          <li key={d.name} className="flex items-center gap-2 text-[14px]">
             <span
               className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm"
               style={{ backgroundColor: DONUT_RAMP[i % DONUT_RAMP.length] }}

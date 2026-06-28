@@ -50,7 +50,7 @@ function InsightBand({ statusLine, kind, reduce }) {
         <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/10 text-white/70">
           <Activity size={15} />
         </span>
-        <p className="text-[14px] leading-relaxed text-white/85">{statusLine}</p>
+        <p className="text-[16px] leading-relaxed text-white/85">{statusLine}</p>
       </div>
     )
   }
@@ -62,10 +62,10 @@ function InsightBand({ statusLine, kind, reduce }) {
         <span className="flex h-6 w-6 items-center justify-center rounded-md bg-gold-gradient text-navy">
           <Sparkles size={13} />
         </span>
-        <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-gold-light">
+        <span className="text-[12px] font-bold uppercase tracking-[0.18em] text-gold-light">
           {isAi ? 'AI Insight' : 'Smart Insight'}
         </span>
-        <span className="ml-auto font-mono text-[9px] uppercase tracking-[0.12em] text-white/30">
+        <span className="ml-auto font-mono text-[11px] uppercase tracking-[0.12em] text-white/30">
           {signals.length} signal{signals.length === 1 ? '' : 's'}
         </span>
       </div>
@@ -82,11 +82,11 @@ function InsightBand({ statusLine, kind, reduce }) {
             >
               <span className="flex items-center gap-1.5 pt-[3px]">
                 <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${m.dot}`} />
-                <span className={`font-mono text-[9.5px] font-bold uppercase tracking-[0.08em] ${m.label}`}>
+                <span className={`font-mono text-[11.5px] font-bold uppercase tracking-[0.08em] ${m.label}`}>
                   {m.name}
                 </span>
               </span>
-              <span className="text-[13.5px] leading-snug text-white/90">{s.text}</span>
+              <span className="text-[15.5px] leading-snug text-white/90">{s.text}</span>
             </motion.li>
           )
         })}
@@ -102,7 +102,7 @@ function TrialChip({ billing, isOwner }) {
     return (
       <Link
         to={isOwner ? '/settings/billing' : '/settings'}
-        className="inline-flex items-center gap-1.5 rounded-full border border-gold/40 bg-gold/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-gold-light transition-colors hover:border-gold/70"
+        className="inline-flex items-center gap-1.5 rounded-full border border-gold/40 bg-gold/10 px-3 py-1 text-[13px] font-semibold uppercase tracking-[0.1em] text-gold-light transition-colors hover:border-gold/70"
       >
         <Clock size={12} />
         {typeof daysLeft === 'number'
@@ -113,7 +113,7 @@ function TrialChip({ billing, isOwner }) {
   }
   if (status === 'active') {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full border border-gold/40 bg-gold/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-gold-light">
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-gold/40 bg-gold/10 px-3 py-1 text-[13px] font-semibold uppercase tracking-[0.1em] text-gold-light">
         <BadgeCheck size={12} /> Active subscription
       </span>
     )
@@ -121,7 +121,7 @@ function TrialChip({ billing, isOwner }) {
   return (
     <Link
       to={isOwner ? '/settings/billing' : '/settings'}
-      className="inline-flex items-center gap-1.5 rounded-full border border-white/25 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-white/80 transition-colors hover:border-gold/50"
+      className="inline-flex items-center gap-1.5 rounded-full border border-white/25 bg-white/5 px-3 py-1 text-[13px] font-semibold uppercase tracking-[0.1em] text-white/80 transition-colors hover:border-gold/50"
     >
       {isOwner ? 'Manage billing' : 'View billing'}
     </Link>
@@ -150,7 +150,7 @@ export default function HomeHero({
       <div className="relative flex flex-col gap-4 sm:gap-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="font-sans text-[11px] font-semibold uppercase tracking-[0.16em] text-gold/80">
+            <p className="font-sans text-[13px] font-semibold uppercase tracking-[0.16em] text-gold/80">
               Command Center
             </p>
             <h1 className="mt-1 font-serif text-xl font-semibold leading-tight text-white sm:text-[28px]">
@@ -167,7 +167,7 @@ export default function HomeHero({
 
         {periods && periods.length > 0 && (
           <div className="flex flex-col gap-2">
-            <span className="font-sans text-[10px] font-semibold uppercase tracking-[0.14em] text-white/50">
+            <span className="font-sans text-[12px] font-semibold uppercase tracking-[0.14em] text-white/50">
               Viewing period
             </span>
             <PeriodSelector periods={periods} activeId={selectedPeriodId} onSelect={onSelectPeriod} />

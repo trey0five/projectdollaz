@@ -99,7 +99,7 @@ export default function IntegrationsSection() {
   if (!activeSchool) {
     return (
       <SettingsCard title="Integrations">
-        <p className="text-[14px] text-muted">Select a school first.</p>
+        <p className="text-[16px] text-muted">Select a school first.</p>
       </SettingsCard>
     )
   }
@@ -110,9 +110,9 @@ export default function IntegrationsSection() {
       description="Pull the trial balance straight from QuickBooks instead of uploading a file."
     >
       {status == null ? (
-        <p className="text-[14px] text-muted">Checking connection…</p>
+        <p className="text-[16px] text-muted">Checking connection…</p>
       ) : !status.configured ? (
-        <div className="rounded-lg border border-border bg-section px-4 py-3 text-[13px] text-muted">
+        <div className="rounded-lg border border-border bg-section px-4 py-3 text-[15px] text-muted">
           The QuickBooks connector isn’t configured on this server yet. An administrator needs to set
           the QuickBooks app credentials (<span className="font-mono">QB_OAUTH_CLIENT_ID</span> /
           <span className="font-mono"> QB_OAUTH_CLIENT_SECRET</span>) to enable it. File upload still
@@ -120,7 +120,7 @@ export default function IntegrationsSection() {
         </div>
       ) : status.connected ? (
         <>
-          <div className="mb-4 flex items-center gap-2 rounded-lg border border-gold/30 bg-gold/10 px-4 py-3 text-[13px] text-navy">
+          <div className="mb-4 flex items-center gap-2 rounded-lg border border-gold/30 bg-gold/10 px-4 py-3 text-[15px] text-navy">
             <Plug size={15} className="text-gold" />
             Connected to QuickBooks ({status.environment}) · company{' '}
             <span className="font-mono">{status.realmId}</span>
@@ -128,7 +128,7 @@ export default function IntegrationsSection() {
 
           {canEdit && (
             <>
-              <label className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.14em] text-muted">
+              <label className="mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-muted">
                 Sync a period
               </label>
               <select
@@ -159,7 +159,7 @@ export default function IntegrationsSection() {
                 <button
                   onClick={disconnect}
                   disabled={busy}
-                  className="inline-flex items-center gap-2 rounded-lg border-2 border-border bg-white px-5 py-2.5 text-[13px] font-semibold text-navy transition-all hover:border-danger/40 hover:text-danger disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-lg border-2 border-border bg-white px-5 py-2.5 text-[15px] font-semibold text-navy transition-all hover:border-danger/40 hover:text-danger disabled:opacity-50"
                 >
                   <Unplug size={15} /> Disconnect
                 </button>
@@ -169,7 +169,7 @@ export default function IntegrationsSection() {
         </>
       ) : (
         <>
-          <p className="mb-4 text-[14px] text-muted">
+          <p className="mb-4 text-[16px] text-muted">
             Connect your school’s QuickBooks Online company to pull the trial balance on demand. Your
             school needs an active QuickBooks Online subscription.
           </p>

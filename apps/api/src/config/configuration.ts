@@ -51,6 +51,14 @@ export interface AppConfig {
     model: string
     baseUrl: string
   }
+  // Penny voice replies (text-to-speech) via ElevenLabs. Empty apiKey => the TTS
+  // proxy returns 503 and the frontend falls back to the browser SpeechSynthesis
+  // API, so voice works out-of-the-box and upgrades automatically if a key is set.
+  elevenlabs: {
+    apiKey: string
+    voiceId: string
+    model: string
+  }
   // Phase 6 — QuickBooks Online connector (optional). Empty clientId = connector
   // disabled (the Connect button 501s); the app boots and file upload still works.
   quickbooks: {
@@ -135,6 +143,11 @@ export function configuration(): AppConfig {
       apiKey: process.env.OPENROUTER_API_KEY ?? '',
       model: process.env.OPENROUTER_MODEL ?? 'anthropic/claude-haiku-4.5',
       baseUrl: process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1',
+    },
+    elevenlabs: {
+      apiKey: process.env.ELEVENLABS_API_KEY ?? '',
+      voiceId: process.env.ELEVENLABS_VOICE_ID ?? 'cgSgspJ2msm6clMCkdW9',
+      model: process.env.ELEVENLABS_MODEL ?? 'eleven_turbo_v2_5',
     },
     quickbooks: {
       clientId: process.env.QB_OAUTH_CLIENT_ID ?? '',

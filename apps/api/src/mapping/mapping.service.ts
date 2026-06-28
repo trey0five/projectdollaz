@@ -1,13 +1,16 @@
-import { Injectable } from '@nestjs/common'
+import { BadRequestException, Injectable } from '@nestjs/common'
 import type { Mapping, Prisma, StandardChartVersion } from '@finrep/db'
 import {
+  categoryDef,
   DEFAULT_CHART,
   DEFAULT_MAPPING,
   MAPPING_VERSION,
   STANDARD_CHART_VERSION,
+  type SCoaCategory,
   type StandardChart,
 } from '@finrep/engine'
 import { PrismaService } from '../prisma/prisma.service.js'
+import type { SpreadMappingOverrides } from '../analytics/budget.spread.js'
 
 export interface ActiveMappingChart {
   mapping: Mapping
@@ -83,6 +86,71 @@ export class MappingService {
       } as StandardChart['mapping'],
     }
     return { mapping, chartVersion, chart }
+  }
+
+  /**
+   * The school's saved per-row category overrides, keyed exactly as
+   * spreadRowKey() (numeric GL strings + `label:`-prefixed label keys). Returned
+   * verbatim from the active Mapping.entries: numeric GL keys equal what
+   * categoryOf already yields (so passing them as overrides is a no-op for those
+   * rows), while user-saved `label:` keys and any re-pointed GL keys take effect.
+   * rollupSpread defensively ignores any value that isn't a real SCoA category.
+   */
+  async getSpreadOverrides(schoolId: string): Promise<SpreadMappingOverrides> {
+    const { mapping } = await this.ensureActive(schoolId)
+    return (mapping.entries as unknown as SpreadMappingOverrides) ?? {}
+  }
+
+  /**
+   * Merge user-chosen account→category picks into the active Mapping.entries
+   * IN PLACE (same version — matches the seed-on-read, single-active-row model; no
+   * version churn). Keys must be a finite GL-number string OR a `label:`-prefixed
+   * key; values must be a real SCoA category. Invalid keys/values 400 (so a bad
+   * value never poisons entries and later breaks getSpreadOverrides). Never
+   * deletes existing entries.
+   */
+  async mergeEntries(
+    schoolId: string,
+    patch: Record<string, string>,
+  ): Promise<{ mappingVersion: string; entriesCount: number; merged: number }> {
+    const validated: Record<string, string> = {}
+    const badCategories: string[] = []
+    const badKeys: string[] = []
+    for (const [key, value] of Object.entries(patch ?? {})) {
+      // GL keys must be positive integers (matches spreadRowKey, which only emits
+      // `String(acct)` for acct>0); reject "0" / decimals / non-numeric.
+      const okKey = key.startsWith('label:')
+        ? key.length > 'label:'.length
+        : /^\d+$/.test(key) && Number(key) > 0
+      if (!okKey) {
+        badKeys.push(key)
+        continue
+      }
+      if (!categoryDef(value as SCoaCategory)) {
+        badCategories.push(value)
+        continue
+      }
+      validated[key] = value
+    }
+    if (badKeys.length) {
+      throw new BadRequestException(`Invalid mapping key(s): ${badKeys.join(', ')}`)
+    }
+    if (badCategories.length) {
+      throw new BadRequestException(`Unknown category value(s): ${badCategories.join(', ')}`)
+    }
+
+    const { mapping } = await this.ensureActive(schoolId)
+    const existing = (mapping.entries as Record<string, string>) ?? {}
+    const next = { ...existing, ...validated }
+    const updated = await this.prisma.mapping.update({
+      where: { id: mapping.id },
+      data: { entries: next as unknown as Prisma.InputJsonValue },
+    })
+    return {
+      mappingVersion: updated.version,
+      entriesCount: Object.keys(next).length,
+      merged: Object.keys(validated).length,
+    }
   }
 
   /** GET surface: active mapping/chart versions + entry count. */

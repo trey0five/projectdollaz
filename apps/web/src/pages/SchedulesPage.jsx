@@ -79,15 +79,15 @@ export default function SchedulesPage() {
       <main className="mx-auto max-w-[1100px] px-4 py-8 sm:px-8">
         <Link
           to="/reports"
-          className="mb-5 inline-flex items-center gap-1.5 text-[13px] font-semibold text-muted transition-colors hover:text-gold"
+          className="mb-5 inline-flex items-center gap-1.5 text-[15px] font-semibold text-muted transition-colors hover:text-gold"
         >
           <ArrowLeft size={15} /> All reports
         </Link>
 
         <motion.header initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">Reports</p>
+          <p className="text-[13px] font-bold uppercase tracking-[0.18em] text-gold">Reports</p>
           <h1 className="mt-1 font-serif text-3xl font-semibold text-navy">Supporting schedules</h1>
-          <p className="mt-1.5 max-w-2xl text-[14px] text-muted">
+          <p className="mt-1.5 max-w-2xl text-[16px] text-muted">
             Capital projects and cash &amp; investment accounts that flow into your board packet. Pick a
             period, fill in the tables, and the next board report picks up the totals automatically.
           </p>
@@ -102,7 +102,7 @@ export default function SchedulesPage() {
         ) : (
           <>
             <div className="mb-5">
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+              <p className="mb-2 text-[13px] font-semibold uppercase tracking-[0.08em] text-muted">
                 Period
               </p>
               <PeriodSelector
@@ -122,7 +122,7 @@ export default function SchedulesPage() {
                     key={t.id}
                     type="button"
                     onClick={() => setTab(t.id)}
-                    className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-[13px] font-semibold transition-all ${
+                    className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-[15px] font-semibold transition-all ${
                       active
                         ? 'border-gold/60 bg-gold/10 text-navy shadow-card'
                         : 'border-rule/60 text-muted hover:border-gold/50 hover:text-navy'

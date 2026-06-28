@@ -73,11 +73,10 @@ export default function EmptySlotCard({
 
   return (
     <motion.div
-      layout
-      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12, scale: 0.96 }}
-      animate={reduce ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
-      exit={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.95 }}
-      transition={{ type: 'spring', stiffness: 260, damping: 22 }}
+      initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.98 }}
+      animate={reduce ? { opacity: 1 } : { opacity: 1, scale: 1 }}
+      exit={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.98 }}
+      transition={{ duration: 0.26, ease: [0.22, 0.8, 0.2, 1] }}
       role="button"
       tabIndex={0}
       aria-label={`Add ${meta.label} file (${meta.required ? 'required' : 'optional'})`}
@@ -116,7 +115,7 @@ export default function EmptySlotCard({
       <p className="font-serif text-base font-semibold text-navy">{meta.plainLabel}</p>
 
       <span
-        className={`inline-flex items-center rounded-full border-2 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] ${
+        className={`inline-flex items-center rounded-full border-2 px-2.5 py-0.5 text-[13px] font-semibold uppercase tracking-[0.08em] ${
           meta.required
             ? 'border-gold bg-[#fff8e6] text-[#7a5e00]'
             : 'border-border bg-white text-muted'
@@ -127,16 +126,16 @@ export default function EmptySlotCard({
 
       {conflicted ? (
         <>
-          <p className="text-[12px] font-medium text-[#7a5e00]">
+          <p className="text-[14px] font-medium text-[#7a5e00]">
             Two files claim this slot
           </p>
-          <p className="text-[11px] text-muted">Resolve below to fill this slot</p>
+          <p className="text-[13px] text-muted">Resolve below to fill this slot</p>
         </>
       ) : (
         <>
-          <p className="text-[12px] leading-snug text-muted">{meta.blurb}</p>
-          <p className="text-[11px] italic text-muted">{meta.source}</p>
-          <p className="text-[11px] text-muted">Drop a file or click to add</p>
+          <p className="text-[14px] leading-snug text-muted">{meta.blurb}</p>
+          <p className="text-[13px] italic text-muted">{meta.source}</p>
+          <p className="text-[13px] text-muted">Drop a file or click to add</p>
         </>
       )}
 

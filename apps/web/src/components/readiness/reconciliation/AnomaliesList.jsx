@@ -18,7 +18,7 @@ const TONE = {
 export default function AnomaliesList({ anomalies }) {
   if (!anomalies || anomalies.length === 0) {
     return (
-      <div className="rounded-xl border border-gold/30 bg-gold/5 px-4 py-3 text-[13px] text-[#7a5e00]">
+      <div className="rounded-xl border border-gold/30 bg-gold/5 px-4 py-3 text-[15px] text-[#7a5e00]">
         No anomalies detected in the disbursement set.
       </div>
     )
@@ -39,7 +39,7 @@ export default function AnomaliesList({ anomalies }) {
           return (
             <span
               key={type}
-              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${TONE[meta.tone]}`}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[13px] font-semibold ${TONE[meta.tone]}`}
             >
               <Icon size={12} /> {meta.label} · {n}
             </span>
@@ -56,13 +56,13 @@ export default function AnomaliesList({ anomalies }) {
                 <Icon size={13} />
               </span>
               <div className="min-w-0">
-                <p className="text-[12px] font-semibold text-navy">
+                <p className="text-[14px] font-semibold text-navy">
                   {meta.label}
                   {a.index != null && (
                     <span className="ml-1.5 font-normal text-muted">· row {a.index + 1}</span>
                   )}
                 </p>
-                <p className="text-[12px] text-muted">{a.detail}</p>
+                <p className="text-[14px] text-muted">{a.detail}</p>
               </div>
             </li>
           )

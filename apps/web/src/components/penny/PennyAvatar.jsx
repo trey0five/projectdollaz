@@ -1,17 +1,34 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Penny — the inline-SVG gold coin mascot for the Data hub. Self-contained, no
-// external asset. Pure SVG: a gold-gradient minted coin (outer ring + darker rim
-// + thin inner concentric ring), a soft navy "$" engraving behind the face, two
-// navy oval eyes with white catch-lights, and a small confident smile. The eyes
-// blink and glance toward the active card; GuideMascot drives those via props.
-// Decorative — aria-hidden; meaning is carried by GuideMascot's live bubble text.
+// Penny — the inline-SVG gold coin mascot. Self-contained, no external asset. Pure
+// SVG: a gold-gradient minted coin (outer ring + darker rim + thin inner concentric
+// ring), a soft navy "$" engraving behind the face, two navy oval eyes with white
+// catch-lights, and a small confident smile. The eyes blink and glance toward the
+// active card; the parent (Penny) drives those via props. Decorative — aria-hidden;
+// meaning is carried by Penny's live bubble text.
+//
+// `active` (additive-only): when true, draws a subtle static gold halo ring around
+// the coin (used while Penny AI chat is open). When active=false the SVG is
+// byte-identical to the original datahub avatar.
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion } from 'framer-motion'
 
 // glance: -1 (left) | 0 | 1 (right) — pupils translate ~2px toward the target.
 // blink: boolean — eyes squash to a slit. celebrate: show a green check badge.
-export default function PennyAvatar({ size = 56, glance = 0, blink = false, celebrate = false }) {
+// active: boolean — subtle gold halo when the chat is open.
+// speaking (additive): gold concentric ring that pulses while Penny talks (TTS).
+// listening (additive): same pulse on the mic surface — used by the input mic,
+//   not the header. Both new rings are decorative + gate on motion-safe.
+export default function PennyAvatar({
+  size = 56,
+  glance = 0,
+  blink = false,
+  celebrate = false,
+  active = false,
+  speaking = false,
+  listening = false,
+}) {
   const px = glance * 2
+  const pulsing = speaking || listening
   return (
     <svg
       width={size}
@@ -29,8 +46,29 @@ export default function PennyAvatar({ size = 56, glance = 0, blink = false, cele
         </radialGradient>
       </defs>
 
+      {/* Speaking / listening concentric gold ring — pulses out from the rim.
+          Decorative; gated on motion-safe via the className (CSS kills it under
+          reduced motion). Sits behind the coin body so the rim stays crisp. */}
+      {pulsing && (
+        <circle
+          cx="50"
+          cy="50"
+          r="48"
+          fill="none"
+          stroke="#E8CC6A"
+          strokeWidth="3"
+          opacity="0.6"
+          className="motion-safe:animate-[penny-pulse-glow_1.5s_ease-in-out_infinite] motion-reduce:hidden"
+          style={{ transformOrigin: '50px 50px' }}
+        />
+      )}
+
       {/* Coin body */}
       <circle cx="50" cy="50" r="46" fill="url(#penny-face)" stroke="#9A7A18" strokeWidth="3" />
+      {/* Active halo (chat open) — subtle, static, decorative. */}
+      {active && (
+        <circle cx="50" cy="50" r="49" fill="none" stroke="#E8CC6A" strokeWidth="2" opacity="0.5" />
+      )}
       {/* Minted inner concentric ring */}
       <circle cx="50" cy="50" r="40" fill="none" stroke="#B68F1E" strokeWidth="1.5" opacity="0.7" />
 

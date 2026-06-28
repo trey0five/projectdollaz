@@ -44,7 +44,7 @@ export default function MetricCard({
         >
           <MetricIcon metricKey={metric.key} size={17} />
         </span>
-        <h3 className="line-clamp-2 font-sans text-[10.5px] font-semibold uppercase leading-snug tracking-[0.1em] text-muted">
+        <h3 className="font-sans text-[12.5px] font-semibold uppercase leading-snug tracking-[0.1em] text-muted">
           {metric.label}
         </h3>
         {showStatus && (
@@ -57,7 +57,7 @@ export default function MetricCard({
       {unavailable ? (
         <div className="mt-4">
           <div className="font-serif text-2xl font-semibold text-gray-300">—</div>
-          <span className="mt-2 inline-flex items-center gap-1 rounded-full border border-border bg-section px-2 py-0.5 text-[10px] font-semibold text-muted">
+          <span className="mt-2 inline-flex items-center gap-1 rounded-full border border-border bg-section px-2 py-0.5 text-[12px] font-semibold text-muted">
             <Info size={10} /> Unavailable
           </span>
         </div>

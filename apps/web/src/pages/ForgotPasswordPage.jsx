@@ -50,12 +50,12 @@ export default function ForgotPasswordPage() {
       {sent && (
         <button
           onClick={() => navigate(`/reset-password?email=${encodeURIComponent(email.trim().toLowerCase())}`)}
-          className="mt-3 w-full text-center text-[13px] font-semibold text-gold hover:underline"
+          className="mt-3 w-full text-center text-[15px] font-semibold text-gold hover:underline"
         >
           I have a code — continue
         </button>
       )}
-      <div className="mt-6 text-center text-[13px] text-muted">
+      <div className="mt-6 text-center text-[15px] text-muted">
         <Link to="/login" className="font-semibold text-gold hover:underline">
           Back to sign in
         </Link>

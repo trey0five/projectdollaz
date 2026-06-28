@@ -31,18 +31,18 @@ export default function MonthlyActualsSection({ periods = [], initialPeriodId = 
       <div className="flex flex-wrap items-center gap-3">
         <label
           htmlFor="monthly-period"
-          className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted"
+          className="text-[13px] font-semibold uppercase tracking-[0.12em] text-muted"
         >
           Fiscal period
         </label>
         {periodOptions.length === 0 ? (
-          <span className="text-[13px] italic text-muted">No saved periods yet.</span>
+          <span className="text-[15px] italic text-muted">No saved periods yet.</span>
         ) : (
           <select
             id="monthly-period"
             value={periodId}
             onChange={(e) => setPeriodId(e.target.value)}
-            className="rounded-xl border border-rule bg-white px-3.5 py-2 text-[14px] text-ink focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/30"
+            className="rounded-xl border border-rule bg-white px-3.5 py-2 text-[16px] text-ink focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/30"
           >
             {periodOptions.map((p) => (
               <option key={p.id} value={p.id}>

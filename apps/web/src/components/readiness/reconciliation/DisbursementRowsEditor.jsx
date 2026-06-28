@@ -55,9 +55,9 @@ export default function DisbursementRowsEditor({ existing, onSave, onCancel, sav
     <div className="space-y-3 rounded-2xl border border-gold/30 bg-white p-5">
       <p className="font-serif text-base font-semibold text-navy">Edit disbursements</p>
       <div className="overflow-x-auto">
-        <table className="w-full text-[12px]">
+        <table className="w-full text-[14px]">
           <thead>
-            <tr className="border-b border-rule text-left text-[10px] uppercase tracking-[0.08em] text-muted">
+            <tr className="border-b border-rule text-left text-[12px] uppercase tracking-[0.08em] text-muted">
               <th className="px-2 py-1.5 font-semibold">Student</th>
               <th className="px-2 py-1.5 font-semibold">Program</th>
               <th className="px-2 py-1.5 font-semibold">Pay date</th>
@@ -74,14 +74,14 @@ export default function DisbursementRowsEditor({ existing, onSave, onCancel, sav
                   <input
                     value={r.studentRef}
                     onChange={(e) => update(i, 'studentRef', e.target.value)}
-                    className="w-24 rounded border border-border px-1.5 py-1 text-[12px]"
+                    className="w-24 rounded border border-border px-1.5 py-1 text-[14px]"
                   />
                 </td>
                 <td className="px-1 py-1">
                   <select
                     value={r.program}
                     onChange={(e) => update(i, 'program', e.target.value)}
-                    className="rounded border border-border px-1 py-1 text-[12px]"
+                    className="rounded border border-border px-1 py-1 text-[14px]"
                   >
                     <option value="">—</option>
                     {PROGRAM_OPTIONS.map((p) => (
@@ -96,7 +96,7 @@ export default function DisbursementRowsEditor({ existing, onSave, onCancel, sav
                     type="date"
                     value={r.payDate}
                     onChange={(e) => update(i, 'payDate', e.target.value)}
-                    className="rounded border border-border px-1.5 py-1 text-[12px]"
+                    className="rounded border border-border px-1.5 py-1 text-[14px]"
                   />
                 </td>
                 <td className="px-1 py-1">
@@ -104,21 +104,21 @@ export default function DisbursementRowsEditor({ existing, onSave, onCancel, sav
                     inputMode="decimal"
                     value={r.amount}
                     onChange={(e) => update(i, 'amount', sanitizeDecimal(e.target.value))}
-                    className="w-24 rounded border border-border px-1.5 py-1 text-right text-[12px] tabular-nums"
+                    className="w-24 rounded border border-border px-1.5 py-1 text-right text-[14px] tabular-nums"
                   />
                 </td>
                 <td className="px-1 py-1">
                   <input
                     value={r.term}
                     onChange={(e) => update(i, 'term', e.target.value)}
-                    className="w-20 rounded border border-border px-1.5 py-1 text-[12px]"
+                    className="w-20 rounded border border-border px-1.5 py-1 text-[14px]"
                   />
                 </td>
                 <td className="px-1 py-1">
                   <input
                     value={r.batchRef}
                     onChange={(e) => update(i, 'batchRef', e.target.value)}
-                    className="w-20 rounded border border-border px-1.5 py-1 text-[12px]"
+                    className="w-20 rounded border border-border px-1.5 py-1 text-[14px]"
                   />
                 </td>
                 <td className="px-1 py-1 text-right">

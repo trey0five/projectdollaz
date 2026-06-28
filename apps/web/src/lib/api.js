@@ -191,6 +191,9 @@ export const importsApi = {
   listForPeriod: (schoolId, periodId) =>
     api.get(`/schools/${schoolId}/periods/${periodId}/imports`),
   get: (schoolId, importId) => api.get(`/schools/${schoolId}/imports/${importId}`),
+  // Delete a stored trial balance; the API reconciles the period snapshot
+  // (regenerates without it, or clears statements when no CY remains).
+  delete: (schoolId, importId) => api.delete(`/schools/${schoolId}/imports/${importId}`),
 }
 
 // ── Monthly Actuals Foundation: per-period monthly trial-balance snapshots ────
@@ -350,6 +353,12 @@ export const assistantApi = {
   chat: (schoolId, body) => api.post(`/schools/${schoolId}/assistant/chat`, body),
   // Apply a user-confirmed proposal (write — owner/accountant).
   apply: (schoolId, action) => api.post(`/schools/${schoolId}/assistant/apply`, action),
+  // ── Penny AI upgrade: URL builders for the raw fetch loops (SSE + TTS) ──────
+  // These return the proxied path only; the hooks (useTextToSpeech / usePennyChat)
+  // do the fetch themselves with `Authorization: Bearer ${tokenStore.getAccess()}`
+  // because EventSource/blob streaming can't go through the axios instance.
+  ttsUrl: (schoolId) => `${API_BASE_URL}/schools/${schoolId}/assistant/tts`,
+  chatStreamUrl: (schoolId) => `${API_BASE_URL}/schools/${schoolId}/assistant/chat/stream`,
 }
 
 // ── Data hub: unified data-status aggregation (read-only) ────────────────────

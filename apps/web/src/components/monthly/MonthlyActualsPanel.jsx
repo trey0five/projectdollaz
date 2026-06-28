@@ -103,7 +103,7 @@ export default function MonthlyActualsPanel({ schoolId, periodId, canEdit = fals
           </span>
           <div>
             <h2 className="font-serif text-xl font-semibold text-navy">Monthly actuals</h2>
-            <p className="mt-0.5 max-w-xl text-[13px] text-muted">
+            <p className="mt-0.5 max-w-xl text-[15px] text-muted">
               Upload a month-end (cumulative-YTD) trial balance for each month of the fiscal year.
               These feed year-to-date and month-to-date actuals for an upcoming board-report view.
             </p>
@@ -122,12 +122,12 @@ export default function MonthlyActualsPanel({ schoolId, periodId, canEdit = fals
       </div>
 
       {error && (
-        <div className="rounded-xl border border-rose-300 bg-rose-50 px-4 py-3 text-[13px] font-medium text-rose-700">
+        <div className="rounded-xl border border-rose-300 bg-rose-50 px-4 py-3 text-[15px] font-medium text-rose-700">
           {error}
         </div>
       )}
       {deleteError && (
-        <div className="rounded-xl border border-rose-300 bg-rose-50 px-4 py-3 text-[13px] font-medium text-rose-700">
+        <div className="rounded-xl border border-rose-300 bg-rose-50 px-4 py-3 text-[15px] font-medium text-rose-700">
           {deleteError}
         </div>
       )}
@@ -135,7 +135,7 @@ export default function MonthlyActualsPanel({ schoolId, periodId, canEdit = fals
         <motion.div
           initial={{ opacity: 0, y: -6 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2.5 text-[13px] font-medium text-emerald-800"
+          className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2.5 text-[15px] font-medium text-emerald-800"
         >
           {toast}
         </motion.div>
@@ -156,7 +156,7 @@ export default function MonthlyActualsPanel({ schoolId, periodId, canEdit = fals
       {months.length === 0 && mode === 'idle' ? (
         <div className="rounded-2xl border-2 border-dashed border-rule bg-section/40 px-6 py-12 text-center">
           <p className="font-serif text-lg italic text-muted">No monthly trial balances loaded yet.</p>
-          <p className="mx-auto mt-1.5 flex max-w-md items-center justify-center gap-1.5 text-[12px] text-muted">
+          <p className="mx-auto mt-1.5 flex max-w-md items-center justify-center gap-1.5 text-[14px] text-muted">
             <Info size={13} className="shrink-0 text-gold" />
             Each month should be a cumulative year-to-date trial balance as of that month-end.
           </p>
@@ -173,10 +173,10 @@ export default function MonthlyActualsPanel({ schoolId, periodId, canEdit = fals
       ) : (
         <div>
           <div className="mb-2.5 flex items-center justify-between">
-            <h3 className="font-sans text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+            <h3 className="font-sans text-[13px] font-semibold uppercase tracking-[0.14em] text-muted">
               Fiscal year {fiscalYearStart ? `(${fiscalYearStart.slice(0, 4)}–${Number(fiscalYearStart.slice(0, 4)) + 1})` : ''}
             </h3>
-            <span className="text-[12px] text-muted">
+            <span className="text-[14px] text-muted">
               {months.length} of 12 months loaded
             </span>
           </div>

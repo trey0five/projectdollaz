@@ -56,7 +56,7 @@ export default function OpeningBalances() {
       <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <h2 className="font-serif text-base font-semibold text-navy sm:text-lg">Opening net assets</h2>
-          <span className="flex items-center gap-1 rounded-full bg-gold/15 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-gold">
+          <span className="flex items-center gap-1 rounded-full bg-gold/15 px-2 py-0.5 text-[13px] font-semibold uppercase tracking-wide text-gold">
             <Info size={12} /> derived
           </span>
         </div>
@@ -67,7 +67,7 @@ export default function OpeningBalances() {
               <button
                 type="button"
                 onClick={saveNow}
-                className="text-[12px] font-semibold uppercase tracking-wide text-gold transition-colors hover:text-gold-light"
+                className="text-[14px] font-semibold uppercase tracking-wide text-gold transition-colors hover:text-gold-light"
               >
                 Save now
               </button>
@@ -75,26 +75,26 @@ export default function OpeningBalances() {
           </div>
         )}
       </div>
-      <p className="mb-3 text-[12px] text-muted sm:mb-4 sm:text-[13px]">
+      <p className="mb-3 text-[14px] text-muted sm:mb-4 sm:text-[15px]">
         Read from your uploaded trial balances — confirm or adjust; changes autosave to the school.
       </p>
-      {saveError && <p className="mb-3 text-[12px] font-medium text-danger">{saveError}</p>}
+      {saveError && <p className="mb-3 text-[14px] font-medium text-danger">{saveError}</p>}
       <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">
         {present.map((role) => {
           const o = openings[role]
           return (
             <div key={role}>
-              <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.12em] text-muted sm:text-[12px] sm:tracking-[0.14em]">
+              <label className="mb-1.5 block text-[13px] font-semibold uppercase tracking-[0.12em] text-muted sm:text-[14px] sm:tracking-[0.14em]">
                 {ROLE_LABEL[role]}
               </label>
               <input
-                className="w-full rounded-lg border border-border bg-white px-3 py-2 text-[15px] text-ink outline-none transition-colors focus:border-gold disabled:cursor-not-allowed disabled:bg-section sm:py-2.5 sm:text-base"
+                className="w-full rounded-lg border border-border bg-white px-3 py-2 text-[16px] text-ink outline-none transition-colors focus:border-gold disabled:cursor-not-allowed disabled:bg-section sm:py-2.5 sm:text-base"
                 inputMode="decimal"
                 value={o.effective}
                 disabled={!canEdit}
                 onChange={(e) => setOpening(role, sanitizeDecimal(e.target.value, { allowNegative: true }))}
               />
-              <p className="mt-1.5 text-[11px] leading-snug text-muted">
+              <p className="mt-1.5 text-[13px] leading-snug text-muted">
                 {o.override != null ? (
                   <>
                     Overridden — derived was {fmtDollar(o.derived.value)}.{' '}

@@ -48,7 +48,7 @@ export default function ResetPasswordPage() {
       <AuthLayout title="Password updated">
         <div className="flex flex-col items-center text-center">
           <CheckCircle2 className="mb-4 h-16 w-16 text-emerald-600" />
-          <p className="text-[15px] text-ink">You can now sign in with your new password.</p>
+          <p className="text-[16px] text-ink">You can now sign in with your new password.</p>
           <button onClick={() => navigate('/login')} className="btn-primary mt-6">
             Continue to sign in
           </button>
@@ -93,7 +93,7 @@ export default function ResetPasswordPage() {
           onEnter={submit}
         />
         {confirm.length > 0 && !matches && (
-          <p className="-mt-3 mb-2 text-[12px] text-danger">Passwords do not match.</p>
+          <p className="-mt-3 mb-2 text-[14px] text-danger">Passwords do not match.</p>
         )}
       </div>
 
@@ -108,7 +108,7 @@ export default function ResetPasswordPage() {
         {busy ? 'Updating…' : 'Reset password'}
       </motion.button>
 
-      <div className="mt-6 text-center text-[13px] text-muted">
+      <div className="mt-6 text-center text-[15px] text-muted">
         <Link to="/login" className="font-semibold text-gold hover:underline">
           Back to sign in
         </Link>

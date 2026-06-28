@@ -59,11 +59,12 @@ COPY --from=installer /app/apps/api/dist ./apps/api/dist
 COPY --from=installer /app/package.json ./package.json
 COPY apps/api/start.sh ./start.sh
 # Drop build-only tooling from the pnpm store that is never imported by the
-# COMPILED api (verified: dist imports only @finrep/{db,engine}, @nestjs/*,
+# COMPILED api (dist imports @finrep/{db,engine,ingestion}, @nestjs/*,
 # class-validator, class-transformer + their runtime transitives). We keep the
 # prisma CLI + @prisma/* (needed by start.sh `migrate deploy`) and the nest
-# runtime. Everything below is dev/build-only and safe to prune, trimming the
-# runtime store meaningfully.
+# runtime. NOTE: xlsx/codepage/cfb are RUNTIME deps now — the Penny AI assistant
+# imports @finrep/ingestion (which uses xlsx) to parse attached trial balances,
+# so they must NOT be pruned. Everything below is dev/build-only.
 RUN find node_modules/.pnpm -maxdepth 1 -type d \( \
       -name 'turbo@*' -o -name '@turbo+*' \
       -o -name 'typescript@*' -o -name 'typescript-eslint@*' \
@@ -73,7 +74,6 @@ RUN find node_modules/.pnpm -maxdepth 1 -type d \( \
       -o -name '@nestjs+cli@*' -o -name '@nestjs+schematics@*' \
       -o -name 'webpack@*' -o -name 'webpack-*' -o -name 'vite@*' \
       -o -name 'rollup@*' -o -name '@rollup+*' \
-      -o -name 'xlsx@*' -o -name 'codepage@*' -o -name 'cfb@*' \
       -o -name 'fast-glob@*' -o -name 'caniuse-lite@*' \
       -o -name '@swc+*' -o -name 'terser@*' \
     \) -prune -exec rm -rf {} + \

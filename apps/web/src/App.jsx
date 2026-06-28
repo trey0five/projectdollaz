@@ -8,7 +8,8 @@ import { BillingProvider } from './context/BillingContext.jsx'
 import { PersistenceProvider } from './context/PersistenceContext.jsx'
 import { ProtectedRoute, PublicOnlyRoute } from './components/auth/RouteGuards.jsx'
 import Onboarding from './components/onboarding/Onboarding.jsx'
-import AssistantWidget from './components/assistant/AssistantWidget.jsx'
+import { PennyProvider } from './context/PennyContext.jsx'
+import Penny from './components/penny/Penny.jsx'
 import HomePage from './pages/HomePage.jsx'
 import DataHubPage from './pages/DataHubPage.jsx'
 import StatementsPage from './pages/StatementsPage.jsx'
@@ -55,10 +56,12 @@ function AuthedLayout() {
       <SchoolProvider>
         <BillingProvider>
           <PersistenceProvider>
-            <OnboardingGate>
-              <Outlet />
-            </OnboardingGate>
-            <AssistantWidget />
+            <PennyProvider>
+              <OnboardingGate>
+                <Outlet />
+              </OnboardingGate>
+              <Penny />
+            </PennyProvider>
           </PersistenceProvider>
         </BillingProvider>
       </SchoolProvider>

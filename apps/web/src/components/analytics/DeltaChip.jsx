@@ -29,7 +29,7 @@ export default function DeltaChip({ delta, format, goodDirection, onDark = false
 
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${cls}`}
+      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[13px] font-semibold ${cls}`}
       title="Change vs the prior period"
     >
       <Icon size={12} />

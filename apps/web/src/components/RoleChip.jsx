@@ -90,7 +90,7 @@ export default function RoleChip({ role, confirmed, needsReview, onChange }) {
         aria-expanded={open}
         onClick={() => editable && setOpen((o) => !o)}
         onKeyDown={onKeyDown}
-        className={`inline-flex items-center gap-1.5 rounded-full border-2 px-3 py-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] outline-none transition-all focus-visible:ring-2 focus-visible:ring-gold ${tone} ${editable ? '' : 'cursor-default opacity-90'}`}
+        className={`inline-flex items-center gap-1.5 rounded-full border-2 px-3 py-1.5 text-[14px] font-semibold uppercase tracking-[0.08em] outline-none transition-all focus-visible:ring-2 focus-visible:ring-gold ${tone} ${editable ? '' : 'cursor-default opacity-90'}`}
       >
         {showAuto && <Sparkles size={13} className="text-gold" aria-hidden />}
         <span>{label}</span>

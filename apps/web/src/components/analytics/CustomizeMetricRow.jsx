@@ -101,13 +101,13 @@ export default function CustomizeMetricRow({
       >
         <MetricIcon metricKey={item.metricKey} size={17} />
       </span>
-      <span className="min-w-0 flex-1 truncate font-sans text-[13px] font-semibold text-navy">
+      <span className="min-w-0 flex-1 truncate font-sans text-[15px] font-semibold text-navy">
         {metricLabel(item.metricKey)}
       </span>
 
       {/* Chart variant (scalar) or locked Donut pill (mix) */}
       {mix ? (
-        <span className="hidden shrink-0 items-center gap-1 rounded-full border border-border bg-section px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-muted sm:inline-flex">
+        <span className="hidden shrink-0 items-center gap-1 rounded-full border border-border bg-section px-2.5 py-1 text-[12px] font-semibold uppercase tracking-[0.06em] text-muted sm:inline-flex">
           <PieChart size={11} /> Donut
         </span>
       ) : (
@@ -120,7 +120,7 @@ export default function CustomizeMetricRow({
                 type="button"
                 onClick={() => onChart(opt.key)}
                 disabled={hidden}
-                className={`px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.06em] transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                className={`px-2.5 py-1 text-[12px] font-semibold uppercase tracking-[0.06em] transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                   active ? 'bg-gold/15 text-navy' : 'text-muted hover:text-navy'
                 }`}
               >

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, Post, UseGuards } from '@nestjs/common'
 import type { User } from '@finrep/db'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js'
 import { RolesGuard } from '../common/guards/roles.guard.js'
@@ -44,5 +44,19 @@ export class ImportsController {
     @Param('importId') importId: string,
   ) {
     return this.imports.getOne(schoolId, importId)
+  }
+
+  // Delete a stored trial balance and reconcile the period's statements
+  // (regenerate without it, or clear the snapshot when no CY remains).
+  // owner/accountant only. Not entitlement-gated — cleanup must stay possible
+  // even if the trial has lapsed.
+  @Delete('schools/:schoolId/imports/:importId')
+  @Roles('owner', 'accountant')
+  remove(
+    @CurrentUser() user: User,
+    @Param('schoolId') schoolId: string,
+    @Param('importId') importId: string,
+  ) {
+    return this.imports.remove(user, schoolId, importId)
   }
 }

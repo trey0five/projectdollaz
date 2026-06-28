@@ -16,7 +16,7 @@ function Chip({ palette, icon, label, count }) {
   const Icon = icon
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[12px] font-semibold ${m.chip}`}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[14px] font-semibold ${m.chip}`}
     >
       <Icon size={13} />
       <span className="tabular-nums">{count}</span>
@@ -36,13 +36,13 @@ export default function ChecklistProgress({ rollup }) {
     <div className="card-flashy p-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+          <p className="text-[13px] font-semibold uppercase tracking-[0.14em] text-muted">
             Readiness progress
           </p>
           <p className="mt-1 font-serif text-2xl font-semibold text-navy tabular-nums">
             {done + na} <span className="text-muted">/ {total} resolved</span>
           </p>
-          <p className="mt-0.5 text-[12px] text-muted tabular-nums">
+          <p className="mt-0.5 text-[14px] text-muted tabular-nums">
             {done} marked done{na > 0 ? ` · ${na} not applicable` : ''}
           </p>
         </div>
@@ -50,7 +50,7 @@ export default function ChecklistProgress({ rollup }) {
           <span className="gold-text font-serif text-3xl font-semibold tabular-nums">
             {pctComplete}%
           </span>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
+          <p className="text-[13px] font-semibold uppercase tracking-[0.12em] text-muted">
             resolved
           </p>
         </div>
@@ -75,7 +75,7 @@ export default function ChecklistProgress({ rollup }) {
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <Chip palette="good" icon={CheckCircle2} label="Done" count={done} />
         <Chip palette="neutral" icon={MinusCircle} label="N/A" count={na} />
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-section px-3 py-1 text-[12px] font-semibold text-muted">
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-section px-3 py-1 text-[14px] font-semibold text-muted">
           <Circle size={13} />
           <StatusDot status="neutral" size={6} />
           <span className="tabular-nums">{pending}</span>

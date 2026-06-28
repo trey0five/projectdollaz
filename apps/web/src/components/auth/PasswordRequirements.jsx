@@ -37,7 +37,7 @@ export default function PasswordRequirements({ password }) {
         return (
           <li
             key={req.label}
-            className={`flex items-center text-[12px] ${color} transition-colors duration-200`}
+            className={`flex items-center text-[14px] ${color} transition-colors duration-200`}
           >
             <Icon className="mr-1.5 h-3.5 w-3.5 shrink-0" />
             {req.label}

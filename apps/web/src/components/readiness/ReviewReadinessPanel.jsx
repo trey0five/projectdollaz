@@ -30,7 +30,7 @@ function TabBadge({ palette, children }) {
   const meta = statusMeta(palette)
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-bold leading-none tabular-nums ${meta.chip}`}
+      className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[12px] font-bold leading-none tabular-nums ${meta.chip}`}
     >
       <StatusDot status={palette} size={6} />
       {children}
@@ -43,7 +43,7 @@ function PageHeader() {
     <div className="mb-5">
       <Link
         to="/"
-        className="mb-4 inline-flex items-center gap-1.5 text-[13px] font-semibold text-muted transition-colors hover:text-gold"
+        className="mb-4 inline-flex items-center gap-1.5 text-[15px] font-semibold text-muted transition-colors hover:text-gold"
       >
         <ArrowLeft size={15} /> Back to dashboard
       </Link>
@@ -55,7 +55,7 @@ function PageHeader() {
           <h1 className="font-serif text-xl font-semibold text-navy sm:text-2xl">
             Review Readiness
           </h1>
-          <p className="text-[13px] text-muted">
+          <p className="text-[15px] text-muted">
             Self-check against the Florida scholarship AUP before your CPA engagement.
           </p>
         </div>
@@ -174,7 +174,7 @@ export default function ReviewReadinessPanel() {
         <PageHeader />
         <div className="card-soft border-dashed px-6 py-14 text-center">
           <p className="font-serif text-lg italic text-muted">No saved statements yet.</p>
-          <p className="mt-1 text-[13px] text-muted">
+          <p className="mt-1 text-[15px] text-muted">
             Generate and save a period on the dashboard to run the readiness checks.
           </p>
           <Link to="/" className="btn-primary mt-6">

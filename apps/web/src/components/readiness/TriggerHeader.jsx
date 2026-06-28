@@ -39,7 +39,7 @@ export default function TriggerHeader({
       <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
         {/* LEFT: the trigger verdict */}
         <div className="min-w-0">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-gold-light">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/5 px-3 py-1 text-[13px] font-semibold uppercase tracking-[0.1em] text-gold-light">
             <StatusDot status={badge.palette} size={8} />
             {badge.label}
           </span>
@@ -55,11 +55,11 @@ export default function TriggerHeader({
             )}
           </div>
           {requiresAup && (
-            <p className="mt-2 inline-flex items-center gap-1.5 text-[13px] font-medium text-gold-light">
+            <p className="mt-2 inline-flex items-center gap-1.5 text-[15px] font-medium text-gold-light">
               <CalendarClock size={15} /> AUP report due September 15
             </p>
           )}
-          <p className="mt-2 text-[12px] text-white/60">
+          <p className="mt-2 text-[14px] text-white/60">
             The $250,000 aggregate threshold determines whether a CPA AUP engagement
             is required this school year.
           </p>
@@ -67,26 +67,26 @@ export default function TriggerHeader({
 
         {/* RIGHT: ruleset meta */}
         <div className="shrink-0 text-left sm:text-right">
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/50">
+          <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.12em] text-white/50">
             <ScrollText size={13} className="text-gold-light" />
             Ruleset
           </span>
-          <p className="mt-1 font-mono text-[12px] text-gold-light">
+          <p className="mt-1 font-mono text-[14px] text-gold-light">
             fl-scholarship-aup v{rulesetVersion}
           </p>
-          <p className="text-[11px] text-white/50">statute year {statuteYear}</p>
+          <p className="text-[13px] text-white/50">statute year {statuteYear}</p>
         </div>
       </div>
 
       {/* TIER SELECTOR (read-only mirror; edit it in the intake form) */}
       <div className="mt-5 border-t border-white/10 pt-4">
-        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/50">
+        <p className="mb-2 text-[13px] font-semibold uppercase tracking-[0.12em] text-white/50">
           Program tiers
         </p>
         {programs.length > 0 ? (
           <TierSelector selected={programs} size="sm" />
         ) : (
-          <p className="text-[12px] italic text-white/50">
+          <p className="text-[14px] italic text-white/50">
             None selected — choose your tiers in the intake form to scope the
             FES-UA checks.
           </p>

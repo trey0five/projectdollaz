@@ -12,7 +12,7 @@ export default function CapExportButton({ periodId }) {
       to={`/readiness/cap/print?period=${encodeURIComponent(periodId)}`}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex items-center gap-2 rounded-lg border border-border bg-white px-4 py-2 text-[13px] font-semibold text-navy transition-all hover:border-gold/50 hover:text-gold"
+      className="inline-flex items-center gap-2 rounded-lg border border-border bg-white px-4 py-2 text-[15px] font-semibold text-navy transition-all hover:border-gold/50 hover:text-gold"
     >
       <Printer size={15} /> Print / Export CAP
     </Link>

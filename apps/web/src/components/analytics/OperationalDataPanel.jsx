@@ -15,9 +15,9 @@ import { FormError } from '../auth/fields.jsx'
 import { AutosaveBar } from '../AutosaveIndicator.jsx'
 
 const labelCls =
-  'mb-1 block text-[10px] font-semibold uppercase tracking-[0.08em] text-muted sm:mb-1.5 sm:text-[12px] sm:tracking-[0.14em]'
+  'mb-1 block text-[12px] font-semibold uppercase tracking-[0.08em] text-muted sm:mb-1.5 sm:text-[14px] sm:tracking-[0.14em]'
 const inputCls =
-  'w-full rounded-lg border border-border bg-white px-3 py-2 text-[14px] text-ink outline-none transition-all focus:border-gold focus:ring-2 focus:ring-gold/20 disabled:cursor-not-allowed disabled:bg-navy/[0.04] disabled:text-muted sm:px-4 sm:py-2.5 sm:text-[15px]'
+  'w-full rounded-lg border border-border bg-white px-3 py-2 text-[16px] text-ink outline-none transition-all focus:border-gold focus:ring-2 focus:ring-gold/20 disabled:cursor-not-allowed disabled:bg-navy/[0.04] disabled:text-muted sm:px-4 sm:py-2.5 sm:text-[16px]'
 
 const toStr = (v) => (v === null || v === undefined ? '' : String(v))
 
@@ -186,8 +186,8 @@ export default function OperationalDataPanel({
             <ClipboardList size={16} />
           </span>
           <div>
-            <h3 className="font-serif text-[15px] font-semibold text-navy sm:text-lg">Operational data</h3>
-            <p className="hidden text-[12px] text-muted sm:block">
+            <h3 className="font-serif text-[16px] font-semibold text-navy sm:text-lg">Operational data</h3>
+            <p className="hidden text-[14px] text-muted sm:block">
               {periodLabel ? `${periodLabel} · ` : ''}
               {canEdit
                 ? 'Enrollment & aid power the per-student metrics below.'
@@ -201,7 +201,7 @@ export default function OperationalDataPanel({
             initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.9 }}
             animate={reduce ? { opacity: 1 } : { opacity: 1, scale: 1 }}
             transition={{ type: 'spring', stiffness: 320, damping: 20 }}
-            className={`hidden shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold sm:inline-flex ${
+            className={`hidden shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-[13px] font-semibold sm:inline-flex ${
               unlockCount === TIER2_TOTAL
                 ? 'border-gold/40 bg-gold/10 text-gold'
                 : unlockCount > 0
@@ -228,7 +228,7 @@ export default function OperationalDataPanel({
       ) : (
         <>
           {!canEdit && empty && (
-            <p className="mt-3 text-[13px] italic text-muted">
+            <p className="mt-3 text-[15px] italic text-muted">
               No operational data entered yet.
             </p>
           )}
@@ -244,7 +244,7 @@ export default function OperationalDataPanel({
                 onChange={(e) => setEnrollment(sanitizeInteger(e.target.value))}
                 placeholder="e.g. 850"
               />
-              <p className="mt-1.5 hidden text-[11px] italic text-muted sm:block">
+              <p className="mt-1.5 hidden text-[13px] italic text-muted sm:block">
                 Primary number; powers cost per pupil & per-student metrics.
               </p>
             </div>
@@ -270,7 +270,7 @@ export default function OperationalDataPanel({
                 placeholder="e.g. 300"
               />
               {crossFieldError && (
-                <p className="mt-1.5 text-[11px] font-semibold text-danger">
+                <p className="mt-1.5 text-[13px] font-semibold text-danger">
                   {crossFieldError}
                 </p>
               )}
@@ -301,11 +301,11 @@ export default function OperationalDataPanel({
                 onChange={(e) => setTeachingFte(sanitizeDecimal(e.target.value))}
                 placeholder="e.g. 42.5"
               />
-              <p className="mt-1.5 hidden text-[11px] italic text-muted sm:block">
+              <p className="mt-1.5 hidden text-[13px] italic text-muted sm:block">
                 Staff FTE (instructional) — distinct from the student FTE above.
               </p>
               {staffCrossFieldError && (
-                <p className="mt-1.5 text-[11px] font-semibold text-danger">
+                <p className="mt-1.5 text-[13px] font-semibold text-danger">
                   {staffCrossFieldError}
                 </p>
               )}
@@ -320,7 +320,7 @@ export default function OperationalDataPanel({
                 onChange={(e) => setTotalStaffFte(sanitizeDecimal(e.target.value))}
                 placeholder="e.g. 61"
               />
-              <p className="mt-1.5 hidden text-[11px] italic text-muted sm:block">
+              <p className="mt-1.5 hidden text-[13px] italic text-muted sm:block">
                 All staff FTE; drives the Teacher Ratio key indicator.
               </p>
             </div>

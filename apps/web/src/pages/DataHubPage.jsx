@@ -1,9 +1,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Data hub — the ONE friendly, guided place to get a school's data into Dollaz.
 // v1 REUSES existing surfaces: it EMBEDS MonthlyActualsPanel + OperationalDataPanel
-// unforked and LINKS out to /statements, /budget, /reports/schedules, /readiness.
-// A QuickBooks fast-path card sits on top, and Penny (GuideMascot) points at the
-// next incomplete step. Shell mirrors ReportsPage (TopBar + BillingBanner +
+// + BudgetSetup unforked and LINKS out to /statements, /reports/schedules, /readiness.
+// A QuickBooks fast-path card sits on top, and the global Penny (usePenny) points
+// at the next incomplete step. Shell mirrors ReportsPage (TopBar + BillingBanner +
 // max-w-[1100px] main). Period selector reuses the ReportsPage idiom verbatim:
 // snapshotPeriods[0]?.id ?? periods[0]?.id, with a local useState synced on key
 // (NOT setState-in-effect). SOURCES is a module-scope config array (like
@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   Sparkles,
   CircleCheck,
+  TrendingUp,
   X,
 } from 'lucide-react'
 import TopBar from '../components/TopBar.jsx'
@@ -29,11 +30,17 @@ import { usePersistence } from '../context/PersistenceContext.jsx'
 import { useDataStatus } from '../hooks/useDataStatus.js'
 import QuickBooksCard from '../components/datahub/QuickBooksCard.jsx'
 import SourceCard from '../components/datahub/SourceCard.jsx'
-import GuideMascot from '../components/datahub/GuideMascot.jsx'
+import { usePenny } from '../context/PennyContext.jsx'
 import MonthlyActualsPanel from '../components/monthly/MonthlyActualsPanel.jsx'
 import OperationalDataPanel from '../components/analytics/OperationalDataPanel.jsx'
 import { AppProvider } from '../context/AppContext.jsx'
 import IntakeBar from '../components/IntakeBar.jsx'
+import BudgetSetup from '../components/budget/BudgetSetup.jsx'
+import ForecastWorkspace from '../components/budget/ForecastWorkspace.jsx'
+import SchedulesEmbed from '../components/datahub/SchedulesEmbed.jsx'
+import ComplianceIntakePanel from '../components/readiness/ComplianceIntakePanel.jsx'
+import { useBudget, useBudgetContext } from '../hooks/useAnalytics.js'
+import { useComplianceInputs } from '../hooks/useCompliance.js'
 
 // Module-scope checklist config (NOT in-render). The `key` matches the
 // dataStatusContract `sources` keys + `summary.order`; SourceCard reads
@@ -72,9 +79,17 @@ const SOURCES = [
     Icon: Wallet,
     what:
       'Import your budget so every report can show budget vs. actual — how you’re tracking against the plan.',
-    action: 'link',
-    to: '/budget',
-    cta: 'Open budget',
+    action: 'embed',
+    cta: 'Set up budget',
+  },
+  {
+    key: 'forecast',
+    title: 'Year-end forecast',
+    Icon: TrendingUp,
+    what:
+      'Revise your assumptions and add incoming students to project where the year lands. We compare it to your budget for the board — view it anytime in Reports.',
+    action: 'embed',
+    cta: 'Update forecast',
   },
   {
     key: 'schedules',
@@ -82,7 +97,7 @@ const SOURCES = [
     Icon: Landmark,
     what:
       'Capital projects, cash & investments, and campaigns that round out your board packet.',
-    action: 'link',
+    action: 'embed',
     cta: 'Open schedules',
   },
   {
@@ -91,14 +106,26 @@ const SOURCES = [
     Icon: ShieldCheck,
     what:
       'A few questions about scholarships and banking so we can check your Florida scholarship review readiness — only needed when you’re preparing for an audit or readiness check.',
-    action: 'link',
-    to: '/readiness',
-    cta: 'Open readiness',
+    action: 'embed',
+    cta: 'Enter compliance inputs',
   },
 ]
 
+// Per-card bubble copy for Penny's "Show me around" tour (moved verbatim out of the
+// former GuideMascot before it was deleted). Keyed by source key; falls back to s.what.
+const HINTS = {
+  trialBalances: "Start here. Drop in your trial balance and I'll turn it into your statements.",
+  monthly: 'Adding each month here lets your board watch the year unfold.',
+  operational: 'A few quick numbers here unlock your per-student metrics.',
+  budget: 'Bring in your budget so we can compare plan vs. reality.',
+  forecast: 'Project where the year lands and compare it to your budget — view it in Reports.',
+  schedules: 'Add supporting schedules if your board packet needs them.',
+  compliance: 'A few compliance answers prep you for a readiness check.',
+}
+
 export default function DataHubPage() {
   const { activeSchool } = useSchools()
+  const penny = usePenny()
   const { periods, hydratedFiles, activePeriod, hydrationToken } = usePersistence()
   const schoolId = activeSchool?.id ?? null
   const isOwnerOrAccountant =
@@ -129,6 +156,21 @@ export default function DataHubPage() {
   const { data, loading, error, notEntitled, refetch } = useDataStatus(schoolId, periodId)
   const sources = data?.sources || null
 
+  // Forecast input embed needs the saved budget + budget context to seed the
+  // ForecastWorkspace. Fetched UNCONDITIONALLY (not gated on which modal is open)
+  // to avoid conditional-hook violations — both hooks key on (schoolId, periodId)
+  // and tolerate nulls, mirroring how BudgetPage loads them.
+  const { budget: forecastBudget } = useBudget(schoolId, periodId)
+  const { context: forecastBudgetContext } = useBudgetContext(schoolId, periodId)
+  // Compliance intake needs its inputs/loading/reload passed in (the panel doesn't
+  // self-fetch). Fetched unconditionally (keyed on schoolId/periodId) like the
+  // forecast hooks, so the embed modal can mount ComplianceIntakePanel.
+  const {
+    inputs: complianceInputs,
+    loading: complianceLoading,
+    reload: reloadComplianceInputs,
+  } = useComplianceInputs(schoolId, periodId)
+
   // After a trial-balance save inside the modal, PersistenceContext bumps
   // hydrationToken — re-pull the data-status so the Trial balance card flips to
   // Done (skip the initial mount; useDataStatus already loads then).
@@ -143,8 +185,6 @@ export default function DataHubPage() {
   const summary = data?.summary || null
 
   const [modalKey, setModalKey] = useState(null) // which embed panel is open in the modal
-  const [tourKey, setTourKey] = useState(null) // card Penny is highlighting during the walkthrough
-  const mascotRef = useRef(null)
 
   // No-period state: nothing to work on yet.
   const noPeriods = (periods || []).length === 0
@@ -152,6 +192,58 @@ export default function DataHubPage() {
   const needsYou = summary?.needsYou ?? 0
   const inProgress = summary?.inProgress ?? 0
   const allReady = !!summary?.allReady
+
+  // First-time guide (intent fire — NOT setState-for-derived-state). Penny glides to
+  // the trial-balance card (or the no-period CTA) and says "start here" the first time
+  // the TB step is incomplete. The {once} key + guideTo's idempotent guard keep re-runs
+  // cheap and prevent nagging on return visits.
+  const tbIncomplete = !!summary && summary.nextStep === 'trialBalances'
+  useEffect(() => {
+    if (!schoolId) return
+    if (noPeriods) {
+      penny.guideTo(
+        {
+          targetId: 'datahub-noperiod-cta',
+          cardKey: 'trialBalances',
+          message:
+            "Start here — let's upload THIS year's trial balance and I'll build your statements.",
+          action: { label: 'Add a trial balance', onClick: () => setModalKey('trialBalances') },
+        },
+        { once: `firsttb:${schoolId}` },
+      )
+    } else if (tbIncomplete) {
+      penny.guideTo(
+        {
+          targetId: 'datahub-card-trialBalances',
+          cardKey: 'trialBalances',
+          message:
+            "Start here — upload THIS year's trial balance and I'll turn it into your four statements.",
+          action: { label: 'Add trial balance', onClick: () => setModalKey('trialBalances') },
+        },
+        { once: `firsttb:${schoolId}` },
+      )
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [schoolId, noPeriods, summary?.nextStep, penny])
+
+  // "Show me around" tour — one step per source card (pure derivation; no state).
+  const tourSteps = useMemo(
+    () =>
+      SOURCES.map((s) => ({
+        targetId: `datahub-card-${s.key}`,
+        cardKey: s.key,
+        message: HINTS[s.key] ?? s.what,
+        ...(s.action === 'embed'
+          ? { action: { label: s.cta, onClick: () => setModalKey(s.key) } }
+          : {}),
+      })),
+    [],
+  )
+
+  // Which card Penny is currently pointing at (pure derivation — no state, no effect).
+  const guideCardKey = penny.guide
+    ? penny.guide.steps[penny.guide.index]?.cardKey ?? null
+    : null
 
   return (
     <div className="min-h-screen bg-section">
@@ -165,9 +257,9 @@ export default function DataHubPage() {
           className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"
         >
           <div className="max-w-2xl">
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold">Data</p>
-            <h1 className="mt-1 font-serif text-3xl font-semibold text-navy">Get your numbers in</h1>
-            <p className="mt-1.5 text-[14px] leading-relaxed text-muted">
+            <p className="text-[13px] font-bold uppercase tracking-[0.18em] text-gold">Data</p>
+            <h1 className="mt-1 font-serif text-2xl font-semibold text-navy sm:text-3xl">Get your numbers in</h1>
+            <p className="mt-1.5 text-[16px] leading-relaxed text-muted">
               This is the one place to bring your school&apos;s data into Dollaz. Add what you have —
               we&apos;ll turn it into your statements, board reports, and readiness checks. Penny will
               walk you through it. Most schools finish the essentials in a few minutes.
@@ -176,12 +268,12 @@ export default function DataHubPage() {
 
           {!noPeriods && (
             <div className="flex shrink-0 flex-col items-start gap-2.5 sm:items-end">
-              <label className="flex items-center gap-2 text-[12px] font-semibold text-muted">
+              <label className="flex items-center gap-2 text-[14px] font-semibold text-muted">
                 <span className="uppercase tracking-[0.1em]">Working on:</span>
                 <select
                   value={periodId || ''}
                   onChange={(e) => setPeriodId(e.target.value)}
-                  className="rounded-lg border-2 border-gold/40 bg-white px-3 py-1.5 text-[13px] font-semibold text-navy outline-none ring-gold/40 focus-visible:ring-2"
+                  className="rounded-lg border-2 border-gold/40 bg-white px-3 py-1.5 text-[15px] font-semibold text-navy outline-none ring-gold/40 focus-visible:ring-2"
                 >
                   {(periods || []).map((p) => (
                     <option key={p.id} value={p.id}>
@@ -193,7 +285,7 @@ export default function DataHubPage() {
 
               <div className="flex items-center gap-2">
                 <span
-                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-bold ${
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[14px] font-bold ${
                     allReady
                       ? 'bg-emerald-50 text-emerald-700'
                       : 'border border-gold/40 bg-gold/10 text-amber-700'
@@ -211,8 +303,8 @@ export default function DataHubPage() {
                 </span>
                 <button
                   type="button"
-                  onClick={() => mascotRef.current?.replay()}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-gold/40 px-3 py-1 text-[12px] font-bold uppercase tracking-[0.06em] text-gold transition-colors hover:bg-gold/5"
+                  onClick={() => penny.runTour(tourSteps)}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-gold/40 px-3 py-1 text-[14px] font-bold uppercase tracking-[0.06em] text-gold transition-colors hover:bg-gold/5"
                 >
                   <Sparkles size={13} /> Show me around
                 </button>
@@ -230,7 +322,7 @@ export default function DataHubPage() {
 
             {/* Guided checklist. */}
             {loading && !sources ? (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-3">
                 {SOURCES.map((s) => (
                   <div
                     key={s.key}
@@ -241,30 +333,30 @@ export default function DataHubPage() {
             ) : notEntitled ? (
               <div className="rounded-2xl border-2 border-rule/60 bg-white px-6 py-10 text-center">
                 <p className="font-serif text-lg text-navy">Your subscription is paused</p>
-                <p className="mt-1 text-[13px] text-muted">
+                <p className="mt-1 text-[15px] text-muted">
                   Reactivate your plan to load and review your data — see the banner above to manage billing.
                 </p>
               </div>
             ) : error ? (
               <div className="rounded-2xl border-2 border-rule/60 bg-white px-6 py-10 text-center">
                 <p className="font-serif text-lg text-navy">Couldn’t load your data status</p>
-                <p className="mt-1 text-[13px] text-muted">{error}</p>
+                <p className="mt-1 text-[15px] text-muted">{error}</p>
                 <button
                   type="button"
                   onClick={refetch}
-                  className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-gold/60 bg-gold/10 px-4 py-2 text-[13px] font-semibold text-navy transition-all hover:bg-gold/20"
+                  className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-gold/60 bg-gold/10 px-4 py-2 text-[15px] font-semibold text-navy transition-all hover:bg-gold/20"
                 >
                   Try again
                 </button>
               </div>
             ) : (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-3">
                 {SOURCES.map((s) => (
                   <SourceCard
                     key={s.key}
                     source={s}
                     status={sources?.[s.key]}
-                    isActive={(tourKey ?? summary?.nextStep) === s.key}
+                    isActive={(guideCardKey ?? summary?.nextStep) === s.key}
                     onOpen={() => setModalKey(s.key)}
                   />
                 ))}
@@ -274,31 +366,35 @@ export default function DataHubPage() {
         )}
       </main>
 
-      {/* Embed modal (Monthly / Operational) — opens instead of expanding inline. */}
+      {/* Embed modal (Monthly / Operational / Budget) — opens instead of expanding inline. */}
       <DataEmbedModal
         openKey={modalKey}
-        onClose={() => setModalKey(null)}
+        onClose={() => {
+          if (modalKey === 'schedules') refetch()
+          setModalKey(null)
+        }}
         schoolId={schoolId}
         periodId={periodId}
         periodLabel={periodLabel}
         canEdit={isOwnerOrAccountant}
         onSaved={refetch}
+        budget={forecastBudget}
+        budgetContext={forecastBudgetContext}
+        complianceInputs={complianceInputs}
+        complianceLoading={complianceLoading}
+        reloadComplianceInputs={reloadComplianceInputs}
         school={activeSchool}
         hydratedFiles={hydratedFiles}
         activePeriod={activePeriod}
         hydrationToken={hydrationToken}
       />
-
-      {/* The star — Penny. Renders once summary is known (and not on empty-school). */}
-      {!noPeriods && summary && (
-        <GuideMascot ref={mascotRef} summary={summary} onActiveStep={setTourKey} />
-      )}
     </div>
   )
 }
 
 // Embed modal (render-helper, module scope — not a nested component def). Shows the
-// Monthly or Operational panel in a centered popup instead of expanding the card.
+// Monthly, Operational, or Budget setup panel in a centered popup instead of
+// expanding the card.
 function DataEmbedModal({
   openKey,
   onClose,
@@ -307,18 +403,43 @@ function DataEmbedModal({
   periodLabel,
   canEdit,
   onSaved,
+  budget,
+  budgetContext,
+  complianceInputs,
+  complianceLoading,
+  reloadComplianceInputs,
   school,
   hydratedFiles,
   activePeriod,
   hydrationToken,
 }) {
   const isTb = openKey === 'trialBalances'
-  const isOpen = isTb || openKey === 'monthly' || openKey === 'operational'
+  const isBudget = openKey === 'budget'
+  const isForecast = openKey === 'forecast'
+  const isSchedules = openKey === 'schedules'
+  const isCompliance = openKey === 'compliance'
+  const isWide = isTb || isBudget || isForecast || isSchedules
+  const isOpen =
+    isTb ||
+    isBudget ||
+    isForecast ||
+    isSchedules ||
+    isCompliance ||
+    openKey === 'monthly' ||
+    openKey === 'operational'
   const title = isTb
     ? 'Add your trial balance'
-    : openKey === 'monthly'
-      ? 'Monthly numbers'
-      : 'Enrollment & aid'
+    : isBudget
+      ? 'Set up your budget'
+      : isForecast
+        ? 'Year-end forecast'
+        : isSchedules
+          ? 'Supporting schedules'
+          : isCompliance
+            ? 'Compliance inputs'
+            : openKey === 'monthly'
+              ? 'Monthly numbers'
+              : 'Enrollment & aid'
 
   useEffect(() => {
     if (!isOpen) return undefined
@@ -351,7 +472,7 @@ function DataEmbedModal({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 16, scale: 0.98 }}
             transition={{ duration: 0.2 }}
-            className={`relative z-10 flex max-h-[90vh] w-full flex-col overflow-hidden rounded-2xl border-2 border-gold/30 bg-section shadow-2xl ${isTb ? 'max-w-[1040px]' : 'max-w-[760px]'}`}
+            className={`relative z-10 flex max-h-[90vh] w-full flex-col overflow-hidden rounded-2xl border-2 border-gold/30 bg-section shadow-2xl ${isWide ? 'max-w-[1040px]' : 'max-w-[760px]'}`}
           >
             <div className="flex items-center justify-between border-b border-rule/60 bg-white px-5 py-3.5">
               <h2 className="font-serif text-lg font-semibold text-navy">{title}</h2>
@@ -376,6 +497,7 @@ function DataEmbedModal({
                   initialPeriod={activePeriod || null}
                   readOnly={!canEdit}
                   autoCollapse={false}
+                  autoSave
                 >
                   <IntakeBar />
                 </AppProvider>
@@ -389,6 +511,52 @@ function DataEmbedModal({
                   periodId={periodId}
                   periodLabel={periodLabel}
                   canEdit={canEdit}
+                  onSaved={onSaved}
+                />
+              )}
+              {openKey === 'budget' && periodId && (
+                <BudgetSetup
+                  schoolId={schoolId}
+                  periodId={periodId}
+                  canEdit={canEdit}
+                  onSaved={onSaved}
+                />
+              )}
+              {openKey === 'forecast' && periodId && (
+                // Forecast INPUT, reused unforked from the (removed) Budget tab.
+                // It autosaves + self-refetches its own preview — no onSaved prop.
+                // The card stays "Optional" (no forecast data-status key, intended).
+                <ForecastWorkspace
+                  key={`forecast-${schoolId}:${periodId}`}
+                  schoolId={schoolId}
+                  periodId={periodId}
+                  canEdit={canEdit}
+                  budget={budget}
+                  budgetContext={budgetContext}
+                />
+              )}
+              {openKey === 'schedules' && periodId && (
+                // The three supporting-schedule workspaces, tabbed. They autosave;
+                // the hub refetches the schedules status on modal close (onClose).
+                <SchedulesEmbed
+                  key={`schedules-${schoolId}:${periodId}`}
+                  schoolId={schoolId}
+                  periodId={periodId}
+                  canEdit={canEdit}
+                />
+              )}
+              {openKey === 'compliance' && periodId && (
+                // Compliance attestation inputs (scholarships/banking). On save it
+                // calls onSaved -> the hub refetches data-status (deriveCompliance
+                // flips the card to Done once the row is materially filled).
+                <ComplianceIntakePanel
+                  schoolId={schoolId}
+                  periodId={periodId}
+                  periodLabel={periodLabel}
+                  inputs={complianceInputs}
+                  loading={complianceLoading}
+                  canEdit={canEdit}
+                  reloadInputs={reloadComplianceInputs}
                   onSaved={onSaved}
                 />
               )}
@@ -414,14 +582,15 @@ function NoPeriodCard({ onAdd }) {
       <h2 className="font-serif text-xl font-semibold text-navy">
         Let&apos;s create your first reporting period
       </h2>
-      <p className="mx-auto mt-1.5 max-w-md text-[13.5px] leading-relaxed text-muted">
+      <p className="mx-auto mt-1.5 max-w-md text-[15.5px] leading-relaxed text-muted">
         Start by adding a trial balance — we&apos;ll set up the period and turn it into your financial
         statements automatically.
       </p>
       <button
+        id="datahub-noperiod-cta"
         type="button"
         onClick={onAdd}
-        className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-gold-gradient px-4 py-2.5 text-[13px] font-bold uppercase tracking-[0.08em] text-navy shadow-glow transition-transform hover:-translate-y-0.5"
+        className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-gold-gradient px-4 py-2.5 text-[15px] font-bold uppercase tracking-[0.08em] text-navy shadow-glow transition-transform hover:-translate-y-0.5"
       >
         Add a trial balance
       </button>

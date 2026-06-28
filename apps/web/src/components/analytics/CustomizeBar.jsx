@@ -37,7 +37,7 @@ export default function CustomizeBar({
         </span>
         <div>
           <p className="font-serif text-sm font-semibold text-navy">Customizing dashboard</p>
-          <p className="text-[11px] text-muted">
+          <p className="text-[13px] text-muted">
             {dirty ? 'You have unsaved changes.' : 'Show, hide, reorder, and resize your metrics.'}
           </p>
         </div>
@@ -45,7 +45,7 @@ export default function CustomizeBar({
 
       <div className="flex flex-wrap items-center gap-2">
         {error && (
-          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-600">
+          <span className="inline-flex items-center gap-1 text-[13px] font-semibold text-red-600">
             <AlertTriangle size={12} /> {error}
           </span>
         )}
@@ -53,7 +53,7 @@ export default function CustomizeBar({
           type="button"
           onClick={onReset}
           disabled={saving}
-          className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted transition-colors hover:border-gold/60 hover:text-navy disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-border px-3 py-2 text-[13px] font-semibold uppercase tracking-[0.08em] text-muted transition-colors hover:border-gold/60 hover:text-navy disabled:cursor-not-allowed disabled:opacity-50"
         >
           <RotateCcw size={14} /> Reset to default
         </button>
@@ -61,7 +61,7 @@ export default function CustomizeBar({
           type="button"
           onClick={onCancel}
           disabled={saving}
-          className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted transition-colors hover:border-gold/60 hover:text-navy disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-border px-3 py-2 text-[13px] font-semibold uppercase tracking-[0.08em] text-muted transition-colors hover:border-gold/60 hover:text-navy disabled:cursor-not-allowed disabled:opacity-50"
         >
           <X size={14} /> Cancel
         </button>
@@ -69,7 +69,7 @@ export default function CustomizeBar({
           type="button"
           onClick={onSave}
           disabled={saving || !dirty}
-          className={`inline-flex min-h-[40px] items-center gap-1.5 rounded-xl px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] transition-colors disabled:cursor-not-allowed ${
+          className={`inline-flex min-h-[40px] items-center gap-1.5 rounded-xl px-4 py-2 text-[13px] font-semibold uppercase tracking-[0.08em] transition-colors disabled:cursor-not-allowed ${
             dirty && !saving
               ? 'bg-gold-gradient text-white hover:opacity-90'
               : 'border border-border text-muted'

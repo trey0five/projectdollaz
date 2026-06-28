@@ -13,7 +13,7 @@ export default function WorkpapersExportButton({ periodId }) {
       to={`/readiness/workpapers/print?period=${encodeURIComponent(periodId)}`}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex items-center gap-2 rounded-lg bg-gold-gradient px-4 py-2 text-[13px] font-semibold text-white shadow-glow transition-all hover:opacity-90"
+      className="inline-flex items-center gap-2 rounded-lg bg-gold-gradient px-4 py-2 text-[15px] font-semibold text-white shadow-glow transition-all hover:opacity-90"
     >
       <Printer size={15} /> Generate Workpapers Packet
     </Link>

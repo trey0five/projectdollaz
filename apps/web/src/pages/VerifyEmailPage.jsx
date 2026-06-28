@@ -56,7 +56,7 @@ export default function VerifyEmailPage() {
       <AuthLayout title="Email verified">
         <div className="flex flex-col items-center text-center">
           <CheckCircle2 className="mb-4 h-16 w-16 text-emerald-600" />
-          <p className="text-[15px] text-ink">{message}</p>
+          <p className="text-[16px] text-ink">{message}</p>
           <Link to="/login" className="btn-primary mt-6 inline-block">
             Continue to sign in
           </Link>
@@ -78,7 +78,7 @@ export default function VerifyEmailPage() {
       {state === 'error' && (
         <div className="mb-5 flex flex-col items-center text-center">
           <XCircle className="mb-3 h-12 w-12 text-danger" />
-          <p className="text-[14px] text-ink">{message}</p>
+          <p className="text-[16px] text-ink">{message}</p>
         </div>
       )}
       <TextField
@@ -93,7 +93,7 @@ export default function VerifyEmailPage() {
       <button onClick={resend} disabled={!email} className="btn-primary mt-3 w-full disabled:opacity-50">
         Resend verification link
       </button>
-      <div className="mt-6 text-center text-[13px] text-muted">
+      <div className="mt-6 text-center text-[15px] text-muted">
         <Link to="/login" className="font-semibold text-gold hover:underline">
           Back to sign in
         </Link>

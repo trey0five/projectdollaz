@@ -11,6 +11,7 @@
     @apply bg-cream text-ink font-sans;
     margin: 0;
     min-height: 100vh;
+    line-height: 1.5; /* NBOA-style comfortable default for unstyled text */
   }
   /* faint gold halo behind the report area */
   #report-container {
@@ -204,6 +205,34 @@
   }
 }
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   PENNY AI — flashy chat keyframes (ported/renamed from Nagare nagare-*).
+   All decorative; every consumer gates on motion-safe: and marks the element
+   aria-hidden. The @media (prefers-reduced-motion) block far below disables the
+   always-on loops as a belt-and-braces fallback.
+   ───────────────────────────────────────────────────────────────────────────── */
+/* Sweeping sheen across the gradient header banner. */
+@keyframes penny-sheen {
+  0% { background-position: -120% 0; }
+  100% { background-position: 220% 0; }
+}
+/* Message-bubble entrance — a gentle pop + rise. */
+@keyframes penny-pop {
+  0% { opacity: 0; transform: translateY(6px) scale(0.96); }
+  60% { opacity: 1; transform: translateY(0) scale(1.01); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+/* Staggered fade-up for the empty-state bento tiles. */
+@keyframes penny-fadeup {
+  0% { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+/* Soft pulsing gold glow used on the Penny hero halo + avatar speaking ring. */
+@keyframes penny-pulse-glow {
+  0%, 100% { opacity: 0.45; transform: scale(1); }
+  50% { opacity: 0.9; transform: scale(1.06); }
+}
+
 /* ── Tabular line shimmer used during generation ───────── */
 .shimmer-bar {
   background: linear-gradient(90deg, #eee 25%, #f5f5f5 37%, #eee 63%);
@@ -244,6 +273,14 @@
   .shimmer-bar,
   .card-flashy::before,
   .card-vital::before {
+    animation: none !important;
+  }
+  /* Penny chat decorative loops — kill the always-on motion. The components
+     also gate these on motion-safe:, this is the CSS belt-and-braces. */
+  [class*='penny-sheen'],
+  [class*='penny-pop'],
+  [class*='penny-fadeup'],
+  [class*='penny-pulse-glow'] {
     animation: none !important;
   }
 }
@@ -891,4 +928,31 @@
   @page {
     margin: 0.6in;
   }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   MOBILE TYPE DOWN-SCALE (phones only, < sm/640px).
+   The site-wide +2px desktop bump reads too large on phones. Rather than retrofit
+   ~900 hardcoded `text-[Npx]` classes, we override just the (small, known) set of
+   bumped sizes here — scoped to <640px, where Tailwind's own `sm:` variants are
+   inactive, so this never fights desktop. `html`-prefixed for specificity so it
+   wins over the single-class utilities regardless of source order. Big headings
+   that use the Tailwind scale (text-2xl/3xl) are nudged down too.
+   ───────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 639px) {
+  html .text-\[12px\] { font-size: 11px; }
+  html .text-\[12\.5px\] { font-size: 11px; }
+  html .text-\[13px\] { font-size: 11.5px; }
+  html .text-\[13\.5px\] { font-size: 12px; }
+  html .text-\[14px\] { font-size: 12px; }
+  html .text-\[14\.5px\] { font-size: 12.5px; }
+  html .text-\[15px\] { font-size: 13px; }
+  html .text-\[15\.5px\] { font-size: 13.5px; }
+  html .text-\[16px\] { font-size: 14px; }
+  html .text-\[16\.5px\] { font-size: 14.5px; }
+  html .text-\[17px\] { font-size: 15px; }
+  html .text-\[18px\] { font-size: 15.5px; }
+  /* Big serif page headings via the Tailwind scale. */
+  html .text-3xl { font-size: 1.55rem; line-height: 1.15; }
+  html .text-2xl { font-size: 1.3rem; line-height: 1.2; }
 }

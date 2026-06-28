@@ -7,7 +7,7 @@ function SlotChip({ label, entry }) {
   const fromHistory = !!entry?.fromHistory
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12px] font-semibold ${
+      className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[14px] font-semibold ${
         fromHistory
           ? 'bg-gold/10 text-gold'
           : present
@@ -57,13 +57,13 @@ export default function SummaryStrip() {
           {shortDateLabel && (
             <>
               <span aria-hidden className="mx-1 hidden h-4 w-px bg-rule sm:inline-block" />
-              <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-navy">
+              <span className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-navy">
                 <Calendar size={13} className="text-gold" /> {shortDateLabel}
               </span>
             </>
           )}
         </div>
-        <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-gold/40 bg-gold/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-gold transition-colors group-hover:border-gold group-hover:bg-gold/10">
+        <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-gold/40 bg-gold/5 px-3 py-1.5 text-[13px] font-semibold uppercase tracking-[0.1em] text-gold transition-colors group-hover:border-gold group-hover:bg-gold/10">
           <PencilLine size={13} /> Edit
         </span>
       </div>

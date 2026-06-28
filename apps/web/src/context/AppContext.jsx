@@ -9,15 +9,17 @@
 // no setState-in-effect. This gives a live preview and stays clean under
 // the repo's react-hooks lint rule. The engine remains pure/untouched.
 // ─────────────────────────────────────────────────────────────
-import { createContext, useContext, useState, useCallback, useMemo, useRef } from 'react'
+import { createContext, useContext, useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import {
   generateReports,
   validateDataset,
   findUnmapped,
   deriveOpeningNetAssets,
+  DEFAULT_CHART,
 } from '@finrep/engine'
 import { ingest, classifyRole, resolveRoles, inferPeriod } from '@finrep/ingestion'
 import { formatDate, formatShortDate, PERIOD_LABELS } from '../lib/format.js'
+import { importsApi, mappingApi, apiErrorMessage } from '../lib/api.js'
 import { usePersistence } from './PersistenceContext.jsx'
 
 const AppContext = createContext(null)
@@ -56,6 +58,9 @@ export function AppProvider({
   // setup — it stays in the 3-slot review so adding PY/Audited is obvious (used by
   // the Data hub modal, where the collapse-to-summary is confusing).
   autoCollapse = true,
+  // When true, a valid trial balance persists itself automatically (debounced)
+  // so the user never has to press Save. Opt-in (the Data hub modal sets it).
+  autoSave = false,
 }) {
   // `school` is the SELECTED school (from SchoolContext) — it carries the engine
   // begin-balance fields. The old PIN login is gone; auth is handled upstream.
@@ -72,6 +77,26 @@ export function AppProvider({
   // (deriveOpeningNetAssets) rather than typed at school creation. A user may
   // override a derived value; overrides are keyed by role ('cy'|'py'|'audit').
   const [openingOverrides, setOpeningOverrides] = useState({})
+  // ── Category-mapping overlay (intake "assign a category" editor) ──────────
+  // mappedOverlay holds THIS session's category picks for accounts the engine
+  // flagged "N to review" (income-statement accounts missing from the chart).
+  // It is merged on top of DEFAULT_CHART.mapping.entries to form activeChart,
+  // which drives BOTH the live preview and the per-file unmapped detection so a
+  // freshly-categorized account immediately drops out of review and shows up in
+  // the statements. Keys are String(acct) to match the PATCH /mapping contract;
+  // the engine reads entries[r.acct] with a numeric acct and string-coercion
+  // makes the lookup equivalent. Mutated ONLY by the mapAccount action and
+  // resetIntake — never an effect.
+  //
+  // KNOWN LIMITATION (DEFERRED — do not solve here): GET /schools/:id/mapping
+  // returns metadata only (no entries), so mappedOverlay starts EMPTY each
+  // session and category picks persisted in a PRIOR session RE-FLAG on reload.
+  // The saved server-side statements remain correct (each pick is PATCHed into
+  // the canonical merged chart). The clean fix is an additive backend change
+  // (GET returns entries) in the fenced apps/api/src/mapping/** owned by the
+  // mapping agent — coordinate there rather than working around it here.
+  const [mappedOverlay, setMappedOverlay] = useState({}) // { [String(acct)]: SCoaCategory } — THIS session's picks
+  const [mappingAccts, setMappingAccts] = useState(() => new Set()) // String(acct) with PATCH in flight
   // Auto-collapse the intake panel once exactly: the first time a valid,
   // conflict-free setup exists. After that, expand/collapse is user-driven
   // (this ref keeps us from fighting a manual re-expand on every recompute).
@@ -89,6 +114,8 @@ export function AppProvider({
     setPeriodTouched(false)
     setIntakeExpanded(true)
     setOpeningOverrides({})
+    setMappedOverlay({})
+    setMappingAccts(new Set())
     autoCollapsedRef.current = false
   }, [])
 
@@ -178,9 +205,32 @@ export function AppProvider({
     )
   }, [])
 
-  const removeFile = useCallback((id) => {
-    setFiles((prev) => prev.filter((f) => f.id !== id))
-  }, [])
+  // Remove a file. Unsaved files are just dropped from local state. A PERSISTED
+  // file is a stored import in Postgres, so a local filter alone would leave it
+  // in the database and it would re-appear on the next hydrate — we delete the
+  // import for real, then re-hydrate (which reconciles the period's snapshot:
+  // regenerated without it, or cleared when no CY remains). Optimistic local
+  // removal gives instant feedback; refresh() bumps the hydration token so the
+  // provider remounts on the authoritative post-delete seed.
+  const removeFile = useCallback(
+    async (id) => {
+      const target = files.find((f) => f.id === id)
+      setFiles((prev) => prev.filter((f) => f.id !== id))
+      if (readOnly || !target?.persisted || !target.importId || !school?.id) return
+      try {
+        setStatus(`Deleting ${target.fileName}…`)
+        await importsApi.delete(school.id, target.importId)
+        setStatus(`Removed ${target.fileName}.`)
+      } catch {
+        setStatus(`Could not delete ${target.fileName}. Please try again.`)
+      } finally {
+        // Re-hydrate either way: confirms the delete, or restores the file if the
+        // request failed (so local state never drifts from the server).
+        await persistence.refresh()
+      }
+    },
+    [files, readOnly, school, persistence],
+  )
 
   const onSetPeriodDate = useCallback((d) => {
     setPeriodTouched(true)
@@ -315,6 +365,47 @@ export function AppProvider({
     })
   }, [])
 
+  // ── Assign a category to a flagged ("N to review") account ──────────────────
+  // Optimistically records the pick in the session overlay (so activeChart, and
+  // thus the preview + the card's unmapped list, update immediately), then
+  // PATCHes /mapping to PERSIST it into the school's canonical merged chart so
+  // the server's canonical generate and future saves include it. On failure the
+  // overlay pick is rolled back and the error surfaced. No-op when read-only or
+  // there is no school / category. All functional setState updaters so deps stay
+  // [readOnly, school]. Keys are String(acct) to match the PATCH contract.
+  const mapAccount = useCallback(
+    async (acct, categoryKey) => {
+      if (readOnly || !school?.id || !categoryKey) return
+      const key = String(acct)
+      // Optimistic: add to overlay (idempotent on re-pick) and mark in-flight.
+      setMappedOverlay((prev) => ({ ...prev, [key]: categoryKey }))
+      setMappingAccts((prev) => {
+        const n = new Set(prev)
+        n.add(key)
+        return n
+      })
+      try {
+        await mappingApi.mergeEntries(school.id, { [key]: categoryKey })
+        setStatus(`Categorized account ${key}.`)
+      } catch (err) {
+        // Roll the optimistic pick back so the account re-flags for another try.
+        setMappedOverlay((prev) => {
+          const next = { ...prev }
+          delete next[key]
+          return next
+        })
+        setStatus(apiErrorMessage(err, `Could not categorize account ${key}.`))
+      } finally {
+        setMappingAccts((prev) => {
+          const n = new Set(prev)
+          n.delete(key)
+          return n
+        })
+      }
+    },
+    [readOnly, school],
+  )
+
   // ── SAVE (Phase 1C): persist the slotted, newly-uploaded imports + request the
   // canonical server snapshot. History-filled slots already exist as imports and
   // are NOT re-POSTed. The live useMemo preview stays the fast path; this is a
@@ -344,6 +435,25 @@ export function AppProvider({
     })
   }, [readOnly, byRole, effectivePeriodDate, effectivePeriodType, persistence])
 
+  // ── ACTIVE CHART: DEFAULT_CHART with this session's category picks merged ────
+  // A copy of DEFAULT_CHART whose mapping.entries are the defaults overlaid with
+  // mappedOverlay (overlay wins, last spread). Passed as `chart` to the preview
+  // generateReports AND as findUnmapped's 2nd arg in the cards, so a fresh pick
+  // both drops the account out of "to review" and lights up the statements.
+  // Pure derivation (no setState); overlay keys are String(acct) and the engine
+  // coerces its numeric lookups identically. Declared ABOVE the reports memo so
+  // reports can depend on it.
+  const activeChart = useMemo(
+    () => ({
+      ...DEFAULT_CHART,
+      mapping: {
+        ...DEFAULT_CHART.mapping,
+        entries: { ...DEFAULT_CHART.mapping.entries, ...mappedOverlay },
+      },
+    }),
+    [mappedOverlay],
+  )
+
   // ── LIVE PREVIEW: reports derived over the pure engine ──────
   // `generatedAt` is intentionally OMITTED so re-renders never thrash a
   // clock value (the engine is deterministic; export stamps the clock).
@@ -355,11 +465,12 @@ export function AppProvider({
         pyData: byRole.py?.rows ?? [],
         auditData: byRole.audit?.rows ?? [],
         school: effectiveSchool,
+        chart: activeChart,
       })
     } catch {
       return null
     }
-  }, [byRole, effectiveSchool, canGenerate])
+  }, [byRole, effectiveSchool, canGenerate, activeChart])
 
   // ── Intake mode (empty | review | collapsed) ────────────────
   const hasUnresolved = conflicts.length > 0
@@ -401,6 +512,25 @@ export function AppProvider({
     [byRole],
   )
 
+  // ── Autosave (opt-in via the autoSave prop) ─────────────────
+  // Once a valid, conflict-free trial balance is in (canGenerate) with unsaved
+  // changes (dirty), persist automatically after a short debounce so the user
+  // never has to hunt for Save. The debounce coalesces rapid CY/PY/Audited
+  // uploads into ONE save; after a save the files become `persisted` (on the
+  // post-save remount) so `dirty` flips false and this can't loop. `save`'s
+  // identity changing on each edit resets the timer, so we only fire once the
+  // uploads settle. This calls an ACTION (save) — no setState-in-effect.
+  const anyParsing = useMemo(() => files.some((f) => f.status === 'parsing'), [files])
+  useEffect(() => {
+    if (!autoSave || readOnly) return undefined
+    if (!canGenerate || !dirty || anyParsing) return undefined
+    if (persistence.saveState === 'saving') return undefined
+    const id = window.setTimeout(() => {
+      void save()
+    }, 1400)
+    return () => window.clearTimeout(id)
+  }, [autoSave, readOnly, canGenerate, dirty, anyParsing, persistence.saveState, save])
+
   const value = {
     school,
     files,
@@ -440,6 +570,12 @@ export function AppProvider({
     removeFile,
     expand,
     collapse,
+    // Category-mapping (intake "assign a category" editor). activeChart drives
+    // the preview + per-file unmapped detection; mapAccount persists a pick;
+    // mappingAccts is the per-row in-flight set (consumers call .has(key)).
+    activeChart,
+    mapAccount,
+    mappingAccts,
   }
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>

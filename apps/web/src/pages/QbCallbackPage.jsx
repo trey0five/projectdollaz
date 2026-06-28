@@ -36,7 +36,7 @@ export default function QbCallbackPage() {
   if (missing) {
     return (
       <div className="mx-auto max-w-[560px] px-4 py-20 text-center">
-        <p className="text-[14px] text-danger">Missing QuickBooks authorization details.</p>
+        <p className="text-[16px] text-danger">Missing QuickBooks authorization details.</p>
       </div>
     )
   }
@@ -44,7 +44,7 @@ export default function QbCallbackPage() {
   return (
     <div className="mx-auto flex max-w-[560px] flex-col items-center gap-3 px-4 py-20 text-center">
       {!error && <Loader2 size={22} className="animate-spin text-gold" />}
-      <p className={`text-[14px] ${error ? 'text-danger' : 'text-muted'}`}>{msg}</p>
+      <p className={`text-[16px] ${error ? 'text-danger' : 'text-muted'}`}>{msg}</p>
     </div>
   )
 }

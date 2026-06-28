@@ -20,7 +20,7 @@ export default function ByMonthBars({ byMonth }) {
 
   if (byMonth.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center rounded-xl border border-rule/60 bg-section px-4 py-8 text-center text-[12px] italic text-muted">
+      <div className="flex h-full items-center justify-center rounded-xl border border-rule/60 bg-section px-4 py-8 text-center text-[14px] italic text-muted">
         No dated disbursements to chart yet.
       </div>
     )
@@ -32,7 +32,7 @@ export default function ByMonthBars({ byMonth }) {
         const pct = max > 0 ? (Math.abs(b.total) / max) * 100 : 0
         const negative = b.total < 0
         return (
-          <div key={b.month} className="flex items-center gap-3 text-[12px]">
+          <div key={b.month} className="flex items-center gap-3 text-[14px]">
             <span className="w-14 shrink-0 font-semibold text-muted">{monthLabel(b.month)}</span>
             <div className="relative h-5 flex-1 overflow-hidden rounded-md bg-section">
               <motion.div

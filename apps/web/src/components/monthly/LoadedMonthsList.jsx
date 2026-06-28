@@ -63,7 +63,7 @@ export default function LoadedMonthsList({
           >
             <div className="flex items-center justify-between gap-2">
               <span
-                className={`text-[12px] font-bold uppercase tracking-[0.08em] ${
+                className={`text-[14px] font-bold uppercase tracking-[0.08em] ${
                   loaded ? 'text-navy' : 'text-muted'
                 }`}
               >
@@ -76,11 +76,11 @@ export default function LoadedMonthsList({
               <>
                 <div className="mt-2 flex min-w-0 items-center gap-1.5">
                   <FileSpreadsheet size={13} className="shrink-0 text-gold" />
-                  <span className="truncate text-[12px] font-medium text-ink" title={loaded.sourceName}>
+                  <span className="truncate text-[14px] font-medium text-ink" title={loaded.sourceName}>
                     {loaded.sourceName}
                   </span>
                 </div>
-                <p className="mt-0.5 text-[11px] text-muted">
+                <p className="mt-0.5 text-[13px] text-muted">
                   {loaded.rowCount} rows
                   {loaded.updatedAt ? ` · ${formatRelative(loaded.updatedAt)}` : ''}
                 </p>
@@ -93,7 +93,7 @@ export default function LoadedMonthsList({
                           type="button"
                           onClick={() => handleDelete(cell.monthKey)}
                           disabled={isDeleting}
-                          className="inline-flex flex-1 items-center justify-center gap-1 rounded-lg bg-rose-600 px-2 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-rose-700 disabled:opacity-60"
+                          className="inline-flex flex-1 items-center justify-center gap-1 rounded-lg bg-rose-600 px-2 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-rose-700 disabled:opacity-60"
                         >
                           {isDeleting ? (
                             <Loader2 size={12} className="animate-spin" />
@@ -106,7 +106,7 @@ export default function LoadedMonthsList({
                           type="button"
                           onClick={() => setConfirming(null)}
                           disabled={isDeleting}
-                          className="rounded-lg border border-rule px-2 py-1.5 text-[11px] font-semibold text-muted transition-colors hover:text-navy"
+                          className="rounded-lg border border-rule px-2 py-1.5 text-[13px] font-semibold text-muted transition-colors hover:text-navy"
                         >
                           Cancel
                         </button>
@@ -116,7 +116,7 @@ export default function LoadedMonthsList({
                         <button
                           type="button"
                           onClick={() => onReplace?.(cell.monthKey)}
-                          className="inline-flex flex-1 items-center justify-center gap-1 rounded-lg border border-rule px-2 py-1.5 text-[11px] font-semibold text-navy transition-colors hover:border-gold/60 hover:text-gold"
+                          className="inline-flex flex-1 items-center justify-center gap-1 rounded-lg border border-rule px-2 py-1.5 text-[13px] font-semibold text-navy transition-colors hover:border-gold/60 hover:text-gold"
                         >
                           <RotateCcw size={12} /> Replace
                         </button>
@@ -139,12 +139,12 @@ export default function LoadedMonthsList({
                   <button
                     type="button"
                     onClick={() => onReplace?.(cell.monthKey)}
-                    className="inline-flex items-center gap-1 rounded-lg border border-dashed border-rule px-2 py-1.5 text-[11px] font-semibold text-muted transition-colors hover:border-gold/60 hover:text-gold"
+                    className="inline-flex items-center gap-1 rounded-lg border border-dashed border-rule px-2 py-1.5 text-[13px] font-semibold text-muted transition-colors hover:border-gold/60 hover:text-gold"
                   >
                     <Plus size={12} /> Add
                   </button>
                 ) : (
-                  <span className="text-[11px] italic text-muted/70">Not loaded</span>
+                  <span className="text-[13px] italic text-muted/70">Not loaded</span>
                 )}
               </div>
             )}

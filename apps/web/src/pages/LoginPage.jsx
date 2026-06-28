@@ -61,14 +61,14 @@ export default function LoginPage() {
       />
 
       <div className="mb-4 text-right">
-        <Link to="/forgot-password" className="text-[13px] font-semibold text-gold hover:underline">
+        <Link to="/forgot-password" className="text-[15px] font-semibold text-gold hover:underline">
           Forgot password?
         </Link>
       </div>
 
       <FormError>{error}</FormError>
       {needsVerify && (
-        <div className="mt-1 text-center text-[13px]">
+        <div className="mt-1 text-center text-[15px]">
           <Link to="/verify-email" className="font-semibold text-gold hover:underline">
             Resend verification email
           </Link>
@@ -84,7 +84,7 @@ export default function LoginPage() {
         {busy ? 'Signing in…' : 'Sign In'}
       </motion.button>
 
-      <div className="mt-6 text-center text-[13px] text-muted">
+      <div className="mt-6 text-center text-[15px] text-muted">
         No account?{' '}
         <Link to="/register" className="font-semibold text-gold hover:underline">
           Create one

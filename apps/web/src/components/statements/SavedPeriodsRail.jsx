@@ -40,22 +40,22 @@ export default function SavedPeriodsRail({
           >
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-1.5">
-                <span className="font-serif text-[14px] font-semibold text-navy sm:text-[15px]">{p.label}</span>
+                <span className="font-serif text-[16px] font-semibold text-navy sm:text-[16px]">{p.label}</span>
                 {isLive ? (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-gold/40 bg-gold/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#7a5e00]">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-gold/40 bg-gold/10 px-2 py-0.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-[#7a5e00]">
                     <Sparkles size={11} /> Live
                   </span>
                 ) : p.hasSnapshot ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[12px] font-semibold text-emerald-700">
                     <FileCheck2 size={11} /> Saved
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-section px-2 py-0.5 text-[10px] font-semibold text-muted">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-section px-2 py-0.5 text-[12px] font-semibold text-muted">
                     <FileX2 size={11} /> No snapshot
                   </span>
                 )}
               </div>
-              <p className="mt-0.5 text-[12px] text-muted">
+              <p className="mt-0.5 text-[14px] text-muted">
                 Ends {formatShortDate(p.periodEndDate)} ·{' '}
                 {['cy', 'py', 'audit']
                   .filter((r) => p.roles?.[r])

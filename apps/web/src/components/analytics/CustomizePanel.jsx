@@ -29,10 +29,10 @@ export default function CustomizePanel({ draft, onChange }) {
   return (
     <div className="rounded-2xl border border-gold/30 bg-section p-4 shadow-card ring-1 ring-gold/5">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
+        <p className="text-[13px] font-semibold uppercase tracking-[0.1em] text-muted">
           Drag the handle or use the arrows to reorder · eye to show/hide · chart &amp; wide per metric
         </p>
-        <span className="shrink-0 rounded-full border border-gold/40 bg-gold/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-navy">
+        <span className="shrink-0 rounded-full border border-gold/40 bg-gold/10 px-2.5 py-0.5 text-[12px] font-semibold uppercase tracking-[0.06em] text-navy">
           {visibleCount} shown
         </span>
       </div>

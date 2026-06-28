@@ -356,6 +356,30 @@ export const TOOL_SCHEMAS = [
   {
     type: 'function',
     function: {
+      name: 'propose_import_trial_balance',
+      description:
+        'PROPOSE importing an ATTACHED spreadsheet that you have identified as a trial balance (does NOT apply — the user must confirm). Pass the attachmentId shown in the attachment digest. The server already holds the fully parsed account rows — NEVER retype or fabricate them. Optionally set the role (cy = current year, py = prior year, audit = audited) and a label. Summarize the trial balance for the user first, then call this.',
+      parameters: {
+        type: 'object',
+        properties: {
+          attachmentId: {
+            type: 'string',
+            description: 'The attachmentId from the attachment digest for the spreadsheet to import.',
+          },
+          role: {
+            type: 'string',
+            enum: ['cy', 'py', 'audit'],
+            description: 'Which slot to import into. Defaults to cy (current year).',
+          },
+          label: { type: 'string', description: 'Optional period label, e.g. "FY2025".' },
+        },
+        required: ['attachmentId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'render_chart',
       description:
         'Draw a chart for the user. Call this to visualize numbers you have already fetched (a trend, a comparison, a breakdown). Pick the chart type that fits and give a clear title.',

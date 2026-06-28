@@ -147,7 +147,7 @@ export default function CorrectiveActionPlanSection({ schoolId, periodId, canEdi
           </span>
           <div>
             <h2 className="font-serif text-xl font-semibold text-navy">Corrective Action Plan</h2>
-            <p className="text-[13px] text-muted">
+            <p className="text-[15px] text-muted">
               {canEdit
                 ? 'Pre-filled remediation for each material / reportable exception. Edit, then save.'
                 : 'Read-only — only an owner or accountant can edit the plan.'}
@@ -159,7 +159,7 @@ export default function CorrectiveActionPlanSection({ schoolId, periodId, canEdi
             <button
               type="button"
               onClick={autoFill}
-              className="inline-flex items-center gap-2 rounded-lg border border-border bg-white px-4 py-2 text-[13px] font-semibold text-navy transition-all hover:border-gold/50 hover:text-gold"
+              className="inline-flex items-center gap-2 rounded-lg border border-border bg-white px-4 py-2 text-[15px] font-semibold text-navy transition-all hover:border-gold/50 hover:text-gold"
             >
               <Sparkles size={15} /> Auto-fill from findings
             </button>
@@ -169,17 +169,17 @@ export default function CorrectiveActionPlanSection({ schoolId, periodId, canEdi
       </div>
 
       {loading && !data ? (
-        <div className="card-soft p-8 text-center text-[14px] text-muted">
+        <div className="card-soft p-8 text-center text-[16px] text-muted">
           Loading the corrective action plan…
         </div>
       ) : error ? (
         <FormError>{error}</FormError>
       ) : !hasAny ? (
         <div className="card-soft border-dashed px-6 py-10 text-center">
-          <p className="font-serif text-[15px] italic text-muted">
+          <p className="font-serif text-[16px] italic text-muted">
             No material or reportable exceptions — nothing to remediate for this period.
           </p>
-          <p className="mt-1 text-[12px] text-muted">
+          <p className="mt-1 text-[14px] text-muted">
             If a finding becomes material or reportable, a pre-filled CAP card appears here.
           </p>
         </div>
@@ -189,7 +189,7 @@ export default function CorrectiveActionPlanSection({ schoolId, periodId, canEdi
             <CapSummaryStrip summary={summary} />
           ) : (
             <div className="card-soft border-dashed px-6 py-8 text-center">
-              <p className="font-serif text-[15px] italic text-muted">
+              <p className="font-serif text-[16px] italic text-muted">
                 No active exceptions — only dismissed items remain for this period.
               </p>
             </div>
@@ -216,7 +216,7 @@ export default function CorrectiveActionPlanSection({ schoolId, periodId, canEdi
                 onClick={() => setShowResolved((s) => !s)}
                 className="flex w-full items-center justify-between gap-2 rounded-lg border border-rule/70 bg-section/50 px-4 py-2.5 text-left transition-colors hover:border-gold/40"
               >
-                <span className="text-[12px] font-semibold uppercase tracking-[0.14em] text-muted">
+                <span className="text-[14px] font-semibold uppercase tracking-[0.14em] text-muted">
                   Resolved / self-healed ({resolved.length})
                 </span>
                 <ChevronDown
@@ -247,7 +247,7 @@ export default function CorrectiveActionPlanSection({ schoolId, periodId, canEdi
                 onClick={() => setShowDismissed((s) => !s)}
                 className="flex w-full items-center justify-between gap-2 rounded-lg border border-rule/70 bg-section/50 px-4 py-2.5 text-left transition-colors hover:border-gold/40"
               >
-                <span className="text-[12px] font-semibold uppercase tracking-[0.14em] text-muted">
+                <span className="text-[14px] font-semibold uppercase tracking-[0.14em] text-muted">
                   Dismissed ({archived.length})
                 </span>
                 <ChevronDown

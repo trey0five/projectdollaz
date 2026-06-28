@@ -39,7 +39,7 @@ export default function ReadinessSummary({ summary }) {
           return (
             <span
               key={key}
-              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[12px] font-semibold ${meta.chip} ${
+              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[14px] font-semibold ${meta.chip} ${
                 n === 0 ? 'opacity-50' : ''
               }`}
             >
@@ -58,7 +58,7 @@ export default function ReadinessSummary({ summary }) {
           className="mt-4 flex items-start gap-3 rounded-xl border-2 border-red-200 bg-red-50 px-4 py-3"
         >
           <AlertTriangle size={18} className="mt-0.5 shrink-0 text-red-600" />
-          <p className="text-[13px] text-red-700">
+          <p className="text-[15px] text-red-700">
             <span className="font-semibold">Material exception present.</span> A
             Corrective Action Plan will be required for this engagement. (The CAP
             document itself is produced separately.)

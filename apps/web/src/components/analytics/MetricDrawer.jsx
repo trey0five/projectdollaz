@@ -73,7 +73,7 @@ function TargetBandBar({ metric }) {
           aria-hidden
         />
       </div>
-      <div className="mt-1.5 flex justify-between text-[10px] text-muted">
+      <div className="mt-1.5 flex justify-between text-[12px] text-muted">
         <span>
           {higher
             ? `Risk < ${formatMetricValue(bands.risk, fmt)}`
@@ -159,7 +159,7 @@ export default function MetricDrawer({ schoolId, metric, open, onClose }) {
                       <StatusChip status={metric.status} />
                     </div>
                   ) : (
-                    <p className="mt-0.5 text-[11px] italic text-muted">
+                    <p className="mt-0.5 text-[13px] italic text-muted">
                       Contextual — no universal target
                     </p>
                   )}
@@ -184,7 +184,7 @@ export default function MetricDrawer({ schoolId, metric, open, onClose }) {
                       <AnimatedMetricValue value={metric.value} format={fmt} />
                     </span>
                     {isMix && (
-                      <span className="pb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
+                      <span className="pb-1 text-[13px] font-semibold uppercase tracking-[0.12em] text-muted">
                         Total
                       </span>
                     )}
@@ -198,7 +198,7 @@ export default function MetricDrawer({ schoolId, metric, open, onClose }) {
                   </div>
                 </div>
               ) : (
-                <div className="rounded-xl border border-border bg-section px-4 py-3 text-[13px] text-muted">
+                <div className="rounded-xl border border-border bg-section px-4 py-3 text-[15px] text-muted">
                   {metric.inputsMissing?.length
                     ? `Unavailable — needs: ${metric.inputsMissing.join(', ')}`
                     : 'Unavailable for this period.'}
@@ -209,7 +209,7 @@ export default function MetricDrawer({ schoolId, metric, open, onClose }) {
                   list IS the story for revenue_mix / expense_mix. */}
               {isMix && metric.available && metric.components && (
                 <div>
-                  <p className="mb-1.5 font-sans text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
+                  <p className="mb-1.5 font-sans text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">
                     Composition
                   </p>
                   <div className="card-soft p-3">
@@ -221,7 +221,7 @@ export default function MetricDrawer({ schoolId, metric, open, onClose }) {
               {/* target band */}
               {metric.bands && metric.available && (
                 <div>
-                  <p className="mb-1 font-sans text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
+                  <p className="mb-1 font-sans text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">
                     Target band
                   </p>
                   <TargetBandBar metric={metric} />
@@ -231,16 +231,16 @@ export default function MetricDrawer({ schoolId, metric, open, onClose }) {
               {/* formula + description */}
               {(metric.formula || metric.description) && (
                 <div>
-                  <p className="mb-1 font-sans text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
+                  <p className="mb-1 font-sans text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">
                     How it's calculated
                   </p>
                   {metric.formula && (
-                    <p className="rounded-lg border border-rule/50 bg-white px-3 py-2 font-serif text-[14px] text-navy">
+                    <p className="rounded-lg border border-rule/50 bg-white px-3 py-2 font-serif text-[16px] text-navy">
                       {metric.formula}
                     </p>
                   )}
                   {metric.description && (
-                    <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
+                    <p className="mt-1.5 text-[14.5px] leading-relaxed text-muted">
                       {metric.description}
                     </p>
                   )}
@@ -250,14 +250,14 @@ export default function MetricDrawer({ schoolId, metric, open, onClose }) {
               {/* named inputs */}
               {metric.inputs?.length > 0 && (
                 <div>
-                  <p className="mb-1.5 font-sans text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
+                  <p className="mb-1.5 font-sans text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">
                     Inputs
                   </p>
                   <ul className="divide-y divide-rule/40 overflow-hidden rounded-lg border border-rule/50 bg-white">
                     {metric.inputs.map((inp) => (
                       <li
                         key={inp.key}
-                        className="flex items-center justify-between gap-3 px-3 py-2 text-[13px]"
+                        className="flex items-center justify-between gap-3 px-3 py-2 text-[15px]"
                       >
                         <span className="text-ink">{inp.label}</span>
                         <span
@@ -277,7 +277,7 @@ export default function MetricDrawer({ schoolId, metric, open, onClose }) {
 
               {/* trend */}
               <div>
-                <p className="mb-1.5 font-sans text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
+                <p className="mb-1.5 font-sans text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">
                   Trend across periods
                 </p>
                 <div className="card-soft p-3">

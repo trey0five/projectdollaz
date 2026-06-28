@@ -31,7 +31,7 @@ export default function PeriodSelector({ periods, activeId, onSelect, light = fa
               }
               onSelect(p.id)
             }}
-            className={`flex min-h-[36px] items-center gap-2 rounded-lg border px-3 py-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] transition-all ${cls}`}
+            className={`flex min-h-[36px] items-center gap-2 rounded-lg border px-3 py-1.5 text-[14px] font-semibold uppercase tracking-[0.08em] transition-all ${cls}`}
             title={`Period end ${formatShortDate(p.periodEndDate)}`}
           >
             {p.label}

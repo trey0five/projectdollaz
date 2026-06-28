@@ -29,7 +29,7 @@ function StatementsView({ bundle, label, periodEndDate, periodType, school, onBa
           <h2 className="truncate font-serif text-lg font-semibold text-navy">
             {label || 'Statements'}
           </h2>
-          <p className="text-[12px] text-muted">
+          <p className="text-[14px] text-muted">
             {formatShortDate(periodEndDate)} · generated statements (read-only)
           </p>
         </div>
@@ -58,7 +58,7 @@ function NoStatementsCard() {
       </span>
       <div>
         <h2 className="font-serif text-xl font-semibold text-navy">No statements yet</h2>
-        <p className="mx-auto mt-1.5 max-w-sm text-[13px] leading-relaxed text-muted">
+        <p className="mx-auto mt-1.5 max-w-sm text-[15px] leading-relaxed text-muted">
           Add your trial balance in the Data hub and we’ll generate your four financial statements
           right here.
         </p>
@@ -160,7 +160,7 @@ export default function StatementsWorkspace() {
     <div className="mx-auto max-w-[1460px] px-4 py-6 sm:px-10">
       <Link
         to="/"
-        className="mb-4 inline-flex items-center gap-1.5 text-[13px] font-semibold text-muted transition-colors hover:text-gold"
+        className="mb-4 inline-flex items-center gap-1.5 text-[15px] font-semibold text-muted transition-colors hover:text-gold"
       >
         <ArrowLeft size={15} /> Back to dashboard
       </Link>
@@ -173,7 +173,7 @@ export default function StatementsWorkspace() {
             <h1 className="font-serif text-xl font-semibold text-navy sm:text-2xl">
               Statements &amp; Periods
             </h1>
-            <p className="text-[13px] text-muted">
+            <p className="text-[15px] text-muted">
               Your generated financial statements — view any period here. Add or update data in the
               Data hub.
             </p>
@@ -190,13 +190,13 @@ export default function StatementsWorkspace() {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-6">
         {/* Saved-periods rail */}
         <aside className="w-full shrink-0 lg:sticky lg:top-24 lg:w-[224px]">
-          <h2 className="mb-2.5 px-1 font-sans text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+          <h2 className="mb-2.5 px-1 font-sans text-[13px] font-semibold uppercase tracking-[0.14em] text-muted">
             Saved periods
           </h2>
           {periods.length === 0 ? (
             <div className="rounded-xl border-2 border-dashed border-border bg-section px-4 py-8 text-center">
-              <p className="font-serif text-[15px] italic text-muted">No saved periods yet.</p>
-              <p className="mt-1 text-[12px] text-muted">
+              <p className="font-serif text-[16px] italic text-muted">No saved periods yet.</p>
+              <p className="mt-1 text-[14px] text-muted">
                 Upload a trial balance and save to build your history.
               </p>
             </div>

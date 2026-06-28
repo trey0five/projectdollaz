@@ -30,10 +30,10 @@ function GatewayTile({ to, title, description, stat, index, icon }) {
             className="text-muted/50 transition-all group-hover:translate-x-0.5 group-hover:text-gold"
           />
         </div>
-        <h3 className="mt-2.5 font-serif text-[15px] font-semibold leading-tight text-navy sm:mt-4 sm:text-lg">{title}</h3>
-        <p className="mt-1 hidden flex-1 text-[13px] leading-relaxed text-muted sm:block">{description}</p>
+        <h3 className="mt-2.5 font-serif text-[16px] font-semibold leading-tight text-navy sm:mt-4 sm:text-lg">{title}</h3>
+        <p className="mt-1 hidden flex-1 text-[15px] leading-relaxed text-muted sm:block">{description}</p>
         {stat && (
-          <p className="mt-2 border-t border-rule/50 pt-2 text-[10px] font-semibold uppercase tracking-[0.05em] text-gold sm:mt-3 sm:pt-3 sm:text-[12px] sm:tracking-[0.06em]">
+          <p className="mt-2 border-t border-rule/50 pt-2 text-[12px] font-semibold uppercase tracking-[0.05em] text-gold sm:mt-3 sm:pt-3 sm:text-[14px] sm:tracking-[0.06em]">
             {stat}
           </p>
         )}

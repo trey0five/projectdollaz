@@ -32,16 +32,16 @@ export default function AuthLayout({ title, subtitle, children, footer, width = 
           transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
           className="relative w-full rounded-2xl border-t-4 border-gold bg-cream px-6 py-10 shadow-login sm:px-14 sm:py-12"
         >
-          <div className="mb-2 flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.28em] text-gold">
+          <div className="mb-2 flex items-center gap-2 text-[14px] font-semibold uppercase tracking-[0.28em] text-gold">
             <ShieldCheck size={16} /> Project Dollaz
           </div>
           <h1 className="mb-2 font-serif text-[26px] font-semibold leading-[1.1] text-navy sm:text-[30px]">
             {title}
           </h1>
-          {subtitle && <p className="mb-8 text-[14px] leading-relaxed text-muted">{subtitle}</p>}
+          {subtitle && <p className="mb-8 text-[16px] leading-relaxed text-muted">{subtitle}</p>}
           {!subtitle && <div className="mb-6" />}
           {children}
-          {footer && <div className="mt-6 text-center text-[13px] text-muted">{footer}</div>}
+          {footer && <div className="mt-6 text-center text-[15px] text-muted">{footer}</div>}
         </motion.div>
       </div>
     </div>

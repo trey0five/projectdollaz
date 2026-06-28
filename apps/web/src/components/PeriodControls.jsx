@@ -1,5 +1,14 @@
+import { useState } from 'react'
+import { Pencil } from 'lucide-react'
 import { useApp } from '../context/AppContext.jsx'
 import { inferPeriod } from '@finrep/ingestion'
+import { formatShortDate } from '../lib/format.js'
+
+const TYPE_LABEL = {
+  ytd: 'Year-to-Date',
+  mtd: 'Month-to-Date',
+  fy: 'Full Fiscal Year',
+}
 
 /** Reactive period-end date + period-type, pre-filled from the CY file. */
 export default function PeriodControls() {
@@ -24,10 +33,37 @@ export default function PeriodControls() {
   const autoFilled = !periodTouched && !!detectedDate && periodDate === detectedDate
   const showReset = periodTouched && detectedDate && detectedDate !== periodDate
 
+  // When the period was confidently auto-filled, default to a compact CONFIRMATION
+  // row (it reads as "we set this for you — change if needed") instead of two big
+  // inputs. The user can expand to edit. Any non-auto-filled / empty / touched
+  // state shows the full controls.
+  const [editing, setEditing] = useState(false)
+  const collapsed = autoFilled && !editing
+
+  if (collapsed) {
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border-2 border-border bg-white px-4 py-3.5 shadow-card">
+        <p className="text-[14px] text-navy">
+          <span className="font-semibold uppercase tracking-[0.1em] text-muted">Period:</span>{' '}
+          <span className="font-semibold">{TYPE_LABEL[periodType] || 'Full Fiscal Year'}</span>{' '}
+          ending <span className="font-semibold">{formatShortDate(periodDate)}</span>
+          <span className="ml-2 text-muted">· auto-detected from {byRole.cy?.fileName}</span>
+        </p>
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="inline-flex items-center gap-1.5 rounded-lg border-2 border-gold/40 px-3 py-1.5 text-[13px] font-bold uppercase tracking-[0.06em] text-gold transition-colors hover:bg-gold/5"
+        >
+          <Pencil size={13} /> Change
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-wrap items-end gap-5 rounded-2xl border-2 border-border bg-white p-4 shadow-card">
       <div className="flex flex-col">
-        <span className="mb-2 text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">
+        <span className="mb-2 text-[14px] font-semibold uppercase tracking-[0.12em] text-muted">
           Period End Date
         </span>
         <input
@@ -41,7 +77,7 @@ export default function PeriodControls() {
       </div>
 
       <div className="flex flex-col">
-        <span className="mb-2 text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">
+        <span className="mb-2 text-[14px] font-semibold uppercase tracking-[0.12em] text-muted">
           Reporting Period
         </span>
         <select
@@ -55,7 +91,7 @@ export default function PeriodControls() {
         </select>
       </div>
 
-      <div className="flex flex-col pb-1 text-[12px] text-muted">
+      <div className="flex flex-col pb-1 text-[14px] text-muted">
         {autoFilled && (
           <span className="italic">
             Auto-filled from {byRole.cy?.fileName}

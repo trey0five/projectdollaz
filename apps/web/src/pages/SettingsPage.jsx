@@ -19,7 +19,7 @@ export default function SettingsPage() {
           </h1>
           <Link
             to="/"
-            className="flex min-h-[44px] items-center gap-2 text-[13px] font-semibold text-white/70 transition-colors hover:text-gold-light"
+            className="flex min-h-[44px] items-center gap-2 text-[15px] font-semibold text-white/70 transition-colors hover:text-gold-light"
           >
             <ArrowLeft size={15} /> Back to dashboard
           </Link>

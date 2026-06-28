@@ -23,7 +23,7 @@ function StatusPill({ status }) {
   const meta = STATUS_META[status] || STATUS_META.none
   return (
     <span
-      className={`inline-flex items-center rounded-full px-3 py-1 text-[12px] font-semibold uppercase tracking-wide ${meta.cls}`}
+      className={`inline-flex items-center rounded-full px-3 py-1 text-[14px] font-semibold uppercase tracking-wide ${meta.cls}`}
     >
       {meta.label}
     </span>
@@ -98,7 +98,7 @@ export default function BillingSection() {
   if (loading) {
     return (
       <SettingsCard title="Billing">
-        <div className="flex items-center gap-2 text-[14px] text-muted">
+        <div className="flex items-center gap-2 text-[16px] text-muted">
           <Loader2 size={16} className="animate-spin" /> Loading billing status…
         </div>
       </SettingsCard>
@@ -130,21 +130,21 @@ export default function BillingSection() {
       {/* Current state summary */}
       <dl className="mb-6 grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
         <div>
-          <dt className="text-[12px] font-semibold uppercase tracking-[0.14em] text-muted">
+          <dt className="text-[14px] font-semibold uppercase tracking-[0.14em] text-muted">
             Plan
           </dt>
-          <dd className="mt-1 text-[15px] font-semibold capitalize text-navy">
+          <dd className="mt-1 text-[16px] font-semibold capitalize text-navy">
             {plan || (isTrial ? 'Free trial' : '—')}
           </dd>
         </div>
         <div>
-          <dt className="text-[12px] font-semibold uppercase tracking-[0.14em] text-muted">
+          <dt className="text-[14px] font-semibold uppercase tracking-[0.14em] text-muted">
             {isTrial ? 'Trial ends' : 'Renews / ends'}
           </dt>
-          <dd className="mt-1 text-[15px] font-semibold text-navy">
+          <dd className="mt-1 text-[16px] font-semibold text-navy">
             {fmtDate(isTrial ? trialEnd : currentPeriodEnd)}
             {typeof daysLeft === 'number' && (
-              <span className="ml-2 text-[13px] font-normal text-muted">
+              <span className="ml-2 text-[15px] font-normal text-muted">
                 ({daysLeft} day{daysLeft === 1 ? '' : 's'} left)
               </span>
             )}
@@ -155,7 +155,7 @@ export default function BillingSection() {
       {/* Entitlement notice */}
       {isEntitled ? (
         isTrial && (
-          <div className="mb-5 flex items-start gap-2 rounded-lg bg-gold/10 px-4 py-3 text-[13px] text-navy">
+          <div className="mb-5 flex items-start gap-2 rounded-lg bg-gold/10 px-4 py-3 text-[15px] text-navy">
             <Check size={16} className="mt-0.5 shrink-0 text-gold" />
             <span>
               You have full access during your trial
@@ -165,7 +165,7 @@ export default function BillingSection() {
           </div>
         )
       ) : (
-        <div className="mb-5 flex items-start gap-2 rounded-lg bg-red-50 px-4 py-3 text-[13px] text-red-700">
+        <div className="mb-5 flex items-start gap-2 rounded-lg bg-red-50 px-4 py-3 text-[15px] text-red-700">
           <AlertTriangle size={16} className="mt-0.5 shrink-0" />
           <span>
             Statement generation is paused.{' '}
@@ -213,7 +213,7 @@ export default function BillingSection() {
               type="button"
               onClick={doPortal}
               disabled={!!busy}
-              className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border-2 border-border px-5 py-2 text-[13px] font-semibold text-navy transition-colors hover:border-gold disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border-2 border-border px-5 py-2 text-[15px] font-semibold text-navy transition-colors hover:border-gold disabled:cursor-not-allowed disabled:opacity-50"
             >
               {busy === 'portal' ? (
                 <Loader2 size={15} className="animate-spin" />

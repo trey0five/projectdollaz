@@ -18,10 +18,10 @@ export default function DisclaimerBanner() {
         <ShieldAlert size={20} />
       </span>
       <div>
-        <h2 className="font-serif text-[15px] font-semibold text-navy">
+        <h2 className="font-serif text-[16px] font-semibold text-navy">
           Readiness pre-flag — not the official AUP
         </h2>
-        <p className="mt-1 text-[13px] leading-relaxed text-muted">
+        <p className="mt-1 text-[15px] leading-relaxed text-muted">
           This mirrors the Step Up For Students AUP template and the governing
           Florida statutes so you can self-check before your CPA engagement. It is{' '}
           <span className="font-semibold text-navy">not</span> the official

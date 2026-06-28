@@ -35,7 +35,7 @@ export default function ByProgramDonut({ byProgram }) {
 
   if (sum <= 0) {
     return (
-      <div className="flex h-full items-center justify-center rounded-xl border border-rule/60 bg-section px-4 py-8 text-center text-[12px] italic text-muted">
+      <div className="flex h-full items-center justify-center rounded-xl border border-rule/60 bg-section px-4 py-8 text-center text-[14px] italic text-muted">
         No positive disbursement totals to chart yet.
       </div>
     )
@@ -74,7 +74,7 @@ export default function ByProgramDonut({ byProgram }) {
           {positive.length === 1 ? 'program' : 'programs'}
         </text>
       </svg>
-      <ul className="space-y-2 text-[12px]">
+      <ul className="space-y-2 text-[14px]">
         {segments.map((s) => (
           <li key={s.program} className="flex items-center gap-2">
             <span

@@ -28,7 +28,7 @@ export default function TrendChart({ trend }) {
 
   if (!hasData) {
     return (
-      <div className="flex h-52 items-center justify-center text-[13px] italic text-muted sm:h-64">
+      <div className="flex h-52 items-center justify-center text-[15px] italic text-muted sm:h-64">
         No data points for this metric yet — save more periods to see a trend.
       </div>
     )

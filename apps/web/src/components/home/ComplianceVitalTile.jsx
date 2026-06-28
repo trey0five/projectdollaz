@@ -50,7 +50,7 @@ export default function ComplianceVitalTile({ summary, loading, index = 0 }) {
         {summary && (
           <>
             <span
-              className={`hidden shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] sm:inline-flex ${meta.chip}`}
+              className={`hidden shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[12px] font-semibold uppercase tracking-[0.08em] sm:inline-flex ${meta.chip}`}
             >
               <StatusDot status={status} size={7} />
               {statusLabel}
@@ -61,7 +61,7 @@ export default function ComplianceVitalTile({ summary, loading, index = 0 }) {
           </>
         )}
       </div>
-      <h3 className="mt-2.5 line-clamp-2 font-sans text-[11px] font-semibold uppercase leading-snug tracking-[0.1em] text-muted">
+      <h3 className="mt-2.5 line-clamp-2 font-sans text-[13px] font-semibold uppercase leading-snug tracking-[0.1em] text-muted">
         Review Readiness
       </h3>
 
@@ -78,7 +78,7 @@ export default function ComplianceVitalTile({ summary, loading, index = 0 }) {
                 <span className="gold-text font-serif text-[30px] font-semibold leading-none sm:text-[40px]">
                   {material > 0 ? material : reportable}
                 </span>
-                <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted sm:text-[12px]">
+                <span className="text-[13px] font-semibold uppercase tracking-[0.08em] text-muted sm:text-[14px]">
                   {material > 0 ? 'material' : 'reportable'}
                 </span>
               </span>
@@ -88,7 +88,7 @@ export default function ComplianceVitalTile({ summary, loading, index = 0 }) {
               </span>
             )}
           </div>
-          <p className={`mt-2.5 text-[12px] leading-snug sm:mt-3 ${requiresAup ? meta.text : 'text-muted'}`}>{sub}</p>
+          <p className={`mt-2.5 text-[14px] leading-snug sm:mt-3 ${requiresAup ? meta.text : 'text-muted'}`}>{sub}</p>
         </>
       )}
     </motion.button>

@@ -3,7 +3,9 @@
 // (instead of the live intake-derived reports). No intake, no save — view + export.
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
+import { Maximize2 } from 'lucide-react'
 import { ReportViewProvider } from '../../context/AppContext.jsx'
+import ReportExpandOverlay from './ReportExpandOverlay.jsx'
 import StatementOfActivities from './StatementOfActivities.jsx'
 import StatementOfFinancialPosition from './StatementOfFinancialPosition.jsx'
 import StatementOfCashFlows from './StatementOfCashFlows.jsx'
@@ -18,6 +20,11 @@ const TABS = [
 
 export default function ReportTabs({ bundle, school, dateLabel = '', periodLabel = '' }) {
   const [tab, setTab] = useState('soa')
+  // Tap/click a statement to open the full-screen pinch-zoom view. This lived in
+  // the old Dashboard and was lost when /statements went read-only — restored here
+  // so it works everywhere ReportTabs renders (and finally on mobile, where the
+  // inline report is too small to read).
+  const [expanded, setExpanded] = useState(false)
   const activeTab = TABS.find((t) => t.key === tab)
   const Active = activeTab.Component
 
@@ -56,10 +63,36 @@ export default function ReportTabs({ bundle, school, dateLabel = '', periodLabel
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.25 }}
           >
-            <Active />
+            <div
+              role="button"
+              tabIndex={0}
+              aria-label={`Open ${activeTab.label} full screen`}
+              onClick={() => setExpanded(true)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  setExpanded(true)
+                }
+              }}
+              className="group relative cursor-zoom-in rounded-2xl outline-none ring-gold/50 focus-visible:ring-2"
+            >
+              <Active />
+              <div className="pointer-events-none absolute right-3 top-3 flex items-center gap-1.5 rounded-full bg-navy/85 px-3 py-1.5 text-[12px] font-semibold uppercase tracking-wide text-white shadow-lift transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                <Maximize2 size={12} /> Tap to zoom
+              </div>
+            </div>
           </motion.div>
         </AnimatePresence>
       </main>
+
+      {/* Full-screen pinch-zoom view of the active statement (no-print). */}
+      <ReportExpandOverlay
+        open={expanded}
+        title={activeTab.label}
+        onClose={() => setExpanded(false)}
+      >
+        <Active />
+      </ReportExpandOverlay>
     </ReportViewProvider>
   )
 }

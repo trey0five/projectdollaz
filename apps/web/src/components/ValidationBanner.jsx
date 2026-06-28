@@ -108,7 +108,7 @@ export default function ValidationBanner({ validation }) {
       className={state.container}
     >
       <h4
-        className={`mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] ${state.headerClass}`}
+        className={`mb-2 flex items-center gap-2 text-[13px] font-semibold uppercase tracking-[0.12em] ${state.headerClass}`}
       >
         <Icon size={14} /> {state.eyebrow}
       </h4>

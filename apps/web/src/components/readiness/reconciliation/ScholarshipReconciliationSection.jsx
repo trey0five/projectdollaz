@@ -71,13 +71,13 @@ export default function ScholarshipReconciliationSection({
         </span>
         <div>
           <h2 className="font-serif text-lg font-semibold text-navy">Scholarship Reconciliation</h2>
-          <p className="text-[12px] text-muted">
+          <p className="text-[14px] text-muted">
             Funding-org disbursements vs the recorded scholarship revenue (AUP §IV).
           </p>
         </div>
       </div>
 
-      <div className="flex items-start gap-2 rounded-xl border border-gold/30 bg-gold/5 px-4 py-2.5 text-[12px] text-[#7a5e00]">
+      <div className="flex items-start gap-2 rounded-xl border border-gold/30 bg-gold/5 px-4 py-2.5 text-[14px] text-[#7a5e00]">
         <Info size={14} className="mt-0.5 shrink-0" />
         <span>
           A readiness pre-flag, not the official AUP or legal/audit advice. Per-student
@@ -92,7 +92,7 @@ export default function ScholarshipReconciliationSection({
           <MetricCardSkeleton />
         </div>
       ) : error ? (
-        <p className="rounded-xl border border-danger/30 bg-danger/5 px-4 py-3 text-[13px] text-danger">
+        <p className="rounded-xl border border-danger/30 bg-danger/5 px-4 py-3 text-[15px] text-danger">
           {error}
         </p>
       ) : (
@@ -105,7 +105,7 @@ export default function ScholarshipReconciliationSection({
               onClear={clear}
             />
           )}
-          {saveError && <p className="text-[12px] text-danger">{saveError}</p>}
+          {saveError && <p className="text-[14px] text-danger">{saveError}</p>}
 
           {result && (
             <>
@@ -125,14 +125,14 @@ export default function ScholarshipReconciliationSection({
               {result.count > 0 && <ReconciliationBreakdowns result={result} />}
 
               <div className="card-flashy p-5">
-                <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
+                <p className="mb-3 text-[13px] font-semibold uppercase tracking-[0.1em] text-muted">
                   Anomalies
                 </p>
                 <AnomaliesList anomalies={result.anomalies} />
               </div>
 
               <div>
-                <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
+                <p className="mb-2 text-[13px] font-semibold uppercase tracking-[0.1em] text-muted">
                   Disbursements ({disbursements.length})
                 </p>
                 <DisbursementsTable disbursements={disbursements} />

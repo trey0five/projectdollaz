@@ -10,7 +10,7 @@ import { PROGRAM_OPTIONS } from '../../lib/complianceMeta.js'
 export default function TierSelector({ selected = [], onChange, disabled = false, size = 'md' }) {
   const reduce = useReducedMotion()
   const readOnly = !onChange || disabled
-  const pad = size === 'sm' ? 'px-3 py-1 text-[11px]' : 'px-4 py-1.5 text-[12px]'
+  const pad = size === 'sm' ? 'px-3 py-1 text-[13px]' : 'px-4 py-1.5 text-[14px]'
 
   const toggle = (value) => {
     if (readOnly) return

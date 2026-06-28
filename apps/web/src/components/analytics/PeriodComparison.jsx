@@ -25,14 +25,14 @@ export default function PeriodComparison({ metrics }) {
         </span>
         <div>
           <h3 className="font-serif text-lg font-semibold text-navy">Period-over-period</h3>
-          <p className="text-[12px] text-muted">Each metric this period vs. the prior period.</p>
+          <p className="text-[14px] text-muted">Each metric this period vs. the prior period.</p>
         </div>
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-[13px]">
+        <table className="w-full text-[15px]">
           <thead>
-            <tr className="border-b border-rule text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">
+            <tr className="border-b border-rule text-[12px] font-semibold uppercase tracking-[0.1em] text-muted">
               <th className="py-2 pr-3 text-left font-semibold">Metric</th>
               <th className="px-3 py-2 text-right font-semibold">Prior</th>
               <th className="px-3 py-2 text-right font-semibold">Current</th>

@@ -23,7 +23,7 @@ export default function SchoolSwitcher() {
 
   if (schools.length <= 1) {
     return (
-      <span className="hidden items-center gap-2 text-[14px] text-white/75 sm:flex">
+      <span className="hidden items-center gap-2 text-[16px] text-white/75 sm:flex">
         <Building2 size={15} className="text-gold-light" />
         {activeSchool.name}
       </span>
@@ -34,10 +34,10 @@ export default function SchoolSwitcher() {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 rounded-lg border-2 border-white/20 px-3 py-2 text-[13px] font-semibold text-white/80 transition-all hover:border-gold/60 hover:text-white"
+        className="flex items-center gap-2 rounded-lg border-2 border-white/20 px-3 py-2 text-[15px] font-semibold text-white/80 transition-all hover:border-gold/60 hover:text-white"
       >
         <Building2 size={15} className="text-gold-light" />
-        <span className="max-w-[180px] truncate">{activeSchool.name}</span>
+        <span className="max-w-[96px] truncate sm:max-w-[180px]">{activeSchool.name}</span>
         <ChevronDown size={15} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       <AnimatePresence>
@@ -58,7 +58,7 @@ export default function SchoolSwitcher() {
                       setActiveSchool(s.id)
                       setOpen(false)
                     }}
-                    className={`flex w-full items-center justify-between px-4 py-2.5 text-left text-[14px] transition-colors hover:bg-gold/10 ${
+                    className={`flex w-full items-center justify-between px-4 py-2.5 text-left text-[16px] transition-colors hover:bg-gold/10 ${
                       active ? 'font-semibold text-navy' : 'text-ink'
                     }`}
                   >

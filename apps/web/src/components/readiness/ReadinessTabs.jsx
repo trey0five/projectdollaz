@@ -20,7 +20,7 @@ export default function ReadinessTabs({ tabs, value, onChange }) {
               type="button"
               onClick={() => onChange(t.key)}
               aria-current={value === t.key ? 'page' : undefined}
-              className={`relative -mb-0.5 flex shrink-0 items-center gap-2 whitespace-nowrap rounded-t-lg px-3.5 py-4 text-[13px] font-semibold uppercase tracking-wide transition-colors ${
+              className={`relative -mb-0.5 flex shrink-0 items-center gap-2 whitespace-nowrap rounded-t-lg px-3.5 py-4 text-[15px] font-semibold uppercase tracking-wide transition-colors ${
                 value === t.key
                   ? 'bg-gold/15 text-navy'
                   : 'text-muted hover:bg-section/60 hover:text-navy'

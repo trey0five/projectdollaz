@@ -23,7 +23,7 @@ export default function ChartRenderer({ spec }) {
 
   return (
     <div className="mt-2 rounded-lg border border-rule/60 bg-white p-2">
-      {spec.title && <p className="mb-1 text-[11px] font-semibold text-navy">{spec.title}</p>}
+      {spec.title && <p className="mb-1 text-[13px] font-semibold text-navy">{spec.title}</p>}
       <ResponsiveContainer width="100%" height={180}>
         {type === 'line' ? (
           <LineChart data={data} margin={{ top: 5, right: 8, bottom: 0, left: 0 }}>

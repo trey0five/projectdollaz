@@ -24,7 +24,7 @@ export default function EntitlementPausedPanel() {
       <h2 className="mt-4 font-serif text-xl font-semibold text-navy">
         Insights are paused
       </h2>
-      <p className="mt-2 text-[14px] text-red-700">
+      <p className="mt-2 text-[16px] text-red-700">
         Financial insights are paused because {reason}.{' '}
         {isOwner
           ? 'Subscribe to unlock your dashboard again.'
@@ -32,7 +32,7 @@ export default function EntitlementPausedPanel() {
       </p>
       <Link
         to="/settings/billing"
-        className="mt-6 inline-flex min-h-[44px] items-center justify-center rounded-lg bg-red-600 px-6 py-2.5 text-[13px] font-semibold uppercase tracking-wide text-white transition-colors hover:bg-red-700"
+        className="mt-6 inline-flex min-h-[44px] items-center justify-center rounded-lg bg-red-600 px-6 py-2.5 text-[15px] font-semibold uppercase tracking-wide text-white transition-colors hover:bg-red-700"
       >
         {isOwner ? 'Subscribe now' : 'View billing'}
       </Link>

@@ -39,7 +39,7 @@ export default function BudgetBridge({ budgetNet, actualNet, revVar, expVar }) {
 
   return (
     <div className="rounded-lg border border-rule/60 bg-white p-3">
-      <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.1em] text-gold">
+      <p className="mb-2 text-[12px] font-bold uppercase tracking-[0.1em] text-gold">
         Budget → actual bridge
       </p>
       <div className="space-y-2">
@@ -50,7 +50,7 @@ export default function BudgetBridge({ budgetNet, actualNet, revVar, expVar }) {
           const width = Math.max(x(hi) - x(lo), 0.6)
           return (
             <div key={s.label} className="flex items-center gap-2">
-              <span className="w-28 shrink-0 text-right text-[11px] text-muted">{s.label}</span>
+              <span className="w-28 shrink-0 text-right text-[13px] text-muted">{s.label}</span>
               <div className="relative h-5 flex-1 rounded bg-section">
                 {/* zero baseline */}
                 <span
@@ -63,7 +63,7 @@ export default function BudgetBridge({ budgetNet, actualNet, revVar, expVar }) {
                 />
               </div>
               <span
-                className="w-24 shrink-0 text-right text-[11px] tabular-nums"
+                className="w-24 shrink-0 text-right text-[13px] tabular-nums"
                 style={{ color: s.solid ? '#1e2a4a' : s.color }}
               >
                 {s.solid ? fmtDollar(s.to) : `${s.delta >= 0 ? '+' : '−'}${fmtDollar(Math.abs(s.delta))}`}

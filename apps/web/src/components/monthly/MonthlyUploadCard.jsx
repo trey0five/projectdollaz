@@ -135,7 +135,7 @@ export default function MonthlyUploadCard({
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="font-serif text-lg font-semibold text-navy">Upload a monthly trial balance</h3>
-          <p className="mt-0.5 text-[13px] text-muted">
+          <p className="mt-0.5 text-[15px] text-muted">
             A month-end, cumulative-YTD trial balance (.xlsx) — the standard QuickBooks / Blackbaud
             export.
           </p>
@@ -172,9 +172,9 @@ export default function MonthlyUploadCard({
         </motion.span>
         <div>
           <div className="font-serif text-lg font-semibold text-navy">Drop your monthly trial balance</div>
-          <p className="mt-0.5 text-[13px] text-muted">.xlsx · accounts with month-end balances</p>
+          <p className="mt-0.5 text-[15px] text-muted">.xlsx · accounts with month-end balances</p>
         </div>
-        <span className="btn-ghost mt-1 text-[12px]">Browse files</span>
+        <span className="btn-ghost mt-1 text-[14px]">Browse files</span>
         <input
           ref={inputRef}
           id="monthly-tb-file"
@@ -189,7 +189,7 @@ export default function MonthlyUploadCard({
         <div className="flex items-center justify-between gap-3 rounded-xl border border-rule bg-white px-3.5 py-2.5">
           <div className="flex min-w-0 items-center gap-2.5">
             <FileSpreadsheet size={18} className="shrink-0 text-gold" />
-            <span className="truncate text-[13px] font-medium text-ink">{fileName}</span>
+            <span className="truncate text-[15px] font-medium text-ink">{fileName}</span>
           </div>
           <button
             type="button"
@@ -203,7 +203,7 @@ export default function MonthlyUploadCard({
       )}
 
       {parseError && (
-        <div className="rounded-xl border border-rose-300 bg-rose-50 px-4 py-3 text-[13px] font-medium text-rose-700">
+        <div className="rounded-xl border border-rose-300 bg-rose-50 px-4 py-3 text-[15px] font-medium text-rose-700">
           {parseError}
         </div>
       )}
@@ -212,7 +212,7 @@ export default function MonthlyUploadCard({
         <>
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-xl border border-rule bg-cream/40 px-4 py-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
+              <div className="text-[13px] font-semibold uppercase tracking-[0.1em] text-muted">
                 Accounts parsed
               </div>
               <div className="mt-0.5 font-serif text-xl font-semibold text-navy">
@@ -220,7 +220,7 @@ export default function MonthlyUploadCard({
               </div>
             </div>
             <div className="rounded-xl border border-rule bg-cream/40 px-4 py-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
+              <div className="text-[13px] font-semibold uppercase tracking-[0.1em] text-muted">
                 Net of rows
               </div>
               <div className="mt-0.5 font-serif text-xl font-semibold text-navy">
@@ -234,7 +234,7 @@ export default function MonthlyUploadCard({
           <div>
             <label
               htmlFor="monthly-tb-month"
-              className="mb-1.5 flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-muted"
+              className="mb-1.5 flex items-center gap-1.5 text-[14px] font-semibold uppercase tracking-[0.08em] text-muted"
             >
               <CalendarRange size={14} className="text-gold" /> Which month is this?
             </label>
@@ -242,7 +242,7 @@ export default function MonthlyUploadCard({
               id="monthly-tb-month"
               value={monthKey}
               onChange={(e) => setMonthKey(e.target.value)}
-              className="w-full rounded-xl border border-rule bg-white px-3.5 py-2.5 text-[14px] text-ink focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/30"
+              className="w-full rounded-xl border border-rule bg-white px-3.5 py-2.5 text-[16px] text-ink focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/30"
             >
               <option value="">Select a fiscal-year month…</option>
               {fyMonths.map((m) => (
@@ -253,14 +253,14 @@ export default function MonthlyUploadCard({
               ))}
             </select>
             {willReplace && (
-              <p className="mt-1.5 flex items-center gap-1.5 text-[12px] font-medium text-amber-700">
+              <p className="mt-1.5 flex items-center gap-1.5 text-[14px] font-medium text-amber-700">
                 <AlertTriangle size={13} /> This month is already loaded — saving will replace it.
               </p>
             )}
           </div>
 
           {saveError && (
-            <div className="rounded-xl border border-rose-300 bg-rose-50 px-4 py-3 text-[13px] font-medium text-rose-700">
+            <div className="rounded-xl border border-rose-300 bg-rose-50 px-4 py-3 text-[15px] font-medium text-rose-700">
               {saveError}
             </div>
           )}

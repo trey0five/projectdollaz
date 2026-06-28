@@ -11,7 +11,7 @@ export default function StatusBadge({ status }) {
   const chip = complianceStatusMeta(status).meta.chip
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${chip}`}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[12px] font-semibold uppercase tracking-[0.08em] ${chip}`}
     >
       <StatusDot status={palette} size={7} />
       {label}

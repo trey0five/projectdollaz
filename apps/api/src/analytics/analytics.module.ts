@@ -3,6 +3,7 @@ import { AuthModule } from '../auth/auth.module.js'
 import { PeriodsModule } from '../periods/periods.module.js'
 import { BillingModule } from '../billing/billing.module.js'
 import { AuditModule } from '../common/audit/audit.module.js'
+import { MappingModule } from '../mapping/mapping.module.js'
 import { AnalyticsController } from './analytics.controller.js'
 import { AnalyticsService } from './analytics.service.js'
 import { InsightService } from './insight.service.js'
@@ -24,7 +25,7 @@ import { AssistantClient } from '../assistant/assistant.client.js'
  * tenant-checked period lookups. PrismaService is global.
  */
 @Module({
-  imports: [AuthModule, PeriodsModule, BillingModule, AuditModule],
+  imports: [AuthModule, PeriodsModule, BillingModule, AuditModule, MappingModule],
   controllers: [
     AnalyticsController,
     OperationalController,

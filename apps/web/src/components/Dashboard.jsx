@@ -51,7 +51,7 @@ export default function Dashboard() {
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
-              className={`relative -mb-0.5 shrink-0 whitespace-nowrap rounded-t-lg px-3.5 py-4 text-[13px] font-semibold uppercase tracking-wide transition-colors ${
+              className={`relative -mb-0.5 shrink-0 whitespace-nowrap rounded-t-lg px-3.5 py-4 text-[15px] font-semibold uppercase tracking-wide transition-colors ${
                 tab === t.key ? 'text-navy' : 'text-muted hover:bg-section/60 hover:text-navy'
               }`}
             >
@@ -121,7 +121,7 @@ export default function Dashboard() {
                   className="group relative cursor-zoom-in rounded-2xl outline-none ring-gold/50 focus-visible:ring-2"
                 >
                   <Active />
-                  <div className="pointer-events-none absolute right-3 top-3 flex items-center gap-1.5 rounded-full bg-navy/85 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-white shadow-lift transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                  <div className="pointer-events-none absolute right-3 top-3 flex items-center gap-1.5 rounded-full bg-navy/85 px-3 py-1.5 text-[13px] font-semibold uppercase tracking-wide text-white shadow-lift transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
                     <Maximize2 size={12} /> Tap to zoom
                   </div>
                 </div>

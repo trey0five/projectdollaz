@@ -18,7 +18,6 @@ import MetricGrid from './MetricGrid.jsx'
 import MetricSection from './MetricSection.jsx'
 import MetricDrawer from './MetricDrawer.jsx'
 import MixDonut from './MixDonut.jsx'
-import OperationalDataPanel from './OperationalDataPanel.jsx'
 import EntitlementPausedPanel from './EntitlementPausedPanel.jsx'
 import ReservedSlotCard from './ReservedSlotCard.jsx'
 import CustomizeBar from './CustomizeBar.jsx'
@@ -69,7 +68,7 @@ function PageHeader() {
     <div className="mb-5">
       <Link
         to="/"
-        className="mb-4 inline-flex items-center gap-1.5 text-[13px] font-semibold text-muted transition-colors hover:text-gold"
+        className="mb-4 inline-flex items-center gap-1.5 text-[15px] font-semibold text-muted transition-colors hover:text-gold"
       >
         <ArrowLeft size={15} /> Back to dashboard
       </Link>
@@ -81,7 +80,7 @@ function PageHeader() {
           <h1 className="font-serif text-xl font-semibold text-navy sm:text-2xl">
             Financial Insights
           </h1>
-          <p className="text-[13px] text-muted">
+          <p className="text-[15px] text-muted">
             At-a-glance metrics from your saved statements.
           </p>
         </div>
@@ -119,13 +118,10 @@ export default function AnalyticsDashboard() {
     }
   }, [savedPeriods])
 
-  const { data, metrics, loading: metricsLoading, notEntitled, reload } = useAnalytics(
+  const { data, metrics, loading: metricsLoading, notEntitled } = useAnalytics(
     schoolId,
     selectedPeriodId,
   )
-
-  const canEditOperational =
-    activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'
 
   // Sparkline trends for the cards (fetched once per school).
   const [sparkTrends, setSparkTrends] = useState({})
@@ -310,7 +306,7 @@ export default function AnalyticsDashboard() {
         <PageHeader />
         <div className="card-soft border-dashed px-6 py-14 text-center">
           <p className="font-serif text-lg italic text-muted">No saved statements yet.</p>
-          <p className="mt-1 text-[13px] text-muted">
+          <p className="mt-1 text-[15px] text-muted">
             Generate and save a period on the dashboard to see your insights.
           </p>
           <Link to="/" className="btn-primary mt-6">
@@ -380,20 +376,6 @@ export default function AnalyticsDashboard() {
         </div>
       ) : (
         <div className="space-y-5 sm:space-y-7">
-          {/* Operational-data intake — lights up the Tier-2 cards. */}
-          {selectedPeriodId && (
-            <div className={dimWhileCustomizing}>
-              <OperationalDataPanel
-                schoolId={schoolId}
-                periodId={selectedPeriodId}
-                periodLabel={data?.label}
-                canEdit={canEditOperational}
-                onSaved={reload}
-              />
-            </div>
-          )}
-
-
           {/* HERO VITALS */}
           {vitalKeys.length > 0 && (
             <div className={dimWhileCustomizing}>

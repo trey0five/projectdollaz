@@ -24,7 +24,7 @@ export default function MetricSection({ title, subtitle, children, defaultOpen =
           className={`text-gold transition-transform duration-200 ${open ? '' : '-rotate-90'}`}
         />
         <h3 className="font-serif text-lg font-semibold text-navy">{title}</h3>
-        {subtitle && <span className="text-[12px] text-muted">· {subtitle}</span>}
+        {subtitle && <span className="text-[14px] text-muted">· {subtitle}</span>}
         <span className="ml-2 h-px flex-1 bg-rule/50" aria-hidden />
       </button>
       <AnimatePresence initial={false}>

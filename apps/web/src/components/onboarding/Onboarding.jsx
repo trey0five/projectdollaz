@@ -12,7 +12,7 @@ import { authApi, apiErrorMessage } from '../../lib/api.js'
 import { sanitizeDecimal } from '../../lib/numericInput.js'
 import { TextField, FormError } from '../auth/fields.jsx'
 
-const labelCls = 'mb-2 block text-[12px] font-semibold uppercase tracking-[0.14em] text-muted'
+const labelCls = 'mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-muted'
 const inputCls =
   'w-full rounded-lg border-2 border-border bg-white px-4 py-3 text-base text-ink outline-none transition-colors focus:border-gold'
 
@@ -75,7 +75,7 @@ export default function Onboarding() {
             <GraduationCap size={22} />
           </span>
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gold">
+            <p className="text-[13px] font-semibold uppercase tracking-[0.16em] text-gold">
               Welcome to FinRep
             </p>
             <h1 className="font-serif text-2xl font-semibold leading-tight text-navy">
@@ -83,7 +83,7 @@ export default function Onboarding() {
             </h1>
           </div>
         </div>
-        <p className="mb-6 text-[13.5px] leading-relaxed text-muted">
+        <p className="mb-6 text-[15.5px] leading-relaxed text-muted">
           A couple of quick details to get started — you can change any of this later in Settings.
         </p>
 
@@ -112,13 +112,13 @@ export default function Onboarding() {
         <button
           type="button"
           onClick={() => setShowBalances((s) => !s)}
-          className="mb-2 text-[12.5px] font-semibold text-gold transition-colors hover:text-gold-light"
+          className="mb-2 text-[14.5px] font-semibold text-gold transition-colors hover:text-gold-light"
         >
           {showBalances ? '− Hide' : '+ Add'} opening net-asset balances (optional)
         </button>
         {showBalances && (
           <div className="mb-4 rounded-xl border border-gold/25 bg-navy/[0.02] p-4">
-            <p className="mb-3 text-[12px] italic text-muted">
+            <p className="mb-3 text-[14px] italic text-muted">
               Optional — these are usually derived automatically from your first trial-balance
               upload.
             </p>

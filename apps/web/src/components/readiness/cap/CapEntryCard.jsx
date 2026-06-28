@@ -14,9 +14,9 @@ import { CAP_STATUS_OPTIONS, capStatusMeta } from '../../../lib/capMeta.js'
 import { activePillCls } from '../../../lib/activePill.js'
 
 const labelCls =
-  'mb-2 block text-[12px] font-semibold uppercase tracking-[0.14em] text-muted'
+  'mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-muted'
 const inputCls =
-  'w-full rounded-lg border border-border bg-white px-4 py-3 text-[14px] text-ink outline-none transition-all focus:border-gold focus:ring-2 focus:ring-gold/20 disabled:cursor-not-allowed disabled:bg-navy/[0.04] disabled:text-muted'
+  'w-full rounded-lg border border-border bg-white px-4 py-3 text-[16px] text-ink outline-none transition-all focus:border-gold focus:ring-2 focus:ring-gold/20 disabled:cursor-not-allowed disabled:bg-navy/[0.04] disabled:text-muted'
 
 /**
  * One CAP card. Read-only finding context (severity badge, observation, citation)
@@ -57,17 +57,17 @@ export default function CapEntryCard({
       {/* Header: severity + title + citation, resolved badge */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <span
-          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${sevMeta.meta.chip}`}
+          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[12px] font-semibold uppercase tracking-[0.08em] ${sevMeta.meta.chip}`}
         >
           <SevIcon size={11} />
           {entry.severity}
         </span>
         {entry.isResolved && (
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-emerald-700">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-emerald-700">
             <CheckCircle2 size={11} /> Resolved
           </span>
         )}
-        <span className="inline-flex items-center gap-1.5 text-[11px] text-muted/80">
+        <span className="inline-flex items-center gap-1.5 text-[13px] text-muted/80">
           <BookOpen size={12} className="text-gold" />
           <span className="font-mono">{entry.citation}</span>
         </span>
@@ -77,10 +77,10 @@ export default function CapEntryCard({
 
       {/* Read-only observation */}
       <div className="mt-2 rounded-lg border border-border bg-section px-4 py-3">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
+        <p className="text-[13px] font-semibold uppercase tracking-[0.12em] text-muted">
           Observation
         </p>
-        <p className="mt-1 text-[13px] leading-relaxed text-ink">{entry.observation}</p>
+        <p className="mt-1 text-[15px] leading-relaxed text-ink">{entry.observation}</p>
       </div>
 
       {/* Editable grid */}
@@ -125,7 +125,7 @@ export default function CapEntryCard({
             onChange={set('targetDate')}
           />
           {entry.suggestedTimeframe && !draft.targetDate && (
-            <p className="mt-1.5 text-[11px] italic text-muted">
+            <p className="mt-1.5 text-[13px] italic text-muted">
               Suggested: {entry.suggestedTimeframe}
             </p>
           )}
@@ -148,7 +148,7 @@ export default function CapEntryCard({
                   whileTap={reduce || disabled ? undefined : { scale: 0.96 }}
                   disabled={disabled}
                   onClick={() => onChange(entry.ruleId, 'status', opt.value)}
-                  className={`inline-flex items-center gap-1.5 rounded-lg border-2 px-3 py-2 text-[12px] font-semibold uppercase tracking-[0.06em] transition-all ${
+                  className={`inline-flex items-center gap-1.5 rounded-lg border-2 px-3 py-2 text-[14px] font-semibold uppercase tracking-[0.06em] transition-all ${
                     active ? activePillCls(m.palette) : 'border-border bg-section text-muted'
                   } ${disabled ? 'cursor-not-allowed opacity-60' : 'hover:border-gold/40'}`}
                 >
@@ -172,7 +172,7 @@ export default function CapEntryCard({
           <button
             type="button"
             onClick={() => onReset(entry.ruleId)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-section px-3 py-2 text-[12px] font-semibold text-muted transition-colors hover:border-gold/40 hover:text-gold"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-section px-3 py-2 text-[14px] font-semibold text-muted transition-colors hover:border-gold/40 hover:text-gold"
           >
             <RotateCcw size={13} /> Reset to suggestion
           </button>
@@ -183,7 +183,7 @@ export default function CapEntryCard({
           <button
             type="button"
             onClick={() => onArchive(entry.ruleId, !entry.archivedAt)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-section px-3 py-2 text-[12px] font-semibold text-muted transition-colors hover:border-gold/40 hover:text-gold"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-section px-3 py-2 text-[14px] font-semibold text-muted transition-colors hover:border-gold/40 hover:text-gold"
           >
             {entry.archivedAt ? (
               <>

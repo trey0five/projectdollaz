@@ -28,18 +28,18 @@ export default function RuleRow({ finding, index = 0 }) {
         <div className="min-w-0">
           <div className="mb-1.5 flex flex-wrap items-center gap-2">
             <StatusBadge status={finding.status} />
-            <span className="inline-flex items-center gap-1 rounded-full border border-border bg-section px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+            <span className="inline-flex items-center gap-1 rounded-full border border-border bg-section px-2 py-0.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-muted">
               {KIND_LABELS[finding.kind] ?? finding.kind}
             </span>
           </div>
-          <h4 className="flex items-center gap-1.5 font-serif text-[15px] font-semibold text-navy">
+          <h4 className="flex items-center gap-1.5 font-serif text-[16px] font-semibold text-navy">
             <Icon size={15} className={meta.text} />
             {finding.title}
           </h4>
-          <p className="mt-1 text-[13px] leading-relaxed text-muted">{finding.detail}</p>
+          <p className="mt-1 text-[15px] leading-relaxed text-muted">{finding.detail}</p>
         </div>
       </div>
-      <p className="mt-2.5 inline-flex items-center gap-1.5 text-[11px] text-muted/80">
+      <p className="mt-2.5 inline-flex items-center gap-1.5 text-[13px] text-muted/80">
         <BookOpen size={12} className="text-gold" />
         <span className="font-mono">{finding.citation}</span>
       </p>

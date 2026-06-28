@@ -101,7 +101,7 @@ export default function OrgSection() {
   if (loading) {
     return (
       <SettingsCard title="Organization">
-        <p className="text-[14px] text-muted">Loading…</p>
+        <p className="text-[16px] text-muted">Loading…</p>
       </SettingsCard>
     )
   }
@@ -109,7 +109,7 @@ export default function OrgSection() {
   if (!org) {
     return (
       <SettingsCard title="Organization">
-        <p className="text-[14px] text-muted">No organization found.</p>
+        <p className="text-[16px] text-muted">No organization found.</p>
       </SettingsCard>
     )
   }
@@ -121,7 +121,7 @@ export default function OrgSection() {
         description={canEdit ? 'Rename your organization.' : 'Read-only — only an owner can edit.'}
       >
         <div className="mb-5">
-          <label className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.14em] text-muted">
+          <label className="mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-muted">
             Organization name
           </label>
           <input
@@ -151,7 +151,7 @@ export default function OrgSection() {
         action={
           <button
             onClick={() => setShowCreate((s) => !s)}
-            className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border-2 border-gold/40 px-3 py-1.5 text-[13px] font-semibold text-navy transition-colors hover:bg-gold/10"
+            className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border-2 border-gold/40 px-3 py-1.5 text-[15px] font-semibold text-navy transition-colors hover:bg-gold/10"
           >
             <Plus size={15} /> Create school
           </button>
@@ -216,15 +216,15 @@ export default function OrgSection() {
                       : 'border-border bg-white hover:border-gold/40'
                   }`}
                 >
-                  <span className="flex items-center gap-2 text-[14px] text-ink">
+                  <span className="flex items-center gap-2 text-[16px] text-ink">
                     <Building2 size={16} className="text-gold" />
                     <span className="font-semibold">{s.name}</span>
-                    <span className="rounded bg-navy/[0.06] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+                    <span className="rounded bg-navy/[0.06] px-2 py-0.5 text-[13px] font-semibold uppercase tracking-[0.08em] text-muted">
                       {s.role}
                     </span>
                   </span>
                   {active && (
-                    <span className="flex items-center gap-1 text-[12px] font-semibold text-navy">
+                    <span className="flex items-center gap-1 text-[14px] font-semibold text-navy">
                       <Check size={15} className="text-gold" /> Active
                     </span>
                   )}

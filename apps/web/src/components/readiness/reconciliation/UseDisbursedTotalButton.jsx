@@ -50,7 +50,7 @@ export default function UseDisbursedTotalButton({
         type="button"
         onClick={apply}
         disabled={saving || already}
-        className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 text-[12px] font-semibold transition-colors ${
+        className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 text-[14px] font-semibold transition-colors ${
           already
             ? 'cursor-default border-gold/30 bg-gold/5 text-[#7a5e00]'
             : 'border-gold/40 bg-gold-gradient text-white shadow-glow hover:opacity-90 disabled:opacity-60'
@@ -63,7 +63,7 @@ export default function UseDisbursedTotalButton({
             ? 'Recorded figure updated'
             : `Use disbursed total (${fmtDollar(totalDisbursed)}) as recorded revenue`}
       </button>
-      {err && <p className="text-[11px] text-danger">{err}</p>}
+      {err && <p className="text-[13px] text-danger">{err}</p>}
     </div>
   )
 }

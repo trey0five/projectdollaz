@@ -56,7 +56,7 @@ function EmptyOnboarding({ schoolName, billing, isOwner }) {
         </motion.span>
         <div>
           <h2 className="font-serif text-2xl font-semibold text-navy">Get started</h2>
-          <p className="mx-auto mt-2 max-w-md text-[14px] leading-relaxed text-muted">
+          <p className="mx-auto mt-2 max-w-md text-[16px] leading-relaxed text-muted">
             Head to the Data hub to add your trial balance — we’ll turn it into your four
             financial statements — then it walks you through everything else (monthly numbers,
             budget, enrollment and more), all in one place.
@@ -87,12 +87,12 @@ function DataHubBanner() {
         <p className="font-serif text-base font-semibold text-navy">
           Get all your numbers in one place
         </p>
-        <p className="mt-0.5 text-[13px] leading-relaxed text-muted">
+        <p className="mt-0.5 text-[15px] leading-relaxed text-muted">
           Trial balances, monthly actuals, budget, enrollment and more — the Data hub walks you
           through exactly what to add, with a friendly guide to help.
         </p>
       </div>
-      <span className="hidden shrink-0 items-center gap-1.5 whitespace-nowrap text-[12px] font-bold uppercase tracking-[0.08em] text-gold sm:inline-flex">
+      <span className="hidden shrink-0 items-center gap-1.5 whitespace-nowrap text-[14px] font-bold uppercase tracking-[0.08em] text-gold sm:inline-flex">
         Go to Data hub
         <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" />
       </span>

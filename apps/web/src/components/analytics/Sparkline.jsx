@@ -18,7 +18,7 @@ export default function Sparkline({ points }) {
 
   if (data.length < 2) {
     return (
-      <div className="flex h-10 items-center text-[11px] italic text-muted">
+      <div className="flex h-10 items-center text-[13px] italic text-muted">
         Trend builds as you save more periods
       </div>
     )

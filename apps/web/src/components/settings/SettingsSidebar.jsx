@@ -28,7 +28,7 @@ export default function SettingsSidebar() {
           value={current}
           onChange={(e) => navigate(`/settings/${e.target.value}`)}
           aria-label="Settings section"
-          className="min-h-[44px] w-full rounded-lg border-2 border-border bg-white px-4 py-2 text-[15px] font-semibold text-navy outline-none focus:border-gold"
+          className="min-h-[44px] w-full rounded-lg border-2 border-border bg-white px-4 py-2 text-[16px] font-semibold text-navy outline-none focus:border-gold"
         >
           {NAV.map((n) => (
             <option key={n.to} value={n.to}>
@@ -47,7 +47,7 @@ export default function SettingsSidebar() {
               <NavLink
                 to={to}
                 className={({ isActive }) =>
-                  `flex min-h-[44px] items-center gap-3 rounded-lg border-l-[3px] px-4 py-2.5 text-[14px] font-semibold transition-colors ${
+                  `flex min-h-[44px] items-center gap-3 rounded-lg border-l-[3px] px-4 py-2.5 text-[16px] font-semibold transition-colors ${
                     isActive
                       ? 'border-gold bg-gold/10 text-white'
                       : 'border-transparent text-white/70 hover:bg-white/5 hover:text-white'

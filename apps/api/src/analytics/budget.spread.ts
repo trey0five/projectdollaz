@@ -85,6 +85,20 @@ export function labelToCategory(label: string): SCoaCategory | null {
   return null
 }
 
+/**
+ * Stable per-row override key, unifying GL rows and label-only rows into the SAME
+ * key space as the per-school Mapping.entries (a Record<string,string>):
+ *  - acct>0  → the numeric GL account as a string ("612"), matching the numeric
+ *    keys DEFAULT_MAPPING seeds (JSON serializes them as string keys).
+ *  - acct===0 → a `label:`-namespaced, normalized (trimmed+lowercased) label key,
+ *    so the Resolve-unmatched editor can pin a category to a label-only row.
+ * The SAME function is used to BUILD an unmatched row's key (assess) and to LOOK
+ * UP an override (rollup), so saved picks always re-resolve on the next assess.
+ */
+export function spreadRowKey(a: { acct: number; label: string }): string {
+  return a.acct > 0 ? String(a.acct) : `label:${a.label.trim().toLowerCase()}`
+}
+
 export interface SpreadRollup {
   revenue: Record<string, number>
   expense: Record<string, number>
@@ -109,10 +123,27 @@ export interface SpreadRollup {
 const round2 = (n: number): number => Math.round(n * 100) / 100
 
 /**
+ * Per-row category overrides, keyed by spreadRowKey(a). Sourced from the school's
+ * saved Mapping.entries (a Record<string,string>) so a user's Resolve-unmatched
+ * picks persist across imports. Values are SCoA category keys; an entry is only
+ * honored when it resolves to a REAL category (categoryDef truthy) — a stale or
+ * unknown value silently falls back to the default mapping.
+ */
+export type SpreadMappingOverrides = Record<string, string>
+
+/**
  * Map + roll up a parsed BudgetSpread. Pure: spread in -> rollup out.
  * Reused by the import endpoint AND the org-rollup summation path.
+ *
+ * `overrides` (optional) wins over the default categoryOf/labelToCategory mapping
+ * ONLY when the supplied value is a valid SCoA category. With no overrides (or no
+ * matching/valid entry) every branch is byte-identical to the legacy behavior, so
+ * existing engine/ingestion snapshots are unaffected.
  */
-export function rollupSpread(spread: BudgetSpread): SpreadRollup {
+export function rollupSpread(
+  spread: BudgetSpread,
+  overrides?: SpreadMappingOverrides,
+): SpreadRollup {
   const revenue: Record<string, number> = {}
   const expense: Record<string, number> = {}
   const accounts: SpreadAccountAnnotated[] = []
@@ -122,7 +153,12 @@ export function rollupSpread(spread: BudgetSpread): SpreadRollup {
     // acct>0  -> map by GL number (categoryOf), UNCHANGED (diocesan path).
     // acct===0 -> label-only row; guess the category from the account NAME.
     const mappedBy: 'acct' | 'keyword' = a.acct > 0 ? 'acct' : 'keyword'
-    const cat = a.acct > 0 ? categoryOf(a.acct) : labelToCategory(a.label)
+    // A saved per-school override (Resolve-unmatched) takes precedence, but ONLY
+    // when it names a real category — otherwise fall back to the default mapping
+    // so an undefined/unknown override is byte-identical to no override at all.
+    const ovrRaw = overrides?.[spreadRowKey(a)]
+    const ovr = ovrRaw && categoryDef(ovrRaw as SCoaCategory) ? (ovrRaw as SCoaCategory) : null
+    const cat = ovr ?? (a.acct > 0 ? categoryOf(a.acct) : labelToCategory(a.label))
     if (!cat) {
       // Keep the line visible on the spread; exclude from rollup totals.
       accounts.push({
