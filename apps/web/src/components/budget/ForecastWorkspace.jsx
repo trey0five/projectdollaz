@@ -184,7 +184,7 @@ const DEFAULT_RETENTION = 93
 // Canonical, FIXED-KEY rollForward object. Both the seed baseline AND doSave
 // serialize through THIS, so key order is deterministic and opening a forecast is
 // never falsely dirty (the known exNorm key-order gotcha, mirrored). currentByGrade
-// is a fixed 14-key grid; retentionByGrade / projectedOverrideByGrade are sparse
+// is a fixed 15-key grid; retentionByGrade / projectedOverrideByGrade are sparse
 // (only present keys), each with a stable GRADE_ROW iteration order.
 function canonicalRollForward(rf) {
   const src = rf || {}
@@ -216,6 +216,24 @@ function canonicalRollForward(rf) {
       : GRADE_ROW[GRADE_ROW.length - 1],
     projectedOverrideByGrade,
   }
+}
+
+// Keep only current GRADE_ROW keys from a per-grade map, dropping legacy grades
+// (e.g. PK0–PK2 saved before the PK3–12 change). Preserves the sparse shape so a
+// re-save doesn't 400 on the forbidNonWhitelisted DTO (which only whitelists the
+// live grade keys).
+function pickGrades(map) {
+  const src = map || {}
+  const out = {}
+  for (const g of GRADE_ROW) if (src[g] !== undefined && src[g] !== null) out[g] = src[g]
+  return out
+}
+
+// Strip legacy grade keys from driver assumptions' enrollmentByGrade (the only
+// per-grade map on the assumptions object).
+function normalizeAssumptions(a) {
+  if (!a || typeof a !== 'object') return a
+  return { ...a, enrollmentByGrade: pickGrades(a.enrollmentByGrade) }
 }
 
 // Build the initial canonical rollForward for a forecast: saved config if present,
@@ -252,11 +270,15 @@ export default function ForecastWorkspace({ schoolId, periodId, canEdit, budget,
   // prior-context seed. Feeder seeds from the operational row (live) or the saved
   // forecast snapshot. Explanations seed from the saved forecast.
   const initialAssumptions = () =>
-    savedForecast?.assumptions ??
-    budget?.lines?.driverModel?.assumptions ??
-    seedAssumptions(budgetContext)
+    normalizeAssumptions(
+      savedForecast?.assumptions ??
+        budget?.lines?.driverModel?.assumptions ??
+        seedAssumptions(budgetContext),
+    )
   const [assumptions, setAssumptions] = useState(initialAssumptions)
-  const [feeder, setFeeder] = useState(() => savedFeeder ?? savedForecast?.feederEnrollmentByGrade ?? {})
+  const [feeder, setFeeder] = useState(() =>
+    pickGrades(savedFeeder ?? savedForecast?.feederEnrollmentByGrade ?? {}),
+  )
   const [explanations, setExplanations] = useState(
     () => savedForecast?.explanations ?? { revenue: {}, expense: {} },
   )
@@ -299,8 +321,10 @@ export default function ForecastWorkspace({ schoolId, periodId, canEdit, budget,
     Promise.resolve().then(() => {
       if (cancelled) return
       const seed = () => {
-        const a = savedForecast?.assumptions ?? budget?.lines?.driverModel?.assumptions ?? seedAssumptions(budgetContext)
-        const f = savedFeeder ?? savedForecast?.feederEnrollmentByGrade ?? {}
+        const a = normalizeAssumptions(
+          savedForecast?.assumptions ?? budget?.lines?.driverModel?.assumptions ?? seedAssumptions(budgetContext),
+        )
+        const f = pickGrades(savedFeeder ?? savedForecast?.feederEnrollmentByGrade ?? {})
         const ex = savedForecast?.explanations ?? { revenue: {}, expense: {} }
         // Normalize ONCE and use the same object for both the state and the
         // autosave baseline — otherwise a shape/key-order mismatch makes draftKey
