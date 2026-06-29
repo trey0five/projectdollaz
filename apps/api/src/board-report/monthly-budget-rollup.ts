@@ -52,6 +52,12 @@ export interface MonthlyBudgetRollup {
   budgetMtd(monthKey: string): MonthlyBudgetColumn | null
   /** Cumulative Jul..monthKey (inclusive, string compare), or null when not in the spread. */
   budgetYtd(monthKey: string): MonthlyBudgetColumn | null
+  /**
+   * Sum of the spread months PRESENT among the requested keys (e.g. a quarter's
+   * 3 monthKeys). Quarter-to-date budget column. Returns null when NONE of the
+   * requested keys are in the spread. Pure — the caller passes the monthKeys.
+   */
+  budgetMonths(monthKeys: string[]): MonthlyBudgetColumn | null
 }
 
 /** Local 2-dp round (mirrors budget.spread's round2 — kept private, no import). */
@@ -136,5 +142,20 @@ export function rollupMonthlyBudget(spread: unknown): MonthlyBudgetRollup | null
     return out
   }
 
-  return { monthKeys, perMonth, budgetMtd, budgetYtd }
+  const budgetMonths = (requestedKeys: string[]): MonthlyBudgetColumn | null => {
+    const present = requestedKeys.filter((mk) => inSpread(mk))
+    if (present.length === 0) return null
+    const out: MonthlyBudgetColumn = { revenue: {}, expense: {} }
+    for (const mk of present) {
+      const col = perMonth[mk]
+      for (const sect of ['revenue', 'expense'] as const) {
+        for (const [k, v] of Object.entries(col[sect])) {
+          out[sect][k] = round2((out[sect][k] ?? 0) + v)
+        }
+      }
+    }
+    return out
+  }
+
+  return { monthKeys, perMonth, budgetMtd, budgetYtd, budgetMonths }
 }

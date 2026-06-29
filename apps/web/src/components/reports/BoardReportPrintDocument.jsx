@@ -71,7 +71,13 @@ function renderCover(data, accent) {
       </p>
       <p className="brd-cover-title">{title}</p>
       <p className="brd-cover-committee">{committee}</p>
-      {data.granularity === 'monthly' && data.monthlyOperations ? (
+      {data.granularity === 'quarterly' && data.quarterlyOperations ? (
+        <p className="brd-cover-fye">
+          {data.quarterlyOperations.quarterLabel ||
+            data.quarterLabel ||
+            (data.periodEndDate ? `For the quarter ended ${longDate(data.periodEndDate)}` : '')}
+        </p>
+      ) : data.granularity === 'monthly' && data.monthlyOperations ? (
         <p className="brd-cover-fye">
           {data.monthlyOperations.monthLabel ||
             (data.periodEndDate ? `For the period ended ${longDate(data.periodEndDate)}` : '')}
@@ -152,6 +158,9 @@ function renderOperations(data) {
   // field (`monthlyOperations`); annual keeps the existing single-actual table.
   if (data.granularity === 'monthly' && data.monthlyOperations) {
     return renderMonthlyOperations(data)
+  }
+  if (data.granularity === 'quarterly' && data.quarterlyOperations) {
+    return renderQuarterlyOperations(data)
   }
   const ops = data.operations
   if (!ops) {
@@ -379,6 +388,82 @@ function moNetRow(label, n) {
       {opCellTds(n.ytd, `${label}-ytd`)}
       <td className="brd-l brd-explain" />
     </tr>
+  )
+}
+
+// ── 4a-Q. Statement of Operations — QUARTERLY (NBOA QTD + YTD column groups) ───
+// PURE presentational clone of renderMonthlyOperations: every figure comes verbatim
+// from bundle.quarterlyOperations (sharedShapes). The QTD column lives in the `mtd`
+// OpCell slot (FROZEN contract — `mtd` semantically carries quarter-to-date), so the
+// row helpers read `.mtd`/`.ytd` exactly like monthly; only the column-group HEADER
+// label and the section heading change ("Quarter to Date" + the quarter NBOA
+// heading). Prior-year is deferred in quarterly bundles, so the PY column is omitted.
+function renderQuarterlyOperations(data) {
+  const qo = data.quarterlyOperations
+  const kpis = (data.keyIndicators || []).filter((k) => k.available && k.value != null)
+  // quarterLabel ("For the quarter ended December 31, 2025") is server-derived; fall
+  // back to deriving from periodEndDate (the quarter-end ISO) if absent.
+  const heading =
+    qo.quarterLabel || (data.periodEndDate ? `For the quarter ended ${longDate(data.periodEndDate)}` : null)
+  return (
+    <section className="brd-section">
+      <h2>Statement of Operations</h2>
+      <p className="brd-subnote">
+        {heading ? `${heading}. ` : ''}Quarter-to-date and year-to-date actual vs. budget.
+      </p>
+      <table className="brd-table brd-table-wide">
+        <thead>
+          <tr>
+            <th className="brd-l" rowSpan={2}>Line</th>
+            <th colSpan={4}>Quarter to Date</th>
+            <th colSpan={4}>Year to Date</th>
+            <th className="brd-l brd-explain" rowSpan={2}>Explanation</th>
+          </tr>
+          <tr>
+            <th>Actual</th>
+            <th>Budget</th>
+            <th>Over (Under)</th>
+            <th>%</th>
+            <th>Actual</th>
+            <th>Budget</th>
+            <th>Over (Under)</th>
+            <th>%</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr className="brd-group">
+            <td colSpan={10}>Revenue</td>
+          </tr>
+          {(qo.revenue || []).map((r) => moRow(r))}
+          {moTotalRow('Total revenue', qo.revenueTotals)}
+
+          <tr className="brd-group">
+            <td colSpan={10}>Expenses</td>
+          </tr>
+          {(qo.expense || []).map((r) => moRow(r))}
+          {moTotalRow('Total expenses', qo.expenseTotals)}
+
+          {moNetRow('Net surplus / (deficit)', qo.netSurplus)}
+        </tbody>
+      </table>
+
+      {kpis.length > 0 && (
+        <div className="brd-kpi-block">
+          <h3 className="brd-narrative-head">Key Indicators</h3>
+          <div className="brd-kpi-grid">
+            {kpis.map((k) => (
+              <div key={k.key} className="brd-kpi">
+                <span className="brd-kpi-label">
+                  {k.label}
+                  {k.partialYear ? ' (partial year)' : ''}
+                </span>
+                <span className="brd-kpi-value">{formatIndicator(k.value, k.unit)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
   )
 }
 

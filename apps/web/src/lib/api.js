@@ -308,9 +308,13 @@ export const analyticsApi = {
 // a narrative (rule baseline + optional LLM). Branding (logo/brandColor/
 // defaultCommittee) goes through the EXISTING schoolsApi.update PATCH.
 export const boardReportApi = {
-  assemble: (schoolId, periodId, granularity = 'annual', month) =>
+  assemble: (schoolId, periodId, granularity = 'annual', month, quarter) =>
     api.get(`/schools/${schoolId}/periods/${periodId}/board-report`, {
-      params: month ? { granularity, month } : { granularity },
+      params: {
+        granularity,
+        ...(granularity === 'monthly' && month ? { month } : {}),
+        ...(granularity === 'quarterly' && quarter ? { quarter } : {}),
+      },
     }),
   save: (schoolId, periodId, body) =>
     api.put(`/schools/${schoolId}/periods/${periodId}/board-report`, body),

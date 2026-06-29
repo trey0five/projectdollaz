@@ -11,29 +11,32 @@
 import { useState, useEffect, useCallback } from 'react'
 import { boardReportApi, isPaymentRequired } from '../lib/api.js'
 
-export function useBoardReport(schoolId, periodId, granularity = 'annual', monthKey = null) {
+export function useBoardReport(schoolId, periodId, granularity = 'annual', monthKey = null, quarter = null) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [monthError, setMonthError] = useState('')
+  const [quarterError, setQuarterError] = useState('')
   const [notEntitled, setNotEntitled] = useState(false)
 
-  const load = useCallback(async (sid, pid, gran, month) => {
+  const load = useCallback(async (sid, pid, gran, month, qtr) => {
     setError('')
     setMonthError('')
+    setQuarterError('')
     setNotEntitled(false)
     try {
-      const res = await boardReportApi.assemble(sid, pid, gran, month)
+      const res = await boardReportApi.assemble(sid, pid, gran, month, qtr)
       setData(res.data)
     } catch (e) {
       if (isPaymentRequired(e)) {
         setNotEntitled(true)
         setData(null)
       } else {
-        // The monthly path returns coded 400s (month_required / month_not_loaded)
-        // when the granularity/month pairing is incomplete or the snapshot is
-        // missing. Surface those as a friendly month-specific notice (not the
-        // generic load failure) and keep the panel from crashing.
+        // The monthly/quarterly paths return coded 400s (month_required /
+        // month_not_loaded / quarter_required / quarter_not_loaded) when the
+        // granularity/selection pairing is incomplete or the snapshot is missing.
+        // Surface those as a friendly granularity-specific notice (not the generic
+        // load failure) and keep the panel from crashing.
         const code = e?.response?.data?.code
         if (code === 'month_not_loaded' || code === 'month_required') {
           const msg =
@@ -42,6 +45,14 @@ export function useBoardReport(schoolId, periodId, granularity = 'annual', month
               ? 'Select a month to view the monthly report.'
               : 'That month has not been loaded for this period.')
           setMonthError(msg)
+          setData(null)
+        } else if (code === 'quarter_not_loaded' || code === 'quarter_required') {
+          const msg =
+            e?.response?.data?.message ||
+            (code === 'quarter_required'
+              ? 'Select a quarter to view the quarterly report.'
+              : 'That quarter has not been loaded for this period.')
+          setQuarterError(msg)
           setData(null)
         } else {
           setError('Could not load the board report for this period.')
@@ -57,12 +68,14 @@ export function useBoardReport(schoolId, periodId, granularity = 'annual', month
     let cancelled = false
     Promise.resolve().then(() => {
       if (cancelled) return
-      // Monthly granularity needs a chosen month before we hit the server; until
-      // one is picked, idle without firing a guaranteed-400 request.
+      // Monthly/quarterly granularity needs a chosen month/quarter before we hit
+      // the server; until one is picked, idle without firing a guaranteed-400
+      // request.
       const monthlyWithoutMonth = granularity === 'monthly' && !monthKey
-      if (schoolId && periodId && !monthlyWithoutMonth) {
+      const quarterlyWithoutQuarter = granularity === 'quarterly' && !quarter
+      if (schoolId && periodId && !monthlyWithoutMonth && !quarterlyWithoutQuarter) {
         setLoading(true)
-        load(schoolId, periodId, granularity, monthKey)
+        load(schoolId, periodId, granularity, monthKey, quarter)
       } else {
         setData(null)
         setLoading(false)
@@ -71,7 +84,7 @@ export function useBoardReport(schoolId, periodId, granularity = 'annual', month
     return () => {
       cancelled = true
     }
-  }, [schoolId, periodId, granularity, monthKey, load])
+  }, [schoolId, periodId, granularity, monthKey, quarter, load])
 
   // Persist editable state (owner/accountant). The PUT returns the saved+merged
   // BoardReport row (settings/mda/explanations only — NOT financials), so we fold
@@ -121,10 +134,10 @@ export function useBoardReport(schoolId, periodId, granularity = 'annual', month
   const reload = useCallback(
     () =>
       schoolId && periodId
-        ? load(schoolId, periodId, granularity, monthKey)
+        ? load(schoolId, periodId, granularity, monthKey, quarter)
         : Promise.resolve(),
-    [schoolId, periodId, granularity, monthKey, load],
+    [schoolId, periodId, granularity, monthKey, quarter, load],
   )
 
-  return { data, loading, error, monthError, notEntitled, save, reload }
+  return { data, loading, error, monthError, quarterError, notEntitled, save, reload }
 }

@@ -42,7 +42,7 @@ export default function Step4Branding({ ctx }) {
     reader.onload = async () => {
       const dataUrl = String(reader.result || '')
       if (dataUrlByteLength(dataUrl) > LOGO_MAX_BYTES) {
-        setLogoErr('That image is over 400KB. Please use a smaller logo.')
+        setLogoErr('That image is over 5 MB. Please use a smaller logo.')
         return
       }
       await patchBranding({ logoBase64: dataUrl })

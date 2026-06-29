@@ -10,6 +10,7 @@ import type {
 import type { MetricResult } from '@finrep/analytics'
 import { REVENUE_LINE_LABELS, EXPENSE_LINE_LABELS } from '@finrep/analytics'
 import { MonthlyActualsService } from '../monthly/monthly-actuals.service.js'
+import { fyMonthKeys, fyStartYearForPeriodEnd } from '../monthly/fy-elapsed.js'
 import type { CategoryActuals } from '../analytics/category-actuals.js'
 import {
   rollupMonthlyBudget,
@@ -110,6 +111,27 @@ interface MonthlyOperations {
   monthKey: string
   monthLabel: string
   priorMonthKey: string | null
+  hasBudget: boolean
+  revenue: MonthlyOperationsLine[]
+  revenueTotals: MonthlyOperationsTotals
+  expense: MonthlyOperationsLine[]
+  expenseTotals: MonthlyOperationsTotals
+  netSurplus: { mtd: MonthlyNetCell; ytd: MonthlyNetCell; priorYear: number | null }
+}
+
+// ── Quarterly column-group (NBOA QTD + YTD) — additive sibling of MonthlyOperations.
+// REUSES MonthlyOperationsLine/MonthlyOperationsTotals/MonthlyNetCell verbatim; the
+// `mtd` OpCell slot SEMANTICALLY CARRIES quarter-to-date (QTD). Field names are KEPT
+// (not renamed to qtd) so buildMonthlyLines/opCell/monthlyTotals/netCell are reused
+// with ZERO change — QTD/YTD is purely a label-string distinction in the print doc.
+interface QuarterlyOperations {
+  granularity: 'quarterly'
+  quarterKey: string
+  /** Long NBOA heading, e.g. 'For the quarter ended December 31, 2025'. */
+  quarterLabel: string
+  /** Short chip/cover label, e.g. 'Q2 FY2026'. */
+  quarterShortLabel: string
+  priorQuarterKey: string | null
   hasBudget: boolean
   revenue: MonthlyOperationsLine[]
   revenueTotals: MonthlyOperationsTotals
@@ -264,11 +286,19 @@ export interface BoardReportBundle {
   label: string
   periodEndDate: string
   fiscalYearStart: string
-  granularity: 'annual' | 'monthly'
-  /** MONTHLY ONLY — OMITTED entirely on the annual branch (byte-identity). */
+  granularity: 'annual' | 'monthly' | 'quarterly'
+  /** MONTHLY ONLY — OMITTED entirely on the annual/quarterly branches (byte-identity). */
   monthKey?: string
-  /** MONTHLY ONLY — OMITTED entirely on the annual branch (byte-identity). */
+  /** MONTHLY ONLY — OMITTED entirely on the annual/quarterly branches (byte-identity). */
   monthsAvailable?: string[]
+  /** QUARTERLY ONLY — OMITTED entirely on the annual/monthly branches (byte-identity). */
+  quarterKey?: string
+  /** QUARTERLY ONLY — long NBOA heading. OMITTED on annual/monthly. */
+  quarterLabel?: string
+  /** QUARTERLY ONLY — short chip/cover label ('Q2 FY2026'). OMITTED on annual/monthly. */
+  quarterShortLabel?: string
+  /** QUARTERLY ONLY — loadable quarterKeys ascending. OMITTED on annual/monthly. */
+  quartersAvailable?: string[]
   availability: {
     hasSnapshot: boolean
     hasBudget: boolean
@@ -280,8 +310,10 @@ export interface BoardReportBundle {
   mda: { text: string | null; source: 'rule' | 'llm' | 'user' | null }
   /** ANNUAL ONLY — null when monthly. */
   operations: Operations | null
-  /** MONTHLY ONLY — null/omitted when annual. */
+  /** MONTHLY ONLY — null/omitted when annual/quarterly. */
   monthlyOperations?: MonthlyOperations | null
+  /** QUARTERLY ONLY — null/omitted when annual/monthly. */
+  quarterlyOperations?: QuarterlyOperations | null
   forecast: ForecastSection | null
   capitalBudget: CapitalBudgetSection | null
   cashInvestments: CashInvestmentsSection | null
@@ -354,6 +386,54 @@ function monthLabel(monthKey: string): string {
   return `For the period ended ${MONTH_NAMES[m - 1]} ${d}, ${y}`
 }
 
+// ── Quarterly FY helpers (Jul–Jun) — FROZEN key = '<fyStartYear>-Q<n>' ──────────
+// fyStartYear is the calendar year of the FY's July (so FY2026 = Jul 2025–Jun 2026
+// -> fyStartYear 2025). FY label = 'FY<fyStartYear+1>'. Month math reuses
+// fyMonthKeys (no hand-rolled arithmetic).
+
+const QUARTER_KEY_RE = /^(\d{4})-Q([1-4])$/
+
+/** Parse a quarterKey '<fyStartYear>-Q<n>' -> {fyStartYear, q} or null when malformed. */
+function parseQuarterKey(key: string): { fyStartYear: number; q: 1 | 2 | 3 | 4 } | null {
+  const m = QUARTER_KEY_RE.exec(key)
+  if (!m) return null
+  return { fyStartYear: Number(m[1]), q: Number(m[2]) as 1 | 2 | 3 | 4 }
+}
+
+/** The 3 'YYYY-MM' month keys of quarter q (1..4) for a fiscal year (Jul–Jun). */
+function quarterMonthKeys(fyStartYear: number, q: 1 | 2 | 3 | 4): string[] {
+  const all = fyMonthKeys(fyStartYear) // Jul..Jun ordered
+  return all.slice((q - 1) * 3, (q - 1) * 3 + 3)
+}
+
+/** The quarter-END 'YYYY-MM' month key (3rd month of the quarter). */
+function quarterEndMonthKey(fyStartYear: number, q: 1 | 2 | 3 | 4): string {
+  return quarterMonthKeys(fyStartYear, q)[2]
+}
+
+/** The PRIOR quarter-end 'YYYY-MM' (Q1 has none -> null). */
+function priorQuarterEndMonthKey(fyStartYear: number, q: 1 | 2 | 3 | 4): string | null {
+  if (q === 1) return null
+  return quarterEndMonthKey(fyStartYear, (q - 1) as 1 | 2 | 3)
+}
+
+/** FY display label, 'FY<fyStartYear+1>' (FY2026 for fyStartYear 2025). */
+function fyLabel(fyStartYear: number): string {
+  return `FY${fyStartYear + 1}`
+}
+
+/** Short chip/cover label, 'Q<n> FY<yyyy>'. */
+function quarterShortLabel(fyStartYear: number, q: 1 | 2 | 3 | 4): string {
+  return `Q${q} ${fyLabel(fyStartYear)}`
+}
+
+/** Long NBOA heading, 'For the quarter ended <Month DD, YYYY>' (quarter-end date). */
+function quarterLabel(fyStartYear: number, q: 1 | 2 | 3 | 4): string {
+  const iso = monthEndIso(quarterEndMonthKey(fyStartYear, q))
+  const [y, m, d] = iso.split('-').map((s) => Number(s))
+  return `For the quarter ended ${MONTH_NAMES[m - 1]} ${d}, ${y}`
+}
+
 @Injectable()
 export class BoardReportService {
   constructor(
@@ -380,16 +460,24 @@ export class BoardReportService {
     periodId: string,
     granularity = 'annual',
     monthKey?: string,
+    quarter?: string,
   ): Promise<BoardReportBundle> {
     const period = await this.periods.getOwnedPeriod(schoolId, periodId) // 404 cross-tenant
-    if (granularity !== 'annual' && granularity !== 'monthly') {
+    if (
+      granularity !== 'annual' &&
+      granularity !== 'monthly' &&
+      granularity !== 'quarterly'
+    ) {
       throw new BadRequestException({
         code: 'granularity_unsupported',
-        message: 'Only annual granularity is supported.',
+        message: 'Only annual, monthly, and quarterly granularities are supported.',
       })
     }
     if (granularity === 'monthly') {
       return this.assembleMonthly(schoolId, period, monthKey)
+    }
+    if (granularity === 'quarterly') {
+      return this.assembleQuarterly(schoolId, period, quarter)
     }
 
     const school = await this.prisma.school.findUnique({ where: { id: schoolId } })
@@ -611,6 +699,284 @@ export class BoardReportService {
       select: { monthKey: true },
     })
     return snaps.map((s) => s.monthKey)
+  }
+
+  // ── Assemble (quarterly — NBOA QTD + YTD column groups) ──────────────────────
+
+  /**
+   * Quarterly branch. Mirrors assembleMonthly structurally but the QTD/YTD cells
+   * are DIFFERENCED from the existing monthly YTD measurements at quarter-ends:
+   *   YTD(quarter) = actuals(quarterEndMonth).ytd
+   *   QTD(quarter) = YTD(quarterEndMonth) − YTD(priorQuarterEndMonth)  (Q1: QTD == YTD(Sep))
+   * At most TWO actuals reads (the actuals .mtd is ignored). NEVER 404s: all data
+   * gaps -> coded BadRequestException (quarter_required / quarter_not_loaded).
+   * quarterKey/quarterLabel/quarterShortLabel/quartersAvailable + quarterlyOperations
+   * are attached ONLY here; operations/monthlyOperations are null.
+   */
+  private async assembleQuarterly(
+    schoolId: string,
+    period: { id: string; label: string; periodEndDate: Date },
+    quarter?: string,
+  ): Promise<BoardReportBundle> {
+    const fyStartYear = fyStartYearForPeriodEnd(period.periodEndDate)
+
+    if (!quarter) {
+      throw new BadRequestException({
+        code: 'quarter_required',
+        message: 'granularity=quarterly requires a quarter (<fyStartYear>-Q<n>).',
+      })
+    }
+
+    // quartersAvailable is needed for BOTH the success bundle and the coded error.
+    const quartersAvailable = await this.quarterlyQuartersAvailable(
+      schoolId,
+      period.id,
+      fyStartYear,
+    )
+
+    const parsed = parseQuarterKey(quarter)
+    // Malformed OR cross-FY (a key for a different fiscal year) -> coded, never 500.
+    if (!parsed || parsed.fyStartYear !== fyStartYear) {
+      throw new BadRequestException({
+        code: 'quarter_not_loaded',
+        message: `Quarter ${quarter} is not loadable for this period.`,
+        quartersAvailable,
+      })
+    }
+    const q = parsed.q
+    if (!quartersAvailable.includes(quarter)) {
+      throw new BadRequestException({
+        code: 'quarter_not_loaded',
+        message: `Quarter ${quarter} is not loaded for this period.`,
+        quartersAvailable,
+      })
+    }
+
+    const endMonth = quarterEndMonthKey(fyStartYear, q)
+    const priorEnd = priorQuarterEndMonthKey(fyStartYear, q)
+
+    // Read the quarter-end (and prior quarter-end for Q2..Q4) YTD actuals. Re-emit
+    // the coded quarter_not_loaded on a not-loaded 400 (mirrors assembleMonthly).
+    let endMa: Awaited<ReturnType<MonthlyActualsService['actuals']>>
+    let priorMa: Awaited<ReturnType<MonthlyActualsService['actuals']>> | null = null
+    try {
+      endMa = await this.monthlyActuals.actuals(schoolId, period.id, endMonth)
+      if (priorEnd) {
+        priorMa = await this.monthlyActuals.actuals(schoolId, period.id, priorEnd)
+      }
+    } catch (e) {
+      if (!(e instanceof BadRequestException)) throw e
+      throw new BadRequestException({
+        code: 'quarter_not_loaded',
+        message: `Quarter ${quarter} is not loaded for this period.`,
+        quartersAvailable,
+      })
+    }
+
+    const ytd = endMa.ytd
+    // QTD = YTD(end) − YTD(priorEnd); Q1 has no prior quarter-end -> QTD == YTD(Sep)
+    // (deep-copy so the two cells are independent objects).
+    const qtd: CategoryActuals = priorMa
+      ? this.diffCategoryActuals(ytd, priorMa.ytd)
+      : { revenue: { ...ytd.revenue }, expense: { ...ytd.expense } }
+
+    const school = await this.prisma.school.findUnique({ where: { id: schoolId } })
+    const row = await this.findRow(schoolId, period.id)
+    const explanations = this.readExplanations(row)
+
+    // Budget — read-only via BudgetService.get; roll up INDEPENDENTLY. YTD budget =
+    // cumulative Jul..quarterEnd; QTD budget = sum of the quarter's 3 spread months.
+    const budgetPublic = await this.budget.get(schoolId, period.id)
+    const budgetLines = (budgetPublic.lines as Record<string, unknown> | null) ?? null
+    const spread = (budgetLines?.spread as unknown) ?? null
+    const mb = rollupMonthlyBudget(spread)
+    const budgetYtd = mb?.budgetYtd(endMonth) ?? null
+    const budgetQtd = mb?.budgetMonths(quarterMonthKeys(fyStartYear, q)) ?? null
+
+    const quarterlyOperations = this.buildQuarterlyOperations(
+      ytd,
+      qtd,
+      budgetYtd,
+      budgetQtd,
+      explanations,
+      quarter,
+      fyStartYear,
+      q,
+    )
+
+    const periodEndDate = monthEndIso(endMonth)
+
+    const operationalRow = await this.prisma.periodOperationalData.findUnique({
+      where: { schoolId_fiscalPeriodId: { schoolId, fiscalPeriodId: period.id } },
+    })
+    const capRow = await this.schedules.getCapital(schoolId, period.id)
+    const cashRow = await this.schedules.getCash(schoolId, period.id)
+    const campRow = await this.schedules.getCampaign(schoolId, period.id)
+
+    const settingsCommittee = row?.committeeName ?? school?.defaultCommittee ?? null
+
+    const bundleOut: BoardReportBundle = {
+      periodId: period.id,
+      label: period.label,
+      periodEndDate,
+      fiscalYearStart: deriveFiscalYearStart(periodEndDate),
+      granularity: 'quarterly',
+      quarterKey: quarter,
+      quarterLabel: quarterLabel(fyStartYear, q),
+      quarterShortLabel: quarterShortLabel(fyStartYear, q),
+      quartersAvailable,
+      availability: {
+        hasSnapshot: true,
+        hasBudget: budgetYtd !== null,
+        hasOperational: !!operationalRow,
+        dataAsOf: periodEndDate,
+      },
+      branding: {
+        schoolName: school?.name ?? '',
+        logoBase64: school?.logoBase64 ?? null,
+        brandColor: school?.brandColor ?? null,
+      },
+      settings: {
+        reportTitle: row?.reportTitle ?? null,
+        committeeName: settingsCommittee,
+        generatedAt: row?.generatedAt ? row.generatedAt.toISOString() : null,
+      },
+      mda: {
+        text: row?.mdaText ?? null,
+        source: (row?.mdaSource as BoardReportBundle['mda']['source']) ?? null,
+      },
+      operations: null,
+      monthlyOperations: null,
+      quarterlyOperations,
+      forecast: this.buildForecastSection(
+        (budgetLines?.forecast as Record<string, unknown> | undefined) ?? null,
+      ),
+      capitalBudget: this.buildCapitalBudget(capRow?.items ?? null),
+      cashInvestments: this.buildCashInvestments(cashRow?.accounts ?? null),
+      capitalCampaign: this.buildCapitalCampaign(
+        campRow?.campaignName ?? null,
+        campRow?.items ?? null,
+      ),
+      keyIndicators: this.buildMonthlyKeyIndicators(endMa.metrics, operationalRow),
+      financialPosition: this.buildMonthlyFinancialPosition(endMa.balanceSheet),
+      // CY-only snapshots — no PY change-in-net-assets / cash-flow comparatives.
+      changesInNetAssets: null,
+      cashFlows: null,
+    }
+    return bundleOut
+  }
+
+  /**
+   * The loadable quarterKeys (ascending Q1..Q4) for a fiscal year. A quarter is
+   * loadable iff EVERY quarter-end snapshot it differences against is loaded:
+   * Q1 needs Sep; Q2 needs Dec AND Sep; Q3 needs Mar AND Dec; Q4 needs Jun AND Mar.
+   * Computed from the existing monthly snapshot list (no new query path).
+   */
+  private async quarterlyQuartersAvailable(
+    schoolId: string,
+    periodId: string,
+    fyStartYear: number,
+  ): Promise<string[]> {
+    const loaded = new Set(await this.monthlyMonthsAvailable(schoolId, periodId))
+    const out: string[] = []
+    for (const q of [1, 2, 3, 4] as const) {
+      const end = quarterEndMonthKey(fyStartYear, q)
+      const prior = priorQuarterEndMonthKey(fyStartYear, q)
+      if (loaded.has(end) && (prior === null || loaded.has(prior))) {
+        out.push(`${fyStartYear}-Q${q}`)
+      }
+    }
+    return out
+  }
+
+  /**
+   * Key-union subtract of two CategoryActuals (end − prior), missing side 0. Local
+   * copy of MonthlyActualsService.subtractFlow (kept private there) — used for the
+   * QTD = YTD(end) − YTD(priorEnd) difference.
+   */
+  private diffCategoryActuals(
+    end: CategoryActuals,
+    prior: CategoryActuals,
+  ): CategoryActuals {
+    const diff = (
+      a: Record<string, number>,
+      b: Record<string, number>,
+    ): Record<string, number> => {
+      const out: Record<string, number> = {}
+      for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) {
+        out[k] = (a[k] ?? 0) - (b[k] ?? 0)
+      }
+      return out
+    }
+    return {
+      revenue: diff(end.revenue, prior.revenue),
+      expense: diff(end.expense, prior.expense),
+    }
+  }
+
+  /**
+   * Build the QTD + YTD Operations group. REUSES buildMonthlyLines/monthlyTotals/
+   * the netCell pattern verbatim with QTD in the `mtd` OpCell slot and YTD in the
+   * `ytd` slot (field names KEPT — the FE reads r.mtd for the QTD column). budget
+   * null sides => null variance, favorable:true (matches the monthly path).
+   */
+  private buildQuarterlyOperations(
+    ytd: CategoryActuals,
+    qtd: CategoryActuals,
+    budgetYtd: MonthlyBudgetColumn | null,
+    budgetQtd: MonthlyBudgetColumn | null,
+    explanations: ExplanationMap,
+    quarterKey: string,
+    fyStartYear: number,
+    q: 1 | 2 | 3 | 4,
+  ): QuarterlyOperations {
+    const revenue = this.buildMonthlyLines(
+      qtd.revenue,
+      ytd.revenue,
+      budgetQtd?.revenue ?? null,
+      budgetYtd?.revenue ?? null,
+      REVENUE_LINE_LABELS as Record<string, string>,
+      explanations.revenue,
+      'revenue',
+    )
+    const expense = this.buildMonthlyLines(
+      qtd.expense,
+      ytd.expense,
+      budgetQtd?.expense ?? null,
+      budgetYtd?.expense ?? null,
+      EXPENSE_LINE_LABELS as Record<string, string>,
+      explanations.expense,
+      'expense',
+    )
+
+    const revenueTotals = this.monthlyTotals(revenue, 'revenue', budgetQtd !== null, budgetYtd !== null)
+    const expenseTotals = this.monthlyTotals(expense, 'expense', budgetQtd !== null, budgetYtd !== null)
+
+    const netCell = (rev: OpCell, exp: OpCell): MonthlyNetCell => {
+      const actual = rev.actual - exp.actual
+      const hasB = rev.budget !== null && exp.budget !== null
+      const budget = hasB ? (rev.budget as number) - (exp.budget as number) : null
+      const { variance, variancePct } = computeVariance(actual, budget)
+      return { actual, budget, variance, variancePct }
+    }
+
+    return {
+      granularity: 'quarterly',
+      quarterKey,
+      quarterLabel: quarterLabel(fyStartYear, q),
+      quarterShortLabel: quarterShortLabel(fyStartYear, q),
+      priorQuarterKey: q === 1 ? null : `${fyStartYear}-Q${q - 1}`,
+      hasBudget: budgetYtd !== null,
+      revenue,
+      revenueTotals,
+      expense,
+      expenseTotals,
+      netSurplus: {
+        mtd: netCell(revenueTotals.mtd, expenseTotals.mtd),
+        ytd: netCell(revenueTotals.ytd, expenseTotals.ytd),
+        priorYear: null,
+      },
+    }
   }
 
   /**

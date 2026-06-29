@@ -52,9 +52,11 @@ export class UpdateSchoolDto {
   @IsOptional()
   @ValidateIf((_o, v) => v !== null)
   @IsString()
-  @MaxLength(700000)
+  // 5MB decoded -> ~7M base64 chars; a little headroom for the data-URL prefix.
+  // The authoritative decoded-byte guard lives in SchoolsService.
+  @MaxLength(7200000)
   @Matches(/^data:image\/(png|jpeg|jpg|svg\+xml);base64,/, {
-    message: 'Logo must be a PNG/JPG/SVG under 400KB.',
+    message: 'Logo must be a PNG/JPG/SVG under 5 MB.',
   })
   logoBase64?: string | null
 

@@ -76,9 +76,9 @@ export const DEFAULT_TITLE = 'Financial Report to the Finance Committee'
 export const DEFAULT_COMMITTEE = 'Finance Committee'
 
 // Decode a base64 data-URL's payload byte length (client-side pre-send guard so we
-// reject an oversized logo with a friendly message before the PATCH). ~400KB cap
+// reject an oversized logo with a friendly message before the PATCH). 5MB cap
 // mirrors the authoritative server guard.
-export const LOGO_MAX_BYTES = 400 * 1024
+export const LOGO_MAX_BYTES = 5 * 1024 * 1024
 export function dataUrlByteLength(dataUrl) {
   if (typeof dataUrl !== 'string') return 0
   const comma = dataUrl.indexOf(',')

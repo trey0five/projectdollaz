@@ -31,9 +31,9 @@ interface SchoolPublic {
   created_at: string
 }
 
-/** Max decoded logo bytes (~400KB). The DTO @MaxLength is a coarse pre-gate; this
+/** Max decoded logo bytes (5MB). The DTO @MaxLength is a coarse pre-gate; this
  * is the authoritative guard on the actual image payload. */
-const MAX_LOGO_BYTES = 400 * 1024
+const MAX_LOGO_BYTES = 5 * 1024 * 1024
 const LOGO_DATA_URL = /^data:image\/(png|jpeg|jpg|svg\+xml);base64,([A-Za-z0-9+/=]+)$/
 
 @Injectable()
@@ -71,19 +71,19 @@ export class SchoolsService {
   /**
    * Authoritative logo guard. The DTO already validated the data-URL prefix +
    * coarse length; here we decode the base64 payload and reject when the actual
-   * bytes exceed ~400KB. Throws a friendly 400 the wizard surfaces verbatim.
+   * bytes exceed 5MB. Throws a friendly 400 the wizard surfaces verbatim.
    */
   private assertLogoWithinLimit(dataUrl: string): void {
     const m = LOGO_DATA_URL.exec(dataUrl)
     if (!m) {
-      throw new BadRequestException('Logo must be a PNG/JPG/SVG under 400KB.')
+      throw new BadRequestException('Logo must be a PNG/JPG/SVG under 5 MB.')
     }
     // Decoded byte length without materializing the buffer twice.
     const b64 = m[2]
     const padding = b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0
     const bytes = Math.floor((b64.length * 3) / 4) - padding
     if (bytes > MAX_LOGO_BYTES) {
-      throw new BadRequestException('Logo must be a PNG/JPG/SVG under 400KB.')
+      throw new BadRequestException('Logo must be a PNG/JPG/SVG under 5 MB.')
     }
   }
 

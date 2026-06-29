@@ -36,7 +36,14 @@ export default function Step5Generate({ ctx }) {
       // Flush any pending edits, then optionally stamp generatedAt.
       if (canEdit) await saveNow()
       if (markGenerated && canEdit) await save({ markGenerated: true })
-      navigate(`/reports/board/print?period=${draft.periodId}`)
+      // Carry the chosen granularity (+ month/quarter selection) into the print
+      // route so monthly/quarterly packets print what the wizard previewed —
+      // not the annual default.
+      const qs = new URLSearchParams({ period: draft.periodId })
+      if (draft.granularity && draft.granularity !== 'annual') qs.set('granularity', draft.granularity)
+      if (draft.granularity === 'monthly' && draft.monthKey) qs.set('month', draft.monthKey)
+      if (draft.granularity === 'quarterly' && draft.quarter) qs.set('quarter', draft.quarter)
+      navigate(`/reports/board/print?${qs.toString()}`)
     } catch {
       setErr('Could not finalize the report. Please try again.')
       setBusy(false)

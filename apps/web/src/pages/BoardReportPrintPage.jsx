@@ -18,9 +18,20 @@ export default function BoardReportPrintPage() {
   const { activeSchool } = useSchools()
   const [params] = useSearchParams()
   const periodId = params.get('period') || null
+  // Honor the granularity (+ month/quarter) the wizard navigated with, so the
+  // printed packet matches the preview (annual / monthly MTD+YTD / quarterly QTD+YTD).
+  const granularity = params.get('granularity') || 'annual'
+  const monthKey = params.get('month') || null
+  const quarter = params.get('quarter') || null
   const schoolId = activeSchool?.id ?? null
 
-  const { data, loading, notEntitled } = useBoardReport(schoolId, periodId)
+  const { data, loading, notEntitled } = useBoardReport(
+    schoolId,
+    periodId,
+    granularity,
+    monthKey,
+    quarter,
+  )
   const ready = !loading && !!data
 
   // Auto-print once data is ready (one-shot).

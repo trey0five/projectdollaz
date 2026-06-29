@@ -27,8 +27,9 @@ export class BoardReportController {
     @Param('periodId') periodId: string,
     @Query('granularity') granularity?: string,
     @Query('month') month?: string,
+    @Query('quarter') quarter?: string,
   ) {
-    return this.boardReport.assemble(schoolId, periodId, granularity ?? 'annual', month)
+    return this.boardReport.assemble(schoolId, periodId, granularity ?? 'annual', month, quarter)
   }
 
   /** Persist editable state (title/committee/explanations/MD&A/markGenerated). */
