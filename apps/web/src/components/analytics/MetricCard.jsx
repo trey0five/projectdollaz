@@ -28,6 +28,8 @@ export default function MetricCard({
   return (
     <motion.button
       type="button"
+      // Stable id so Penny's walkthrough can glide to a specific metric (metric-<key>).
+      id={`metric-${metric.key}`}
       onClick={() => onOpen?.(metric.key)}
       initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12 }}
       animate={reduce ? { opacity: 1 } : { opacity: 1, y: 0 }}

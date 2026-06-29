@@ -1,6 +1,54 @@
 // Phase 4D+ — the assistant's tool registry (OpenAI function schemas fed to the
 // LLM). All read-only except render_chart, which returns a spec the frontend draws.
 // Handlers live in AssistantService (they need the injected data services).
+
+// SINGLE SOURCE OF TRUTH for the interactive-walkthrough target keys. Used BOTH as
+// the start_walkthrough `target` enum (below) AND as the runtime validator set in
+// AssistantService (imported there) so the two can never drift. MUST stay byte-
+// identical to the FE registry keys in apps/web/src/components/penny/guide/targetRegistry.js.
+export const WALKTHROUGH_TARGET_KEYS = [
+  'nav.home',
+  'nav.data',
+  'nav.statements',
+  'nav.analytics',
+  'nav.budget',
+  'nav.reports',
+  'nav.readiness',
+  'nav.settings',
+  'dataHub.trialBalanceCard',
+  'dataHub.monthlyCard',
+  'dataHub.operationalCard',
+  'dataHub.budgetCard',
+  'dataHub.forecastCard',
+  'dataHub.schedulesCard',
+  'dataHub.complianceCard',
+  'dataHub.tourButton',
+  'dataHub.periodSelect',
+  'trialBalance.uploadDrop',
+  'trialBalance.saveButton',
+  'budget.setupPanel',
+  'budget.saveButton',
+  'forecast.workspace',
+  'forecast.feederInput',
+  'budgetPage.tabBar',
+  'analytics.aiInsight',
+  'analytics.customizeBar',
+  'reports.boardReportCard',
+  'reports.generateButton',
+  'schedules.capitalTab',
+  'readiness.capPanel',
+  'metric.operating_margin',
+  'metric.days_cash_on_hand',
+  'metric.months_operating_reserve',
+  'metric.tuition_dependency',
+  'metric.cost_per_pupil',
+  'metric.net_tuition_per_student',
+  'metric.financial_aid_per_student',
+  'metric.aid_per_aided_student',
+  'metric.tuition_discount_rate',
+  'metric.pct_students_on_aid',
+] as const
+
 export const TOOL_SCHEMAS = [
   {
     type: 'function',
@@ -410,7 +458,7 @@ export const TOOL_SCHEMAS = [
     function: {
       name: 'navigate_to_page',
       description:
-        'Take the user to a page, a Data-hub modal, or a Settings section. Read-only — this changes no data; it only moves the user’s view. Use it when the user asks to go somewhere or when a change you applied lives on another page.',
+        'Move the user to a whole PAGE, Data-hub modal, or Settings section (no pointing). Read-only — changes no data. Use this ONLY when the destination is a page in general, NOT a specific control. If the user asks WHERE a specific metric/button/field is, or to SHOW / POINT OUT / GO TO a specific item that has a target key, use start_walkthrough instead (it both navigates AND glides Penny to the exact element). Do not use navigate_to_page to "show" a specific metric.',
       parameters: {
         type: 'object',
         properties: {
@@ -465,7 +513,7 @@ export const TOOL_SCHEMAS = [
     function: {
       name: 'start_walkthrough',
       description:
-        'Run an interactive on-screen walkthrough where Penny physically glides to each control it describes. Provide an ORDERED list of steps; each step names a target control (from the allowed keys only), a short message, and optionally the page / Data-hub modal to open first. Use this to walk the user through a process step by step.',
+        'Make Penny physically glide to a specific on-screen control and point it out. THIS IS THE TOOL for "where is X?", "show me X", "point out X", "take me to the X metric/button" — give it a SINGLE step targeting that element (it auto-navigates to the right page/modal first, then glides). Also use it for multi-step "walk me through …" processes (an ORDERED list of steps). Each step: a target key (allowed keys only — incl. metric.* for analytics KPIs like metric.net_tuition_per_student), a short message, and optionally a page / Data-hub modal to open first. Prefer this over navigate_to_page whenever a matching target key exists.',
       parameters: {
         type: 'object',
         properties: {
@@ -479,39 +527,9 @@ export const TOOL_SCHEMAS = [
               properties: {
                 target: {
                   type: 'string',
-                  enum: [
-                    'nav.home',
-                    'nav.data',
-                    'nav.statements',
-                    'nav.analytics',
-                    'nav.budget',
-                    'nav.reports',
-                    'nav.readiness',
-                    'nav.settings',
-                    'dataHub.trialBalanceCard',
-                    'dataHub.monthlyCard',
-                    'dataHub.operationalCard',
-                    'dataHub.budgetCard',
-                    'dataHub.forecastCard',
-                    'dataHub.schedulesCard',
-                    'dataHub.complianceCard',
-                    'dataHub.tourButton',
-                    'dataHub.periodSelect',
-                    'trialBalance.uploadDrop',
-                    'trialBalance.saveButton',
-                    'budget.setupPanel',
-                    'budget.saveButton',
-                    'forecast.workspace',
-                    'forecast.feederInput',
-                    'budgetPage.tabBar',
-                    'analytics.aiInsight',
-                    'analytics.customizeBar',
-                    'reports.boardReportCard',
-                    'reports.generateButton',
-                    'schedules.capitalTab',
-                    'readiness.capPanel',
-                  ],
-                  description: 'The control Penny glides to. Use only these provided keys.',
+                  enum: WALKTHROUGH_TARGET_KEYS,
+                  description:
+                    'The control Penny glides to. Use only these provided keys. The metric.* keys point at a specific analytics KPI tile on the Analytics page.',
                 },
                 message: {
                   type: 'string',

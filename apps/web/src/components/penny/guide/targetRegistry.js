@@ -50,6 +50,21 @@ export const TARGET_REGISTRY = {
   'reports.generateButton': { domId: 'reports-generate-button', page: 'reports' },
   'schedules.capitalTab': { domId: 'schedules-capital-tab', page: 'schedules' },
   'readiness.capPanel': { domId: 'readiness-cap-panel', page: 'readiness' },
+
+  // Individual analytics KPI tiles — each metric card carries id=`metric-<key>`
+  // (MetricCard / HeroVitalTile). Lets Penny glide to a specific metric when the
+  // user asks to be shown it (e.g. "show me net tuition per student"). Only the
+  // metrics in the user's current layout are mounted; a hidden one parks the coin.
+  'metric.operating_margin': { domId: 'metric-operating_margin', page: 'analytics' },
+  'metric.days_cash_on_hand': { domId: 'metric-days_cash_on_hand', page: 'analytics' },
+  'metric.months_operating_reserve': { domId: 'metric-months_operating_reserve', page: 'analytics' },
+  'metric.tuition_dependency': { domId: 'metric-tuition_dependency', page: 'analytics' },
+  'metric.cost_per_pupil': { domId: 'metric-cost_per_pupil', page: 'analytics' },
+  'metric.net_tuition_per_student': { domId: 'metric-net_tuition_per_student', page: 'analytics' },
+  'metric.financial_aid_per_student': { domId: 'metric-financial_aid_per_student', page: 'analytics' },
+  'metric.aid_per_aided_student': { domId: 'metric-aid_per_aided_student', page: 'analytics' },
+  'metric.tuition_discount_rate': { domId: 'metric-tuition_discount_rate', page: 'analytics' },
+  'metric.pct_students_on_aid': { domId: 'metric-pct_students_on_aid', page: 'analytics' },
 }
 
 export const TARGET_KEYS = Object.keys(TARGET_REGISTRY)

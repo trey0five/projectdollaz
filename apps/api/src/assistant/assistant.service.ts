@@ -35,7 +35,7 @@ import {
   type AttachmentInput,
   type PreparedAttachments,
 } from './assistant-files.service.js'
-import { TOOL_SCHEMAS, TOOL_LABELS } from './assistant.tools.js'
+import { TOOL_SCHEMAS, TOOL_LABELS, WALKTHROUGH_TARGET_KEYS } from './assistant.tools.js'
 
 const MAX_TURNS = 6
 
@@ -70,38 +70,10 @@ const MODAL_KEYS = new Set<string>([
   'schedules',
   'compliance',
 ])
-const TARGET_KEYS = new Set<string>([
-  'nav.home',
-  'nav.data',
-  'nav.statements',
-  'nav.analytics',
-  'nav.budget',
-  'nav.reports',
-  'nav.readiness',
-  'nav.settings',
-  'dataHub.trialBalanceCard',
-  'dataHub.monthlyCard',
-  'dataHub.operationalCard',
-  'dataHub.budgetCard',
-  'dataHub.forecastCard',
-  'dataHub.schedulesCard',
-  'dataHub.complianceCard',
-  'dataHub.tourButton',
-  'dataHub.periodSelect',
-  'trialBalance.uploadDrop',
-  'trialBalance.saveButton',
-  'budget.setupPanel',
-  'budget.saveButton',
-  'forecast.workspace',
-  'forecast.feederInput',
-  'budgetPage.driverTab',
-  'analytics.aiInsight',
-  'analytics.customizeBar',
-  'reports.boardReportCard',
-  'reports.generateButton',
-  'schedules.capitalTab',
-  'readiness.capPanel',
-])
+// Runtime validator for walkthrough targets — derived from the SAME list that
+// defines the start_walkthrough enum, so the schema the LLM sees and the set we
+// validate against can never drift.
+const TARGET_KEYS = new Set<string>(WALKTHROUGH_TARGET_KEYS)
 
 // tool kind -> which client data domains to refresh after an autonomous write.
 const REFRESH: Record<ProposedAction['kind'], RefreshKey[]> = {
@@ -1064,6 +1036,13 @@ export class AssistantService {
       'ORDERED list of steps and Penny physically glides to each control, navigating across pages as needed. ' +
       'Use ONLY the provided target keys; each step has a short message and may name a page/openModal to open ' +
       'first. Walk the user through a process step by step when they ask how to do something. ' +
+      'IMPORTANT: when the user asks WHERE something is, or to SHOW / POINT OUT / "go to" / "take me to" a ' +
+      'SPECIFIC metric or control, do NOT just navigate_to_page (that only moves the view and leaves them ' +
+      'hunting). Instead call start_walkthrough with a SINGLE step whose target is that element, so Penny ' +
+      'physically glides to it and points it out — the step’s page/openModal handles the navigation. For an ' +
+      'analytics KPI use the matching metric.* target key (e.g. metric.net_tuition_per_student, ' +
+      'metric.operating_margin, metric.days_cash_on_hand). Only fall back to navigate_to_page when there is no ' +
+      'specific target key for what they asked about. ' +
       'You can also make changes, and these APPLY IMMEDIATELY through the validated, reversible workflow — ' +
       'after each one, briefly state EXACTLY what you changed: set_budget (set a budget figure), ' +
       'apply_driver_budget (build the budget from enrollment / tuition / staffing assumptions — provide ONLY ' +
