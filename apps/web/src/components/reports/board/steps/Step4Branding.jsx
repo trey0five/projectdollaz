@@ -112,13 +112,22 @@ export default function Step4Branding({ ctx }) {
     setLogoErr('')
     try {
       await updateSchool(school.id, patch)
-      await reload()
     } catch (e) {
-      // class-validator returns `message` as an array; surface its first line so the
-      // user sees the real reason instead of the generic fallback.
+      // The SAVE itself failed. class-validator returns `message` as an array;
+      // surface its first line so the user sees the real reason, not the fallback.
       const raw = e?.response?.data?.message
       const msg = Array.isArray(raw) ? raw[0] : raw
       setLogoErr(typeof msg === 'string' ? msg : 'Could not save branding. Please try again.')
+      setBusy(false)
+      return
+    }
+    // Save succeeded — refresh the assembled bundle so the live preview/print pick
+    // up the change. A reload hiccup must NOT masquerade as a save failure (this was
+    // the long-standing "Could not save branding" bug: reload was undefined in ctx).
+    try {
+      await reload?.()
+    } catch {
+      /* preview will catch up on the next load; the save is already persisted */
     } finally {
       setBusy(false)
     }

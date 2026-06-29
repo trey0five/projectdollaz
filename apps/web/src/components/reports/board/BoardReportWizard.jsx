@@ -144,7 +144,7 @@ export default function BoardReportWizard({ schoolId, school, periods, initialPe
     periodId: initialPeriodId ?? null,
   }))
 
-  const { data, loading, monthError, quarterError, notEntitled, save } = useBoardReport(
+  const { data, loading, monthError, quarterError, notEntitled, save, reload } = useBoardReport(
     schoolId,
     draft.periodId,
     draft.granularity,
@@ -216,6 +216,7 @@ export default function BoardReportWizard({ schoolId, school, periods, initialPe
     saveNow,
     dispatch,
     save,
+    reload,
     goTo: (s) => dispatch({ type: 'setStep', step: s }),
   }
 
