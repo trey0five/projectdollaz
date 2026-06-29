@@ -31,7 +31,7 @@ describe('mergeFeederEnrollment', () => {
     expect(mergeFeederEnrollment({ K: 20 }, undefined)).toEqual({ K: 20 })
   })
 
-  it('ignores unknown keys on both inputs (only the 14 GRADE_KEYS participate)', () => {
+  it('ignores unknown keys on both inputs (only the 15 GRADE_KEYS participate)', () => {
     const out = mergeFeederEnrollment(
       { K: 10, bogus: 99 } as Record<string, number>,
       { K: 5, alsoBogus: 7 } as Record<string, number>,
@@ -54,16 +54,16 @@ describe('mergeFeederEnrollment', () => {
 })
 
 describe('rollForwardEnrollment', () => {
-  it('locks the worked example: K/1 age up, grade 8 graduates, PK0/K entrants', () => {
+  it('locks the worked example: K/1 age up, grade 8 graduates, PK3/K entrants', () => {
     const out = rollForwardEnrollment({
       currentByGrade: { K: 100, '1': 100, '8': 100 },
       retentionPct: 90,
-      newEntrantsByGrade: { PK0: 30, K: 10 },
+      newEntrantsByGrade: { PK3: 30, K: 10 },
       graduatingGrade: '8',
     })
     // K(100)->1 round(90)=90; 1(100)->2 round(90)=90; 8 graduates (no roll-up);
-    // entrants PK0=30, K=10. Returning K/1 no longer counted in their own grade.
-    expect(out).toEqual({ PK0: 30, K: 10, '1': 90, '2': 90 })
+    // entrants PK3=30, K=10. Returning K/1 no longer counted in their own grade.
+    expect(out).toEqual({ PK3: 30, K: 10, '1': 90, '2': 90 })
     expect(Object.values(out).reduce((s, v) => s + v, 0)).toBe(220)
   })
 
@@ -72,15 +72,15 @@ describe('rollForwardEnrollment', () => {
     expect(out).toEqual({ '4': 50 })
   })
 
-  it('first grade PK0 stays 0 returning (no lower grade feeds it)', () => {
-    const out = rollForwardEnrollment({ currentByGrade: { PK0: 80 }, retentionPct: 100 })
-    // PK0's cohort ages into PK1; PK0 itself has no source → absent (0 returning).
-    expect(out).toEqual({ PK1: 80 })
-    expect(out).not.toHaveProperty('PK0')
+  it('first grade PK3 stays 0 returning (no lower grade feeds it)', () => {
+    const out = rollForwardEnrollment({ currentByGrade: { PK3: 80 }, retentionPct: 100 })
+    // PK3's cohort ages into PK4; PK3 itself has no source → absent (0 returning).
+    expect(out).toEqual({ PK4: 80 })
+    expect(out).not.toHaveProperty('PK3')
   })
 
-  it('drops the graduating cohort (default grade 8)', () => {
-    const out = rollForwardEnrollment({ currentByGrade: { '8': 100 }, retentionPct: 100 })
+  it('drops the graduating cohort (default = top grade 12)', () => {
+    const out = rollForwardEnrollment({ currentByGrade: { '12': 100 }, retentionPct: 100 })
     expect(out).toEqual({})
   })
 
@@ -100,10 +100,10 @@ describe('rollForwardEnrollment', () => {
     const out = rollForwardEnrollment({
       currentByGrade: { K: 20 },
       retentionPct: 50,
-      newEntrantsByGrade: { PK0: 18, '1': 5, '4': 2 },
+      newEntrantsByGrade: { PK3: 18, '1': 5, '4': 2 },
     })
-    // K(20)->1 round(10)=10, +5 transfer at 1 = 15; PK0=18 entrants; 4=2 transfer.
-    expect(out).toEqual({ PK0: 18, '1': 15, '4': 2 })
+    // K(20)->1 round(10)=10, +5 transfer at 1 = 15; PK3=18 entrants; 4=2 transfer.
+    expect(out).toEqual({ PK3: 18, '1': 15, '4': 2 })
   })
 
   it('Math.round per cohort (half-up), one boundary per grade', () => {
@@ -145,7 +145,7 @@ describe('rollForwardEnrollment', () => {
     ).not.toThrow()
   })
 
-  it('emits sparse output (only the 14 GRADE_KEYS, zeros omitted)', () => {
+  it('emits sparse output (only the 15 GRADE_KEYS, zeros omitted)', () => {
     const out = rollForwardEnrollment({ currentByGrade: { K: 100 }, retentionPct: 90 })
     for (const k of Object.keys(out)) expect(GRADE_KEYS).toContain(k)
     expect(Object.values(out).every((v) => v !== 0)).toBe(true)
@@ -167,7 +167,7 @@ describe('effectiveEnrollment (shared dispatcher)', () => {
 
   it('missing/unknown projectionMethod ⇒ manual (back-compat)', () => {
     const enrollment = { K: 95, '1': 90 }
-    const feeder = { PK0: 30 }
+    const feeder = { PK3: 30 }
     const expected = mergeFeederEnrollment(enrollment, feeder)
     expect(
       effectiveEnrollment({ enrollmentByGrade: enrollment, feederEnrollmentByGrade: feeder }),
@@ -192,26 +192,28 @@ describe('effectiveEnrollment (shared dispatcher)', () => {
     const out = effectiveEnrollment({
       projectionMethod: 'rollforward',
       enrollmentByGrade: { K: 999 }, // DERIVED/IGNORED in rollforward mode
-      feederEnrollmentByGrade: { PK0: 18, K: 22, '3': 2 },
+      feederEnrollmentByGrade: { PK3: 18, K: 22, '3': 2 },
       rollForward: {
         currentByGrade: {
-          PK0: 16, PK1: 17, PK2: 18, PK3: 19, PK4: 20,
+          PK3: 19, PK4: 20,
           K: 24, '1': 23, '2': 22, '3': 21, '4': 20,
           '5': 19, '6': 18, '7': 17, '8': 16,
+          '9': 15, '10': 14, '11': 13, '12': 12,
         },
         retentionPct: 93,
-        retentionByGrade: { '8': 100, PK4: 88 },
-        graduatingGrade: '8',
+        retentionByGrade: { '12': 100, PK4: 88 },
+        graduatingGrade: '12',
         projectedOverrideByGrade: { K: 45 },
       },
     })
     // K = round(PK4 20 * 88%) 18 promoted + feeder K 22 = 40, OVERRIDDEN to 45.
-    // '1' = round(K 24 * 93%)=22 + feeder 0 = 22. PK0 = 0 + feeder 18 = 18.
-    // '8' = round('7' 17 * 93%)=16. Current grade-8 16 do NOT roll up.
+    // '1' = round(K 24 * 93%)=22 + feeder 0 = 22. PK3 = 0 + feeder 18 = 18.
+    // '12' = round('11' 13 * 93%)=12. Current grade-12 12 graduate (do NOT roll up).
     expect(out).toMatchObject({
-      PK0: 18, PK1: 15, PK2: 16, PK3: 17, PK4: 18,
+      PK3: 18, PK4: 18,
       K: 45, '1': 22, '2': 21, '3': 22, '4': 20,
       '5': 19, '6': 18, '7': 17, '8': 16,
+      '9': 15, '10': 14, '11': 13, '12': 12,
     })
     // enrollmentByGrade in rollforward is ignored — 999 never appears.
     expect(out.K).toBe(45)
@@ -222,16 +224,16 @@ describe('effectiveEnrollment (shared dispatcher)', () => {
       effectiveEnrollment({
         projectionMethod: 'rollforward',
         enrollmentByGrade: {},
-        feederEnrollmentByGrade: { PK0: 25, K: 30 },
+        feederEnrollmentByGrade: { PK3: 25, K: 30 },
       }),
     ).not.toThrow()
     expect(
       effectiveEnrollment({
         projectionMethod: 'rollforward',
         enrollmentByGrade: {},
-        feederEnrollmentByGrade: { PK0: 25, K: 30 },
+        feederEnrollmentByGrade: { PK3: 25, K: 30 },
       }),
-    ).toEqual({ PK0: 25, K: 30 })
+    ).toEqual({ PK3: 25, K: 30 })
   })
 
   it('override clamps negatives to >=0 and can REPLACE down to zero (omitted)', () => {

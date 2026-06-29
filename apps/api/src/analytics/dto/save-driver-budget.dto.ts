@@ -13,9 +13,6 @@ const MONEY = { min: -1_000_000_000_000, max: 1_000_000_000_000 }
 
 /** Enrollment by grade — all 14 keys explicit, each a non-negative count. */
 export class EnrollmentByGradeDto {
-  @IsOptional() @IsNumber() @Min(0) @Max(100000) PK0?: number
-  @IsOptional() @IsNumber() @Min(0) @Max(100000) PK1?: number
-  @IsOptional() @IsNumber() @Min(0) @Max(100000) PK2?: number
   @IsOptional() @IsNumber() @Min(0) @Max(100000) PK3?: number
   @IsOptional() @IsNumber() @Min(0) @Max(100000) PK4?: number
   @IsOptional() @IsNumber() @Min(0) @Max(100000) K?: number
@@ -27,14 +24,19 @@ export class EnrollmentByGradeDto {
   @IsOptional() @IsNumber() @Min(0) @Max(100000) '6'?: number
   @IsOptional() @IsNumber() @Min(0) @Max(100000) '7'?: number
   @IsOptional() @IsNumber() @Min(0) @Max(100000) '8'?: number
+  @IsOptional() @IsNumber() @Min(0) @Max(100000) '9'?: number
+  @IsOptional() @IsNumber() @Min(0) @Max(100000) '10'?: number
+  @IsOptional() @IsNumber() @Min(0) @Max(100000) '11'?: number
+  @IsOptional() @IsNumber() @Min(0) @Max(100000) '12'?: number
 }
 
-/** 4 tuition band rates. */
+/** 5 tuition band rates. */
 export class TuitionRatesDto {
   @IsOptional() @IsNumber() @Min(0) @Max(1_000_000) prek3?: number
   @IsOptional() @IsNumber() @Min(0) @Max(1_000_000) prek5?: number
   @IsOptional() @IsNumber() @Min(0) @Max(1_000_000) elem?: number
   @IsOptional() @IsNumber() @Min(0) @Max(1_000_000) middle?: number
+  @IsOptional() @IsNumber() @Min(0) @Max(1_000_000) high?: number
 }
 
 /** 3-way program split percentages (normalized in compute; bounds only here). */

@@ -11,14 +11,16 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { defaultAssumptions, toDriverPriorContext as pkgToDriverPriorContext } from '@finrep/analytics'
 
-// Enrollment grid order (PK tiers → K → 1..8). Kept here only for the grid layout;
+// Enrollment grid order (PK3/PK4 → K → 1..12). Kept here only for the grid layout;
 // the grade→band mapping (bandOf) lives in the package and runs inside the compute.
-export const GRADE_ROW = ['PK0', 'PK1', 'PK2', 'PK3', 'PK4', 'K', '1', '2', '3', '4', '5', '6', '7', '8']
+// MUST stay in sync with GRADE_KEYS in @finrep/analytics/driver.ts.
+export const GRADE_ROW = ['PK3', 'PK4', 'K', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']
 
 export const GRADE_LABELS = {
-  PK0: 'PK-0', PK1: 'PK-1', PK2: 'PK-2', PK3: 'PK-3', PK4: 'PK-4',
+  PK3: 'PK-3', PK4: 'PK-4',
   K: 'K', 1: 'Grade 1', 2: 'Grade 2', 3: 'Grade 3', 4: 'Grade 4',
   5: 'Grade 5', 6: 'Grade 6', 7: 'Grade 7', 8: 'Grade 8',
+  9: 'Grade 9', 10: 'Grade 10', 11: 'Grade 11', 12: 'Grade 12',
 }
 
 // Display labels for tuition rate bands — covers BOTH naming schemes the
@@ -29,6 +31,7 @@ const RATE_BAND_LABELS = {
   prek5: 'PreK (full-day)', prekFull: 'PreK (full-day)',
   elem: 'Elementary (K–5)', elementary: 'Elementary (K–5)',
   middle: 'Middle (6–8)',
+  high: 'Upper School (9–12)',
 }
 
 export function rateBandLabel(band) {

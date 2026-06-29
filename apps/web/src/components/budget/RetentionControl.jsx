@@ -1,9 +1,9 @@
 // Phase 4 — retention control for the roll-forward projection.
 //
 // Primary "Default retention %" input (default 93) drives every promoted cohort.
-// An expandable disclosure (framer-motion height) exposes 14 per-grade percent
+// An expandable disclosure (framer-motion height) exposes 15 per-grade percent
 // overrides — blank inherits the default — writing rollForward.retentionByGrade.
-// A "Graduating grade" select (default '8', options = GRADE_KEYS via GRADE_ROW)
+// A "Graduating grade" select (default = top grade, options = GRADE_KEYS via GRADE_ROW)
 // writes rollForward.graduatingGrade: that grade's current cohort exits the school
 // instead of rolling up.
 //
@@ -29,7 +29,7 @@ function renderOverrideCell(grade, raw, onCell, disabled) {
   const value = raw === undefined || raw === null ? '' : String(raw)
   return (
     <div key={`ret-${grade}`} className="flex flex-col">
-      <span className="mb-0.5 text-center text-[10.5px] font-semibold text-muted">
+      <span className="mb-0.5 flex min-h-[2.4em] items-end justify-center text-center text-[10.5px] font-semibold leading-tight text-muted">
         Gr {GRADE_LABELS[grade] ?? grade}
       </span>
       <input
@@ -57,7 +57,9 @@ export default function RetentionControl({
   const [open, setOpen] = useState(false)
   const overrides = retentionByGrade || {}
   const overrideCount = GRADE_ROW.filter((g) => overrides[g] !== undefined && overrides[g] !== null).length
-  const grad = GRADE_ROW.includes(graduatingGrade) ? graduatingGrade : '8'
+  const grad = GRADE_ROW.includes(graduatingGrade)
+    ? graduatingGrade
+    : GRADE_ROW[GRADE_ROW.length - 1]
 
   // Per-grade cell change: blank clears the override (inherit default), else
   // store the clamped number. We pass the SANITIZED string in and decide here.
@@ -156,7 +158,7 @@ export default function RetentionControl({
             <p className="mb-2 mt-3 text-[11.5px] text-muted">
               % of current Gr-N returning. Blank inherits the default ({retentionPct ?? 93}%).
             </p>
-            <div className="grid grid-cols-5 gap-1.5 sm:grid-cols-7">
+            <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-5">
               {GRADE_ROW.map((g) => renderOverrideCell(g, overrides[g], setOverride, disabled))}
             </div>
           </motion.div>

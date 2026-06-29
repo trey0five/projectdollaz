@@ -12,10 +12,10 @@ const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v)
 
 /**
  * Merge anticipated feeder enrollment ADDITIVELY into the driver's per-grade
- * enrollment. For each of the 14 GRADE_KEYS the output is
+ * enrollment. For each of the 15 GRADE_KEYS the output is
  * `max(0, enrollment[g]) + max(0, feeder[g])`. Keys whose sum is 0 are omitted
  * (so the result stays a sparse Partial map, like the form's input). Only the
- * 14 GRADE_KEYS participate — unknown keys on either input are ignored. Feeder is
+ * 15 GRADE_KEYS participate — unknown keys on either input are ignored. Feeder is
  * net-new on top of the revised base enrollment; this raises projected gross
  * tuition through computeDriverBudget's existing tuition = Σ enrollment × rate path.
  */
@@ -61,10 +61,10 @@ export interface RollForwardInput {
 
 /**
  * Age this year's roster forward one grade and add new entrants. For each
- * destination grade i (1..13) exactly one source cohort GRADE_KEYS[i-1] feeds
+ * destination grade i (1..14) exactly one source cohort GRADE_KEYS[i-1] feeds
  * it: `round(current[src] * retOf(src) / 100)` — a SINGLE rounding boundary per
  * grade (no compounding). The graduating grade's cohort exits and never rolls
- * up. The first grade (PK0) has no lower source, so it starts at 0 returning;
+ * up. The first grade (PK3) has no lower source, so it starts at 0 returning;
  * its only population is new entrants. New entrants are then added at any grade
  * (entry grades get the bulk, transfers allowed anywhere). Result is SPARSE
  * (zeros omitted) — same shape as mergeFeederEnrollment. NEVER throws: retention
@@ -79,7 +79,7 @@ export function rollForwardEnrollment(
   const current = input?.currentByGrade ?? {}
   const grad: GradeKey = GRADE_KEYS.includes(input?.graduatingGrade as GradeKey)
     ? (input.graduatingGrade as GradeKey)
-    : '8'
+    : GRADE_KEYS[GRADE_KEYS.length - 1] // default: the top grade graduates (now 12)
   const retOf = (g: GradeKey): number =>
     clampPct(input?.retentionByGrade?.[g] ?? input?.retentionPct)
 
@@ -88,7 +88,7 @@ export function rollForwardEnrollment(
   for (const g of GRADE_KEYS) projected[g] = 0
 
   // 2. Age-up: each destination grade i gets its single source cohort i-1
-  //    (PK0 is never a destination → stays 0 returning). Graduating cohort exits.
+  //    (PK3 is never a destination → stays 0 returning). Graduating cohort exits.
   for (let i = 1; i < GRADE_KEYS.length; i++) {
     const src = GRADE_KEYS[i - 1]
     if (src === grad) continue // graduating cohort leaves the school

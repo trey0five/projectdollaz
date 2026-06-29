@@ -211,7 +211,9 @@ function canonicalRollForward(rf) {
     currentByGrade,
     retentionPct: Number.isFinite(Number(pct)) && pct !== '' && pct != null ? Number(pct) : DEFAULT_RETENTION,
     retentionByGrade,
-    graduatingGrade: GRADE_ROW.includes(src.graduatingGrade) ? src.graduatingGrade : '8',
+    graduatingGrade: GRADE_ROW.includes(src.graduatingGrade)
+      ? src.graduatingGrade
+      : GRADE_ROW[GRADE_ROW.length - 1],
     projectedOverrideByGrade,
   }
 }
@@ -224,7 +226,7 @@ function initialRollForward({ savedForecast, budget, budgetContext }) {
   return canonicalRollForward({
     currentByGrade: seedCurrentRoster({ driverAssumptions, budgetContext }),
     retentionPct: DEFAULT_RETENTION,
-    graduatingGrade: '8',
+    graduatingGrade: GRADE_ROW[GRADE_ROW.length - 1],
   })
 }
 
@@ -694,7 +696,7 @@ export default function ForecastWorkspace({ schoolId, periodId, canEdit, budget,
         disabled={!canEdit}
       />
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(340px,460px)_1fr]">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(320px,420px)_1fr]">
         <div className="space-y-4">
           {isRollforward ? (
             <>

@@ -28,9 +28,6 @@ export type ExpenseKey = ExpenseLineKey
 
 /** Enrollment grid keys — the columns the UI collects. Fixed order = deterministic Σ. */
 export const GRADE_KEYS = [
-  'PK0',
-  'PK1',
-  'PK2',
   'PK3',
   'PK4',
   'K',
@@ -42,28 +39,30 @@ export const GRADE_KEYS = [
   '6',
   '7',
   '8',
+  '9',
+  '10',
+  '11',
+  '12',
 ] as const
 export type GradeKey = (typeof GRADE_KEYS)[number]
 
 /**
- * Tuition rate bands — collapse 14 grades into 4 rate inputs. The band keys ARE
+ * Tuition rate bands — collapse the 15 grades into 5 rate inputs. The band keys ARE
  * the `tuitionRates` keys, so `tuitionRates[bandOf(g)]` is a direct lookup.
- *  - prek3 : part-time / younger PreK tiers (PK0–PK3)
+ *  - prek3 : part-time PreK (PK3 — 3-year-olds)
  *  - prek5 : full-day PreK (PK4 / VPK)
  *  - elem  : K–5
  *  - middle: 6–8
+ *  - high  : 9–12 (Upper School)
  * (Band boundaries are a v2 decision adapted from the workbook's PreK split; if
- * the workbook needs finer tiers, only `bandOf` + `TUITION_BANDS` change.)
+ * a school needs finer tiers, only `bandOf` + `TUITION_BANDS` change.)
  */
-export const TUITION_BANDS = ['prek3', 'prek5', 'elem', 'middle'] as const
+export const TUITION_BANDS = ['prek3', 'prek5', 'elem', 'middle', 'high'] as const
 export type TuitionBand = (typeof TUITION_BANDS)[number]
 
 /** Total map grade → rate band. Exhaustive over GradeKey. */
 export function bandOf(g: GradeKey): TuitionBand {
   switch (g) {
-    case 'PK0':
-    case 'PK1':
-    case 'PK2':
     case 'PK3':
       return 'prek3'
     case 'PK4':
@@ -79,6 +78,11 @@ export function bandOf(g: GradeKey): TuitionBand {
     case '7':
     case '8':
       return 'middle'
+    case '9':
+    case '10':
+    case '11':
+    case '12':
+      return 'high'
     default: {
       // Exhaustiveness guard — unreachable for a valid GradeKey.
       const _never: never = g
@@ -90,9 +94,9 @@ export function bandOf(g: GradeKey): TuitionBand {
 // ── Shapes ───────────────────────────────────────────────────────────────────
 
 export interface DriverAssumptions {
-  /** All 14 grade keys; a missing/blank grade is treated as 0. */
+  /** All 15 grade keys; a missing/blank grade is treated as 0. */
   enrollmentByGrade: Partial<Record<GradeKey, number>>
-  /** 4 band rates; a missing band is treated as 0. */
+  /** 5 band rates; a missing band is treated as 0. */
   tuitionRates: Partial<Record<TuitionBand, number>>
   /** 3-way program split as percentages. Normalized in compute (sum need not be exactly 100). */
   tuitionProgramSplit: { parent: number; ftc: number; fes: number }
@@ -203,7 +207,7 @@ export function defaultAssumptions(): DriverAssumptions {
   for (const g of GRADE_KEYS) enrollmentByGrade[g] = 0
   return {
     enrollmentByGrade,
-    tuitionRates: { prek3: 0, prek5: 0, elem: 0, middle: 0 },
+    tuitionRates: { prek3: 0, prek5: 0, elem: 0, middle: 0, high: 0 },
     tuitionProgramSplit: { parent: 100, ftc: 0, fes: 0 },
     feePerStudent: 0,
     staffing: {

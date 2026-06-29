@@ -52,14 +52,16 @@ function localRollForward(input) {
   const retDefault = input?.retentionPct
   const retByGrade = input?.retentionByGrade || {}
   const entrants = input?.newEntrantsByGrade || {}
-  const grad = GRADE_KEYS.includes(input?.graduatingGrade) ? input.graduatingGrade : '8'
+  const grad = GRADE_KEYS.includes(input?.graduatingGrade)
+    ? input.graduatingGrade
+    : GRADE_KEYS[GRADE_KEYS.length - 1]
   const retOf = (g) => clampPct(retByGrade?.[g] ?? retDefault)
 
   const projected = {}
   for (const g of GRADE_KEYS) projected[g] = 0
 
   // Age-up one index; the graduating cohort exits (does NOT roll up). First grade
-  // (index 0 / PK0) is never a destination, so its only population is new entrants.
+  // (index 0 / PK3) is never a destination, so its only population is new entrants.
   for (let i = 1; i < GRADE_KEYS.length; i += 1) {
     const src = GRADE_KEYS[i - 1]
     if (src === grad) continue

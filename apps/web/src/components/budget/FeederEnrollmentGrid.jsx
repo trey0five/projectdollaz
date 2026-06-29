@@ -21,7 +21,7 @@ function num(v) {
 function renderFeederCell(grade, value, onCell, disabled) {
   return (
     <div key={`feeder-${grade}`} className="flex flex-col">
-      <span className="mb-0.5 text-center text-[11px] font-semibold text-muted">
+      <span className="mb-0.5 flex min-h-[2.4em] items-end justify-center text-center text-[11px] font-semibold leading-tight text-muted">
         {GRADE_LABELS[grade] ?? grade}
       </span>
       <input
@@ -80,7 +80,7 @@ export default function FeederEnrollmentGrid({ feeder, onChange, disabled, mode 
           +{total} students
         </span>
       </div>
-      <div className="grid grid-cols-5 gap-2 sm:grid-cols-7">
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
         {GRADE_ROW.map((g) => renderFeederCell(g, grid[g] ?? 0, setCell, disabled))}
       </div>
     </motion.div>

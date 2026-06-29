@@ -69,9 +69,6 @@ export class ForecastExplanationsDto {
  * EnrollmentByGradeDto because retention is a 0..100 percent, not a 0..100000 count.
  */
 export class RetentionByGradeDto {
-  @IsOptional() @IsNumber() @Min(0) @Max(100) PK0?: number
-  @IsOptional() @IsNumber() @Min(0) @Max(100) PK1?: number
-  @IsOptional() @IsNumber() @Min(0) @Max(100) PK2?: number
   @IsOptional() @IsNumber() @Min(0) @Max(100) PK3?: number
   @IsOptional() @IsNumber() @Min(0) @Max(100) PK4?: number
   @IsOptional() @IsNumber() @Min(0) @Max(100) K?: number
@@ -83,13 +80,17 @@ export class RetentionByGradeDto {
   @IsOptional() @IsNumber() @Min(0) @Max(100) '6'?: number
   @IsOptional() @IsNumber() @Min(0) @Max(100) '7'?: number
   @IsOptional() @IsNumber() @Min(0) @Max(100) '8'?: number
+  @IsOptional() @IsNumber() @Min(0) @Max(100) '9'?: number
+  @IsOptional() @IsNumber() @Min(0) @Max(100) '10'?: number
+  @IsOptional() @IsNumber() @Min(0) @Max(100) '11'?: number
+  @IsOptional() @IsNumber() @Min(0) @Max(100) '12'?: number
 }
 
 /**
  * Roll-forward (cohort) projection config, stored inside lines.forecast.rollForward.
  * currentByGrade + projectedOverrideByGrade are enrollment COUNTS (reuse
  * EnrollmentByGradeDto, 0..100000); retentionPct/retentionByGrade are PERCENTS
- * (0..100); graduatingGrade is one of the 14 GRADE_KEYS (the single source of order).
+ * (0..100); graduatingGrade is one of the 15 GRADE_KEYS (the single source of order).
  */
 export class RollForwardConfigDto {
   @IsObject() @ValidateNested() @Type(() => EnrollmentByGradeDto)

@@ -170,7 +170,7 @@ export const TOOL_SCHEMAS = [
           },
           enrollmentByGrade: {
             type: 'object',
-            description: 'Students per grade, e.g. {"K":50,"1":48}. Keys: PK0–PK4, K, 1–8.',
+            description: 'Students per grade, e.g. {"K":50,"1":48}. Keys: PK3, PK4, K, 1–12.',
           },
           tuitionRates: {
             type: 'object',
@@ -268,7 +268,7 @@ export const TOOL_SCHEMAS = [
           },
           enrollmentByGrade: {
             type: 'object',
-            description: 'Base students per grade, e.g. {"K":50,"1":48}. Keys: PK0–PK4, K, 1–8.',
+            description: 'Base students per grade, e.g. {"K":50,"1":48}. Keys: PK3, PK4, K, 1–12.',
           },
           tuitionRates: {
             type: 'object',
@@ -288,7 +288,7 @@ export const TOOL_SCHEMAS = [
           feederEnrollmentByGrade: {
             type: 'object',
             description:
-              'Anticipated INCOMING (net-new) students per grade, e.g. {"PK4":12,"K":8}. Added ON TOP of the base enrollment to drive forecast tuition. Keys: PK0–PK4, K, 1–8.',
+              'Anticipated INCOMING (net-new) students per grade, e.g. {"PK4":12,"K":8}. Added ON TOP of the base enrollment to drive forecast tuition. Keys: PK3, PK4, K, 1–12.',
           },
         },
         required: [],
@@ -307,7 +307,7 @@ export const TOOL_SCHEMAS = [
           periodId: { type: 'string' },
           feederEnrollmentByGrade: {
             type: 'object',
-            description: 'Incoming students per grade, e.g. {"PK4":12,"K":8}. Keys: PK0–PK4, K, 1–8.',
+            description: 'Incoming students per grade, e.g. {"PK4":12,"K":8}. Keys: PK3, PK4, K, 1–12.',
           },
         },
         required: ['feederEnrollmentByGrade'],

@@ -26,7 +26,7 @@ function renderProjectedCell(grade, computedValue, isOverridden, editing, onStar
   if (editing && !disabled) {
     return (
       <div key={`proj-${grade}`} className="flex flex-col">
-        <span className="mb-0.5 text-center text-[11px] font-semibold text-muted">
+        <span className="mb-0.5 flex min-h-[2.4em] items-end justify-center text-center text-[11px] font-semibold leading-tight text-muted">
           {GRADE_LABELS[grade] ?? grade}
         </span>
         <input
@@ -44,7 +44,7 @@ function renderProjectedCell(grade, computedValue, isOverridden, editing, onStar
   }
   return (
     <div key={`proj-${grade}`} className="flex flex-col">
-      <span className="mb-0.5 text-center text-[11px] font-semibold text-muted">
+      <span className="mb-0.5 flex min-h-[2.4em] items-end justify-center text-center text-[11px] font-semibold leading-tight text-muted">
         {GRADE_LABELS[grade] ?? grade}
       </span>
       <div
@@ -118,7 +118,7 @@ export default function ProjectedRosterGrid({
           {total} students
         </span>
       </div>
-      <div className="grid grid-cols-5 gap-2 sm:grid-cols-7">
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
         {GRADE_ROW.map((g) =>
           renderProjectedCell(
             g,
