@@ -1,5 +1,7 @@
-// Step 4 — Branding. Logo upload (FileReader -> data URL, client size-check
-// ~400KB pre-send, thumbnail preview, PATCH school via SchoolContext.updateSchool;
+// Step 4 — Branding. Logo upload: big images are DOWNSCALED client-side on a canvas
+// (~512px longest edge, PNG to keep transparency, JPEG fallback if still heavy) so a
+// 5MB+ photo becomes a small, web-friendly logo that always saves; then PATCH school
+// via SchoolContext.updateSchool.
 // Remove -> logoBase64:null). Logo + brandColor are SCHOOL-WIDE (owner-only);
 // committee name + report title are per-period (saved via the wizard PUT, so any
 // accountant can set them). Live cover preview mirrors the print cover. After a
@@ -19,6 +21,52 @@ import WizardNav from './WizardNav.jsx'
 
 const ACCEPT = 'image/png,image/jpeg,image/svg+xml'
 
+// Stored-logo sizing. We accept large uploads (RESIZE_INPUT_MAX) and shrink them so
+// the saved logo stays small + web-friendly — no giant base64 riding on every school
+// fetch / board-report PDF. MAX_LOGO_DIM caps the longest edge; if the PNG export is
+// still heavy (a photographic logo), fall back to JPEG.
+const MAX_LOGO_DIM = 512
+const RESIZE_INPUT_MAX = 15 * 1024 * 1024 // 15MB raw upload ceiling (we downscale it)
+const RESIZE_TARGET_BYTES = 500 * 1024 // PNG over this -> re-export as JPEG
+
+const readFileAsDataUrl = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result || ''))
+    reader.onerror = () => reject(new Error('read-failed'))
+    reader.readAsDataURL(file)
+  })
+
+const loadImage = (src) =>
+  new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => reject(new Error('decode-failed'))
+    img.src = src
+  })
+
+// Downscale a raster logo to a web-friendly size via canvas. SVGs pass through (vector,
+// already tiny). Returns a small data URL — PNG (preserves transparency) unless it's
+// still heavy, then JPEG q0.85.
+async function shrinkLogo(file) {
+  if (file.type === 'image/svg+xml') return readFileAsDataUrl(file)
+  const src = await readFileAsDataUrl(file)
+  const img = await loadImage(src)
+  const longest = Math.max(img.width, img.height) || 1
+  const scale = Math.min(1, MAX_LOGO_DIM / longest)
+  const w = Math.max(1, Math.round(img.width * scale))
+  const h = Math.max(1, Math.round(img.height * scale))
+  const canvas = document.createElement('canvas')
+  canvas.width = w
+  canvas.height = h
+  const cx = canvas.getContext('2d')
+  if (!cx) return src
+  cx.drawImage(img, 0, 0, w, h)
+  let out = canvas.toDataURL('image/png')
+  if (dataUrlByteLength(out) > RESIZE_TARGET_BYTES) out = canvas.toDataURL('image/jpeg', 0.85)
+  return out
+}
+
 export default function Step4Branding({ ctx }) {
   const { data, draft, dispatch, goTo, canEdit, isOwner, school, reload } = ctx
   const { updateSchool } = useSchools()
@@ -31,24 +79,31 @@ export default function Step4Branding({ ctx }) {
   const brandColor = branding.brandColor || null
 
   // ── School-wide branding (owner-only) ───────────────────────────────────────
-  const onLogoFile = (file) => {
+  const onLogoFile = async (file) => {
     if (!file) return
     setLogoErr('')
     if (!/^image\/(png|jpeg|svg\+xml)$/.test(file.type)) {
       setLogoErr('Logo must be a PNG, JPG, or SVG.')
       return
     }
-    const reader = new FileReader()
-    reader.onload = async () => {
-      const dataUrl = String(reader.result || '')
+    if (file.size > RESIZE_INPUT_MAX) {
+      setLogoErr('That file is over 15 MB. Please use a smaller image.')
+      return
+    }
+    setBusy(true)
+    try {
+      // Shrink big uploads to a small, web-friendly logo before saving.
+      const dataUrl = await shrinkLogo(file)
       if (dataUrlByteLength(dataUrl) > LOGO_MAX_BYTES) {
-        setLogoErr('That image is over 5 MB. Please use a smaller logo.')
+        setLogoErr('That image is too detailed to shrink down. Please try a simpler logo.')
+        setBusy(false)
         return
       }
       await patchBranding({ logoBase64: dataUrl })
+    } catch {
+      setLogoErr('Could not process that image. Try another file.')
+      setBusy(false)
     }
-    reader.onerror = () => setLogoErr('Could not read that file. Try another image.')
-    reader.readAsDataURL(file)
   }
 
   const patchBranding = async (patch) => {
@@ -59,7 +114,10 @@ export default function Step4Branding({ ctx }) {
       await updateSchool(school.id, patch)
       await reload()
     } catch (e) {
-      const msg = e?.response?.data?.message
+      // class-validator returns `message` as an array; surface its first line so the
+      // user sees the real reason instead of the generic fallback.
+      const raw = e?.response?.data?.message
+      const msg = Array.isArray(raw) ? raw[0] : raw
       setLogoErr(typeof msg === 'string' ? msg : 'Could not save branding. Please try again.')
     } finally {
       setBusy(false)
@@ -129,7 +187,9 @@ export default function Step4Branding({ ctx }) {
                 )}
               </div>
             </div>
-            <p className="mt-1.5 text-[11px] text-muted">PNG, JPG, or SVG up to 400KB.</p>
+            <p className="mt-1.5 text-[11px] text-muted">
+              PNG, JPG, or SVG. Large images are resized automatically to a web-friendly size.
+            </p>
             {logoErr && (
               <p className="mt-1.5 flex items-center gap-1.5 text-[12.5px] text-rose-600">
                 <AlertCircle size={14} /> {logoErr}
