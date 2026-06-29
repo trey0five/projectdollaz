@@ -13,6 +13,7 @@
 // The SSE vocabulary is UNCHANGED: delta | status | chart | proposal | error | done.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSchools } from '../../../context/SchoolContext.jsx'
+import { usePenny } from '../../../context/PennyContext.jsx'
 import { tokenStore, apiErrorMessage, assistantApi } from '../../../lib/api.js'
 import { useTextToSpeech } from '../hooks/useTextToSpeech.js'
 import { useSmoothStream } from '../hooks/useSmoothStream.js'
@@ -34,6 +35,13 @@ function toWireAttachment(a) {
 
 export default function usePennyChat() {
   const { activeId } = useSchools()
+
+  // Penny's agentic surface (navigate / refresh / guide). Mirrored into a latest-
+  // ref so send() can drive it WITHOUT listing penny as a dep — otherwise send()
+  // would be re-created on every PennyContext value change, churning consumers.
+  const penny = usePenny()
+  const pennyRef = useRef(penny)
+  pennyRef.current = penny
 
   const tts = useTextToSpeech(activeId)
   const smooth = useSmoothStream()
@@ -239,8 +247,38 @@ export default function usePennyChat() {
               charts = [...charts, ev.spec]
               update()
             } else if (ev.type === 'proposal') {
+              // Legacy proposal/confirm path — kept for back-compat (no tool emits
+              // this anymore; writes are now autonomous via `applied`).
               proposals = [...proposals, { action: ev.action, status: 'pending' }]
               update()
+            } else if (ev.type === 'navigate') {
+              // Penny moved the user to a page/modal — drive react-router via the
+              // agent bridge (NOT useNavigate here, so send() stays stable).
+              pennyRef.current.agentNavigate({
+                page: ev.page,
+                section: ev.section,
+                openModal: ev.openModal,
+              })
+            } else if (ev.type === 'applied') {
+              // Autonomous write already executed server-side: render a terminal
+              // "what I changed" card (rides the same proposals[] array, applied:true
+              // + terminal status so it rehydrates statically) and refresh the data.
+              proposals = [
+                ...proposals,
+                {
+                  applied: true,
+                  tool: ev.tool,
+                  summary: ev.summary,
+                  details: ev.details || [],
+                  periodId: ev.periodId,
+                  status: ev.tool === 'import_trial_balance' ? 'imported' : 'applied',
+                },
+              ]
+              update()
+              pennyRef.current.agentRefresh(ev.refresh || [])
+            } else if (ev.type === 'guide') {
+              // Interactive on-screen walkthrough — drive the existing Penny glide.
+              pennyRef.current.runAgentGuide(ev.steps)
             } else if (ev.type === 'error') {
               content = content || ev.text
               st = ''

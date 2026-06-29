@@ -89,7 +89,7 @@ export default function BudgetPage() {
 
   // Saved budget for the active school+period (the read-only summary, Forecast
   // seed, and BvA all derive from this). Setup/editing now lives in /data.
-  const { budget, loading: budgetLoading } = useBudget(
+  const { budget, loading: budgetLoading, reload: reloadBudget } = useBudget(
     schoolId,
     selectedPeriodId,
   )
@@ -98,7 +98,22 @@ export default function BudgetPage() {
   // Period actuals so the Budget-vs-Actual tab shows real variances (the
   // existing component reads `metrics`). Empty until a snapshot exists — the
   // component degrades to a pure budget builder, which is the expected behavior.
-  const { metrics } = useAnalytics(schoolId, selectedPeriodId)
+  const { metrics, reload: reloadMetrics } = useAnalytics(schoolId, selectedPeriodId)
+
+  // Penny autonomous-write refresh: a budget/forecast change broadcasts a
+  // 'penny:data-changed' signal — re-pull the saved budget + metrics so the page
+  // reflects what Penny just did. Pure side-effect listener with cleanup.
+  useEffect(() => {
+    const onDataChanged = (e) => {
+      const key = e?.detail?.key
+      if (key === 'budget' || key === 'forecast') {
+        reloadBudget()
+        reloadMetrics()
+      }
+    }
+    window.addEventListener('penny:data-changed', onDataChanged)
+    return () => window.removeEventListener('penny:data-changed', onDataChanged)
+  }, [reloadBudget, reloadMetrics])
 
   // Caller's org id — resolved once for the organization roll-up (single fetch).
   const [orgId, setOrgId] = useState(null)
@@ -292,8 +307,8 @@ export default function BudgetPage() {
           )}
         </div>
 
-        {/* Tab bar */}
-        <div className="mb-6">
+        {/* Tab bar (id anchors Penny's budget-workspace glide). */}
+        <div id="budgetpage-driver-tab" className="mb-6">
           <BudgetTabs tabs={TABS} active={activeTab} onChange={setActiveTab} />
         </div>
 

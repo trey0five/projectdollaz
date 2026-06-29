@@ -285,8 +285,10 @@ export default function BudgetSetup({ schoolId, periodId, canEdit, onSaved }) {
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div id="budget-setup-panel" className="space-y-5">
+      {/* id anchors Penny's "save your budget" glide. The actual save lives inside
+          the wizard/import flow; the toggle row is the stable always-present anchor. */}
+      <div id="budget-save-button" className="flex flex-wrap items-center justify-between gap-3">
         {renderModeToggle()}
         <p className="max-w-md text-[12px] text-muted">
           {mode === 'guided'

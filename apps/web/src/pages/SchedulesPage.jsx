@@ -120,6 +120,7 @@ export default function SchedulesPage() {
                 return (
                   <button
                     key={t.id}
+                    id={t.id === 'capital' ? 'schedules-capital-tab' : undefined}
                     type="button"
                     onClick={() => setTab(t.id)}
                     className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-[15px] font-semibold transition-all ${

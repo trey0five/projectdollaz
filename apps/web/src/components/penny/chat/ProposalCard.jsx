@@ -8,8 +8,13 @@
 // the exact same /apply route — the action payload is self-contained.
 import { motion } from 'framer-motion'
 import { CheckCircle2, FileSpreadsheet, Sparkles } from 'lucide-react'
+import AppliedCard from './AppliedCard.jsx'
 
 export default function ProposalCard({ proposal, index, messageIndex, onConfirm, onCancel }) {
+  // Autonomous writes ride the same proposals[] array, flagged applied:true with a
+  // terminal status — render the receipt card instead of the confirm UI below.
+  if (proposal?.applied) return <AppliedCard proposal={proposal} />
+
   const action = proposal?.action
   const status = proposal?.status
   const isImport = action?.kind === 'import_trial_balance'

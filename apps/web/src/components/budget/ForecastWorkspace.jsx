@@ -670,6 +670,7 @@ export default function ForecastWorkspace({ schoolId, periodId, canEdit, budget,
 
   return (
     <motion.div
+      id="forecast-workspace"
       key="forecast"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
@@ -721,7 +722,8 @@ export default function ForecastWorkspace({ schoolId, periodId, canEdit, budget,
       />
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(320px,420px)_1fr]">
-        <div className="space-y-4">
+        {/* id anchors Penny's "add your feeder students" glide. */}
+        <div id="forecast-feeder-input" className="space-y-4">
           {isRollforward ? (
             <>
               <CurrentRosterGrid

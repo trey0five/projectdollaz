@@ -8,7 +8,7 @@
 // read-only. Entitlement 402 -> the parent already shows the paused panel, but this
 // section also no-ops gracefully.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { ClipboardList, Sparkles, ChevronDown } from 'lucide-react'
 import { useCorrectiveActionPlan } from '../../../hooks/useCorrectiveActionPlan.js'
@@ -42,8 +42,18 @@ function suggestionDraft(entry) {
 
 export default function CorrectiveActionPlanSection({ schoolId, periodId, canEdit }) {
   const reduce = useReducedMotion()
-  const { data, entries, archived, summary, loading, error, notEntitled, save, setArchived } =
+  const { data, entries, archived, summary, loading, error, notEntitled, reload, save, setArchived } =
     useCorrectiveActionPlan(schoolId, periodId)
+
+  // Penny autonomous-write refresh: a drafted CAP entry broadcasts 'penny:data-changed'
+  // with key 'cap' — re-pull the plan so the new draft appears. Pure listener.
+  useEffect(() => {
+    const onDataChanged = (e) => {
+      if (e?.detail?.key === 'cap') reload()
+    }
+    window.addEventListener('penny:data-changed', onDataChanged)
+    return () => window.removeEventListener('penny:data-changed', onDataChanged)
+  }, [reload])
 
   const [editsByRule, setEditsByRule] = useState({})
   // Resolved + dismissed lists are collapsed by default so they don't stack up.
@@ -136,6 +146,7 @@ export default function CorrectiveActionPlanSection({ schoolId, periodId, canEdi
 
   return (
     <motion.div
+      id="readiness-cap-panel"
       initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12 }}
       animate={reduce ? { opacity: 1 } : { opacity: 1, y: 0 }}
       className="space-y-5"

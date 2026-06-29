@@ -150,7 +150,10 @@ export default function IntakeBar() {
             </div>
             {canEdit ? (
               <>
-                <HeroDropzone />
+                {/* id anchors Penny's "drop your trial balance here" glide. */}
+                <div id="tb-upload-drop">
+                  <HeroDropzone />
+                </div>
                 <div className="mt-4">
                   <IntakeGuide />
                 </div>
@@ -211,7 +214,10 @@ export default function IntakeBar() {
                     <Plus size={16} /> Add
                   </button>
                 )}
-                <SaveBar />
+                {/* id anchors Penny's "save your trial balance" glide. */}
+                <span id="tb-save-button" className="contents">
+                  <SaveBar />
+                </span>
                 <button
                   type="button"
                   onClick={collapse}

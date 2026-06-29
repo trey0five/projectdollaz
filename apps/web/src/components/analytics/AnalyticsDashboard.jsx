@@ -118,10 +118,18 @@ export default function AnalyticsDashboard() {
     }
   }, [savedPeriods])
 
-  const { data, metrics, loading: metricsLoading, notEntitled } = useAnalytics(
-    schoolId,
-    selectedPeriodId,
-  )
+  const { data, metrics, loading: metricsLoading, notEntitled, reload: reloadMetrics } =
+    useAnalytics(schoolId, selectedPeriodId)
+
+  // Penny autonomous-write refresh: a write that affects metrics broadcasts a
+  // 'penny:data-changed' signal — re-pull the analytics so the cards reflect it.
+  useEffect(() => {
+    const onDataChanged = (e) => {
+      if (e?.detail?.key === 'metrics') reloadMetrics()
+    }
+    window.addEventListener('penny:data-changed', onDataChanged)
+    return () => window.removeEventListener('penny:data-changed', onDataChanged)
+  }, [reloadMetrics])
 
   // Sparkline trends for the cards (fetched once per school).
   const [sparkTrends, setSparkTrends] = useState({})
@@ -325,15 +333,19 @@ export default function AnalyticsDashboard() {
       <PageHeader />
 
       {!showSkeleton && (
-        <ContextBar
-          periods={savedPeriods}
-          activePeriodId={selectedPeriodId}
-          onSelectPeriod={setSelectedPeriodId}
-          freshness={data?.freshness}
-          canCustomize={canCustomize}
-          customizing={customizing}
-          onCustomize={enterCustomize}
-        />
+        // id anchors Penny's "customize your dashboard" glide (the Customize entry
+        // lives in the ContextBar).
+        <div id="analytics-customize-bar">
+          <ContextBar
+            periods={savedPeriods}
+            activePeriodId={selectedPeriodId}
+            onSelectPeriod={setSelectedPeriodId}
+            freshness={data?.freshness}
+            canCustomize={canCustomize}
+            customizing={customizing}
+            onCustomize={enterCustomize}
+          />
+        </div>
       )}
 
       <AnimatePresence initial={false}>
@@ -376,9 +388,9 @@ export default function AnalyticsDashboard() {
         </div>
       ) : (
         <div className="space-y-5 sm:space-y-7">
-          {/* HERO VITALS */}
+          {/* HERO VITALS (id anchors Penny's "your at-a-glance insights" glide). */}
           {vitalKeys.length > 0 && (
-            <div className={dimWhileCustomizing}>
+            <div id="analytics-ai-insight" className={dimWhileCustomizing}>
               <HeroVitals
                 vitalKeys={vitalKeys}
                 metricsByKey={metricsByKey}

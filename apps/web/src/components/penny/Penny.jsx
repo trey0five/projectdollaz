@@ -56,7 +56,9 @@ export default function Penny() {
 
   // DERIVED (never stored in state via effect).
   const step = guide ? guide.steps[guide.index] : null
-  const touring = !!guide && guide.steps.length > 1
+  // Agent walkthroughs always show Step n/m + Done (even single-step) so the user
+  // can dismiss; page tours only show the strip when multi-step.
+  const touring = !!guide && (guide.steps.length > 1 || guide.agent)
 
   // ── Measurement effect (the one allowed setState-in-effect for `box`). ────────
   // Reads the target element's rect, scrolls it into view if off-screen, and keeps
@@ -74,6 +76,10 @@ export default function Penny() {
       const el = document.getElementById(step.targetId)
       if (!el || cancelled) return
       const r = el.getBoundingClientRect()
+      // A zero-area rect means the target is present in the DOM but not visible in
+      // this layout (e.g. the desktop nav is `hidden lg:flex` on mobile). Treat it
+      // like a not-yet-mounted target: leave Penny parked rather than glide to (0,0).
+      if (r.width === 0 && r.height === 0) return
       const onScreen = r.top >= 0 && r.bottom <= window.innerHeight
       if (allowScroll && !onScreen && !reduce) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -88,15 +94,17 @@ export default function Penny() {
         height: r.height,
       })
     }
-    const t1 = window.setTimeout(() => measure(true), 60)
-    const t2 = window.setTimeout(() => measure(true), 420) // re-measure after smooth scroll settles
+    // Bounded retry schedule (idempotent measure): an agent guide may navigate to a
+    // NEW page/modal first, so the target can mount a beat after the step changes.
+    // These passes re-measure until it appears, then settle after the smooth scroll.
+    const RETRY_MS = [60, 220, 420, 700, 1100, 1600]
+    const timers = RETRY_MS.map((ms) => window.setTimeout(() => measure(true), ms))
     const onMove = () => measure(false)
     window.addEventListener('resize', onMove)
     window.addEventListener('scroll', onMove, { passive: true })
     return () => {
       cancelled = true
-      window.clearTimeout(t1)
-      window.clearTimeout(t2)
+      timers.forEach((t) => window.clearTimeout(t))
       window.removeEventListener('resize', onMove)
       window.removeEventListener('scroll', onMove)
     }
@@ -211,6 +219,11 @@ export default function Penny() {
                 >
                   {step.action.label} <ChevronRight size={14} />
                 </button>
+              )}
+              {step.ctaLabel && (
+                <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-gold/15 px-2.5 py-0.5 text-[12.5px] font-semibold text-gold">
+                  <ChevronRight size={12} aria-hidden /> {step.ctaLabel}
+                </p>
               )}
               {touring && (
                 <div className="mt-2.5 flex items-center justify-between gap-2">

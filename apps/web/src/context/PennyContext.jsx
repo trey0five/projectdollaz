@@ -12,7 +12,8 @@
 // is open). The <Penny/> component owns the motion (measuring the target, gliding
 // to it) so the script stays with the page that knows its own DOM.
 // ─────────────────────────────────────────────────────────────────────────────
-import { createContext, useCallback, useContext, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
+import { resolveTarget } from '../components/penny/guide/targetRegistry.js'
 
 const PennyContext = createContext(null)
 
@@ -27,6 +28,12 @@ const NOOP = {
   runTour() {},
   advance() {},
   dismissGuide() {},
+  // Agentic surface (driven by Penny's `navigate` / `applied` / `guide` SSE events).
+  navIntent: null,
+  agentNavigate() {},
+  consumeNavIntent() {},
+  agentRefresh() {},
+  runAgentGuide() {},
 }
 
 export const usePenny = () => useContext(PennyContext) || NOOP
@@ -49,8 +56,18 @@ const markSeen = (k) => {
 
 export function PennyProvider({ children }) {
   const [chatOpen, setChatOpen] = useState(false)
-  // guide: { steps: Step[], index } | null. Step = { targetId, message, cardKey?, action? }.
+  // guide: { steps: Step[], index, agent? } | null.
+  //   Step (page tours)  = { targetId, message, cardKey?, action? }
+  //   Step (agent guides) = { targetId, message, nav?:{page,openModal?}, ctaLabel? }
+  // The `agent` flag marks an LLM-driven walkthrough so PennyAgentBridge drives
+  // per-step navigation and Penny.jsx shows Done even on a single step.
   const [guide, setGuide] = useState(null)
+
+  // navIntent: a one-shot { page, section?, openModal? } the bridge consumes to
+  // navigate (+ open a DataHub modal). navNonceRef lets a repeat navigate to the
+  // SAME page still re-fire the effect (object identity changes via the nonce).
+  const [navIntent, setNavIntent] = useState(null)
+  const navNonceRef = useRef(0)
 
   const openChat = useCallback(() => {
     setGuide(null)
@@ -102,6 +119,46 @@ export function PennyProvider({ children }) {
 
   const dismissGuide = useCallback(() => setGuide(null), [])
 
+  // ── Agentic surface ─────────────────────────────────────────────────────────
+  // Set a navigation intent (consumed by PennyAgentBridge). The nonce guarantees a
+  // fresh object even when navigating to the page we're already on, so the bridge's
+  // effect always re-runs (e.g. re-open the same modal mid-walkthrough).
+  const agentNavigate = useCallback((intent) => {
+    if (!intent?.page) return
+    navNonceRef.current += 1
+    setNavIntent({ ...intent, _nonce: navNonceRef.current })
+  }, [])
+  const consumeNavIntent = useCallback(() => setNavIntent(null), [])
+
+  // Broadcast a data-changed signal per refresh key; pages listen and refetch.
+  const agentRefresh = useCallback((keys) => {
+    for (const key of keys || []) {
+      if (!key) continue
+      window.dispatchEvent(new CustomEvent('penny:data-changed', { detail: { key } }))
+    }
+  }, [])
+
+  // Translate an LLM walkthrough (registry keys) into the existing guide shape,
+  // attaching per-step navigation so the coin can cross pages/modals. Reuses the
+  // SAME guide state + Penny.jsx glide — this only maps keys → domIds.
+  const runAgentGuide = useCallback((agentSteps) => {
+    const steps = (agentSteps || [])
+      .map((s) => {
+        const t = resolveTarget(s?.target)
+        if (!t) return null
+        return {
+          targetId: t.domId,
+          message: s.message,
+          nav: { page: s.page ?? t.page, openModal: s.openModal ?? t.openModal },
+          ctaLabel: s.cta?.label,
+        }
+      })
+      .filter(Boolean)
+    if (!steps.length) return
+    setChatOpen(false)
+    setGuide({ steps, index: 0, agent: true })
+  }, [])
+
   const value = useMemo(
     () => ({
       chatOpen,
@@ -113,8 +170,28 @@ export function PennyProvider({ children }) {
       runTour,
       advance,
       dismissGuide,
+      navIntent,
+      agentNavigate,
+      consumeNavIntent,
+      agentRefresh,
+      runAgentGuide,
     }),
-    [chatOpen, guide, openChat, closeChat, toggleChat, guideTo, runTour, advance, dismissGuide],
+    [
+      chatOpen,
+      guide,
+      openChat,
+      closeChat,
+      toggleChat,
+      guideTo,
+      runTour,
+      advance,
+      dismissGuide,
+      navIntent,
+      agentNavigate,
+      consumeNavIntent,
+      agentRefresh,
+      runAgentGuide,
+    ],
   )
 
   return <PennyContext.Provider value={value}>{children}</PennyContext.Provider>

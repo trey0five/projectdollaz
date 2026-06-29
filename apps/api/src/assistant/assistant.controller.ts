@@ -36,7 +36,7 @@ export class AssistantController {
   @Post('chat')
   @Roles('owner', 'accountant', 'viewer')
   chat(@Param('schoolId') schoolId: string, @Body() dto: ChatDto, @CurrentUser() user: User) {
-    return this.assistant.chat(schoolId, dto.periodId ?? null, dto.messages, user.id)
+    return this.assistant.chat(schoolId, dto.periodId ?? null, dto.messages, user)
   }
 
   /** Streaming variant — Server-Sent Events (delta / status / chart / done). */
@@ -64,7 +64,7 @@ export class AssistantController {
       dto.periodId ?? null,
       dto.messages,
       emit,
-      user.id,
+      user,
       dto.attachments,
     )
     if (!closed) res.end()

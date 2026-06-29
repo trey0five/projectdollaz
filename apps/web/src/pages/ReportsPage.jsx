@@ -6,7 +6,7 @@
 // preselected to the live (newest snapshot) period. Navy/gold theme, framer-motion
 // polish. Distinct from the compliance "board packet" (/board-packet/print).
 // ─────────────────────────────────────────────────────────────────────────────
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { FileBarChart2, Landmark, ArrowRight, ArrowLeft, Lock, CalendarClock, TrendingUp } from 'lucide-react'
@@ -65,6 +65,18 @@ export default function ReportsPage() {
   const navigate = useNavigate()
   const [openReport, setOpenReport] = useState(null)
 
+  // Penny autonomous-write refresh: a board-report change (e.g. an MD&A explanation
+  // Penny set) broadcasts 'penny:data-changed'. Bump a nonce to re-key the open
+  // wizard so it re-pulls — the wizard self-fetches on mount. Pure listener.
+  const [boardNonce, setBoardNonce] = useState(0)
+  useEffect(() => {
+    const onDataChanged = (e) => {
+      if (e?.detail?.key === 'boardReport') setBoardNonce((n) => n + 1)
+    }
+    window.addEventListener('penny:data-changed', onDataChanged)
+    return () => window.removeEventListener('penny:data-changed', onDataChanged)
+  }, [])
+
   // Preselect the newest period that actually has a snapshot (the "live" period).
   const snapshotPeriods = useMemo(
     () => (periods || []).filter((p) => p.hasSnapshot),
@@ -101,6 +113,7 @@ export default function ReportsPage() {
               <ArrowLeft size={15} /> All reports
             </button>
             <BoardReportWizard
+              key={`board-${boardNonce}`}
               schoolId={activeSchool?.id ?? null}
               school={activeSchool}
               periods={periods || []}
@@ -164,6 +177,7 @@ function renderHub(onSelect) {
           return (
           <motion.button
             key={r.id}
+            id={r.id === 'board' ? 'reports-board-card' : undefined}
             type="button"
             disabled={!r.live}
             onClick={() => r.live && onSelect(r)}
@@ -189,7 +203,10 @@ function renderHub(onSelect) {
             <p className="mt-1 flex-1 text-[12.5px] leading-relaxed text-muted sm:mt-1.5 sm:text-[15px]">
               {r.blurb}
             </p>
-            <span className="mt-3 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] sm:mt-4 sm:text-[14px]">
+            <span
+              id={r.id === 'board' ? 'reports-generate-button' : undefined}
+              className="mt-3 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] sm:mt-4 sm:text-[14px]"
+            >
               {r.live ? (
                 <span className="inline-flex items-center gap-1.5 text-gold">
                   {r.action === 'navigate'

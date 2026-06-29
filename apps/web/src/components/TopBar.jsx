@@ -65,15 +65,17 @@ export default function TopBar() {
     }`
   const navLabel = 'text-[14px] font-semibold uppercase tracking-[0.1em]'
 
+  // navId = the stable DOM id Penny's target registry anchors her glide to (desktop
+  // nav only). Mobile links don't need ids (the coin guides on the desktop layout).
   const NAV = [
-    { to: '/', label: 'Home', Icon: LayoutDashboard, active: onHome },
-    { to: '/data', label: 'Data', Icon: Database, active: onData },
-    { to: '/statements', label: 'Statements', Icon: FileStack, active: onStatements },
-    { to: '/analytics', label: 'Analytics', Icon: BarChart3, active: onAnalytics },
-    { to: '/budget', label: 'Budget', Icon: Wallet, active: onBudget },
-    { to: '/reports', label: 'Reports', Icon: FileBarChart2, active: onReports },
-    { to: '/readiness', label: 'Readiness', Icon: ShieldCheck, active: onReadiness },
-    { to: '/settings', label: 'Settings', Icon: Settings, active: onSettings },
+    { to: '/', navId: 'nav-home', label: 'Home', Icon: LayoutDashboard, active: onHome },
+    { to: '/data', navId: 'nav-data', label: 'Data', Icon: Database, active: onData },
+    { to: '/statements', navId: 'nav-statements', label: 'Statements', Icon: FileStack, active: onStatements },
+    { to: '/analytics', navId: 'nav-analytics', label: 'Analytics', Icon: BarChart3, active: onAnalytics },
+    { to: '/budget', navId: 'nav-budget', label: 'Budget', Icon: Wallet, active: onBudget },
+    { to: '/reports', navId: 'nav-reports', label: 'Reports', Icon: FileBarChart2, active: onReports },
+    { to: '/readiness', navId: 'nav-readiness', label: 'Readiness', Icon: ShieldCheck, active: onReadiness },
+    { to: '/settings', navId: 'nav-settings', label: 'Settings', Icon: Settings, active: onSettings },
   ]
 
   return (
@@ -98,6 +100,7 @@ export default function TopBar() {
         {NAV.map((item) => (
           <Link
             key={item.to}
+            id={item.navId}
             to={item.to}
             aria-label={item.label}
             aria-current={item.active ? 'page' : undefined}

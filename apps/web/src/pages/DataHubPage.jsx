@@ -186,6 +186,28 @@ export default function DataHubPage() {
 
   const [modalKey, setModalKey] = useState(null) // which embed panel is open in the modal
 
+  // Penny agent: a `navigate` event with openModal dispatches this CustomEvent so
+  // the hub opens the requested embed panel (e.g. she walks the user to the budget
+  // setup). 'none' is the no-op sentinel. Pure side-effect listener with cleanup.
+  useEffect(() => {
+    const onOpenModal = (e) => {
+      const key = e?.detail?.openKey
+      if (key && key !== 'none') setModalKey(key)
+    }
+    window.addEventListener('penny:open-datahub-modal', onOpenModal)
+    return () => window.removeEventListener('penny:open-datahub-modal', onOpenModal)
+  }, [])
+
+  // Penny autonomous-write refresh: an import re-pulls the data-status so the
+  // checklist cards flip to Done. refetch is stable from useDataStatus.
+  useEffect(() => {
+    const onDataChanged = (e) => {
+      if (e?.detail?.key === 'dataStatus') refetch()
+    }
+    window.addEventListener('penny:data-changed', onDataChanged)
+    return () => window.removeEventListener('penny:data-changed', onDataChanged)
+  }, [refetch])
+
   // No-period state: nothing to work on yet.
   const noPeriods = (periods || []).length === 0
 
@@ -271,6 +293,7 @@ export default function DataHubPage() {
               <label className="flex items-center gap-2 text-[14px] font-semibold text-muted">
                 <span className="uppercase tracking-[0.1em]">Working on:</span>
                 <select
+                  id="datahub-period-select"
                   value={periodId || ''}
                   onChange={(e) => setPeriodId(e.target.value)}
                   className="rounded-lg border-2 border-gold/40 bg-white px-3 py-1.5 text-[15px] font-semibold text-navy outline-none ring-gold/40 focus-visible:ring-2"
@@ -302,6 +325,7 @@ export default function DataHubPage() {
                   )}
                 </span>
                 <button
+                  id="datahub-tour-button"
                   type="button"
                   onClick={() => penny.runTour(tourSteps)}
                   className="inline-flex items-center gap-1.5 rounded-full border border-gold/40 px-3 py-1 text-[14px] font-bold uppercase tracking-[0.06em] text-gold transition-colors hover:bg-gold/5"

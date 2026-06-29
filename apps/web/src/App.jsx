@@ -10,6 +10,7 @@ import { ProtectedRoute, PublicOnlyRoute } from './components/auth/RouteGuards.j
 import Onboarding from './components/onboarding/Onboarding.jsx'
 import { PennyProvider } from './context/PennyContext.jsx'
 import Penny from './components/penny/Penny.jsx'
+import PennyAgentBridge from './components/penny/PennyAgentBridge.jsx'
 import HomePage from './pages/HomePage.jsx'
 import DataHubPage from './pages/DataHubPage.jsx'
 import StatementsPage from './pages/StatementsPage.jsx'
@@ -61,6 +62,9 @@ function AuthedLayout() {
                 <Outlet />
               </OnboardingGate>
               <Penny />
+              {/* Headless: drives router navigation + DataHub modal-open from
+                  Penny's agentic intents (navigate / per-step guide nav). */}
+              <PennyAgentBridge />
             </PennyProvider>
           </PersistenceProvider>
         </BillingProvider>

@@ -96,7 +96,7 @@ export const TOOL_SCHEMAS = [
     function: {
       name: 'set_budget',
       description:
-        'PROPOSE a budget change (does NOT apply — the user must confirm). Set a single category line (categoryKey + categoryType + amount) and/or the top-line totalRevenue/totalExpenses for a period.',
+        'APPLY a budget change immediately, then tell the user what changed (reversible in the UI). Set a single category line (categoryKey + categoryType + amount) and/or the top-line totalRevenue/totalExpenses for a period.',
       parameters: {
         type: 'object',
         properties: {
@@ -116,7 +116,7 @@ export const TOOL_SCHEMAS = [
     function: {
       name: 'draft_cap_entry',
       description:
-        'PROPOSE filling a corrective-action-plan entry (does NOT apply — the user must confirm). Provide the ruleId (from get_corrective_action_plan) and the fields to draft.',
+        'APPLY a corrective-action-plan entry immediately, then tell the user what changed (reversible in the UI). Provide the ruleId (from get_corrective_action_plan) and the fields to fill.',
       parameters: {
         type: 'object',
         properties: {
@@ -159,7 +159,7 @@ export const TOOL_SCHEMAS = [
     function: {
       name: 'apply_driver_budget',
       description:
-        'PROPOSE building the budget from driver assumptions (does NOT apply — the user must confirm). Provide ONLY the levers the user mentioned; everything else keeps its current value. Enrollment drives tuition; staffing drives salaries; other lines grow from last year by inflationPct.',
+        'APPLY a budget built from driver assumptions immediately, then tell the user what changed (reversible in the UI). Provide ONLY the levers the user mentioned; everything else keeps its current value. Enrollment drives tuition; staffing drives salaries; other lines grow from last year by inflationPct.',
       parameters: {
         type: 'object',
         properties: {
@@ -226,7 +226,7 @@ export const TOOL_SCHEMAS = [
     function: {
       name: 'set_explanation',
       description:
-        'PROPOSE a per-line variance explanation/comment for the Board Report (does NOT apply — the user must confirm). Provide the period, the category type (revenue or expense), the category key (e.g. tuition, instructional), and the explanation text.',
+        'APPLY a per-line variance explanation/comment for the Board Report immediately, then tell the user what changed (reversible in the UI). Provide the period, the category type (revenue or expense), the category key (e.g. tuition, instructional), and the explanation text.',
       parameters: {
         type: 'object',
         properties: {
@@ -257,7 +257,7 @@ export const TOOL_SCHEMAS = [
     function: {
       name: 'apply_forecast',
       description:
-        'PROPOSE recomputing the FY-end forecast from revised driver assumptions plus anticipated feeder enrollment (does NOT apply — the user must confirm). Provide ONLY the levers the user mentioned; everything else keeps the saved forecast / driver values. feederEnrollmentByGrade is anticipated INCOMING students ADDED ON TOP of projected enrollment, which raises projected tuition. The result is compared to the active budget for variance.',
+        'APPLY a recomputed FY-end forecast immediately from revised driver assumptions plus anticipated feeder enrollment, then tell the user what changed (reversible in the UI). Provide ONLY the levers the user mentioned; everything else keeps the saved forecast / driver values. feederEnrollmentByGrade is anticipated INCOMING students ADDED ON TOP of projected enrollment, which raises projected tuition. The result is compared to the active budget for variance.',
       parameters: {
         type: 'object',
         properties: {
@@ -300,7 +300,7 @@ export const TOOL_SCHEMAS = [
     function: {
       name: 'set_feeder_enrollment',
       description:
-        'PROPOSE setting the anticipated feeder enrollment (net-new incoming students by grade) for a period (does NOT apply — the user must confirm). This sets the INPUT only; run apply_forecast afterwards to re-project the forecast tuition from it.',
+        'APPLY the anticipated feeder enrollment (net-new incoming students by grade) for a period immediately, then tell the user what changed (reversible in the UI). This sets the INPUT only; run apply_forecast afterwards to re-project the forecast tuition from it.',
       parameters: {
         type: 'object',
         properties: {
@@ -358,7 +358,7 @@ export const TOOL_SCHEMAS = [
     function: {
       name: 'propose_import_trial_balance',
       description:
-        'PROPOSE importing an ATTACHED spreadsheet that you have identified as a trial balance (does NOT apply — the user must confirm). Pass the attachmentId shown in the attachment digest. The server already holds the fully parsed account rows — NEVER retype or fabricate them. Optionally set the role (cy = current year, py = prior year, audit = audited) and a label. Summarize the trial balance for the user first, then call this.',
+        'IMPORT the attached trial balance now; summarize the parsed rows (period, account count, net) for the user. Pass the attachmentId shown in the attachment digest. The server already holds the fully parsed account rows — NEVER retype or fabricate them. Optionally set the role (cy = current year, py = prior year, audit = audited) and a label.',
       parameters: {
         type: 'object',
         properties: {
@@ -405,4 +405,182 @@ export const TOOL_SCHEMAS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'navigate_to_page',
+      description:
+        'Take the user to a page, a Data-hub modal, or a Settings section. Read-only — this changes no data; it only moves the user’s view. Use it when the user asks to go somewhere or when a change you applied lives on another page.',
+      parameters: {
+        type: 'object',
+        properties: {
+          page: {
+            type: 'string',
+            enum: [
+              'home',
+              'data',
+              'statements',
+              'analytics',
+              'budget',
+              'readiness',
+              'reports',
+              'schedules',
+              'settings',
+            ],
+            description: 'Which page to open.',
+          },
+          section: {
+            type: 'string',
+            enum: [
+              'account',
+              'members',
+              'school',
+              'organization',
+              'reports',
+              'integrations',
+              'billing',
+            ],
+            description: 'Only when page is settings: which settings section to open.',
+          },
+          openModal: {
+            type: 'string',
+            enum: [
+              'trialBalances',
+              'monthly',
+              'operational',
+              'budget',
+              'forecast',
+              'schedules',
+              'compliance',
+            ],
+            description: 'Only when page is data: which Data-hub modal to open.',
+          },
+        },
+        required: ['page'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'start_walkthrough',
+      description:
+        'Run an interactive on-screen walkthrough where Penny physically glides to each control it describes. Provide an ORDERED list of steps; each step names a target control (from the allowed keys only), a short message, and optionally the page / Data-hub modal to open first. Use this to walk the user through a process step by step.',
+      parameters: {
+        type: 'object',
+        properties: {
+          steps: {
+            type: 'array',
+            minItems: 1,
+            maxItems: 8,
+            description: 'Ordered walkthrough steps; Penny glides to each target in turn.',
+            items: {
+              type: 'object',
+              properties: {
+                target: {
+                  type: 'string',
+                  enum: [
+                    'nav.home',
+                    'nav.data',
+                    'nav.statements',
+                    'nav.analytics',
+                    'nav.budget',
+                    'nav.reports',
+                    'nav.readiness',
+                    'nav.settings',
+                    'dataHub.trialBalanceCard',
+                    'dataHub.monthlyCard',
+                    'dataHub.operationalCard',
+                    'dataHub.budgetCard',
+                    'dataHub.forecastCard',
+                    'dataHub.schedulesCard',
+                    'dataHub.complianceCard',
+                    'dataHub.tourButton',
+                    'dataHub.periodSelect',
+                    'trialBalance.uploadDrop',
+                    'trialBalance.saveButton',
+                    'budget.setupPanel',
+                    'budget.saveButton',
+                    'forecast.workspace',
+                    'forecast.feederInput',
+                    'budgetPage.tabBar',
+                    'analytics.aiInsight',
+                    'analytics.customizeBar',
+                    'reports.boardReportCard',
+                    'reports.generateButton',
+                    'schedules.capitalTab',
+                    'readiness.capPanel',
+                  ],
+                  description: 'The control Penny glides to. Use only these provided keys.',
+                },
+                message: {
+                  type: 'string',
+                  description: 'What Penny says at this step (one or two short sentences).',
+                },
+                page: {
+                  type: 'string',
+                  enum: [
+                    'home',
+                    'data',
+                    'statements',
+                    'analytics',
+                    'budget',
+                    'readiness',
+                    'reports',
+                    'schedules',
+                    'settings',
+                  ],
+                  description: 'Optional: navigate to this page before this step.',
+                },
+                openModal: {
+                  type: 'string',
+                  enum: [
+                    'trialBalances',
+                    'monthly',
+                    'operational',
+                    'budget',
+                    'forecast',
+                    'schedules',
+                    'compliance',
+                  ],
+                  description: 'Optional (only with page=data): open this Data-hub modal first.',
+                },
+              },
+              required: ['target', 'message'],
+            },
+          },
+        },
+        required: ['steps'],
+      },
+    },
+  },
 ]
+
+/** Status-line labels shown while a tool runs (present tense; agentic). */
+export const TOOL_LABELS: Record<string, string> = {
+  list_periods: 'Looking up periods…',
+  get_metrics: 'Reading the financial metrics…',
+  get_compliance: 'Checking compliance findings…',
+  get_reconciliation: 'Reviewing the reconciliation…',
+  get_budget_vs_actual: 'Pulling budget vs. actual…',
+  get_budget: 'Reading the budget…',
+  get_budget_rollup: 'Consolidating your organization budget…',
+  get_corrective_action_plan: 'Reading the corrective action plan…',
+  get_trend: 'Loading the trend…',
+  set_budget: 'Setting the budget…',
+  apply_driver_budget: 'Building the driver budget…',
+  draft_cap_entry: 'Logging a corrective action…',
+  get_board_report: 'Reading the board report…',
+  generate_board_narrative: 'Drafting the board narrative…',
+  set_explanation: 'Saving the explanation…',
+  get_forecast: 'Reading the FY-end forecast…',
+  get_capital_schedule: 'Reading the capital budget…',
+  get_cash_schedule: 'Reading cash & investments…',
+  get_campaign_schedule: 'Reading the capital campaign…',
+  apply_forecast: 'Updating the forecast…',
+  set_feeder_enrollment: 'Updating feeder enrollment…',
+  propose_import_trial_balance: 'Importing the trial balance…',
+  render_chart: 'Drawing a chart…',
+  navigate_to_page: 'Taking you there…',
+  start_walkthrough: 'Let me show you…',
+}
