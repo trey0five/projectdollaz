@@ -19,6 +19,7 @@ import {
   Building2,
   CheckCircle2,
   MinusCircle,
+  Inbox,
 } from 'lucide-react'
 
 // Per-severity theming — identical language to HomeBriefing (navy/gold/danger):
@@ -161,8 +162,25 @@ export default function OrgBriefing({ briefing, loading, error }) {
       transition={{ duration: 0.3 }}
       className="no-print space-y-5"
     >
-      {/* Headline — org-scoped HomeBriefing idiom. */}
-      {total === 0 ? (
+      {/* Headline — org-scoped HomeBriefing idiom. total===0 splits two ways:
+          genuinely all-clear (≥1 school reported, nothing flagged) vs. nothing to
+          report on yet (no school has generated statements for this period). */}
+      {total === 0 && schoolsReporting === 0 ? (
+        <div className="card-soft flex items-center gap-4 px-6 py-6">
+          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-navy/5 text-navy">
+            <Inbox size={26} />
+          </span>
+          <div>
+            <h2 className="font-serif text-xl font-semibold text-navy">
+              No schools have reported yet.
+            </h2>
+            <p className="mt-1 text-[15px] leading-relaxed text-muted">
+              None of your {schoolCount} {schoolCount === 1 ? 'school' : 'schools'} has generated
+              statements for this period — once they do, their briefings roll up here.
+            </p>
+          </div>
+        </div>
+      ) : total === 0 ? (
         <div className="card-soft flex items-center gap-4 px-6 py-6">
           <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gold-gradient text-white shadow-glow">
             <Sparkles size={26} />

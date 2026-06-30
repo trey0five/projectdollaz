@@ -347,30 +347,25 @@ export function useStatementsRollup(orgId, fiscalYearStart) {
 }
 
 // ── Org attention briefing — read-only ────────────────────────────────────────
-// Mirrors useStatementsRollup VERBATIM: same loading/error/notEntitled triad +
-// org-resolution guard + microtask-deferred await-before-setState, so BudgetPage
-// consumes it identically alongside the other org views. Rolls each in-org
-// school's latest-for-FY briefing up into a ranked cross-school attention list.
+// Mirrors useStatementsRollup's loading/error + org-resolution guard +
+// microtask-deferred await-before-setState, so BudgetPage consumes it identically
+// alongside the other org views. Rolls each in-org school's latest-for-FY briefing
+// up into a ranked cross-school attention list. Unlike the school-scoped hooks the
+// org-briefing route is JwtAuthGuard-only (never 402s), so there's no entitlement
+// branch here.
 export function useOrgBriefing(orgId, fiscalYearStart) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [notEntitled, setNotEntitled] = useState(false)
 
   const load = useCallback(async (oid, fys) => {
     setError('')
-    setNotEntitled(false)
     try {
       const res = await analyticsApi.orgBriefing(oid, fys)
       setData(res.data)
-    } catch (e) {
-      if (isPaymentRequired(e)) {
-        setNotEntitled(true)
-        setData(null)
-      } else {
-        setError('Could not load the organization briefing.')
-        setData(null)
-      }
+    } catch {
+      setError('Could not load the organization briefing.')
+      setData(null)
     } finally {
       setLoading(false)
     }
@@ -398,7 +393,7 @@ export function useOrgBriefing(orgId, fiscalYearStart) {
     [orgId, fiscalYearStart, load],
   )
 
-  return { briefing: data, loading, error, notEntitled, reload }
+  return { briefing: data, loading, error, reload }
 }
 
 // ── Budget builder context: prior actuals + history + drivers (read-only) ─────
