@@ -92,10 +92,10 @@ The platform's core promise is that **two people never see figures that disagree
 
 The Monday-morning screen is not one view for everyone. From the same connected figures, the Intelligence layer assembles a per-person briefing along two dimensions:
 
-- **Scope** — how much of the organisation you're responsible for (one school → a diocese's finances → the whole system). Scope is also a **boundary**: you see only what your role entitles you to, following the org hierarchy the solution pack defines.
+- **Scope** — how much of the organisation you're responsible for (one school → an organization's finances → the whole system). Scope is also a **boundary**: you see only what your role entitles you to, following the org hierarchy the solution pack defines.
 - **Lens** — which decisions and which of the eight domains sit with you (a finance director's briefing centres on money; a principal's on running their school; a superintendent's reaches across all eight).
 
-Same engines, same figures, three different briefings — Principal · Diocesan finance director · Superintendent. This is the feature competitors can't fake without the semantic layer underneath it.
+Same engines, same figures, three different briefings — Principal · Organization finance director · Superintendent. This is the feature competitors can't fake without the semantic layer underneath it.
 
 ---
 
@@ -148,19 +148,19 @@ A multi-source competitive sweep (sources cited in the companion research file) 
 | Layer | Who's there | What they do | The gap they leave |
 |---|---|---|---|
 | **Suite incumbent** | **Blackbaud** (Financial Edge NXT, Raiser's Edge NXT, SIS, Billing, BoardEffect) | discrete products + *point-to-point* integrations; per-product "Copilot" AI | sold as separate products; tightest integration is only "intelligent reporting," **no unified cross-domain briefing**; consolidation lives on separate pages |
-| **SIS + billing (and the real threat)** | **FACTS / Nelnet** — building **FACTS IQ** | branded "the intelligence layer," "central nervous system," "single system of record," "30+ decision-ready dashboards" | **single-school, SIS-centric; only 4 hubs (admissions/engagement/financial/success); no HR, facilities, governance, accreditation, strategy, or diocesan consolidation; dashboards, not a *prioritised briefing*** |
+| **SIS + billing (and the real threat)** | **FACTS / Nelnet** — building **FACTS IQ** | branded "the intelligence layer," "central nervous system," "single system of record," "30+ decision-ready dashboards" | **single-school, SIS-centric; only 4 hubs (admissions/engagement/financial/success); no HR, facilities, governance, accreditation, strategy, or multi-school consolidation; dashboards, not a *prioritised briefing*** |
 | | Veracross | connected single-school SIS+billing+accounting | accounting positioned as an *efficiency* tool — no leadership/briefing layer |
 | **Finance / FP&A** | Frontline/Forecast5, Sage Intacct, Adaptive/Vena/Prophix | strong multi-year forecasting & multi-entity GL | **finance-domain only**; Forecast5 is public-district only |
-| **Diocesan consolidation** | ParishSOFT (parish-focused), separate FE NXT pages | parish/diocese financial reporting | **multi-school diocesan consolidation is largely unclaimed** by the SIS/suite incumbents on their core pages |
+| **Multi-school consolidation** | ParishSOFT (parish-focused), separate FE NXT pages | parish/diocese financial reporting | **multi-school (multi-entity) consolidation is largely unclaimed** by the SIS/suite incumbents on their core pages |
 | **Governance** | BoardEffect, OnBoard, Diligent, Boardable, BoardPro | board portals | governance domain only |
 | **AI-era entrants ('25–'26)** | **schoolOS** (IT/ops "operational intelligence"), **Scout** (YC W25, AI SIS) | orchestrate-not-replace, but for IT/ops and SIS busywork | **adjacent slices, not the cross-domain COO briefing** |
 
 **Verdict:**
 - **(a) White space is real (high confidence).** No verified player ships a prioritised, role-shaped, cross-domain daily *briefing* across all eight domains.
-- **(b) Single biggest threat: FACTS (Nelnet).** It already sits on enrollment + tuition + finance data and is actively shipping an "intelligence layer." But its scope is bounded to its own SIS ecosystem, single-school, and it markets **dashboards, not prioritisation** — and it has **no governance/accreditation/strategy and no diocesan consolidation.** Our three durable differentiators are exactly its three gaps: **(1) a prioritised briefing, not dashboards; (2) full eight-domain orchestration; (3) diocesan/multi-school consolidation.**
+- **(b) Single biggest threat: FACTS (Nelnet).** It already sits on enrollment + tuition + finance data and is actively shipping an "intelligence layer." But its scope is bounded to its own SIS ecosystem, single-school, and it markets **dashboards, not prioritisation** — and it has **no governance/accreditation/strategy and no multi-school consolidation.** Our three durable differentiators are exactly its three gaps: **(1) a prioritised briefing, not dashboards; (2) full eight-domain orchestration; (3) multi-school (multi-entity) consolidation across districts, networks, systems and dioceses.**
 - **(c) Near-analogue worth studying:** **schoolOS** (same "orchestrate, don't replace" thesis, but for IT/operations) and higher-ed **student-success/early-alert** tools (EAB Navigate, Civitas) that nail the "prioritised morning briefing" pattern — for *students*, not institutional operations. Borrow the pattern; own the domain they don't.
 
-**Strategic read:** lead go-to-market with the two unclaimed things — **the briefing** and **diocesan consolidation** — using **finance as the proof.** FACTS will likely add domains and prioritisation over time; the race is to own the cross-domain *leadership* layer (and the Catholic/diocesan wedge) before they extend out of the SIS.
+**Strategic read:** lead go-to-market with the two unclaimed things — **the briefing** and **multi-school consolidation** — using **finance as the proof.** The core market is **multi-school organizations** — districts, networks, systems and dioceses — where finance + multi-school consolidation pain is sharpest. FACTS will likely add domains and prioritisation over time; the race is to own the cross-domain *leadership* layer (and the multi-school consolidation wedge) before they extend out of the SIS.
 
 ---
 
@@ -170,7 +170,7 @@ Honest inventory of the current codebase against the model:
 
 | Engine / layer | Built today | Gap |
 |---|---|---|
-| **Financial (vertical)** | **~80%** — Data hub (sources incl. **QBO**), mapping/normalisation, Statements (validation/reconciliation + reporting), Budget (+ forecast, budget-vs-actual, **diocesan roll-up**), Monthly actuals, Reports + **Board packets**, Readiness/Compliance, period history | deepen QBO sync; harden multi-school consolidation as a headline |
+| **Financial (vertical)** | **~80%** — Data hub (sources incl. **QBO**), mapping/normalisation, Statements (validation/reconciliation + reporting), Budget (+ forecast, budget-vs-actual, **multi-school roll-up**), Monthly actuals, Reports + **Board packets**, Readiness/Compliance, period history | deepen QBO sync; harden multi-school consolidation as a headline |
 | **Intelligence + briefing** | **seeded** — Analytics (dashboards/metrics/benchmarks), **Penny** (AI assistant + autonomous actions), Home (briefing surface) | it only reads the *finance* domain; no canonical metric registry; no prioritisation → not yet a real cross-domain briefing |
 | **Semantic / metric layer** | **implicit** — each module computes its own numbers | **not unified** — this is the keystone work |
 | **Planning (vertical)** | **partial** — Budget + forecast (the finance slice) | strategic plan, improvement plans, facilities/capital, progress tracking |
@@ -180,17 +180,17 @@ Honest inventory of the current codebase against the model:
 
 ### The roadmap (depth on the differentiator before breadth)
 
-**Phase 0 — Finish the wedge *(in progress).*** Financial intelligence engine + diocesan roll-up as a *headline*, deeper QBO sync. This already delivers value alone and earns the trust + data everything else depends on. ✅ largely done.
+**Phase 0 — Finish the wedge *(in progress).*** Financial intelligence engine + multi-school roll-up as a *headline*, deeper QBO sync. This already delivers value alone and earns the trust + data everything else depends on. ✅ largely done.
 
 **Phase 1 — Build the semantic layer and the *real* briefing *(do this next — it's the differentiator).*** Extract the metric/indicator registry + prioritisation engine from the finance domain; turn Home + Penny into an actual *prioritised* briefing ("3 things today"), finance-only at first. **This is the demo that wins, and it must come before more engines** — it's what converts "another finance tool" into "the digital COO," and it's precisely what FACTS's dashboards are not.
 
 **Phase 2 — First non-finance domain into the briefing.** Add **enrollment** (read from the SIS) — because *"enrollment down 6 vs. plan"* + *"cash below target in November"* in one briefing is the cross-domain moment no competitor delivers, and it's directly on FACTS's turf where they still lack prioritisation. (Enrollment is also the lowest-integration-cost first expansion.)
 
-**Phase 3 — Governance + Workflow primitives.** Grow **Governance** out from the existing board-packets into meetings/minutes/policies; this *requires* the first real **Workflow** primitives (tasks, approvals, reminders, document routing). Dioceses and boards feel this acutely, and it deepens the governance white space competitors leave open.
+**Phase 3 — Governance + Workflow primitives.** Grow **Governance** out from the existing board-packets into meetings/minutes/policies; this *requires* the first real **Workflow** primitives (tasks, approvals, reminders, document routing). Multi-school organizations and boards feel this acutely, and it deepens the governance white space competitors leave open.
 
 **Phase 4 — Knowledge + the read-only domains.** Stand up the **Knowledge** engine (document store, accreditation evidence promoted from Readiness, search, institutional memory) and connect the remaining read-from-external domains — **HR, facilities, advancement** — as feeds into the briefing.
 
-**Cross-cutting — solution packs, Catholic/diocesan first.** It's the wedge *and* the unclaimed consolidation white space. Independent / charter / private-network / small-college packs follow as configuration over the same architecture.
+**Cross-cutting — solution packs.** The platform's identity is general; each market gets a pack — **independent schools, charter schools, private-school networks, dioceses, small colleges** — as configuration (org hierarchy, compliance rules, templates, report packages) over the same architecture. No single pack leads; the common wedge across all of them is **finance + multi-school consolidation**, the unclaimed white space.
 
 **Sequencing principle:** hold every engine to "independently valuable before the next starts" (finance already passes). Resist the everything-platform sprawl — the failure mode is *shallow everywhere*. Win by being **deep on finance + the briefing**, then expand one domain at a time, each one making the briefing smarter.
 
