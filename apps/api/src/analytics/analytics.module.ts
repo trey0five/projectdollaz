@@ -13,6 +13,8 @@ import { BudgetController } from './budget.controller.js'
 import { BudgetService } from './budget.service.js'
 import { BudgetRollupController } from './budget-rollup.controller.js'
 import { BudgetRollupService } from './budget-rollup.service.js'
+import { StatementsRollupController } from './statements-rollup.controller.js'
+import { StatementsRollupService } from './statements-rollup.service.js'
 import { DashboardController } from './dashboard.controller.js'
 import { DashboardService } from './dashboard.service.js'
 import { AssistantClient } from '../assistant/assistant.client.js'
@@ -31,6 +33,7 @@ import { AssistantClient } from '../assistant/assistant.client.js'
     OperationalController,
     BudgetController,
     BudgetRollupController,
+    StatementsRollupController,
     DashboardController,
   ],
   providers: [
@@ -39,6 +42,7 @@ import { AssistantClient } from '../assistant/assistant.client.js'
     OperationalService,
     BudgetService,
     BudgetRollupService,
+    StatementsRollupService,
     DashboardService,
     // Re-provide the STATELESS leaf AssistantClient here (it only needs the
     // global ConfigService) for BudgetService.advise(). We deliberately do NOT
@@ -46,6 +50,6 @@ import { AssistantClient } from '../assistant/assistant.client.js'
     // be a circular import. A second AssistantClient instance is harmless.
     AssistantClient,
   ],
-  exports: [InsightService, AnalyticsService, OperationalService, BudgetService, BudgetRollupService],
+  exports: [InsightService, AnalyticsService, OperationalService, BudgetService, BudgetRollupService, StatementsRollupService],
 })
 export class AnalyticsModule {}

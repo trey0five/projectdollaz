@@ -2,6 +2,7 @@
 // Shared report cell primitives (4-column statements: SOA & SFP)
 // ─────────────────────────────────────────────────────────────
 import { fmt, fmtDollar, plain } from '../../lib/format.js'
+import { useLineage } from '../../context/LineageContext.jsx'
 
 export const COLS4 = 'grid grid-cols-[minmax(0,1fr)_150px_150px_150px]'
 
@@ -47,6 +48,51 @@ export function PlainTotal({ value, show = true }) {
   if (!show || value == null)
     return <div className="amt border-t-2 border-navy pt-2 font-semibold text-gray-300">—</div>
   return <div className="amt border-t-2 border-navy pt-2 font-semibold text-navy">$ {plain(value)}</div>
+}
+
+/**
+ * Drill-down wrapper around any amount cell. ADDITIVE + screen-only: when the
+ * lineage drill-down is wired (a LineageProvider is mounted), a lineKey is
+ * given, and the cell is shown with a real value, it renders the SAME amount
+ * inside a `no-print` button that opens the LineageDrawer for this line. In
+ * every other case (no provider, no lineKey, hidden/empty cell, or print) it
+ * renders the child amount untouched, so the printed DOM / PDF is byte-identical
+ * and rows without lineage stay non-interactive.
+ *
+ * `statement` is the StatementId ('SOA'|'SFP'|'SCF'|'NetAssets'); `variant` is
+ * the column ('cy'|'py'|'audit') for the 4-column statements (ignored for
+ * SCF/NetAssets, which are CY-only).
+ */
+export function LineageCell({
+  statement,
+  variant = 'cy',
+  lineKey,
+  label,
+  value,
+  show = true,
+  children,
+}) {
+  const lineage = useLineage()
+  const clickable = !!(lineage?.onOpenLineage && lineKey && show && value != null)
+  if (!clickable) return children
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        // The statement is wrapped in a zoom "Tap to zoom" role=button host;
+        // stop the click from also opening the full-screen overlay.
+        e.stopPropagation()
+        lineage.onOpenLineage({ statement, variant, lineKey, label, value })
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') e.stopPropagation()
+      }}
+      title={`Trace ${label} to its source accounts`}
+      className="lineage-cell w-full cursor-pointer rounded text-right outline-none transition-colors hover:bg-gold/10 focus-visible:ring-2 focus-visible:ring-gold/60"
+    >
+      {children}
+    </button>
+  )
 }
 
 /** Net-asset / dollar-prefixed value (used on SOA NA rows). */

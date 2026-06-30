@@ -20,12 +20,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Wallet, Scale, Building2 } from 'lucide-react'
+import { Wallet, Scale, Building2, Landmark } from 'lucide-react'
 import TopBar from '../components/TopBar.jsx'
 import BillingBanner from '../components/BillingBanner.jsx'
 import PeriodSelector from '../components/analytics/PeriodSelector.jsx'
 import BudgetTabs from '../components/budget/BudgetTabs.jsx'
 import DioceseRollup from '../components/budget/DioceseRollup.jsx'
+import DioceseStatements from '../components/budget/DioceseStatements.jsx'
 import BudgetVsActual from '../components/analytics/BudgetVsActual.jsx'
 import BudgetSummary from '../components/budget/BudgetSummary.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
@@ -34,6 +35,7 @@ import {
   useAnalytics,
   useBudget,
   useBudgetRollup,
+  useStatementsRollup,
 } from '../hooks/useAnalytics.js'
 import { orgsApi } from '../lib/api.js'
 
@@ -41,6 +43,7 @@ const TABS = [
   { id: 'budget', label: 'Budget', Icon: Wallet },
   { id: 'bva', label: 'Budget vs. Actual', Icon: Scale },
   { id: 'rollup', label: 'Organizational Roll-up', Icon: Building2 },
+  { id: 'orgStatements', label: 'Consolidated Statements', Icon: Landmark },
 ]
 
 // FL dioceses budget on a Jul–Jun fiscal year. Derive the 'YYYY-MM' fiscal-year
@@ -149,6 +152,15 @@ export default function BudgetPage() {
     fiscalYearStart,
   )
 
+  // Consolidated statements roll-up — only fetched while its tab is active, same FY
+  // as the budget roll-up so the two org-level views stay on one fiscal year.
+  const stmtOrgId = activeTab === 'orgStatements' ? orgId : null
+  const {
+    rollup: stmtRollup,
+    loading: stmtLoading,
+    error: stmtError,
+  } = useStatementsRollup(stmtOrgId, fiscalYearStart)
+
   // Does a budget exist for this period? (drives the summary-vs-empty state).
   // A budget "exists" if it has a spread or rev/exp lines.
   const hasBudget = !!(
@@ -247,12 +259,20 @@ export default function BudgetPage() {
     </div>
   )
 
+  const renderOrgStatements = () => (
+    <div key="orgStatements">
+      <DioceseStatements rollup={stmtRollup} loading={stmtLoading} error={stmtError} />
+    </div>
+  )
+
   const renderActivePanel = () => {
     switch (activeTab) {
       case 'bva':
         return renderBva()
       case 'rollup':
         return renderRollup()
+      case 'orgStatements':
+        return renderOrgStatements()
       case 'budget':
       default:
         return renderBudget()
@@ -326,7 +346,7 @@ export default function BudgetPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2 }}
           >
-            {hydrating && activeTab !== 'rollup' ? (
+            {hydrating && activeTab !== 'rollup' && activeTab !== 'orgStatements' ? (
               <div className="card-soft animate-pulse px-6 py-14 text-center">
                 <p className="font-serif text-base italic text-muted">Loading your periods…</p>
               </div>

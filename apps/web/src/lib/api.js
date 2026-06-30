@@ -295,6 +295,15 @@ export const analyticsApi = {
     api.get(`/organizations/${orgId}/budget/rollup`, {
       params: fiscalYearStart ? { fiscalYearStart } : {},
     }),
+  // Organization consolidated statements roll-up: per-school + diocesan-consolidated
+  // Statement of Activities + Statement of Financial Position for a fiscal year,
+  // summed from each school's STORED snapshot (no engine re-run). SINGLE call site so
+  // the route is trivial to retune in integration. Omit fiscalYearStart entirely (not
+  // '') when no FY is selected, to satisfy the forbidNonWhitelisted ValidationPipe.
+  statementsRollup: (orgId, fiscalYearStart) =>
+    api.get(`/organizations/${orgId}/statements/rollup`, {
+      params: fiscalYearStart ? { fiscalYearStart } : {},
+    }),
   // ── Phase 4C: per-school dashboard layout (owner customizes; all roles read) ──
   dashboard: (schoolId) => api.get(`/schools/${schoolId}/dashboard`),
   saveDashboard: (schoolId, body) => api.put(`/schools/${schoolId}/dashboard`, body),
@@ -377,6 +386,8 @@ export const qboApi = {
   callback: (schoolId, body) => api.post(`/schools/${schoolId}/integrations/qb/callback`, body),
   disconnect: (schoolId) => api.delete(`/schools/${schoolId}/integrations/qb`),
   sync: (schoolId, periodId) => api.post(`/schools/${schoolId}/integrations/qb/sync`, { periodId }),
+  syncAll: (schoolId) => api.post(`/schools/${schoolId}/integrations/qb/sync-all`),
+  syncHistory: (schoolId) => api.get(`/schools/${schoolId}/integrations/qb/sync-history`),
 }
 
 // ── Phase 2A: Florida scholarship AUP — Review Readiness ─────────────────────

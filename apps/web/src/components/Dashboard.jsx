@@ -12,6 +12,7 @@ import StatementOfCashFlows from './reports/StatementOfCashFlows.jsx'
 import StatementOfNetAssets from './reports/StatementOfNetAssets.jsx'
 import ReportExpandOverlay from './reports/ReportExpandOverlay.jsx'
 import ReportPicker from './reports/ReportPicker.jsx'
+import LineageHost from './reports/LineageHost.jsx'
 
 const TABS = [
   { key: 'soa', label: 'Statement of Activities', short: 'Activities', Component: StatementOfActivities },
@@ -68,6 +69,7 @@ export default function Dashboard() {
         </div>
       </div>
 
+      <LineageHost bundle={reports} imports={null}>
       {/* report container */}
       <main id="report-container" className="mx-auto max-w-[1120px] px-4 pb-20 pt-8 sm:px-10 sm:pb-24 sm:pt-10">
         {!reports ? (
@@ -140,6 +142,7 @@ export default function Dashboard() {
       >
         {reports && <Active />}
       </ReportExpandOverlay>
+      </LineageHost>
     </div>
   )
 }

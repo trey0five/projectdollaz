@@ -1,5 +1,6 @@
 import { useApp } from '../../context/AppContext.jsx'
 import { plain } from '../../lib/format.js'
+import { LineageCell } from './cells.jsx'
 import ReportScroll from './ReportScroll.jsx'
 
 const COLS = 'grid grid-cols-[minmax(0,1fr)_220px]'
@@ -30,7 +31,7 @@ export default function StatementOfCashFlows() {
     <div className="py-1 font-serif text-[13px] italic text-muted" style={{ paddingLeft: pl }}>{label}</div>
   )
 
-  const row = ({ label, val, indent = 20, bold, top, double }) => {
+  const row = ({ label, val, indent = 20, bold, top, double, lineKey }) => {
     const border = double ? 'border-t-2 border-navy' : top ? 'border-t border-navy' : 'border-b border-dotted border-black/10'
     const mt = top || double ? 'mt-0.5' : ''
     return (
@@ -41,22 +42,28 @@ export default function StatementOfCashFlows() {
         >
           {label}
         </div>
-        <div className={`amt ${bold ? 'font-semibold text-navy' : ''} ${val < 0 ? 'amt-neg' : ''}`}>{paren(val)}</div>
+        <LineageCell statement="SCF" lineKey={lineKey} label={label} value={val}>
+          <div className={`amt ${bold ? 'font-semibold text-navy' : ''} ${val < 0 ? 'amt-neg' : ''}`}>{paren(val)}</div>
+        </LineageCell>
       </div>
     )
   }
 
-  const total = ({ label, val }) => (
+  const total = ({ label, val, lineKey }) => (
     <div className={`${COLS} mt-1 border-t-2 border-navy py-2`}>
       <div className="font-serif text-[15px] font-semibold text-navy">{label}</div>
-      <div className={`amt border-t-2 border-navy pt-1 font-semibold text-navy ${val < 0 ? 'amt-neg' : ''}`}>$ {paren(val)}</div>
+      <LineageCell statement="SCF" lineKey={lineKey} label={label} value={val}>
+        <div className={`amt border-t-2 border-navy pt-1 font-semibold text-navy ${val < 0 ? 'amt-neg' : ''}`}>$ {paren(val)}</div>
+      </LineageCell>
     </div>
   )
 
-  const cash = ({ label, val, isTotal }) => (
+  const cash = ({ label, val, isTotal, lineKey }) => (
     <div className={`${COLS} py-1.5 ${isTotal ? 'mt-0.5' : ''}`}>
       <div className={`font-serif text-sm text-navy ${isTotal ? 'border-t-2 border-navy pt-1.5 font-semibold' : 'pl-5'}`}>{label}</div>
-      <div className={`amt text-navy ${isTotal ? 'border-t-2 border-navy pt-1.5 font-semibold' : ''}`}>$ {plain(val)}</div>
+      <LineageCell statement="SCF" lineKey={lineKey} label={label} value={val}>
+        <div className={`amt text-navy ${isTotal ? 'border-t-2 border-navy pt-1.5 font-semibold' : ''}`}>$ {plain(val)}</div>
+      </LineageCell>
     </div>
   )
 
@@ -70,40 +77,40 @@ export default function StatementOfCashFlows() {
       <hr className="rpt-rule mb-2" />
 
       {section('Cash flows from operating activities:')}
-      {row({ label: 'Change in net assets', val: s.netChange })}
+      {row({ label: 'Change in net assets', lineKey: 'netChange', val: s.netChange })}
       {note('Adjustments to reconcile change in net assets to net cash provided by operating activities:', 20)}
-      {row({ label: 'Depreciation', val: s.depr, indent: 36 })}
+      {row({ label: 'Depreciation', lineKey: 'depr', val: s.depr, indent: 36 })}
       {note('Increase (decrease) in cash due to changes in:', 36)}
-      {row({ label: 'Accounts receivable', val: s.arAdj, indent: 48 })}
-      {row({ label: 'Prepaid expenses', val: s.prepaidAdj, indent: 48 })}
-      {row({ label: 'Accounts payable and accrued expenses', val: s.apAdj, indent: 48 })}
-      {row({ label: 'Deferred tuition', val: s.deferredAdj, indent: 48 })}
-      {row({ label: 'Due to student organizations', val: s.clubsAdj, indent: 48 })}
-      {row({ label: 'Net cash provided by (used in) operating activities', val: s.operatingCash, indent: 0, bold: true, top: true })}
+      {row({ label: 'Accounts receivable', lineKey: 'arAdj', val: s.arAdj, indent: 48 })}
+      {row({ label: 'Prepaid expenses', lineKey: 'prepaidAdj', val: s.prepaidAdj, indent: 48 })}
+      {row({ label: 'Accounts payable and accrued expenses', lineKey: 'apAdj', val: s.apAdj, indent: 48 })}
+      {row({ label: 'Deferred tuition', lineKey: 'deferredAdj', val: s.deferredAdj, indent: 48 })}
+      {row({ label: 'Due to student organizations', lineKey: 'clubsAdj', val: s.clubsAdj, indent: 48 })}
+      {row({ label: 'Net cash provided by (used in) operating activities', lineKey: 'operatingCash', val: s.operatingCash, indent: 0, bold: true, top: true })}
 
       {section('Cash flows used in investing activities:')}
-      {row({ label: 'Purchase of (proceeds from) investments', val: s.investmentsCash })}
-      {row({ label: 'Purchases of property and equipment', val: s.ppePurchases })}
-      {row({ label: 'Net cash provided by (used in) investing activities', val: s.investingCash, indent: 0, bold: true, top: true })}
+      {row({ label: 'Purchase of (proceeds from) investments', lineKey: 'investmentsCash', val: s.investmentsCash })}
+      {row({ label: 'Purchases of property and equipment', lineKey: 'ppePurchases', val: s.ppePurchases })}
+      {row({ label: 'Net cash provided by (used in) investing activities', lineKey: 'investingCash', val: s.investingCash, indent: 0, bold: true, top: true })}
 
       {section('Cash flows used in financing activities:')}
       {row({ label: 'Payments to the System Administration', val: 0 })}
-      {row({ label: 'Payments on lease obligations', val: s.leasePayments })}
-      {row({ label: 'Net cash provided by (used in) financing activities', val: s.financingCash, indent: 0, bold: true, top: true })}
+      {row({ label: 'Payments on lease obligations', lineKey: 'leasePayments', val: s.leasePayments })}
+      {row({ label: 'Net cash provided by (used in) financing activities', lineKey: 'financingCash', val: s.financingCash, indent: 0, bold: true, top: true })}
 
       <div className="h-4" />
-      {total({ label: 'Increase in cash', val: s.netCashChange })}
+      {total({ label: 'Increase in cash', lineKey: 'netCashChange', val: s.netCashChange })}
 
       <div className="h-4" />
-      {cash({ label: 'Cash, beginning of year', val: s.cashBegin })}
+      {cash({ label: 'Cash, beginning of year', lineKey: 'cashBegin', val: s.cashBegin })}
       <div className="h-1" />
-      {cash({ label: 'Cash, end of year', val: s.cashEnd, isTotal: true })}
+      {cash({ label: 'Cash, end of year', lineKey: 'cashEnd', val: s.cashEnd, isTotal: true })}
 
       <div className="mt-6 border-t border-rule pt-4">
         <div className="mb-2 font-serif text-[13px] italic text-navy">Reconciliation to cash:</div>
-        {cash({ label: 'Cash', val: s.cashUnrestricted })}
-        {cash({ label: 'Restricted cash', val: s.cashRestricted })}
-        {cash({ label: 'Total cash', val: s.cashEnd, isTotal: true })}
+        {cash({ label: 'Cash', lineKey: 'cashUnrestricted', val: s.cashUnrestricted })}
+        {cash({ label: 'Restricted cash', lineKey: 'cashRestricted', val: s.cashRestricted })}
+        {cash({ label: 'Total cash', lineKey: 'cashEnd', val: s.cashEnd, isTotal: true })}
       </div>
     </div>
     </ReportScroll>

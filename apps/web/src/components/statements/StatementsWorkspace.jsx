@@ -21,7 +21,7 @@ import ReportTabs from '../reports/ReportTabs.jsx'
 import SavedPeriodsRail from './SavedPeriodsRail.jsx'
 
 // Read-only statements view for one period (module scope — not an in-render def).
-function StatementsView({ bundle, label, periodEndDate, periodType, school, onBack }) {
+function StatementsView({ bundle, label, periodId, periodEndDate, periodType, school, onBack }) {
   return (
     <div className="card-soft overflow-hidden">
       <div className="flex items-center justify-between gap-3 border-b border-rule px-4 py-3 sm:px-6">
@@ -42,6 +42,7 @@ function StatementsView({ bundle, label, periodEndDate, periodType, school, onBa
       <ReportTabs
         bundle={bundle}
         school={school}
+        periodId={periodId}
         dateLabel={formatShortDate(periodEndDate)}
         periodLabel={PERIOD_LABELS[periodType] || ''}
       />
@@ -218,6 +219,7 @@ export default function StatementsWorkspace() {
             <StatementsView
               bundle={openBundle}
               label={openPeriod?.label}
+              periodId={openPeriod?.id}
               periodEndDate={openPeriod?.periodEndDate}
               periodType={openPeriod?.periodType}
               school={activeSchool}
@@ -227,6 +229,7 @@ export default function StatementsWorkspace() {
             <StatementsView
               bundle={latestSnapshot.payload}
               label={activePeriod?.label}
+              periodId={activePeriod?.id}
               periodEndDate={activePeriod?.periodEndDate}
               periodType={activePeriod?.periodType}
               school={activeSchool}

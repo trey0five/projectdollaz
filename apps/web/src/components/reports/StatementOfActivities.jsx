@@ -1,6 +1,6 @@
 import { useApp } from '../../context/AppContext.jsx'
 import { fmt } from '../../lib/format.js'
-import { COLS4, LineAmt, SubAmt, DollarAmt } from './cells.jsx'
+import { COLS4, LineAmt, SubAmt, DollarAmt, LineageCell } from './cells.jsx'
 import ReportScroll from './ReportScroll.jsx'
 
 export default function StatementOfActivities() {
@@ -10,21 +10,33 @@ export default function StatementOfActivities() {
 
   // Render-helper functions (invoked as calls, not components) so they are
   // not re-created on every render.
-  const line = ({ label, cyV, pyV, auV, first }) => (
+  const line = ({ label, cyV, pyV, auV, first, lineKey }) => (
     <div className={`${COLS4} border-b border-dotted border-black/10 py-1`}>
       <div className={`pl-5 font-serif text-sm text-ink ${first ? 'font-semibold' : ''}`}>{label}</div>
-      <LineAmt value={cyV} />
-      <LineAmt value={pyV} show={hasPY} />
-      <LineAmt value={auV} show={hasAudit} />
+      <LineageCell statement="SOA" variant="cy" lineKey={lineKey} label={label} value={cyV}>
+        <LineAmt value={cyV} />
+      </LineageCell>
+      <LineageCell statement="SOA" variant="py" lineKey={lineKey} label={label} value={pyV} show={hasPY}>
+        <LineAmt value={pyV} show={hasPY} />
+      </LineageCell>
+      <LineageCell statement="SOA" variant="audit" lineKey={lineKey} label={label} value={auV} show={hasAudit}>
+        <LineAmt value={auV} show={hasAudit} />
+      </LineageCell>
     </div>
   )
 
-  const sub = ({ label, cyV, pyV, auV }) => (
+  const sub = ({ label, cyV, pyV, auV, lineKey }) => (
     <div className={`${COLS4} mt-0.5 py-1.5`}>
       <div className="text-[11px] font-semibold uppercase tracking-wide text-navy">{label}</div>
-      <SubAmt value={cyV} />
-      <SubAmt value={pyV} show={hasPY} />
-      <SubAmt value={auV} show={hasAudit} />
+      <LineageCell statement="SOA" variant="cy" lineKey={lineKey} label={label} value={cyV}>
+        <SubAmt value={cyV} />
+      </LineageCell>
+      <LineageCell statement="SOA" variant="py" lineKey={lineKey} label={label} value={pyV} show={hasPY}>
+        <SubAmt value={pyV} show={hasPY} />
+      </LineageCell>
+      <LineageCell statement="SOA" variant="audit" lineKey={lineKey} label={label} value={auV} show={hasAudit}>
+        <SubAmt value={auV} show={hasAudit} />
+      </LineageCell>
     </div>
   )
 
@@ -55,30 +67,30 @@ export default function StatementOfActivities() {
       </div>
 
       <div className="section-header">Revenue and support:</div>
-      {line({ label: 'Tuitions and fees, net', cyV: cy.tuition, pyV: py?.tuition, auV: audit?.tuition, first: true })}
-      {line({ label: 'Development income', cyV: cy.dev, pyV: py?.dev, auV: audit?.dev })}
-      {line({ label: 'Student activities income', cyV: cy.studAct, pyV: py?.studAct, auV: audit?.studAct })}
-      {line({ label: 'Textbook leasing income', cyV: cy.textbook, pyV: py?.textbook, auV: audit?.textbook })}
-      {line({ label: 'Other', cyV: cy.other, pyV: py?.other, auV: audit?.other })}
-      {line({ label: 'Support', cyV: cy.support, pyV: py?.support, auV: audit?.support })}
+      {line({ label: 'Tuitions and fees, net', lineKey: 'tuition', cyV: cy.tuition, pyV: py?.tuition, auV: audit?.tuition, first: true })}
+      {line({ label: 'Development income', lineKey: 'dev', cyV: cy.dev, pyV: py?.dev, auV: audit?.dev })}
+      {line({ label: 'Student activities income', lineKey: 'studAct', cyV: cy.studAct, pyV: py?.studAct, auV: audit?.studAct })}
+      {line({ label: 'Textbook leasing income', lineKey: 'textbook', cyV: cy.textbook, pyV: py?.textbook, auV: audit?.textbook })}
+      {line({ label: 'Other', lineKey: 'other', cyV: cy.other, pyV: py?.other, auV: audit?.other })}
+      {line({ label: 'Support', lineKey: 'support', cyV: cy.support, pyV: py?.support, auV: audit?.support })}
       {line({ label: 'Grant revenue', cyV: 0, pyV: hasPY ? 0 : null, auV: hasAudit ? 0 : null })}
-      {line({ label: 'International program', cyV: cy.intlRev, pyV: py?.intlRev, auV: audit?.intlRev })}
-      {line({ label: 'Net gain (loss) on investments', cyV: cy.investments, pyV: py?.investments, auV: audit?.investments })}
-      {line({ label: 'Interest income', cyV: cy.interest, pyV: py?.interest, auV: audit?.interest })}
-      {sub({ label: 'Total revenue and support', cyV: cy.totalRev, pyV: py?.totalRev, auV: audit?.totalRev })}
+      {line({ label: 'International program', lineKey: 'intlRev', cyV: cy.intlRev, pyV: py?.intlRev, auV: audit?.intlRev })}
+      {line({ label: 'Net gain (loss) on investments', lineKey: 'investments', cyV: cy.investments, pyV: py?.investments, auV: audit?.investments })}
+      {line({ label: 'Interest income', lineKey: 'interest', cyV: cy.interest, pyV: py?.interest, auV: audit?.interest })}
+      {sub({ label: 'Total revenue and support', lineKey: 'totalRev', cyV: cy.totalRev, pyV: py?.totalRev, auV: audit?.totalRev })}
 
       <div className="section-header mt-3">Expenses:</div>
-      {line({ label: 'Instructional', cyV: cy.instructional, pyV: py?.instructional, auV: audit?.instructional, first: true })}
-      {line({ label: 'Facilities', cyV: cy.facilities, pyV: py?.facilities, auV: audit?.facilities })}
-      {line({ label: 'Fixed charges and other', cyV: cy.fixedOther, pyV: py?.fixedOther, auV: audit?.fixedOther })}
-      {line({ label: 'International program & resale', cyV: cy.intlExp, pyV: py?.intlExp, auV: audit?.intlExp })}
-      {line({ label: 'Pupil transportation', cyV: cy.bus, pyV: py?.bus, auV: audit?.bus })}
-      {line({ label: 'Food service costs', cyV: cy.food, pyV: py?.food, auV: audit?.food })}
-      {line({ label: 'Student activities', cyV: cy.studActExp, pyV: py?.studActExp, auV: audit?.studActExp })}
-      {line({ label: 'Athletics', cyV: cy.athletics, pyV: py?.athletics, auV: audit?.athletics })}
-      {line({ label: 'Administration', cyV: cy.admin, pyV: py?.admin, auV: audit?.admin })}
-      {line({ label: 'Restricted expenditures', cyV: cy.restricted, pyV: py?.restricted, auV: audit?.restricted })}
-      {sub({ label: 'Total expenses', cyV: cy.totalExp, pyV: py?.totalExp, auV: audit?.totalExp })}
+      {line({ label: 'Instructional', lineKey: 'instructional', cyV: cy.instructional, pyV: py?.instructional, auV: audit?.instructional, first: true })}
+      {line({ label: 'Facilities', lineKey: 'facilities', cyV: cy.facilities, pyV: py?.facilities, auV: audit?.facilities })}
+      {line({ label: 'Fixed charges and other', lineKey: 'fixedOther', cyV: cy.fixedOther, pyV: py?.fixedOther, auV: audit?.fixedOther })}
+      {line({ label: 'International program & resale', lineKey: 'intlExp', cyV: cy.intlExp, pyV: py?.intlExp, auV: audit?.intlExp })}
+      {line({ label: 'Pupil transportation', lineKey: 'bus', cyV: cy.bus, pyV: py?.bus, auV: audit?.bus })}
+      {line({ label: 'Food service costs', lineKey: 'food', cyV: cy.food, pyV: py?.food, auV: audit?.food })}
+      {line({ label: 'Student activities', lineKey: 'studActExp', cyV: cy.studActExp, pyV: py?.studActExp, auV: audit?.studActExp })}
+      {line({ label: 'Athletics', lineKey: 'athletics', cyV: cy.athletics, pyV: py?.athletics, auV: audit?.athletics })}
+      {line({ label: 'Administration', lineKey: 'admin', cyV: cy.admin, pyV: py?.admin, auV: audit?.admin })}
+      {line({ label: 'Restricted expenditures', lineKey: 'restricted', cyV: cy.restricted, pyV: py?.restricted, auV: audit?.restricted })}
+      {sub({ label: 'Total expenses', lineKey: 'totalExp', cyV: cy.totalExp, pyV: py?.totalExp, auV: audit?.totalExp })}
 
       {/* net change */}
       <div className={`${COLS4} mt-4 border-t-2 border-navy py-2.5`}>

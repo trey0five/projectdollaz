@@ -19,6 +19,39 @@ export interface QboStatus {
   realmId: string | null
   environment: string | null
   connectedAt: string | null
+  lastSyncedAt: string | null
+  lastSyncRowCount: number | null
+  lastSyncFiscalPeriodId: string | null
+}
+
+export interface QboSyncHistoryEntry {
+  syncedAt: string
+  fiscalPeriodId: string | null
+  rowCount: number | null
+}
+
+export interface QboSyncAllItem {
+  periodId: string
+  label: string
+  ok: boolean
+  rowCount?: number
+  error?: string
+}
+
+export interface QboSyncAllResult {
+  total: number
+  succeeded: number
+  failed: number
+  results: QboSyncAllItem[]
+}
+
+/** Defensively read the keys we write into a `qbo.synced` audit row's Json metadata. */
+function readSyncMeta(metadata: unknown): { fiscalPeriodId: string | null; rowCount: number | null } {
+  const m = (metadata ?? {}) as { fiscalPeriodId?: unknown; rowCount?: unknown }
+  return {
+    fiscalPeriodId: typeof m.fiscalPeriodId === 'string' ? m.fiscalPeriodId : null,
+    rowCount: typeof m.rowCount === 'number' ? m.rowCount : null,
+  }
 }
 
 @Injectable()
@@ -43,13 +76,41 @@ export class QboService {
 
   async status(schoolId: string): Promise<QboStatus> {
     const conn = await this.prisma.qboConnection.findUnique({ where: { schoolId } })
+    // Last-synced is derived from the most recent 'qbo.synced' audit row (no schema
+    // change). Independent of `connected` — a school's sync history survives a
+    // reconnect; the UI only surfaces it while connected.
+    const last = await this.prisma.auditLog.findFirst({
+      where: { schoolId, action: 'qbo.synced' },
+      orderBy: { createdAt: 'desc' },
+    })
+    const lastMeta = readSyncMeta(last?.metadata)
     return {
       configured: this.client.isConfigured(),
       connected: !!conn,
       realmId: conn?.realmId ?? null,
       environment: conn?.environment ?? null,
       connectedAt: conn?.createdAt ? conn.createdAt.toISOString() : null,
+      lastSyncedAt: last ? last.createdAt.toISOString() : null,
+      lastSyncRowCount: lastMeta.rowCount,
+      lastSyncFiscalPeriodId: lastMeta.fiscalPeriodId,
     }
+  }
+
+  /** Recent 'qbo.synced' audit rows for the school (newest-first, capped). */
+  async syncHistory(schoolId: string): Promise<QboSyncHistoryEntry[]> {
+    const rows = await this.prisma.auditLog.findMany({
+      where: { schoolId, action: 'qbo.synced' },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    })
+    return rows.map((r) => {
+      const meta = readSyncMeta(r.metadata)
+      return {
+        syncedAt: r.createdAt.toISOString(),
+        fiscalPeriodId: meta.fiscalPeriodId,
+        rowCount: meta.rowCount,
+      }
+    })
   }
 
   /** Complete the OAuth handshake: exchange the code + realmId and store the connection. */
@@ -99,14 +160,22 @@ export class QboService {
   private async accessToken(conn: QboConnection): Promise<string> {
     if (conn.expiresAt.getTime() - Date.now() > 60_000) return conn.accessToken
     const tokens = await this.client.refresh(conn.refreshToken)
+    const expiresAt = new Date(Date.now() + tokens.expiresInSec * 1000)
     await this.prisma.qboConnection.update({
       where: { schoolId: conn.schoolId },
       data: {
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
-        expiresAt: new Date(Date.now() + tokens.expiresInSec * 1000),
+        expiresAt,
       },
     })
+    // Keep the IN-MEMORY conn in sync. sync-all reuses one `conn` object across
+    // every period; QBO rotates the refresh token on each refresh, so without
+    // this the next period would re-refresh with the now-invalid old token and
+    // fail. After this, conn.expiresAt is far out, so later calls short-circuit.
+    conn.accessToken = tokens.accessToken
+    conn.refreshToken = tokens.refreshToken
+    conn.expiresAt = expiresAt
     return tokens.accessToken
   }
 
@@ -117,7 +186,22 @@ export class QboService {
   async sync(actor: User, schoolId: string, periodId: string) {
     const conn = await this.prisma.qboConnection.findUnique({ where: { schoolId } })
     if (!conn) throw new NotFoundException('QuickBooks is not connected for this school.')
+    const { snapshot } = await this.syncOnePeriod(actor, schoolId, conn, periodId)
+    return snapshot
+  }
 
+  /**
+   * Shared single-period sync body. Pulls the QBO trial balance as of the period
+   * end and runs it through the import → generate pipeline (which auto-scans),
+   * then logs a 'qbo.synced' audit row. Takes an already-loaded `conn` so the
+   * caller controls connection loading (and sync-all loads it once for the batch).
+   */
+  private async syncOnePeriod(
+    actor: User,
+    schoolId: string,
+    conn: QboConnection,
+    periodId: string,
+  ): Promise<{ snapshot: Awaited<ReturnType<StatementsService['generate']>>; rowCount: number; label: string }> {
     const period = await this.periods.getOwnedPeriod(schoolId, periodId)
     const endDate = period.periodEndDate.toISOString().slice(0, 10)
     const token = await this.accessToken(conn)
@@ -145,6 +229,36 @@ export class QboService {
       targetType: 'statement_snapshots',
       metadata: { fiscalPeriodId: periodId, rowCount: rows.length },
     })
-    return snapshot
+    return { snapshot, rowCount: rows.length, label: period.label }
+  }
+
+  /**
+   * Sync every period for the school, reusing the single-period helper. Resilient:
+   * each period runs under its own try/catch so one period failing (e.g. QBO has no
+   * trial-balance rows for it) never aborts the batch. Sequential by design — token
+   * refresh and the import/generate stack shouldn't stampede. Returns a per-period
+   * summary; HTTP 200 even when some/all periods fail (404 only if not connected).
+   */
+  async syncAll(actor: User, schoolId: string): Promise<QboSyncAllResult> {
+    const conn = await this.prisma.qboConnection.findUnique({ where: { schoolId } })
+    if (!conn) throw new NotFoundException('QuickBooks is not connected for this school.')
+
+    const periods = await this.periods.listPeriods(schoolId)
+    const results: QboSyncAllItem[] = []
+    for (const p of periods) {
+      try {
+        const r = await this.syncOnePeriod(actor, schoolId, conn, p.id)
+        results.push({ periodId: p.id, label: p.label, ok: true, rowCount: r.rowCount })
+      } catch (err) {
+        results.push({
+          periodId: p.id,
+          label: p.label,
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
+    const succeeded = results.filter((r) => r.ok).length
+    return { total: results.length, succeeded, failed: results.length - succeeded, results }
   }
 }

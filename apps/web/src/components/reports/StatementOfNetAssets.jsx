@@ -1,5 +1,5 @@
 import { useApp } from '../../context/AppContext.jsx'
-import { COLS4, DollarAmt, PlainAmt, PlainSub } from './cells.jsx'
+import { COLS4, DollarAmt, PlainAmt, PlainSub, LineageCell } from './cells.jsx'
 import ReportScroll from './ReportScroll.jsx'
 
 export default function StatementOfNetAssets() {
@@ -7,10 +7,14 @@ export default function StatementOfNetAssets() {
   const r = reports.netAssets
   const { cy, py, audit, hasPY, hasAudit } = r
 
-  const line = ({ label, cyV, pyV, auV, first }) => (
+  // NetAssets lineage is CY-only (buildNetAssetsLineage), so only the CY cell is
+  // clickable; PY/Audited render plain.
+  const line = ({ label, cyV, pyV, auV, first, lineKey }) => (
     <div className={`${COLS4} border-b border-dotted border-black/10 py-1`}>
       <div className={`pl-5 font-serif text-sm text-ink ${first ? 'font-semibold' : ''}`}>{label}</div>
-      <DollarAmt value={cyV} />
+      <LineageCell statement="NetAssets" lineKey={lineKey} label={label} value={cyV}>
+        <DollarAmt value={cyV} />
+      </LineageCell>
       <DollarAmt value={pyV} show={hasPY} />
       <DollarAmt value={auV} show={hasAudit} />
     </div>
@@ -48,6 +52,7 @@ export default function StatementOfNetAssets() {
       <div className="section-header">Net assets roll-forward</div>
       {line({
         label: 'Net assets, at beginning of year',
+        lineKey: 'begin',
         cyV: cy.begin,
         pyV: py?.begin,
         auV: audit?.begin,
@@ -55,6 +60,7 @@ export default function StatementOfNetAssets() {
       })}
       {line({
         label: 'Change in net assets',
+        lineKey: 'change',
         cyV: cy.change,
         pyV: py?.change,
         auV: audit?.change,
@@ -62,7 +68,9 @@ export default function StatementOfNetAssets() {
 
       <div className={`${COLS4} mt-1.5 py-2`}>
         <div className="font-serif text-[15px] font-semibold text-navy">Net assets, at end of period</div>
-        <DollarAmt value={cy.end} final />
+        <LineageCell statement="NetAssets" lineKey="end" label="Net assets, at end of period" value={cy.end}>
+          <DollarAmt value={cy.end} final />
+        </LineageCell>
         <DollarAmt value={py?.end} show={hasPY} final />
         <DollarAmt value={audit?.end} show={hasAudit} final />
       </div>
@@ -71,19 +79,25 @@ export default function StatementOfNetAssets() {
       <div className="section-header">Ending net assets by donor restriction</div>
       <div className={`${COLS4} border-b border-dotted border-black/10 py-1`}>
         <div className="pl-5 font-serif text-sm text-ink">Without donor restrictions</div>
-        <PlainAmt value={cy.withoutDonor} />
+        <LineageCell statement="NetAssets" lineKey="withoutDonor" label="Without donor restrictions" value={cy.withoutDonor}>
+          <PlainAmt value={cy.withoutDonor} />
+        </LineageCell>
         <PlainAmt value={py?.withoutDonor} show={hasPY} />
         <PlainAmt value={audit?.withoutDonor} show={hasAudit} />
       </div>
       <div className={`${COLS4} border-b border-dotted border-black/10 py-1`}>
         <div className="pl-5 font-serif text-sm text-ink">With donor restrictions</div>
-        <PlainAmt value={cy.withDonor} />
+        <LineageCell statement="NetAssets" lineKey="withDonor" label="With donor restrictions" value={cy.withDonor}>
+          <PlainAmt value={cy.withDonor} />
+        </LineageCell>
         <PlainAmt value={py?.withDonor} show={hasPY} />
         <PlainAmt value={audit?.withDonor} show={hasAudit} />
       </div>
       <div className={`${COLS4} mt-0.5 py-1.5`}>
         <div className="text-[11px] font-semibold uppercase tracking-wide text-navy">Total ending net assets</div>
-        <PlainSub value={cy.end} />
+        <LineageCell statement="NetAssets" lineKey="end" label="Total ending net assets" value={cy.end}>
+          <PlainSub value={cy.end} />
+        </LineageCell>
         <PlainSub value={py?.end} show={hasPY} />
         <PlainSub value={audit?.end} show={hasAudit} />
       </div>

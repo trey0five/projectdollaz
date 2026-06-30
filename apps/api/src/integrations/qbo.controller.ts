@@ -53,4 +53,21 @@ export class QboController {
   sync(@Param('schoolId') schoolId: string, @Body() dto: QbSyncDto, @CurrentUser() user: User) {
     return this.qbo.sync(user, schoolId, dto.periodId)
   }
+
+  /** Recent 'qbo.synced' audit rows (newest-first, capped). Read-open like status. */
+  @Get('sync-history')
+  @Roles('owner', 'accountant', 'viewer')
+  syncHistory(@Param('schoolId') schoolId: string) {
+    return this.qbo.syncHistory(schoolId)
+  }
+
+  /**
+   * Sync every period for the school (resilient: one period's failure doesn't abort
+   * the batch). No request body — nothing to whitelist. Owner/accountant like sync.
+   */
+  @Post('sync-all')
+  @Roles('owner', 'accountant')
+  syncAll(@Param('schoolId') schoolId: string, @CurrentUser() user: User) {
+    return this.qbo.syncAll(user, schoolId)
+  }
 }

@@ -290,6 +290,16 @@
   .no-print {
     display: none !important;
   }
+  /* Drill-down audit-trail cells are interactive buttons wrapping a statement
+     amount on screen. In print, collapse the button to contents so it adds no
+     box (the inner .amt prints verbatim) and drop all hover/focus styling, so
+     the PDF/board-report output stays byte-identical. */
+  .lineage-cell {
+    display: contents !important;
+    background: none !important;
+    box-shadow: none !important;
+    cursor: default !important;
+  }
   #report-container {
     margin: 0;
     padding: 0;

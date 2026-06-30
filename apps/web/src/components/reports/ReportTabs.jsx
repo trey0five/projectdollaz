@@ -1,11 +1,13 @@
 // Read-only tabbed report view used by the History page (Phase 1C). Renders the
 // SAME four statement components fed a STORED snapshot bundle via ReportViewProvider
 // (instead of the live intake-derived reports). No intake, no save — view + export.
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Maximize2 } from 'lucide-react'
 import { ReportViewProvider } from '../../context/AppContext.jsx'
+import { importsApi } from '../../lib/api.js'
 import ReportExpandOverlay from './ReportExpandOverlay.jsx'
+import LineageHost from './LineageHost.jsx'
 import StatementOfActivities from './StatementOfActivities.jsx'
 import StatementOfFinancialPosition from './StatementOfFinancialPosition.jsx'
 import StatementOfCashFlows from './StatementOfCashFlows.jsx'
@@ -18,8 +20,36 @@ const TABS = [
   { key: 'na', label: 'Net Assets', Component: StatementOfNetAssets },
 ]
 
-export default function ReportTabs({ bundle, school, dateLabel = '', periodLabel = '' }) {
+export default function ReportTabs({ bundle, school, periodId = null, dateLabel = '', periodLabel = '' }) {
   const [tab, setTab] = useState('soa')
+  // Period import summaries power the drill-down drawer's "Source" section. Read
+  // -only, any-active-member; tolerates failure (the Source section degrades).
+  // All setState runs in async callbacks (await-before-setState pattern) so no
+  // state is set synchronously inside the effect body.
+  const [imports, setImports] = useState(null)
+  const schoolId = school?.id ?? null
+  useEffect(() => {
+    let cancelled = false
+    if (!schoolId || !periodId) {
+      Promise.resolve().then(() => {
+        if (!cancelled) setImports(null)
+      })
+      return () => {
+        cancelled = true
+      }
+    }
+    importsApi
+      .listForPeriod(schoolId, periodId)
+      .then((res) => {
+        if (!cancelled) setImports(res.data)
+      })
+      .catch(() => {
+        if (!cancelled) setImports([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [schoolId, periodId])
   // Tap/click a statement to open the full-screen pinch-zoom view. This lived in
   // the old Dashboard and was lost when /statements went read-only — restored here
   // so it works everywhere ReportTabs renders (and finally on mobile, where the
@@ -32,6 +62,7 @@ export default function ReportTabs({ bundle, school, dateLabel = '', periodLabel
 
   return (
     <ReportViewProvider bundle={bundle} school={school} dateLabel={dateLabel} periodLabel={periodLabel}>
+      <LineageHost bundle={bundle} imports={imports}>
       <div className="no-print border-b-2 border-rule bg-white">
         <nav className="scrollbar-none mx-auto flex w-full max-w-[1120px] items-stretch justify-center overflow-x-auto sm:px-10">
           {TABS.map((t) => (
@@ -93,6 +124,7 @@ export default function ReportTabs({ bundle, school, dateLabel = '', periodLabel
       >
         <Active />
       </ReportExpandOverlay>
+      </LineageHost>
     </ReportViewProvider>
   )
 }

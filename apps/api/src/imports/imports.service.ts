@@ -37,15 +37,31 @@ export interface ImportPublic {
   createdAt: string
 }
 
+/** Where an import's rows came from (drives the drill-down "Source" badge). */
+export type ImportSourceType = 'quickbooks' | 'upload' | 'unknown'
+
 export interface ImportSummary {
   id: string
   role: ImportRole
   sourceName: string
+  /** Provenance of the rows: a QBO sync, an uploaded file, or unknown (legacy). */
+  sourceType: ImportSourceType
   rowCount: number
   uploadedBy: string | null
   createdAt: string
   /** True for the latest import of its role within the period (the active one). */
   active: boolean
+}
+
+/** Read an import's stored metadata.source into the public sourceType enum. */
+function readSourceType(metadata: unknown): ImportSourceType {
+  const source =
+    metadata && typeof metadata === 'object'
+      ? (metadata as { source?: unknown }).source
+      : undefined
+  if (source === 'quickbooks') return 'quickbooks'
+  if (source === 'upload') return 'upload'
+  return 'unknown'
 }
 
 @Injectable()
@@ -125,6 +141,7 @@ export class ImportsService {
         id: imp.id,
         role: imp.role,
         sourceName: imp.sourceName,
+        sourceType: readSourceType(imp.metadata),
         rowCount: imp.rowCount,
         uploadedBy: imp.uploadedBy,
         createdAt: imp.createdAt.toISOString(),

@@ -292,6 +292,60 @@ export function useBudgetRollup(orgId, fiscalYearStart) {
   return { rollup: data, loading, error, notEntitled, reload }
 }
 
+// ── Org consolidated statements roll-up (read-only) ───────────────────────────
+// Mirrors useBudgetRollup: same loading/error/data triad + org-resolution guard,
+// so BudgetPage consumes it identically alongside the budget roll-up. Consolidates
+// stored statement snapshots (no engine re-run) into a diocesan SOA + SFP view.
+export function useStatementsRollup(orgId, fiscalYearStart) {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [notEntitled, setNotEntitled] = useState(false)
+
+  const load = useCallback(async (oid, fys) => {
+    setError('')
+    setNotEntitled(false)
+    try {
+      const res = await analyticsApi.statementsRollup(oid, fys)
+      setData(res.data)
+    } catch (e) {
+      if (isPaymentRequired(e)) {
+        setNotEntitled(true)
+        setData(null)
+      } else {
+        setError('Could not load the consolidated statements.')
+        setData(null)
+      }
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.resolve().then(() => {
+      if (cancelled) return
+      if (orgId) {
+        setLoading(true)
+        load(orgId, fiscalYearStart)
+      } else {
+        setData(null)
+        setLoading(false)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [orgId, fiscalYearStart, load])
+
+  const reload = useCallback(
+    () => (orgId ? load(orgId, fiscalYearStart) : Promise.resolve()),
+    [orgId, fiscalYearStart, load],
+  )
+
+  return { rollup: data, loading, error, notEntitled, reload }
+}
+
 // ── Budget builder context: prior actuals + history + drivers (read-only) ─────
 // Loads alongside useBudget; never blocks the budget UI (failure just disables
 // the smart build methods, leaving manual entry working).
