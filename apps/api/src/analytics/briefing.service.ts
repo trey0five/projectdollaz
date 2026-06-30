@@ -1,11 +1,19 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
-import { METRIC_KEYS, type MetricResult, type MetricUnit } from '@finrep/analytics'
+import { type MetricResult, type MetricUnit } from '@finrep/analytics'
+import type { MembershipRole } from '@finrep/db'
 import { PeriodsService } from '../periods/periods.service.js'
 import { AnalyticsService } from './analytics.service.js'
 import { ComplianceService } from '../compliance/compliance.service.js'
 import { ChecklistService } from '../compliance/checklist.service.js'
 import { ReconciliationService } from '../compliance/reconciliation.service.js'
 import { CorrectiveActionService } from '../compliance/corrective-action.service.js'
+import {
+  applyLens,
+  availableLensesFor,
+  clampLens,
+  type AttentionVoice,
+  type Lens,
+} from './briefing-lens.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Phase 1 (slice 1) — the prioritised attention briefing. A READ-ONLY synthesis
@@ -41,6 +49,12 @@ export interface AttentionItem {
   link: string
   /** ISO yyyy-mm-dd when known (earliest open CAP targetDate); else null. */
   dueDate: string | null
+  /**
+   * ADDITIVE (Scope × Lens). Per-item reframing hint the frontend uses to pick
+   * CTA wording / tone ('decision' | 'action' | 'governance'). Populated by
+   * applyLens; absent on any legacy path is fine — never carries a value.
+   */
+  voice?: AttentionVoice
 }
 
 export interface BriefingSummary {
@@ -55,24 +69,19 @@ export interface BriefingResponse {
   label: string
   generatedAt: string
   summary: BriefingSummary
-  /** Pre-ranked server-side: critical>warn>info, then source/registry order, stable. */
+  /** Pre-ranked + lens-shaped server-side: critical>warn>info, then the lens
+   *  source emphasis/registry order, stable. Counts in `summary` are over THIS
+   *  (lens-filtered) list, so they always match what the caller sees. */
   items: AttentionItem[]
+  // ── ADDITIVE (Scope × Lens) — existing consumers that ignore these keep working ──
+  /** The EFFECTIVE lens actually applied (post-clamp) — what shaped this payload. */
+  lens: Lens
+  /** The caller's own role / ceiling, so the FE knows whether to show the preview
+   *  switcher and which lenses are selectable. */
+  callerRole: Lens
+  /** The lenses this caller may preview (own role + every narrower lens). */
+  availableLenses: Lens[]
 }
-
-const SEV_RANK: Record<AttentionSeverity, number> = { critical: 0, warn: 1, info: 2 }
-// Source tiebreak within a severity: data-blocking first, then compliance gaps,
-// then metric watch-outs. Keeps "fix the data" above "review a metric".
-const SOURCE_RANK: Record<AttentionSource, number> = { data: 0, compliance: 1, metric: 2 }
-// Fixed sub-order for the non-metric items so the list is deterministic.
-const COMPLIANCE_ORDER = [
-  'compliance:reconciliation',
-  'compliance:material',
-  'compliance:reportable',
-  'compliance:cap-open',
-  'compliance:checklist',
-  'data:no-snapshot',
-  'data:unmapped',
-]
 
 /**
  * Format a metric value for human `why` text using its unit semantics, so e.g.
@@ -144,10 +153,24 @@ export class BriefingService {
    * friendly "get started" 200. A period that exists but has no snapshot returns a
    * single info item with a 200 (graceful, never a 500).
    */
-  async getBriefing(schoolId: string, periodId: string): Promise<BriefingResponse> {
+  async getBriefing(
+    schoolId: string,
+    periodId: string,
+    callerRole: MembershipRole = 'owner',
+    lensOverride?: Lens,
+  ): Promise<BriefingResponse> {
     // Tenant isolation up front: a true 404 (unknown/foreign period) propagates.
     const period = await this.periods.getOwnedPeriod(schoolId, periodId)
     const generatedAt = new Date().toISOString()
+
+    // SECURITY: a lens may only NARROW/REFRAME, never widen past the caller's
+    // ceiling. Default lens = caller's own role. Clamp is silent (a preview no-op).
+    const effectiveLens = clampLens(callerRole, lensOverride)
+    const lensMeta = {
+      lens: effectiveLens,
+      callerRole,
+      availableLenses: availableLensesFor(callerRole),
+    }
 
     // ── STEP 0: no-snapshot graceful path ────────────────────────────────────
     // computeMetricsResponse throws NotFound when the period has no snapshot.
@@ -171,12 +194,16 @@ export class BriefingService {
           link: '/data',
           dueDate: null,
         }
+        // Route the single get-started item through the lens too (it survives every
+        // lens, gets the voice tag, and the viewer reframe), so the shape is uniform.
+        const lensed = applyLens([item], effectiveLens)
         return {
           periodId: period.id,
           label: period.label,
           generatedAt,
-          summary: { total: 1, critical: 0, warn: 0, info: 1 },
-          items: [item],
+          summary: summarise(lensed),
+          items: lensed,
+          ...lensMeta,
         }
       }
       throw e
@@ -303,30 +330,31 @@ export class BriefingService {
       })
     }
 
-    // ── STEP 3: rank (deterministic, explainable) + summarise ────────────────
-    items.sort((a, b) => {
-      const sev = SEV_RANK[a.severity] - SEV_RANK[b.severity]
-      if (sev !== 0) return sev
-      const src = SOURCE_RANK[a.source] - SOURCE_RANK[b.source]
-      if (src !== 0) return src
-      if (a.source === 'metric' && b.source === 'metric') {
-        const mi =
-          METRIC_KEYS.indexOf(a.metricKey as never) - METRIC_KEYS.indexOf(b.metricKey as never)
-        if (mi !== 0) return mi
-      } else {
-        const ci = COMPLIANCE_ORDER.indexOf(a.id) - COMPLIANCE_ORDER.indexOf(b.id)
-        if (ci !== 0) return ci
-      }
-      return a.id.localeCompare(b.id)
-    })
+    // ── STEP 3: lens-shape (rank + filter + reframe) + summarise ─────────────
+    // applyLens is the SINGLE source of ranking truth (shared with the org fan-
+    // out). It re-ranks per the lens emphasis, drops curated-out items (viewer),
+    // and attaches voice — but NEVER touches a value. Counts are computed over
+    // the FILTERED list so summary.total matches what this caller actually sees.
+    const shaped = applyLens(items, effectiveLens)
+    const summary = summarise(shaped)
 
-    const summary: BriefingSummary = {
-      total: items.length,
-      critical: items.filter((i) => i.severity === 'critical').length,
-      warn: items.filter((i) => i.severity === 'warn').length,
-      info: items.filter((i) => i.severity === 'info').length,
+    return {
+      periodId: period.id,
+      label: period.label,
+      generatedAt,
+      summary,
+      items: shaped,
+      ...lensMeta,
     }
+  }
+}
 
-    return { periodId: period.id, label: period.label, generatedAt, summary, items }
+/** Lens-relative severity counts over the already-shaped item list. */
+function summarise(items: AttentionItem[]): BriefingSummary {
+  return {
+    total: items.length,
+    critical: items.filter((i) => i.severity === 'critical').length,
+    warn: items.filter((i) => i.severity === 'warn').length,
+    info: items.filter((i) => i.severity === 'info').length,
   }
 }

@@ -353,15 +353,18 @@ export function useStatementsRollup(orgId, fiscalYearStart) {
 // up into a ranked cross-school attention list. Unlike the school-scoped hooks the
 // org-briefing route is JwtAuthGuard-only (never 402s), so there's no entitlement
 // branch here.
-export function useOrgBriefing(orgId, fiscalYearStart) {
+// Scope × Lens: optional `lens` previews a narrower org lens (server clamps to
+// the caller's widest in-org role). The response carries lens/callerRole/
+// availableLenses for the indicator + owner-only switcher.
+export function useOrgBriefing(orgId, fiscalYearStart, lens) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  const load = useCallback(async (oid, fys) => {
+  const load = useCallback(async (oid, fys, ln) => {
     setError('')
     try {
-      const res = await analyticsApi.orgBriefing(oid, fys)
+      const res = await analyticsApi.orgBriefing(oid, fys, ln)
       setData(res.data)
     } catch {
       setError('Could not load the organization briefing.')
@@ -377,7 +380,7 @@ export function useOrgBriefing(orgId, fiscalYearStart) {
       if (cancelled) return
       if (orgId) {
         setLoading(true)
-        load(orgId, fiscalYearStart)
+        load(orgId, fiscalYearStart, lens)
       } else {
         setData(null)
         setLoading(false)
@@ -386,14 +389,22 @@ export function useOrgBriefing(orgId, fiscalYearStart) {
     return () => {
       cancelled = true
     }
-  }, [orgId, fiscalYearStart, load])
+  }, [orgId, fiscalYearStart, lens, load])
 
   const reload = useCallback(
-    () => (orgId ? load(orgId, fiscalYearStart) : Promise.resolve()),
-    [orgId, fiscalYearStart, load],
+    () => (orgId ? load(orgId, fiscalYearStart, lens) : Promise.resolve()),
+    [orgId, fiscalYearStart, lens, load],
   )
 
-  return { briefing: data, loading, error, reload }
+  return {
+    briefing: data,
+    lens: data?.lens ?? null,
+    callerRole: data?.callerRole ?? null,
+    availableLenses: data?.availableLenses ?? [],
+    loading,
+    error,
+    reload,
+  }
 }
 
 // ── Budget builder context: prior actuals + history + drivers (read-only) ─────

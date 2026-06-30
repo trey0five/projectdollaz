@@ -161,12 +161,18 @@ export default function HomeDashboard() {
     schoolId,
     selectedPeriodId,
   )
+  // Scope × Lens: ephemeral "Preview as" selection (owner-only switcher). null =
+  // the caller's own role (server default). Persists across period flips — the
+  // server re-clamps to the live ceiling, so a stale wider lens can never leak.
+  const [previewLens, setPreviewLens] = useState(null)
   const {
     items: briefingItems,
     summary: briefingSummary,
+    lens: briefingLens,
+    availableLenses: briefingAvailableLenses,
     loading: briefingLoading,
     error: briefingError,
-  } = useBriefing(schoolId, selectedPeriodId)
+  } = useBriefing(schoolId, selectedPeriodId, previewLens)
 
   // Sparkline trends for the 3 vital keys only (cheap subset).
   const [sparkTrends, setSparkTrends] = useState({})
@@ -292,6 +298,9 @@ export default function HomeDashboard() {
         summary={briefingSummary}
         loading={briefingLoading}
         error={briefingError}
+        lens={briefingLens}
+        availableLenses={briefingAvailableLenses}
+        onLensChange={setPreviewLens}
       />
 
       <DataHubBanner />

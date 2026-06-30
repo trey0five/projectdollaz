@@ -21,6 +21,7 @@ import {
   MinusCircle,
   Inbox,
 } from 'lucide-react'
+import { LensIndicator, LensSwitcher } from '../home/LensControls.jsx'
 
 // Per-severity theming — identical language to HomeBriefing (navy/gold/danger):
 // accent rail + tint + icon, plus a chip tint for the per-school count pills.
@@ -55,6 +56,12 @@ const CTA_LABEL = {
   metric: 'Open analytics',
   compliance: 'Open readiness',
   data: 'Go to Data hub',
+}
+
+// Voice-aware CTA: a governance (board) lens never gets an imperative "go fix".
+function ctaLabel(item) {
+  if (item.voice === 'governance') return 'Review with leadership'
+  return CTA_LABEL[item.source] ?? 'Take a look'
 }
 
 function fmtDue(iso) {
@@ -104,7 +111,7 @@ function OrgBriefingItemCard({ item, index, reduce }) {
             </div>
             <p className="mt-1 text-[15px] leading-relaxed text-muted">{item.why}</p>
             <span className="mt-2 inline-flex items-center gap-1.5 text-[13px] font-bold uppercase tracking-[0.06em] text-gold">
-              {CTA_LABEL[item.source] ?? 'Take a look'}
+              {ctaLabel(item)}
               <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
             </span>
           </div>
@@ -126,7 +133,14 @@ function CountPill({ kind, value }) {
   )
 }
 
-export default function OrgBriefing({ briefing, loading, error }) {
+export default function OrgBriefing({
+  briefing,
+  loading,
+  error,
+  lens = null,
+  availableLenses = [],
+  onLensChange,
+}) {
   const reduce = useReducedMotion()
 
   if (loading) {
@@ -162,6 +176,14 @@ export default function OrgBriefing({ briefing, loading, error }) {
       transition={{ duration: 0.3 }}
       className="no-print space-y-5"
     >
+      {/* Scope × Lens chrome — active org lens + (owner-only) preview switcher. */}
+      {lens && (
+        <div className="flex flex-wrap items-center gap-3">
+          <LensIndicator lens={lens} />
+          <LensSwitcher lens={lens} availableLenses={availableLenses} onChange={onLensChange} />
+        </div>
+      )}
+
       {/* Headline — org-scoped HomeBriefing idiom. total===0 splits two ways:
           genuinely all-clear (≥1 school reported, nothing flagged) vs. nothing to
           report on yet (no school has generated statements for this period). */}

@@ -32,7 +32,12 @@ export class RolesGuard implements CanActivate {
     if (!required || required.length === 0) return true
 
     const req = context.switchToHttp().getRequest<
-      Request & { user?: User; params: Record<string, string>; body: Record<string, unknown> }
+      Request & {
+        user?: User
+        params: Record<string, string>
+        body: Record<string, unknown>
+        membershipRole?: MembershipRole
+      }
     >()
     const user = req.user
     if (!user) throw new ForbiddenException('Not authenticated.')
@@ -64,6 +69,11 @@ export class RolesGuard implements CanActivate {
     if (!required.includes(membership.role)) {
       throw new ForbiddenException('Insufficient role for this action.')
     }
+    // Attach the resolved role so handlers (via @CallerRole()) can role-shape the
+    // response WITHOUT a second DB hit. Distinct property name (never overwrites
+    // req.user) so no other guard/interceptor is affected. Single writer, runs
+    // before the handler, so it is always present downstream on @Roles() routes.
+    req.membershipRole = membership.role
     return true
   }
 }

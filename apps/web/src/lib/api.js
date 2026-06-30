@@ -309,9 +309,14 @@ export const analyticsApi = {
   // cross-school item list + per-school summaries + consolidated counts. SINGLE
   // call site so the route is trivial to retune in integration. Omit
   // fiscalYearStart entirely (not '') when no FY, to satisfy forbidNonWhitelisted.
-  orgBriefing: (orgId, fiscalYearStart) =>
+  // `lens` (Scope × Lens override) is omitted entirely when absent, exactly like
+  // fiscalYearStart, to satisfy the global forbidNonWhitelisted ValidationPipe.
+  orgBriefing: (orgId, fiscalYearStart, lens) =>
     api.get(`/organizations/${orgId}/briefing`, {
-      params: fiscalYearStart ? { fiscalYearStart } : {},
+      params: {
+        ...(fiscalYearStart ? { fiscalYearStart } : {}),
+        ...(lens ? { lens } : {}),
+      },
     }),
   // ── Phase 4C: per-school dashboard layout (owner customizes; all roles read) ──
   dashboard: (schoolId) => api.get(`/schools/${schoolId}/dashboard`),
@@ -324,8 +329,12 @@ export const analyticsApi = {
 // server returns a ranked AttentionItem[] + a summary (and a graceful "get
 // started" item when the period has no snapshot — always a 200).
 export const briefingApi = {
-  get: (schoolId, periodId) =>
-    api.get(`/schools/${schoolId}/periods/${periodId}/briefing`),
+  // `lens` (Scope × Lens override) is omitted when absent so forbidNonWhitelisted
+  // doesn't 400 on an empty param. The server clamps it to the caller's ceiling.
+  get: (schoolId, periodId, lens) =>
+    api.get(`/schools/${schoolId}/periods/${periodId}/briefing`, {
+      params: lens ? { lens } : {},
+    }),
 }
 
 // ── Phase 1 (Board Report): NBOA-style finance-committee packet ──────────────

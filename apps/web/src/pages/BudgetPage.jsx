@@ -168,11 +168,17 @@ export default function BudgetPage() {
   // endpoint: it fans BriefingService.getBriefing out across every reporting
   // school), same FY as the other org views so all org tabs stay on one FY.
   const briefingOrgId = activeTab === 'orgBriefing' ? orgId : null
+  // Scope × Lens: ephemeral "Preview as" selection for the org briefing (owner-
+  // only switcher). null = the caller's widest in-org role (server default). The
+  // server re-clamps to the live ceiling, so a stale wider lens can never leak.
+  const [orgPreviewLens, setOrgPreviewLens] = useState(null)
   const {
     briefing: orgBriefing,
+    lens: orgBriefingLens,
+    availableLenses: orgBriefingAvailableLenses,
     loading: orgBriefingLoading,
     error: orgBriefingError,
-  } = useOrgBriefing(briefingOrgId, fiscalYearStart)
+  } = useOrgBriefing(briefingOrgId, fiscalYearStart, orgPreviewLens)
 
   // Does a budget exist for this period? (drives the summary-vs-empty state).
   // A budget "exists" if it has a spread or rev/exp lines.
@@ -284,6 +290,9 @@ export default function BudgetPage() {
         briefing={orgBriefing}
         loading={orgBriefingLoading}
         error={orgBriefingError}
+        lens={orgBriefingLens}
+        availableLenses={orgBriefingAvailableLenses}
+        onLensChange={setOrgPreviewLens}
       />
     </div>
   )

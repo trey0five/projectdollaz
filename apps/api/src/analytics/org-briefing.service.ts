@@ -1,8 +1,10 @@
 import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common'
 import type { User } from '@finrep/db'
 import { PrismaService } from '../prisma/prisma.service.js'
+import type { MembershipRole } from '@finrep/db'
 import { BriefingService } from './briefing.service.js'
-import type { AttentionItem, AttentionSeverity, BriefingSummary } from './briefing.service.js'
+import type { AttentionItem, BriefingSummary } from './briefing.service.js'
+import { availableLensesFor, clampLens, SEV_RANK, type Lens } from './briefing-lens.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Phase 1 (slice 2) — the ORG-LEVEL, multi-school attention briefing. A third
@@ -68,9 +70,19 @@ export interface OrgBriefingResponse {
   capApplied: boolean
   /** Items omitted by the cap (0 when not capped). */
   cappedItemCount: number
+  // ── ADDITIVE (Scope × Lens) — one lens shapes the WHOLE org view ──────────────
+  /** The EFFECTIVE org lens (post-clamp) applied to every school in the rollup. */
+  lens: Lens
+  /** The caller's derived org role (widest in-org membership) = the ceiling. */
+  callerRole: Lens
+  /** The lenses this caller may preview (own org role + every narrower lens). */
+  availableLenses: Lens[]
 }
 
-const SEV_RANK: Record<AttentionSeverity, number> = { critical: 0, warn: 1, info: 2 }
+// Org role precedence — owner is the WIDEST. An org consumer who is owner at ANY
+// school in the org acts as leadership for the consolidated view (the natural
+// ceiling); a viewer-everywhere caller gets the board lens org-wide.
+const ORG_ROLE_RANK: Record<MembershipRole, number> = { owner: 2, accountant: 1, viewer: 0 }
 
 // Sane cap on the flat cross-school list. The CONSOLIDATED counts always reflect
 // the FULL totals (summed from per-school summaries, not from items), and the
@@ -96,6 +108,7 @@ export class OrgBriefingService {
     user: User,
     orgId: string,
     fiscalYearStart: string | null,
+    lensOverride?: Lens,
   ): Promise<OrgBriefingResponse> {
     const generatedAt = new Date().toISOString()
 
@@ -115,6 +128,17 @@ export class OrgBriefingService {
     if (inOrg.length === 0) {
       throw new ForbiddenException('You do not have access to this organization.')
     }
+
+    // ── Scope × Lens: derive ONE org-level role + clamp the override ──────────
+    // The caller has per-SCHOOL roles, not an org role. Take the WIDEST in-org
+    // membership as the org ceiling (reuses the memberships already fetched — no
+    // extra query). Clamp the requested lens to it, then apply that SAME lens to
+    // every school so the consolidated view is value-consistent by construction.
+    const orgRole: Lens = inOrg.reduce<MembershipRole>(
+      (widest, m) => (ORG_ROLE_RANK[m.role] > ORG_ROLE_RANK[widest] ? m.role : widest),
+      inOrg[0].role,
+    )
+    const effectiveLens = clampLens(orgRole, lensOverride)
 
     const org = await this.prisma.organization.findUnique({ where: { id: orgId } })
     if (!org) throw new NotFoundException('Organization not found.')
@@ -166,8 +190,12 @@ export class OrgBriefingService {
     // so an organization of N schools fans out ~5N service reads — this is the heaviest
     // endpoint in the app. It is gated client-side to fire only when the tab is
     // open; a short-TTL cache / batch path is a Phase-2 follow-up if N grows large.
+    // Pass effectiveLens as the per-school callerRole (no override) so getBriefing
+    // uses it verbatim as the default lens — every school is shaped by the ONE org
+    // lens, never each school's own per-school role. (effectiveLens is already
+    // clamped to the org ceiling, so getBriefing's internal clamp is a no-op.)
     const settled = await Promise.allSettled(
-      reported.map((r) => this.briefing.getBriefing(r.schoolId, r.periodId)),
+      reported.map((r) => this.briefing.getBriefing(r.schoolId, r.periodId, effectiveLens)),
     )
 
     // ── AGGREGATE ────────────────────────────────────────────────────────────
@@ -281,6 +309,9 @@ export class OrgBriefingService {
       notReported,
       capApplied,
       cappedItemCount,
+      lens: effectiveLens,
+      callerRole: orgRole,
+      availableLenses: availableLensesFor(orgRole),
     }
   }
 }

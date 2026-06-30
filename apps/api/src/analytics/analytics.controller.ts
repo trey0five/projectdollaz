@@ -1,12 +1,15 @@
 import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common'
+import type { MembershipRole } from '@finrep/db'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js'
 import { RolesGuard } from '../common/guards/roles.guard.js'
 import { Roles } from '../common/decorators/roles.decorator.js'
+import { CallerRole } from '../common/decorators/caller-role.decorator.js'
 import { EntitlementGuard } from '../billing/entitlement.guard.js'
 import { METRIC_META } from '@finrep/analytics'
 import { AnalyticsService } from './analytics.service.js'
 import { InsightService } from './insight.service.js'
 import { BriefingService } from './briefing.service.js'
+import { BriefingQueryDto } from './dto/briefing-query.dto.js'
 
 /**
  * Phase 4A analytics reads. Tenant-isolated by RolesGuard (must be an active
@@ -41,13 +44,23 @@ export class AnalyticsController {
   // of off-band metrics + readiness gaps + data gaps synthesised from the existing
   // services (no recompute). Read-auth = any active member, same as /metrics.
   // Graceful: a period with no snapshot returns a single "get started" item (200).
+  //
+  // Scope × Lens: the briefing is role-SHAPED. The caller's resolved role (from
+  // RolesGuard, query-free) is the default lens AND the ceiling. An optional
+  // ?lens=<role> previews a NARROWER lens (server clamps; never widens). Same
+  // figures, role-correct emphasis/inclusion/voice — additive to the response.
   @Get('periods/:periodId/briefing')
   @Roles('owner', 'accountant', 'viewer')
   briefingForPeriod(
     @Param('schoolId') schoolId: string,
     @Param('periodId') periodId: string,
+    @CallerRole() callerRole: MembershipRole | undefined,
+    @Query() query: BriefingQueryDto,
   ) {
-    return this.briefing.getBriefing(schoolId, periodId)
+    // Fail safe to the most restrictive lens if the guard somehow didn't attach
+    // a role (it always does on this @Roles() route).
+    const role: MembershipRole = callerRole ?? 'viewer'
+    return this.briefing.getBriefing(schoolId, periodId, role, query.lens)
   }
 
   // The static metric catalog metadata (formula/description/bands). No recompute.

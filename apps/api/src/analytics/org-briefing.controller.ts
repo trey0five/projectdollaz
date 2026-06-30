@@ -27,6 +27,11 @@ export class OrgBriefingController {
     @Param('orgId') orgId: string,
     @Query() query: OrgBriefingQueryDto,
   ) {
-    return this.orgBriefing.getOrgBriefing(user, orgId, query.fiscalYearStart ?? null)
+    return this.orgBriefing.getOrgBriefing(
+      user,
+      orgId,
+      query.fiscalYearStart ?? null,
+      query.lens,
+    )
   }
 }

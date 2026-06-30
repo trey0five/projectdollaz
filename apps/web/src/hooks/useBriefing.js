@@ -9,17 +9,22 @@
 import { useState, useEffect, useCallback } from 'react'
 import { briefingApi, isPaymentRequired } from '../lib/api.js'
 
-export function useBriefing(schoolId, periodId) {
+// Scope × Lens: the optional `lens` arg previews a NARROWER lens (the server
+// clamps to the caller's ceiling, so it can only narrow). The response carries
+// the effective lens + callerRole (ceiling) + availableLenses, which the
+// HomeBriefing pill + owner-only preview switcher render. Absent fields (older
+// deploy) leave the indicator/switcher hidden — fully back-compatible.
+export function useBriefing(schoolId, periodId, lens) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [notEntitled, setNotEntitled] = useState(false)
 
-  const load = useCallback(async (sid, pid) => {
+  const load = useCallback(async (sid, pid, ln) => {
     setError('')
     setNotEntitled(false)
     try {
-      const res = await briefingApi.get(sid, pid)
+      const res = await briefingApi.get(sid, pid, ln)
       setData(res.data)
     } catch (e) {
       if (isPaymentRequired(e)) {
@@ -40,7 +45,7 @@ export function useBriefing(schoolId, periodId) {
       if (cancelled) return
       if (schoolId && periodId) {
         setLoading(true)
-        load(schoolId, periodId)
+        load(schoolId, periodId, lens)
       } else {
         setData(null)
         setLoading(false)
@@ -49,17 +54,20 @@ export function useBriefing(schoolId, periodId) {
     return () => {
       cancelled = true
     }
-  }, [schoolId, periodId, load])
+  }, [schoolId, periodId, lens, load])
 
   const reload = useCallback(
-    () => (schoolId && periodId ? load(schoolId, periodId) : Promise.resolve()),
-    [schoolId, periodId, load],
+    () => (schoolId && periodId ? load(schoolId, periodId, lens) : Promise.resolve()),
+    [schoolId, periodId, lens, load],
   )
 
   return {
     data,
     items: data?.items ?? [],
     summary: data?.summary ?? null,
+    lens: data?.lens ?? null,
+    callerRole: data?.callerRole ?? null,
+    availableLenses: data?.availableLenses ?? [],
     loading,
     error,
     notEntitled,
