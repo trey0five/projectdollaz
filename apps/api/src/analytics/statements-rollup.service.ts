@@ -58,7 +58,7 @@ function addLine<T>(acc: Record<string, number>, src: T | null | undefined, keys
 }
 
 /**
- * Organization-wide CONSOLIDATED financial statements ("diocesan consolidation").
+ * Organization-wide CONSOLIDATED financial statements (multi-school consolidation).
  * Advisory/read-only: it SUMS each member school's latest STORED statement snapshot
  * (the @finrep/engine ReportBundle) field-by-field — it NEVER re-runs the engine.
  *

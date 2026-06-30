@@ -14,7 +14,7 @@ export const SCOA_OPTIONS = [
   { key: 'studActRev', label: 'Student activities (revenue)', section: 'revenue' },
   { key: 'textbook', label: 'Textbooks', section: 'revenue' },
   { key: 'other', label: 'Other revenue', section: 'revenue' },
-  { key: 'support', label: 'Parish / diocesan support & grants', section: 'revenue' },
+  { key: 'support', label: 'Sponsor / affiliate support & grants', section: 'revenue' },
   { key: 'intlRev', label: 'International program (revenue)', section: 'revenue' },
   { key: 'investments', label: 'Investments & endowment', section: 'revenue' },
   { key: 'interest', label: 'Interest & dividends', section: 'revenue' },

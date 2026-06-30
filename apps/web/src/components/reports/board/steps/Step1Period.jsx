@@ -20,7 +20,7 @@ const GRANULARITIES = [
   { id: 'monthly', label: 'Monthly', enabled: true },
 ]
 
-// ── Fiscal-quarter helpers (Jul–Jun FY, FL dioceses) — PURE client mirror of the
+// ── Fiscal-quarter helpers (Jul–Jun fiscal year) — PURE client mirror of the
 // frozen backend contract. fyStartYear = the JULY calendar year. quarterKey =
 // `${fyStartYear}-Q${n}`; FY label = `FY${fyStartYear+1}`. A "YYYY-MM" month with
 // MM>=7 belongs to fyStartYear=year; MM<=6 belongs to fyStartYear=year-1.

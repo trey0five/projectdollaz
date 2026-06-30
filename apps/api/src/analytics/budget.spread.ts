@@ -12,7 +12,7 @@
 // balance numbers and would double-negate a budget here.
 //
 // TOTALS: PeriodBudget.totalRevenue/totalExpenses use the sheet's printed
-// grand totals (authoritative, 5,383,000 in the diocesan sample) when the
+// grand totals (authoritative, 5,383,000 in the sample workbook) when the
 // parser captured them, else fall back to the computed rollup sum.
 // ─────────────────────────────────────────────────────────────
 import { categoryOf, categoryDef } from '@finrep/engine'
@@ -150,7 +150,7 @@ export function rollupSpread(
   const unmappedAccts: number[] = []
 
   for (const a of spread.accounts) {
-    // acct>0  -> map by GL number (categoryOf), UNCHANGED (diocesan path).
+    // acct>0  -> map by GL number (categoryOf), UNCHANGED (standard GL path).
     // acct===0 -> label-only row; guess the category from the account NAME.
     const mappedBy: 'acct' | 'keyword' = a.acct > 0 ? 'acct' : 'keyword'
     // A saved per-school override (Resolve-unmatched) takes precedence, but ONLY

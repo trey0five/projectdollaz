@@ -1,4 +1,4 @@
-// Consolidated Statements tab — the diocesan, multi-school CONSOLIDATED financial
+// Consolidated Statements tab — the multi-school CONSOLIDATED financial
 // statements for the caller's organization. Reads the statements-rollup endpoint
 // (one call site in api.js) and renders a per-school summary table plus a
 // consolidated Statement of Activities (SOA) and Statement of Financial Position
@@ -21,7 +21,7 @@ const LABELS = {
   studAct: 'Student activities',
   textbook: 'Textbooks',
   other: 'Other revenue',
-  support: 'Parish / diocesan support',
+  support: 'Sponsor / affiliate support',
   intlRev: 'International program revenue',
   investments: 'Investment income',
   interest: 'Interest income',
@@ -94,7 +94,7 @@ const SFP_ASSETS = ['cash', 'restrictedCash', 'tuitionRec', 'prepaid', 'totalCur
 const SFP_LIAB = ['apAccrued', 'leaseCurr', 'studentClubs', 'deferredIntl', 'totalCurrL', 'leaseNonCurr', 'totalLiab']
 const SFP_NA = ['naWithout', 'naWith', 'totalNA', 'totalLiabNA']
 
-export default function DioceseStatements({ rollup, loading, error }) {
+export default function OrgStatements({ rollup, loading, error }) {
   if (loading) {
     return (
       <div className="card-soft animate-pulse px-6 py-14 text-center">

@@ -2,14 +2,14 @@
 // @finrep/ingestion — Budget Spread parser (browser + node).
 //
 // Format-AGNOSTIC structural parser for monthly budget spreadsheets,
-// with the diocesan "Budget Spread" template recognized as a preset.
+// with the standard "Budget Spread" template (format 'diocesan') recognized as a preset.
 // Mirrors excelAdapter's SheetJS usage (XLSX.read(bytes,{type:'array'})
 // + sheet_to_json header:1). Pure: bytes in -> BudgetSpread out, NO I/O.
 //
 // CORRECTNESS RULES (load-bearing):
 //  • A row is an ACCOUNT row IFF col[acctIdx] is an integer in [100,9999].
 //    The DISCRIMINATOR is the account code, NEVER the label. This keeps the
-//    diocesan row [940,'Total Student Activity Expense',0] (a real GL code
+//    standard-template row [940,'Total Student Activity Expense',0] (a real GL code
 //    whose label starts with "Total") while still skipping the section
 //    subtotal rows ("Total Tuition and Fees", acct cell null).
 //  • Amounts are stored EXACTLY as written (sign-lossless). Revenue is
@@ -18,7 +18,7 @@
 //    rollup step, so the parsed spread is a faithful copy of the file.
 //  • months[] preserves blank-vs-zero: a blank cell is null, a 0 cell is 0.
 //  • The sheet's OWN printed grand-total rows (Total Operating Revenues /
-//    TOTAL OPERATING EXPENDITURES = 5,383,000 each in the diocesan sample)
+//    TOTAL OPERATING EXPENDITURES = 5,383,000 each in the sample workbook)
 //    are captured into sheetTotals as the AUTHORITATIVE figures; the
 //    account-level rollup (computed downstream) is reconciled against them.
 // ─────────────────────────────────────────────────────────────
@@ -64,7 +64,7 @@ export interface BudgetSpread {
   /** Rows skipped during the parse, for transparency. */
   skippedRows: BudgetSpreadSkippedRow[]
   /**
-   * Authoritative grand-total rows printed on the sheet (diocesan). null when
+   * Authoritative grand-total rows printed on the sheet (standard template). null when
    * not found (generic files); the API then falls back to the rollup sum.
    */
   sheetTotals: { revenue: number | null; expense: number | null }
@@ -246,7 +246,7 @@ function tryAnnualOnly(wb: XLSX.WorkBook, ordered: string[]): BudgetSpread | nul
         acctRaw != null && Number.isInteger(acctRaw) && acctRaw >= 100 && acctRaw <= 9999
 
       if (!labelOnly) {
-        // Numeric annual-only sheet: GL code is the discriminator (diocesan-like).
+        // Numeric annual-only sheet: GL code is the discriminator (standard-template-like).
         if (isAcct) {
           accounts.push({ acct: acctRaw!, label, months: [], annual: amount ?? 0 })
           continue
@@ -452,7 +452,7 @@ export function parseBudgetSpread(arrayBuffer: ArrayBuffer, opts?: { sheet?: str
     }
   }
   // LABEL-ONLY discriminator: when NO column has any GL integer in [100,9999]
-  // (acctBest === 0), the sheet has account NAMES but no GL codes. The diocesan
+  // (acctBest === 0), the sheet has account NAMES but no GL codes. The standard-template
   // sample has acctBest === 131, so it can NEVER enter this branch — the
   // numeric path below stays byte-identical for it.
   const labelOnly = acctBest === 0
@@ -572,7 +572,7 @@ export function parseBudgetSpread(arrayBuffer: ArrayBuffer, opts?: { sheet?: str
     }
 
     // Non-account row: capture authoritative grand totals while skipping.
-    // Diocesan grand REVENUE total is a blank-label annual row that sits
+    // The standard template's grand REVENUE total is a blank-label annual row that sits
     // immediately before the OPERATING EXPENDITURES section (no "Total ..."
     // text on the sheet), so anchor it positionally.
     if (

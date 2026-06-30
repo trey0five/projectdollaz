@@ -315,7 +315,7 @@ export class BudgetService {
    * Apply a Phase-2 DRIVER MODEL. Recomputes the category budget AUTHORITATIVELY
    * server-side via the pure computeDriverBudget (never trusts a client preview),
    * folding prior-year actuals (budgetContext) into the auto-grown non-driver
-   * lines. OVERWRITES lines.revenue/lines.expense (so Budget-vs-Actual + Diocese
+   * lines. OVERWRITES lines.revenue/lines.expense (so Budget-vs-Actual + Org
    * Roll-up read the driver numbers) and writes lines.spread (format:'driver',
    * 12 even months) so the Monthly Spread grid populates — while PRESERVING the
    * manual lines.methods builder state. Stores lines.driverModel (the assumptions

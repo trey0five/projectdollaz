@@ -295,13 +295,22 @@ export const analyticsApi = {
     api.get(`/organizations/${orgId}/budget/rollup`, {
       params: fiscalYearStart ? { fiscalYearStart } : {},
     }),
-  // Organization consolidated statements roll-up: per-school + diocesan-consolidated
+  // Organization consolidated statements roll-up: per-school + org-consolidated
   // Statement of Activities + Statement of Financial Position for a fiscal year,
   // summed from each school's STORED snapshot (no engine re-run). SINGLE call site so
   // the route is trivial to retune in integration. Omit fiscalYearStart entirely (not
   // '') when no FY is selected, to satisfy the forbidNonWhitelisted ValidationPipe.
   statementsRollup: (orgId, fiscalYearStart) =>
     api.get(`/organizations/${orgId}/statements/rollup`, {
+      params: fiscalYearStart ? { fiscalYearStart } : {},
+    }),
+  // Organization ATTENTION BRIEFING: per-school attention rolled up
+  // across the caller's org for a fiscal year — a ranked, school-attributed
+  // cross-school item list + per-school summaries + consolidated counts. SINGLE
+  // call site so the route is trivial to retune in integration. Omit
+  // fiscalYearStart entirely (not '') when no FY, to satisfy forbidNonWhitelisted.
+  orgBriefing: (orgId, fiscalYearStart) =>
+    api.get(`/organizations/${orgId}/briefing`, {
       params: fiscalYearStart ? { fiscalYearStart } : {},
     }),
   // ── Phase 4C: per-school dashboard layout (owner customizes; all roles read) ──

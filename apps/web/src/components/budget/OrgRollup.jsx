@@ -28,7 +28,7 @@ function categoryRows(consolidated, section) {
     .sort((a, b) => b.value - a.value)
 }
 
-export default function DioceseRollup({ rollup, loading, error }) {
+export default function OrgRollup({ rollup, loading, error }) {
   if (loading) {
     return (
       <div className="card-soft animate-pulse px-6 py-14 text-center">

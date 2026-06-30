@@ -295,7 +295,7 @@ export function useBudgetRollup(orgId, fiscalYearStart) {
 // ── Org consolidated statements roll-up (read-only) ───────────────────────────
 // Mirrors useBudgetRollup: same loading/error/data triad + org-resolution guard,
 // so BudgetPage consumes it identically alongside the budget roll-up. Consolidates
-// stored statement snapshots (no engine re-run) into a diocesan SOA + SFP view.
+// stored statement snapshots (no engine re-run) into an organization SOA + SFP view.
 export function useStatementsRollup(orgId, fiscalYearStart) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -344,6 +344,61 @@ export function useStatementsRollup(orgId, fiscalYearStart) {
   )
 
   return { rollup: data, loading, error, notEntitled, reload }
+}
+
+// ── Org attention briefing — read-only ────────────────────────────────────────
+// Mirrors useStatementsRollup VERBATIM: same loading/error/notEntitled triad +
+// org-resolution guard + microtask-deferred await-before-setState, so BudgetPage
+// consumes it identically alongside the other org views. Rolls each in-org
+// school's latest-for-FY briefing up into a ranked cross-school attention list.
+export function useOrgBriefing(orgId, fiscalYearStart) {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [notEntitled, setNotEntitled] = useState(false)
+
+  const load = useCallback(async (oid, fys) => {
+    setError('')
+    setNotEntitled(false)
+    try {
+      const res = await analyticsApi.orgBriefing(oid, fys)
+      setData(res.data)
+    } catch (e) {
+      if (isPaymentRequired(e)) {
+        setNotEntitled(true)
+        setData(null)
+      } else {
+        setError('Could not load the organization briefing.')
+        setData(null)
+      }
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.resolve().then(() => {
+      if (cancelled) return
+      if (orgId) {
+        setLoading(true)
+        load(orgId, fiscalYearStart)
+      } else {
+        setData(null)
+        setLoading(false)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [orgId, fiscalYearStart, load])
+
+  const reload = useCallback(
+    () => (orgId ? load(orgId, fiscalYearStart) : Promise.resolve()),
+    [orgId, fiscalYearStart, load],
+  )
+
+  return { briefing: data, loading, error, notEntitled, reload }
 }
 
 // ── Budget builder context: prior actuals + history + drivers (read-only) ─────

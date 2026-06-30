@@ -9,7 +9,7 @@ import { fmt } from '../../lib/format.js'
 
 // The parser is sign-lossless and format-agnostic, so reconciliation here is a
 // best-effort summary: sum the account annuals and compare to the sheet's own
-// printed grand totals when the parser captured them (diocesan preset).
+// printed grand totals when the parser captured them (standard spread template preset).
 function summarize(spread) {
   const accounts = spread.accounts || []
   const sumAnnual = (a) =>
@@ -60,7 +60,7 @@ export default function BudgetSpreadPreview({ spread }) {
         {stat(
           FileCheck2,
           'Format',
-          spread.format === 'diocesan' ? 'Diocesan template' : 'Generic spread',
+          spread.format === 'diocesan' ? 'Standard template' : 'Generic spread',
         )}
         {stat(
           CalendarRange,

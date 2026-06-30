@@ -39,7 +39,7 @@ export {
   FL_FISCAL_YEAR_END,
 } from './classify.js'
 
-// Budget-spread parser (format-agnostic; diocesan preset). Browser + node.
+// Budget-spread parser (format-agnostic; standard 'diocesan' spread template preset). Browser + node.
 export type {
   BudgetSpread,
   BudgetSpreadAccount,

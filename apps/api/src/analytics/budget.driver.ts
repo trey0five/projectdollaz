@@ -6,7 +6,7 @@
 // budget with zero per-consumer code.
 //
 // Each category becomes ONE synthetic GL row whose `acct` is a representative
-// diocesan account for that rollup line (so categoryOf(acct) maps it back to
+// standard-chart account for that rollup line (so categoryOf(acct) maps it back to
 // the intended category), carrying the even-12-month split and the category
 // annual. This lives in the API (not @finrep/analytics) because it depends on
 // @finrep/engine account NUMBERS; the pure package depends only on engine types.
@@ -21,7 +21,7 @@ import {
   type ExpenseKey,
 } from '@finrep/analytics'
 
-/** Representative diocesan account# per rollup line (each maps back via categoryOf). */
+/** Representative standard-chart account# per rollup line (each maps back via categoryOf). */
 const REVENUE_ACCT: Record<RevenueKey, number> = {
   tuition: 401,
   dev: 475,
@@ -41,7 +41,7 @@ const EXPENSE_ACCT: Record<ExpenseKey, number> = {
   intlExp: 988,
   bus: 925,
   food: 935,
-  studActExp: 0, // studActExp has no mapped diocesan acct; synthetic-only row
+  studActExp: 0, // studActExp has no mapped standard-chart acct; synthetic-only row
   athletics: 950,
   admin: 600,
   restricted: 963,

@@ -17,6 +17,8 @@ import { BudgetRollupController } from './budget-rollup.controller.js'
 import { BudgetRollupService } from './budget-rollup.service.js'
 import { StatementsRollupController } from './statements-rollup.controller.js'
 import { StatementsRollupService } from './statements-rollup.service.js'
+import { OrgBriefingController } from './org-briefing.controller.js'
+import { OrgBriefingService } from './org-briefing.service.js'
 import { DashboardController } from './dashboard.controller.js'
 import { DashboardService } from './dashboard.service.js'
 import { AssistantClient } from '../assistant/assistant.client.js'
@@ -36,6 +38,7 @@ import { AssistantClient } from '../assistant/assistant.client.js'
     BudgetController,
     BudgetRollupController,
     StatementsRollupController,
+    OrgBriefingController,
     DashboardController,
   ],
   providers: [
@@ -46,6 +49,7 @@ import { AssistantClient } from '../assistant/assistant.client.js'
     BudgetService,
     BudgetRollupService,
     StatementsRollupService,
+    OrgBriefingService,
     DashboardService,
     // Re-provide the STATELESS leaf AssistantClient here (it only needs the
     // global ConfigService) for BudgetService.advise(). We deliberately do NOT
