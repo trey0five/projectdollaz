@@ -22,7 +22,7 @@
 // bubble simply appears at the home corner so guidance is still fully available.
 // PRINT: everything is wrapped in .no-print.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { X, ChevronRight, ChevronLeft } from 'lucide-react'
 import { usePenny } from '../../context/PennyContext.jsx'
@@ -65,6 +65,7 @@ export default function Penny() {
   // the rect fresh on resize/scroll. Mirrors the old GuideMascot measurement.
   useEffect(() => {
     if (!step || chatOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: DOM-measurement effect (see header); resetting the rect when there's no step must be synchronous to avoid a stale highlight box flashing.
       setBox(null)
       return undefined
     }

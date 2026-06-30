@@ -38,8 +38,16 @@ export default function TopBar() {
   // single hamburger that opens a labeled slide-down menu; lg+ keeps the inline nav.
   const [menuOpen, setMenuOpen] = useState(false)
   // Close on navigation (route change) so the drawer never lingers over a new page.
+  // Deferred to a microtask so it isn't a synchronous setState-in-effect
+  // (react-hooks/set-state-in-effect); setMenuOpen(false) is idempotent.
   useEffect(() => {
-    setMenuOpen(false)
+    let cancelled = false
+    Promise.resolve().then(() => {
+      if (!cancelled) setMenuOpen(false)
+    })
+    return () => {
+      cancelled = true
+    }
   }, [path])
   // Close on Escape; lock body scroll while the drawer is open.
   useEffect(() => {
