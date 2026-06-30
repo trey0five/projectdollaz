@@ -17,10 +17,12 @@ import { useBilling } from '../../context/BillingContext.jsx'
 import { usePersistence } from '../../context/PersistenceContext.jsx'
 import { useAnalytics, useInsights } from '../../hooks/useAnalytics.js'
 import { useCompliance } from '../../hooks/useCompliance.js'
+import { useBriefing } from '../../hooks/useBriefing.js'
 import { analyticsApi } from '../../lib/api.js'
 import EntitlementPausedPanel from '../analytics/EntitlementPausedPanel.jsx'
 import { HeadlineSkeleton, MetricCardSkeleton } from '../analytics/skeletons.jsx'
 import HomeHero from './HomeHero.jsx'
+import HomeBriefing from './HomeBriefing.jsx'
 import BoardPacketExportButton from '../reports/BoardPacketExportButton.jsx'
 import HomeVitals from './HomeVitals.jsx'
 import FeatureGateway from './FeatureGateway.jsx'
@@ -159,6 +161,12 @@ export default function HomeDashboard() {
     schoolId,
     selectedPeriodId,
   )
+  const {
+    items: briefingItems,
+    summary: briefingSummary,
+    loading: briefingLoading,
+    error: briefingError,
+  } = useBriefing(schoolId, selectedPeriodId)
 
   // Sparkline trends for the 3 vital keys only (cheap subset).
   const [sparkTrends, setSparkTrends] = useState({})
@@ -278,6 +286,13 @@ export default function HomeDashboard() {
           <BoardPacketExportButton periodId={selectedPeriodId} />
         </div>
       )}
+
+      <HomeBriefing
+        items={briefingItems}
+        summary={briefingSummary}
+        loading={briefingLoading}
+        error={briefingError}
+      />
 
       <DataHubBanner />
 

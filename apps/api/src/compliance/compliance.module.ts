@@ -48,6 +48,9 @@ import { WorkpapersService } from './workpapers.service.js'
     ComplianceInputsService,
     ReconciliationService,
     CorrectiveActionService,
+    // Exported so the AnalyticsModule's BriefingService can inject the readiness-
+    // checklist rollup (additive — ChecklistService is already a provider here).
+    ChecklistService,
   ],
 })
 export class ComplianceModule {}

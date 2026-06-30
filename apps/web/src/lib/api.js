@@ -310,6 +310,15 @@ export const analyticsApi = {
   resetDashboard: (schoolId) => api.delete(`/schools/${schoolId}/dashboard`),
 }
 
+// ── Phase 1 (Attention Briefing): the prioritised "things that need attention"
+// list for one period. Read-only; same read-auth as analyticsApi.metrics. The
+// server returns a ranked AttentionItem[] + a summary (and a graceful "get
+// started" item when the period has no snapshot — always a 200).
+export const briefingApi = {
+  get: (schoolId, periodId) =>
+    api.get(`/schools/${schoolId}/periods/${periodId}/briefing`),
+}
+
 // ── Phase 1 (Board Report): NBOA-style finance-committee packet ──────────────
 // ONE server-side "assemble" GET returns a fully-computed BoardReportBundle; the
 // web layer does ZERO financial math. PUT saves only editable state (per-line

@@ -6,6 +6,7 @@ import { EntitlementGuard } from '../billing/entitlement.guard.js'
 import { METRIC_META } from '@finrep/analytics'
 import { AnalyticsService } from './analytics.service.js'
 import { InsightService } from './insight.service.js'
+import { BriefingService } from './briefing.service.js'
 
 /**
  * Phase 4A analytics reads. Tenant-isolated by RolesGuard (must be an active
@@ -22,6 +23,7 @@ export class AnalyticsController {
   constructor(
     private readonly analytics: AnalyticsService,
     private readonly insights: InsightService,
+    private readonly briefing: BriefingService,
   ) {}
 
   // All metrics for a period (snapshot + prior period for PoP deltas). The
@@ -33,6 +35,19 @@ export class AnalyticsController {
     @Param('periodId') periodId: string,
   ) {
     return this.analytics.metricsForPeriod(schoolId, periodId)
+  }
+
+  // The prioritised attention briefing for a period: a RANKED, explainable list
+  // of off-band metrics + readiness gaps + data gaps synthesised from the existing
+  // services (no recompute). Read-auth = any active member, same as /metrics.
+  // Graceful: a period with no snapshot returns a single "get started" item (200).
+  @Get('periods/:periodId/briefing')
+  @Roles('owner', 'accountant', 'viewer')
+  briefingForPeriod(
+    @Param('schoolId') schoolId: string,
+    @Param('periodId') periodId: string,
+  ) {
+    return this.briefing.getBriefing(schoolId, periodId)
   }
 
   // The static metric catalog metadata (formula/description/bands). No recompute.
