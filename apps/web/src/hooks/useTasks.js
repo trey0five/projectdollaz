@@ -91,6 +91,17 @@ export function useTasks(schoolId, filters = {}, canEdit = false) {
     [schoolId, load],
   )
 
+  // Penny confirm-then-create: a create_task apply broadcasts 'penny:data-changed'
+  // with key 'tasks'; re-pull the list so a task Penny just created shows up here
+  // without a manual reload (mirrors AnalyticsDashboard / CAP section listeners).
+  useEffect(() => {
+    const onDataChanged = (e) => {
+      if (e?.detail?.key === 'tasks') refresh()
+    }
+    window.addEventListener('penny:data-changed', onDataChanged)
+    return () => window.removeEventListener('penny:data-changed', onDataChanged)
+  }, [refresh])
+
   const create = useCallback(
     async (body) => {
       if (!schoolId) return

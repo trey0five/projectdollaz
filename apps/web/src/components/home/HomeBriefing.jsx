@@ -8,8 +8,8 @@
 // items it renders nothing so a briefing hiccup never blocks the vitals below.
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion, useReducedMotion } from 'framer-motion'
-import { Link } from 'react-router-dom'
-import { AlertTriangle, AlertCircle, Info, ArrowRight, Sparkles } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { AlertTriangle, AlertCircle, Info, ArrowRight, Sparkles, ListPlus } from 'lucide-react'
 import { LensIndicator, LensSwitcher } from './LensControls.jsx'
 
 function greeting() {
@@ -79,6 +79,17 @@ const CTA_LABEL = {
   data: 'Go to Data hub',
 }
 
+// Map a briefing item.source (metric|compliance|data|governance|workflow) to a
+// valid TASK_SOURCE_TYPE (manual|policy|metric|compliance). governance→policy,
+// data/workflow→manual — otherwise the create-task DTO @IsIn would 400.
+const TASK_SOURCE_MAP = {
+  metric: 'metric',
+  compliance: 'compliance',
+  governance: 'policy',
+  data: 'manual',
+  workflow: 'manual',
+}
+
 // Scope × Lens: the board (governance voice) is read-only — never hand it an
 // imperative "go fix" CTA. When item.voice==='governance' the CTA reads as a
 // review prompt; otherwise fall back to the source-based operator label.
@@ -94,46 +105,89 @@ function fmtDue(iso) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-function BriefingItemCard({ item, index, reduce }) {
+function BriefingItemCard({ item, index, reduce, canEdit }) {
   const theme = SEVERITY[item.severity] ?? SEVERITY.info
   const { Icon } = theme
+  const navigate = useNavigate()
+
+  // "Create task" — the actionable pairing: turn a briefing attention item into a
+  // pre-filled, assignable task on /tasks (mirrors GovernancePage.createTaskFromPolicy).
+  // Rendered as a sibling of the card Link (never nested inside the <a>) so it does
+  // NOT trigger the card's navigation. Due date is seeded ONLY when the item's own
+  // dueDate is still in the FUTURE (a fresh task's due date is a new decision, so a
+  // past date would open the modal already-overdue) — otherwise blank.
+  const createTaskFromItem = () => {
+    const today = new Date().toISOString().slice(0, 10)
+    const futureDue = item.dueDate && item.dueDate > today ? item.dueDate : ''
+    navigate('/tasks', {
+      state: {
+        prefill: {
+          title: `Follow up: ${item.title}`,
+          sourceType: TASK_SOURCE_MAP[item.source] ?? 'manual',
+          sourceRef: item.id ?? '',
+          dueDate: futureDue,
+        },
+      },
+    })
+  }
+
+  // Governance items address a board/read-only audience — frame the label as a
+  // review prompt, not an imperative (mirrors ctaLabel's governance handling).
+  const taskLabel = item.voice === 'governance' ? 'Create review task' : 'Create task'
+
   return (
     <motion.div
       initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, delay: reduce ? 0 : index * 0.05 }}
+      className={`group overflow-hidden rounded-2xl border ${theme.border} ${theme.tint} shadow-card transition-all hover:shadow-glow`}
     >
-      <Link
-        to={item.link}
-        className={`group flex items-stretch gap-0 overflow-hidden rounded-2xl border ${theme.border} ${theme.tint} shadow-card transition-all hover:shadow-glow`}
-      >
+      <div className="flex items-stretch gap-0">
         <span className={`w-1.5 shrink-0 ${theme.rail}`} aria-hidden />
-        <div className="flex flex-1 items-start gap-4 px-5 py-4">
-          <span
-            className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${theme.iconWrap}`}
-          >
-            <Icon size={20} />
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="font-semibold text-navy">{item.title}</p>
-              {item.dueDate && (
-                <span className="rounded-full bg-navy/10 px-2 py-0.5 text-[12px] font-semibold text-navy">
-                  Due {fmtDue(item.dueDate)}
-                </span>
-              )}
-            </div>
-            <p className="mt-1 text-[15px] leading-relaxed text-muted">{item.why}</p>
-            <span className="mt-2 inline-flex items-center gap-1.5 text-[13px] font-bold uppercase tracking-[0.06em] text-gold">
-              {ctaLabel(item)}
-              <ArrowRight
-                size={14}
-                className="transition-transform group-hover:translate-x-0.5"
-              />
+        <div className="flex flex-1 flex-col">
+          <Link to={item.link} className="flex items-start gap-4 px-5 pt-4 pb-2">
+            <span
+              className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${theme.iconWrap}`}
+            >
+              <Icon size={20} />
             </span>
-          </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="font-semibold text-navy">{item.title}</p>
+                {item.dueDate && (
+                  <span className="rounded-full bg-navy/10 px-2 py-0.5 text-[12px] font-semibold text-navy">
+                    Due {fmtDue(item.dueDate)}
+                  </span>
+                )}
+              </div>
+              <p className="mt-1 text-[15px] leading-relaxed text-muted">{item.why}</p>
+              <span className="mt-2 inline-flex items-center gap-1.5 text-[13px] font-bold uppercase tracking-[0.06em] text-gold">
+                {ctaLabel(item)}
+                <ArrowRight
+                  size={14}
+                  className="transition-transform group-hover:translate-x-0.5"
+                />
+              </span>
+            </div>
+          </Link>
+          {/* Secondary action row — kept OUTSIDE the card Link (nested interactive in
+              an <a> is invalid) so "Create task" never triggers the card nav. */}
+          {canEdit && (
+            <div className="flex items-center justify-end px-5 pb-3">
+              <button
+                type="button"
+                onClick={createTaskFromItem}
+                aria-label={`${taskLabel} for ${item.title}`}
+                title="Turn this into an assignable task"
+                className="inline-flex items-center gap-1.5 rounded-full border border-navy/15 bg-white/60 px-3 py-1 text-[12px] font-semibold text-navy/60 transition-colors hover:border-gold/50 hover:text-gold focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50"
+              >
+                <ListPlus size={13} />
+                {taskLabel}
+              </button>
+            </div>
+          )}
         </div>
-      </Link>
+      </div>
     </motion.div>
   )
 }
@@ -162,6 +216,7 @@ export default function HomeBriefing({
   lens = null,
   availableLenses = [],
   onLensChange,
+  canEdit = false,
 }) {
   const reduce = useReducedMotion()
   const total = summary?.total ?? items.length
@@ -232,7 +287,7 @@ export default function HomeBriefing({
       </div>
       <div className="space-y-3">
         {items.map((item, i) => (
-          <BriefingItemCard key={item.id} item={item} index={i} reduce={reduce} />
+          <BriefingItemCard key={item.id} item={item} index={i} reduce={reduce} canEdit={canEdit} />
         ))}
       </div>
     </section>

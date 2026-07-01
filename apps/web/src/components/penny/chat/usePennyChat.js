@@ -125,6 +125,10 @@ export default function usePennyChat() {
       try {
         await assistantApi.apply(activeIdRef.current, action) // UNCHANGED apply path
         setProposalStatus(mi, pi, 'applied')
+        // A confirmed create_task now exists server-side — broadcast so an open
+        // Tasks page (useTasks) refetches. The autonomous 'applied' SSE path already
+        // refreshes via ev.refresh; the proposal/confirm path needs this explicitly.
+        if (action?.kind === 'create_task') pennyRef.current?.agentRefresh?.(['tasks'])
       } catch {
         setProposalStatus(mi, pi, 'error')
       }

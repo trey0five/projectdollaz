@@ -10,6 +10,7 @@ export class ApplyActionDto {
     'apply_forecast',
     'set_feeder_enrollment',
     'import_trial_balance',
+    'create_task',
   ])
   kind!:
     | 'set_budget'
@@ -19,6 +20,7 @@ export class ApplyActionDto {
     | 'apply_forecast'
     | 'set_feeder_enrollment'
     | 'import_trial_balance'
+    | 'create_task'
 
   @IsString()
   periodId!: string

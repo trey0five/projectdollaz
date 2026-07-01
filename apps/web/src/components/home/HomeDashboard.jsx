@@ -301,6 +301,7 @@ export default function HomeDashboard() {
         lens={briefingLens}
         availableLenses={briefingAvailableLenses}
         onLensChange={setPreviewLens}
+        canEdit={activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'}
       />
 
       <DataHubBanner />

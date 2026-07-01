@@ -3,7 +3,7 @@
 // reconciliation, budget, trends) and can call render_chart to visualize them; we
 // execute each tool, feed results back, and repeat until it answers. Tenant-scoped
 // to the school (the controller's RolesGuard) and the period (getOwnedPeriod).
-import { Injectable, Logger } from '@nestjs/common'
+import { BadRequestException, Injectable, Logger } from '@nestjs/common'
 import type { User } from '@finrep/db'
 import type { NormalizedRow } from '@finrep/ingestion'
 import {
@@ -29,6 +29,7 @@ import { CorrectiveActionService } from '../compliance/corrective-action.service
 import { BoardReportService } from '../board-report/board-report.service.js'
 import { ImportsService } from '../imports/imports.service.js'
 import { StatementsService } from '../statements/statements.service.js'
+import { TasksService } from '../workflow/tasks.service.js'
 import { AssistantClient } from './assistant.client.js'
 import {
   AssistantFilesService,
@@ -85,6 +86,7 @@ const REFRESH: Record<ProposedAction['kind'], RefreshKey[]> = {
   set_explanation: ['boardReport'],
   draft_cap_entry: ['cap'],
   import_trial_balance: ['dataStatus', 'metrics'],
+  create_task: ['tasks'],
 }
 
 // Tools that perform a write. Membership UNCHANGED — but the meaning flips from
@@ -99,6 +101,13 @@ const WRITE_TOOLS = new Set([
   'propose_import_trial_balance',
 ])
 
+// Tools that must NOT auto-apply — they ride the confirm-then-create PROPOSAL path
+// (buildProposal → onProposal → user confirms → /apply → applyAction). create_task
+// deliberately diverges from the autonomous WRITE_TOOLS above: the slice forbids
+// silently creating a task the user didn't explicitly confirm. Same owner/accountant
+// gate as WRITE_TOOLS applies before a proposal is even offered.
+const CONFIRM_TOOLS = new Set(['create_task'])
+
 export interface ProposedAction {
   kind:
     | 'set_budget'
@@ -108,6 +117,7 @@ export interface ProposedAction {
     | 'apply_forecast'
     | 'set_feeder_enrollment'
     | 'import_trial_balance'
+    | 'create_task'
   periodId: string
   summary: string
   payload: Record<string, unknown>
@@ -123,6 +133,19 @@ const DRIVER_FIELDS = [
   'inflationPct',
   'overrides',
 ] as const
+
+// The 4 valid TASK_SOURCE_TYPES (mirror create-task.dto.ts). The briefing's own
+// item.source can also be 'governance'/'workflow', which are NOT valid here — those
+// must be clamped to 'manual' (or the caller maps governance→policy) before create,
+// or the CreateTaskDto @IsIn/forbidNonWhitelisted pipe would 400.
+const TASK_SOURCE_TYPES = ['manual', 'policy', 'metric', 'compliance'] as const
+type TaskSourceType = (typeof TASK_SOURCE_TYPES)[number]
+
+function clampTaskSourceType(v: unknown): TaskSourceType {
+  return typeof v === 'string' && (TASK_SOURCE_TYPES as readonly string[]).includes(v)
+    ? (v as TaskSourceType)
+    : 'manual'
+}
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return !!v && typeof v === 'object' && !Array.isArray(v)
@@ -192,6 +215,7 @@ type RefreshKey =
   | 'cap'
   | 'dataStatus'
   | 'metrics'
+  | 'tasks'
 
 /** A flat label/value row on the "what I changed" card. */
 export interface AppliedDetail {
@@ -278,6 +302,7 @@ export class AssistantService {
     private readonly files: AssistantFilesService,
     private readonly imports: ImportsService,
     private readonly statements: StatementsService,
+    private readonly tasks: TasksService,
   ) {}
 
   isConfigured(): boolean {
@@ -515,6 +540,28 @@ export class AssistantService {
         return { walkthroughStarted: true, steps: steps.length }
       }
 
+      if (CONFIRM_TOOLS.has(name)) {
+        // Same fail-closed owner/accountant gate as the autonomous writes — a
+        // viewer can't even be OFFERED a task proposal as actionable.
+        if (ctx.role !== 'owner' && ctx.role !== 'accountant') {
+          return {
+            error: "You don't have edit access, so I can't create a task — ask an owner or accountant.",
+          }
+        }
+        if (!ctx.user) {
+          throw new Error('No authenticated user in context — cannot propose this change.')
+        }
+        // Confirm-then-create: emit a proposal for the user to confirm; the REAL
+        // create happens later in applyAction (via /assistant/apply). NO mutation here.
+        const action = await this.buildProposal(name, args, ctx)
+        sinks.onProposal(action)
+        return {
+          proposed: true,
+          summary: action.summary,
+          note: 'Proposed a task — tell the user what it will be and that they must CONFIRM it before it is created. Do not claim it exists yet.',
+        }
+      }
+
       if (WRITE_TOOLS.has(name)) {
         // FAIL-CLOSED: only owners/accountants may write. A null/unknown role (e.g.
         // membership not resolved) must NOT fall through to an autonomous write.
@@ -583,6 +630,9 @@ export class AssistantService {
   ): Promise<ProposedAction> {
     if (name === 'propose_import_trial_balance') {
       return this.buildImportProposal(args, ctx)
+    }
+    if (name === 'create_task') {
+      return this.buildTaskProposal(args, ctx)
     }
     const periodId = await this.resolvePeriod(args, ctx)
     if (name === 'set_budget') {
@@ -751,6 +801,86 @@ export class AssistantService {
     }
   }
 
+  /**
+   * Build a confirmable create_task proposal (NO mutation). Tasks are school-scoped,
+   * NOT period-scoped, so periodId is a non-semantic placeholder (ctx.periodId ?? '')
+   * that applyAction ignores — ProposedAction.periodId is required, so we carry the
+   * on-screen period as a harmless hint (same pattern as buildImportProposal when the
+   * period is unknown). The RAW assignee string is carried UNRESOLVED; it is resolved
+   * against live membership at APPLY time (mirroring how every write re-validates its
+   * untrusted payload at apply, since a forged /apply can hit applyAction directly).
+   */
+  private buildTaskProposal(args: Record<string, unknown>, ctx: Ctx): ProposedAction {
+    const title = typeof args.title === 'string' ? args.title.trim().slice(0, 200) : ''
+    if (!title) throw new Error('create_task needs a title.')
+    const assignee =
+      typeof args.assignee === 'string' && args.assignee.trim() ? args.assignee.trim() : undefined
+    const dueDate =
+      typeof args.dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(args.dueDate)
+        ? args.dueDate
+        : undefined
+    const priority = ['low', 'normal', 'high'].includes(String(args.priority))
+      ? (args.priority as 'low' | 'normal' | 'high')
+      : undefined
+    const sourceType = clampTaskSourceType(args.sourceType)
+    const sourceRef =
+      typeof args.sourceRef === 'string' && args.sourceRef.trim()
+        ? args.sourceRef.trim().slice(0, 200)
+        : undefined
+    const who = assignee ? (assignee.toLowerCase() === 'me' ? 'you' : assignee) : 'no one yet'
+    const bits = [`assign to ${who}`]
+    if (dueDate) bits.push(`due ${dueDate}`)
+    if (priority && priority !== 'normal') bits.push(`${priority} priority`)
+    return {
+      kind: 'create_task',
+      periodId: ctx.periodId ?? '',
+      summary: `Create task: “${title}” (${bits.join(', ')}).`,
+      payload: {
+        title,
+        ...(assignee ? { assignee } : {}),
+        ...(dueDate ? { dueDate } : {}),
+        ...(priority ? { priority } : {}),
+        sourceType,
+        ...(sourceRef ? { sourceRef } : {}),
+      },
+    }
+  }
+
+  /**
+   * Resolve an assignee string to an ACTIVE-member userId of THIS school, or null.
+   * "me" → the caller; an email → the active member with that email (case-insensitive)
+   * or a clear error; omitted/empty → null (unassigned). The membership query is
+   * scoped to schoolId, so a matching email in ANOTHER school is invisible — a
+   * cross-tenant assignee is impossible and never silently falls back to a wrong user.
+   */
+  private async resolveAssignee(
+    schoolId: string,
+    user: User,
+    assignee: unknown,
+  ): Promise<string | null> {
+    if (typeof assignee !== 'string') return null
+    const a = assignee.trim()
+    if (!a) return null
+    if (a.toLowerCase() === 'me') return user.id
+    const m = await this.prisma.membership.findFirst({
+      where: {
+        schoolId,
+        status: 'active',
+        user: { is: { email: { equals: a, mode: 'insensitive' } } },
+      },
+    })
+    if (!m) {
+      // A 4xx (not a 500): an unknown/cross-school email is a user-correctable
+      // input, and the message must surface to the FE (a bare Error → opaque 500).
+      // Tenant-safe: the membership query is scoped to THIS school, so a real user
+      // in another school matches nothing here → same clear error, never assigned.
+      throw new BadRequestException(
+        `No active member of this school has the email “${a}”. Ask an owner to invite them first, or leave the task unassigned.`,
+      )
+    }
+    return m.userId
+  }
+
   /** Pick a sane ISO periodEndDate from metadata, else derive FL June-30 from FY, else default. */
   private resolvePeriodEndDate(periodEndDate?: string, fiscalYear?: number): string {
     if (periodEndDate && /^\d{4}-\d{2}-\d{2}$/.test(periodEndDate)) return periodEndDate
@@ -904,6 +1034,37 @@ export class AssistantService {
         { feederEnrollmentByGrade: feeder } as unknown as Parameters<
           OperationalService['upsert']
         >[2],
+        userId,
+      )
+      return { applied: true, summary: action.summary }
+    }
+    if (action.kind === 'create_task') {
+      // Untrusted payload (a forged /apply can hit this directly) — re-derive and
+      // re-validate every field, resolve the assignee to an active member (or null),
+      // and let TasksService.create RE-CHECK membership as defense in depth.
+      const title = typeof p.title === 'string' ? p.title.trim().slice(0, 200) : ''
+      if (!title) throw new Error('A task needs a title.')
+      const assigneeUserId = await this.resolveAssignee(schoolId, user, p.assignee)
+      const dueDate =
+        typeof p.dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(p.dueDate) ? p.dueDate : undefined
+      const priority = ['low', 'normal', 'high'].includes(String(p.priority))
+        ? (p.priority as 'low' | 'normal' | 'high')
+        : undefined
+      const sourceType = clampTaskSourceType(p.sourceType)
+      const sourceRef =
+        typeof p.sourceRef === 'string' && p.sourceRef.trim()
+          ? p.sourceRef.trim().slice(0, 200)
+          : undefined
+      await this.tasks.create(
+        schoolId,
+        {
+          title,
+          ...(assigneeUserId ? { assigneeUserId } : {}),
+          ...(dueDate ? { dueDate } : {}),
+          ...(priority ? { priority } : {}),
+          sourceType,
+          ...(sourceRef ? { sourceRef } : {}),
+        },
         userId,
       )
       return { applied: true, summary: action.summary }
@@ -1065,7 +1226,14 @@ export class AssistantService {
       'after each one, briefly state EXACTLY what you changed: set_budget (set a budget figure), ' +
       'apply_driver_budget (build the budget from enrollment / tuition / staffing assumptions — provide ONLY ' +
       'the levers the user mentions; the rest keep their current values), and draft_cap_entry (fill a ' +
-      'corrective-action-plan entry). For the board report (finance-committee packet) use get_board_report ' +
+      'corrective-action-plan entry). create_task is DIFFERENT — it PROPOSES a new workflow task for the ' +
+      'user to CONFIRM before it is created (it does NOT apply immediately). Use it when the user asks to ' +
+      'create or assign a task, or to turn a briefing / governance attention item into one (e.g. "make a task ' +
+      'for the chair to review that overdue policy"): pull the title and source (sourceType/sourceRef) from the ' +
+      'referenced item, accept an assignee ("me" or a school member’s email — it must be an active member of ' +
+      'this school) and a due date (only if the user states one — never invent a due date), and never claim the ' +
+      'task exists until the user confirms. Offering create_task is a natural way to act on a briefing item. ' +
+      'For the board report (finance-committee packet) use get_board_report ' +
       '(its settings, MD&A, budget-vs-actual variances and key indicators) and generate_board_narrative ' +
       '(draft the MD&A narrative — returns text, does not save). set_explanation applies a per-line variance ' +
       'explanation/comment (provide categoryType + categoryKey + text). ' +

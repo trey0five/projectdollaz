@@ -428,6 +428,45 @@ export const TOOL_SCHEMAS = [
   {
     type: 'function',
     function: {
+      name: 'create_task',
+      description:
+        'PROPOSE a new workflow Task for the user to CONFIRM before it is created (like drafting a corrective action — this does NOT create the task itself; the user must confirm). Use when the user asks to create or assign a task, or to "turn this into a task / make a task for the chair to review this" off a briefing or governance attention item — pull the title and source from the referenced item. assignee is "me" (the current user), a school member’s email address, or omitted (unassigned); it can ONLY be an active member of this school. dueDate is yyyy-mm-dd — only pass one the user actually stated; never invent one. Task, not period-scoped.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: {
+            type: 'string',
+            description: 'Short task title, e.g. "Review overdue conflict-of-interest policy".',
+          },
+          dueDate: {
+            type: 'string',
+            description: 'YYYY-MM-DD; when the task is due. Omit unless the user stated one.',
+          },
+          assignee: {
+            type: 'string',
+            description:
+              'Who to assign to: "me" for the current user, or a school member’s email address. Omit to leave unassigned.',
+          },
+          priority: { type: 'string', enum: ['low', 'normal', 'high'] },
+          sourceType: {
+            type: 'string',
+            enum: ['manual', 'policy', 'metric', 'compliance'],
+            description:
+              'The kind of item this task came from (from a briefing/governance item). Defaults to manual.',
+          },
+          sourceRef: {
+            type: 'string',
+            description:
+              'The id of the source item (e.g. the policy id or briefing item id) for the deep-link back.',
+          },
+        },
+        required: ['title'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'render_chart',
       description:
         'Draw a chart for the user. Call this to visualize numbers you have already fetched (a trend, a comparison, a breakdown). Pick the chart type that fits and give a clear title.',
@@ -603,6 +642,7 @@ export const TOOL_LABELS: Record<string, string> = {
   set_budget: 'Setting the budget…',
   apply_driver_budget: 'Building the driver budget…',
   draft_cap_entry: 'Logging a corrective action…',
+  create_task: 'Drafting a task…',
   get_board_report: 'Reading the board report…',
   generate_board_narrative: 'Drafting the board narrative…',
   set_explanation: 'Saving the explanation…',

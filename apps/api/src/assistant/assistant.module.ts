@@ -7,6 +7,7 @@ import { ComplianceModule } from '../compliance/compliance.module.js'
 import { BoardReportModule } from '../board-report/board-report.module.js'
 import { ImportsModule } from '../imports/imports.module.js'
 import { StatementsModule } from '../statements/statements.module.js'
+import { WorkflowModule } from '../workflow/workflow.module.js'
 import { AssistantController } from './assistant.controller.js'
 import { AssistantService } from './assistant.service.js'
 import { AssistantClient } from './assistant.client.js'
@@ -28,6 +29,7 @@ import { AssistantFilesService } from './assistant-files.service.js'
     BoardReportModule,
     ImportsModule,
     StatementsModule,
+    WorkflowModule,
   ],
   controllers: [AssistantController],
   providers: [AssistantService, AssistantClient, AssistantTtsService, AssistantFilesService],
