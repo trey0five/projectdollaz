@@ -367,6 +367,18 @@ export const boardReportApi = {
     api.post(`/schools/${schoolId}/periods/${periodId}/board-report/mda`, body),
 }
 
+// ── Phase 3 Governance v1: the POLICY REGISTER ───────────────────────────────
+// School-scoped (NOT period-scoped) — a standing list of policies + review cycle.
+// Gated by the 'governance' module: an entitled-but-unlicensed school gets a 402
+// { code:'MODULE_NOT_LICENSED', module:'governance' } (surface via isModuleNotLicensed).
+export const policiesApi = {
+  list: (schoolId) => api.get(`/schools/${schoolId}/policies`),
+  create: (schoolId, body) => api.post(`/schools/${schoolId}/policies`, body),
+  update: (schoolId, policyId, body) =>
+    api.patch(`/schools/${schoolId}/policies/${policyId}`, body),
+  remove: (schoolId, policyId) => api.delete(`/schools/${schoolId}/policies/${policyId}`),
+}
+
 // ── Phase 3: supporting schedules (Capital Budget + Cash & Investments) ──────
 // Period-scoped, user-maintained JSON-array schedules. GET never 404s on a
 // missing row (returns { items: [] } / { accounts: [] }, updatedAt: null). PUT

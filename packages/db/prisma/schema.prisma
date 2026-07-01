@@ -119,6 +119,7 @@ model School {
   cashSchedules      CashSchedule[]
   campaignSchedules  CampaignSchedule[]
   monthlySnapshots   MonthlySnapshot[]
+  policies           Policy[]
 
   @@index([organizationId])
   @@map("schools")
@@ -192,6 +193,7 @@ model User {
   cashSchedulesUpdated    CashSchedule[]    @relation("CashScheduleUpdatedBy")
   campaignSchedulesUpdated CampaignSchedule[] @relation("CampaignScheduleUpdatedBy")
   monthlySnapshotsUploaded MonthlySnapshot[]  @relation("MonthlySnapshotUploadedBy")
+  policyUpdates            Policy[]           @relation("PolicyUpdatedBy")
 
   @@index([email])
   @@map("users")
@@ -789,4 +791,43 @@ model CampaignSchedule {
   @@index([schoolId])
   @@index([fiscalPeriodId])
   @@map("campaign_schedules")
+}
+
+// ── Phase 3 Governance v1 — the POLICY REGISTER ──────────────────────────────
+//
+// One row per policy a school tracks (board/finance/HR/safety/etc.), each with a
+// review cadence. SCHOOL-scoped, NOT period-scoped — a policy register is a
+// STANDING list (unlike BoardReport/CAP which are per (school, fiscalPeriod)).
+// That non-period shape is deliberate: it makes Governance the first briefing
+// source driven by a state/deadline (a review cycle) rather than a period metric.
+//
+// Review status (current | due-soon | overdue | unknown) is COMPUTED from the
+// three date/interval inputs by the pure @finrep/compliance review-status
+// function — NEVER stored, so it can never drift. Both dates are nullable so a
+// half-entered policy computes to an honest 'unknown' (no fabricated review date).
+//
+// Self-contained: v1 has NO committee/board/meeting/minutes FKs (deferred) so
+// those later governance slices are purely additive.
+model Policy {
+  id                   String    @id @default(uuid()) @db.Uuid
+  schoolId             String    @map("school_id") @db.Uuid
+  title                String
+  // Free text v1 (e.g. 'Financial','HR','Safety','Governance') — schools name
+  // their own categories; bounded only by the DTO @MaxLength, not an enum.
+  category             String
+  status               String    @default("active") // 'active' | 'draft' | 'retired' (lifecycle)
+  owner                String?   // responsible party/role, free text, nullable
+  adoptedDate          DateTime? @map("adopted_date") @db.Date
+  lastReviewedDate     DateTime? @map("last_reviewed_date") @db.Date
+  reviewIntervalMonths Int       @default(12) @map("review_interval_months")
+  notes                String?
+  updatedByUserId      String?   @map("updated_by_user_id") @db.Uuid
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  school        School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  updatedByUser User?  @relation("PolicyUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([schoolId])
+  @@map("policies")
 }

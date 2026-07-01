@@ -5,6 +5,7 @@ import { BillingModule } from '../billing/billing.module.js'
 import { AuditModule } from '../common/audit/audit.module.js'
 import { MappingModule } from '../mapping/mapping.module.js'
 import { ComplianceModule } from '../compliance/compliance.module.js'
+import { GovernanceModule } from '../governance/governance.module.js'
 import { AnalyticsController } from './analytics.controller.js'
 import { AnalyticsService } from './analytics.service.js'
 import { InsightService } from './insight.service.js'
@@ -33,7 +34,18 @@ import { AssistantClient } from '../assistant/assistant.client.js'
  * tenant-checked period lookups. PrismaService is global.
  */
 @Module({
-  imports: [AuthModule, PeriodsModule, BillingModule, AuditModule, MappingModule, ComplianceModule],
+  // GovernanceModule exports PoliciesService for BriefingService's 'governance'
+  // STEP. Edge is analytics → governance ONLY (governance imports no analytics) —
+  // acyclic. BillingModule already here supplies BillingService for the gate.
+  imports: [
+    AuthModule,
+    PeriodsModule,
+    BillingModule,
+    AuditModule,
+    MappingModule,
+    ComplianceModule,
+    GovernanceModule,
+  ],
   controllers: [
     AnalyticsController,
     OperationalController,

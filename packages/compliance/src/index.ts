@@ -74,3 +74,11 @@ export type {
   ChecklistSection,
 } from './checklist.js'
 export { buildYearEndChecklist, SECTION_TITLES } from './checklist.js'
+
+// Phase 3 Governance v1 — pure policy review-status (injectable now)
+export type { ReviewStatus, PolicyReviewInput, PolicyReviewResult } from './review-status.js'
+export {
+  computeReviewStatus,
+  DUE_SOON_DAYS,
+  BADLY_OVERDUE_DAYS,
+} from './review-status.js'

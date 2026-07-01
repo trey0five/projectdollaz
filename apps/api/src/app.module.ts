@@ -21,6 +21,7 @@ import { BoardReportModule } from './board-report/board-report.module.js'
 import { SchedulesModule } from './schedules/schedules.module.js'
 import { AssistantModule } from './assistant/assistant.module.js'
 import { DataHubModule } from './data-hub/data-hub.module.js'
+import { GovernanceModule } from './governance/governance.module.js'
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { DataHubModule } from './data-hub/data-hub.module.js'
     SchedulesModule,
     AssistantModule,
     DataHubModule,
+    GovernanceModule,
   ],
 })
 export class AppModule {}

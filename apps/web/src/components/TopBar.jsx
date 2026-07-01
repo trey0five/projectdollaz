@@ -10,16 +10,19 @@ import {
   LayoutDashboard,
   Wallet,
   FileBarChart2,
+  Landmark,
   Database,
   Menu,
   X,
 } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
+import { useBilling } from '../context/BillingContext.jsx'
 import SchoolSwitcher from './SchoolSwitcher.jsx'
 
 export default function TopBar() {
   const { logout } = useAuth()
+  const { hasModule } = useBilling()
   const location = useLocation()
   const path = location.pathname
   const onHome = path === '/'
@@ -32,6 +35,7 @@ export default function TopBar() {
   const onBudget = path.startsWith('/budget')
   const onReports = path.startsWith('/reports')
   const onReadiness = path.startsWith('/readiness')
+  const onGovernance = path.startsWith('/governance')
 
   // Mobile drawer (<lg). The old bar crammed 8 icon buttons + switcher + sign-out
   // into one row, which overflowed/looked messy on phones. Below lg we now show a
@@ -83,6 +87,12 @@ export default function TopBar() {
     { to: '/budget', navId: 'nav-budget', label: 'Budget', Icon: Wallet, active: onBudget },
     { to: '/reports', navId: 'nav-reports', label: 'Reports', Icon: FileBarChart2, active: onReports },
     { to: '/readiness', navId: 'nav-readiness', label: 'Readiness', Icon: ShieldCheck, active: onReadiness },
+    // Gated by the 'governance' module: hidden for a finance-only school, shown for
+    // a trial (all-access) school. hasModule defaults to true while billing loads,
+    // so the item never flashes a gate pre-load.
+    ...(hasModule('governance')
+      ? [{ to: '/governance', navId: 'nav-governance', label: 'Governance', Icon: Landmark, active: onGovernance }]
+      : []),
     { to: '/settings', navId: 'nav-settings', label: 'Settings', Icon: Settings, active: onSettings },
   ]
 

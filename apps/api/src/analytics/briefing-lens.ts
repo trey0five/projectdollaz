@@ -36,7 +36,12 @@ export const SEV_RANK: Record<AttentionSeverity, number> = { critical: 0, warn: 
 /** The legacy/default source tiebreak (data-blocking first, then compliance gaps,
  *  then metric watch-outs). Kept here so the accountant lens === today's shipped
  *  ranking byte-for-byte and existing consumers are unaffected. */
-export const SOURCE_RANK: Record<AttentionSource, number> = { data: 0, compliance: 1, metric: 2 }
+export const SOURCE_RANK: Record<AttentionSource, number> = {
+  data: 0,
+  compliance: 1,
+  governance: 2,
+  metric: 3,
+}
 
 /** Fixed sub-order for the non-metric items so the list is deterministic. */
 export const COMPLIANCE_ORDER = [
@@ -45,6 +50,10 @@ export const COMPLIANCE_ORDER = [
   'compliance:reportable',
   'compliance:cap-open',
   'compliance:checklist',
+  // Governance policy-review items (Phase 3). Placed after the compliance items;
+  // overdue before due-soon so a same-severity tie is curated, not id-arbitrary.
+  'governance:policies-overdue',
+  'governance:policies-due-soon',
   'data:no-snapshot',
   'data:unmapped',
 ]
@@ -55,10 +64,13 @@ export const COMPLIANCE_ORDER = [
 // operator (accountant) keeps today's data→compliance→metric "fix the data
 // first" order — which is EXACTLY SOURCE_RANK, so accountant output is byte-
 // identical to the pre-lens shipped ordering (back-compat, pinned by snapshot).
+// Governance is the board's own domain, so it sits HIGH for owner/viewer (right
+// after metric) and mid for the accountant (== SOURCE_RANK). Governance items are
+// additive — accountant output stays byte-identical for the pre-governance ids.
 const SOURCE_WEIGHT: Record<Lens, Record<AttentionSource, number>> = {
-  owner: { metric: 0, compliance: 1, data: 2 },
-  viewer: { metric: 0, compliance: 1, data: 2 },
-  accountant: { data: 0, compliance: 1, metric: 2 }, // == SOURCE_RANK (today's default)
+  owner: { metric: 0, governance: 1, compliance: 2, data: 3 },
+  viewer: { metric: 0, governance: 1, compliance: 2, data: 3 },
+  accountant: { data: 0, compliance: 1, governance: 2, metric: 3 }, // == SOURCE_RANK
 }
 
 // ── VOICE: per-lens reframing tone (additive metadata, never a value rewrite) ──
@@ -97,6 +109,10 @@ const VIEWER_COMPLIANCE = new Set<string>(['compliance:material'])
 function keepForViewer(item: AttentionItem): boolean {
   if (item.source === 'metric') return true
   if (item.id === 'data:no-snapshot') return true
+  // Governance policy-review IS a board matter — a board member should see overdue/
+  // due-soon policy items. The whys are already governance/outcome-voiced (no "go
+  // reconcile" operator CTA), so they pass through with no VIEWER_REFRAME entry.
+  if (item.source === 'governance') return true
   if (item.source === 'compliance') return VIEWER_COMPLIANCE.has(item.id)
   return false
 }

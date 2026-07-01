@@ -7,6 +7,9 @@ import { ComplianceService } from '../compliance/compliance.service.js'
 import { ChecklistService } from '../compliance/checklist.service.js'
 import { ReconciliationService } from '../compliance/reconciliation.service.js'
 import { CorrectiveActionService } from '../compliance/corrective-action.service.js'
+import { BillingService } from '../billing/billing.service.js'
+import { PoliciesService } from '../governance/policies.service.js'
+import { BADLY_OVERDUE_DAYS, DUE_SOON_DAYS } from '@finrep/compliance'
 import {
   applyLens,
   availableLensesFor,
@@ -29,7 +32,7 @@ import {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type AttentionSeverity = 'critical' | 'warn' | 'info'
-export type AttentionSource = 'metric' | 'compliance' | 'data'
+export type AttentionSource = 'metric' | 'compliance' | 'data' | 'governance'
 
 /** One ranked, explainable thing that needs the user's attention this period. */
 export interface AttentionItem {
@@ -143,6 +146,9 @@ export class BriefingService {
     private readonly checklist: ChecklistService,
     private readonly reconciliation: ReconciliationService,
     private readonly corrective: CorrectiveActionService,
+    // Phase 3 Governance v1 — the module gate + the policy register read.
+    private readonly billing: BillingService,
+    private readonly policies: PoliciesService,
   ) {}
 
   /**
@@ -233,11 +239,16 @@ export class BriefingService {
     // ── STEP 2: compliance / readiness signals (source 'compliance') ─────────
     // Fan out the independent reads in parallel; each fail-softs to null so one
     // failing service never 500s the whole briefing (latency = slowest, not sum).
-    const [compliance, recon, checklist, cap] = await Promise.all([
+    // The governance module gate is independent of the period reads, so it rides
+    // the SAME parallel fan-out (latency = slowest, not sum) rather than adding a
+    // sequential hop before STEP 2.5. Fail CLOSED (throw → not licensed) so a
+    // billing hiccup hides governance items rather than leaking them.
+    const [compliance, recon, checklist, cap, governanceLicensed] = await Promise.all([
       this.compliance.evaluateForPeriod(schoolId, period.id).catch(() => null),
       this.reconciliation.reconcileForPeriod(schoolId, period.id).catch(() => null),
       this.checklist.getChecklist(schoolId, period.id).catch(() => null),
       this.corrective.getPlan(schoolId, period.id).catch(() => null),
+      this.billing.isEntitledForModule(schoolId, 'governance').catch(() => false),
     ])
 
     // 2a — open 2A findings (material -> critical, reportable -> warn).
@@ -328,6 +339,76 @@ export class BriefingService {
         link: '/readiness',
         dueDate: null,
       })
+    }
+
+    // ── STEP 2.5: governance policy-review signals (source 'governance') ──────
+    // The FIRST non-metric, non-compliance briefing source — proving the mechanism
+    // generalises to STATE/DEADLINE-driven items (a policy review cycle), not just
+    // banded metrics or period compliance. School-scoped (NOT period-bound).
+    //
+    // GATED by the per-module entitlement: a finance-only school gets ZERO
+    // governance items here (this is the cross-module briefing moment) while STILL
+    // getting every metric/compliance/data item above — the gate ONLY skips this
+    // push, it never touches STEP 0/1/2. Fail-soft in BOTH directions:
+    //   • isEntitledForModule throws → treat as NOT licensed (fail CLOSED, so a
+    //     billing hiccup hides governance items rather than leaking them), and
+    //   • policies.list throws → skip (fail-soft to null), exactly like STEP 2.
+    // Neither ever 500s the briefing. (governanceLicensed was resolved in the
+    // STEP 2 parallel fan-out above.)
+    if (governanceLicensed) {
+      const policyList = await this.policies
+        .list(schoolId)
+        .then((r) => r.policies)
+        .catch(() => null)
+      if (policyList) {
+        // 'unknown' (missing dates / non-active lifecycle) is an honest non-signal
+        // and emits NOTHING — no false alarm (mirrors recon 'needs_data').
+        const overdue = policyList.filter((p) => p.reviewStatus === 'overdue')
+        const dueSoon = policyList.filter((p) => p.reviewStatus === 'due-soon')
+
+        // ONE AGGREGATE item per band (not one-per-policy) so the briefing stays
+        // digestible and the id set is finite/stable → deterministic ranking.
+        if (overdue.length > 0) {
+          // At least a full quarter past due on ANY overdue policy → critical.
+          const badly = overdue.some((p) => (p.daysUntilDue ?? 0) <= -BADLY_OVERDUE_DAYS)
+          const earliest =
+            overdue
+              .map((p) => p.nextReviewDate)
+              .filter((d): d is string => d !== null)
+              .sort()[0] ?? null
+          const n = overdue.length
+          items.push({
+            id: 'governance:policies-overdue',
+            severity: badly ? 'critical' : 'warn',
+            source: 'governance',
+            title: `${n} polic${n === 1 ? 'y is' : 'ies are'} overdue for review`,
+            why: `${n} board polic${n === 1 ? 'y has' : 'ies have'} passed ${n === 1 ? 'its' : 'their'} scheduled review date${badly ? ' — at least one is more than a quarter overdue' : ''}. Review and record ${n === 1 ? 'it' : 'them'} in the policy register to keep governance current.`,
+            metricKey: null,
+            value: null,
+            link: '/governance',
+            dueDate: earliest,
+          })
+        }
+        if (dueSoon.length > 0) {
+          const earliest =
+            dueSoon
+              .map((p) => p.nextReviewDate)
+              .filter((d): d is string => d !== null)
+              .sort()[0] ?? null
+          const n = dueSoon.length
+          items.push({
+            id: 'governance:policies-due-soon',
+            severity: 'info',
+            source: 'governance',
+            title: `${n} polic${n === 1 ? 'y is' : 'ies are'} due for review soon`,
+            why: `${n} polic${n === 1 ? 'y is' : 'ies are'} within ${DUE_SOON_DAYS} days of ${n === 1 ? 'its' : 'their'} scheduled review. Plan the review before ${n === 1 ? 'it lapses' : 'they lapse'}.`,
+            metricKey: null,
+            value: null,
+            link: '/governance',
+            dueDate: earliest,
+          })
+        }
+      }
     }
 
     // ── STEP 3: lens-shape (rank + filter + reframe) + summarise ─────────────
