@@ -14,6 +14,14 @@ export const netTuitionPerStudent: MetricDef = {
   unit: 'currency',
   category: 'operational',
   goodDirection: 'higher',
+  domain: 'aid',
+  // Org = (Σtuition − Σaid) / Σenrollment — enrollment-weighted mean.
+  scopeAggregation: 'weighted-by-components',
+  inputs: [
+    { key: 'tuition', source: 'financials', label: 'Gross tuition' },
+    { key: 'financialAidTotal', source: 'operational', label: 'Financial aid' },
+    { key: 'enrollment', source: 'operational', label: 'Enrollment' },
+  ],
   basis: '(Gross tuition − financial aid) ÷ enrollment. Tuition rollup line = gross tuition.',
   formula: '(Gross tuition − Financial aid) ÷ Enrollment',
   description: 'Average tuition the school keeps per student after aid is applied.',

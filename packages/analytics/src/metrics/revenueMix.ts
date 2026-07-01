@@ -19,6 +19,11 @@ export const revenueMix: MetricDef = {
   unit: 'share',
   category: 'revenue-mix',
   goodDirection: 'neutral',
+  domain: 'finance',
+  // Org = recompute on summed revenueLines + summed totalRev: each component
+  // share = Σline / Σrev (the correct org donut), value carries Σrev.
+  scopeAggregation: 'recompute-from-components',
+  inputs: [{ key: 'totalRev', source: 'financials', label: 'Total revenue' }],
   basis: 'Each revenue category as a share of total revenue.',
   formula: 'Each revenue category ÷ Total revenue',
   description: 'Where the school’s revenue comes from, by category.',

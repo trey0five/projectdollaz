@@ -7,6 +7,9 @@
 export type {
   MetricUnit,
   MetricCategory,
+  MetricDomain,
+  ScopeAggregation,
+  MetricInputSpec,
   GoodDirection,
   MetricKey,
   PeriodFinancials,
@@ -47,6 +50,7 @@ export {
   METRIC_META,
   isMetricKey,
   getMetric,
+  scopeRuleFor,
 } from './registry.js'
 export type { MetricMeta } from './registry.js'
 
@@ -55,11 +59,25 @@ export {
   computeMetricsForPeriod,
   computeMetricsRecord,
   computeTrend,
+  assembleMetricResult,
 } from './compute.js'
 export type {
   ComputeMetricsArgs,
   TrendSeriesEntry,
 } from './compute.js'
+
+// Org-scope (canonical semantic layer v1) — the generic, registry-driven
+// school→organization rollup: org metric = def.compute(Σ extensive components),
+// never avg(per-school values). Reuses the per-school def.compute + assembler.
+export {
+  computeOrgMetrics,
+  sumFinancials,
+  sumOperational,
+} from './org-compute.js'
+export type {
+  SchoolPeriodInputs,
+  OrgMetricResult,
+} from './org-compute.js'
 
 // Dashboard layout (Phase 4C) — pure layout helpers + the metric-key whitelist
 // reused for API validation so the package and API never drift.

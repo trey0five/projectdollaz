@@ -11,6 +11,13 @@ export const financialAidPerStudent: MetricDef = {
   unit: 'currency',
   category: 'operational',
   goodDirection: 'neutral',
+  domain: 'aid',
+  // Org = Σaid / Σenrollment — enrollment-weighted mean.
+  scopeAggregation: 'weighted-by-components',
+  inputs: [
+    { key: 'financialAidTotal', source: 'operational', label: 'Financial aid' },
+    { key: 'enrollment', source: 'operational', label: 'Enrollment' },
+  ],
   basis: 'Total financial aid ÷ enrollment (all enrolled students).',
   formula: 'Financial aid ÷ Enrollment',
   description: 'Average aid spread across every enrolled student.',

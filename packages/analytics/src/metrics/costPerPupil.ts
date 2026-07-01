@@ -11,6 +11,14 @@ export const costPerPupil: MetricDef = {
   unit: 'currency',
   category: 'operational',
   goodDirection: 'neutral',
+  domain: 'operations',
+  // Org = Σexp / Σenrollment — the enrollment-weighted mean of per-school
+  // cost-per-pupil (recompute path; 'weighted' is the honest label).
+  scopeAggregation: 'weighted-by-components',
+  inputs: [
+    { key: 'totalExp', source: 'financials', label: 'Total expenses' },
+    { key: 'enrollment', source: 'operational', label: 'Enrollment' },
+  ],
   basis: 'Total expenses ÷ enrollment (headcount).',
   formula: 'Total expenses ÷ Enrollment',
   description: 'Average operating cost to educate one enrolled student.',

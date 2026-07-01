@@ -27,6 +27,7 @@ import PeriodSelector from '../components/analytics/PeriodSelector.jsx'
 import BudgetTabs from '../components/budget/BudgetTabs.jsx'
 import OrgRollup from '../components/budget/OrgRollup.jsx'
 import OrgStatements from '../components/budget/OrgStatements.jsx'
+import OrgKpiStrip from '../components/budget/OrgKpiStrip.jsx'
 import OrgBriefing from '../components/budget/OrgBriefing.jsx'
 import BudgetVsActual from '../components/analytics/BudgetVsActual.jsx'
 import BudgetSummary from '../components/budget/BudgetSummary.jsx'
@@ -37,6 +38,7 @@ import {
   useBudget,
   useBudgetRollup,
   useStatementsRollup,
+  useOrgMetrics,
   useOrgBriefing,
 } from '../hooks/useAnalytics.js'
 import { orgsApi } from '../lib/api.js'
@@ -164,6 +166,15 @@ export default function BudgetPage() {
     error: stmtError,
   } = useStatementsRollup(stmtOrgId, fiscalYearStart)
 
+  // Org-scope KPI strip (canonical semantic layer v1) — shares the Consolidated
+  // Statements tab + its FY so the org KPIs and the consolidated totals below them
+  // are computed for the same fiscal year. org metric = formula(Σ components).
+  const {
+    metrics: orgMetrics,
+    loading: orgMetricsLoading,
+    error: orgMetricsError,
+  } = useOrgMetrics(stmtOrgId, fiscalYearStart)
+
   // Organization briefing — only fetched while its tab is active (the heaviest org
   // endpoint: it fans BriefingService.getBriefing out across every reporting
   // school), same FY as the other org views so all org tabs stay on one FY.
@@ -280,6 +291,7 @@ export default function BudgetPage() {
 
   const renderOrgStatements = () => (
     <div key="orgStatements">
+      <OrgKpiStrip metrics={orgMetrics} loading={orgMetricsLoading} error={orgMetricsError} />
       <OrgStatements rollup={stmtRollup} loading={stmtLoading} error={stmtError} />
     </div>
   )

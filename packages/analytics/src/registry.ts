@@ -3,7 +3,14 @@
 // entry here (+ its file + a test). The compute layer (compute.ts) iterates
 // this registry, so new metrics light up across the API automatically.
 // ─────────────────────────────────────────────────────────────
-import type { MetricDef, MetricKey, TargetBands } from './types.js'
+import type {
+  MetricDef,
+  MetricDomain,
+  MetricInputSpec,
+  MetricKey,
+  ScopeAggregation,
+  TargetBands,
+} from './types.js'
 import { DEFAULT_BANDS } from './health.js'
 import { operatingMargin } from './metrics/operatingMargin.js'
 import { daysCashOnHand } from './metrics/daysCashOnHand.js'
@@ -61,6 +68,17 @@ export function getMetric(key: MetricKey): MetricDef {
   return METRIC_REGISTRY[key]
 }
 
+/**
+ * The org-rollup rule for a metric, defaulting an UNDECLARED metric to
+ * 'recompute-from-components' (safe: every current input is extensive). The org
+ * engine calls this so the rollup is fully registry-driven — a new metric rolls
+ * up with no extra code, and a non-extensive metric must opt out via
+ * scopeAggregation:'not-aggregatable'.
+ */
+export function scopeRuleFor(key: MetricKey): ScopeAggregation {
+  return METRIC_REGISTRY[key].scopeAggregation ?? 'recompute-from-components'
+}
+
 /** Static, recompute-free metadata for one metric (drives the drawer + meta API). */
 export interface MetricMeta {
   key: MetricKey
@@ -72,6 +90,15 @@ export interface MetricMeta {
   formula: string
   description: string
   bands?: TargetBands
+  /** Coarse business domain (additive). */
+  domain?: MetricDomain
+  /**
+   * The metric's school→org rollup rule, DEFAULTED to 'recompute-from-components'
+   * here so the catalog always exposes an explicit rule (never undefined).
+   */
+  scopeAggregation: ScopeAggregation
+  /** Declared extensive components the metric consumes (additive). */
+  inputs?: MetricInputSpec[]
 }
 
 /**
@@ -90,5 +117,11 @@ export const METRIC_META: MetricMeta[] = METRIC_KEYS.map((key) => {
     formula: def.formula,
     description: def.description,
     bands: DEFAULT_BANDS[key],
+    // Additive canonical-semantic-layer metadata. scopeAggregation is DEFAULTED so
+    // the catalog always carries an explicit rule; domain/inputs ride along when
+    // declared. Existing FE consumers ignore unknown keys (back-compatible).
+    domain: def.domain,
+    scopeAggregation: scopeRuleFor(key),
+    inputs: def.inputs,
   }
 })

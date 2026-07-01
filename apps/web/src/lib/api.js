@@ -304,6 +304,15 @@ export const analyticsApi = {
     api.get(`/organizations/${orgId}/statements/rollup`, {
       params: fiscalYearStart ? { fiscalYearStart } : {},
     }),
+  // Organization METRICS (canonical semantic layer v1): org-level KPIs computed
+  // as the metric's OWN formula over the SUM of each school's extensive components
+  // (never the average of per-school values) — same MetricResult shape the
+  // per-school dashboard renders, plus which schools contributed. SINGLE call site.
+  // Omit fiscalYearStart entirely (not '') when no FY, to satisfy forbidNonWhitelisted.
+  orgMetrics: (orgId, fiscalYearStart) =>
+    api.get(`/organizations/${orgId}/metrics`, {
+      params: fiscalYearStart ? { fiscalYearStart } : {},
+    }),
   // Organization ATTENTION BRIEFING: per-school attention rolled up
   // across the caller's org for a fiscal year — a ranked, school-attributed
   // cross-school item list + per-school summaries + consolidated counts. SINGLE

@@ -7,6 +7,8 @@
 // ─────────────────────────────────────────────────────────────
 import type { ReportBundle } from '@finrep/engine'
 import type {
+  MetricComputeOutput,
+  MetricDef,
   MetricKey,
   MetricResult,
   MetricTrend,
@@ -17,6 +19,40 @@ import type {
 import { fromBundle } from './adapt.js'
 import { ALL_METRICS, getMetric, METRIC_KEYS } from './registry.js'
 import { bandsFor, healthStatus } from './health.js'
+
+/**
+ * Assemble a full MetricResult from a metric def + its raw compute output (+ an
+ * optional period-over-period delta). The SINGLE place where def metadata, the
+ * target band, and the health status are stitched onto a value — shared by the
+ * per-school path (evaluate, below) AND the org path (org-compute.ts), so the two
+ * surfaces can NEVER drift in how they wrap an identical compute output. Pure.
+ */
+export function assembleMetricResult(
+  def: MetricDef,
+  out: MetricComputeOutput,
+  periodOverPeriodDelta: number | null,
+): MetricResult {
+  const bands = bandsFor(def.key)
+  const status = healthStatus(out.value, bands, out.available)
+  return {
+    key: def.key,
+    label: def.label,
+    unit: def.unit,
+    category: def.category,
+    goodDirection: def.goodDirection,
+    basis: def.basis,
+    formula: def.formula,
+    description: def.description,
+    available: out.available,
+    value: out.value,
+    inputsMissing: out.inputsMissing,
+    periodOverPeriodDelta,
+    status,
+    bands,
+    inputs: out.inputs ?? [],
+    components: out.components,
+  }
+}
 
 /**
  * Run one metric def against current (+ optional prior) financials and assemble
@@ -45,29 +81,9 @@ function evaluate(
     }
   }
 
-  // Phase 4D additive fields: target band -> health status, named inputs,
-  // formula/description metadata. The numeric fields above are unchanged.
-  const bands = bandsFor(def.key)
-  const status = healthStatus(out.value, bands, out.available)
-
-  return {
-    key: def.key,
-    label: def.label,
-    unit: def.unit,
-    category: def.category,
-    goodDirection: def.goodDirection,
-    basis: def.basis,
-    formula: def.formula,
-    description: def.description,
-    available: out.available,
-    value: out.value,
-    inputsMissing: out.inputsMissing,
-    periodOverPeriodDelta,
-    status,
-    bands,
-    inputs: out.inputs ?? [],
-    components: out.components,
-  }
+  // Phase 4D additive fields (band -> status, named inputs, metadata) are stitched
+  // on by the shared assembler so the per-school and org surfaces never drift.
+  return assembleMetricResult(def, out, periodOverPeriodDelta)
 }
 
 export interface ComputeMetricsArgs {

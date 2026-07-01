@@ -9,6 +9,67 @@
 /** A metric's unit, drives UI formatting. */
 export type MetricUnit = 'percent' | 'days' | 'months' | 'ratio' | 'currency' | 'share'
 
+/**
+ * Coarse business domain a metric belongs to — for catalog grouping/filtering.
+ * Additive metadata (distinct from the finer-grained `category` used by the
+ * dashboard layout). Today every metric is finance/operations/aid; declared so
+ * the catalog (GET /metrics/meta) and the org rollup can group metrics honestly.
+ */
+export type MetricDomain = 'finance' | 'operations' | 'aid' | 'enrollment'
+
+/**
+ * How a metric rolls up from a single school to the whole organization. This is
+ * the CANONICAL semantic-layer rule that makes "two people never see disagreeing
+ * numbers" hold across school + org scope.
+ *
+ *   'recompute-from-components' (DEFAULT) — org value = the metric's OWN
+ *      def.compute run on the FIELD-BY-FIELD SUM of the schools' extensive
+ *      PeriodFinancials + PeriodOperational. Because every $ field is extensive
+ *      and every metric is a quotient of extensive fields, this is the UNIQUE
+ *      correct roll-up (e.g. org operating_margin = (Σrev−Σexp)/Σrev, NEVER the
+ *      average of per-school margins). One formula per metric, by construction.
+ *
+ *   'weighted-by-components' — mechanically IDENTICAL to recompute (the org engine
+ *      does NOT branch on it). It exists as an honest LABEL for metrics whose
+ *      recompute is mathematically an enrollment-/count-weighted mean of the
+ *      per-school values (cost_per_pupil = Σexp/Σenroll is the enrollment-weighted
+ *      mean), so the catalog/UI can say "enrollment-weighted" instead of implying a
+ *      naive average.
+ *
+ *   'sum' — the metric's VALUE is itself extensive (a raw total). None of the 12
+ *      current metrics are pure 'sum' (mix totals fall out of recompute); retained
+ *      for a future "total revenue"-style metric. Treated like recompute by the
+ *      engine (def.compute on the summed components yields the summed value).
+ *
+ *   'not-aggregatable' — Σ of the inputs is meaningless OR there is no defensible
+ *      org formula (e.g. a future metric whose only input is itself a pre-divided
+ *      ratio or an order statistic like a median). The org engine SKIPS the math
+ *      and resolves available:false with inputsMissing:['scope:not-aggregatable'].
+ *      None of the 12 use it; it exists so a future non-extensive metric refuses to
+ *      silently mis-average rather than returning a wrong number.
+ */
+export type ScopeAggregation =
+  | 'recompute-from-components'
+  | 'weighted-by-components'
+  | 'sum'
+  | 'not-aggregatable'
+
+/**
+ * Declarative spec for ONE extensive component a metric's compute() consumes — the
+ * PeriodFinancials/PeriodOperational field it reads. Purely informational (drives
+ * the catalog drawer + a meta-integrity test that the declared keys actually
+ * appear in the metric's runtime inputs[]); the org engine NEVER recomputes from
+ * this — it sums the real structs field-by-field.
+ */
+export interface MetricInputSpec {
+  /** The operand key — mirrors the runtime MetricInput.key the metric reports. */
+  key: string
+  /** Which struct the field lives on. */
+  source: 'financials' | 'operational'
+  /** Human label (matches the runtime input label). */
+  label: string
+}
+
 /** Logical grouping for the dashboard. */
 export type MetricCategory =
   | 'profitability'
@@ -218,6 +279,24 @@ export interface MetricDef {
   formula: string
   /** One-line plain-language description of what the metric means. */
   description: string
+  /**
+   * Coarse business domain (catalog grouping). Optional + additive; absent is
+   * tolerated by every consumer. All 12 current metrics declare one.
+   */
+  domain?: MetricDomain
+  /**
+   * How this metric rolls school→organization. Optional + additive; the org engine
+   * treats ABSENT as 'recompute-from-components' (safe — every current input is
+   * extensive). Declaring it makes the rollup self-documenting and future-proof
+   * (a future non-extensive metric MUST declare 'not-aggregatable').
+   */
+  scopeAggregation?: ScopeAggregation
+  /**
+   * Formalized declaration of the extensive components this metric consumes. Static
+   * spec (distinct from the runtime MetricComputeOutput.inputs); informational —
+   * NOT used to recompute. Optional + additive.
+   */
+  inputs?: MetricInputSpec[]
   /**
    * Pure compute. `prior` is the IMMEDIATELY-PRIOR fiscal period's financials
    * (for period-over-period context, though the registry computes the PoP delta

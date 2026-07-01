@@ -10,6 +10,14 @@ export const operatingMargin: MetricDef = {
   unit: 'percent',
   category: 'profitability',
   goodDirection: 'higher',
+  domain: 'finance',
+  // Org = (Σnet)/(Σrev) via recompute on summed extensive components — NOT the
+  // average of per-school margins (which would ignore school size).
+  scopeAggregation: 'recompute-from-components',
+  inputs: [
+    { key: 'netChange', source: 'financials', label: 'Change in net assets' },
+    { key: 'totalRev', source: 'financials', label: 'Total revenue' },
+  ],
   basis: '(Total revenue − total expenses) ÷ total revenue.',
   formula: '(Total revenue − Total expenses) ÷ Total revenue',
   description: 'Share of revenue left after operating expenses — a positive surplus.',

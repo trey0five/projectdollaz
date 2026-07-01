@@ -11,6 +11,13 @@ export const pctStudentsOnAid: MetricDef = {
   unit: 'percent',
   category: 'operational',
   goodDirection: 'neutral',
+  domain: 'aid',
+  // Org = ΣstudentsOnAid / Σenrollment — enrollment-weighted share.
+  scopeAggregation: 'recompute-from-components',
+  inputs: [
+    { key: 'studentsOnAid', source: 'operational', label: 'Students on aid' },
+    { key: 'enrollment', source: 'operational', label: 'Enrollment' },
+  ],
   basis: 'Students receiving aid ÷ enrollment.',
   formula: 'Students on aid ÷ Enrollment',
   description: 'Share of the student body receiving financial aid.',

@@ -14,6 +14,13 @@ export const daysCashOnHand: MetricDef = {
   unit: 'days',
   category: 'liquidity',
   goodDirection: 'higher',
+  domain: 'finance',
+  // Org = Σcash / (Σexp/365) — cash-weighted by construction.
+  scopeAggregation: 'recompute-from-components',
+  inputs: [
+    { key: 'cash', source: 'financials', label: 'Unrestricted cash' },
+    { key: 'totalExp', source: 'financials', label: 'Total expenses' },
+  ],
   basis:
     'Unrestricted cash ÷ (total expenses ÷ 365). Uses total expenses as the cash op-ex proxy (depreciation not separately removed).',
   formula: 'Unrestricted cash ÷ (Total expenses ÷ 365)',

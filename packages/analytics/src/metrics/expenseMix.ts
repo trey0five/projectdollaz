@@ -17,6 +17,11 @@ export const expenseMix: MetricDef = {
   unit: 'share',
   category: 'expense-mix',
   goodDirection: 'neutral',
+  domain: 'finance',
+  // Org = recompute on summed expenseLines + summed totalExp: each component
+  // share = Σline / Σexp (the correct org donut), value carries Σexp.
+  scopeAggregation: 'recompute-from-components',
+  inputs: [{ key: 'totalExp', source: 'financials', label: 'Total expenses' }],
   basis: 'Each expense category as a share of total expenses.',
   formula: 'Each expense category ÷ Total expenses',
   description: 'Where the school’s money goes, by expense category.',

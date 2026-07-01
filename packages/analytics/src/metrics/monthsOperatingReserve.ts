@@ -10,6 +10,13 @@ export const monthsOperatingReserve: MetricDef = {
   unit: 'months',
   category: 'reserves',
   goodDirection: 'higher',
+  domain: 'finance',
+  // Org = ΣnaWithout / (Σexp/12) — reserve-weighted by construction.
+  scopeAggregation: 'recompute-from-components',
+  inputs: [
+    { key: 'naWithout', source: 'financials', label: 'Net assets without restrictions' },
+    { key: 'totalExp', source: 'financials', label: 'Total expenses' },
+  ],
   basis: 'Unrestricted net assets ÷ (total expenses ÷ 12).',
   formula: 'Unrestricted net assets ÷ (Total expenses ÷ 12)',
   description: 'Months of operations the school could fund from unrestricted reserves.',

@@ -14,6 +14,13 @@ export const tuitionDiscountRate: MetricDef = {
   unit: 'percent',
   category: 'operational',
   goodDirection: 'lower',
+  domain: 'aid',
+  // Org = Σaid / Σtuition — recompute on extensive components, not avg of rates.
+  scopeAggregation: 'recompute-from-components',
+  inputs: [
+    { key: 'financialAidTotal', source: 'operational', label: 'Financial aid' },
+    { key: 'tuition', source: 'financials', label: 'Gross tuition' },
+  ],
   basis: 'Total financial aid ÷ gross tuition. Tuition rollup line = gross tuition.',
   formula: 'Financial aid ÷ Gross tuition',
   description: 'Share of gross tuition given back as aid — a high rate erodes net tuition.',

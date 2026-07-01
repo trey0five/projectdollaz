@@ -21,6 +21,13 @@ export const tuitionDependency: MetricDef = {
   unit: 'percent',
   category: 'composition',
   goodDirection: 'neutral',
+  domain: 'finance',
+  // Org = Σtuition / Σrev — recompute on extensive components, not avg of shares.
+  scopeAggregation: 'recompute-from-components',
+  inputs: [
+    { key: 'tuition', source: 'financials', label: 'Tuition & fees' },
+    { key: 'totalRev', source: 'financials', label: 'Total revenue' },
+  ],
   basis: 'Tuition & fees ÷ total revenue.',
   formula: 'Tuition & fees ÷ Total revenue',
   description: 'How concentrated the school’s revenue is in tuition — diversification risk.',

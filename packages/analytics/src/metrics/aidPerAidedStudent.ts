@@ -11,6 +11,13 @@ export const aidPerAidedStudent: MetricDef = {
   unit: 'currency',
   category: 'operational',
   goodDirection: 'neutral',
+  domain: 'aid',
+  // Org = Σaid / ΣstudentsOnAid — aided-count-weighted mean.
+  scopeAggregation: 'weighted-by-components',
+  inputs: [
+    { key: 'financialAidTotal', source: 'operational', label: 'Financial aid' },
+    { key: 'studentsOnAid', source: 'operational', label: 'Students on aid' },
+  ],
   basis: 'Total financial aid ÷ students receiving aid.',
   formula: 'Financial aid ÷ Students on aid',
   description: 'Average award size among students who actually receive aid.',

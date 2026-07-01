@@ -346,6 +346,50 @@ export function useStatementsRollup(orgId, fiscalYearStart) {
   return { rollup: data, loading, error, notEntitled, reload }
 }
 
+// ── Org metrics (canonical semantic layer v1) — read-only ─────────────────────
+// Mirrors useStatementsRollup's org-resolution guard + microtask-deferred load.
+// Returns the org MetricResult[] + which schools contributed, so a KPI strip can
+// render org KPIs with the per-school card shape. The org-metrics route is
+// JwtAuthGuard-only (never 402s — EntitlementGuard gates paid writes, not org
+// read-rollups), so there's no notEntitled branch here.
+export function useOrgMetrics(orgId, fiscalYearStart) {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  const load = useCallback(async (oid, fys) => {
+    setError('')
+    try {
+      const res = await analyticsApi.orgMetrics(oid, fys)
+      setData(res.data)
+    } catch {
+      setError('Could not load organization KPIs.')
+      setData(null)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.resolve().then(() => {
+      if (cancelled) return
+      if (orgId) {
+        setLoading(true)
+        load(orgId, fiscalYearStart)
+      } else {
+        setData(null)
+        setLoading(false)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [orgId, fiscalYearStart, load])
+
+  return { metrics: data, loading, error }
+}
+
 // ── Org attention briefing — read-only ────────────────────────────────────────
 // Mirrors useStatementsRollup's loading/error + org-resolution guard +
 // microtask-deferred await-before-setState, so BudgetPage consumes it identically
