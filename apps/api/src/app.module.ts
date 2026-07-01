@@ -22,6 +22,7 @@ import { SchedulesModule } from './schedules/schedules.module.js'
 import { AssistantModule } from './assistant/assistant.module.js'
 import { DataHubModule } from './data-hub/data-hub.module.js'
 import { GovernanceModule } from './governance/governance.module.js'
+import { WorkflowModule } from './workflow/workflow.module.js'
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { GovernanceModule } from './governance/governance.module.js'
     AssistantModule,
     DataHubModule,
     GovernanceModule,
+    WorkflowModule,
   ],
 })
 export class AppModule {}

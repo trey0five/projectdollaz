@@ -82,3 +82,7 @@ export {
   DUE_SOON_DAYS,
   BADLY_OVERDUE_DAYS,
 } from './review-status.js'
+
+// Phase 3 Workflow v1 — pure task urgency (injectable now)
+export type { TaskUrgency, TaskUrgencyInput, TaskUrgencyResult } from './task-urgency.js'
+export { computeTaskUrgency, TASK_DUE_SOON_DAYS } from './task-urgency.js'

@@ -9,6 +9,7 @@ import { ReconciliationService } from '../compliance/reconciliation.service.js'
 import { CorrectiveActionService } from '../compliance/corrective-action.service.js'
 import { BillingService } from '../billing/billing.service.js'
 import { PoliciesService } from '../governance/policies.service.js'
+import { TasksService } from '../workflow/tasks.service.js'
 import { BADLY_OVERDUE_DAYS, DUE_SOON_DAYS } from '@finrep/compliance'
 import {
   applyLens,
@@ -32,7 +33,16 @@ import {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type AttentionSeverity = 'critical' | 'warn' | 'info'
-export type AttentionSource = 'metric' | 'compliance' | 'data' | 'governance'
+export type AttentionSource = 'metric' | 'compliance' | 'data' | 'governance' | 'workflow'
+
+/**
+ * A task at least this many days past due escalates the workflow overdue item from
+ * warn → critical. Deliberately TIGHTER than the governance BADLY_OVERDUE_DAYS=90
+ * (tasks are day-scale operational work, so two weeks past due is already
+ * critical). Lives here (not in the pure helper) so the pure layer stays minimal
+ * and the briefing owns the severity decision.
+ */
+const WORKFLOW_BADLY_OVERDUE_DAYS = 14
 
 /** One ranked, explainable thing that needs the user's attention this period. */
 export interface AttentionItem {
@@ -149,6 +159,8 @@ export class BriefingService {
     // Phase 3 Governance v1 — the module gate + the policy register read.
     private readonly billing: BillingService,
     private readonly policies: PoliciesService,
+    // Phase 3 Workflow v1 — open-task read for the (CORE, ungated) workflow STEP.
+    private readonly tasks: TasksService,
   ) {}
 
   /**
@@ -243,12 +255,16 @@ export class BriefingService {
     // the SAME parallel fan-out (latency = slowest, not sum) rather than adding a
     // sequential hop before STEP 2.5. Fail CLOSED (throw → not licensed) so a
     // billing hiccup hides governance items rather than leaking them.
-    const [compliance, recon, checklist, cap, governanceLicensed] = await Promise.all([
+    // The workflow open-task read (STEP 2.6) rides the SAME fan-out — it is CORE
+    // (not module-gated) and fail-soft to null, so a tasks hiccup never 500s the
+    // briefing and latency stays slowest-not-sum.
+    const [compliance, recon, checklist, cap, governanceLicensed, openTasks] = await Promise.all([
       this.compliance.evaluateForPeriod(schoolId, period.id).catch(() => null),
       this.reconciliation.reconcileForPeriod(schoolId, period.id).catch(() => null),
       this.checklist.getChecklist(schoolId, period.id).catch(() => null),
       this.corrective.getPlan(schoolId, period.id).catch(() => null),
       this.billing.isEntitledForModule(schoolId, 'governance').catch(() => false),
+      this.tasks.listOpenForBriefing(schoolId).catch(() => null),
     ])
 
     // 2a — open 2A findings (material -> critical, reportable -> warn).
@@ -408,6 +424,68 @@ export class BriefingService {
             dueDate: earliest,
           })
         }
+      }
+    }
+
+    // ── STEP 2.6: workflow open-task signals (source 'workflow') ─────────────
+    // The OTHER half of Phase 3 (pairs with the governance STEP): open tasks that
+    // are overdue/due-soon make the briefing ACTIONABLE and close the loop — a task
+    // spawned from an attention item feeds BACK here. School-scoped (NOT period-
+    // bound), same as governance.
+    //
+    // CORE, NOT module-gated: there is no 'workflow' ModuleKey, so unlike the
+    // governance STEP this is NEVER wrapped in an isEntitledForModule gate — every
+    // ENTITLED school gets these items. FAIL-SOFT: openTasks was resolved with
+    // .catch(()=>null) in the STEP 2 fan-out above, and we guard `if (openTasks)`,
+    // so a tasks failure can never 500 the briefing or perturb STEP 0/1/2/2.5.
+    // 'on-track'/'none' tasks emit NOTHING (honest non-signal, mirrors governance
+    // 'unknown' / recon 'needs_data').
+    if (openTasks) {
+      const overdue = openTasks.filter((t) => t.urgency === 'overdue')
+      const dueSoon = openTasks.filter((t) => t.urgency === 'due-soon')
+
+      // ONE AGGREGATE item per band (not one-per-task) so the briefing stays
+      // digestible and the id set is finite/stable → deterministic ranking.
+      if (overdue.length > 0) {
+        // At least two weeks past due on ANY open task → critical (tighter than the
+        // governance 90-day escalation — tasks are shorter-lived).
+        const badly = overdue.some((t) => (t.daysUntilDue ?? 0) <= -WORKFLOW_BADLY_OVERDUE_DAYS)
+        const earliest =
+          overdue
+            .map((t) => t.dueDate)
+            .filter((d): d is string => d !== null)
+            .sort()[0] ?? null
+        const n = overdue.length
+        items.push({
+          id: 'workflow:tasks-overdue',
+          severity: badly ? 'critical' : 'warn',
+          source: 'workflow',
+          title: `${n} task${n === 1 ? ' is' : 's are'} overdue`,
+          why: `${n} open task${n === 1 ? ' has' : 's have'} passed ${n === 1 ? 'its' : 'their'} due date${badly ? ' — at least one is more than two weeks overdue' : ''}. Open the task list to reassign or complete ${n === 1 ? 'it' : 'them'}.`,
+          metricKey: null,
+          value: null,
+          link: '/tasks',
+          dueDate: earliest,
+        })
+      }
+      if (dueSoon.length > 0) {
+        const earliest =
+          dueSoon
+            .map((t) => t.dueDate)
+            .filter((d): d is string => d !== null)
+            .sort()[0] ?? null
+        const n = dueSoon.length
+        items.push({
+          id: 'workflow:tasks-due-soon',
+          severity: 'info',
+          source: 'workflow',
+          title: `${n} task${n === 1 ? ' is' : 's are'} due soon`,
+          why: `${n} open task${n === 1 ? ' is' : 's are'} coming due this week. Plan the work before ${n === 1 ? 'it slips' : 'they slip'}.`,
+          metricKey: null,
+          value: null,
+          link: '/tasks',
+          dueDate: earliest,
+        })
       }
     }
 

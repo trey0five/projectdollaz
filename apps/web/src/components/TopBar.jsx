@@ -11,6 +11,7 @@ import {
   Wallet,
   FileBarChart2,
   Landmark,
+  ListChecks,
   Database,
   Menu,
   X,
@@ -36,6 +37,7 @@ export default function TopBar() {
   const onReports = path.startsWith('/reports')
   const onReadiness = path.startsWith('/readiness')
   const onGovernance = path.startsWith('/governance')
+  const onTasks = path.startsWith('/tasks')
 
   // Mobile drawer (<lg). The old bar crammed 8 icon buttons + switcher + sign-out
   // into one row, which overflowed/looked messy on phones. Below lg we now show a
@@ -93,6 +95,9 @@ export default function TopBar() {
     ...(hasModule('governance')
       ? [{ to: '/governance', navId: 'nav-governance', label: 'Governance', Icon: Landmark, active: onGovernance }]
       : []),
+    // Tasks (Phase 3 Workflow) is CORE — ALWAYS shown (no hasModule guard),
+    // contrast Governance above (a licensed module).
+    { to: '/tasks', navId: 'nav-tasks', label: 'Tasks', Icon: ListChecks, active: onTasks },
     { to: '/settings', navId: 'nav-settings', label: 'Settings', Icon: Settings, active: onSettings },
   ]
 

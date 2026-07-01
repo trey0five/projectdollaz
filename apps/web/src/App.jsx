@@ -22,6 +22,7 @@ import WorkpapersPrintPage from './pages/WorkpapersPrintPage.jsx'
 import BoardPacketPrintPage from './pages/BoardPacketPrintPage.jsx'
 import ReportsPage from './pages/ReportsPage.jsx'
 import GovernancePage from './pages/GovernancePage.jsx'
+import TasksPage from './pages/TasksPage.jsx'
 import SchedulesPage from './pages/SchedulesPage.jsx'
 import BoardReportPrintPage from './pages/BoardReportPrintPage.jsx'
 import SettingsPage from './pages/SettingsPage.jsx'
@@ -119,6 +120,7 @@ export default function App() {
         <Route path="/budget" element={<BudgetPage />} />
         <Route path="/readiness" element={<ReadinessPage />} />
         <Route path="/governance" element={<GovernancePage />} />
+        <Route path="/tasks" element={<TasksPage />} />
         <Route path="/readiness/cap/print" element={<CapPrintPage />} />
         <Route path="/readiness/workpapers/print" element={<WorkpapersPrintPage />} />
         <Route path="/board-packet/print" element={<BoardPacketPrintPage />} />

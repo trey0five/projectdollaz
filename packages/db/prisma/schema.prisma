@@ -120,6 +120,7 @@ model School {
   campaignSchedules  CampaignSchedule[]
   monthlySnapshots   MonthlySnapshot[]
   policies           Policy[]
+  tasks              Task[]
 
   @@index([organizationId])
   @@map("schools")
@@ -194,6 +195,8 @@ model User {
   campaignSchedulesUpdated CampaignSchedule[] @relation("CampaignScheduleUpdatedBy")
   monthlySnapshotsUploaded MonthlySnapshot[]  @relation("MonthlySnapshotUploadedBy")
   policyUpdates            Policy[]           @relation("PolicyUpdatedBy")
+  tasksAssigned            Task[]             @relation("TaskAssignee")
+  tasksCreated             Task[]             @relation("TaskCreatedBy")
 
   @@index([email])
   @@map("users")
@@ -830,4 +833,49 @@ model Policy {
 
   @@index([schoolId])
   @@map("policies")
+}
+
+// ── Phase 3 Workflow v1 — the generic TASK engine ─────────────────────────────
+// The OTHER half of Phase 3 (pairs with the Policy register): a generic,
+// assignable, due-dated task that makes every domain ACTIONABLE. A briefing
+// attention item (an overdue policy, an off-band metric) can become a Task, and
+// open/overdue Tasks feed BACK into the briefing.
+//
+// PACKAGING: Workflow is CORE (always included, never a licensed module) — so
+// unlike Policy there is no module gate; the controller uses the base entitlement
+// only. Mirrors Policy for tenant scoping + audit-lite + @db.Date discipline.
+//
+// urgency (overdue/due-soon/on-track/none) is COMPUTED at the API boundary by the
+// pure @finrep/compliance computeTaskUrgency — NEVER stored, so it can't drift.
+// sourceType/sourceRef are SOFT links (no FK — heterogeneous targets: a policyId,
+// a metricKey, or a briefing item id) so a task can be spawned from any item.
+//
+// Self-contained: v1 has NO approval/routing/recurrence/reminder fields (deferred)
+// so those later workflow slices are purely additive.
+model Task {
+  id              String    @id @default(uuid()) @db.Uuid
+  schoolId        String    @map("school_id") @db.Uuid
+  title           String
+  description     String?
+  // Nullable FK→users, SET NULL on delete (an unassigned task is legal; deleting
+  // a user orphans the assignee rather than the task). VALIDATED as an ACTIVE
+  // school membership at write time — never a cross-tenant / non-member user.
+  assigneeUserId  String?   @map("assignee_user_id") @db.Uuid
+  dueDate         DateTime? @map("due_date") @db.Date
+  status          String    @default("open")   // 'open' | 'in_progress' | 'done' | 'cancelled'
+  priority        String    @default("normal") // 'low' | 'normal' | 'high' (triage hint, not urgency)
+  sourceType      String?   @map("source_type") // 'manual' | 'policy' | 'metric' | 'compliance'
+  sourceRef       String?   @map("source_ref")  // policyId / metricKey / briefing item id (soft link)
+  createdByUserId String?   @map("created_by_user_id") @db.Uuid
+  completedAt     DateTime? @map("completed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  school        School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  assignee      User?  @relation("TaskAssignee", fields: [assigneeUserId], references: [id], onDelete: SetNull)
+  createdByUser User?  @relation("TaskCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([schoolId])
+  @@index([schoolId, status])
+  @@map("tasks")
 }

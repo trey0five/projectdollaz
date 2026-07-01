@@ -6,8 +6,9 @@
 // Navy/gold theme, reduced-motion safe, no setState-in-effect.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { Landmark, Plus, Pencil, Trash2, X } from 'lucide-react'
+import { Landmark, Plus, Pencil, Trash2, ListPlus, X } from 'lucide-react'
 import TopBar from '../components/TopBar.jsx'
 import BillingBanner from '../components/BillingBanner.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
@@ -223,9 +224,33 @@ function GovernancePanel() {
   const schoolId = activeSchool?.id ?? null
   const canEdit = activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'
   const reduce = useReducedMotion()
+  const navigate = useNavigate()
 
   const { policies, loading, error, notLicensed, notEntitled, create, update, remove } =
     usePolicies(schoolId)
+
+  // "Create task" — the actionable pairing: an overdue/due-soon policy row spawns a
+  // pre-filled task (sourceType='policy', sourceRef=policy.id) on the /tasks page.
+  // That task, being open + due-dated, then feeds BACK into the briefing's workflow
+  // items. v1 = manual (the user confirms assignee + due date in the task modal).
+  const createTaskFromPolicy = (p) => {
+    // Only seed the task's due date when the policy's next review is still in the
+    // FUTURE (a due-soon policy). For an OVERDUE policy nextReviewDate is in the
+    // past, and a task's due date is a fresh "when will you do this" decision —
+    // seeding a past date would open the modal already-overdue, so leave it blank.
+    const today = new Date().toISOString().slice(0, 10)
+    const futureDue = p.nextReviewDate && p.nextReviewDate > today ? p.nextReviewDate : ''
+    navigate('/tasks', {
+      state: {
+        prefill: {
+          title: `Review policy: ${p.title}`,
+          sourceType: 'policy',
+          sourceRef: p.id,
+          dueDate: futureDue,
+        },
+      },
+    })
+  }
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null) // the policy being edited, or null
@@ -364,6 +389,17 @@ function GovernancePanel() {
                     {canEdit ? (
                       <td className="px-4 py-3">
                         <div className="flex justify-end gap-1.5">
+                          {p.reviewStatus === 'overdue' || p.reviewStatus === 'due-soon' ? (
+                            <button
+                              type="button"
+                              onClick={() => createTaskFromPolicy(p)}
+                              aria-label={`Create task to review ${p.title}`}
+                              title="Create a task to review this policy"
+                              className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-gold/60 hover:text-gold-light"
+                            >
+                              <ListPlus size={15} />
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             onClick={() => openEdit(p)}

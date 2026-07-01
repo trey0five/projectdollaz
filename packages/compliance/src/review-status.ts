@@ -50,15 +50,17 @@ export interface PolicyReviewResult {
 }
 
 /** A calendar date as plain integers (proleptic Gregorian, UTC — no Date object). */
-interface Civil {
+export interface Civil {
   y: number
   m: number // 1-12
   d: number // 1-31
 }
 
 // Days from civil date → days since 1970-01-01 (Howard Hinnant's algorithm).
-// Pure integer math; no Date, no timezone.
-function daysFromCivil(y: number, m: number, d: number): number {
+// Pure integer math; no Date, no timezone. EXPORTED so the sibling task-urgency
+// helper reuses the exact same UTC-accessor day math (one source of truth, no
+// drift) — both stay within the package purity guard.
+export function daysFromCivil(y: number, m: number, d: number): number {
   const yy = m <= 2 ? y - 1 : y
   const era = Math.floor((yy >= 0 ? yy : yy - 399) / 400)
   const yoe = yy - era * 400
@@ -83,8 +85,9 @@ function civilToIso(c: Civil): string {
 }
 
 /** Normalize a Date|string|null to a Civil, or null. Only READS a Date's UTC
- *  accessors (never constructs one), keeping the module purity-guard clean. */
-function toCivil(v: Date | string | null | undefined): Civil | null {
+ *  accessors (never constructs one), keeping the module purity-guard clean.
+ *  EXPORTED so task-urgency shares the identical parse (no drift). */
+export function toCivil(v: Date | string | null | undefined): Civil | null {
   if (v === null || v === undefined) return null
   if (typeof v === 'object' && typeof (v as Date).getUTCFullYear === 'function') {
     const dt = v as Date

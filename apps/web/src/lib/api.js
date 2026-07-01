@@ -379,6 +379,17 @@ export const policiesApi = {
   remove: (schoolId, policyId) => api.delete(`/schools/${schoolId}/policies/${policyId}`),
 }
 
+// ── Phase 3 Workflow v1 — the generic TASK engine. School-scoped. CORE (always
+// included, NOT a licensed module), so there is NO MODULE_NOT_LICENSED path — only
+// the base entitlement 402 (isPaymentRequired) applies, like any other core read.
+export const tasksApi = {
+  list: (schoolId, params) => api.get(`/schools/${schoolId}/tasks`, { params }),
+  create: (schoolId, body) => api.post(`/schools/${schoolId}/tasks`, body),
+  update: (schoolId, taskId, body) => api.patch(`/schools/${schoolId}/tasks/${taskId}`, body),
+  complete: (schoolId, taskId) => api.post(`/schools/${schoolId}/tasks/${taskId}/complete`),
+  remove: (schoolId, taskId) => api.delete(`/schools/${schoolId}/tasks/${taskId}`),
+}
+
 // ── Phase 3: supporting schedules (Capital Budget + Cash & Investments) ──────
 // Period-scoped, user-maintained JSON-array schedules. GET never 404s on a
 // missing row (returns { items: [] } / { accounts: [] }, updatedAt: null). PUT

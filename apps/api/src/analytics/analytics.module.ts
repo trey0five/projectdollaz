@@ -6,6 +6,7 @@ import { AuditModule } from '../common/audit/audit.module.js'
 import { MappingModule } from '../mapping/mapping.module.js'
 import { ComplianceModule } from '../compliance/compliance.module.js'
 import { GovernanceModule } from '../governance/governance.module.js'
+import { WorkflowModule } from '../workflow/workflow.module.js'
 import { AnalyticsController } from './analytics.controller.js'
 import { AnalyticsService } from './analytics.service.js'
 import { InsightService } from './insight.service.js'
@@ -35,8 +36,9 @@ import { AssistantClient } from '../assistant/assistant.client.js'
  */
 @Module({
   // GovernanceModule exports PoliciesService for BriefingService's 'governance'
-  // STEP. Edge is analytics → governance ONLY (governance imports no analytics) —
-  // acyclic. BillingModule already here supplies BillingService for the gate.
+  // STEP; WorkflowModule exports TasksService for the 'workflow' STEP. Both edges
+  // are analytics → X ONLY (neither imports analytics) — acyclic. BillingModule
+  // already here supplies BillingService for the governance gate.
   imports: [
     AuthModule,
     PeriodsModule,
@@ -45,6 +47,7 @@ import { AssistantClient } from '../assistant/assistant.client.js'
     MappingModule,
     ComplianceModule,
     GovernanceModule,
+    WorkflowModule,
   ],
   controllers: [
     AnalyticsController,

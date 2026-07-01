@@ -59,6 +59,9 @@ function makeService(over: {
   const reconciliation = { reconcileForPeriod: async () => null }
   const checklist = { getChecklist: async () => null }
   const corrective = { getPlan: async () => null }
+  // The workflow open-task read — empty so no workflow item is emitted (keeps the
+  // governance assertion isolated).
+  const tasks = { listOpenForBriefing: async () => [] }
   void nullish
 
   return new BriefingService(
@@ -70,6 +73,7 @@ function makeService(over: {
     corrective as never,
     billing as never,
     policiesSvc as never,
+    tasks as never,
   )
 }
 
