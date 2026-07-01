@@ -85,6 +85,7 @@ export {
   CHART_VARIANTS,
   SPANS,
   defaultDashboardLayout,
+  reconcileDashboardLayout,
   validateDashboardLayout,
 } from './dashboard.js'
 export type {

@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common'
 import type { Prisma } from '@finrep/db'
 import {
   defaultDashboardLayout,
+  reconcileDashboardLayout,
   validateDashboardLayout,
 } from '@finrep/analytics'
 import type { DashboardLayout } from '@finrep/analytics'
@@ -43,9 +44,14 @@ export class DashboardService {
       }
     }
     // The stored layout is only ever written through validateDashboardLayout
-    // below, so this cast is safe (the persisted shape is canonical).
+    // below, so this cast is safe (the persisted shape is canonical). Reconcile
+    // against the CURRENT registry so metrics added after this school customized
+    // (e.g. student_teacher_ratio) appear appended-visible instead of being
+    // frozen out by the older saved set — and any metric later removed from the
+    // registry is dropped. A school that never customized falls through to the
+    // registry default above, so it already sees the full set.
     return {
-      layout: row.layout as unknown as DashboardLayout,
+      layout: reconcileDashboardLayout(row.layout as unknown as DashboardLayout),
       isDefault: false,
       updatedAt: row.updatedAt.toISOString(),
       updatedByUserId: row.updatedByUserId,

@@ -6,6 +6,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   defaultDashboardLayout,
+  reconcileDashboardLayout,
   validateDashboardLayout,
   CHART_VARIANTS,
   SPANS,
@@ -30,6 +31,51 @@ describe('defaultDashboardLayout', () => {
     expect(a).not.toBe(b)
     a[0].visible = false
     expect(b[0].visible).toBe(true)
+  })
+})
+
+describe('reconcileDashboardLayout', () => {
+  it('appends registry metrics missing from a saved layout (visible), preserving saved order + visibility', () => {
+    // A stale saved layout: only the first two keys, second one hidden + customized.
+    const saved = [
+      { metricKey: METRIC_KEYS[0], visible: true, chart: 'trend' as const, span: 2 as const },
+      { metricKey: METRIC_KEYS[1], visible: false, chart: 'auto' as const, span: 1 as const },
+    ]
+    const out = reconcileDashboardLayout(saved)
+    // Every registry metric is now present, no drops, no dupes.
+    expect(out.map((i) => i.metricKey).sort()).toEqual([...METRIC_KEYS].sort())
+    expect(out).toHaveLength(METRIC_KEYS.length)
+    // Saved items keep their position, visibility, and customization.
+    expect(out[0]).toEqual({ metricKey: METRIC_KEYS[0], visible: true, chart: 'trend', span: 2 })
+    expect(out[1]).toEqual({ metricKey: METRIC_KEYS[1], visible: false, chart: 'auto', span: 1 })
+    // Appended metrics are visible with defaults, in canonical order.
+    const appended = out.slice(2)
+    expect(appended.map((i) => i.metricKey)).toEqual(METRIC_KEYS.slice(2))
+    for (const item of appended) {
+      expect(item.visible).toBe(true)
+      expect(item.chart).toBe('auto')
+      expect(item.span).toBe(1)
+    }
+  })
+
+  it('drops saved items whose metricKey is no longer a registry key', () => {
+    const saved = [
+      { metricKey: 'ghost_metric_removed' as never, visible: true },
+      { metricKey: METRIC_KEYS[0], visible: false, chart: 'auto' as const, span: 1 as const },
+    ]
+    const out = reconcileDashboardLayout(saved)
+    expect(out.some((i) => i.metricKey === ('ghost_metric_removed' as never))).toBe(false)
+    // The surviving saved item keeps its hidden state; the rest are appended.
+    expect(out.find((i) => i.metricKey === METRIC_KEYS[0])?.visible).toBe(false)
+    expect(out).toHaveLength(METRIC_KEYS.length)
+  })
+
+  it('is idempotent on an already-current layout (order preserved)', () => {
+    const full = defaultDashboardLayout()
+    const once = reconcileDashboardLayout(full)
+    const twice = reconcileDashboardLayout(once)
+    expect(once).toEqual(full)
+    expect(twice).toEqual(once)
   })
 })
 

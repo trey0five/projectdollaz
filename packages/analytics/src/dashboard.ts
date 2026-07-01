@@ -55,6 +55,42 @@ export function defaultDashboardLayout(): DashboardLayout {
   }))
 }
 
+/**
+ * Reconcile a SAVED layout against the current registry so a school that once
+ * customized its dashboard still sees metrics added to the registry LATER.
+ *
+ * - PRESERVES the saved items' order, visibility, chart, and span (the school's
+ *   customization is authoritative for the metrics it already configured).
+ * - DROPS any saved item whose metricKey is no longer a registry key (defensive —
+ *   a metric removed from the registry must not linger in a stored layout).
+ * - APPENDS any registry metric MISSING from the saved layout, in canonical
+ *   METRIC_KEYS order, visible:true / chart 'auto' / span 1 — so a newly-added
+ *   metric (e.g. student_teacher_ratio) shows up for existing schools instead of
+ *   being frozen out by their older saved layout.
+ *
+ * Pure + idempotent: reconciling a layout that already matches the registry
+ * returns the same set (order preserved), and there is no IO/clock/random.
+ */
+export function reconcileDashboardLayout(saved: DashboardLayout): DashboardLayout {
+  const seen = new Set<string>()
+  const kept: DashboardLayout = []
+  for (const item of saved) {
+    if (!isMetricKey(item.metricKey) || seen.has(item.metricKey)) continue
+    seen.add(item.metricKey)
+    kept.push({
+      metricKey: item.metricKey,
+      visible: item.visible,
+      chart: item.chart ?? 'auto',
+      span: item.span ?? 1,
+    })
+  }
+  for (const metricKey of METRIC_KEYS) {
+    if (seen.has(metricKey)) continue
+    kept.push({ metricKey, visible: true, chart: 'auto', span: 1 })
+  }
+  return kept
+}
+
 /** Discriminated result of validateDashboardLayout — never throws. */
 export type ValidateLayoutResult =
   | { ok: true; value: DashboardLayout }
