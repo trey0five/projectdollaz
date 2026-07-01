@@ -48,7 +48,15 @@ function fin(over: Partial<PeriodFinancials>): PeriodFinancials {
 }
 
 function op(over: Partial<PeriodOperational>): PeriodOperational {
-  return { enrollment: null, enrollmentFte: null, studentsOnAid: null, financialAidTotal: null, ...over }
+  return {
+    enrollment: null,
+    enrollmentFte: null,
+    studentsOnAid: null,
+    financialAidTotal: null,
+    teachingFte: null,
+    totalStaffFte: null,
+    ...over,
+  }
 }
 
 // Two DIFFERENT-SIZED schools (so weighted ≠ simple mean by construction).

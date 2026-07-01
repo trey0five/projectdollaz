@@ -16,6 +16,8 @@ const OP: PeriodOperational = {
   enrollmentFte: 95,
   studentsOnAid: 40,
   financialAidTotal: 210,
+  teachingFte: null,
+  totalStaffFte: null,
 }
 
 const named = (inputs: { key: string; value: number | null }[]) =>

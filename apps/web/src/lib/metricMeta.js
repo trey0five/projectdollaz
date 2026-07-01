@@ -17,6 +17,7 @@ import {
   HandCoins,
   Users,
   TrendingUp,
+  UserCog,
 } from 'lucide-react'
 
 // Navy/gold palette tokens (kept in sync with tailwind.config.js).
@@ -61,6 +62,8 @@ export const METRIC_META = {
   pct_students_on_aid: { icon: Users, format: 'percent' },
   // Enrollment domain (thin wedge).
   enrollment_change_yoy: { icon: TrendingUp, format: 'percent' },
+  // HR domain (page-less module; value shows here + in the briefing).
+  student_teacher_ratio: { icon: UserCog, format: 'ratio' },
 }
 
 export function metricIcon(key) {
@@ -84,6 +87,7 @@ export const METRIC_LABELS = {
   tuition_discount_rate: 'Tuition Discount Rate',
   pct_students_on_aid: '% of Students on Aid',
   enrollment_change_yoy: 'Enrollment Change (YoY)',
+  student_teacher_ratio: 'Student-Teacher Ratio',
 }
 
 export function metricLabel(key) {
@@ -108,6 +112,7 @@ export const METRIC_DOMAIN = {
   tuition_discount_rate: 'aid',
   pct_students_on_aid: 'aid',
   enrollment_change_yoy: 'enrollment',
+  student_teacher_ratio: 'hr',
 }
 
 export function metricDomain(key) {

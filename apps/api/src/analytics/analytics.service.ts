@@ -13,8 +13,10 @@ import {
 } from '@finrep/analytics'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { PeriodsService } from '../periods/periods.service.js'
+import { BillingService } from '../billing/billing.service.js'
 import { OperationalService } from './operational.service.js'
 import { categoryActualsFromBundle } from './category-actuals.js'
+import { entitledModulesForSchool, filterMetricsByEntitlement } from './metric-gating.js'
 
 /** Prisma Decimal -> plain number (null-safe), for the pure analytics layer. */
 function dec(v: Prisma.Decimal | null): number | null {
@@ -95,6 +97,11 @@ export class AnalyticsService {
     private readonly prisma: PrismaService,
     private readonly periods: PeriodsService,
     private readonly operational: OperationalService,
+    // MODULE-SCOPED METRIC GATING — resolves per-school entitlement to filter the
+    // enrollment/hr metrics (finance-family metrics are never gated). Injected here
+    // so BOTH the /metrics endpoint and the briefing (which consumes
+    // computeMetricsResponse) share ONE gate point.
+    private readonly billing: BillingService,
   ) {}
 
   /**
@@ -189,12 +196,20 @@ export class AnalyticsService {
       ? await this.operational.operationalFor(schoolId, priorResolved.periodId)
       : null
 
-    const metrics = computeMetricsForPeriod({
+    const allMetrics = computeMetricsForPeriod({
       current,
       prior,
       currentOperational,
       priorOperational,
     })
+
+    // MODULE-SCOPED METRIC GATING (surface 1 of 3). Keep only metrics whose owning
+    // module the school is entitled to. finance-family metrics are always kept
+    // (finance is seeded true, never behind a fragile billing call); ONLY the
+    // enrollment/hr metrics are conditionally hidden, fail-CLOSED. The briefing
+    // inherits this gate by consuming this same response (surface 2).
+    const entitled = await entitledModulesForSchool(schoolId, this.billing)
+    const metrics = filterMetricsByEntitlement(allMetrics, entitled)
 
     const periodEndDate = period.periodEndDate.toISOString().slice(0, 10)
 
@@ -450,6 +465,9 @@ export class AnalyticsService {
         enrollmentFte: dec(r.enrollmentFte),
         studentsOnAid: r.studentsOnAid,
         financialAidTotal: dec(r.financialAidTotal),
+        // Staff FTEs so Tier-2 HR trend points (student_teacher_ratio) populate.
+        teachingFte: dec(r.teachingFte),
+        totalStaffFte: dec(r.totalStaffFte),
       })
     }
 

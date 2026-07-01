@@ -105,6 +105,10 @@ export class OperationalService {
       enrollmentFte: dec(row.enrollmentFte),
       studentsOnAid: row.studentsOnAid,
       financialAidTotal: dec(row.financialAidTotal),
+      // Phase 4 HR — surface the already-captured staff FTEs to the pure compute
+      // layer (feeds student_teacher_ratio). Same dec() as toPublic on these cols.
+      teachingFte: dec(row.teachingFte),
+      totalStaffFte: dec(row.totalStaffFte),
     }
   }
 

@@ -53,7 +53,7 @@ describe('metric metadata', () => {
   it('every metric declares a domain + a valid scopeAggregation', () => {
     for (const def of ALL_METRICS) {
       expect(def.domain).toBeDefined()
-      expect(['finance', 'operations', 'aid', 'enrollment']).toContain(def.domain)
+      expect(['finance', 'operations', 'aid', 'enrollment', 'hr']).toContain(def.domain)
       expect(def.scopeAggregation).toBeDefined()
       expect(SCOPE_RULES).toContain(def.scopeAggregation)
     }
@@ -69,10 +69,10 @@ describe('metric metadata', () => {
   it('declared input keys all appear in the metric runtime inputs[] (no drift)', () => {
     // Build each metric's runtime inputs once (full bundle + operational so every
     // operand is reported even when the metric is available).
-    const operational = { enrollment: 100, enrollmentFte: null, studentsOnAid: 40, financialAidTotal: 50000 }
+    const operational = { enrollment: 100, enrollmentFte: null, studentsOnAid: 40, financialAidTotal: 50000, teachingFte: 8, totalStaffFte: 12 }
     // Pass a prior operational too so enrollment_change_yoy (which reads priorOp) is
     // available and reports both its operands — keeps the no-drift check exhaustive.
-    const priorOperational = { enrollment: 95, enrollmentFte: null, studentsOnAid: 38, financialAidTotal: 48000 }
+    const priorOperational = { enrollment: 95, enrollmentFte: null, studentsOnAid: 38, financialAidTotal: 48000, teachingFte: 8, totalStaffFte: 12 }
     const r = computeMetricsRecord({
       current: FULL_BUNDLE,
       prior: FULL_BUNDLE,

@@ -8,7 +8,9 @@ import {
   type SchoolPeriodInputs,
 } from '@finrep/analytics'
 import { PrismaService } from '../prisma/prisma.service.js'
+import { BillingService } from '../billing/billing.service.js'
 import { OperationalService } from './operational.service.js'
+import { entitledModulesForOrg, filterMetricsByEntitlement } from './metric-gating.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Canonical semantic layer v1 — the ORG-SCOPE metrics endpoint service.
@@ -65,6 +67,10 @@ export class OrgMetricsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly operational: OperationalService,
+    // MODULE-SCOPED METRIC GATING (org surface). Gates enrollment/hr org metrics by
+    // the WIDEST licensed set across contributing schools (any-school-licenses),
+    // mirroring the shipped org-lens-ceiling precedent. finance-family always kept.
+    private readonly billing: BillingService,
   ) {}
 
   /**
@@ -197,7 +203,19 @@ export class OrgMetricsService {
     )
 
     // ── PURE ORG COMPUTE (all the math lives in @finrep/analytics) ───────────
-    const metrics = computeOrgMetrics(inputs)
+    const allMetrics = computeOrgMetrics(inputs)
+
+    // MODULE-SCOPED METRIC GATING (surface 3 of 3). Gate enrollment/hr org metrics
+    // by the WIDEST licensed set across the contributing schools: keep the org
+    // metric if ANY reported school is entitled to the module (mirrors the org
+    // ceiling = widest-in-org precedent). finance-family metrics are always kept.
+    // A fully finance-only org sees neither org enrollment_change_yoy nor
+    // student_teacher_ratio; a trial (all-access on every school) sees all.
+    const entitled = await entitledModulesForOrg(
+      reported.map((r) => r.schoolId),
+      this.billing,
+    )
+    const metrics = filterMetricsByEntitlement(allMetrics, entitled)
 
     const contributingSchools: OrgMetricContributor[] = reported.map((r, i) => ({
       schoolId: r.schoolId,

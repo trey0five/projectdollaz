@@ -15,7 +15,7 @@ export type MetricUnit = 'percent' | 'days' | 'months' | 'ratio' | 'currency' | 
  * dashboard layout). Today every metric is finance/operations/aid; declared so
  * the catalog (GET /metrics/meta) and the org rollup can group metrics honestly.
  */
-export type MetricDomain = 'finance' | 'operations' | 'aid' | 'enrollment'
+export type MetricDomain = 'finance' | 'operations' | 'aid' | 'enrollment' | 'hr'
 
 /**
  * How a metric rolls up from a single school to the whole organization. This is
@@ -105,6 +105,8 @@ export type MetricKey =
   | 'pct_students_on_aid'
   // Tier-2 enrollment domain — first non-finance banded metric (thin wedge).
   | 'enrollment_change_yoy'
+  // Tier-2 hr domain — banded staffing-load metric (reuses staff-FTE data).
+  | 'student_teacher_ratio'
 
 /**
  * Operational reference data for a period — enrollment + financial aid figures
@@ -127,6 +129,18 @@ export interface PeriodOperational {
   studentsOnAid: number | null
   /** Total financial aid / scholarship dollars for the period. */
   financialAidTotal: number | null
+  /**
+   * Phase 5 — actual TEACHING FTEs (instructional staff full-time equivalents),
+   * distinct from the student-side enrollmentFte. Denominator of the HR-domain
+   * student_teacher_ratio; nullable (NOT ENTERED) with the same absent-as-null
+   * contract, and additionally requires > 0 to be a usable denominator.
+   */
+  teachingFte: number | null
+  /**
+   * Phase 5 — TOTAL STAFF FTEs (all staff, teaching + non-teaching). Surfaced for
+   * a complete struct / future admin-ratio metric; unused by v1's single HR metric.
+   */
+  totalStaffFte: number | null
 }
 
 /**

@@ -46,8 +46,8 @@ describe('computeTrend', () => {
     // FY25 (PRIOR_BUNDLE, totalExp 950) has operational data; FY26 (FULL_BUNDLE,
     // totalExp 900) has it too; FY24 (NO_SFP_BUNDLE) has NONE -> unavailable point.
     const series = [
-      { ...SERIES[0], operational: { enrollment: 95, enrollmentFte: null, studentsOnAid: 30, financialAidTotal: 200 } },
-      { ...SERIES[1], operational: { enrollment: 100, enrollmentFte: null, studentsOnAid: 40, financialAidTotal: 210 } },
+      { ...SERIES[0], operational: { enrollment: 95, enrollmentFte: null, studentsOnAid: 30, financialAidTotal: 200, teachingFte: null, totalStaffFte: null } },
+      { ...SERIES[1], operational: { enrollment: 100, enrollmentFte: null, studentsOnAid: 40, financialAidTotal: 210, teachingFte: null, totalStaffFte: null } },
       { ...SERIES[2] }, // FY24: no operational
     ]
     const t = computeTrend('cost_per_pupil', series)

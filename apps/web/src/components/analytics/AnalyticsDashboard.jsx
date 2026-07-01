@@ -63,6 +63,8 @@ const DEFAULT_KEYS = [
   'pct_students_on_aid',
   // Enrollment domain (thin wedge) — appended last, mirrors METRIC_KEYS order.
   'enrollment_change_yoy',
+  // HR domain (page-less module) — appended last, mirrors METRIC_KEYS order.
+  'student_teacher_ratio',
 ]
 
 // Compact cards are grouped BY DOMAIN into these ordered sections. Enrollment leads
@@ -71,6 +73,11 @@ const DEFAULT_KEYS = [
 // Any non-vital, non-mix finance key falls into "Financial (Other)".
 const DOMAIN_SECTIONS = [
   { domain: 'enrollment', title: 'Enrollment' },
+  // People & Staffing (HR) — a page-less module; the section renders only when the
+  // school licenses hr (the gated metric is present in the API response) AND that
+  // metric survives the layout filter. An unlicensed school's gated key is stripped
+  // from the response, so the render loop's metricsByKey intersection drops it.
+  { domain: 'hr', title: 'People & Staffing' },
   { domain: 'aid', title: 'Tuition & Aid' },
   { domain: 'operations', title: 'Operations' },
   { domain: 'finance', title: 'Financial (Other)' },
@@ -423,7 +430,13 @@ export default function AnalyticsDashboard() {
               Operations / Financial). Each section renders only when non-empty and
               preserves within-group layout order (sectionItems is already ordered). */}
           {DOMAIN_SECTIONS.map(({ domain, title }) => {
-            const items = sectionItems.filter((i) => metricDomain(i.key) === domain)
+            // Intersect with metricsByKey (the GATED API response): a module-gated
+            // metric is absent from the response entirely, so its section must drop.
+            // A licensed-but-no-data metric IS present (available:false) and still
+            // renders its normal unavailable card — so this only hides gated domains.
+            const items = sectionItems.filter(
+              (i) => metricDomain(i.key) === domain && metricsByKey[i.key],
+            )
             if (items.length === 0) return null
             return (
               <div className={dimWhileCustomizing} key={domain}>

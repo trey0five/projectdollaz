@@ -68,7 +68,7 @@ describe('tuition_discount_rate (lower: good<=0.20, risk>0.35)', () => {
 describe('contextual metrics are NEUTRAL (no band)', () => {
   const banded = new Set(Object.keys(DEFAULT_BANDS))
   const contextual = METRIC_KEYS.filter((k) => !banded.has(k))
-  it('exactly the 6 banded metrics have bands', () => {
+  it('exactly the 7 banded metrics have bands', () => {
     expect([...banded].sort()).toEqual(
       [
         'days_cash_on_hand',
@@ -78,6 +78,8 @@ describe('contextual metrics are NEUTRAL (no band)', () => {
         'tuition_discount_rate',
         // Thin wedge: enrollment is the first non-finance banded metric.
         'enrollment_change_yoy',
+        // HR wedge: student_teacher_ratio is the first hr-domain banded metric.
+        'student_teacher_ratio',
       ].sort(),
     )
   })

@@ -159,6 +159,10 @@ export function sumOperational(
     enrollmentFte: foldNullable(present.map((r) => r.enrollmentFte)),
     studentsOnAid: foldNullable(present.map((r) => r.studentsOnAid)),
     financialAidTotal: foldNullable(present.map((r) => r.financialAidTotal)),
+    // Staff FTEs fold the SAME absent-as-null way, so org student_teacher_ratio =
+    // Σenrollment / Σ(present teachingFte) — an FTE-weighted org ratio.
+    teachingFte: foldNullable(present.map((r) => r.teachingFte)),
+    totalStaffFte: foldNullable(present.map((r) => r.totalStaffFte)),
   }
 }
 

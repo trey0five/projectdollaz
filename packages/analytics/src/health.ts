@@ -22,6 +22,7 @@ import type { HealthStatus, MetricKey, TargetBands } from './types.js'
  *   tuition_dependency (lower):       good <= 0.70,  risk > 0.85
  *   tuition_discount_rate (lower):    good <= 0.20,  risk > 0.35
  *   enrollment_change_yoy (higher):   good >= 0,     risk < -0.05
+ *   student_teacher_ratio (lower):    good <= 12,    risk > 16
  *
  * Boundary semantics (see TargetBands): `good` inclusive of good, `risk` is the
  * watch/risk frontier and is inclusive of WATCH (exactly == risk lands in watch).
@@ -36,6 +37,12 @@ export const DEFAULT_BANDS: Partial<Record<MetricKey, TargetBands>> = {
   // 5% = watch; a steeper-than-5% drop = risk (a genuine revenue-sustainability
   // threat for a tuition-dependent school). Tunable sector default.
   enrollment_change_yoy: { goodDirection: 'higher', good: 0, risk: -0.05 },
+  // HR (staffing load): ~12:1 or better = good; a load above 16:1 flags a
+  // staffing-load / class-size concern worth a briefing item. Lower is better.
+  // TUNABLE SECTOR DEFAULT (like enrollment_change_yoy) — private-school ratios
+  // vary widely by model (Montessori/special-ed run low, large schools higher);
+  // per-school override deferred. Not a hard truth.
+  student_teacher_ratio: { goodDirection: 'lower', good: 12, risk: 16 },
 }
 
 /** The target band for a metric, or undefined when the metric is contextual. */

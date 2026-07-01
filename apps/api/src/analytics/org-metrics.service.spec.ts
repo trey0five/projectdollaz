@@ -62,7 +62,7 @@ interface Fixture {
   memberships: { userId: string; status: string; role: string; school: { id: string; name: string; organizationId: string } }[]
   organizations: { id: string }[]
   snapshots: { schoolId: string; fiscalPeriodId: string; createdAt: Date; payload: unknown; fiscalPeriod: { periodEndDate: Date } }[]
-  operational: Record<string, { enrollment: number | null; enrollmentFte: number | null; studentsOnAid: number | null; financialAidTotal: number | null }>
+  operational: Record<string, { enrollment: number | null; enrollmentFte: number | null; studentsOnAid: number | null; financialAidTotal: number | null; teachingFte?: number | null; totalStaffFte?: number | null }>
 }
 
 function buildService(fx: Fixture) {
@@ -114,11 +114,22 @@ function buildService(fx: Fixture) {
   } as unknown as PrismaService
 
   const operational = {
-    operationalFor: async (schoolId: string, periodId: string) =>
-      fx.operational[`${schoolId}:${periodId}`] ?? null,
+    operationalFor: async (schoolId: string, periodId: string) => {
+      const row = fx.operational[`${schoolId}:${periodId}`]
+      if (!row) return null
+      // Normalize to the full PeriodOperational shape (staff FTEs default to null).
+      return { teachingFte: null, totalStaffFte: null, ...row }
+    },
   } as unknown as OperationalService
 
-  return new OrgMetricsService(prisma, operational)
+  // All-access billing (mirrors a trial): every module entitled, so NO metric is
+  // gated and the rollup assertions below are unaffected by module gating. The
+  // gating-specific behavior is covered in metric-gating.spec.ts.
+  const billing = {
+    isEntitledForModule: async () => true,
+  } as unknown as import('../billing/billing.service.js').BillingService
+
+  return new OrgMetricsService(prisma, operational, billing)
 }
 
 const baseSchool = (id: string, org: string) => ({ id, name: `School ${id}`, organizationId: org })
@@ -190,7 +201,7 @@ describe('OrgMetricsService rollup', () => {
 
     const perSchool = computeMetricsRecord({
       current: fx.snapshots.find((s) => s.fiscalPeriodId === 'p1-26')!.payload as never,
-      currentOperational: fx.operational['s1:p1-26'],
+      currentOperational: { teachingFte: null, totalStaffFte: null, ...fx.operational['s1:p1-26'] },
     })
     for (const m of res.metrics) {
       expect(m.value).toBe(perSchool[m.key].value)

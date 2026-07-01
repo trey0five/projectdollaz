@@ -22,6 +22,8 @@ const OP: PeriodOperational = {
   enrollmentFte: 95,
   studentsOnAid: 40,
   financialAidTotal: 210,
+  teachingFte: null,
+  totalStaffFte: null,
 }
 
 describe('Tier-2 operational metric arithmetic', () => {
@@ -99,7 +101,7 @@ describe('Tier-2 partial inputs + zero-as-valid contract', () => {
   it('enrollment <= 0 is treated as missing (no divide-by-zero)', () => {
     const r = computeMetricsRecord({
       current: FULL_BUNDLE,
-      currentOperational: { enrollment: 0, enrollmentFte: null, studentsOnAid: 10, financialAidTotal: 100 },
+      currentOperational: { enrollment: 0, enrollmentFte: null, studentsOnAid: 10, financialAidTotal: 100, teachingFte: null, totalStaffFte: null },
     })
     expect(r.cost_per_pupil.available).toBe(false)
     expect(r.cost_per_pupil.inputsMissing).toContain('enrollment')
@@ -110,7 +112,7 @@ describe('Tier-2 partial inputs + zero-as-valid contract', () => {
   it('financialAidTotal === 0 is a VALID value (zero-aid school)', () => {
     const r = computeMetricsRecord({
       current: FULL_BUNDLE,
-      currentOperational: { enrollment: 100, enrollmentFte: null, studentsOnAid: 0, financialAidTotal: 0 },
+      currentOperational: { enrollment: 100, enrollmentFte: null, studentsOnAid: 0, financialAidTotal: 0, teachingFte: null, totalStaffFte: null },
     })
     // 0 aid -> discount rate 0%, aid per student $0 — both AVAILABLE, not hidden.
     expect(r.tuition_discount_rate.available).toBe(true)
@@ -128,7 +130,7 @@ describe('Tier-2 partial inputs + zero-as-valid contract', () => {
   it('only the missing field is named when enrollment is present but aid is not', () => {
     const r = computeMetricsRecord({
       current: FULL_BUNDLE,
-      currentOperational: { enrollment: 100, enrollmentFte: null, studentsOnAid: 40, financialAidTotal: null },
+      currentOperational: { enrollment: 100, enrollmentFte: null, studentsOnAid: 40, financialAidTotal: null, teachingFte: null, totalStaffFte: null },
     })
     expect(r.financial_aid_per_student.inputsMissing).toEqual(['financialAidTotal'])
     expect(r.cost_per_pupil.available).toBe(true)
@@ -139,8 +141,8 @@ describe('Tier-2 partial inputs + zero-as-valid contract', () => {
 describe('Tier-2 period-over-period delta uses the PRIOR period operational data', () => {
   it('delta = cur metric - prior metric, each on its OWN operational data', () => {
     // cur cost_per_pupil = 900/100 = 9 ; prior = 950/95 = 10 ; delta = -1.
-    const curOp: PeriodOperational = { enrollment: 100, enrollmentFte: null, studentsOnAid: 40, financialAidTotal: 210 }
-    const priorOp: PeriodOperational = { enrollment: 95, enrollmentFte: null, studentsOnAid: 30, financialAidTotal: 200 }
+    const curOp: PeriodOperational = { enrollment: 100, enrollmentFte: null, studentsOnAid: 40, financialAidTotal: 210, teachingFte: null, totalStaffFte: null }
+    const priorOp: PeriodOperational = { enrollment: 95, enrollmentFte: null, studentsOnAid: 30, financialAidTotal: 200, teachingFte: null, totalStaffFte: null }
     const r = computeMetricsRecord({
       current: FULL_BUNDLE,
       prior: PRIOR_BUNDLE,
@@ -151,7 +153,7 @@ describe('Tier-2 period-over-period delta uses the PRIOR period operational data
   })
 
   it('delta is null when prior operational data is absent', () => {
-    const curOp: PeriodOperational = { enrollment: 100, enrollmentFte: null, studentsOnAid: 40, financialAidTotal: 210 }
+    const curOp: PeriodOperational = { enrollment: 100, enrollmentFte: null, studentsOnAid: 40, financialAidTotal: 210, teachingFte: null, totalStaffFte: null }
     const r = computeMetricsRecord({
       current: FULL_BUNDLE,
       prior: PRIOR_BUNDLE,
