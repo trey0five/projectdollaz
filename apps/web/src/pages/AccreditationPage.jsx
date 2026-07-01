@@ -7,12 +7,14 @@
 // Navy/gold theme, reduced-motion safe, no setState-in-effect.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import {
   BadgeCheck,
   ChevronDown,
   ChevronRight,
   FileText,
+  Landmark,
   Link as LinkIcon,
   Pencil,
   Plus,
@@ -213,12 +215,24 @@ function StandardFormModal({ open, initial, onClose, onSave, reduce }) {
 }
 
 /** The lazy-loaded evidence sub-list for one expanded standard row. */
-function EvidencePanel({ standardId, canEdit, listEvidence, createEvidence, removeEvidence }) {
+function EvidencePanel({
+  standardId,
+  canEdit,
+  reduce,
+  listEvidence,
+  listEvidenceSources,
+  createEvidence,
+  removeEvidence,
+}) {
   const [items, setItems] = useState(null) // null = not yet loaded
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
   const [form, setForm] = useState({ title: '', kind: 'document', reference: '', capturedAt: '' })
   const [err, setErr] = useState('')
+  // "Attach from operations" picker: null = closed, undefined = loading, object = loaded sources.
+  const [sources, setSources] = useState(null)
+  const [picking, setPicking] = useState(false)
+  const [attaching, setAttaching] = useState(null) // sourceRef currently attaching (spinner)
 
   // Lazy load on first mount (the row was just expanded). setState-safe: deferred
   // to a microtask + cancelled flag, mirroring the hook pattern.
@@ -244,6 +258,38 @@ function EvidencePanel({ standardId, canEdit, listEvidence, createEvidence, remo
   const reload = async () => {
     const rows = await listEvidence(standardId)
     setItems(rows)
+  }
+
+  // Open the picker and lazily fetch the school's operational artifacts. Fetch runs in
+  // the click handler (NOT an effect) so no new effect / setState-in-effect is introduced.
+  const openPicker = async () => {
+    setErr('')
+    setPicking(true)
+    setSources(undefined) // loading
+    try {
+      const res = await listEvidenceSources()
+      setSources(res ?? { policies: [], boardReports: [] })
+    } catch {
+      setSources({ policies: [], boardReports: [] })
+      setErr('Could not load your operational artifacts.')
+    }
+  }
+
+  // Attach a discovered artifact as LINKED evidence. Title is omitted so the server
+  // auto-derives it from the artifact; kind is forced to 'link' server-side.
+  const attach = async (src) => {
+    setAttaching(src.sourceRef)
+    setErr('')
+    try {
+      await createEvidence(standardId, { sourceType: src.sourceType, sourceRef: src.sourceRef })
+      setPicking(false)
+      setSources(null)
+      await reload()
+    } catch {
+      setErr('Could not attach this artifact.')
+    } finally {
+      setAttaching(null)
+    }
   }
 
   const submit = async (e) => {
@@ -293,7 +339,16 @@ function EvidencePanel({ standardId, canEdit, listEvidence, createEvidence, remo
                 <div className="flex min-w-0 items-center gap-2">
                   <Icon size={15} className="shrink-0 text-gold-light" />
                   <span className="truncate text-[13px] text-white/85">{ev.title}</span>
-                  {ev.reference && ev.kind === 'link' ? (
+                  {ev.sourceType && ev.sourceType !== 'manual' && ev.sourceLink ? (
+                    <Link
+                      to={ev.sourceLink}
+                      className="inline-flex shrink-0 items-center gap-1 rounded-md border border-gold/40 bg-gold/10 px-1.5 py-0.5 text-[11px] font-semibold text-gold-light hover:bg-gold/20"
+                      title={`Attached from ${ev.sourceLabel}`}
+                    >
+                      from {ev.sourceLabel}
+                    </Link>
+                  ) : null}
+                  {ev.reference && ev.kind === 'link' && ev.sourceType === 'manual' ? (
                     <a
                       href={ev.reference}
                       target="_blank"
@@ -374,15 +429,120 @@ function EvidencePanel({ standardId, canEdit, listEvidence, createEvidence, remo
             </div>
           </form>
         ) : (
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-lg border-2 border-white/20 px-3 py-1.5 text-[13px] font-semibold text-white/70 hover:border-gold/60 hover:text-gold-light"
-          >
-            <Plus size={14} /> Add evidence
-          </button>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setAdding(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg border-2 border-white/20 px-3 py-1.5 text-[13px] font-semibold text-white/70 hover:border-gold/60 hover:text-gold-light"
+            >
+              <Plus size={14} /> Add evidence
+            </button>
+            <button
+              type="button"
+              onClick={openPicker}
+              className="inline-flex items-center gap-1.5 rounded-lg border-2 border-gold/40 bg-gold/10 px-3 py-1.5 text-[13px] font-semibold text-gold-light hover:bg-gold/20"
+            >
+              <Landmark size={14} /> Attach from operations
+            </button>
+          </div>
         )
       ) : null}
+
+      {picking ? (
+        <SourcePicker
+          sources={sources}
+          attaching={attaching}
+          err={err}
+          reduce={reduce}
+          onAttach={attach}
+          onClose={() => {
+            setPicking(false)
+            setSources(null)
+            setErr('')
+          }}
+        />
+      ) : null}
+    </div>
+  )
+}
+
+/** Grouped picker of the school's operational artifacts (policies + board reports). */
+function SourcePicker({ sources, attaching, err, reduce, onAttach, onClose }) {
+  const loading = sources === undefined
+  const groups = [
+    { key: 'policies', label: 'Governance policies', empty: 'No policies yet' },
+    { key: 'boardReports', label: 'Board reports', empty: 'No board reports yet' },
+  ]
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <motion.div
+        initial={reduce ? false : { opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-2xl border-2 border-gold/30 bg-navy-gradient p-6 shadow-navy-glow"
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="font-serif text-[18px] uppercase tracking-[0.12em] text-gold-light">
+            Attach from operations
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-gold/60 hover:text-white"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <p className="mb-4 text-[13px] text-white/60">
+          Link an existing policy or board report as evidence for this standard — one click, a
+          live deep link.
+        </p>
+        {loading ? (
+          <p className="text-[13px] text-white/50">Loading your artifacts…</p>
+        ) : (
+          <div className="space-y-4">
+            {groups.map((g) => {
+              const list = sources?.[g.key] ?? []
+              return (
+                <div key={g.key}>
+                  <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-[0.1em] text-white/50">
+                    {g.label}
+                  </h3>
+                  {list.length === 0 ? (
+                    <p className="text-[13px] text-white/40">{g.empty}</p>
+                  ) : (
+                    <ul className="space-y-1.5">
+                      {list.map((src) => (
+                        <li key={src.sourceRef}>
+                          <button
+                            type="button"
+                            disabled={attaching !== null}
+                            onClick={() => onAttach(src)}
+                            className="flex w-full items-center justify-between gap-3 rounded-lg border border-white/10 bg-navy/50 px-3 py-2 text-left hover:border-gold/50 hover:bg-navy/70 disabled:opacity-50"
+                          >
+                            <span className="min-w-0">
+                              <span className="block truncate text-[13px] text-white/85">
+                                {src.label}
+                              </span>
+                              {src.date ? (
+                                <span className="block text-[11px] text-white/45">{src.date}</span>
+                              ) : null}
+                            </span>
+                            <span className="shrink-0 text-[12px] font-semibold text-gold-light">
+                              {attaching === src.sourceRef ? 'Attaching…' : 'Attach'}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+        {err ? <p className="mt-4 text-[13px] text-red-300">{err}</p> : null}
+      </motion.div>
     </div>
   )
 }
@@ -403,6 +563,7 @@ function AccreditationPanel() {
     createStandard,
     updateStandard,
     removeStandard,
+    listEvidenceSources,
     listEvidence,
     createEvidence,
     removeEvidence,
@@ -598,6 +759,8 @@ function AccreditationPanel() {
                     <EvidencePanel
                       standardId={s.id}
                       canEdit={canEdit}
+                      reduce={reduce}
+                      listEvidenceSources={listEvidenceSources}
                       listEvidence={listEvidence}
                       createEvidence={createEvidence}
                       removeEvidence={removeEvidence}

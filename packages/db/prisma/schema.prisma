@@ -887,6 +887,15 @@ model AccreditationEvidence {
   standardId      String    @map("standard_id") @db.Uuid
   title           String
   kind            String    @default("document") // 'document' | 'link' | 'note'
+  // Phase 4 evidence-linkage — a SOFT link (no FK; heterogeneous targets: a Policy
+  // id or a BoardReport id) to an internal operational artifact this evidence was
+  // attached FROM. Mirrors the Task.sourceType/sourceRef soft-link precedent. NEVER
+  // trusted alone: when sourceType != 'manual' the service validates sourceRef ∈ the
+  // path school (a schoolId-scoped findFirst on the source table) BEFORE insert, so a
+  // forged/foreign sourceRef → 404 and is never linked. @default("manual") means the
+  // migration needs NO backfill — every existing row reads as manual, source_ref NULL.
+  sourceType      String    @default("manual") @map("source_type") // 'manual' | 'policy' | 'board_report'
+  sourceRef       String?   @map("source_ref") @db.Uuid // Policy.id / BoardReport.id (both @db.Uuid)
   reference       String?   // url / doc path / citation, free text, nullable
   notes           String?
   capturedAt      DateTime? @map("captured_at") @db.Date

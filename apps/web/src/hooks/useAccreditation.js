@@ -93,6 +93,14 @@ export function useAccreditation(schoolId) {
     [schoolId, load],
   )
 
+  // Discover the school's operational artifacts (policies + board reports) that can be
+  // attached as evidence. Called lazily from the "Attach from operations" click handler.
+  const listEvidenceSources = useCallback(async () => {
+    if (!schoolId) return { policies: [], boardReports: [] }
+    const res = await accreditationApi.listEvidenceSources(schoolId)
+    return res.data ?? { policies: [], boardReports: [] }
+  }, [schoolId])
+
   // Lazy evidence ops — the page calls these when a standard row is expanded.
   const listEvidence = useCallback(
     async (standardId) => {
@@ -132,6 +140,7 @@ export function useAccreditation(schoolId) {
     createStandard,
     updateStandard,
     removeStandard,
+    listEvidenceSources,
     listEvidence,
     createEvidence,
     removeEvidence,

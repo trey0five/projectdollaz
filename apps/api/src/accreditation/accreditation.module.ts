@@ -4,6 +4,7 @@ import { BillingModule } from '../billing/billing.module.js'
 import { AuditModule } from '../common/audit/audit.module.js'
 import { StandardsController } from './standards.controller.js'
 import { EvidenceController } from './evidence.controller.js'
+import { EvidenceSourcesController } from './evidence-sources.controller.js'
 import { AccreditationService } from './accreditation.service.js'
 
 /**
@@ -19,7 +20,7 @@ import { AccreditationService } from './accreditation.service.js'
  */
 @Module({
   imports: [AuthModule, BillingModule, AuditModule],
-  controllers: [StandardsController, EvidenceController],
+  controllers: [StandardsController, EvidenceController, EvidenceSourcesController],
   providers: [AccreditationService],
   exports: [AccreditationService],
 })

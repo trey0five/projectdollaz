@@ -11,7 +11,12 @@ import { PrismaService } from '../prisma/prisma.service.js'
 import { AuditService } from '../common/audit/audit.service.js'
 import type { CreateStandardDto } from './dto/create-standard.dto.js'
 import type { UpdateStandardDto } from './dto/update-standard.dto.js'
-import { EVIDENCE_KINDS, type CreateEvidenceDto, type EvidenceKind } from './dto/create-evidence.dto.js'
+import {
+  EVIDENCE_KINDS,
+  type CreateEvidenceDto,
+  type EvidenceKind,
+  type EvidenceSourceType,
+} from './dto/create-evidence.dto.js'
 
 /** One standard as returned to the client, with COMPUTED coverage + review urgency. */
 export interface StandardPublic {
@@ -40,6 +45,14 @@ export interface EvidencePublic {
   notes: string | null
   capturedAt: string | null
   createdByUserId: string | null
+  /** 'manual' (free-text) or a linked operational artifact. */
+  sourceType: EvidenceSourceType
+  /** The linked artifact's uuid (null for manual). */
+  sourceRef: string | null
+  /** Resolved source-domain label for the badge ('Governance'/'Reports'); null for manual. */
+  sourceLabel: string | null
+  /** Deep-link route for the badge ('/governance'/'/reports'); null for manual. */
+  sourceLink: string | null
   createdAt: string
   updatedAt: string
 }
@@ -51,6 +64,31 @@ export interface StandardListResponse {
 
 export interface EvidenceListResponse {
   evidence: EvidencePublic[]
+}
+
+/** One discoverable operational artifact the school can attach as evidence. */
+export interface EvidenceSource {
+  sourceType: 'policy' | 'board_report'
+  sourceRef: string
+  label: string
+  date: string | null // yyyy-mm-dd, for the picker subtitle
+  link: string // deep-link route: '/governance' | '/reports'
+}
+
+export interface EvidenceSourcesResponse {
+  policies: EvidenceSource[]
+  boardReports: EvidenceSource[]
+}
+
+/**
+ * Source-domain metadata for a LINKED evidence's badge. Keyed by the non-manual
+ * sourceType. `label` is the DOMAIN name (shown as "from Governance" + the row's own
+ * title); `link` is the react-router route the badge navigates to. v1 links to the
+ * domain page, not a per-artifact anchor (per-artifact deep-link deferred).
+ */
+const SOURCE_META: Record<'policy' | 'board_report', { label: string; link: string }> = {
+  policy: { label: 'Governance', link: '/governance' },
+  board_report: { label: 'Reports', link: '/reports' },
 }
 
 /** Deterministic list order: no-evidence first, then review pressure, then code. */
@@ -129,6 +167,9 @@ export class AccreditationService {
   }
 
   private toEvidencePublic(row: AccreditationEvidence): EvidencePublic {
+    // Legacy/manual rows have sourceType 'manual' (the column default) → no source badge.
+    const st = (row.sourceType ?? 'manual') as EvidenceSourceType
+    const meta = st === 'manual' ? null : SOURCE_META[st]
     return {
       id: row.id,
       standardId: row.standardId,
@@ -138,6 +179,12 @@ export class AccreditationService {
       notes: row.notes,
       capturedAt: toIsoDate(row.capturedAt),
       createdByUserId: row.createdByUserId,
+      sourceType: st,
+      sourceRef: row.sourceRef ?? null,
+      // Denormalized display: the row's own `title` already holds the artifact name
+      // (auto-derived at create time), so the badge needs no second query at read time.
+      sourceLabel: meta ? meta.label : null,
+      sourceLink: meta ? meta.link : null,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     }
@@ -282,18 +329,62 @@ export class AccreditationService {
     dto: CreateEvidenceDto,
     userId: string,
   ): Promise<EvidencePublic> {
+    // resolveStandard FIRST — a foreign/unknown standard 404s BEFORE any artifact query.
     const std = await this.resolveStandard(schoolId, standardId)
     const capturedAt = parseIsoDate(dto.capturedAt, 'capturedAt') ?? null
+
+    const sourceType: EvidenceSourceType = dto.sourceType ?? 'manual'
+    let sourceRef: string | null = null
+    let title = (dto.title ?? '').trim()
+    let kind = normalizeKind(dto.kind)
+    let reference = dto.reference ?? null
+
+    if (sourceType === 'manual') {
+      // Byte-for-byte today's behavior: a non-empty title is required for manual.
+      if (!title) throw new BadRequestException('A title is required for manual evidence.')
+    } else {
+      if (!dto.sourceRef) {
+        throw new BadRequestException('sourceRef is required when linking an artifact.')
+      }
+      // The CROSS-TENANT gate: a schoolId-scoped findFirst on the source table, where
+      // std.schoolId is derived from the RESOLVED standard (never raw client input). A
+      // forged/foreign/nonexistent sourceRef resolves to null → 404, so the evidence
+      // row is NEVER created for another school's artifact.
+      if (sourceType === 'policy') {
+        const p = await this.prisma.policy.findFirst({
+          where: { id: dto.sourceRef, schoolId: std.schoolId },
+        })
+        if (!p) throw new NotFoundException('Linked policy not found.')
+        sourceRef = p.id
+        if (!title) title = `${p.title}${p.category ? ` (${p.category})` : ''}`
+        if (!reference) reference = SOURCE_META.policy.link
+        kind = 'link'
+      } else {
+        // sourceType === 'board_report' (the only remaining @IsIn value)
+        const r = await this.prisma.boardReport.findFirst({
+          where: { id: dto.sourceRef, schoolId: std.schoolId },
+          include: { fiscalPeriod: { select: { label: true } } },
+        })
+        if (!r) throw new NotFoundException('Linked board report not found.')
+        sourceRef = r.id
+        if (!title) title = r.reportTitle?.trim() || `Board report — ${r.fiscalPeriod?.label ?? 'period'}`
+        if (!reference) reference = SOURCE_META.board_report.link
+        kind = 'link'
+      }
+    }
+
     const row = await this.prisma.accreditationEvidence.create({
       data: {
         // schoolId is COPIED from the resolved standard — never trusted from the client.
         schoolId: std.schoolId,
         standardId: std.id,
-        title: dto.title,
-        kind: normalizeKind(dto.kind),
-        reference: dto.reference ?? null,
+        title,
+        kind,
+        reference,
         notes: dto.notes ?? null,
         capturedAt,
+        sourceType,
+        sourceRef, // null for manual
         createdByUserId: userId,
       },
     })
@@ -305,6 +396,58 @@ export class AccreditationService {
       targetId: row.id,
     })
     return this.toEvidencePublic(row)
+  }
+
+  /**
+   * Discover the school's operational artifacts that can be attached as evidence
+   * (v1: policies + board reports). PRISMA-DIRECT (no PoliciesService/BoardReportService
+   * import — avoids the circular-dep the module guards against). Tenant-scoped: both
+   * findMany filter by the path `schoolId`, so ONLY the caller-school's artifacts are
+   * returned. v1 does NOT exclude already-attached artifacts (dedupe deferred — a school
+   * may legitimately attach one policy to multiple standards).
+   */
+  async listEvidenceSources(schoolId: string): Promise<EvidenceSourcesResponse> {
+    const [policies, reports] = await Promise.all([
+      this.prisma.policy.findMany({
+        where: { schoolId },
+        select: {
+          id: true,
+          title: true,
+          category: true,
+          lastReviewedDate: true,
+          adoptedDate: true,
+        },
+        orderBy: [{ category: 'asc' }, { title: 'asc' }],
+      }),
+      this.prisma.boardReport.findMany({
+        where: { schoolId },
+        select: {
+          id: true,
+          reportTitle: true,
+          generatedAt: true,
+          createdAt: true,
+          fiscalPeriod: { select: { label: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ])
+    return {
+      policies: policies.map((p) => ({
+        sourceType: 'policy' as const,
+        sourceRef: p.id,
+        label: `${p.title}${p.category ? ` (${p.category})` : ''}`,
+        date: toIsoDate(p.lastReviewedDate ?? p.adoptedDate),
+        link: SOURCE_META.policy.link,
+      })),
+      boardReports: reports.map((r) => ({
+        sourceType: 'board_report' as const,
+        sourceRef: r.id,
+        label: r.reportTitle?.trim() || `Board report — ${r.fiscalPeriod?.label ?? 'period'}`,
+        // generatedAt/createdAt are TIMESTAMP (not @db.Date); toIsoDate's slice(0,10) still yields yyyy-mm-dd.
+        date: toIsoDate(r.generatedAt ?? r.createdAt),
+        link: SOURCE_META.board_report.link,
+      })),
+    }
   }
 
   async removeEvidence(
