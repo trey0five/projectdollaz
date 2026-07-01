@@ -4,6 +4,7 @@
 // reserved for later sub-phases (JWT -> 1B, Stripe -> 1D).
 // ─────────────────────────────────────────────────────────────────────────────
 import { randomBytes } from 'node:crypto'
+import { SELLABLE_MODULE_KEYS } from '@finrep/db'
 
 export interface AppConfig {
   port: number
@@ -32,6 +33,14 @@ export interface AppConfig {
     webhookSecret: string
     priceMonthly: string
     priceYearly: string
+    // Per-module Stripe billing (v1 monthly-only). `priceCore` is the base/core
+    // line item for a modular subscription; `modulePrices` maps a SELLABLE module
+    // key → its Stripe priceId. All env-driven with empty defaults so the api
+    // BOOTS keyless. An empty priceId means "not purchasable via checkout" and is
+    // simply skipped by the price map (reconciliation still recognizes prices we
+    // DO map). Config-driven: adding a sellable module needs only a new env var.
+    priceCore: string
+    modulePrices: Record<string, string>
     trialDays: number
     successUrl: string
     cancelUrl: string
@@ -106,6 +115,15 @@ export function configuration(): AppConfig {
   const nodeEnv = process.env.NODE_ENV ?? 'development'
   const webOrigin = process.env.WEB_ORIGIN ?? 'http://localhost:5173'
 
+  // Build the sellable module → priceId map from STRIPE_PRICE_<MODULE> env vars.
+  // Empty/unset values are omitted so an unconfigured module is truly absent (its
+  // toggle disables in the FE; reconciliation never mis-recognizes an '' price).
+  const modulePrices: Record<string, string> = {}
+  for (const key of SELLABLE_MODULE_KEYS) {
+    const envVal = process.env[`STRIPE_PRICE_${key.toUpperCase()}`]
+    if (envVal) modulePrices[key] = envVal
+  }
+
   return {
     port: parseInt(process.env.PORT ?? '8000', 10),
     webOrigin,
@@ -128,6 +146,8 @@ export function configuration(): AppConfig {
       webhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? '',
       priceMonthly: process.env.STRIPE_PRICE_MONTHLY ?? '',
       priceYearly: process.env.STRIPE_PRICE_YEARLY ?? '',
+      priceCore: process.env.STRIPE_PRICE_CORE ?? '',
+      modulePrices,
       trialDays: parseInt(process.env.STRIPE_TRIAL_DAYS ?? '14', 10),
       successUrl:
         process.env.STRIPE_SUCCESS_URL ?? `${webOrigin}/settings/billing?checkout=success`,

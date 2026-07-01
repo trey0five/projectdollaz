@@ -74,6 +74,18 @@ export function BillingProvider({ children }) {
     [schoolId],
   )
 
+  // Owner-only. Modular per-module checkout — subscribes to `modules` (core added
+  // implicitly server-side). Redirects to the returned Stripe Checkout URL.
+  const startModuleCheckout = useCallback(
+    async (modules) => {
+      if (!schoolId) return
+      const res = await billingApi.checkout(schoolId, undefined, modules)
+      const url = res.data?.url
+      if (url) window.location.assign(url)
+    },
+    [schoolId],
+  )
+
   // Owner-only. Redirects to the Stripe Customer Portal.
   const openPortal = useCallback(async () => {
     if (!schoolId) return
@@ -113,6 +125,7 @@ export function BillingProvider({ children }) {
     hasModule,
     refresh,
     startCheckout,
+    startModuleCheckout,
     openPortal,
     apiErrorMessage,
   }

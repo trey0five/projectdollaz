@@ -2,14 +2,25 @@
 // left, Subscribe (Monthly / Yearly) and Manage-billing controls. Accountants /
 // viewers see the same status read-only. Handles the return from Checkout
 // (?checkout=success|cancel) by refreshing status.
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useSearchParams } from 'react-router-dom'
-import { CreditCard, Check, AlertTriangle, Loader2, ExternalLink } from 'lucide-react'
+import { CreditCard, Check, AlertTriangle, Loader2, ExternalLink, Lock } from 'lucide-react'
 import { useBilling } from '../../context/BillingContext.jsx'
-import { apiErrorMessage } from '../../lib/api.js'
+import { useSchools } from '../../context/SchoolContext.jsx'
+import { billingApi, apiErrorMessage } from '../../lib/api.js'
+import { SELLABLE_MODULE_KEYS, MODULE_META } from '../../lib/modules.js'
 import { FormError, FormSuccess } from '../auth/fields.jsx'
 import SettingsCard from './SettingsCard.jsx'
+
+// Fallback catalog derived from the web module mirror when the server catalog
+// field is unavailable (keyless dev still returns it, so this is a safety net).
+const FALLBACK_CATALOG = SELLABLE_MODULE_KEYS.map((key) => ({
+  key,
+  label: MODULE_META[key].label,
+  description: MODULE_META[key].description,
+  purchasable: false,
+}))
 
 const STATUS_META = {
   trialing: { label: 'Trial', cls: 'bg-gold/15 text-navy' },
@@ -41,6 +52,155 @@ function fmtDate(iso) {
   } catch {
     return '—'
   }
+}
+
+// Owner-only per-module picker. Pure UI from the catalog + the licensed set; the
+// Subscribe button hits the modular checkout (503 STRIPE_NOT_CONFIGURED in keyless
+// dev is caught and shown gracefully — the picker itself stays rendered).
+function ModulePicker() {
+  const { billing, hasModule, startModuleCheckout } = useBilling()
+  const { activeSchool } = useSchools()
+  const schoolId = activeSchool?.id ?? null
+
+  const [catalog, setCatalog] = useState(FALLBACK_CATALOG)
+  const [coreConfigured, setCoreConfigured] = useState(false)
+  const [selected, setSelected] = useState(null) // null = not yet seeded
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  const isTrial = billing?.status === 'trialing'
+
+  // Load the server catalog once (works keyless — pure config/meta).
+  useEffect(() => {
+    if (!schoolId) return
+    let cancelled = false
+    billingApi
+      .catalog(schoolId)
+      .then((res) => {
+        if (cancelled) return
+        if (Array.isArray(res.data?.modules)) setCatalog(res.data.modules)
+        setCoreConfigured(Boolean(res.data?.coreConfigured))
+      })
+      .catch(() => {
+        /* keep fallback catalog; picker still renders */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [schoolId])
+
+  // Seed the selection from the currently-licensed set at render time (repo
+  // convention: no setState-in-effect). Not during a trial (all-access, nothing
+  // "purchased" yet). Runs once (selected stays null until seeded).
+  if (selected === null && billing && !isTrial) {
+    const licensed = (billing.licensedModules ?? []).map((m) => m.key)
+    setSelected(new Set(licensed))
+  }
+  const chosen = selected ?? new Set()
+
+  const toggle = (key) => {
+    setSelected((prev) => {
+      const next = new Set(prev ?? [])
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  const subscribe = async () => {
+    if (busy) return
+    // Guard the empty selection: an empty modules[] would otherwise fall back to a
+    // legacy base-plan checkout — surprising. Require ≥1 module (core is implicit).
+    if (chosen.size === 0) {
+      setErr('Choose at least one module to subscribe (Core is always included).')
+      return
+    }
+    setErr('')
+    setBusy(true)
+    try {
+      await startModuleCheckout(Array.from(chosen))
+      // On success the browser redirects; keyless dev throws (caught below).
+    } catch (e) {
+      setErr(apiErrorMessage(e, 'Billing is not configured on this server yet.'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="mt-8 border-t border-border pt-6">
+      <h3 className="text-[17px] font-semibold text-navy">Modules</h3>
+      <p className="mt-1 text-[15px] text-muted">
+        {isTrial
+          ? 'All modules are included during your trial. Choose the modules to keep when you subscribe.'
+          : 'Choose the modules your school is licensed for. Core is always included.'}
+      </p>
+
+      <ul className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {catalog.map((m) => {
+          const licensed = hasModule(m.key)
+          const checked = chosen.has(m.key)
+          const disabled = !m.purchasable
+          return (
+            <li key={m.key}>
+              <label
+                className={`flex h-full cursor-pointer items-start gap-3 rounded-xl border-2 px-4 py-3 transition-colors ${
+                  checked ? 'border-gold bg-gold/[0.06]' : 'border-border hover:border-gold/60'
+                } ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
+              >
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4 accent-gold"
+                  checked={checked}
+                  disabled={disabled}
+                  onChange={() => toggle(m.key)}
+                />
+                <span className="min-w-0">
+                  <span className="flex items-center gap-2">
+                    <span className="text-[15px] font-semibold text-navy">{m.label}</span>
+                    {licensed && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-gold/15 px-2 py-0.5 text-[12px] font-semibold text-navy">
+                        <Check size={11} className="text-gold" /> Licensed
+                      </span>
+                    )}
+                  </span>
+                  <span className="mt-0.5 block text-[13px] leading-snug text-muted">
+                    {m.description}
+                  </span>
+                  {disabled && (
+                    <span className="mt-1 inline-flex items-center gap-1 text-[12px] font-medium text-muted">
+                      <Lock size={11} /> Not available yet
+                    </span>
+                  )}
+                </span>
+              </label>
+            </li>
+          )
+        })}
+      </ul>
+
+      {err && (
+        <div className="mt-4">
+          <FormError>{err}</FormError>
+        </div>
+      )}
+
+      <motion.button
+        whileTap={{ scale: 0.98 }}
+        onClick={subscribe}
+        disabled={busy || chosen.size === 0}
+        className="btn-primary mt-5 inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:px-6"
+      >
+        {busy ? <Loader2 size={15} className="animate-spin" /> : <CreditCard size={15} />}
+        Subscribe / update plan
+      </motion.button>
+      {!coreConfigured && (
+        <p className="mt-2 text-[13px] text-muted">
+          Modular checkout is not configured on this server yet.
+        </p>
+      )}
+    </div>
+  )
 }
 
 export default function BillingSection() {
@@ -225,6 +385,9 @@ export default function BillingSection() {
           )}
         </div>
       )}
+
+      {/* Owner-only per-module picker (additive; legacy buttons above unchanged). */}
+      {isOwner && <ModulePicker />}
     </SettingsCard>
   )
 }

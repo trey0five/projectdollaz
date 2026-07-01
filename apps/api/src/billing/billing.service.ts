@@ -5,6 +5,7 @@ import type { Subscription, SubscriptionStatus, LicensedModule, ModuleKey } from
 import {
   CORE_MODULE,
   DEFAULT_LICENSED_MODULES,
+  MODULE_META,
   SELLABLE_MODULE_KEYS,
   isModuleKey,
 } from '@finrep/db'
@@ -26,6 +27,21 @@ export interface BillingView {
   // licensed set (legacy/null → [{finance}]); when not entitled it's []. Never a
   // client-sent field, so forbidNonWhitelisted is irrelevant.
   licensedModules: LicensedModule[]
+}
+
+/** One sellable-module entry in the FE billing catalog (no raw priceId leaked). */
+export interface ModuleCatalogEntry {
+  key: ModuleKey
+  label: string
+  description: string
+  /** true when a Stripe price is configured for this module (checkout enabled). */
+  purchasable: boolean
+}
+
+export interface ModuleCatalog {
+  /** true when a core/base Stripe price is configured (modular checkout enabled). */
+  coreConfigured: boolean
+  modules: ModuleCatalogEntry[]
 }
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24
@@ -183,6 +199,74 @@ export class BillingService {
     return priceId
   }
 
+  // ── Pure, config-driven module ↔ priceId map (never throws) ─────────────────
+
+  /** The configured sellable moduleKey → priceId map (empty entries excluded). */
+  private modulePriceMap(): Record<string, string> {
+    return this.config.get<Record<string, string>>('stripe.modulePrices') ?? {}
+  }
+
+  /** The configured core/base priceId, or null when unset. */
+  private corePriceId(): string | null {
+    return this.config.get<string>('stripe.priceCore') || null
+  }
+
+  /**
+   * priceId → sellable ModuleKey (webhook reconciliation direction). The core
+   * price, the legacy base prices, and any unknown/unconfigured price all map to
+   * null (caller distinguishes recognized-core via isCorePrice). Never throws.
+   */
+  private moduleFromPrice(priceId: string | null | undefined): ModuleKey | null {
+    if (!priceId) return null
+    const map = this.modulePriceMap()
+    for (const [key, pid] of Object.entries(map)) {
+      if (pid && pid === priceId && isModuleKey(key) && key !== CORE_MODULE) {
+        return key as ModuleKey
+      }
+    }
+    return null
+  }
+
+  /**
+   * True when the priceId is a RECOGNIZED base/core price: the dedicated
+   * `priceCore` OR the legacy `priceMonthly`/`priceYearly` base. A recognized
+   * core price contributes NO sellable module but marks the catalog as understood
+   * (so a legacy single-base sub is not mistaken for an "unknown catalog").
+   */
+  private isCorePrice(priceId: string | null | undefined): boolean {
+    if (!priceId) return false
+    const core = this.corePriceId()
+    if (core && priceId === core) return true
+    const monthly = this.config.get<string>('stripe.priceMonthly') || null
+    const yearly = this.config.get<string>('stripe.priceYearly') || null
+    return priceId === monthly || priceId === yearly
+  }
+
+  /** ModuleKey → configured priceId (checkout direction); null when unconfigured. */
+  private priceForModule(key: string): string | null {
+    const map = this.modulePriceMap()
+    return map[key] || null
+  }
+
+  // ── Module catalog (FE picker) ──────────────────────────────────────────────
+
+  /**
+   * Sellable-module catalog for the FE picker. Pure (config + MODULE_META only) —
+   * makes NO Stripe call, so it works keyless. Raw priceIds are NOT exposed; only
+   * a `purchasable` boolean (a price is configured). Amounts are deferred (v1).
+   */
+  getCatalog(): ModuleCatalog {
+    return {
+      coreConfigured: !!this.corePriceId(),
+      modules: SELLABLE_MODULE_KEYS.map((key) => ({
+        key,
+        label: MODULE_META[key].label,
+        description: MODULE_META[key].description,
+        purchasable: !!this.priceForModule(key),
+      })),
+    }
+  }
+
   /** Create-or-reuse the Stripe customer for a school; persists the id. */
   private async ensureCustomer(schoolId: string): Promise<string> {
     const sub = await this.getOrCreateSubscription(schoolId)
@@ -197,15 +281,65 @@ export class BillingService {
     return customer.id
   }
 
-  async createCheckoutSession(schoolId: string, plan: BillingPlan): Promise<{ url: string }> {
-    const stripe = this.stripeClient.getClient()
-    const priceId = this.resolvePriceId(plan)
+  /**
+   * Build the line_items for a MODULAR checkout: the core/base price first (always,
+   * so the sub carries the platform floor), then one item per requested sellable
+   * module. Pure (no Stripe call) → unit-testable. Rejects the always-on `core`
+   * pseudo-key and any module whose price is unconfigured with a clear 400.
+   */
+  private buildModuleLineItems(modules: string[]): { price: string; quantity: number }[] {
+    const items: { price: string; quantity: number }[] = []
+    const core = this.corePriceId()
+    if (core) items.push({ price: core, quantity: 1 })
+
+    const unknown: string[] = []
+    const seen = new Set<string>()
+    for (const key of modules) {
+      if (key === CORE_MODULE) continue // core is implicit, never a line item here
+      if (seen.has(key)) continue // de-dupe
+      seen.add(key)
+      const price = this.priceForModule(key)
+      if (price) items.push({ price, quantity: 1 })
+      else unknown.push(key)
+    }
+    if (unknown.length) {
+      throw new BadRequestException({
+        code: 'MODULE_PRICE_NOT_CONFIGURED',
+        message: `No Stripe price configured for module(s): ${unknown.join(', ')}.`,
+      })
+    }
+    if (items.length === 0) {
+      throw new BadRequestException({
+        code: 'NO_LINE_ITEMS',
+        message:
+          'No purchasable line items — configure a core price or at least one module price.',
+      })
+    }
+    return items
+  }
+
+  // Overloads: legacy base-plan checkout OR modular per-module checkout. Both are
+  // gated by getClient() (503 when keyless — FIRST, before any work / DB write).
+  async createCheckoutSession(schoolId: string, plan: BillingPlan): Promise<{ url: string }>
+  async createCheckoutSession(
+    schoolId: string,
+    opts: { modules: string[]; interval?: BillingPlan },
+  ): Promise<{ url: string }>
+  async createCheckoutSession(
+    schoolId: string,
+    arg: BillingPlan | { modules: string[]; interval?: BillingPlan },
+  ): Promise<{ url: string }> {
+    const stripe = this.stripeClient.getClient() // keyless → 503 before any work
+    const lineItems =
+      typeof arg === 'string'
+        ? [{ price: this.resolvePriceId(arg), quantity: 1 }] // legacy base plan
+        : this.buildModuleLineItems(arg.modules) // modular per-module
     const customer = await this.ensureCustomer(schoolId)
 
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       customer,
-      line_items: [{ price: priceId, quantity: 1 }],
+      line_items: lineItems,
       success_url: this.config.get<string>('stripe.successUrl') ?? '',
       cancel_url: this.config.get<string>('stripe.cancelUrl') ?? '',
       metadata: { schoolId },
@@ -407,7 +541,33 @@ export class BillingService {
       (item as unknown as { current_period_end?: number } | undefined)?.current_period_end
     const trialEndUnix = (sub as unknown as { trial_end?: number | null }).trial_end ?? null
 
-    const data = {
+    // ── Reconcile licensed modules from ALL line items (per-module billing) ──
+    // FAIL-SAFE rule (see the no-lockout truth table):
+    //   • ≥1 recognized MODULE price          → write that exact sellable set.
+    //   • only a recognized core/legacy base   → write [] (genuine core-only sub;
+    //     the READ layer resolveLicensed still floors [] → finance → no lockout).
+    //   • items present but NONE recognized    → LEAVE licensed_modules UNTOUCHED
+    //     (omit the key) — never wipe a paid set on an unknown/misconfigured
+    //     catalog or a malformed payload. This is the #1 fail-safe.
+    //   • no items at all                      → LEAVE UNTOUCHED (omit the key).
+    // The stored set is IGNORED while trialing (trial = all-access) and only takes
+    // effect once the sub is active — so writing it during a trial is harmless.
+    const items = sub.items?.data ?? []
+    const recognizedModules: ModuleKey[] = []
+    let sawRecognizedPrice = false
+    for (const it of items) {
+      const pid = it?.price?.id ?? null
+      const mod = this.moduleFromPrice(pid)
+      if (mod) {
+        sawRecognizedPrice = true
+        if (!recognizedModules.includes(mod)) recognizedModules.push(mod)
+      } else if (this.isCorePrice(pid)) {
+        sawRecognizedPrice = true // recognized core → no sellable module contributed
+      }
+      // else: unknown price → contributes nothing; does NOT set sawRecognizedPrice
+    }
+
+    const data: Record<string, unknown> = {
       stripeCustomerId: customerId ?? null,
       stripeSubscriptionId: sub.id,
       stripePriceId: priceId,
@@ -418,6 +578,20 @@ export class BillingService {
       cancelAtPeriodEnd: Boolean(sub.cancel_at_period_end),
     }
 
+    if (sawRecognizedPrice) {
+      // Catalog understood → the recognized sellable set is authoritative, even if
+      // empty (core-only purchase writes []; read layer floors [] → finance).
+      data.licensedModules = recognizedModules.map((key) => ({ key, tier: null }))
+    } else if (items.length > 0) {
+      // Items present but NOT ONE recognized → do NOT touch licensed_modules.
+      this.logger.warn(
+        `${eventType} for ${schoolId}: ${items.length} item(s) but no recognized price ` +
+          `(unknown catalog / misconfig) — leaving licensed_modules UNTOUCHED. ` +
+          `priceIds seen: ${items.map((i) => i?.price?.id ?? '?').join(', ')}`,
+      )
+    }
+    // items.length === 0 → also leave untouched (data.licensedModules omitted).
+
     await this.prisma.subscription.upsert({
       where: { schoolId },
       update: data,
@@ -427,7 +601,14 @@ export class BillingService {
       schoolId,
       action: 'billing.subscription_updated',
       targetType: 'subscription',
-      metadata: { eventType, status },
+      metadata: {
+        eventType,
+        status,
+        licensedModules:
+          data.licensedModules !== undefined
+            ? (data.licensedModules as LicensedModule[]).map((m) => m.key)
+            : 'untouched',
+      },
     })
   }
 

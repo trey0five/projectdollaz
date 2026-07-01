@@ -20,8 +20,17 @@ export class BillingController {
     return this.billing.getBilling(schoolId)
   }
 
+  // Sellable-module catalog for the FE picker (labels + purchasable flags; no raw
+  // priceIds). Pure config/meta — works keyless. All active members may read it.
+  @Get('catalog')
+  @Roles('owner', 'accountant', 'viewer')
+  catalog() {
+    return this.billing.getCatalog()
+  }
+
   // Create a Stripe Checkout Session. OWNER only. Requires a live STRIPE_SECRET_KEY
-  // (otherwise returns 503 STRIPE_NOT_CONFIGURED).
+  // (otherwise returns 503 STRIPE_NOT_CONFIGURED). Branches on the DTO: a `modules`
+  // array → modular per-module checkout; otherwise the legacy base-plan checkout.
   @Post('checkout')
   @Roles('owner')
   checkout(
@@ -29,7 +38,13 @@ export class BillingController {
     @Param('schoolId') schoolId: string,
     @Body() dto: CreateCheckoutDto,
   ) {
-    return this.billing.createCheckoutSession(schoolId, dto.plan)
+    if (dto.modules && dto.modules.length) {
+      return this.billing.createCheckoutSession(schoolId, {
+        modules: dto.modules,
+        interval: dto.interval,
+      })
+    }
+    return this.billing.createCheckoutSession(schoolId, dto.plan ?? 'monthly')
   }
 
   // Create a Customer Portal session. OWNER only.

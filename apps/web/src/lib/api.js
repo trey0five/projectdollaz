@@ -526,8 +526,15 @@ export const workpapersApi = {
 // ── Phase 1D: subscription billing ───────────────────────────────────────────
 export const billingApi = {
   get: (schoolId) => api.get(`/schools/${schoolId}/billing`),
-  checkout: (schoolId, plan) =>
-    api.post(`/schools/${schoolId}/billing/checkout`, { plan }),
+  // Sellable-module catalog for the settings picker (labels + purchasable flags).
+  catalog: (schoolId) => api.get(`/schools/${schoolId}/billing/catalog`),
+  // Legacy base-plan checkout OR modular per-module checkout. Sends { modules }
+  // when a non-empty module list is passed, else the legacy { plan } body.
+  checkout: (schoolId, plan, modules) =>
+    api.post(
+      `/schools/${schoolId}/billing/checkout`,
+      modules && modules.length ? { modules } : { plan },
+    ),
   portal: (schoolId) => api.post(`/schools/${schoolId}/billing/portal`),
 }
 
