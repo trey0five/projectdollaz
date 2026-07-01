@@ -47,6 +47,7 @@ import { useAuth } from '../../context/AuthContext.jsx'
 import { useBilling } from '../../context/BillingContext.jsx'
 import { SELLABLE_MODULE_KEYS, MODULE_META } from '../../lib/modules.js'
 import SchoolSwitcher from '../SchoolSwitcher.jsx'
+import SearchBox from '../search/SearchBox.jsx'
 import { NAV_GROUPS, SETTINGS_ITEM } from './sidebarNav.js'
 
 // Per-module icon for the (dimmed) Add-ons rows; falls back to a Lock badge.
@@ -288,6 +289,8 @@ export default function AppShell({ children }) {
               </button>
               <SchoolSwitcher />
             </div>
+            {/* Middle: platform-wide search (desktop input + mobile icon overlay). */}
+            <SearchBox />
             <div className="hidden items-center gap-3 lg:flex">
               <motion.button
                 whileTap={reduce ? undefined : { scale: 0.96 }}

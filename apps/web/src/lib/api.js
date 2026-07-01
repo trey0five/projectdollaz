@@ -563,6 +563,17 @@ export const workpapersApi = {
     api.get(`/schools/${schoolId}/periods/${periodId}/workpapers`),
 }
 
+// ── Phase 4 Knowledge/Search v1 — platform-wide search ────────────────────────
+// CORE (route not module-gated); per-DOMAIN results are gated server-side by module
+// entitlement (a finance-only school finds only tasks). Returns a grouped response
+// { query, total, groups:[{ domain, label, count, items }] }. `q` is the ONLY query
+// param the forbidNonWhitelisted DTO accepts. AbortSignal is forwarded so the hook
+// can cancel a stale in-flight request.
+export const searchApi = {
+  query: (schoolId, q, signal) =>
+    api.get(`/schools/${schoolId}/search`, { params: { q }, signal }),
+}
+
 // ── Phase 1D: subscription billing ───────────────────────────────────────────
 export const billingApi = {
   get: (schoolId) => api.get(`/schools/${schoolId}/billing`),
