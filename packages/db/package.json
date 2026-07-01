@@ -16,6 +16,11 @@
       "types": "./dist/json-types.d.ts",
       "import": "./dist/json-types.js",
       "default": "./dist/json-types.js"
+    },
+    "./modules": {
+      "types": "./dist/modules.d.ts",
+      "import": "./dist/modules.js",
+      "default": "./dist/modules.js"
     }
   },
   "files": [

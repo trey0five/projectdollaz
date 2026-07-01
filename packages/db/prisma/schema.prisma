@@ -372,6 +372,14 @@ model Subscription {
   currentPeriodEnd     DateTime?          @map("current_period_end")
   trialEnd             DateTime?          @map("trial_end")
   cancelAtPeriodEnd    Boolean            @default(false) @map("cancel_at_period_end")
+  // Per-module entitlement (additive, NULLABLE). Stored shape: LicensedModule[]
+  // i.e. [{ "key": "finance", "tier": "standard" }]. NULL = legacy/un-migrated
+  // row → resolved to {finance} (+ core) at READ time (billing.service). NULL is
+  // deliberately NOT defaulted to [] in the DB: [] would mean "licensed to
+  // nothing" and could lock out an existing active school, whereas NULL must mean
+  // "legacy → finance". Written only by the (deferred) Stripe reconciliation; no
+  // client DTO accepts it (forbidNonWhitelisted-safe).
+  licensedModules      Json?              @map("licensed_modules") @db.JsonB
   createdAt            DateTime           @default(now()) @map("created_at")
   updatedAt           DateTime           @updatedAt @map("updated_at")
 

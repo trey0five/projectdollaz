@@ -1,7 +1,7 @@
 import { defineConfig } from 'tsup'
 
 export default defineConfig({
-  entry: ['src/index.ts', 'src/json-types.ts'],
+  entry: ['src/index.ts', 'src/json-types.ts', 'src/modules.ts'],
   format: ['esm'],
   dts: { compilerOptions: { composite: false, declarationMap: false } },
   tsconfig: 'tsconfig.json',

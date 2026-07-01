@@ -5,6 +5,7 @@ import { RolesGuard } from '../common/guards/roles.guard.js'
 import { Roles } from '../common/decorators/roles.decorator.js'
 import { CurrentUser } from '../common/decorators/current-user.decorator.js'
 import { EntitlementGuard } from '../billing/entitlement.guard.js'
+import { RequiresModule } from '../billing/requires-module.decorator.js'
 import { StatementsService } from './statements.service.js'
 import { GenerateStatementDto } from './dto/generate-statement.dto.js'
 
@@ -18,6 +19,7 @@ export class StatementsController {
   @Post()
   @Roles('owner', 'accountant')
   @UseGuards(EntitlementGuard)
+  @RequiresModule('finance')
   generate(
     @CurrentUser() user: User,
     @Param('schoolId') schoolId: string,

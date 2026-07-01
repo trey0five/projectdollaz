@@ -1,7 +1,13 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import type Stripe from 'stripe'
-import type { Subscription, SubscriptionStatus } from '@finrep/db'
+import type { Subscription, SubscriptionStatus, LicensedModule, ModuleKey } from '@finrep/db'
+import {
+  CORE_MODULE,
+  DEFAULT_LICENSED_MODULES,
+  SELLABLE_MODULE_KEYS,
+  isModuleKey,
+} from '@finrep/db'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { AuditService } from '../common/audit/audit.service.js'
 import { StripeClientService } from './stripe-client.service.js'
@@ -15,6 +21,11 @@ export interface BillingView {
   cancelAtPeriodEnd: boolean
   daysLeft: number | null
   isEntitled: boolean
+  // Per-module entitlement (additive RESPONSE field). During a live trial this is
+  // the full sellable set (all-access); for an active sub it's the resolved
+  // licensed set (legacy/null → [{finance}]); when not entitled it's []. Never a
+  // client-sent field, so forbidNonWhitelisted is irrelevant.
+  licensedModules: LicensedModule[]
 }
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24
@@ -79,6 +90,45 @@ export class BillingService {
     return this.computeEntitled(sub)
   }
 
+  // ── Per-module entitlement ──────────────────────────────────────────────────
+
+  /**
+   * FAIL-SAFE resolver (pure, no DB) mapping the stored `licensedModules` JSON to
+   * a clean LicensedModule[]. The NO-LOCKOUT linchpin: NULL / empty / non-array /
+   * all-invalid resolves to the DEFAULT ([{finance}]) so every existing active row
+   * (NULL after the additive migration) licenses finance. Defensive against
+   * garbage / hand-edited JSON — never throws, always fails toward finance.
+   */
+  private resolveLicensed(sub: Subscription): LicensedModule[] {
+    const raw = sub.licensedModules as unknown
+    if (!Array.isArray(raw)) return [...DEFAULT_LICENSED_MODULES]
+    const parsed = raw
+      .filter(
+        (m): m is { key: string; tier?: unknown } =>
+          !!m && typeof m === 'object' && isModuleKey((m as { key?: unknown }).key),
+      )
+      .map((m) => ({
+        key: m.key as ModuleKey,
+        tier: typeof m.tier === 'string' ? (m.tier as LicensedModule['tier']) : null,
+      }))
+    return parsed.length > 0 ? parsed : [...DEFAULT_LICENSED_MODULES]
+  }
+
+  /**
+   * Module-aware entitlement. Semantics = ENTITLED (active / valid-trial) AND
+   * (core OR trial=all-access OR key ∈ resolved licensed set). A not-entitled
+   * school is false for EVERY module (so the guard emits SUBSCRIPTION_REQUIRED, not
+   * MODULE_NOT_LICENSED). A live trial passes EVERY module (all-access, no lockout).
+   * An active school with a legacy/null set resolves to finance-only.
+   */
+  async isEntitledForModule(schoolId: string, moduleKey: string): Promise<boolean> {
+    const sub = await this.getOrCreateSubscription(schoolId)
+    if (!this.computeEntitled(sub)) return false // not paying at all → false
+    if (moduleKey === CORE_MODULE) return true // core is always-on when entitled
+    if (sub.status === 'trialing') return true // TRIAL = all-access to every module
+    return this.resolveLicensed(sub).some((m) => m.key === moduleKey)
+  }
+
   // ── Read ────────────────────────────────────────────────────────────────────
 
   async getBilling(schoolId: string): Promise<BillingView> {
@@ -93,6 +143,18 @@ export class BillingService {
       daysLeft = Math.max(0, Math.ceil((anchor.getTime() - Date.now()) / MS_PER_DAY))
     }
 
+    // Surface the licensed set so the FE matches the guard. A live trial shows the
+    // full sellable set (all-access); an active sub shows its resolved set
+    // (legacy/null → [{finance}]); not entitled → [] (nothing to render).
+    let licensedModules: LicensedModule[]
+    if (!isEntitled) {
+      licensedModules = []
+    } else if (sub.status === 'trialing') {
+      licensedModules = SELLABLE_MODULE_KEYS.map((key) => ({ key, tier: null }))
+    } else {
+      licensedModules = this.resolveLicensed(sub)
+    }
+
     return {
       status: sub.status,
       plan: sub.plan,
@@ -101,6 +163,7 @@ export class BillingService {
       cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
       daysLeft,
       isEntitled,
+      licensedModules,
     }
   }
 

@@ -82,6 +82,24 @@ export function BillingProvider({ children }) {
     if (url) window.location.assign(url)
   }, [schoolId])
 
+  // Per-module gate mirror of the backend isEntitledForModule. Order matches the
+  // backend: entitlement is checked FIRST (a lapsed/canceled school is NOT
+  // licensed to anything — not even 'core'), THEN core-always / trial-all-access /
+  // the licensed set (legacy/null → finance). Defaults toward ACCESS only while
+  // billing is still loading (never flash a gate pre-load). Nothing hides today
+  // since every entitled school has finance.
+  const hasModule = useCallback(
+    (key) => {
+      if (!billing) return true // still loading — don't flash a gate
+      if (!billing.isEntitled) return false // parity with backend: not entitled → nothing, incl. core
+      if (key === 'core') return true
+      if (billing.status === 'trialing') return true
+      const set = billing.licensedModules ?? [{ key: 'finance' }]
+      return set.some((m) => m.key === key)
+    },
+    [billing],
+  )
+
   const value = {
     billing,
     loading,
@@ -91,6 +109,8 @@ export function BillingProvider({ children }) {
     // entitled mirrors the backend gate; default true while loading so we never
     // flash a "subscribe" gate before status arrives.
     entitled: billing ? billing.isEntitled : true,
+    licensedModules: billing?.licensedModules ?? [],
+    hasModule,
     refresh,
     startCheckout,
     openPortal,

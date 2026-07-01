@@ -510,11 +510,25 @@ export const billingApi = {
 
 // The backend signals a lapsed trial / inactive subscription on a paid write
 // (statement generate, import create) with HTTP 402 + code SUBSCRIPTION_REQUIRED.
+// Per-module gating adds a DISTINCT 402 { code: 'MODULE_NOT_LICENSED', module }
+// for an entitled-but-unlicensed school — that is a "add this module" state, NOT
+// a "subscribe" state, so isPaymentRequired EXCLUDES it (they are mutually
+// exclusive). A bare 402 with no code is still treated as the subscribe case.
 export function isPaymentRequired(err) {
-  return (
-    err?.response?.status === 402 ||
-    err?.response?.data?.code === 'SUBSCRIPTION_REQUIRED'
-  )
+  const code = err?.response?.data?.code
+  if (code === 'MODULE_NOT_LICENSED') return false
+  return err?.response?.status === 402 || code === 'SUBSCRIPTION_REQUIRED'
+}
+
+// The entitled-but-not-licensed 402 — the school pays, but this module isn't on
+// their plan. Surfaces an "add this module" CTA (distinct from "subscribe").
+export function isModuleNotLicensed(err) {
+  return err?.response?.data?.code === 'MODULE_NOT_LICENSED'
+}
+
+// The module key from a MODULE_NOT_LICENSED 402 body (e.g. 'planning'), or null.
+export function moduleFromError(err) {
+  return err?.response?.data?.module ?? null
 }
 
 // Extract a Nest error response's `code` field (e.g. LAST_OWNER) if present.

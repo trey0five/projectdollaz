@@ -17,3 +17,18 @@ export type {
   StatementPayloadJson,
   AuditMetadataJson,
 } from './json-types.js'
+
+// Per-module entitlement registry (pure const — no Prisma). Re-exported so the
+// api can `import { MODULE_KEYS, ... } from '@finrep/db'`. Web mirrors these in
+// apps/web/src/lib/modules.js to avoid pulling Prisma into the Vite bundle.
+export {
+  MODULE_KEYS,
+  CORE_MODULE,
+  DEFAULT_MODULE,
+  MODULE_META,
+  SELLABLE_MODULE_KEYS,
+  DEFAULT_LICENSED_MODULES,
+  isModuleKey,
+  isCoreModule,
+} from './modules.js'
+export type { ModuleKey, ModuleTier, LicensedModule, ModuleDef } from './modules.js'
