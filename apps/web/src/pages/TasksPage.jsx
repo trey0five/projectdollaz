@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Tasks route (Phase 3 Workflow v1): TopBar + the TASK list panel. School-scoped
+// Tasks route (Phase 3 Workflow v1): AppShell chrome + the TASK list panel. School-scoped
 // (no period selector). CORE — always available (no module gate); only the base
 // entitlement can pause it (notEntitled). Navy/gold theme, reduced-motion safe,
 // no setState-in-effect.

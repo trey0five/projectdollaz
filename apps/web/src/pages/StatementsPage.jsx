@@ -1,4 +1,4 @@
-// Statements & Periods route (IA overhaul). The TopBar (rendered once here) +
+// Statements & Periods route (IA overhaul). The AppShell chrome (rendered once here) +
 // the merged workspace: the saved-periods list + the full live statements
 // workspace (intake -> generate -> the four statements -> save). Inherits
 // SchoolProvider/BillingProvider/PersistenceProvider from AuthedLayout; the live

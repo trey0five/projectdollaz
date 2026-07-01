@@ -1,4 +1,4 @@
-// Home route (IA overhaul): the TopBar + the trial banner + the hybrid command
+// Home route (IA overhaul): the AppShell chrome + the trial banner + the hybrid command
 // center. Mirrors AnalyticsPage's shell — inherits SchoolProvider/BillingProvider/
 // PersistenceProvider from AuthedLayout. AppContext/useApp is NOT needed here.
 import BillingBanner from '../components/BillingBanner.jsx'

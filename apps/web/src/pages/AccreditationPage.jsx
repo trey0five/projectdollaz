@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Accreditation route (Phase 4 v1): TopBar + the STANDARDS + EVIDENCE register.
+// Accreditation route (Phase 4 v1): AppShell chrome + the STANDARDS + EVIDENCE register.
 // School-scoped (no period selector). Gated by the 'accreditation' module — the nav
 // item is hidden by hasModule, but a direct-nav for a finance-only school renders a
 // friendly "module not on your plan" panel (the API 402 → notLicensed). A coverage

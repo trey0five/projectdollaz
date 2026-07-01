@@ -1,4 +1,4 @@
-// Analytics route (Phase 4A): the TopBar + the financial-insights dashboard.
+// Analytics route (Phase 4A): the AppShell chrome + the financial-insights dashboard.
 // Mirrors HistoryPage's shell — inherits SchoolProvider/BillingProvider/
 // PersistenceProvider from AuthedLayout. All roles may read.
 import BillingBanner from '../components/BillingBanner.jsx'

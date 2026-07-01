@@ -1,4 +1,4 @@
-// Settings shell: the navy app chrome (reusing TopBar) + a responsive sidebar
+// Settings shell: the navy app chrome (reusing AppShell chrome) + a responsive sidebar
 // and an animated cream panel that renders the active nested section via Outlet.
 import { motion } from 'framer-motion'
 import { Link, Outlet, useLocation } from 'react-router-dom'

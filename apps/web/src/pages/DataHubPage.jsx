@@ -3,7 +3,7 @@
 // v1 REUSES existing surfaces: it EMBEDS MonthlyActualsPanel + OperationalDataPanel
 // + BudgetSetup unforked and LINKS out to /statements, /reports/schedules, /readiness.
 // A QuickBooks fast-path card sits on top, and the global Penny (usePenny) points
-// at the next incomplete step. Shell mirrors ReportsPage (TopBar + BillingBanner +
+// at the next incomplete step. Shell mirrors ReportsPage (AppShell chrome + BillingBanner +
 // max-w-[1100px] main). Period selector reuses the ReportsPage idiom verbatim:
 // snapshotPeriods[0]?.id ?? periods[0]?.id, with a local useState synced on key
 // (NOT setState-in-effect). SOURCES is a module-scope config array (like

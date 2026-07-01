@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Governance route (Phase 3 v1): TopBar + the POLICY REGISTER panel. School-scoped
+// Governance route (Phase 3 v1): AppShell chrome + the POLICY REGISTER panel. School-scoped
 // (no period selector). Gated by the 'governance' module — the nav item is hidden
 // by hasModule, but a direct-nav to /governance for a finance-only school renders
 // a friendly "module not on your plan" panel (the API 402 → notLicensed).
