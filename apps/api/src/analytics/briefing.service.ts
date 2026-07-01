@@ -12,7 +12,13 @@ import { PoliciesService } from '../governance/policies.service.js'
 import { TasksService } from '../workflow/tasks.service.js'
 import { AccreditationService } from '../accreditation/accreditation.service.js'
 import { FacilitiesService } from '../facilities/facilities.service.js'
-import { ACCREDITATION_REVIEW_SOON_DAYS, BADLY_OVERDUE_DAYS, DUE_SOON_DAYS } from '@finrep/compliance'
+import { AdvancementService } from '../advancement/advancement.service.js'
+import {
+  ACCREDITATION_REVIEW_SOON_DAYS,
+  ADVANCEMENT_CLOSING_SOON_DAYS,
+  BADLY_OVERDUE_DAYS,
+  DUE_SOON_DAYS,
+} from '@finrep/compliance'
 import {
   applyLens,
   availableLensesFor,
@@ -43,6 +49,7 @@ export type AttentionSource =
   | 'workflow'
   | 'accreditation'
   | 'facilities'
+  | 'advancement'
 
 /**
  * A task at least this many days past due escalates the workflow overdue item from
@@ -174,6 +181,8 @@ export class BriefingService {
     private readonly accreditation: AccreditationService,
     // Phase 4 Facilities v1 — the module gate + the maintenance register read.
     private readonly facilities: FacilitiesService,
+    // Phase 4 Advancement v1 — the module gate + the campaign register read.
+    private readonly advancement: AdvancementService,
   ) {}
 
   /**
@@ -280,6 +289,7 @@ export class BriefingService {
       openTasks,
       accreditationLicensed,
       facilitiesLicensed,
+      advancementLicensed,
     ] = await Promise.all([
       this.compliance.evaluateForPeriod(schoolId, period.id).catch(() => null),
       this.reconciliation.reconcileForPeriod(schoolId, period.id).catch(() => null),
@@ -292,6 +302,8 @@ export class BriefingService {
       this.billing.isEntitledForModule(schoolId, 'accreditation').catch(() => false),
       // Phase 4 Facilities gate — same fan-out, fail CLOSED (hides facilities items).
       this.billing.isEntitledForModule(schoolId, 'facilities').catch(() => false),
+      // Phase 4 Advancement gate — same fan-out, fail CLOSED (hides advancement items).
+      this.billing.isEntitledForModule(schoolId, 'advancement').catch(() => false),
     ])
 
     // 2a — open 2A findings (material -> critical, reportable -> warn).
@@ -659,6 +671,56 @@ export class BriefingService {
             metricKey: null,
             value: null,
             link: '/facilities',
+            dueDate: earliest,
+          })
+        }
+      }
+    }
+
+    // ── STEP 2.9: advancement giving-progress signals (source 'advancement') ──
+    // The FOURTH licensable module's briefing source — fundraising campaign progress
+    // surfaced as a board/development signal, completing all 8 domains. School-scoped
+    // (NOT period-bound), like governance/accreditation/facilities.
+    //
+    // GATED by the per-module entitlement: a finance-only school gets ZERO
+    // advancement items here while STILL getting every other item above — the gate
+    // ONLY skips this push. Fail-soft in BOTH directions like facilities:
+    //   • isEntitledForModule throws → treat as NOT licensed (fail CLOSED), and
+    //   • listCampaigns throws → skip (fail-soft to null).
+    // Neither ever 500s the briefing. Value-safe: AGGREGATE only, no per-donor PII.
+    // (advancementLicensed was resolved in the STEP 2 parallel fan-out above.)
+    if (advancementLicensed) {
+      const reg = await this.advancement.listCampaigns(schoolId).catch(() => null)
+      if (reg) {
+        const { behindGoalActiveCount, closingSoonActiveCount, overdueActiveCount, activeCount, overallPctOfGoal } =
+          reg.summary
+        if (behindGoalActiveCount > 0 || closingSoonActiveCount > 0 || overdueActiveCount > 0) {
+          // CRITICAL when any active campaign is past its close date, OR (closing soon
+          // AND behind goal — under-funded with the clock running out); else warn.
+          const critical =
+            overdueActiveCount > 0 || (closingSoonActiveCount > 0 && behindGoalActiveCount > 0)
+          // Earliest close date among ACTIVE campaigns → the dueDate hint.
+          const earliest =
+            reg.campaigns
+              .filter((c) => c.status === 'active' && c.closeDate)
+              .map((c) => c.closeDate as string)
+              .sort()[0] ?? null
+          const pctTxt =
+            overallPctOfGoal !== null ? `${Math.round(overallPctOfGoal * 100)}% of goal` : 'in progress'
+          items.push({
+            id: 'advancement:giving-progress',
+            severity: critical ? 'critical' : 'warn',
+            source: 'advancement',
+            title:
+              behindGoalActiveCount > 0
+                ? `${behindGoalActiveCount} active campaign${behindGoalActiveCount === 1 ? '' : 's'} behind goal`
+                : overdueActiveCount > 0
+                  ? `${overdueActiveCount} campaign${overdueActiveCount === 1 ? '' : 's'} past close date`
+                  : `${closingSoonActiveCount} campaign${closingSoonActiveCount === 1 ? '' : 's'} closing soon`,
+            why: `Fundraising is ${pctTxt} across ${activeCount} active campaign${activeCount === 1 ? '' : 's'}${behindGoalActiveCount > 0 ? `; ${behindGoalActiveCount} behind goal` : ''}${overdueActiveCount > 0 ? `; ${overdueActiveCount} past ${overdueActiveCount === 1 ? 'its' : 'their'} close date` : closingSoonActiveCount > 0 ? `; ${closingSoonActiveCount} closing within ${ADVANCEMENT_CLOSING_SOON_DAYS} days` : ''}. Review the advancement register for development planning.`,
+            metricKey: null,
+            value: null,
+            link: '/advancement',
             dueDate: earliest,
           })
         }

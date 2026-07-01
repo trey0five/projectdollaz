@@ -89,6 +89,12 @@ function makeService(over: {
     tasks as never,
     accreditationSvc as never,
     facilities as never,
+    {
+      listCampaigns: async () => ({
+        campaigns: [],
+        summary: { total: 0, activeCount: 0, totalGoal: 0, totalRaised: 0, overallPctOfGoal: null, behindGoalActiveCount: 0, closingSoonActiveCount: 0, overdueActiveCount: 0 },
+      }),
+    } as never,
   )
 }
 

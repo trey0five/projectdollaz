@@ -81,10 +81,11 @@ function buildBriefing(analytics: AnalyticsService, billing: BillingService): Br
   const tasks = { listOpenForBriefing: async () => [] }
   const accreditation = { listStandards: async () => ({ standards: [], summary: { total: 0, withEvidence: 0, gaps: 0, pctCovered: 0 } }) }
   const facilities = { listMaintenance: async () => ({ items: [], summary: { total: 0, openCount: 0, highPriorityOpenCount: 0, criticalOpen: 0, overdueOpen: 0, backlogCost: 0 } }) }
+  const advancement = { listCampaigns: async () => ({ campaigns: [], summary: { total: 0, activeCount: 0, totalGoal: 0, totalRaised: 0, overallPctOfGoal: null, behindGoalActiveCount: 0, closingSoonActiveCount: 0, overdueActiveCount: 0 } }) }
   return new BriefingService(
     periods as never, analytics, nullSvc as never, checklist as never,
     recon as never, corrective as never, billing, policies as never,
-    tasks as never, accreditation as never, facilities as never,
+    tasks as never, accreditation as never, facilities as never, advancement as never,
   )
 }
 

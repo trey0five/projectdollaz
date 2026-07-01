@@ -25,6 +25,7 @@ import ReportsPage from './pages/ReportsPage.jsx'
 import GovernancePage from './pages/GovernancePage.jsx'
 import AccreditationPage from './pages/AccreditationPage.jsx'
 import FacilitiesPage from './pages/FacilitiesPage.jsx'
+import AdvancementPage from './pages/AdvancementPage.jsx'
 import TasksPage from './pages/TasksPage.jsx'
 import SchedulesPage from './pages/SchedulesPage.jsx'
 import BoardReportPrintPage from './pages/BoardReportPrintPage.jsx'
@@ -127,6 +128,7 @@ export default function App() {
         <Route path="/governance" element={<GovernancePage />} />
         <Route path="/accreditation" element={<AccreditationPage />} />
         <Route path="/facilities" element={<FacilitiesPage />} />
+        <Route path="/advancement" element={<AdvancementPage />} />
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/readiness/cap/print" element={<CapPrintPage />} />
         <Route path="/readiness/workpapers/print" element={<WorkpapersPrintPage />} />

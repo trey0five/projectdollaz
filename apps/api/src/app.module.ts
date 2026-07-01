@@ -25,6 +25,7 @@ import { GovernanceModule } from './governance/governance.module.js'
 import { WorkflowModule } from './workflow/workflow.module.js'
 import { AccreditationModule } from './accreditation/accreditation.module.js'
 import { FacilitiesModule } from './facilities/facilities.module.js'
+import { AdvancementModule } from './advancement/advancement.module.js'
 import { KnowledgeModule } from './knowledge/knowledge.module.js'
 
 @Module({
@@ -62,6 +63,7 @@ import { KnowledgeModule } from './knowledge/knowledge.module.js'
     WorkflowModule,
     AccreditationModule,
     FacilitiesModule,
+    AdvancementModule,
     KnowledgeModule,
   ],
 })

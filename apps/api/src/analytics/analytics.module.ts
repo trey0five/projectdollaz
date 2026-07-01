@@ -9,6 +9,7 @@ import { GovernanceModule } from '../governance/governance.module.js'
 import { WorkflowModule } from '../workflow/workflow.module.js'
 import { AccreditationModule } from '../accreditation/accreditation.module.js'
 import { FacilitiesModule } from '../facilities/facilities.module.js'
+import { AdvancementModule } from '../advancement/advancement.module.js'
 import { AnalyticsController } from './analytics.controller.js'
 import { AnalyticsService } from './analytics.service.js'
 import { InsightService } from './insight.service.js'
@@ -57,6 +58,9 @@ import { AssistantClient } from '../assistant/assistant.client.js'
     // Exports FacilitiesService for BriefingService's 'facilities' STEP. Edge is
     // analytics → facilities ONLY (facilities does not import analytics) — acyclic.
     FacilitiesModule,
+    // Exports AdvancementService for BriefingService's 'advancement' STEP. Edge is
+    // analytics → advancement ONLY (advancement does not import analytics) — acyclic.
+    AdvancementModule,
   ],
   controllers: [
     AnalyticsController,

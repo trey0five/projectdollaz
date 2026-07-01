@@ -116,3 +116,19 @@ export {
   summarizeBacklog,
   MAINTENANCE_DUE_SOON_DAYS,
 } from './maintenance-backlog.js'
+
+// Phase 4 Advancement v1 — pure campaign giving-progress + giving summary (injectable now)
+export type {
+  CampaignStatus,
+  CampaignUrgency,
+  CampaignProgressInput,
+  CampaignProgressResult,
+  GivingSummaryInput,
+  GivingSummary,
+} from './advancement-giving.js'
+export {
+  computeCampaignProgress,
+  summarizeGiving,
+  ADVANCEMENT_CLOSING_SOON_DAYS,
+  BEHIND_GOAL_THRESHOLD,
+} from './advancement-giving.js'

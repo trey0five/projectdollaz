@@ -85,6 +85,13 @@ function makeService(over: {
     }),
   }
 
+  const advancement = {
+    listCampaigns: async () => ({
+      campaigns: [],
+      summary: { total: 0, activeCount: 0, totalGoal: 0, totalRaised: 0, overallPctOfGoal: null, behindGoalActiveCount: 0, closingSoonActiveCount: 0, overdueActiveCount: 0 },
+    }),
+  }
+
   return new BriefingService(
     periods as never,
     analytics as never,
@@ -97,6 +104,7 @@ function makeService(over: {
     tasks as never,
     accreditation as never,
     facilitiesSvc as never,
+    advancement as never,
   )
 }
 

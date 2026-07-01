@@ -75,6 +75,24 @@ function makeService(over: {
       summary: { total: 0, openCount: 0, highPriorityOpenCount: 0, criticalOpen: 0, overdueOpen: 0, backlogCost: 0 },
     }),
   }
+  // The advancement module gate is not-licensed here (over.licensed only swaps the
+  // governance gate) so no advancement item is emitted (keeps the governance
+  // assertion isolated). The service still returns an empty register if ever called.
+  const advancement = {
+    listCampaigns: async () => ({
+      campaigns: [],
+      summary: {
+        total: 0,
+        activeCount: 0,
+        totalGoal: 0,
+        totalRaised: 0,
+        overallPctOfGoal: null,
+        behindGoalActiveCount: 0,
+        closingSoonActiveCount: 0,
+        overdueActiveCount: 0,
+      },
+    }),
+  }
   void nullish
 
   return new BriefingService(
@@ -89,6 +107,7 @@ function makeService(over: {
     tasks as never,
     accreditation as never,
     facilities as never,
+    advancement as never,
   )
 }
 

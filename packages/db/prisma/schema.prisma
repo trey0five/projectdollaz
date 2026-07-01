@@ -124,6 +124,7 @@ model School {
   accreditationStandards AccreditationStandard[]
   accreditationEvidence  AccreditationEvidence[]
   maintenanceItems       MaintenanceItem[]
+  campaigns              AdvancementCampaign[]
 
   @@index([organizationId])
   @@map("schools")
@@ -205,6 +206,7 @@ model User {
   accreditationStandardUpdates AccreditationStandard[] @relation("AccreditationStandardUpdatedBy")
   accreditationEvidenceCreated AccreditationEvidence[] @relation("AccreditationEvidenceCreatedBy")
   maintenanceItemsCreated      MaintenanceItem[]       @relation("MaintenanceItemCreatedBy")
+  advancementCampaignsCreated  AdvancementCampaign[]   @relation("AdvancementCampaignCreatedBy")
 
   @@index([email])
   @@map("users")
@@ -953,6 +955,45 @@ model MaintenanceItem {
 
   @@index([schoolId])
   @@map("maintenance_items")
+}
+
+// ── Phase 4 Advancement v1 — the fundraising campaign/appeal register ─────────
+// The FOURTH (and LAST-uncovered-domain) licensable module. A school-scoped,
+// read/write register feeding the prioritised briefing. A school tracks fundraising
+// campaigns (goal, raised, close date, status); the briefing surfaces the giving
+// progress ("N active campaigns behind goal / closing soon") — a board/development
+// matter. Mirrors MaintenanceItem: per-school tenant table, @db.Date UTC-midnight
+// discipline, audit-lite createdByUserId.
+//
+// campaignType/status are TEXT columns (free text at DB level); the DTO @IsIn
+// enforces the status enum (mirrors MaintenanceItem.status). raisedAmount is nullable
+// (mirrors estimatedCost) — the service defaults an omitted create to 0.
+model AdvancementCampaign {
+  id              String    @id @default(uuid()) @db.Uuid
+  schoolId        String    @map("school_id") @db.Uuid
+  name            String
+  // Free text v1 (e.g. 'annual_fund' | 'capital' | 'other'), nullable — NOT an enum (stay general).
+  campaignType    String?   @map("campaign_type")
+  // Fundraising goal. Decimal(14,2) money, nullable. Coerced to a JS number in toPublic.
+  goalAmount      Decimal?  @map("goal_amount") @db.Decimal(14, 2)
+  // Amount raised so far. Decimal(14,2), nullable (mirrors estimatedCost). Coerced to
+  // a JS number in toPublic; the service defaults an omitted create to 0.
+  raisedAmount    Decimal?  @map("raised_amount") @db.Decimal(14, 2)
+  fiscalYear      Int?      @map("fiscal_year")
+  // @db.Date UTC-midnight campaign window.
+  startDate       DateTime? @map("start_date") @db.Date
+  closeDate       DateTime? @map("close_date") @db.Date
+  status          String    @default("active") // 'planned' | 'active' | 'closed'
+  notes           String?
+  createdByUserId String?   @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  school        School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  createdByUser User?  @relation("AdvancementCampaignCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([schoolId])
+  @@map("advancement_campaigns")
 }
 
 // ── Phase 3 Workflow v1 — the generic TASK engine ─────────────────────────────

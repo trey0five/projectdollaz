@@ -416,6 +416,19 @@ export const facilitiesApi = {
     api.delete(`/schools/${schoolId}/facilities/maintenance/${itemId}`),
 }
 
+// ── Phase 4 Advancement v1: the fundraising campaign/appeal register ──────────
+// School-scoped. Gated by the 'advancement' module: an entitled-but-unlicensed
+// school gets a 402 { code:'MODULE_NOT_LICENSED', module:'advancement' } (surface
+// via isModuleNotLicensed). Single flat resource (no nested sub-resource).
+export const advancementApi = {
+  listCampaigns: (schoolId) => api.get(`/schools/${schoolId}/advancement/campaigns`),
+  createCampaign: (schoolId, body) => api.post(`/schools/${schoolId}/advancement/campaigns`, body),
+  updateCampaign: (schoolId, campaignId, body) =>
+    api.patch(`/schools/${schoolId}/advancement/campaigns/${campaignId}`, body),
+  removeCampaign: (schoolId, campaignId) =>
+    api.delete(`/schools/${schoolId}/advancement/campaigns/${campaignId}`),
+}
+
 // ── Phase 3 Workflow v1 — the generic TASK engine. School-scoped. CORE (always
 // included, NOT a licensed module), so there is NO MODULE_NOT_LICENSED path — only
 // the base entitlement 402 (isPaymentRequired) applies, like any other core read.
