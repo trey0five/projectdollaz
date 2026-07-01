@@ -379,6 +379,27 @@ export const policiesApi = {
   remove: (schoolId, policyId) => api.delete(`/schools/${schoolId}/policies/${policyId}`),
 }
 
+// ── Phase 4 Accreditation v1: the STANDARDS + EVIDENCE register ───────────────
+// School-scoped (NOT period-scoped). Gated by the 'accreditation' module: an
+// entitled-but-unlicensed school gets a 402 { code:'MODULE_NOT_LICENSED',
+// module:'accreditation' } (surface via isModuleNotLicensed). Evidence is nested
+// under a standard so the standardId∈school invariant is a URL contract.
+export const accreditationApi = {
+  listStandards: (schoolId) => api.get(`/schools/${schoolId}/accreditation/standards`),
+  createStandard: (schoolId, body) =>
+    api.post(`/schools/${schoolId}/accreditation/standards`, body),
+  updateStandard: (schoolId, standardId, body) =>
+    api.patch(`/schools/${schoolId}/accreditation/standards/${standardId}`, body),
+  removeStandard: (schoolId, standardId) =>
+    api.delete(`/schools/${schoolId}/accreditation/standards/${standardId}`),
+  listEvidence: (schoolId, standardId) =>
+    api.get(`/schools/${schoolId}/accreditation/standards/${standardId}/evidence`),
+  createEvidence: (schoolId, standardId, body) =>
+    api.post(`/schools/${schoolId}/accreditation/standards/${standardId}/evidence`, body),
+  removeEvidence: (schoolId, standardId, evidenceId) =>
+    api.delete(`/schools/${schoolId}/accreditation/standards/${standardId}/evidence/${evidenceId}`),
+}
+
 // ── Phase 3 Workflow v1 — the generic TASK engine. School-scoped. CORE (always
 // included, NOT a licensed module), so there is NO MODULE_NOT_LICENSED path — only
 // the base entitlement 402 (isPaymentRequired) applies, like any other core read.

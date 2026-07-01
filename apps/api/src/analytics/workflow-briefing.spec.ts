@@ -59,6 +59,15 @@ function makeService(over: {
   const reconciliation = { reconcileForPeriod: async () => null }
   const checklist = { getChecklist: async () => null }
   const corrective = { getPlan: async () => null }
+  // Accreditation not licensed here (the billing mock returns false for every
+  // module) so no accreditation item is emitted — keeps the workflow assertion
+  // isolated. The service still returns an empty register if ever called.
+  const accreditation = {
+    listStandards: async () => ({
+      standards: [],
+      summary: { total: 0, withEvidence: 0, gaps: 0, pctCovered: 0 },
+    }),
+  }
 
   return new BriefingService(
     periods as never,
@@ -70,6 +79,7 @@ function makeService(over: {
     billing as never,
     policiesSvc as never,
     tasksSvc as never,
+    accreditation as never,
   )
 }
 

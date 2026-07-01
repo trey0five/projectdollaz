@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// @finrep/compliance — Policy REVIEW-STATUS (Phase 3 Governance v1).
+// Policy review-status — the governance policy-review-cycle engine.
 //
 // A PURE, framework-free, INJECTABLE-`now` function shared by BOTH the governance
 // PoliciesService (to enrich each CRUD response) AND the analytics BriefingService

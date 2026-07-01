@@ -86,3 +86,17 @@ export {
 // Phase 3 Workflow v1 — pure task urgency (injectable now)
 export type { TaskUrgency, TaskUrgencyInput, TaskUrgencyResult } from './task-urgency.js'
 export { computeTaskUrgency, TASK_DUE_SOON_DAYS } from './task-urgency.js'
+
+// Phase 4 Accreditation v1 — pure coverage + review-urgency (injectable now)
+export type {
+  CoverageStatus,
+  StandardCoverageInput,
+  StandardCoverage,
+  SchoolCoverageSummary,
+} from './accreditation-coverage.js'
+export {
+  coverageForStandard,
+  computeStandardCoverage,
+  summarizeCoverage,
+  ACCREDITATION_REVIEW_SOON_DAYS,
+} from './accreditation-coverage.js'

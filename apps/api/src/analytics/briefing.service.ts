@@ -10,7 +10,8 @@ import { CorrectiveActionService } from '../compliance/corrective-action.service
 import { BillingService } from '../billing/billing.service.js'
 import { PoliciesService } from '../governance/policies.service.js'
 import { TasksService } from '../workflow/tasks.service.js'
-import { BADLY_OVERDUE_DAYS, DUE_SOON_DAYS } from '@finrep/compliance'
+import { AccreditationService } from '../accreditation/accreditation.service.js'
+import { ACCREDITATION_REVIEW_SOON_DAYS, BADLY_OVERDUE_DAYS, DUE_SOON_DAYS } from '@finrep/compliance'
 import {
   applyLens,
   availableLensesFor,
@@ -33,7 +34,13 @@ import {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type AttentionSeverity = 'critical' | 'warn' | 'info'
-export type AttentionSource = 'metric' | 'compliance' | 'data' | 'governance' | 'workflow'
+export type AttentionSource =
+  | 'metric'
+  | 'compliance'
+  | 'data'
+  | 'governance'
+  | 'workflow'
+  | 'accreditation'
 
 /**
  * A task at least this many days past due escalates the workflow overdue item from
@@ -161,6 +168,8 @@ export class BriefingService {
     private readonly policies: PoliciesService,
     // Phase 3 Workflow v1 — open-task read for the (CORE, ungated) workflow STEP.
     private readonly tasks: TasksService,
+    // Phase 4 Accreditation v1 — the module gate + the standards register read.
+    private readonly accreditation: AccreditationService,
   ) {}
 
   /**
@@ -258,14 +267,18 @@ export class BriefingService {
     // The workflow open-task read (STEP 2.6) rides the SAME fan-out — it is CORE
     // (not module-gated) and fail-soft to null, so a tasks hiccup never 500s the
     // briefing and latency stays slowest-not-sum.
-    const [compliance, recon, checklist, cap, governanceLicensed, openTasks] = await Promise.all([
-      this.compliance.evaluateForPeriod(schoolId, period.id).catch(() => null),
-      this.reconciliation.reconcileForPeriod(schoolId, period.id).catch(() => null),
-      this.checklist.getChecklist(schoolId, period.id).catch(() => null),
-      this.corrective.getPlan(schoolId, period.id).catch(() => null),
-      this.billing.isEntitledForModule(schoolId, 'governance').catch(() => false),
-      this.tasks.listOpenForBriefing(schoolId).catch(() => null),
-    ])
+    const [compliance, recon, checklist, cap, governanceLicensed, openTasks, accreditationLicensed] =
+      await Promise.all([
+        this.compliance.evaluateForPeriod(schoolId, period.id).catch(() => null),
+        this.reconciliation.reconcileForPeriod(schoolId, period.id).catch(() => null),
+        this.checklist.getChecklist(schoolId, period.id).catch(() => null),
+        this.corrective.getPlan(schoolId, period.id).catch(() => null),
+        this.billing.isEntitledForModule(schoolId, 'governance').catch(() => false),
+        this.tasks.listOpenForBriefing(schoolId).catch(() => null),
+        // Phase 4 Accreditation gate — rides the SAME parallel fan-out. Fail CLOSED
+        // (throw → not licensed) so a billing hiccup HIDES accreditation items.
+        this.billing.isEntitledForModule(schoolId, 'accreditation').catch(() => false),
+      ])
 
     // 2a — open 2A findings (material -> critical, reportable -> warn).
     if (compliance) {
@@ -519,6 +532,77 @@ export class BriefingService {
           link: '/tasks',
           dueDate: earliest,
         })
+      }
+    }
+
+    // ── STEP 2.7: accreditation coverage signals (source 'accreditation') ─────
+    // The FIRST Phase-4 briefing source — proving the mechanism generalises to the
+    // second licensable module. School-scoped (NOT period-bound), like governance.
+    //
+    // GATED by the per-module entitlement: a finance-only school gets ZERO
+    // accreditation items here while STILL getting every metric/compliance/data/
+    // governance/workflow item above — the gate ONLY skips this push. Fail-soft in
+    // BOTH directions like governance:
+    //   • isEntitledForModule throws → treat as NOT licensed (fail CLOSED), and
+    //   • listStandards throws → skip (fail-soft to null).
+    // Neither ever 500s the briefing. (accreditationLicensed was resolved in the
+    // STEP 2 parallel fan-out above.)
+    if (accreditationLicensed) {
+      const reg = await this.accreditation.listStandards(schoolId).catch(() => null)
+      if (reg) {
+        const { total, gaps } = reg.summary
+        // A review is "approaching" when any standard is overdue/due-soon.
+        const approaching = reg.standards.filter(
+          (s) => s.reviewStatus === 'overdue' || s.reviewStatus === 'due-soon',
+        )
+        const reviewApproaching = approaching.length > 0
+
+        // (a) coverage-gap — the headline "N of M standards still need evidence".
+        // total===0 → gaps 0 → NO item (honest non-signal, like recon needs_data).
+        if (gaps > 0) {
+          // Escalate to critical ONLY when gaps remain AND a review is approaching
+          // (a gap with the review far out is a warn, not an alarm — no crying wolf).
+          const earliest =
+            approaching
+              .map((s) => s.reviewDate)
+              .filter((d): d is string => d !== null)
+              .sort()[0] ?? null
+          items.push({
+            id: 'accreditation:coverage-gap',
+            severity: reviewApproaching ? 'critical' : 'warn',
+            source: 'accreditation',
+            title: `${gaps} of ${total} standard${total === 1 ? '' : 's'} still need evidence`,
+            why: `${gaps} accreditation standard${gaps === 1 ? ' has' : 's have'} no evidence attached${reviewApproaching ? ' and a review is approaching' : ''}. Attach documents, links, or notes in the accreditation register before your review.`,
+            metricKey: null,
+            value: null,
+            link: '/accreditation',
+            dueDate: earliest,
+          })
+        }
+
+        // (b) review-approaching — an info nudge ONLY when coverage is otherwise
+        // complete (gaps===0). When gaps>0 the review pressure is already folded
+        // into the coverage-gap item's severity, so we don't double-count.
+        if (gaps === 0 && reviewApproaching) {
+          const anyOverdue = approaching.some((s) => s.reviewStatus === 'overdue')
+          const earliest =
+            approaching
+              .map((s) => s.reviewDate)
+              .filter((d): d is string => d !== null)
+              .sort()[0] ?? null
+          const n = approaching.length
+          items.push({
+            id: 'accreditation:review-approaching',
+            severity: anyOverdue ? 'warn' : 'info',
+            source: 'accreditation',
+            title: `${n} standard${n === 1 ? ' is' : 's are'} due for review`,
+            why: `${n} accreditation standard${n === 1 ? ' is' : 's are'} at or past ${ACCREDITATION_REVIEW_SOON_DAYS} days to its scheduled review, and evidence is complete. Confirm the evidence is current before the visit.`,
+            metricKey: null,
+            value: null,
+            link: '/accreditation',
+            dueDate: earliest,
+          })
+        }
       }
     }
 

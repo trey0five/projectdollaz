@@ -62,6 +62,10 @@ function makeService(over: {
   // The workflow open-task read — empty so no workflow item is emitted (keeps the
   // governance assertion isolated).
   const tasks = { listOpenForBriefing: async () => [] }
+  // The accreditation module gate is not-licensed here (over.licensed only swaps the
+  // governance gate) so no accreditation item is emitted (keeps the governance
+  // assertion isolated). The service still returns an empty register if ever called.
+  const accreditation = { listStandards: async () => ({ standards: [], summary: { total: 0, withEvidence: 0, gaps: 0, pctCovered: 0 } }) }
   void nullish
 
   return new BriefingService(
@@ -74,6 +78,7 @@ function makeService(over: {
     billing as never,
     policiesSvc as never,
     tasks as never,
+    accreditation as never,
   )
 }
 

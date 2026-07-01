@@ -121,6 +121,8 @@ model School {
   monthlySnapshots   MonthlySnapshot[]
   policies           Policy[]
   tasks              Task[]
+  accreditationStandards AccreditationStandard[]
+  accreditationEvidence  AccreditationEvidence[]
 
   @@index([organizationId])
   @@map("schools")
@@ -199,6 +201,8 @@ model User {
   tasksCreated             Task[]             @relation("TaskCreatedBy")
   tasksToApprove           Task[]             @relation("TaskApprover")
   tasksDecided             Task[]             @relation("TaskDecidedBy")
+  accreditationStandardUpdates AccreditationStandard[] @relation("AccreditationStandardUpdatedBy")
+  accreditationEvidenceCreated AccreditationEvidence[] @relation("AccreditationEvidenceCreatedBy")
 
   @@index([email])
   @@map("users")
@@ -835,6 +839,69 @@ model Policy {
 
   @@index([schoolId])
   @@map("policies")
+}
+
+// ── Phase 4 Accreditation v1 — the STANDARDS + EVIDENCE register ───────────────
+// The first Phase-4 domain and the SECOND licensable module (after governance),
+// gated by the 'accreditation' entitlement. Mirrors the Policy register pattern
+// (a module-gated, school-scoped CRUD domain feeding the briefing) but split
+// across TWO tables: the framework SKELETON (one AccreditationStandard per
+// criterion the reviewer scores) vs. the ARTIFACTS (many AccreditationEvidence
+// rows attached to prove each). Coverage = "does standard X have >=1 evidence?",
+// a one-to-many — a single flat table could not model the whole point (a standard
+// with NO evidence yet, i.e. a coverage GAP).
+//
+// Tenant scoping + @db.Date UTC-midnight discipline + audit-lite all mirror Policy.
+model AccreditationStandard {
+  id              String    @id @default(uuid()) @db.Uuid
+  schoolId        String    @map("school_id") @db.Uuid
+  // Framework code, free text v1 (e.g. 'MSA-3','Std 1.2') — schools name their own;
+  // bounded only by the DTO @MaxLength, deliberately NOT unique (v1 tolerates dups).
+  code            String
+  title           String
+  // Free text v1 (e.g. 'Governance','Finance','Teaching & Learning'), nullable.
+  category        String?
+  // Next scheduled accreditation review/visit date. Unlike a Policy (anchor +
+  // interval), this is the review date DIRECTLY (drives "review approaching").
+  reviewDate      DateTime? @map("review_date") @db.Date
+  owner           String?
+  notes           String?
+  updatedByUserId String?   @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  school        School                  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  updatedByUser User?                   @relation("AccreditationStandardUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  evidence      AccreditationEvidence[]
+
+  @@index([schoolId])
+  @@map("accreditation_standards")
+}
+
+model AccreditationEvidence {
+  id              String    @id @default(uuid()) @db.Uuid
+  // DENORMALIZED tenant key (also derivable via standard) so every evidence query
+  // filters by schoolId directly — belt-and-suspenders tenant isolation. NEVER
+  // trusted from the client: the service copies it from the resolved standard.
+  schoolId        String    @map("school_id") @db.Uuid
+  standardId      String    @map("standard_id") @db.Uuid
+  title           String
+  kind            String    @default("document") // 'document' | 'link' | 'note'
+  reference       String?   // url / doc path / citation, free text, nullable
+  notes           String?
+  capturedAt      DateTime? @map("captured_at") @db.Date
+  createdByUserId String?   @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  school        School                @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  // Deleting a standard drops its evidence (no orphans, coverage recomputes).
+  standard      AccreditationStandard @relation(fields: [standardId], references: [id], onDelete: Cascade)
+  createdByUser User?                 @relation("AccreditationEvidenceCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([schoolId])
+  @@index([standardId])
+  @@map("accreditation_evidence")
 }
 
 // ── Phase 3 Workflow v1 — the generic TASK engine ─────────────────────────────

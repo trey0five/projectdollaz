@@ -250,3 +250,73 @@ describe('applyLens — VALUE-SAFETY invariant (the headline guarantee)', () => 
     expect(input).toStrictEqual(snapshot) // no voice/why mutation leaked back
   })
 })
+
+// Phase 4 Accreditation — the accreditation source is a board matter (KEPT for the
+// viewer, like governance) and slots between governance and workflow in the rank.
+describe('applyLens — accreditation (Phase 4)', () => {
+  function accItems(): AttentionItem[] {
+    return [
+      {
+        id: 'accreditation:coverage-gap',
+        severity: 'warn',
+        source: 'accreditation',
+        title: '3 of 10 standards still need evidence',
+        why: '3 accreditation standards have no evidence attached.',
+        metricKey: null,
+        value: null,
+        link: '/accreditation',
+        dueDate: '2026-09-01',
+      },
+      {
+        id: 'workflow:tasks-overdue',
+        severity: 'warn',
+        source: 'workflow',
+        title: '2 tasks are overdue',
+        why: '2 open tasks have passed their due date.',
+        metricKey: null,
+        value: null,
+        link: '/tasks',
+        dueDate: null,
+      },
+      {
+        id: 'governance:policies-overdue',
+        severity: 'warn',
+        source: 'governance',
+        title: '1 policy is overdue for review',
+        why: '1 board policy has passed its scheduled review date.',
+        metricKey: null,
+        value: null,
+        link: '/governance',
+        dueDate: null,
+      },
+    ]
+  }
+
+  it('viewer KEEPS the accreditation item, DROPS the workflow item, KEEPS governance', () => {
+    const out = applyLens(accItems(), 'viewer').map((i) => i.id)
+    expect(out).toContain('accreditation:coverage-gap')
+    expect(out).toContain('governance:policies-overdue')
+    expect(out).not.toContain('workflow:tasks-overdue')
+  })
+
+  it('owner ranks accreditation right after governance and ahead of workflow within a severity', () => {
+    const out = applyLens(accItems(), 'owner').map((i) => i.id)
+    expect(out.indexOf('governance:policies-overdue')).toBeLessThan(
+      out.indexOf('accreditation:coverage-gap'),
+    )
+    expect(out.indexOf('accreditation:coverage-gap')).toBeLessThan(
+      out.indexOf('workflow:tasks-overdue'),
+    )
+  })
+
+  it('value-safety: applyLens never alters an accreditation item value field', () => {
+    const [acc] = accItems()
+    const out = applyLens([acc], 'viewer')[0]
+    expect(out.id).toBe(acc.id)
+    expect(out.severity).toBe(acc.severity)
+    expect(out.source).toBe(acc.source)
+    expect(out.link).toBe(acc.link)
+    expect(out.dueDate).toBe(acc.dueDate)
+    expect(out.voice).toBe('governance')
+  })
+})

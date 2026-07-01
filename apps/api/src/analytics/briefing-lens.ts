@@ -40,8 +40,9 @@ export const SOURCE_RANK: Record<AttentionSource, number> = {
   data: 0,
   compliance: 1,
   governance: 2,
-  workflow: 3,
-  metric: 4,
+  accreditation: 3,
+  workflow: 4,
+  metric: 5,
 }
 
 /** Fixed sub-order for the non-metric items so the list is deterministic. */
@@ -55,6 +56,12 @@ export const COMPLIANCE_ORDER = [
   // overdue before due-soon so a same-severity tie is curated, not id-arbitrary.
   'governance:policies-overdue',
   'governance:policies-due-soon',
+  // Accreditation items (Phase 4). Placed after governance, before workflow (both
+  // board-oversight domains grouped); coverage-gap (actionable) leads the softer
+  // review-approaching nudge so a same-severity tie is curated, not id-arbitrary.
+  // KEPT for the viewer lens (board-relevant) — see keepForViewer.
+  'accreditation:coverage-gap',
+  'accreditation:review-approaching',
   // Workflow task items (Phase 3). Placed after the governance items; overdue
   // leads (actionable now), then the sign-off backlog, then upcoming, so a same-
   // severity tie is curated, not id-arbitrary. (These are ALL DROPPED for the
@@ -82,10 +89,14 @@ export const COMPLIANCE_ORDER = [
 // existing ids (workflow items are purely additive). Viewer numeric weights match
 // owner but workflow items are DROPPED entirely (keepForViewer), so their weight
 // is never actually consulted for the board.
+// Accreditation is a board-oversight domain like governance, so it sits WITH
+// governance (right after metric for owner/viewer; mid for the accountant). It is
+// ADDITIVE — the accountant weighting == SOURCE_RANK, so the pre-accreditation
+// accountant snapshot stays byte-identical for the existing ids.
 const SOURCE_WEIGHT: Record<Lens, Record<AttentionSource, number>> = {
-  owner: { metric: 0, governance: 1, compliance: 2, data: 3, workflow: 4 },
-  viewer: { metric: 0, governance: 1, compliance: 2, data: 3, workflow: 4 },
-  accountant: { data: 0, compliance: 1, governance: 2, workflow: 3, metric: 4 }, // == SOURCE_RANK
+  owner: { metric: 0, governance: 1, accreditation: 2, compliance: 3, data: 4, workflow: 5 },
+  viewer: { metric: 0, governance: 1, accreditation: 2, compliance: 3, data: 4, workflow: 5 },
+  accountant: { data: 0, compliance: 1, governance: 2, accreditation: 3, workflow: 4, metric: 5 }, // == SOURCE_RANK
 }
 
 // ── VOICE: per-lens reframing tone (additive metadata, never a value rewrite) ──
@@ -128,6 +139,11 @@ function keepForViewer(item: AttentionItem): boolean {
   // due-soon policy items. The whys are already governance/outcome-voiced (no "go
   // reconcile" operator CTA), so they pass through with no VIEWER_REFRAME entry.
   if (item.source === 'governance') return true
+  // Accreditation status is a fiduciary/oversight matter the board OWNS and reports
+  // to its accreditor — KEPT for the viewer, exactly like governance and UNLIKE
+  // workflow. The whys are outcome/governance-voiced (no operator "go do" CTA), so
+  // they pass through with no VIEWER_REFRAME entry.
+  if (item.source === 'accreditation') return true
   if (item.source === 'compliance') return VIEWER_COMPLIANCE.has(item.id)
   // Workflow (operational tasks) are DROPPED for the board: open tasks are "go do
   // this" operator chores a read-only board cannot action (the same reason warn/

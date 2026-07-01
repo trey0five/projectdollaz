@@ -11,6 +11,7 @@ import {
   Wallet,
   FileBarChart2,
   Landmark,
+  BadgeCheck,
   ListChecks,
   Database,
   Menu,
@@ -37,6 +38,7 @@ export default function TopBar() {
   const onReports = path.startsWith('/reports')
   const onReadiness = path.startsWith('/readiness')
   const onGovernance = path.startsWith('/governance')
+  const onAccreditation = path.startsWith('/accreditation')
   const onTasks = path.startsWith('/tasks')
 
   // Mobile drawer (<lg). The old bar crammed 8 icon buttons + switcher + sign-out
@@ -94,6 +96,12 @@ export default function TopBar() {
     // so the item never flashes a gate pre-load.
     ...(hasModule('governance')
       ? [{ to: '/governance', navId: 'nav-governance', label: 'Governance', Icon: Landmark, active: onGovernance }]
+      : []),
+    // Gated by the 'accreditation' module (Phase 4). Hidden for a finance-only
+    // school, shown for a trial (all-access) school (hasModule defaults true while
+    // billing loads → no flash-hide). Placed with Governance (both board domains).
+    ...(hasModule('accreditation')
+      ? [{ to: '/accreditation', navId: 'nav-accreditation', label: 'Accreditation', Icon: BadgeCheck, active: onAccreditation }]
       : []),
     // Tasks (Phase 3 Workflow) is CORE — ALWAYS shown (no hasModule guard),
     // contrast Governance above (a licensed module).
