@@ -572,6 +572,21 @@ export const TOOL_SCHEMAS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'get_briefing',
+      description:
+        "The prioritised attention briefing for a period — the SAME ranked, plain-language list the Home screen shows the user: everything that needs their decision right now (off-band financial metrics, AUP readiness/compliance gaps, scholarship reconciliation variance, open corrective actions, or data-not-yet-generated). Returns summary counts (total / critical / warn / info) and an ORDERED items[] already sorted critical→warn→info and lens-shaped for the caller's role: each item has severity, source (metric|compliance|data), title, why (a plain-language reason), an optional metricKey/value, a client link (deep-link route), an optional dueDate, and a voice tone hint. Call this FIRST when the user says 'brief me', 'what needs my attention', 'good morning', or asks broadly 'how are we doing', then narrate the items in order and offer to act on them. The list is already role-correct and complete; read-only, and NEVER invent, add, drop, or re-rank items beyond what this returns.",
+      parameters: {
+        type: 'object',
+        properties: {
+          periodId: { type: 'string', description: 'Fiscal period id; omit to use the current period.' },
+        },
+        required: [],
+      },
+    },
+  },
 ]
 
 /** Status-line labels shown while a tool runs (present tense; agentic). */
@@ -601,4 +616,5 @@ export const TOOL_LABELS: Record<string, string> = {
   render_chart: 'Drawing a chart…',
   navigate_to_page: 'Taking you there…',
   start_walkthrough: 'Let me show you…',
+  get_briefing: 'Reviewing what needs your attention…',
 }

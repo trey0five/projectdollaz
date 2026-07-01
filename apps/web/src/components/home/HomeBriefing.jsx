@@ -19,6 +19,34 @@ function greeting() {
   return 'Good evening'
 }
 
+// One-click "ask Penny to narrate this briefing". Dispatches the SAME
+// 'penny:ai-ask' CustomEvent usePennyChat listens for — the hook opens the panel
+// AND routes this canned prompt through its existing send() streaming path, so
+// Penny calls get_briefing and reads back the identical ranked list shown here.
+function askPennyToBrief() {
+  window.dispatchEvent(
+    new CustomEvent('penny:ai-ask', {
+      detail: { text: 'Brief me on what needs my attention.' },
+    }),
+  )
+}
+
+// Gold-accent "Brief me" pill. Reduced-motion safe (plain button, no entrance
+// animation) and on the navy/gold theme, matching the Sparkles bubble CTAs.
+function BriefMeButton() {
+  return (
+    <button
+      type="button"
+      onClick={askPennyToBrief}
+      aria-label="Ask Penny to brief me on what needs my attention"
+      className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gold-gradient px-3.5 py-1.5 text-[13px] font-semibold text-white shadow-glow transition-transform hover:-translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+    >
+      <Sparkles size={14} />
+      Brief me
+    </button>
+  )
+}
+
 // Per-severity theming — navy/gold/danger, consistent with ValidationBanner and
 // the DataHubBanner gold language. Each carries an accent rail + tint + icon.
 const SEVERITY = {
@@ -174,7 +202,7 @@ export default function HomeBriefing({
           <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gold-gradient text-white shadow-glow">
             <Sparkles size={26} />
           </span>
-          <div>
+          <div className="flex-1">
             <h2 className="font-serif text-xl font-semibold text-navy">
               You&rsquo;re all caught up.
             </h2>
@@ -182,6 +210,7 @@ export default function HomeBriefing({
               No metrics, readiness gaps, or data issues need your attention for this period.
             </p>
           </div>
+          <BriefMeButton />
         </motion.div>
       </section>
     )
@@ -199,6 +228,7 @@ export default function HomeBriefing({
           className="h-1.5 w-1.5 rotate-45 rounded-[1px] bg-gold/70 shadow-[0_0_8px_rgba(184,150,80,0.5)]"
           aria-hidden
         />
+        <BriefMeButton />
       </div>
       <div className="space-y-3">
         {items.map((item, i) => (

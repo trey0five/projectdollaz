@@ -21,6 +21,7 @@ import { AnalyticsService } from '../analytics/analytics.service.js'
 import { BudgetService } from '../analytics/budget.service.js'
 import { OperationalService } from '../analytics/operational.service.js'
 import { BudgetRollupService } from '../analytics/budget-rollup.service.js'
+import { BriefingService } from '../analytics/briefing.service.js'
 import { deriveFiscalYearStart } from '../analytics/budget.driver.js'
 import { ComplianceService } from '../compliance/compliance.service.js'
 import { ReconciliationService } from '../compliance/reconciliation.service.js'
@@ -267,6 +268,7 @@ export class AssistantService {
     private readonly analytics: AnalyticsService,
     private readonly budget: BudgetService,
     private readonly rollup: BudgetRollupService,
+    private readonly briefing: BriefingService,
     private readonly compliance: ComplianceService,
     private readonly reconciliation: ReconciliationService,
     private readonly correctiveAction: CorrectiveActionService,
@@ -1043,6 +1045,22 @@ export class AssistantService {
       'analytics KPI use the matching metric.* target key (e.g. metric.net_tuition_per_student, ' +
       'metric.operating_margin, metric.days_cash_on_hand). Only fall back to navigate_to_page when there is no ' +
       'specific target key for what they asked about. ' +
+      'You also deliver the MORNING BRIEFING. When the user says "brief me", "what needs my attention", ' +
+      '"good morning", asks broadly "how are we doing / where do we stand", or otherwise wants a prioritised ' +
+      'overview, call get_briefing FIRST (before any other tool) and narrate ITS results — do NOT assemble your ' +
+      'own list from get_metrics / get_compliance / etc. This returns the SAME prioritised list the Home screen ' +
+      'shows, already ranked and complete for this user’s role, so never contradict it, never re-rank it, and ' +
+      'never invent, add, or drop items beyond what it returns. Lead with the count ("Good morning — three ' +
+      'things need a decision today." or "You’re all caught up." when there are none). Then walk the items IN ' +
+      'THE ORDER RETURNED (critical first, then watch, then info): for each, give its title and explain its ' +
+      '`why` in plain language — do not just read the numbers back — and mention the `dueDate` when present. ' +
+      'After naming an item, OFFER TO ACT on it using your existing tools: start_walkthrough (or ' +
+      'navigate_to_page) to take them to the item’s `link`, or the matching write proposal (e.g. draft_cap_entry ' +
+      'for an open corrective action, set_budget / apply_driver_budget for a budget gap) — but only act when ' +
+      'they say yes. Honor each item’s `voice`: items tagged "governance" are for a board / read-only audience, ' +
+      'so frame them as review prompts, not "go fix this" imperatives. When get_briefing returns a single ' +
+      '"generate this period’s statements" item, say the period has no data yet and offer to open the Data hub. ' +
+      'Be brief and decision-oriented — a sentence or two per item, no preamble, no tables. ' +
       'You can also make changes, and these APPLY IMMEDIATELY through the validated, reversible workflow — ' +
       'after each one, briefly state EXACTLY what you changed: set_budget (set a budget figure), ' +
       'apply_driver_budget (build the budget from enrollment / tuition / staffing assumptions — provide ONLY ' +
@@ -1135,6 +1153,35 @@ export class AssistantService {
         const pid = await this.resolvePeriod(args, ctx)
         const r = await this.reconciliation.reconcileForPeriod(ctx.schoolId, pid)
         return r.result
+      }
+      case 'get_briefing': {
+        const pid = await this.resolvePeriod(args, ctx)
+        // NO lens override — pin the lens to the caller's OWN role so Penny reads
+        // the EXACT same lens/ranking/values the on-screen briefing shows. Fail SAFE
+        // to the narrowest lens ('viewer') when the role is unresolved, never 'owner'
+        // (getBriefing's own default is 'owner', so we must pass 'viewer' explicitly).
+        const b = await this.briefing.getBriefing(ctx.schoolId, pid, ctx.role ?? 'viewer')
+        // Thin pass-through projection: copy the narrated fields VERBATIM (no re-rank,
+        // no recompute, no reformat) and drop only UI chrome (id/generatedAt/
+        // callerRole/availableLenses) to stay well under the 8000-char truncation.
+        // applyLens in BriefingService remains the single ranking source of truth.
+        return {
+          periodId: b.periodId,
+          label: b.label,
+          lens: b.lens,
+          summary: b.summary,
+          items: b.items.map((i) => ({
+            severity: i.severity,
+            source: i.source,
+            title: i.title,
+            why: i.why,
+            metricKey: i.metricKey,
+            value: i.value,
+            link: i.link,
+            dueDate: i.dueDate,
+            voice: i.voice ?? null,
+          })),
+        }
       }
       case 'get_budget_vs_actual': {
         const pid = await this.resolvePeriod(args, ctx)

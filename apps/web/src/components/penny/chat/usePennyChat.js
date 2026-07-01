@@ -314,6 +314,28 @@ export default function usePennyChat() {
     [activeId, busy, messages],
   )
 
+  // ── One-click "ask Penny" bridge (e.g. HomeBriefing's "Brief me" button).
+  // Mirrors the existing window CustomEvent transport (penny:ai-drop-files):
+  // an outside surface dispatches 'penny:ai-ask' with { text }, and here — inside
+  // the always-mounted chat hook — we open the panel and route the text through
+  // the SAME send() streaming path a typed message uses (so get_briefing runs
+  // server-side identically). send()'s busy guard no-ops any accidental double-fire.
+  // Read send through a latest-ref so the listener subscribes ONCE — send is a
+  // useCallback that changes on every message/streaming tick, and re-binding the
+  // window listener per token is wasteful (and could drop an event mid-swap).
+  const sendRef = useRef(send)
+  sendRef.current = send
+  useEffect(() => {
+    const onAsk = (e) => {
+      const text = e?.detail?.text
+      if (!text) return
+      pennyRef.current?.openChat?.()
+      sendRef.current(text)
+    }
+    window.addEventListener('penny:ai-ask', onAsk)
+    return () => window.removeEventListener('penny:ai-ask', onAsk)
+  }, [])
+
   const retry = useCallback(() => {
     // Re-send the last user message (drop the failed assistant turn + that user
     // turn, then resend its text). Mirrors the simple Nagare retry.
