@@ -24,6 +24,7 @@ import { financialAidPerStudent } from './metrics/financialAidPerStudent.js'
 import { aidPerAidedStudent } from './metrics/aidPerAidedStudent.js'
 import { tuitionDiscountRate } from './metrics/tuitionDiscountRate.js'
 import { pctStudentsOnAid } from './metrics/pctStudentsOnAid.js'
+import { enrollmentChangeYoy } from './metrics/enrollmentChangeYoy.js'
 
 export const METRIC_REGISTRY: Record<MetricKey, MetricDef> = {
   operating_margin: operatingMargin,
@@ -39,6 +40,8 @@ export const METRIC_REGISTRY: Record<MetricKey, MetricDef> = {
   aid_per_aided_student: aidPerAidedStudent,
   tuition_discount_rate: tuitionDiscountRate,
   pct_students_on_aid: pctStudentsOnAid,
+  // Tier-2 enrollment domain (thin wedge: first non-finance banded metric).
+  enrollment_change_yoy: enrollmentChangeYoy,
 }
 
 /** Stable ordering for the dashboard's default layout (Tier-1 first, then Tier-2). */
@@ -55,6 +58,8 @@ export const METRIC_KEYS: MetricKey[] = [
   'aid_per_aided_student',
   'tuition_discount_rate',
   'pct_students_on_aid',
+  // Appended LAST so the existing 12-key order/layout stays byte-identical.
+  'enrollment_change_yoy',
 ]
 
 /** All metric defs in default-layout order. */

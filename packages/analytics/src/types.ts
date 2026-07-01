@@ -103,6 +103,8 @@ export type MetricKey =
   | 'aid_per_aided_student'
   | 'tuition_discount_rate'
   | 'pct_students_on_aid'
+  // Tier-2 enrollment domain — first non-finance banded metric (thin wedge).
+  | 'enrollment_change_yoy'
 
 /**
  * Operational reference data for a period — enrollment + financial aid figures

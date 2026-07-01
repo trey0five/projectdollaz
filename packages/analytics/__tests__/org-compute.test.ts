@@ -19,6 +19,7 @@ import {
   type SchoolPeriodInputs,
 } from '../src/org-compute.js'
 import { assembleMetricResult, computeMetricsRecord } from '../src/compute.js'
+import { scopeRuleFor } from '../src/registry.js'
 import { fromBundle } from '../src/adapt.js'
 import { FULL_BUNDLE, NO_SFP_BUNDLE } from './fixtures.js'
 
@@ -180,6 +181,12 @@ describe('cross-surface identity: org-of-one === per-school', () => {
       expect(o.value).toBe(ps.value)
       expect(o.available).toBe(ps.available)
       expect(o.status).toBe(ps.status)
+      // A 'not-aggregatable' metric (e.g. enrollment_change_yoy, a YoY rate) is
+      // honestly unavailable at org via the engine's not-aggregatable branch, so it
+      // reports inputsMissing ['scope:not-aggregatable'] instead of the per-school
+      // reason. value/available/status still agree (null/false/neutral); only the
+      // reason string diverges by design — skip the reason equality for those.
+      if (scopeRuleFor(key as never) === 'not-aggregatable') continue
       expect(o.inputsMissing).toEqual(ps.inputsMissing)
     }
   })

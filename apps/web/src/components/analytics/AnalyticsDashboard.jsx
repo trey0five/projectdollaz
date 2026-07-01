@@ -10,7 +10,7 @@ import {
   useDashboardLayout,
 } from '../../hooks/useAnalytics.js'
 import { analyticsApi, apiErrorMessage } from '../../lib/api.js'
-import { isMixMetric } from '../../lib/metricMeta.js'
+import { isMixMetric, metricDomain } from '../../lib/metricMeta.js'
 import ContextBar from './ContextBar.jsx'
 import HeroVitals from './HeroVitals.jsx'
 import PeriodComparison from './PeriodComparison.jsx'
@@ -61,6 +61,19 @@ const DEFAULT_KEYS = [
   'aid_per_aided_student',
   'tuition_discount_rate',
   'pct_students_on_aid',
+  // Enrollment domain (thin wedge) — appended last, mirrors METRIC_KEYS order.
+  'enrollment_change_yoy',
+]
+
+// Compact cards are grouped BY DOMAIN into these ordered sections. Enrollment leads
+// (most-scannable, and the thin-wedge focus). A section only renders when it has at
+// least one visible card — matching the existing "section only when items>0" rule.
+// Any non-vital, non-mix finance key falls into "Financial (Other)".
+const DOMAIN_SECTIONS = [
+  { domain: 'enrollment', title: 'Enrollment' },
+  { domain: 'aid', title: 'Tuition & Aid' },
+  { domain: 'operations', title: 'Operations' },
+  { domain: 'finance', title: 'Financial (Other)' },
 ]
 
 function PageHeader() {
@@ -406,22 +419,28 @@ export default function AnalyticsDashboard() {
             <PeriodComparison metrics={metrics} />
           </div>
 
-          {/* TUITION & AID + OTHER compact metrics */}
-          {sectionItems.length > 0 && (
-            <div className={dimWhileCustomizing}>
-              <MetricSection title="Tuition, Aid & Operations">
-                <div className="bg-page-glow bg-no-repeat">
-                  <MetricGrid
-                    items={sectionItems}
-                    metricsByKey={metricsByKey}
-                    trendsByKey={sparkTrends}
-                    periodKey={selectedPeriodId}
-                    onOpen={openDrawer}
-                  />
-                </div>
-              </MetricSection>
-            </div>
-          )}
+          {/* COMPACT metrics, grouped by domain (Enrollment / Tuition & Aid /
+              Operations / Financial). Each section renders only when non-empty and
+              preserves within-group layout order (sectionItems is already ordered). */}
+          {DOMAIN_SECTIONS.map(({ domain, title }) => {
+            const items = sectionItems.filter((i) => metricDomain(i.key) === domain)
+            if (items.length === 0) return null
+            return (
+              <div className={dimWhileCustomizing} key={domain}>
+                <MetricSection title={title}>
+                  <div className="bg-page-glow bg-no-repeat">
+                    <MetricGrid
+                      items={items}
+                      metricsByKey={metricsByKey}
+                      trendsByKey={sparkTrends}
+                      periodKey={selectedPeriodId}
+                      onOpen={openDrawer}
+                    />
+                  </div>
+                </MetricSection>
+              </div>
+            )
+          })}
 
           {/* REVENUE & EXPENSE MIX donuts */}
           {donutKeys.length > 0 && (

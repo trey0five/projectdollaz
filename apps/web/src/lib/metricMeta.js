@@ -16,6 +16,7 @@ import {
   Banknote,
   HandCoins,
   Users,
+  TrendingUp,
 } from 'lucide-react'
 
 // Navy/gold palette tokens (kept in sync with tailwind.config.js).
@@ -58,6 +59,8 @@ export const METRIC_META = {
   aid_per_aided_student: { icon: PiggyBank, format: 'currency' },
   tuition_discount_rate: { icon: Percent, format: 'percent' },
   pct_students_on_aid: { icon: Users, format: 'percent' },
+  // Enrollment domain (thin wedge).
+  enrollment_change_yoy: { icon: TrendingUp, format: 'percent' },
 }
 
 export function metricIcon(key) {
@@ -80,10 +83,35 @@ export const METRIC_LABELS = {
   aid_per_aided_student: 'Aid per Aided Student',
   tuition_discount_rate: 'Tuition Discount Rate',
   pct_students_on_aid: '% of Students on Aid',
+  enrollment_change_yoy: 'Enrollment Change (YoY)',
 }
 
 export function metricLabel(key) {
   return METRIC_LABELS[key] ?? key
+}
+
+// Coarse business domain per metric key — mirrors the @finrep/analytics registry
+// `domain` (the per-period MetricResult does not carry it), used ONLY to group the
+// compact dashboard cards into domain sections. Kept in lockstep with the registry;
+// domains are stable so drift risk is low. Unknown keys fall back to 'finance'.
+export const METRIC_DOMAIN = {
+  operating_margin: 'finance',
+  days_cash_on_hand: 'finance',
+  months_operating_reserve: 'finance',
+  tuition_dependency: 'finance',
+  revenue_mix: 'finance',
+  expense_mix: 'finance',
+  cost_per_pupil: 'operations',
+  net_tuition_per_student: 'aid',
+  financial_aid_per_student: 'aid',
+  aid_per_aided_student: 'aid',
+  tuition_discount_rate: 'aid',
+  pct_students_on_aid: 'aid',
+  enrollment_change_yoy: 'enrollment',
+}
+
+export function metricDomain(key) {
+  return METRIC_DOMAIN[key] ?? 'finance'
 }
 
 // ── Phase 4D: health status visual tokens (strictly navy/gold) ───────────────

@@ -70,7 +70,15 @@ describe('metric metadata', () => {
     // Build each metric's runtime inputs once (full bundle + operational so every
     // operand is reported even when the metric is available).
     const operational = { enrollment: 100, enrollmentFte: null, studentsOnAid: 40, financialAidTotal: 50000 }
-    const r = computeMetricsRecord({ current: FULL_BUNDLE, currentOperational: operational })
+    // Pass a prior operational too so enrollment_change_yoy (which reads priorOp) is
+    // available and reports both its operands — keeps the no-drift check exhaustive.
+    const priorOperational = { enrollment: 95, enrollmentFte: null, studentsOnAid: 38, financialAidTotal: 48000 }
+    const r = computeMetricsRecord({
+      current: FULL_BUNDLE,
+      prior: FULL_BUNDLE,
+      currentOperational: operational,
+      priorOperational,
+    })
     for (const def of ALL_METRICS) {
       if (!def.inputs) continue
       const runtimeKeys = new Set(r[def.key].inputs.map((i) => i.key))
