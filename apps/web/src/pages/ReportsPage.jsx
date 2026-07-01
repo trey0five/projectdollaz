@@ -10,7 +10,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { FileBarChart2, Landmark, ArrowRight, ArrowLeft, Lock, CalendarClock, TrendingUp } from 'lucide-react'
-import TopBar from '../components/TopBar.jsx'
 import BillingBanner from '../components/BillingBanner.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { usePersistence } from '../context/PersistenceContext.jsx'
@@ -100,7 +99,6 @@ export default function ReportsPage() {
 
   return (
     <div className="min-h-screen bg-section">
-      <TopBar />
       <BillingBanner />
       <main className="mx-auto max-w-[1100px] px-4 py-8 sm:px-8">
         {openReport === 'board' ? (

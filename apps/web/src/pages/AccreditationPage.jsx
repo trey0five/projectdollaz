@@ -22,7 +22,6 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import TopBar from '../components/TopBar.jsx'
 import BillingBanner from '../components/BillingBanner.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useAccreditation } from '../hooks/useAccreditation.js'
@@ -788,7 +787,6 @@ function AccreditationPanel() {
 export default function AccreditationPage() {
   return (
     <div className="min-h-screen">
-      <TopBar />
       <BillingBanner />
       <AccreditationPanel />
     </div>

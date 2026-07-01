@@ -21,7 +21,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Wallet, Scale, Building2, Landmark, ListChecks } from 'lucide-react'
-import TopBar from '../components/TopBar.jsx'
 import BillingBanner from '../components/BillingBanner.jsx'
 import PeriodSelector from '../components/analytics/PeriodSelector.jsx'
 import BudgetTabs from '../components/budget/BudgetTabs.jsx'
@@ -327,7 +326,6 @@ export default function BudgetPage() {
 
   return (
     <div className="min-h-screen">
-      <TopBar />
       <BillingBanner />
       <div className="mx-auto max-w-[1280px] px-4 py-8 sm:px-10">
         {/* Page header: title + pinned school switcher & period selector. */}

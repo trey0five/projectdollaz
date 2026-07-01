@@ -30,7 +30,7 @@ import PennyAvatar from './PennyAvatar.jsx'
 import PennyChat from './PennyChat.jsx'
 
 const MARGIN = 12 // viewport edge clamp
-const HOME_X = 20 // home corner inset (matches bottom-5 left-5)
+const HOME_X = 20 // home corner inset (matches bottom-5 right-5, ~20px)
 const HOME_Y = 20
 
 export default function Penny() {
@@ -144,7 +144,11 @@ export default function Penny() {
     }
     cx = Math.max(MARGIN + COIN, Math.min(vw - MARGIN - COIN, cx))
     const cy = Math.max(MARGIN + 150, Math.min(vh - MARGIN - COIN, cy0)) // reserve 150px for bubble
-    const homeCx = HOME_X + COIN
+    // Home corner is bottom-RIGHT (the coin sits HOME_X in from the right edge),
+    // so its resting center-x is measured from the right: vw − HOME_X − COIN. The
+    // glide transform (cx − homeCx) then carries her to a target — including nav
+    // items in the LEFT sidebar — and back home to the right.
+    const homeCx = vw - HOME_X - COIN
     const homeCy = vh - HOME_Y - COIN
     return { x: cx - homeCx, y: cy - homeCy, parked: false, placeRight }
   }, [box, reduce, COIN])
@@ -185,7 +189,7 @@ export default function Penny() {
 
       {/* (ii) Travelling wrapper — glides from the home corner to beside the card. */}
       <motion.div
-        className="pointer-events-none fixed bottom-5 left-5 z-[55]"
+        className="pointer-events-none fixed bottom-5 right-5 z-[55]"
         animate={reduce ? { x: 0, y: 0 } : { x: travel.x, y: travel.y }}
         transition={spring}
       >
@@ -268,7 +272,7 @@ export default function Penny() {
         </motion.div>
       </motion.div>
 
-      {/* (iii) Penny AI chat — controlled, anchored bottom-left above the coin. */}
+      {/* (iii) Penny AI chat — controlled, anchored bottom-right above the coin. */}
       <PennyChat open={chatOpen} onClose={closeChat} />
     </div>
   )

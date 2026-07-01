@@ -1,0 +1,85 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// sidebarNav.js — the DATA-DRIVEN grouped-nav config for the left Sidebar.
+//
+// One row per GROUP. A group renders iff `module === null` (always: Core) OR
+// hasModule(group.module) === true (the licensed-group rule). Items map 1:1 to
+// the former flat TopBar NAV so behavior is byte-preserved — including each
+// item's `navId`, which is the STABLE DOM id Penny's target registry anchors her
+// glide to (targetRegistry.js). DO NOT rename/drop a navId.
+//
+// `match(path)` ports TopBar's exact active-route predicates (Home is exact;
+// Statements also lights on /history for the /history→/statements redirect;
+// everything else is a startsWith). Active state is derived per render from
+// useLocation — never stored in state / written from an effect.
+//
+// To extend declaratively: add a group row (with its `module` key) or an item —
+// no branching logic. ONLY include a group whose items have REAL routes; a
+// licensed-but-page-less module (enrollment/planning/hr/facilities/advancement)
+// contributes NO group (its value surfaces inside Analytics/briefing) and is
+// upsold via the Add-ons list (SELLABLE_MODULE_KEYS) only while UNLICENSED.
+// ─────────────────────────────────────────────────────────────────────────────
+import {
+  LayoutDashboard,
+  ListChecks,
+  Database,
+  FileStack,
+  BarChart3,
+  Wallet,
+  FileBarChart2,
+  ShieldCheck,
+  Landmark,
+  BadgeCheck,
+  Settings,
+} from 'lucide-react'
+
+export const NAV_GROUPS = [
+  {
+    id: 'core',
+    label: null, // Core renders as the top block with no visible heading.
+    module: null, // null = always shown (never gated, never upsold).
+    items: [
+      { to: '/', navId: 'nav-home', label: 'Home', Icon: LayoutDashboard, match: (p) => p === '/' },
+      { to: '/tasks', navId: 'nav-tasks', label: 'Tasks', Icon: ListChecks, match: (p) => p.startsWith('/tasks') },
+      { to: '/data', navId: 'nav-data', label: 'Data', Icon: Database, match: (p) => p.startsWith('/data') },
+    ],
+  },
+  {
+    id: 'finance',
+    label: 'Finance',
+    module: 'finance',
+    items: [
+      { to: '/statements', navId: 'nav-statements', label: 'Statements', Icon: FileStack, match: (p) => p.startsWith('/statements') || p.startsWith('/history') },
+      { to: '/analytics', navId: 'nav-analytics', label: 'Analytics', Icon: BarChart3, match: (p) => p.startsWith('/analytics') },
+      { to: '/budget', navId: 'nav-budget', label: 'Budget', Icon: Wallet, match: (p) => p.startsWith('/budget') },
+      { to: '/reports', navId: 'nav-reports', label: 'Reports', Icon: FileBarChart2, match: (p) => p.startsWith('/reports') },
+      // Readiness is finance audit/compliance readiness (same finance license, no
+      // own module key) — it lives UNDER Finance, adjacent to Reports as before.
+      { to: '/readiness', navId: 'nav-readiness', label: 'Readiness', Icon: ShieldCheck, match: (p) => p.startsWith('/readiness') },
+    ],
+  },
+  {
+    id: 'governance',
+    label: 'Governance',
+    module: 'governance',
+    items: [
+      { to: '/governance', navId: 'nav-governance', label: 'Governance', Icon: Landmark, match: (p) => p.startsWith('/governance') },
+    ],
+  },
+  {
+    id: 'accreditation',
+    label: 'Accreditation',
+    module: 'accreditation',
+    items: [
+      { to: '/accreditation', navId: 'nav-accreditation', label: 'Accreditation', Icon: BadgeCheck, match: (p) => p.startsWith('/accreditation') },
+    ],
+  },
+]
+
+// Settings is pinned to the sidebar FOOT, always, module-independent (no group).
+export const SETTINGS_ITEM = {
+  to: '/settings',
+  navId: 'nav-settings',
+  label: 'Settings',
+  Icon: Settings,
+  match: (p) => p.startsWith('/settings'),
+}

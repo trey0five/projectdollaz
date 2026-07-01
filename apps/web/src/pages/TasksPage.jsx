@@ -12,7 +12,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { ListChecks, Plus, Pencil, Trash2, Check, X, Link2, ShieldCheck } from 'lucide-react'
-import TopBar from '../components/TopBar.jsx'
 import BillingBanner from '../components/BillingBanner.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useTasks } from '../hooks/useTasks.js'
@@ -709,7 +708,6 @@ function TasksPanel() {
 export default function TasksPage() {
   return (
     <div className="min-h-screen">
-      <TopBar />
       <BillingBanner />
       <TasksPanel />
     </div>

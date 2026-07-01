@@ -112,7 +112,7 @@ export default function PennyChat({ open, onClose }) {
             }}
             className="fixed z-50 flex flex-col overflow-hidden border border-gold/25 bg-cream shadow-login
               inset-x-0 bottom-0 max-h-[92vh] rounded-t-2xl
-              sm:inset-x-auto sm:bottom-24 sm:left-5 sm:h-[680px] sm:max-h-[calc(100vh-7rem)] sm:w-[440px] sm:max-w-[calc(100vw-2.5rem)] sm:rounded-2xl
+              sm:inset-x-auto sm:bottom-24 sm:right-5 sm:h-[680px] sm:max-h-[calc(100vh-7rem)] sm:w-[440px] sm:max-w-[calc(100vw-2.5rem)] sm:rounded-2xl
               lg:h-[760px] lg:w-[500px]"
           >
             {/* ── Header — navy→gold gradient banner with a motion-safe sheen

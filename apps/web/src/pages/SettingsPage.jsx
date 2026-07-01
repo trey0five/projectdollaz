@@ -3,7 +3,6 @@
 import { motion } from 'framer-motion'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
-import TopBar from '../components/TopBar.jsx'
 import SettingsSidebar from '../components/settings/SettingsSidebar.jsx'
 
 export default function SettingsPage() {
@@ -11,7 +10,6 @@ export default function SettingsPage() {
 
   return (
     <div className="min-h-screen bg-navy-deep bg-navy-radial">
-      <TopBar />
       <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-8 sm:py-10">
         <div className="mb-6 flex items-center justify-between">
           <h1 className="font-serif text-[24px] font-semibold text-gold-light sm:text-[28px]">

@@ -290,6 +290,14 @@
   .no-print {
     display: none !important;
   }
+  /* The AppShell content column is offset by the fixed left sidebar (lg:pl-64).
+     The sidebar itself is .no-print (hidden), but `lg:pl-64` is a min-width media
+     query orthogonal to `print`, so at desktop-width print it would still shift the
+     centered mx-auto print documents (board report / CAP / workpapers / board
+     packet PDFs) 256px right and clip them. Neutralize the offset in print. */
+  .app-content-offset {
+    padding-left: 0 !important;
+  }
   /* Drill-down audit-trail cells are interactive buttons wrapping a statement
      amount on screen. In print, collapse the button to contents so it adds no
      box (the inner .amt prints verbatim) and drop all hover/focus styling, so

@@ -17,7 +17,6 @@ import { useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Landmark, Banknote, Target } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import TopBar from '../components/TopBar.jsx'
 import BillingBanner from '../components/BillingBanner.jsx'
 import PeriodSelector from '../components/analytics/PeriodSelector.jsx'
 import CapitalScheduleWorkspace from '../components/reports/schedules/CapitalScheduleWorkspace.jsx'
@@ -74,7 +73,6 @@ export default function SchedulesPage() {
 
   return (
     <div className="min-h-screen bg-section">
-      <TopBar />
       <BillingBanner />
       <main className="mx-auto max-w-[1100px] px-4 py-8 sm:px-8">
         <Link

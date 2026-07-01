@@ -9,7 +9,6 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Landmark, Plus, Pencil, Trash2, ListPlus, X } from 'lucide-react'
-import TopBar from '../components/TopBar.jsx'
 import BillingBanner from '../components/BillingBanner.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { usePolicies } from '../hooks/usePolicies.js'
@@ -442,7 +441,6 @@ function GovernancePanel() {
 export default function GovernancePage() {
   return (
     <div className="min-h-screen">
-      <TopBar />
       <BillingBanner />
       <GovernancePanel />
     </div>
