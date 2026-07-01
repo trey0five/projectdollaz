@@ -56,9 +56,11 @@ export const COMPLIANCE_ORDER = [
   'governance:policies-overdue',
   'governance:policies-due-soon',
   // Workflow task items (Phase 3). Placed after the governance items; overdue
-  // before due-soon so a same-severity tie is curated, not id-arbitrary. (These
-  // are DROPPED for the viewer lens — see keepForViewer.)
+  // leads (actionable now), then the sign-off backlog, then upcoming, so a same-
+  // severity tie is curated, not id-arbitrary. (These are ALL DROPPED for the
+  // viewer lens — see keepForViewer.)
   'workflow:tasks-overdue',
+  'workflow:approvals-pending',
   'workflow:tasks-due-soon',
   'data:no-snapshot',
   'data:unmapped',
@@ -130,7 +132,10 @@ function keepForViewer(item: AttentionItem): boolean {
   // Workflow (operational tasks) are DROPPED for the board: open tasks are "go do
   // this" operator chores a read-only board cannot action (the same reason warn/
   // info compliance is dropped). Governance policy items STAY (a board matter);
-  // task counts do not. Falls through to the default drop below (no allow branch).
+  // task counts do not. This ALSO drops workflow:approvals-pending in v1 (a school-
+  // scoped pending COUNT) — the board-facing surface is the deferred USER-scoped
+  // "awaiting YOUR sign-off" item, which would need an allow branch HERE when built.
+  // Falls through to the default drop below (no allow branch).
   return false
 }
 

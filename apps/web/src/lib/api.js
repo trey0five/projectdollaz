@@ -388,6 +388,9 @@ export const tasksApi = {
   update: (schoolId, taskId, body) => api.patch(`/schools/${schoolId}/tasks/${taskId}`, body),
   complete: (schoolId, taskId) => api.post(`/schools/${schoolId}/tasks/${taskId}/complete`),
   remove: (schoolId, taskId) => api.delete(`/schools/${schoolId}/tasks/${taskId}`),
+  submitApproval: (schoolId, taskId, body) =>
+    api.post(`/schools/${schoolId}/tasks/${taskId}/submit-approval`, body),
+  decide: (schoolId, taskId, body) => api.post(`/schools/${schoolId}/tasks/${taskId}/decide`, body),
 }
 
 // ── Phase 3: supporting schedules (Capital Budget + Cash & Investments) ──────

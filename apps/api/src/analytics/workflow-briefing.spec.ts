@@ -25,6 +25,13 @@ function task(over: Partial<TaskPublic>): TaskPublic {
     sourceRef: over.sourceRef ?? null,
     createdByUserId: over.createdByUserId ?? null,
     completedAt: over.completedAt ?? null,
+    approverUserId: over.approverUserId ?? null,
+    approver: over.approver ?? null,
+    approvalStatus: over.approvalStatus ?? 'none',
+    decidedByUserId: over.decidedByUserId ?? null,
+    decidedBy: over.decidedBy ?? null,
+    decidedAt: over.decidedAt ?? null,
+    decisionNote: over.decisionNote ?? null,
     urgency: over.urgency ?? 'on-track',
     daysUntilDue: over.daysUntilDue ?? null,
     createdAt: over.createdAt ?? '2025-01-01T00:00:00.000Z',
@@ -143,5 +150,73 @@ describe('briefing — workflow STEP', () => {
     })
     const res = await svc.getBriefing('school-1', PERIOD.id, 'owner')
     expect(res.items.some((i) => i.id === 'workflow:tasks-overdue')).toBe(true)
+  })
+
+  it('two pending approvals → one info "approvals-pending" item, title counts, /tasks link', async () => {
+    const svc = makeService({
+      tasks: [
+        task({ id: 't1', approvalStatus: 'pending', urgency: 'on-track' }),
+        task({ id: 't2', approvalStatus: 'pending', urgency: 'on-track' }),
+      ],
+    })
+    const res = await svc.getBriefing('school-1', PERIOD.id, 'owner')
+    const wf = res.items.find((i) => i.id === 'workflow:approvals-pending')
+    expect(wf).toBeDefined()
+    expect(wf!.severity).toBe('info')
+    expect(wf!.source).toBe('workflow')
+    expect(wf!.title).toBe('2 tasks awaiting sign-off')
+    expect(wf!.link).toBe('/tasks')
+  })
+
+  it('no pending approvals → no approvals-pending item', async () => {
+    const svc = makeService({ tasks: [task({ id: 't1', approvalStatus: 'none' })] })
+    const res = await svc.getBriefing('school-1', PERIOD.id, 'owner')
+    expect(res.items.some((i) => i.id === 'workflow:approvals-pending')).toBe(false)
+  })
+
+  it('a pending task that is ALSO overdue escalates approvals-pending to warn', async () => {
+    const svc = makeService({
+      tasks: [
+        task({
+          id: 't1',
+          approvalStatus: 'pending',
+          urgency: 'overdue',
+          daysUntilDue: -2,
+          dueDate: '2026-06-29',
+        }),
+      ],
+    })
+    const res = await svc.getBriefing('school-1', PERIOD.id, 'owner')
+    const wf = res.items.find((i) => i.id === 'workflow:approvals-pending')
+    expect(wf!.severity).toBe('warn')
+  })
+
+  it('ranking: overdue → approvals-pending → due-soon within same severity (owner lens)', async () => {
+    const svc = makeService({
+      tasks: [
+        // same 'warn' severity band: an overdue (warn) + a pending-that-is-overdue (warn)
+        task({ id: 't1', urgency: 'overdue', daysUntilDue: -1, dueDate: '2026-06-30' }),
+        task({
+          id: 't2',
+          approvalStatus: 'pending',
+          urgency: 'overdue',
+          daysUntilDue: -1,
+          dueDate: '2026-06-30',
+        }),
+      ],
+    })
+    const res = await svc.getBriefing('school-1', PERIOD.id, 'owner')
+    const ids = res.items.filter((i) => i.source === 'workflow').map((i) => i.id)
+    expect(ids.indexOf('workflow:tasks-overdue')).toBeLessThan(
+      ids.indexOf('workflow:approvals-pending'),
+    )
+  })
+
+  it('VIEWER lens DROPS approvals-pending (school-scoped count is not a board surface)', async () => {
+    const svc = makeService({
+      tasks: [task({ id: 't1', approvalStatus: 'pending', urgency: 'on-track' })],
+    })
+    const res = await svc.getBriefing('school-1', PERIOD.id, 'viewer')
+    expect(res.items.some((i) => i.id === 'workflow:approvals-pending')).toBe(false)
   })
 })

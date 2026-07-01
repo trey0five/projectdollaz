@@ -20,6 +20,8 @@ import { TasksService } from './tasks.service.js'
 import { CreateTaskDto } from './dto/create-task.dto.js'
 import { UpdateTaskDto } from './dto/update-task.dto.js'
 import { ListTasksQueryDto } from './dto/list-tasks-query.dto.js'
+import { SubmitTaskApprovalDto } from './dto/submit-task-approval.dto.js'
+import { DecideTaskDto } from './dto/decide-task.dto.js'
 
 /**
  * Phase 3 Workflow v1 — the generic TASK controller. Workflow is CORE (roadmap:
@@ -79,6 +81,40 @@ export class TasksController {
     @CurrentUser() user: User,
   ) {
     return this.tasks.complete(schoolId, taskId, user.id)
+  }
+
+  /**
+   * Route a task to an approver for sign-off. owner/accountant only — a viewer
+   * cannot ASSIGN an approver (that is an operator action); they can only DECIDE
+   * when named. The service validates the approver is an active member (400 else).
+   */
+  @Post(':taskId/submit-approval')
+  @Roles('owner', 'accountant')
+  submitApproval(
+    @Param('schoolId', ParseUUIDPipe) schoolId: string,
+    @Param('taskId', ParseUUIDPipe) taskId: string,
+    @Body() dto: SubmitTaskApprovalDto,
+    @CurrentUser() user: User,
+  ) {
+    return this.tasks.submitForApproval(schoolId, taskId, dto.approverUserId, user.id)
+  }
+
+  /**
+   * Record the approver's decision. @Roles INCLUDES 'viewer' deliberately — a
+   * board-chair approver is frequently a viewer and must be able to sign off. The
+   * ROUTE ROLE IS NOT THE GATE: the service enforces caller.id === task.approverUserId
+   * (403 else), so a non-approver owner/accountant CANNOT decide, and a viewer can
+   * ONLY decide the tasks they were named the approver of.
+   */
+  @Post(':taskId/decide')
+  @Roles('owner', 'accountant', 'viewer')
+  decide(
+    @Param('schoolId', ParseUUIDPipe) schoolId: string,
+    @Param('taskId', ParseUUIDPipe) taskId: string,
+    @Body() dto: DecideTaskDto,
+    @CurrentUser() user: User,
+  ) {
+    return this.tasks.decide(schoolId, taskId, dto.decision, dto.note ?? null, user)
   }
 
   @Delete(':taskId')

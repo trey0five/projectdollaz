@@ -11,11 +11,16 @@
 // task and don't need the picker).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect, useCallback } from 'react'
-import { tasksApi, schoolsApi, isPaymentRequired } from '../lib/api.js'
+import { tasksApi, schoolsApi, authApi, isPaymentRequired } from '../lib/api.js'
 
 export function useTasks(schoolId, filters = {}, canEdit = false) {
   const [tasks, setTasks] = useState([])
   const [members, setMembers] = useState([])
+  // The caller's own user id — needed so the page can tell whether the caller IS
+  // the designated approver of a pending task (the Approve/Reject controls gate on
+  // this, NOT on canEdit, so a viewer-approver can act). SchoolContext gives role,
+  // not the user id, so we fetch it once via authApi.me().
+  const [currentUserId, setCurrentUserId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [notEntitled, setNotEntitled] = useState(false)
@@ -86,6 +91,24 @@ export function useTasks(schoolId, filters = {}, canEdit = false) {
     }
   }, [schoolId, canEdit])
 
+  // Current user id — fetched once (microtask-deferred, cancelled-flag), works for
+  // EVERY role (a viewer-approver has no members roster but still needs their id).
+  useEffect(() => {
+    let cancelled = false
+    Promise.resolve().then(async () => {
+      if (cancelled) return
+      try {
+        const res = await authApi.me()
+        if (!cancelled) setCurrentUserId(res.data?.user?.id ?? res.data?.id ?? null)
+      } catch {
+        if (!cancelled) setCurrentUserId(null)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const refresh = useCallback(
     () => (schoolId ? load(schoolId) : Promise.resolve()),
     [schoolId, load],
@@ -138,5 +161,37 @@ export function useTasks(schoolId, filters = {}, canEdit = false) {
     [schoolId, load],
   )
 
-  return { tasks, members, loading, error, notEntitled, refresh, create, update, complete, remove }
+  const submitApproval = useCallback(
+    async (taskId, approverUserId) => {
+      if (!schoolId) return
+      await tasksApi.submitApproval(schoolId, taskId, { approverUserId })
+      await load(schoolId)
+    },
+    [schoolId, load],
+  )
+
+  const decide = useCallback(
+    async (taskId, decision, note) => {
+      if (!schoolId) return
+      await tasksApi.decide(schoolId, taskId, { decision, note: note || null })
+      await load(schoolId)
+    },
+    [schoolId, load],
+  )
+
+  return {
+    tasks,
+    members,
+    currentUserId,
+    loading,
+    error,
+    notEntitled,
+    refresh,
+    create,
+    update,
+    complete,
+    remove,
+    submitApproval,
+    decide,
+  }
 }

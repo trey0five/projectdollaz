@@ -487,6 +487,39 @@ export class BriefingService {
           dueDate: earliest,
         })
       }
+
+      // ── STEP 2.6b: awaiting sign-off (workflow approval, Phase 3 v1) ──────────
+      // A 'pending' approval can only live on an open/in_progress task (submit
+      // doesn't change status; approve → 'done' drops out; reject → 'in_progress'
+      // stays visible), so counting approvalStatus==='pending' over the SAME
+      // openTasks read is correct and needs no extra query. SCHOOL-scoped COUNT (a
+      // v1 limitation — NOT user-scoped "awaiting YOUR sign-off", which is deferred,
+      // and the reason this DROPS for the viewer/board lens like the other workflow
+      // items). Severity: 'info' by default, escalated to 'warn' if any pending task
+      // is itself overdue (a sign-off blocking an overdue task is more pressing);
+      // never 'critical' — a stalled approval is a nudge, not an alarm. Same fail-
+      // soft `if (openTasks)` guard → never 500s.
+      const pending = openTasks.filter((t) => t.approvalStatus === 'pending')
+      if (pending.length > 0) {
+        const n = pending.length
+        const anyOverdue = pending.some((t) => t.urgency === 'overdue')
+        const earliest =
+          pending
+            .map((t) => t.dueDate)
+            .filter((d): d is string => d !== null)
+            .sort()[0] ?? null
+        items.push({
+          id: 'workflow:approvals-pending',
+          severity: anyOverdue ? 'warn' : 'info',
+          source: 'workflow',
+          title: `${n} task${n === 1 ? '' : 's'} awaiting sign-off`,
+          why: `${n} task${n === 1 ? ' is' : 's are'} waiting on an approver's decision. Open the task list to review and sign off (or reassign the approver).`,
+          metricKey: null,
+          value: null,
+          link: '/tasks',
+          dueDate: earliest,
+        })
+      }
     }
 
     // ── STEP 3: lens-shape (rank + filter + reframe) + summarise ─────────────

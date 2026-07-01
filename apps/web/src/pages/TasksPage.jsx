@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { ListChecks, Plus, Pencil, Trash2, Check, X, Link2 } from 'lucide-react'
+import { ListChecks, Plus, Pencil, Trash2, Check, X, Link2, ShieldCheck } from 'lucide-react'
 import TopBar from '../components/TopBar.jsx'
 import BillingBanner from '../components/BillingBanner.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
@@ -54,6 +54,17 @@ function assigneeName(a) {
   if (!a) return 'Unassigned'
   const full = [a.firstName, a.lastName].filter(Boolean).join(' ').trim()
   return full || a.email
+}
+
+// Approval / sign-off status pill (mirrors the URGENCY_BADGE styling vocab). 'none'
+// renders nothing.
+const APPROVAL_BADGE = {
+  pending: { label: 'Awaiting sign-off', cls: 'border-amber-400/50 bg-amber-500/15 text-amber-200' },
+  approved: { label: 'Approved', cls: 'border-emerald-400/50 bg-emerald-500/15 text-emerald-200' },
+  rejected: {
+    label: 'Changes requested',
+    cls: 'border-red-400/50 bg-red-500/15 text-red-200',
+  },
 }
 
 const EMPTY_FORM = {
@@ -230,6 +241,143 @@ function TaskFormModal({ open, initial, members, onClose, onSave, reduce }) {
   )
 }
 
+/** Approver-picker modal for "Request sign-off" — reuses the members roster + the
+ *  create-modal control styling. Editors (owner/accountant) only. */
+function ApproverPickerModal({ open, task, members, onClose, onSubmit, reduce }) {
+  const [approverUserId, setApproverUserId] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState('')
+
+  const submit = async (e) => {
+    e.preventDefault()
+    if (!approverUserId) {
+      setErr('Choose an approver.')
+      return
+    }
+    setSaving(true)
+    setErr('')
+    try {
+      await onSubmit(approverUserId)
+      onClose()
+    } catch {
+      setErr('Could not request sign-off.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!open) return null
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <motion.div
+        initial={reduce ? false : { opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full max-w-md rounded-2xl border-2 border-gold/30 bg-navy-gradient p-6 shadow-navy-glow"
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="font-serif text-[18px] uppercase tracking-[0.12em] text-gold-light">
+            Request sign-off
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-gold/60 hover:text-white"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <p className="mb-3 text-[13px] text-white/60">
+          Route <span className="font-semibold text-white/90">{task?.title}</span> to an approver.
+          They will be able to approve or request changes.
+        </p>
+        <form onSubmit={submit} className="space-y-3">
+          <label className="block text-[13px] text-white/70">
+            Approver
+            <select
+              value={approverUserId}
+              onChange={(e) => setApproverUserId(e.target.value)}
+              className="mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-white outline-none focus:border-gold/60"
+            >
+              <option value="">Select an approver…</option>
+              {members.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {memberName(m)}
+                </option>
+              ))}
+            </select>
+          </label>
+          {err ? <p className="text-[13px] text-red-300">{err}</p> : null}
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border-2 border-white/20 px-4 py-2 text-[14px] font-semibold text-white/70 hover:border-white/40 hover:text-white"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="inline-flex items-center gap-2 rounded-lg border-2 border-gold/60 bg-gold/15 px-4 py-2 text-[14px] font-semibold text-gold-light hover:bg-gold/25 disabled:opacity-50"
+            >
+              <ShieldCheck size={15} /> {saving ? 'Requesting…' : 'Request sign-off'}
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </div>
+  )
+}
+
+/** Inline Approve / Request-changes controls shown ONLY to the row's designated
+ *  approver on a pending task (gated on currentUserId === approverUserId, NOT on
+ *  canEdit — a viewer-approver must see these). Optional decision note. */
+function DecideControls({ task, onDecide }) {
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const act = async (decision) => {
+    setBusy(true)
+    try {
+      await onDecide(task.id, decision, note.trim() || null)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="mt-2 rounded-lg border-2 border-amber-400/30 bg-amber-500/5 p-2">
+      <p className="mb-1.5 text-[12px] font-semibold text-amber-200">You are the approver.</p>
+      <input
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        maxLength={2000}
+        placeholder="Add a note (optional)"
+        className="mb-2 w-full rounded-md border-2 border-white/20 bg-navy/40 px-2 py-1 text-[13px] text-white outline-none focus:border-gold/60"
+      />
+      <div className="flex gap-2">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => act('approve')}
+          className="inline-flex items-center gap-1 rounded-lg border-2 border-emerald-400/50 bg-emerald-500/15 px-3 py-1 text-[13px] font-semibold text-emerald-200 hover:bg-emerald-500/25 disabled:opacity-50"
+        >
+          <Check size={14} /> Approve
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => act('reject')}
+          className="inline-flex items-center gap-1 rounded-lg border-2 border-red-400/50 bg-red-500/15 px-3 py-1 text-[13px] font-semibold text-red-200 hover:bg-red-500/25 disabled:opacity-50"
+        >
+          <X size={14} /> Request changes
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function TasksPanel() {
   const { activeSchool } = useSchools()
   const schoolId = activeSchool?.id ?? null
@@ -249,12 +397,25 @@ function TasksPanel() {
     [statusFilter, assigneeFilter],
   )
 
-  const { tasks, members, loading, error, notEntitled, create, update, complete, remove } =
-    useTasks(schoolId, filters, canEdit)
+  const {
+    tasks,
+    members,
+    currentUserId,
+    loading,
+    error,
+    notEntitled,
+    create,
+    update,
+    complete,
+    remove,
+    submitApproval,
+    decide,
+  } = useTasks(schoolId, filters, canEdit)
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const [prefill, setPrefill] = useState(null)
+  const [approvalTask, setApprovalTask] = useState(null)
 
   // A navigated-in prefill (from a "Create task" affordance elsewhere) opens the
   // create modal pre-seeded. Deferred to a microtask (setState-in-effect safe) and
@@ -436,6 +597,31 @@ function TasksPanel() {
                       <span className="rounded-md border border-white/20 bg-white/5 px-2 py-0.5 text-[12px] text-white/70">
                         {t.status.replace('_', ' ')}
                       </span>
+                      {APPROVAL_BADGE[t.approvalStatus] ? (
+                        <div className="mt-1.5">
+                          <span
+                            className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[12px] font-semibold ${APPROVAL_BADGE[t.approvalStatus].cls}`}
+                            title={t.decisionNote || undefined}
+                          >
+                            {APPROVAL_BADGE[t.approvalStatus].label}
+                          </span>
+                          {t.approvalStatus === 'pending' && t.approver ? (
+                            <div className="mt-1 text-[11px] text-white/45">
+                              Approver: {assigneeName(t.approver)}
+                            </div>
+                          ) : null}
+                          {(t.approvalStatus === 'approved' || t.approvalStatus === 'rejected') &&
+                          t.decidedBy ? (
+                            <div className="mt-1 text-[11px] text-white/45">
+                              Decided by {assigneeName(t.decidedBy)}
+                            </div>
+                          ) : null}
+                          {t.approvalStatus === 'pending' &&
+                          t.approverUserId === currentUserId ? (
+                            <DecideControls task={t} onDecide={decide} />
+                          ) : null}
+                        </div>
+                      ) : null}
                     </td>
                     <td className="px-4 py-3">
                       <UrgencyBadge
@@ -447,6 +633,19 @@ function TasksPanel() {
                     {canEdit ? (
                       <td className="px-4 py-3">
                         <div className="flex justify-end gap-1.5">
+                          {t.status !== 'done' &&
+                          t.status !== 'cancelled' &&
+                          (t.approvalStatus === 'none' || t.approvalStatus === 'rejected') ? (
+                            <button
+                              type="button"
+                              onClick={() => setApprovalTask(t)}
+                              aria-label={`Request sign-off for ${t.title}`}
+                              title="Request sign-off"
+                              className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-gold/60 hover:text-gold-light"
+                            >
+                              <ShieldCheck size={15} />
+                            </button>
+                          ) : null}
                           {t.status !== 'done' && t.status !== 'cancelled' ? (
                             <button
                               type="button"
@@ -491,6 +690,16 @@ function TasksPanel() {
         members={members}
         onClose={() => setModalOpen(false)}
         onSave={onSave}
+        reduce={reduce}
+      />
+
+      <ApproverPickerModal
+        key={approvalTask ? `approve-${approvalTask.id}` : 'approve-none'}
+        open={!!approvalTask}
+        task={approvalTask}
+        members={members}
+        onClose={() => setApprovalTask(null)}
+        onSubmit={(approverUserId) => submitApproval(approvalTask.id, approverUserId)}
         reduce={reduce}
       />
     </div>

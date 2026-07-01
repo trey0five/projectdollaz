@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import { BadRequestException, NotFoundException } from '@nestjs/common'
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common'
 import { TasksService } from './tasks.service.js'
+
+/** A minimal User-shaped caller for decide() (only .id is read by the service). */
+function user(id: string) {
+  return { id, firstName: null, lastName: null, email: `${id}@x.test` } as never
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TasksService — TENANT ISOLATION + assignee-must-be-a-member + computed urgency.
@@ -22,6 +27,13 @@ function row(over: Record<string, unknown> = {}) {
     sourceRef: null,
     createdByUserId: null,
     completedAt: null,
+    approverUserId: null,
+    approver: null,
+    approvalStatus: 'none',
+    decidedByUserId: null,
+    decidedByUser: null,
+    decidedAt: null,
+    decisionNote: null,
     createdAt: new Date('2025-01-01T00:00:00.000Z'),
     updatedAt: new Date('2025-01-01T00:00:00.000Z'),
     ...over,
@@ -65,7 +77,7 @@ describe('TasksService', () => {
     const res = await svc.list('school-A', { status: 'open', assigneeUserId: 'u1' }, NOW)
     expect(task.findMany).toHaveBeenCalledWith({
       where: { schoolId: 'school-A', status: 'open', assigneeUserId: 'u1' },
-      include: { assignee: true },
+      include: { assignee: true, approver: true, decidedByUser: true },
     })
     // Overdue sorts before on-track (deterministic URGENCY_ORDER).
     expect(res.tasks[0].id).toBe('b')
@@ -214,5 +226,215 @@ describe('TasksService', () => {
       where: { schoolId: 'school-A', status: { in: ['open', 'in_progress'] } },
     })
     expect(res[0].urgency).toBe('overdue')
+  })
+
+  // ── Phase 3 v1 approval / sign-off state machine ──────────────────────────────
+  describe('submitForApproval', () => {
+    it('from "none" → pending + approver set; status untouched; decision fields cleared', async () => {
+      const { svc, task, membership, audit } = makeService({
+        task: { findFirst: vi.fn(async () => row({ id: 't1', status: 'open', approvalStatus: 'none' })) },
+        membership: { findFirst: vi.fn(async () => ({ id: 'm1' })) },
+      })
+      await svc.submitForApproval('school-A', 't1', 'approver-1', 'user-1')
+      const data = task.update.mock.calls[0][0].data
+      expect(data.approvalStatus).toBe('pending')
+      expect(data.approverUserId).toBe('approver-1')
+      expect(data.status).toBeUndefined() // status is NOT changed on submit
+      expect(data.decidedByUserId).toBeNull()
+      expect(data.decidedAt).toBeNull()
+      expect(data.decisionNote).toBeNull()
+      expect(membership.findFirst).toHaveBeenCalledWith({
+        where: { schoolId: 'school-A', userId: 'approver-1', status: 'active' },
+      })
+      expect(audit.write).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'task.approval_requested' }),
+      )
+    })
+
+    it('from "rejected" (rework) → pending again (resubmit is legal)', async () => {
+      const { svc, task } = makeService({
+        task: {
+          findFirst: vi.fn(async () =>
+            row({ id: 't1', status: 'in_progress', approvalStatus: 'rejected', decidedByUserId: 'x' }),
+          ),
+        },
+        membership: { findFirst: vi.fn(async () => ({ id: 'm1' })) },
+      })
+      await svc.submitForApproval('school-A', 't1', 'approver-1', 'user-1')
+      expect(task.update.mock.calls[0][0].data.approvalStatus).toBe('pending')
+    })
+
+    it('when already "pending" → 400 (no double-submit)', async () => {
+      const { svc, task } = makeService({
+        task: { findFirst: vi.fn(async () => row({ id: 't1', approvalStatus: 'pending' })) },
+        membership: { findFirst: vi.fn(async () => ({ id: 'm1' })) },
+      })
+      await expect(
+        svc.submitForApproval('school-A', 't1', 'approver-1', 'user-1'),
+      ).rejects.toBeInstanceOf(BadRequestException)
+      expect(task.update).not.toHaveBeenCalled()
+    })
+
+    it('when "approved" → 400', async () => {
+      const { svc } = makeService({
+        task: { findFirst: vi.fn(async () => row({ id: 't1', approvalStatus: 'approved' })) },
+        membership: { findFirst: vi.fn(async () => ({ id: 'm1' })) },
+      })
+      await expect(
+        svc.submitForApproval('school-A', 't1', 'approver-1', 'user-1'),
+      ).rejects.toBeInstanceOf(BadRequestException)
+    })
+
+    it('on a done/cancelled task → 400', async () => {
+      for (const status of ['done', 'cancelled']) {
+        const { svc, task } = makeService({
+          task: { findFirst: vi.fn(async () => row({ id: 't1', status, approvalStatus: 'none' })) },
+          membership: { findFirst: vi.fn(async () => ({ id: 'm1' })) },
+        })
+        await expect(
+          svc.submitForApproval('school-A', 't1', 'approver-1', 'user-1'),
+        ).rejects.toBeInstanceOf(BadRequestException)
+        expect(task.update).not.toHaveBeenCalled()
+      }
+    })
+
+    it('approver that is NOT an active member → 400 (reuses the membership guard)', async () => {
+      const { svc, task } = makeService({
+        task: { findFirst: vi.fn(async () => row({ id: 't1', approvalStatus: 'none' })) },
+        membership: { findFirst: vi.fn(async () => null) }, // not a member (or cross-tenant)
+      })
+      await expect(
+        svc.submitForApproval('school-A', 't1', 'outsider', 'user-1'),
+      ).rejects.toBeInstanceOf(BadRequestException)
+      expect(task.update).not.toHaveBeenCalled()
+    })
+
+    it('cross-tenant taskId → 404, never loads/mutates the foreign row', async () => {
+      const { svc, task } = makeService({ task: { findFirst: vi.fn(async () => null) } })
+      await expect(
+        svc.submitForApproval('school-B', 'task-of-A', 'approver-1', 'user-1'),
+      ).rejects.toBeInstanceOf(NotFoundException)
+      expect(task.update).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('decide', () => {
+    it('approve from "pending" (BY THE APPROVER) → approved + status done + completedAt + decidedBy/at/note', async () => {
+      const { svc, task, audit } = makeService({
+        task: {
+          findFirst: vi.fn(async () =>
+            row({ id: 't1', approvalStatus: 'pending', approverUserId: 'approver-1' }),
+          ),
+        },
+      })
+      await svc.decide('school-A', 't1', 'approve', 'looks good', user('approver-1'))
+      const data = task.update.mock.calls[0][0].data
+      expect(data.approvalStatus).toBe('approved')
+      expect(data.status).toBe('done')
+      expect(data.completedAt).toBeInstanceOf(Date)
+      expect(data.decidedByUserId).toBe('approver-1')
+      expect(data.decidedAt).toBeInstanceOf(Date) // stamped server-side, not client
+      expect(data.decisionNote).toBe('looks good')
+      expect(audit.write).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'task.approved' }),
+      )
+    })
+
+    it('reject from "pending" → rejected + status in_progress + completedAt null', async () => {
+      const { svc, task, audit } = makeService({
+        task: {
+          findFirst: vi.fn(async () =>
+            row({
+              id: 't1',
+              status: 'done',
+              completedAt: new Date('2026-01-01T00:00:00.000Z'),
+              approvalStatus: 'pending',
+              approverUserId: 'approver-1',
+            }),
+          ),
+        },
+      })
+      await svc.decide('school-A', 't1', 'reject', null, user('approver-1'))
+      const data = task.update.mock.calls[0][0].data
+      expect(data.approvalStatus).toBe('rejected')
+      expect(data.status).toBe('in_progress')
+      expect(data.completedAt).toBeNull() // un-completes a previously-done task
+      expect(data.decisionNote).toBeNull()
+      expect(audit.write).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'task.rejected' }),
+      )
+    })
+
+    it('SECURITY: a VIEWER who IS the approver can decide (route allows viewer; service identity passes)', async () => {
+      // The service does not consult role — only caller.id === approverUserId. A viewer
+      // whose id matches the approver passes the identity gate.
+      const { svc, task } = makeService({
+        task: {
+          findFirst: vi.fn(async () =>
+            row({ id: 't1', approvalStatus: 'pending', approverUserId: 'board-chair' }),
+          ),
+        },
+      })
+      await svc.decide('school-A', 't1', 'approve', null, user('board-chair'))
+      expect(task.update).toHaveBeenCalled()
+    })
+
+    it('SECURITY: a NON-approver (even an owner) on a PENDING task → 403, no mutation', async () => {
+      const { svc, task } = makeService({
+        task: {
+          findFirst: vi.fn(async () =>
+            row({ id: 't1', approvalStatus: 'pending', approverUserId: 'approver-1' }),
+          ),
+        },
+      })
+      await expect(
+        svc.decide('school-A', 't1', 'approve', null, user('some-other-owner')),
+      ).rejects.toBeInstanceOf(ForbiddenException)
+      expect(task.update).not.toHaveBeenCalled()
+    })
+
+    it('decide when approvalStatus "none" → 400 (decide-without-pending)', async () => {
+      const { svc } = makeService({
+        task: { findFirst: vi.fn(async () => row({ id: 't1', approvalStatus: 'none' })) },
+      })
+      await expect(
+        svc.decide('school-A', 't1', 'approve', null, user('anyone')),
+      ).rejects.toBeInstanceOf(BadRequestException)
+    })
+
+    it('double-decide: deciding an already-"approved" task → 400', async () => {
+      const { svc } = makeService({
+        task: {
+          findFirst: vi.fn(async () =>
+            row({ id: 't1', approvalStatus: 'approved', approverUserId: 'approver-1' }),
+          ),
+        },
+      })
+      await expect(
+        svc.decide('school-A', 't1', 'reject', null, user('approver-1')),
+      ).rejects.toBeInstanceOf(BadRequestException)
+    })
+
+    it('ORDER: pending-guard precedes identity-guard — a non-approver on a NON-pending task gets 400, not 403', async () => {
+      const { svc } = makeService({
+        task: {
+          findFirst: vi.fn(async () =>
+            row({ id: 't1', approvalStatus: 'approved', approverUserId: 'approver-1' }),
+          ),
+        },
+      })
+      // A random owner poking a non-pending task must get the plain 400 (no approver leak).
+      await expect(
+        svc.decide('school-A', 't1', 'approve', null, user('random-owner')),
+      ).rejects.toBeInstanceOf(BadRequestException)
+    })
+
+    it('cross-tenant taskId → 404 for decide, never mutates', async () => {
+      const { svc, task } = makeService({ task: { findFirst: vi.fn(async () => null) } })
+      await expect(
+        svc.decide('school-B', 'task-of-A', 'approve', null, user('approver-1')),
+      ).rejects.toBeInstanceOf(NotFoundException)
+      expect(task.update).not.toHaveBeenCalled()
+    })
   })
 })

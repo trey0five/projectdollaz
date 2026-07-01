@@ -20,6 +20,16 @@ export type TaskPriority = (typeof TASK_PRIORITIES)[number]
 export const TASK_SOURCE_TYPES = ['manual', 'policy', 'metric', 'compliance'] as const
 export type TaskSourceType = (typeof TASK_SOURCE_TYPES)[number]
 
+/** Approval / sign-off lifecycle (Phase 3 v1). Co-located with TASK_STATUSES so the
+ *  service, DTOs, and normalizer share ONE enum. Written only by the service state
+ *  machine (submitForApproval/decide); the read path normalizes to 'none'. */
+export const APPROVAL_STATUSES = ['none', 'pending', 'approved', 'rejected'] as const
+export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number]
+
+/** The two decisions an approver may record on a pending task. */
+export const TASK_DECISIONS = ['approve', 'reject'] as const
+export type TaskDecision = (typeof TASK_DECISIONS)[number]
+
 /**
  * Create a task. forbidNonWhitelisted-SAFE: EVERY field is class-validator
  * decorated, so a stray/unknown key 400s. Nullable fields are `@IsOptional()`,

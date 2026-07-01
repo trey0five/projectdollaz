@@ -197,6 +197,8 @@ model User {
   policyUpdates            Policy[]           @relation("PolicyUpdatedBy")
   tasksAssigned            Task[]             @relation("TaskAssignee")
   tasksCreated             Task[]             @relation("TaskCreatedBy")
+  tasksToApprove           Task[]             @relation("TaskApprover")
+  tasksDecided             Task[]             @relation("TaskDecidedBy")
 
   @@index([email])
   @@map("users")
@@ -868,14 +870,28 @@ model Task {
   sourceRef       String?   @map("source_ref")  // policyId / metricKey / briefing item id (soft link)
   createdByUserId String?   @map("created_by_user_id") @db.Uuid
   completedAt     DateTime? @map("completed_at")
+  // ── Phase 3 Workflow v1 approval / sign-off (additive; single-approver). A task
+  // carries AT MOST ONE approval at a time, so approval is a set of columns on the
+  // Task — NOT a separate Approval table (that is the deferred multi-step design).
+  // approvalStatus defaults 'none' so EVERY existing row is valid post-migration
+  // with no backfill. approver/decidedBy are SET NULL on user delete (audit history
+  // survives), mirroring assignee/createdBy.
+  approverUserId  String?   @map("approver_user_id") @db.Uuid
+  approvalStatus  String    @default("none") @map("approval_status") // 'none' | 'pending' | 'approved' | 'rejected'
+  decidedByUserId String?   @map("decided_by_user_id") @db.Uuid
+  decidedAt       DateTime? @map("decided_at")
+  decisionNote    String?   @map("decision_note")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
   school        School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   assignee      User?  @relation("TaskAssignee", fields: [assigneeUserId], references: [id], onDelete: SetNull)
   createdByUser User?  @relation("TaskCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  approver      User?  @relation("TaskApprover", fields: [approverUserId], references: [id], onDelete: SetNull)
+  decidedByUser User?  @relation("TaskDecidedBy", fields: [decidedByUserId], references: [id], onDelete: SetNull)
 
   @@index([schoolId])
   @@index([schoolId, status])
+  @@index([schoolId, approvalStatus])
   @@map("tasks")
 }
