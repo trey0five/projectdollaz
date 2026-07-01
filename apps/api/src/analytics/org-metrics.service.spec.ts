@@ -80,6 +80,36 @@ function buildService(fx: Fixture) {
         fx.snapshots
           .filter((s) => where.schoolId.in.includes(s.schoolId))
           .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()),
+      // For nearestPriorBundle: the latest snapshot of a resolved prior period.
+      findFirst: async ({
+        where,
+      }: {
+        where: { schoolId: string; fiscalPeriodId: string }
+      }) =>
+        fx.snapshots
+          .filter((s) => s.schoolId === where.schoolId && s.fiscalPeriodId === where.fiscalPeriodId)
+          .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0] ?? null,
+    },
+    // For nearestPriorBundle: newest prior fiscal period (by periodEndDate) that
+    // has at least one snapshot, strictly before the chosen period end.
+    fiscalPeriod: {
+      findFirst: async ({
+        where,
+      }: {
+        where: { schoolId: string; periodEndDate: { lt: Date } }
+      }) => {
+        const candidates = fx.snapshots
+          .filter(
+            (s) =>
+              s.schoolId === where.schoolId &&
+              s.fiscalPeriod.periodEndDate.getTime() < where.periodEndDate.lt.getTime(),
+          )
+          .sort(
+            (a, b) => b.fiscalPeriod.periodEndDate.getTime() - a.fiscalPeriod.periodEndDate.getTime(),
+          )
+        const top = candidates[0]
+        return top ? { id: top.fiscalPeriodId } : null
+      },
     },
   } as unknown as PrismaService
 
@@ -186,5 +216,32 @@ describe('OrgMetricsService rollup', () => {
     const s1 = res.contributingSchools.find((c) => c.schoolId === 's1')!
     expect(s1.hasSFP).toBe(true)
     expect(s1.hasOperational).toBe(true)
+  })
+
+  it('resolves each school nearest-prior snapshot → org PoP delta populated', async () => {
+    // FY '2025-07' (Jul-2025→Jun-2026): s1 chosen = p1-26 (ends 2026-06-30, rev
+    // 1100), whose nearest prior is p1-25 (ends 2025-06-30, rev 1000). s2 chosen =
+    // p2-26 (rev 100) with NO prior (its only snapshot). So the org prior sums over
+    // s1 alone → operating_margin gets a non-null delta.
+    const svc = buildService(fx)
+    const res = await svc.getMetrics(USER, 'org1', '2025-07')
+    expect(res.reportedCount).toBe(2)
+    const om = res.metrics.find((m) => m.key === 'operating_margin')!
+    // cur: Σnet=(200 + −20)=180, Σrev=(1100+100)=1200 → 180/1200.
+    // prior: s1 only → 200/1000. delta = 180/1200 − 200/1000.
+    expect(om.value).toBeCloseTo(180 / 1200, 12)
+    expect(om.periodOverPeriodDelta).toBeCloseTo(180 / 1200 - 200 / 1000, 12)
+  })
+
+  it('no school has a prior snapshot → deltas stay null (back-compat)', async () => {
+    // FY '2024-07' (Jul-2024→Jun-2025): only s1's OLDEST snapshot p1-25 (ends
+    // 2025-06-30) matches; it has NO prior period. s2 has no snapshot for that FY,
+    // so it does not report. No priors anywhere → every delta null.
+    const svc = buildService(fx)
+    const res = await svc.getMetrics(USER, 'org1', '2024-07')
+    expect(res.reportedCount).toBe(1)
+    for (const m of res.metrics) {
+      expect(m.periodOverPeriodDelta).toBeNull()
+    }
   })
 })

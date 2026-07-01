@@ -67,6 +67,38 @@ export class OrgMetricsService {
     private readonly operational: OperationalService,
   ) {}
 
+  /**
+   * The latest snapshot of the NEAREST prior fiscal period that has one, for a
+   * school. REPLICATED (not extracted) from AnalyticsService.nearestPriorBundle —
+   * the org-resolution block is deliberately copied across the shipped
+   * rollup/briefing/metrics services (documented above) to avoid touching the live
+   * services; staying with copy-not-extract keeps this slice additive. Walks back
+   * from `before` by periodEndDate, skipping any prior period that never produced a
+   * snapshot, so org PoP deltas survive gaps. schoolId-scoped (from the caller's
+   * in-org set) → no cross-tenant leak. Null when no prior period has a snapshot.
+   */
+  private async nearestPriorBundle(
+    schoolId: string,
+    before: Date,
+  ): Promise<{ bundle: ReportBundle; periodId: string } | null> {
+    const priorWithSnap = await this.prisma.fiscalPeriod.findFirst({
+      where: {
+        schoolId,
+        periodEndDate: { lt: before },
+        statementSnapshots: { some: {} },
+      },
+      orderBy: { periodEndDate: 'desc' },
+    })
+    if (!priorWithSnap) return null
+    const snap = await this.prisma.statementSnapshot.findFirst({
+      where: { schoolId, fiscalPeriodId: priorWithSnap.id },
+      orderBy: { createdAt: 'desc' },
+    })
+    return snap
+      ? { bundle: snap.payload as unknown as ReportBundle, periodId: priorWithSnap.id }
+      : null
+  }
+
   async getMetrics(
     user: User,
     orgId: string,
@@ -120,6 +152,8 @@ export class OrgMetricsService {
       name: string
       periodId: string
       periodEndDate: string | null
+      /** The chosen period's end as a Date, for the nearest-prior query. */
+      periodEnd: Date | null
       bundle: ReportBundle
     }[] = []
 
@@ -137,18 +171,28 @@ export class OrgMetricsService {
         name: s.name,
         periodId: chosen.fiscalPeriodId,
         periodEndDate: chosen.fiscalPeriod?.periodEndDate?.toISOString().slice(0, 10) ?? null,
+        periodEnd: chosen.fiscalPeriod?.periodEndDate ?? null,
         bundle: chosen.payload as unknown as ReportBundle,
       })
     }
 
-    // ── ADAPT + LOAD OPERATIONAL (in parallel) → pure inputs ─────────────────
+    // ── ADAPT + LOAD OPERATIONAL + NEAREST-PRIOR (in parallel) → pure inputs ──
     // operationalFor does no tenant check (the period id came from a snapshot we
-    // already resolved within the caller's in-org school set, so it is safe).
+    // already resolved within the caller's in-org school set, so it is safe); the
+    // same holds for the prior period id, which comes from nearestPriorBundle's
+    // schoolId-scoped query. The nearest-prior snapshot + prior operational let the
+    // pure engine light up org PoP deltas + org enrollment YoY (additive — the
+    // deltas ride MetricResult.periodOverPeriodDelta, response shape unchanged).
     const inputs: SchoolPeriodInputs[] = await Promise.all(
       reported.map(async (r) => {
         const financials = fromBundle(r.bundle)
         const operational = await this.operational.operationalFor(r.schoolId, r.periodId)
-        return { schoolId: r.schoolId, financials, operational }
+        const prior = r.periodEnd ? await this.nearestPriorBundle(r.schoolId, r.periodEnd) : null
+        const priorFinancials = prior ? fromBundle(prior.bundle) : null
+        const priorOperational = prior
+          ? await this.operational.operationalFor(r.schoolId, prior.periodId)
+          : null
+        return { schoolId: r.schoolId, financials, operational, priorFinancials, priorOperational }
       }),
     )
 

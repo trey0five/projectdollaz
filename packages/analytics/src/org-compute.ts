@@ -37,6 +37,20 @@ export interface SchoolPeriodInputs {
   financials: PeriodFinancials
   /** The school's period operational data, or null/absent when not entered. */
   operational?: PeriodOperational | null
+  /**
+   * The school's NEAREST-PRIOR snapshot financials (adapted via fromBundle by the
+   * API), or null/absent when the school has no prior snapshot. Present-anchor for
+   * the org period-over-period delta: a school without one contributes NOTHING to
+   * the org prior sums (mirrors the current-period absent-as-null discipline).
+   */
+  priorFinancials?: PeriodFinancials | null
+  /**
+   * The school's nearest-prior operational data, or null/absent. Folded ONLY over
+   * the schools that carry a priorFinancials (the financial snapshot is the anchor
+   * of "a prior period exists"), so a stray prior-operational row cannot manufacture
+   * an org prior on its own.
+   */
+  priorOperational?: PeriodOperational | null
 }
 
 /** An org-scope MetricResult, plus which schools contributed + how many reported. */
@@ -154,13 +168,34 @@ export function sumOperational(
  * the extensive components ONCE, and runs each metric's own def.compute on the
  * sums — then wraps with the SAME assembleMetricResult the per-school path uses.
  *
- * Org scope has no prior period in v1, so periodOverPeriodDelta is always null
- * (cards simply hide the delta chip, which they already do for null).
+ * PERIOD-OVER-PERIOD (org): when at least one school carries a prior snapshot, the
+ * priors are summed field-by-field (over ONLY the prior-bearing schools) into an
+ * org PRIOR PeriodFinancials/PeriodOperational, and each aggregatable metric's PoP
+ * delta = def.compute(Σcur) − def.compute(Σprior) — a LINE-FOR-LINE mirror of the
+ * per-school evaluate() (compute.ts): recompute the prior via the metric's OWN
+ * formula on summed prior components, then subtract, only when BOTH periods are
+ * available. NEVER an average of per-school deltas. When NO school has a prior,
+ * orgPriorFin is null → def.compute receives undefined priors (byte-identical to
+ * the current-only call) and every delta stays null (back-compat).
  */
 export function computeOrgMetrics(rows: SchoolPeriodInputs[]): OrgMetricResult[] {
   const reportedSchoolCount = rows.length
   const orgFin = sumFinancials(rows.map((r) => r.financials))
   const orgOp = sumOperational(rows.map((r) => r.operational))
+
+  // Org PRIOR sums, over ONLY the schools that carry a prior snapshot (the
+  // financial snapshot is the anchor of "a prior period exists"). orgPriorOp folds
+  // the SAME prior-bearing schools' operational, so a prior snapshot without a
+  // prior operational row contributes to Σprior financials but not Σprior
+  // enrollment — the same consolidated-entity asymmetry documented for the
+  // current period. null when NO school has a prior → deltas stay null.
+  const priorRows = rows.filter((r) => r.priorFinancials != null)
+  const orgPriorFin =
+    priorRows.length > 0
+      ? sumFinancials(priorRows.map((r) => r.priorFinancials as PeriodFinancials))
+      : null
+  const orgPriorOp =
+    priorRows.length > 0 ? sumOperational(priorRows.map((r) => r.priorOperational)) : null
 
   return ALL_METRICS.map((def) => {
     const rule = scopeRuleFor(def.key)
@@ -179,9 +214,22 @@ export function computeOrgMetrics(rows: SchoolPeriodInputs[]): OrgMetricResult[]
 
     // recompute / weighted / sum all funnel through the IDENTICAL path: the
     // metric's own formula on the summed components. (weighted/sum are honest
-    // LABELS, not separate math — see ScopeAggregation docs.)
-    const out = def.compute(orgFin, undefined, orgOp ?? undefined, undefined)
-    const result = assembleMetricResult(def, out, null)
+    // LABELS, not separate math — see ScopeAggregation docs.) When an org prior
+    // exists, its summed components ride the SAME def.compute so any YoY metric
+    // (e.g. enrollment_change_yoy) reads Σprior enrollment by construction.
+    const out = def.compute(orgFin, orgPriorFin ?? undefined, orgOp ?? undefined, orgPriorOp ?? undefined)
+
+    // PoP delta = orgCurValue − orgPriorValue, both formula-on-sums, ONLY when both
+    // periods produced an available value (identical rule to per-school evaluate()).
+    let popDelta: number | null = null
+    if (orgPriorFin && out.available && out.value !== null) {
+      const priorOut = def.compute(orgPriorFin, undefined, orgPriorOp ?? undefined, undefined)
+      if (priorOut.available && priorOut.value !== null) {
+        popDelta = out.value - priorOut.value
+      }
+    }
+
+    const result = assembleMetricResult(def, out, popDelta)
     return { ...result, scope: 'org' as const, reportedSchoolCount }
   })
 }

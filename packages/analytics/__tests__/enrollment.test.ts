@@ -41,12 +41,14 @@ describe('enrollment_change_yoy — registry wiring', () => {
     ])
   })
 
-  it('declares enrollment domain, higher goodDirection, percent unit, not-aggregatable rollup', () => {
+  it('declares enrollment domain, higher goodDirection, percent unit, recompute-from-components rollup', () => {
     const m = METRIC_META.find((x) => x.key === 'enrollment_change_yoy')!
     expect(m.domain).toBe('enrollment')
     expect(m.goodDirection).toBe('higher')
     expect(m.unit).toBe('percent')
-    expect(m.scopeAggregation).toBe('not-aggregatable')
+    // Now that the org path resolves each school's nearest-prior operational,
+    // enrollment (an extensive stock) rolls up as (Σcur − Σprior) / Σprior.
+    expect(m.scopeAggregation).toBe('recompute-from-components')
     expect(m.bands).toEqual({ goodDirection: 'higher', good: 0, risk: -0.05 })
   })
 
@@ -166,23 +168,58 @@ describe('enrollment_change_yoy — PoP delta is intentionally null', () => {
   })
 })
 
-describe('enrollment_change_yoy — org scope is honestly unavailable (no org prior)', () => {
-  function school(id: string, enrollment: number): SchoolPeriodInputs {
-    return { schoolId: id, financials: fromBundle(FULL_BUNDLE), operational: op(enrollment) }
+describe('enrollment_change_yoy — org scope recomputes from summed enrollment', () => {
+  // With prior operational supplied, org YoY = (Σcur − Σprior) / Σprior.
+  function schoolWithPrior(
+    id: string,
+    cur: number,
+    prior: number,
+  ): SchoolPeriodInputs {
+    return {
+      schoolId: id,
+      financials: fromBundle(FULL_BUNDLE),
+      operational: op(cur),
+      priorFinancials: fromBundle(FULL_BUNDLE),
+      priorOperational: op(prior),
+    }
+  }
+  // No prior: no priorFinancials/priorOperational at all.
+  function schoolNoPrior(id: string, cur: number): SchoolPeriodInputs {
+    return { schoolId: id, financials: fromBundle(FULL_BUNDLE), operational: op(cur) }
   }
 
-  it('resolves not-aggregatable at org: available:false with scope reason', () => {
-    const org = computeOrgMetrics([school('A', 100), school('B', 40)])
+  it('with priors present: org value = (Σcur − Σprior) / Σprior, banded', () => {
+    // Σcur = 80 + 20 = 100; Σprior = 100 + 40 = 140 → (100−140)/140 = −0.2857… decline.
+    const org = computeOrgMetrics([
+      schoolWithPrior('A', 80, 100),
+      schoolWithPrior('B', 20, 40),
+    ])
+    const m = org.find((x) => x.key === 'enrollment_change_yoy')!
+    expect(m.available).toBe(true)
+    expect(m.value).toBeCloseTo((100 - 140) / 140, 12)
+    // ≈ −28.6% is past the −5% risk frontier → banded risk (a superintendent signal).
+    expect(m.status).toBe('risk')
+    expect(m.scope).toBe('org')
+    // Its OWN PoP delta stays null: no prior-of-prior in the org sums (honest).
+    expect(m.periodOverPeriodDelta).toBeNull()
+  })
+
+  it('NO school has a prior: guard-driven unavailable (NOT a scope refusal)', () => {
+    const org = computeOrgMetrics([schoolNoPrior('A', 100), schoolNoPrior('B', 40)])
     const m = org.find((x) => x.key === 'enrollment_change_yoy')!
     expect(m.available).toBe(false)
     expect(m.value).toBeNull()
-    expect(m.inputsMissing).toContain('scope:not-aggregatable')
-    expect(m.status).toBe('neutral')
+    // Reason is now the metric's OWN priorEnrollment guard, not scope:not-aggregatable.
+    expect(m.inputsMissing).toContain('priorEnrollment')
+    expect(m.inputsMissing).not.toContain('scope:not-aggregatable')
     expect(m.scope).toBe('org')
   })
 
   it('does NOT break the rest of the org rollup', () => {
-    const org = computeOrgMetrics([school('A', 100), school('B', 40)])
+    const org = computeOrgMetrics([
+      schoolWithPrior('A', 100, 95),
+      schoolWithPrior('B', 40, 40),
+    ])
     expect(org.find((x) => x.key === 'operating_margin')!.available).toBe(true)
     expect(org).toHaveLength(13)
   })

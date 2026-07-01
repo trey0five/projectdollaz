@@ -181,11 +181,12 @@ describe('cross-surface identity: org-of-one === per-school', () => {
       expect(o.value).toBe(ps.value)
       expect(o.available).toBe(ps.available)
       expect(o.status).toBe(ps.status)
-      // A 'not-aggregatable' metric (e.g. enrollment_change_yoy, a YoY rate) is
-      // honestly unavailable at org via the engine's not-aggregatable branch, so it
-      // reports inputsMissing ['scope:not-aggregatable'] instead of the per-school
-      // reason. value/available/status still agree (null/false/neutral); only the
-      // reason string diverges by design — skip the reason equality for those.
+      // Any remaining 'not-aggregatable' metric would report inputsMissing
+      // ['scope:not-aggregatable'] at org instead of the per-school reason; skip the
+      // reason equality for those. (No live metric declares it today — org-of-one
+      // enrollment_change_yoy now matches the per-school ['priorEnrollment'] reason
+      // because BOTH surfaces lack a prior here — but the guard stays for future
+      // non-extensive metrics.)
       if (scopeRuleFor(key as never) === 'not-aggregatable') continue
       expect(o.inputsMissing).toEqual(ps.inputsMissing)
     }
@@ -321,6 +322,82 @@ describe('not-aggregatable rule → unavailable', () => {
     expect(sib?.available).toBe(true)
     vi.doUnmock('../src/registry.js')
     vi.resetModules()
+  })
+})
+
+describe('org period-over-period delta = formula(Σcur) − formula(Σprior)', () => {
+  // Prior-period versions of A and B (different scales so per-school deltas differ
+  // and the org delta can be proven NOT to be their average).
+  // A prior: rev 900, exp 750, net 150 (margin 150/900 ≈ 0.1667).
+  // B prior: rev 120, exp 100, net 20  (margin  20/120 ≈ 0.1667).
+  const priorA: PeriodFinancials = fin({ totalRev: 900, totalExp: 750, netChange: 150, tuition: 630 })
+  const priorB: PeriodFinancials = fin({ totalRev: 120, totalExp: 100, netChange: 20, tuition: 96 })
+
+  const withPriorA: SchoolPeriodInputs = {
+    ...schoolA,
+    priorFinancials: priorA,
+    priorOperational: op({ enrollment: 90 }),
+  }
+  const withPriorB: SchoolPeriodInputs = {
+    ...schoolB,
+    priorFinancials: priorB,
+    priorOperational: op({ enrollment: 15 }),
+  }
+
+  it('operating_margin delta = (Σnet_cur/Σrev_cur) − (Σnet_prior/Σrev_prior), NOT avg of per-school deltas', () => {
+    const org = byKey(computeOrgMetrics([withPriorA, withPriorB]))
+    const m = org.operating_margin
+    // cur: Σnet=180, Σrev=1100 → 0.163636…  prior: Σnet=170, Σrev=1020 → 0.166666…
+    const curV = 180 / 1100
+    const priorV = 170 / 1020
+    expect(m.value).toBeCloseTo(curV, 12)
+    expect(m.periodOverPeriodDelta).toBeCloseTo(curV - priorV, 12)
+
+    // The naive average of per-school deltas differs — prove we are NOT doing that.
+    const perSchoolDeltaA = 200 / 1000 - 150 / 900 // 0.2 − 0.1667
+    const perSchoolDeltaB = -20 / 100 - 20 / 120 // −0.2 − 0.1667
+    const naiveAvg = (perSchoolDeltaA + perSchoolDeltaB) / 2
+    expect(m.periodOverPeriodDelta).not.toBeCloseTo(naiveAvg, 6)
+  })
+
+  it('org enrollment_change_yoy value = (Σcur − Σprior) / Σprior with a band status', () => {
+    const org = byKey(computeOrgMetrics([withPriorA, withPriorB]))
+    const m = org.enrollment_change_yoy
+    // Σcur enrollment = 100 + 20 = 120; Σprior = 90 + 15 = 105 → +14.28% growth.
+    expect(m.available).toBe(true)
+    expect(m.value).toBeCloseTo((120 - 105) / 105, 12)
+    expect(['good', 'watch', 'risk']).toContain(m.status) // banded, not neutral
+    expect(m.periodOverPeriodDelta).toBeNull() // no prior-of-prior
+  })
+
+  it('back-compat: NO school carries a prior → every delta null, enrollment YoY unavailable', () => {
+    const org = byKey(computeOrgMetrics([schoolA, schoolB]))
+    for (const r of Object.values(org)) {
+      expect(r.periodOverPeriodDelta).toBeNull()
+    }
+    const yoy = org.enrollment_change_yoy
+    expect(yoy.available).toBe(false)
+    expect(yoy.inputsMissing).toContain('priorEnrollment')
+  })
+
+  it('partial prior coverage: only some schools carry a prior → sum-what-exists, deterministic', () => {
+    // Only A has a prior; the org prior sums just A. Delta still computed.
+    const org = byKey(computeOrgMetrics([withPriorA, schoolB]))
+    const m = org.operating_margin
+    // cur: Σnet=180, Σrev=1100 (both A+B). prior: A only → 150/900.
+    expect(m.value).toBeCloseTo(180 / 1100, 12)
+    expect(m.periodOverPeriodDelta).toBeCloseTo(180 / 1100 - 150 / 900, 12)
+    // Determinism.
+    const again = byKey(computeOrgMetrics([withPriorA, schoolB]))
+    expect(again.operating_margin.periodOverPeriodDelta).toBe(m.periodOverPeriodDelta)
+  })
+
+  it('with-prior compute is deterministic (deep-equal on repeat) + does not mutate inputs', () => {
+    const before = JSON.parse(JSON.stringify(withPriorA))
+    const a = computeOrgMetrics([withPriorA, withPriorB])
+    const b = computeOrgMetrics([withPriorA, withPriorB])
+    expect(a).toEqual(b)
+    expect(withPriorA).toEqual(before)
   })
 })
 

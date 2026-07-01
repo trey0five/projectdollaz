@@ -16,6 +16,7 @@
 import { motion, useReducedMotion } from 'framer-motion'
 import { Gauge } from 'lucide-react'
 import StatusDot from '../analytics/StatusDot.jsx'
+import DeltaChip from '../analytics/DeltaChip.jsx'
 import { metricFormat, formatMetricValue, isBandedStatus } from '../../lib/metricMeta.js'
 
 // The org strip leads with the four Tier-1 banded metrics (status-colored), then a
@@ -29,6 +30,10 @@ const STRIP_KEYS = [
   'cost_per_pupil',
   'tuition_discount_rate',
   'pct_students_on_aid',
+  // Enrollment domain — now roll-up-able at org scope (recompute-from-components):
+  // system-wide enrollment decline surfaces as a superintendent-level banded signal.
+  // Renders '—' (unavailable) when no school has a prior year, via the existing path.
+  'enrollment_change_yoy',
 ]
 
 // Weighted metrics get an honest "enrollment-weighted" hint so users understand
@@ -68,6 +73,16 @@ function Tile({ metric, index, reduce }) {
       >
         {unavailable ? '—' : formatMetricValue(metric.value, fmt)}
       </p>
+      {/* Period-over-period chip: now populated for aggregatable org metrics (was
+          always null pre-slice, so the strip hid it). goodDirection drives the tone;
+          DeltaChip renders nothing for a null delta, so no guard needed here. */}
+      {!unavailable && metric.periodOverPeriodDelta != null && (
+        <DeltaChip
+          delta={metric.periodOverPeriodDelta}
+          format={fmt}
+          goodDirection={metric.goodDirection}
+        />
+      )}
       {weightedHint && !unavailable && (
         <p className="text-[10.5px] uppercase tracking-[0.08em] text-muted">{weightedHint}</p>
       )}

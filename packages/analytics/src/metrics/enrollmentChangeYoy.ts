@@ -28,11 +28,16 @@ import type { MetricDef } from '../types.js'
  * missing/zero-prior input → available:false with precise inputsMissing — never a
  * fabricated 0% and never Infinity.
  *
- * scopeAggregation 'not-aggregatable': a YoY rate is a ratio of a DELTA, genuinely
- * NOT a Σ of extensive components, so it must never be silently summed/averaged. At
- * org scope the engine's not-aggregatable branch resolves it available:false with
- * inputsMissing ['scope:not-aggregatable'] — the honest "no org YoY" (matches the
- * documented no-org-prior-period gap). This is the FIRST live not-aggregatable metric.
+ * scopeAggregation 'recompute-from-components': enrollment is an EXTENSIVE stock, so
+ * Σcur_enroll and Σprior_enroll are both meaningful, and the org YoY is the metric's
+ * OWN formula on those sums: (Σcur_enroll − Σprior_enroll)/Σprior_enroll. Now that the
+ * org path resolves each school's nearest-prior operational and folds it into orgPriorOp,
+ * this metric rolls up correctly-by-construction like every other ratio — the compute()
+ * body already reads priorOp.enrollment, so ONLY the label changes. At org scope it
+ * resolves available:false via its OWN priorEnrollment guard when no school has a prior
+ * (Σprior_enroll null/≤0) — the honest "no org YoY", now guard-driven rather than a
+ * scope refusal. (Its periodOverPeriodDelta stays null: a change-of-a-change needs a
+ * prior-of-prior the org sums don't carry — same honesty as the per-school path.)
  */
 export const enrollmentChangeYoy: MetricDef = {
   key: 'enrollment_change_yoy',
@@ -41,7 +46,7 @@ export const enrollmentChangeYoy: MetricDef = {
   category: 'operational',
   goodDirection: 'higher',
   domain: 'enrollment',
-  scopeAggregation: 'not-aggregatable',
+  scopeAggregation: 'recompute-from-components',
   inputs: [
     { key: 'enrollment', source: 'operational', label: 'Enrollment (current)' },
     { key: 'priorEnrollment', source: 'operational', label: 'Enrollment (prior year)' },
