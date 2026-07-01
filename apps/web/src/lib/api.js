@@ -402,6 +402,20 @@ export const accreditationApi = {
     api.delete(`/schools/${schoolId}/accreditation/standards/${standardId}/evidence/${evidenceId}`),
 }
 
+// ── Phase 4 Facilities v1: the deferred-maintenance register ──────────────────
+// School-scoped (NOT period-scoped). Gated by the 'facilities' module: an entitled-
+// but-unlicensed school gets a 402 { code:'MODULE_NOT_LICENSED', module:'facilities' }
+// (surface via isModuleNotLicensed). Single flat resource (no nested sub-resource).
+export const facilitiesApi = {
+  listMaintenance: (schoolId) => api.get(`/schools/${schoolId}/facilities/maintenance`),
+  createMaintenance: (schoolId, body) =>
+    api.post(`/schools/${schoolId}/facilities/maintenance`, body),
+  updateMaintenance: (schoolId, itemId, body) =>
+    api.patch(`/schools/${schoolId}/facilities/maintenance/${itemId}`, body),
+  removeMaintenance: (schoolId, itemId) =>
+    api.delete(`/schools/${schoolId}/facilities/maintenance/${itemId}`),
+}
+
 // ── Phase 3 Workflow v1 — the generic TASK engine. School-scoped. CORE (always
 // included, NOT a licensed module), so there is NO MODULE_NOT_LICENSED path — only
 // the base entitlement 402 (isPaymentRequired) applies, like any other core read.

@@ -100,3 +100,19 @@ export {
   summarizeCoverage,
   ACCREDITATION_REVIEW_SOON_DAYS,
 } from './accreditation-coverage.js'
+
+// Phase 4 Facilities v1 — pure deferred-maintenance backlog (injectable now)
+export type {
+  MaintenancePriority,
+  MaintenanceStatus,
+  MaintenanceUrgency,
+  MaintenanceUrgencyInput,
+  MaintenanceUrgencyResult,
+  MaintenanceBacklogSummary,
+  MaintenanceBacklogInput,
+} from './maintenance-backlog.js'
+export {
+  computeMaintenanceUrgency,
+  summarizeBacklog,
+  MAINTENANCE_DUE_SOON_DAYS,
+} from './maintenance-backlog.js'

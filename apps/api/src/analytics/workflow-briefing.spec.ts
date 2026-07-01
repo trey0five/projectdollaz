@@ -68,6 +68,14 @@ function makeService(over: {
       summary: { total: 0, withEvidence: 0, gaps: 0, pctCovered: 0 },
     }),
   }
+  // Facilities not licensed here (billing returns false for every module) → no
+  // facilities item; the service returns an empty register if ever called.
+  const facilities = {
+    listMaintenance: async () => ({
+      items: [],
+      summary: { total: 0, openCount: 0, highPriorityOpenCount: 0, criticalOpen: 0, overdueOpen: 0, backlogCost: 0 },
+    }),
+  }
 
   return new BriefingService(
     periods as never,
@@ -80,6 +88,7 @@ function makeService(over: {
     policiesSvc as never,
     tasksSvc as never,
     accreditation as never,
+    facilities as never,
   )
 }
 

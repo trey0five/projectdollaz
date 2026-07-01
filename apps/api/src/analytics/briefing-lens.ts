@@ -41,8 +41,9 @@ export const SOURCE_RANK: Record<AttentionSource, number> = {
   compliance: 1,
   governance: 2,
   accreditation: 3,
-  workflow: 4,
-  metric: 5,
+  facilities: 4,
+  workflow: 5,
+  metric: 6,
 }
 
 /** Fixed sub-order for the non-metric items so the list is deterministic. */
@@ -62,6 +63,10 @@ export const COMPLIANCE_ORDER = [
   // KEPT for the viewer lens (board-relevant) — see keepForViewer.
   'accreditation:coverage-gap',
   'accreditation:review-approaching',
+  // Facilities deferred-maintenance item (Phase 4). Placed after accreditation,
+  // before workflow (grouped with the board-oversight domains). KEPT for the
+  // viewer lens (board/capital-relevant) — see keepForViewer.
+  'facilities:maintenance-backlog',
   // Workflow task items (Phase 3). Placed after the governance items; overdue
   // leads (actionable now), then the sign-off backlog, then upcoming, so a same-
   // severity tie is curated, not id-arbitrary. (These are ALL DROPPED for the
@@ -93,10 +98,15 @@ export const COMPLIANCE_ORDER = [
 // governance (right after metric for owner/viewer; mid for the accountant). It is
 // ADDITIVE — the accountant weighting == SOURCE_RANK, so the pre-accreditation
 // accountant snapshot stays byte-identical for the existing ids.
+// Facilities is a capital/board-oversight domain like governance & accreditation,
+// so it sits WITH them (right after accreditation for owner/viewer; mid for the
+// accountant). ADDITIVE — the accountant weighting == SOURCE_RANK, and inserting
+// facilities only shifts compliance/data/workflow/metric down by one, so the
+// pre-facilities accountant snapshot stays byte-identical for the existing ids.
 const SOURCE_WEIGHT: Record<Lens, Record<AttentionSource, number>> = {
-  owner: { metric: 0, governance: 1, accreditation: 2, compliance: 3, data: 4, workflow: 5 },
-  viewer: { metric: 0, governance: 1, accreditation: 2, compliance: 3, data: 4, workflow: 5 },
-  accountant: { data: 0, compliance: 1, governance: 2, accreditation: 3, workflow: 4, metric: 5 }, // == SOURCE_RANK
+  owner: { metric: 0, governance: 1, accreditation: 2, facilities: 3, compliance: 4, data: 5, workflow: 6 },
+  viewer: { metric: 0, governance: 1, accreditation: 2, facilities: 3, compliance: 4, data: 5, workflow: 6 },
+  accountant: { data: 0, compliance: 1, governance: 2, accreditation: 3, facilities: 4, workflow: 5, metric: 6 }, // == SOURCE_RANK
 }
 
 // ── VOICE: per-lens reframing tone (additive metadata, never a value rewrite) ──
@@ -144,6 +154,13 @@ function keepForViewer(item: AttentionItem): boolean {
   // workflow. The whys are outcome/governance-voiced (no operator "go do" CTA), so
   // they pass through with no VIEWER_REFRAME entry.
   if (item.source === 'accreditation') return true
+  // Deferred maintenance / capital backlog is a fiduciary/board/finance matter the
+  // board OWNS (it drives capital planning and the reserve) — KEPT for the viewer/
+  // board lens exactly like governance + accreditation, UNLIKE operational workflow
+  // tasks which are DROPPED. The `why` is already outcome/governance-voiced ("Review
+  // the deferred-maintenance register for capital planning" — no operator "go fix"
+  // CTA), so it passes through with no VIEWER_REFRAME entry.
+  if (item.source === 'facilities') return true
   if (item.source === 'compliance') return VIEWER_COMPLIANCE.has(item.id)
   // Workflow (operational tasks) are DROPPED for the board: open tasks are "go do
   // this" operator chores a read-only board cannot action (the same reason warn/

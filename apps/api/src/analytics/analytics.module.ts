@@ -8,6 +8,7 @@ import { ComplianceModule } from '../compliance/compliance.module.js'
 import { GovernanceModule } from '../governance/governance.module.js'
 import { WorkflowModule } from '../workflow/workflow.module.js'
 import { AccreditationModule } from '../accreditation/accreditation.module.js'
+import { FacilitiesModule } from '../facilities/facilities.module.js'
 import { AnalyticsController } from './analytics.controller.js'
 import { AnalyticsService } from './analytics.service.js'
 import { InsightService } from './insight.service.js'
@@ -53,6 +54,9 @@ import { AssistantClient } from '../assistant/assistant.client.js'
     // Edge is analytics → accreditation ONLY (accreditation does not import
     // analytics) — acyclic, same as governance.
     AccreditationModule,
+    // Exports FacilitiesService for BriefingService's 'facilities' STEP. Edge is
+    // analytics → facilities ONLY (facilities does not import analytics) — acyclic.
+    FacilitiesModule,
   ],
   controllers: [
     AnalyticsController,

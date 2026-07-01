@@ -24,6 +24,7 @@ import { DataHubModule } from './data-hub/data-hub.module.js'
 import { GovernanceModule } from './governance/governance.module.js'
 import { WorkflowModule } from './workflow/workflow.module.js'
 import { AccreditationModule } from './accreditation/accreditation.module.js'
+import { FacilitiesModule } from './facilities/facilities.module.js'
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { AccreditationModule } from './accreditation/accreditation.module.js'
     GovernanceModule,
     WorkflowModule,
     AccreditationModule,
+    FacilitiesModule,
   ],
 })
 export class AppModule {}

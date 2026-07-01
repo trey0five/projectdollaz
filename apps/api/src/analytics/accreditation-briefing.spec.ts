@@ -68,6 +68,14 @@ function makeService(over: {
   const corrective = { getPlan: async () => null }
   const policiesSvc = { list: async () => ({ policies: [] }) }
   const tasks = { listOpenForBriefing: async () => [] }
+  // Facilities not licensed here (billing returns false for non-accreditation) → no
+  // facilities item; the service returns an empty register if ever called.
+  const facilities = {
+    listMaintenance: async () => ({
+      items: [],
+      summary: { total: 0, openCount: 0, highPriorityOpenCount: 0, criticalOpen: 0, overdueOpen: 0, backlogCost: 0 },
+    }),
+  }
 
   return new BriefingService(
     periods as never,
@@ -80,6 +88,7 @@ function makeService(over: {
     policiesSvc as never,
     tasks as never,
     accreditationSvc as never,
+    facilities as never,
   )
 }
 

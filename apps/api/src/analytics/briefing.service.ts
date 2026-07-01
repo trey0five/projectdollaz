@@ -11,6 +11,7 @@ import { BillingService } from '../billing/billing.service.js'
 import { PoliciesService } from '../governance/policies.service.js'
 import { TasksService } from '../workflow/tasks.service.js'
 import { AccreditationService } from '../accreditation/accreditation.service.js'
+import { FacilitiesService } from '../facilities/facilities.service.js'
 import { ACCREDITATION_REVIEW_SOON_DAYS, BADLY_OVERDUE_DAYS, DUE_SOON_DAYS } from '@finrep/compliance'
 import {
   applyLens,
@@ -41,6 +42,7 @@ export type AttentionSource =
   | 'governance'
   | 'workflow'
   | 'accreditation'
+  | 'facilities'
 
 /**
  * A task at least this many days past due escalates the workflow overdue item from
@@ -170,6 +172,8 @@ export class BriefingService {
     private readonly tasks: TasksService,
     // Phase 4 Accreditation v1 — the module gate + the standards register read.
     private readonly accreditation: AccreditationService,
+    // Phase 4 Facilities v1 — the module gate + the maintenance register read.
+    private readonly facilities: FacilitiesService,
   ) {}
 
   /**
@@ -267,18 +271,28 @@ export class BriefingService {
     // The workflow open-task read (STEP 2.6) rides the SAME fan-out — it is CORE
     // (not module-gated) and fail-soft to null, so a tasks hiccup never 500s the
     // briefing and latency stays slowest-not-sum.
-    const [compliance, recon, checklist, cap, governanceLicensed, openTasks, accreditationLicensed] =
-      await Promise.all([
-        this.compliance.evaluateForPeriod(schoolId, period.id).catch(() => null),
-        this.reconciliation.reconcileForPeriod(schoolId, period.id).catch(() => null),
-        this.checklist.getChecklist(schoolId, period.id).catch(() => null),
-        this.corrective.getPlan(schoolId, period.id).catch(() => null),
-        this.billing.isEntitledForModule(schoolId, 'governance').catch(() => false),
-        this.tasks.listOpenForBriefing(schoolId).catch(() => null),
-        // Phase 4 Accreditation gate — rides the SAME parallel fan-out. Fail CLOSED
-        // (throw → not licensed) so a billing hiccup HIDES accreditation items.
-        this.billing.isEntitledForModule(schoolId, 'accreditation').catch(() => false),
-      ])
+    const [
+      compliance,
+      recon,
+      checklist,
+      cap,
+      governanceLicensed,
+      openTasks,
+      accreditationLicensed,
+      facilitiesLicensed,
+    ] = await Promise.all([
+      this.compliance.evaluateForPeriod(schoolId, period.id).catch(() => null),
+      this.reconciliation.reconcileForPeriod(schoolId, period.id).catch(() => null),
+      this.checklist.getChecklist(schoolId, period.id).catch(() => null),
+      this.corrective.getPlan(schoolId, period.id).catch(() => null),
+      this.billing.isEntitledForModule(schoolId, 'governance').catch(() => false),
+      this.tasks.listOpenForBriefing(schoolId).catch(() => null),
+      // Phase 4 Accreditation gate — rides the SAME parallel fan-out. Fail CLOSED
+      // (throw → not licensed) so a billing hiccup HIDES accreditation items.
+      this.billing.isEntitledForModule(schoolId, 'accreditation').catch(() => false),
+      // Phase 4 Facilities gate — same fan-out, fail CLOSED (hides facilities items).
+      this.billing.isEntitledForModule(schoolId, 'facilities').catch(() => false),
+    ])
 
     // 2a — open 2A findings (material -> critical, reportable -> warn).
     if (compliance) {
@@ -600,6 +614,51 @@ export class BriefingService {
             metricKey: null,
             value: null,
             link: '/accreditation',
+            dueDate: earliest,
+          })
+        }
+      }
+    }
+
+    // ── STEP 2.8: facilities deferred-maintenance signals (source 'facilities') ─
+    // The THIRD licensable module's briefing source — the deferred-maintenance
+    // backlog surfaced as a board/capital signal. School-scoped (NOT period-bound),
+    // like governance/accreditation.
+    //
+    // GATED by the per-module entitlement: a finance-only school gets ZERO
+    // facilities items here while STILL getting every other item above — the gate
+    // ONLY skips this push. Fail-soft in BOTH directions like accreditation:
+    //   • isEntitledForModule throws → treat as NOT licensed (fail CLOSED), and
+    //   • listMaintenance throws → skip (fail-soft to null).
+    // Neither ever 500s the briefing. (facilitiesLicensed was resolved in the STEP
+    // 2 parallel fan-out above.)
+    if (facilitiesLicensed) {
+      const reg = await this.facilities.listMaintenance(schoolId).catch(() => null)
+      if (reg) {
+        const { highPriorityOpenCount, criticalOpen, overdueOpen, backlogCost, openCount } =
+          reg.summary
+        // ONE aggregate item in v1 (keyed on highPriorityOpenCount>0) — a low/medium-
+        // only backlog is visible on /facilities but not surfaced here (avoids noise).
+        // total===0 → highPriorityOpenCount 0 → NO item (honest non-signal).
+        if (highPriorityOpenCount > 0) {
+          // Escalate to critical when any critical-PRIORITY item is open OR any open
+          // item is past its target date (overdue); else warn.
+          const critical = criticalOpen > 0 || overdueOpen > 0
+          // Earliest target date among OPEN items → the dueDate hint.
+          const earliest =
+            reg.items
+              .filter((i) => i.status !== 'resolved' && i.targetDate)
+              .map((i) => i.targetDate as string)
+              .sort()[0] ?? null
+          items.push({
+            id: 'facilities:maintenance-backlog',
+            severity: critical ? 'critical' : 'warn',
+            source: 'facilities',
+            title: `${highPriorityOpenCount} high-priority maintenance item${highPriorityOpenCount === 1 ? '' : 's'} open`,
+            why: `${highPriorityOpenCount} open high-priority facilities item${highPriorityOpenCount === 1 ? '' : 's'} (of ${openCount} open)${backlogCost > 0 ? `, ~${fmtMoney(backlogCost)} deferred-maintenance backlog` : ''}${overdueOpen > 0 ? `; ${overdueOpen} past ${overdueOpen === 1 ? 'its' : 'their'} target date` : ''}. Review the deferred-maintenance register for capital planning.`,
+            metricKey: null,
+            value: null,
+            link: '/facilities',
             dueDate: earliest,
           })
         }

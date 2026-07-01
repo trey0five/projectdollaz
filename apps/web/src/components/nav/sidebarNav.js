@@ -14,9 +14,10 @@
 //
 // To extend declaratively: add a group row (with its `module` key) or an item —
 // no branching logic. ONLY include a group whose items have REAL routes; a
-// licensed-but-page-less module (enrollment/planning/hr/facilities/advancement)
-// contributes NO group (its value surfaces inside Analytics/briefing) and is
-// upsold via the Add-ons list (SELLABLE_MODULE_KEYS) only while UNLICENSED.
+// licensed-but-page-less module (enrollment/planning/hr/advancement) contributes
+// NO group (its value surfaces inside Analytics/briefing) and is upsold via the
+// Add-ons list (SELLABLE_MODULE_KEYS) only while UNLICENSED. (Facilities NOW has a
+// page/group — the deferred-maintenance register — so it appears here when licensed.)
 // ─────────────────────────────────────────────────────────────────────────────
 import {
   LayoutDashboard,
@@ -29,6 +30,7 @@ import {
   ShieldCheck,
   Landmark,
   BadgeCheck,
+  Wrench,
   Settings,
 } from 'lucide-react'
 
@@ -71,6 +73,14 @@ export const NAV_GROUPS = [
     module: 'accreditation',
     items: [
       { to: '/accreditation', navId: 'nav-accreditation', label: 'Accreditation', Icon: BadgeCheck, match: (p) => p.startsWith('/accreditation') },
+    ],
+  },
+  {
+    id: 'facilities',
+    label: 'Facilities',
+    module: 'facilities',
+    items: [
+      { to: '/facilities', navId: 'nav-facilities', label: 'Facilities', Icon: Wrench, match: (p) => p.startsWith('/facilities') },
     ],
   },
 ]

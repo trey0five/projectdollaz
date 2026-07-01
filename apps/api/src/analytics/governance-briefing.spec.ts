@@ -66,6 +66,15 @@ function makeService(over: {
   // governance gate) so no accreditation item is emitted (keeps the governance
   // assertion isolated). The service still returns an empty register if ever called.
   const accreditation = { listStandards: async () => ({ standards: [], summary: { total: 0, withEvidence: 0, gaps: 0, pctCovered: 0 } }) }
+  // The facilities module gate is not-licensed here (over.licensed only swaps the
+  // governance gate) so no facilities item is emitted (keeps the governance
+  // assertion isolated). The service still returns an empty register if ever called.
+  const facilities = {
+    listMaintenance: async () => ({
+      items: [],
+      summary: { total: 0, openCount: 0, highPriorityOpenCount: 0, criticalOpen: 0, overdueOpen: 0, backlogCost: 0 },
+    }),
+  }
   void nullish
 
   return new BriefingService(
@@ -79,6 +88,7 @@ function makeService(over: {
     policiesSvc as never,
     tasks as never,
     accreditation as never,
+    facilities as never,
   )
 }
 

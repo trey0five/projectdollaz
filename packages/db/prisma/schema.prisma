@@ -123,6 +123,7 @@ model School {
   tasks              Task[]
   accreditationStandards AccreditationStandard[]
   accreditationEvidence  AccreditationEvidence[]
+  maintenanceItems       MaintenanceItem[]
 
   @@index([organizationId])
   @@map("schools")
@@ -203,6 +204,7 @@ model User {
   tasksDecided             Task[]             @relation("TaskDecidedBy")
   accreditationStandardUpdates AccreditationStandard[] @relation("AccreditationStandardUpdatedBy")
   accreditationEvidenceCreated AccreditationEvidence[] @relation("AccreditationEvidenceCreatedBy")
+  maintenanceItemsCreated      MaintenanceItem[]       @relation("MaintenanceItemCreatedBy")
 
   @@index([email])
   @@map("users")
@@ -911,6 +913,46 @@ model AccreditationEvidence {
   @@index([schoolId])
   @@index([standardId])
   @@map("accreditation_evidence")
+}
+
+// ── Phase 4 Facilities v1 — the deferred-maintenance register ─────────────────
+// The THIRD licensable module (after governance + accreditation) and another
+// read-only domain feeding the prioritised briefing. A school tracks maintenance
+// items (priority, status, estimatedCost, targetDate); the briefing surfaces the
+// deferred-maintenance backlog ("N high-priority items open, $X backlog") — a
+// board/capital matter. Mirrors AccreditationStandard: per-school tenant table,
+// @db.Date UTC-midnight discipline, audit-lite createdByUserId.
+//
+// SEPARATE from CapitalSchedule (per-period capital planning) in v1 — no FK, no
+// rollup; linking the register to the capital forecast is deferred.
+//
+// priority/status are TEXT columns with a @default (free text at DB level); the
+// DTO @IsIn enforces the enum (mirrors AccreditationEvidence.kind / Policy.status).
+model MaintenanceItem {
+  id              String    @id @default(uuid()) @db.Uuid
+  schoolId        String    @map("school_id") @db.Uuid
+  title           String
+  // Free text v1 (e.g. 'Boiler room','Gym roof'), nullable.
+  location        String?
+  // Free text v1 (e.g. 'HVAC','Roofing','Electrical'), nullable.
+  category        String?
+  priority        String    @default("medium") // 'low' | 'medium' | 'high' | 'critical'
+  status          String    @default("open") // 'open' | 'scheduled' | 'in_progress' | 'resolved'
+  // Estimated repair/replacement cost. Decimal(14,2) — money, nullable. Coerced to
+  // a JS number in the service's toPublic (Prisma.Decimal never reaches the pure helper).
+  estimatedCost   Decimal?  @map("estimated_cost") @db.Decimal(14, 2)
+  // Target/desired-by completion date (drives overdue urgency). @db.Date UTC-midnight.
+  targetDate      DateTime? @map("target_date") @db.Date
+  notes           String?
+  createdByUserId String?   @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  school        School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  createdByUser User?  @relation("MaintenanceItemCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([schoolId])
+  @@map("maintenance_items")
 }
 
 // ── Phase 3 Workflow v1 — the generic TASK engine ─────────────────────────────
