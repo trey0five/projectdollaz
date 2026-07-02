@@ -181,7 +181,11 @@ export default function AppShell({ children }) {
         className={itemClass(active)}
       >
         <ActiveRail active={active} />
-        <item.Icon size={17} className="shrink-0" />
+        {/* Icon is GOLD when this module is selected, white otherwise. */}
+        <item.Icon
+          size={17}
+          className={`shrink-0 ${active ? 'text-gold-light' : 'text-white/70'}`}
+        />
         <span>{item.label}</span>
       </Link>
     )
@@ -270,7 +274,12 @@ export default function AppShell({ children }) {
                     groupActive ? 'text-white' : 'text-white/85 hover:bg-white/[0.06] hover:text-white'
                   }`}
                 >
-                  {GroupIcon && <GroupIcon size={17} className="shrink-0 text-gold-light" />}
+                  {GroupIcon && (
+                    <GroupIcon
+                      size={17}
+                      className={`shrink-0 ${groupActive ? 'text-gold-light' : 'text-white/70'}`}
+                    />
+                  )}
                   <span>{group.label}</span>
                 </Link>
                 <div className="ml-[19px] flex flex-col gap-0.5 border-l border-white/10 pl-2.5">
