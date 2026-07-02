@@ -24,9 +24,45 @@
 // warn-vs-critical severity itself (see WORKFLOW_BADLY_OVERDUE_DAYS in the
 // briefing) so the pure layer stays minimal.
 // ─────────────────────────────────────────────────────────────────────────────
-import { toCivil, daysFromCivil } from './review-status.js'
+import { toCivil, daysFromCivil, addMonths, civilFromDays, civilToIso } from './review-status.js'
 
 export type TaskUrgency = 'overdue' | 'due-soon' | 'on-track' | 'none'
+
+// ── Phase 3 Workflow depth — recurrence date math (pure, injected-now) ─────────
+/** The cadence of a recurring task. 'none' = one-off (never spawns a successor). */
+export type TaskRecurrence = 'none' | 'weekly' | 'monthly' | 'quarterly' | 'annual'
+export const TASK_RECURRENCES = ['none', 'weekly', 'monthly', 'quarterly', 'annual'] as const
+
+/**
+ * Compute the NEXT occurrence's due date (yyyy-mm-dd) from a base date, or null
+ * when the cadence is 'none' / unrecognized. PURE — reuses the shared civil day
+ * math (weekly = +7 days via civilFromDays; monthly/quarterly/annual = +1/3/12
+ * months via addMonths, so month-end is safe: Jan-31 monthly → Feb-28/29). The
+ * base is EXPLICIT (prevDue when present, else `now` decomposed via UTC accessors)
+ * so the module constructs NO Date and reads only `now`'s UTC accessors — obeying
+ * the package purity guard. The impure service layer materializes the returned
+ * string into a stored date column.
+ */
+export function nextTaskOccurrence(
+  prevDue: Date | string | null,
+  recurrence: string,
+  now: Date,
+): string | null {
+  if (recurrence === 'none' || !(TASK_RECURRENCES as readonly string[]).includes(recurrence)) {
+    return null
+  }
+  const base =
+    toCivil(prevDue) ?? {
+      y: now.getUTCFullYear(),
+      m: now.getUTCMonth() + 1,
+      d: now.getUTCDate(),
+    }
+  if (recurrence === 'weekly') {
+    return civilToIso(civilFromDays(daysFromCivil(base.y, base.m, base.d) + 7))
+  }
+  const months = recurrence === 'monthly' ? 1 : recurrence === 'quarterly' ? 3 : 12
+  return civilToIso(addMonths(base, months))
+}
 
 /**
  * Default "due soon" horizon — 7 days. Tasks are DAY-SCALE operational items

@@ -76,11 +76,15 @@ export type {
 export { buildYearEndChecklist, SECTION_TITLES } from './checklist.js'
 
 // Phase 3 Governance v1 — pure policy review-status (injectable now)
-export type { ReviewStatus, PolicyReviewInput, PolicyReviewResult } from './review-status.js'
+export type { ReviewStatus, PolicyReviewInput, PolicyReviewResult, Civil } from './review-status.js'
 export {
   computeReviewStatus,
   DUE_SOON_DAYS,
   BADLY_OVERDUE_DAYS,
+  // Phase 3 Workflow depth — civil date helpers reused by the recurrence math.
+  addMonths,
+  civilFromDays,
+  civilToIso,
 } from './review-status.js'
 
 // Phase 3 Governance depth — meetings/committees board signal (pure, injectable now)
@@ -101,8 +105,14 @@ export {
 } from './meeting-governance.js'
 
 // Phase 3 Workflow v1 — pure task urgency (injectable now)
-export type { TaskUrgency, TaskUrgencyInput, TaskUrgencyResult } from './task-urgency.js'
-export { computeTaskUrgency, TASK_DUE_SOON_DAYS } from './task-urgency.js'
+export type { TaskUrgency, TaskUrgencyInput, TaskUrgencyResult, TaskRecurrence } from './task-urgency.js'
+export {
+  computeTaskUrgency,
+  TASK_DUE_SOON_DAYS,
+  // Phase 3 Workflow depth — recurring-task next-occurrence date math (pure).
+  nextTaskOccurrence,
+  TASK_RECURRENCES,
+} from './task-urgency.js'
 
 // Phase 4 Accreditation v1 — pure coverage + review-urgency (injectable now)
 export type {

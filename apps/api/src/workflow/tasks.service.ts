@@ -4,13 +4,19 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common'
-import type { Task, User } from '@finrep/db'
-import { computeTaskUrgency, type TaskUrgency } from '@finrep/compliance'
+import type { Prisma, Task, User } from '@finrep/db'
+import {
+  computeTaskUrgency,
+  nextTaskOccurrence,
+  type TaskRecurrence,
+  type TaskUrgency,
+} from '@finrep/compliance'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { AuditService } from '../common/audit/audit.service.js'
 import {
   APPROVAL_STATUSES,
   TASK_PRIORITIES,
+  TASK_RECURRENCES,
   TASK_STATUSES,
   type ApprovalStatus,
   type CreateTaskDto,
@@ -32,6 +38,44 @@ export interface TaskMemberRef {
 
 /** Back-compat alias — the assignee display was originally named TaskAssignee. */
 export type TaskAssignee = TaskMemberRef
+
+/**
+ * One step in a multi-step (sequential) approval chain (Phase 3 Workflow depth).
+ * The ORDERED array is the source of truth on Task.approvalSteps; the scalar
+ * approver* columns remain the DENORMALIZED pointer at the CURRENT pending step,
+ * so the shipped identity-gate / briefing / my-signoffs filter all work unchanged.
+ * A legacy single-approver task has approvalSteps null and uses the scalar path.
+ */
+export interface ApprovalStep {
+  order: number // 1..n
+  approverUserId: string
+  status: 'pending' | 'approved' | 'rejected'
+  decidedByUserId: string | null
+  decidedAt: string | null // iso
+  decisionNote: string | null
+}
+
+/** Defensive reader — coerces the Json column to a well-formed ApprovalStep[] or
+ *  null (a legacy/absent/malformed value → null → the legacy single-approver path). */
+function readApprovalSteps(v: Prisma.JsonValue | null | undefined): ApprovalStep[] | null {
+  if (!Array.isArray(v) || v.length === 0) return null
+  const steps: ApprovalStep[] = []
+  for (const raw of v) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+    const o = raw as Record<string, unknown>
+    if (typeof o.approverUserId !== 'string') return null
+    const status = o.status === 'approved' || o.status === 'rejected' ? o.status : 'pending'
+    steps.push({
+      order: typeof o.order === 'number' ? o.order : steps.length + 1,
+      approverUserId: o.approverUserId,
+      status,
+      decidedByUserId: typeof o.decidedByUserId === 'string' ? o.decidedByUserId : null,
+      decidedAt: typeof o.decidedAt === 'string' ? o.decidedAt : null,
+      decisionNote: typeof o.decisionNote === 'string' ? o.decisionNote : null,
+    })
+  }
+  return steps
+}
 
 /** One task as returned to the client, with the COMPUTED urgency + assignee. */
 export interface TaskPublic {
@@ -57,6 +101,15 @@ export interface TaskPublic {
   decidedBy: TaskMemberRef | null
   decidedAt: string | null
   decisionNote: string | null
+  // ── Phase 3 Workflow depth — recurrence + multi-step chain ──────────────────
+  /** none|weekly|monthly|quarterly|annual — the auto-generation cadence. */
+  recurrence: TaskRecurrence
+  /** yyyy-mm-dd bound (null = open-ended, hard-capped). */
+  recurrenceUntil: string | null
+  /** Links occurrences of one recurring series (null on a non-recurring task). */
+  seriesId: string | null
+  /** The ordered approval chain (null on a legacy single-approver / un-submitted task). */
+  approvalSteps: ApprovalStep[] | null
   /** COMPUTED (never stored) — from @finrep/compliance computeTaskUrgency. */
   urgency: TaskUrgency
   daysUntilDue: number | null
@@ -125,6 +178,12 @@ function normalizeApprovalStatus(s: string | null | undefined): ApprovalStatus {
   return (APPROVAL_STATUSES as readonly string[]).includes(s ?? '') ? (s as ApprovalStatus) : 'none'
 }
 
+/** Defends the READ against a stray recurrence value (recurrence is a free TEXT
+ *  column, not a DB enum). Fallback 'none' → a one-off task. */
+function normalizeRecurrence(s: string | null | undefined): TaskRecurrence {
+  return (TASK_RECURRENCES as readonly string[]).includes(s ?? '') ? (s as TaskRecurrence) : 'none'
+}
+
 /** Project a (possibly undefined/null) User relation → the safe member display. */
 function toMemberRef(u: User | null | undefined) {
   return u ? { id: u.id, firstName: u.firstName, lastName: u.lastName, email: u.email } : null
@@ -180,6 +239,10 @@ export class TasksService {
       decidedBy: toMemberRef(row.decidedByUser ?? null),
       decidedAt: row.decidedAt ? row.decidedAt.toISOString() : null,
       decisionNote: row.decisionNote,
+      recurrence: normalizeRecurrence(row.recurrence),
+      recurrenceUntil: toIsoDate(row.recurrenceUntil),
+      seriesId: row.seriesId,
+      approvalSteps: readApprovalSteps(row.approvalSteps as Prisma.JsonValue | null),
       urgency,
       daysUntilDue,
       createdAt: row.createdAt.toISOString(),
@@ -214,6 +277,70 @@ export class TasksService {
       where: { schoolId, userId, status: 'active' },
     })
     if (!m) throw new BadRequestException(`${label} must be an active member of this school.`)
+  }
+
+  /**
+   * Phase 3 Workflow depth — SPAWN-ON-TRANSITION-TO-DONE (no cron). Called by BOTH
+   * complete(), the final-approve branch of decide(), AND update()'s into-done
+   * transition — ONE shared helper so the recurrence logic is never duplicated.
+   *
+   * CONTRACT (BLOCKER guards):
+   *  • The CALLER passes the PRE-update `existing` row (still carrying the OLD
+   *    status) and only calls this when existing.status !== 'done' — so it fires
+   *    EXACTLY on the transition INTO done. Re-completing an already-done task has
+   *    existing.status === 'done' → the caller never invokes this → NO re-spawn
+   *    (no infinite/duplicate series).
+   *  • Spawns AT MOST ONE next occurrence.
+   *  • HARD SAFETY CAP: never spawn if the next due is not strictly AFTER the base
+   *    (guards any degenerate cadence → no zero/negative-interval runaway series).
+   *  • recurrenceUntil bounds the series (null = open-ended). Both are yyyy-mm-dd
+   *    so a string compare is exact.
+   * `now` is passed in (created once per method) so the spawned dueDate + the
+   * completedAt stamp agree. Not fail-soft — a spawn is a write the user expects.
+   */
+  private async spawnNextIfRecurring(existing: Task, userId: string, now: Date): Promise<void> {
+    const rec = normalizeRecurrence(existing.recurrence)
+    if (rec === 'none') return
+    // ANCHOR-ON-SCHEDULE (deliberate v1): the successor is exactly one cadence step
+    // past the prior DUE date (not past `now`), so the series keeps its original phase
+    // (e.g. the day-of-month). A task completed LATE therefore spawns a successor keyed
+    // to the schedule, which can be born already-overdue — an honest "you are behind on
+    // this recurring duty" signal. FOLLOW-UP: offer a roll-forward-to-next-future variant.
+    const iso = nextTaskOccurrence(existing.dueDate, rec, now)
+    if (!iso) return
+    // Cap #1 — the next occurrence must be strictly after the base (prevDue when set).
+    const baseIso = toIsoDate(existing.dueDate)
+    if (baseIso && iso <= baseIso) return
+    // Bound #2 — honor recurrenceUntil (open-ended when null).
+    const untilIso = toIsoDate(existing.recurrenceUntil)
+    if (untilIso && iso > untilIso) return
+
+    const nextDue = parseIsoDate(iso, 'recurrence') as Date
+    const created = await this.prisma.task.create({
+      data: {
+        schoolId: existing.schoolId,
+        title: existing.title,
+        description: existing.description,
+        assigneeUserId: existing.assigneeUserId,
+        dueDate: nextDue,
+        status: 'open', // FRESH open task
+        priority: existing.priority,
+        sourceType: existing.sourceType,
+        sourceRef: existing.sourceRef,
+        createdByUserId: existing.createdByUserId,
+        recurrence: rec, // inherit the cadence
+        recurrenceUntil: existing.recurrenceUntil,
+        seriesId: existing.seriesId ?? existing.id, // first completion seeds the series id
+        // Approval fields all default ('none') — a spawned occurrence starts clean.
+      },
+    })
+    await this.audit.write({
+      schoolId: existing.schoolId,
+      userId,
+      action: 'task.recurrence_spawned',
+      targetType: 'tasks',
+      targetId: created.id,
+    })
   }
 
   /** List all tasks for one school, deterministically ordered + enriched. */
@@ -264,6 +391,8 @@ export class TasksService {
     if (dto.assigneeUserId != null) await this.assertAssigneeIsMember(schoolId, dto.assigneeUserId)
     const dueDate = parseIsoDate(dto.dueDate, 'dueDate') ?? null
     const status = normalizeStatus(dto.status)
+    const recurrence = normalizeRecurrence(dto.recurrence)
+    const recurrenceUntil = parseIsoDate(dto.recurrenceUntil, 'recurrenceUntil') ?? null
     const row = await this.prisma.task.create({
       data: {
         schoolId,
@@ -276,6 +405,9 @@ export class TasksService {
         sourceType: dto.sourceType ?? null,
         sourceRef: dto.sourceRef ?? null,
         createdByUserId: userId,
+        // Recurrence is seed-only here; the successor spawns on transition-to-done.
+        recurrence,
+        recurrenceUntil,
         // A task created directly as done stamps completedAt for consistency.
         completedAt: status === 'done' ? new Date() : null,
       },
@@ -310,8 +442,10 @@ export class TasksService {
     const nextStatus = dto.status ? normalizeStatus(dto.status) : existing.status
 
     // completedAt lifecycle: stamp on transition INTO done; clear on transition OUT.
+    const now = new Date()
+    const transitionsToDone = nextStatus === 'done' && existing.status !== 'done'
     let completedAt = existing.completedAt
-    if (nextStatus === 'done' && existing.status !== 'done') completedAt = new Date()
+    if (transitionsToDone) completedAt = now
     else if (nextStatus !== 'done' && existing.status === 'done') completedAt = null
 
     const row = await this.prisma.task.update({
@@ -336,15 +470,20 @@ export class TasksService {
       targetType: 'tasks',
       targetId: row.id,
     })
+    // Completing a recurring task via the edit modal also advances the series (same
+    // shared helper + wasDone guard, so it's safe and never double-spawns).
+    if (transitionsToDone) await this.spawnNextIfRecurring(existing, userId, now)
     return this.toPublic(row)
   }
 
   async complete(schoolId: string, taskId: string, userId: string): Promise<TaskPublic> {
     const existing = await this.prisma.task.findFirst({ where: { id: taskId, schoolId } })
     if (!existing) throw new NotFoundException('Task not found.')
+    const now = new Date()
+    const wasDone = existing.status === 'done'
     const row = await this.prisma.task.update({
       where: { id: existing.id },
-      data: { status: 'done', completedAt: new Date() },
+      data: { status: 'done', completedAt: now },
       include: TASK_INCLUDE,
     })
     await this.audit.write({
@@ -354,6 +493,9 @@ export class TasksService {
       targetType: 'tasks',
       targetId: row.id,
     })
+    // Spawn the next occurrence ONLY on the transition INTO done (re-completing an
+    // already-done task never re-spawns — the wasDone guard makes this idempotent).
+    if (!wasDone) await this.spawnNextIfRecurring(existing, userId, now)
     return this.toPublic(row)
   }
 
@@ -372,9 +514,14 @@ export class TasksService {
   async submitForApproval(
     schoolId: string,
     taskId: string,
-    approverUserId: string,
+    approvers: string | string[],
     userId: string,
   ): Promise<TaskPublic> {
+    // Normalize the single/legacy string or the ordered array to a list. A single
+    // approver is simply a 1-step chain (back-compat with the shipped signature).
+    const list = Array.isArray(approvers) ? approvers : [approvers]
+    if (list.length === 0) throw new BadRequestException('At least one approver is required.')
+
     const existing = await this.prisma.task.findFirst({ where: { id: taskId, schoolId } })
     if (!existing) throw new NotFoundException('Task not found.')
 
@@ -385,13 +532,25 @@ export class TasksService {
     if (existing.status === 'done' || existing.status === 'cancelled') {
       throw new BadRequestException('Cannot request approval on a completed or cancelled task.')
     }
-    await this.assertUserIsMember(schoolId, approverUserId, 'Approver')
+    // Validate EACH approver is an active member of THIS school (400 on any).
+    for (const a of list) await this.assertUserIsMember(schoolId, a, 'Approver')
+
+    const steps: ApprovalStep[] = list.map((approverUserId, i) => ({
+      order: i + 1,
+      approverUserId,
+      status: 'pending',
+      decidedByUserId: null,
+      decidedAt: null,
+      decisionNote: null,
+    }))
 
     const row = await this.prisma.task.update({
       where: { id: existing.id },
       data: {
-        approverUserId,
+        // Pointer = step 1; a 1-element list reproduces today's single-approver row.
+        approverUserId: steps[0].approverUserId,
         approvalStatus: 'pending',
+        approvalSteps: steps as unknown as Prisma.InputJsonValue,
         // Clear any prior decision so a resubmitted (previously rejected) task is clean.
         decidedByUserId: null,
         decidedAt: null,
@@ -445,19 +604,95 @@ export class TasksService {
     }
 
     const now = new Date()
-    const decided =
-      decision === 'approve'
-        ? { approvalStatus: 'approved', status: 'done', completedAt: now }
-        : { approvalStatus: 'rejected', status: 'in_progress', completedAt: null }
+    const steps = readApprovalSteps(existing.approvalSteps as Prisma.JsonValue | null)
 
-    const row = await this.prisma.task.update({
-      where: { id: existing.id },
-      data: {
-        ...decided,
+    // ── LEGACY PATH: no chain (approvalSteps null) → today's exact behavior ──────
+    if (!steps) {
+      const decided =
+        decision === 'approve'
+          ? { approvalStatus: 'approved', status: 'done', completedAt: now }
+          : { approvalStatus: 'rejected', status: 'in_progress', completedAt: null }
+      const row = await this.prisma.task.update({
+        where: { id: existing.id },
+        data: {
+          ...decided,
+          decidedByUserId: user.id,
+          decidedAt: now,
+          decisionNote: note ?? null,
+        },
+        include: TASK_INCLUDE,
+      })
+      await this.audit.write({
+        schoolId,
+        userId: user.id,
+        action: decision === 'approve' ? 'task.approved' : 'task.rejected',
+        targetType: 'tasks',
+        targetId: row.id,
+      })
+      // Terminal approve on a recurring legacy task advances the series.
+      if (decision === 'approve') await this.spawnNextIfRecurring(existing, user.id, now)
+      return this.toPublic(row)
+    }
+
+    // ── CHAIN PATH: stamp the current pending step, then advance / complete / stop.
+    // The pending-guard + pointer invariant guarantee the current step is the FIRST
+    // pending one and its approverUserId === existing.approverUserId (already gated).
+    const idx = steps.findIndex((s) => s.status === 'pending')
+    // Defensive: a 'pending' approvalStatus with no pending step is inconsistent —
+    // treat it as not-decidable rather than mutating an already-settled chain.
+    if (idx === -1) throw new BadRequestException('This task is not awaiting a decision.')
+    steps[idx] = {
+      ...steps[idx],
+      status: decision === 'approve' ? 'approved' : 'rejected',
+      decidedByUserId: user.id,
+      decidedAt: now.toISOString(),
+      decisionNote: note ?? null,
+    }
+
+    let data: Prisma.TaskUncheckedUpdateInput
+    let spawnAfter = false
+    const nextPending = decision === 'approve' ? steps.find((s) => s.status === 'pending') : undefined
+    if (decision === 'reject') {
+      // Chain STOPS: task in_progress + approvalStatus rejected; pointer frozen on
+      // this (now-rejected) step. Further decide 400s via the pending-guard.
+      data = {
+        approvalSteps: steps as unknown as Prisma.InputJsonValue,
+        approvalStatus: 'rejected',
+        status: 'in_progress',
+        completedAt: null,
+        approverUserId: steps[idx].approverUserId,
         decidedByUserId: user.id,
         decidedAt: now,
         decisionNote: note ?? null,
-      },
+      }
+    } else if (nextPending) {
+      // ADVANCE exactly one step: pointer → next approver, still pending, live.
+      data = {
+        approvalSteps: steps as unknown as Prisma.InputJsonValue,
+        approvalStatus: 'pending',
+        approverUserId: nextPending.approverUserId,
+        decidedByUserId: user.id,
+        decidedAt: now,
+        decisionNote: note ?? null,
+      }
+    } else {
+      // FINAL approve → chain complete: task done + approved + stamp; then spawn.
+      data = {
+        approvalSteps: steps as unknown as Prisma.InputJsonValue,
+        approvalStatus: 'approved',
+        status: 'done',
+        completedAt: now,
+        approverUserId: steps[idx].approverUserId,
+        decidedByUserId: user.id,
+        decidedAt: now,
+        decisionNote: note ?? null,
+      }
+      spawnAfter = true
+    }
+
+    const row = await this.prisma.task.update({
+      where: { id: existing.id },
+      data,
       include: TASK_INCLUDE,
     })
     await this.audit.write({
@@ -467,6 +702,7 @@ export class TasksService {
       targetType: 'tasks',
       targetId: row.id,
     })
+    if (spawnAfter) await this.spawnNextIfRecurring(existing, user.id, now)
     return this.toPublic(row)
   }
 

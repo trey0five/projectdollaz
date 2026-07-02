@@ -203,6 +203,10 @@ export class BriefingService {
     periodId: string,
     callerRole: MembershipRole = 'owner',
     lensOverride?: Lens,
+    // Threaded from @CurrentUser in the controller (NEVER client-supplied). Placed
+    // LAST-optional so the org fan-out (3-arg) + assistant (3-arg) + existing specs
+    // still compile; when absent, the caller-scoped my-approvals item is not produced.
+    callerUserId?: string | null,
   ): Promise<BriefingResponse> {
     // Tenant isolation up front: a true 404 (unknown/foreign period) propagates.
     const period = await this.periods.getOwnedPeriod(schoolId, periodId)
@@ -612,6 +616,40 @@ export class BriefingService {
           link: '/tasks',
           dueDate: earliest,
         })
+      }
+
+      // ── STEP 2.6c: awaiting MY sign-off (caller-scoped; board-viewer surface) ──
+      // DISTINCT from the school-scoped aggregate workflow:approvals-pending above.
+      // STRICT caller-scoping (BLOCKER): filter approverUserId===callerUserId, and
+      // the whole block is guarded by `if (callerUserId)` — no userId → NO item, so
+      // another user's queue can NEVER leak. This is the ONE workflow item KEPT for
+      // the viewer/board lens (see VIEWER_WORKFLOW); the aggregate stays DROPPED.
+      // Severity floor is warn (my own action item, more pressing than the school
+      // aggregate), escalating to critical when any of MY pending tasks is overdue.
+      if (callerUserId) {
+        const myPending = openTasks.filter(
+          (t) => t.approvalStatus === 'pending' && t.approverUserId === callerUserId,
+        )
+        if (myPending.length > 0) {
+          const n = myPending.length
+          const anyOverdue = myPending.some((t) => t.urgency === 'overdue')
+          const earliest =
+            myPending
+              .map((t) => t.dueDate)
+              .filter((d): d is string => d !== null)
+              .sort()[0] ?? null
+          items.push({
+            id: 'workflow:my-approvals-pending',
+            severity: anyOverdue ? 'critical' : 'warn',
+            source: 'workflow',
+            title: `${n} task${n === 1 ? '' : 's'} awaiting your sign-off`,
+            why: `${n} task${n === 1 ? ' is' : 's are'} waiting on YOUR decision as the designated approver. Open the task list to review and sign off.`,
+            metricKey: null,
+            value: null,
+            link: '/tasks',
+            dueDate: earliest,
+          })
+        }
       }
     }
 

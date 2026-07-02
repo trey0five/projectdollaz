@@ -128,7 +128,13 @@ export default function usePennyChat() {
         // A confirmed create_task now exists server-side — broadcast so an open
         // Tasks page (useTasks) refetches. The autonomous 'applied' SSE path already
         // refreshes via ev.refresh; the proposal/confirm path needs this explicitly.
-        if (action?.kind === 'create_task') pennyRef.current?.agentRefresh?.(['tasks'])
+        if (
+          action?.kind === 'create_task' ||
+          action?.kind === 'submit_for_approval' ||
+          action?.kind === 'decide_approval'
+        ) {
+          pennyRef.current?.agentRefresh?.(['tasks'])
+        }
       } catch {
         setProposalStatus(mi, pi, 'error')
       }

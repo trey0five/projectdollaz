@@ -30,6 +30,12 @@ export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number]
 export const TASK_DECISIONS = ['approve', 'reject'] as const
 export type TaskDecision = (typeof TASK_DECISIONS)[number]
 
+/** Recurrence cadence (Phase 3 Workflow depth). Co-located with the other task
+ *  enums; the pure next-occurrence math lives in @finrep/compliance. Written by
+ *  the service; the read path normalizes an unknown value to 'none'. */
+export const TASK_RECURRENCES = ['none', 'weekly', 'monthly', 'quarterly', 'annual'] as const
+export type TaskRecurrence = (typeof TASK_RECURRENCES)[number]
+
 /**
  * Create a task. forbidNonWhitelisted-SAFE: EVERY field is class-validator
  * decorated, so a stray/unknown key 400s. Nullable fields are `@IsOptional()`,
@@ -75,4 +81,14 @@ export class CreateTaskDto {
   @IsString()
   @MaxLength(200)
   sourceRef?: string | null
+
+  // ── Phase 3 Workflow depth — recurrence (additive; seriesId is server-only and
+  // NEVER accepted from the client — forbidNonWhitelisted 400s a stray series_id). ──
+  @IsOptional()
+  @IsIn(TASK_RECURRENCES)
+  recurrence?: TaskRecurrence
+
+  @IsOptional()
+  @IsDateString()
+  recurrenceUntil?: string | null
 }

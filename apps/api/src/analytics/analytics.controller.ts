@@ -1,9 +1,10 @@
 import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common'
-import type { MembershipRole } from '@finrep/db'
+import type { MembershipRole, User } from '@finrep/db'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js'
 import { RolesGuard } from '../common/guards/roles.guard.js'
 import { Roles } from '../common/decorators/roles.decorator.js'
 import { CallerRole } from '../common/decorators/caller-role.decorator.js'
+import { CurrentUser } from '../common/decorators/current-user.decorator.js'
 import { EntitlementGuard } from '../billing/entitlement.guard.js'
 import { METRIC_META } from '@finrep/analytics'
 import { AnalyticsService } from './analytics.service.js'
@@ -55,12 +56,15 @@ export class AnalyticsController {
     @Param('schoolId') schoolId: string,
     @Param('periodId') periodId: string,
     @CallerRole() callerRole: MembershipRole | undefined,
+    @CurrentUser() user: User,
     @Query() query: BriefingQueryDto,
   ) {
     // Fail safe to the most restrictive lens if the guard somehow didn't attach
     // a role (it always does on this @Roles() route).
     const role: MembershipRole = callerRole ?? 'viewer'
-    return this.briefing.getBriefing(schoolId, periodId, role, query.lens)
+    // BLOCKER: the caller-scoped "awaiting your sign-off" item is keyed off the
+    // SERVER-authenticated user.id ONLY — never a client-supplied id.
+    return this.briefing.getBriefing(schoolId, periodId, role, query.lens, user.id)
   }
 
   // The static metric catalog metadata (formula/description/bands). No recompute.

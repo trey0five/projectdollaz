@@ -69,6 +69,25 @@ export function daysFromCivil(y: number, m: number, d: number): number {
   return era * 146097 + doe - 719468
 }
 
+/**
+ * Inverse of daysFromCivil — days-since-1970-01-01 → civil date (Howard Hinnant's
+ * algorithm). Pure integer math; no Date, no timezone. EXPORTED so the sibling
+ * task-urgency helper can do weekly (day-count) recurrence math and round-trip it
+ * back to a civil date, all within the package purity guard.
+ */
+export function civilFromDays(z: number): Civil {
+  const zz = z + 719468
+  const era = Math.floor((zz >= 0 ? zz : zz - 146096) / 146097)
+  const doe = zz - era * 146097
+  const yoe = Math.floor((doe - Math.floor(doe / 1460) + Math.floor(doe / 36524) - Math.floor(doe / 146096)) / 365)
+  const y = yoe + era * 400
+  const doy = doe - (365 * yoe + Math.floor(yoe / 4) - Math.floor(yoe / 100))
+  const mp = Math.floor((5 * doy + 2) / 153)
+  const d = doy - Math.floor((153 * mp + 2) / 5) + 1
+  const m = mp < 10 ? mp + 3 : mp - 9
+  return { y: m <= 2 ? y + 1 : y, m, d }
+}
+
 /** Last day of a given (year, month 1-12) — leap-year aware, pure. */
 function lastDayOfMonth(y: number, m: number): number {
   const days = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
@@ -80,7 +99,9 @@ function pad(n: number): string {
   return n < 10 ? `0${n}` : String(n)
 }
 
-function civilToIso(c: Civil): string {
+/** Serialize a Civil to yyyy-mm-dd. EXPORTED so task-urgency can materialize a
+ *  next-occurrence date string within the purity guard (no Date construction). */
+export function civilToIso(c: Civil): string {
   return `${c.y}-${pad(c.m)}-${pad(c.d)}`
 }
 
@@ -105,8 +126,9 @@ export function toCivil(v: Date | string | null | undefined): Civil | null {
   return { y, m, d }
 }
 
-/** Add `months` to a Civil, clamping day overflow (Jan-31 + 1mo → Feb-28/29). */
-function addMonths(c: Civil, months: number): Civil {
+/** Add `months` to a Civil, clamping day overflow (Jan-31 + 1mo → Feb-28/29).
+ *  EXPORTED so task-urgency reuses the identical month-end-safe cadence math. */
+export function addMonths(c: Civil, months: number): Civil {
   const total = c.m - 1 + months
   const y = c.y + Math.floor(total / 12)
   const m = ((total % 12) + 12) % 12 + 1

@@ -161,10 +161,14 @@ export function useTasks(schoolId, filters = {}, canEdit = false) {
     [schoolId, load],
   )
 
+  // Accepts an ORDERED array of approver userIds (a multi-step chain) OR a single
+  // string (legacy single-approver — a 1-step chain), standardizing on the array
+  // body the DTO accepts (approverUserIds).
   const submitApproval = useCallback(
-    async (taskId, approverUserId) => {
+    async (taskId, approvers) => {
       if (!schoolId) return
-      await tasksApi.submitApproval(schoolId, taskId, { approverUserId })
+      const approverUserIds = Array.isArray(approvers) ? approvers : [approvers]
+      await tasksApi.submitApproval(schoolId, taskId, { approverUserIds })
       await load(schoolId)
     },
     [schoolId, load],

@@ -34,6 +34,12 @@ function row(over: Record<string, unknown> = {}) {
     decidedByUser: null,
     decidedAt: null,
     decisionNote: null,
+    // Phase 3 Workflow depth defaults — recurrence 'none' → spawn helper early-
+    // returns; approvalSteps null → decide() takes the LEGACY single-approver path.
+    recurrence: 'none',
+    recurrenceUntil: null,
+    seriesId: null,
+    approvalSteps: null,
     createdAt: new Date('2025-01-01T00:00:00.000Z'),
     updatedAt: new Date('2025-01-01T00:00:00.000Z'),
     ...over,
@@ -437,4 +443,247 @@ describe('TasksService', () => {
       expect(task.update).not.toHaveBeenCalled()
     })
   })
+
+  // ── Phase 3 Workflow depth — recurring-task spawn-on-transition-to-done ────────
+  describe('recurrence spawn', () => {
+    const NOW_ISH = () => new Date()
+
+    it('complete: a recurring task spawns exactly ONE next occurrence (fresh open, series seeded)', async () => {
+      const { svc, task, audit } = makeService({
+        task: {
+          findFirst: vi.fn(async () =>
+            row({
+              id: 't1',
+              status: 'open',
+              recurrence: 'monthly',
+              dueDate: new Date('2026-01-15T00:00:00.000Z'),
+            }),
+          ),
+        },
+      })
+      await svc.complete('school-A', 't1', 'user-1')
+      // update(→done) + create(next occurrence) each once.
+      expect(task.update).toHaveBeenCalledTimes(1)
+      expect(task.create).toHaveBeenCalledTimes(1)
+      const spawned = task.create.mock.calls[0][0].data
+      expect(spawned.status).toBe('open')
+      expect(spawned.recurrence).toBe('monthly')
+      expect(spawned.seriesId).toBe('t1') // first completion seeds the series with the origin id
+      expect(toIso(spawned.dueDate)).toBe('2026-02-15') // month-end-safe +1mo
+      // A fresh occurrence carries NO approval pointer.
+      expect(spawned.approvalStatus).toBeUndefined()
+      expect(audit.write).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'task.recurrence_spawned' }),
+      )
+    })
+
+    it('re-completing an ALREADY-done task NEVER re-spawns (idempotent transition guard)', async () => {
+      const { svc, task } = makeService({
+        task: {
+          findFirst: vi.fn(async () =>
+            row({ id: 't1', status: 'done', recurrence: 'monthly', dueDate: new Date('2026-01-15T00:00:00.000Z') }),
+          ),
+        },
+      })
+      await svc.complete('school-A', 't1', 'user-1')
+      expect(task.create).not.toHaveBeenCalled() // wasDone → no spawn
+    })
+
+    it("a 'none' (one-off) task never spawns on completion", async () => {
+      const { svc, task } = makeService({
+        task: { findFirst: vi.fn(async () => row({ id: 't1', status: 'open', recurrence: 'none' })) },
+      })
+      await svc.complete('school-A', 't1', 'user-1')
+      expect(task.create).not.toHaveBeenCalled()
+    })
+
+    it('recurrenceUntil bound: does NOT spawn past the end date', async () => {
+      const { svc, task } = makeService({
+        task: {
+          findFirst: vi.fn(async () =>
+            row({
+              id: 't1',
+              status: 'open',
+              recurrence: 'monthly',
+              dueDate: new Date('2026-01-15T00:00:00.000Z'),
+              recurrenceUntil: new Date('2026-01-31T00:00:00.000Z'), // next (Feb-15) is past this
+            }),
+          ),
+        },
+      })
+      await svc.complete('school-A', 't1', 'user-1')
+      expect(task.create).not.toHaveBeenCalled()
+    })
+
+    it('a spawned occurrence inherits the EXISTING seriesId (not the id) after the first cycle', async () => {
+      const { svc, task } = makeService({
+        task: {
+          findFirst: vi.fn(async () =>
+            row({
+              id: 't2',
+              seriesId: 'origin-1',
+              status: 'open',
+              recurrence: 'weekly',
+              dueDate: new Date('2026-03-02T00:00:00.000Z'),
+            }),
+          ),
+        },
+      })
+      await svc.complete('school-A', 't2', 'user-1')
+      const spawned = task.create.mock.calls[0][0].data
+      expect(spawned.seriesId).toBe('origin-1')
+      expect(toIso(spawned.dueDate)).toBe('2026-03-09') // +7 days
+    })
+
+    it('completing via update(status:done) also advances a recurring series', async () => {
+      const { svc, task } = makeService({
+        task: {
+          findFirst: vi.fn(async () =>
+            row({ id: 't1', status: 'open', recurrence: 'quarterly', dueDate: new Date('2026-01-15T00:00:00.000Z') }),
+          ),
+        },
+      })
+      await svc.update('school-A', 't1', { status: 'done' }, 'user-1')
+      expect(task.create).toHaveBeenCalledTimes(1)
+      expect(toIso(task.create.mock.calls[0][0].data.dueDate)).toBe('2026-04-15')
+    })
+
+    void NOW_ISH
+  })
+
+  // ── Phase 3 Workflow depth — multi-step sequential approval chains ─────────────
+  describe('approval chains', () => {
+    function chainRow(over = {}) {
+      const steps = [
+        { order: 1, approverUserId: 'a1', status: 'pending', decidedByUserId: null, decidedAt: null, decisionNote: null },
+        { order: 2, approverUserId: 'a2', status: 'pending', decidedByUserId: null, decidedAt: null, decisionNote: null },
+      ]
+      return row({
+        id: 't1',
+        status: 'in_progress',
+        approvalStatus: 'pending',
+        approverUserId: 'a1', // pointer = step 1
+        approvalSteps: steps,
+        ...over,
+      })
+    }
+
+    it('submitForApproval with an ORDERED list builds an all-pending chain + pointer at step 1', async () => {
+      const { svc, task } = makeService({
+        task: { findFirst: vi.fn(async () => row({ id: 't1', status: 'open', approvalStatus: 'none' })) },
+        membership: { findFirst: vi.fn(async () => ({ id: 'm1' })) },
+      })
+      await svc.submitForApproval('school-A', 't1', ['a1', 'a2', 'a3'], 'user-1')
+      const data = task.update.mock.calls[0][0].data
+      expect(data.approverUserId).toBe('a1') // pointer = first step
+      expect(data.approvalStatus).toBe('pending')
+      expect(steps(data)).toHaveLength(3)
+      expect(steps(data).map((s) => s.status)).toEqual(['pending', 'pending', 'pending'])
+      expect(steps(data).map((s) => s.order)).toEqual([1, 2, 3])
+    })
+
+    it('validates EVERY approver as an active member (any non-member → 400, no write)', async () => {
+      const membershipFindFirst = vi
+        .fn()
+        .mockResolvedValueOnce({ id: 'm1' }) // a1 ok
+        .mockResolvedValueOnce(null) // a2 not a member
+      const { svc, task } = makeService({
+        task: { findFirst: vi.fn(async () => row({ id: 't1', status: 'open', approvalStatus: 'none' })) },
+        membership: { findFirst: membershipFindFirst },
+      })
+      await expect(
+        svc.submitForApproval('school-A', 't1', ['a1', 'a2'], 'user-1'),
+      ).rejects.toBeInstanceOf(BadRequestException)
+      expect(task.update).not.toHaveBeenCalled()
+    })
+
+    it('APPROVE step 1 advances the pointer to step 2; task stays live (not done)', async () => {
+      const { svc, task } = makeService({ task: { findFirst: vi.fn(async () => chainRow()) } })
+      await svc.decide('school-A', 't1', 'approve', 'ok', user('a1'))
+      const data = task.update.mock.calls[0][0].data
+      expect(data.approvalStatus).toBe('pending') // chain still active
+      expect(data.approverUserId).toBe('a2') // advanced exactly one step
+      expect(data.status).toBeUndefined() // NOT completed mid-chain
+      expect(steps(data)[0].status).toBe('approved')
+      expect(steps(data)[0].decidedByUserId).toBe('a1')
+      expect(steps(data)[1].status).toBe('pending')
+    })
+
+    it('FINAL approve (last step) completes the task → done + approved', async () => {
+      const lastStep = chainRow({
+        approverUserId: 'a2',
+        approvalSteps: [
+          { order: 1, approverUserId: 'a1', status: 'approved', decidedByUserId: 'a1', decidedAt: 'x', decisionNote: null },
+          { order: 2, approverUserId: 'a2', status: 'pending', decidedByUserId: null, decidedAt: null, decisionNote: null },
+        ],
+      })
+      const { svc, task } = makeService({ task: { findFirst: vi.fn(async () => lastStep) } })
+      await svc.decide('school-A', 't1', 'approve', null, user('a2'))
+      const data = task.update.mock.calls[0][0].data
+      expect(data.approvalStatus).toBe('approved')
+      expect(data.status).toBe('done')
+      expect(data.completedAt).toBeInstanceOf(Date)
+      expect(steps(data)[1].status).toBe('approved')
+    })
+
+    it('REJECT stops the chain → in_progress + rejected; later steps untouched', async () => {
+      const { svc, task } = makeService({ task: { findFirst: vi.fn(async () => chainRow()) } })
+      await svc.decide('school-A', 't1', 'reject', 'redo', user('a1'))
+      const data = task.update.mock.calls[0][0].data
+      expect(data.approvalStatus).toBe('rejected')
+      expect(data.status).toBe('in_progress')
+      expect(steps(data)[0].status).toBe('rejected')
+      expect(steps(data)[1].status).toBe('pending') // not skipped/replayed
+    })
+
+    it('a NON-current-step approver cannot decide (identity gate on the pointer) → 403', async () => {
+      const { svc, task } = makeService({ task: { findFirst: vi.fn(async () => chainRow()) } })
+      // a2 is the SECOND approver but the pointer is at a1 → 403.
+      await expect(svc.decide('school-A', 't1', 'approve', null, user('a2'))).rejects.toBeInstanceOf(
+        ForbiddenException,
+      )
+      expect(task.update).not.toHaveBeenCalled()
+    })
+
+    it('a decided (rejected) chain 400s further decides via the pending-guard', async () => {
+      const rejected = chainRow({
+        approvalStatus: 'rejected',
+        approvalSteps: [
+          { order: 1, approverUserId: 'a1', status: 'rejected', decidedByUserId: 'a1', decidedAt: 'x', decisionNote: null },
+          { order: 2, approverUserId: 'a2', status: 'pending', decidedByUserId: null, decidedAt: null, decisionNote: null },
+        ],
+      })
+      const { svc } = makeService({ task: { findFirst: vi.fn(async () => rejected) } })
+      await expect(svc.decide('school-A', 't1', 'approve', null, user('a1'))).rejects.toBeInstanceOf(
+        BadRequestException,
+      )
+    })
+
+    it('a recurring multi-step task spawns the next occurrence on FINAL approve', async () => {
+      const lastStep = chainRow({
+        approverUserId: 'a2',
+        recurrence: 'monthly',
+        dueDate: new Date('2026-05-31T00:00:00.000Z'),
+        approvalSteps: [
+          { order: 1, approverUserId: 'a1', status: 'approved', decidedByUserId: 'a1', decidedAt: 'x', decisionNote: null },
+          { order: 2, approverUserId: 'a2', status: 'pending', decidedByUserId: null, decidedAt: null, decisionNote: null },
+        ],
+      })
+      const { svc, task } = makeService({ task: { findFirst: vi.fn(async () => lastStep) } })
+      await svc.decide('school-A', 't1', 'approve', null, user('a2'))
+      expect(task.create).toHaveBeenCalledTimes(1)
+      expect(toIso(task.create.mock.calls[0][0].data.dueDate)).toBe('2026-06-30') // month-end-safe
+    })
+  })
 })
+
+/** Read a spawned @db.Date back to yyyy-mm-dd (mirrors the service's toIsoDate). */
+function toIso(d: unknown): string {
+  return d instanceof Date ? d.toISOString().slice(0, 10) : String(d)
+}
+
+/** Narrow the mock update `data.approvalSteps` (typed as unknown in the spec). */
+type Step = { order: number; approverUserId: string; status: string; decidedByUserId: string | null }
+function steps(data: Record<string, unknown>): Step[] {
+  return data.approvalSteps as Step[]
+}

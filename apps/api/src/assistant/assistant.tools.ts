@@ -614,6 +614,56 @@ export const TOOL_SCHEMAS = [
   {
     type: 'function',
     function: {
+      name: 'list_open_tasks',
+      description:
+        "List this school's OPEN and in-progress workflow tasks (read-only) so you can resolve a task the user names into its taskId BEFORE calling submit_for_approval or decide_approval. Returns each task's id, title, status, approvalStatus, and the current designated approver's email (or null). Always call this first when the user refers to a task by name.",
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'submit_for_approval',
+      description:
+        'PROPOSE routing an existing task to one or more approvers for sign-off, for the user to CONFIRM (this does NOT submit until the user confirms). approvers is an ORDERED list of "me" (the current user) and/or school-member email addresses — sign-off happens in that order (step 1, then 2, …). Resolve the task the user names to its taskId first via list_open_tasks. Each approver must be an active member of this school.',
+      parameters: {
+        type: 'object',
+        properties: {
+          taskId: { type: 'string', description: 'The task id (uuid) to route for approval.' },
+          approvers: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Ordered approvers: "me" or member email addresses. One or more.',
+          },
+        },
+        required: ['taskId', 'approvers'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'decide_approval',
+      description:
+        'PROPOSE recording YOUR approval decision on a task awaiting your sign-off, for you to CONFIRM (this does NOT record until you confirm). You may only decide a task where YOU are the current designated approver — the server enforces this (403 otherwise). decision is "approve" or "reject"; note is an optional rationale.',
+      parameters: {
+        type: 'object',
+        properties: {
+          taskId: { type: 'string', description: 'The task id (uuid) to decide.' },
+          decision: { type: 'string', enum: ['approve', 'reject'] },
+          note: { type: 'string', description: 'Optional decision rationale.' },
+        },
+        required: ['taskId', 'decision'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'get_briefing',
       description:
         "The prioritised attention briefing for a period — the SAME ranked, plain-language list the Home screen shows the user: everything that needs their decision right now (off-band financial metrics, AUP readiness/compliance gaps, scholarship reconciliation variance, open corrective actions, or data-not-yet-generated). Returns summary counts (total / critical / warn / info) and an ORDERED items[] already sorted critical→warn→info and lens-shaped for the caller's role: each item has severity, source (metric|compliance|data), title, why (a plain-language reason), an optional metricKey/value, a client link (deep-link route), an optional dueDate, and a voice tone hint. Call this FIRST when the user says 'brief me', 'what needs my attention', 'good morning', or asks broadly 'how are we doing', then narrate the items in order and offer to act on them. The list is already role-correct and complete; read-only, and NEVER invent, add, drop, or re-rank items beyond what this returns.",
@@ -643,6 +693,9 @@ export const TOOL_LABELS: Record<string, string> = {
   apply_driver_budget: 'Building the driver budget…',
   draft_cap_entry: 'Logging a corrective action…',
   create_task: 'Drafting a task…',
+  list_open_tasks: 'Reading your open tasks…',
+  submit_for_approval: 'Routing for sign-off…',
+  decide_approval: 'Recording your decision…',
   get_board_report: 'Reading the board report…',
   generate_board_narrative: 'Drafting the board narrative…',
   set_explanation: 'Saving the explanation…',

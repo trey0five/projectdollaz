@@ -87,6 +87,8 @@ const REFRESH: Record<ProposedAction['kind'], RefreshKey[]> = {
   draft_cap_entry: ['cap'],
   import_trial_balance: ['dataStatus', 'metrics'],
   create_task: ['tasks'],
+  submit_for_approval: ['tasks'],
+  decide_approval: ['tasks'],
 }
 
 // Tools that perform a write. Membership UNCHANGED — but the meaning flips from
@@ -106,7 +108,7 @@ const WRITE_TOOLS = new Set([
 // deliberately diverges from the autonomous WRITE_TOOLS above: the slice forbids
 // silently creating a task the user didn't explicitly confirm. Same owner/accountant
 // gate as WRITE_TOOLS applies before a proposal is even offered.
-const CONFIRM_TOOLS = new Set(['create_task'])
+const CONFIRM_TOOLS = new Set(['create_task', 'submit_for_approval', 'decide_approval'])
 
 export interface ProposedAction {
   kind:
@@ -118,6 +120,8 @@ export interface ProposedAction {
     | 'set_feeder_enrollment'
     | 'import_trial_balance'
     | 'create_task'
+    | 'submit_for_approval'
+    | 'decide_approval'
   periodId: string
   summary: string
   payload: Record<string, unknown>
@@ -541,24 +545,32 @@ export class AssistantService {
       }
 
       if (CONFIRM_TOOLS.has(name)) {
-        // Same fail-closed owner/accountant gate as the autonomous writes — a
-        // viewer can't even be OFFERED a task proposal as actionable.
-        if (ctx.role !== 'owner' && ctx.role !== 'accountant') {
+        // Fail-closed role gate BEFORE a proposal is even offered. create_task and
+        // submit_for_approval are operator actions (owner/accountant). decide_approval
+        // ADDITIONALLY allows a viewer, because a board-chair approver is frequently a
+        // viewer and must be able to sign off — the REAL 403 enforcement is still
+        // server-side in tasks.decide (caller === current approver), so merely OFFERING
+        // the proposal to a viewer is safe.
+        const canPropose =
+          name === 'decide_approval'
+            ? ctx.role === 'owner' || ctx.role === 'accountant' || ctx.role === 'viewer'
+            : ctx.role === 'owner' || ctx.role === 'accountant'
+        if (!canPropose) {
           return {
-            error: "You don't have edit access, so I can't create a task — ask an owner or accountant.",
+            error: "You don't have edit access, so I can't do that — ask an owner or accountant.",
           }
         }
         if (!ctx.user) {
           throw new Error('No authenticated user in context — cannot propose this change.')
         }
-        // Confirm-then-create: emit a proposal for the user to confirm; the REAL
-        // create happens later in applyAction (via /assistant/apply). NO mutation here.
+        // Confirm-then-apply: emit a proposal for the user to confirm; the REAL write
+        // happens later in applyAction (via /assistant/apply). NO mutation here.
         const action = await this.buildProposal(name, args, ctx)
         sinks.onProposal(action)
         return {
           proposed: true,
           summary: action.summary,
-          note: 'Proposed a task — tell the user what it will be and that they must CONFIRM it before it is created. Do not claim it exists yet.',
+          note: 'Proposed an action — tell the user exactly what it will do and that they must CONFIRM it before it happens. Do not claim it is done yet.',
         }
       }
 
@@ -633,6 +645,12 @@ export class AssistantService {
     }
     if (name === 'create_task') {
       return this.buildTaskProposal(args, ctx)
+    }
+    if (name === 'submit_for_approval') {
+      return this.buildSubmitApprovalProposal(args, ctx)
+    }
+    if (name === 'decide_approval') {
+      return this.buildDecideProposal(args, ctx)
     }
     const periodId = await this.resolvePeriod(args, ctx)
     if (name === 'set_budget') {
@@ -844,6 +862,72 @@ export class AssistantService {
         ...(sourceRef ? { sourceRef } : {}),
       },
     }
+  }
+
+  /**
+   * Build a confirmable submit_for_approval proposal (NO mutation). The RAW ordered
+   * approvers list ("me"/emails) is carried UNRESOLVED and re-resolved at apply, so
+   * a forged /apply re-runs the exact same active-member resolution + tenant checks.
+   */
+  private buildSubmitApprovalProposal(args: Record<string, unknown>, ctx: Ctx): ProposedAction {
+    const taskId = typeof args.taskId === 'string' ? args.taskId.trim() : ''
+    if (!/^[0-9a-f-]{36}$/i.test(taskId)) throw new Error('submit_for_approval needs a valid taskId.')
+    const raw = Array.isArray(args.approvers)
+      ? args.approvers.filter((a): a is string => typeof a === 'string' && a.trim() !== '').map((a) => a.trim())
+      : []
+    if (raw.length === 0) throw new Error('Name at least one approver.')
+    const who = raw.map((a) => (a.toLowerCase() === 'me' ? 'you' : a)).join(' → ')
+    return {
+      kind: 'submit_for_approval',
+      periodId: ctx.periodId ?? '',
+      summary: `Route this task for sign-off: ${who}.`,
+      payload: { taskId, approvers: raw },
+    }
+  }
+
+  /**
+   * Build a confirmable decide_approval proposal (NO mutation). The decision/note are
+   * carried and re-validated at apply; the caller===current-approver 403 is enforced
+   * server-side in tasks.decide, so Penny can never bypass the identity gate.
+   */
+  private buildDecideProposal(args: Record<string, unknown>, ctx: Ctx): ProposedAction {
+    const taskId = typeof args.taskId === 'string' ? args.taskId.trim() : ''
+    if (!/^[0-9a-f-]{36}$/i.test(taskId)) throw new Error('decide_approval needs a valid taskId.')
+    const decision = args.decision === 'approve' ? 'approve' : args.decision === 'reject' ? 'reject' : ''
+    if (!decision) throw new Error('decide_approval needs approve or reject.')
+    const note =
+      typeof args.note === 'string' && args.note.trim() ? args.note.trim().slice(0, 2000) : undefined
+    return {
+      kind: 'decide_approval',
+      periodId: ctx.periodId ?? '',
+      summary: `${decision === 'approve' ? 'Approve' : 'Reject'} this task${note ? ` — “${note.slice(0, 120)}”` : ''}.`,
+      payload: { taskId, decision, ...(note ? { note } : {}) },
+    }
+  }
+
+  /**
+   * Resolve an approver string to an ACTIVE-member userId of THIS school, or THROW.
+   * Unlike resolveAssignee (null on empty), an approver is REQUIRED — "me" → the
+   * caller; an email → the active member with that email (case-insensitive) or a
+   * clear 4xx error. Scoped to schoolId, so a cross-tenant email is invisible.
+   */
+  private async resolveApprover(schoolId: string, user: User, approver: unknown): Promise<string> {
+    const a = typeof approver === 'string' ? approver.trim() : ''
+    if (!a) throw new BadRequestException('An approver is required.')
+    if (a.toLowerCase() === 'me') return user.id
+    const m = await this.prisma.membership.findFirst({
+      where: {
+        schoolId,
+        status: 'active',
+        user: { is: { email: { equals: a, mode: 'insensitive' } } },
+      },
+    })
+    if (!m) {
+      throw new BadRequestException(
+        `No active member of this school has the email “${a}”. Ask an owner to invite them first.`,
+      )
+    }
+    return m.userId
   }
 
   /**
@@ -1069,6 +1153,31 @@ export class AssistantService {
       )
       return { applied: true, summary: action.summary }
     }
+    if (action.kind === 'submit_for_approval') {
+      // Untrusted payload — re-validate taskId + re-resolve EACH approver to an
+      // active member (me→user.id, email→lookup, 400 on unknown/cross-school),
+      // preserving order. tasks.submitForApproval re-validates membership + tenant-
+      // 404s an out-of-school taskId (defense in depth).
+      const taskId = typeof p.taskId === 'string' ? p.taskId.trim() : ''
+      if (!/^[0-9a-f-]{36}$/i.test(taskId)) throw new Error('Invalid taskId.')
+      const raw = Array.isArray(p.approvers) ? p.approvers : []
+      if (raw.length === 0) throw new Error('At least one approver is required.')
+      const approverIds: string[] = []
+      for (const a of raw) approverIds.push(await this.resolveApprover(schoolId, user, a))
+      await this.tasks.submitForApproval(schoolId, taskId, approverIds, userId)
+      return { applied: true, summary: action.summary }
+    }
+    if (action.kind === 'decide_approval') {
+      // Untrusted payload — re-validate; tasks.decide ENFORCES caller===current
+      // approver (403 else), identical to the REST route, so no identity bypass.
+      const taskId = typeof p.taskId === 'string' ? p.taskId.trim() : ''
+      if (!/^[0-9a-f-]{36}$/i.test(taskId)) throw new Error('Invalid taskId.')
+      const decision = p.decision === 'approve' || p.decision === 'reject' ? p.decision : ''
+      if (!decision) throw new Error('Invalid decision.')
+      const note = typeof p.note === 'string' && p.note.trim() ? p.note.slice(0, 2000) : null
+      await this.tasks.decide(schoolId, taskId, decision, note, user)
+      return { applied: true, summary: action.summary }
+    }
     // draft_cap_entry
     await this.correctiveAction.upsertEntries(
       schoolId,
@@ -1233,6 +1342,12 @@ export class AssistantService {
       'referenced item, accept an assignee ("me" or a school member’s email — it must be an active member of ' +
       'this school) and a due date (only if the user states one — never invent a due date), and never claim the ' +
       'task exists until the user confirms. Offering create_task is a natural way to act on a briefing item. ' +
+      'submit_for_approval and decide_approval are ALSO confirm-then-apply tools (propose → the user confirms → ' +
+      'apply; NEVER autonomous). submit_for_approval routes an existing task to an ORDERED list of approvers ' +
+      '("me" or member emails; sign-off happens in that order). decide_approval records YOUR approve/reject on a ' +
+      'task where you are the current designated approver (the server enforces caller===approver). Always call the ' +
+      'read-only list_open_tasks FIRST to resolve a task the user names into its taskId before either write, and ' +
+      'never claim a sign-off was routed or a decision recorded until the user confirms. ' +
       'For the board report (finance-committee packet) use get_board_report ' +
       '(its settings, MD&A, budget-vs-actual variances and key indicators) and generate_board_narrative ' +
       '(draft the MD&A narrative — returns text, does not save). set_explanation applies a per-line variance ' +
@@ -1328,7 +1443,13 @@ export class AssistantService {
         // the EXACT same lens/ranking/values the on-screen briefing shows. Fail SAFE
         // to the narrowest lens ('viewer') when the role is unresolved, never 'owner'
         // (getBriefing's own default is 'owner', so we must pass 'viewer' explicitly).
-        const b = await this.briefing.getBriefing(ctx.schoolId, pid, ctx.role ?? 'viewer')
+        const b = await this.briefing.getBriefing(
+          ctx.schoolId,
+          pid,
+          ctx.role ?? 'viewer',
+          undefined,
+          ctx.user?.id ?? null,
+        )
         // Thin pass-through projection: copy the narrated fields VERBATIM (no re-rank,
         // no recompute, no reformat) and drop only UI chrome (id/generatedAt/
         // callerRole/availableLenses) to stay well under the 8000-char truncation.
@@ -1532,6 +1653,23 @@ export class AssistantService {
             note: 'No capital campaign entered for this period.',
           }
         )
+      }
+      case 'list_open_tasks': {
+        // Read-only, tenant-scoped by schoolId. Include BOTH open + in_progress so a
+        // rejected / mid-chain task (in_progress) is resolvable for a decide, not just
+        // fresh 'open' work. No role write-gate — any member who can chat can read
+        // their own school's tasks; the service is tenant-safe.
+        const [open, inProgress] = await Promise.all([
+          this.tasks.list(ctx.schoolId, { status: 'open' }),
+          this.tasks.list(ctx.schoolId, { status: 'in_progress' }),
+        ])
+        return [...open.tasks, ...inProgress.tasks].slice(0, 40).map((t) => ({
+          id: t.id,
+          title: t.title,
+          status: t.status,
+          approvalStatus: t.approvalStatus,
+          approver: t.approver?.email ?? null,
+        }))
       }
       case 'render_chart': {
         const chartType = ['bar', 'line', 'pie'].includes(String(args.chartType))

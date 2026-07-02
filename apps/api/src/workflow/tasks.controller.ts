@@ -96,7 +96,10 @@ export class TasksController {
     @Body() dto: SubmitTaskApprovalDto,
     @CurrentUser() user: User,
   ) {
-    return this.tasks.submitForApproval(schoolId, taskId, dto.approverUserId, user.id)
+    // Resolve the ordered chain: the new array wins; else the legacy single field
+    // (a 1-step chain); the service 400s an empty list.
+    const approvers = dto.approverUserIds ?? (dto.approverUserId ? [dto.approverUserId] : [])
+    return this.tasks.submitForApproval(schoolId, taskId, approvers, user.id)
   }
 
   /**

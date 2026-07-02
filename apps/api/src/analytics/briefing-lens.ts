@@ -80,10 +80,12 @@ export const COMPLIANCE_ORDER = [
   // for the viewer lens (board/development-relevant) — see keepForViewer.
   'advancement:giving-progress',
   // Workflow task items (Phase 3). Placed after the governance items; overdue
-  // leads (actionable now), then the sign-off backlog, then upcoming, so a same-
-  // severity tie is curated, not id-arbitrary. (These are ALL DROPPED for the
-  // viewer lens — see keepForViewer.)
+  // leads (actionable now), then MY personal sign-off queue, then the school-scoped
+  // sign-off backlog, then upcoming, so a same-severity tie is curated, not id-
+  // arbitrary. All are DROPPED for the viewer lens EXCEPT workflow:my-approvals-
+  // pending (the board-chair's own sign-off queue) — see VIEWER_WORKFLOW.
   'workflow:tasks-overdue',
+  'workflow:my-approvals-pending',
   'workflow:approvals-pending',
   'workflow:tasks-due-soon',
   'data:no-snapshot',
@@ -159,6 +161,12 @@ export const LENS_LABEL: Record<Lens, string> = {
 // it would surface to the board in unreframed operator voice ("go fix this").
 const VIEWER_COMPLIANCE = new Set<string>(['compliance:material'])
 
+// The ONLY workflow items KEPT for the board/viewer lens. The school-scoped
+// aggregate (workflow:approvals-pending) + overdue/due-soon operational tasks stay
+// DROPPED — but the caller-scoped "awaiting YOUR sign-off" item IS a board matter
+// (a board-chair approver needs to see their own decision queue), so it survives.
+const VIEWER_WORKFLOW = new Set<string>(['workflow:my-approvals-pending'])
+
 function keepForViewer(item: AttentionItem): boolean {
   if (item.source === 'metric') return true
   if (item.id === 'data:no-snapshot') return true
@@ -186,13 +194,14 @@ function keepForViewer(item: AttentionItem): boolean {
   // operator "go fix" CTA), so it passes through with no VIEWER_REFRAME entry.
   if (item.source === 'advancement') return true
   if (item.source === 'compliance') return VIEWER_COMPLIANCE.has(item.id)
-  // Workflow (operational tasks) are DROPPED for the board: open tasks are "go do
-  // this" operator chores a read-only board cannot action (the same reason warn/
-  // info compliance is dropped). Governance policy items STAY (a board matter);
-  // task counts do not. This ALSO drops workflow:approvals-pending in v1 (a school-
-  // scoped pending COUNT) — the board-facing surface is the deferred USER-scoped
-  // "awaiting YOUR sign-off" item, which would need an allow branch HERE when built.
-  // Falls through to the default drop below (no allow branch).
+  // Workflow (operational tasks) are DROPPED for the board EXCEPT the caller-scoped
+  // "awaiting YOUR sign-off" item: open tasks / the school-scoped pending COUNT are
+  // "go do this" operator chores a read-only board cannot action (same reason warn/
+  // info compliance is dropped), but a board-chair's OWN sign-off queue is a board
+  // matter. VIEWER_WORKFLOW is the explicit allowlist (in LOCKSTEP with VIEWER_
+  // REFRAME below, exactly like VIEWER_COMPLIANCE) so a new viewer-kept workflow id
+  // must be added to BOTH sets or it surfaces unreframed.
+  if (item.source === 'workflow') return VIEWER_WORKFLOW.has(item.id)
   return false
 }
 
@@ -211,6 +220,11 @@ const VIEWER_REFRAME: Record<string, (i: AttentionItem) => string> = {
   // item title still carries the finding count.
   'compliance:material': () =>
     'Material findings will require a corrective action plan before the next review.',
+  // Governance voice for the board-chair's own sign-off queue. ONLY the `why` is
+  // rewritten — id/severity/title/link/dueDate/value are untouched (value-safe), and
+  // the title still carries the count N.
+  'workflow:my-approvals-pending': () =>
+    'You are the designated approver on the item(s) below; the board expects your decision to be recorded.',
 }
 
 // ── CEILING: a lens may only NARROW, never reveal MORE than the caller's role ──

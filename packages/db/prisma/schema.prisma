@@ -1140,6 +1140,18 @@ model Task {
   decidedByUserId String?   @map("decided_by_user_id") @db.Uuid
   decidedAt       DateTime? @map("decided_at")
   decisionNote    String?   @map("decision_note")
+  // ── Phase 3 Workflow depth (additive) — recurrence + multi-step approval chain.
+  // recurrence defaults 'none' so EVERY existing row is valid post-migration with
+  // no backfill. On transition INTO 'done', a 'none'!==recurrence task spawns its
+  // next occurrence (a fresh open task) linked by seriesId; recurrenceUntil bounds
+  // the series (null = open-ended, hard-capped in the service). approvalSteps is
+  // the ordered multi-approver chain (JSON); the scalar approver* columns above
+  // remain the DENORMALIZED current-step pointer, so legacy single-approver reads
+  // work unchanged (approvalSteps null → legacy path).
+  recurrence      String    @default("none") @map("recurrence") // none|weekly|monthly|quarterly|annual
+  recurrenceUntil DateTime? @map("recurrence_until") @db.Date
+  seriesId        String?   @map("series_id") @db.Uuid
+  approvalSteps   Json?     @map("approval_steps")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
@@ -1152,5 +1164,6 @@ model Task {
   @@index([schoolId])
   @@index([schoolId, status])
   @@index([schoolId, approvalStatus])
+  @@index([schoolId, seriesId])
   @@map("tasks")
 }

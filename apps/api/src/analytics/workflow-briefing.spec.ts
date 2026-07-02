@@ -32,6 +32,10 @@ function task(over: Partial<TaskPublic>): TaskPublic {
     decidedBy: over.decidedBy ?? null,
     decidedAt: over.decidedAt ?? null,
     decisionNote: over.decisionNote ?? null,
+    recurrence: over.recurrence ?? 'none',
+    recurrenceUntil: over.recurrenceUntil ?? null,
+    seriesId: over.seriesId ?? null,
+    approvalSteps: over.approvalSteps ?? null,
     urgency: over.urgency ?? 'on-track',
     daysUntilDue: over.daysUntilDue ?? null,
     createdAt: over.createdAt ?? '2025-01-01T00:00:00.000Z',
@@ -245,5 +249,70 @@ describe('briefing — workflow STEP', () => {
     })
     const res = await svc.getBriefing('school-1', PERIOD.id, 'viewer')
     expect(res.items.some((i) => i.id === 'workflow:approvals-pending')).toBe(false)
+  })
+})
+
+// ── Phase 3 Workflow depth — caller-scoped "awaiting MY sign-off" item + lens ────
+describe('briefing — workflow:my-approvals-pending (caller-scoped)', () => {
+  it('surfaces ONLY the caller\'s own pending approvals (warn), earliest dueDate', async () => {
+    const svc = makeService({
+      tasks: [
+        task({ id: 't1', approvalStatus: 'pending', approverUserId: 'me-1', urgency: 'on-track', dueDate: '2026-07-20' }),
+        task({ id: 't2', approvalStatus: 'pending', approverUserId: 'me-1', urgency: 'on-track', dueDate: '2026-07-10' }),
+        task({ id: 't3', approvalStatus: 'pending', approverUserId: 'someone-else', urgency: 'on-track' }),
+      ],
+    })
+    const res = await svc.getBriefing('school-1', PERIOD.id, 'owner', undefined, 'me-1')
+    const mine = res.items.find((i) => i.id === 'workflow:my-approvals-pending')
+    expect(mine).toBeDefined()
+    expect(mine!.severity).toBe('warn')
+    expect(mine!.title).toBe('2 tasks awaiting your sign-off') // only MY two, not the third
+    expect(mine!.dueDate).toBe('2026-07-10') // earliest of mine
+    expect(mine!.link).toBe('/tasks')
+  })
+
+  it('escalates to critical when any of MY pending tasks is overdue', async () => {
+    const svc = makeService({
+      tasks: [task({ id: 't1', approvalStatus: 'pending', approverUserId: 'me-1', urgency: 'overdue', daysUntilDue: -2, dueDate: '2026-06-29' })],
+    })
+    const res = await svc.getBriefing('school-1', PERIOD.id, 'owner', undefined, 'me-1')
+    expect(res.items.find((i) => i.id === 'workflow:my-approvals-pending')!.severity).toBe('critical')
+  })
+
+  it('CALLER-SCOPING: no userId → NO my-approvals item (never leaks a queue)', async () => {
+    const svc = makeService({
+      tasks: [task({ id: 't1', approvalStatus: 'pending', approverUserId: 'me-1', urgency: 'on-track' })],
+    })
+    const res = await svc.getBriefing('school-1', PERIOD.id, 'owner') // no 5th arg
+    expect(res.items.some((i) => i.id === 'workflow:my-approvals-pending')).toBe(false)
+  })
+
+  it("another user's pending queue is NEVER surfaced to me", async () => {
+    const svc = makeService({
+      tasks: [task({ id: 't1', approvalStatus: 'pending', approverUserId: 'other', urgency: 'on-track' })],
+    })
+    const res = await svc.getBriefing('school-1', PERIOD.id, 'owner', undefined, 'me-1')
+    expect(res.items.some((i) => i.id === 'workflow:my-approvals-pending')).toBe(false)
+  })
+
+  it('VIEWER (board) KEEPS my-approvals-pending while DROPPING the school-scoped aggregate + overdue', async () => {
+    const svc = makeService({
+      tasks: [
+        task({ id: 't1', approvalStatus: 'pending', approverUserId: 'chair-1', urgency: 'on-track', dueDate: '2026-07-15' }),
+        task({ id: 't2', approvalStatus: 'pending', approverUserId: 'other', urgency: 'on-track' }),
+        task({ id: 't3', urgency: 'overdue', daysUntilDue: -3, dueDate: '2026-06-28' }),
+      ],
+    })
+    const res = await svc.getBriefing('school-1', PERIOD.id, 'viewer', undefined, 'chair-1')
+    const mine = res.items.find((i) => i.id === 'workflow:my-approvals-pending')
+    expect(mine).toBeDefined()
+    // Value-safe reframe: governance voice in `why`, but title/link/dueDate intact.
+    expect(mine!.why).toMatch(/board expects your decision/i)
+    expect(mine!.title).toBe('1 task awaiting your sign-off')
+    expect(mine!.link).toBe('/tasks')
+    // The aggregate + operational task items stay DROPPED for the board.
+    expect(res.items.some((i) => i.id === 'workflow:approvals-pending')).toBe(false)
+    expect(res.items.some((i) => i.id === 'workflow:tasks-overdue')).toBe(false)
+    expect(res.items.some((i) => i.id === 'workflow:tasks-due-soon')).toBe(false)
   })
 })

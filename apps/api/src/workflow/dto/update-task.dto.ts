@@ -9,9 +9,11 @@ import {
 } from 'class-validator'
 import {
   TASK_PRIORITIES,
+  TASK_RECURRENCES,
   TASK_SOURCE_TYPES,
   TASK_STATUSES,
   type TaskPriority,
+  type TaskRecurrence,
   type TaskSourceType,
   type TaskStatus,
 } from './create-task.dto.js'
@@ -60,4 +62,13 @@ export class UpdateTaskDto {
   @IsString()
   @MaxLength(200)
   sourceRef?: string | null
+
+  // Phase 3 Workflow depth — recurrence editable via the patch modal.
+  @IsOptional()
+  @IsIn(TASK_RECURRENCES)
+  recurrence?: TaskRecurrence
+
+  @IsOptional()
+  @IsDateString()
+  recurrenceUntil?: string | null
 }
