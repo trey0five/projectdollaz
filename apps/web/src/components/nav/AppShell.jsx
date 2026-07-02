@@ -64,10 +64,10 @@ const LOCKED_ICON = {
 }
 
 const itemClass = (active) =>
-  `group relative flex min-h-[44px] items-center gap-3 rounded-lg border-2 px-3 py-2 text-[14px] font-semibold uppercase tracking-[0.08em] outline-none ring-gold/50 transition-all focus-visible:ring-2 ${
+  `group relative flex min-h-[40px] items-center gap-3 rounded-[10px] px-3 py-2 text-[13.5px] font-medium outline-none ring-gold/50 transition-colors focus-visible:ring-2 ${
     active
-      ? 'border-gold/60 bg-gold/10 text-gold-light'
-      : 'border-white/15 text-white/70 hover:border-gold/60 hover:text-white'
+      ? 'bg-gradient-to-r from-gold/[0.16] to-gold/[0.04] text-white'
+      : 'text-white/70 hover:bg-white/[0.06] hover:text-white'
   }`
 
 // A gold left-accent rail marks the active item in the vertical layout.
@@ -194,11 +194,16 @@ export default function AppShell({ children }) {
       title="Home dashboard"
       className="flex min-w-0 items-center gap-3 rounded-lg px-1 py-1 outline-none ring-gold/50 transition-opacity hover:opacity-90 focus-visible:ring-2"
     >
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gold/15 text-gold-light shadow-glow">
-        <LineChart size={20} />
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gold-gradient text-navy-deep shadow-glow">
+        <LineChart size={18} />
       </span>
-      <span className="truncate font-serif text-[15px] uppercase tracking-[0.16em] text-gold-light">
-        Project Dollaz
+      <span className="flex min-w-0 flex-col">
+        <span className="truncate font-serif text-[17px] font-semibold leading-tight tracking-[0.01em] text-gold-light">
+          Project Dollaz
+        </span>
+        <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">
+          Digital COO
+        </span>
       </span>
     </Link>
   )
@@ -270,7 +275,7 @@ export default function AppShell({ children }) {
                 onClick={() => navigate('/settings/billing')}
                 aria-label={`Add ${meta?.label ?? key} module`}
                 title={meta?.description ?? undefined}
-                className="group flex min-h-[44px] items-center gap-3 rounded-lg border-2 border-white/10 px-3 py-2 text-left text-white/45 outline-none ring-gold/50 transition-all hover:border-gold/40 hover:text-white/70 focus-visible:ring-2"
+                className="group flex min-h-[42px] items-center gap-3 rounded-[10px] px-3 py-2 text-left text-white/45 outline-none ring-gold/50 transition-colors hover:bg-white/[0.05] hover:text-white/70 focus-visible:ring-2"
               >
                 <span className="relative flex shrink-0 items-center">
                   <Icon size={16} className="opacity-70" />
@@ -320,7 +325,7 @@ export default function AppShell({ children }) {
     <motion.button
       whileTap={reduce ? undefined : { scale: 0.96 }}
       onClick={logout}
-      className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg border-2 border-white/20 px-4 py-2 text-[13px] font-semibold uppercase tracking-[0.12em] text-white/70 transition-all hover:border-gold/60 hover:text-white"
+      className="flex min-h-[40px] w-full items-center justify-center gap-2 rounded-[10px] border border-white/15 px-4 py-2 text-[13px] font-medium text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white"
     >
       <LogOut size={15} /> Sign Out
     </motion.button>
@@ -348,7 +353,7 @@ export default function AppShell({ children }) {
                 aria-label={menuOpen ? 'Close menu' : 'Open menu'}
                 aria-expanded={menuOpen}
                 aria-controls="app-sidebar-drawer"
-                className="flex h-10 w-10 items-center justify-center rounded-lg border-2 border-white/20 text-white/80 transition-all hover:border-gold/60 hover:text-white lg:hidden"
+                className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/15 text-white/80 transition-colors hover:bg-white/[0.06] hover:text-white lg:hidden"
               >
                 {menuOpen ? <X size={20} /> : <Menu size={20} />}
               </button>
@@ -362,7 +367,7 @@ export default function AppShell({ children }) {
               <motion.button
                 whileTap={reduce ? undefined : { scale: 0.96 }}
                 onClick={logout}
-                className="flex min-h-[40px] items-center gap-2 rounded-lg border-2 border-white/20 px-4 py-1.5 text-[13px] font-semibold uppercase tracking-[0.12em] text-white/70 transition-all hover:border-gold/60 hover:text-white"
+                className="flex min-h-[38px] items-center gap-2 rounded-[10px] border border-white/15 px-4 py-1.5 text-[13px] font-medium text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white"
               >
                 <LogOut size={15} /> Sign Out
               </motion.button>
@@ -403,7 +408,7 @@ export default function AppShell({ children }) {
                   type="button"
                   onClick={() => setMenuOpen(false)}
                   aria-label="Close menu"
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border-2 border-white/20 text-white/80 transition-all hover:border-gold/60 hover:text-white"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/15 text-white/80 transition-colors hover:bg-white/[0.06] hover:text-white"
                 >
                   <X size={20} />
                 </button>
