@@ -27,6 +27,7 @@ import AccreditationPage from './pages/AccreditationPage.jsx'
 import FacilitiesPage from './pages/FacilitiesPage.jsx'
 import AdvancementPage from './pages/AdvancementPage.jsx'
 import TasksPage from './pages/TasksPage.jsx'
+import KnowledgePage from './pages/KnowledgePage.jsx'
 import SchedulesPage from './pages/SchedulesPage.jsx'
 import BoardReportPrintPage from './pages/BoardReportPrintPage.jsx'
 import SettingsPage from './pages/SettingsPage.jsx'
@@ -130,6 +131,7 @@ export default function App() {
         <Route path="/facilities" element={<FacilitiesPage />} />
         <Route path="/advancement" element={<AdvancementPage />} />
         <Route path="/tasks" element={<TasksPage />} />
+        <Route path="/knowledge" element={<KnowledgePage />} />
         <Route path="/readiness/cap/print" element={<CapPrintPage />} />
         <Route path="/readiness/workpapers/print" element={<WorkpapersPrintPage />} />
         <Route path="/board-packet/print" element={<BoardPacketPrintPage />} />

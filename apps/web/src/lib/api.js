@@ -402,6 +402,26 @@ export const accreditationApi = {
     api.delete(`/schools/${schoolId}/accreditation/standards/${standardId}/evidence/${evidenceId}`),
 }
 
+// ── Phase 4 Knowledge document store: CORE (always included, NOT a licensed module).
+// Files are uploaded SERVER-SIDE as multipart/form-data (the API PutObjects to S3);
+// download is a top-level browser navigation to a presigned GET url the API returns.
+// The upload MUST NOT force Content-Type: application/json — pass Content-Type:
+// undefined so axios/the browser set the multipart boundary. No MODULE_NOT_LICENSED
+// path (CORE) — only the base entitlement 402 applies.
+export const documentsApi = {
+  list: (schoolId, params) => api.get(`/schools/${schoolId}/knowledge/documents`, { params }),
+  upload: (schoolId, formData) =>
+    api.post(`/schools/${schoolId}/knowledge/documents`, formData, {
+      headers: { 'Content-Type': undefined },
+    }),
+  downloadUrl: (schoolId, documentId) =>
+    api.get(`/schools/${schoolId}/knowledge/documents/${documentId}/download-url`),
+  patch: (schoolId, documentId, body) =>
+    api.patch(`/schools/${schoolId}/knowledge/documents/${documentId}`, body),
+  remove: (schoolId, documentId) =>
+    api.delete(`/schools/${schoolId}/knowledge/documents/${documentId}`),
+}
+
 // ── Phase 4 Facilities v1: the deferred-maintenance register ──────────────────
 // School-scoped (NOT period-scoped). Gated by the 'facilities' module: an entitled-
 // but-unlicensed school gets a 402 { code:'MODULE_NOT_LICENSED', module:'facilities' }

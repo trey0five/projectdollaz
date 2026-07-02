@@ -125,6 +125,7 @@ model School {
   accreditationEvidence  AccreditationEvidence[]
   maintenanceItems       MaintenanceItem[]
   campaigns              AdvancementCampaign[]
+  documents              KnowledgeDocument[]
 
   @@index([organizationId])
   @@map("schools")
@@ -207,6 +208,7 @@ model User {
   accreditationEvidenceCreated AccreditationEvidence[] @relation("AccreditationEvidenceCreatedBy")
   maintenanceItemsCreated      MaintenanceItem[]       @relation("MaintenanceItemCreatedBy")
   advancementCampaignsCreated  AdvancementCampaign[]   @relation("AdvancementCampaignCreatedBy")
+  knowledgeDocumentsUploaded   KnowledgeDocument[]     @relation("KnowledgeDocumentUploadedBy")
 
   @@index([email])
   @@map("users")
@@ -994,6 +996,42 @@ model AdvancementCampaign {
 
   @@index([schoolId])
   @@map("advancement_campaigns")
+}
+
+// ── Phase 4 Knowledge document store — the uploaded-file register ──────────────
+// The last Phase-4 depth piece: file BYTES live in AWS S3 (server-side upload);
+// this row holds the METADATA + an optional soft polymorphic link to an operational
+// entity. Knowledge is CORE (always included, NOT a licensed module), so there is no
+// module gate. Mirrors AccreditationEvidence's sourceType/sourceRef soft-link (no FK,
+// heterogeneous targets) + the denormalized schoolId tenant convention.
+//
+// s3Key is the object key (prefix/schoolId/documentId/sanitized-name) — namespaced by
+// schoolId for tenant isolation in the object store itself; it is NOT a secret
+// (download is always via a short-lived presigned GET). @unique per object.
+model KnowledgeDocument {
+  id               String   @id @default(uuid()) @db.Uuid
+  schoolId         String   @map("school_id") @db.Uuid
+  title            String
+  description      String?
+  fileName         String   @map("file_name")
+  mimeType         String   @map("mime_type")
+  sizeBytes        Int      @map("size_bytes")
+  s3Key            String   @unique @map("s3_key")
+  tags             String[] @default([])
+  // manual|policy|board_report|standard|campaign|maintenance — validated ∈ path school
+  // in the service when != 'manual' (mirror AccreditationEvidence link validation).
+  sourceType       String   @default("manual") @map("source_type")
+  sourceRef        String?  @map("source_ref") @db.Uuid
+  uploadedByUserId String?  @map("uploaded_by_user_id") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  school         School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  uploadedByUser User?  @relation("KnowledgeDocumentUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([schoolId])
+  @@index([schoolId, sourceRef])
+  @@map("knowledge_documents")
 }
 
 // ── Phase 3 Workflow v1 — the generic TASK engine ─────────────────────────────

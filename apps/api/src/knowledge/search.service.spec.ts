@@ -34,6 +34,7 @@ function makeService(
     standard?: unknown[]
     evidence?: unknown[]
     maintenance?: unknown[]
+    document?: unknown[]
     policyFn?: () => Promise<unknown[]>
   } = {},
 ) {
@@ -44,6 +45,7 @@ function makeService(
     accreditationStandard: { findMany: mk(opts.standard) },
     accreditationEvidence: { findMany: mk(opts.evidence) },
     maintenanceItem: { findMany: mk(opts.maintenance) },
+    knowledgeDocument: { findMany: mk(opts.document) },
   }
   const gate = opts.gate ?? (() => true)
   const billing = {
@@ -66,14 +68,16 @@ describe('SearchService — matching + shape', () => {
       ],
       evidence: [row({ id: 'e1', title: 'Boiler cert', notes: null, reference: null })],
       maintenance: [row({ id: 'm1', title: 'Boiler repair', location: null, category: null, notes: null })],
+      document: [row({ id: 'd1', title: 'Boiler manual', description: null, fileName: 'boiler.pdf' })],
     })
     const res = await svc.search(SCHOOL, 'boiler')
 
     expect(res.query).toBe('boiler')
-    expect(res.total).toBe(5)
-    // Groups in stable order: tasks(core), governance, accreditation, facilities.
+    expect(res.total).toBe(6)
+    // Groups in stable order: tasks(core), documents, governance, accreditation, facilities.
     expect(res.groups.map((g) => g.domain)).toEqual([
       'core',
+      'documents',
       'governance',
       'accreditation',
       'facilities',
@@ -81,6 +85,9 @@ describe('SearchService — matching + shape', () => {
     const task = res.groups.find((g) => g.domain === 'core')!.items[0]
     expect(task).toMatchObject({ type: 'task', id: 't1', link: '/tasks', matchedField: 'title' })
     expect(task.snippet).toContain('boiler')
+    // Documents are CORE — always searched (no gate), grouped right after Tasks.
+    const doc = res.groups.find((g) => g.domain === 'documents')!.items[0]
+    expect(doc).toMatchObject({ type: 'document', id: 'd1', link: '/knowledge', matchedField: 'title' })
     // Policy matched only in notes → matchedField 'notes'.
     const policy = res.groups.find((g) => g.domain === 'governance')!.items[0]
     expect(policy).toMatchObject({ type: 'policy', link: '/governance', matchedField: 'notes' })
@@ -103,27 +110,31 @@ describe('SearchService — matching + shape', () => {
 })
 
 describe('SearchService — module gating (gate BEFORE query)', () => {
-  it('finance-only school finds ONLY tasks; locked domains are NEVER queried', async () => {
+  it('finance-only school finds tasks + documents (both CORE); locked domains NEVER queried', async () => {
     const { svc, prisma } = makeService({
       gate: (key) => key === 'core', // governance/accreditation/facilities → false
       task: [row({ id: 't1', title: 'boiler' })],
+      document: [row({ id: 'd1', title: 'boiler', description: null, fileName: 'b.pdf' })],
     })
     const res = await svc.search(SCHOOL, 'boiler')
 
-    expect(res.groups.map((g) => g.domain)).toEqual(['core'])
+    // Documents are CORE — a finance-only school STILL finds them (no gate).
+    expect(res.groups.map((g) => g.domain)).toEqual(['core', 'documents'])
     // The security boundary: locked-domain findMany is never invoked.
     expect(prisma.policy.findMany).not.toHaveBeenCalled()
     expect(prisma.accreditationStandard.findMany).not.toHaveBeenCalled()
     expect(prisma.accreditationEvidence.findMany).not.toHaveBeenCalled()
     expect(prisma.maintenanceItem.findMany).not.toHaveBeenCalled()
-    // Tasks (core) always run.
+    // Tasks + documents (core) always run.
     expect(prisma.task.findMany).toHaveBeenCalledOnce()
+    expect(prisma.knowledgeDocument.findMany).toHaveBeenCalledOnce()
   })
 
-  it('trial school (all gates true) queries all five entities', async () => {
+  it('trial school (all gates true) queries all entities incl. documents', async () => {
     const { svc, prisma } = makeService()
     await svc.search(SCHOOL, 'boiler')
     expect(prisma.task.findMany).toHaveBeenCalledOnce()
+    expect(prisma.knowledgeDocument.findMany).toHaveBeenCalledOnce()
     expect(prisma.policy.findMany).toHaveBeenCalledOnce()
     expect(prisma.accreditationStandard.findMany).toHaveBeenCalledOnce()
     expect(prisma.accreditationEvidence.findMany).toHaveBeenCalledOnce()
@@ -149,6 +160,7 @@ describe('SearchService — tenant isolation', () => {
     await svc.search(SCHOOL, 'boiler')
     for (const table of [
       prisma.task,
+      prisma.knowledgeDocument,
       prisma.policy,
       prisma.accreditationStandard,
       prisma.accreditationEvidence,

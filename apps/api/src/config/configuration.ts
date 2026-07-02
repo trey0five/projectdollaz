@@ -76,6 +76,19 @@ export interface AppConfig {
     environment: 'sandbox' | 'production'
     redirectUri: string
   }
+  // Phase 4 Knowledge document store — AWS S3 object storage for uploaded files.
+  // Empty bucket/creds => DocumentStorageService.isConfigured() is false, so the
+  // upload/download endpoints return 503 while the app still BOOTS keyless and the
+  // list endpoint still works. Creds are read ONLY here (from env) — never hardcoded,
+  // never logged, never returned in a response.
+  s3Documents: {
+    region: string
+    bucket: string
+    prefix: string
+    accessKeyId: string
+    secretAccessKey: string
+    urlTtlSeconds: number
+  }
 }
 
 const DEFAULT_DEV_SECRET = 'changeme-dev-only'
@@ -174,6 +187,17 @@ export function configuration(): AppConfig {
       clientSecret: process.env.QB_OAUTH_CLIENT_SECRET ?? '',
       environment: (process.env.QB_ENVIRONMENT ?? 'sandbox') as 'sandbox' | 'production',
       redirectUri: process.env.QB_REDIRECT_URI ?? `${webOrigin}/integrations/qb/callback`,
+    },
+    // Safe empty defaults so the api BOOTS with no S3 creds (upload/download then
+    // 503; list still works). region/prefix have benign defaults and are NOT part of
+    // the readiness test (isConfigured checks bucket + accessKeyId + secretAccessKey).
+    s3Documents: {
+      region: process.env.AWS_REGION ?? 'us-east-1',
+      bucket: process.env.S3_DOCUMENTS_BUCKET ?? '',
+      prefix: process.env.S3_DOCUMENTS_PREFIX ?? 'finrep/documents',
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID ?? '',
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? '',
+      urlTtlSeconds: parseInt(process.env.S3_DOCUMENTS_URL_TTL ?? '604800', 10),
     },
   }
 }

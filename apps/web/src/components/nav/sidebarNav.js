@@ -24,6 +24,7 @@ import {
   LayoutDashboard,
   ListChecks,
   Database,
+  Library,
   FileStack,
   BarChart3,
   Wallet,
@@ -45,6 +46,7 @@ export const NAV_GROUPS = [
       { to: '/', navId: 'nav-home', label: 'Home', Icon: LayoutDashboard, match: (p) => p === '/' },
       { to: '/tasks', navId: 'nav-tasks', label: 'Tasks', Icon: ListChecks, match: (p) => p.startsWith('/tasks') },
       { to: '/data', navId: 'nav-data', label: 'Data', Icon: Database, match: (p) => p.startsWith('/data') },
+      { to: '/knowledge', navId: 'nav-knowledge', label: 'Knowledge', Icon: Library, match: (p) => p.startsWith('/knowledge') },
     ],
   },
   {

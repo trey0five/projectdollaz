@@ -36,8 +36,14 @@ const PER_TYPE_LIMIT = 8
 /** Snippet window (chars) around the matched substring. */
 const SNIPPET_RADIUS = 60
 
-export type SearchResultType = 'policy' | 'task' | 'standard' | 'evidence' | 'maintenance'
-export type SearchDomain = 'core' | 'governance' | 'accreditation' | 'facilities'
+export type SearchResultType =
+  | 'policy'
+  | 'task'
+  | 'standard'
+  | 'evidence'
+  | 'maintenance'
+  | 'document'
+export type SearchDomain = 'core' | 'governance' | 'accreditation' | 'facilities' | 'documents'
 
 export interface SearchResult {
   type: SearchResultType
@@ -67,6 +73,8 @@ export interface SearchResponse {
 /** Stable domain order + human label (Tasks/CORE first). */
 const DOMAIN_ORDER: { domain: SearchDomain; label: string }[] = [
   { domain: 'core', label: 'Tasks' },
+  // Documents are CORE (always searched, no gate) — grouped right after Tasks.
+  { domain: 'documents', label: 'Documents' },
   { domain: 'governance', label: 'Governance' },
   { domain: 'accreditation', label: 'Accreditation' },
   { domain: 'facilities', label: 'Facilities' },
@@ -104,7 +112,11 @@ export class SearchService {
     ])
 
     // Build ONLY the entitled domains' queries; a locked domain is never scheduled.
-    const tasks: Promise<SearchResult[]>[] = [this.softFind('core', () => this.searchTasks(schoolId, q))]
+    // Tasks AND documents are CORE — always searched, no gate (like tasks).
+    const tasks: Promise<SearchResult[]>[] = [
+      this.softFind('core', () => this.searchTasks(schoolId, q)),
+      this.softFind('documents', () => this.searchDocuments(schoolId, q)),
+    ]
     if (gov) tasks.push(this.softFind('governance', () => this.searchPolicies(schoolId, q)))
     if (accr) {
       tasks.push(this.softFind('accreditation', () => this.searchStandards(schoolId, q)))
@@ -196,6 +208,34 @@ export class SearchService {
       link: '/tasks',
       titleFields: ['title'],
       fieldOrder: ['title', 'description'],
+    })
+  }
+
+  private async searchDocuments(schoolId: string, q: string): Promise<SearchResult[]> {
+    // Documents are CORE — always searched (no gate), tenant-scoped by schoolId.
+    // NOTE: `tags` is a scalar String[] — Prisma has no case-insensitive contains on a
+    // list, so tags use `has` (exact-tag match); title/description/fileName carry the
+    // insensitive contains. (v1 limitation.)
+    const rows = await this.prisma.knowledgeDocument.findMany({
+      where: {
+        schoolId,
+        OR: [
+          { title: this.contains(q) },
+          { description: this.contains(q) },
+          { fileName: this.contains(q) },
+          { tags: { has: q } },
+        ],
+      },
+      select: { id: true, title: true, description: true, fileName: true, updatedAt: true },
+      orderBy: { updatedAt: 'desc' },
+      take: PER_TYPE_LIMIT,
+    })
+    return this.rankAndMap(rows, q, {
+      type: 'document',
+      domain: 'documents',
+      link: '/knowledge',
+      titleFields: ['title', 'fileName'],
+      fieldOrder: ['title', 'description', 'fileName'],
     })
   }
 

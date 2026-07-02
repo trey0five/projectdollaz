@@ -1,21 +1,27 @@
 import { Module } from '@nestjs/common'
 import { AuthModule } from '../auth/auth.module.js'
 import { BillingModule } from '../billing/billing.module.js'
+import { AuditModule } from '../common/audit/audit.module.js'
 import { SearchController } from './search.controller.js'
 import { SearchService } from './search.service.js'
+import { DocumentsController } from './documents.controller.js'
+import { DocumentsService } from './documents.service.js'
+import { DocumentStorageService } from './document-storage.service.js'
 
 /**
- * Phase 4 Knowledge/Search v1 — platform-wide search (CORE, not a licensed module).
+ * Phase 4 Knowledge — platform-wide search + the document store (both CORE, NOT a
+ * licensed module).
  *
- * DEP DIRECTION (critical — no circular dep): imports ONLY AuthModule (the guards)
- * and BillingModule (the reused EntitlementGuard + BillingService for the per-domain
- * gate). PrismaService is global. It does NOT import GovernanceModule /
- * AccreditationModule / FacilitiesModule / WorkflowModule — SearchService reads
- * every domain PRISMA-DIRECT, so there is no cycle.
+ * DEP DIRECTION (critical — no circular dep): imports AuthModule (the guards),
+ * BillingModule (the reused EntitlementGuard + BillingService for search's per-domain
+ * gate) and AuditModule (the shared AuditService for document mutations — same as
+ * AccreditationModule). PrismaService + ConfigService are global. It does NOT import
+ * the domain modules — both services read PRISMA-DIRECT, so there is no cycle.
+ * DocumentStorageService wraps S3 (config-driven, lazy client, no boot dependency).
  */
 @Module({
-  imports: [AuthModule, BillingModule],
-  controllers: [SearchController],
-  providers: [SearchService],
+  imports: [AuthModule, BillingModule, AuditModule],
+  controllers: [SearchController, DocumentsController],
+  providers: [SearchService, DocumentsService, DocumentStorageService],
 })
 export class KnowledgeModule {}

@@ -38,6 +38,16 @@ services:
       # Talk to the postgres SERVICE on the internal port 5432 (overrides .env).
       DATABASE_URL: postgresql://${POSTGRES_USER:-finrep}:${POSTGRES_PASSWORD:-finrep_dev_pw}@postgres:5432/${POSTGRES_DB:-finrep}?schema=public
       PORT: "8000"
+      # Phase 4 Knowledge document store — S3 config passed through from the host .env
+      # via dollar-brace substitution ONLY (no literal secret values in this file).
+      # An unset host var resolves empty => isConfigured()=false => upload/download 503;
+      # the app still boots and the list endpoint still works.
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      S3_DOCUMENTS_BUCKET: ${S3_DOCUMENTS_BUCKET:-}
+      S3_DOCUMENTS_PREFIX: ${S3_DOCUMENTS_PREFIX:-finrep/documents}
+      S3_DOCUMENTS_URL_TTL: ${S3_DOCUMENTS_URL_TTL:-604800}
     depends_on:
       postgres:
         condition: service_healthy
