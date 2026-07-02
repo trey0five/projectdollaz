@@ -247,18 +247,38 @@ export default function AppShell({ children }) {
       {domainGroups.length > 0 && (
         <section role="group" aria-labelledby="navgrp-domains" className="flex flex-col gap-3">
           {sectionHeader('navgrp-domains', 'Domains', `${domainGroups.length} licensed`, 'lic')}
-          {domainGroups.map((group) => (
-            <div key={group.id} className="flex flex-col gap-1.5">
-              {/* A multi-page domain (Finance) keeps its own sub-label; a single-page
-                  domain renders the item directly (its label already names the group). */}
-              {group.items.length > 1 && (
-                <h3 className="px-2 pt-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/40">
-                  {group.label}
-                </h3>
-              )}
-              {group.items.map((item) => renderNavItem(item, withIds))}
-            </div>
-          ))}
+          {domainGroups.map((group) => {
+            // A single-page domain (Governance, Accreditation…) renders as one row.
+            if (group.items.length <= 1) {
+              return (
+                <div key={group.id} className="flex flex-col">
+                  {group.items.map((item) => renderNavItem(item, withIds))}
+                </div>
+              )
+            }
+            // A multi-page domain (Finance) is a DOMAIN with its pages nested under
+            // it: a header row (its own icon + name, → the first page) over the
+            // indented child pages with a left guide.
+            const GroupIcon = group.Icon
+            const groupActive = group.items.some((item) => item.match(path))
+            return (
+              <div key={group.id} className="flex flex-col gap-0.5">
+                <Link
+                  to={group.items[0].to}
+                  aria-label={group.label}
+                  className={`group relative flex min-h-[40px] items-center gap-3 rounded-[10px] px-3 py-2 text-[13.5px] font-semibold outline-none ring-gold/50 transition-colors focus-visible:ring-2 ${
+                    groupActive ? 'text-white' : 'text-white/85 hover:bg-white/[0.06] hover:text-white'
+                  }`}
+                >
+                  {GroupIcon && <GroupIcon size={17} className="shrink-0 text-gold-light" />}
+                  <span>{group.label}</span>
+                </Link>
+                <div className="ml-[19px] flex flex-col gap-0.5 border-l border-white/10 pl-2.5">
+                  {group.items.map((item) => renderNavItem(item, withIds))}
+                </div>
+              </div>
+            )
+          })}
         </section>
       )}
 

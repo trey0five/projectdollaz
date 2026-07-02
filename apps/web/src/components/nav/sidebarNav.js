@@ -34,6 +34,7 @@ import {
   BadgeCheck,
   Wrench,
   HeartHandshake,
+  CircleDollarSign,
   Settings,
 } from 'lucide-react'
 
@@ -57,6 +58,9 @@ export const NAV_GROUPS = [
     id: 'finance',
     label: 'Finance',
     module: 'finance',
+    // A multi-page domain: AppShell renders `Icon` + `label` as the Finance domain
+    // header, with the items nested (indented) beneath it.
+    Icon: CircleDollarSign,
     items: [
       { to: '/statements', navId: 'nav-statements', label: 'Statements', Icon: FileStack, match: (p) => p.startsWith('/statements') || p.startsWith('/history') },
       { to: '/analytics', navId: 'nav-analytics', label: 'Analytics', Icon: BarChart3, match: (p) => p.startsWith('/analytics') },
