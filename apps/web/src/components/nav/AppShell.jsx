@@ -130,6 +130,60 @@ export default function AppShell({ children }) {
 
   const visibleGroups = NAV_GROUPS.filter((g) => g.module === null || hasModule(g.module))
 
+  // Layer-cake split: the always-on Core group, its elevated Briefing hero, and the
+  // licensed domain groups. The briefing is pulled OUT of the Core list and rendered
+  // as the prominent top entry (the digital-COO thesis); everything else keeps its
+  // frozen navId + behavior.
+  const coreGroup = visibleGroups.find((g) => g.module === null)
+  const domainGroups = visibleGroups.filter((g) => g.module !== null)
+  const heroItem = coreGroup?.items.find((i) => i.hero) ?? null
+  const coreItems = (coreGroup?.items ?? []).filter((i) => !i.hero)
+
+  // A labeled section divider: an uppercase heading + optional pill + hairline.
+  const sectionHeader = (id, label, pill, tone) => (
+    <div className="flex items-center gap-2 px-2 pb-0.5">
+      <h2
+        id={id}
+        className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gold-light/70"
+      >
+        {label}
+      </h2>
+      {pill && (
+        <span
+          className={`rounded-full border px-2 py-[1px] text-[9.5px] font-bold uppercase tracking-[0.08em] ${
+            tone === 'lic'
+              ? 'border-emerald-300/30 bg-emerald-300/10 text-emerald-200/90'
+              : 'border-gold/30 bg-gold/15 text-gold-light'
+          }`}
+        >
+          {pill}
+        </span>
+      )}
+      <span aria-hidden="true" className="h-px flex-1 bg-gradient-to-r from-white/10 to-transparent" />
+    </div>
+  )
+
+  // One standard nav row (shared by Core + Domains). withIds gates the frozen navId
+  // onto the DESKTOP layout only (mobile drawer passes false — no duplicate ids).
+  const renderNavItem = (item, withIds) => {
+    const active = item.match(path)
+    return (
+      <Link
+        key={item.to}
+        id={withIds ? item.navId : undefined}
+        to={item.to}
+        aria-label={item.label}
+        aria-current={active ? 'page' : undefined}
+        title={item.label}
+        className={itemClass(active)}
+      >
+        <ActiveRail active={active} />
+        <item.Icon size={17} className="shrink-0" />
+        <span>{item.label}</span>
+      </Link>
+    )
+  }
+
   const brand = (
     <Link
       to="/"
@@ -150,51 +204,59 @@ export default function AppShell({ children }) {
   // only; the mobile drawer passes withIds=false (no duplicate DOM ids).
   const navBody = (withIds) => (
     <nav aria-label="Primary" className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 py-4">
-      {visibleGroups.map((group) => (
-        <section
-          key={group.id}
-          role="group"
-          aria-labelledby={group.label ? `navgrp-${group.id}` : undefined}
-          aria-label={group.label ? undefined : 'Overview'}
-          className="flex flex-col gap-1.5"
+      {/* ── The elevated Briefing — the digital COO, promoted above the rails ── */}
+      {heroItem && (
+        <Link
+          id={withIds ? heroItem.navId : undefined}
+          to={heroItem.to}
+          aria-label={heroItem.label}
+          aria-current={heroItem.match(path) ? 'page' : undefined}
+          className={`group relative flex flex-col gap-1 overflow-hidden rounded-xl border-2 px-3.5 py-3 outline-none ring-gold/50 transition-all focus-visible:ring-2 ${
+            heroItem.match(path)
+              ? 'border-gold bg-gold/15 shadow-glow'
+              : 'border-gold/35 bg-white/[0.06] hover:border-gold/70 hover:bg-white/[0.09]'
+          }`}
         >
-          {group.label && (
-            <h2
-              id={`navgrp-${group.id}`}
-              className="px-2 pb-0.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-gold-light/70"
-            >
-              {group.label}
-            </h2>
-          )}
-          {group.items.map((item) => {
-            const active = item.match(path)
-            return (
-              <Link
-                key={item.to}
-                id={withIds ? item.navId : undefined}
-                to={item.to}
-                aria-label={item.label}
-                aria-current={active ? 'page' : undefined}
-                title={item.label}
-                className={itemClass(active)}
-              >
-                <ActiveRail active={active} />
-                <item.Icon size={17} className="shrink-0" />
-                <span>{item.label}</span>
-              </Link>
-            )
-          })}
+          <span className="flex items-center gap-2.5">
+            <heroItem.Icon size={19} className="shrink-0 text-gold-light" />
+            <span className="font-serif text-[15px] font-semibold text-white">{heroItem.label}</span>
+          </span>
+          <span className="text-[11px] normal-case tracking-normal text-white/55">
+            Your prioritised command center
+          </span>
+        </Link>
+      )}
+
+      {/* ── Core — the always-included platform substrate ── */}
+      {coreItems.length > 0 && (
+        <section role="group" aria-labelledby="navgrp-core" className="flex flex-col gap-1.5">
+          {sectionHeader('navgrp-core', coreGroup?.label ?? 'Core', coreGroup?.pill, 'core')}
+          {coreItems.map((item) => renderNavItem(item, withIds))}
         </section>
-      ))}
+      )}
+
+      {/* ── Domains — the licensed vertical engines + read-domain connectors ── */}
+      {domainGroups.length > 0 && (
+        <section role="group" aria-labelledby="navgrp-domains" className="flex flex-col gap-3">
+          {sectionHeader('navgrp-domains', 'Domains', `${domainGroups.length} licensed`, 'lic')}
+          {domainGroups.map((group) => (
+            <div key={group.id} className="flex flex-col gap-1.5">
+              {/* A multi-page domain (Finance) keeps its own sub-label; a single-page
+                  domain renders the item directly (its label already names the group). */}
+              {group.items.length > 1 && (
+                <h3 className="px-2 pt-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/40">
+                  {group.label}
+                </h3>
+              )}
+              {group.items.map((item) => renderNavItem(item, withIds))}
+            </div>
+          ))}
+        </section>
+      )}
 
       {showAddons && (
         <section role="group" aria-labelledby="navgrp-addons" className="flex flex-col gap-1.5">
-          <h2
-            id="navgrp-addons"
-            className="px-2 pb-0.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-gold-light/70"
-          >
-            Add-ons
-          </h2>
+          {sectionHeader('navgrp-addons', 'Add-ons', `${lockedModules.length} available`, 'core')}
           {lockedModules.map((key) => {
             const meta = MODULE_META[key]
             const Icon = LOCKED_ICON[key] || Lock

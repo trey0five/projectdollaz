@@ -21,7 +21,7 @@
 // licensed.)
 // ─────────────────────────────────────────────────────────────────────────────
 import {
-  LayoutDashboard,
+  Sparkles,
   ListChecks,
   Database,
   Library,
@@ -40,10 +40,14 @@ import {
 export const NAV_GROUPS = [
   {
     id: 'core',
-    label: null, // Core renders as the top block with no visible heading.
+    label: 'Core', // the always-included platform substrate — labeled + pill'd.
+    pill: 'Included', // AppShell renders this as a gold "Included" badge.
     module: null, // null = always shown (never gated, never upsold).
     items: [
-      { to: '/', navId: 'nav-home', label: 'Home', Icon: LayoutDashboard, match: (p) => p === '/' },
+      // `hero` marks the prioritised briefing — the digital-COO surface. AppShell
+      // pulls it OUT of the list and renders it as the elevated top entry. navId
+      // stays nav-home (Penny's target registry anchors to it) and route stays '/'.
+      { to: '/', navId: 'nav-home', label: 'Briefing', Icon: Sparkles, hero: true, match: (p) => p === '/' },
       { to: '/tasks', navId: 'nav-tasks', label: 'Tasks', Icon: ListChecks, match: (p) => p.startsWith('/tasks') },
       { to: '/data', navId: 'nav-data', label: 'Data', Icon: Database, match: (p) => p.startsWith('/data') },
       { to: '/knowledge', navId: 'nav-knowledge', label: 'Knowledge', Icon: Library, match: (p) => p.startsWith('/knowledge') },
