@@ -45,8 +45,10 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useBilling } from '../../context/BillingContext.jsx'
+import { useScope } from '../../context/ScopeContext.jsx'
 import { SELLABLE_MODULE_KEYS, MODULE_META } from '../../lib/modules.js'
 import SchoolSwitcher from '../SchoolSwitcher.jsx'
+import ScopeToggle from './ScopeToggle.jsx'
 import SearchBox from '../search/SearchBox.jsx'
 import { NAV_GROUPS, SETTINGS_ITEM } from './sidebarNav.js'
 
@@ -77,6 +79,7 @@ function ActiveRail({ active }) {
 export default function AppShell({ children }) {
   const { logout } = useAuth()
   const { hasModule, entitled } = useBilling()
+  const { isMultiSchool } = useScope()
   const navigate = useNavigate()
   const reduce = useReducedMotion()
   const location = useLocation()
@@ -350,6 +353,8 @@ export default function AppShell({ children }) {
                 {menuOpen ? <X size={20} /> : <Menu size={20} />}
               </button>
               <SchoolSwitcher />
+              {/* Scope axis: School ↔ Organization — only for a multi-school caller. */}
+              {isMultiSchool && <ScopeToggle />}
             </div>
             {/* Middle: platform-wide search (desktop input + mobile icon overlay). */}
             <SearchBox />

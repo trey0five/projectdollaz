@@ -13,6 +13,7 @@ import { motion, useReducedMotion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { FileText, ArrowRight, Compass, Database } from 'lucide-react'
 import { useSchools } from '../../context/SchoolContext.jsx'
+import { useScope } from '../../context/ScopeContext.jsx'
 import { useBilling } from '../../context/BillingContext.jsx'
 import { usePersistence } from '../../context/PersistenceContext.jsx'
 import { useAnalytics, useInsights } from '../../hooks/useAnalytics.js'
@@ -21,6 +22,7 @@ import { useBriefing } from '../../hooks/useBriefing.js'
 import { analyticsApi } from '../../lib/api.js'
 import EntitlementPausedPanel from '../analytics/EntitlementPausedPanel.jsx'
 import { HeadlineSkeleton, MetricCardSkeleton } from '../analytics/skeletons.jsx'
+import OrgHome from './OrgHome.jsx'
 import HomeHero from './HomeHero.jsx'
 import HomeBriefing from './HomeBriefing.jsx'
 import BoardPacketExportButton from '../reports/BoardPacketExportButton.jsx'
@@ -29,6 +31,16 @@ import FeatureGateway from './FeatureGateway.jsx'
 import RecentPeriods from './RecentPeriods.jsx'
 
 const VITAL_KEYS = ['operating_margin', 'days_cash_on_hand', 'months_operating_reserve']
+
+// Jul–Jun fiscal year that CONTAINS a period end date → its 'YYYY-07' start (the
+// org endpoints' FY key). Mirrors BudgetPage.deriveFiscalYearStart so the org Home
+// and the Budget org tabs resolve the same FY from the same period.
+function deriveFiscalYearStart(periodEndDate) {
+  if (!periodEndDate) return null
+  const [y, m] = periodEndDate.split('-').map(Number)
+  if (!y || !m) return null
+  return `${m <= 6 ? y - 1 : y}-07`
+}
 
 function EmptyOnboarding({ schoolName, billing, isOwner }) {
   const reduce = useReducedMotion()
@@ -114,7 +126,11 @@ function SectionDivider() {
 
 export default function HomeDashboard() {
   const { activeSchool } = useSchools()
-  const schoolId = activeSchool?.id ?? null
+  const { scope, orgId, orgName, isMultiSchool, orgSchoolCount } = useScope()
+  const orgMode = scope === 'org' && isMultiSchool && !!orgId
+  // In org mode the per-school hooks are parked (null id → they no-op) — we render
+  // the consolidated <OrgHome/> instead, so there's no point fetching school data.
+  const schoolId = orgMode ? null : activeSchool?.id ?? null
   const { billing, loading: billingLoading, entitled, isOwner } = useBilling()
   const { periods, hydrating } = usePersistence()
 
@@ -222,6 +238,25 @@ export default function HomeDashboard() {
   }, [insightText, complianceSummary])
 
   const initialLoading = billingLoading || hydrating
+
+  // ── Organization scope: render the consolidated Home instead ───────────────
+  // Org endpoints are JwtAuth-only (never 402), so this deliberately sits ABOVE
+  // the per-school entitlement gate. OrgHome owns its own loading/empty states.
+  if (orgMode) {
+    const selectedPeriod =
+      savedPeriods.find((p) => p.id === selectedPeriodId) ?? savedPeriods[0] ?? null
+    return (
+      <OrgHome
+        orgId={orgId}
+        orgName={orgName}
+        orgSchoolCount={orgSchoolCount}
+        fiscalYearStart={deriveFiscalYearStart(selectedPeriod?.periodEndDate)}
+        periods={savedPeriods}
+        selectedPeriodId={selectedPeriod?.id ?? null}
+        onSelectPeriod={setSelectedPeriodId}
+      />
+    )
+  }
 
   // ── Entitlement gate (mirror AnalyticsDashboard) ───────────────────────────
   if (!billingLoading && (!entitled || notEntitled)) {

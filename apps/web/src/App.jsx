@@ -4,6 +4,7 @@
 // report preview can read the user's schools.
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { SchoolProvider, useSchools } from './context/SchoolContext.jsx'
+import { ScopeProvider } from './context/ScopeContext.jsx'
 import { BillingProvider } from './context/BillingContext.jsx'
 import { PersistenceProvider } from './context/PersistenceContext.jsx'
 import { ProtectedRoute, PublicOnlyRoute } from './components/auth/RouteGuards.jsx'
@@ -65,11 +66,13 @@ function AuthedLayout() {
         <BillingProvider>
           <PersistenceProvider>
             <PennyProvider>
-              <OnboardingGate>
-                <AppShell>
-                  <Outlet />
-                </AppShell>
-              </OnboardingGate>
+              <ScopeProvider>
+                <OnboardingGate>
+                  <AppShell>
+                    <Outlet />
+                  </AppShell>
+                </OnboardingGate>
+              </ScopeProvider>
               <Penny />
               {/* Headless: drives router navigation + DataHub modal-open from
                   Penny's agentic intents (navigate / per-step guide nav). */}
