@@ -67,7 +67,7 @@ export default function OrgHome({
           <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-gold">
             Organization · consolidated
           </p>
-          <h1 className="truncate font-serif text-2xl font-semibold text-navy sm:text-[28px]">
+          <h1 className="truncate py-0.5 font-serif text-2xl font-semibold leading-[1.35] text-navy sm:text-[28px]">
             {orgName || 'Organization'}
           </h1>
           <p className="text-[13px] text-muted">
