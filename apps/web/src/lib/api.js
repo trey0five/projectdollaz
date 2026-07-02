@@ -379,6 +379,30 @@ export const policiesApi = {
   remove: (schoolId, policyId) => api.delete(`/schools/${schoolId}/policies/${policyId}`),
 }
 
+// ── Phase 3 Governance depth: COMMITTEES + MEETINGS ──────────────────────────
+// School-scoped, same 'governance' module gate as policies (an unlicensed school
+// gets a 402 { code:'MODULE_NOT_LICENSED', module:'governance' } → isModuleNotLicensed).
+export const committeesApi = {
+  list: (schoolId) => api.get(`/schools/${schoolId}/governance/committees`),
+  create: (schoolId, body) => api.post(`/schools/${schoolId}/governance/committees`, body),
+  update: (schoolId, committeeId, body) =>
+    api.patch(`/schools/${schoolId}/governance/committees/${committeeId}`, body),
+  remove: (schoolId, committeeId) =>
+    api.delete(`/schools/${schoolId}/governance/committees/${committeeId}`),
+}
+
+export const meetingsApi = {
+  list: (schoolId) => api.get(`/schools/${schoolId}/governance/meetings`),
+  create: (schoolId, body) => api.post(`/schools/${schoolId}/governance/meetings`, body),
+  update: (schoolId, meetingId, body) =>
+    api.patch(`/schools/${schoolId}/governance/meetings/${meetingId}`, body),
+  remove: (schoolId, meetingId) =>
+    api.delete(`/schools/${schoolId}/governance/meetings/${meetingId}`),
+  // The server stamps the approver + date; the client sends no body.
+  approveMinutes: (schoolId, meetingId) =>
+    api.post(`/schools/${schoolId}/governance/meetings/${meetingId}/approve-minutes`, {}),
+}
+
 // ── Phase 4 Accreditation v1: the STANDARDS + EVIDENCE register ───────────────
 // School-scoped (NOT period-scoped). Gated by the 'accreditation' module: an
 // entitled-but-unlicensed school gets a 402 { code:'MODULE_NOT_LICENSED',

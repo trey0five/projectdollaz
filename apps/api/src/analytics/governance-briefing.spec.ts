@@ -35,9 +35,29 @@ function policy(over: Partial<PolicyPublic>): PolicyPublic {
 
 /** Build a BriefingService whose deps are mocked to a clean baseline. `over`
  *  swaps in the two governance-relevant mocks (billing gate + policy list). */
+/** A minimal meeting-summary shape (only the fields the briefing reads). */
+function meetingSummary(over: Partial<{
+  minutesPendingCount: number
+  minutesOverdueCount: number
+  agendaMissingSoonCount: number
+  earliestMinutesPendingHeldAt: string | null
+  nextMeetingAt: string | null
+}> = {}) {
+  return {
+    total: 0,
+    upcomingCount: 0,
+    agendaMissingSoonCount: over.agendaMissingSoonCount ?? 0,
+    minutesPendingCount: over.minutesPendingCount ?? 0,
+    minutesOverdueCount: over.minutesOverdueCount ?? 0,
+    nextMeetingAt: over.nextMeetingAt ?? null,
+    earliestMinutesPendingHeldAt: over.earliestMinutesPendingHeldAt ?? null,
+  }
+}
+
 function makeService(over: {
   licensed?: boolean | (() => Promise<boolean>)
   policies?: PolicyPublic[] | (() => Promise<{ policies: PolicyPublic[] }>)
+  meetings?: ReturnType<typeof meetingSummary> | (() => Promise<{ summary: ReturnType<typeof meetingSummary> }>)
   metrics?: unknown
 }) {
   const billing = {
@@ -48,6 +68,12 @@ function makeService(over: {
     list: async () => {
       if (typeof over.policies === 'function') return over.policies()
       return { policies: over.policies ?? [] }
+    },
+  }
+  const meetingsSvc = {
+    listMeetings: async () => {
+      if (typeof over.meetings === 'function') return over.meetings()
+      return { meetings: [], summary: over.meetings ?? meetingSummary() }
     },
   }
   const periods = { getOwnedPeriod: async () => PERIOD }
@@ -104,6 +130,7 @@ function makeService(over: {
     corrective as never,
     billing as never,
     policiesSvc as never,
+    meetingsSvc as never,
     tasks as never,
     accreditation as never,
     facilities as never,
@@ -200,5 +227,71 @@ describe('briefing — governance STEP', () => {
     const res = await svc.getBriefing('school-1', PERIOD.id, 'viewer')
     expect(res.lens).toBe('viewer')
     expect(res.items.some((i) => i.id === 'governance:policies-overdue')).toBe(true)
+  })
+
+  // ── Governance depth — board-meeting register items ──────────────────────────
+
+  it('licensed + pending minutes → warn "minutes-approval-pending" to /governance', async () => {
+    const svc = makeService({
+      licensed: true,
+      meetings: meetingSummary({ minutesPendingCount: 2, earliestMinutesPendingHeldAt: '2026-06-10' }),
+    })
+    const res = await svc.getBriefing('school-1', PERIOD.id, 'owner')
+    const it = res.items.find((i) => i.id === 'governance:minutes-approval-pending')
+    expect(it).toBeDefined()
+    expect(it!.severity).toBe('warn')
+    expect(it!.source).toBe('governance')
+    expect(it!.link).toBe('/governance')
+    expect(it!.dueDate).toBe('2026-06-10')
+  })
+
+  it('overdue minutes escalate the pending item to critical', async () => {
+    const svc = makeService({
+      licensed: true,
+      meetings: meetingSummary({ minutesPendingCount: 3, minutesOverdueCount: 1, earliestMinutesPendingHeldAt: '2026-05-01' }),
+    })
+    const res = await svc.getBriefing('school-1', PERIOD.id, 'owner')
+    const it = res.items.find((i) => i.id === 'governance:minutes-approval-pending')
+    expect(it!.severity).toBe('critical')
+  })
+
+  it('agenda-missing upcoming meeting → warn "meeting-agenda-due" item', async () => {
+    const svc = makeService({
+      licensed: true,
+      meetings: meetingSummary({ agendaMissingSoonCount: 1, nextMeetingAt: '2026-07-05' }),
+    })
+    const res = await svc.getBriefing('school-1', PERIOD.id, 'owner')
+    const it = res.items.find((i) => i.id === 'governance:meeting-agenda-due')
+    expect(it).toBeDefined()
+    expect(it!.severity).toBe('warn')
+    expect(it!.dueDate).toBe('2026-07-05')
+  })
+
+  it('MODULE GATE: not licensed → ZERO meeting items even with pending minutes', async () => {
+    const svc = makeService({
+      licensed: false,
+      meetings: meetingSummary({ minutesPendingCount: 5, agendaMissingSoonCount: 2 }),
+    })
+    const res = await svc.getBriefing('school-1', PERIOD.id, 'owner')
+    expect(res.items.filter((i) => i.id.startsWith('governance:minutes') || i.id.startsWith('governance:meeting'))).toHaveLength(0)
+  })
+
+  it('FAIL-SOFT: listMeetings throws → briefing still 200s with no meeting item', async () => {
+    const svc = makeService({
+      licensed: true,
+      meetings: () => Promise.reject(new Error('db down')),
+    })
+    const res = await svc.getBriefing('school-1', PERIOD.id, 'owner')
+    expect(res.items.some((i) => i.id === 'governance:minutes-approval-pending')).toBe(false)
+    expect(res.periodId).toBe(PERIOD.id)
+  })
+
+  it('VIEWER (board) lens keeps the meeting minutes item', async () => {
+    const svc = makeService({
+      licensed: true,
+      meetings: meetingSummary({ minutesPendingCount: 1, earliestMinutesPendingHeldAt: '2026-06-10' }),
+    })
+    const res = await svc.getBriefing('school-1', PERIOD.id, 'viewer')
+    expect(res.items.some((i) => i.id === 'governance:minutes-approval-pending')).toBe(true)
   })
 })

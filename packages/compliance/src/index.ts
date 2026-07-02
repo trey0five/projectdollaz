@@ -83,6 +83,23 @@ export {
   BADLY_OVERDUE_DAYS,
 } from './review-status.js'
 
+// Phase 3 Governance depth — meetings/committees board signal (pure, injectable now)
+export type {
+  MeetingStatus,
+  MinutesStatus,
+  MeetingSignalInput,
+  MeetingSignal,
+  MeetingSummaryItem,
+  MeetingsSummary,
+} from './meeting-governance.js'
+export {
+  computeMeetingSignal,
+  summarizeMeetings,
+  AGENDA_DUE_SOON_DAYS,
+  MINUTES_APPROVAL_SLA_DAYS,
+  MINUTES_BADLY_OVERDUE_DAYS,
+} from './meeting-governance.js'
+
 // Phase 3 Workflow v1 — pure task urgency (injectable now)
 export type { TaskUrgency, TaskUrgencyInput, TaskUrgencyResult } from './task-urgency.js'
 export { computeTaskUrgency, TASK_DUE_SOON_DAYS } from './task-urgency.js'

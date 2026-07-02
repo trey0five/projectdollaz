@@ -78,6 +78,7 @@ function buildBriefing(analytics: AnalyticsService, billing: BillingService): Br
   const checklist = { getChecklist: async () => null }
   const corrective = { getPlan: async () => null }
   const policies = { list: async () => ({ policies: [] }) }
+  const meetings = { listMeetings: async () => ({ meetings: [], summary: { total: 0, upcomingCount: 0, agendaMissingSoonCount: 0, minutesPendingCount: 0, minutesOverdueCount: 0, nextMeetingAt: null, earliestMinutesPendingHeldAt: null } }) }
   const tasks = { listOpenForBriefing: async () => [] }
   const accreditation = { listStandards: async () => ({ standards: [], summary: { total: 0, withEvidence: 0, gaps: 0, pctCovered: 0 } }) }
   const facilities = { listMaintenance: async () => ({ items: [], summary: { total: 0, openCount: 0, highPriorityOpenCount: 0, criticalOpen: 0, overdueOpen: 0, backlogCost: 0 } }) }
@@ -85,7 +86,7 @@ function buildBriefing(analytics: AnalyticsService, billing: BillingService): Br
   return new BriefingService(
     periods as never, analytics, nullSvc as never, checklist as never,
     recon as never, corrective as never, billing, policies as never,
-    tasks as never, accreditation as never, facilities as never, advancement as never,
+    meetings as never, tasks as never, accreditation as never, facilities as never, advancement as never,
   )
 }
 

@@ -120,6 +120,8 @@ model School {
   campaignSchedules  CampaignSchedule[]
   monthlySnapshots   MonthlySnapshot[]
   policies           Policy[]
+  committees         Committee[]
+  meetings           Meeting[]
   tasks              Task[]
   accreditationStandards AccreditationStandard[]
   accreditationEvidence  AccreditationEvidence[]
@@ -200,6 +202,9 @@ model User {
   campaignSchedulesUpdated CampaignSchedule[] @relation("CampaignScheduleUpdatedBy")
   monthlySnapshotsUploaded MonthlySnapshot[]  @relation("MonthlySnapshotUploadedBy")
   policyUpdates            Policy[]           @relation("PolicyUpdatedBy")
+  committeeUpdates         Committee[]        @relation("CommitteeUpdatedBy")
+  meetingUpdates           Meeting[]          @relation("MeetingUpdatedBy")
+  meetingMinutesApproved   Meeting[]          @relation("MeetingMinutesApprovedBy")
   tasksAssigned            Task[]             @relation("TaskAssignee")
   tasksCreated             Task[]             @relation("TaskCreatedBy")
   tasksToApprove           Task[]             @relation("TaskApprover")
@@ -845,6 +850,63 @@ model Policy {
 
   @@index([schoolId])
   @@map("policies")
+}
+
+// ── Phase 3 Governance depth — COMMITTEES + MEETINGS ──────────────────────────
+// The board-meeting half of the governance module (extends the Policy Register).
+// Same sellable 'governance' module; a REGISTER-BASED briefing source (like
+// policies), NOT a canonical metric. Mirrors the Policy conventions (uuid pk,
+// schoolId Cascade, updatedByUserId SetNull, @db.Date discipline, snake_case).
+model Committee {
+  id              String   @id @default(uuid()) @db.Uuid
+  schoolId        String   @map("school_id") @db.Uuid
+  name            String
+  // Free text v1 (board|finance|governance|advancement|academic|other) — NOT an enum.
+  kind            String   @default("other")
+  description     String?
+  chair           String?
+  active          Boolean  @default(true)
+  updatedByUserId String?  @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  school        School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  updatedByUser User?     @relation("CommitteeUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  meetings      Meeting[] // back-ref; deleting a committee SetNulls each meeting.committeeId (meeting history preserved)
+
+  @@index([schoolId])
+  @@map("governance_committees")
+}
+
+model Meeting {
+  id                      String    @id @default(uuid()) @db.Uuid
+  schoolId                String    @map("school_id") @db.Uuid
+  // NULLABLE FK — a meeting MAY belong to a committee; SetNull so deleting a
+  // committee nulls this (never cascades away meeting history). Service validates
+  // same-school on create/update.
+  committeeId             String?   @map("committee_id") @db.Uuid
+  title                   String
+  scheduledAt             DateTime  @map("scheduled_at") @db.Date
+  location                String?
+  status                  String    @default("scheduled") // scheduled|held|cancelled
+  agenda                  String?
+  minutes                 String?
+  decisions               String?
+  minutesStatus           String    @default("none") @map("minutes_status") // none|draft|pending_approval|approved
+  minutesApprovedAt       DateTime? @map("minutes_approved_at") @db.Date
+  minutesApprovedByUserId String?   @map("minutes_approved_by_user_id") @db.Uuid
+  updatedByUserId         String?   @map("updated_by_user_id") @db.Uuid
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
+
+  school            School     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  committee         Committee? @relation(fields: [committeeId], references: [id], onDelete: SetNull)
+  minutesApprovedBy User?      @relation("MeetingMinutesApprovedBy", fields: [minutesApprovedByUserId], references: [id], onDelete: SetNull)
+  updatedByUser     User?      @relation("MeetingUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([schoolId])
+  @@index([committeeId])
+  @@map("governance_meetings")
 }
 
 // ── Phase 4 Accreditation v1 — the STANDARDS + EVIDENCE register ───────────────

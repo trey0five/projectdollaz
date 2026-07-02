@@ -58,6 +58,13 @@ export const COMPLIANCE_ORDER = [
   // overdue before due-soon so a same-severity tie is curated, not id-arbitrary.
   'governance:policies-overdue',
   'governance:policies-due-soon',
+  // Governance depth — board-meeting register items (Phase 3). Placed right after
+  // the policy items (same governance source); minutes-approval (actionable, can
+  // escalate critical) leads the agenda-due nudge so a same-severity tie is
+  // curated, not id-arbitrary. KEPT for the viewer lens (board matter) via the
+  // existing source==='governance' keepForViewer branch.
+  'governance:minutes-approval-pending',
+  'governance:meeting-agenda-due',
   // Accreditation items (Phase 4). Placed after governance, before workflow (both
   // board-oversight domains grouped); coverage-gap (actionable) leads the softer
   // review-approaching nudge so a same-severity tie is curated, not id-arbitrary.

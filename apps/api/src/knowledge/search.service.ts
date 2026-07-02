@@ -38,6 +38,8 @@ const SNIPPET_RADIUS = 60
 
 export type SearchResultType =
   | 'policy'
+  | 'committee'
+  | 'meeting'
   | 'task'
   | 'standard'
   | 'evidence'
@@ -117,7 +119,11 @@ export class SearchService {
       this.softFind('core', () => this.searchTasks(schoolId, q)),
       this.softFind('documents', () => this.searchDocuments(schoolId, q)),
     ]
-    if (gov) tasks.push(this.softFind('governance', () => this.searchPolicies(schoolId, q)))
+    if (gov) {
+      tasks.push(this.softFind('governance', () => this.searchPolicies(schoolId, q)))
+      tasks.push(this.softFind('governance', () => this.searchCommittees(schoolId, q)))
+      tasks.push(this.softFind('governance', () => this.searchMeetings(schoolId, q)))
+    }
     if (accr) {
       tasks.push(this.softFind('accreditation', () => this.searchStandards(schoolId, q)))
       tasks.push(this.softFind('accreditation', () => this.searchEvidence(schoolId, q)))
@@ -189,6 +195,57 @@ export class SearchService {
       link: '/governance',
       titleFields: ['title'],
       fieldOrder: ['title', 'category', 'owner', 'notes'],
+    })
+  }
+
+  private async searchCommittees(schoolId: string, q: string): Promise<SearchResult[]> {
+    const rows = await this.prisma.committee.findMany({
+      where: {
+        schoolId,
+        OR: [
+          { name: this.contains(q) },
+          { kind: this.contains(q) },
+          { chair: this.contains(q) },
+          { description: this.contains(q) },
+        ],
+      },
+      select: { id: true, name: true, kind: true, chair: true, description: true, updatedAt: true },
+      orderBy: { updatedAt: 'desc' },
+      take: PER_TYPE_LIMIT,
+    })
+    return this.rankAndMap(rows, q, {
+      type: 'committee',
+      domain: 'governance',
+      link: '/governance',
+      titleFields: ['name'],
+      fieldOrder: ['name', 'kind', 'chair', 'description'],
+      displayTitle: (r) => String(r.name ?? ''),
+    })
+  }
+
+  private async searchMeetings(schoolId: string, q: string): Promise<SearchResult[]> {
+    // Value-safe: searches the text the user typed against title/agenda/decisions/
+    // minutes; no attendee PII beyond the stored governance record.
+    const rows = await this.prisma.meeting.findMany({
+      where: {
+        schoolId,
+        OR: [
+          { title: this.contains(q) },
+          { agenda: this.contains(q) },
+          { decisions: this.contains(q) },
+          { minutes: this.contains(q) },
+        ],
+      },
+      select: { id: true, title: true, agenda: true, decisions: true, minutes: true, updatedAt: true },
+      orderBy: { updatedAt: 'desc' },
+      take: PER_TYPE_LIMIT,
+    })
+    return this.rankAndMap(rows, q, {
+      type: 'meeting',
+      domain: 'governance',
+      link: '/governance',
+      titleFields: ['title'],
+      fieldOrder: ['title', 'agenda', 'decisions', 'minutes'],
     })
   }
 

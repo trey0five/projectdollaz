@@ -9,6 +9,7 @@ import { ReconciliationService } from '../compliance/reconciliation.service.js'
 import { CorrectiveActionService } from '../compliance/corrective-action.service.js'
 import { BillingService } from '../billing/billing.service.js'
 import { PoliciesService } from '../governance/policies.service.js'
+import { MeetingsService } from '../governance/meetings.service.js'
 import { TasksService } from '../workflow/tasks.service.js'
 import { AccreditationService } from '../accreditation/accreditation.service.js'
 import { FacilitiesService } from '../facilities/facilities.service.js'
@@ -16,8 +17,10 @@ import { AdvancementService } from '../advancement/advancement.service.js'
 import {
   ACCREDITATION_REVIEW_SOON_DAYS,
   ADVANCEMENT_CLOSING_SOON_DAYS,
+  AGENDA_DUE_SOON_DAYS,
   BADLY_OVERDUE_DAYS,
   DUE_SOON_DAYS,
+  MINUTES_APPROVAL_SLA_DAYS,
 } from '@finrep/compliance'
 import {
   applyLens,
@@ -175,6 +178,8 @@ export class BriefingService {
     // Phase 3 Governance v1 — the module gate + the policy register read.
     private readonly billing: BillingService,
     private readonly policies: PoliciesService,
+    // Phase 3 Governance depth — the meeting register read (rides the governance gate).
+    private readonly meetings: MeetingsService,
     // Phase 3 Workflow v1 — open-task read for the (CORE, ungated) workflow STEP.
     private readonly tasks: TasksService,
     // Phase 4 Accreditation v1 — the module gate + the standards register read.
@@ -461,6 +466,55 @@ export class BriefingService {
             value: null,
             link: '/governance',
             dueDate: earliest,
+          })
+        }
+      }
+
+      // ── Governance depth — board-meeting register items (rides the SAME
+      // governanceLicensed gate). Value-safe: AGGREGATE counts + dates only, no
+      // attendee/decision PII (board-kept by keepForViewer). Fail-soft (.catch →
+      // null) so a meetings hiccup never 500s the briefing. Up to TWO aggregate
+      // items, mirroring the accreditation two-sub-item pattern.
+      const meetingReg = await this.meetings.listMeetings(schoolId).catch(() => null)
+      if (meetingReg) {
+        const {
+          minutesPendingCount,
+          minutesOverdueCount,
+          agendaMissingSoonCount,
+          earliestMinutesPendingHeldAt,
+          nextMeetingAt,
+        } = meetingReg.summary
+
+        // (1) minutes awaiting approval — warn, escalated to critical when any set
+        // is past the approval SLA (overdue).
+        if (minutesPendingCount > 0) {
+          const n = minutesPendingCount
+          items.push({
+            id: 'governance:minutes-approval-pending',
+            severity: minutesOverdueCount > 0 ? 'critical' : 'warn',
+            source: 'governance',
+            title: `${n} set${n === 1 ? '' : 's'} of minutes await${n === 1 ? 's' : ''} approval`,
+            why: `${n} meeting${n === 1 ? "'s" : "s'"} minutes ${n === 1 ? 'is' : 'are'} pending approval${minutesOverdueCount > 0 ? ` — ${minutesOverdueCount} past the ${MINUTES_APPROVAL_SLA_DAYS}-day approval window` : ''}. Approve and record ${n === 1 ? 'it' : 'them'} in the meeting register to keep the governance record complete.`,
+            metricKey: null,
+            value: null,
+            link: '/governance',
+            dueDate: earliestMinutesPendingHeldAt,
+          })
+        }
+
+        // (2) upcoming meeting needs an agenda — warn (info-ish nudge).
+        if (agendaMissingSoonCount > 0) {
+          const n = agendaMissingSoonCount
+          items.push({
+            id: 'governance:meeting-agenda-due',
+            severity: 'warn',
+            source: 'governance',
+            title: `${n} upcoming meeting${n === 1 ? '' : 's'} need${n === 1 ? 's' : ''} an agenda`,
+            why: `${n} scheduled meeting${n === 1 ? ' is' : 's are'} within ${AGENDA_DUE_SOON_DAYS} days and ${n === 1 ? 'has' : 'have'} no agenda yet. Draft and post the agenda in the meeting register before the meeting.`,
+            metricKey: null,
+            value: null,
+            link: '/governance',
+            dueDate: nextMeetingAt,
           })
         }
       }

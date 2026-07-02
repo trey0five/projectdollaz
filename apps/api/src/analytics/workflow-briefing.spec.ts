@@ -47,6 +47,7 @@ function makeService(over: {
 }) {
   const billing = { isEntitledForModule: async () => false }
   const policiesSvc = { list: async () => ({ policies: [] }) }
+  const meetingsSvc = { listMeetings: async () => ({ meetings: [], summary: { total: 0, upcomingCount: 0, agendaMissingSoonCount: 0, minutesPendingCount: 0, minutesOverdueCount: 0, nextMeetingAt: null, earliestMinutesPendingHeldAt: null } }) }
   const tasksSvc = {
     listOpenForBriefing: async () => {
       if (typeof over.tasks === 'function') return over.tasks()
@@ -86,6 +87,7 @@ function makeService(over: {
     corrective as never,
     billing as never,
     policiesSvc as never,
+    meetingsSvc as never,
     tasksSvc as never,
     accreditation as never,
     facilities as never,

@@ -4,6 +4,10 @@ import { BillingModule } from '../billing/billing.module.js'
 import { AuditModule } from '../common/audit/audit.module.js'
 import { PoliciesController } from './policies.controller.js'
 import { PoliciesService } from './policies.service.js'
+import { CommitteesController } from './committees.controller.js'
+import { CommitteesService } from './committees.service.js'
+import { MeetingsController } from './meetings.controller.js'
+import { MeetingsService } from './meetings.service.js'
 
 /**
  * Phase 3 Governance v1 — the Policy Register module. The first NON-FINANCE domain
@@ -17,8 +21,11 @@ import { PoliciesService } from './policies.service.js'
  */
 @Module({
   imports: [AuthModule, BillingModule, AuditModule],
-  controllers: [PoliciesController],
-  providers: [PoliciesService],
-  exports: [PoliciesService],
+  controllers: [PoliciesController, CommitteesController, MeetingsController],
+  providers: [PoliciesService, CommitteesService, MeetingsService],
+  // MeetingsService is EXPORTED so AnalyticsModule's BriefingService can inject it
+  // for the governance STEP's meeting items (the analytics → governance edge already
+  // exists for PoliciesService — no new circular dep).
+  exports: [PoliciesService, CommitteesService, MeetingsService],
 })
 export class GovernanceModule {}

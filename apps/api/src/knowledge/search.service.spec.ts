@@ -30,6 +30,8 @@ function makeService(
   opts: {
     gate?: (key: string) => boolean | Promise<boolean>
     policy?: unknown[]
+    committee?: unknown[]
+    meeting?: unknown[]
     task?: unknown[]
     standard?: unknown[]
     evidence?: unknown[]
@@ -41,6 +43,8 @@ function makeService(
   const mk = (rows: unknown[] = []) => vi.fn(async () => rows)
   const prisma = {
     policy: { findMany: opts.policyFn ? vi.fn(opts.policyFn) : mk(opts.policy) },
+    committee: { findMany: mk(opts.committee) },
+    meeting: { findMany: mk(opts.meeting) },
     task: { findMany: mk(opts.task) },
     accreditationStandard: { findMany: mk(opts.standard) },
     accreditationEvidence: { findMany: mk(opts.evidence) },
@@ -122,6 +126,8 @@ describe('SearchService — module gating (gate BEFORE query)', () => {
     expect(res.groups.map((g) => g.domain)).toEqual(['core', 'documents'])
     // The security boundary: locked-domain findMany is never invoked.
     expect(prisma.policy.findMany).not.toHaveBeenCalled()
+    expect(prisma.committee.findMany).not.toHaveBeenCalled()
+    expect(prisma.meeting.findMany).not.toHaveBeenCalled()
     expect(prisma.accreditationStandard.findMany).not.toHaveBeenCalled()
     expect(prisma.accreditationEvidence.findMany).not.toHaveBeenCalled()
     expect(prisma.maintenanceItem.findMany).not.toHaveBeenCalled()
@@ -136,9 +142,24 @@ describe('SearchService — module gating (gate BEFORE query)', () => {
     expect(prisma.task.findMany).toHaveBeenCalledOnce()
     expect(prisma.knowledgeDocument.findMany).toHaveBeenCalledOnce()
     expect(prisma.policy.findMany).toHaveBeenCalledOnce()
+    expect(prisma.committee.findMany).toHaveBeenCalledOnce()
+    expect(prisma.meeting.findMany).toHaveBeenCalledOnce()
     expect(prisma.accreditationStandard.findMany).toHaveBeenCalledOnce()
     expect(prisma.accreditationEvidence.findMany).toHaveBeenCalledOnce()
     expect(prisma.maintenanceItem.findMany).toHaveBeenCalledOnce()
+  })
+
+  it('governance domain returns committee + meeting results alongside policies', async () => {
+    const { svc } = makeService({
+      committee: [row({ id: 'c1', name: 'Finance boiler committee', kind: 'finance', chair: null, description: null })],
+      meeting: [row({ id: 'mtg1', title: 'Boiler review meeting', agenda: null, decisions: null, minutes: null })],
+    })
+    const res = await svc.search(SCHOOL, 'boiler')
+    const gov = res.groups.find((g) => g.domain === 'governance')!
+    const types = gov.items.map((i) => i.type)
+    expect(types).toContain('committee')
+    expect(types).toContain('meeting')
+    for (const it of gov.items) expect(it.link).toBe('/governance')
   })
 
   it('fail-CLOSED: a billing error for facilities excludes it (never queried)', async () => {

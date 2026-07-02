@@ -77,6 +77,7 @@ function makeService(over: {
   const checklist = { getChecklist: async () => null }
   const corrective = { getPlan: async () => null }
   const policiesSvc = { list: async () => ({ policies: [] }) }
+  const meetingsSvc = { listMeetings: async () => ({ meetings: [], summary: { total: 0, upcomingCount: 0, agendaMissingSoonCount: 0, minutesPendingCount: 0, minutesOverdueCount: 0, nextMeetingAt: null, earliestMinutesPendingHeldAt: null } }) }
   const tasks = { listOpenForBriefing: async () => [] }
   const accreditation = {
     listStandards: async () => ({
@@ -101,6 +102,7 @@ function makeService(over: {
     corrective as never,
     billing as never,
     policiesSvc as never,
+    meetingsSvc as never,
     tasks as never,
     accreditation as never,
     facilitiesSvc as never,
