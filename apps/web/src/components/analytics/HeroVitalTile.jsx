@@ -5,7 +5,7 @@ import Sparkline from './Sparkline.jsx'
 import StatusChip from './StatusChip.jsx'
 import StatusDot from './StatusDot.jsx'
 import MetricIcon from './MetricIcon.jsx'
-import { metricFormat, statusMeta } from '../../lib/metricMeta.js'
+import { metricFormat } from '../../lib/metricMeta.js'
 
 /**
  * A large "vital sign" hero tile (Phase 4D): status-colored left accent rail,
@@ -16,8 +16,10 @@ export default function HeroVitalTile({ metric, index = 0, trend, periodKey, onO
   const reduce = useReducedMotion()
   const fmt = metricFormat(metric.key, metric.unit)
   const unavailable = !metric.available
-  const meta = statusMeta(metric.status)
   const points = trend?.points
+  const banded = !unavailable && metric.status && metric.status !== 'neutral'
+  const threshold =
+    banded && metric.bands && Number.isFinite(metric.bands.risk) ? metric.bands.risk : null
 
   return (
     <motion.button
@@ -32,10 +34,8 @@ export default function HeroVitalTile({ metric, index = 0, trend, periodKey, onO
       className="card-vital group relative flex w-full flex-col overflow-hidden p-4 text-left sm:p-5"
       aria-label={`${metric.label} details`}
     >
-      {/* Status accent rail (gold/navy-soft/danger/muted) — above the flashy border. */}
-      <span aria-hidden className={`absolute inset-y-0 left-0 z-[1] w-1 ${meta.rail}`} />
-
-      {/* Row 1: icon + status (chip on sm+, dot on mobile). */}
+      {/* Row 1: icon + status (chip on sm+, dot on mobile). Severity now reads from
+          the status chip/dot + the status-colored trend below — no left rail. */}
       <div className="flex items-center justify-between gap-2">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gold/15 text-gold sm:h-10 sm:w-10">
           <MetricIcon metricKey={metric.key} size={18} />
@@ -80,8 +80,10 @@ export default function HeroVitalTile({ metric, index = 0, trend, periodKey, onO
               goodDirection={metric.goodDirection}
             />
           </div>
-          <div className="mt-3 border-t border-rule/50 pt-3">
-            <Sparkline points={points} />
+          {/* Full-bleed status trend at the tile foot (bleeds to the rounded edges),
+              band-colored with the risk threshold drawn on it. */}
+          <div className="-mx-4 -mb-4 mt-4 sm:-mx-5 sm:-mb-5">
+            <Sparkline points={points} status={metric.status} threshold={threshold} height={64} />
           </div>
         </>
       )}

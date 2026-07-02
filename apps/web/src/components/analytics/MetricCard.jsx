@@ -24,6 +24,12 @@ export default function MetricCard({
   const fmt = metricFormat(metric.key, metric.unit)
   const unavailable = !metric.available
   const showStatus = !unavailable && isBandedStatus(metric.status)
+  // The band's risk boundary — drawn on the trend as the line the value must not
+  // cross. Only for banded metrics that carry bands (contextual ones stay clean).
+  const threshold =
+    showStatus && metric.bands && Number.isFinite(metric.bands.risk)
+      ? metric.bands.risk
+      : null
 
   return (
     <motion.button
@@ -77,8 +83,16 @@ export default function MetricCard({
               goodDirection={metric.goodDirection}
             />
           </div>
-          <div className="mt-3 border-t border-rule/50 pt-2.5">
-            <Sparkline points={trendPoints} />
+          {/* Full-bleed status trend: the graph is a real presence at the card
+              foot (bleeds to the rounded edges via the card's overflow-hidden),
+              colored to the band with the risk threshold drawn on it. */}
+          <div className="-mx-3 -mb-3 mt-3 sm:-mx-4 sm:-mb-4">
+            <Sparkline
+              points={trendPoints}
+              status={metric.status}
+              threshold={threshold}
+              height={56}
+            />
           </div>
         </>
       )}
