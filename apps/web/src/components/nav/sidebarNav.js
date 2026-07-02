@@ -59,7 +59,11 @@ export const NAV_GROUPS = [
     label: 'Finance',
     module: 'finance',
     // A multi-page domain: AppShell renders `Icon` + `label` as the Finance domain
-    // header, with the items nested (indented) beneath it.
+    // header, with the items nested (indented) beneath it. The header links to the
+    // Finance MODULE HOME (/finance) and lights ONLY on an EXACT /finance match, so
+    // a child page (e.g. /statements) never lights the header as if it were home.
+    to: '/finance',
+    match: (p) => p === '/finance',
     Icon: CircleDollarSign,
     items: [
       { to: '/statements', navId: 'nav-statements', label: 'Statements', Icon: FileStack, match: (p) => p.startsWith('/statements') || p.startsWith('/history') },

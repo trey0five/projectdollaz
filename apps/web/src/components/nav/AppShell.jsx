@@ -264,20 +264,27 @@ export default function AppShell({ children }) {
             // it: a header row (its own icon + name, → the first page) over the
             // indented child pages with a left guide.
             const GroupIcon = group.Icon
-            const groupActive = group.items.some((item) => item.match(path))
+            // The HEADER's own active/gold-icon state: when the group carries an
+            // exact `match` (Finance → /finance), the header lights ONLY on its own
+            // home route, so a child page keeps its own highlight and the header
+            // does not steal it. Groups without `match` fall back to any-child.
+            const headerActive = group.match
+              ? group.match(path)
+              : group.items.some((item) => item.match(path))
             return (
               <div key={group.id} className="flex flex-col gap-0.5">
                 <Link
-                  to={group.items[0].to}
+                  to={group.to ?? group.items[0].to}
                   aria-label={group.label}
+                  aria-current={headerActive ? 'page' : undefined}
                   className={`group relative flex min-h-[40px] items-center gap-3 rounded-[10px] px-3 py-2 text-[13.5px] font-semibold outline-none ring-gold/50 transition-colors focus-visible:ring-2 ${
-                    groupActive ? 'text-white' : 'text-white/85 hover:bg-white/[0.06] hover:text-white'
+                    headerActive ? 'text-white' : 'text-white/85 hover:bg-white/[0.06] hover:text-white'
                   }`}
                 >
                   {GroupIcon && (
                     <GroupIcon
                       size={17}
-                      className={`shrink-0 ${groupActive ? 'text-gold-light' : 'text-white/70'}`}
+                      className={`shrink-0 ${headerActive ? 'text-gold-light' : 'text-white/70'}`}
                     />
                   )}
                   <span>{group.label}</span>
