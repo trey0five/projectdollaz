@@ -1,6 +1,6 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import type { User } from '@finrep/db'
-import type { ReportBundle, SOAResult, SFPResult } from '@finrep/engine'
+import type { ReportBundle, SOAResult, SFPResult, SCFResult, NetAssetsColumn } from '@finrep/engine'
 import { PrismaService } from '../prisma/prisma.service.js'
 
 // Fixed engine field names. Because every school runs the SAME @finrep/engine over
@@ -20,6 +20,23 @@ const SFP_KEYS: (keyof SFPResult)[] = [
   'studentClubs', 'deferredIntl', 'totalCurrL', 'leaseNonCurr', 'totalLiab',
   'naWithout', 'naWith', 'totalNA', 'totalLiabNA',
 ]
+// SCFResult is FLAT (packages/engine/src/types/results.ts SCFResult) — folds exactly
+// like SOA. All 18 fields, in engine order, so no cash-flow line is silently dropped.
+// bundle.scf is `SCFResult | null` (a TB-only import with no audited beginning balances
+// yields scf:null), so a school missing it is EXCLUDED + flagged, never zero-filled.
+const SCF_KEYS: (keyof SCFResult)[] = [
+  'netChange', 'depr', 'arAdj', 'prepaidAdj', 'apAdj', 'deferredAdj', 'clubsAdj',
+  'operatingCash', 'ppePurchases', 'investmentsCash', 'investingCash', 'leasePayments',
+  'financingCash', 'netCashChange', 'cashBegin', 'cashEnd', 'cashUnrestricted',
+  'cashRestricted',
+]
+// NetAssetsResult is NESTED ({ cy, py, audit, hasPY, hasAudit }); the extensive,
+// summable column is netAssets.cy (a NetAssetsColumn). We fold that CY column ONLY —
+// begin/change/end and the withoutDonor/withDonor end-of-year split are all extensive
+// across schools, so a straight field-by-field sum is the correct advisory roll-up.
+const NET_ASSETS_KEYS: (keyof NetAssetsColumn)[] = [
+  'begin', 'change', 'end', 'withoutDonor', 'withDonor',
+]
 
 interface SchoolStatementEntry {
   schoolId: string
@@ -31,6 +48,14 @@ interface SchoolStatementEntry {
   sfp: { totalAssets: number; totalLiab: number; totalNA: number } | null
   /** true only when the school both reported AND contributed an SFP block. */
   sfpReported: boolean
+  /** null when the reported school carries no cash-flow statement (bundle.scf===null). */
+  scf: { operatingCash: number; netCashChange: number; cashEnd: number } | null
+  /** true only when the school both reported AND contributed an SCF block. */
+  scfReported: boolean
+  /** null when the reported school's payload carries no changes-in-net-assets block. */
+  netAssets: { begin: number; change: number; end: number } | null
+  /** true only when the school both reported AND contributed a net-assets block. */
+  naReported: boolean
 }
 
 export interface OrgStatementsRollup {
@@ -41,7 +66,12 @@ export interface OrgStatementsRollup {
   consolidated: {
     soa: Record<string, number>
     sfp: Record<string, number>
+    scf: Record<string, number>
+    netAssets: Record<string, number>
     reportedCount: number
+    sfpReportedCount: number
+    scfReportedCount: number
+    naReportedCount: number
     schoolCount: number
   }
 }
@@ -127,8 +157,13 @@ export class StatementsRollupService {
 
     const consolidatedSoa: Record<string, number> = {}
     const consolidatedSfp: Record<string, number> = {}
+    const consolidatedScf: Record<string, number> = {}
+    const consolidatedNetAssets: Record<string, number> = {}
     const notReported: { schoolId: string; name: string }[] = []
     let reportedCount = 0
+    let sfpReportedCount = 0
+    let scfReportedCount = 0
+    let naReportedCount = 0
 
     const schoolEntries: SchoolStatementEntry[] = schools.map((s) => {
       // Candidate snapshots for this school, optionally filtered by fiscal year;
@@ -148,6 +183,10 @@ export class StatementsRollupService {
           soa: null,
           sfp: null,
           sfpReported: false,
+          scf: null,
+          scfReported: false,
+          netAssets: null,
+          naReported: false,
         }
       }
 
@@ -155,12 +194,31 @@ export class StatementsRollupService {
       const bundle = chosen.payload as unknown as ReportBundle
       const soa = bundle?.soaResults?.cy ?? null
       const sfp = bundle?.sfpResults?.cy ?? null
+      // scf is a top-level `SCFResult | null` on the bundle; netAssets is nested —
+      // the summable CY column is netAssets.cy (older payloads may predate netAssets
+      // entirely, so guard both hops).
+      const scf = bundle?.scf ?? null
+      const na = bundle?.netAssets?.cy ?? null
 
-      // SOA always contributes for a reported school. SFP can be null (a TB-only
-      // import with no balance sheet) — still SOA-reported, but contributes zero to
-      // the consolidated SFP and is flagged sfpReported:false for the UI.
+      // SOA always contributes for a reported school. SFP/SCF/net-assets can each be
+      // null (e.g. a TB-only import with no balance sheet / no audited beginning
+      // balances) — still SOA-reported, but each missing block contributes zero to its
+      // consolidated total and is flagged *Reported:false for the UI. Each of the four
+      // coverage counts is INDEPENDENT (a school may be SOA-only, or SOA+SFP but
+      // SCF-null, etc.), so each increments only inside its own guard.
       addLine(consolidatedSoa, soa, SOA_KEYS)
-      if (sfp) addLine(consolidatedSfp, sfp, SFP_KEYS)
+      if (sfp) {
+        addLine(consolidatedSfp, sfp, SFP_KEYS)
+        sfpReportedCount += 1
+      }
+      if (scf) {
+        addLine(consolidatedScf, scf, SCF_KEYS)
+        scfReportedCount += 1
+      }
+      if (na) {
+        addLine(consolidatedNetAssets, na, NET_ASSETS_KEYS)
+        naReportedCount += 1
+      }
 
       return {
         schoolId: s.id,
@@ -182,6 +240,22 @@ export class StatementsRollupService {
             }
           : null,
         sfpReported: !!sfp,
+        scf: scf
+          ? {
+              operatingCash: round2(Number(scf.operatingCash) || 0),
+              netCashChange: round2(Number(scf.netCashChange) || 0),
+              cashEnd: round2(Number(scf.cashEnd) || 0),
+            }
+          : null,
+        scfReported: !!scf,
+        netAssets: na
+          ? {
+              begin: round2(Number(na.begin) || 0),
+              change: round2(Number(na.change) || 0),
+              end: round2(Number(na.end) || 0),
+            }
+          : null,
+        naReported: !!na,
       }
     })
 
@@ -193,7 +267,12 @@ export class StatementsRollupService {
       consolidated: {
         soa: consolidatedSoa,
         sfp: consolidatedSfp,
+        scf: consolidatedScf,
+        netAssets: consolidatedNetAssets,
         reportedCount,
+        sfpReportedCount,
+        scfReportedCount,
+        naReportedCount,
         schoolCount: schools.length,
       },
     }

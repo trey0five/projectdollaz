@@ -9,7 +9,7 @@
 // Pure presentation over the `rollup` prop; everything derived at render (no
 // effects, no in-render component definitions — React-Compiler safe).
 import { motion } from 'framer-motion'
-import { Building2, CheckCircle2, MinusCircle, Landmark, FileBarChart } from 'lucide-react'
+import { Building2, CheckCircle2, MinusCircle, Landmark, FileBarChart, Waves, Scale } from 'lucide-react'
 import { fmt } from '../../lib/format.js'
 
 // Friendly labels for the engine's flat SOA/SFP field abbreviations. Anything not
@@ -62,12 +62,38 @@ const LABELS = {
   naWith: 'With donor restrictions',
   totalNA: 'Total net assets',
   totalLiabNA: 'Total liabilities & net assets',
+  // SCF — cash flows (bundle.scf, flat)
+  depr: 'Depreciation',
+  arAdj: 'Accounts receivable',
+  prepaidAdj: 'Prepaid expenses',
+  apAdj: 'Accounts payable & accrued',
+  deferredAdj: 'Deferred tuition',
+  clubsAdj: 'Due to student organizations',
+  operatingCash: 'Net cash from operating activities',
+  investmentsCash: 'Purchase of (proceeds from) investments',
+  ppePurchases: 'Purchases of property & equipment',
+  investingCash: 'Net cash from investing activities',
+  leasePayments: 'Payments on lease obligations',
+  financingCash: 'Net cash from financing activities',
+  netCashChange: 'Net increase (decrease) in cash',
+  cashBegin: 'Cash, beginning of year',
+  cashEnd: 'Cash, end of year',
+  cashUnrestricted: 'Cash',
+  cashRestricted: 'Restricted cash',
+  // Changes in Net Assets (bundle.netAssets.cy)
+  begin: 'Net assets, beginning of year',
+  change: 'Change in net assets',
+  end: 'Net assets, end of year',
+  withoutDonor: 'Without donor restrictions',
+  withDonor: 'With donor restrictions',
 }
 
 // Subtotal/total rows render emphasized; everything else is a plain line.
 const EMPHASIS = new Set([
   'totalRev', 'totalExp', 'netChange', 'totalCurrentA', 'totalAssets',
   'totalCurrL', 'totalLiab', 'totalNA', 'totalLiabNA',
+  // SCF subtotals + Changes-in-Net-Assets total
+  'operatingCash', 'investingCash', 'financingCash', 'netCashChange', 'cashEnd', 'end',
 ])
 
 function labelFor(key) {
@@ -93,6 +119,16 @@ const SOA_EXPENSE = ['instructional', 'facilities', 'fixedOther', 'intlExp', 'bu
 const SFP_ASSETS = ['cash', 'restrictedCash', 'tuitionRec', 'prepaid', 'totalCurrentA', 'ppNet', 'rouAsset', 'restrictInvst', 'totalAssets']
 const SFP_LIAB = ['apAccrued', 'leaseCurr', 'studentClubs', 'deferredIntl', 'totalCurrL', 'leaseNonCurr', 'totalLiab']
 const SFP_NA = ['naWithout', 'naWith', 'totalNA', 'totalLiabNA']
+// SCF section order mirrors StatementOfCashFlows.jsx (operating → investing →
+// financing → net change → cash reconciliation).
+const SCF_OPERATING = ['netChange', 'depr', 'arAdj', 'prepaidAdj', 'apAdj', 'deferredAdj', 'clubsAdj', 'operatingCash']
+const SCF_INVESTING = ['investmentsCash', 'ppePurchases', 'investingCash']
+const SCF_FINANCING = ['leasePayments', 'financingCash']
+const SCF_NET = ['netCashChange']
+const SCF_CASH = ['cashBegin', 'cashEnd', 'cashUnrestricted', 'cashRestricted']
+// Changes-in-Net-Assets: roll-forward (begin → change → end) then donor split.
+const NA_ROLL = ['begin', 'change', 'end']
+const NA_SPLIT = ['withoutDonor', 'withDonor']
 
 export default function OrgStatements({ rollup, loading, error }) {
   if (loading) {
@@ -115,9 +151,20 @@ export default function OrgStatements({ rollup, loading, error }) {
   const consolidated = rollup.consolidated || {}
   const soa = consolidated.soa || {}
   const sfp = consolidated.sfp || {}
+  const scf = consolidated.scf || {}
+  const netAssets = consolidated.netAssets || {}
   const notReported = rollup.notReported || []
   const reportedCount = consolidated.reportedCount ?? schools.filter((s) => s.reported).length
   const schoolCount = consolidated.schoolCount ?? schools.length
+  // Four INDEPENDENT coverage denominators (a school can be SOA-reported yet lack an
+  // SFP / cash-flow / net-assets block). Fall back to counting the per-school flags so
+  // an older API response (pre-deploy) still renders honest coverage.
+  const sfpReportedCount = consolidated.sfpReportedCount ?? schools.filter((s) => s.sfpReported).length
+  const scfReportedCount = consolidated.scfReportedCount ?? schools.filter((s) => s.scfReported).length
+  const naReportedCount = consolidated.naReportedCount ?? schools.filter((s) => s.naReported).length
+  const noSfp = Math.max(0, reportedCount - sfpReportedCount)
+  const noScf = Math.max(0, reportedCount - scfReportedCount)
+  const noNa = Math.max(0, reportedCount - naReportedCount)
 
   const totalRev = soa.totalRev ?? null
   const totalExp = soa.totalExp ?? null
@@ -137,6 +184,16 @@ export default function OrgStatements({ rollup, loading, error }) {
 
   const soaRows = [...lineRows(soa, SOA_REVENUE), ...lineRows(soa, SOA_EXPENSE), ...lineRows(soa, ['netChange'])]
   const sfpRows = [...lineRows(sfp, SFP_ASSETS), ...lineRows(sfp, SFP_LIAB), ...lineRows(sfp, SFP_NA)]
+  const scfRows = [
+    ...lineRows(scf, SCF_OPERATING),
+    ...lineRows(scf, SCF_INVESTING),
+    ...lineRows(scf, SCF_FINANCING),
+    ...lineRows(scf, SCF_NET),
+    ...lineRows(scf, SCF_CASH),
+  ]
+  const naRows = [...lineRows(netAssets, NA_ROLL), ...lineRows(netAssets, NA_SPLIT)]
+  const scfEmpty = scfReportedCount === 0
+  const naEmpty = naReportedCount === 0
 
   return (
     <motion.div
@@ -145,12 +202,35 @@ export default function OrgStatements({ rollup, loading, error }) {
       transition={{ duration: 0.3 }}
       className="space-y-5"
     >
-      {/* Coverage banner — never let the totals look complete while a school is missing. */}
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-gold/30 bg-gold/5 px-5 py-3">
-        <p className="text-[13px] font-semibold text-navy">
-          {reportedCount} of {schoolCount} {schoolCount === 1 ? 'school' : 'schools'} reported
-        </p>
-        <p className="text-[11px] italic text-muted">Advisory consolidation — straight sum, pre-elimination.</p>
+      {/* Coverage banner — never let the totals look complete while a school is missing
+          a statement. Four independent denominators, so partial SFP/SCF/NA coverage is
+          surfaced distinctly and a partial consolidation never reads as complete. */}
+      <div className="rounded-2xl border border-gold/30 bg-gold/5 px-5 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-[13px] font-semibold text-navy">
+            {reportedCount} of {schoolCount} {schoolCount === 1 ? 'school' : 'schools'} reported
+          </p>
+          <p className="text-[11px] italic text-muted">Advisory consolidation — straight sum, pre-elimination.</p>
+        </div>
+        {(noSfp > 0 || noScf > 0 || noNa > 0) && (
+          <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted">
+            {noSfp > 0 && (
+              <span>
+                <span className="font-semibold text-navy">{noSfp}</span> {noSfp === 1 ? 'has' : 'have'} no balance sheet (SFP)
+              </span>
+            )}
+            {noScf > 0 && (
+              <span>
+                <span className="font-semibold text-navy">{noScf}</span> {noScf === 1 ? 'has' : 'have'} no cash-flow statement
+              </span>
+            )}
+            {noNa > 0 && (
+              <span>
+                <span className="font-semibold text-navy">{noNa}</span> {noNa === 1 ? 'has' : 'have'} no net-assets statement
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Consolidated summary cards */}
@@ -183,14 +263,17 @@ export default function OrgStatements({ rollup, loading, error }) {
                 <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-muted">Expense</th>
                 <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-muted">Net change</th>
                 <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-muted">Total assets</th>
+                <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-muted">Total liabilities</th>
                 <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-muted">Net assets</th>
+                <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-muted">Operating cash</th>
+                <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-muted">Cash, end</th>
                 <th className="px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-wide text-muted">Status</th>
               </tr>
             </thead>
             <tbody>
               {schools.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-3 py-8 text-center font-serif italic text-muted">
+                  <td colSpan={10} className="px-3 py-8 text-center font-serif italic text-muted">
                     No schools found for your organization.
                   </td>
                 </tr>
@@ -202,7 +285,10 @@ export default function OrgStatements({ rollup, loading, error }) {
                   <td className="px-3 py-2 text-right tabular-nums text-ink">{s.soa ? fmt(s.soa.totalExp) : '—'}</td>
                   <td className="px-3 py-2 text-right tabular-nums text-ink">{s.soa ? fmt(s.soa.netChange) : '—'}</td>
                   <td className="px-3 py-2 text-right tabular-nums text-ink">{s.sfp ? fmt(s.sfp.totalAssets) : '—'}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-ink">{s.sfp ? fmt(s.sfp.totalLiab) : '—'}</td>
                   <td className="px-3 py-2 text-right tabular-nums text-ink">{s.sfp ? fmt(s.sfp.totalNA) : '—'}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-ink">{s.scf ? fmt(s.scf.operatingCash) : '—'}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-ink">{s.scf ? fmt(s.scf.cashEnd) : '—'}</td>
                   <td className="px-3 py-2 text-center">
                     {s.reported ? (
                       <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-emerald-600">
@@ -240,6 +326,22 @@ export default function OrgStatements({ rollup, loading, error }) {
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <StatementTable title="Consolidated Statement of Activities" icon={FileBarChart} rows={soaRows} />
           <StatementTable title="Consolidated Statement of Financial Position" icon={Landmark} rows={sfpRows} />
+          <StatementTable
+            title="Consolidated Statement of Cash Flows"
+            icon={Waves}
+            rows={scfRows}
+            emptyText={
+              scfEmpty
+                ? 'No cash-flow statements reported — a cash-flow statement needs audited beginning balances.'
+                : undefined
+            }
+          />
+          <StatementTable
+            title="Consolidated Statement of Changes in Net Assets"
+            icon={Scale}
+            rows={naRows}
+            emptyText={naEmpty ? 'No changes-in-net-assets statements reported for this fiscal year yet.' : undefined}
+          />
         </div>
       )}
     </motion.div>
@@ -247,7 +349,7 @@ export default function OrgStatements({ rollup, loading, error }) {
 }
 
 // Module-scope helper component (NOT defined inside render — React-Compiler safe).
-function StatementTable({ title, icon, rows }) {
+function StatementTable({ title, icon, rows, emptyText }) {
   const Icon = icon
   return (
     <div className="card-soft overflow-hidden p-0">
@@ -262,7 +364,7 @@ function StatementTable({ title, icon, rows }) {
           {rows.length === 0 && (
             <tr>
               <td colSpan={2} className="px-4 py-6 text-center font-serif italic text-muted">
-                No data yet.
+                {emptyText || 'No data yet.'}
               </td>
             </tr>
           )}
