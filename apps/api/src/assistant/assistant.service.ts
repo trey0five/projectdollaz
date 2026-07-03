@@ -3,7 +3,12 @@
 // reconciliation, budget, trends) and can call render_chart to visualize them; we
 // execute each tool, feed results back, and repeat until it answers. Tenant-scoped
 // to the school (the controller's RolesGuard) and the period (getOwnedPeriod).
-import { BadRequestException, Injectable, Logger } from '@nestjs/common'
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common'
 import type { User } from '@finrep/db'
 import type { NormalizedRow } from '@finrep/ingestion'
 import {
@@ -30,6 +35,17 @@ import { BoardReportService } from '../board-report/board-report.service.js'
 import { ImportsService } from '../imports/imports.service.js'
 import { StatementsService } from '../statements/statements.service.js'
 import { TasksService } from '../workflow/tasks.service.js'
+import {
+  DocumentsService,
+  MIME_ALLOWLIST as KNOWLEDGE_MIME_ALLOWLIST,
+  type UploadedDocumentFile,
+} from '../knowledge/documents.service.js'
+import { DocumentStorageService } from '../knowledge/document-storage.service.js'
+import {
+  DOCUMENT_SOURCE_TYPES,
+  type CreateDocumentDto,
+  type DocumentSourceType,
+} from '../knowledge/dto/create-document.dto.js'
 import { AssistantClient } from './assistant.client.js'
 import {
   AssistantFilesService,
@@ -89,6 +105,7 @@ const REFRESH: Record<ProposedAction['kind'], RefreshKey[]> = {
   create_task: ['tasks'],
   submit_for_approval: ['tasks'],
   decide_approval: ['tasks'],
+  file_document: ['knowledge'],
 }
 
 // Tools that perform a write. Membership UNCHANGED — but the meaning flips from
@@ -108,7 +125,18 @@ const WRITE_TOOLS = new Set([
 // deliberately diverges from the autonomous WRITE_TOOLS above: the slice forbids
 // silently creating a task the user didn't explicitly confirm. Same owner/accountant
 // gate as WRITE_TOOLS applies before a proposal is even offered.
-const CONFIRM_TOOLS = new Set(['create_task', 'submit_for_approval', 'decide_approval'])
+const CONFIRM_TOOLS = new Set([
+  'create_task',
+  'submit_for_approval',
+  'decide_approval',
+  'file_document',
+])
+
+// ~5MB RAW cap on a filable attachment. Base64 inflates ~4/3 → ~6.7MB, and with the
+// rest of the /apply JSON payload it stays comfortably under main.ts's 8MB JSON body
+// limit (a bigger file would 413). Larger files must go through the multipart Knowledge
+// uploader (no JSON body limit). Enforced at BUILD and re-checked at APPLY.
+const FILE_DOCUMENT_MAX_RAW_BYTES = 5 * 1024 * 1024
 
 export interface ProposedAction {
   kind:
@@ -122,6 +150,7 @@ export interface ProposedAction {
     | 'create_task'
     | 'submit_for_approval'
     | 'decide_approval'
+    | 'file_document'
   periodId: string
   summary: string
   payload: Record<string, unknown>
@@ -149,6 +178,39 @@ function clampTaskSourceType(v: unknown): TaskSourceType {
   return typeof v === 'string' && (TASK_SOURCE_TYPES as readonly string[]).includes(v)
     ? (v as TaskSourceType)
     : 'manual'
+}
+
+/** Clamp arbitrary input to a valid Knowledge DocumentSourceType (default 'manual'). */
+function clampDocumentSourceType(v: unknown): DocumentSourceType {
+  return typeof v === 'string' && (DOCUMENT_SOURCE_TYPES as readonly string[]).includes(v)
+    ? (v as DocumentSourceType)
+    : 'manual'
+}
+
+// Map a Penny attachment (its kind + declared mime + filename) to a MIME the
+// Knowledge store accepts, so a doomed file is declined at PROPOSE time rather than
+// failing AFTER the user confirms. Penny's intake allows image/jpg and
+// application/octet-stream (xlsx/csv), which the doc-store allowlist does not — the
+// attachment KIND is the reliable signal, with an extension fallback for images.
+const EXT_MIME: Record<string, string> = {
+  pdf: 'application/pdf',
+  csv: 'text/csv',
+  txt: 'text/plain',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+}
+function normalizeKnowledgeMime(kind: string, mime: string, fileName: string): string {
+  if (kind === 'xlsx') return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  if (kind === 'csv') return 'text/csv'
+  if (kind === 'pdf') return 'application/pdf'
+  const m = (mime || '').toLowerCase()
+  if (m === 'image/jpg') return 'image/jpeg'
+  if (KNOWLEDGE_MIME_ALLOWLIST.has(m)) return m
+  const ext = (fileName.split('.').pop() ?? '').toLowerCase()
+  return EXT_MIME[ext] ?? m
 }
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -220,6 +282,7 @@ type RefreshKey =
   | 'dataStatus'
   | 'metrics'
   | 'tasks'
+  | 'knowledge'
 
 /** A flat label/value row on the "what I changed" card. */
 export interface AppliedDetail {
@@ -307,6 +370,8 @@ export class AssistantService {
     private readonly imports: ImportsService,
     private readonly statements: StatementsService,
     private readonly tasks: TasksService,
+    private readonly documents: DocumentsService,
+    private readonly documentStorage: DocumentStorageService,
   ) {}
 
   isConfigured(): boolean {
@@ -652,6 +717,9 @@ export class AssistantService {
     if (name === 'decide_approval') {
       return this.buildDecideProposal(args, ctx)
     }
+    if (name === 'file_document') {
+      return this.buildFileDocumentProposal(args, ctx)
+    }
     const periodId = await this.resolvePeriod(args, ctx)
     if (name === 'set_budget') {
       const amount = typeof args.amount === 'number' ? args.amount : undefined
@@ -902,6 +970,75 @@ export class AssistantService {
       periodId: ctx.periodId ?? '',
       summary: `${decision === 'approve' ? 'Approve' : 'Reject'} this task${note ? ` — “${note.slice(0, 120)}”` : ''}.`,
       payload: { taskId, decision, ...(note ? { note } : {}) },
+    }
+  }
+
+  /**
+   * Build a confirmable file_document proposal (NO mutation) from an attached file.
+   * The RAW file bytes live in the request-scoped prep.rawFiles map (keyed by the
+   * attachmentId the LLM saw in the digest) — the LLM NEVER supplies bytes. The bytes
+   * ride the payload as base64 (the proven import_trial_balance carry pattern) so
+   * /apply (a separate request with no prep) can decode + re-validate them. The
+   * attachment is RAW-size-capped so the /apply JSON body stays under the 8MB limit;
+   * a larger file gracefully declines and points at the multipart Knowledge uploader.
+   */
+  private buildFileDocumentProposal(args: Record<string, unknown>, ctx: Ctx): ProposedAction {
+    const attachmentId = typeof args.attachmentId === 'string' ? args.attachmentId : ''
+    const raw = attachmentId ? ctx.prep?.rawFiles.get(attachmentId) : undefined
+    if (!raw || !raw.buffer || raw.buffer.length === 0) {
+      throw new Error('file_document needs a valid attachmentId from an attached document.')
+    }
+    if (raw.buffer.length > FILE_DOCUMENT_MAX_RAW_BYTES) {
+      throw new Error(
+        'That file is too large for me to file here (over 5MB) — please use the Knowledge uploader on the Data page, which handles larger files.',
+      )
+    }
+    // Normalize to a Knowledge-accepted MIME and decline NOW (not after confirm) if
+    // the file type is unsupported.
+    const mimeType = normalizeKnowledgeMime(raw.kind, raw.mimeType, raw.fileName)
+    if (!KNOWLEDGE_MIME_ALLOWLIST.has(mimeType)) {
+      throw new Error(
+        'I can file PDFs, Office documents, images, CSV, and text files — that file type is not supported here.',
+      )
+    }
+    const title = typeof args.title === 'string' ? args.title.trim().slice(0, 200) : ''
+    if (!title) throw new Error('file_document needs a title.')
+    const description =
+      typeof args.description === 'string' && args.description.trim()
+        ? args.description.trim().slice(0, 2000)
+        : undefined
+    const tags = Array.isArray(args.tags)
+      ? args.tags
+          .filter((t): t is string => typeof t === 'string' && t.trim() !== '')
+          .map((t) => t.trim())
+          .slice(0, 20)
+      : []
+    const sourceType = clampDocumentSourceType(args.sourceType)
+    const sourceRef =
+      sourceType !== 'manual' &&
+      typeof args.sourceRef === 'string' &&
+      /^[0-9a-f-]{36}$/i.test(args.sourceRef.trim())
+        ? args.sourceRef.trim()
+        : undefined
+    const summary =
+      `File “${title}” to Knowledge` +
+      (tags.length ? ` (tags: ${tags.join(', ')})` : '') +
+      (sourceType !== 'manual' ? ` — linked to ${sourceType}` : '') +
+      '.'
+    return {
+      kind: 'file_document',
+      periodId: ctx.periodId ?? '',
+      summary,
+      payload: {
+        title,
+        ...(description ? { description } : {}),
+        ...(tags.length ? { tags } : {}),
+        sourceType,
+        ...(sourceRef ? { sourceRef } : {}),
+        fileName: raw.fileName,
+        mimeType,
+        fileDataBase64: raw.buffer.toString('base64'),
+      },
     }
   }
 
@@ -1178,6 +1315,64 @@ export class AssistantService {
       await this.tasks.decide(schoolId, taskId, decision, note, user)
       return { applied: true, summary: action.summary }
     }
+    if (action.kind === 'file_document') {
+      // UNTRUSTED payload (a forged /apply can hit this directly) — re-validate EVERY
+      // field, decode + re-check the REAL buffer size, and reuse DocumentsService.
+      const title = typeof p.title === 'string' ? p.title.trim().slice(0, 200) : ''
+      if (!title) throw new Error('A document needs a title.')
+      const b64 = typeof p.fileDataBase64 === 'string' ? p.fileDataBase64 : ''
+      if (!b64) throw new Error('The document file is missing.')
+      let buffer: Buffer
+      try {
+        buffer = Buffer.from(b64, 'base64')
+      } catch {
+        throw new Error('The document file could not be decoded.')
+      }
+      if (buffer.length === 0) throw new Error('The document file is empty.')
+      if (buffer.length > FILE_DOCUMENT_MAX_RAW_BYTES) {
+        throw new Error(
+          'That file is too large to file here (over 5MB) — use the Knowledge uploader instead.',
+        )
+      }
+      // GRACEFUL storage guard — a clear 503-style decline, NEVER a 500.
+      if (!this.documentStorage.isConfigured()) {
+        throw new ServiceUnavailableException(
+          'Document storage isn’t configured on this server, so I can’t file this right now.',
+        )
+      }
+      const fileName =
+        typeof p.fileName === 'string' && p.fileName.trim()
+          ? p.fileName.trim().slice(0, 255)
+          : 'document'
+      const mimeType = typeof p.mimeType === 'string' ? p.mimeType : ''
+      const description =
+        typeof p.description === 'string' && p.description.trim()
+          ? p.description.trim().slice(0, 2000)
+          : undefined
+      const tags = Array.isArray(p.tags)
+        ? p.tags
+            .filter((t): t is string => typeof t === 'string' && t.trim() !== '')
+            .map((t) => t.trim())
+            .slice(0, 20)
+        : undefined
+      const sourceType = clampDocumentSourceType(p.sourceType)
+      const sourceRef =
+        sourceType !== 'manual' && typeof p.sourceRef === 'string' && p.sourceRef.trim()
+          ? p.sourceRef.trim()
+          : undefined
+      const file: UploadedDocumentFile = { originalname: fileName, mimetype: mimeType, buffer }
+      const dto: CreateDocumentDto = {
+        title,
+        ...(description ? { description } : {}),
+        ...(tags ? { tags } : {}),
+        sourceType,
+        ...(sourceRef ? { sourceRef } : {}),
+      } as CreateDocumentDto
+      // Reused wholesale: S3 put + row + orphan cleanup + resolveLink tenant validation
+      // (a forged/cross-tenant sourceRef 404s here) + MIME allowlist + 25MB re-check.
+      await this.documents.createDocument(schoolId, file, dto, userId)
+      return { applied: true, summary: action.summary }
+    }
     // draft_cap_entry
     await this.correctiveAction.upsertEntries(
       schoolId,
@@ -1370,6 +1565,10 @@ export class AssistantService {
       'that file’s attachmentId — this IMPORTS it now (the server holds the full parsed rows, so NEVER ' +
       'fabricate, retype, or invent account rows); afterwards summarize the parsed rows you imported ' +
       '(period, account count, net). For other attachments, answer the user’s questions from what you can read. ' +
+      'When the user wants to SAVE or FILE an attached document to the Knowledge store (a policy, board packet, ' +
+      'accreditation evidence, etc.) call file_document with that file’s attachmentId — it PROPOSES filing it ' +
+      'for the user to CONFIRM (classify the domain, suggest a clear title and domain tags; the server holds the ' +
+      'file bytes, so NEVER retype the file). It does NOT file anything until the user confirms. ' +
       'Be concise and board-appropriate; format money as USD. Only this school’s data is available. ' +
       'If a tool returns an error or needs data, say so plainly.'
     )

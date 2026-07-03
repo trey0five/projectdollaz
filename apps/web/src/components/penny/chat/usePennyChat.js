@@ -134,6 +134,10 @@ export default function usePennyChat() {
           action?.kind === 'decide_approval'
         ) {
           pennyRef.current?.agentRefresh?.(['tasks'])
+        } else if (action?.kind === 'file_document') {
+          // A confirmed file_document now exists in the Knowledge store — broadcast so
+          // an open Knowledge list (useDocuments) refetches without a manual reload.
+          pennyRef.current?.agentRefresh?.(['knowledge'])
         }
       } catch {
         setProposalStatus(mi, pi, 'error')

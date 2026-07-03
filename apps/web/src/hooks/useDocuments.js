@@ -67,6 +67,17 @@ export function useDocuments(schoolId) {
     [schoolId, load],
   )
 
+  // Penny confirm-then-file: a file_document apply broadcasts 'penny:data-changed'
+  // with key 'knowledge'; re-pull the list so a doc Penny just filed shows up here
+  // without a manual reload (mirrors useTasks' 'tasks' listener).
+  useEffect(() => {
+    const onDataChanged = (e) => {
+      if (e?.detail?.key === 'knowledge') refresh()
+    }
+    window.addEventListener('penny:data-changed', onDataChanged)
+    return () => window.removeEventListener('penny:data-changed', onDataChanged)
+  }, [refresh])
+
   const upload = useCallback(
     async (formData) => {
       if (!schoolId) return

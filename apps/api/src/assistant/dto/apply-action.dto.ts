@@ -11,6 +11,7 @@ export class ApplyActionDto {
     'set_feeder_enrollment',
     'import_trial_balance',
     'create_task',
+    'file_document',
   ])
   kind!:
     | 'set_budget'
@@ -21,6 +22,7 @@ export class ApplyActionDto {
     | 'set_feeder_enrollment'
     | 'import_trial_balance'
     | 'create_task'
+    | 'file_document'
 
   @IsString()
   periodId!: string

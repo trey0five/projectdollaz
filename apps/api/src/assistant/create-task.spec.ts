@@ -47,6 +47,8 @@ function makeService(opts: {
     stub, // imports
     stub, // statements
     tasks as never, // tasks
+    stub, // documents
+    stub, // documentStorage
   )
   return { svc, tasksCreate, membershipFindFirst }
 }

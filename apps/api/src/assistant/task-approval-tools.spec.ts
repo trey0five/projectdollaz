@@ -39,6 +39,8 @@ function makeService(opts: { member?: { userId: string } | null } = {}) {
   const svc = new AssistantService(
     prisma as never, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub,
     tasks as never, // tasks
+    stub, // documents
+    stub, // documentStorage
   )
   return { svc, submitForApproval, decide, list, membershipFindFirst }
 }

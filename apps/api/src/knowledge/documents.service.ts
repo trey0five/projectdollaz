@@ -29,7 +29,7 @@ export interface UploadedDocumentFile {
 const MAX_SIZE_BYTES = 25 * 1024 * 1024
 
 /** Allowlisted MIME types (office docs + common images + csv/text). */
-const MIME_ALLOWLIST = new Set<string>([
+export const MIME_ALLOWLIST = new Set<string>([
   'application/pdf',
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',

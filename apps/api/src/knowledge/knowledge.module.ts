@@ -23,5 +23,7 @@ import { DocumentStorageService } from './document-storage.service.js'
   imports: [AuthModule, BillingModule, AuditModule],
   controllers: [SearchController, DocumentsController],
   providers: [SearchService, DocumentsService, DocumentStorageService],
+  // Exported so AssistantService (Penny file_document) can inject them cross-module.
+  exports: [DocumentsService, DocumentStorageService],
 })
 export class KnowledgeModule {}

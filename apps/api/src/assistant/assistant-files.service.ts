@@ -47,6 +47,16 @@ export interface ImportCandidate {
   metadata?: SheetMetadata
 }
 
+/** The raw bytes + mime + filename of ONE attachment, retained for file_document. */
+export interface RawAttachmentFile {
+  buffer: Buffer
+  mimeType: string
+  fileName: string
+  /** The intake kind ('xlsx' | 'csv' | 'pdf' | 'image') — the reliable signal for
+   *  mapping to a Knowledge-accepted MIME when filing. */
+  kind: string
+}
+
 export interface PreparedAttachments {
   /** OpenAI-style content blocks (image_url / text) to splice into the user turn. */
   llmContentBlocks: unknown[]
@@ -54,6 +64,12 @@ export interface PreparedAttachments {
   digests: string[]
   /** Full parsed spreadsheets, keyed by attachmentId (request-scoped). */
   parsed: Map<string, ParsedFile>
+  /**
+   * RAW bytes+mime+filename for EVERY attachment kind (pdf/image/xlsx/csv), keyed by
+   * the SAME attachmentId surfaced in its digest — so file_document can carry the
+   * original file to the Knowledge store. Request-scoped (gone at /apply).
+   */
+  rawFiles: Map<string, RawAttachmentFile>
   /** Recognized trial balances the LLM may propose to import. */
   importCandidates: ImportCandidate[]
 }
@@ -73,6 +89,7 @@ export class AssistantFilesService {
     const llmContentBlocks: unknown[] = []
     const digests: string[] = []
     const parsed = new Map<string, ParsedFile>()
+    const rawFiles = new Map<string, RawAttachmentFile>()
     const importCandidates: ImportCandidate[] = []
     let totalBytes = 0
 
@@ -102,6 +119,17 @@ export class AssistantFilesService {
         throw new AttachmentError('Those attachments are too large in total (max 16MB).')
       }
 
+      // ONE attachmentId per attachment, minted up-front and surfaced in the digest,
+      // so the LLM can cite it for BOTH propose_import_trial_balance (xlsx/csv) AND
+      // file_document (any kind). Retain the raw bytes+mime+filename for filing.
+      const attachmentId = randomId()
+      rawFiles.set(attachmentId, {
+        buffer: buf,
+        mimeType: mime,
+        fileName: this.safeName(att.name),
+        kind: att.kind,
+      })
+
       if (att.kind === 'image') {
         const b64 = buf.toString('base64')
         llmContentBlocks.push({
@@ -111,7 +139,7 @@ export class AssistantFilesService {
         digests.push(
           this.wrapDigest(
             att.name,
-            `kind: image\nThe image is attached above for you to view directly.`,
+            `kind: image\nattachmentId: ${attachmentId}\nThe image is attached above for you to view directly. To FILE it to Knowledge, call file_document with attachmentId "${attachmentId}".`,
           ),
         )
         continue
@@ -129,7 +157,7 @@ export class AssistantFilesService {
         digests.push(
           this.wrapDigest(
             att.name,
-            `kind: pdf\nPDF received: ${this.safeName(att.name)} (${buf.length} bytes). Read it from the document attached to this turn if your tools support it; otherwise ask the user what they need from it.`,
+            `kind: pdf\nattachmentId: ${attachmentId}\nPDF received: ${this.safeName(att.name)} (${buf.length} bytes). Read it from the document attached to this turn if your tools support it; otherwise ask the user what they need from it. To FILE it to Knowledge, call file_document with attachmentId "${attachmentId}".`,
           ),
         )
         continue
@@ -137,7 +165,6 @@ export class AssistantFilesService {
 
       // xlsx / csv — parse server-side via @finrep/ingestion (the only place bytes
       // become rows). Guarded; a parse failure degrades to a note, never throws out.
-      const attachmentId = randomId()
       let result: { rows: NormalizedRow[]; metadata?: SheetMetadata; warnings?: string[] } | null = null
       try {
         const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer
@@ -147,7 +174,7 @@ export class AssistantFilesService {
         digests.push(
           this.wrapDigest(
             att.name,
-            `kind: spreadsheet\nThis spreadsheet could not be parsed as a trial balance. Tell the user it didn't look like a standard trial balance and ask how they'd like to proceed.`,
+            `kind: spreadsheet\nattachmentId: ${attachmentId}\nThis spreadsheet could not be parsed as a trial balance. Tell the user it didn't look like a standard trial balance and ask how they'd like to proceed. To FILE it to Knowledge as-is, call file_document with attachmentId "${attachmentId}".`,
           ),
         )
         continue
@@ -173,7 +200,7 @@ export class AssistantFilesService {
       digests.push(this.buildSpreadsheetDigest(attachmentId, att.name, rows, metadata, candidate))
     }
 
-    return { llmContentBlocks, digests, parsed, importCandidates }
+    return { llmContentBlocks, digests, parsed, rawFiles, importCandidates }
   }
 
   /** Run ingest() under a small wall-clock budget so a pathological file can't hang. */
@@ -239,6 +266,7 @@ export class AssistantFilesService {
       candidate
         ? `If the user wants to import this, call propose_import_trial_balance with attachmentId "${attachmentId}". NEVER fabricate or retype the account rows — the server holds the full parsed rows.`
         : `This did not look like a standard trial balance; do not propose importing it.`,
+      `To FILE this file to Knowledge, call file_document with attachmentId "${attachmentId}".`,
       `Top ${Math.min(MAX_DIGEST_ROWS, rows.length)} rows by |amount| (acct  desc  total):`,
       top || '  (no rows)',
     ].filter((l): l is string => l != null)

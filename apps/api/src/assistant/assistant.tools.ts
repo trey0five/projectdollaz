@@ -467,6 +467,43 @@ export const TOOL_SCHEMAS = [
   {
     type: 'function',
     function: {
+      name: 'file_document',
+      description:
+        'PROPOSE filing an attached document into the Knowledge store for the user to CONFIRM before it is stored (like drafting a task — this does NOT file it; the user must confirm). Use ONLY when the user attached a document and wants to save/file it. Classify its domain and suggest a clear title plus domain tags (governance/compliance/finance/facilities/accreditation/advancement). Pass the attachmentId shown in the attachment digest — the server holds the file bytes, so NEVER retype the file. sourceType defaults to manual; set a non-manual sourceType + sourceRef ONLY when the user names a specific in-school entity (a policy, board report, standard, campaign, or maintenance item) to link it to.',
+      parameters: {
+        type: 'object',
+        properties: {
+          attachmentId: {
+            type: 'string',
+            description: 'The attachmentId from the attachment digest for the file to file.',
+          },
+          title: {
+            type: 'string',
+            description: 'Short document title, e.g. "FY2026 Conflict-of-Interest Policy".',
+          },
+          description: { type: 'string', description: 'Optional one-line description.' },
+          tags: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Domain tags, e.g. ["governance","compliance"].',
+          },
+          sourceType: {
+            type: 'string',
+            enum: ['manual', 'policy', 'board_report', 'standard', 'campaign', 'maintenance'],
+            description: 'Domain this doc links FROM. Defaults to manual (standalone).',
+          },
+          sourceRef: {
+            type: 'string',
+            description: 'UUID of the linked in-school entity — ONLY when sourceType is not manual.',
+          },
+        },
+        required: ['attachmentId', 'title'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'render_chart',
       description:
         'Draw a chart for the user. Call this to visualize numbers you have already fetched (a trend, a comparison, a breakdown). Pick the chart type that fits and give a clear title.',
@@ -693,6 +730,7 @@ export const TOOL_LABELS: Record<string, string> = {
   apply_driver_budget: 'Building the driver budget…',
   draft_cap_entry: 'Logging a corrective action…',
   create_task: 'Drafting a task…',
+  file_document: 'Filing the document…',
   list_open_tasks: 'Reading your open tasks…',
   submit_for_approval: 'Routing for sign-off…',
   decide_approval: 'Recording your decision…',
