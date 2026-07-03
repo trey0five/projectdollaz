@@ -167,6 +167,8 @@ export const schoolsApi = {
   members: (schoolId) => api.get(`/schools/${schoolId}/members`),
   updateMemberRole: (schoolId, userId, data) =>
     api.patch(`/schools/${schoolId}/members/${userId}`, data),
+  updateMemberAccess: (schoolId, userId, body) =>
+    api.patch(`/schools/${schoolId}/members/${userId}/access`, body),
   removeMember: (schoolId, userId) => api.delete(`/schools/${schoolId}/members/${userId}`),
   invite: (schoolId, data) => api.post(`/schools/${schoolId}/invitations`, data),
   listInvitations: (schoolId) => api.get(`/schools/${schoolId}/invitations`),

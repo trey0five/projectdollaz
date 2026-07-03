@@ -244,6 +244,7 @@ model Invitation {
   email      String
   role       MembershipRole
   token      String         @unique
+  orgWide    Boolean        @default(false) @map("org_wide")
   expiresAt  DateTime       @map("expires_at")
   acceptedAt DateTime?      @map("accepted_at")
   createdAt  DateTime       @default(now()) @map("created_at")

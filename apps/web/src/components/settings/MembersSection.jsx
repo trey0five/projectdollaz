@@ -5,7 +5,7 @@
 // authoritative (LAST_OWNER 409 is surfaced inline). Refetches after mutations.
 import { useCallback, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Trash2, Mail, ShieldAlert } from 'lucide-react'
+import { Trash2, Mail, ShieldAlert, Building2, Building } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useSchools } from '../../context/SchoolContext.jsx'
 import { schoolsApi, apiErrorMessage, apiErrorCode } from '../../lib/api.js'
@@ -77,6 +77,18 @@ export default function MembersSection() {
     }
   }
 
+  const onAccessChange = async (m, orgWide) => {
+    clearErr(m.id)
+    try {
+      await schoolsApi.updateMemberAccess(activeId, m.id, { orgWide })
+      await load()
+      // If we changed our own access, refresh schools so the switcher updates.
+      if (m.id === user?.id) await reloadSchools()
+    } catch (err) {
+      setErr(m.id, apiErrorMessage(err, 'Could not change access.'))
+    }
+  }
+
   const onRemove = async (m) => {
     clearErr(m.id)
     try {
@@ -95,6 +107,7 @@ export default function MembersSection() {
   // Invite form
   const [email, setEmail] = useState('')
   const [inviteRole, setInviteRole] = useState('viewer')
+  const [inviteOrgWide, setInviteOrgWide] = useState(false)
   const [inviteErr, setInviteErr] = useState('')
   const [inviteOk, setInviteOk] = useState('')
   const [inviteBusy, setInviteBusy] = useState(false)
@@ -105,7 +118,11 @@ export default function MembersSection() {
     setInviteOk('')
     setInviteBusy(true)
     try {
-      await schoolsApi.invite(activeId, { email: email.trim(), role: inviteRole })
+      await schoolsApi.invite(activeId, {
+        email: email.trim(),
+        role: inviteRole,
+        orgWide: inviteOrgWide,
+      })
       setEmail('')
       setInviteOk('Invitation sent.')
       await load()
@@ -164,6 +181,7 @@ export default function MembersSection() {
                   <th className="py-2 pr-3 font-semibold">Name</th>
                   <th className="py-2 pr-3 font-semibold">Email</th>
                   <th className="py-2 pr-3 font-semibold">Role</th>
+                  <th className="py-2 pr-3 font-semibold">Access</th>
                   {isOwner && <th className="py-2 font-semibold" />}
                 </tr>
               </thead>
@@ -206,6 +224,29 @@ export default function MembersSection() {
                         {rowErr[m.id] && (
                           <p className="mt-1 text-[14px] text-danger">{rowErr[m.id]}</p>
                         )}
+                      </td>
+                      <td className="py-3 pr-3">
+                        <div className="flex flex-col items-start gap-1.5">
+                          {m.orgWide ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-gold/15 px-2.5 py-1 text-[13px] font-semibold text-navy">
+                              <Building2 size={13} className="text-gold" /> All schools
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-navy/[0.06] px-2.5 py-1 text-[13px] font-semibold text-muted">
+                              <Building size={13} /> This school
+                            </span>
+                          )}
+                          {/* Owner-only toggle. Hidden for the owner's own row and
+                              for owner-role members (never restrict/expand an owner). */}
+                          {isOwner && m.id !== user?.id && m.role !== 'owner' && (
+                            <button
+                              onClick={() => onAccessChange(m, !m.orgWide)}
+                              className="text-[13px] font-semibold text-navy underline decoration-gold/60 underline-offset-2 transition-colors hover:text-gold"
+                            >
+                              {m.orgWide ? 'Restrict to this school' : 'All schools'}
+                            </button>
+                          )}
+                        </div>
                       </td>
                       {isOwner && (
                         <td className="py-3 text-right">
@@ -263,6 +304,19 @@ export default function MembersSection() {
                 ))}
               </select>
             </div>
+            <div className="sm:w-52">
+              <label className="mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-muted">
+                Access
+              </label>
+              <select
+                value={inviteOrgWide ? 'org' : 'school'}
+                onChange={(e) => setInviteOrgWide(e.target.value === 'org')}
+                className={inputCls}
+              >
+                <option value="school">This school</option>
+                <option value="org">Entire organization</option>
+              </select>
+            </div>
             <motion.button
               whileTap={{ scale: email.trim() ? 0.98 : 1 }}
               onClick={sendInvite}
@@ -282,6 +336,9 @@ export default function MembersSection() {
               <FormSuccess>{inviteOk}</FormSuccess>
             </div>
           )}
+          <p className="mt-3 text-[14px] text-muted">
+            Entire organization = sees every school + the consolidated view.
+          </p>
         </SettingsCard>
       )}
 

@@ -52,6 +52,15 @@ export class SchoolsService {
     })
   }
 
+  /** IDs of every school in an org (basis for org-wide membership fan-out). */
+  private async orgSchoolIds(organizationId: string): Promise<string[]> {
+    const schools = await this.prisma.school.findMany({
+      where: { organizationId },
+      select: { id: true },
+    })
+    return schools.map((s) => s.id)
+  }
+
   private toSchoolPublic(school: School, role: string): SchoolPublic {
     return {
       id: school.id,
@@ -93,6 +102,18 @@ export class SchoolsService {
       where: { userId: user.id, role: 'owner', status: 'active' },
       include: { school: true },
     })
+    // Owner-gate: a member who already belongs to school(s) but owns none of them
+    // (e.g. an org-wide accountant/viewer) must not create schools / spin up a
+    // stray org. A brand-new user (0 active memberships) is still allowed to
+    // onboard and becomes the owner of their first school.
+    if (!existing) {
+      const activeMemberships = await this.prisma.membership.count({
+        where: { userId: user.id, status: 'active' },
+      })
+      if (activeMemberships > 0) {
+        throw new ForbiddenException('Only an owner can create a school.')
+      }
+    }
     const orgId =
       existing?.school.organizationId ??
       (await this.prisma.organization.create({ data: { name: `${dto.name} Org` } })).id
@@ -127,15 +148,42 @@ export class SchoolsService {
   }
 
   async listMembers(schoolId: string) {
+    const school = await this.prisma.school.findUnique({ where: { id: schoolId } })
+    if (!school) throw new NotFoundException('School not found.')
+
     const members = await this.prisma.membership.findMany({
       where: { schoolId },
       include: { user: true },
       orderBy: { createdAt: 'asc' },
     })
+
+    // Org-wide = the member has an ACTIVE membership on EVERY school in this
+    // school's org. Only meaningful for multi-school orgs (a single-school org
+    // is always "this school", never org-wide).
+    const orgSchoolIds = await this.orgSchoolIds(school.organizationId)
+    const orgSchoolCount = orgSchoolIds.length
+    const memberCounts =
+      orgSchoolCount > 1 && members.length > 0
+        ? await this.prisma.membership.groupBy({
+            by: ['userId'],
+            where: {
+              userId: { in: members.map((m) => m.userId) },
+              schoolId: { in: orgSchoolIds },
+              status: 'active',
+            },
+            _count: { schoolId: true },
+          })
+        : []
+    const activeOrgSchoolsByUser = new Map(
+      memberCounts.map((c) => [c.userId, c._count.schoolId]),
+    )
+
     return members.map((m) => ({
       ...toUserPublic(m.user),
       role: m.role,
       status: m.status,
+      orgWide:
+        orgSchoolCount > 1 && activeOrgSchoolsByUser.get(m.userId) === orgSchoolCount,
     }))
   }
 
@@ -160,6 +208,7 @@ export class SchoolsService {
         schoolId,
         email: dto.email,
         role: dto.role,
+        orgWide: dto.orgWide ?? false,
         token,
         expiresAt: new Date(Date.now() + INVITE_TTL_MS),
       },
@@ -201,6 +250,44 @@ export class SchoolsService {
         status: 'active',
       },
     })
+
+    // Org-wide invite: fan the membership out to every OTHER school in the
+    // inviting school's org so the member sees all schools + the consolidated
+    // org view. Never downgrade an owner (skip schools where they own already).
+    if (invitation.orgWide) {
+      const school = await this.prisma.school.findUnique({
+        where: { id: invitation.schoolId },
+        select: { organizationId: true },
+      })
+      if (school) {
+        const orgSchoolIds = await this.orgSchoolIds(school.organizationId)
+        const others = orgSchoolIds.filter((id) => id !== invitation.schoolId)
+        const ownerElsewhere = await this.prisma.membership.findMany({
+          where: {
+            userId: user.id,
+            schoolId: { in: others },
+            role: 'owner',
+            status: 'active',
+          },
+          select: { schoolId: true },
+        })
+        const ownerSet = new Set(ownerElsewhere.map((m) => m.schoolId))
+        for (const sid of others) {
+          if (ownerSet.has(sid)) continue // never downgrade an owner
+          await this.prisma.membership.upsert({
+            where: { userId_schoolId: { userId: user.id, schoolId: sid } },
+            update: { role: invitation.role, status: 'active' },
+            create: {
+              userId: user.id,
+              schoolId: sid,
+              role: invitation.role,
+              status: 'active',
+            },
+          })
+        }
+      }
+    }
+
     await this.prisma.invitation.update({
       where: { id: invitation.id },
       data: { acceptedAt: new Date() },
@@ -256,6 +343,79 @@ export class SchoolsService {
       metadata: { targetUserId, from: membership.role, to: role },
     })
     return { ...toUserPublic(updated.user), role: updated.role, status: updated.status }
+  }
+
+  /**
+   * Toggle a member between org-wide access (a membership on every school in the
+   * org, at their role) and single-school access (this school only). Owner-only
+   * at the controller. All mutations stay within the target school's org.
+   */
+  async changeMemberAccess(
+    actor: User,
+    schoolId: string,
+    targetUserId: string,
+    orgWide: boolean,
+  ) {
+    // Anchor on the target's membership for THIS school: gives us their role and,
+    // via the school, the org whose schools we may touch. 404 if not a member.
+    const membership = await this.prisma.membership.findUnique({
+      where: { userId_schoolId: { userId: targetUserId, schoolId } },
+      include: { user: true, school: { select: { organizationId: true } } },
+    })
+    if (!membership) throw new NotFoundException('Member not found in this school.')
+
+    const organizationId = membership.school.organizationId
+    const orgSchoolIds = await this.orgSchoolIds(organizationId)
+    const others = orgSchoolIds.filter((id) => id !== schoolId)
+
+    if (orgWide) {
+      // Grant: upsert an active membership at the target's role on every other
+      // org school. Never downgrade a school they already own.
+      const ownerElsewhere = await this.prisma.membership.findMany({
+        where: {
+          userId: targetUserId,
+          schoolId: { in: others },
+          role: 'owner',
+          status: 'active',
+        },
+        select: { schoolId: true },
+      })
+      const ownerSet = new Set(ownerElsewhere.map((m) => m.schoolId))
+      for (const sid of others) {
+        if (ownerSet.has(sid)) continue
+        await this.prisma.membership.upsert({
+          where: { userId_schoolId: { userId: targetUserId, schoolId: sid } },
+          update: { role: membership.role, status: 'active' },
+          create: {
+            userId: targetUserId,
+            schoolId: sid,
+            role: membership.role,
+            status: 'active',
+          },
+        })
+      }
+    } else {
+      // Restrict: drop the target's memberships on every org school EXCEPT this
+      // one — but NEVER delete an owner membership (would orphan a school owner).
+      await this.prisma.membership.deleteMany({
+        where: {
+          userId: targetUserId,
+          schoolId: { in: others },
+          role: { not: 'owner' },
+        },
+      })
+    }
+
+    await this.audit.write({
+      organizationId,
+      schoolId,
+      userId: actor.id,
+      action: 'member.access_changed',
+      targetType: 'membership',
+      targetId: membership.id,
+      metadata: { targetUserId, orgWide, orgId: organizationId },
+    })
+    return { ...toUserPublic(membership.user), role: membership.role, status: membership.status }
   }
 
   /** Remove a member. Blocks removing the LAST remaining owner. */
