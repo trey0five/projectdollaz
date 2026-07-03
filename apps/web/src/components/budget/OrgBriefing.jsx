@@ -11,45 +11,43 @@
 import { motion, useReducedMotion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import {
-  AlertTriangle,
-  AlertCircle,
-  Info,
+  Clock,
   ArrowRight,
   Sparkles,
   Building2,
   CheckCircle2,
   MinusCircle,
   Inbox,
+  Landmark,
+  HeartHandshake,
+  BarChart3,
+  ShieldCheck,
+  Database,
+  ListChecks,
+  BadgeCheck,
+  Wrench,
 } from 'lucide-react'
 import { LensIndicator, LensSwitcher } from '../home/LensControls.jsx'
 
-// Per-severity theming — identical language to HomeBriefing (navy/gold/danger):
-// accent rail + tint + icon, plus a chip tint for the per-school count pills.
+// Per-severity theming — folder-tab language shared with HomeBriefing: the tab
+// colour, a faint corner wash, the tab label, and a chip tint for the per-school
+// count pills.
 const SEVERITY = {
-  critical: {
-    Icon: AlertTriangle,
-    rail: 'bg-danger',
-    tint: 'bg-[#fdeeee]',
-    border: 'border-[#e0a0a0]',
-    iconWrap: 'bg-danger/10 text-danger',
-    chip: 'bg-danger/10 text-danger',
-  },
-  warn: {
-    Icon: AlertCircle,
-    rail: 'bg-gold',
-    tint: 'bg-[#fff8e6]',
-    border: 'border-[#e8c96a]',
-    iconWrap: 'bg-gold/15 text-gold',
-    chip: 'bg-gold/15 text-gold',
-  },
-  info: {
-    Icon: Info,
-    rail: 'bg-navy/40',
-    tint: 'bg-navy/[0.04]',
-    border: 'border-rule',
-    iconWrap: 'bg-navy/10 text-navy',
-    chip: 'bg-navy/10 text-navy',
-  },
+  critical: { label: 'Critical', tab: 'bg-danger', wash: 'rgba(139,26,26,0.07)', chip: 'bg-danger/10 text-danger' },
+  warn: { label: 'Warning', tab: 'bg-gold', wash: 'rgba(184,150,80,0.09)', chip: 'bg-gold/15 text-gold' },
+  info: { label: 'Review', tab: 'bg-navy-soft', wash: 'rgba(46,80,143,0.06)', chip: 'bg-navy/10 text-navy' },
+}
+
+// Domain eyebrow: a label + an icon that rides inside the gold coin.
+const SOURCE_META = {
+  metric: { label: 'Finance', Icon: BarChart3 },
+  compliance: { label: 'Readiness', Icon: ShieldCheck },
+  data: { label: 'Data', Icon: Database },
+  governance: { label: 'Governance', Icon: Landmark },
+  workflow: { label: 'Workflow', Icon: ListChecks },
+  accreditation: { label: 'Accreditation', Icon: BadgeCheck },
+  facilities: { label: 'Facilities', Icon: Wrench },
+  advancement: { label: 'Advancement', Icon: HeartHandshake },
 }
 
 const CTA_LABEL = {
@@ -76,45 +74,65 @@ function fmtDue(iso) {
 // school-relative route); the school name is surfaced prominently because the link
 // resolves against the viewer's active school (seamless cross-school deep-linking
 // is a known integration caveat, out of this slice's scope).
+// Cross-school decision card — the same flashy folder-tab idiom as HomeBriefing,
+// with a school-attribution chip in the eyebrow. The whole card links to item.link.
 function OrgBriefingItemCard({ item, index, reduce }) {
-  const theme = SEVERITY[item.severity] ?? SEVERITY.info
-  const { Icon } = theme
+  const sev = SEVERITY[item.severity] ?? SEVERITY.info
+  const domain = SOURCE_META[item.source] ?? { label: item.source ?? 'Signal', Icon: Sparkles }
+  const DomainIcon = domain.Icon
   return (
     <motion.div
-      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12 }}
+      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, delay: reduce ? 0 : index * 0.04 }}
+      transition={{ duration: 0.38, delay: reduce ? 0 : index * 0.05, ease: [0.22, 1, 0.36, 1] }}
+      whileHover={reduce ? undefined : { y: -3 }}
     >
       <Link
         to={item.link}
-        className={`group flex items-stretch gap-0 overflow-hidden rounded-2xl border ${theme.border} ${theme.tint} shadow-card transition-all hover:shadow-glow`}
+        className="group relative block overflow-hidden rounded-2xl border border-rule/70 bg-white shadow-card transition-shadow duration-300 hover:shadow-glow"
       >
-        <span className={`w-1.5 shrink-0 ${theme.rail}`} aria-hidden />
-        <div className="flex flex-1 items-start gap-4 px-5 py-4">
-          <span
-            className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${theme.iconWrap}`}
-          >
-            <Icon size={20} />
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-1 rounded-full bg-navy px-2.5 py-0.5 text-[11px] font-semibold text-white">
-                <Building2 size={11} />
-                {item.schoolName}
-              </span>
-              <p className="font-semibold text-navy">{item.title}</p>
-              {item.dueDate && (
-                <span className="rounded-full bg-navy/10 px-2 py-0.5 text-[12px] font-semibold text-navy">
-                  Due {fmtDue(item.dueDate)}
-                </span>
-              )}
-            </div>
-            <p className="mt-1 text-[15px] leading-relaxed text-muted">{item.why}</p>
-            <span className="mt-2 inline-flex items-center gap-1.5 text-[13px] font-bold uppercase tracking-[0.06em] text-gold">
-              {ctaLabel(item)}
-              <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          style={{ background: `radial-gradient(130% 95% at 0% 0%, ${sev.wash}, transparent 58%)` }}
+        />
+        <span
+          className={`absolute left-6 top-0 z-10 rounded-b-lg px-3 pb-1.5 pt-1 text-[10px] font-extrabold uppercase tracking-[0.09em] text-white ${sev.tab}`}
+        >
+          {item.severity === 'critical' && !reduce && (
+            <span className="absolute inset-0 rounded-b-lg bg-danger motion-safe:animate-ping" style={{ opacity: 0.35 }} aria-hidden />
+          )}
+          <span className="relative">{sev.label}</span>
+        </span>
+
+        <div className="relative px-5 pb-4 pt-8 sm:px-6">
+          <div className="mb-2 flex flex-wrap items-center gap-2.5">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-navy px-2.5 py-0.5 text-[11px] font-semibold text-white">
+              <Building2 size={11} />
+              {item.schoolName}
             </span>
+            <span className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.07em] text-muted">
+              <span className="flex h-5 w-5 items-center justify-center rounded-md bg-gold-gradient text-white shadow-[0_1px_4px_rgba(184,150,80,0.4)]">
+                <DomainIcon size={11} />
+              </span>
+              {domain.label}
+            </span>
+            {item.dueDate && (
+              <span className="ml-auto inline-flex items-center gap-1.5 text-[12px] font-medium text-muted">
+                <Clock size={13} className="opacity-70" />
+                Due {fmtDue(item.dueDate)}
+              </span>
+            )}
           </div>
+
+          <h3 className="font-serif text-[19px] font-semibold leading-snug text-navy sm:text-[21px]">
+            {item.title}
+          </h3>
+          <p className="mt-1.5 max-w-[64ch] text-[14.5px] leading-relaxed text-muted">{item.why}</p>
+          <span className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-bold uppercase tracking-[0.06em] text-gold">
+            {ctaLabel(item)}
+            <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
+          </span>
         </div>
       </Link>
     </motion.div>
