@@ -44,7 +44,7 @@ export default function ComplianceVitalTile({ summary, loading, index = 0 }) {
     >
       <span aria-hidden className={`absolute inset-y-0 left-0 z-[1] w-1 ${meta.rail}`} />
       <div className="flex items-center justify-between gap-2">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gold/15 text-gold sm:h-10 sm:w-10">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gold-gradient text-white shadow-[0_3px_10px_-2px_rgba(184,150,80,0.55)] transition-transform duration-300 group-hover:scale-105 sm:h-10 sm:w-10">
           <Icon size={18} />
         </span>
         {summary && (

@@ -62,8 +62,10 @@ export default function MetricCard({
       )}
       <div className="flex items-start gap-2.5">
         <span
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
-            unavailable ? 'bg-section text-muted' : 'bg-gold/15 text-gold'
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-transform duration-300 group-hover:scale-105 ${
+            unavailable
+              ? 'bg-section text-muted'
+              : 'bg-gold-gradient text-white shadow-[0_3px_10px_-2px_rgba(184,150,80,0.55)]'
           }`}
         >
           <MetricIcon metricKey={metric.key} size={17} />

@@ -37,7 +37,7 @@ export default function HeroVitalTile({ metric, index = 0, trend, periodKey, onO
       {/* Row 1: icon + status (chip on sm+, dot on mobile). Severity now reads from
           the status chip/dot + the status-colored trend below — no left rail. */}
       <div className="flex items-center justify-between gap-2">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gold/15 text-gold sm:h-10 sm:w-10">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gold-gradient text-white shadow-[0_3px_10px_-2px_rgba(184,150,80,0.55)] transition-transform duration-300 group-hover:scale-105 sm:h-10 sm:w-10">
           <MetricIcon metricKey={metric.key} size={18} />
         </span>
         {!unavailable && (
@@ -69,7 +69,10 @@ export default function HeroVitalTile({ metric, index = 0, trend, periodKey, onO
       ) : (
         <>
           <div className="mt-3 flex items-end gap-3 sm:mt-4">
-            <span className="gold-text font-serif text-[30px] font-semibold leading-none sm:text-[40px]">
+            <span
+              className="gold-text font-serif text-[30px] font-semibold leading-none sm:text-[40px]"
+              style={{ filter: 'drop-shadow(0 2px 12px rgba(184,150,80,0.28))' }}
+            >
               <AnimatedMetricValue key={periodKey} value={metric.value} format={fmt} />
             </span>
           </div>

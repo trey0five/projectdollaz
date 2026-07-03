@@ -40,7 +40,15 @@
      hover. Used for the home Explore tiles + Recent-periods chips. Rotation is
      disabled under prefers-reduced-motion (the static gradient ring remains). */
   .card-flashy {
-    @apply relative rounded-2xl bg-white shadow-card transition-shadow duration-300;
+    @apply relative rounded-2xl transition-shadow duration-300;
+    /* Same premium surface as .card-vital: warm gradient + glass highlight + depth. */
+    background:
+      radial-gradient(120% 82% at 12% -12%, rgba(255, 255, 255, 0.95), transparent 55%),
+      linear-gradient(158deg, #ffffff 0%, #fcfaf4 58%, #f7f2e6 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.9),
+      0 10px 26px -14px rgba(26, 39, 68, 0.30),
+      0 2px 8px -5px rgba(26, 39, 68, 0.12);
   }
   .card-flashy::before {
     content: '';
@@ -78,7 +86,17 @@
      gold↔navy gradient ring that FLOWS side-to-side (vs. the rotating Explore
      ring), brightening with a soft glow on hover. Pairs with the status rail. */
   .card-vital {
-    @apply relative rounded-2xl bg-white shadow-card transition-shadow duration-300;
+    @apply relative overflow-hidden rounded-2xl transition-shadow duration-300;
+    /* Premium surface: a warm white→cream gradient with a top-left glass highlight,
+       sitting on a layered depth shadow + an inner top light so the tile reads as a
+       lifted glass pane even at rest (not a flat white box). */
+    background:
+      radial-gradient(120% 82% at 12% -12%, rgba(255, 255, 255, 0.95), transparent 55%),
+      linear-gradient(158deg, #ffffff 0%, #fcfaf4 58%, #f7f2e6 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.9),
+      0 10px 26px -14px rgba(26, 39, 68, 0.30),
+      0 2px 8px -5px rgba(26, 39, 68, 0.12);
   }
   .card-vital::before {
     content: '';
@@ -101,15 +119,40 @@
     pointer-events: none;
     animation: cf-flow 5.5s ease-in-out infinite;
     transition: padding 0.3s ease, filter 0.3s ease;
+    z-index: 1;
+  }
+  /* Diagonal glass glint that sweeps across the tile on hover. */
+  .card-vital::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(
+      116deg,
+      transparent 40%,
+      rgba(255, 255, 255, 0.55) 48%,
+      rgba(214, 178, 92, 0.3) 52%,
+      transparent 62%
+    );
+    transform: translateX(-130%);
+    opacity: 0;
+    pointer-events: none;
+    z-index: 2;
+    transition: transform 0.75s ease, opacity 0.75s ease;
   }
   .card-vital:hover {
     box-shadow:
-      0 14px 34px -10px rgba(26, 39, 68, 0.22),
-      0 0 18px -3px rgba(184, 150, 80, 0.4);
+      inset 0 1px 0 rgba(255, 255, 255, 0.9),
+      0 22px 48px -16px rgba(26, 39, 68, 0.34),
+      0 0 30px -4px rgba(184, 150, 80, 0.55);
   }
   .card-vital:hover::before {
-    padding: 2.25px;
-    filter: brightness(1.15);
+    padding: 2.4px;
+    filter: brightness(1.2);
+  }
+  .card-vital:hover::after {
+    transform: translateX(130%);
+    opacity: 1;
   }
 
   /* ── Buttons (bigger + gradient + animated sheen) ─────── */
@@ -274,6 +317,10 @@
   .card-flashy::before,
   .card-vital::before {
     animation: none !important;
+  }
+  /* No hover glint sweep under reduced motion. */
+  .card-vital::after {
+    display: none !important;
   }
   /* Penny chat decorative loops — kill the always-on motion. The components
      also gate these on motion-safe:, this is the CSS belt-and-braces. */
