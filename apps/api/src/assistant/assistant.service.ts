@@ -975,7 +975,19 @@ export class AssistantService {
     const role: 'cy' | 'py' | 'audit' =
       args.role === 'py' || args.role === 'audit' ? args.role : 'cy'
     const md = parsed.metadata
-    const periodEndDate = this.resolvePeriodEndDate(md?.periodEndDate, md?.fiscalYear)
+    // GUARDRAIL — don't GUESS the period. A user-supplied periodEndDate wins; else use
+    // the date/fiscal-year DETECTED in the file. If neither exists, DON'T fall back to
+    // a wall-clock guess — ask the user to confirm the period first.
+    const argEnd =
+      typeof args.periodEndDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(args.periodEndDate.trim())
+        ? args.periodEndDate.trim()
+        : undefined
+    if (!argEnd && !md?.periodEndDate && md?.fiscalYear == null) {
+      throw new Error(
+        `I couldn't confidently determine the fiscal period for “${parsed.sourceName}” — no period-ending date or fiscal year was found in the file. Please tell me the period-ending date (YYYY-MM-DD) or the fiscal year, and I'll import it. I won't guess.`,
+      )
+    }
+    const periodEndDate = argEnd ?? this.resolvePeriodEndDate(md?.periodEndDate, md?.fiscalYear)
     // periodId is unknown until the import create-or-gets it; carry the resolved
     // on-screen period as a hint so applyAction can re-generate the right snapshot.
     const periodId = ctx.periodId ?? ''
@@ -2331,7 +2343,11 @@ export class AssistantService {
       'marks it isMonthly with a monthKey — an as-of-month-end, cumulative YTD balance) → import_monthly_actuals, ' +
       'ONE call per month to that sheet’s attachmentId (its monthKey is auto-detected). NEVER import a monthly ' +
       'sheet as an annual trial balance — monthly sheets are cumulative YTD, not annual, and importing them ' +
-      'annually would collapse every month onto one fiscal-year period. For other attachments, answer the user’s questions from what you can read. ' +
+      'annually would collapse every month onto one fiscal-year period. ' +
+      'NEVER GUESS THE PERIOD: if the digest marks an annual sheet’s period "UNDETERMINED" (or the import tool ' +
+      'replies that it couldn’t determine the period), do NOT import — ASK the user for the period-ending date ' +
+      '(or fiscal year), then re-call propose_import_trial_balance passing periodEndDate=YYYY-MM-DD. ' +
+      'For other attachments, answer the user’s questions from what you can read. ' +
       'When the user wants to SAVE or FILE an attached document to the Knowledge store (a policy, board packet, ' +
       'accreditation evidence, etc.) call file_document with that file’s attachmentId — it PROPOSES filing it ' +
       'for the user to CONFIRM (classify the domain, suggest a clear title and domain tags; the server holds the ' +

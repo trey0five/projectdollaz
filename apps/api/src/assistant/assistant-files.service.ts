@@ -306,7 +306,9 @@ export class AssistantFilesService {
       const acctCount = typeof md?.accountCount === 'number' ? md.accountCount : rows.length
       const periodDesc = md?.isMonthly
         ? `MONTHLY YTD, monthKey ${md.monthKey ?? '(unknown)'} (fiscal year ending ${md.periodEndDate ?? '?'})`
-        : `ANNUAL, period ending ${md?.periodEndDate ?? '(undetermined)'}`
+        : md?.periodEndDate
+          ? `ANNUAL, period ending ${md.periodEndDate}`
+          : `ANNUAL, period UNDETERMINED — ask the user for the period-ending date and pass it as periodEndDate; do NOT guess`
       lines.push(
         `• sheet "${this.safeName(s.sheet)}" — attachmentId: ${compositeId}`,
         `    ${periodDesc}`,
@@ -360,7 +362,13 @@ export class AssistantFilesService {
       `sourceName: ${this.safeName(metadata?.sourceName ?? name)}`,
       `rowCount: ${rows.length}`,
       metadata?.fiscalYear != null ? `fiscalYear: ${metadata.fiscalYear}` : null,
+      metadata?.isMonthly ? `monthly: yes  monthKey: ${metadata.monthKey ?? '(unknown)'}` : null,
       metadata?.periodEndDate ? `periodEndDate: ${metadata.periodEndDate}` : null,
+      // Flag an undetermined ANNUAL period so Penny ASKS the user rather than importing
+      // to a guessed date (the apply-side guardrail refuses to guess anyway).
+      candidate && !metadata?.isMonthly && !metadata?.periodEndDate && metadata?.fiscalYear == null
+        ? `period: UNDETERMINED — ask the user for the period-ending date and pass it as periodEndDate; do NOT guess`
+        : null,
       metadata?.auditStatus ? `auditStatus: ${metadata.auditStatus}` : null,
       `looksLikeTrialBalance: ${candidate ? 'yes' : 'no'}`,
       candidate

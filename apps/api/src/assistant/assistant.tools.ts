@@ -406,7 +406,7 @@ export const TOOL_SCHEMAS = [
     function: {
       name: 'propose_import_trial_balance',
       description:
-        'IMPORT the attached trial balance now; summarize the parsed rows (period, account count, net) for the user. Pass the attachmentId shown in the attachment digest. The server already holds the fully parsed account rows — NEVER retype or fabricate them. Optionally set the role (cy = current year, py = prior year, audit = audited) and a label.',
+        'IMPORT the attached trial balance now; summarize the parsed rows (period, account count, net) for the user. Pass the attachmentId shown in the attachment digest. The server already holds the fully parsed account rows — NEVER retype or fabricate them. Optionally set the role (cy = current year, py = prior year, audit = audited) and a label. If the digest shows the period is INFERRED/unconfirmed (or the import reports it could not determine the period), ASK the user for the period-ending date and pass it as periodEndDate — do not guess.',
       parameters: {
         type: 'object',
         properties: {
@@ -418,6 +418,11 @@ export const TOOL_SCHEMAS = [
             type: 'string',
             enum: ['cy', 'py', 'audit'],
             description: 'Which slot to import into. Defaults to cy (current year).',
+          },
+          periodEndDate: {
+            type: 'string',
+            description:
+              "The period-ending date as YYYY-MM-DD (e.g. a June-30 fiscal-year end). ONLY pass this when the file's period couldn't be read and the USER has told you the date/fiscal year — never a guess of your own.",
           },
           label: { type: 'string', description: 'Optional period label, e.g. "FY2025".' },
         },
