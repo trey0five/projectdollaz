@@ -13,6 +13,7 @@ import { PennyProvider } from './context/PennyContext.jsx'
 import Penny from './components/penny/Penny.jsx'
 import AppShell from './components/nav/AppShell.jsx'
 import PennyAgentBridge from './components/penny/PennyAgentBridge.jsx'
+import InviteResultToast from './components/InviteResultToast.jsx'
 import HomePage from './pages/HomePage.jsx'
 import DataHubPage from './pages/DataHubPage.jsx'
 import FinancePage from './pages/FinancePage.jsx'
@@ -75,6 +76,8 @@ function AuthedLayout() {
                 </OnboardingGate>
               </ScopeProvider>
               <Penny />
+              {/* Surfaces the outcome of an emailed member invite redeemed on load. */}
+              <InviteResultToast />
               {/* Headless: drives router navigation + DataHub modal-open from
                   Penny's agentic intents (navigate / per-step guide nav). */}
               <PennyAgentBridge />

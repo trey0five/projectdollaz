@@ -10,7 +10,8 @@
 // fetched list. Creating a school appends + selects it.
 // ─────────────────────────────────────────────────────────────────────────────
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
-import { schoolsApi } from '../lib/api.js'
+import { schoolsApi, apiErrorMessage } from '../lib/api.js'
+import { getPendingInvite, clearPendingInvite } from '../lib/pendingInvite.js'
 import { useAuth } from './AuthContext.jsx'
 
 const SchoolContext = createContext(null)
@@ -28,12 +29,42 @@ export function SchoolProvider({ children }) {
   // still legitimately synchronizing React state with the external API.
   const loadSchools = useCallback(async () => {
     setError('')
+    // Redeem a stashed member invite (from an emailed /login?invite=<token> link)
+    // BEFORE listing, so the just-joined school is in this very list and the token
+    // is only ever spent once. Fires a result event the app surfaces; a bad/expired
+    // invite (or wrong-email) never blocks the normal school load.
+    let joinedSchoolId = null
+    const invite = getPendingInvite()
+    if (invite) {
+      try {
+        const res = await schoolsApi.acceptInvite(invite)
+        joinedSchoolId = res.data?.school_id ?? null
+        window.dispatchEvent(
+          new CustomEvent('finrep:invite-result', { detail: { ok: true } }),
+        )
+      } catch (e) {
+        window.dispatchEvent(
+          new CustomEvent('finrep:invite-result', {
+            detail: {
+              ok: false,
+              message: apiErrorMessage(
+                e,
+                'That invitation is no longer valid — ask for a fresh invite.',
+              ),
+            },
+          }),
+        )
+      } finally {
+        clearPendingInvite()
+      }
+    }
     try {
       const res = await schoolsApi.list()
       const list = res.data || []
       setSchools(list)
-      // Re-resolve the active selection against the fresh list.
+      // Re-resolve the active selection: prefer the school just joined via invite.
       setActiveId((cur) => {
+        if (joinedSchoolId && list.some((s) => s.id === joinedSchoolId)) return joinedSchoolId
         if (cur && list.some((s) => s.id === cur)) return cur
         return list.length ? list[0].id : null
       })

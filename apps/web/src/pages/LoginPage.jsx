@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
+import { Mail } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { apiErrorMessage, isEmailNotVerified } from '../lib/api.js'
+import { captureInviteFromUrl, getPendingInvite } from '../lib/pendingInvite.js'
 import AuthLayout from '../components/auth/AuthLayout.jsx'
 import { TextField, PasswordField, FormError } from '../components/auth/fields.jsx'
 
@@ -15,6 +17,14 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [needsVerify, setNeedsVerify] = useState(false)
   const [busy, setBusy] = useState(false)
+  // Stash an emailed invite token so it survives the (possible) register→verify
+  // detour and is redeemed once authenticated (SchoolContext.loadSchools). The
+  // effect only writes localStorage (no setState); the banner reads in render.
+  useEffect(() => {
+    captureInviteFromUrl(location.search)
+  }, [location.search])
+  const hasInvite =
+    !!new URLSearchParams(location.search || '').get('invite') || !!getPendingInvite()
 
   const submit = async () => {
     if (busy) return
@@ -43,6 +53,19 @@ export default function LoginPage() {
 
   return (
     <AuthLayout title="Welcome back" subtitle="Sign in to your financial reporting workspace.">
+      {hasInvite && (
+        <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-gold/40 bg-gold/10 px-4 py-3 text-[14px] leading-relaxed text-navy">
+          <Mail size={16} className="mt-0.5 shrink-0 text-gold" />
+          <span>
+            You&rsquo;ve been invited to a school. Sign in — or{' '}
+            <Link to="/register" className="font-semibold text-gold hover:underline">
+              create an account
+            </Link>{' '}
+            — with <strong>the email the invite was sent to</strong>, and you&rsquo;ll join
+            automatically.
+          </span>
+        </div>
+      )}
       <TextField
         label="Email"
         type="email"

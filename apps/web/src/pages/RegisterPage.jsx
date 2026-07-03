@@ -1,15 +1,25 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { MailCheck } from 'lucide-react'
+import { MailCheck, Mail } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { apiErrorMessage } from '../lib/api.js'
+import { captureInviteFromUrl, getPendingInvite } from '../lib/pendingInvite.js'
 import AuthLayout from '../components/auth/AuthLayout.jsx'
 import { TextField, PasswordField, FormError } from '../components/auth/fields.jsx'
 import PasswordRequirements, { allRequirementsMet } from '../components/auth/PasswordRequirements.jsx'
 
 export default function RegisterPage() {
   const { register, resendVerification } = useAuth()
+  const location = useLocation()
+  // Keep the emailed invite token alive across registration + email verification;
+  // it's redeemed after the first authenticated sign-in. Effect only stashes to
+  // localStorage (no setState); the banner reads in render.
+  useEffect(() => {
+    captureInviteFromUrl(location.search)
+  }, [location.search])
+  const hasInvite =
+    !!new URLSearchParams(location.search || '').get('invite') || !!getPendingInvite()
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
@@ -82,6 +92,16 @@ export default function RegisterPage() {
 
   return (
     <AuthLayout title="Create your account" subtitle="Start building financial statements in minutes." width={500}>
+      {hasInvite && (
+        <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-gold/40 bg-gold/10 px-4 py-3 text-[14px] leading-relaxed text-navy">
+          <Mail size={16} className="mt-0.5 shrink-0 text-gold" />
+          <span>
+            You&rsquo;re accepting a school invite. Use{' '}
+            <strong>the email the invite was sent to</strong> — verify it, sign in, and you&rsquo;ll
+            join automatically.
+          </span>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-4">
         <TextField
           label="First name"
