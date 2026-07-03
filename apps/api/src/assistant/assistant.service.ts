@@ -159,6 +159,21 @@ const CONFIRM_TOOLS = new Set([
   'create_campaign',
 ])
 
+// Role-gate the tools OFFERED to the model. A viewer (Board) is read-only: every
+// autonomous write and every confirm-proposal is withheld so Penny never even
+// offers a doomed action — EXCEPT decide_approval (a board-chair approver may sign
+// off; tasks.decide still enforces the caller-is-approver identity check). This
+// sits ON TOP of the execution-time fail-closed gate in runToolCall, and matches
+// the /apply endpoint (owner/accountant only). owner/accountant get the full set.
+function toolsForRole(role: 'owner' | 'accountant' | 'viewer' | null | undefined) {
+  if (role === 'owner' || role === 'accountant') return TOOL_SCHEMAS
+  return TOOL_SCHEMAS.filter((t) => {
+    const name = (t as { function?: { name?: string } })?.function?.name ?? ''
+    if (name === 'decide_approval') return true
+    return !WRITE_TOOLS.has(name) && !CONFIRM_TOOLS.has(name)
+  })
+}
+
 // Enum vocab for the six new confirm-then-create tools — kept BYTE-IDENTICAL to the
 // corresponding DTO @IsIn arrays so a proposal clamps to exactly what the service DTO
 // will accept (a stray enum is dropped, never 400s the /apply). NOTE: some diverge
@@ -488,8 +503,9 @@ export class AssistantService {
       onGuide: () => {},
     }
 
+    const tools = toolsForRole(role)
     for (let turn = 0; turn < MAX_TURNS; turn++) {
-      const msg = await this.client.chat(messages, TOOL_SCHEMAS)
+      const msg = await this.client.chat(messages, tools)
       messages.push({
         role: 'assistant',
         content: msg.content ?? '',
@@ -559,9 +575,10 @@ export class AssistantService {
       this.attachToLastUserTurn(messages, prep)
     }
 
+    const tools = toolsForRole(role)
     try {
       for (let turn = 0; turn < MAX_TURNS; turn++) {
-        const msg = await this.client.streamChat(messages, TOOL_SCHEMAS, (text) =>
+        const msg = await this.client.streamChat(messages, tools, (text) =>
           emit({ type: 'delta', text }),
         )
         messages.push({
@@ -2070,9 +2087,19 @@ export class AssistantService {
         /* ignore */
       }
     }
+    // Tell Penny the caller's access level so she behaves within it (the tool list
+    // is ALSO role-filtered, and writes are gated server-side — this is so she can
+    // proactively explain limits rather than attempting a withheld action).
+    const roleClause =
+      ctx.role === 'viewer'
+        ? 'ACCESS LEVEL: This user is a BOARD member (view-only). You CANNOT create, change, file, or write anything on their behalf — those tools are not available to them. Help them read: answer questions, deliver briefings, show or point things out, and navigate. If they ask you to create/update/file/change something, briefly and warmly explain that their Board (view-only) access does not permit it and an owner or a finance member would need to make that change — never pretend to attempt it. '
+        : ctx.role === 'accountant'
+          ? 'ACCESS LEVEL: This user is a FINANCE member with edit access — you may PROPOSE creating and updating records; they confirm before anything is written. '
+          : 'ACCESS LEVEL: This user is an OWNER (Leadership) with full edit access — you may PROPOSE creating and updating records; they confirm before anything is written. '
     return (
       `You are FinRep's financial assistant for ${school?.name ?? 'this school'}, a private school. ` +
       `The user is currently viewing fiscal period "${periodLabel}". ` +
+      roleClause +
       'Answer questions about this school’s finances, KPIs, AUP scholarship-compliance readiness, ' +
       'budget vs. actual, and scholarship reconciliation. ALWAYS use the tools to fetch real numbers ' +
       'before answering — never invent or estimate figures. When a comparison, breakdown, or trend ' +
