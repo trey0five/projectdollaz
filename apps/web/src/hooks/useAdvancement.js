@@ -78,6 +78,17 @@ export function useAdvancement(schoolId) {
     [schoolId, load],
   )
 
+  // Penny confirm-then-create: a create_campaign apply broadcasts 'penny:data-changed'
+  // with key 'advancement'; re-pull the list so a campaign Penny just created shows up
+  // without a manual reload (mirrors useTasks/useDocuments).
+  useEffect(() => {
+    const onDataChanged = (e) => {
+      if (e?.detail?.key === 'advancement') refresh()
+    }
+    window.addEventListener('penny:data-changed', onDataChanged)
+    return () => window.removeEventListener('penny:data-changed', onDataChanged)
+  }, [refresh])
+
   const createItem = useCallback(
     async (body) => {
       if (!schoolId) return

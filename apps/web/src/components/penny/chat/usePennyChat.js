@@ -19,6 +19,18 @@ import { useTextToSpeech } from '../hooks/useTextToSpeech.js'
 import { useSmoothStream } from '../hooks/useSmoothStream.js'
 import { useAiChatSessions } from '../hooks/useAiChatSessions.js'
 
+// A confirmed module-create proposal → the domain refresh key to broadcast so an
+// open register page refetches. Mirrors the API's REFRESH map for these kinds; any
+// kind not listed here falls through the confirmProposal branches to a no-op.
+const CONFIRM_REFRESH_KEYS = {
+  create_policy: 'governance',
+  create_committee: 'governance',
+  create_meeting: 'governance',
+  create_standard: 'accreditation',
+  create_maintenance_item: 'facilities',
+  create_campaign: 'advancement',
+}
+
 // Map a locally-staged attachment to the FROZEN wire shape the backend expects.
 // Local: { local_id, name, mime, kind, dataBase64, preview?, status }
 // Wire:  { name, kind, mimeType, size, dataBase64 }
@@ -138,6 +150,13 @@ export default function usePennyChat() {
           // A confirmed file_document now exists in the Knowledge store — broadcast so
           // an open Knowledge list (useDocuments) refetches without a manual reload.
           pennyRef.current?.agentRefresh?.(['knowledge'])
+        } else if (CONFIRM_REFRESH_KEYS[action?.kind]) {
+          // A confirmed module-create (policy/committee/meeting/standard/maintenance/
+          // campaign) now exists — broadcast its domain key so an open register page
+          // (usePolicies/useCommittees/… listeners) refetches. agentRefresh dispatches
+          // a per-key 'penny:data-changed' window event; an unknown/off-page key is a
+          // harmless no-op, so this never breaks the existing refresh handling.
+          pennyRef.current?.agentRefresh?.([CONFIRM_REFRESH_KEYS[action.kind]])
         }
       } catch {
         setProposalStatus(mi, pi, 'error')

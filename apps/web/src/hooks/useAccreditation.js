@@ -66,6 +66,17 @@ export function useAccreditation(schoolId) {
     [schoolId, load],
   )
 
+  // Penny confirm-then-create: a create_standard apply broadcasts 'penny:data-changed'
+  // with key 'accreditation'; re-pull the list so a standard Penny just created shows up
+  // without a manual reload (mirrors useTasks/useDocuments).
+  useEffect(() => {
+    const onDataChanged = (e) => {
+      if (e?.detail?.key === 'accreditation') refresh()
+    }
+    window.addEventListener('penny:data-changed', onDataChanged)
+    return () => window.removeEventListener('penny:data-changed', onDataChanged)
+  }, [refresh])
+
   const createStandard = useCallback(
     async (body) => {
       if (!schoolId) return

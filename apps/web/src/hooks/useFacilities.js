@@ -74,6 +74,17 @@ export function useFacilities(schoolId) {
     [schoolId, load],
   )
 
+  // Penny confirm-then-create: a create_maintenance_item apply broadcasts
+  // 'penny:data-changed' with key 'facilities'; re-pull the list so an item Penny just
+  // created shows up without a manual reload (mirrors useTasks/useDocuments).
+  useEffect(() => {
+    const onDataChanged = (e) => {
+      if (e?.detail?.key === 'facilities') refresh()
+    }
+    window.addEventListener('penny:data-changed', onDataChanged)
+    return () => window.removeEventListener('penny:data-changed', onDataChanged)
+  }, [refresh])
+
   const createItem = useCallback(
     async (body) => {
       if (!schoolId) return

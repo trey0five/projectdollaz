@@ -49,6 +49,12 @@ function makeService(opts: {
     tasks as never, // tasks
     stub, // documents
     stub, // documentStorage
+    stub, // policies
+    stub, // committees
+    stub, // meetings
+    stub, // accreditation
+    stub, // facilities
+    stub, // advancement
   )
   return { svc, tasksCreate, membershipFindFirst }
 }

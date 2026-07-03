@@ -50,6 +50,12 @@ function makeService(opts: { configured?: boolean } = {}) {
     stub, // tasks
     documents as never, // documents
     documentStorage as never, // documentStorage
+    stub, // policies
+    stub, // committees
+    stub, // meetings
+    stub, // accreditation
+    stub, // facilities
+    stub, // advancement
   )
   return { svc, createDocument, isConfigured }
 }

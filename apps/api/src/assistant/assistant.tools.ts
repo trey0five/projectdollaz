@@ -504,6 +504,130 @@ export const TOOL_SCHEMAS = [
   {
     type: 'function',
     function: {
+      name: 'create_policy',
+      description:
+        'PROPOSE a new governance Policy for the user to CONFIRM before it is created (like create_task — this does NOT create it; the user must confirm). Use when the user asks to add/file a policy to the Policy Register, or to turn a briefing/governance attention item (e.g. a missing or overdue policy) into a real record — pull the title and category from the referenced item. category is FREE TEXT (e.g. "board", "finance", "hr"). status defaults to active. Dates are yyyy-mm-dd; only pass ones the user stated. Policy, not period-scoped.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Policy title, e.g. "Conflict of Interest".' },
+          category: { type: 'string', description: 'Free-text category, e.g. "board" or "finance".' },
+          status: { type: 'string', enum: ['active', 'draft', 'retired'] },
+          owner: { type: 'string', description: 'Who owns/maintains the policy. Omit if unknown.' },
+          adoptedDate: { type: 'string', description: 'YYYY-MM-DD; when adopted. Omit unless stated.' },
+          reviewIntervalMonths: {
+            type: 'number',
+            description: 'How often it is reviewed, in months (1–120). Defaults to 12.',
+          },
+          notes: { type: 'string', description: 'Optional notes.' },
+        },
+        required: ['title', 'category'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_committee',
+      description:
+        'PROPOSE a new governance Committee for the user to CONFIRM before it is created (this does NOT create it; the user must confirm). Use when the user asks to add a committee to the Governance register. kind is FREE TEXT (e.g. "board", "finance", "advancement"). Committee, not period-scoped.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Committee name, e.g. "Finance Committee".' },
+          kind: { type: 'string', description: 'Free-text kind, e.g. "board" or "finance".' },
+          chair: { type: 'string', description: 'Who chairs the committee. Omit if unknown.' },
+          description: { type: 'string', description: 'Optional one- or two-line description.' },
+        },
+        required: ['name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_meeting',
+      description:
+        'PROPOSE a new governance Meeting for the user to CONFIRM before it is created (this does NOT create it; the user must confirm). Use when the user asks to schedule/log a board or committee meeting. Pass committeeId (a uuid) ONLY when the user names a committee you have already resolved; the server verifies it belongs to this school. scheduledAt is yyyy-mm-dd. Meeting, not period-scoped.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Meeting title, e.g. "Q1 Board Meeting".' },
+          scheduledAt: { type: 'string', description: 'YYYY-MM-DD; the meeting date. Required.' },
+          committeeId: {
+            type: 'string',
+            description: 'UUID of the committee this meeting belongs to. Omit if standalone.',
+          },
+          location: { type: 'string', description: 'Where it is held. Omit if unknown.' },
+          agenda: { type: 'string', description: 'Optional agenda text.' },
+        },
+        required: ['title', 'scheduledAt'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_standard',
+      description:
+        'PROPOSE a new accreditation Standard for the user to CONFIRM before it is created (this does NOT create it; the user must confirm). Use when the user asks to add a standard to the Accreditation register. code and category are FREE TEXT (schools name their own framework codes/domains). reviewDate is yyyy-mm-dd. Standard, not period-scoped.',
+      parameters: {
+        type: 'object',
+        properties: {
+          code: { type: 'string', description: 'Framework code, e.g. "1.2" or "GOV-3".' },
+          title: { type: 'string', description: 'Standard title.' },
+          category: { type: 'string', description: 'Free-text domain, e.g. "governance". Omit if unknown.' },
+          reviewDate: { type: 'string', description: 'YYYY-MM-DD; next review. Omit unless stated.' },
+          owner: { type: 'string', description: 'Who owns this standard. Omit if unknown.' },
+          notes: { type: 'string', description: 'Optional notes.' },
+        },
+        required: ['code', 'title'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_maintenance_item',
+      description:
+        'PROPOSE a new facilities deferred-maintenance item for the user to CONFIRM before it is created (this does NOT create it; the user must confirm). Use when the user asks to log a maintenance/repair item to the Facilities register. category and location are FREE TEXT. targetDate is yyyy-mm-dd. Maintenance item, not period-scoped.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Item title, e.g. "Replace HVAC compressor".' },
+          location: { type: 'string', description: 'Where, e.g. "Gym roof". Omit if unknown.' },
+          category: { type: 'string', description: 'Free-text category, e.g. "HVAC". Omit if unknown.' },
+          priority: { type: 'string', enum: ['low', 'medium', 'high', 'critical'] },
+          estimatedCost: { type: 'number', description: 'Estimated cost in USD. Omit if unknown.' },
+          targetDate: { type: 'string', description: 'YYYY-MM-DD; target completion. Omit unless stated.' },
+          notes: { type: 'string', description: 'Optional notes.' },
+        },
+        required: ['title'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_campaign',
+      description:
+        'PROPOSE a new advancement fundraising Campaign for the user to CONFIRM before it is created (this does NOT create it; the user must confirm). Use when the user asks to add a campaign to the Advancement register. campaignType is FREE TEXT (e.g. "annual", "capital"). closeDate is yyyy-mm-dd. Campaign, not period-scoped.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Campaign name, e.g. "2026 Annual Fund".' },
+          campaignType: { type: 'string', description: 'Free-text type, e.g. "annual" or "capital".' },
+          goalAmount: { type: 'number', description: 'Fundraising goal in USD. Omit if unknown.' },
+          closeDate: { type: 'string', description: 'YYYY-MM-DD; when the campaign closes. Omit unless stated.' },
+          notes: { type: 'string', description: 'Optional notes.' },
+        },
+        required: ['name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'render_chart',
       description:
         'Draw a chart for the user. Call this to visualize numbers you have already fetched (a trend, a comparison, a breakdown). Pick the chart type that fits and give a clear title.',
@@ -731,6 +855,12 @@ export const TOOL_LABELS: Record<string, string> = {
   draft_cap_entry: 'Logging a corrective action…',
   create_task: 'Drafting a task…',
   file_document: 'Filing the document…',
+  create_policy: 'Filing a policy…',
+  create_committee: 'Setting up a committee…',
+  create_meeting: 'Scheduling a meeting…',
+  create_standard: 'Adding a standard…',
+  create_maintenance_item: 'Logging a maintenance item…',
+  create_campaign: 'Starting a campaign…',
   list_open_tasks: 'Reading your open tasks…',
   submit_for_approval: 'Routing for sign-off…',
   decide_approval: 'Recording your decision…',

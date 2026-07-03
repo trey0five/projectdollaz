@@ -63,6 +63,17 @@ export function usePolicies(schoolId) {
     [schoolId, load],
   )
 
+  // Penny confirm-then-create: a create_policy/create_committee/create_meeting apply
+  // broadcasts 'penny:data-changed' with key 'governance'; re-pull the list so a record
+  // Penny just created shows up without a manual reload (mirrors useTasks/useDocuments).
+  useEffect(() => {
+    const onDataChanged = (e) => {
+      if (e?.detail?.key === 'governance') refresh()
+    }
+    window.addEventListener('penny:data-changed', onDataChanged)
+    return () => window.removeEventListener('penny:data-changed', onDataChanged)
+  }, [refresh])
+
   const create = useCallback(
     async (body) => {
       if (!schoolId) return

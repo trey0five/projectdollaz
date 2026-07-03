@@ -46,6 +46,18 @@ import {
   type CreateDocumentDto,
   type DocumentSourceType,
 } from '../knowledge/dto/create-document.dto.js'
+import { PoliciesService } from '../governance/policies.service.js'
+import { CommitteesService } from '../governance/committees.service.js'
+import { MeetingsService } from '../governance/meetings.service.js'
+import { AccreditationService } from '../accreditation/accreditation.service.js'
+import { FacilitiesService } from '../facilities/facilities.service.js'
+import { AdvancementService } from '../advancement/advancement.service.js'
+import type { CreatePolicyDto } from '../governance/dto/create-policy.dto.js'
+import type { CreateCommitteeDto } from '../governance/dto/create-committee.dto.js'
+import type { CreateMeetingDto } from '../governance/dto/create-meeting.dto.js'
+import type { CreateStandardDto } from '../accreditation/dto/create-standard.dto.js'
+import type { CreateMaintenanceDto } from '../facilities/dto/create-maintenance.dto.js'
+import type { CreateCampaignDto } from '../advancement/dto/create-campaign.dto.js'
 import { AssistantClient } from './assistant.client.js'
 import {
   AssistantFilesService,
@@ -106,6 +118,12 @@ const REFRESH: Record<ProposedAction['kind'], RefreshKey[]> = {
   submit_for_approval: ['tasks'],
   decide_approval: ['tasks'],
   file_document: ['knowledge'],
+  create_policy: ['governance'],
+  create_committee: ['governance'],
+  create_meeting: ['governance'],
+  create_standard: ['accreditation'],
+  create_maintenance_item: ['facilities'],
+  create_campaign: ['advancement'],
 }
 
 // Tools that perform a write. Membership UNCHANGED — but the meaning flips from
@@ -130,7 +148,22 @@ const CONFIRM_TOOLS = new Set([
   'submit_for_approval',
   'decide_approval',
   'file_document',
+  'create_policy',
+  'create_committee',
+  'create_meeting',
+  'create_standard',
+  'create_maintenance_item',
+  'create_campaign',
 ])
+
+// Enum vocab for the six new confirm-then-create tools — kept BYTE-IDENTICAL to the
+// corresponding DTO @IsIn arrays so a proposal clamps to exactly what the service DTO
+// will accept (a stray enum is dropped, never 400s the /apply). NOTE: some diverge
+// from the task prompt because the DTO is authoritative — facilities statuses are
+// open/scheduled/in_progress/resolved (no 'completed'/'closed'), priorities include
+// 'critical', and campaign statuses are planned/active/closed (no 'paused').
+const POLICY_STATUSES = new Set(['active', 'draft', 'retired'])
+const MAINTENANCE_PRIORITIES = new Set(['low', 'medium', 'high', 'critical'])
 
 // ~5MB RAW cap on a filable attachment. Base64 inflates ~4/3 → ~6.7MB, and with the
 // rest of the /apply JSON payload it stays comfortably under main.ts's 8MB JSON body
@@ -151,6 +184,12 @@ export interface ProposedAction {
     | 'submit_for_approval'
     | 'decide_approval'
     | 'file_document'
+    | 'create_policy'
+    | 'create_committee'
+    | 'create_meeting'
+    | 'create_standard'
+    | 'create_maintenance_item'
+    | 'create_campaign'
   periodId: string
   summary: string
   payload: Record<string, unknown>
@@ -283,6 +322,10 @@ type RefreshKey =
   | 'metrics'
   | 'tasks'
   | 'knowledge'
+  | 'governance'
+  | 'accreditation'
+  | 'facilities'
+  | 'advancement'
 
 /** A flat label/value row on the "what I changed" card. */
 export interface AppliedDetail {
@@ -372,6 +415,12 @@ export class AssistantService {
     private readonly tasks: TasksService,
     private readonly documents: DocumentsService,
     private readonly documentStorage: DocumentStorageService,
+    private readonly policies: PoliciesService,
+    private readonly committees: CommitteesService,
+    private readonly meetings: MeetingsService,
+    private readonly accreditation: AccreditationService,
+    private readonly facilities: FacilitiesService,
+    private readonly advancement: AdvancementService,
   ) {}
 
   isConfigured(): boolean {
@@ -720,6 +769,24 @@ export class AssistantService {
     if (name === 'file_document') {
       return this.buildFileDocumentProposal(args, ctx)
     }
+    if (name === 'create_policy') {
+      return this.buildPolicyProposal(args, ctx)
+    }
+    if (name === 'create_committee') {
+      return this.buildCommitteeProposal(args, ctx)
+    }
+    if (name === 'create_meeting') {
+      return this.buildMeetingProposal(args, ctx)
+    }
+    if (name === 'create_standard') {
+      return this.buildStandardProposal(args, ctx)
+    }
+    if (name === 'create_maintenance_item') {
+      return this.buildMaintenanceProposal(args, ctx)
+    }
+    if (name === 'create_campaign') {
+      return this.buildCampaignProposal(args, ctx)
+    }
     const periodId = await this.resolvePeriod(args, ctx)
     if (name === 'set_budget') {
       const amount = typeof args.amount === 'number' ? args.amount : undefined
@@ -1038,6 +1105,243 @@ export class AssistantService {
         fileName: raw.fileName,
         mimeType,
         fileDataBase64: raw.buffer.toString('base64'),
+      },
+    }
+  }
+
+  /**
+   * Build a confirmable create_policy proposal (NO mutation). Governance records are
+   * school-scoped, NOT period-scoped, so periodId is the non-semantic placeholder
+   * (ctx.periodId ?? '') applyAction ignores — same pattern as buildTaskProposal. Every
+   * untrusted string is trimmed + sliced to its DTO max; status clamps to the closed
+   * enum (dropped if invalid); dates are shape-checked; the interval is a bounded int.
+   * The RAW validated fields ride the payload and are RE-VALIDATED at apply, because a
+   * forged /apply hits applyAction directly (PoliciesService.create re-checks the tenant).
+   */
+  private buildPolicyProposal(args: Record<string, unknown>, ctx: Ctx): ProposedAction {
+    const title = typeof args.title === 'string' ? args.title.trim().slice(0, 200) : ''
+    if (!title) throw new Error('create_policy needs a title.')
+    const category = typeof args.category === 'string' ? args.category.trim().slice(0, 80) : ''
+    if (!category) throw new Error('create_policy needs a category.')
+    const status =
+      typeof args.status === 'string' && POLICY_STATUSES.has(args.status) ? args.status : undefined
+    const owner =
+      typeof args.owner === 'string' && args.owner.trim() ? args.owner.trim().slice(0, 200) : undefined
+    const adoptedDate =
+      typeof args.adoptedDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(args.adoptedDate)
+        ? args.adoptedDate
+        : undefined
+    const reviewIntervalMonths =
+      typeof args.reviewIntervalMonths === 'number' && Number.isFinite(args.reviewIntervalMonths)
+        ? Math.min(120, Math.max(1, Math.round(args.reviewIntervalMonths)))
+        : undefined
+    const notes =
+      typeof args.notes === 'string' && args.notes.trim() ? args.notes.trim().slice(0, 4000) : undefined
+    const bits = [`category: ${category}`]
+    if (status) bits.push(status)
+    if (reviewIntervalMonths) bits.push(`review every ${reviewIntervalMonths} months`)
+    return {
+      kind: 'create_policy',
+      periodId: ctx.periodId ?? '',
+      summary: `Create policy: “${title}” (${bits.join(', ')}).`,
+      payload: {
+        title,
+        category,
+        ...(status ? { status } : {}),
+        ...(owner ? { owner } : {}),
+        ...(adoptedDate ? { adoptedDate } : {}),
+        ...(reviewIntervalMonths ? { reviewIntervalMonths } : {}),
+        ...(notes ? { notes } : {}),
+      },
+    }
+  }
+
+  /** Build a confirmable create_committee proposal (NO mutation). See buildPolicyProposal. */
+  private buildCommitteeProposal(args: Record<string, unknown>, ctx: Ctx): ProposedAction {
+    const name = typeof args.name === 'string' ? args.name.trim().slice(0, 200) : ''
+    if (!name) throw new Error('create_committee needs a name.')
+    const kind =
+      typeof args.kind === 'string' && args.kind.trim() ? args.kind.trim().slice(0, 80) : undefined
+    const chair =
+      typeof args.chair === 'string' && args.chair.trim() ? args.chair.trim().slice(0, 200) : undefined
+    const description =
+      typeof args.description === 'string' && args.description.trim()
+        ? args.description.trim().slice(0, 2000)
+        : undefined
+    const bits: string[] = []
+    if (kind) bits.push(kind)
+    if (chair) bits.push(`chair: ${chair}`)
+    return {
+      kind: 'create_committee',
+      periodId: ctx.periodId ?? '',
+      summary: `Create committee: “${name}”${bits.length ? ` (${bits.join(', ')})` : ''}.`,
+      payload: {
+        name,
+        ...(kind ? { kind } : {}),
+        ...(chair ? { chair } : {}),
+        ...(description ? { description } : {}),
+      },
+    }
+  }
+
+  /** Build a confirmable create_meeting proposal (NO mutation). See buildPolicyProposal. */
+  private buildMeetingProposal(args: Record<string, unknown>, ctx: Ctx): ProposedAction {
+    const title = typeof args.title === 'string' ? args.title.trim().slice(0, 200) : ''
+    if (!title) throw new Error('create_meeting needs a title.')
+    const scheduledAt =
+      typeof args.scheduledAt === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(args.scheduledAt)
+        ? args.scheduledAt
+        : ''
+    if (!scheduledAt) throw new Error('create_meeting needs a scheduledAt date (YYYY-MM-DD).')
+    const committeeId =
+      typeof args.committeeId === 'string' && /^[0-9a-f-]{36}$/i.test(args.committeeId.trim())
+        ? args.committeeId.trim()
+        : undefined
+    const location =
+      typeof args.location === 'string' && args.location.trim()
+        ? args.location.trim().slice(0, 200)
+        : undefined
+    const agenda =
+      typeof args.agenda === 'string' && args.agenda.trim()
+        ? args.agenda.trim().slice(0, 20000)
+        : undefined
+    const bits = [`on ${scheduledAt}`]
+    if (location) bits.push(`at ${location}`)
+    return {
+      kind: 'create_meeting',
+      periodId: ctx.periodId ?? '',
+      summary: `Schedule meeting: “${title}” (${bits.join(', ')}).`,
+      payload: {
+        title,
+        scheduledAt,
+        ...(committeeId ? { committeeId } : {}),
+        ...(location ? { location } : {}),
+        ...(agenda ? { agenda } : {}),
+      },
+    }
+  }
+
+  /** Build a confirmable create_standard proposal (NO mutation). See buildPolicyProposal. */
+  private buildStandardProposal(args: Record<string, unknown>, ctx: Ctx): ProposedAction {
+    const code = typeof args.code === 'string' ? args.code.trim().slice(0, 40) : ''
+    if (!code) throw new Error('create_standard needs a code.')
+    const title = typeof args.title === 'string' ? args.title.trim().slice(0, 200) : ''
+    if (!title) throw new Error('create_standard needs a title.')
+    const category =
+      typeof args.category === 'string' && args.category.trim()
+        ? args.category.trim().slice(0, 80)
+        : undefined
+    const reviewDate =
+      typeof args.reviewDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(args.reviewDate)
+        ? args.reviewDate
+        : undefined
+    const owner =
+      typeof args.owner === 'string' && args.owner.trim() ? args.owner.trim().slice(0, 200) : undefined
+    const notes =
+      typeof args.notes === 'string' && args.notes.trim() ? args.notes.trim().slice(0, 4000) : undefined
+    const bits: string[] = []
+    if (category) bits.push(`domain: ${category}`)
+    if (reviewDate) bits.push(`review ${reviewDate}`)
+    return {
+      kind: 'create_standard',
+      periodId: ctx.periodId ?? '',
+      summary: `Create standard ${code}: “${title}”${bits.length ? ` (${bits.join(', ')})` : ''}.`,
+      payload: {
+        code,
+        title,
+        ...(category ? { category } : {}),
+        ...(reviewDate ? { reviewDate } : {}),
+        ...(owner ? { owner } : {}),
+        ...(notes ? { notes } : {}),
+      },
+    }
+  }
+
+  /** Build a confirmable create_maintenance_item proposal (NO mutation). See buildPolicyProposal. */
+  private buildMaintenanceProposal(args: Record<string, unknown>, ctx: Ctx): ProposedAction {
+    const title = typeof args.title === 'string' ? args.title.trim().slice(0, 200) : ''
+    if (!title) throw new Error('create_maintenance_item needs a title.')
+    const location =
+      typeof args.location === 'string' && args.location.trim()
+        ? args.location.trim().slice(0, 200)
+        : undefined
+    const category =
+      typeof args.category === 'string' && args.category.trim()
+        ? args.category.trim().slice(0, 80)
+        : undefined
+    const priority =
+      typeof args.priority === 'string' && MAINTENANCE_PRIORITIES.has(args.priority)
+        ? args.priority
+        : undefined
+    const estimatedCost =
+      typeof args.estimatedCost === 'number' &&
+      Number.isFinite(args.estimatedCost) &&
+      args.estimatedCost >= 0 &&
+      args.estimatedCost <= 1_000_000_000
+        ? Math.round(args.estimatedCost * 100) / 100
+        : undefined
+    const targetDate =
+      typeof args.targetDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(args.targetDate)
+        ? args.targetDate
+        : undefined
+    const notes =
+      typeof args.notes === 'string' && args.notes.trim() ? args.notes.trim().slice(0, 4000) : undefined
+    const bits: string[] = []
+    if (priority) bits.push(`${priority} priority`)
+    if (location) bits.push(`at ${location}`)
+    if (estimatedCost != null) bits.push(`est. $${estimatedCost.toLocaleString('en-US')}`)
+    if (targetDate) bits.push(`target ${targetDate}`)
+    return {
+      kind: 'create_maintenance_item',
+      periodId: ctx.periodId ?? '',
+      summary: `Log maintenance item: “${title}”${bits.length ? ` (${bits.join(', ')})` : ''}.`,
+      payload: {
+        title,
+        ...(location ? { location } : {}),
+        ...(category ? { category } : {}),
+        ...(priority ? { priority } : {}),
+        ...(estimatedCost != null ? { estimatedCost } : {}),
+        ...(targetDate ? { targetDate } : {}),
+        ...(notes ? { notes } : {}),
+      },
+    }
+  }
+
+  /** Build a confirmable create_campaign proposal (NO mutation). See buildPolicyProposal. */
+  private buildCampaignProposal(args: Record<string, unknown>, ctx: Ctx): ProposedAction {
+    const name = typeof args.name === 'string' ? args.name.trim().slice(0, 200) : ''
+    if (!name) throw new Error('create_campaign needs a name.')
+    const campaignType =
+      typeof args.campaignType === 'string' && args.campaignType.trim()
+        ? args.campaignType.trim().slice(0, 80)
+        : undefined
+    const goalAmount =
+      typeof args.goalAmount === 'number' &&
+      Number.isFinite(args.goalAmount) &&
+      args.goalAmount >= 0 &&
+      args.goalAmount <= 1_000_000_000
+        ? Math.round(args.goalAmount * 100) / 100
+        : undefined
+    const closeDate =
+      typeof args.closeDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(args.closeDate)
+        ? args.closeDate
+        : undefined
+    const notes =
+      typeof args.notes === 'string' && args.notes.trim() ? args.notes.trim().slice(0, 4000) : undefined
+    const bits: string[] = []
+    if (campaignType) bits.push(campaignType)
+    if (goalAmount != null) bits.push(`goal $${goalAmount.toLocaleString('en-US')}`)
+    if (closeDate) bits.push(`closes ${closeDate}`)
+    return {
+      kind: 'create_campaign',
+      periodId: ctx.periodId ?? '',
+      summary: `Create campaign: “${name}”${bits.length ? ` (${bits.join(', ')})` : ''}.`,
+      payload: {
+        name,
+        ...(campaignType ? { campaignType } : {}),
+        ...(goalAmount != null ? { goalAmount } : {}),
+        ...(closeDate ? { closeDate } : {}),
+        ...(notes ? { notes } : {}),
       },
     }
   }
@@ -1373,6 +1677,194 @@ export class AssistantService {
       await this.documents.createDocument(schoolId, file, dto, userId)
       return { applied: true, summary: action.summary }
     }
+    if (action.kind === 'create_policy') {
+      // UNTRUSTED payload (a forged /apply can hit this directly) — re-derive and
+      // re-validate EVERY field; PoliciesService.create re-checks the tenant (defense
+      // in depth) and the DTO's forbidNonWhitelisted pipe re-runs at the REST boundary.
+      const title = typeof p.title === 'string' ? p.title.trim().slice(0, 200) : ''
+      if (!title) throw new Error('A policy needs a title.')
+      const category = typeof p.category === 'string' ? p.category.trim().slice(0, 80) : ''
+      if (!category) throw new Error('A policy needs a category.')
+      const status =
+        typeof p.status === 'string' && POLICY_STATUSES.has(p.status)
+          ? (p.status as CreatePolicyDto['status'])
+          : undefined
+      const owner =
+        typeof p.owner === 'string' && p.owner.trim() ? p.owner.trim().slice(0, 200) : undefined
+      const adoptedDate =
+        typeof p.adoptedDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(p.adoptedDate)
+          ? p.adoptedDate
+          : undefined
+      const reviewIntervalMonths =
+        typeof p.reviewIntervalMonths === 'number' && Number.isFinite(p.reviewIntervalMonths)
+          ? Math.min(120, Math.max(1, Math.round(p.reviewIntervalMonths)))
+          : undefined
+      const notes =
+        typeof p.notes === 'string' && p.notes.trim() ? p.notes.trim().slice(0, 4000) : undefined
+      const dto: CreatePolicyDto = {
+        title,
+        category,
+        ...(status ? { status } : {}),
+        ...(owner ? { owner } : {}),
+        ...(adoptedDate ? { adoptedDate } : {}),
+        ...(reviewIntervalMonths ? { reviewIntervalMonths } : {}),
+        ...(notes ? { notes } : {}),
+      }
+      await this.policies.create(schoolId, dto, userId)
+      return { applied: true, summary: action.summary }
+    }
+    if (action.kind === 'create_committee') {
+      // UNTRUSTED payload — re-validate; CommitteesService.create re-checks the tenant.
+      const name = typeof p.name === 'string' ? p.name.trim().slice(0, 200) : ''
+      if (!name) throw new Error('A committee needs a name.')
+      const kind =
+        typeof p.kind === 'string' && p.kind.trim() ? p.kind.trim().slice(0, 80) : undefined
+      const chair =
+        typeof p.chair === 'string' && p.chair.trim() ? p.chair.trim().slice(0, 200) : undefined
+      const description =
+        typeof p.description === 'string' && p.description.trim()
+          ? p.description.trim().slice(0, 2000)
+          : undefined
+      const dto: CreateCommitteeDto = {
+        name,
+        ...(kind ? { kind } : {}),
+        ...(chair ? { chair } : {}),
+        ...(description ? { description } : {}),
+      }
+      await this.committees.create(schoolId, dto, userId)
+      return { applied: true, summary: action.summary }
+    }
+    if (action.kind === 'create_meeting') {
+      // UNTRUSTED payload — re-validate; MeetingsService.create re-checks the tenant AND
+      // 404s a committeeId that is not same-school (never trusting the client value).
+      const title = typeof p.title === 'string' ? p.title.trim().slice(0, 200) : ''
+      if (!title) throw new Error('A meeting needs a title.')
+      const scheduledAt =
+        typeof p.scheduledAt === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(p.scheduledAt)
+          ? p.scheduledAt
+          : ''
+      if (!scheduledAt) throw new Error('A meeting needs a scheduledAt date.')
+      const committeeId =
+        typeof p.committeeId === 'string' && /^[0-9a-f-]{36}$/i.test(p.committeeId.trim())
+          ? p.committeeId.trim()
+          : undefined
+      const location =
+        typeof p.location === 'string' && p.location.trim()
+          ? p.location.trim().slice(0, 200)
+          : undefined
+      const agenda =
+        typeof p.agenda === 'string' && p.agenda.trim() ? p.agenda.trim().slice(0, 20000) : undefined
+      const dto: CreateMeetingDto = {
+        title,
+        scheduledAt,
+        ...(committeeId ? { committeeId } : {}),
+        ...(location ? { location } : {}),
+        ...(agenda ? { agenda } : {}),
+      }
+      await this.meetings.create(schoolId, dto, userId)
+      return { applied: true, summary: action.summary }
+    }
+    if (action.kind === 'create_standard') {
+      // UNTRUSTED payload — re-validate; AccreditationService.createStandard re-checks tenant.
+      const code = typeof p.code === 'string' ? p.code.trim().slice(0, 40) : ''
+      if (!code) throw new Error('A standard needs a code.')
+      const title = typeof p.title === 'string' ? p.title.trim().slice(0, 200) : ''
+      if (!title) throw new Error('A standard needs a title.')
+      const category =
+        typeof p.category === 'string' && p.category.trim()
+          ? p.category.trim().slice(0, 80)
+          : undefined
+      const reviewDate =
+        typeof p.reviewDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(p.reviewDate)
+          ? p.reviewDate
+          : undefined
+      const owner =
+        typeof p.owner === 'string' && p.owner.trim() ? p.owner.trim().slice(0, 200) : undefined
+      const notes =
+        typeof p.notes === 'string' && p.notes.trim() ? p.notes.trim().slice(0, 4000) : undefined
+      const dto: CreateStandardDto = {
+        code,
+        title,
+        ...(category ? { category } : {}),
+        ...(reviewDate ? { reviewDate } : {}),
+        ...(owner ? { owner } : {}),
+        ...(notes ? { notes } : {}),
+      }
+      await this.accreditation.createStandard(schoolId, dto, userId)
+      return { applied: true, summary: action.summary }
+    }
+    if (action.kind === 'create_maintenance_item') {
+      // UNTRUSTED payload — re-validate; FacilitiesService.createMaintenance re-checks tenant.
+      const title = typeof p.title === 'string' ? p.title.trim().slice(0, 200) : ''
+      if (!title) throw new Error('A maintenance item needs a title.')
+      const location =
+        typeof p.location === 'string' && p.location.trim()
+          ? p.location.trim().slice(0, 200)
+          : undefined
+      const category =
+        typeof p.category === 'string' && p.category.trim()
+          ? p.category.trim().slice(0, 80)
+          : undefined
+      const priority =
+        typeof p.priority === 'string' && MAINTENANCE_PRIORITIES.has(p.priority)
+          ? p.priority
+          : undefined
+      const estimatedCost =
+        typeof p.estimatedCost === 'number' &&
+        Number.isFinite(p.estimatedCost) &&
+        p.estimatedCost >= 0 &&
+        p.estimatedCost <= 1_000_000_000
+          ? Math.round(p.estimatedCost * 100) / 100
+          : undefined
+      const targetDate =
+        typeof p.targetDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(p.targetDate)
+          ? p.targetDate
+          : undefined
+      const notes =
+        typeof p.notes === 'string' && p.notes.trim() ? p.notes.trim().slice(0, 4000) : undefined
+      const dto: CreateMaintenanceDto = {
+        title,
+        ...(location ? { location } : {}),
+        ...(category ? { category } : {}),
+        ...(priority ? { priority } : {}),
+        ...(estimatedCost != null ? { estimatedCost } : {}),
+        ...(targetDate ? { targetDate } : {}),
+        ...(notes ? { notes } : {}),
+      }
+      await this.facilities.createMaintenance(schoolId, dto, userId)
+      return { applied: true, summary: action.summary }
+    }
+    if (action.kind === 'create_campaign') {
+      // UNTRUSTED payload — re-validate; AdvancementService.createCampaign re-checks tenant.
+      const name = typeof p.name === 'string' ? p.name.trim().slice(0, 200) : ''
+      if (!name) throw new Error('A campaign needs a name.')
+      const campaignType =
+        typeof p.campaignType === 'string' && p.campaignType.trim()
+          ? p.campaignType.trim().slice(0, 80)
+          : undefined
+      const goalAmount =
+        typeof p.goalAmount === 'number' &&
+        Number.isFinite(p.goalAmount) &&
+        p.goalAmount >= 0 &&
+        p.goalAmount <= 1_000_000_000
+          ? Math.round(p.goalAmount * 100) / 100
+          : undefined
+      const closeDate =
+        typeof p.closeDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(p.closeDate)
+          ? p.closeDate
+          : undefined
+      const notes =
+        typeof p.notes === 'string' && p.notes.trim() ? p.notes.trim().slice(0, 4000) : undefined
+      const dto: CreateCampaignDto = {
+        name,
+        ...(campaignType ? { campaignType } : {}),
+        ...(goalAmount != null ? { goalAmount } : {}),
+        ...(closeDate ? { closeDate } : {}),
+        ...(notes ? { notes } : {}),
+      }
+      await this.advancement.createCampaign(schoolId, dto, userId)
+      return { applied: true, summary: action.summary }
+    }
     // draft_cap_entry
     await this.correctiveAction.upsertEntries(
       schoolId,
@@ -1569,6 +2061,14 @@ export class AssistantService {
       'accreditation evidence, etc.) call file_document with that file’s attachmentId — it PROPOSES filing it ' +
       'for the user to CONFIRM (classify the domain, suggest a clear title and domain tags; the server holds the ' +
       'file bytes, so NEVER retype the file). It does NOT file anything until the user confirms. ' +
+      'You can also CREATE records across the modules — each is a confirm-then-create PROPOSAL (propose → ' +
+      'the user confirms → apply; NEVER autonomous), so never claim the record exists until the user confirms: ' +
+      'create_policy (a governance Policy), create_committee and create_meeting (governance), create_standard ' +
+      '(an accreditation Standard), create_maintenance_item (a facilities deferred-maintenance item), and ' +
+      'create_campaign (an advancement fundraising campaign). Use them when the user asks to add such a record, ' +
+      'or to turn a briefing/attention item into one (e.g. "file that overdue conflict-of-interest policy"). ' +
+      'Pull the title/name and details from the referenced item; pass dates (yyyy-mm-dd) only when the user ' +
+      'states them, and never invent them. ' +
       'Be concise and board-appropriate; format money as USD. Only this school’s data is available. ' +
       'If a tool returns an error or needs data, say so plainly.'
     )
