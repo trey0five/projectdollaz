@@ -1,27 +1,37 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Governance route (Phase 3): AppShell chrome + the governance module surfaced as
-// TABS — Policies (the review register), Committees, and Meetings (agenda /
-// minutes / decisions / minutes-approval). School-scoped (no period selector).
-// Gated by the 'governance' module — the nav item is hidden by hasModule, but a
-// direct-nav for a finance-only school renders a friendly "module not on your
-// plan" panel (the API 402 → notLicensed) shown ONCE at page level.
-// Navy/gold theme, flashy tab underline, reduced-motion safe, no setState-in-effect.
+// Governance route — the DOMAIN COMMAND CENTER (Phase 3 register, redesigned). A
+// LIGHT command-center (matches the Finance home, not the old dark tabbed page):
+// Penny lands you on governance's slice of the briefing — the KPIs that define its
+// health (policies past review, minutes awaiting sign-off, committees, next
+// meeting), the items that need a decision (the attention rail with one-click
+// Approve / Draft-agenda actions), with the three registers (Meetings, Committees,
+// Policies) a tab away. Built on the reusable DomainCommandCenter scaffold that
+// Facilities / Advancement / Accreditation will reuse next.
+//
+// School-scoped (no period selector). Route stays /governance. Gated by the
+// 'governance' module — a finance-only school direct-navving here gets a friendly
+// light "module not on your plan" panel (the API 402 → notLicensed). The create /
+// edit form modals are kept as dark navy/gold overlays over the light page.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import {
   Landmark,
-  Plus,
   Pencil,
   Trash2,
   ListPlus,
   X,
-  Users,
-  CalendarDays,
   CheckCircle2,
+  TrendingDown,
+  AlertTriangle,
+  Check,
+  CalendarClock,
+  Clock,
+  FileWarning,
 } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
+import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { usePolicies } from '../hooks/usePolicies.js'
 import { useCommittees } from '../hooks/useCommittees.js'
@@ -32,11 +42,12 @@ const COMMITTEE_KINDS = ['board', 'finance', 'governance', 'advancement', 'acade
 const MEETING_STATUSES = ['scheduled', 'held', 'cancelled']
 const MINUTES_STATUSES = ['none', 'draft', 'pending_approval', 'approved']
 
+// ── Light-theme review badge (restyled from the old dark pills) ──────────────
 const REVIEW_BADGE = {
-  overdue: { label: 'Overdue', cls: 'border-red-400/50 bg-red-500/15 text-red-200' },
-  'due-soon': { label: 'Due soon', cls: 'border-amber-400/50 bg-amber-500/15 text-amber-200' },
-  current: { label: 'Current', cls: 'border-emerald-400/50 bg-emerald-500/15 text-emerald-200' },
-  unknown: { label: 'No review date', cls: 'border-white/20 bg-white/5 text-white/50' },
+  overdue: { label: 'Overdue', cls: 'border-danger/30 bg-danger/10 text-danger' },
+  'due-soon': { label: 'Due soon', cls: 'border-gold/40 bg-gold/10 text-[#7a5e00]' },
+  current: { label: 'Current', cls: 'border-emerald-300/70 bg-emerald-50 text-emerald-700' },
+  unknown: { label: 'No review date', cls: 'border-rule/60 bg-section text-muted' },
 }
 
 function ReviewBadge({ status, nextReviewDate, daysUntilDue }) {
@@ -56,7 +67,7 @@ function ReviewBadge({ status, nextReviewDate, daysUntilDue }) {
   )
 }
 
-/** A small pill (shared idiom for committee active + meeting status / signal badges). */
+/** A small light-theme pill (shared idiom for committee active + meeting signals). */
 function Pill({ cls, children, title }) {
   return (
     <span
@@ -68,7 +79,59 @@ function Pill({ cls, children, title }) {
   )
 }
 
-// ── Shared modal shell (navy/gold, reduced-motion safe) ──────────────────────
+// ── Light-theme register table primitives ────────────────────────────────────
+function Th({ children, right }) {
+  return (
+    <th
+      className={`px-4 py-2.5 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-muted ${
+        right ? 'text-right' : 'text-left'
+      }`}
+    >
+      {children}
+    </th>
+  )
+}
+
+function IconAction(props) {
+  const { onClick, label, title, danger } = props
+  const ActionIcon = props.Icon
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={title ?? label}
+      className={`rounded-lg border border-rule/60 p-1.5 text-muted transition hover:text-navy ${
+        danger ? 'hover:border-danger/50 hover:text-danger' : 'hover:border-gold/60'
+      }`}
+    >
+      <ActionIcon size={15} />
+    </button>
+  )
+}
+
+function TableShell({ children, cols }) {
+  return (
+    <div className="overflow-x-auto rounded-xl border border-rule/50">
+      <table className="w-full text-left text-[14px]">
+        <thead className="bg-cream">
+          <tr>{cols}</tr>
+        </thead>
+        <tbody>{children}</tbody>
+      </table>
+    </div>
+  )
+}
+
+function StateRow({ children }) {
+  return (
+    <div className="rounded-xl border border-dashed border-rule/60 bg-cream/50 px-6 py-12 text-center">
+      {children}
+    </div>
+  )
+}
+
+// ── Shared dark modal shell (an overlay — deliberately kept dark) ─────────────
 function ModalShell({ title, onClose, reduce, children }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -120,32 +183,38 @@ function ModalActions({ saving, onClose, label }) {
   )
 }
 
-// ── Shared empty/loading/error/locked states so all three tabs render alike ──
-function GatePanel({ notLicensed, notEntitled }) {
-  if (notLicensed)
-    return (
-      <div className="rounded-2xl border-2 border-gold/30 bg-navy/30 p-8 text-center">
-        <p className="text-[15px] text-white/80">
-          The Governance module isn&apos;t on your plan yet.
-        </p>
-        <p className="mt-1 text-[13px] text-white/55">
-          Add Governance to track board policies, committees, and meetings.
-        </p>
+// ── Light-theme entitlement / license gate ───────────────────────────────────
+function GatePanel({ notLicensed }) {
+  return (
+    <div className="mx-auto max-w-[1180px] px-4 py-6 sm:px-10 sm:py-8">
+      <div className="card-soft flex flex-col items-center gap-3 px-6 py-14 text-center">
+        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gold-gradient text-navy shadow-glow">
+          <Landmark size={26} />
+        </span>
+        {notLicensed ? (
+          <>
+            <h2 className="font-serif text-xl font-semibold text-navy">
+              Governance isn&apos;t on your plan yet
+            </h2>
+            <p className="max-w-md text-[15px] text-muted">
+              Add the Governance module to track board policies, committees, and meetings — and land
+              its slice of the briefing here.
+            </p>
+          </>
+        ) : (
+          <>
+            <h2 className="font-serif text-xl font-semibold text-navy">Your subscription is paused</h2>
+            <p className="max-w-md text-[15px] text-muted">
+              Resume your plan to manage governance records.
+            </p>
+          </>
+        )}
       </div>
-    )
-  if (notEntitled)
-    return (
-      <div className="rounded-2xl border-2 border-gold/30 bg-navy/30 p-8 text-center">
-        <p className="text-[15px] text-white/80">Your subscription is paused.</p>
-        <p className="mt-1 text-[13px] text-white/55">
-          Resume your plan to manage governance records.
-        </p>
-      </div>
-    )
-  return null
+    </div>
+  )
 }
 
-// ═══════════════════════════ POLICIES TAB ═══════════════════════════════════
+// ═══════════════════════════ POLICY MODAL ═══════════════════════════════════
 
 const EMPTY_POLICY = {
   title: '',
@@ -269,183 +338,7 @@ function PolicyFormModal({ initial, onClose, onSave, reduce }) {
   )
 }
 
-function PoliciesPanel({ schoolId, canEdit, reduce, gate }) {
-  const navigate = useNavigate()
-  const { policies, loading, error, create, update, remove } = usePolicies(schoolId)
-  const [modalOpen, setModalOpen] = useState(false)
-  const [editing, setEditing] = useState(null)
-
-  const createTaskFromPolicy = (p) => {
-    const today = new Date().toISOString().slice(0, 10)
-    const futureDue = p.nextReviewDate && p.nextReviewDate > today ? p.nextReviewDate : ''
-    navigate('/tasks', {
-      state: {
-        prefill: {
-          title: `Review policy: ${p.title}`,
-          sourceType: 'policy',
-          sourceRef: p.id,
-          dueDate: futureDue,
-        },
-      },
-    })
-  }
-
-  const openAdd = () => {
-    setEditing(null)
-    setModalOpen(true)
-  }
-  const openEdit = (p) => {
-    setEditing(p)
-    setModalOpen(true)
-  }
-  const initialForm = useMemo(() => {
-    if (!editing) return null
-    return {
-      title: editing.title ?? '',
-      category: editing.category ?? '',
-      status: editing.status ?? 'active',
-      owner: editing.owner ?? '',
-      adoptedDate: editing.adoptedDate ?? '',
-      lastReviewedDate: editing.lastReviewedDate ?? '',
-      reviewIntervalMonths: editing.reviewIntervalMonths ?? 12,
-      notes: editing.notes ?? '',
-    }
-  }, [editing])
-
-  const onSave = async (body) => {
-    if (editing) await update(editing.id, body)
-    else await create(body)
-  }
-  const onDelete = async (p) => {
-    if (window.confirm(`Delete "${p.title}"? This cannot be undone.`)) await remove(p.id)
-  }
-
-  if (gate) return gate
-
-  return (
-    <div>
-      <div className="mb-4 flex items-center justify-between">
-        <p className="text-[13px] text-white/60">Your standing policies and their review cycles.</p>
-        {canEdit ? (
-          <button
-            type="button"
-            onClick={openAdd}
-            className="inline-flex items-center gap-2 rounded-lg border-2 border-gold/60 bg-gold/15 px-4 py-2 text-[14px] font-semibold text-gold-light hover:bg-gold/25"
-          >
-            <Plus size={16} /> Add policy
-          </button>
-        ) : null}
-      </div>
-
-      {loading ? (
-        <div className="rounded-2xl border-2 border-white/10 bg-navy/30 p-8 text-center text-white/50">
-          Loading policies…
-        </div>
-      ) : error ? (
-        <div className="rounded-2xl border-2 border-red-400/30 bg-red-500/10 p-6 text-center text-red-200">
-          {error}
-        </div>
-      ) : policies.length === 0 ? (
-        <div className="rounded-2xl border-2 border-dashed border-white/20 bg-navy/30 p-10 text-center">
-          <p className="text-[15px] text-white/80">No policies yet.</p>
-          <p className="mt-1 text-[13px] text-white/55">
-            Add your first policy to start tracking review cycles.
-          </p>
-        </div>
-      ) : (
-        <div className="overflow-hidden rounded-2xl border-2 border-gold/20">
-          <table className="w-full text-left text-[14px]">
-            <thead className="bg-navy/50 text-[12px] uppercase tracking-[0.08em] text-white/50">
-              <tr>
-                <th className="px-4 py-3">Policy</th>
-                <th className="px-4 py-3">Category</th>
-                <th className="px-4 py-3">Owner</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Review</th>
-                {canEdit ? <th className="px-4 py-3 text-right">Actions</th> : null}
-              </tr>
-            </thead>
-            <tbody>
-              <AnimatePresence initial={false}>
-                {policies.map((p) => (
-                  <motion.tr
-                    key={p.id}
-                    layout={!reduce}
-                    initial={reduce ? false : { opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={reduce ? undefined : { opacity: 0 }}
-                    className="border-t border-white/10 text-white/85"
-                  >
-                    <td className="px-4 py-3 font-semibold text-white">{p.title}</td>
-                    <td className="px-4 py-3 text-white/70">{p.category}</td>
-                    <td className="px-4 py-3 text-white/70">{p.owner ?? '—'}</td>
-                    <td className="px-4 py-3">
-                      <span className="rounded-md border border-white/20 bg-white/5 px-2 py-0.5 text-[12px] capitalize text-white/70">
-                        {p.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <ReviewBadge
-                        status={p.reviewStatus}
-                        nextReviewDate={p.nextReviewDate}
-                        daysUntilDue={p.daysUntilDue}
-                      />
-                    </td>
-                    {canEdit ? (
-                      <td className="px-4 py-3">
-                        <div className="flex justify-end gap-1.5">
-                          {p.reviewStatus === 'overdue' || p.reviewStatus === 'due-soon' ? (
-                            <button
-                              type="button"
-                              onClick={() => createTaskFromPolicy(p)}
-                              aria-label={`Create task to review ${p.title}`}
-                              title="Create a task to review this policy"
-                              className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-gold/60 hover:text-gold-light"
-                            >
-                              <ListPlus size={15} />
-                            </button>
-                          ) : null}
-                          <button
-                            type="button"
-                            onClick={() => openEdit(p)}
-                            aria-label={`Edit ${p.title}`}
-                            className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-gold/60 hover:text-white"
-                          >
-                            <Pencil size={15} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onDelete(p)}
-                            aria-label={`Delete ${p.title}`}
-                            className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-red-400/60 hover:text-red-200"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
-                      </td>
-                    ) : null}
-                  </motion.tr>
-                ))}
-              </AnimatePresence>
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {modalOpen ? (
-        <PolicyFormModal
-          key={editing ? editing.id : 'new'}
-          initial={initialForm}
-          onClose={() => setModalOpen(false)}
-          onSave={onSave}
-          reduce={reduce}
-        />
-      ) : null}
-    </div>
-  )
-}
-
-// ═══════════════════════════ COMMITTEES TAB ═════════════════════════════════
+// ═══════════════════════════ COMMITTEE MODAL ════════════════════════════════
 
 const EMPTY_COMMITTEE = { name: '', kind: 'board', chair: '', description: '', active: true }
 
@@ -532,151 +425,7 @@ function CommitteeFormModal({ initial, onClose, onSave, reduce }) {
   )
 }
 
-function CommitteesPanel({ committeesHook, canEdit, reduce, gate }) {
-  const { committees, loading, error, create, update, remove } = committeesHook
-  const [modalOpen, setModalOpen] = useState(false)
-  const [editing, setEditing] = useState(null)
-
-  const openAdd = () => {
-    setEditing(null)
-    setModalOpen(true)
-  }
-  const openEdit = (c) => {
-    setEditing(c)
-    setModalOpen(true)
-  }
-  const initialForm = useMemo(() => {
-    if (!editing) return null
-    return {
-      name: editing.name ?? '',
-      kind: editing.kind ?? 'other',
-      chair: editing.chair ?? '',
-      description: editing.description ?? '',
-      active: editing.active ?? true,
-    }
-  }, [editing])
-
-  const onSave = async (body) => {
-    if (editing) await update(editing.id, body)
-    else await create(body)
-  }
-  const onDelete = async (c) => {
-    if (window.confirm(`Delete "${c.name}"? Its meetings are kept but detached.`)) await remove(c.id)
-  }
-
-  if (gate) return gate
-
-  return (
-    <div>
-      <div className="mb-4 flex items-center justify-between">
-        <p className="text-[13px] text-white/60">
-          Your committees — meetings can be filed under one.
-        </p>
-        {canEdit ? (
-          <button
-            type="button"
-            onClick={openAdd}
-            className="inline-flex items-center gap-2 rounded-lg border-2 border-gold/60 bg-gold/15 px-4 py-2 text-[14px] font-semibold text-gold-light hover:bg-gold/25"
-          >
-            <Plus size={16} /> Add committee
-          </button>
-        ) : null}
-      </div>
-
-      {loading ? (
-        <div className="rounded-2xl border-2 border-white/10 bg-navy/30 p-8 text-center text-white/50">
-          Loading committees…
-        </div>
-      ) : error ? (
-        <div className="rounded-2xl border-2 border-red-400/30 bg-red-500/10 p-6 text-center text-red-200">
-          {error}
-        </div>
-      ) : committees.length === 0 ? (
-        <div className="rounded-2xl border-2 border-dashed border-white/20 bg-navy/30 p-10 text-center">
-          <p className="text-[15px] text-white/80">No committees yet.</p>
-          <p className="mt-1 text-[13px] text-white/55">Add a committee to organize your meetings.</p>
-        </div>
-      ) : (
-        <div className="overflow-hidden rounded-2xl border-2 border-gold/20">
-          <table className="w-full text-left text-[14px]">
-            <thead className="bg-navy/50 text-[12px] uppercase tracking-[0.08em] text-white/50">
-              <tr>
-                <th className="px-4 py-3">Committee</th>
-                <th className="px-4 py-3">Kind</th>
-                <th className="px-4 py-3">Chair</th>
-                <th className="px-4 py-3">Status</th>
-                {canEdit ? <th className="px-4 py-3 text-right">Actions</th> : null}
-              </tr>
-            </thead>
-            <tbody>
-              <AnimatePresence initial={false}>
-                {committees.map((c) => (
-                  <motion.tr
-                    key={c.id}
-                    layout={!reduce}
-                    initial={reduce ? false : { opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={reduce ? undefined : { opacity: 0 }}
-                    className="border-t border-white/10 text-white/85"
-                  >
-                    <td className="px-4 py-3 font-semibold text-white">{c.name}</td>
-                    <td className="px-4 py-3">
-                      <span className="rounded-md border border-white/20 bg-white/5 px-2 py-0.5 text-[12px] capitalize text-white/70">
-                        {c.kind}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-white/70">{c.chair ?? '—'}</td>
-                    <td className="px-4 py-3">
-                      {c.active ? (
-                        <Pill cls="border-emerald-400/50 bg-emerald-500/15 text-emerald-200">Active</Pill>
-                      ) : (
-                        <Pill cls="border-white/20 bg-white/5 text-white/50">Inactive</Pill>
-                      )}
-                    </td>
-                    {canEdit ? (
-                      <td className="px-4 py-3">
-                        <div className="flex justify-end gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => openEdit(c)}
-                            aria-label={`Edit ${c.name}`}
-                            className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-gold/60 hover:text-white"
-                          >
-                            <Pencil size={15} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onDelete(c)}
-                            aria-label={`Delete ${c.name}`}
-                            className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-red-400/60 hover:text-red-200"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
-                      </td>
-                    ) : null}
-                  </motion.tr>
-                ))}
-              </AnimatePresence>
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {modalOpen ? (
-        <CommitteeFormModal
-          key={editing ? editing.id : 'new'}
-          initial={initialForm}
-          onClose={() => setModalOpen(false)}
-          onSave={onSave}
-          reduce={reduce}
-        />
-      ) : null}
-    </div>
-  )
-}
-
-// ═══════════════════════════ MEETINGS TAB ═══════════════════════════════════
+// ═══════════════════════════ MEETING MODAL ══════════════════════════════════
 
 const EMPTY_MEETING = {
   title: '',
@@ -801,271 +550,612 @@ function MeetingFormModal({ initial, committees, onClose, onSave, reduce }) {
   )
 }
 
-function MeetingsPanel({ meetingsHook, committees, canEdit, reduce, gate }) {
-  const { meetings, loading, error, create, update, remove, approveMinutes } = meetingsHook
-  const [modalOpen, setModalOpen] = useState(false)
-  const [editing, setEditing] = useState(null)
+// ═══════════════════════════ LIGHT REGISTER TABLES ══════════════════════════
 
-  const openAdd = () => {
-    setEditing(null)
-    setModalOpen(true)
-  }
-  const openEdit = (m) => {
-    setEditing(m)
-    setModalOpen(true)
-  }
-  const initialForm = useMemo(() => {
-    if (!editing) return null
-    return {
-      title: editing.title ?? '',
-      committeeId: editing.committeeId ?? '',
-      scheduledAt: editing.scheduledAt ?? '',
-      location: editing.location ?? '',
-      status: editing.status ?? 'scheduled',
-      agenda: editing.agenda ?? '',
-      minutes: editing.minutes ?? '',
-      decisions: editing.decisions ?? '',
-      minutesStatus: editing.minutesStatus ?? 'none',
-    }
-  }, [editing])
-
-  const onSave = async (body) => {
-    if (editing) await update(editing.id, body)
-    else await create(body)
-  }
-  const onDelete = async (m) => {
-    if (window.confirm(`Delete "${m.title}"? This cannot be undone.`)) await remove(m.id)
-  }
-
-  if (gate) return gate
+function PoliciesTable({ policies, loading, error, canEdit, reduce, onEdit, onDelete, onMakeTask }) {
+  if (loading) return <StateRow><p className="text-[14px] text-muted">Loading policies…</p></StateRow>
+  if (error)
+    return (
+      <StateRow>
+        <p className="text-[14px] text-danger">{error}</p>
+      </StateRow>
+    )
+  if (policies.length === 0)
+    return (
+      <StateRow>
+        <p className="font-serif text-[16px] italic text-muted">No policies yet.</p>
+        <p className="mt-1 text-[13px] text-muted">Add your first policy to start tracking review cycles.</p>
+      </StateRow>
+    )
 
   return (
-    <div>
-      <div className="mb-4 flex items-center justify-between">
-        <p className="text-[13px] text-white/60">
-          Board and committee meetings — agenda, minutes, decisions, approvals.
-        </p>
-        {canEdit ? (
-          <button
-            type="button"
-            onClick={openAdd}
-            className="inline-flex items-center gap-2 rounded-lg border-2 border-gold/60 bg-gold/15 px-4 py-2 text-[14px] font-semibold text-gold-light hover:bg-gold/25"
+    <TableShell
+      cols={
+        <>
+          <Th>Policy</Th>
+          <Th>Category</Th>
+          <Th>Owner</Th>
+          <Th>Status</Th>
+          <Th>Review</Th>
+          {canEdit ? <Th right>Actions</Th> : null}
+        </>
+      }
+    >
+      <AnimatePresence initial={false}>
+        {policies.map((p) => (
+          <motion.tr
+            key={p.id}
+            layout={!reduce}
+            initial={reduce ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={reduce ? undefined : { opacity: 0 }}
+            className="group border-t border-rule/50"
           >
-            <Plus size={16} /> Add meeting
-          </button>
-        ) : null}
-      </div>
-
-      {loading ? (
-        <div className="rounded-2xl border-2 border-white/10 bg-navy/30 p-8 text-center text-white/50">
-          Loading meetings…
-        </div>
-      ) : error ? (
-        <div className="rounded-2xl border-2 border-red-400/30 bg-red-500/10 p-6 text-center text-red-200">
-          {error}
-        </div>
-      ) : meetings.length === 0 ? (
-        <div className="rounded-2xl border-2 border-dashed border-white/20 bg-navy/30 p-10 text-center">
-          <p className="text-[15px] text-white/80">No meetings yet.</p>
-          <p className="mt-1 text-[13px] text-white/55">
-            Schedule a meeting to track its agenda and minutes.
-          </p>
-        </div>
-      ) : (
-        <div className="overflow-hidden rounded-2xl border-2 border-gold/20">
-          <table className="w-full text-left text-[14px]">
-            <thead className="bg-navy/50 text-[12px] uppercase tracking-[0.08em] text-white/50">
-              <tr>
-                <th className="px-4 py-3">Meeting</th>
-                <th className="px-4 py-3">Committee</th>
-                <th className="px-4 py-3">Date</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Signals</th>
-                {canEdit ? <th className="px-4 py-3 text-right">Actions</th> : null}
-              </tr>
-            </thead>
-            <tbody>
-              <AnimatePresence initial={false}>
-                {meetings.map((m) => (
-                  <motion.tr
-                    key={m.id}
-                    layout={!reduce}
-                    initial={reduce ? false : { opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={reduce ? undefined : { opacity: 0 }}
-                    className="border-t border-white/10 text-white/85"
-                  >
-                    <td className="px-4 py-3 font-semibold text-white">{m.title}</td>
-                    <td className="px-4 py-3 text-white/70">{m.committeeName ?? '—'}</td>
-                    <td className="px-4 py-3 text-white/70">{m.scheduledAt ?? '—'}</td>
-                    <td className="px-4 py-3">
-                      <span className="rounded-md border border-white/20 bg-white/5 px-2 py-0.5 text-[12px] capitalize text-white/70">
-                        {m.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1.5">
-                        {m.agendaMissing ? (
-                          <Pill cls="border-amber-400/50 bg-amber-500/15 text-amber-200">Agenda due</Pill>
-                        ) : null}
-                        {m.minutesOverdue ? (
-                          <Pill cls="border-red-400/50 bg-red-500/15 text-red-200">Minutes overdue</Pill>
-                        ) : m.minutesPending ? (
-                          <Pill cls="border-amber-400/50 bg-amber-500/15 text-amber-200">Minutes pending</Pill>
-                        ) : null}
-                        {m.minutesStatus === 'approved' ? (
-                          <Pill cls="border-emerald-400/50 bg-emerald-500/15 text-emerald-200">
-                            Minutes approved
-                          </Pill>
-                        ) : null}
-                        {!m.agendaMissing &&
-                        !m.minutesPending &&
-                        !m.minutesOverdue &&
-                        m.minutesStatus !== 'approved' ? (
-                          <span className="text-[12px] text-white/40">—</span>
-                        ) : null}
-                      </div>
-                    </td>
-                    {canEdit ? (
-                      <td className="px-4 py-3">
-                        <div className="flex justify-end gap-1.5">
-                          {m.minutesStatus === 'pending_approval' ? (
-                            <button
-                              type="button"
-                              onClick={() => approveMinutes(m.id)}
-                              aria-label={`Mark minutes approved for ${m.title}`}
-                              title="Mark minutes approved"
-                              className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-emerald-400/60 hover:text-emerald-200"
-                            >
-                              <CheckCircle2 size={15} />
-                            </button>
-                          ) : null}
-                          <button
-                            type="button"
-                            onClick={() => openEdit(m)}
-                            aria-label={`Edit ${m.title}`}
-                            className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-gold/60 hover:text-white"
-                          >
-                            <Pencil size={15} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onDelete(m)}
-                            aria-label={`Delete ${m.title}`}
-                            className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-red-400/60 hover:text-red-200"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
-                      </td>
-                    ) : null}
-                  </motion.tr>
-                ))}
-              </AnimatePresence>
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {modalOpen ? (
-        <MeetingFormModal
-          key={editing ? editing.id : 'new'}
-          initial={initialForm}
-          committees={committees}
-          onClose={() => setModalOpen(false)}
-          onSave={onSave}
-          reduce={reduce}
-        />
-      ) : null}
-    </div>
+            <td className="px-4 py-3 font-semibold text-navy">{p.title}</td>
+            <td className="px-4 py-3 text-muted">{p.category}</td>
+            <td className="px-4 py-3 text-muted">{p.owner ?? '—'}</td>
+            <td className="px-4 py-3">
+              <span className="rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[12px] capitalize text-muted">
+                {p.status}
+              </span>
+            </td>
+            <td className="px-4 py-3">
+              <ReviewBadge
+                status={p.reviewStatus}
+                nextReviewDate={p.nextReviewDate}
+                daysUntilDue={p.daysUntilDue}
+              />
+            </td>
+            {canEdit ? (
+              <td className="px-4 py-3">
+                <div className="flex justify-end gap-1.5 opacity-60 transition group-hover:opacity-100">
+                  {p.reviewStatus === 'overdue' || p.reviewStatus === 'due-soon' ? (
+                    <IconAction
+                      Icon={ListPlus}
+                      onClick={() => onMakeTask(p)}
+                      label={`Create task to review ${p.title}`}
+                      title="Create a task to review this policy"
+                    />
+                  ) : null}
+                  <IconAction Icon={Pencil} onClick={() => onEdit(p)} label={`Edit ${p.title}`} />
+                  <IconAction Icon={Trash2} danger onClick={() => onDelete(p)} label={`Delete ${p.title}`} />
+                </div>
+              </td>
+            ) : null}
+          </motion.tr>
+        ))}
+      </AnimatePresence>
+    </TableShell>
   )
 }
 
-// ═══════════════════════════ PAGE (tabs) ════════════════════════════════════
+function CommitteesTable({ committees, loading, error, canEdit, reduce, onEdit, onDelete }) {
+  if (loading) return <StateRow><p className="text-[14px] text-muted">Loading committees…</p></StateRow>
+  if (error)
+    return (
+      <StateRow>
+        <p className="text-[14px] text-danger">{error}</p>
+      </StateRow>
+    )
+  if (committees.length === 0)
+    return (
+      <StateRow>
+        <p className="font-serif text-[16px] italic text-muted">No committees yet.</p>
+        <p className="mt-1 text-[13px] text-muted">Add a committee to organize your meetings.</p>
+      </StateRow>
+    )
+
+  return (
+    <TableShell
+      cols={
+        <>
+          <Th>Committee</Th>
+          <Th>Kind</Th>
+          <Th>Chair</Th>
+          <Th>Status</Th>
+          {canEdit ? <Th right>Actions</Th> : null}
+        </>
+      }
+    >
+      <AnimatePresence initial={false}>
+        {committees.map((c) => (
+          <motion.tr
+            key={c.id}
+            layout={!reduce}
+            initial={reduce ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={reduce ? undefined : { opacity: 0 }}
+            className="group border-t border-rule/50"
+          >
+            <td className="px-4 py-3 font-semibold text-navy">{c.name}</td>
+            <td className="px-4 py-3">
+              <span className="rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[12px] capitalize text-muted">
+                {c.kind}
+              </span>
+            </td>
+            <td className="px-4 py-3 text-muted">{c.chair ?? '—'}</td>
+            <td className="px-4 py-3">
+              {c.active ? (
+                <Pill cls="border-emerald-300/70 bg-emerald-50 text-emerald-700">Active</Pill>
+              ) : (
+                <Pill cls="border-rule/60 bg-section text-muted">Inactive</Pill>
+              )}
+            </td>
+            {canEdit ? (
+              <td className="px-4 py-3">
+                <div className="flex justify-end gap-1.5 opacity-60 transition group-hover:opacity-100">
+                  <IconAction Icon={Pencil} onClick={() => onEdit(c)} label={`Edit ${c.name}`} />
+                  <IconAction Icon={Trash2} danger onClick={() => onDelete(c)} label={`Delete ${c.name}`} />
+                </div>
+              </td>
+            ) : null}
+          </motion.tr>
+        ))}
+      </AnimatePresence>
+    </TableShell>
+  )
+}
+
+function MeetingsTable({
+  meetings,
+  loading,
+  error,
+  canEdit,
+  reduce,
+  onEdit,
+  onDelete,
+  onApprove,
+}) {
+  if (loading) return <StateRow><p className="text-[14px] text-muted">Loading meetings…</p></StateRow>
+  if (error)
+    return (
+      <StateRow>
+        <p className="text-[14px] text-danger">{error}</p>
+      </StateRow>
+    )
+  if (meetings.length === 0)
+    return (
+      <StateRow>
+        <p className="font-serif text-[16px] italic text-muted">No meetings yet.</p>
+        <p className="mt-1 text-[13px] text-muted">Schedule a meeting to track its agenda and minutes.</p>
+      </StateRow>
+    )
+
+  return (
+    <TableShell
+      cols={
+        <>
+          <Th>Meeting</Th>
+          <Th>Committee</Th>
+          <Th>Date</Th>
+          <Th>Status</Th>
+          <Th>Signals</Th>
+          {canEdit ? <Th right>Actions</Th> : null}
+        </>
+      }
+    >
+      <AnimatePresence initial={false}>
+        {meetings.map((m) => (
+          <motion.tr
+            key={m.id}
+            layout={!reduce}
+            initial={reduce ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={reduce ? undefined : { opacity: 0 }}
+            className="group border-t border-rule/50"
+          >
+            <td className="px-4 py-3 font-semibold text-navy">{m.title}</td>
+            <td className="px-4 py-3 text-muted">{m.committeeName ?? '—'}</td>
+            <td className="px-4 py-3 text-muted">{m.scheduledAt ?? '—'}</td>
+            <td className="px-4 py-3">
+              <span className="rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[12px] capitalize text-muted">
+                {m.status}
+              </span>
+            </td>
+            <td className="px-4 py-3">
+              <div className="flex flex-wrap gap-1.5">
+                {m.agendaMissing ? (
+                  <Pill cls="border-gold/40 bg-gold/10 text-[#7a5e00]">Agenda due</Pill>
+                ) : null}
+                {m.minutesOverdue ? (
+                  <Pill cls="border-danger/30 bg-danger/10 text-danger">Minutes overdue</Pill>
+                ) : m.minutesPending ? (
+                  <Pill cls="border-gold/40 bg-gold/10 text-[#7a5e00]">Minutes pending</Pill>
+                ) : null}
+                {m.minutesStatus === 'approved' ? (
+                  <Pill cls="border-emerald-300/70 bg-emerald-50 text-emerald-700">Minutes approved</Pill>
+                ) : null}
+                {!m.agendaMissing &&
+                !m.minutesPending &&
+                !m.minutesOverdue &&
+                m.minutesStatus !== 'approved' ? (
+                  <span className="text-[12px] text-muted/60">—</span>
+                ) : null}
+              </div>
+            </td>
+            {canEdit ? (
+              <td className="px-4 py-3">
+                <div className="flex justify-end gap-1.5 opacity-60 transition group-hover:opacity-100">
+                  {m.minutesStatus === 'pending_approval' ? (
+                    <button
+                      type="button"
+                      onClick={() => onApprove(m.id)}
+                      aria-label={`Mark minutes approved for ${m.title}`}
+                      title="Mark minutes approved"
+                      className="rounded-lg border border-rule/60 p-1.5 text-muted transition hover:border-emerald-400/60 hover:text-emerald-600"
+                    >
+                      <CheckCircle2 size={15} />
+                    </button>
+                  ) : null}
+                  <IconAction Icon={Pencil} onClick={() => onEdit(m)} label={`Edit ${m.title}`} />
+                  <IconAction Icon={Trash2} danger onClick={() => onDelete(m)} label={`Delete ${m.title}`} />
+                </div>
+              </td>
+            ) : null}
+          </motion.tr>
+        ))}
+      </AnimatePresence>
+    </TableShell>
+  )
+}
+
+// ── Short "Jul 6" date from a yyyy-mm-dd string (UTC-safe, no tz drift). ──────
+function shortDate(iso) {
+  if (!iso) return null
+  const d = new Date(`${iso.slice(0, 10)}T00:00:00.000Z`)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+}
 
 const TABS = [
-  { id: 'policies', label: 'Policies', icon: Landmark },
-  { id: 'committees', label: 'Committees', icon: Users },
-  { id: 'meetings', label: 'Meetings', icon: CalendarDays },
+  { key: 'meetings', label: 'Meetings' },
+  { key: 'committees', label: 'Committees' },
+  { key: 'policies', label: 'Policies' },
 ]
 
+// ═══════════════════════════ PAGE ═══════════════════════════════════════════
+
 function GovernanceWorkspace() {
+  const navigate = useNavigate()
   const { activeSchool } = useSchools()
   const schoolId = activeSchool?.id ?? null
   const canEdit = activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'
   const reduce = useReducedMotion()
-  const [tab, setTab] = useState('policies')
 
-  // Committees + meetings hooks are mounted at the page level: the committees list
-  // feeds the Meetings tab's committee picker + name column too. The gate state
-  // (notLicensed / notEntitled) is shared across all three tabs.
+  const policiesHook = usePolicies(schoolId)
   const committeesHook = useCommittees(schoolId)
   const meetingsHook = useMeetings(schoolId)
 
-  const notLicensed = committeesHook.notLicensed || meetingsHook.notLicensed
-  const notEntitled = committeesHook.notEntitled || meetingsHook.notEntitled
-  const gate =
-    notLicensed || notEntitled ? (
-      <GatePanel notLicensed={notLicensed} notEntitled={notEntitled} />
-    ) : null
+  const { policies } = policiesHook
+  const { committees } = committeesHook
+  const { meetings, summary, approveMinutes } = meetingsHook
+
+  const [tab, setTab] = useState('meetings')
+  const [modal, setModal] = useState(null) // { type, entity } | null
+
+  const openCreate = (type) => setModal({ type, entity: null })
+  const openEdit = (type, entity) => setModal({ type, entity })
+  const closeModal = () => setModal(null)
+
+  const createTaskFromPolicy = (p) => {
+    const today = new Date().toISOString().slice(0, 10)
+    const futureDue = p.nextReviewDate && p.nextReviewDate > today ? p.nextReviewDate : ''
+    navigate('/tasks', {
+      state: {
+        prefill: {
+          title: `Review policy: ${p.title}`,
+          sourceType: 'policy',
+          sourceRef: p.id,
+          dueDate: futureDue,
+        },
+      },
+    })
+  }
+
+  const onDeletePolicy = async (p) => {
+    if (window.confirm(`Delete "${p.title}"? This cannot be undone.`)) await policiesHook.remove(p.id)
+  }
+  const onDeleteCommittee = async (c) => {
+    if (window.confirm(`Delete "${c.name}"? Its meetings are kept but detached.`))
+      await committeesHook.remove(c.id)
+  }
+  const onDeleteMeeting = async (m) => {
+    if (window.confirm(`Delete "${m.title}"? This cannot be undone.`)) await meetingsHook.remove(m.id)
+  }
+
+  // ── KPIs (computed from the hooks) ─────────────────────────────────────────
+  const kpis = useMemo(() => {
+    // Policies past review.
+    const total = policies.length
+    const overdue = policies.filter((p) => p.reviewStatus === 'overdue').length
+    const dueSoon = policies.filter((p) => p.reviewStatus === 'due-soon').length
+    const flagged = overdue + dueSoon
+    const policiesKpi = {
+      label: 'Policies past review',
+      value: `${flagged}/${total}`,
+      status: overdue > 0 ? 'risk' : dueSoon > 0 ? 'watch' : 'good',
+      sub:
+        overdue > 0
+          ? { icon: TrendingDown, text: `${overdue} overdue`, tone: 'bad' }
+          : dueSoon > 0
+            ? { icon: Clock, text: `${dueSoon} due soon`, tone: 'neutral' }
+            : { icon: Check, text: 'all current', tone: 'good' },
+    }
+
+    // Minutes awaiting sign-off.
+    const pending = summary.minutesPendingCount ?? 0
+    const minutesOverdue = summary.minutesOverdueCount ?? 0
+    const minutesKpi = {
+      label: 'Minutes awaiting sign-off',
+      value: minutesOverdue > 0 ? `${pending} · ${minutesOverdue} overdue` : String(pending),
+      status: minutesOverdue > 0 ? 'risk' : pending > 0 ? 'watch' : 'good',
+      sub:
+        minutesOverdue > 0
+          ? { icon: AlertTriangle, text: `${minutesOverdue} overdue`, tone: 'bad' }
+          : pending > 0
+            ? { icon: Clock, text: 'awaiting approval', tone: 'neutral' }
+            : { icon: Check, text: 'all signed off', tone: 'good' },
+    }
+
+    // Committees.
+    const active = committees.filter((c) => c.active)
+    const noChair = active.filter((c) => !c.chair).length
+    const committeesKpi = {
+      label: 'Committees',
+      value: String(active.length),
+      status: noChair > 0 ? 'watch' : 'good',
+      sub:
+        noChair > 0
+          ? { icon: AlertTriangle, text: `${noChair} without a chair`, tone: 'neutral' }
+          : { icon: Check, text: 'all staffed', tone: 'good' },
+    }
+
+    // Next meeting.
+    const nextIso = summary.nextMeetingAt
+    const nextMeeting = nextIso
+      ? meetings.find((m) => m.isUpcoming && m.scheduledAt === nextIso) ??
+        meetings.find((m) => m.scheduledAt === nextIso)
+      : null
+    const noAgenda = nextMeeting ? nextMeeting.agendaMissing : false
+    const nextKpi = {
+      label: 'Next meeting',
+      value: nextIso ? (shortDate(nextIso) ?? '—') : 'None scheduled',
+      status: !nextIso ? 'good' : noAgenda ? 'watch' : 'good',
+      sub: !nextIso
+        ? { icon: CalendarClock, text: 'nothing on the calendar', tone: 'neutral' }
+        : noAgenda
+          ? {
+              icon: FileWarning,
+              text: `${nextMeeting?.committeeName ?? 'Meeting'} · no agenda yet`,
+              tone: 'neutral',
+            }
+          : {
+              icon: Check,
+              text: `${nextMeeting?.committeeName ?? 'Meeting'} · agenda ready`,
+              tone: 'good',
+            },
+    }
+
+    return [policiesKpi, minutesKpi, committeesKpi, nextKpi]
+  }, [policies, committees, meetings, summary])
+
+  // ── Needs-attention items (most-urgent first, capped at 6) ─────────────────
+  const attentionItems = useMemo(() => {
+    const items = []
+
+    // 1) Minutes awaiting sign-off (overdue first).
+    const pendingMeetings = meetings
+      .filter((m) => m.minutesPending || m.minutesOverdue)
+      .sort((a, b) => (b.minutesOverdue ? 1 : 0) - (a.minutesOverdue ? 1 : 0))
+    for (const m of pendingMeetings) {
+      items.push({
+        id: `minutes-${m.id}`,
+        tone: m.minutesOverdue ? 'risk' : 'watch',
+        sortKey: m.minutesOverdue ? 0 : 2,
+        title: `${m.title} minutes await sign-off`,
+        why: m.minutesOverdue
+          ? 'You are the current approver · past the sign-off SLA'
+          : 'You are the current approver · awaiting your approval',
+        actions:
+          canEdit && m.minutesStatus === 'pending_approval'
+            ? [
+                {
+                  label: 'Approve',
+                  primary: true,
+                  onClick: () => approveMinutes(m.id),
+                },
+              ]
+            : [],
+      })
+    }
+
+    // 2) Upcoming meetings missing an agenda within the soon window.
+    const needAgenda = meetings.filter((m) => m.isUpcoming && m.agendaMissing)
+    for (const m of needAgenda) {
+      const days = typeof m.daysUntilMeeting === 'number' ? m.daysUntilMeeting : null
+      items.push({
+        id: `agenda-${m.id}`,
+        tone: 'watch',
+        sortKey: 1,
+        title: `${m.committeeName ?? m.title} needs an agenda`,
+        why: days != null ? `Meets in ${days} day${days === 1 ? '' : 's'} · no agenda posted` : 'No agenda posted',
+        actions: canEdit
+          ? [{ label: 'Draft agenda', primary: false, onClick: () => openEdit('meeting', m) }]
+          : [],
+      })
+    }
+
+    // 3) Policies overdue on their review cycle.
+    const overduePolicies = policies.filter((p) => p.reviewStatus === 'overdue')
+    for (const p of overduePolicies) {
+      const days = typeof p.daysUntilDue === 'number' ? Math.abs(p.daysUntilDue) : null
+      items.push({
+        id: `policy-${p.id}`,
+        tone: 'risk',
+        sortKey: 0,
+        title: `${p.title} review`,
+        why: days != null ? `${days} day${days === 1 ? '' : 's'} overdue on its annual cycle` : 'Overdue on its review cycle',
+        actions: [
+          {
+            label: 'Review',
+            primary: false,
+            onClick: () => {
+              setTab('policies')
+              openEdit('policy', p)
+            },
+          },
+        ],
+      })
+    }
+
+    return items.sort((a, b) => a.sortKey - b.sortKey).slice(0, 6)
+  }, [meetings, policies, canEdit, approveMinutes])
+
+  // ── Gate (shared across all three registers) ───────────────────────────────
+  const notLicensed =
+    policiesHook.notLicensed || committeesHook.notLicensed || meetingsHook.notLicensed
+  const notEntitled =
+    policiesHook.notEntitled || committeesHook.notEntitled || meetingsHook.notEntitled
+  if (notLicensed || notEntitled) return <GatePanel notLicensed={notLicensed} />
+
+  // ── Active register table ──────────────────────────────────────────────────
+  let registerTable = null
+  if (tab === 'meetings')
+    registerTable = (
+      <MeetingsTable
+        meetings={meetings}
+        loading={meetingsHook.loading}
+        error={meetingsHook.error}
+        canEdit={canEdit}
+        reduce={reduce}
+        onEdit={(m) => openEdit('meeting', m)}
+        onDelete={onDeleteMeeting}
+        onApprove={approveMinutes}
+      />
+    )
+  else if (tab === 'committees')
+    registerTable = (
+      <CommitteesTable
+        committees={committees}
+        loading={committeesHook.loading}
+        error={committeesHook.error}
+        canEdit={canEdit}
+        reduce={reduce}
+        onEdit={(c) => openEdit('committee', c)}
+        onDelete={onDeleteCommittee}
+      />
+    )
+  else
+    registerTable = (
+      <PoliciesTable
+        policies={policies}
+        loading={policiesHook.loading}
+        error={policiesHook.error}
+        canEdit={canEdit}
+        reduce={reduce}
+        onEdit={(p) => openEdit('policy', p)}
+        onDelete={onDeletePolicy}
+        onMakeTask={createTaskFromPolicy}
+      />
+    )
+
+  const onNew = canEdit
+    ? () => openCreate(tab === 'meetings' ? 'meeting' : tab === 'committees' ? 'committee' : 'policy')
+    : null
+
+  const savePolicy = async (body) => {
+    if (modal?.entity) await policiesHook.update(modal.entity.id, body)
+    else await policiesHook.create(body)
+  }
+  const saveCommittee = async (body) => {
+    if (modal?.entity) await committeesHook.update(modal.entity.id, body)
+    else await committeesHook.create(body)
+  }
+  const saveMeeting = async (body) => {
+    if (modal?.entity) await meetingsHook.update(modal.entity.id, body)
+    else await meetingsHook.create(body)
+  }
+
+  const policyInitial = modal?.entity
+    ? {
+        title: modal.entity.title ?? '',
+        category: modal.entity.category ?? '',
+        status: modal.entity.status ?? 'active',
+        owner: modal.entity.owner ?? '',
+        adoptedDate: modal.entity.adoptedDate ?? '',
+        lastReviewedDate: modal.entity.lastReviewedDate ?? '',
+        reviewIntervalMonths: modal.entity.reviewIntervalMonths ?? 12,
+        notes: modal.entity.notes ?? '',
+      }
+    : null
+  const committeeInitial = modal?.entity
+    ? {
+        name: modal.entity.name ?? '',
+        kind: modal.entity.kind ?? 'other',
+        chair: modal.entity.chair ?? '',
+        description: modal.entity.description ?? '',
+        active: modal.entity.active ?? true,
+      }
+    : null
+  const meetingInitial = modal?.entity
+    ? {
+        title: modal.entity.title ?? '',
+        committeeId: modal.entity.committeeId ?? '',
+        scheduledAt: modal.entity.scheduledAt ?? '',
+        location: modal.entity.location ?? '',
+        status: modal.entity.status ?? 'scheduled',
+        agenda: modal.entity.agenda ?? '',
+        minutes: modal.entity.minutes ?? '',
+        decisions: modal.entity.decisions ?? '',
+        minutesStatus: modal.entity.minutesStatus ?? 'none',
+      }
+    : null
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-8">
-      <div className="mb-6 flex items-center gap-3">
-        <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gold/15 text-gold-light shadow-glow">
-          <Landmark size={22} />
-        </span>
-        <div>
-          <h1 className="font-serif text-[22px] uppercase tracking-[0.12em] text-gold-light">
-            Governance
-          </h1>
-          <p className="text-[13px] text-white/60">
-            Board policies, committees, and meetings — your Monday-morning governance screen.
-          </p>
-        </div>
-      </div>
+    <>
+      <DomainCommandCenter
+        eyebrow="Domain · Govern engine · system of record"
+        title="Governance"
+        Icon={Landmark}
+        attentionCount={attentionItems.length}
+        kpis={kpis}
+        tabs={TABS}
+        activeTab={tab}
+        onTabChange={setTab}
+        onNew={onNew}
+        registerTable={registerTable}
+        attentionItems={attentionItems}
+      />
 
-      {/* Flashy navy/gold tab bar with a framer-motion underline. */}
-      <div className="mb-6 flex gap-1 border-b-2 border-white/10">
-        {TABS.map(({ id, label, icon }) => {
-          const Icon = icon
-          const active = tab === id
-          return (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setTab(id)}
-              className={`relative flex items-center gap-2 px-4 py-2.5 text-[14px] font-semibold transition-colors ${
-                active ? 'text-gold-light' : 'text-white/55 hover:text-white/80'
-              }`}
-            >
-              <Icon size={16} />
-              {label}
-              {active ? (
-                <motion.span
-                  layoutId={reduce ? undefined : 'gov-tab-underline'}
-                  className="absolute inset-x-1 -bottom-[2px] h-[3px] rounded-full bg-gold"
-                />
-              ) : null}
-            </button>
-          )
-        })}
-      </div>
-
-      {tab === 'policies' ? (
-        <PoliciesPanel schoolId={schoolId} canEdit={canEdit} reduce={reduce} gate={gate} />
-      ) : tab === 'committees' ? (
-        <CommitteesPanel committeesHook={committeesHook} canEdit={canEdit} reduce={reduce} gate={gate} />
-      ) : (
-        <MeetingsPanel
-          meetingsHook={meetingsHook}
-          committees={committeesHook.committees}
-          canEdit={canEdit}
+      {modal?.type === 'policy' ? (
+        <PolicyFormModal
+          key={modal.entity ? modal.entity.id : 'new'}
+          initial={policyInitial}
+          onClose={closeModal}
+          onSave={savePolicy}
           reduce={reduce}
-          gate={gate}
         />
-      )}
-    </div>
+      ) : null}
+      {modal?.type === 'committee' ? (
+        <CommitteeFormModal
+          key={modal.entity ? modal.entity.id : 'new'}
+          initial={committeeInitial}
+          onClose={closeModal}
+          onSave={saveCommittee}
+          reduce={reduce}
+        />
+      ) : null}
+      {modal?.type === 'meeting' ? (
+        <MeetingFormModal
+          key={modal.entity ? modal.entity.id : 'new'}
+          initial={meetingInitial}
+          committees={committees}
+          onClose={closeModal}
+          onSave={saveMeeting}
+          reduce={reduce}
+        />
+      ) : null}
+    </>
   )
 }
 
