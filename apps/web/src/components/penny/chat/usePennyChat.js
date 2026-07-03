@@ -132,10 +132,17 @@ export default function usePennyChat() {
   }, [])
 
   const confirmProposal = useCallback(
-    async (mi, pi, action) => {
+    // `destination` is an OPTIONAL override from the file_document destination picker
+    // (ProposalCard). When present we merge it into the action payload so the backend
+    // files to the user's PICKED destination (it re-validates + clamps it server-side).
+    async (mi, pi, action, destination) => {
       setProposalStatus(mi, pi, 'applying')
       try {
-        await assistantApi.apply(activeIdRef.current, action) // UNCHANGED apply path
+        const outbound =
+          action?.kind === 'file_document' && destination
+            ? { ...action, payload: { ...(action.payload ?? {}), destination } }
+            : action
+        await assistantApi.apply(activeIdRef.current, outbound) // UNCHANGED apply path
         setProposalStatus(mi, pi, 'applied')
         // A confirmed create_task now exists server-side — broadcast so an open
         // Tasks page (useTasks) refetches. The autonomous 'applied' SSE path already
@@ -148,8 +155,13 @@ export default function usePennyChat() {
           pennyRef.current?.agentRefresh?.(['tasks'])
         } else if (action?.kind === 'file_document') {
           // A confirmed file_document now exists in the Knowledge store — broadcast so
-          // an open Knowledge list (useDocuments) refetches without a manual reload.
-          pennyRef.current?.agentRefresh?.(['knowledge'])
+          // an open Knowledge list (useDocuments) refetches without a manual reload. A
+          // 'facilities' filing ALSO created a maintenance item, so refresh that surface
+          // too (harmless no-op when no facilities list is open / for a plain filing).
+          const chosen = destination || outbound?.payload?.destination
+          pennyRef.current?.agentRefresh?.(
+            chosen === 'facilities' ? ['knowledge', 'facilities'] : ['knowledge'],
+          )
         } else if (CONFIRM_REFRESH_KEYS[action?.kind]) {
           // A confirmed module-create (policy/committee/meeting/standard/maintenance/
           // campaign) now exists — broadcast its domain key so an open register page

@@ -8,7 +8,8 @@
 // priority callout, rather than the finance signal list. Derives everything from
 // the already-fetched briefing (items/summary/lens) — no new endpoints.
 // ─────────────────────────────────────────────────────────────────────────────
-import { motion, useReducedMotion } from 'framer-motion'
+import { useState, useEffect } from 'react'
+import { motion, useReducedMotion, animate } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import {
   Clock,
@@ -131,6 +132,76 @@ function askPennyToBrief() {
   )
 }
 
+// Count-up the headline number (0 → value) for a dynamic, eye-drawing reveal.
+// Reduced-motion shows the final value immediately.
+function CountUp({ value, reduce }) {
+  const [n, setN] = useState(reduce ? value : 0)
+  useEffect(() => {
+    if (reduce) {
+      setN(value)
+      return undefined
+    }
+    const controls = animate(0, value, {
+      duration: 0.9,
+      ease: [0.22, 1, 0.36, 1],
+      onUpdate: (v) => setN(Math.round(v)),
+    })
+    return () => controls.stop()
+  }, [value, reduce])
+  return <>{n}</>
+}
+
+// Living navy backdrop: a premium gold top-edge hairline (always on) plus, when
+// motion is allowed, drifting/breathing gold + navy glow orbs and a slow diagonal
+// gold light-sweep. Purely decorative (aria-hidden); reduced-motion falls back to
+// two soft static glows so the hero still reads rich without any animation.
+function LivingBackdrop({ reduce }) {
+  return (
+    <>
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-px"
+        style={{ background: 'linear-gradient(90deg, transparent, rgba(214,178,92,0.55), transparent)' }}
+      />
+      {reduce ? (
+        <>
+          <span aria-hidden className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-gold/10 blur-3xl" />
+          <span aria-hidden className="pointer-events-none absolute -bottom-24 -left-10 h-52 w-52 rounded-full bg-navy-soft/20 blur-3xl" />
+        </>
+      ) : (
+        <>
+          <motion.span
+            aria-hidden
+            className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-gold/10 blur-3xl"
+            animate={{ x: [0, -26, 8, 0], y: [0, 22, -12, 0], scale: [1, 1.14, 0.94, 1], opacity: [0.55, 0.9, 0.6, 0.55] }}
+            transition={{ duration: 15, repeat: Infinity, ease: 'easeInOut' }}
+          />
+          <motion.span
+            aria-hidden
+            className="pointer-events-none absolute -bottom-24 -left-10 h-56 w-56 rounded-full bg-navy-soft/25 blur-3xl"
+            animate={{ x: [0, 30, -10, 0], y: [0, -18, 10, 0], scale: [1, 1.1, 0.96, 1], opacity: [0.5, 0.82, 0.55, 0.5] }}
+            transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut' }}
+          />
+          <motion.span
+            aria-hidden
+            className="pointer-events-none absolute left-1/3 top-1/2 h-40 w-40 rounded-full bg-gold-light/10 blur-3xl"
+            animate={{ x: [0, 60, -40, 0], y: [0, -30, 30, 0], opacity: [0.3, 0.6, 0.35, 0.3] }}
+            transition={{ duration: 22, repeat: Infinity, ease: 'easeInOut' }}
+          />
+          {/* Diagonal gold light-sweep gliding across the card every ~10s. */}
+          <motion.span
+            aria-hidden
+            className="pointer-events-none absolute inset-y-[-20%] -left-1/3 w-1/3 -skew-x-12"
+            style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.05), rgba(214,178,92,0.16), rgba(255,255,255,0.05), transparent)' }}
+            animate={{ x: ['0%', '440%'] }}
+            transition={{ duration: 5.5, repeat: Infinity, repeatDelay: 4.5, ease: 'easeInOut' }}
+          />
+        </>
+      )}
+    </>
+  )
+}
+
 export default function HomeCommandCenter({
   schoolName,
   periods,
@@ -170,9 +241,9 @@ export default function HomeCommandCenter({
       transition={{ duration: 0.45 }}
       className="relative overflow-hidden rounded-2xl bg-navy-gradient p-5 shadow-navy-glow sm:p-7"
     >
-      {/* Decorative gold glow + a faint corner grid to differ from the finance band. */}
-      <span aria-hidden className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-gold/10 blur-3xl" />
-      <span aria-hidden className="pointer-events-none absolute -bottom-24 -left-10 h-52 w-52 rounded-full bg-navy-soft/20 blur-3xl" />
+      {/* Living decorative backdrop: gold top hairline + drifting glow orbs + a
+          slow gold light-sweep (all disabled under reduced-motion). */}
+      <LivingBackdrop reduce={reduce} />
 
       <div className="relative flex flex-col gap-5">
         {/* Eyebrow: daily-briefing label + lens badge, trial chip on the right. */}
@@ -191,8 +262,11 @@ export default function HomeCommandCenter({
           <h1 className="font-serif text-2xl font-semibold leading-tight text-white sm:text-[30px]">
             {greeting()} — {total === 0 ? 'you’re all caught up.' : (
               <>
-                <span className="gold-text">
-                  {total} thing{total === 1 ? '' : 's'}
+                <span
+                  className="gold-text"
+                  style={{ filter: 'drop-shadow(0 0 18px rgba(214,178,92,0.35))' }}
+                >
+                  <CountUp value={total} reduce={reduce} /> thing{total === 1 ? '' : 's'}
                 </span>{' '}
                 {verb}.
               </>
@@ -262,8 +336,13 @@ export default function HomeCommandCenter({
         {top && (
           <Link
             to={top.link || '/'}
-            className="group relative flex items-start gap-3 overflow-hidden rounded-xl border border-white/12 bg-navy-deep/40 px-4 py-3 transition-colors hover:border-gold/40"
+            className="group relative flex items-start gap-3 overflow-hidden rounded-xl border border-white/12 bg-navy-deep/40 px-4 py-3 transition-all duration-300 hover:border-gold/40 hover:bg-navy-deep/60 hover:shadow-[0_0_26px_-8px_rgba(214,178,92,0.5)]"
           >
+            {/* Gold shine that sweeps across on hover. */}
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-gold/15 to-transparent transition-transform duration-700 ease-out group-hover:translate-x-full motion-reduce:hidden"
+            />
             <span
               className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
                 top.severity === 'critical'
@@ -296,9 +375,15 @@ export default function HomeCommandCenter({
           <button
             type="button"
             onClick={askPennyToBrief}
-            className="inline-flex items-center gap-1.5 rounded-full bg-gold-gradient px-4 py-2 text-[13px] font-semibold text-navy shadow-glow transition-transform hover:-translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 motion-reduce:hover:translate-y-0"
+            className="group relative inline-flex items-center gap-1.5 overflow-hidden rounded-full bg-gold-gradient px-4 py-2 text-[13px] font-semibold text-navy shadow-glow transition-transform hover:-translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 motion-reduce:hover:translate-y-0"
           >
-            <Sparkles size={14} /> Brief me
+            {/* Light shine sweeping across the CTA on hover. */}
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/45 to-transparent transition-transform duration-700 ease-out group-hover:translate-x-full motion-reduce:hidden"
+            />
+            <Sparkles size={14} className="relative" />
+            <span className="relative">Brief me</span>
           </button>
           {periods && periods.length > 0 && (
             <div className="flex flex-col gap-1.5">

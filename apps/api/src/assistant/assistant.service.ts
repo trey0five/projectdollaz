@@ -117,7 +117,10 @@ const REFRESH: Record<ProposedAction['kind'], RefreshKey[]> = {
   create_task: ['tasks'],
   submit_for_approval: ['tasks'],
   decide_approval: ['tasks'],
-  file_document: ['knowledge'],
+  // A facilities filing writes BOTH a maintenance item and a linked Knowledge copy,
+  // so refresh both surfaces (a 'facilities' key is a harmless no-op for a plain
+  // knowledge filing where no facilities list is open).
+  file_document: ['knowledge', 'facilities'],
   create_policy: ['governance'],
   create_committee: ['governance'],
   create_meeting: ['governance'],
@@ -224,6 +227,17 @@ function clampDocumentSourceType(v: unknown): DocumentSourceType {
   return typeof v === 'string' && (DOCUMENT_SOURCE_TYPES as readonly string[]).includes(v)
     ? (v as DocumentSourceType)
     : 'manual'
+}
+
+// The four modules Penny can auto-file an uploaded document into. UNTRUSTED at both
+// PROPOSE and APPLY (a forged /apply can supply any string) — always clamp to this
+// closed set, defaulting to 'knowledge' (the pre-existing, unchanged behaviour).
+const FILE_DOCUMENT_DESTINATIONS = ['knowledge', 'facilities', 'accreditation', 'governance'] as const
+type FileDocumentDestination = (typeof FILE_DOCUMENT_DESTINATIONS)[number]
+function clampFileDocumentDestination(v: unknown): FileDocumentDestination {
+  return typeof v === 'string' && (FILE_DOCUMENT_DESTINATIONS as readonly string[]).includes(v)
+    ? (v as FileDocumentDestination)
+    : 'knowledge'
 }
 
 // Map a Penny attachment (its kind + declared mime + filename) to a MIME the
@@ -1087,11 +1101,27 @@ export class AssistantService {
       /^[0-9a-f-]{36}$/i.test(args.sourceRef.trim())
         ? args.sourceRef.trim()
         : undefined
+    // Auto-detected destination + why. destination clamps to the closed set (default
+    // 'knowledge'); confidence clamps to 0–100 (null when absent); rationale is a
+    // trimmed, capped one-liner. The FE renders these as the "DETECTED DESTINATION"
+    // chip picker, and the user's pick overrides `destination` on /apply.
+    const destination = clampFileDocumentDestination(args.destination)
+    const confidence =
+      typeof args.confidence === 'number' && Number.isFinite(args.confidence)
+        ? Math.min(100, Math.max(0, Math.round(args.confidence)))
+        : null
+    const rationale =
+      typeof args.rationale === 'string' && args.rationale.trim()
+        ? args.rationale.trim().slice(0, 400)
+        : undefined
     const summary =
-      `File “${title}” to Knowledge` +
-      (tags.length ? ` (tags: ${tags.join(', ')})` : '') +
-      (sourceType !== 'manual' ? ` — linked to ${sourceType}` : '') +
-      '.'
+      destination === 'facilities'
+        ? `File “${title}” to Facilities — creates a maintenance record + a linked Knowledge copy.`
+        : destination === 'accreditation'
+          ? `File “${title}” to Accreditation.`
+          : destination === 'governance'
+            ? `File “${title}” to Governance.`
+            : `File “${title}” to Knowledge.`
     return {
       kind: 'file_document',
       periodId: ctx.periodId ?? '',
@@ -1102,6 +1132,9 @@ export class AssistantService {
         ...(tags.length ? { tags } : {}),
         sourceType,
         ...(sourceRef ? { sourceRef } : {}),
+        destination,
+        confidence,
+        ...(rationale ? { rationale } : {}),
         fileName: raw.fileName,
         mimeType,
         fileDataBase64: raw.buffer.toString('base64'),
@@ -1659,16 +1692,77 @@ export class AssistantService {
             .map((t) => t.trim())
             .slice(0, 20)
         : undefined
-      const sourceType = clampDocumentSourceType(p.sourceType)
-      const sourceRef =
+      let sourceType = clampDocumentSourceType(p.sourceType)
+      let sourceRef =
         sourceType !== 'manual' && typeof p.sourceRef === 'string' && p.sourceRef.trim()
           ? p.sourceRef.trim()
           : undefined
+      // RE-VALIDATE the destination from the UNTRUSTED payload (the FE lets the user
+      // pick one of the four; a forged /apply could send anything) — clamp to the
+      // closed set, default 'knowledge' (the original, unchanged behaviour).
+      const destination = clampFileDocumentDestination(p.destination)
       const file: UploadedDocumentFile = { originalname: fileName, mimetype: mimeType, buffer }
+      // Mutable so the tag list can gain the destination grouping-tag below.
+      const dtoTags = tags ? [...tags] : undefined
+
+      if (destination === 'facilities') {
+        // FIRST log a facilities maintenance item, THEN file the doc to Knowledge
+        // linked to it (sourceType: 'maintenance', sourceRef: <new item id>) so the
+        // Knowledge copy deep-links back to the maintenance record. createMaintenance
+        // re-checks the tenant; createDocument's resolveLink re-validates the sourceRef.
+        const rationale =
+          typeof p.rationale === 'string' && p.rationale.trim()
+            ? p.rationale.trim().slice(0, 400)
+            : undefined
+        const item = await this.facilities.createMaintenance(
+          schoolId,
+          {
+            title,
+            category: 'Inspection / compliance',
+            notes: rationale ?? 'Filed from an uploaded document by Penny.',
+            priority: 'medium',
+          },
+          userId,
+        )
+        sourceType = 'maintenance'
+        sourceRef = item.id
+        const dto: CreateDocumentDto = {
+          title,
+          ...(description ? { description } : {}),
+          ...(dtoTags && dtoTags.length ? { tags: dtoTags } : {}),
+          sourceType,
+          sourceRef,
+        } as CreateDocumentDto
+        await this.documents.createDocument(schoolId, file, dto, userId)
+        return {
+          applied: true,
+          summary: 'Filed to Facilities: created a maintenance item + a linked Knowledge copy.',
+        }
+      }
+
+      if (destination === 'accreditation' || destination === 'governance') {
+        // File to Knowledge as usual, but ADD the destination as a grouping tag so it
+        // surfaces under that domain. We do NOT create a Standard/Meeting record here —
+        // those require a parent (a framework/committee) the user hasn't named; linking
+        // a doc to a specific accreditation/governance record is DEFERRED.
+        const grouped = dtoTags ? [...dtoTags] : []
+        if (!grouped.includes(destination)) grouped.push(destination)
+        const dto: CreateDocumentDto = {
+          title,
+          ...(description ? { description } : {}),
+          ...(grouped.length ? { tags: grouped.slice(0, 20) } : {}),
+          sourceType,
+          ...(sourceRef ? { sourceRef } : {}),
+        } as CreateDocumentDto
+        await this.documents.createDocument(schoolId, file, dto, userId)
+        return { applied: true, summary: action.summary }
+      }
+
+      // destination === 'knowledge' (and default) — UNCHANGED path.
       const dto: CreateDocumentDto = {
         title,
         ...(description ? { description } : {}),
-        ...(tags ? { tags } : {}),
+        ...(dtoTags ? { tags: dtoTags } : {}),
         sourceType,
         ...(sourceRef ? { sourceRef } : {}),
       } as CreateDocumentDto

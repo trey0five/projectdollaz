@@ -469,7 +469,7 @@ export const TOOL_SCHEMAS = [
     function: {
       name: 'file_document',
       description:
-        'PROPOSE filing an attached document into the Knowledge store for the user to CONFIRM before it is stored (like drafting a task — this does NOT file it; the user must confirm). Use ONLY when the user attached a document and wants to save/file it. Classify its domain and suggest a clear title plus domain tags (governance/compliance/finance/facilities/accreditation/advancement). Pass the attachmentId shown in the attachment digest — the server holds the file bytes, so NEVER retype the file. sourceType defaults to manual; set a non-manual sourceType + sourceRef ONLY when the user names a specific in-school entity (a policy, board report, standard, campaign, or maintenance item) to link it to.',
+        'PROPOSE filing an attached document into one of the school’s modules for the user to CONFIRM before it is stored (like drafting a task — this does NOT file it; the user must confirm). Use ONLY when the user attached a document and wants to save/file it. CLASSIFY where the document belongs across four destinations and set `destination` accordingly: a fire-safety / boiler / HVAC / building inspection or facilities report → "facilities"; an accreditation self-study or evidence artifact → "accreditation"; board minutes, bylaws, or a policy → "governance"; anything else (general reference, finance, contracts, etc.) → "knowledge". Also set `confidence` (0–100) and a short one-line `rationale` explaining WHY that destination. Default `destination` to "knowledge" when unsure. Still suggest a clear `title` plus domain `tags`. Pass the attachmentId shown in the attachment digest — the server holds the file bytes, so NEVER retype the file. sourceType defaults to manual; set a non-manual sourceType + sourceRef ONLY when the user names a specific in-school entity (a policy, board report, standard, campaign, or maintenance item) to link it to.',
       parameters: {
         type: 'object',
         properties: {
@@ -480,6 +480,20 @@ export const TOOL_SCHEMAS = [
           title: {
             type: 'string',
             description: 'Short document title, e.g. "FY2026 Conflict-of-Interest Policy".',
+          },
+          destination: {
+            type: 'string',
+            enum: ['knowledge', 'facilities', 'accreditation', 'governance'],
+            description:
+              'Which module this document belongs in. facilities = inspections / building reports; accreditation = self-study / evidence; governance = board minutes / policies; knowledge = everything else. Defaults to knowledge.',
+          },
+          confidence: {
+            type: 'number',
+            description: 'How confident the destination is, 0–100.',
+          },
+          rationale: {
+            type: 'string',
+            description: 'One short line explaining WHY this destination (≤400 chars).',
           },
           description: { type: 'string', description: 'Optional one-line description.' },
           tags: {
