@@ -42,10 +42,14 @@ export default function Sparkline({
     .map((p) => ({ x: p.periodEndDate, y: p.value }))
 
   if (data.length < 2) {
+    // Placeholder (no trend yet). The card foot is full-bleed (negative margins),
+    // so pad it back in — otherwise the italic copy sits flush to the rounded
+    // bottom/left edges and reads as cropped. minHeight (not a fixed height) lets
+    // it wrap to a second line without clipping.
     return (
       <div
-        className="flex items-center text-[13px] italic text-muted"
-        style={{ height }}
+        className="flex items-center px-3 pb-3 pt-1 text-[12.5px] italic leading-snug text-muted sm:px-4 sm:pb-4"
+        style={{ minHeight: height }}
       >
         Trend builds as you save more periods
       </div>

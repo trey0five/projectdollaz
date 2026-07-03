@@ -328,17 +328,6 @@ export default function HomeDashboard() {
         </div>
       )}
 
-      <HomeBriefing
-        items={briefingItems}
-        summary={briefingSummary}
-        loading={briefingLoading}
-        error={briefingError}
-        lens={briefingLens}
-        availableLenses={briefingAvailableLenses}
-        onLensChange={setPreviewLens}
-        canEdit={activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'}
-      />
-
       <DataHubBanner />
 
       <HomeVitals
@@ -365,6 +354,21 @@ export default function HomeDashboard() {
       <SectionDivider />
 
       <RecentPeriods periods={periods} />
+
+      {/* Triage board LAST — the vitals/Explore sit above it, mirroring the org
+          view (KPIs + schools table above, triage board at the bottom). */}
+      <SectionDivider />
+
+      <HomeBriefing
+        items={briefingItems}
+        summary={briefingSummary}
+        loading={briefingLoading}
+        error={briefingError}
+        lens={briefingLens}
+        availableLenses={briefingAvailableLenses}
+        onLensChange={setPreviewLens}
+        canEdit={activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'}
+      />
     </div>
   )
 }
