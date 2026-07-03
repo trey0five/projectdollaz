@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
-import { type MetricResult, type MetricUnit } from '@finrep/analytics'
+import { type MetricResult, formatMetricValueLong, resolveDisplayUnit } from '@finrep/analytics'
 import type { MembershipRole } from '@finrep/db'
 import { PeriodsService } from '../periods/periods.service.js'
 import { AnalyticsService } from './analytics.service.js'
@@ -115,29 +115,6 @@ export interface BriefingResponse {
   availableLenses: Lens[]
 }
 
-/**
- * Format a metric value for human `why` text using its unit semantics, so e.g.
- * operating_margin reads "-2.0%" (not "-0.02") and days_cash_on_hand reads
- * "45 days". Mirrors the web unit formatting. Null-safe.
- */
-function fmtMetric(value: number | null, unit: MetricUnit): string {
-  if (value === null || !Number.isFinite(value)) return 'unavailable'
-  switch (unit) {
-    case 'percent':
-    case 'share':
-      return `${(value * 100).toFixed(1)}%`
-    case 'days':
-      return `${Math.round(value)} day${Math.round(value) === 1 ? '' : 's'}`
-    case 'months':
-      return `${value.toFixed(1)} months`
-    case 'currency':
-      return `$${Math.round(value).toLocaleString('en-US')}`
-    case 'ratio':
-    default:
-      return value.toFixed(2)
-  }
-}
-
 /** Money for the reconciliation variance line. */
 function fmtMoney(value: number): string {
   const sign = value < 0 ? '-' : ''
@@ -149,13 +126,17 @@ function fmtMoney(value: number): string {
  * MetricResult's value + bands + goodDirection. Explains WHY it's on the list.
  */
 function metricWhy(r: MetricResult): string {
-  const v = fmtMetric(r.value, r.unit)
+  // resolveDisplayUnit maps a mix metric (unit 'share' but a $ total) to currency —
+  // defensive/consistent with every other surface (mix metrics are unbanded today,
+  // so this path is latent, but it can never mis-format if that ever changes).
+  const u = resolveDisplayUnit(r.key, r.unit)
+  const v = formatMetricValueLong(r.value, u)
   const isRisk = r.status === 'risk'
   if (!r.bands) {
     return `${r.label} is ${v}, in the ${isRisk ? 'risk' : 'watch'} range for this metric.`
   }
-  const good = fmtMetric(r.bands.good, r.unit)
-  const risk = fmtMetric(r.bands.risk, r.unit)
+  const good = formatMetricValueLong(r.bands.good, u)
+  const risk = formatMetricValueLong(r.bands.risk, u)
   if (r.bands.goodDirection === 'higher') {
     return isRisk
       ? `${r.label} is ${v} — below the ${risk} risk floor (healthy schools target ${good} or better).`

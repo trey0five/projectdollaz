@@ -92,6 +92,8 @@ export function scopeRuleFor(key: MetricKey): ScopeAggregation {
 export interface MetricMeta {
   key: MetricKey
   label: string
+  /** Board key-indicator alias (additive; absent falls back to `label`). */
+  boardLabel?: string
   unit: MetricDef['unit']
   category: MetricDef['category']
   goodDirection: MetricDef['goodDirection']
@@ -119,6 +121,7 @@ export const METRIC_META: MetricMeta[] = METRIC_KEYS.map((key) => {
   return {
     key: def.key,
     label: def.label,
+    boardLabel: def.boardLabel,
     unit: def.unit,
     category: def.category,
     goodDirection: def.goodDirection,

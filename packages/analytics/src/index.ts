@@ -27,6 +27,18 @@ export type {
   MetricTrend,
 } from './types.js'
 
+// Canonical formatters (single source of truth for value/delta strings) + the
+// mix→currency display override + the lineage breadcrumb. Consumed by the web
+// dashboard, the API briefing, the board report, and Penny so no surface drifts.
+export {
+  MIX_METRIC_KEYS,
+  resolveDisplayUnit,
+  formatMetricValue,
+  formatMetricDelta,
+  formatMetricValueLong,
+  describeLineage,
+} from './format.js'
+
 // Health / target bands (Phase 4D)
 export { DEFAULT_BANDS, bandsFor, healthStatus } from './health.js'
 

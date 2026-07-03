@@ -1,6 +1,12 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// UI metadata + formatters for the analytics dashboard. Everything visual lives
-// here (icons, value/delta formatting, donut palette) so cards/charts stay dumb.
+// UI metadata for the analytics dashboard. The web-only VISUAL tokens live here
+// (icons, status colors, donut palette) so cards/charts stay dumb.
+//
+// The metric CATALOG (labels, domains, units) and the VALUE/DELTA FORMATTERS are
+// no longer hand-maintained here — they are re-derived from @finrep/analytics,
+// the single semantic-layer source of truth, so the dashboard, API briefing,
+// board report and Penny never drift. The exported names below are unchanged, so
+// no consumer import changes.
 //
 // IMPORTANT: these formatters do NOT use the report's fmt() (which renders a real
 // 0 as an em-dash). A legitimate 0% metric must render "0.0%", not "—".
@@ -19,6 +25,18 @@ import {
   TrendingUp,
   UserCog,
 } from 'lucide-react'
+import {
+  METRIC_META,
+  MIX_METRIC_KEYS,
+  resolveDisplayUnit,
+  formatMetricValue,
+  formatMetricDelta,
+} from '@finrep/analytics'
+
+// Re-export the canonical value/delta formatters + the mix-keys list under the
+// SAME names the dashboard already imports (byte-identical output).
+export { formatMetricValue, MIX_METRIC_KEYS }
+export { formatMetricDelta as formatDelta }
 
 // Navy/gold palette tokens (kept in sync with tailwind.config.js).
 export const PALETTE = {
@@ -45,78 +63,48 @@ export const DONUT_RAMP = [
   '#54648f',
 ]
 
-// Per-metric icon + the format used by the value formatter.
-export const METRIC_META = {
-  operating_margin: { icon: Percent, format: 'percent' },
-  days_cash_on_hand: { icon: Wallet, format: 'days' },
-  months_operating_reserve: { icon: PiggyBank, format: 'months' },
-  tuition_dependency: { icon: GraduationCap, format: 'percent' },
-  revenue_mix: { icon: PieChart, format: 'currency' },
-  expense_mix: { icon: BarChart3, format: 'currency' },
+// Per-metric icon (web-only visual token; the icon component per metric key).
+const METRIC_ICONS = {
+  operating_margin: Percent,
+  days_cash_on_hand: Wallet,
+  months_operating_reserve: PiggyBank,
+  tuition_dependency: GraduationCap,
+  revenue_mix: PieChart,
+  expense_mix: BarChart3,
   // Tier-2 operational metrics (Phase 4B).
-  cost_per_pupil: { icon: Coins, format: 'currency' },
-  net_tuition_per_student: { icon: Banknote, format: 'currency' },
-  financial_aid_per_student: { icon: HandCoins, format: 'currency' },
-  aid_per_aided_student: { icon: PiggyBank, format: 'currency' },
-  tuition_discount_rate: { icon: Percent, format: 'percent' },
-  pct_students_on_aid: { icon: Users, format: 'percent' },
+  cost_per_pupil: Coins,
+  net_tuition_per_student: Banknote,
+  financial_aid_per_student: HandCoins,
+  aid_per_aided_student: PiggyBank,
+  tuition_discount_rate: Percent,
+  pct_students_on_aid: Users,
   // Enrollment domain (thin wedge).
-  enrollment_change_yoy: { icon: TrendingUp, format: 'percent' },
+  enrollment_change_yoy: TrendingUp,
   // HR domain (page-less module; value shows here + in the briefing).
-  student_teacher_ratio: { icon: UserCog, format: 'ratio' },
+  student_teacher_ratio: UserCog,
 }
 
 export function metricIcon(key) {
-  return METRIC_META[key]?.icon ?? BarChart3
+  return METRIC_ICONS[key] ?? BarChart3
 }
 
-// Human labels for every metric key. Used by customize mode, which lists metrics
-// by key even when they aren't in the current period's results (e.g. hidden or
-// unavailable). Kept in sync with the @finrep/analytics registry labels.
-export const METRIC_LABELS = {
-  operating_margin: 'Operating Margin',
-  days_cash_on_hand: 'Days Cash on Hand',
-  months_operating_reserve: 'Months of Operating Reserve',
-  tuition_dependency: 'Tuition Dependency',
-  revenue_mix: 'Revenue Mix',
-  expense_mix: 'Expense Mix',
-  cost_per_pupil: 'Cost per Pupil',
-  net_tuition_per_student: 'Net Tuition per Student',
-  financial_aid_per_student: 'Financial Aid per Student',
-  aid_per_aided_student: 'Aid per Aided Student',
-  tuition_discount_rate: 'Tuition Discount Rate',
-  pct_students_on_aid: '% of Students on Aid',
-  enrollment_change_yoy: 'Enrollment Change (YoY)',
-  student_teacher_ratio: 'Student-Teacher Ratio',
-}
+// Keyed lookup over the canonical served catalog (labels/units/domains) from
+// @finrep/analytics — the single source of truth. Replaces the hand-maintained
+// METRIC_LABELS / METRIC_DOMAIN maps so they can never drift from the registry.
+const META_BY_KEY = Object.fromEntries(METRIC_META.map((m) => [m.key, m]))
 
+// Human label for a metric key. Used by customize mode, which lists metrics by
+// key even when they aren't in the current period's results. Falls back to the
+// raw key for an unknown metric.
 export function metricLabel(key) {
-  return METRIC_LABELS[key] ?? key
+  return META_BY_KEY[key]?.label ?? key
 }
 
-// Coarse business domain per metric key — mirrors the @finrep/analytics registry
-// `domain` (the per-period MetricResult does not carry it), used ONLY to group the
-// compact dashboard cards into domain sections. Kept in lockstep with the registry;
-// domains are stable so drift risk is low. Unknown keys fall back to 'finance'.
-export const METRIC_DOMAIN = {
-  operating_margin: 'finance',
-  days_cash_on_hand: 'finance',
-  months_operating_reserve: 'finance',
-  tuition_dependency: 'finance',
-  revenue_mix: 'finance',
-  expense_mix: 'finance',
-  cost_per_pupil: 'operations',
-  net_tuition_per_student: 'aid',
-  financial_aid_per_student: 'aid',
-  aid_per_aided_student: 'aid',
-  tuition_discount_rate: 'aid',
-  pct_students_on_aid: 'aid',
-  enrollment_change_yoy: 'enrollment',
-  student_teacher_ratio: 'hr',
-}
-
+// Coarse business domain for a metric key — the registry `domain` (the per-period
+// MetricResult doesn't carry it), used ONLY to group the compact dashboard cards
+// into domain sections. Unknown keys fall back to 'finance'.
 export function metricDomain(key) {
-  return METRIC_DOMAIN[key] ?? 'finance'
+  return META_BY_KEY[key]?.domain ?? 'finance'
 }
 
 // ── Phase 4D: health status visual tokens (strictly navy/gold) ───────────────
@@ -177,87 +165,29 @@ export function isBandedStatus(status) {
 
 // Mix metrics render as donuts in a dedicated row, never as value cards. The
 // chart variant is locked to a donut for these (a UI rule, not a stored one).
-export const MIX_METRIC_KEYS = ['revenue_mix', 'expense_mix']
+// MIX_METRIC_KEYS is re-exported from @finrep/analytics (canonical) above.
 export function isMixMetric(key) {
   return MIX_METRIC_KEYS.includes(key)
 }
 
-// Map a metric's unit to a value format (the API also sends `unit`).
+// Normalize a metric's unit into the format vocab the value formatter switches
+// on. Retained as a thin passthrough for the drawer's per-input formatting: the
+// canonical formatMetricValue keys off the same {percent,share,days,months,
+// currency,ratio} vocab, so this is now the identity (with a ratio default for
+// an unknown unit — byte-identical to the prior mapping downstream).
 export function formatForUnit(unit) {
-  switch (unit) {
-    case 'percent':
-      return 'percent'
-    case 'days':
-      return 'days'
-    case 'months':
-      return 'months'
-    case 'currency':
-      return 'currency'
-    case 'ratio':
-      return 'ratio'
-    case 'share':
-      return 'share'
-    default:
-      return 'ratio'
-  }
+  return unit ?? 'ratio'
 }
 
 /**
- * Resolve the format to use for a given metric, preferring the per-metric format
- * from METRIC_META over the unit-derived one. This fixes the mix-metric trap:
+ * Resolve the display unit/format to use for a given metric. Delegates to the
+ * canonical resolveDisplayUnit, which applies the mix→currency override:
  * revenue_mix / expense_mix carry unit 'share' but their .value is a CURRENCY
- * TOTAL — METRIC_META declares them format:'currency', so this helper renders the
- * dollar total instead of a bogus percent. Falls back to formatForUnit for every
- * key without an explicit format (byte-identical output for those).
+ * TOTAL, so this renders the dollar total instead of a bogus percent. Every other
+ * key passes its own unit through (byte-identical to before).
  */
 export function metricFormat(key, unit) {
-  return METRIC_META[key]?.format ?? formatForUnit(unit)
-}
-
-/** Format a raw metric value for display. Never substitutes a dash for a real 0. */
-export function formatMetricValue(value, format) {
-  if (value == null || Number.isNaN(value)) return '—'
-  switch (format) {
-    case 'percent':
-    case 'share':
-      return `${(value * 100).toFixed(1)}%`
-    case 'days':
-      return value.toLocaleString('en-US', { maximumFractionDigits: 0 })
-    case 'months':
-      return value.toLocaleString('en-US', {
-        minimumFractionDigits: 1,
-        maximumFractionDigits: 1,
-      })
-    case 'currency':
-      return `$${value.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
-    case 'ratio':
-    default:
-      return value.toLocaleString('en-US', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      })
-  }
-}
-
-/** Format a PoP delta (signed). Percent/share deltas render as +x.x pts. */
-export function formatDelta(delta, format) {
-  if (delta == null || Number.isNaN(delta)) return null
-  const sign = delta > 0 ? '+' : delta < 0 ? '−' : ''
-  const abs = Math.abs(delta)
-  switch (format) {
-    case 'percent':
-    case 'share':
-      return `${sign}${(abs * 100).toFixed(1)} pts`
-    case 'days':
-      return `${sign}${abs.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
-    case 'months':
-      return `${sign}${abs.toFixed(1)}`
-    case 'currency':
-      return `${sign}$${abs.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
-    case 'ratio':
-    default:
-      return `${sign}${abs.toFixed(2)}`
-  }
+  return resolveDisplayUnit(key, unit)
 }
 
 /**

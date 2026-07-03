@@ -1,3 +1,5 @@
+import { formatMetricValue } from '@finrep/analytics'
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Phase 1 — Board Report pure presentation helpers. NO financial math here: every
 // number rendered comes verbatim from the server-assembled BoardReportBundle
@@ -33,20 +35,22 @@ export function ragColor(favorable, variancePct) {
 }
 
 // Key-indicator value formatting by unit (matches the bundle's `unit` field).
+// Thin shim over the canonical formatMetricValue: the board's KeyIndicator now
+// carries canonical MetricUnit values (percent/currency/days/…) plus its own
+// 'count' pseudo-unit. 'count' keeps the board's integer/1-dp local logic and
+// 'days' keeps the board's plain " days" suffix (no thousands commas); every
+// other unit defers to the shared formatter so all surfaces stay in lockstep.
 export function formatIndicator(value, unit) {
   if (value == null || Number.isNaN(value)) return '—'
   switch (unit) {
-    case 'currency':
-      return `$${Math.round(value).toLocaleString('en-US')}`
-    case 'ratio':
-      return `${(value * 100).toFixed(1)}%`
     case 'days':
       return `${Math.round(value)} days`
     case 'count':
-    default:
       return Number.isInteger(value)
         ? value.toLocaleString('en-US')
         : value.toLocaleString('en-US', { maximumFractionDigits: 1 })
+    default:
+      return formatMetricValue(value, unit)
   }
 }
 

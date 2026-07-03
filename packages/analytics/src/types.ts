@@ -235,6 +235,13 @@ export interface MetricInput {
   label: string
   value: number | null
   unit: MetricUnit
+  /**
+   * Which struct this operand came from — stamped by the compute layer by
+   * key-joining the metric def's declared MetricInputSpec. Optional + additive;
+   * powers the lineage breadcrumb (describeLineage). Absent when a runtime input
+   * has no matching declared spec.
+   */
+  source?: 'financials' | 'operational'
 }
 
 /**
@@ -286,6 +293,13 @@ export interface MetricComputeOutput {
 export interface MetricDef {
   key: MetricKey
   label: string
+  /**
+   * Optional shorter alias used by the board report's key-indicator strip (e.g.
+   * "Avg Net Tuition / Student" vs the canonical "Net Tuition per Student"). When
+   * absent the board falls back to `label`. Additive; declaring it moves the
+   * alias into the registry so the board never hardcodes a title.
+   */
+  boardLabel?: string
   unit: MetricUnit
   category: MetricCategory
   goodDirection: GoodDirection
@@ -332,6 +346,8 @@ export interface MetricDef {
 export interface MetricResult {
   key: MetricKey
   label: string
+  /** Board key-indicator alias (from def.boardLabel), copied on by the assembler. */
+  boardLabel?: string
   unit: MetricUnit
   category: MetricCategory
   goodDirection: GoodDirection

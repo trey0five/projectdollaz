@@ -34,9 +34,18 @@ export function assembleMetricResult(
 ): MetricResult {
   const bands = bandsFor(def.key)
   const status = healthStatus(out.value, bands, out.available)
+  // Canonical semantic layer: stamp each runtime input's `source` by key-joining
+  // the def's declared MetricInputSpec, and copy the board alias onto the result.
+  // Both the per-school (evaluate) and org (org-compute) paths flow through here,
+  // so neither surface can drift in how it labels an identical compute output.
+  const inputs = (out.inputs ?? []).map((input) => ({
+    ...input,
+    source: def.inputs?.find((s) => s.key === input.key)?.source,
+  }))
   return {
     key: def.key,
     label: def.label,
+    boardLabel: def.boardLabel,
     unit: def.unit,
     category: def.category,
     goodDirection: def.goodDirection,
@@ -49,7 +58,7 @@ export function assembleMetricResult(
     periodOverPeriodDelta,
     status,
     bands,
-    inputs: out.inputs ?? [],
+    inputs,
     components: out.components,
   }
 }

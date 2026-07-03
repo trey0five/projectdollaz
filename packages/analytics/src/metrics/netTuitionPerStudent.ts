@@ -11,6 +11,7 @@ import type { MetricDef } from '../types.js'
 export const netTuitionPerStudent: MetricDef = {
   key: 'net_tuition_per_student',
   label: 'Net Tuition per Student',
+  boardLabel: 'Avg Net Tuition / Student',
   unit: 'currency',
   category: 'operational',
   goodDirection: 'higher',

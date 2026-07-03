@@ -8,6 +8,7 @@ import type { MetricDef } from '../types.js'
 export const costPerPupil: MetricDef = {
   key: 'cost_per_pupil',
   label: 'Cost per Pupil',
+  boardLabel: 'Avg Cost / Student',
   unit: 'currency',
   category: 'operational',
   goodDirection: 'neutral',

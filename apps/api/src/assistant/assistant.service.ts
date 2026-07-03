@@ -14,6 +14,8 @@ import type { NormalizedRow } from '@finrep/ingestion'
 import {
   computeDriverBudget,
   defaultAssumptions,
+  formatMetricValueLong,
+  resolveDisplayUnit,
   mergeFeederEnrollment,
   toDriverPriorContext,
   GRADE_KEYS,
@@ -2237,6 +2239,11 @@ export class AssistantService {
             key: m.key,
             label: m.label,
             value: m.value,
+            // Canonical prose form (e.g. "45 days", "-2.0%") so Penny narrates the
+            // same string every other surface shows. resolveDisplayUnit maps the mix
+            // metrics (unit 'share' but a $ total value) to currency, matching the
+            // dashboard. Purely additive.
+            valueFormatted: formatMetricValueLong(m.value, resolveDisplayUnit(m.key, m.unit)),
             unit: m.unit,
             status: m.status,
             changeVsPrior: m.periodOverPeriodDelta,

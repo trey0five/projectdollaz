@@ -7,8 +7,8 @@ import type {
   NetAssetsColumn,
   SCFResult,
 } from '@finrep/engine'
-import type { MetricResult } from '@finrep/analytics'
-import { REVENUE_LINE_LABELS, EXPENSE_LINE_LABELS } from '@finrep/analytics'
+import type { MetricResult, MetricUnit } from '@finrep/analytics'
+import { REVENUE_LINE_LABELS, EXPENSE_LINE_LABELS, formatMetricValueLong } from '@finrep/analytics'
 import { MonthlyActualsService } from '../monthly/monthly-actuals.service.js'
 import { fyMonthKeys, fyStartYearForPeriodEnd } from '../monthly/fy-elapsed.js'
 import type { CategoryActuals } from '../analytics/category-actuals.js'
@@ -144,7 +144,10 @@ interface KeyIndicator {
   key: string
   label: string
   value: number | null
-  unit: 'count' | 'currency' | 'ratio' | 'days'
+  // Canonical MetricUnit (percent/currency/days/…) for metric-backed rows, plus
+  // the board-local 'count' pseudo-unit for enrollment/FTE headcount rows. The
+  // web formatIndicator shim renders both.
+  unit: MetricUnit | 'count'
   available: boolean
 }
 
@@ -1661,34 +1664,10 @@ export class BoardReportService {
         unit: 'count',
         available: fte != null,
       },
-      this.indicatorFromMetric(
-        metrics,
-        'net_tuition_per_student',
-        'net_tuition_per_student',
-        'Avg Net Tuition / Student',
-        'currency',
-      ),
-      this.indicatorFromMetric(
-        metrics,
-        'cost_per_pupil',
-        'cost_per_pupil',
-        'Avg Cost / Student',
-        'currency',
-      ),
-      this.indicatorFromMetric(
-        metrics,
-        'operating_margin',
-        'operating_margin',
-        'Operating Margin',
-        'ratio',
-      ),
-      this.indicatorFromMetric(
-        metrics,
-        'days_cash_on_hand',
-        'days_cash_on_hand',
-        'Days Cash on Hand',
-        'days',
-      ),
+      this.indicatorFromMetric(metrics, 'net_tuition_per_student', 'net_tuition_per_student'),
+      this.indicatorFromMetric(metrics, 'cost_per_pupil', 'cost_per_pupil'),
+      this.indicatorFromMetric(metrics, 'operating_margin', 'operating_margin'),
+      this.indicatorFromMetric(metrics, 'days_cash_on_hand', 'days_cash_on_hand'),
     ]
 
     // Phase 5 — STAFF-FTE KPIs (Teaching / Total Staff / Teacher Ratio), appended
@@ -1721,7 +1700,9 @@ export class BoardReportService {
         key: 'teacherRatio',
         label: 'Teacher Ratio',
         value: teacherRatio,
-        unit: 'ratio',
+        // Canonical 'percent' (staffing %); renders identically to the prior
+        // 'ratio' path through the web formatIndicator shim (×100, 1dp, %).
+        unit: 'percent',
         available: teacherRatio != null,
       },
     )
@@ -1733,12 +1714,19 @@ export class BoardReportService {
     metrics: MetricResult[],
     metricKey: string,
     outKey: string,
-    label: string,
-    unit: KeyIndicator['unit'],
   ): KeyIndicator {
     const m = metrics.find((x) => x.key === metricKey)
     const available = !!m?.available && m.value != null
-    return { key: outKey, label, value: available ? (m!.value as number) : null, unit, available }
+    // Label + unit come from the registry (via the MetricResult): the board alias
+    // (boardLabel) when declared, else the canonical label; and the canonical
+    // unit passed straight through. No hardcoded titles/units here anymore.
+    return {
+      key: outKey,
+      label: m?.boardLabel ?? m?.label ?? outKey,
+      value: available ? (m!.value as number) : null,
+      unit: m?.unit ?? 'ratio',
+      available,
+    }
   }
 
   // ── Statements (VERBATIM engine keys off the snapshot payload) ───────────────
@@ -1925,9 +1913,14 @@ export class BoardReportService {
     const kpis = data.keyIndicators
       .filter((k) => k.available && k.value != null)
       .map((k) => {
-        if (k.unit === 'ratio') return `${k.label}: ${(Number(k.value) * 100).toFixed(1)}%`
-        if (k.unit === 'currency') return `${k.label}: ${usd(k.value)}`
-        return `${k.label}: ${k.value}`
+        // Route through the canonical formatter so the LLM gets correct strings
+        // ("-2.0%", "45 days", "$1,234") — canonical units now flow through
+        // KeyIndicator.unit; only the board-local 'count' rows stay raw.
+        const display =
+          k.unit === 'count'
+            ? String(k.value)
+            : formatMetricValueLong(k.value as number, k.unit)
+        return `${k.label}: ${display}`
       })
       .join(', ')
     return [

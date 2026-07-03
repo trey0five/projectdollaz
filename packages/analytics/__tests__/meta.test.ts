@@ -66,6 +66,39 @@ describe('metric metadata', () => {
     }
   })
 
+  it('boardLabel is declared on exactly the two board-aliased metrics', () => {
+    const withAlias = METRIC_META.filter((m) => m.boardLabel)
+    expect(withAlias.map((m) => m.key).sort()).toEqual([
+      'cost_per_pupil',
+      'net_tuition_per_student',
+    ])
+    const byKey = Object.fromEntries(METRIC_META.map((m) => [m.key, m]))
+    expect(byKey.net_tuition_per_student.boardLabel).toBe('Avg Net Tuition / Student')
+    expect(byKey.cost_per_pupil.boardLabel).toBe('Avg Cost / Student')
+    // The alias is DISTINCT from the canonical label (proving it's a real alias).
+    expect(byKey.net_tuition_per_student.label).toBe('Net Tuition per Student')
+    expect(byKey.cost_per_pupil.label).toBe('Cost per Pupil')
+  })
+
+  it('every computed input carries a source consistent with the declared spec', () => {
+    const operational = { enrollment: 100, enrollmentFte: null, studentsOnAid: 40, financialAidTotal: 50000, teachingFte: 8, totalStaffFte: 12 }
+    const priorOperational = { enrollment: 95, enrollmentFte: null, studentsOnAid: 38, financialAidTotal: 48000, teachingFte: 8, totalStaffFte: 12 }
+    const r = computeMetricsRecord({
+      current: FULL_BUNDLE,
+      prior: FULL_BUNDLE,
+      currentOperational: operational,
+      priorOperational,
+    })
+    for (const def of ALL_METRICS) {
+      const specByKey = new Map((def.inputs ?? []).map((s) => [s.key, s.source]))
+      for (const inp of r[def.key].inputs) {
+        // Every runtime input's source is DEFINED and equals the def's declared source.
+        expect(inp.source).toBeDefined()
+        expect(inp.source).toBe(specByKey.get(inp.key))
+      }
+    }
+  })
+
   it('declared input keys all appear in the metric runtime inputs[] (no drift)', () => {
     // Build each metric's runtime inputs once (full bundle + operational so every
     // operand is reported even when the metric is available).
