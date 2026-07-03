@@ -148,17 +148,22 @@ export default function OrgSection() {
 
       <SettingsCard
         title="Schools"
-        description="Switch the active school or create a new one."
+        description={
+          canEdit ? 'Switch the active school or create a new one.' : 'Switch the active school.'
+        }
         action={
-          <button
-            onClick={() => setShowCreate((s) => !s)}
-            className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border-2 border-gold/40 px-3 py-1.5 text-[15px] font-semibold text-navy transition-colors hover:bg-gold/10"
-          >
-            <Plus size={15} /> Create school
-          </button>
+          // Only an owner may add schools — a member (e.g. Board) just switches.
+          canEdit ? (
+            <button
+              onClick={() => setShowCreate((s) => !s)}
+              className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border-2 border-gold/40 px-3 py-1.5 text-[15px] font-semibold text-navy transition-colors hover:bg-gold/10"
+            >
+              <Plus size={15} /> Create school
+            </button>
+          ) : null
         }
       >
-        {showCreate && (
+        {canEdit && showCreate && (
           <div className="mb-5 rounded-xl border border-gold/30 bg-navy/[0.02] p-4">
             <input
               className={`${inputCls} mb-3`}
