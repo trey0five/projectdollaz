@@ -16,7 +16,7 @@ import { useSchools } from '../../context/SchoolContext.jsx'
 import { useScope } from '../../context/ScopeContext.jsx'
 import { useBilling } from '../../context/BillingContext.jsx'
 import { usePersistence } from '../../context/PersistenceContext.jsx'
-import { useAnalytics, useInsights } from '../../hooks/useAnalytics.js'
+import { useAnalytics } from '../../hooks/useAnalytics.js'
 import { useCompliance } from '../../hooks/useCompliance.js'
 import { useBriefing } from '../../hooks/useBriefing.js'
 import { analyticsApi } from '../../lib/api.js'
@@ -24,6 +24,7 @@ import EntitlementPausedPanel from '../analytics/EntitlementPausedPanel.jsx'
 import { HeadlineSkeleton, MetricCardSkeleton } from '../analytics/skeletons.jsx'
 import OrgHome from './OrgHome.jsx'
 import HomeHero from './HomeHero.jsx'
+import HomeCommandCenter from './HomeCommandCenter.jsx'
 import HomeBriefing from './HomeBriefing.jsx'
 import HomeVitals from './HomeVitals.jsx'
 import FeatureGateway from './FeatureGateway.jsx'
@@ -171,7 +172,6 @@ export default function HomeDashboard() {
     schoolId,
     selectedPeriodId,
   )
-  const { text: insightText, source: insightSource } = useInsights(schoolId, selectedPeriodId)
   const { summary: complianceSummary, loading: complianceLoading } = useCompliance(
     schoolId,
     selectedPeriodId,
@@ -223,19 +223,6 @@ export default function HomeDashboard() {
     for (const r of metrics) m[r.key] = r
     return m
   }, [metrics])
-
-  // Compose the hero status line: prefer the AI insight, else a compliance summary.
-  const statusLine = useMemo(() => {
-    if (insightText) return insightText
-    if (complianceSummary) {
-      const material = complianceSummary.counts?.material ?? 0
-      const reportable = complianceSummary.counts?.reportable ?? 0
-      if (material > 0) return `${material} material finding${material === 1 ? '' : 's'} to address before review.`
-      if (reportable > 0) return `${reportable} reportable item${reportable === 1 ? '' : 's'} to review.`
-      return 'On track for review — no exceptions found.'
-    }
-    return null
-  }, [insightText, complianceSummary])
 
   const initialLoading = billingLoading || hydrating
 
@@ -311,13 +298,14 @@ export default function HomeDashboard() {
 
   return (
     <div className="mx-auto max-w-[1100px] space-y-5 px-4 py-6 sm:space-y-8 sm:px-10 sm:py-8">
-      <HomeHero
+      <HomeCommandCenter
         schoolName={activeSchool?.name}
         periods={savedPeriods}
         selectedPeriodId={selectedPeriodId}
         onSelectPeriod={setSelectedPeriodId}
-        statusLine={statusLine}
-        insightKind={insightText ? insightSource : null}
+        items={briefingItems}
+        summary={briefingSummary}
+        lens={briefingLens}
         billing={billing}
         isOwner={isOwner}
       />
