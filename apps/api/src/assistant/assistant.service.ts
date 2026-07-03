@@ -2202,11 +2202,10 @@ export class AssistantService {
       return { acct, desc: String(o.desc ?? '').slice(0, 255), total }
     })
 
-    // Create-or-get the FY period this month belongs to, then upsert the snapshot.
-    const { period } = await this.periods.createOrGet(schoolId, {
-      periodEndDate,
-      periodType,
-    })
+    // Resolve (REUSING the school's existing FY period for this end-date, whatever
+    // its periodType string is) so the snapshot lands in the fiscal year the user
+    // actually sees — never a duplicate period. Then upsert the snapshot.
+    const { period } = await this.periods.resolveForImport(schoolId, periodEndDate, periodType)
     await this.monthlySnapshots.create(user, schoolId, period.id, {
       monthKey,
       sourceName,

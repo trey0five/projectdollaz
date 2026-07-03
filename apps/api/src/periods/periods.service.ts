@@ -70,6 +70,39 @@ export class PeriodsService {
     return result
   }
 
+  /**
+   * Resolve the period to IMPORT INTO for a given end-date — REUSING the school's
+   * existing fiscal-year period regardless of its (historically inconsistent)
+   * periodType ('fy' / 'fye' / 'fiscal_year' / …). A school has ONE fiscal year per
+   * end-date, so keying create-or-get on periodType (as createOrGet does) spawns a
+   * DUPLICATE period the user can't see when a caller passes a different type string
+   * than the one already on file. Prefers the period that already carries statement
+   * snapshots (the canonical one the user works in), else the oldest. Only creates a
+   * new period when NONE exists at that end-date (using fallbackType).
+   */
+  async resolveForImport(
+    schoolId: string,
+    periodEndDate: string,
+    fallbackType = 'fy',
+    label?: string,
+  ): Promise<{ period: FiscalPeriod; created: boolean }> {
+    const end = new Date(periodEndDate)
+    const existing = await this.prisma.fiscalPeriod.findMany({
+      where: { schoolId, periodEndDate: end },
+      orderBy: { createdAt: 'asc' },
+    })
+    if (existing.length > 0) {
+      const withSnap = await this.prisma.statementSnapshot.findFirst({
+        where: { fiscalPeriodId: { in: existing.map((p) => p.id) } },
+        select: { fiscalPeriodId: true },
+      })
+      const chosen =
+        (withSnap && existing.find((p) => p.id === withSnap.fiscalPeriodId)) || existing[0]
+      return { period: chosen, created: false }
+    }
+    return this.createOrGet(schoolId, { periodEndDate, periodType: fallbackType, label })
+  }
+
   async createOrGetPublic(
     schoolId: string,
     input: { periodEndDate: string; periodType: string; label?: string },

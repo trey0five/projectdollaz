@@ -88,13 +88,18 @@ export class ImportsService {
     }
   }
 
-  /** Store an immutable import; create-or-get the period; audit; return it. */
+  /** Store an immutable import; REUSE-or-create the period by end-date; audit; return it. */
   async create(actor: User, schoolId: string, dto: CreateImportDto): Promise<ImportPublic> {
-    const { period } = await this.periods.createOrGet(schoolId, {
-      periodEndDate: dto.periodEndDate,
-      periodType: dto.periodType,
-      label: dto.label,
-    })
+    // Reuse the school's existing fiscal-year period for this end-date (whatever its
+    // periodType string) rather than keying create-or-get on periodType — otherwise a
+    // caller passing a different type ('fiscal_year' vs the on-file 'fy') mints a
+    // DUPLICATE period the user can't see.
+    const { period } = await this.periods.resolveForImport(
+      schoolId,
+      dto.periodEndDate,
+      dto.periodType,
+      dto.label,
+    )
 
     const imp = await this.prisma.import.create({
       data: {
