@@ -428,6 +428,28 @@ export const TOOL_SCHEMAS = [
   {
     type: 'function',
     function: {
+      name: 'import_monthly_actuals',
+      description:
+        'IMPORT an attached MONTHLY (as-of month-end, cumulative YTD) trial balance now, storing it as that month’s actuals; then summarize what you imported (month, account count, net). Use this — NOT propose_import_trial_balance — for a sheet the digest marks as MONTHLY (isMonthly / monthKey). A multi-sheet workbook lists one attachmentId per sheet; call this ONCE PER MONTH with that sheet’s attachmentId. The server already holds the fully parsed account rows — NEVER retype or fabricate them. monthKey (YYYY-MM) is taken from the sheet automatically; pass it ONLY to override an undetected month.',
+      parameters: {
+        type: 'object',
+        properties: {
+          attachmentId: {
+            type: 'string',
+            description: 'The attachmentId from the attachment digest for the monthly sheet to import.',
+          },
+          monthKey: {
+            type: 'string',
+            description: 'YYYY-MM of the month this sheet represents. Omit to use the month detected from the sheet.',
+          },
+        },
+        required: ['attachmentId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'create_task',
       description:
         'PROPOSE a new workflow Task for the user to CONFIRM before it is created (like drafting a corrective action — this does NOT create the task itself; the user must confirm). Use when the user asks to create or assign a task, or to "turn this into a task / make a task for the chair to review this" off a briefing or governance attention item — pull the title and source from the referenced item. assignee is "me" (the current user), a school member’s email address, or omitted (unassigned); it can ONLY be an active member of this school. dueDate is yyyy-mm-dd — only pass one the user actually stated; never invent one. Task, not period-scoped.',
@@ -888,6 +910,7 @@ export const TOOL_LABELS: Record<string, string> = {
   apply_forecast: 'Updating the forecast…',
   set_feeder_enrollment: 'Updating feeder enrollment…',
   propose_import_trial_balance: 'Importing the trial balance…',
+  import_monthly_actuals: 'Importing the monthly actuals…',
   render_chart: 'Drawing a chart…',
   navigate_to_page: 'Taking you there…',
   start_walkthrough: 'Let me show you…',

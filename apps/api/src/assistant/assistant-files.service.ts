@@ -6,7 +6,13 @@
 // re-decodes and re-checks every byte cap here — it NEVER trusts the client's
 // `size`. ingest() (xlsx/csv) is wrapped in try/catch with a time budget.
 import { Injectable, Logger } from '@nestjs/common'
-import { ingest, type NormalizedRow, type SheetMetadata } from '@finrep/ingestion'
+import {
+  ingest,
+  listTrialBalanceSheets,
+  type NormalizedRow,
+  type SheetCandidate,
+  type SheetMetadata,
+} from '@finrep/ingestion'
 
 const MAX_DECODED_BYTES = 8_000_000 // per file
 const MAX_TOTAL_DECODED_BYTES = 16_000_000 // across the turn
@@ -38,6 +44,8 @@ export interface ParsedFile {
   rows: NormalizedRow[]
   metadata?: SheetMetadata
   isTrialBalanceCandidate: boolean
+  /** The workbook sheet this parse came from (multi-sheet fan-out); absent for CSV. */
+  sheet?: string
 }
 
 export interface ImportCandidate {
@@ -45,6 +53,8 @@ export interface ImportCandidate {
   kind: 'trial_balance'
   sourceName: string
   metadata?: SheetMetadata
+  /** The workbook sheet this candidate came from (multi-sheet fan-out); absent for CSV. */
+  sheet?: string
 }
 
 /** The raw bytes + mime + filename of ONE attachment, retained for file_document. */
@@ -165,9 +175,31 @@ export class AssistantFilesService {
 
       // xlsx / csv — parse server-side via @finrep/ingestion (the only place bytes
       // become rows). Guarded; a parse failure degrades to a note, never throws out.
+      const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer
+
+      // An .xlsx may hold MANY sheets (e.g. a prior-year annual TB + monthly YTD
+      // sheets). Enumerate them all and fan out one candidate PER trial-balance
+      // sheet under a composite attachmentId, so each is independently importable
+      // WITHOUT a new tool param. CSV / a single-sheet workbook keep one candidate
+      // under the ORIGINAL attachmentId (byte-identical to the prior behaviour).
+      if (att.kind === 'xlsx') {
+        let sheets: SheetCandidate[] = []
+        try {
+          sheets = this.withBudget(att.name, () => listTrialBalanceSheets(ab))
+        } catch (e) {
+          this.logger.warn(
+            `attachment sheet-enumeration failed: ${e instanceof Error ? e.message : 'error'}`,
+          )
+        }
+        if (sheets.length > 1) {
+          this.registerMultiSheet(att.name, attachmentId, sheets, parsed, importCandidates, digests)
+          continue
+        }
+        // 0 or 1 TB sheet → fall through to the single-candidate path below.
+      }
+
       let result: { rows: NormalizedRow[]; metadata?: SheetMetadata; warnings?: string[] } | null = null
       try {
-        const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer
         result = this.ingestWithBudget(att.name, ab)
       } catch (e) {
         this.logger.warn(`attachment parse failed for a spreadsheet: ${e instanceof Error ? e.message : 'error'}`)
@@ -188,6 +220,7 @@ export class AssistantFilesService {
         rows,
         metadata,
         isTrialBalanceCandidate: candidate,
+        ...(metadata?.sheet ? { sheet: metadata.sheet } : {}),
       })
       if (candidate) {
         importCandidates.push({
@@ -195,6 +228,7 @@ export class AssistantFilesService {
           kind: 'trial_balance',
           sourceName: metadata?.sourceName ?? this.safeName(att.name),
           metadata,
+          ...(metadata?.sheet ? { sheet: metadata.sheet } : {}),
         })
       }
       digests.push(this.buildSpreadsheetDigest(attachmentId, att.name, rows, metadata, candidate))
@@ -208,13 +242,79 @@ export class AssistantFilesService {
     name: string,
     ab: ArrayBuffer,
   ): { rows: NormalizedRow[]; metadata?: SheetMetadata; warnings?: string[] } {
+    return this.withBudget(name, () => ingest(name, ab))
+  }
+
+  /** Time-budget wrapper: log (never throw) when a parse takes too long. */
+  private withBudget<T>(name: string, fn: () => T): T {
     const started = Date.now()
-    const out = ingest(name, ab)
+    const out = fn()
     const elapsed = Date.now() - started
-    if (elapsed > 8000) {
-      this.logger.warn(`attachment ingest took ${elapsed}ms`)
-    }
+    if (elapsed > 8000) this.logger.warn(`attachment parse of “${this.safeName(name)}” took ${elapsed}ms`)
     return out
+  }
+
+  /**
+   * Fan a multi-sheet workbook out to one ParsedFile + (per real trial balance)
+   * one ImportCandidate PER sheet, each keyed by a COMPOSITE attachmentId
+   * `${attachmentId}::${sheet}`, and emit a SINGLE combined digest that lists every
+   * sheet-candidate (its composite id, sheet, monthly/annual period, accounts, net)
+   * so the LLM can import each one distinctly. The raw file keeps the ORIGINAL id
+   * for file_document.
+   */
+  private registerMultiSheet(
+    fileName: string,
+    baseAttachmentId: string,
+    sheets: SheetCandidate[],
+    parsed: Map<string, ParsedFile>,
+    importCandidates: ImportCandidate[],
+    digests: string[],
+  ): void {
+    const lines: string[] = [
+      `kind: spreadsheet (multi-sheet workbook — ${sheets.length} sheets)`,
+      `This workbook holds MULTIPLE trial-balance sheets. Each is listed below with its OWN`,
+      `attachmentId and period. Import each sheet the user asked for with its own attachmentId:`,
+      `MONTHLY (YTD) sheets → import_monthly_actuals; ANNUAL sheets → propose_import_trial_balance.`,
+      `NEVER retype or fabricate the account rows — the server holds each sheet's parsed rows.`,
+      ``,
+    ]
+    for (const s of sheets) {
+      const compositeId = `${baseAttachmentId}::${s.sheet}`
+      const rows = s.rows ?? []
+      const md = s.metadata
+      const candidate = this.looksLikeTrialBalance(rows)
+      const sourceName = md?.sourceName ? this.safeName(md.sourceName) : this.safeName(fileName)
+
+      parsed.set(compositeId, {
+        sourceName,
+        rows,
+        metadata: md,
+        isTrialBalanceCandidate: candidate,
+        sheet: s.sheet,
+      })
+      if (candidate) {
+        importCandidates.push({
+          attachmentId: compositeId,
+          kind: 'trial_balance',
+          sourceName,
+          metadata: md,
+          sheet: s.sheet,
+        })
+      }
+
+      const net = typeof md?.net === 'number' ? md.net : rows.reduce((t, r) => t + (Number(r.total) || 0), 0)
+      const acctCount = typeof md?.accountCount === 'number' ? md.accountCount : rows.length
+      const periodDesc = md?.isMonthly
+        ? `MONTHLY YTD, monthKey ${md.monthKey ?? '(unknown)'} (fiscal year ending ${md.periodEndDate ?? '?'})`
+        : `ANNUAL, period ending ${md?.periodEndDate ?? '(undetermined)'}`
+      lines.push(
+        `• sheet "${this.safeName(s.sheet)}" — attachmentId: ${compositeId}`,
+        `    ${periodDesc}`,
+        `    accounts: ${acctCount}  net: ${Math.round(net)}  ${candidate ? 'looksLikeTrialBalance: yes' : 'looksLikeTrialBalance: no (do not import)'}`,
+      )
+    }
+    lines.push(``, `To FILE the whole workbook to Knowledge as-is, call file_document with attachmentId "${baseAttachmentId}".`)
+    digests.push(this.wrapDigest(fileName, lines.join('\n')))
   }
 
   /**

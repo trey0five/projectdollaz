@@ -37,7 +37,9 @@ function makeService(opts: { member?: { userId: string } | null } = {}) {
   const tasks = { submitForApproval, decide, list }
   const stub = {} as never
   const svc = new AssistantService(
-    prisma as never, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub,
+    // prisma, periods, analytics, budget, rollup, briefing, compliance, reconciliation,
+    // correctiveAction, boardReport, operational, client, files, imports, monthlySnapshots, statements
+    prisma as never, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub,
     tasks as never, // tasks
     stub, // documents
     stub, // documentStorage

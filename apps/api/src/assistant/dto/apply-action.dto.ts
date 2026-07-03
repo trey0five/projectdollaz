@@ -10,6 +10,7 @@ const APPLY_KINDS = [
   'apply_forecast',
   'set_feeder_enrollment',
   'import_trial_balance',
+  'import_monthly_actuals',
   'create_task',
   'submit_for_approval',
   'decide_approval',

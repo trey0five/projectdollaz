@@ -87,7 +87,71 @@ export function detectExplicitDate(text: string): string | undefined {
       return `${numeric[3]}-${pad2(mo)}-${pad2(day)}`
     }
   }
+  // Bare "Month YYYY" (no day) → that month's END date. Used for an ANNUAL sheet
+  // titled by a month; a YTD MONTHLY sheet routes through detectMonthYear instead
+  // (its period is the FY-end, with the month carried in monthKey).
+  const bareMonth = detectMonthYear(text)
+  if (bareMonth) {
+    return `${bareMonth.year}-${pad2(bareMonth.month)}-${pad2(lastDayOfMonth(bareMonth.year, bareMonth.month))}`
+  }
   return undefined
+}
+
+/** Last calendar day of (year, month 1..12) — Gregorian leap rule. */
+function lastDayOfMonth(year: number, month: number): number {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate()
+}
+
+/**
+ * Detect a bare "Month YYYY" / "MMM YYYY" token (no day), e.g. "Jul 2026" or
+ * "September 2026". Deliberately does NOT match a day-qualified date like
+ * "June 30, 2026" (that's an explicit annual period-end, handled elsewhere).
+ */
+export function detectMonthYear(text: string): { year: number; month: number } | undefined {
+  const re = /\b([A-Za-z]{3,9})\.?\s+(20\d{2})\b/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text)) !== null) {
+    const mo = MONTHS[m[1]!.toLowerCase()]
+    if (mo) return { year: parseInt(m[2]!, 10), month: mo }
+  }
+  return undefined
+}
+
+/** True when the WHOLE string is just a "Month YYYY" token (e.g. a sheet tab "Jul 2026"). */
+function isPureMonthYearToken(text: string): boolean {
+  const m = text.trim().match(/^([A-Za-z]{3,9})\.?\s+(20\d{2})$/)
+  return !!(m && MONTHS[m[1]!.toLowerCase()])
+}
+
+/**
+ * The fiscal-year END date (YYYY-06-30, Jul–Jun FL FY) of the FY a given month
+ * belongs to. Jul..Dec belong to the FY that STARTED that Jul → ends next
+ * June; Jan..Jun belong to the FY that started the PRIOR Jul → ends this June.
+ */
+export function fiscalYearEndForMonth(year: number, month: number): string {
+  const fyStartYear = month >= 7 ? year : year - 1
+  return `${fyStartYear + 1}-06-30`
+}
+
+/**
+ * Decide whether a sheet is a MONTHLY (as-of month-end, cumulative YTD) trial
+ * balance and, if so, its monthKey + fiscal-year-end period date. A sheet is
+ * monthly when it carries a bare "Month YYYY" AND a YTD/monthly signal — the
+ * signal is either explicit ("YTD"/"month") in the banner OR the SHEET NAME
+ * itself being a pure "Month YYYY" tab (how monthly workbooks are laid out).
+ */
+export function detectMonthly(
+  bannerText: string,
+  sheetName: string,
+): { monthKey: string; periodEndDate: string } | undefined {
+  const my = detectMonthYear(`${sheetName} ${bannerText}`)
+  if (!my) return undefined
+  const ytdSignal = /\bytd\b|\bmonth(ly|[- ]end|-to-date)?\b/i.test(bannerText)
+  if (!ytdSignal && !isPureMonthYearToken(sheetName)) return undefined
+  return {
+    monthKey: `${my.year}-${pad2(my.month)}`,
+    periodEndDate: fiscalYearEndForMonth(my.year, my.month),
+  }
 }
 
 /**
@@ -98,12 +162,17 @@ export function detectExplicitDate(text: string): string | undefined {
 export function extractSheetMetadata(
   headerCells: string[],
   sourceName: string,
-  rowCount: number
+  rowCount: number,
+  opts?: { sheetName?: string; net?: number; accountCount?: number }
 ): SheetMetadata {
   const cells = headerCells.map((c) => (c ?? '').toString().trim()).filter(Boolean)
   const text = cells.join(' ')
+  const sheetName = (opts?.sheetName ?? '').trim()
 
   const meta: SheetMetadata = { sourceName, rowCount }
+  if (sheetName) meta.sheet = sheetName
+  if (opts?.net !== undefined) meta.net = opts.net
+  if (opts?.accountCount !== undefined) meta.accountCount = opts.accountCount
 
   const periodTitle = cells[0]
   if (periodTitle) meta.periodTitle = periodTitle
@@ -111,16 +180,27 @@ export function extractSheetMetadata(
   const fiscalYear = detectFiscalYear(text)
   if (fiscalYear !== undefined) meta.fiscalYear = fiscalYear
 
-  // Prefer an EXPLICIT in-sheet date over an FY-derived one, and record which
-  // source we used so the resolver/UI can weight explicit dates higher.
-  const explicit = detectExplicitDate(text)
-  if (explicit) {
-    meta.periodEndDate = explicit
-    meta.periodEndSource = 'explicit'
-  } else if (fiscalYear !== undefined) {
-    // FL private-school fiscal year ends June 30.
-    meta.periodEndDate = `${fiscalYear}-06-30`
+  // MONTHLY (YTD, as-of month-end) sheets resolve to their fiscal-year END and
+  // carry the month in monthKey — check this BEFORE the annual date logic so a
+  // month-titled YTD sheet never collapses onto a month-end/FY date as "annual".
+  const monthly = detectMonthly(text, sheetName)
+  if (monthly) {
+    meta.isMonthly = true
+    meta.monthKey = monthly.monthKey
+    meta.periodEndDate = monthly.periodEndDate
     meta.periodEndSource = 'fiscal-year-end'
+  } else {
+    // Prefer an EXPLICIT in-sheet date over an FY-derived one, and record which
+    // source we used so the resolver/UI can weight explicit dates higher.
+    const explicit = detectExplicitDate(text)
+    if (explicit) {
+      meta.periodEndDate = explicit
+      meta.periodEndSource = 'explicit'
+    } else if (fiscalYear !== undefined) {
+      // FL private-school fiscal year ends June 30.
+      meta.periodEndDate = `${fiscalYear}-06-30`
+      meta.periodEndSource = 'fiscal-year-end'
+    }
   }
 
   const auditStatus = detectAuditStatus(text)

@@ -45,6 +45,7 @@ function makeService(opts: {
     stub, // client
     stub, // files
     stub, // imports
+    stub, // monthlySnapshots
     stub, // statements
     tasks as never, // tasks
     stub, // documents

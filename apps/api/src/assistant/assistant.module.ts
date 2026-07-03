@@ -6,6 +6,7 @@ import { AnalyticsModule } from '../analytics/analytics.module.js'
 import { ComplianceModule } from '../compliance/compliance.module.js'
 import { BoardReportModule } from '../board-report/board-report.module.js'
 import { ImportsModule } from '../imports/imports.module.js'
+import { MonthlyModule } from '../monthly/monthly.module.js'
 import { StatementsModule } from '../statements/statements.module.js'
 import { WorkflowModule } from '../workflow/workflow.module.js'
 import { KnowledgeModule } from '../knowledge/knowledge.module.js'
@@ -33,6 +34,9 @@ import { AssistantFilesService } from './assistant-files.service.js'
     ComplianceModule,
     BoardReportModule,
     ImportsModule,
+    // MonthlyModule exports MonthlySnapshotsService so Penny can store a monthly
+    // (YTD) trial balance. No cycle: MonthlyModule imports none of AssistantModule.
+    MonthlyModule,
     StatementsModule,
     WorkflowModule,
     KnowledgeModule,

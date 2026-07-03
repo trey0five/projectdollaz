@@ -46,6 +46,7 @@ function makeService(opts: { configured?: boolean } = {}) {
     stub, // client
     stub, // files
     stub, // imports
+    stub, // monthlySnapshots
     stub, // statements
     stub, // tasks
     documents as never, // documents

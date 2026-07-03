@@ -32,6 +32,32 @@ export interface SheetMetadata {
   auditStatus?: 'audited' | 'unaudited'
   /** First non-empty banner/title row text. */
   periodTitle?: string
+  /**
+   * NEW (multi-sheet). Set when the sheet is a MONTHLY (as-of month-end, YTD)
+   * trial balance rather than an annual one. 'YYYY-MM' of the month the sheet
+   * represents; pair with isMonthly. For a monthly sheet periodEndDate is the
+   * FISCAL-YEAR END the month belongs to (Jul–Jun), NOT the month itself.
+   */
+  monthKey?: string
+  /** True when the sheet is a monthly YTD trial balance (see monthKey). */
+  isMonthly?: boolean
+  /** Sum of parsed row totals (the trial balance "net"), for the digest. */
+  net?: number
+  /** Count of parsed account rows (mirrors rowCount; kept explicit for the fan-out). */
+  accountCount?: number
+  /** The workbook sheet this metadata came from (multi-sheet fan-out). */
+  sheet?: string
+}
+
+/**
+ * One trial-balance-looking sheet discovered in a multi-sheet workbook. Sheets
+ * that hold no account rows (e.g. an "Assumptions" tab) are NOT returned.
+ */
+export interface SheetCandidate {
+  /** The workbook sheet name. */
+  sheet: string
+  rows: NormalizedRow[]
+  metadata: SheetMetadata
 }
 
 export interface IngestionResult {

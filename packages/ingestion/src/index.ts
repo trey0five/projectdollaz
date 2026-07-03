@@ -7,8 +7,13 @@ export type {
   IngestionResult,
   NormalizedRow,
   SheetMetadata,
+  SheetCandidate,
 } from './types.js'
-export { excelAdapter, parseTrialBalance } from './adapters/excelAdapter.js'
+export {
+  excelAdapter,
+  parseTrialBalance,
+  listTrialBalanceSheets,
+} from './adapters/excelAdapter.js'
 export { csvAdapter, parseTrialBalanceCsv } from './adapters/csvAdapter.js'
 export { adapters, getAdapter, ingest } from './registry.js'
 
@@ -18,6 +23,9 @@ export {
   detectFiscalYear,
   detectExplicitDate,
   detectAuditStatus,
+  detectMonthYear,
+  detectMonthly,
+  fiscalYearEndForMonth,
 } from './metadata.js'
 
 // Role + period classification (pure)

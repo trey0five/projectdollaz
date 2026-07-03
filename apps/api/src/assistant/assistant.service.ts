@@ -35,6 +35,8 @@ import { ReconciliationService } from '../compliance/reconciliation.service.js'
 import { CorrectiveActionService } from '../compliance/corrective-action.service.js'
 import { BoardReportService } from '../board-report/board-report.service.js'
 import { ImportsService } from '../imports/imports.service.js'
+import { MonthlySnapshotsService } from '../monthly/monthly-snapshots.service.js'
+import { fyElapsed, MONTH_KEY_RE } from '../monthly/fy-elapsed.js'
 import { StatementsService } from '../statements/statements.service.js'
 import { TasksService } from '../workflow/tasks.service.js'
 import {
@@ -116,6 +118,7 @@ const REFRESH: Record<ProposedAction['kind'], RefreshKey[]> = {
   set_explanation: ['boardReport'],
   draft_cap_entry: ['cap'],
   import_trial_balance: ['dataStatus', 'metrics'],
+  import_monthly_actuals: ['dataStatus', 'metrics', 'monthly'],
   create_task: ['tasks'],
   submit_for_approval: ['tasks'],
   decide_approval: ['tasks'],
@@ -141,6 +144,7 @@ const WRITE_TOOLS = new Set([
   'apply_forecast',
   'set_feeder_enrollment',
   'propose_import_trial_balance',
+  'import_monthly_actuals',
 ])
 
 // Tools that must NOT auto-apply — they ride the confirm-then-create PROPOSAL path
@@ -200,6 +204,7 @@ export interface ProposedAction {
     | 'apply_forecast'
     | 'set_feeder_enrollment'
     | 'import_trial_balance'
+    | 'import_monthly_actuals'
     | 'create_task'
     | 'submit_for_approval'
     | 'decide_approval'
@@ -351,6 +356,7 @@ type RefreshKey =
   | 'cap'
   | 'dataStatus'
   | 'metrics'
+  | 'monthly'
   | 'tasks'
   | 'knowledge'
   | 'governance'
@@ -442,6 +448,7 @@ export class AssistantService {
     private readonly client: AssistantClient,
     private readonly files: AssistantFilesService,
     private readonly imports: ImportsService,
+    private readonly monthlySnapshots: MonthlySnapshotsService,
     private readonly statements: StatementsService,
     private readonly tasks: TasksService,
     private readonly documents: DocumentsService,
@@ -740,7 +747,11 @@ export class AssistantService {
           summary: res.summary,
           periodId: action.periodId,
           refresh: REFRESH[action.kind],
-          ...(action.kind === 'import_trial_balance' ? { details: this.importDetails(action) } : {}),
+          ...(action.kind === 'import_trial_balance'
+            ? { details: this.importDetails(action) }
+            : action.kind === 'import_monthly_actuals'
+              ? { details: this.monthlyImportDetails(action) }
+              : {}),
         }
         sinks.onApplied(ev)
         return {
@@ -789,6 +800,9 @@ export class AssistantService {
   ): Promise<ProposedAction> {
     if (name === 'propose_import_trial_balance') {
       return this.buildImportProposal(args, ctx)
+    }
+    if (name === 'import_monthly_actuals') {
+      return this.buildMonthlyImportProposal(args, ctx)
     }
     if (name === 'create_task') {
       return this.buildTaskProposal(args, ctx)
@@ -983,6 +997,82 @@ export class AssistantService {
         ...(label ? { label } : {}),
         sourceName: parsed.sourceName,
         ...(md ? { metadata: { ...md } as Record<string, unknown> } : {}),
+      },
+    }
+  }
+
+  /** The parsed-rows summary rows the 'applied' card shows for a monthly import. */
+  private monthlyImportDetails(action: ProposedAction): AppliedDetail[] {
+    const p = (action.payload ?? {}) as Record<string, unknown>
+    const rows = Array.isArray(p.rows) ? p.rows : []
+    const total = rows.reduce((s: number, r) => {
+      const t = Number((r as { total?: unknown })?.total)
+      return s + (Number.isFinite(t) ? t : 0)
+    }, 0)
+    const out: AppliedDetail[] = [
+      { label: 'Source', value: String(p.sourceName ?? 'Imported monthly actuals') },
+      { label: 'Month', value: String(p.monthKey ?? '') },
+      { label: 'Accounts', value: String(rows.length) },
+      { label: 'Net', value: `$${Math.round(total).toLocaleString('en-US')}` },
+    ]
+    if (typeof p.periodEndDate === 'string' && p.periodEndDate) {
+      out.push({ label: 'Fiscal year ending', value: p.periodEndDate })
+    }
+    return out
+  }
+
+  /**
+   * Build a SELF-CONTAINED import_monthly_actuals proposal from an attached, parsed
+   * MONTHLY (YTD) sheet. Like buildImportProposal, the full rows live in the
+   * request-scoped prep map keyed by the (possibly COMPOSITE) attachmentId the LLM
+   * saw — never supplied by the LLM. The monthKey comes from the sheet's detected
+   * metadata (or an explicit override arg); the period is the FISCAL-YEAR END that
+   * month belongs to (Jul–Jun). Re-validated as untrusted input on apply.
+   */
+  private buildMonthlyImportProposal(args: Record<string, unknown>, ctx: Ctx): ProposedAction {
+    const attachmentId = typeof args.attachmentId === 'string' ? args.attachmentId : ''
+    const parsed = attachmentId ? ctx.prep?.parsed.get(attachmentId) : undefined
+    if (!parsed) {
+      throw new Error(
+        'import_monthly_actuals needs a valid attachmentId from an attached spreadsheet sheet.',
+      )
+    }
+    if (!parsed.isTrialBalanceCandidate) {
+      throw new Error('That sheet did not look like a trial balance, so it can’t be imported.')
+    }
+    // monthKey: an explicit YYYY-MM arg wins; otherwise the month detected on the sheet.
+    const argMonth = typeof args.monthKey === 'string' ? args.monthKey.trim() : ''
+    const monthKey = MONTH_KEY_RE.test(argMonth) ? argMonth : parsed.metadata?.monthKey
+    if (!monthKey || !MONTH_KEY_RE.test(monthKey)) {
+      throw new Error(
+        'I couldn’t determine which month this sheet is for. Ask the user for the month and pass monthKey as YYYY-MM.',
+      )
+    }
+    const rows: NormalizedRow[] = (parsed.rows ?? [])
+      .filter(
+        (r) => r && Number.isInteger(r.acct) && Number.isFinite(r.total) && typeof r.desc === 'string',
+      )
+      .slice(0, 5000)
+    if (rows.length === 0) throw new Error('The monthly trial balance has no usable account rows to import.')
+
+    // The FY-end (YYYY-06-30) of the fiscal year this month belongs to (Jul–Jun).
+    const fyStartYear = fyElapsed(monthKey).fyStartYear
+    const periodEndDate = `${fyStartYear + 1}-06-30`
+    const periodId = ctx.periodId ?? ''
+    const total = rows.reduce((s, r) => s + (Number(r.total) || 0), 0)
+    return {
+      kind: 'import_monthly_actuals',
+      periodId,
+      summary:
+        `Import the ${monthKey} monthly (YTD) actuals “${parsed.sourceName}” ` +
+        `(${rows.length} accounts, net $${Math.round(total).toLocaleString('en-US')}) ` +
+        `into the fiscal year ending ${periodEndDate}.`,
+      payload: {
+        rows,
+        monthKey,
+        periodEndDate,
+        periodType: 'fiscal_year',
+        sourceName: parsed.sourceName,
       },
     }
   }
@@ -1549,6 +1639,9 @@ export class AssistantService {
     if (action.kind === 'import_trial_balance') {
       return this.applyImportTrialBalance(user, schoolId, action)
     }
+    if (action.kind === 'import_monthly_actuals') {
+      return this.applyImportMonthlyActuals(user, schoolId, action)
+    }
     if (action.kind === 'apply_driver_budget') {
       const assumptions = (p.assumptions ?? {}) as Record<string, unknown>
       await this.budget.upsertDriver(
@@ -2069,6 +2162,59 @@ export class AssistantService {
     return { applied: true, summary: action.summary }
   }
 
+  /**
+   * Apply a user-confirmed MONTHLY import. Re-validates EVERY field as untrusted
+   * (a forged /apply can hit here directly): monthKey shape, period-end date, and
+   * each row. Create-or-gets the fiscal-year period the month belongs to, then
+   * delegates to MonthlySnapshotsService.create — which re-checks monthKey ∈ the
+   * period's FY (Jul–Jun), runs the engine CY-only, and UPSERTS on (period, month).
+   */
+  private async applyImportMonthlyActuals(
+    user: User,
+    schoolId: string,
+    action: ProposedAction,
+  ): Promise<{ applied: boolean; summary: string }> {
+    const p = (action.payload ?? {}) as Record<string, unknown>
+    const monthKey = typeof p.monthKey === 'string' ? p.monthKey.trim() : ''
+    if (!MONTH_KEY_RE.test(monthKey)) {
+      throw new Error('Invalid monthKey (expected YYYY-MM).')
+    }
+    // SERVER-DERIVED from the (validated) monthKey — NEVER trust a client-supplied
+    // periodEndDate/periodType on a forgeable /apply. A month belongs to the Jul–Jun
+    // fiscal year ending the following June 30; MonthlySnapshotsService.create then
+    // re-checks monthKey ∈ that period's FY as defense in depth.
+    const periodEndDate = `${fyElapsed(monthKey).fyStartYear + 1}-06-30`
+    const periodType = 'fiscal_year'
+    const sourceName =
+      typeof p.sourceName === 'string' && p.sourceName.trim()
+        ? p.sourceName.trim().slice(0, 255)
+        : 'Imported monthly actuals'
+
+    const rawRows = Array.isArray(p.rows) ? p.rows : []
+    if (rawRows.length === 0) throw new Error('No rows to import.')
+    if (rawRows.length > 5000) throw new Error('Too many rows to import (max 5000).')
+    const rows = rawRows.map((r, i) => {
+      const o = (r ?? {}) as { acct?: unknown; desc?: unknown; total?: unknown }
+      const acct = Number(o.acct)
+      const total = Number(o.total)
+      if (!Number.isInteger(acct)) throw new Error(`Row ${i + 1}: account must be an integer.`)
+      if (!Number.isFinite(total)) throw new Error(`Row ${i + 1}: amount must be a finite number.`)
+      return { acct, desc: String(o.desc ?? '').slice(0, 255), total }
+    })
+
+    // Create-or-get the FY period this month belongs to, then upsert the snapshot.
+    const { period } = await this.periods.createOrGet(schoolId, {
+      periodEndDate,
+      periodType,
+    })
+    await this.monthlySnapshots.create(user, schoolId, period.id, {
+      monthKey,
+      sourceName,
+      rows,
+    })
+    return { applied: true, summary: action.summary }
+  }
+
   private parseArgs(raw: string): Record<string, unknown> {
     try {
       const v = JSON.parse(raw || '{}')
@@ -2179,7 +2325,14 @@ export class AssistantService {
       'looksLikeTrialBalance: yes and the user wants it imported, call propose_import_trial_balance with ' +
       'that file’s attachmentId — this IMPORTS it now (the server holds the full parsed rows, so NEVER ' +
       'fabricate, retype, or invent account rows); afterwards summarize the parsed rows you imported ' +
-      '(period, account count, net). For other attachments, answer the user’s questions from what you can read. ' +
+      '(period, account count, net). A MULTI-SHEET workbook surfaces ONE candidate PER sheet — each with ' +
+      'its OWN attachmentId and its OWN period in the digest. Import each sheet the user asked for under its ' +
+      'own attachmentId, and summarize each (sheet, period/month, accounts, net). Two kinds of sheet: an ' +
+      'ANNUAL trial balance (a full fiscal year) → propose_import_trial_balance; a MONTHLY sheet (the digest ' +
+      'marks it isMonthly with a monthKey — an as-of-month-end, cumulative YTD balance) → import_monthly_actuals, ' +
+      'ONE call per month to that sheet’s attachmentId (its monthKey is auto-detected). NEVER import a monthly ' +
+      'sheet as an annual trial balance — monthly sheets are cumulative YTD, not annual, and importing them ' +
+      'annually would collapse every month onto one fiscal-year period. For other attachments, answer the user’s questions from what you can read. ' +
       'When the user wants to SAVE or FILE an attached document to the Knowledge store (a policy, board packet, ' +
       'accreditation evidence, etc.) call file_document with that file’s attachmentId — it PROPOSES filing it ' +
       'for the user to CONFIRM (classify the domain, suggest a clear title and domain tags; the server holds the ' +
