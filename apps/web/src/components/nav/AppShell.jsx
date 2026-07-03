@@ -46,11 +46,25 @@ import {
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useBilling } from '../../context/BillingContext.jsx'
 import { useScope } from '../../context/ScopeContext.jsx'
+import { useSchools } from '../../context/SchoolContext.jsx'
+import { usePersistence } from '../../context/PersistenceContext.jsx'
+import { useNavBadges } from '../../hooks/useNavBadges.js'
 import { SELLABLE_MODULE_KEYS, MODULE_META } from '../../lib/modules.js'
 import SchoolSwitcher from '../SchoolSwitcher.jsx'
 import ScopeToggle from './ScopeToggle.jsx'
 import SearchBox from '../search/SearchBox.jsx'
 import { NAV_GROUPS, SETTINGS_ITEM } from './sidebarNav.js'
+
+// Which briefing AttentionSource backs each nav route's attention badge.
+const NAV_BADGE_SOURCE = {
+  '/tasks': 'workflow',
+  '/governance': 'governance',
+  '/facilities': 'facilities',
+  '/accreditation': 'accreditation',
+  '/advancement': 'advancement',
+}
+// The Finance domain rolls up its finance-family attention sources.
+const FINANCE_BADGE_SOURCES = ['metric', 'compliance', 'data']
 
 // Per-module icon for the (dimmed) Add-ons rows; falls back to a Lock badge.
 const LOCKED_ICON = {
@@ -80,7 +94,36 @@ export default function AppShell({ children }) {
   const { logout } = useAuth()
   const { hasModule, entitled } = useBilling()
   const { isMultiSchool } = useScope()
+  const { activeSchool } = useSchools()
+  const { periods } = usePersistence()
   const navigate = useNavigate()
+
+  // Attention badges from the briefing (latest saved period, fail-soft).
+  const latestPeriodId = (periods || []).find((p) => p.hasSnapshot)?.id ?? null
+  const badges = useNavBadges(activeSchool?.id ?? null, latestPeriodId)
+  const financeBadge = (() => {
+    let count = 0
+    let critical = false
+    for (const s of FINANCE_BADGE_SOURCES) {
+      const b = badges[s]
+      if (b) {
+        count += b.count
+        critical = critical || b.critical
+      }
+    }
+    return count ? { count, critical } : null
+  })()
+  // A small count pill (red when any item is critical, else gold).
+  const navBadge = (b) =>
+    b && b.count > 0 ? (
+      <span
+        className={`ml-auto flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 text-[10.5px] font-bold ${
+          b.critical ? 'bg-danger text-white' : 'bg-gold text-navy-deep'
+        }`}
+      >
+        {b.count}
+      </span>
+    ) : null
   const reduce = useReducedMotion()
   const location = useLocation()
   const path = location.pathname
@@ -187,6 +230,7 @@ export default function AppShell({ children }) {
           className={`shrink-0 ${active ? 'text-gold-light' : 'text-white/70'}`}
         />
         <span>{item.label}</span>
+        {navBadge(badges[NAV_BADGE_SOURCE[item.to]])}
       </Link>
     )
   }
@@ -288,6 +332,7 @@ export default function AppShell({ children }) {
                     />
                   )}
                   <span>{group.label}</span>
+                  {group.id === 'finance' && navBadge(financeBadge)}
                 </Link>
                 <div className="ml-[19px] flex flex-col gap-0.5 border-l border-white/10 pl-2.5">
                   {group.items.map((item) => renderNavItem(item, withIds))}
