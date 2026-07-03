@@ -38,6 +38,14 @@ const SEVERITY = {
   info: { label: 'Review', tab: 'bg-navy-soft', wash: 'rgba(46,80,143,0.06)', chip: 'bg-navy/10 text-navy' },
 }
 
+// Triage-board lanes — one column per severity (decreasing urgency), matching
+// HomeBriefing. Server order is preserved within each lane.
+const LANES = [
+  { key: 'critical', label: 'Critical', bar: 'from-danger to-danger/40', dot: 'bg-danger', text: 'text-danger', empty: 'Nothing critical.' },
+  { key: 'warn', label: 'Warning', bar: 'from-gold to-gold/40', dot: 'bg-gold', text: 'text-gold-dark', empty: 'No warnings.' },
+  { key: 'info', label: 'To review', bar: 'from-navy-soft to-navy-soft/40', dot: 'bg-navy-soft', text: 'text-navy-soft', empty: 'Nothing to review.' },
+]
+
 // Domain eyebrow: a label + an icon that rides inside the gold coin.
 const SOURCE_META = {
   metric: { label: 'Finance', Icon: BarChart3 },
@@ -128,7 +136,7 @@ function OrgBriefingItemCard({ item, index, reduce }) {
           <h3 className="font-serif text-[19px] font-semibold leading-snug text-navy sm:text-[21px]">
             {item.title}
           </h3>
-          <p className="mt-1.5 max-w-[64ch] text-[14.5px] leading-relaxed text-muted">{item.why}</p>
+          <p className="mt-1.5 text-[14.5px] leading-relaxed text-muted">{item.why}</p>
           <span className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-bold uppercase tracking-[0.06em] text-gold">
             {ctaLabel(item)}
             <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
@@ -136,6 +144,37 @@ function OrgBriefingItemCard({ item, index, reduce }) {
         </div>
       </Link>
     </motion.div>
+  )
+}
+
+// One triage-board column: a colour-accented header with a live count, then the
+// server-ranked cross-school cards for this severity (or a soft empty state).
+function OrgTriageLane({ lane, items, reduce }) {
+  const count = items.length
+  return (
+    <section aria-label={`${lane.label} — ${count} item${count === 1 ? '' : 's'}`} className="flex flex-col gap-4">
+      <div className="relative overflow-hidden rounded-xl border border-rule/70 bg-white/80 px-4 py-3 shadow-sm backdrop-blur-sm">
+        <span aria-hidden className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${lane.bar}`} />
+        <div className="flex items-center gap-2.5">
+          <span className={`h-2.5 w-2.5 rounded-full ${lane.dot}`} />
+          <span className="text-[12.5px] font-bold uppercase tracking-[0.08em] text-navy">{lane.label}</span>
+          <span className={`ml-auto min-w-[1.75rem] rounded-full bg-section px-2 py-0.5 text-center text-[12.5px] font-extrabold tabular-nums ${lane.text}`}>
+            {count}
+          </span>
+        </div>
+      </div>
+      {count === 0 ? (
+        <div className="flex items-center justify-center rounded-2xl border border-dashed border-rule/70 bg-white/40 px-4 py-10 text-center">
+          <p className="text-[13px] font-medium text-muted/70">{lane.empty}</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {items.map((item, i) => (
+            <OrgBriefingItemCard key={item.orgItemId} item={item} index={i} reduce={reduce} />
+          ))}
+        </div>
+      )}
+    </section>
   )
 }
 
@@ -265,12 +304,20 @@ export default function OrgBriefing({
         </p>
       </div>
 
-      {/* Ranked cross-school items (server-ranked — never re-sorted). */}
+      {/* Triage board — cross-school items bucketed into severity lanes (server
+          order preserved within each lane). */}
       {items.length > 0 && (
         <div className="space-y-3">
-          {items.map((item, i) => (
-            <OrgBriefingItemCard key={item.orgItemId} item={item} index={i} reduce={reduce} />
-          ))}
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {LANES.map((lane) => (
+              <OrgTriageLane
+                key={lane.key}
+                lane={lane}
+                items={items.filter((it) => (it.severity ?? 'info') === lane.key)}
+                reduce={reduce}
+              />
+            ))}
+          </div>
           {briefing.capApplied && (
             <div className="rounded-2xl border border-dashed border-rule bg-cream/40 px-5 py-3 text-center">
               <p className="text-[12px] text-muted">

@@ -2,11 +2,13 @@
 // HomeBriefing — the LEAD panel of HomeDashboard. Turns Home from a vitals
 // dashboard into a prioritised, advisory briefing: "Good morning. N things need
 // your attention." Renders the server-RANKED AttentionItem[] (never re-sorts) as
-// flashy folder-tab DECISION CARDS: a severity tab, a domain eyebrow with a gold
-// coin, a due indicator, the serif headline, the plain-language `why`, and inline
-// actions. Zero items => the all-caught-up empty state. Read-only, no-print,
-// navy/gold theme. Fail-soft: an error with no items renders nothing so a briefing
-// hiccup never blocks the vitals below. Dismiss is client-only (session-scoped).
+// a TRIAGE BOARD: three severity lanes (Critical / Warning / To review), each a
+// column of flashy folder-tab DECISION CARDS — a severity tab, a domain eyebrow
+// with a gold coin, a due indicator, the serif headline, the plain-language `why`,
+// and inline actions. Server order is preserved WITHIN each lane. Zero items =>
+// the all-caught-up empty state. Read-only, no-print, navy/gold theme. Fail-soft:
+// an error with no items renders nothing so a briefing hiccup never blocks the
+// vitals below. Dismiss is client-only (session-scoped).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo, useState } from 'react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
@@ -64,6 +66,36 @@ const SEVERITY = {
   warn: { label: 'Warning', tab: 'bg-gold', wash: 'rgba(184,150,80,0.09)' },
   info: { label: 'Review', tab: 'bg-navy-soft', wash: 'rgba(46,80,143,0.06)' },
 }
+
+// Triage-board lanes. One column per severity, in decreasing urgency. `bar` is the
+// lane's top accent gradient; `dot`/`text` colour the header; `empty` is the copy
+// shown when a lane is clear. Card order within a lane stays server-ranked.
+const LANES = [
+  {
+    key: 'critical',
+    label: 'Critical',
+    bar: 'from-danger to-danger/40',
+    dot: 'bg-danger',
+    text: 'text-danger',
+    empty: 'Nothing critical.',
+  },
+  {
+    key: 'warn',
+    label: 'Warning',
+    bar: 'from-gold to-gold/40',
+    dot: 'bg-gold',
+    text: 'text-gold-dark',
+    empty: 'No warnings.',
+  },
+  {
+    key: 'info',
+    label: 'To review',
+    bar: 'from-navy-soft to-navy-soft/40',
+    dot: 'bg-navy-soft',
+    text: 'text-navy-soft',
+    empty: 'Nothing to review.',
+  },
+]
 
 // Domain eyebrow: a label + a small icon that rides inside the gold coin.
 const SOURCE_META = {
@@ -172,7 +204,7 @@ function BriefingItemCard({ item, index, reduce, canEdit, onDismiss }) {
         <h3 className="font-serif text-[19px] font-semibold leading-snug text-navy sm:text-[21px]">
           {item.title}
         </h3>
-        <p className="mt-1.5 max-w-[64ch] text-[14.5px] leading-relaxed text-muted">{item.why}</p>
+        <p className="mt-1.5 text-[14.5px] leading-relaxed text-muted">{item.why}</p>
 
         {/* Inline actions */}
         <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -210,6 +242,55 @@ function BriefingItemCard({ item, index, reduce, canEdit, onDismiss }) {
   )
 }
 
+// One triage-board column: a colour-accented header with a live count, then the
+// server-ranked cards for this severity (or a soft empty state when the lane is
+// clear). Cards keep their folder-tab design; the lane just groups by urgency.
+function TriageLane({ lane, items, reduce, canEdit, onDismiss }) {
+  const count = items.length
+  return (
+    <section
+      aria-label={`${lane.label} — ${count} item${count === 1 ? '' : 's'}`}
+      className="flex flex-col gap-4"
+    >
+      <div className="relative overflow-hidden rounded-xl border border-rule/70 bg-white/80 px-4 py-3 shadow-sm backdrop-blur-sm">
+        <span aria-hidden className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${lane.bar}`} />
+        <div className="flex items-center gap-2.5">
+          <span className={`h-2.5 w-2.5 rounded-full ${lane.dot}`} />
+          <span className="text-[12.5px] font-bold uppercase tracking-[0.08em] text-navy">
+            {lane.label}
+          </span>
+          <span
+            className={`ml-auto min-w-[1.75rem] rounded-full bg-section px-2 py-0.5 text-center text-[12.5px] font-extrabold tabular-nums ${lane.text}`}
+          >
+            {count}
+          </span>
+        </div>
+      </div>
+
+      {count === 0 ? (
+        <div className="flex items-center justify-center rounded-2xl border border-dashed border-rule/70 bg-white/40 px-4 py-10 text-center">
+          <p className="text-[13px] font-medium text-muted/70">{lane.empty}</p>
+        </div>
+      ) : (
+        <motion.div layout className="flex flex-col gap-4">
+          <AnimatePresence initial={false}>
+            {items.map((item, i) => (
+              <BriefingItemCard
+                key={item.id}
+                item={item}
+                index={i}
+                reduce={reduce}
+                canEdit={canEdit}
+                onDismiss={onDismiss}
+              />
+            ))}
+          </AnimatePresence>
+        </motion.div>
+      )}
+    </section>
+  )
+}
+
 function ItemSkeleton() {
   return (
     <div className="overflow-hidden rounded-2xl border border-rule bg-white shadow-card">
@@ -237,6 +318,12 @@ export default function HomeBriefing({
   const visible = useMemo(() => items.filter((i) => !dismissed.has(i.id)), [items, dismissed])
   const total = visible.length
   const dismiss = (id) => setDismissed((prev) => new Set(prev).add(id))
+  // Bucket the server-ranked items into lanes, preserving order within each.
+  const byLane = useMemo(() => {
+    const b = { critical: [], warn: [], info: [] }
+    for (const i of visible) (b[i.severity] ?? b.info).push(i)
+    return b
+  }, [visible])
 
   const lensControls = lens ? (
     <div className="flex flex-wrap items-center gap-3">
@@ -282,10 +369,6 @@ export default function HomeBriefing({
     )
   }
 
-  const crit = visible.filter((i) => i.severity === 'critical').length
-  const warn = visible.filter((i) => i.severity === 'warn').length
-  const rev = total - crit - warn
-
   return (
     <section className="no-print space-y-4">
       {lensControls}
@@ -294,39 +377,20 @@ export default function HomeBriefing({
           {greeting()}. {total} thing{total === 1 ? '' : 's'} need{total === 1 ? 's' : ''} your attention.
         </h2>
         <BriefMeButton />
-        {/* Severity summary pips */}
-        <div className="ml-auto flex items-center gap-3 text-[12.5px] font-semibold">
-          {crit > 0 && (
-            <span className="inline-flex items-center gap-1.5 text-danger">
-              <span className="h-2 w-2 rounded-full bg-danger" /> {crit} critical
-            </span>
-          )}
-          {warn > 0 && (
-            <span className="inline-flex items-center gap-1.5 text-gold">
-              <span className="h-2 w-2 rounded-full bg-gold" /> {warn} warning{warn === 1 ? '' : 's'}
-            </span>
-          )}
-          {rev > 0 && (
-            <span className="inline-flex items-center gap-1.5 text-navy-soft">
-              <span className="h-2 w-2 rounded-full bg-navy-soft" /> {rev} to review
-            </span>
-          )}
-        </div>
       </div>
-      <motion.div layout className="space-y-4">
-        <AnimatePresence initial={false}>
-          {visible.map((item, i) => (
-            <BriefingItemCard
-              key={item.id}
-              item={item}
-              index={i}
-              reduce={reduce}
-              canEdit={canEdit}
-              onDismiss={dismiss}
-            />
-          ))}
-        </AnimatePresence>
-      </motion.div>
+      {/* Triage board — one lane per severity, side by side on wide screens. */}
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+        {LANES.map((lane) => (
+          <TriageLane
+            key={lane.key}
+            lane={lane}
+            items={byLane[lane.key]}
+            reduce={reduce}
+            canEdit={canEdit}
+            onDismiss={dismiss}
+          />
+        ))}
+      </div>
     </section>
   )
 }
