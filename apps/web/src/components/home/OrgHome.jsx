@@ -15,6 +15,7 @@ import { Layers } from 'lucide-react'
 import { useOrgBriefing, useOrgMetrics } from '../../hooks/useAnalytics.js'
 import OrgBriefing from '../budget/OrgBriefing.jsx'
 import OrgKpiStrip from '../budget/OrgKpiStrip.jsx'
+import OrgSchoolsTable from '../budget/OrgSchoolsTable.jsx'
 
 function fyLabel(fiscalYearStart) {
   if (!fiscalYearStart) return null
@@ -92,7 +93,16 @@ export default function OrgHome({
         )}
       </motion.div>
 
-      {/* The multi-school attention briefing — the org "3 things today" */}
+      {/* Consolidated KPI strip (formula-on-Σ, not an average) — the org vitals,
+          surfaced ABOVE the triage board. */}
+      <OrgKpiStrip metrics={metrics} loading={metricsLoading} error={metricsError} />
+
+      {/* Per-school summary table — also above the triage, so the board is the
+          last, action-focused block. Only once the briefing has loaded. */}
+      {briefing && <OrgSchoolsTable schools={briefing.schools || []} />}
+
+      {/* The multi-school attention briefing — the org "3 things today". Its
+          headline stays attached to the triage board it introduces. */}
       <OrgBriefing
         briefing={briefing}
         loading={briefingLoading}
@@ -101,9 +111,6 @@ export default function OrgHome({
         availableLenses={availableLenses}
         onLensChange={setPreviewLens}
       />
-
-      {/* Consolidated KPI strip (formula-on-Σ, not an average) */}
-      <OrgKpiStrip metrics={metrics} loading={metricsLoading} error={metricsError} />
     </div>
   )
 }

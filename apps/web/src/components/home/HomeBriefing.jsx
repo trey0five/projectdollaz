@@ -16,6 +16,9 @@ import { Link, useNavigate } from 'react-router-dom'
 import {
   Clock,
   ArrowRight,
+  ChevronDown,
+  ChevronUp,
+  Layers,
   ListPlus,
   X,
   Sparkles,
@@ -242,11 +245,40 @@ function BriefingItemCard({ item, index, reduce, canEdit, onDismiss }) {
   )
 }
 
+// A lane shows at most this many cards before collapsing the rest behind a
+// "stacked" expander. Lanes with 4 or fewer items always render in full.
+const LANE_COLLAPSE_AT = 4
+
+// The "stacked" expander that stands in for a lane's hidden cards: a card-shaped
+// button with two edges peeking behind it to read as a pile. Click reveals the rest.
+function StackExpander({ hidden, tab, onClick }) {
+  return (
+    <button type="button" onClick={onClick} className="relative mt-1 w-full text-left">
+      {/* Peeking stacked card edges behind the button → reads as a pile. */}
+      <span aria-hidden className="absolute inset-x-4 -bottom-1.5 h-full rounded-2xl border border-rule/50 bg-white/50" />
+      <span aria-hidden className="absolute inset-x-2 -bottom-[3px] h-full rounded-2xl border border-rule/60 bg-white/75" />
+      <span className="relative flex items-center justify-center gap-2 rounded-2xl border border-dashed border-gold/50 bg-white px-4 py-3.5 text-[12.5px] font-bold uppercase tracking-[0.06em] text-navy shadow-card transition-all duration-200 hover:border-gold hover:shadow-glow">
+        <span className={`inline-flex h-4 w-4 items-center justify-center rounded ${tab}`}>
+          <Layers size={11} className="text-white" />
+        </span>
+        Show {hidden} more
+        <ChevronDown size={15} className="text-gold" />
+      </span>
+    </button>
+  )
+}
+
 // One triage-board column: a colour-accented header with a live count, then the
 // server-ranked cards for this severity (or a soft empty state when the lane is
-// clear). Cards keep their folder-tab design; the lane just groups by urgency.
+// clear). When a lane holds more than LANE_COLLAPSE_AT cards, the overflow is
+// stacked behind an expander and revealed on click. Cards keep their folder-tab
+// design; the lane just groups by urgency.
 function TriageLane({ lane, items, reduce, canEdit, onDismiss }) {
   const count = items.length
+  const [expanded, setExpanded] = useState(false)
+  const collapsible = count > LANE_COLLAPSE_AT
+  const shown = collapsible && !expanded ? items.slice(0, LANE_COLLAPSE_AT) : items
+
   return (
     <section
       aria-label={`${lane.label} — ${count} item${count === 1 ? '' : 's'}`}
@@ -274,7 +306,7 @@ function TriageLane({ lane, items, reduce, canEdit, onDismiss }) {
       ) : (
         <motion.div layout className="flex flex-col gap-4">
           <AnimatePresence initial={false}>
-            {items.map((item, i) => (
+            {shown.map((item, i) => (
               <BriefingItemCard
                 key={item.id}
                 item={item}
@@ -285,6 +317,19 @@ function TriageLane({ lane, items, reduce, canEdit, onDismiss }) {
               />
             ))}
           </AnimatePresence>
+
+          {collapsible && !expanded && (
+            <StackExpander hidden={count - LANE_COLLAPSE_AT} tab={lane.dot} onClick={() => setExpanded(true)} />
+          )}
+          {collapsible && expanded && (
+            <button
+              type="button"
+              onClick={() => setExpanded(false)}
+              className="mt-1 inline-flex items-center justify-center gap-1.5 self-center rounded-full px-3 py-1.5 text-[12.5px] font-semibold text-muted transition-colors hover:text-navy focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/40"
+            >
+              <ChevronUp size={14} /> Show less
+            </button>
+          )}
         </motion.div>
       )}
     </section>

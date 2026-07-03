@@ -8,15 +8,17 @@
 //
 // Pure presentation over the `briefing` prop; everything derived at render (no
 // effects, no in-render component definitions — React-Compiler safe).
-import { motion, useReducedMotion } from 'framer-motion'
+import { useState } from 'react'
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import {
   Clock,
   ArrowRight,
+  ChevronDown,
+  ChevronUp,
+  Layers,
   Sparkles,
   Building2,
-  CheckCircle2,
-  MinusCircle,
   Inbox,
   Landmark,
   HeartHandshake,
@@ -147,10 +149,37 @@ function OrgBriefingItemCard({ item, index, reduce }) {
   )
 }
 
+// A lane shows at most this many cards before collapsing the rest behind a
+// "stacked" expander. Lanes with 4 or fewer items always render in full.
+const LANE_COLLAPSE_AT = 4
+
+// The "stacked" expander that stands in for a lane's hidden cards.
+function StackExpander({ hidden, tab, onClick }) {
+  return (
+    <button type="button" onClick={onClick} className="relative mt-1 w-full text-left">
+      <span aria-hidden className="absolute inset-x-4 -bottom-1.5 h-full rounded-2xl border border-rule/50 bg-white/50" />
+      <span aria-hidden className="absolute inset-x-2 -bottom-[3px] h-full rounded-2xl border border-rule/60 bg-white/75" />
+      <span className="relative flex items-center justify-center gap-2 rounded-2xl border border-dashed border-gold/50 bg-white px-4 py-3.5 text-[12.5px] font-bold uppercase tracking-[0.06em] text-navy shadow-card transition-all duration-200 hover:border-gold hover:shadow-glow">
+        <span className={`inline-flex h-4 w-4 items-center justify-center rounded ${tab}`}>
+          <Layers size={11} className="text-white" />
+        </span>
+        Show {hidden} more
+        <ChevronDown size={15} className="text-gold" />
+      </span>
+    </button>
+  )
+}
+
 // One triage-board column: a colour-accented header with a live count, then the
-// server-ranked cross-school cards for this severity (or a soft empty state).
+// server-ranked cross-school cards for this severity (or a soft empty state). When
+// a lane holds more than LANE_COLLAPSE_AT cards, the overflow is stacked behind an
+// expander and revealed on click.
 function OrgTriageLane({ lane, items, reduce }) {
   const count = items.length
+  const [expanded, setExpanded] = useState(false)
+  const collapsible = count > LANE_COLLAPSE_AT
+  const shown = collapsible && !expanded ? items.slice(0, LANE_COLLAPSE_AT) : items
+
   return (
     <section aria-label={`${lane.label} — ${count} item${count === 1 ? '' : 's'}`} className="flex flex-col gap-4">
       <div className="relative overflow-hidden rounded-xl border border-rule/70 bg-white/80 px-4 py-3 shadow-sm backdrop-blur-sm">
@@ -168,25 +197,28 @@ function OrgTriageLane({ lane, items, reduce }) {
           <p className="text-[13px] font-medium text-muted/70">{lane.empty}</p>
         </div>
       ) : (
-        <div className="flex flex-col gap-4">
-          {items.map((item, i) => (
-            <OrgBriefingItemCard key={item.orgItemId} item={item} index={i} reduce={reduce} />
-          ))}
-        </div>
+        <motion.div layout className="flex flex-col gap-4">
+          <AnimatePresence initial={false}>
+            {shown.map((item, i) => (
+              <OrgBriefingItemCard key={item.orgItemId} item={item} index={i} reduce={reduce} />
+            ))}
+          </AnimatePresence>
+
+          {collapsible && !expanded && (
+            <StackExpander hidden={count - LANE_COLLAPSE_AT} tab={lane.dot} onClick={() => setExpanded(true)} />
+          )}
+          {collapsible && expanded && (
+            <button
+              type="button"
+              onClick={() => setExpanded(false)}
+              className="mt-1 inline-flex items-center justify-center gap-1.5 self-center rounded-full px-3 py-1.5 text-[12.5px] font-semibold text-muted transition-colors hover:text-navy focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/40"
+            >
+              <ChevronUp size={14} /> Show less
+            </button>
+          )}
+        </motion.div>
       )}
     </section>
-  )
-}
-
-// One severity count pill for the per-school summary row.
-function CountPill({ kind, value }) {
-  if (!value) return <span className="text-muted">—</span>
-  return (
-    <span
-      className={`inline-flex min-w-[1.75rem] items-center justify-center rounded-full px-2 py-0.5 text-[12px] font-semibold ${SEVERITY[kind].chip}`}
-    >
-      {value}
-    </span>
   )
 }
 
@@ -329,82 +361,9 @@ export default function OrgBriefing({
         </div>
       )}
 
-      {/* Per-school summary — OrgStatements table chrome. */}
-      <div className="card-soft overflow-hidden p-0">
-        <div className="flex items-center gap-2.5 border-b border-rule bg-cream/50 px-4 py-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gold/15 text-gold">
-            <Building2 size={17} />
-          </span>
-          <h3 className="font-serif text-base font-semibold text-navy sm:text-lg">
-            Schools in your organization
-          </h3>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-[13px]">
-            <thead>
-              <tr className="bg-cream">
-                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted">
-                  School
-                </th>
-                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted">
-                  Period
-                </th>
-                <th className="px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-wide text-muted">
-                  Critical
-                </th>
-                <th className="px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-wide text-muted">
-                  Warn
-                </th>
-                <th className="px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-wide text-muted">
-                  Review
-                </th>
-                <th className="px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-wide text-muted">
-                  Status
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {schools.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-3 py-8 text-center font-serif italic text-muted">
-                    No schools found for your organization.
-                  </td>
-                </tr>
-              )}
-              {schools.map((s) => (
-                <tr key={s.schoolId} className="border-t border-rule/50">
-                  <td className="px-3 py-2 font-medium text-ink">{s.name}</td>
-                  <td className="px-3 py-2 text-muted">{s.periodLabel || '—'}</td>
-                  <td className="px-3 py-2 text-center">
-                    {s.summary ? <CountPill kind="critical" value={s.summary.critical} /> : '—'}
-                  </td>
-                  <td className="px-3 py-2 text-center">
-                    {s.summary ? <CountPill kind="warn" value={s.summary.warn} /> : '—'}
-                  </td>
-                  <td className="px-3 py-2 text-center">
-                    {s.summary ? <CountPill kind="info" value={s.summary.info} /> : '—'}
-                  </td>
-                  <td className="px-3 py-2 text-center">
-                    {s.failed ? (
-                      <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-muted">
-                        <MinusCircle size={14} /> Couldn&rsquo;t load
-                      </span>
-                    ) : s.reported ? (
-                      <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-emerald-600">
-                        <CheckCircle2 size={14} /> Reported
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-muted">
-                        <MinusCircle size={14} /> Not yet reported
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {/* Per-school summary table + org KPI strip now render ABOVE this triage
+          board (owned by OrgHome / OrgSchoolsTable), so the briefing headline stays
+          attached to the triage. */}
 
       {/* Not-reported callout — never let the briefing look complete while a school is missing. */}
       {notReported.length > 0 && (
