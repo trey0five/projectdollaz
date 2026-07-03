@@ -11,6 +11,7 @@ import PeriodControls from './PeriodControls.jsx'
 import SummaryStrip from './SummaryStrip.jsx'
 import ExportMenu from './ExportMenu.jsx'
 import SaveBar from './SaveBar.jsx'
+import PromotePyToggle from './PromotePyToggle.jsx'
 import { SLOT_ROLES, ROLE_META } from '../lib/roleMeta.js'
 
 const ACCEPT = '.xlsx,.xls,.csv'
@@ -313,6 +314,9 @@ export default function IntakeBar() {
                         </div>
                       )}
                     </AnimatePresence>
+                    {/* PY auto-promote opt-in — only renders for a fresh,
+                        promotable Prior-Year upload (component self-gates). */}
+                    {role === 'py' && filled && <PromotePyToggle />}
                   </div>
                 )
               })}

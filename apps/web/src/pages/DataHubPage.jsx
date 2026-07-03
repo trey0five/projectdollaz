@@ -32,8 +32,7 @@ import SourceCard from '../components/datahub/SourceCard.jsx'
 import { usePenny } from '../context/PennyContext.jsx'
 import MonthlyActualsPanel from '../components/monthly/MonthlyActualsPanel.jsx'
 import OperationalDataPanel from '../components/analytics/OperationalDataPanel.jsx'
-import { AppProvider } from '../context/AppContext.jsx'
-import IntakeBar from '../components/IntakeBar.jsx'
+import TrialBalanceModalBody from '../components/datahub/TrialBalanceModalBody.jsx'
 import BudgetSetup from '../components/budget/BudgetSetup.jsx'
 import ForecastWorkspace from '../components/budget/ForecastWorkspace.jsx'
 import SchedulesEmbed from '../components/datahub/SchedulesEmbed.jsx'
@@ -419,6 +418,7 @@ export default function DataHubPage() {
         hydratedFiles={hydratedFiles}
         activePeriod={activePeriod}
         hydrationToken={hydrationToken}
+        onOpenMonthly={() => setModalKey('monthly')}
       />
     </div>
   )
@@ -444,6 +444,7 @@ function DataEmbedModal({
   hydratedFiles,
   activePeriod,
   hydrationToken,
+  onOpenMonthly,
 }) {
   const isTb = openKey === 'trialBalances'
   const isBudget = openKey === 'budget'
@@ -460,7 +461,7 @@ function DataEmbedModal({
     openKey === 'monthly' ||
     openKey === 'operational'
   const title = isTb
-    ? 'Add your trial balance'
+    ? 'Add your trial balances'
     : isBudget
       ? 'Set up your budget'
       : isForecast
@@ -519,20 +520,18 @@ function DataEmbedModal({
             </div>
             <div className={`overflow-y-auto ${isTb ? 'p-0' : 'p-5'}`}>
               {isTb && (
-                // The full trial-balance intake, standalone — upload CY/PY/Audited,
-                // assign roles, and save. Saving bumps PersistenceContext's
-                // hydrationToken, which the hub watches to refresh the card status.
-                <AppProvider
-                  key={`tb-${school?.id ?? 'none'}:${hydrationToken}`}
+                // Trial-balance intake with two tabs: today's single-year 3-slot
+                // intake, and the bulk "Add years" uploader that lights up the
+                // annual trend. Both save through PersistenceContext (bumping
+                // hydrationToken), which the hub watches to refresh card status.
+                <TrialBalanceModalBody
                   school={school}
-                  initialFiles={hydratedFiles || []}
-                  initialPeriod={activePeriod || null}
-                  readOnly={!canEdit}
-                  autoCollapse={false}
-                  autoSave
-                >
-                  <IntakeBar />
-                </AppProvider>
+                  hydratedFiles={hydratedFiles}
+                  activePeriod={activePeriod}
+                  hydrationToken={hydrationToken}
+                  canEdit={canEdit}
+                  onOpenMonthly={onOpenMonthly}
+                />
               )}
               {openKey === 'monthly' && periodId && (
                 <MonthlyActualsPanel schoolId={schoolId} periodId={periodId} canEdit={canEdit} />

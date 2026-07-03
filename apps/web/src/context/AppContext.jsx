@@ -73,6 +73,10 @@ export function AppProvider({
   const [periodTouched, setPeriodTouched] = useState(false)
   const [intakeExpanded, setIntakeExpanded] = useState(true)
   const [status, setStatus] = useState('')
+  // PY AUTO-PROMOTE: when a Prior-Year file is uploaded alongside the CY, also
+  // save it as its OWN saved period (role cy) so the year-over-year trend lights
+  // up. Default ON; the user can opt out via the PromotePyToggle under the PY slot.
+  const [promotePy, setPromotePy] = useState(true)
   // Opening net-asset balances are DERIVED from the uploaded trial balances
   // (deriveOpeningNetAssets) rather than typed at school creation. A user may
   // override a derived value; overrides are keyed by role ('cy'|'py'|'audit').
@@ -116,6 +120,7 @@ export function AppProvider({
     setOpeningOverrides({})
     setMappedOverlay({})
     setMappingAccts(new Set())
+    setPromotePy(true)
     autoCollapsedRef.current = false
   }, [])
 
@@ -309,6 +314,39 @@ export function AppProvider({
     [periodTouched, periodType, inferredCy]
   )
 
+  // ── PY AUTO-PROMOTE derivations ───────────────────────────────────────────
+  // The Prior-Year file's OWN inferred period (date/type). When promoted it is
+  // saved as its own period with a role-cy import (a CY-only period generates a
+  // snapshot → an annual trend point).
+  const pyDetected = useMemo(
+    () => (byRole.py?.metadata ? inferPeriod(byRole.py.metadata) : null),
+    [byRole],
+  )
+  // Skip promotion when a saved period already covers the PY end-date with a CY
+  // import (idempotency — no duplicate/collapse on re-save).
+  const pyExistsAsPeriod = useMemo(
+    () =>
+      !!pyDetected?.periodEndDate &&
+      (persistence.periods || []).some(
+        (p) => p.periodEndDate === pyDetected.periodEndDate && p.roles?.cy,
+      ),
+    [pyDetected, persistence.periods],
+  )
+  // Promotable only when the PY slot is a fresh upload (not a history fill, not
+  // already persisted), it has its own end-date DIFFERENT from the CY period, and
+  // no saved period already covers it.
+  const pyPromotable = useMemo(
+    () =>
+      !!byRole.py &&
+      byRole.py.status === 'ready' &&
+      !byRole.py.fromHistory &&
+      !byRole.py.persisted &&
+      !!pyDetected?.periodEndDate &&
+      pyDetected.periodEndDate !== effectivePeriodDate &&
+      !pyExistsAsPeriod,
+    [byRole, pyDetected, effectivePeriodDate, pyExistsAsPeriod],
+  )
+
   const canGenerate = useMemo(
     () =>
       !!byRole.cy && byRole.cy.status === 'ready' && !!effectivePeriodDate && !cyCollision,
@@ -427,13 +465,61 @@ export function AppProvider({
       })
     }
     if (imports.length === 0) return null
-    return persistence.savePeriod({
+
+    // Build the payload array. The PY-promote period goes FIRST and the primary
+    // CY period LAST, so the single terminal refresh in savePeriods settles focus
+    // on the current year (the PY becomes just another saved trend point). The PY
+    // file is filed as role cy in its OWN period so it generates a snapshot. The
+    // Audit slot is intentionally NOT promoted (it shares PY's end-date).
+    const payloads = []
+    let promoted = false
+    if (promotePy && pyPromotable) {
+      promoted = true
+      payloads.push({
+        periodEndDate: pyDetected.periodEndDate,
+        periodType: pyDetected.periodType,
+        label: undefined,
+        imports: [
+          {
+            role: 'cy',
+            sourceName: byRole.py.fileName,
+            rows: byRole.py.rows,
+            metadata: byRole.py.metadata || {},
+          },
+        ],
+      })
+    }
+    const cyPayload = {
       periodEndDate: effectivePeriodDate,
       periodType: effectivePeriodType,
       label: undefined,
       imports,
-    })
-  }, [readOnly, byRole, effectivePeriodDate, effectivePeriodType, persistence])
+    }
+    payloads.push(cyPayload)
+
+    // Name the CY as the intended focus so the remount/refresh keys on it (and
+    // stays put if only the PY promotion lands). When a promotion actually
+    // occurred, the success label names BOTH years so the auto-created PY period
+    // isn't a silent surprise. Focus/label are otherwise the pre-fix behavior.
+    const savedLabel = promoted
+      ? `Saved FY${effectivePeriodDate.slice(0, 4)} · added FY${pyDetected.periodEndDate.slice(
+          0,
+          4,
+        )} to your trend`
+      : null
+
+    const { saved } = await persistence.savePeriods(payloads, { focus: cyPayload, savedLabel })
+    return saved.find((s) => s.payload === cyPayload)?.snapshot ?? null
+  }, [
+    readOnly,
+    byRole,
+    effectivePeriodDate,
+    effectivePeriodType,
+    promotePy,
+    pyPromotable,
+    pyDetected,
+    persistence,
+  ])
 
   // ── ACTIVE CHART: DEFAULT_CHART with this session's category picks merged ────
   // A copy of DEFAULT_CHART whose mapping.entries are the defaults overlaid with
@@ -544,6 +630,11 @@ export function AppProvider({
     save,
     saveState: persistence.saveState,
     savedPeriodLabel: persistence.savedPeriodLabel,
+    // PY auto-promote surface (consumed by PromotePyToggle under the PY slot).
+    promotePy,
+    setPromotePy,
+    pyPromotable,
+    pyDetected,
     dirty,
     intakeExpanded,
     // Expose the EFFECTIVE (inferred-until-touched) period as periodDate/Type so

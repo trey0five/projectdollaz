@@ -231,66 +231,139 @@ export function PersistenceProvider({ children }) {
   // `payload` = { periodEndDate, periodType, label, imports: [{role, sourceName,
   // rows, metadata}] }. Only NEWLY-UPLOADED (non-history, non-persisted) imports
   // are POSTed — history-filled slots already exist as imports.
-  const savePeriod = useCallback(
-    async (payload) => {
-      if (!schoolId) return null
-      setSaveState('saving')
-      setError('')
+  //
+  // Persist ONE period: createOrGet → per-import create → generate the canonical
+  // snapshot. Pure network work: NO local-state refresh, NO hydrationToken bump
+  // (the batch driver hydrates ONCE at the end). Returns { period, snapshot }.
+  const persistOnePeriod = useCallback(async (sid, payload) => {
+    const period = (
+      await periodsApi.createOrGet(sid, {
+        periodEndDate: payload.periodEndDate,
+        periodType: payload.periodType,
+        label: payload.label,
+      })
+    ).data
+
+    for (const imp of payload.imports) {
+      await importsApi.create(sid, {
+        role: imp.role,
+        periodEndDate: payload.periodEndDate,
+        periodType: payload.periodType,
+        label: payload.label,
+        sourceName: imp.sourceName,
+        rows: imp.rows,
+        metadata: imp.metadata || {},
+      })
+    }
+
+    const snapshot = (await statementsApi.generate(sid, period.id, {})).data
+    return { period, snapshot }
+  }, [])
+
+  // Re-hydrate live state around the LAST successfully-saved period so the hub
+  // settles focus there. This is the ex-tail of the old savePeriod, factored out
+  // so the batch driver runs it EXACTLY ONCE (one periodsApi.list, one
+  // fetchActiveImports, one hydrationToken bump — not one per saved period).
+  const refreshAfterSave = useCallback(
+    async (sid, lastPeriod, lastSnapshot, savedLabel = null) => {
+      const pres = await periodsApi.list(sid)
+      const list = pres.data || []
+      const refreshed = list.find((p) => p.id === lastPeriod.id) || lastPeriod
+      const imports = await fetchActiveImports(sid, lastPeriod.id)
+
+      setPeriods(list)
+      setActivePeriod(refreshed)
+      setPeriodImports(imports)
+      setLatestSnapshot(lastSnapshot)
+      // A caller may override the saved-period label (e.g. to also name a PY
+      // period auto-promoted in the same batch). Falls back to the period's own
+      // label so the normal single-save case is unchanged.
+      setSavedPeriodLabel(savedLabel ?? refreshed.label ?? lastPeriod.label)
+      setHydrationToken((t) => t + 1)
+    },
+    [fetchActiveImports],
+  )
+
+  // Settle live state after a batch. The `focus` payload (when the caller passes
+  // one) is the intended-focus period — normally the primary CY. It drives the
+  // remount-causing refresh ONLY when it actually saved. If the focus payload
+  // FAILED (e.g. a transient error on the primary CY while an earlier PY
+  // promotion succeeded), we refresh only the periods LIST (so the saved
+  // side-period shows up) but do NOT bump hydrationToken / swap the active period
+  // — the caller's AppProvider must stay mounted so the user's still-unsaved
+  // uploads remain on screen to retry. With NO focus hint (bulk), the last saved
+  // payload is the focus, so the single terminal refresh behaves exactly as before.
+  const settleAfterBatch = useCallback(
+    async (sid, saved, focus, savedLabel) => {
+      if (saved.length === 0) return
+      const focusEntry = focus
+        ? saved.find((s) => s.payload === focus) || null
+        : saved[saved.length - 1]
+      if (focusEntry) {
+        await refreshAfterSave(sid, focusEntry.period, focusEntry.snapshot, savedLabel)
+        return
+      }
       try {
-        const period = (
-          await periodsApi.createOrGet(schoolId, {
-            periodEndDate: payload.periodEndDate,
-            periodType: payload.periodType,
-            label: payload.label,
-          })
-        ).data
-
-        for (const imp of payload.imports) {
-          await importsApi.create(schoolId, {
-            role: imp.role,
-            periodEndDate: payload.periodEndDate,
-            periodType: payload.periodType,
-            label: payload.label,
-            sourceName: imp.sourceName,
-            rows: imp.rows,
-            metadata: imp.metadata || {},
-          })
-        }
-
-        const snapshot = (
-          await statementsApi.generate(schoolId, period.id, {})
-        ).data
-
-        // Refresh history + hydration so the saved data is the live state.
-        const pres = await periodsApi.list(schoolId)
-        const list = pres.data || []
-        const refreshed = list.find((p) => p.id === period.id) || period
-        const imports = await fetchActiveImports(schoolId, period.id)
-
-        setPeriods(list)
-        setActivePeriod(refreshed)
-        setPeriodImports(imports)
-        setLatestSnapshot(snapshot)
-        setSavedPeriodLabel(refreshed.label || period.label)
-        setSaveState('saved')
-        setHydrationToken((t) => t + 1)
-        return snapshot
-      } catch (e) {
-        // 402 from the entitlement gate (lapsed trial / inactive sub): surface a
-        // friendly "subscribe to generate" state, not a raw error. Refresh
-        // billing so the banner + section reflect the lapse.
-        if (isPaymentRequired(e)) {
-          setSaveState('blocked')
-          setError('Your trial has ended — subscribe to generate and save statements.')
-          refreshBilling()
-          return null
-        }
-        setSaveState('error')
-        setError('Could not save this period. Please try again.')
-        return null
+        const pres = await periodsApi.list(sid)
+        setPeriods(pres.data || [])
+      } catch {
+        /* leave the periods list unchanged on a refresh failure */
       }
     },
-    [schoolId, fetchActiveImports, refreshBilling],
+    [refreshAfterSave],
+  )
+
+  // ── BATCH SAVE: persist N periods, hydrate ONCE at the end ────────────────
+  // Loops persistOnePeriod per payload (calling onProgress before each), collects
+  // { saved, failed }. Transient per-period errors are pushed to `failed` and the
+  // loop CONTINUES (partial success is desired). A 402 (lapsed trial) is terminal:
+  // settle around whatever saved so far, flip to 'blocked', refresh billing, and
+  // bail with { blocked:true }. `focus` names the intended-focus payload (see
+  // settleAfterBatch); `savedLabel` overrides the saved-period label on success.
+  const savePeriods = useCallback(
+    async (payloads, { onProgress, focus = null, savedLabel = null } = {}) => {
+      if (!schoolId) return { saved: [], failed: [] }
+      setSaveState('saving')
+      setError('')
+      const saved = []
+      const failed = []
+      const total = payloads.length
+      for (let index = 0; index < total; index += 1) {
+        const payload = payloads[index]
+        onProgress?.({ index, total, payload })
+        try {
+          const { period, snapshot } = await persistOnePeriod(schoolId, payload)
+          saved.push({ payload, period, snapshot })
+        } catch (e) {
+          // 402 from the entitlement gate: terminal. Settle on what saved so far.
+          if (isPaymentRequired(e)) {
+            await settleAfterBatch(schoolId, saved, focus, savedLabel)
+            setSaveState('blocked')
+            setError('Your trial has ended — subscribe to generate and save statements.')
+            refreshBilling()
+            return { saved, failed, blocked: true }
+          }
+          failed.push({ payload, error: e })
+        }
+      }
+
+      await settleAfterBatch(schoolId, saved, focus, savedLabel)
+      setSaveState(failed.length ? 'error' : 'saved')
+      if (failed.length) setError('Some periods could not be saved. Please try again.')
+      return { saved, failed }
+    },
+    [schoolId, persistOnePeriod, settleAfterBatch, refreshBilling],
+  )
+
+  // Thin single-period wrapper — behaviorally identical to the old savePeriod for
+  // every existing caller (AppContext.save's single-payload path, autosave). It
+  // returns the saved snapshot, or null when blocked/failed.
+  const savePeriod = useCallback(
+    async (payload) => {
+      const { saved, blocked } = await savePeriods([payload])
+      return blocked ? null : saved[0]?.snapshot ?? null
+    },
+    [savePeriods],
   )
 
   // ── HISTORY: reopen a saved period's stored snapshot (read-only) ──────────
@@ -320,6 +393,7 @@ export function PersistenceProvider({ children }) {
     saveState,
     savedPeriodLabel,
     savePeriod,
+    savePeriods,
     reopenPeriod,
     refresh: () => (schoolId ? loadForSchool(schoolId) : Promise.resolve()),
   }
