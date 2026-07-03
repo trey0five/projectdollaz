@@ -145,6 +145,16 @@ export default function DataHubPage() {
   // render-time per React docs — NOT setState-in-effect. The user's explicit
   // pick wins thereafter (sync only fires while periodId is still unset).
   const [periodId, setPeriodId] = useState(null)
+  // Reset the selection when the ACTIVE SCHOOL changes — otherwise a period id from
+  // the previous school lingers (it's non-null, so the adopt below never re-fires),
+  // and the status fetch hits /schools/<newSchool>/periods/<oldSchoolsPeriod> which
+  // isn't owned by the new school → 404 → "Couldn't load your data status" on every
+  // school toggle. Dropping it here re-adopts the new school's default next.
+  const [lastSchoolId, setLastSchoolId] = useState(schoolId)
+  if (schoolId !== lastSchoolId) {
+    setLastSchoolId(schoolId)
+    setPeriodId(null)
+  }
   if (defaultPeriodId && periodId == null) {
     setPeriodId(defaultPeriodId)
   }

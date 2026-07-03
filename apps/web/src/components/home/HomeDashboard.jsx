@@ -25,7 +25,6 @@ import { HeadlineSkeleton, MetricCardSkeleton } from '../analytics/skeletons.jsx
 import OrgHome from './OrgHome.jsx'
 import HomeHero from './HomeHero.jsx'
 import HomeBriefing from './HomeBriefing.jsx'
-import BoardPacketExportButton from '../reports/BoardPacketExportButton.jsx'
 import HomeVitals from './HomeVitals.jsx'
 import FeatureGateway from './FeatureGateway.jsx'
 import RecentPeriods from './RecentPeriods.jsx'
@@ -322,12 +321,6 @@ export default function HomeDashboard() {
         isOwner={isOwner}
       />
 
-      {selectedPeriodId && (
-        <div className="flex justify-end">
-          <BoardPacketExportButton periodId={selectedPeriodId} />
-        </div>
-      )}
-
       <DataHubBanner />
 
       <HomeVitals
@@ -351,12 +344,7 @@ export default function HomeDashboard() {
         />
       </div>
 
-      <SectionDivider />
-
-      <RecentPeriods periods={periods} />
-
-      {/* Triage board LAST — the vitals/Explore sit above it, mirroring the org
-          view (KPIs + schools table above, triage board at the bottom). */}
+      {/* Triage board — the vitals/Explore sit above it, mirroring the org view. */}
       <SectionDivider />
 
       <HomeBriefing
@@ -369,6 +357,11 @@ export default function HomeDashboard() {
         onLensChange={setPreviewLens}
         canEdit={activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'}
       />
+
+      {/* Recent periods — a quiet navigational footer, dead last. */}
+      <SectionDivider />
+
+      <RecentPeriods periods={periods} />
     </div>
   )
 }
