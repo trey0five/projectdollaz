@@ -1,12 +1,20 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Tasks route (Phase 3 Workflow v1): AppShell chrome + the TASK list panel. School-scoped
-// (no period selector). CORE — always available (no module gate); only the base
-// entitlement can pause it (notEntitled). Navy/gold theme, reduced-motion safe,
-// no setState-in-effect.
+// Tasks route (Phase 3 Workflow v1) — the DOMAIN COMMAND CENTER. A LIGHT
+// command-center (matches Governance / Facilities / Advancement / Accreditation):
+// Penny lands you on the workflow engine's slice of the briefing — the KPIs that
+// define its health (open work, overdue, due soon, sign-offs awaiting YOU), the
+// items that need a decision (the attention rail with one-click Approve / Complete
+// actions), with the task list a tab away (All · Mine · Awaiting sign-off). Built
+// on the reusable DomainCommandCenter scaffold.
 //
-// A briefing/governance item can hand this page a `prefill` (via navigation state)
-// to open the create modal pre-seeded with a source link (sourceType/sourceRef) —
-// the "actionable pairing" that turns an attention item into a task.
+// School-scoped (no period selector). Route stays /tasks. CORE — always available
+// (no module gate); only the base entitlement can pause it (notEntitled → a light
+// GatePanel). The create/edit, approver-picker, and decision modals are kept as
+// dark navy/gold overlays over the light page. Reduced-motion safe, no
+// setState-in-effect.
+//
+// A briefing/governance item can still hand this page a `prefill` (via navigation
+// state) to open the create modal pre-seeded with a source link.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -23,8 +31,12 @@ import {
   Repeat,
   ArrowUp,
   ArrowDown,
+  TrendingDown,
+  Clock,
+  AlertTriangle,
 } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
+import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useTasks } from '../hooks/useTasks.js'
 
@@ -32,11 +44,12 @@ const STATUSES = ['open', 'in_progress', 'done', 'cancelled']
 const PRIORITIES = ['low', 'normal', 'high']
 const RECURRENCES = ['none', 'weekly', 'monthly', 'quarterly', 'annual']
 
+// ── Light-theme urgency badge (restyled from the old dark pills) ─────────────
 const URGENCY_BADGE = {
-  overdue: { label: 'Overdue', cls: 'border-red-400/50 bg-red-500/15 text-red-200' },
-  'due-soon': { label: 'Due soon', cls: 'border-amber-400/50 bg-amber-500/15 text-amber-200' },
-  'on-track': { label: 'On track', cls: 'border-emerald-400/50 bg-emerald-500/15 text-emerald-200' },
-  none: { label: 'No due date', cls: 'border-white/20 bg-white/5 text-white/50' },
+  overdue: { label: 'Overdue', cls: 'border-danger/30 bg-danger/10 text-danger' },
+  'due-soon': { label: 'Due soon', cls: 'border-gold/40 bg-gold/10 text-[#7a5e00]' },
+  'on-track': { label: 'On track', cls: 'border-emerald-300/70 bg-emerald-50 text-emerald-700' },
+  none: { label: 'No due date', cls: 'border-rule/60 bg-section text-muted' },
 }
 
 function UrgencyBadge({ urgency, dueDate, daysUntilDue }) {
@@ -68,15 +81,67 @@ function assigneeName(a) {
   return full || a.email
 }
 
-// Approval / sign-off status pill (mirrors the URGENCY_BADGE styling vocab). 'none'
-// renders nothing.
+// ── Light-theme approval / sign-off status badge. 'none' renders nothing. ────
 const APPROVAL_BADGE = {
-  pending: { label: 'Awaiting sign-off', cls: 'border-amber-400/50 bg-amber-500/15 text-amber-200' },
-  approved: { label: 'Approved', cls: 'border-emerald-400/50 bg-emerald-500/15 text-emerald-200' },
-  rejected: {
-    label: 'Changes requested',
-    cls: 'border-red-400/50 bg-red-500/15 text-red-200',
-  },
+  pending: { label: 'Awaiting sign-off', cls: 'border-gold/40 bg-gold/10 text-[#7a5e00]' },
+  approved: { label: 'Approved', cls: 'border-emerald-300/70 bg-emerald-50 text-emerald-700' },
+  rejected: { label: 'Changes requested', cls: 'border-danger/30 bg-danger/10 text-danger' },
+}
+
+// ── Light-theme table primitives (shared idiom with GovernancePage) ──────────
+function Th({ children, right }) {
+  return (
+    <th
+      className={`px-4 py-2.5 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-muted ${
+        right ? 'text-right' : 'text-left'
+      }`}
+    >
+      {children}
+    </th>
+  )
+}
+
+function IconAction(props) {
+  const { onClick, label, title, danger, good } = props
+  const ActionIcon = props.Icon
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={title ?? label}
+      className={`rounded-lg border border-rule/60 p-1.5 text-muted transition hover:text-navy ${
+        danger
+          ? 'hover:border-danger/50 hover:text-danger'
+          : good
+            ? 'hover:border-emerald-400/60 hover:text-emerald-600'
+            : 'hover:border-gold/60'
+      }`}
+    >
+      <ActionIcon size={15} />
+    </button>
+  )
+}
+
+function TableShell({ children, cols }) {
+  return (
+    <div className="overflow-x-auto rounded-xl border border-rule/50">
+      <table className="w-full text-left text-[14px]">
+        <thead className="bg-cream">
+          <tr>{cols}</tr>
+        </thead>
+        <tbody>{children}</tbody>
+      </table>
+    </div>
+  )
+}
+
+function StateRow({ children }) {
+  return (
+    <div className="rounded-xl border border-dashed border-rule/60 bg-cream/50 px-6 py-12 text-center">
+      {children}
+    </div>
+  )
 }
 
 const EMPTY_FORM = {
@@ -504,12 +569,12 @@ function DecideControls({ task, onDecide }) {
   )
 }
 
-/** A small navy/gold "↻ cadence" badge shown on recurring task rows. */
+/** A small light-theme "↻ cadence" badge shown on recurring task rows. */
 function RecurrenceBadge({ recurrence, seriesId }) {
   if (!recurrence || recurrence === 'none') return null
   return (
     <span
-      className="mt-1 ml-1 inline-flex items-center gap-1 rounded border border-gold/40 bg-gold/10 px-1.5 py-0.5 text-[11px] font-semibold capitalize text-gold-light"
+      className="ml-1 inline-flex items-center gap-1 rounded border border-gold/40 bg-gold/10 px-1.5 py-0.5 text-[11px] font-semibold capitalize text-[#7a5e00]"
       title={seriesId ? 'Part of a recurring series.' : 'Repeats automatically on completion.'}
     >
       <Repeat size={11} /> {recurrence}
@@ -517,9 +582,8 @@ function RecurrenceBadge({ recurrence, seriesId }) {
   )
 }
 
-/** Multi-step chain progress ("Step 2 of 3") + per-step chips. Renders nothing for
- *  a legacy single-approver task (steps null / length <= 1). Resolves each step's
- *  approver name off the roster, falling back to task.approver (the pointer). */
+/** Multi-step chain progress ("Step 2 of 3") + per-step chips — LIGHT theme.
+ *  Renders nothing for a legacy single-approver task (steps null / length <= 1). */
 function ChainProgress({ task, members }) {
   const steps = Array.isArray(task.approvalSteps) ? task.approvalSteps : null
   if (!steps || steps.length <= 1) return null
@@ -531,18 +595,18 @@ function ChainProgress({ task, members }) {
   }
   const currentIdx = steps.findIndex((s) => s.status === 'pending')
   const chip = {
-    approved: 'border-emerald-400/50 bg-emerald-500/15 text-emerald-200',
-    rejected: 'border-red-400/50 bg-red-500/15 text-red-200',
-    pending: 'border-amber-400/50 bg-amber-500/15 text-amber-200',
+    approved: 'border-emerald-300/70 bg-emerald-50 text-emerald-700',
+    rejected: 'border-danger/30 bg-danger/10 text-danger',
+    pending: 'border-gold/40 bg-gold/10 text-[#7a5e00]',
   }
   return (
     <div className="mt-1.5">
       {currentIdx >= 0 ? (
-        <div className="text-[11px] font-semibold text-white/70">
+        <div className="text-[11px] font-semibold text-muted">
           Step {currentIdx + 1} of {steps.length} — {nameFor(steps[currentIdx].approverUserId)}
         </div>
       ) : (
-        <div className="text-[11px] font-semibold text-white/50">
+        <div className="text-[11px] font-semibold text-muted/70">
           {steps.length}-step chain complete
         </div>
       )}
@@ -551,8 +615,8 @@ function ChainProgress({ task, members }) {
           const isCurrent = i === currentIdx
           const cls =
             s.status === 'pending' && !isCurrent
-              ? 'border-white/15 bg-white/5 text-white/40'
-              : chip[s.status] ?? 'border-white/15 bg-white/5 text-white/40'
+              ? 'border-rule/60 bg-section text-muted/70'
+              : chip[s.status] ?? 'border-rule/60 bg-section text-muted/70'
           return (
             <span
               key={s.order ?? i}
@@ -568,7 +632,201 @@ function ChainProgress({ task, members }) {
   )
 }
 
-function TasksPanel() {
+// ── Light-theme entitlement / license gate ───────────────────────────────────
+function GatePanel() {
+  return (
+    <div className="mx-auto max-w-[1180px] px-4 py-6 sm:px-10 sm:py-8">
+      <div className="card-soft flex flex-col items-center gap-3 px-6 py-14 text-center">
+        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gold-gradient text-navy shadow-glow">
+          <ListChecks size={26} />
+        </span>
+        <h2 className="font-serif text-xl font-semibold text-navy">Your subscription is paused</h2>
+        <p className="max-w-md text-[15px] text-muted">Resume your plan to manage tasks.</p>
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════ LIGHT TASKS TABLE ══════════════════════════════
+
+function TasksTable({
+  tasks,
+  members,
+  currentUserId,
+  loading,
+  error,
+  canEdit,
+  reduce,
+  emptyLabel,
+  onComplete,
+  onEdit,
+  onDelete,
+  onRequestSignoff,
+  onDecide,
+}) {
+  if (loading)
+    return (
+      <StateRow>
+        <p className="text-[14px] text-muted">Loading tasks…</p>
+      </StateRow>
+    )
+  if (error)
+    return (
+      <StateRow>
+        <p className="text-[14px] text-danger">{error}</p>
+      </StateRow>
+    )
+  if (tasks.length === 0)
+    return (
+      <StateRow>
+        <p className="font-serif text-[16px] italic text-muted">{emptyLabel}</p>
+        <p className="mt-1 text-[13px] text-muted">
+          Add a task, or spawn one from an attention item on your briefing.
+        </p>
+      </StateRow>
+    )
+
+  return (
+    <TableShell
+      cols={
+        <>
+          <Th>Task</Th>
+          <Th>Assignee</Th>
+          <Th>Due</Th>
+          <Th>Priority</Th>
+          <Th>Status</Th>
+          <Th>Approval</Th>
+          {canEdit ? <Th right>Actions</Th> : null}
+        </>
+      }
+    >
+      <AnimatePresence initial={false}>
+        {tasks.map((t) => {
+          const active = t.status !== 'done' && t.status !== 'cancelled'
+          const canRequest =
+            canEdit && active && (t.approvalStatus === 'none' || t.approvalStatus === 'rejected')
+          const iAmApprover = t.approvalStatus === 'pending' && t.approverUserId === currentUserId
+          const badge = APPROVAL_BADGE[t.approvalStatus]
+          return (
+            <motion.tr
+              key={t.id}
+              layout={!reduce}
+              initial={reduce ? false : { opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={reduce ? undefined : { opacity: 0 }}
+              className="group border-t border-rule/50 align-top"
+            >
+              <td className="px-4 py-3">
+                <div className="font-semibold text-navy">{t.title}</div>
+                <div className="mt-1 flex flex-wrap items-center gap-1">
+                  {t.sourceType && t.sourceType !== 'manual' ? (
+                    <span className="inline-flex items-center gap-1 rounded border border-gold/40 bg-gold/10 px-1.5 py-0.5 text-[11px] font-semibold text-[#7a5e00]">
+                      <Link2 size={11} /> from {t.sourceType}
+                    </span>
+                  ) : null}
+                  <RecurrenceBadge recurrence={t.recurrence} seriesId={t.seriesId} />
+                </div>
+              </td>
+              <td className="px-4 py-3 text-muted">{assigneeName(t.assignee)}</td>
+              <td className="px-4 py-3">
+                <UrgencyBadge
+                  urgency={t.urgency}
+                  dueDate={t.dueDate}
+                  daysUntilDue={t.daysUntilDue}
+                />
+              </td>
+              <td className="px-4 py-3">
+                <span className="rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[12px] capitalize text-muted">
+                  {t.priority}
+                </span>
+              </td>
+              <td className="px-4 py-3">
+                <span className="rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[12px] capitalize text-muted">
+                  {t.status.replace('_', ' ')}
+                </span>
+              </td>
+              <td className="px-4 py-3">
+                {badge ? (
+                  <div>
+                    <span
+                      className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[12px] font-semibold ${badge.cls}`}
+                      title={t.decisionNote || undefined}
+                    >
+                      {badge.label}
+                    </span>
+                    {t.approvalStatus === 'pending' &&
+                    t.approver &&
+                    !(Array.isArray(t.approvalSteps) && t.approvalSteps.length > 1) ? (
+                      <div className="mt-1 text-[11px] text-muted">
+                        Approver: {assigneeName(t.approver)}
+                      </div>
+                    ) : null}
+                    <ChainProgress task={t} members={members} />
+                    {(t.approvalStatus === 'approved' || t.approvalStatus === 'rejected') &&
+                    t.decidedBy ? (
+                      <div className="mt-1 text-[11px] text-muted">
+                        Decided by {assigneeName(t.decidedBy)}
+                      </div>
+                    ) : null}
+                    {iAmApprover ? <DecideControls task={t} onDecide={onDecide} /> : null}
+                  </div>
+                ) : (
+                  <span className="text-[12px] text-muted/60">—</span>
+                )}
+              </td>
+              {canEdit ? (
+                <td className="px-4 py-3">
+                  <div className="flex justify-end gap-1.5 opacity-60 transition group-hover:opacity-100">
+                    {active ? (
+                      <IconAction
+                        Icon={Check}
+                        good
+                        onClick={() => onComplete(t.id)}
+                        label={`Complete ${t.title}`}
+                        title="Mark complete"
+                      />
+                    ) : null}
+                    {canRequest ? (
+                      <IconAction
+                        Icon={ShieldCheck}
+                        onClick={() => onRequestSignoff(t)}
+                        label={`Request sign-off for ${t.title}`}
+                        title="Request sign-off"
+                      />
+                    ) : null}
+                    <IconAction Icon={Pencil} onClick={() => onEdit(t)} label={`Edit ${t.title}`} />
+                    <IconAction
+                      Icon={Trash2}
+                      danger
+                      onClick={() => onDelete(t)}
+                      label={`Delete ${t.title}`}
+                    />
+                  </div>
+                </td>
+              ) : null}
+            </motion.tr>
+          )
+        })}
+      </AnimatePresence>
+    </TableShell>
+  )
+}
+
+const TABS = [
+  { key: 'all', label: 'All tasks' },
+  { key: 'mine', label: 'My tasks' },
+  { key: 'signoffs', label: 'Awaiting sign-off' },
+]
+
+const EMPTY_LABEL = {
+  all: 'No tasks here.',
+  mine: 'Nothing assigned to you.',
+  signoffs: 'No sign-offs waiting on you.',
+}
+
+// ═══════════════════════════ PAGE ═══════════════════════════════════════════
+
+function TasksWorkspace() {
   const { activeSchool } = useSchools()
   const schoolId = activeSchool?.id ?? null
   const canEdit = activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'
@@ -576,16 +834,10 @@ function TasksPanel() {
   const location = useLocation()
   const navigate = useNavigate()
 
-  const [statusFilter, setStatusFilter] = useState('open')
-  const [assigneeFilter, setAssigneeFilter] = useState('')
-
-  const filters = useMemo(
-    () => ({
-      status: statusFilter === 'all' ? undefined : statusFilter,
-      assigneeUserId: assigneeFilter || undefined,
-    }),
-    [statusFilter, assigneeFilter],
-  )
+  // The command center owns the full list (no server-side status/assignee filter);
+  // the tabs (All / Mine / Awaiting sign-off) slice it client-side, and the KPIs +
+  // attention rail are computed over the whole list.
+  const filters = useMemo(() => ({}), [])
 
   const {
     tasks,
@@ -602,6 +854,7 @@ function TasksPanel() {
     decide,
   } = useTasks(schoolId, filters, canEdit)
 
+  const [tab, setTab] = useState('all')
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const [prefill, setPrefill] = useState(null)
@@ -669,260 +922,175 @@ function TasksPanel() {
 
   const modalKey = editing ? editing.id : prefill ? 'prefill' : 'new'
 
-  // MY SIGN-OFFS — tasks where the caller IS the current designated approver of a
-  // pending chain. Computed over the full loaded list (independent of the status
-  // filter is not possible here since the list is filtered; but a 'pending' approval
-  // only lives on open/in_progress tasks, so the default 'open' filter surfaces
-  // most). The briefing item workflow:my-approvals-pending deep-links here.
-  const mySignoffs = useMemo(
-    () =>
-      tasks.filter(
-        (t) => t.approvalStatus === 'pending' && t.approverUserId === currentUserId,
-      ),
-    [tasks, currentUserId],
+  const isOverdue = (t) =>
+    t.urgency === 'overdue' ||
+    (t.dueDate &&
+      t.dueDate < new Date().toISOString().slice(0, 10) &&
+      t.status !== 'done' &&
+      t.status !== 'cancelled')
+
+  // ── KPIs (computed over the whole list) ────────────────────────────────────
+  const kpis = useMemo(() => {
+    const openCount = tasks.filter((t) => t.status === 'open' || t.status === 'in_progress').length
+    const inProgress = tasks.filter((t) => t.status === 'in_progress').length
+    const overdue = tasks.filter(isOverdue).length
+    const dueSoon = tasks.filter((t) => t.urgency === 'due-soon').length
+    const mySignoffs = tasks.filter(
+      (t) => t.approvalStatus === 'pending' && t.approverUserId === currentUserId,
+    ).length
+
+    return [
+      {
+        label: 'Open tasks',
+        value: String(openCount),
+        status: openCount === 0 ? 'good' : inProgress > 0 ? 'watch' : 'neutral',
+        sub:
+          openCount === 0
+            ? { icon: Check, text: 'all clear', tone: 'good' }
+            : { icon: Clock, text: `${inProgress} in progress`, tone: 'neutral' },
+      },
+      {
+        label: 'Overdue',
+        value: String(overdue),
+        status: overdue > 0 ? 'risk' : 'good',
+        sub:
+          overdue > 0
+            ? { icon: TrendingDown, text: 'past due date', tone: 'bad' }
+            : { icon: Check, text: 'on schedule', tone: 'good' },
+      },
+      {
+        label: 'Due soon',
+        value: String(dueSoon),
+        status: dueSoon > 0 ? 'watch' : 'neutral',
+        sub: { icon: Clock, text: 'within 7 days', tone: 'neutral' },
+      },
+      {
+        label: 'Awaiting your sign-off',
+        value: String(mySignoffs),
+        status: mySignoffs > 0 ? 'risk' : 'good',
+        sub:
+          mySignoffs > 0
+            ? { icon: AlertTriangle, text: 'your decision', tone: 'bad' }
+            : { icon: Check, text: 'none pending', tone: 'good' },
+      },
+    ]
+  }, [tasks, currentUserId])
+
+  // ── Needs-attention items (most-urgent first, capped at 6) ─────────────────
+  const attentionItems = useMemo(() => {
+    const items = []
+
+    // 1) Tasks awaiting MY sign-off — I am the current approver.
+    const mine = tasks.filter(
+      (t) => t.approvalStatus === 'pending' && t.approverUserId === currentUserId,
+    )
+    for (const t of mine) {
+      items.push({
+        id: `signoff-${t.id}`,
+        tone: 'risk',
+        sortKey: 0,
+        title: `${t.title} awaits your sign-off`,
+        why: 'You are the approver',
+        actions: canEdit
+          ? [
+              {
+                label: 'Approve',
+                primary: true,
+                onClick: () => decide(t.id, 'approve', null),
+              },
+            ]
+          : [],
+      })
+    }
+
+    // 2) Overdue tasks — most days-past-due first.
+    const overdue = tasks
+      .filter((t) => isOverdue(t) && !(t.approvalStatus === 'pending' && t.approverUserId === currentUserId))
+      .sort((a, b) => (a.daysUntilDue ?? 0) - (b.daysUntilDue ?? 0))
+    for (const t of overdue) {
+      const days = typeof t.daysUntilDue === 'number' ? Math.abs(t.daysUntilDue) : null
+      items.push({
+        id: `overdue-${t.id}`,
+        tone: 'risk',
+        sortKey: 1,
+        title: `${t.title} is overdue`,
+        why: days != null ? `${days} day${days === 1 ? '' : 's'} past due` : 'Past its due date',
+        actions: canEdit
+          ? [{ label: 'Complete', primary: false, onClick: () => complete(t.id) }]
+          : [],
+      })
+    }
+
+    // 3) Due-soon tasks — soonest first.
+    const dueSoon = tasks
+      .filter((t) => t.urgency === 'due-soon')
+      .sort((a, b) => (a.daysUntilDue ?? 0) - (b.daysUntilDue ?? 0))
+    for (const t of dueSoon) {
+      const days = typeof t.daysUntilDue === 'number' ? t.daysUntilDue : null
+      items.push({
+        id: `due-soon-${t.id}`,
+        tone: 'watch',
+        sortKey: 2,
+        title:
+          days === 0
+            ? `${t.title} is due today`
+            : days != null
+              ? `${t.title} is due in ${days} day${days === 1 ? '' : 's'}`
+              : `${t.title} is due soon`,
+        why: 'Coming up within the next 7 days',
+        actions: [],
+      })
+    }
+
+    return items.sort((a, b) => a.sortKey - b.sortKey).slice(0, 6)
+  }, [tasks, currentUserId, canEdit, decide, complete])
+
+  // ── Gate ───────────────────────────────────────────────────────────────────
+  if (notEntitled) return <GatePanel />
+
+  // ── Active-tab slice ───────────────────────────────────────────────────────
+  const visibleTasks =
+    tab === 'mine'
+      ? tasks.filter((t) => t.assigneeUserId === currentUserId)
+      : tab === 'signoffs'
+        ? tasks.filter(
+            (t) => t.approvalStatus === 'pending' && t.approverUserId === currentUserId,
+          )
+        : tasks
+
+  const registerTable = (
+    <TasksTable
+      tasks={visibleTasks}
+      members={members}
+      currentUserId={currentUserId}
+      loading={loading}
+      error={error}
+      canEdit={canEdit}
+      reduce={reduce}
+      emptyLabel={EMPTY_LABEL[tab] ?? EMPTY_LABEL.all}
+      onComplete={complete}
+      onEdit={openEdit}
+      onDelete={onDelete}
+      onRequestSignoff={setApprovalTask}
+      onDecide={decide}
+    />
   )
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-8">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gold/15 text-gold-light shadow-glow">
-            <ListChecks size={22} />
-          </span>
-          <div>
-            <h1 className="font-serif text-[22px] uppercase tracking-[0.12em] text-gold-light">
-              Tasks
-            </h1>
-            <p className="text-[13px] text-white/60">
-              Assignable, due-dated work across every part of your school.
-            </p>
-          </div>
-        </div>
-        {canEdit && !notEntitled ? (
-          <button
-            type="button"
-            onClick={openAdd}
-            className="inline-flex items-center gap-2 rounded-lg border-2 border-gold/60 bg-gold/15 px-4 py-2 text-[14px] font-semibold text-gold-light hover:bg-gold/25"
-          >
-            <Plus size={16} /> Add task
-          </button>
-        ) : null}
-      </div>
-
-      {!notEntitled && mySignoffs.length > 0 ? (
-        <motion.div
-          initial={reduce ? false : { opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-4 rounded-2xl border-2 border-amber-400/40 bg-amber-500/[0.07] p-4 shadow-navy-glow"
-        >
-          <div className="mb-2 flex items-center gap-2">
-            <ShieldCheck size={18} className="text-amber-200" />
-            <h2 className="font-serif text-[15px] uppercase tracking-[0.1em] text-amber-100">
-              Awaiting your sign-off ({mySignoffs.length})
-            </h2>
-          </div>
-          <div className="space-y-2">
-            {mySignoffs.map((t) => (
-              <div
-                key={`signoff-${t.id}`}
-                className="rounded-xl border border-amber-400/25 bg-navy/40 p-3"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-white">{t.title}</span>
-                  <RecurrenceBadge recurrence={t.recurrence} seriesId={t.seriesId} />
-                </div>
-                <ChainProgress task={t} members={members} />
-                <DecideControls task={t} onDecide={decide} />
-              </div>
-            ))}
-          </div>
-        </motion.div>
-      ) : null}
-
-      {!notEntitled ? (
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-1.5 text-[13px] text-white outline-none focus:border-gold/60"
-          >
-            <option value="all">All statuses</option>
-            {STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s.replace('_', ' ')}
-              </option>
-            ))}
-          </select>
-          {canEdit ? (
-            <select
-              value={assigneeFilter}
-              onChange={(e) => setAssigneeFilter(e.target.value)}
-              className="rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-1.5 text-[13px] text-white outline-none focus:border-gold/60"
-            >
-              <option value="">All assignees</option>
-              {members.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {memberName(m)}
-                </option>
-              ))}
-            </select>
-          ) : null}
-        </div>
-      ) : null}
-
-      {notEntitled ? (
-        <div className="rounded-2xl border-2 border-gold/30 bg-navy/30 p-8 text-center">
-          <p className="text-[15px] text-white/80">Your subscription is paused.</p>
-          <p className="mt-1 text-[13px] text-white/55">Resume your plan to manage tasks.</p>
-        </div>
-      ) : loading ? (
-        <div className="rounded-2xl border-2 border-white/10 bg-navy/30 p-8 text-center text-white/50">
-          Loading tasks…
-        </div>
-      ) : error ? (
-        <div className="rounded-2xl border-2 border-red-400/30 bg-red-500/10 p-6 text-center text-red-200">
-          {error}
-        </div>
-      ) : tasks.length === 0 ? (
-        <div className="rounded-2xl border-2 border-dashed border-white/20 bg-navy/30 p-10 text-center">
-          <p className="text-[15px] text-white/80">No tasks here.</p>
-          <p className="mt-1 text-[13px] text-white/55">
-            Add a task, or spawn one from an attention item on your briefing.
-          </p>
-        </div>
-      ) : (
-        <div className="overflow-hidden rounded-2xl border-2 border-gold/20">
-          <table className="w-full text-left text-[14px]">
-            <thead className="bg-navy/50 text-[12px] uppercase tracking-[0.08em] text-white/50">
-              <tr>
-                <th className="px-4 py-3">Task</th>
-                <th className="px-4 py-3">Assignee</th>
-                <th className="px-4 py-3">Priority</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Due</th>
-                {canEdit ? <th className="px-4 py-3 text-right">Actions</th> : null}
-              </tr>
-            </thead>
-            <tbody>
-              <AnimatePresence initial={false}>
-                {tasks.map((t) => (
-                  <motion.tr
-                    key={t.id}
-                    layout={!reduce}
-                    initial={reduce ? false : { opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={reduce ? undefined : { opacity: 0 }}
-                    className="border-t border-white/10 text-white/85"
-                  >
-                    <td className="px-4 py-3">
-                      <div className="font-semibold text-white">{t.title}</div>
-                      <div className="flex flex-wrap items-center">
-                        {t.sourceType && t.sourceType !== 'manual' ? (
-                          <span className="mt-1 inline-flex items-center gap-1 rounded border border-gold/30 bg-gold/10 px-1.5 py-0.5 text-[11px] font-semibold text-gold-light">
-                            <Link2 size={11} /> from {t.sourceType}
-                          </span>
-                        ) : null}
-                        <RecurrenceBadge recurrence={t.recurrence} seriesId={t.seriesId} />
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-white/70">{assigneeName(t.assignee)}</td>
-                    <td className="px-4 py-3">
-                      <span className="rounded-md border border-white/20 bg-white/5 px-2 py-0.5 text-[12px] capitalize text-white/70">
-                        {t.priority}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="rounded-md border border-white/20 bg-white/5 px-2 py-0.5 text-[12px] text-white/70">
-                        {t.status.replace('_', ' ')}
-                      </span>
-                      {APPROVAL_BADGE[t.approvalStatus] ? (
-                        <div className="mt-1.5">
-                          <span
-                            className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[12px] font-semibold ${APPROVAL_BADGE[t.approvalStatus].cls}`}
-                            title={t.decisionNote || undefined}
-                          >
-                            {APPROVAL_BADGE[t.approvalStatus].label}
-                          </span>
-                          {t.approvalStatus === 'pending' &&
-                          t.approver &&
-                          !(Array.isArray(t.approvalSteps) && t.approvalSteps.length > 1) ? (
-                            <div className="mt-1 text-[11px] text-white/45">
-                              Approver: {assigneeName(t.approver)}
-                            </div>
-                          ) : null}
-                          <ChainProgress task={t} members={members} />
-                          {(t.approvalStatus === 'approved' || t.approvalStatus === 'rejected') &&
-                          t.decidedBy ? (
-                            <div className="mt-1 text-[11px] text-white/45">
-                              Decided by {assigneeName(t.decidedBy)}
-                            </div>
-                          ) : null}
-                          {t.approvalStatus === 'pending' &&
-                          t.approverUserId === currentUserId ? (
-                            <DecideControls task={t} onDecide={decide} />
-                          ) : null}
-                        </div>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3">
-                      <UrgencyBadge
-                        urgency={t.urgency}
-                        dueDate={t.dueDate}
-                        daysUntilDue={t.daysUntilDue}
-                      />
-                    </td>
-                    {canEdit ? (
-                      <td className="px-4 py-3">
-                        <div className="flex justify-end gap-1.5">
-                          {t.status !== 'done' &&
-                          t.status !== 'cancelled' &&
-                          (t.approvalStatus === 'none' || t.approvalStatus === 'rejected') ? (
-                            <button
-                              type="button"
-                              onClick={() => setApprovalTask(t)}
-                              aria-label={`Request sign-off for ${t.title}`}
-                              title="Request sign-off"
-                              className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-gold/60 hover:text-gold-light"
-                            >
-                              <ShieldCheck size={15} />
-                            </button>
-                          ) : null}
-                          {t.status !== 'done' && t.status !== 'cancelled' ? (
-                            <button
-                              type="button"
-                              onClick={() => complete(t.id)}
-                              aria-label={`Complete ${t.title}`}
-                              className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-emerald-400/60 hover:text-emerald-200"
-                            >
-                              <Check size={15} />
-                            </button>
-                          ) : null}
-                          <button
-                            type="button"
-                            onClick={() => openEdit(t)}
-                            aria-label={`Edit ${t.title}`}
-                            className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-gold/60 hover:text-white"
-                          >
-                            <Pencil size={15} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onDelete(t)}
-                            aria-label={`Delete ${t.title}`}
-                            className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-red-400/60 hover:text-red-200"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
-                      </td>
-                    ) : null}
-                  </motion.tr>
-                ))}
-              </AnimatePresence>
-            </tbody>
-          </table>
-        </div>
-      )}
+    <>
+      <DomainCommandCenter
+        eyebrow="Core · Workflow engine · system of record"
+        title="Tasks"
+        Icon={ListChecks}
+        attentionCount={attentionItems.length}
+        kpis={kpis}
+        tabs={TABS}
+        activeTab={tab}
+        onTabChange={setTab}
+        onNew={canEdit ? openAdd : null}
+        registerTable={registerTable}
+        attentionItems={attentionItems}
+      />
 
       <TaskFormModal
         key={modalKey}
@@ -943,7 +1111,7 @@ function TasksPanel() {
         onSubmit={(approverUserIds) => submitApproval(approvalTask.id, approverUserIds)}
         reduce={reduce}
       />
-    </div>
+    </>
   )
 }
 
@@ -951,7 +1119,7 @@ export default function TasksPage() {
   return (
     <div className="min-h-screen">
       <BillingBanner />
-      <TasksPanel />
+      <TasksWorkspace />
     </div>
   )
 }

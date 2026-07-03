@@ -1,34 +1,38 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Advancement route (Phase 4 v1): AppShell chrome + the fundraising campaign register.
-// School-scoped (no period selector). Gated by the 'advancement' module — the nav
-// item is hidden by hasModule, but a direct-nav for a finance-only school renders a
-// friendly "module not on your plan" panel (the API 402 → notLicensed). A giving
-// summary banner headlines total raised vs goal + overall progress; each row shows a
-// status/urgency badge, a pct-of-goal progress bar, and raised/goal. Navy/gold theme,
-// reduced-motion safe, no setState-in-effect. AGGREGATE-only (no per-donor PII).
+// Advancement route — the DOMAIN COMMAND CENTER (Phase 4 register, redesigned to
+// match Governance). A LIGHT command-center (matches the Finance home, not the old
+// dark banner+list page): Penny lands you on advancement's slice of the briefing —
+// the KPIs that define its health (raised this year, active campaigns, behind goal,
+// closing soon), the items that need a decision (the attention rail with one-click
+// Update actions), with the campaign register a tab away. Built on the reusable
+// DomainCommandCenter scaffold.
+//
+// School-scoped (no period selector). Route stays /advancement. Gated by the
+// 'advancement' module — a finance-only school direct-navving here gets a friendly
+// light "module not on your plan" panel (the API 402 → notLicensed). The create /
+// edit CampaignFormModal is kept as a dark navy/gold overlay over the light page.
+// AGGREGATE-only (no per-donor PII).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo, useState } from 'react'
-import { motion, useReducedMotion } from 'framer-motion'
-import { HeartHandshake, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import {
+  HeartHandshake,
+  Pencil,
+  Trash2,
+  X,
+  Check,
+  TrendingDown,
+  Clock,
+  CalendarClock,
+  AlertTriangle,
+} from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
+import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useAdvancement } from '../hooks/useAdvancement.js'
 
 const STATUSES = ['planned', 'active', 'closed']
 const CAMPAIGN_TYPES = ['annual_fund', 'capital', 'other']
-
-const STATUS_BADGE = {
-  planned: { label: 'Planned', cls: 'border-sky-400/50 bg-sky-500/15 text-sky-200' },
-  active: { label: 'Active', cls: 'border-gold/50 bg-gold/15 text-gold-light' },
-  closed: { label: 'Closed', cls: 'border-white/20 bg-white/5 text-white/60' },
-}
-
-const URGENCY_BADGE = {
-  overdue: { label: 'Overdue', cls: 'border-red-400/50 bg-red-500/15 text-red-200' },
-  'closing-soon': { label: 'Closing soon', cls: 'border-amber-400/50 bg-amber-500/15 text-amber-200' },
-  'on-track': { label: 'On track', cls: 'border-emerald-400/50 bg-emerald-500/15 text-emerald-200' },
-  none: null,
-}
 
 const TYPE_LABEL = {
   annual_fund: 'Annual Fund',
@@ -36,7 +40,29 @@ const TYPE_LABEL = {
   other: 'Other',
 }
 
+const STATUS_LABEL = {
+  planned: 'Planned',
+  active: 'Active',
+  closed: 'Closed',
+}
+
+// ── Light-theme urgency badge (restyled from the old dark pills) ──────────────
+const URGENCY_BADGE = {
+  overdue: { label: 'Overdue', cls: 'border-danger/30 bg-danger/10 text-danger' },
+  'closing-soon': { label: 'Closing soon', cls: 'border-gold/40 bg-gold/10 text-[#7a5e00]' },
+  'on-track': { label: 'On track', cls: 'border-emerald-300/70 bg-emerald-50 text-emerald-700' },
+  none: null,
+}
+
 function fmtMoney(value) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '$0'
+  const abs = Math.abs(value)
+  if (abs >= 1_000_000) return `$${(value / 1_000_000).toFixed(abs >= 10_000_000 ? 0 : 1)}M`
+  if (abs >= 10_000) return `$${Math.round(value / 1_000)}K`
+  return `$${Math.round(value).toLocaleString('en-US')}`
+}
+
+function fmtMoneyFull(value) {
   if (typeof value !== 'number' || !Number.isFinite(value)) return '$0'
   return `$${Math.round(value).toLocaleString('en-US')}`
 }
@@ -46,34 +72,126 @@ function fmtPct(value) {
   return `${Math.round(value * 100)}%`
 }
 
-function Badge({ def, suffix }) {
+// ── Short "Jul 6" date from a yyyy-mm-dd string (UTC-safe, no tz drift). ──────
+function shortDate(iso) {
+  if (!iso) return null
+  const d = new Date(`${iso.slice(0, 10)}T00:00:00.000Z`)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+}
+
+// ── Light-theme register table primitives ────────────────────────────────────
+function Th({ children, right }) {
+  return (
+    <th
+      className={`px-4 py-2.5 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-muted ${
+        right ? 'text-right' : 'text-left'
+      }`}
+    >
+      {children}
+    </th>
+  )
+}
+
+function IconAction(props) {
+  const { onClick, label, title, danger } = props
+  const ActionIcon = props.Icon
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={title ?? label}
+      className={`rounded-lg border border-rule/60 p-1.5 text-muted transition hover:text-navy ${
+        danger ? 'hover:border-danger/50 hover:text-danger' : 'hover:border-gold/60'
+      }`}
+    >
+      <ActionIcon size={15} />
+    </button>
+  )
+}
+
+function TableShell({ children, cols }) {
+  return (
+    <div className="overflow-x-auto rounded-xl border border-rule/50">
+      <table className="w-full text-left text-[14px]">
+        <thead className="bg-cream">
+          <tr>{cols}</tr>
+        </thead>
+        <tbody>{children}</tbody>
+      </table>
+    </div>
+  )
+}
+
+function StateRow({ children }) {
+  return (
+    <div className="rounded-xl border border-dashed border-rule/60 bg-cream/50 px-6 py-12 text-center">
+      {children}
+    </div>
+  )
+}
+
+function Badge({ def }) {
   if (!def) return null
   return (
     <span
       className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[12px] font-semibold ${def.cls}`}
     >
       {def.label}
-      {suffix ?? ''}
     </span>
   )
 }
 
-/** A navy-on-gold progress bar. pct is a RATIO (0.54 = 54%); null → an "unset" bar. */
+/** A light-theme pct-of-goal bar. pct is a RATIO (0.54 = 54%); null → an "unset" bar. */
 function ProgressBar({ pct, reduce }) {
   const has = typeof pct === 'number' && Number.isFinite(pct)
   const clamped = has ? Math.min(Math.max(pct, 0), 1) : 0
   const over = has && pct > 1
   return (
-    <div className="h-2 w-full overflow-hidden rounded-full border border-white/10 bg-navy/60">
+    <div className="h-2 w-full overflow-hidden rounded-full border border-rule/50 bg-section">
       <motion.div
         initial={reduce ? false : { width: 0 }}
         animate={{ width: `${clamped * 100}%` }}
         transition={{ duration: reduce ? 0 : 0.6, ease: 'easeOut' }}
-        className={`h-full ${over ? 'bg-emerald-400' : 'bg-gold'}`}
+        className={`h-full ${over ? 'bg-emerald-500' : 'bg-gold-gradient'}`}
       />
     </div>
   )
 }
+
+// ── Light-theme entitlement / license gate ───────────────────────────────────
+function GatePanel({ notLicensed }) {
+  return (
+    <div className="mx-auto max-w-[1180px] px-4 py-6 sm:px-10 sm:py-8">
+      <div className="card-soft flex flex-col items-center gap-3 px-6 py-14 text-center">
+        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gold-gradient text-navy shadow-glow">
+          <HeartHandshake size={26} />
+        </span>
+        {notLicensed ? (
+          <>
+            <h2 className="font-serif text-xl font-semibold text-navy">
+              Advancement isn&apos;t on your plan yet
+            </h2>
+            <p className="max-w-md text-[15px] text-muted">
+              Add the Advancement module to track fundraising campaigns and their giving progress —
+              and land its slice of the briefing here.
+            </p>
+          </>
+        ) : (
+          <>
+            <h2 className="font-serif text-xl font-semibold text-navy">Your subscription is paused</h2>
+            <p className="max-w-md text-[15px] text-muted">
+              Resume your plan to manage the advancement register.
+            </p>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════ CAMPAIGN MODAL (dark overlay, reused) ═══════════
 
 const EMPTY_FORM = {
   name: '',
@@ -104,7 +222,10 @@ function toCampaignBody(form) {
   }
 }
 
-function CampaignFormModal({ open, initial, onClose, onSave, reduce }) {
+const inputCls =
+  'mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-white outline-none focus:border-gold/60'
+
+function CampaignFormModal({ initial, onClose, onSave, reduce }) {
   const [form, setForm] = useState(initial ?? EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
@@ -136,7 +257,6 @@ function CampaignFormModal({ open, initial, onClose, onSave, reduce }) {
     }
   }
 
-  if (!open) return null
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <motion.div
@@ -166,16 +286,12 @@ function CampaignFormModal({ open, initial, onClose, onSave, reduce }) {
                 onChange={set('name')}
                 maxLength={200}
                 placeholder="e.g. 2026 Annual Fund"
-                className="mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-white outline-none focus:border-gold/60"
+                className={inputCls}
               />
             </label>
             <label className="block text-[13px] text-white/70">
               Type
-              <select
-                value={form.campaignType}
-                onChange={set('campaignType')}
-                className="mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-white outline-none focus:border-gold/60"
-              >
+              <select value={form.campaignType} onChange={set('campaignType')} className={inputCls}>
                 <option value="">—</option>
                 {CAMPAIGN_TYPES.map((t) => (
                   <option key={t} value={t}>
@@ -186,14 +302,10 @@ function CampaignFormModal({ open, initial, onClose, onSave, reduce }) {
             </label>
             <label className="block text-[13px] text-white/70">
               Status
-              <select
-                value={form.status}
-                onChange={set('status')}
-                className="mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-white outline-none focus:border-gold/60"
-              >
+              <select value={form.status} onChange={set('status')} className={inputCls}>
                 {STATUSES.map((s) => (
                   <option key={s} value={s}>
-                    {STATUS_BADGE[s].label}
+                    {STATUS_LABEL[s]}
                   </option>
                 ))}
               </select>
@@ -207,7 +319,7 @@ function CampaignFormModal({ open, initial, onClose, onSave, reduce }) {
                 value={form.goalAmount}
                 onChange={set('goalAmount')}
                 placeholder="e.g. 250000"
-                className="mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-white outline-none focus:border-gold/60"
+                className={inputCls}
               />
             </label>
             <label className="block text-[13px] text-white/70">
@@ -219,7 +331,7 @@ function CampaignFormModal({ open, initial, onClose, onSave, reduce }) {
                 value={form.raisedAmount}
                 onChange={set('raisedAmount')}
                 placeholder="e.g. 135000"
-                className="mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-white outline-none focus:border-gold/60"
+                className={inputCls}
               />
             </label>
             <label className="block text-[13px] text-white/70">
@@ -231,26 +343,16 @@ function CampaignFormModal({ open, initial, onClose, onSave, reduce }) {
                 value={form.fiscalYear}
                 onChange={set('fiscalYear')}
                 placeholder="e.g. 2026"
-                className="mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-white outline-none focus:border-gold/60"
+                className={inputCls}
               />
             </label>
             <label className="block text-[13px] text-white/70">
               Start date
-              <input
-                type="date"
-                value={form.startDate}
-                onChange={set('startDate')}
-                className="mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-white outline-none focus:border-gold/60"
-              />
+              <input type="date" value={form.startDate} onChange={set('startDate')} className={inputCls} />
             </label>
             <label className="block text-[13px] text-white/70">
               Close date
-              <input
-                type="date"
-                value={form.closeDate}
-                onChange={set('closeDate')}
-                className="mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-white outline-none focus:border-gold/60"
-              />
+              <input type="date" value={form.closeDate} onChange={set('closeDate')} className={inputCls} />
             </label>
             <label className="col-span-2 block text-[13px] text-white/70">
               Notes
@@ -259,7 +361,7 @@ function CampaignFormModal({ open, initial, onClose, onSave, reduce }) {
                 onChange={set('notes')}
                 maxLength={4000}
                 rows={2}
-                className="mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-white outline-none focus:border-gold/60"
+                className={inputCls}
               />
             </label>
           </div>
@@ -286,7 +388,97 @@ function CampaignFormModal({ open, initial, onClose, onSave, reduce }) {
   )
 }
 
-function AdvancementPanel() {
+// ═══════════════════════════ LIGHT REGISTER TABLE ═══════════════════════════
+
+function CampaignsTable({ campaigns, loading, error, canEdit, reduce, onEdit, onDelete }) {
+  if (loading) return <StateRow><p className="text-[14px] text-muted">Loading campaigns…</p></StateRow>
+  if (error)
+    return (
+      <StateRow>
+        <p className="text-[14px] text-danger">{error}</p>
+      </StateRow>
+    )
+  if (campaigns.length === 0)
+    return (
+      <StateRow>
+        <p className="font-serif text-[16px] italic text-muted">No campaigns yet.</p>
+        <p className="mt-1 text-[13px] text-muted">
+          Add your first campaign to start tracking fundraising progress.
+        </p>
+      </StateRow>
+    )
+
+  return (
+    <TableShell
+      cols={
+        <>
+          <Th>Campaign</Th>
+          <Th>Type</Th>
+          <Th>Progress</Th>
+          <Th right>Raised · Goal</Th>
+          <Th>Close</Th>
+          {canEdit ? <Th right>Actions</Th> : null}
+        </>
+      }
+    >
+      <AnimatePresence initial={false}>
+        {campaigns.map((c) => {
+          const pctLabel = fmtPct(c.pctOfGoal)
+          return (
+            <motion.tr
+              key={c.id}
+              layout={!reduce}
+              initial={reduce ? false : { opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={reduce ? undefined : { opacity: 0 }}
+              className="group border-t border-rule/50"
+            >
+              <td className="px-4 py-3">
+                <div className="font-semibold text-navy">{c.name}</div>
+                <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                  <span className="rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[11px] capitalize text-muted">
+                    {STATUS_LABEL[c.status] ?? c.status}
+                  </span>
+                  <Badge def={URGENCY_BADGE[c.urgency]} />
+                </div>
+              </td>
+              <td className="px-4 py-3 text-muted">{TYPE_LABEL[c.campaignType] ?? '—'}</td>
+              <td className="px-4 py-3">
+                <div className="w-32">
+                  <ProgressBar pct={c.pctOfGoal} reduce={reduce} />
+                  <div className="mt-1 text-[11.5px] font-semibold text-muted">
+                    {pctLabel ? `${pctLabel} of goal` : 'no goal set'}
+                  </div>
+                </div>
+              </td>
+              <td className="px-4 py-3 text-right">
+                <span className="font-semibold text-navy">{fmtMoneyFull(c.raisedAmount ?? 0)}</span>
+                <span className="text-muted">
+                  {typeof c.goalAmount === 'number' ? ` / ${fmtMoneyFull(c.goalAmount)}` : ''}
+                </span>
+              </td>
+              <td className="px-4 py-3 text-muted">{c.closeDate ? (shortDate(c.closeDate) ?? c.closeDate) : '—'}</td>
+              {canEdit ? (
+                <td className="px-4 py-3">
+                  <div className="flex justify-end gap-1.5 opacity-60 transition group-hover:opacity-100">
+                    <IconAction Icon={Pencil} onClick={() => onEdit(c)} label={`Edit ${c.name}`} />
+                    <IconAction Icon={Trash2} danger onClick={() => onDelete(c)} label={`Delete ${c.name}`} />
+                  </div>
+                </td>
+              ) : null}
+            </motion.tr>
+          )
+        })}
+      </AnimatePresence>
+    </TableShell>
+  )
+}
+
+const TABS = [{ key: 'campaigns', label: 'Campaigns' }]
+
+// ═══════════════════════════ PAGE ═══════════════════════════════════════════
+
+function AdvancementWorkspace() {
   const { activeSchool } = useSchools()
   const schoolId = activeSchool?.id ?? null
   const canEdit = activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'
@@ -304,234 +496,204 @@ function AdvancementPanel() {
     removeItem,
   } = useAdvancement(schoolId)
 
-  const [modalOpen, setModalOpen] = useState(false)
-  const [editing, setEditing] = useState(null)
+  const [tab, setTab] = useState('campaigns')
+  const [modal, setModal] = useState(null) // { entity } | null
 
-  const openAdd = () => {
-    setEditing(null)
-    setModalOpen(true)
-  }
-  const openEdit = (c) => {
-    setEditing(c)
-    setModalOpen(true)
+  const openCreate = () => setModal({ entity: null })
+  const openEdit = (entity) => setModal({ entity })
+  const closeModal = () => setModal(null)
+
+  const onDelete = async (c) => {
+    if (window.confirm(`Delete "${c.name}"?`)) await removeItem(c.id)
   }
 
-  const initialForm = useMemo(() => {
-    if (!editing) return null
-    return {
-      name: editing.name ?? '',
-      campaignType: editing.campaignType ?? '',
-      goalAmount: editing.goalAmount === null || editing.goalAmount === undefined ? '' : String(editing.goalAmount),
-      raisedAmount: editing.raisedAmount === null || editing.raisedAmount === undefined ? '' : String(editing.raisedAmount),
-      fiscalYear: editing.fiscalYear === null || editing.fiscalYear === undefined ? '' : String(editing.fiscalYear),
-      startDate: editing.startDate ?? '',
-      closeDate: editing.closeDate ?? '',
-      status: editing.status ?? 'active',
-      notes: editing.notes ?? '',
+  // ── KPIs (computed from the summary) ───────────────────────────────────────
+  const kpis = useMemo(() => {
+    const totalGoal = summary.totalGoal ?? 0
+    const totalRaised = summary.totalRaised ?? 0
+    const overallPct = summary.overallPctOfGoal
+    const activeCount = summary.activeCount ?? 0
+    const behind = summary.behindGoalActiveCount ?? 0
+    const closingSoon = summary.closingSoonActiveCount ?? 0
+    const overdue = summary.overdueActiveCount ?? 0
+    const onGoalPace = typeof overallPct === 'number' && overallPct >= 0.9
+
+    // 1) Raised this year.
+    const raisedKpi = {
+      label: 'Raised this year',
+      value: fmtMoney(totalRaised),
+      status: onGoalPace ? 'good' : 'watch',
+      sub: {
+        icon: onGoalPace ? Check : TrendingDown,
+        text:
+          totalGoal > 0
+            ? `${fmtPct(overallPct) ?? '0%'} of ${fmtMoney(totalGoal)} goal`
+            : 'no goal set',
+        tone: onGoalPace ? 'good' : 'neutral',
+      },
     }
-  }, [editing])
+
+    // 2) Active campaigns.
+    const activeKpi = {
+      label: 'Active campaigns',
+      value: String(activeCount),
+      status: behind > 0 ? 'risk' : 'good',
+      sub:
+        behind > 0
+          ? { icon: TrendingDown, text: `${behind} behind goal`, tone: 'bad' }
+          : { icon: Check, text: 'on pace', tone: 'good' },
+    }
+
+    // 3) Behind goal.
+    const behindKpi = {
+      label: 'Behind goal',
+      value: String(behind),
+      status: behind > 0 ? 'risk' : 'good',
+      sub:
+        behind > 0
+          ? { icon: TrendingDown, text: 'active campaigns under pace', tone: 'bad' }
+          : { icon: Check, text: 'all on pace', tone: 'good' },
+    }
+
+    // 4) Closing soon.
+    const closingKpi = {
+      label: 'Closing soon',
+      value: String(closingSoon),
+      status: closingSoon > 0 ? 'watch' : 'neutral',
+      sub:
+        overdue > 0
+          ? { icon: AlertTriangle, text: `${overdue} past close date`, tone: 'bad' }
+          : { icon: CalendarClock, text: 'within 45 days', tone: 'neutral' },
+    }
+
+    return [raisedKpi, activeKpi, behindKpi, closingKpi]
+  }, [summary])
+
+  // ── Needs-attention items (most-urgent first, capped at 6) ─────────────────
+  const attentionItems = useMemo(() => {
+    const active = items.filter((c) => c.status === 'active')
+    const raw = []
+
+    // 1) Overdue active campaigns (past their close date).
+    for (const c of active.filter((c) => c.urgency === 'overdue')) {
+      raw.push({
+        id: `overdue-${c.id}`,
+        tone: 'risk',
+        sortKey: 0,
+        title: `${c.name} is past its close date`,
+        why:
+          typeof c.daysUntilClose === 'number'
+            ? `Closed ${Math.abs(c.daysUntilClose)} day${Math.abs(c.daysUntilClose) === 1 ? '' : 's'} ago · still open`
+            : 'Past its close date · still open',
+        actions: canEdit ? [{ label: 'Update', primary: true, onClick: () => openEdit(c) }] : [],
+      })
+    }
+
+    // 2) Active campaigns behind goal.
+    const behind = active.filter(
+      (c) => typeof c.pctOfGoal === 'number' && c.pctOfGoal < 0.9 && c.urgency !== 'overdue',
+    )
+    for (const c of behind) {
+      raw.push({
+        id: `behind-${c.id}`,
+        tone: 'watch',
+        sortKey: 1,
+        title: `${c.name} is behind goal`,
+        why: `${fmtPct(c.pctOfGoal) ?? '0%'} of goal raised`,
+        actions: canEdit ? [{ label: 'Update', primary: false, onClick: () => openEdit(c) }] : [],
+      })
+    }
+
+    // 3) Active campaigns closing soon.
+    for (const c of active.filter((c) => c.urgency === 'closing-soon')) {
+      const days = typeof c.daysUntilClose === 'number' ? c.daysUntilClose : null
+      raw.push({
+        id: `closing-${c.id}`,
+        tone: 'watch',
+        sortKey: 2,
+        title: days != null ? `${c.name} closes in ${days} day${days === 1 ? '' : 's'}` : `${c.name} closes soon`,
+        why:
+          typeof c.pctOfGoal === 'number'
+            ? `${fmtPct(c.pctOfGoal)} of goal raised so far`
+            : 'Approaching its close date',
+        actions: canEdit ? [{ label: 'Update', primary: false, onClick: () => openEdit(c) }] : [],
+      })
+    }
+
+    return raw.sort((a, b) => a.sortKey - b.sortKey).slice(0, 6)
+  }, [items, canEdit])
+
+  // ── Gate ───────────────────────────────────────────────────────────────────
+  if (notLicensed || notEntitled) return <GatePanel notLicensed={notLicensed} />
+
+  const registerTable = (
+    <CampaignsTable
+      campaigns={items}
+      loading={loading}
+      error={error}
+      canEdit={canEdit}
+      reduce={reduce}
+      onEdit={openEdit}
+      onDelete={onDelete}
+    />
+  )
+
+  const onNew = canEdit ? () => openCreate() : null
 
   const onSave = async (body) => {
-    if (editing) await updateItem(editing.id, body)
+    if (modal?.entity) await updateItem(modal.entity.id, body)
     else await createItem(body)
   }
 
-  const onDelete = async (c) => {
-    if (window.confirm(`Delete "${c.name}"?`)) {
-      await removeItem(c.id)
-    }
-  }
-
-  const showList = !notLicensed && !notEntitled && !loading && !error
+  const initialForm = modal?.entity
+    ? {
+        name: modal.entity.name ?? '',
+        campaignType: modal.entity.campaignType ?? '',
+        goalAmount:
+          modal.entity.goalAmount === null || modal.entity.goalAmount === undefined
+            ? ''
+            : String(modal.entity.goalAmount),
+        raisedAmount:
+          modal.entity.raisedAmount === null || modal.entity.raisedAmount === undefined
+            ? ''
+            : String(modal.entity.raisedAmount),
+        fiscalYear:
+          modal.entity.fiscalYear === null || modal.entity.fiscalYear === undefined
+            ? ''
+            : String(modal.entity.fiscalYear),
+        startDate: modal.entity.startDate ?? '',
+        closeDate: modal.entity.closeDate ?? '',
+        status: modal.entity.status ?? 'active',
+        notes: modal.entity.notes ?? '',
+      }
+    : null
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-8">
-      <div className="mb-6 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gold/15 text-gold-light shadow-glow">
-            <HeartHandshake size={22} />
-          </span>
-          <div>
-            <h1 className="font-serif text-[22px] uppercase tracking-[0.12em] text-gold-light">
-              Advancement
-            </h1>
-            <p className="text-[13px] text-white/60">
-              Your fundraising campaigns — goal, raised, close date, and giving progress.
-            </p>
-          </div>
-        </div>
-        {canEdit && showList ? (
-          <button
-            type="button"
-            onClick={openAdd}
-            className="inline-flex items-center gap-2 rounded-lg border-2 border-gold/60 bg-gold/15 px-4 py-2 text-[14px] font-semibold text-gold-light hover:bg-gold/25"
-          >
-            <Plus size={16} /> Add campaign
-          </button>
-        ) : null}
-      </div>
-
-      {/* Giving summary banner */}
-      {showList && summary.total > 0 ? (
-        <div className="mb-6 rounded-2xl border-2 border-gold/20 bg-navy/40 p-5">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <p className="text-[12px] uppercase tracking-[0.1em] text-white/50">Total raised vs goal</p>
-              <p className="mt-1 text-[24px] font-semibold text-white">
-                {fmtMoney(summary.totalRaised)}
-                <span className="text-[16px] font-normal text-white/50">
-                  {' '}/ {summary.totalGoal > 0 ? fmtMoney(summary.totalGoal) : 'no goal set'}
-                </span>
-              </p>
-            </div>
-            <p className="text-[22px] font-semibold text-gold-light">
-              {fmtPct(summary.overallPctOfGoal) ?? '—'}
-            </p>
-          </div>
-          <div className="mt-3">
-            <ProgressBar pct={summary.overallPctOfGoal} reduce={reduce} />
-          </div>
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-xl border border-white/10 bg-navy/40 p-3">
-              <p className="text-[11px] uppercase tracking-[0.1em] text-white/50">Active</p>
-              <p className="mt-0.5 text-[20px] font-semibold text-white">{summary.activeCount}</p>
-            </div>
-            <div className="rounded-xl border border-white/10 bg-navy/40 p-3">
-              <p className="text-[11px] uppercase tracking-[0.1em] text-white/50">Behind goal</p>
-              <p className="mt-0.5 text-[20px] font-semibold text-amber-200">
-                {summary.behindGoalActiveCount}
-              </p>
-            </div>
-            <div className="rounded-xl border border-white/10 bg-navy/40 p-3">
-              <p className="text-[11px] uppercase tracking-[0.1em] text-white/50">Closing soon</p>
-              <p className="mt-0.5 text-[20px] font-semibold text-amber-200">
-                {summary.closingSoonActiveCount}
-              </p>
-            </div>
-            <div className="rounded-xl border border-white/10 bg-navy/40 p-3">
-              <p className="text-[11px] uppercase tracking-[0.1em] text-white/50">Overdue</p>
-              <p className="mt-0.5 text-[20px] font-semibold text-red-200">
-                {summary.overdueActiveCount}
-              </p>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {notLicensed ? (
-        <div className="rounded-2xl border-2 border-gold/30 bg-navy/30 p-8 text-center">
-          <p className="text-[15px] text-white/80">
-            The Advancement module isn&apos;t on your plan yet.
-          </p>
-          <p className="mt-1 text-[13px] text-white/55">
-            Add Advancement to track fundraising campaigns and their giving progress.
-          </p>
-        </div>
-      ) : notEntitled ? (
-        <div className="rounded-2xl border-2 border-gold/30 bg-navy/30 p-8 text-center">
-          <p className="text-[15px] text-white/80">Your subscription is paused.</p>
-          <p className="mt-1 text-[13px] text-white/55">
-            Resume your plan to manage the advancement register.
-          </p>
-        </div>
-      ) : loading ? (
-        <div className="rounded-2xl border-2 border-white/10 bg-navy/30 p-8 text-center text-white/50">
-          Loading campaigns…
-        </div>
-      ) : error ? (
-        <div className="rounded-2xl border-2 border-red-400/30 bg-red-500/10 p-6 text-center text-red-200">
-          {error}
-        </div>
-      ) : items.length === 0 ? (
-        <div className="rounded-2xl border-2 border-dashed border-white/20 bg-navy/30 p-10 text-center">
-          <p className="text-[15px] text-white/80">No campaigns yet.</p>
-          <p className="mt-1 text-[13px] text-white/55">
-            Add your first campaign to start tracking fundraising progress.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {items.map((c) => (
-            <div
-              key={c.id}
-              className="overflow-hidden rounded-2xl border-2 border-gold/20 bg-navy/30 px-4 py-3"
-            >
-              <div className="flex items-center gap-3">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="truncate font-semibold text-white">{c.name}</span>
-                    {c.campaignType ? (
-                      <span className="rounded-md border border-white/20 bg-white/5 px-2 py-0.5 text-[11px] font-semibold text-white/60">
-                        {TYPE_LABEL[c.campaignType] ?? c.campaignType}
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-2">
-                    <Badge def={STATUS_BADGE[c.status]} />
-                    <Badge
-                      def={URGENCY_BADGE[c.urgency]}
-                      suffix={
-                        c.urgency === 'overdue' && typeof c.daysUntilClose === 'number'
-                          ? ` · ${Math.abs(c.daysUntilClose)}d ago`
-                          : c.urgency === 'closing-soon' && typeof c.daysUntilClose === 'number'
-                            ? ` · in ${c.daysUntilClose}d`
-                            : ''
-                      }
-                    />
-                    {fmtPct(c.pctOfGoal) ? (
-                      <span className="text-[12px] font-semibold text-gold-light">
-                        {fmtPct(c.pctOfGoal)} of goal
-                      </span>
-                    ) : null}
-                    <span className="text-[12px] text-white/45">
-                      {fmtMoney(c.raisedAmount ?? 0)}
-                      {typeof c.goalAmount === 'number' ? ` / ${fmtMoney(c.goalAmount)}` : ''}
-                    </span>
-                    {c.closeDate ? (
-                      <span className="text-[12px] text-white/45">closes {c.closeDate}</span>
-                    ) : null}
-                  </div>
-                  {typeof c.pctOfGoal === 'number' ? (
-                    <div className="mt-2">
-                      <ProgressBar pct={c.pctOfGoal} reduce={reduce} />
-                    </div>
-                  ) : null}
-                </div>
-                {canEdit ? (
-                  <div className="flex gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => openEdit(c)}
-                      aria-label={`Edit ${c.name}`}
-                      className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-gold/60 hover:text-white"
-                    >
-                      <Pencil size={15} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onDelete(c)}
-                      aria-label={`Delete ${c.name}`}
-                      className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-red-400/60 hover:text-red-200"
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <CampaignFormModal
-        key={editing ? editing.id : 'new'}
-        open={modalOpen}
-        initial={initialForm}
-        onClose={() => setModalOpen(false)}
-        onSave={onSave}
-        reduce={reduce}
+    <>
+      <DomainCommandCenter
+        eyebrow="Domain · Advancement engine · system of record"
+        title="Advancement"
+        Icon={HeartHandshake}
+        attentionCount={attentionItems.length}
+        kpis={kpis}
+        tabs={TABS}
+        activeTab={tab}
+        onTabChange={setTab}
+        onNew={onNew}
+        registerTable={registerTable}
+        attentionItems={attentionItems}
       />
-    </div>
+
+      {modal ? (
+        <CampaignFormModal
+          key={modal.entity ? modal.entity.id : 'new'}
+          initial={initialForm}
+          onClose={closeModal}
+          onSave={onSave}
+          reduce={reduce}
+        />
+      ) : null}
+    </>
   )
 }
 
@@ -539,7 +701,7 @@ export default function AdvancementPage() {
   return (
     <div className="min-h-screen">
       <BillingBanner />
-      <AdvancementPanel />
+      <AdvancementWorkspace />
     </div>
   )
 }

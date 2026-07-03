@@ -1,40 +1,59 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Facilities route (Phase 4 v1): AppShell chrome + the deferred-maintenance register.
-// School-scoped (no period selector). Gated by the 'facilities' module — the nav
-// item is hidden by hasModule, but a direct-nav for a finance-only school renders a
-// friendly "module not on your plan" panel (the API 402 → notLicensed). A backlog
-// summary banner headlines the open/high-priority counts + $ backlog; each row shows
-// priority/status/urgency badges. Navy/gold theme, reduced-motion safe, no setState-
-// in-effect. SEPARATE from the capital schedule (deferred-maintenance ≠ planned capital).
+// Facilities route — the DOMAIN COMMAND CENTER (Phase 4 register, redesigned to
+// match Governance). A LIGHT command-center: Penny lands you on facilities' slice
+// of the briefing — the KPIs that define its health (open items, high-priority
+// open, overdue, deferred backlog), the items that need a decision (the attention
+// rail with one-click Update actions), with the maintenance register a tab away.
+// Built on the reusable DomainCommandCenter scaffold shared with Governance /
+// Advancement / Accreditation.
+//
+// School-scoped (no period selector). Route stays /facilities. Gated by the
+// 'facilities' module — a finance-only school direct-navving here gets a friendly
+// light "module not on your plan" panel (the API 402 → notLicensed). The create /
+// edit form modal is kept as a dark navy/gold overlay over the light page.
+// SEPARATE from the capital schedule (deferred-maintenance ≠ planned capital).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo, useState } from 'react'
-import { motion, useReducedMotion } from 'framer-motion'
-import { Pencil, Plus, Trash2, Wrench, X } from 'lucide-react'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import {
+  Wrench,
+  Pencil,
+  Trash2,
+  X,
+  Check,
+  TrendingDown,
+  AlertTriangle,
+  Clock,
+} from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
+import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useFacilities } from '../hooks/useFacilities.js'
 
 const PRIORITIES = ['low', 'medium', 'high', 'critical']
 const STATUSES = ['open', 'scheduled', 'in_progress', 'resolved']
 
+const PRIORITY_LABEL = { low: 'Low', medium: 'Medium', high: 'High', critical: 'Critical' }
+const STATUS_LABEL = {
+  open: 'Open',
+  scheduled: 'Scheduled',
+  in_progress: 'In progress',
+  resolved: 'Resolved',
+}
+
+// ── Light-theme priority badge (restyled from the old dark pills) ────────────
 const PRIORITY_BADGE = {
-  low: { label: 'Low', cls: 'border-white/20 bg-white/5 text-white/60' },
-  medium: { label: 'Medium', cls: 'border-sky-400/50 bg-sky-500/15 text-sky-200' },
-  high: { label: 'High', cls: 'border-amber-400/50 bg-amber-500/15 text-amber-200' },
-  critical: { label: 'Critical', cls: 'border-red-400/50 bg-red-500/15 text-red-200' },
+  low: { label: 'Low', cls: 'border-rule/60 bg-section text-muted' },
+  medium: { label: 'Medium', cls: 'border-sky-300/70 bg-sky-50 text-sky-700' },
+  high: { label: 'High', cls: 'border-gold/40 bg-gold/10 text-[#7a5e00]' },
+  critical: { label: 'Critical', cls: 'border-danger/30 bg-danger/10 text-danger' },
 }
 
-const STATUS_BADGE = {
-  open: { label: 'Open', cls: 'border-amber-400/50 bg-amber-500/15 text-amber-200' },
-  scheduled: { label: 'Scheduled', cls: 'border-sky-400/50 bg-sky-500/15 text-sky-200' },
-  in_progress: { label: 'In progress', cls: 'border-gold/50 bg-gold/15 text-gold-light' },
-  resolved: { label: 'Resolved', cls: 'border-emerald-400/50 bg-emerald-500/15 text-emerald-200' },
-}
-
+// ── Light-theme urgency badge ────────────────────────────────────────────────
 const URGENCY_BADGE = {
-  overdue: { label: 'Overdue', cls: 'border-red-400/50 bg-red-500/15 text-red-200' },
-  'due-soon': { label: 'Due soon', cls: 'border-amber-400/50 bg-amber-500/15 text-amber-200' },
-  'on-track': { label: 'On track', cls: 'border-emerald-400/50 bg-emerald-500/15 text-emerald-200' },
+  overdue: { label: 'Overdue', cls: 'border-danger/30 bg-danger/10 text-danger' },
+  'due-soon': { label: 'Due soon', cls: 'border-gold/40 bg-gold/10 text-[#7a5e00]' },
+  'on-track': { label: 'On track', cls: 'border-emerald-300/70 bg-emerald-50 text-emerald-700' },
   none: null,
 }
 
@@ -43,7 +62,8 @@ function fmtMoney(value) {
   return `$${Math.round(value).toLocaleString('en-US')}`
 }
 
-function Badge({ def, suffix }) {
+/** A small light-theme pill (shared idiom for priority + urgency signals). */
+function Pill({ def, suffix }) {
   if (!def) return null
   return (
     <span
@@ -54,6 +74,92 @@ function Badge({ def, suffix }) {
     </span>
   )
 }
+
+// ── Light-theme register table primitives ────────────────────────────────────
+function Th({ children, right }) {
+  return (
+    <th
+      className={`px-4 py-2.5 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-muted ${
+        right ? 'text-right' : 'text-left'
+      }`}
+    >
+      {children}
+    </th>
+  )
+}
+
+function IconAction(props) {
+  const { onClick, label, title, danger } = props
+  const ActionIcon = props.Icon
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={title ?? label}
+      className={`rounded-lg border border-rule/60 p-1.5 text-muted transition hover:text-navy ${
+        danger ? 'hover:border-danger/50 hover:text-danger' : 'hover:border-gold/60'
+      }`}
+    >
+      <ActionIcon size={15} />
+    </button>
+  )
+}
+
+function TableShell({ children, cols }) {
+  return (
+    <div className="overflow-x-auto rounded-xl border border-rule/50">
+      <table className="w-full text-left text-[14px]">
+        <thead className="bg-cream">
+          <tr>{cols}</tr>
+        </thead>
+        <tbody>{children}</tbody>
+      </table>
+    </div>
+  )
+}
+
+function StateRow({ children }) {
+  return (
+    <div className="rounded-xl border border-dashed border-rule/60 bg-cream/50 px-6 py-12 text-center">
+      {children}
+    </div>
+  )
+}
+
+// ── Light-theme entitlement / license gate ───────────────────────────────────
+function GatePanel({ notLicensed }) {
+  return (
+    <div className="mx-auto max-w-[1180px] px-4 py-6 sm:px-10 sm:py-8">
+      <div className="card-soft flex flex-col items-center gap-3 px-6 py-14 text-center">
+        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gold-gradient text-navy shadow-glow">
+          <Wrench size={26} />
+        </span>
+        {notLicensed ? (
+          <>
+            <h2 className="font-serif text-xl font-semibold text-navy">
+              Facilities isn&apos;t on your plan yet
+            </h2>
+            <p className="max-w-md text-[15px] text-muted">
+              Add the Facilities module to track deferred maintenance and its capital backlog — and
+              land its slice of the briefing here.
+            </p>
+          </>
+        ) : (
+          <>
+            <h2 className="font-serif text-xl font-semibold text-navy">Your subscription is paused</h2>
+            <p className="max-w-md text-[15px] text-muted">
+              Resume your plan to manage the maintenance register.
+            </p>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════ MAINTENANCE MODAL ══════════════════════════════
+// Kept as a dark navy/gold overlay over the light page (unchanged idiom).
 
 const EMPTY_FORM = {
   title: '',
@@ -170,7 +276,7 @@ function MaintenanceFormModal({ open, initial, onClose, onSave, reduce }) {
               >
                 {PRIORITIES.map((p) => (
                   <option key={p} value={p}>
-                    {PRIORITY_BADGE[p].label}
+                    {PRIORITY_LABEL[p]}
                   </option>
                 ))}
               </select>
@@ -184,7 +290,7 @@ function MaintenanceFormModal({ open, initial, onClose, onSave, reduce }) {
               >
                 {STATUSES.map((s) => (
                   <option key={s} value={s}>
-                    {STATUS_BADGE[s].label}
+                    {STATUS_LABEL[s]}
                   </option>
                 ))}
               </select>
@@ -244,7 +350,116 @@ function MaintenanceFormModal({ open, initial, onClose, onSave, reduce }) {
   )
 }
 
-function FacilitiesPanel() {
+// ═══════════════════════════ LIGHT REGISTER TABLE ═══════════════════════════
+
+function MaintenanceTable({ items, loading, error, canEdit, reduce, onEdit, onDelete }) {
+  if (loading)
+    return (
+      <StateRow>
+        <p className="text-[14px] text-muted">Loading maintenance items…</p>
+      </StateRow>
+    )
+  if (error)
+    return (
+      <StateRow>
+        <p className="text-[14px] text-danger">{error}</p>
+      </StateRow>
+    )
+  if (items.length === 0)
+    return (
+      <StateRow>
+        <p className="font-serif text-[16px] italic text-muted">No maintenance items yet.</p>
+        <p className="mt-1 text-[13px] text-muted">
+          Add your first item to start tracking the deferred-maintenance backlog.
+        </p>
+      </StateRow>
+    )
+
+  return (
+    <TableShell
+      cols={
+        <>
+          <Th>Item</Th>
+          <Th>Location</Th>
+          <Th>Priority</Th>
+          <Th>Status</Th>
+          <Th right>Cost</Th>
+          <Th>Target</Th>
+          {canEdit ? <Th right>Actions</Th> : null}
+        </>
+      }
+    >
+      <AnimatePresence initial={false}>
+        {items.map((it) => (
+          <motion.tr
+            key={it.id}
+            layout={!reduce}
+            initial={reduce ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={reduce ? undefined : { opacity: 0 }}
+            className="group border-t border-rule/50"
+          >
+            <td className="px-4 py-3">
+              <div className="font-semibold text-navy">{it.title}</div>
+              {it.category ? (
+                <span className="mt-0.5 inline-flex items-center rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[11px] font-semibold text-muted">
+                  {it.category}
+                </span>
+              ) : null}
+            </td>
+            <td className="px-4 py-3 text-muted">{it.location ?? '—'}</td>
+            <td className="px-4 py-3">
+              <Pill def={PRIORITY_BADGE[it.priority]} />
+            </td>
+            <td className="px-4 py-3">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[12px] capitalize text-muted">
+                  {STATUS_LABEL[it.status] ?? it.status}
+                </span>
+                <Pill
+                  def={URGENCY_BADGE[it.urgency]}
+                  suffix={
+                    it.urgency === 'overdue' && typeof it.daysUntilTarget === 'number'
+                      ? ` · ${Math.abs(it.daysUntilTarget)}d ago`
+                      : it.urgency === 'due-soon' && typeof it.daysUntilTarget === 'number'
+                        ? ` · in ${it.daysUntilTarget}d`
+                        : ''
+                  }
+                />
+              </div>
+            </td>
+            <td className="px-4 py-3 text-right font-semibold text-navy">
+              {typeof it.estimatedCost === 'number' ? fmtMoney(it.estimatedCost) : '—'}
+            </td>
+            <td className="px-4 py-3 text-muted">{it.targetDate ?? '—'}</td>
+            {canEdit ? (
+              <td className="px-4 py-3">
+                <div className="flex justify-end gap-1.5 opacity-60 transition group-hover:opacity-100">
+                  <IconAction Icon={Pencil} onClick={() => onEdit(it)} label={`Edit ${it.title}`} />
+                  <IconAction
+                    Icon={Trash2}
+                    danger
+                    onClick={() => onDelete(it)}
+                    label={`Delete ${it.title}`}
+                  />
+                </div>
+              </td>
+            ) : null}
+          </motion.tr>
+        ))}
+      </AnimatePresence>
+    </TableShell>
+  )
+}
+
+const TABS = [{ key: 'maintenance', label: 'Maintenance' }]
+
+const HIGH_PRIORITIES = new Set(['high', 'critical'])
+const OPEN_STATUSES = new Set(['open', 'scheduled', 'in_progress'])
+
+// ═══════════════════════════ PAGE ═══════════════════════════════════════════
+
+function FacilitiesWorkspace() {
   const { activeSchool } = useSchools()
   const schoolId = activeSchool?.id ?? null
   const canEdit = activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'
@@ -262,6 +477,7 @@ function FacilitiesPanel() {
     removeItem,
   } = useFacilities(schoolId)
 
+  const [tab, setTab] = useState('maintenance')
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
 
@@ -282,7 +498,10 @@ function FacilitiesPanel() {
       category: editing.category ?? '',
       priority: editing.priority ?? 'medium',
       status: editing.status ?? 'open',
-      estimatedCost: editing.estimatedCost === null || editing.estimatedCost === undefined ? '' : String(editing.estimatedCost),
+      estimatedCost:
+        editing.estimatedCost === null || editing.estimatedCost === undefined
+          ? ''
+          : String(editing.estimatedCost),
       targetDate: editing.targetDate ?? '',
       notes: editing.notes ?? '',
     }
@@ -294,170 +513,137 @@ function FacilitiesPanel() {
   }
 
   const onDelete = async (it) => {
-    if (window.confirm(`Delete "${it.title}"?`)) {
-      await removeItem(it.id)
-    }
+    if (window.confirm(`Delete "${it.title}"?`)) await removeItem(it.id)
   }
 
-  const showList = !notLicensed && !notEntitled && !loading && !error
+  // ── KPIs (computed from the summary) ───────────────────────────────────────
+  const kpis = useMemo(() => {
+    const total = summary.total ?? 0
+    const openCount = summary.openCount ?? 0
+    const highPriorityOpenCount = summary.highPriorityOpenCount ?? 0
+    const criticalOpen = summary.criticalOpen ?? 0
+    const overdueOpen = summary.overdueOpen ?? 0
+    const backlogCost = summary.backlogCost ?? 0
+
+    const openKpi = {
+      label: 'Open items',
+      value: total > 0 ? `${openCount}/${total}` : String(openCount),
+      status: overdueOpen > 0 ? 'risk' : highPriorityOpenCount > 0 ? 'watch' : 'good',
+      sub:
+        overdueOpen > 0
+          ? { icon: TrendingDown, text: `${overdueOpen} overdue`, tone: 'bad' }
+          : highPriorityOpenCount > 0
+            ? { icon: Clock, text: `${highPriorityOpenCount} high priority`, tone: 'neutral' }
+            : { icon: Check, text: 'all clear', tone: 'good' },
+    }
+
+    const highKpi = {
+      label: 'High-priority open',
+      value: String(highPriorityOpenCount),
+      status: criticalOpen > 0 ? 'risk' : highPriorityOpenCount > 0 ? 'watch' : 'good',
+      sub:
+        criticalOpen > 0
+          ? { icon: AlertTriangle, text: `${criticalOpen} critical`, tone: 'bad' }
+          : { icon: Check, text: 'manageable', tone: 'good' },
+    }
+
+    const overdueKpi = {
+      label: 'Overdue',
+      value: String(overdueOpen),
+      status: overdueOpen > 0 ? 'risk' : 'good',
+      sub:
+        overdueOpen > 0
+          ? { icon: AlertTriangle, text: 'past target date', tone: 'bad' }
+          : { icon: Check, text: 'on schedule', tone: 'good' },
+    }
+
+    const backlogKpi = {
+      label: 'Deferred backlog',
+      value: fmtMoney(backlogCost),
+      status: 'neutral',
+      sub: { icon: Wrench, text: 'open maintenance cost', tone: 'neutral' },
+    }
+
+    return [openKpi, highKpi, overdueKpi, backlogKpi]
+  }, [summary])
+
+  // ── Needs-attention items (most-urgent first, capped at 6) ─────────────────
+  const attentionItems = useMemo(() => {
+    const list = []
+    const seen = new Set()
+
+    const openItems = items.filter((it) => OPEN_STATUSES.has(it.status))
+
+    // 1) Overdue open items.
+    const overdueItems = openItems.filter((it) => it.urgency === 'overdue')
+    for (const it of overdueItems) {
+      seen.add(it.id)
+      const days = typeof it.daysUntilTarget === 'number' ? Math.abs(it.daysUntilTarget) : null
+      list.push({
+        id: `overdue-${it.id}`,
+        tone: 'risk',
+        sortKey: 0,
+        title: `${it.title} is overdue`,
+        why:
+          days != null
+            ? `${days} day${days === 1 ? '' : 's'} past its target date`
+            : 'Past its target date',
+        actions: canEdit ? [{ label: 'Update', primary: true, onClick: () => openEdit(it) }] : [],
+      })
+    }
+
+    // 2) Critical / high-priority open items not already flagged as overdue.
+    const highItems = openItems.filter(
+      (it) => HIGH_PRIORITIES.has(it.priority) && !seen.has(it.id),
+    )
+    // Critical first, then high.
+    highItems.sort((a, b) => (b.priority === 'critical' ? 1 : 0) - (a.priority === 'critical' ? 1 : 0))
+    for (const it of highItems) {
+      list.push({
+        id: `high-${it.id}`,
+        tone: it.priority === 'critical' ? 'risk' : 'watch',
+        sortKey: it.priority === 'critical' ? 1 : 2,
+        title: `${it.title} needs attention`,
+        why: `high-priority · ${it.location ?? 'no location'}`,
+        actions: canEdit ? [{ label: 'Update', primary: false, onClick: () => openEdit(it) }] : [],
+      })
+    }
+
+    return list.sort((a, b) => a.sortKey - b.sortKey).slice(0, 6)
+  }, [items, canEdit])
+
+  // ── Gate ───────────────────────────────────────────────────────────────────
+  if (notLicensed || notEntitled) return <GatePanel notLicensed={notLicensed} />
+
+  const registerTable = (
+    <MaintenanceTable
+      items={items}
+      loading={loading}
+      error={error}
+      canEdit={canEdit}
+      reduce={reduce}
+      onEdit={openEdit}
+      onDelete={onDelete}
+    />
+  )
+
+  const onNew = canEdit ? openAdd : null
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-8">
-      <div className="mb-6 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gold/15 text-gold-light shadow-glow">
-            <Wrench size={22} />
-          </span>
-          <div>
-            <h1 className="font-serif text-[22px] uppercase tracking-[0.12em] text-gold-light">
-              Deferred Maintenance
-            </h1>
-            <p className="text-[13px] text-white/60">
-              Your maintenance backlog — priority, status, estimated cost, and target date.
-            </p>
-          </div>
-        </div>
-        {canEdit && showList ? (
-          <button
-            type="button"
-            onClick={openAdd}
-            className="inline-flex items-center gap-2 rounded-lg border-2 border-gold/60 bg-gold/15 px-4 py-2 text-[14px] font-semibold text-gold-light hover:bg-gold/25"
-          >
-            <Plus size={16} /> Add item
-          </button>
-        ) : null}
-      </div>
-
-      {/* Backlog summary banner */}
-      {showList && summary.total > 0 ? (
-        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div className="rounded-2xl border-2 border-gold/20 bg-navy/40 p-4">
-            <p className="text-[12px] uppercase tracking-[0.1em] text-white/50">Open items</p>
-            <p className="mt-1 text-[22px] font-semibold text-white">{summary.openCount}</p>
-          </div>
-          <div className="rounded-2xl border-2 border-gold/20 bg-navy/40 p-4">
-            <p className="text-[12px] uppercase tracking-[0.1em] text-white/50">High priority</p>
-            <p className="mt-1 text-[22px] font-semibold text-amber-200">
-              {summary.highPriorityOpenCount}
-            </p>
-            {summary.criticalOpen > 0 ? (
-              <span className="mt-1 inline-flex items-center rounded-md border border-red-400/50 bg-red-500/15 px-2 py-0.5 text-[11px] font-semibold text-red-200">
-                {summary.criticalOpen} critical
-              </span>
-            ) : null}
-          </div>
-          <div className="rounded-2xl border-2 border-gold/20 bg-navy/40 p-4">
-            <p className="text-[12px] uppercase tracking-[0.1em] text-white/50">Overdue</p>
-            <p className="mt-1 text-[22px] font-semibold text-red-200">{summary.overdueOpen}</p>
-          </div>
-          <div className="rounded-2xl border-2 border-gold/20 bg-navy/40 p-4">
-            <p className="text-[12px] uppercase tracking-[0.1em] text-white/50">Backlog cost</p>
-            <p className="mt-1 text-[22px] font-semibold text-gold-light">
-              {fmtMoney(summary.backlogCost)}
-            </p>
-          </div>
-        </div>
-      ) : null}
-
-      {notLicensed ? (
-        <div className="rounded-2xl border-2 border-gold/30 bg-navy/30 p-8 text-center">
-          <p className="text-[15px] text-white/80">
-            The Facilities module isn&apos;t on your plan yet.
-          </p>
-          <p className="mt-1 text-[13px] text-white/55">
-            Add Facilities to track deferred maintenance and its capital backlog.
-          </p>
-        </div>
-      ) : notEntitled ? (
-        <div className="rounded-2xl border-2 border-gold/30 bg-navy/30 p-8 text-center">
-          <p className="text-[15px] text-white/80">Your subscription is paused.</p>
-          <p className="mt-1 text-[13px] text-white/55">
-            Resume your plan to manage the maintenance register.
-          </p>
-        </div>
-      ) : loading ? (
-        <div className="rounded-2xl border-2 border-white/10 bg-navy/30 p-8 text-center text-white/50">
-          Loading maintenance items…
-        </div>
-      ) : error ? (
-        <div className="rounded-2xl border-2 border-red-400/30 bg-red-500/10 p-6 text-center text-red-200">
-          {error}
-        </div>
-      ) : items.length === 0 ? (
-        <div className="rounded-2xl border-2 border-dashed border-white/20 bg-navy/30 p-10 text-center">
-          <p className="text-[15px] text-white/80">No maintenance items yet.</p>
-          <p className="mt-1 text-[13px] text-white/55">
-            Add your first item to start tracking the deferred-maintenance backlog.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {items.map((it) => (
-            <div
-              key={it.id}
-              className="overflow-hidden rounded-2xl border-2 border-gold/20 bg-navy/30 px-4 py-3"
-            >
-              <div className="flex items-center gap-3">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="truncate font-semibold text-white">{it.title}</span>
-                    {it.location ? (
-                      <span className="text-[12px] text-white/45">{it.location}</span>
-                    ) : null}
-                    {it.category ? (
-                      <span className="rounded-md border border-white/20 bg-white/5 px-2 py-0.5 text-[11px] font-semibold text-white/60">
-                        {it.category}
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-2">
-                    <Badge def={PRIORITY_BADGE[it.priority]} />
-                    <Badge def={STATUS_BADGE[it.status]} />
-                    <Badge
-                      def={URGENCY_BADGE[it.urgency]}
-                      suffix={
-                        it.urgency === 'overdue' && typeof it.daysUntilTarget === 'number'
-                          ? ` · ${Math.abs(it.daysUntilTarget)}d ago`
-                          : it.urgency === 'due-soon' && typeof it.daysUntilTarget === 'number'
-                            ? ` · in ${it.daysUntilTarget}d`
-                            : ''
-                      }
-                    />
-                    {typeof it.estimatedCost === 'number' ? (
-                      <span className="text-[12px] font-semibold text-gold-light">
-                        {fmtMoney(it.estimatedCost)}
-                      </span>
-                    ) : null}
-                    {it.targetDate ? (
-                      <span className="text-[12px] text-white/45">target {it.targetDate}</span>
-                    ) : null}
-                  </div>
-                </div>
-                {canEdit ? (
-                  <div className="flex gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => openEdit(it)}
-                      aria-label={`Edit ${it.title}`}
-                      className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-gold/60 hover:text-white"
-                    >
-                      <Pencil size={15} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onDelete(it)}
-                      aria-label={`Delete ${it.title}`}
-                      className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-red-400/60 hover:text-red-200"
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+    <>
+      <DomainCommandCenter
+        eyebrow="Domain · Facilities engine · system of record"
+        title="Facilities"
+        Icon={Wrench}
+        attentionCount={attentionItems.length}
+        kpis={kpis}
+        tabs={TABS}
+        activeTab={tab}
+        onTabChange={setTab}
+        onNew={onNew}
+        registerTable={registerTable}
+        attentionItems={attentionItems}
+      />
 
       <MaintenanceFormModal
         key={editing ? editing.id : 'new'}
@@ -467,7 +653,7 @@ function FacilitiesPanel() {
         onSave={onSave}
         reduce={reduce}
       />
-    </div>
+    </>
   )
 }
 
@@ -475,7 +661,7 @@ export default function FacilitiesPage() {
   return (
     <div className="min-h-screen">
       <BillingBanner />
-      <FacilitiesPanel />
+      <FacilitiesWorkspace />
     </div>
   )
 }

@@ -1,16 +1,27 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Accreditation route (Phase 4 v1): AppShell chrome + the STANDARDS + EVIDENCE register.
-// School-scoped (no period selector). Gated by the 'accreditation' module — the nav
-// item is hidden by hasModule, but a direct-nav for a finance-only school renders a
-// friendly "module not on your plan" panel (the API 402 → notLicensed). A coverage
-// summary banner headlines the gap count; each standard row lazy-loads its evidence.
-// Navy/gold theme, reduced-motion safe, no setState-in-effect.
+// Accreditation route — the DOMAIN COMMAND CENTER (Phase 4 register, redesigned).
+// A LIGHT command-center (matches Governance / the Finance home, not the old dark
+// register): Penny lands you on accreditation's slice of the briefing — the KPIs
+// that define its health (evidence coverage, gaps, standards, reviews due), the
+// items that need a decision (the attention rail — standards with no evidence,
+// then reviews past due), with the Standards register a tab away. Built on the
+// reusable DomainCommandCenter scaffold shared with Governance.
+//
+// School-scoped (no period selector). Route stays /accreditation. Gated by the
+// 'accreditation' module — a finance-only school direct-navving here gets a
+// friendly light "module not on your plan" panel (the API 402 → notLicensed).
+//
+// The expand-to-evidence interaction is PRESERVED: each standard row expands to
+// the lazy EvidencePanel (list evidence + "Add evidence" form + "Attach from
+// operations" SourcePicker). The evidence panel, source picker, and the standard
+// create/edit form modal remain dark navy/gold overlays over the light page.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import {
   BadgeCheck,
+  Check,
   ChevronDown,
   ChevronRight,
   FileText,
@@ -18,24 +29,29 @@ import {
   Link as LinkIcon,
   Pencil,
   Plus,
+  ShieldAlert,
   StickyNote,
   Trash2,
+  TrendingDown,
   X,
 } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
+import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useAccreditation } from '../hooks/useAccreditation.js'
 
-const REVIEW_BADGE = {
-  overdue: { label: 'Review overdue', cls: 'border-red-400/50 bg-red-500/15 text-red-200' },
-  'due-soon': { label: 'Review approaching', cls: 'border-amber-400/50 bg-amber-500/15 text-amber-200' },
-  current: { label: 'Review current', cls: 'border-emerald-400/50 bg-emerald-500/15 text-emerald-200' },
-  unknown: { label: 'No review date', cls: 'border-white/20 bg-white/5 text-white/50' },
+// ── Light-theme coverage badge (restyled from the old dark pills) ────────────
+const COVERAGE_BADGE = {
+  'no-evidence': { label: 'No evidence', cls: 'border-gold/40 bg-gold/10 text-[#7a5e00]' },
+  covered: { label: 'Evidenced', cls: 'border-emerald-300/70 bg-emerald-50 text-emerald-700' },
 }
 
-const COVERAGE_BADGE = {
-  'no-evidence': { label: 'No evidence', cls: 'border-amber-400/50 bg-amber-500/15 text-amber-200' },
-  covered: { label: 'Evidenced', cls: 'border-emerald-400/50 bg-emerald-500/15 text-emerald-200' },
+// ── Light-theme review badge ─────────────────────────────────────────────────
+const REVIEW_BADGE = {
+  overdue: { label: 'Review overdue', cls: 'border-danger/30 bg-danger/10 text-danger' },
+  'due-soon': { label: 'Review approaching', cls: 'border-gold/40 bg-gold/10 text-[#7a5e00]' },
+  current: { label: 'Review current', cls: 'border-emerald-300/70 bg-emerald-50 text-emerald-700' },
+  unknown: { label: 'No review date', cls: 'border-rule/60 bg-section text-muted' },
 }
 
 const KIND_ICON = { document: FileText, link: LinkIcon, note: StickyNote }
@@ -55,7 +71,7 @@ function CoverageBadge({ coverage, evidenceCount }) {
 }
 
 function ReviewBadge({ status, reviewDate, daysUntilReview }) {
-  if (status === 'unknown') return null
+  if (status === 'unknown') return <span className="text-[12px] text-muted/60">—</span>
   const b = REVIEW_BADGE[status] ?? REVIEW_BADGE.unknown
   let suffix = ''
   if (status === 'due-soon' && typeof daysUntilReview === 'number') suffix = ` · in ${daysUntilReview}d`
@@ -71,6 +87,91 @@ function ReviewBadge({ status, reviewDate, daysUntilReview }) {
     </span>
   )
 }
+
+// ── Light-theme register table primitives (shared idiom with Governance) ─────
+function Th({ children, right }) {
+  return (
+    <th
+      className={`px-4 py-2.5 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-muted ${
+        right ? 'text-right' : 'text-left'
+      }`}
+    >
+      {children}
+    </th>
+  )
+}
+
+function IconAction(props) {
+  const { onClick, label, title, danger } = props
+  const ActionIcon = props.Icon
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={title ?? label}
+      className={`rounded-lg border border-rule/60 p-1.5 text-muted transition hover:text-navy ${
+        danger ? 'hover:border-danger/50 hover:text-danger' : 'hover:border-gold/60'
+      }`}
+    >
+      <ActionIcon size={15} />
+    </button>
+  )
+}
+
+function TableShell({ children, cols }) {
+  return (
+    <div className="overflow-x-auto rounded-xl border border-rule/50">
+      <table className="w-full text-left text-[14px]">
+        <thead className="bg-cream">
+          <tr>{cols}</tr>
+        </thead>
+        <tbody>{children}</tbody>
+      </table>
+    </div>
+  )
+}
+
+function StateRow({ children }) {
+  return (
+    <div className="rounded-xl border border-dashed border-rule/60 bg-cream/50 px-6 py-12 text-center">
+      {children}
+    </div>
+  )
+}
+
+// ── Light-theme entitlement / license gate ───────────────────────────────────
+function GatePanel({ notLicensed }) {
+  return (
+    <div className="mx-auto max-w-[1180px] px-4 py-6 sm:px-10 sm:py-8">
+      <div className="card-soft flex flex-col items-center gap-3 px-6 py-14 text-center">
+        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gold-gradient text-navy shadow-glow">
+          <BadgeCheck size={26} />
+        </span>
+        {notLicensed ? (
+          <>
+            <h2 className="font-serif text-xl font-semibold text-navy">
+              Accreditation isn&apos;t on your plan yet
+            </h2>
+            <p className="max-w-md text-[15px] text-muted">
+              Add the Accreditation module to track your standards and the evidence demonstrating
+              each — and land its slice of the briefing here.
+            </p>
+          </>
+        ) : (
+          <>
+            <h2 className="font-serif text-xl font-semibold text-navy">Your subscription is paused</h2>
+            <p className="max-w-md text-[15px] text-muted">
+              Resume your plan to manage the accreditation register.
+            </p>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════ STANDARD MODAL (dark overlay) ══════════════════
 
 const EMPTY_FORM = { code: '', title: '', category: '', reviewDate: '', owner: '', notes: '' }
 
@@ -213,7 +314,8 @@ function StandardFormModal({ open, initial, onClose, onSave, reduce }) {
   )
 }
 
-/** The lazy-loaded evidence sub-list for one expanded standard row. */
+/** The lazy-loaded evidence sub-list for one expanded standard row (dark overlay
+ *  panel — deliberately kept dark against the light table). */
 function EvidencePanel({
   standardId,
   canEdit,
@@ -546,7 +648,117 @@ function SourcePicker({ sources, attaching, err, reduce, onAttach, onClose }) {
   )
 }
 
-function AccreditationPanel() {
+// ═══════════════════════════ LIGHT STANDARDS TABLE ══════════════════════════
+
+function StandardsTable({
+  standards,
+  loading,
+  error,
+  canEdit,
+  reduce,
+  expanded,
+  onToggle,
+  onEdit,
+  onDelete,
+}) {
+  if (loading)
+    return (
+      <StateRow>
+        <p className="text-[14px] text-muted">Loading standards…</p>
+      </StateRow>
+    )
+  if (error)
+    return (
+      <StateRow>
+        <p className="text-[14px] text-danger">{error}</p>
+      </StateRow>
+    )
+  if (standards.length === 0)
+    return (
+      <StateRow>
+        <p className="font-serif text-[16px] italic text-muted">No standards yet.</p>
+        <p className="mt-1 text-[13px] text-muted">
+          Add your first standard to start tracking accreditation evidence.
+        </p>
+      </StateRow>
+    )
+
+  return (
+    <TableShell
+      cols={
+        <>
+          <Th>Code</Th>
+          <Th>Standard</Th>
+          <Th>Category</Th>
+          <Th>Coverage</Th>
+          <Th>Review</Th>
+          <Th right>{canEdit ? 'Actions' : ''}</Th>
+        </>
+      }
+    >
+      <AnimatePresence initial={false}>
+        {standards.map((s) => {
+          const isOpen = expanded === s.id
+          return (
+            <motion.tr
+              key={s.id}
+              layout={!reduce}
+              initial={reduce ? false : { opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={reduce ? undefined : { opacity: 0 }}
+              className="group border-t border-rule/50 align-top"
+            >
+              <td className="px-4 py-3">
+                <span className="rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[12px] font-semibold text-muted">
+                  {s.code}
+                </span>
+              </td>
+              <td className="px-4 py-3 font-semibold text-navy">{s.title}</td>
+              <td className="px-4 py-3 text-muted">{s.category ?? '—'}</td>
+              <td className="px-4 py-3">
+                <CoverageBadge coverage={s.coverage} evidenceCount={s.evidenceCount} />
+              </td>
+              <td className="px-4 py-3">
+                <ReviewBadge
+                  status={s.reviewStatus}
+                  reviewDate={s.reviewDate}
+                  daysUntilReview={s.daysUntilReview}
+                />
+              </td>
+              <td className="px-4 py-3">
+                <div className="flex justify-end gap-1.5">
+                  <IconAction
+                    Icon={isOpen ? ChevronDown : ChevronRight}
+                    onClick={() => onToggle(s.id)}
+                    label={isOpen ? `Collapse evidence for ${s.code}` : `Expand evidence for ${s.code}`}
+                    title={isOpen ? 'Collapse evidence' : 'Expand evidence'}
+                  />
+                  {canEdit ? (
+                    <span className="flex gap-1.5 opacity-60 transition group-hover:opacity-100">
+                      <IconAction Icon={Pencil} onClick={() => onEdit(s)} label={`Edit ${s.code}`} />
+                      <IconAction
+                        Icon={Trash2}
+                        danger
+                        onClick={() => onDelete(s)}
+                        label={`Delete ${s.code}`}
+                      />
+                    </span>
+                  ) : null}
+                </div>
+              </td>
+            </motion.tr>
+          )
+        })}
+      </AnimatePresence>
+    </TableShell>
+  )
+}
+
+// ═══════════════════════════ PAGE ═══════════════════════════════════════════
+
+const TABS = [{ key: 'standards', label: 'Standards' }]
+
+function AccreditationWorkspace() {
   const { activeSchool } = useSchools()
   const schoolId = activeSchool?.id ?? null
   const canEdit = activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'
@@ -568,6 +780,7 @@ function AccreditationPanel() {
     removeEvidence,
   } = useAccreditation(schoolId)
 
+  const [tab, setTab] = useState('standards')
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const [expanded, setExpanded] = useState(null) // the expanded standard id, or null
@@ -580,6 +793,7 @@ function AccreditationPanel() {
     setEditing(s)
     setModalOpen(true)
   }
+  const toggleExpanded = (id) => setExpanded((cur) => (cur === id ? null : id))
 
   const initialForm = useMemo(() => {
     if (!editing) return null
@@ -604,173 +818,179 @@ function AccreditationPanel() {
     }
   }
 
-  const showList = !notLicensed && !notEntitled && !loading && !error
-  const pct = summary.total === 0 ? 0 : summary.pctCovered
+  // ── KPIs (computed from the summary + standards) ───────────────────────────
+  const kpis = useMemo(() => {
+    const total = summary.total ?? 0
+    const withEvidence = summary.withEvidence ?? 0
+    const gaps = summary.gaps ?? 0
+    const pct = total === 0 ? 0 : summary.pctCovered ?? 0
+
+    // 1) Coverage.
+    const coverageKpi = {
+      label: 'Coverage',
+      value: total === 0 ? '—' : `${withEvidence}/${total}`,
+      status: total === 0 ? 'neutral' : pct >= 80 ? 'good' : pct >= 50 ? 'watch' : 'risk',
+      sub:
+        total === 0
+          ? { icon: Check, text: 'no standards yet', tone: 'neutral' }
+          : pct >= 80
+            ? { icon: Check, text: `${pct}% evidenced`, tone: 'good' }
+            : { icon: TrendingDown, text: `${pct}% evidenced`, tone: pct >= 50 ? 'neutral' : 'bad' },
+    }
+
+    // 2) Evidence gaps.
+    const gapsKpi = {
+      label: 'Evidence gaps',
+      value: String(gaps),
+      status: gaps > 0 ? 'risk' : 'good',
+      sub:
+        gaps > 0
+          ? { icon: ShieldAlert, text: 'standards with no evidence', tone: 'bad' }
+          : { icon: Check, text: 'all evidenced', tone: 'good' },
+    }
+
+    // 3) Standards.
+    const standardsKpi = {
+      label: 'Standards',
+      value: String(total),
+      status: 'neutral',
+      sub: { icon: BadgeCheck, text: 'in your register', tone: 'neutral' },
+    }
+
+    // 4) Review due (past-due or approaching, from reviewStatus).
+    const reviewDue = standards.filter(
+      (s) => s.reviewStatus === 'overdue' || s.reviewStatus === 'due-soon',
+    ).length
+    const hasReviewData = standards.some((s) => s.reviewStatus && s.reviewStatus !== 'unknown')
+    const reviewKpi = {
+      label: 'Review due',
+      value: !hasReviewData ? '—' : String(reviewDue),
+      status: !hasReviewData ? 'neutral' : reviewDue > 0 ? 'risk' : 'good',
+      sub: !hasReviewData
+        ? { icon: Check, text: 'no review dates set', tone: 'neutral' }
+        : reviewDue > 0
+          ? { icon: ShieldAlert, text: 'past review date', tone: 'bad' }
+          : { icon: Check, text: 'all current', tone: 'good' },
+    }
+
+    return [coverageKpi, gapsKpi, standardsKpi, reviewKpi]
+  }, [summary, standards])
+
+  // ── Needs-attention items (most-urgent first, capped at 6) ─────────────────
+  const attentionItems = useMemo(() => {
+    if (!canEdit) return []
+    const items = []
+
+    // 1) Standards with no evidence → "«code» has no evidence".
+    const noEvidence = standards.filter((s) => s.coverage === 'no-evidence')
+    for (const s of noEvidence) {
+      items.push({
+        id: `gap-${s.id}`,
+        tone: 'risk',
+        sortKey: 0,
+        title: `${s.code} has no evidence`,
+        why: s.title,
+        actions: [{ label: 'Add evidence', primary: true, onClick: () => setExpanded(s.id) }],
+      })
+    }
+
+    // 2) Standards past their review date → "«code» review is due".
+    const reviewDue = standards.filter((s) => s.reviewStatus === 'overdue')
+    for (const s of reviewDue) {
+      const days = typeof s.daysUntilReview === 'number' ? Math.abs(s.daysUntilReview) : null
+      items.push({
+        id: `review-${s.id}`,
+        tone: 'watch',
+        sortKey: 1,
+        title: `${s.code} review is due`,
+        why:
+          days != null
+            ? `${s.title} · ${days} day${days === 1 ? '' : 's'} past review date`
+            : `${s.title} · past its review date`,
+        actions: [{ label: 'Open', primary: false, onClick: () => setExpanded(s.id) }],
+      })
+    }
+
+    return items.sort((a, b) => a.sortKey - b.sortKey).slice(0, 6)
+  }, [standards, canEdit])
+
+  // ── Gate ───────────────────────────────────────────────────────────────────
+  if (notLicensed || notEntitled) return <GatePanel notLicensed={notLicensed} />
+
+  const registerTable = (
+    <StandardsTable
+      standards={standards}
+      loading={loading}
+      error={error}
+      canEdit={canEdit}
+      reduce={reduce}
+      expanded={expanded}
+      onToggle={toggleExpanded}
+      onEdit={openEdit}
+      onDelete={onDelete}
+    />
+  )
+
+  const expandedStandard = expanded ? standards.find((s) => s.id === expanded) : null
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-8">
-      <div className="mb-6 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gold/15 text-gold-light shadow-glow">
-            <BadgeCheck size={22} />
-          </span>
-          <div>
-            <h1 className="font-serif text-[22px] uppercase tracking-[0.12em] text-gold-light">
-              Accreditation Register
-            </h1>
-            <p className="text-[13px] text-white/60">
-              Your accreditation standards and the evidence demonstrating each.
-            </p>
-          </div>
-        </div>
-        {canEdit && showList ? (
-          <button
-            type="button"
-            onClick={openAdd}
-            className="inline-flex items-center gap-2 rounded-lg border-2 border-gold/60 bg-gold/15 px-4 py-2 text-[14px] font-semibold text-gold-light hover:bg-gold/25"
-          >
-            <Plus size={16} /> Add standard
-          </button>
-        ) : null}
-      </div>
+    <>
+      <DomainCommandCenter
+        eyebrow="Domain · Accreditation engine · system of record"
+        title="Accreditation"
+        Icon={BadgeCheck}
+        attentionCount={attentionItems.length}
+        kpis={kpis}
+        tabs={TABS}
+        activeTab={tab}
+        onTabChange={setTab}
+        onNew={canEdit ? openAdd : null}
+        registerTable={registerTable}
+        attentionItems={attentionItems}
+      />
 
-      {/* Coverage summary banner */}
-      {showList && summary.total > 0 ? (
-        <div className="mb-6 rounded-2xl border-2 border-gold/20 bg-navy/40 p-5">
-          <div className="flex items-center justify-between">
-            <p className="text-[15px] font-semibold text-white">
-              {summary.withEvidence} of {summary.total} standards evidenced
-            </p>
-            <p className="text-[13px] text-white/60">
-              {summary.gaps > 0 ? (
-                <span className="text-amber-200">{summary.gaps} still need evidence</span>
-              ) : (
-                <span className="text-emerald-200">All standards evidenced</span>
-              )}
-            </p>
-          </div>
-          <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-white/10">
-            <motion.div
-              className="h-full rounded-full bg-gradient-to-r from-gold/70 to-gold-light"
-              initial={reduce ? false : { width: 0 }}
-              animate={{ width: `${pct}%` }}
-              transition={reduce ? undefined : { duration: 0.6 }}
+      {/* Expanded standard → its evidence, shown as a light panel below the center
+          (the register table rows can't host their own tbody sub-row cleanly, so the
+          evidence for the open row lives here — the interaction is preserved). */}
+      {expandedStandard ? (
+        <div className="mx-auto max-w-[1180px] px-4 pb-8 sm:px-10">
+          <motion.div
+            layout={!reduce}
+            initial={reduce ? false : { opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="overflow-hidden rounded-2xl border-2 border-gold/20 bg-navy-gradient shadow-navy-glow"
+          >
+            <div className="flex items-center justify-between gap-3 px-6 py-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="rounded-md border border-white/20 bg-white/5 px-2 py-0.5 text-[12px] font-semibold text-white/70">
+                  {expandedStandard.code}
+                </span>
+                <span className="truncate text-[14px] font-semibold text-white">
+                  {expandedStandard.title}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setExpanded(null)}
+                aria-label="Close evidence panel"
+                className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-gold/60 hover:text-white"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <EvidencePanel
+              key={expandedStandard.id}
+              standardId={expandedStandard.id}
+              canEdit={canEdit}
+              reduce={reduce}
+              listEvidenceSources={listEvidenceSources}
+              listEvidence={listEvidence}
+              createEvidence={createEvidence}
+              removeEvidence={removeEvidence}
             />
-          </div>
+          </motion.div>
         </div>
       ) : null}
-
-      {notLicensed ? (
-        <div className="rounded-2xl border-2 border-gold/30 bg-navy/30 p-8 text-center">
-          <p className="text-[15px] text-white/80">
-            The Accreditation module isn&apos;t on your plan yet.
-          </p>
-          <p className="mt-1 text-[13px] text-white/55">
-            Add Accreditation to track standards and the evidence for each.
-          </p>
-        </div>
-      ) : notEntitled ? (
-        <div className="rounded-2xl border-2 border-gold/30 bg-navy/30 p-8 text-center">
-          <p className="text-[15px] text-white/80">Your subscription is paused.</p>
-          <p className="mt-1 text-[13px] text-white/55">
-            Resume your plan to manage the accreditation register.
-          </p>
-        </div>
-      ) : loading ? (
-        <div className="rounded-2xl border-2 border-white/10 bg-navy/30 p-8 text-center text-white/50">
-          Loading standards…
-        </div>
-      ) : error ? (
-        <div className="rounded-2xl border-2 border-red-400/30 bg-red-500/10 p-6 text-center text-red-200">
-          {error}
-        </div>
-      ) : standards.length === 0 ? (
-        <div className="rounded-2xl border-2 border-dashed border-white/20 bg-navy/30 p-10 text-center">
-          <p className="text-[15px] text-white/80">No standards yet.</p>
-          <p className="mt-1 text-[13px] text-white/55">
-            Add your first standard to start tracking accreditation evidence.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          <AnimatePresence initial={false}>
-            {standards.map((s) => {
-              const isOpen = expanded === s.id
-              return (
-                <motion.div
-                  key={s.id}
-                  layout={!reduce}
-                  initial={reduce ? false : { opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={reduce ? undefined : { opacity: 0 }}
-                  className="overflow-hidden rounded-2xl border-2 border-gold/20 bg-navy/30"
-                >
-                  <div className="flex items-center gap-3 px-4 py-3">
-                    <button
-                      type="button"
-                      onClick={() => setExpanded(isOpen ? null : s.id)}
-                      aria-label={isOpen ? 'Collapse evidence' : 'Expand evidence'}
-                      className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-gold/60 hover:text-gold-light"
-                    >
-                      {isOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
-                    </button>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="rounded-md border border-white/20 bg-white/5 px-2 py-0.5 text-[12px] font-semibold text-white/70">
-                          {s.code}
-                        </span>
-                        <span className="truncate font-semibold text-white">{s.title}</span>
-                      </div>
-                      <div className="mt-1 flex flex-wrap items-center gap-2">
-                        <CoverageBadge coverage={s.coverage} evidenceCount={s.evidenceCount} />
-                        <ReviewBadge
-                          status={s.reviewStatus}
-                          reviewDate={s.reviewDate}
-                          daysUntilReview={s.daysUntilReview}
-                        />
-                        {s.category ? (
-                          <span className="text-[12px] text-white/45">{s.category}</span>
-                        ) : null}
-                      </div>
-                    </div>
-                    {canEdit ? (
-                      <div className="flex gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => openEdit(s)}
-                          aria-label={`Edit ${s.code}`}
-                          className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-gold/60 hover:text-white"
-                        >
-                          <Pencil size={15} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onDelete(s)}
-                          aria-label={`Delete ${s.code}`}
-                          className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-red-400/60 hover:text-red-200"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
-                  {isOpen ? (
-                    <EvidencePanel
-                      standardId={s.id}
-                      canEdit={canEdit}
-                      reduce={reduce}
-                      listEvidenceSources={listEvidenceSources}
-                      listEvidence={listEvidence}
-                      createEvidence={createEvidence}
-                      removeEvidence={removeEvidence}
-                    />
-                  ) : null}
-                </motion.div>
-              )
-            })}
-          </AnimatePresence>
-        </div>
-      )}
 
       <StandardFormModal
         key={editing ? editing.id : 'new'}
@@ -780,7 +1000,7 @@ function AccreditationPanel() {
         onSave={onSave}
         reduce={reduce}
       />
-    </div>
+    </>
   )
 }
 
@@ -788,7 +1008,7 @@ export default function AccreditationPage() {
   return (
     <div className="min-h-screen">
       <BillingBanner />
-      <AccreditationPanel />
+      <AccreditationWorkspace />
     </div>
   )
 }

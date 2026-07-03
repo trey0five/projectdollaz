@@ -13,11 +13,20 @@ import { metricFormat, isBandedStatus } from '../../lib/metricMeta.js'
  * value, goodDirection-colored PoP delta, and a sparkline. The whole card is a
  * button that opens the drill-down drawer. Unavailable metrics show a muted dash.
  */
+// Status → soft hover-glow tint (navy/gold on-theme; risk stays a restrained
+// crimson wash). Absent/neutral keeps the default gold card glow (backward-compat).
+const STATUS_GLOW = {
+  good: 'hover:shadow-[0_16px_38px_-12px_rgba(26,39,68,0.24),0_0_22px_-4px_rgba(184,150,80,0.5)]',
+  watch: 'hover:shadow-[0_16px_38px_-12px_rgba(26,39,68,0.26),0_0_22px_-4px_rgba(46,80,143,0.42)]',
+  risk: 'hover:shadow-[0_16px_38px_-12px_rgba(26,39,68,0.22),0_0_22px_-4px_rgba(139,26,26,0.4)]',
+}
+
 export default function MetricCard({
   metric,
   index = 0,
   trendPoints,
   periodKey,
+  category,
   onOpen,
 }) {
   const reduce = useReducedMotion()
@@ -41,9 +50,16 @@ export default function MetricCard({
       animate={reduce ? { opacity: 1 } : { opacity: 1, y: 0 }}
       transition={{ delay: index * 0.04, type: 'spring', stiffness: 260, damping: 22 }}
       whileHover={reduce ? undefined : { y: -3 }}
-      className="card-vital group relative flex w-full flex-col overflow-hidden p-3 text-left sm:p-4"
+      className={`card-vital group relative flex w-full flex-col overflow-hidden p-3 text-left transition-shadow duration-300 sm:p-4 ${
+        (!unavailable && STATUS_GLOW[metric.status]) || ''
+      }`}
       aria-label={`${metric.label} details`}
     >
+      {category && (
+        <span className="mb-1.5 inline-block max-w-full truncate text-[10px] font-bold uppercase tracking-[0.16em] text-muted/70">
+          {category}
+        </span>
+      )}
       <div className="flex items-start gap-2.5">
         <span
           className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${

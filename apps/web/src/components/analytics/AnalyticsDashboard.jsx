@@ -275,6 +275,32 @@ export default function AnalyticsDashboard() {
     [orderedVisibleKeys],
   )
 
+  // Flattened compact cards for the ONE dense grid: cluster by DOMAIN_SECTIONS order
+  // so groups still read together, tag each card with its category eyebrow, and
+  // intersect with metricsByKey so gated (absent) metrics drop. Within-group layout
+  // order is preserved (sectionItems is already ordered). No section header per
+  // domain → a lone-category card never wastes a full row.
+  const flatSectionItems = useMemo(() => {
+    const out = []
+    const seen = new Set()
+    for (const { domain, title } of DOMAIN_SECTIONS) {
+      for (const it of sectionItems) {
+        if (seen.has(it.key)) continue
+        if (metricDomain(it.key) !== domain || !metricsByKey[it.key]) continue
+        seen.add(it.key)
+        out.push({ ...it, category: title })
+      }
+    }
+    // Any visible card whose domain isn't in DOMAIN_SECTIONS still renders (untagged),
+    // in layout order, so nothing silently disappears.
+    for (const it of sectionItems) {
+      if (seen.has(it.key) || !metricsByKey[it.key]) continue
+      seen.add(it.key)
+      out.push({ ...it })
+    }
+    return out
+  }, [sectionItems, metricsByKey])
+
   // Donuts = revenue_mix / expense_mix, visibility-driven, in layout order.
   const donutKeys = useMemo(
     () => orderedVisibleKeys.filter((i) => isMixMetric(i.key)).map((i) => i.key),
@@ -396,8 +422,8 @@ export default function AnalyticsDashboard() {
       {showSkeleton ? (
         <div className="space-y-5 sm:space-y-6">
           <HeadlineSkeleton />
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
+            {Array.from({ length: 8 }).map((_, i) => (
               <MetricCardSkeleton key={i} />
             ))}
           </div>
@@ -426,34 +452,31 @@ export default function AnalyticsDashboard() {
             <PeriodComparison metrics={metrics} />
           </div>
 
-          {/* COMPACT metrics, grouped by domain (Enrollment / Tuition & Aid /
-              Operations / Financial). Each section renders only when non-empty and
-              preserves within-group layout order (sectionItems is already ordered). */}
-          {DOMAIN_SECTIONS.map(({ domain, title }) => {
-            // Intersect with metricsByKey (the GATED API response): a module-gated
-            // metric is absent from the response entirely, so its section must drop.
-            // A licensed-but-no-data metric IS present (available:false) and still
-            // renders its normal unavailable card — so this only hides gated domains.
-            const items = sectionItems.filter(
-              (i) => metricDomain(i.key) === domain && metricsByKey[i.key],
-            )
-            if (items.length === 0) return null
-            return (
-              <div className={dimWhileCustomizing} key={domain}>
-                <MetricSection title={title}>
-                  <div className="bg-page-glow bg-no-repeat">
-                    <MetricGrid
-                      items={items}
-                      metricsByKey={metricsByKey}
-                      trendsByKey={sparkTrends}
-                      periodKey={selectedPeriodId}
-                      onOpen={openDrawer}
-                    />
-                  </div>
-                </MetricSection>
-              </div>
-            )
-          })}
+          {/* COMPACT metrics — ONE continuous dense grid that fills the width.
+              Grouping meaning (Enrollment / People & Staffing / Tuition & Aid /
+              Operations / Financial) is preserved by CLUSTERING each domain's cards
+              together in DOMAIN_SECTIONS order and tagging every card with a small
+              category eyebrow — so a single-metric domain no longer strands an empty
+              row. Each card is intersected with metricsByKey (the GATED API
+              response): a module-gated metric is absent entirely and simply drops;
+              a licensed-but-no-data metric IS present and renders its unavailable
+              card. Within a domain, layout order is preserved (flatSectionItems is
+              already ordered). */}
+          {flatSectionItems.length > 0 && (
+            <div className={dimWhileCustomizing}>
+              <MetricSection title="Key Metrics">
+                <div className="bg-page-glow bg-no-repeat">
+                  <MetricGrid
+                    items={flatSectionItems}
+                    metricsByKey={metricsByKey}
+                    trendsByKey={sparkTrends}
+                    periodKey={selectedPeriodId}
+                    onOpen={openDrawer}
+                  />
+                </div>
+              </MetricSection>
+            </div>
+          )}
 
           {/* REVENUE & EXPENSE MIX donuts */}
           {donutKeys.length > 0 && (
