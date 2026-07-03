@@ -39,6 +39,7 @@ export default function OrgHome({
   const {
     briefing,
     lens,
+    callerRole,
     availableLenses,
     loading: briefingLoading,
     error: briefingError,
@@ -108,6 +109,7 @@ export default function OrgHome({
         loading={briefingLoading}
         error={briefingError}
         lens={lens}
+        callerRole={callerRole}
         availableLenses={availableLenses}
         onLensChange={setPreviewLens}
       />

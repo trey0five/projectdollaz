@@ -25,9 +25,15 @@ export function useDataStatus(schoolId, periodId) {
       const res = await dataHubApi.status(sid, pid)
       setData(res.data ?? null)
     } catch (e) {
-      if (isPaymentRequired(e)) setNotEntitled(true)
-      else setError('Could not load your data status.')
       setData(null)
+      if (isPaymentRequired(e)) setNotEntitled(true)
+      else if (e?.response?.status === 404) {
+        // Transient during a school switch: the selected period isn't owned by the
+        // now-active school yet (persistence is mid-reload, so the still-stale
+        // period id is cross-tenant). Not a real failure — stay quiet and let the
+        // period re-resolve, rather than flashing the "couldn't load" panel.
+        setError('')
+      } else setError('Could not load your data status.')
     } finally {
       setLoading(false)
     }

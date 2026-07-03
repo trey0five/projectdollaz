@@ -49,8 +49,8 @@ export const NAV_GROUPS = [
       // pulls it OUT of the list and renders it as the elevated top entry. navId
       // stays nav-home (Penny's target registry anchors to it) and route stays '/'.
       { to: '/', navId: 'nav-home', label: 'Briefing', Icon: Sparkles, hero: true, match: (p) => p === '/' },
-      { to: '/tasks', navId: 'nav-tasks', label: 'Tasks', Icon: ListChecks, match: (p) => p.startsWith('/tasks') },
       { to: '/data', navId: 'nav-data', label: 'Data', Icon: Database, match: (p) => p.startsWith('/data') },
+      { to: '/tasks', navId: 'nav-tasks', label: 'Tasks', Icon: ListChecks, match: (p) => p.startsWith('/tasks') },
       { to: '/knowledge', navId: 'nav-knowledge', label: 'Knowledge', Icon: Library, match: (p) => p.startsWith('/knowledge') },
     ],
   },

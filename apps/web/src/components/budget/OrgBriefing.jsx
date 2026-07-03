@@ -227,6 +227,7 @@ export default function OrgBriefing({
   loading,
   error,
   lens = null,
+  callerRole = null,
   availableLenses = [],
   onLensChange,
 }) {
@@ -269,7 +270,12 @@ export default function OrgBriefing({
       {lens && (
         <div className="flex flex-wrap items-center gap-3">
           <LensIndicator lens={lens} />
-          <LensSwitcher lens={lens} availableLenses={availableLenses} onChange={onLensChange} />
+          <LensSwitcher
+            lens={lens}
+            callerRole={callerRole}
+            availableLenses={availableLenses}
+            onChange={onLensChange}
+          />
         </div>
       )}
 

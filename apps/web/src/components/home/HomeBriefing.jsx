@@ -354,6 +354,7 @@ export default function HomeBriefing({
   loading,
   error,
   lens = null,
+  callerRole = null,
   availableLenses = [],
   onLensChange,
   canEdit = false,
@@ -373,7 +374,12 @@ export default function HomeBriefing({
   const lensControls = lens ? (
     <div className="flex flex-wrap items-center gap-3">
       <LensIndicator lens={lens} />
-      <LensSwitcher lens={lens} availableLenses={availableLenses} onChange={onLensChange} />
+      <LensSwitcher
+        lens={lens}
+        callerRole={callerRole}
+        availableLenses={availableLenses}
+        onChange={onLensChange}
+      />
     </div>
   ) : null
 

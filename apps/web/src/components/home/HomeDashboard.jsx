@@ -184,6 +184,7 @@ export default function HomeDashboard() {
     items: briefingItems,
     summary: briefingSummary,
     lens: briefingLens,
+    callerRole: briefingCallerRole,
     availableLenses: briefingAvailableLenses,
     loading: briefingLoading,
     error: briefingError,
@@ -353,6 +354,7 @@ export default function HomeDashboard() {
         loading={briefingLoading}
         error={briefingError}
         lens={briefingLens}
+        callerRole={briefingCallerRole}
         availableLenses={briefingAvailableLenses}
         onLensChange={setPreviewLens}
         canEdit={activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'}

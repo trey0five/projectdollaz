@@ -315,6 +315,12 @@ export default function AppShell({ children }) {
             const headerActive = group.match
               ? group.match(path)
               : group.items.some((item) => item.match(path))
+            // Only expand the nested pages when the current route is WITHIN this
+            // domain (its home or any child). Selecting another module collapses
+            // Finance back to its single header row.
+            const inGroup =
+              (group.match ? group.match(path) : false) ||
+              group.items.some((item) => item.match(path))
             return (
               <div key={group.id} className="flex flex-col gap-0.5">
                 <Link
@@ -334,9 +340,11 @@ export default function AppShell({ children }) {
                   <span>{group.label}</span>
                   {group.id === 'finance' && navBadge(financeBadge)}
                 </Link>
-                <div className="ml-[19px] flex flex-col gap-0.5 border-l border-white/10 pl-2.5">
-                  {group.items.map((item) => renderNavItem(item, withIds))}
-                </div>
+                {inGroup && (
+                  <div className="ml-[19px] flex flex-col gap-0.5 border-l border-white/10 pl-2.5">
+                    {group.items.map((item) => renderNavItem(item, withIds))}
+                  </div>
+                )}
               </div>
             )
           })}

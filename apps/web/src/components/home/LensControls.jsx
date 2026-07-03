@@ -4,10 +4,11 @@
 //   • LensIndicator  — a static navy/gold pill showing the ACTIVE lens the server
 //     actually shaped this payload with (driven by response.lens, never local
 //     state). Reuses the rotated-gold-diamond + uppercase-tracking idiom.
-//   • LensSwitcher   — a "Preview as" segmented control rendered ONLY when the
-//     caller may preview more than one lens (availableLenses.length > 1, i.e.
-//     owner, or accountant who can preview Board). Selecting a lens re-fetches
-//     through ?lens=… ; the server clamps so it can never widen past the ceiling.
+//   • LensSwitcher   — a "Preview as" segmented control rendered ONLY for the
+//     account OWNER (callerRole === 'owner'), so the owner can preview how other
+//     views look. Everyone else just sees their own assigned view (the indicator);
+//     they can't change it. Selecting a lens re-fetches through ?lens=… ; the
+//     server clamps so it can never widen past the ceiling.
 // Navy/gold theme, reduced-motion safe (no entrance animation), no-print.
 // ─────────────────────────────────────────────────────────────────────────────
 import { Crown, Calculator, Users } from 'lucide-react'
@@ -37,7 +38,11 @@ export function LensIndicator({ lens }) {
   )
 }
 
-export function LensSwitcher({ lens, availableLenses = [], onChange }) {
+export function LensSwitcher({ lens, availableLenses = [], onChange, callerRole }) {
+  // OWNER ONLY: the account owner may preview how other views look. Everyone else
+  // sees their own assigned view as a read-only indicator — never a switcher, so a
+  // non-owner can't change the lens the owner set for them.
+  if (callerRole !== 'owner') return null
   // Only render when there is genuinely more than one lens to preview.
   if (!availableLenses || availableLenses.length <= 1) return null
   return (
