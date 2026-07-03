@@ -9,9 +9,12 @@ import { Trash2, Mail, ShieldAlert } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useSchools } from '../../context/SchoolContext.jsx'
 import { schoolsApi, apiErrorMessage, apiErrorCode } from '../../lib/api.js'
+import { memberRoleLabel } from '../../lib/roleLabels.js'
 import { FormError, FormSuccess } from '../auth/fields.jsx'
 import SettingsCard from './SettingsCard.jsx'
 
+// The stored enum (owner/accountant/viewer) drives permissions; the labels shown
+// are the briefing VIEWS (Leadership/Finance/Board) via memberRoleLabel.
 const ROLES = ['owner', 'accountant', 'viewer']
 
 export default function MembersSection() {
@@ -189,16 +192,16 @@ export default function MembersSection() {
                                 ? 'A school must keep at least one owner'
                                 : undefined
                             }
-                            className="min-h-[40px] rounded-lg border-2 border-border bg-white px-3 py-1.5 text-[15px] capitalize text-ink outline-none focus:border-gold disabled:cursor-not-allowed disabled:opacity-60"
+                            className="min-h-[40px] rounded-lg border-2 border-border bg-white px-3 py-1.5 text-[15px] text-ink outline-none focus:border-gold disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {ROLES.map((r) => (
                               <option key={r} value={r}>
-                                {r}
+                                {memberRoleLabel(r)}
                               </option>
                             ))}
                           </select>
                         ) : (
-                          <span className="capitalize text-ink">{m.role}</span>
+                          <span className="text-ink">{memberRoleLabel(m.role)}</span>
                         )}
                         {rowErr[m.id] && (
                           <p className="mt-1 text-[14px] text-danger">{rowErr[m.id]}</p>
@@ -251,11 +254,11 @@ export default function MembersSection() {
               <select
                 value={inviteRole}
                 onChange={(e) => setInviteRole(e.target.value)}
-                className={`${inputCls} capitalize`}
+                className={inputCls}
               >
                 {ROLES.map((r) => (
                   <option key={r} value={r}>
-                    {r}
+                    {memberRoleLabel(r)}
                   </option>
                 ))}
               </select>
@@ -296,7 +299,7 @@ export default function MembersSection() {
                   <Mail size={15} className="text-gold" />
                   <span>{inv.email}</span>
                   <span className="rounded bg-gold/15 px-2 py-0.5 text-[13px] font-semibold uppercase tracking-[0.08em] text-navy">
-                    {inv.role}
+                    {memberRoleLabel(inv.role)}
                   </span>
                 </div>
                 <div className="flex items-center gap-3">

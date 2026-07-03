@@ -8,6 +8,7 @@ import { Building2, Check, Plus } from 'lucide-react'
 import { useSchools } from '../../context/SchoolContext.jsx'
 import { orgsApi, apiErrorMessage } from '../../lib/api.js'
 import { sanitizeDecimal } from '../../lib/numericInput.js'
+import { memberRoleLabel } from '../../lib/roleLabels.js'
 import { useAutosave } from '../../hooks/useAutosave.js'
 import { FormError } from '../auth/fields.jsx'
 import { AutosaveBar } from '../AutosaveIndicator.jsx'
@@ -220,7 +221,7 @@ export default function OrgSection() {
                     <Building2 size={16} className="text-gold" />
                     <span className="font-semibold">{s.name}</span>
                     <span className="rounded bg-navy/[0.06] px-2 py-0.5 text-[13px] font-semibold uppercase tracking-[0.08em] text-muted">
-                      {s.role}
+                      {memberRoleLabel(s.role)}
                     </span>
                   </span>
                   {active && (
