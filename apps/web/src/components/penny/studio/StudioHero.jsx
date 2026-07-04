@@ -154,7 +154,13 @@ export default function StudioHero({ compact, name, chat, askBar, onNewChat }) {
       layout
       layoutId="studio-hero"
       transition={layoutTransition}
-      className="relative overflow-hidden rounded-2xl border border-gold/20 bg-studio-hero shadow-navy-glow"
+      className={`relative overflow-hidden rounded-2xl border border-gold/20 bg-studio-hero shadow-navy-glow ${
+        // In a conversation the slim header stays pinned so "New chat" (the way back
+        // to the Studio landing) is always reachable, even after scrolling a long
+        // reply. `top-16` clears the app-shell's own sticky top strip (h-14 / z-20);
+        // only when compact — the tall landing hero scrolls normally.
+        compact ? 'sticky top-16 z-30' : ''
+      }`}
     >
       <StudioBackdrop />
 
