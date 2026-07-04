@@ -1021,3 +1021,40 @@
   html .text-3xl { font-size: 1.55rem; line-height: 1.15; }
   html .text-2xl { font-size: 1.3rem; line-height: 1.2; }
 }
+
+/* ── Landing hero "Opening Bell": one-shot gold shine sweep across the ────────
+   headline accent, fired once when the intro settles. The base gold fill is
+   .gold-text; this overlay is an identical copy of the accent text clipped to a
+   narrow bright band that travels across once (both fill-mode holds it off-screen
+   after). Reduced motion hides it entirely (the JS timeline also skips it). */
+.hero-shine {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(
+    105deg,
+    transparent 40%,
+    rgba(255, 247, 220, 0.9) 50%,
+    transparent 60%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  transform: translateX(-130%);
+}
+.hero-shine.is-glinting {
+  animation: hero-shine-sweep 0.95s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes hero-shine-sweep {
+  from {
+    transform: translateX(-130%);
+  }
+  to {
+    transform: translateX(130%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-shine {
+    display: none;
+  }
+}

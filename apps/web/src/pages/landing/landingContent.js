@@ -15,15 +15,18 @@ export const NAV = {
 }
 
 export const HERO = {
-  kicker: 'The digital COO for independent schools',
-  h1Line1: 'Your school has a hundred moving parts.',
-  h1Line2: 'Penny keeps every one of them moving.',
+  kicker: 'For private & independent schools',
+  h1Line1: 'A hundred moving parts.',
+  h1Line2: 'One Penny.',
   subhead:
-    'Project Dollaz is a digital chief operating officer for private and independent schools. Every morning it hands you a prioritized briefing across finance, governance, accreditation, facilities, advancement, enrollment, and more — and its AI, Penny, does the work underneath: importing trial balances, generating statements, drafting board packets, filing documents, and asking before anything is saved.',
+    'The AI Digital COO — finances, enrollment, board reports, and every deadline, kept in motion.',
   ctaPrimary: { label: 'Get started', to: '/register' },
   ctaGhost: { label: 'Sign in', to: '/login' },
   trustLine: 'Built for heads of school, business officers, and diocese finance teams.',
   scrollHint: 'Follow the day',
+  // The top-left mascot lockup the coin flies into at the end of the intro.
+  brandName: 'Penny',
+  brandTag: 'Your Digital COO',
   demoSrSummary:
     'Demo: Penny imports a trial balance, generates statements, files a document, and answers a multi-school question.',
 }

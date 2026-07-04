@@ -17,7 +17,10 @@ const MOTES = Array.from({ length: MOTE_COUNT }, () => ({
   duration: 9 + Math.random() * 7,
 }))
 
-export default function StudioBackdrop() {
+// `sweep` toggles the diagonal gold light-sweep. It's on by default (Penny
+// Studio keeps it), but the marketing hero passes sweep={false} — that looping
+// sheen is the "overused fold shimmer" the landing intentionally retired.
+export default function StudioBackdrop({ sweep = true }) {
   const reduce = useReducedMotion()
 
   return (
@@ -50,13 +53,15 @@ export default function StudioBackdrop() {
             animate={{ x: [0, 66, -44, 0], y: [0, -32, 32, 0], opacity: [0.3, 0.6, 0.35, 0.3] }}
             transition={{ duration: 23, repeat: Infinity, ease: 'easeInOut' }}
           />
-          {/* Diagonal gold light-sweep gliding across the hero. */}
-          <motion.span
-            className="absolute inset-y-[-20%] -left-1/3 w-1/3 -skew-x-12"
-            style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.05), rgba(212,180,122,0.16), rgba(255,255,255,0.05), transparent)' }}
-            animate={{ x: ['0%', '440%'] }}
-            transition={{ duration: 6, repeat: Infinity, repeatDelay: 4.5, ease: 'easeInOut' }}
-          />
+          {/* Diagonal gold light-sweep gliding across the hero (opt-out via sweep). */}
+          {sweep && (
+            <motion.span
+              className="absolute inset-y-[-20%] -left-1/3 w-1/3 -skew-x-12"
+              style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.05), rgba(212,180,122,0.16), rgba(255,255,255,0.05), transparent)' }}
+              animate={{ x: ['0%', '440%'] }}
+              transition={{ duration: 6, repeat: Infinity, repeatDelay: 4.5, ease: 'easeInOut' }}
+            />
+          )}
 
           {/* Gold motes drifting up (CSS keyframe; hidden under reduced motion). */}
           {MOTES.map((m, i) => (
