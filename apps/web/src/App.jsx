@@ -64,12 +64,14 @@ const LandingPage = lazy(() => import('./pages/landing/LandingPage.jsx'))
 // flash) so the landing's auth-aware nav renders correctly on first paint.
 function RootRoute() {
   const { ready } = useAuth()
-  if (!ready) return <BootSplash />
-  return (
-    <Suspense fallback={<BootSplash />}>
+  // No spinner ahead of the marketing hero — a bare dark screen matching the
+  // hero's pre-"power-on" background, so the auth rehydrate + lazy-chunk load
+  // blend seamlessly into the hero's own TV-open intro (no loading circle).
+  const fallback = <div className="min-h-screen bg-[#0a1526]" />
+  if (!ready) return fallback
+  return <Suspense fallback={fallback}>
       <LandingPage />
     </Suspense>
-  )
 }
 
 // 404: send signed-in users back into the app, everyone else to the homepage.

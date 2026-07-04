@@ -1,64 +1,72 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // LandingHero — "The Opening Bell": a cinematic title-sequence intro.
-//   phase 0  dark screen
+//   phase 0  dark screen (no spinner — RootRoute's fallback is the same navy)
 //   phase 1  a gold ignition line draws across the center
 //   phase 2  the hero "powers on" — a TV/CRT vertical bloom opens from that line
-//   phase 3  the Penny coin appears, large, center stage (a held beat)
-//   phase 4  the coin flies to the top-left and becomes the mascot lockup
-//   phase 5  the headline racks into focus, word by word (blur → sharp)
-//   phase 6  one gold shine sweeps the accent once; subhead, CTAs, trust and the
-//            live Penny chat box follow through
-// Kept from the prior hero: StudioBackdrop's rising gold motes (its diagonal
-// light-sweep is dropped via sweep={false}) and the live PennyDemo chat frame.
-// Click anywhere to skip to the settled state. Reduced motion: no choreography —
-// everything renders settled with a plain fade.
+//   phase 3  the Penny mascot (the smiling gold coin) appears, large, center stage
+//   phase 4  the mascot flies to the right, to the chat box's header-avatar spot
+//   phase 5  the chat box unfolds outward from the mascot — it *becomes* the live
+//            Penny AI chat — while the headline racks into focus, word by word
+//   phase 6  one gold shine sweeps the accent once; subhead, CTAs and trust settle
+// Kept: StudioBackdrop's rising gold motes (its diagonal light-sweep is dropped
+// via sweep={false}). On phones the mascot doesn't fly to an off-screen chat —
+// it fades at center and the chat scales up in place. Click to skip; reduced
+// motion renders everything settled with a plain fade.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
 import { ChevronDown } from 'lucide-react'
 import StudioBackdrop from '../../components/penny/studio/StudioBackdrop.jsx'
+import PennyAvatar from '../../components/penny/PennyAvatar.jsx'
 import PennyDemo from './PennyDemo.jsx'
 import { EASE } from './Reveal.jsx'
 import { HERO } from './landingContent.js'
 
 const FOCUS_RING = 'outline-none focus-visible:ring-2 focus-visible:ring-gold/60'
-const COIN = 48 // px — resting mascot coin diameter (its center is what we fly)
+const COIN = 52 // px — the flying mascot diameter (≈ the chat header avatar)
+// The chat header avatar's center, measured from the floating frame's top-left:
+// p-1.5 (6) + px-4 / py-3 (16 / 12) + half the 44px avatar (22).
+const AV_X = 6 + 16 + 22
+const AV_Y = 6 + 12 + 22
 
-// Beat schedule (ms from mount): [line, open, coin-in, coin-flies, text, settle].
-// The coin gets a real held beat (~600ms fully gold) between arriving center-
-// stage and flying home. Interactive controls (nav) never wait on this, and a
-// click short-circuits straight to the settled state.
-const BEATS = [200, 750, 1250, 2200, 2950, 3450]
+// Beat schedule (ms from mount): [line, open, coin-in, coin-flies, expand+text,
+// settle]. The mascot gets a held gold beat center-stage before it flies right
+// and unfolds into the chat. Nav stays interactive throughout; click skips.
+const BEATS = [200, 750, 1250, 2050, 2750, 3350]
 
 export default function LandingHero() {
   const reduce = useReducedMotion()
   const sectionRef = useRef(null)
-  const brandRef = useRef(null)
-  // phase 6 = fully settled. Reduced motion starts there; otherwise we climb.
+  const chatRef = useRef(null) // the (unscaled) grid cell wrapping the chat box
   const [phase, setPhase] = useState(reduce ? 6 : 0)
-  // Pixel delta that carries the coin's resting (top-left) center to stage center.
-  const [center, setCenter] = useState({ x: 0, y: 0 })
+  // lg+ gets the full fly-to-chat; phones fade the coin at center instead (the
+  // chat would be below the fold, so flying to it would leave the frame).
+  const [flyToChat] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches,
+  )
+  // Where the mascot sits (its resting base = the chat avatar spot) and the
+  // translate that carries it up to stage-center.
+  const [coinPos, setCoinPos] = useState({ left: 0, top: 0 })
+  const [toCenter, setToCenter] = useState({ x: 0, y: 0 })
 
-  // Measure the coin's travel once laid out, and on resize.
   useLayoutEffect(() => {
     const measure = () => {
       const s = sectionRef.current
-      const b = brandRef.current
-      if (!s || !b) return
+      const c = chatRef.current
+      if (!s || !c) return
       const sr = s.getBoundingClientRect()
-      const br = b.getBoundingClientRect()
-      setCenter({
-        x: sr.left + sr.width / 2 - (br.left + COIN / 2),
-        y: sr.top + sr.height / 2 - (br.top + COIN / 2),
-      })
+      const cr = c.getBoundingClientRect() // outer cell = full-size layout box
+      const avX = cr.left - sr.left + AV_X
+      const avY = cr.top - sr.top + AV_Y
+      setCoinPos({ left: avX - COIN / 2, top: avY - COIN / 2 })
+      setToCenter({ x: sr.width / 2 - avX, y: sr.height / 2 - avY })
     }
     measure()
     window.addEventListener('resize', measure)
     return () => window.removeEventListener('resize', measure)
   }, [])
 
-  // The timeline: advance phase on each beat. Cancelled on unmount / skip.
   useEffect(() => {
     if (reduce) return undefined
     const ids = BEATS.map((t, i) => setTimeout(() => setPhase(i + 1), t))
@@ -69,30 +77,36 @@ export default function LandingHero() {
 
   const open = phase >= 2
   const coinStaged = phase >= 3
-  const coinHome = phase >= 4
+  const coinFlown = phase >= 4
+  const chatExpand = phase >= 5
   const textIn = phase >= 5
   const settled = phase >= 6
 
-  // Coin animation target by phase (identity transform once home).
+  // Mascot animation. It appears center-stage (big), flies to the avatar spot
+  // (lg only), then fades as the chat unfolds from underneath it.
+  const bigCenter = { x: toCenter.x, y: toCenter.y, scale: 2.5 }
+  const home = { x: 0, y: 0, scale: 1 }
   const coinAnim = reduce
-    ? { opacity: 1, x: 0, y: 0, scale: 1 }
-    : coinHome
-      ? { opacity: 1, x: 0, y: 0, scale: 1 }
-      : { opacity: coinStaged ? 1 : 0, x: center.x, y: center.y, scale: 2.6 }
+    ? { opacity: 0 }
+    : chatExpand
+      ? { opacity: 0, ...(flyToChat ? home : bigCenter) }
+      : coinFlown
+        ? { opacity: 1, ...(flyToChat ? home : bigCenter) }
+        : { opacity: coinStaged ? 1 : 0, ...bigCenter }
+  const coinTransition =
+    coinFlown && !chatExpand && flyToChat
+      ? { duration: 0.6, ease: EASE } // the flight
+      : chatExpand
+        ? { duration: 0.35, ease: EASE } // the fade
+        : { duration: 0.4, ease: EASE } // the appear
 
   const words1 = HERO.h1Line1.split(' ')
   const words2 = HERO.h1Line2.split(' ')
-
-  // Per-word focus-pull; staggered only once text is cued.
   const word = (i) => ({
     initial: reduce ? false : { opacity: 0, filter: 'blur(14px)' },
-    animate: textIn
-      ? { opacity: 1, filter: 'blur(0px)' }
-      : { opacity: 0, filter: 'blur(14px)' },
+    animate: textIn ? { opacity: 1, filter: 'blur(0px)' } : { opacity: 0, filter: 'blur(14px)' },
     transition: { duration: 0.7, ease: EASE, delay: textIn ? i * 0.07 : 0 },
   })
-
-  // Follow-through elements (subhead / CTAs / trust / chat) rise once settled.
   const rise = (delay = 0) => ({
     initial: reduce ? false : { opacity: 0, y: 16 },
     animate: settled ? { opacity: 1, y: 0 } : { opacity: 0, y: 16 },
@@ -132,20 +146,26 @@ export default function LandingHero() {
             >
               <span className="block">
                 {words1.map((w, i) => (
-                  <motion.span key={i} {...word(i)} className="inline-block text-white">
-                    {w}
-                    {i < words1.length - 1 && ' '}
-                  </motion.span>
+                  <Fragment key={i}>
+                    <motion.span {...word(i)} className="inline-block text-white">
+                      {w}
+                    </motion.span>
+                    {i < words1.length - 1 ? ' ' : ''}
+                  </Fragment>
                 ))}
               </span>
-              <span className="relative block gold-text">
+              {/* gold-text lives on each WORD (not the line): framer animates a
+                  per-word filter/opacity, which puts each word in its own layer
+                  and would break a parent-level background-clip:text. */}
+              <span className="relative block">
                 {words2.map((w, i) => (
-                  <motion.span key={i} {...word(words1.length + i)} className="inline-block">
-                    {w}
-                    {i < words2.length - 1 && ' '}
-                  </motion.span>
+                  <Fragment key={i}>
+                    <motion.span {...word(words1.length + i)} className="gold-text inline-block">
+                      {w}
+                    </motion.span>
+                    {i < words2.length - 1 ? ' ' : ''}
+                  </Fragment>
                 ))}
-                {/* One-shot shine, fired at settle (CSS handles reduced motion). */}
                 <span aria-hidden="true" className={`hero-shine ${settled ? 'is-glinting' : ''}`}>
                   {HERO.h1Line2}
                 </span>
@@ -175,27 +195,36 @@ export default function LandingHero() {
             </motion.div>
           </div>
 
-          {/* The live Penny chat box, in its floating glass frame. */}
-          <motion.div
-            initial={reduce ? false : { opacity: 0, scale: 0.96, y: 20 }}
-            animate={settled ? { opacity: 1, scale: 1, y: 0 } : { opacity: 0, scale: 0.96, y: 20 }}
-            transition={{ duration: 0.7, ease: EASE, delay: 0.1 }}
-          >
+          {/* The chat cell. chatRef stays full-size (the coin's flight target is
+              measured from it); the inner frame unfolds from the mascot's landing
+              point — transform-origin at the header-avatar corner on lg. */}
+          <div ref={chatRef}>
             <motion.div
-              animate={reduce ? undefined : { y: [0, -8, 0] }}
-              transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut' }}
-              className="rounded-2xl border border-gold/25 bg-white/[0.04] p-1.5 shadow-lift backdrop-blur-sm"
+              initial={reduce ? false : { scale: flyToChat ? 0.08 : 0.9, opacity: 0 }}
+              animate={
+                reduce || chatExpand
+                  ? { scale: 1, opacity: 1 }
+                  : { scale: flyToChat ? 0.08 : 0.9, opacity: 0 }
+              }
+              transition={{ duration: 0.6, ease: EASE }}
+              style={{ transformOrigin: flyToChat ? `${AV_X}px ${AV_Y}px` : 'center' }}
             >
-              <div className="overflow-hidden rounded-xl bg-cream">
-                <PennyDemo />
-              </div>
+              <motion.div
+                animate={reduce || !settled ? undefined : { y: [0, -8, 0] }}
+                transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut' }}
+                className="rounded-2xl border border-gold/25 bg-white/[0.04] p-1.5 shadow-lift backdrop-blur-sm"
+              >
+                <div className="overflow-hidden rounded-xl bg-cream">
+                  <PennyDemo />
+                </div>
+              </motion.div>
             </motion.div>
-          </motion.div>
+          </div>
         </div>
       </motion.div>
 
-      {/* The gold ignition line — lives above the screen so it reads on the dark
-          field before the bloom. Draws in (phase 1), fades as the screen opens. */}
+      {/* The gold ignition line — above the screen so it reads on the dark field
+          before the bloom. Draws in (phase 1), fades as the screen opens. */}
       <motion.span
         aria-hidden="true"
         className="pointer-events-none absolute left-[8%] right-[8%] top-1/2 z-20 h-px origin-center"
@@ -208,44 +237,24 @@ export default function LandingHero() {
         transition={{ duration: open ? 0.3 : 0.55, ease: 'easeOut' }}
       />
 
-      {/* The mascot lockup. brandRef is the measured anchor; the coin flies from
-          stage-center into this slot, the wordmark fades in behind it. */}
-      <div
-        ref={brandRef}
-        className="pointer-events-none absolute left-5 top-24 z-30 flex items-center gap-3 sm:left-8"
+      {/* The Penny mascot (the smiling gold coin). Appears center-stage, flies to
+          the chat's header-avatar spot, then fades as the chat unfolds into it. */}
+      <motion.div
+        aria-hidden="true"
+        initial={false}
+        animate={coinAnim}
+        transition={coinTransition}
+        className="pointer-events-none absolute z-30 rounded-full"
+        style={{
+          left: coinPos.left,
+          top: coinPos.top,
+          width: COIN,
+          height: COIN,
+          boxShadow: '0 0 36px rgba(212,180,122,.5)',
+        }}
       >
-        <motion.div
-          initial={false}
-          animate={coinAnim}
-          transition={
-            coinHome
-              ? { duration: 0.85, ease: EASE }
-              : { duration: 0.4, ease: EASE }
-          }
-          className="relative grid place-items-center rounded-full font-serif font-bold text-[#6d5416]"
-          style={{
-            width: COIN,
-            height: COIN,
-            fontSize: 25,
-            // Emboss baked entirely into the gradient (bright top-left → dark-gold
-            // rim) so the coin reads gold at ANY scale — transform-scaled inset
-            // box-shadows would blow up and grey it out at 2.6×.
-            background:
-              'radial-gradient(circle at 36% 30%, #fff3d0 0%, #f0dca6 22%, #e8d4a8 42%, #d4b47a 64%, #b89650 84%, #8a6d1f 100%)',
-            boxShadow: '0 0 30px rgba(212,180,122,.4), inset 0 0 0 1.5px rgba(255,255,255,.3)',
-          }}
-        >
-          P
-        </motion.div>
-        <motion.span
-          initial={reduce ? false : { opacity: 0, x: -6 }}
-          animate={coinHome ? { opacity: 1, x: 0 } : { opacity: 0, x: -6 }}
-          transition={{ duration: 0.5, ease: EASE, delay: 0.15 }}
-          className="font-serif text-[19px] font-semibold text-gold-light"
-        >
-          {HERO.brandName}
-        </motion.span>
-      </div>
+        <PennyAvatar size={COIN} />
+      </motion.div>
 
       {/* Scroll cue — appears with the settle. */}
       <motion.div
