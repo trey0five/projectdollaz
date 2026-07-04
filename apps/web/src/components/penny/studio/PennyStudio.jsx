@@ -24,6 +24,7 @@ import StudioRecipes from './StudioRecipes.jsx'
 import StudioActionInbox from './StudioActionInbox.jsx'
 import StudioRail from './StudioRail.jsx'
 import StudioActivity from './StudioActivity.jsx'
+import StudioParticles from './StudioParticles.jsx'
 import StudioConversation from './StudioConversation.jsx'
 
 const PERIOD_KEY = 'finrep_active_period'
@@ -256,7 +257,10 @@ export default function PennyStudio() {
       onDragLeave={onRootDragLeave}
       onDrop={onRootDrop}
     >
-      <div className="mx-auto max-w-[1160px] px-4 py-6 sm:px-6">
+      {/* Ambient drifting-particle field behind a conversation so the light page
+          doesn't read as flat while Penny works. Landing has its own hero backdrop. */}
+      {inConversation && <StudioParticles />}
+      <div className="relative z-10 mx-auto max-w-[1160px] px-4 py-6 sm:px-6">
         <StudioHero
           compact={inConversation}
           name={name}

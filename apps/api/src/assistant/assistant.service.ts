@@ -695,8 +695,18 @@ export class AssistantService {
       }
       emit({ type: 'done' })
     } catch (e) {
-      this.logger.warn(`assistant stream failed: ${e instanceof Error ? e.message : String(e)}`)
-      emit({ type: 'error', text: 'Sorry — I hit an error answering that.' })
+      const msg = e instanceof Error ? e.message : String(e)
+      this.logger.warn(`assistant stream failed: ${msg}`)
+      // Surface an honest reason for the common upstream-billing case (the LLM
+      // provider returns 402 when the account is out of credits) so it doesn't
+      // look like Penny is broken.
+      const outOfCredits = /LLM error (402|429)/.test(msg)
+      emit({
+        type: 'error',
+        text: outOfCredits
+          ? 'Penny’s AI service is temporarily unavailable — the AI account is out of credits. Please top it up and try again.'
+          : 'Sorry — I hit an error answering that.',
+      })
       emit({ type: 'done' })
     }
   }
