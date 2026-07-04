@@ -16,11 +16,11 @@ export const NAV = {
 }
 
 export const HERO = {
-  kicker: 'For private & independent schools',
+  kicker: 'The operating platform for independent schools',
   h1Line1: 'A hundred moving parts.',
-  h1Line2: 'One Penny.',
+  h1Line2: 'One platform.',
   subhead:
-    'The AI Digital COO — finances, enrollment, board reports, and every deadline, kept in motion.',
+    'Finance, enrollment, governance, facilities, advancement, and board-ready reporting — every part of the school in one place, prioritized for you each morning.',
   ctaPrimary: { label: 'Get started', to: '/register' },
   ctaGhost: { label: 'Sign in', to: '/login' },
   trustLine: 'Built for heads of school, business officers, and diocese finance teams.',
