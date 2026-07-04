@@ -252,7 +252,7 @@ export default function PennyStudio() {
 
   return (
     <div
-      className="relative min-h-screen bg-page-glow"
+      className="relative h-full overflow-hidden bg-page-glow"
       onDragOver={onRootDragOver}
       onDragLeave={onRootDragLeave}
       onDrop={onRootDrop}
@@ -260,43 +260,38 @@ export default function PennyStudio() {
       {/* Ambient drifting-particle field behind a conversation so the light page
           doesn't read as flat while Penny works. Landing has its own hero backdrop. */}
       {inConversation && <StudioParticles />}
-      <div className="relative z-10 mx-auto max-w-[1160px] px-4 py-6 sm:px-6">
-        <StudioHero
-          compact={inConversation}
-          name={name}
-          chat={engagedChat}
-          askBar={inConversation ? null : askBar}
-          onNewChat={chat.newChat}
-        />
-
-        <div className="mt-6">
-          <AnimatePresence mode="wait">
-            {inConversation ? (
-              <motion.div key="c" {...swap}>
-                <StudioConversation chat={engagedChat} />
-              </motion.div>
-            ) : (
-              <motion.div key="l" {...swap} className="space-y-10 pb-24">
-                <StudioCapabilityTiles onSelect={onSelectTile} canEdit={canEdit} />
-                <StudioRecipes onRun={runPrompt} />
-                <div className="grid items-start gap-5 lg:grid-cols-[1.35fr_1fr]">
-                  <StudioActionInbox schoolId={activeId} periodId={periodId} onHandle={runPrompt} />
-                  <div className="space-y-5">
-                    <StudioRail chat={engagedChat} onPick={runPrompt} />
-                    <StudioActivity schoolId={activeId} canEdit={canEdit} />
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+      {inConversation ? (
+        /* Conversation: a FIXED-HEIGHT flex column (viewport minus the app-shell's
+           h-14 top strip). The slim hero sits on top, the transcript fills the
+           middle and scrolls on its own, and the composer is a flex child at the
+           bottom — NOT a floating sticky bar — so it can never cover the last
+           message and the transcript always scrolls clear of it. */
+        <div className="relative z-10 mx-auto flex h-full max-w-[1160px] flex-col px-4 pt-4 sm:px-6">
+          <div className="shrink-0">
+            <StudioHero compact name={name} chat={engagedChat} askBar={null} onNewChat={chat.newChat} />
+          </div>
+          <div className="mt-4 min-h-0 flex-1">
+            <StudioConversation chat={engagedChat} />
+          </div>
+          <div className="mt-3 shrink-0 rounded-t-2xl border-t border-rule/60 bg-cream/95 px-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur">
+            <div className="mx-auto max-w-[820px]">{askBar}</div>
+          </div>
         </div>
-      </div>
-
-      {/* Bottom-docked composer during a conversation. Rendered OUTSIDE the animated
-          container (no transformed ancestor) so `sticky` resolves to the page. */}
-      {inConversation && (
-        <div className="sticky bottom-0 z-30 border-t border-rule/60 bg-cream/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur sm:px-6">
-          <div className="mx-auto max-w-[820px]">{askBar}</div>
+      ) : (
+        /* Landing: scrolls internally (the page itself doesn't scroll). */
+        <div className="relative z-10 mx-auto h-full max-w-[1160px] overflow-y-auto px-4 py-6 sm:px-6">
+          <StudioHero compact={false} name={name} chat={engagedChat} askBar={askBar} onNewChat={chat.newChat} />
+          <motion.div {...swap} className="mt-6 space-y-10 pb-24">
+            <StudioCapabilityTiles onSelect={onSelectTile} canEdit={canEdit} />
+            <StudioRecipes onRun={runPrompt} />
+            <div className="grid items-start gap-5 lg:grid-cols-[1.35fr_1fr]">
+              <StudioActionInbox schoolId={activeId} periodId={periodId} onHandle={runPrompt} />
+              <div className="space-y-5">
+                <StudioRail chat={engagedChat} onPick={runPrompt} />
+                <StudioActivity schoolId={activeId} canEdit={canEdit} />
+              </div>
+            </div>
+          </motion.div>
         </div>
       )}
 
