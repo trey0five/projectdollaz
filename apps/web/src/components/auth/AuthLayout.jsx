@@ -2,6 +2,7 @@
 // gold-haloed cream card, matching the original PIN-gate aesthetic.
 import { motion } from 'framer-motion'
 import { ShieldCheck } from 'lucide-react'
+import { Link } from 'react-router-dom'
 
 export default function AuthLayout({ title, subtitle, children, footer, width = 460 }) {
   return (
@@ -32,9 +33,13 @@ export default function AuthLayout({ title, subtitle, children, footer, width = 
           transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
           className="relative w-full rounded-2xl border-t-4 border-gold bg-cream px-6 py-10 shadow-login sm:px-14 sm:py-12"
         >
-          <div className="mb-2 flex items-center gap-2 text-[14px] font-semibold uppercase tracking-[0.28em] text-gold">
+          <Link
+            to="/"
+            aria-label="Project Dollaz — home"
+            className="mb-2 inline-flex items-center gap-2 rounded-md text-[14px] font-semibold uppercase tracking-[0.28em] text-gold outline-none transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-gold/50"
+          >
             <ShieldCheck size={16} /> Project Dollaz
-          </div>
+          </Link>
           <h1 className="mb-2 font-serif text-[26px] font-semibold leading-[1.1] text-navy sm:text-[30px]">
             {title}
           </h1>

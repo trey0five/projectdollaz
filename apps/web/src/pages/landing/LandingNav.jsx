@@ -42,6 +42,7 @@ export default function LandingNav() {
         <Link
           to="/"
           aria-label="Project Dollaz — home"
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
           className={`flex min-w-0 items-center gap-3 rounded-lg px-1 py-1 transition-opacity hover:opacity-90 ${FOCUS_RING}`}
         >
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gold-gradient text-navy-deep shadow-glow">
