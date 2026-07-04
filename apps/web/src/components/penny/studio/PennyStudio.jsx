@@ -226,17 +226,12 @@ export default function PennyStudio() {
 
   return (
     <div
-      className="relative min-h-screen bg-studio-page"
+      className="relative min-h-screen bg-page-glow"
       onDragOver={onRootDragOver}
       onDragLeave={onRootDragLeave}
       onDrop={onRootDrop}
     >
-      {/* Page-level gold glow (top-right), matching the mockup dark ground. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-studio-glow"
-      />
-      <div className="relative mx-auto max-w-[1160px] px-4 py-6 sm:px-6">
+      <div className="mx-auto max-w-[1160px] px-4 py-6 sm:px-6">
         <StudioHero
           compact={inConversation}
           name={name}
@@ -267,7 +262,7 @@ export default function PennyStudio() {
       {/* Bottom-docked composer during a conversation. Rendered OUTSIDE the animated
           container (no transformed ancestor) so `sticky` resolves to the page. */}
       {inConversation && (
-        <div className="sticky bottom-0 z-30 border-t border-[#22406e] bg-[#0b1b36]/85 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur sm:px-6">
+        <div className="sticky bottom-0 z-30 border-t border-rule/60 bg-cream/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur sm:px-6">
           <div className="mx-auto max-w-[820px]">{askBar}</div>
         </div>
       )}

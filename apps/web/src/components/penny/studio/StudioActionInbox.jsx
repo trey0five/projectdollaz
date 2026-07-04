@@ -4,7 +4,7 @@
 // links to the item for do-it-myself. Server order is preserved (never re-sorted).
 //
 // States: loading → skeletons; empty → all-caught-up card; notEntitled (402) →
-// hide the panel; error with no items → render nothing (fail-soft). Dark deck.
+// hide the panel; error with no items → render nothing (fail-soft).
 import { ArrowRight, Clock, Sparkles } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useBriefing } from '../../../hooks/useBriefing.js'
@@ -52,13 +52,13 @@ function handlePrompt(item) {
 
 function RowSkeleton() {
   return (
-    <div className="flex gap-3 border-b border-[#22406e] px-[18px] py-[15px] last:border-b-0">
-      <div className="w-1 shrink-0 rounded bg-[#22406e]" />
+    <div className="flex gap-3 border-b border-rule/60 px-[18px] py-[15px] last:border-b-0">
+      <div className="w-1 shrink-0 rounded bg-section" />
       <div className="flex-1">
-        <div className="h-2.5 w-28 rounded bg-[#22406e]" />
-        <div className="mt-2.5 h-3.5 w-2/3 rounded bg-[#22406e]" />
-        <div className="mt-2 h-3 w-full rounded bg-[#22406e]" />
-        <div className="mt-3 h-7 w-40 rounded-lg bg-[#22406e]" />
+        <div className="shimmer-bar h-2.5 w-28 rounded" />
+        <div className="shimmer-bar mt-2.5 h-3.5 w-2/3 rounded" />
+        <div className="shimmer-bar mt-2 h-3 w-full rounded" />
+        <div className="shimmer-bar mt-3 h-7 w-40 rounded-lg" />
       </div>
     </div>
   )
@@ -76,15 +76,15 @@ export default function StudioActionInbox({ schoolId, periodId, onHandle }) {
   const anyCritical = items.some((i) => i.severity === 'critical')
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-[#22406e] bg-[#152a4d]">
-      <header className="flex items-center gap-2.5 border-b border-[#22406e] px-[18px] py-4">
-        <h2 className="font-serif text-[18px] font-semibold text-white">Your action inbox</h2>
+    <section className="overflow-hidden rounded-2xl border border-rule/60 bg-white shadow-card">
+      <header className="flex items-center gap-2.5 border-b border-rule/60 px-[18px] py-4">
+        <h2 className="font-serif text-[18px] font-semibold text-navy">Your action inbox</h2>
         {loading ? (
-          <span className="ml-auto h-5 w-14 rounded-full bg-[#22406e]" />
+          <span className="ml-auto h-5 w-14 rounded-full bg-section" />
         ) : openCount > 0 ? (
           <span
-            className={`ml-auto rounded-full px-2.5 py-[3px] text-[11px] font-bold ${
-              anyCritical ? 'bg-danger text-white' : 'bg-gold text-navy-deep'
+            className={`ml-auto rounded-full px-2.5 py-[3px] text-[11px] font-bold text-white ${
+              anyCritical ? 'bg-danger' : 'bg-navy'
             }`}
           >
             {openCount} open
@@ -104,28 +104,28 @@ export default function StudioActionInbox({ schoolId, periodId, onHandle }) {
             <Sparkles size={22} aria-hidden />
           </span>
           <div>
-            <p className="font-serif text-[17px] font-semibold text-white">You’re all caught up.</p>
-            <p className="mt-0.5 text-[13.5px] text-[#93a6c4]">Nothing needs a decision for this period.</p>
+            <p className="font-serif text-[17px] font-semibold text-navy">You’re all caught up.</p>
+            <p className="mt-0.5 text-[13.5px] text-muted">Nothing needs a decision for this period.</p>
           </div>
         </div>
       ) : (
         items.map((item) => (
-          <article key={item.id} className="flex gap-3 border-b border-[#22406e] px-[18px] py-[15px] last:border-b-0">
+          <article key={item.id} className="flex gap-3 border-b border-rule/60 px-[18px] py-[15px] last:border-b-0">
             <span className={`w-1 shrink-0 rounded ${SEV_BAR[item.severity] ?? SEV_BAR.info}`} aria-hidden />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#93a6c4]">
+                <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted">
                   {SOURCE_LABEL[item.source] ?? item.source} · {item.severity}
                 </span>
                 {item.dueDate && (
-                  <span className="ml-auto inline-flex items-center gap-1 text-[12px] font-medium text-[#93a6c4]">
+                  <span className="ml-auto inline-flex items-center gap-1 text-[12px] font-medium text-muted">
                     <Clock size={12} className="opacity-70" aria-hidden />
                     Due {fmtDue(item.dueDate)}
                   </span>
                 )}
               </div>
-              <h3 className="mt-0.5 text-[14.5px] font-semibold text-white">{item.title}</h3>
-              <p className="mt-0.5 text-[13px] leading-relaxed text-[#c2d0e6]">{item.why}</p>
+              <h3 className="mt-0.5 text-[14.5px] font-semibold text-ink">{item.title}</h3>
+              <p className="mt-0.5 text-[13px] leading-relaxed text-muted">{item.why}</p>
               <div className="mt-2.5 flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -137,7 +137,7 @@ export default function StudioActionInbox({ schoolId, periodId, onHandle }) {
                 {item.link && (
                   <Link
                     to={item.link}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-[#22406e] px-3 py-1.5 text-[12.5px] font-semibold text-[#c2d0e6] transition-colors hover:border-gold/60 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-rule/70 px-3 py-1.5 text-[12.5px] font-semibold text-muted transition-colors hover:border-navy hover:text-navy focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
                   >
                     Open
                     <ArrowRight size={13} aria-hidden />
