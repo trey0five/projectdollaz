@@ -177,7 +177,12 @@ export default function LandingHero({ onIntroOpen }) {
               <span className="relative block">
                 {words2.map((w, i) => (
                   <Fragment key={i}>
-                    <motion.span {...word(words1.length + i)} className="gold-text inline-block">
+                    {/* pb extends each word's background-clip:text paint box so
+                        descenders (the "p" in "platform") aren't cut off. */}
+                    <motion.span
+                      {...word(words1.length + i)}
+                      className="gold-text inline-block pb-[0.16em]"
+                    >
                       {w}
                     </motion.span>
                     {i < words2.length - 1 ? ' ' : ''}
