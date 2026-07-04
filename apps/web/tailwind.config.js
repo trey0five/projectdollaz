@@ -44,6 +44,12 @@ export default {
           'radial-gradient(900px circle at 50% -120px, rgba(184,150,80,0.10) 0%, transparent 70%)',
         sheen:
           'linear-gradient(110deg, transparent 25%, rgba(255,255,255,0.35) 50%, transparent 75%)',
+        // Penny Studio dark "command deck" surfaces (named so the JIT always emits
+        // them — comma'd arbitrary gradient classes drop out of incremental builds).
+        'studio-page': 'linear-gradient(180deg, #0e2142 0%, #0a1830 100%)',
+        'studio-hero': 'linear-gradient(150deg, #1f3d72 0%, #12294f 46%, #0b1b36 100%)',
+        'studio-glow':
+          'radial-gradient(1200px 600px at 82% -8%, rgba(201,162,39,0.10) 0%, transparent 60%)',
       },
       keyframes: {
         'fade-up': {

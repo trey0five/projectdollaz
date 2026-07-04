@@ -154,7 +154,7 @@ export default function StudioHero({ compact, name, chat, askBar, onNewChat }) {
       layout
       layoutId="studio-hero"
       transition={layoutTransition}
-      className="relative overflow-hidden rounded-2xl border border-gold/20 bg-[linear-gradient(150deg,#1f3d72_0%,#12294f_46%,#0b1b36_100%)] shadow-navy-glow"
+      className="relative overflow-hidden rounded-2xl border border-gold/20 bg-studio-hero shadow-navy-glow"
     >
       <StudioBackdrop />
 

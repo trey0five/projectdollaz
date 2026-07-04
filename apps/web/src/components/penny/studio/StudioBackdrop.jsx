@@ -6,7 +6,7 @@
 // <canvas> — all CSS/framer so it degrades cleanly.
 import { motion, useReducedMotion } from 'framer-motion'
 
-const MOTE_COUNT = 12
+const MOTE_COUNT = 20
 
 // Randomized mote placement computed ONCE at module load (never during render, so
 // it stays pure/idempotent). Keys are the stable array index, never a random value.
@@ -62,7 +62,7 @@ export default function StudioBackdrop() {
           {MOTES.map((m, i) => (
             <span
               key={i}
-              className="absolute h-[1.5px] w-[1.5px] rounded-full bg-gold-light/70 shadow-[0_0_6px_rgba(212,180,122,0.8)] motion-safe:animate-studio-mote motion-reduce:hidden"
+              className="absolute h-[3px] w-[3px] rounded-full bg-gold-light shadow-[0_0_10px_rgba(212,180,122,0.95)] motion-safe:animate-studio-mote motion-reduce:hidden"
               style={{
                 left: `${m.left}%`,
                 bottom: `${m.bottom}%`,
