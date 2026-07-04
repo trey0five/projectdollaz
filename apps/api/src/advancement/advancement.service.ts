@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
-import type { AdvancementCampaign } from '@finrep/db'
+import type { AdvancementCampaign, AdvancementGift } from '@finrep/db'
 import {
   computeCampaignProgress,
   summarizeGiving,
@@ -10,6 +10,8 @@ import { PrismaService } from '../prisma/prisma.service.js'
 import { AuditService } from '../common/audit/audit.service.js'
 import type { CreateCampaignDto } from './dto/create-campaign.dto.js'
 import type { UpdateCampaignDto } from './dto/update-campaign.dto.js'
+import type { CreateGiftDto } from './dto/create-gift.dto.js'
+import type { UpdateGiftDto } from './dto/update-gift.dto.js'
 
 /** One campaign as returned to the client, with COMPUTED progress. */
 export interface CampaignPublic {
@@ -32,6 +34,13 @@ export interface CampaignPublic {
   gapToGoal: number | null
   urgency: CampaignUrgency
   daysUntilClose: number | null
+  // ── Gift/pledge ROLLUP (computed from AdvancementGift children) ──────────────
+  /** Σ (amount - receivedAmount) for kind='pledge' AND status != 'written_off'. */
+  pledgedOutstanding: number
+  /** raisedAmount (received) + pledgedOutstanding. */
+  committedTotal: number
+  /** Number of gift/pledge entries under this campaign (0 → raisedAmount is the manual figure). */
+  giftCount: number
   createdAt: string
   updatedAt: string
 }
@@ -39,6 +48,69 @@ export interface CampaignPublic {
 export interface CampaignListResponse {
   campaigns: CampaignPublic[]
   summary: GivingSummary
+}
+
+/** One gift/pledge as returned to the client (AGGREGATE-ONLY, no donor PII). */
+export interface GiftPublic {
+  id: string
+  campaignId: string
+  kind: string
+  /** Prisma.Decimal → JS number (exact for DECIMAL(14,2)). */
+  amount: number
+  receivedAmount: number
+  status: string
+  /** yyyy-mm-dd (@db.Date). */
+  occurredOn: string | null
+  label: string | null
+  note: string | null
+  source: string | null
+  createdByUserId: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface GiftListResponse {
+  gifts: GiftPublic[]
+}
+
+/** Per-campaign gift rollup accumulated from a school-wide aggregate (no N+1). */
+interface GiftRollup {
+  giftCount: number
+  /** Σ receivedAmount across ALL gifts under the campaign. */
+  received: number
+  /** Σ (amount - receivedAmount) for kind='pledge' AND status != 'written_off'. */
+  pledgedOutstanding: number
+}
+
+const cents = (n: number): number => Math.round(n * 100)
+
+/**
+ * Derive the persisted { receivedAmount, status } for a gift/pledge from its kind +
+ * amount + inputs — the ONE place the "gift ⇒ received=amount/received" and
+ * "pledge ⇒ status from received" invariants live (shared by create + update). Pure;
+ * throws BadRequest on an out-of-range pledge received. `written_off` is an explicit
+ * override (any other statusInput is ignored and re-derived from receivedAmount).
+ */
+function deriveGiftState(
+  kind: string,
+  amount: number,
+  receivedInput: number | undefined,
+  statusInput: string | undefined,
+): { receivedAmount: number; status: string } {
+  if (kind === 'gift') {
+    // A gift is fully in on creation: received == amount. Only 'written_off' overrides.
+    return { receivedAmount: amount, status: statusInput === 'written_off' ? 'written_off' : 'received' }
+  }
+  // pledge
+  const received = receivedInput ?? 0
+  if (received < 0 || cents(received) > cents(amount)) {
+    throw new BadRequestException('receivedAmount must be between 0 and the pledged amount.')
+  }
+  if (statusInput === 'written_off') return { receivedAmount: received, status: 'written_off' }
+  const rc = cents(received)
+  const ac = cents(amount)
+  const status = rc === 0 ? 'pledged' : rc >= ac ? 'received' : 'partial'
+  return { receivedAmount: received, status }
 }
 
 /** Deterministic list order: active first, then by urgency, then close date, name, id. */
@@ -87,10 +159,17 @@ export class AdvancementService {
     private readonly audit: AuditService,
   ) {}
 
-  private toPublic(row: AdvancementCampaign, now: Date): CampaignPublic {
+  private toPublic(row: AdvancementCampaign, now: Date, rollup?: GiftRollup): CampaignPublic {
     // Prisma.Decimal → number (exact for DECIMAL(14,2)); null passes untouched.
     const goalAmount = row.goalAmount === null ? null : Number(row.goalAmount)
-    const raisedAmount = row.raisedAmount === null ? null : Number(row.raisedAmount)
+    const storedRaised = row.raisedAmount === null ? null : Number(row.raisedAmount)
+    // BACKWARD-COMPATIBLE ROLLUP: once the campaign has ≥1 gift/pledge entry, `raised`
+    // is the computed Σ receivedAmount; a campaign with NO entries keeps its hand-typed
+    // raisedAmount (existing campaigns are untouched). The EFFECTIVE raised then feeds
+    // computeCampaignProgress + summarizeGiving, so pct/urgency reflect the real money.
+    const hasGifts = !!rollup && rollup.giftCount > 0
+    const raisedAmount = hasGifts ? rollup!.received : storedRaised
+    const pledgedOutstanding = rollup?.pledgedOutstanding ?? 0
     const p = computeCampaignProgress(
       { status: row.status, goalAmount, raisedAmount, closeDate: row.closeDate },
       now,
@@ -111,9 +190,74 @@ export class AdvancementService {
       gapToGoal: p.gapToGoal,
       urgency: p.urgency,
       daysUntilClose: p.daysUntilClose,
+      pledgedOutstanding,
+      committedTotal: Math.round(((raisedAmount ?? 0) + pledgedOutstanding) * 100) / 100,
+      giftCount: rollup?.giftCount ?? 0,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     }
+  }
+
+  /** Prisma.Decimal → JS number; a null aggregate _sum → 0. */
+  private static sumToNumber(v: unknown): number {
+    return v === null || v === undefined ? 0 : Number(v)
+  }
+
+  private toGiftPublic(row: AdvancementGift): GiftPublic {
+    return {
+      id: row.id,
+      campaignId: row.campaignId,
+      kind: row.kind,
+      amount: Number(row.amount),
+      receivedAmount: Number(row.receivedAmount),
+      status: row.status,
+      occurredOn: toIsoDate(row.occurredOn),
+      label: row.label,
+      note: row.note,
+      source: row.source,
+      createdByUserId: row.createdByUserId,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    }
+  }
+
+  /**
+   * Compute per-campaign gift rollups for a school (or ONE campaign) via TWO groupBy
+   * aggregates — NOT per-campaign queries (no N+1). Returns a Map keyed by campaignId.
+   *   • received/giftCount: Σ receivedAmount + count over ALL gifts.
+   *   • pledgedOutstanding: Σ (amount - receivedAmount) over pledges NOT written_off.
+   */
+  private async giftRollups(schoolId: string, campaignId?: string): Promise<Map<string, GiftRollup>> {
+    const scope = { schoolId, ...(campaignId ? { campaignId } : {}) }
+    const [received, pledged] = await Promise.all([
+      this.prisma.advancementGift.groupBy({
+        by: ['campaignId'],
+        where: scope,
+        _sum: { receivedAmount: true },
+        _count: { _all: true },
+      }),
+      this.prisma.advancementGift.groupBy({
+        by: ['campaignId'],
+        where: { ...scope, kind: 'pledge', status: { not: 'written_off' } },
+        _sum: { amount: true, receivedAmount: true },
+      }),
+    ])
+    const map = new Map<string, GiftRollup>()
+    for (const r of received) {
+      map.set(r.campaignId, {
+        giftCount: r._count._all,
+        received: AdvancementService.sumToNumber(r._sum.receivedAmount),
+        pledgedOutstanding: 0,
+      })
+    }
+    for (const p of pledged) {
+      const cur = map.get(p.campaignId) ?? { giftCount: 0, received: 0, pledgedOutstanding: 0 }
+      const amt = AdvancementService.sumToNumber(p._sum.amount)
+      const rec = AdvancementService.sumToNumber(p._sum.receivedAmount)
+      cur.pledgedOutstanding = Math.max(0, Math.round((amt - rec) * 100) / 100)
+      map.set(p.campaignId, cur)
+    }
+    return map
   }
 
   /**
@@ -130,9 +274,12 @@ export class AdvancementService {
 
   /** List all campaigns for one school, deterministically ordered + enriched, plus the summary. */
   async listCampaigns(schoolId: string, now = new Date()): Promise<CampaignListResponse> {
-    const rows = await this.prisma.advancementCampaign.findMany({ where: { schoolId } })
+    const [rows, rollups] = await Promise.all([
+      this.prisma.advancementCampaign.findMany({ where: { schoolId } }),
+      this.giftRollups(schoolId),
+    ])
     const campaigns = rows
-      .map((r) => this.toPublic(r, now))
+      .map((r) => this.toPublic(r, now, rollups.get(r.id)))
       .sort((a, b) => {
         const s = (STATUS_RANK[a.status] ?? 99) - (STATUS_RANK[b.status] ?? 99)
         if (s !== 0) return s
@@ -228,7 +375,10 @@ export class AdvancementService {
       targetType: 'advancement_campaigns',
       targetId: row.id,
     })
-    return this.toPublic(row, new Date())
+    // Reflect the gift rollup in the returned campaign (a manual raisedAmount edit is
+    // OVERRIDDEN by the computed Σ receivedAmount once entries exist).
+    const rollups = await this.giftRollups(schoolId, campaignId)
+    return this.toPublic(row, new Date(), rollups.get(row.id))
   }
 
   async removeCampaign(
@@ -243,6 +393,133 @@ export class AdvancementService {
       userId,
       action: 'advancement.campaign.deleted',
       targetType: 'advancement_campaigns',
+      targetId: existing.id,
+    })
+    return { id: existing.id }
+  }
+
+  // ── Gifts & Pledges (nested under a campaign) ───────────────────────────────
+  // AGGREGATE-ONLY / NO per-donor PII: a gift row is amount/kind/status/date + an
+  // OPTIONAL non-identifying label — there is no donor identity anywhere in this path.
+
+  /** Resolve a gift owned by the PATH school — tenant + existence gate in ONE query. */
+  private async resolveGift(schoolId: string, giftId: string): Promise<AdvancementGift> {
+    const row = await this.prisma.advancementGift.findFirst({ where: { id: giftId, schoolId } })
+    if (!row) throw new NotFoundException('Gift not found.')
+    return row
+  }
+
+  /** List a campaign's gifts (newest first), tenant + campaign-ownership checked. */
+  async listGifts(schoolId: string, campaignId: string): Promise<GiftListResponse> {
+    await this.resolveCampaign(schoolId, campaignId) // 404 if foreign/cross-tenant
+    const rows = await this.prisma.advancementGift.findMany({
+      where: { campaignId, schoolId },
+    })
+    const gifts = rows
+      .map((r) => this.toGiftPublic(r))
+      .sort((a, b) => {
+        // occurredOn desc (nulls last), then createdAt desc, then id.
+        const oa = a.occurredOn ?? ''
+        const ob = b.occurredOn ?? ''
+        if (oa !== ob) return ob.localeCompare(oa)
+        if (a.createdAt !== b.createdAt) return b.createdAt.localeCompare(a.createdAt)
+        return a.id.localeCompare(b.id)
+      })
+    return { gifts }
+  }
+
+  async createGift(
+    schoolId: string,
+    campaignId: string,
+    dto: CreateGiftDto,
+    userId: string,
+  ): Promise<GiftPublic> {
+    // resolveCampaign FIRST — a foreign/unknown campaign 404s BEFORE any insert.
+    const campaign = await this.resolveCampaign(schoolId, campaignId)
+    const occurredOn = parseIsoDate(dto.occurredOn, 'occurredOn')
+    if (!occurredOn) throw new BadRequestException('occurredOn is required.')
+    // status is NEVER trusted from create — it is DERIVED from kind + amount + received.
+    const { receivedAmount, status } = deriveGiftState(dto.kind, dto.amount, dto.receivedAmount, undefined)
+
+    const row = await this.prisma.advancementGift.create({
+      data: {
+        // schoolId is COPIED from the resolved campaign — never trusted from the client.
+        schoolId: campaign.schoolId,
+        campaignId: campaign.id,
+        kind: dto.kind,
+        amount: dto.amount,
+        receivedAmount,
+        status,
+        occurredOn,
+        label: dto.label ?? null,
+        note: dto.note ?? null,
+        source: dto.source ?? null,
+        createdByUserId: userId,
+      },
+    })
+    await this.audit.write({
+      schoolId,
+      userId,
+      action: 'advancement.gift.created',
+      targetType: 'advancement_gifts',
+      targetId: row.id,
+    })
+    return this.toGiftPublic(row)
+  }
+
+  async updateGift(
+    schoolId: string,
+    giftId: string,
+    dto: UpdateGiftDto,
+    userId: string,
+  ): Promise<GiftPublic> {
+    const existing = await this.resolveGift(schoolId, giftId)
+    const pick = <T>(v: T | undefined, current: T): T => (v === undefined ? current : v)
+    // occurredOn is a REQUIRED (non-null) column — an omitted patch keeps the current
+    // date; the DTO can't send null (it's @IsDateString), so coerce nullish → undefined.
+    const occurredOn = parseIsoDate(dto.occurredOn, 'occurredOn') ?? undefined
+
+    // Merge the money-shape inputs, then RE-DERIVE receivedAmount + status (the common
+    // "record a payment on a pledge" path re-runs the same invariant as create).
+    const kind = pick(dto.kind, existing.kind)
+    const amount = pick(dto.amount, Number(existing.amount))
+    const receivedInput = pick(dto.receivedAmount, Number(existing.receivedAmount))
+    // status from the DTO (explicit 'written_off' override), else the current status.
+    const statusInput = pick(dto.status, existing.status)
+    const { receivedAmount, status } = deriveGiftState(kind, amount, receivedInput, statusInput)
+
+    const row = await this.prisma.advancementGift.update({
+      where: { id: existing.id },
+      data: {
+        kind,
+        amount,
+        receivedAmount,
+        status,
+        occurredOn: pick(occurredOn, existing.occurredOn),
+        label: pick(dto.label, existing.label),
+        note: pick(dto.note, existing.note),
+        source: pick(dto.source, existing.source),
+        // createdByUserId is NEVER overwritten on update (audit-lite provenance).
+      },
+    })
+    await this.audit.write({
+      schoolId,
+      userId,
+      action: 'advancement.gift.updated',
+      targetType: 'advancement_gifts',
+      targetId: row.id,
+    })
+    return this.toGiftPublic(row)
+  }
+
+  async removeGift(schoolId: string, giftId: string, userId: string): Promise<{ id: string }> {
+    const existing = await this.resolveGift(schoolId, giftId)
+    await this.prisma.advancementGift.delete({ where: { id: existing.id } })
+    await this.audit.write({
+      schoolId,
+      userId,
+      action: 'advancement.gift.deleted',
+      targetType: 'advancement_gifts',
       targetId: existing.id,
     })
     return { id: existing.id }

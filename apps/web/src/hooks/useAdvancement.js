@@ -116,6 +116,46 @@ export function useAdvancement(schoolId) {
     [schoolId, load],
   )
 
+  // ── Gifts & pledges (lazy per expanded campaign) ────────────────────────────
+  // list is lazy (called when a campaign row is expanded); every mutation awaits the
+  // write THEN reloads the campaign list so the computed rollup (raised / pledged
+  // outstanding / pct-of-goal) updates without a manual refresh.
+  const listGifts = useCallback(
+    async (campaignId) => {
+      if (!schoolId) return []
+      const res = await advancementApi.listGifts(schoolId, campaignId)
+      return res.data?.gifts ?? []
+    },
+    [schoolId],
+  )
+
+  const createGift = useCallback(
+    async (campaignId, body) => {
+      if (!schoolId) return
+      await advancementApi.createGift(schoolId, campaignId, body)
+      await load(schoolId) // refresh rollups
+    },
+    [schoolId, load],
+  )
+
+  const updateGift = useCallback(
+    async (giftId, body) => {
+      if (!schoolId) return
+      await advancementApi.updateGift(schoolId, giftId, body)
+      await load(schoolId)
+    },
+    [schoolId, load],
+  )
+
+  const removeGift = useCallback(
+    async (giftId) => {
+      if (!schoolId) return
+      await advancementApi.removeGift(schoolId, giftId)
+      await load(schoolId)
+    },
+    [schoolId, load],
+  )
+
   return {
     items,
     summary,
@@ -127,5 +167,9 @@ export function useAdvancement(schoolId) {
     createItem,
     updateItem,
     removeItem,
+    listGifts,
+    createGift,
+    updateGift,
+    removeGift,
   }
 }

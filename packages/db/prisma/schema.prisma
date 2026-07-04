@@ -127,6 +127,7 @@ model School {
   accreditationEvidence  AccreditationEvidence[]
   maintenanceItems       MaintenanceItem[]
   campaigns              AdvancementCampaign[]
+  advancementGifts       AdvancementGift[]
   documents              KnowledgeDocument[]
 
   @@index([organizationId])
@@ -213,6 +214,7 @@ model User {
   accreditationEvidenceCreated AccreditationEvidence[] @relation("AccreditationEvidenceCreatedBy")
   maintenanceItemsCreated      MaintenanceItem[]       @relation("MaintenanceItemCreatedBy")
   advancementCampaignsCreated  AdvancementCampaign[]   @relation("AdvancementCampaignCreatedBy")
+  advancementGiftsCreated      AdvancementGift[]       @relation("AdvancementGiftCreatedBy")
   knowledgeDocumentsUploaded   KnowledgeDocument[]     @relation("KnowledgeDocumentUploadedBy")
 
   @@index([email])
@@ -1054,11 +1056,66 @@ model AdvancementCampaign {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  school        School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  createdByUser User?  @relation("AdvancementCampaignCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  school        School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  createdByUser User?             @relation("AdvancementCampaignCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  gifts         AdvancementGift[]
 
   @@index([schoolId])
   @@map("advancement_campaigns")
+}
+
+// ── Phase 4 Advancement v1 — Gifts & Pledges under a campaign ─────────────────
+// CHILD entities of an AdvancementCampaign (mirrors AccreditationEvidence under a
+// standard): each row is ONE gift or pledge, so a campaign's "raised" becomes a
+// COMPUTED rollup (Σ received_amount) instead of a hand-typed aggregate — with
+// pledge-vs-received tracking. DENORMALIZED school_id tenant key (also derivable via
+// the campaign) so every gift query filters by schoolId directly — belt-and-suspenders
+// tenant isolation, NEVER trusted from the client: the service copies it from the
+// resolved campaign. Deleting a campaign cascades its gifts (onDelete: Cascade), so
+// "raised" recomputes with no orphans; deleting a user nulls created_by.
+//
+// AGGREGATE-ONLY / NO per-donor PII (see the AdvancementCampaign comment above): a gift
+// row captures amount / kind / status / date + an OPTIONAL non-identifying free-text
+// label ('Spring appeal', 'Anonymous major gift') and note/source ONLY. There is
+// DELIBERATELY NO donor name / email / address column — the platform does not model
+// donors. The DTO caps `label` length and the UI never collects an identity.
+//
+// kind/status are TEXT columns with a @default (free text at DB level); the DTO @IsIn
+// enforces the enum and the service DERIVES status from receivedAmount (0 → 'pledged',
+// 0<x<amount → 'partial', ==amount → 'received'; 'written_off' is an explicit override).
+// Mirrors MaintenanceItem.status / AdvancementCampaign.status (String, not a Prisma enum
+// — the register domains keep enums app-level, unlike the auth domain).
+model AdvancementGift {
+  id              String   @id @default(uuid()) @db.Uuid
+  schoolId        String   @map("school_id") @db.Uuid
+  campaignId      String   @map("campaign_id") @db.Uuid
+  kind            String   @default("gift") // 'gift' | 'pledge'
+  // The gift amount, or the TOTAL pledged amount. Decimal(14,2) money. Coerced to a JS
+  // number in the service's toGiftPublic (Prisma.Decimal never reaches the pure helpers).
+  amount          Decimal  @db.Decimal(14, 2)
+  // How much has actually been received. For a 'gift' == amount on creation; for a
+  // 'pledge' it's 0..amount. The campaign rollup sums THIS column into `raised`.
+  receivedAmount  Decimal  @default(0) @map("received_amount") @db.Decimal(14, 2)
+  status          String   @default("received") // 'received' | 'pledged' | 'partial' | 'written_off'
+  // Date of the gift / pledge. @db.Date UTC-midnight (mirrors campaign start/close dates).
+  occurredOn      DateTime @map("occurred_on") @db.Date
+  // OPTIONAL non-identifying label (e.g. 'Spring appeal'). NEVER a donor name.
+  label           String?
+  note            String?
+  // OPTIONAL provenance (e.g. 'event' | 'online' | 'grant'), free text.
+  source          String?
+  createdByUserId String?  @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  school        School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  // Deleting a campaign drops its gifts (no orphans, the rollup recomputes).
+  campaign      AdvancementCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  createdByUser User?               @relation("AdvancementGiftCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([schoolId])
+  @@index([campaignId])
+  @@map("advancement_gifts")
 }
 
 // ── Phase 4 Knowledge document store — the uploaded-file register ──────────────

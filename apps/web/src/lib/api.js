@@ -473,6 +473,15 @@ export const advancementApi = {
     api.patch(`/schools/${schoolId}/advancement/campaigns/${campaignId}`, body),
   removeCampaign: (schoolId, campaignId) =>
     api.delete(`/schools/${schoolId}/advancement/campaigns/${campaignId}`),
+  // Gifts & pledges under a campaign (AGGREGATE-ONLY, no donor PII). list/create are
+  // nested under a campaign; patch/delete resolve a flat gift id.
+  listGifts: (schoolId, campaignId) =>
+    api.get(`/schools/${schoolId}/advancement/campaigns/${campaignId}/gifts`),
+  createGift: (schoolId, campaignId, body) =>
+    api.post(`/schools/${schoolId}/advancement/campaigns/${campaignId}/gifts`, body),
+  updateGift: (schoolId, giftId, body) =>
+    api.patch(`/schools/${schoolId}/advancement/gifts/${giftId}`, body),
+  removeGift: (schoolId, giftId) => api.delete(`/schools/${schoolId}/advancement/gifts/${giftId}`),
 }
 
 // ── Phase 3 Workflow v1 — the generic TASK engine. School-scoped. CORE (always

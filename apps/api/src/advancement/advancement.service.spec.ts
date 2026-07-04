@@ -33,7 +33,27 @@ function campaignRow(over: Record<string, unknown> = {}) {
   }
 }
 
-function makeService(over: { campaign?: Record<string, unknown> } = {}) {
+function giftRow(over: Record<string, unknown> = {}) {
+  return {
+    id: 'g1',
+    schoolId: 'school-A',
+    campaignId: 'c1',
+    kind: 'gift',
+    amount: 100,
+    receivedAmount: 100,
+    status: 'received',
+    occurredOn: new Date('2026-05-01T00:00:00.000Z'),
+    label: null,
+    note: null,
+    source: null,
+    createdByUserId: null,
+    createdAt: new Date('2025-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2025-01-01T00:00:00.000Z'),
+    ...over,
+  }
+}
+
+function makeService(over: { campaign?: Record<string, unknown>; gift?: Record<string, unknown> } = {}) {
   const advancementCampaign = {
     findMany: vi.fn(async () => []),
     findFirst: vi.fn(async () => null),
@@ -42,10 +62,21 @@ function makeService(over: { campaign?: Record<string, unknown> } = {}) {
     delete: vi.fn(async () => campaignRow()),
     ...over.campaign,
   }
-  const prisma = { advancementCampaign }
+  // The gift child table. groupBy powers the rollup (Σ receivedAmount / pledged
+  // outstanding) — default to no entries so a campaign keeps its manual raisedAmount.
+  const advancementGift = {
+    groupBy: vi.fn(async () => []),
+    findMany: vi.fn(async () => []),
+    findFirst: vi.fn(async () => null),
+    create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => giftRow(data)),
+    update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => giftRow(data)),
+    delete: vi.fn(async () => giftRow()),
+    ...over.gift,
+  }
+  const prisma = { advancementCampaign, advancementGift }
   const audit = { write: vi.fn(async () => undefined) }
   const svc = new AdvancementService(prisma as never, audit as never)
-  return { svc, advancementCampaign, audit }
+  return { svc, advancementCampaign, advancementGift, audit }
 }
 
 const NOW = new Date('2026-07-01T12:00:00.000Z')
@@ -173,5 +204,86 @@ describe('AdvancementService — create + update + audit', () => {
     expect(data.notes).toBe('keep me')
     expect(data.goalAmount).toBe(5000) // decimal coerced to number, kept
     expect(data.createdByUserId).toBeUndefined() // not in the update payload
+  })
+})
+
+describe('AdvancementService — gifts & pledges (AGGREGATE-ONLY rollup)', () => {
+  const giftCampaign = { findFirst: vi.fn(async () => campaignRow({ id: 'c1', schoolId: 'school-A' })) }
+
+  it('createGift (gift): forces receivedAmount = amount, status "received"; copies schoolId', async () => {
+    const { svc, advancementGift } = makeService({ campaign: giftCampaign })
+    await svc.createGift('school-A', 'c1', { kind: 'gift', amount: 500, occurredOn: '2026-05-01' }, 'user-1')
+    const data = advancementGift.create.mock.calls[0][0].data
+    expect(data.schoolId).toBe('school-A') // copied from resolved campaign, not client
+    expect(data.receivedAmount).toBe(500)
+    expect(data.status).toBe('received')
+  })
+
+  it('createGift (pledge): derives status from receivedAmount (0→pledged, partial, full)', async () => {
+    const cases: Array<[number, number, string]> = [
+      [1000, 0, 'pledged'],
+      [1000, 400, 'partial'],
+      [1000, 1000, 'received'],
+    ]
+    for (const [amount, receivedAmount, status] of cases) {
+      const { svc, advancementGift } = makeService({ campaign: giftCampaign })
+      await svc.createGift('school-A', 'c1', { kind: 'pledge', amount, receivedAmount, occurredOn: '2026-05-01' }, 'u')
+      expect(advancementGift.create.mock.calls[0][0].data.status).toBe(status)
+    }
+  })
+
+  it('createGift (pledge): received > amount → BadRequest (never persisted)', async () => {
+    const { svc, advancementGift } = makeService({ campaign: giftCampaign })
+    await expect(
+      svc.createGift('school-A', 'c1', { kind: 'pledge', amount: 100, receivedAmount: 150, occurredOn: '2026-05-01' }, 'u'),
+    ).rejects.toThrow()
+    expect(advancementGift.create).not.toHaveBeenCalled()
+  })
+
+  it('createGift: foreign campaign → NotFound (tenant isolation, never inserts)', async () => {
+    const { svc, advancementGift } = makeService({ campaign: { findFirst: vi.fn(async () => null) } })
+    await expect(
+      svc.createGift('school-B', 'campaign-of-A', { kind: 'gift', amount: 10, occurredOn: '2026-05-01' }, 'u'),
+    ).rejects.toBeInstanceOf(NotFoundException)
+    expect(advancementGift.create).not.toHaveBeenCalled()
+  })
+
+  it('rollup OVERRIDES the manual raisedAmount once entries exist; adds pledgedOutstanding', async () => {
+    const { svc } = makeService({
+      campaign: {
+        findMany: vi.fn(async () => [campaignRow({ id: 'c1', goalAmount: decimal(1000), raisedAmount: decimal(999) })]),
+      },
+      gift: {
+        groupBy: vi.fn(async (args: { where: Record<string, unknown> }) =>
+          // pledged-outstanding query is filtered by kind='pledge'; the received query isn't.
+          args.where.kind === 'pledge'
+            ? [{ campaignId: 'c1', _sum: { amount: decimal(500), receivedAmount: decimal(200) } }]
+            : [{ campaignId: 'c1', _sum: { receivedAmount: decimal(300) }, _count: { _all: 2 } }],
+        ),
+      },
+    })
+    const res = await svc.listCampaigns('school-A', NOW)
+    const c = res.campaigns[0]
+    expect(c.raisedAmount).toBe(300) // Σ receivedAmount, NOT the manual 999
+    expect(c.giftCount).toBe(2)
+    expect(c.pledgedOutstanding).toBe(300) // 500 pledged - 200 received
+    expect(c.committedTotal).toBe(600) // 300 raised + 300 outstanding
+    expect(c.pctOfGoal).toBeCloseTo(300 / 1000, 10) // pct reflects the rollup
+  })
+
+  it('rollup falls back to the manual raisedAmount when a campaign has NO entries', async () => {
+    const { svc } = makeService({
+      campaign: { findMany: vi.fn(async () => [campaignRow({ id: 'c1', raisedAmount: decimal(777) })]) },
+      // groupBy default → [] (no gifts)
+    })
+    const res = await svc.listCampaigns('school-A', NOW)
+    expect(res.campaigns[0].raisedAmount).toBe(777)
+    expect(res.campaigns[0].giftCount).toBe(0)
+  })
+
+  it('removeGift: foreign id → NotFound, never deletes', async () => {
+    const { svc, advancementGift } = makeService({ gift: { findFirst: vi.fn(async () => null) } })
+    await expect(svc.removeGift('school-B', 'gift-of-A', 'u')).rejects.toBeInstanceOf(NotFoundException)
+    expect(advancementGift.delete).not.toHaveBeenCalled()
   })
 })

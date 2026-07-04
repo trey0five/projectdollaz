@@ -13,7 +13,7 @@
 // edit CampaignFormModal is kept as a dark navy/gold overlay over the light page.
 // AGGREGATE-only (no per-donor PII).
 // ─────────────────────────────────────────────────────────────────────────────
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import {
   HeartHandshake,
@@ -25,6 +25,12 @@ import {
   Clock,
   CalendarClock,
   AlertTriangle,
+  ChevronRight,
+  ChevronDown,
+  Plus,
+  ShieldCheck,
+  Gift as GiftIcon,
+  HandCoins,
 } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
 import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
@@ -388,9 +394,345 @@ function CampaignFormModal({ initial, onClose, onSave, reduce }) {
   )
 }
 
+// ═══════════════════════════ GIFTS & PLEDGES PANEL (dark, reused idiom) ══════
+
+const GIFT_KINDS = ['gift', 'pledge']
+const GIFT_KIND_LABEL = { gift: 'Gift', pledge: 'Pledge' }
+const GIFT_STATUS_LABEL = {
+  received: 'Received',
+  partial: 'Partial',
+  pledged: 'Pledged',
+  written_off: 'Written off',
+}
+// Dark-panel status pills (the panel is a navy overlay, so these are dark-theme tones).
+const GIFT_STATUS_CLS = {
+  received: 'border-emerald-400/40 bg-emerald-400/10 text-emerald-200',
+  partial: 'border-gold/50 bg-gold/10 text-gold-light',
+  pledged: 'border-white/25 bg-white/5 text-white/70',
+  written_off: 'border-red-400/40 bg-red-400/10 text-red-200',
+}
+
+const giftInputCls =
+  'rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-1.5 text-[13px] text-white outline-none focus:border-gold/60'
+
+/** Add / edit a single gift or pledge. `initial` null → add mode. Emits a ready-to-POST
+ *  body (gift ⇒ receivedAmount omitted, server forces = amount). */
+function GiftForm({ initial, onCancel, onSubmit }) {
+  const [form, setForm] = useState(
+    initial ?? { kind: 'gift', amount: '', receivedAmount: '', occurredOn: '', label: '', source: '', note: '' },
+  )
+  const [err, setErr] = useState('')
+  const [saving, setSaving] = useState(false)
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
+  const isPledge = form.kind === 'pledge'
+
+  const submit = async (e) => {
+    e.preventDefault()
+    const amount = Number(form.amount)
+    if (!form.amount.toString().trim() || Number.isNaN(amount) || amount < 0) {
+      setErr('Enter a valid amount.')
+      return
+    }
+    if (!form.occurredOn) {
+      setErr('Pick a date.')
+      return
+    }
+    const body = {
+      kind: form.kind,
+      amount,
+      occurredOn: form.occurredOn,
+      label: form.label.trim() ? form.label.trim() : null,
+      source: form.source.trim() ? form.source.trim() : null,
+      note: form.note.trim() ? form.note.trim() : null,
+    }
+    if (isPledge) {
+      const rec = form.receivedAmount.toString().trim()
+      const recNum = rec === '' ? 0 : Number(rec)
+      if (Number.isNaN(recNum) || recNum < 0 || recNum > amount) {
+        setErr('Received must be between 0 and the pledged amount.')
+        return
+      }
+      body.receivedAmount = recNum
+    }
+    setSaving(true)
+    setErr('')
+    try {
+      await onSubmit(body)
+      onCancel()
+    } catch {
+      setErr('Could not save this entry.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="mt-3 grid grid-cols-2 gap-2 rounded-lg border border-white/10 bg-navy/50 p-3">
+      <label className="block text-[12px] text-white/60">
+        Type
+        <select value={form.kind} onChange={set('kind')} className={`mt-1 w-full ${giftInputCls}`}>
+          {GIFT_KINDS.map((k) => (
+            <option key={k} value={k}>
+              {GIFT_KIND_LABEL[k]}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="block text-[12px] text-white/60">
+        {isPledge ? 'Pledged amount ($)' : 'Amount ($)'}
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          value={form.amount}
+          onChange={set('amount')}
+          placeholder="e.g. 5000"
+          className={`mt-1 w-full ${giftInputCls}`}
+        />
+      </label>
+      {isPledge ? (
+        <label className="block text-[12px] text-white/60">
+          Received so far ($)
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={form.receivedAmount}
+            onChange={set('receivedAmount')}
+            placeholder="0"
+            className={`mt-1 w-full ${giftInputCls}`}
+          />
+        </label>
+      ) : null}
+      <label className="block text-[12px] text-white/60">
+        Date
+        <input type="date" value={form.occurredOn} onChange={set('occurredOn')} className={`mt-1 w-full ${giftInputCls}`} />
+      </label>
+      <label className={`block text-[12px] text-white/60 ${isPledge ? 'col-span-2' : ''}`}>
+        Label (optional — no donor names)
+        <input
+          value={form.label}
+          onChange={set('label')}
+          maxLength={120}
+          placeholder="e.g. Spring appeal · Anonymous major gift"
+          className={`mt-1 w-full ${giftInputCls}`}
+        />
+      </label>
+      <label className="block text-[12px] text-white/60">
+        Source (optional)
+        <input
+          value={form.source}
+          onChange={set('source')}
+          maxLength={60}
+          placeholder="e.g. event · online · grant"
+          className={`mt-1 w-full ${giftInputCls}`}
+        />
+      </label>
+      <label className="col-span-2 block text-[12px] text-white/60">
+        Note (optional)
+        <input value={form.note} onChange={set('note')} maxLength={2000} className={`mt-1 w-full ${giftInputCls}`} />
+      </label>
+      {err ? <p className="col-span-2 text-[12px] text-red-300">{err}</p> : null}
+      <div className="col-span-2 flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-lg border-2 border-white/20 px-3 py-1.5 text-[13px] font-semibold text-white/70 hover:border-white/40 hover:text-white"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={saving}
+          className="rounded-lg border-2 border-gold/60 bg-gold/15 px-3 py-1.5 text-[13px] font-semibold text-gold-light hover:bg-gold/25 disabled:opacity-50"
+        >
+          {saving ? 'Saving…' : initial ? 'Save entry' : 'Add entry'}
+        </button>
+      </div>
+    </form>
+  )
+}
+
+/** The lazy-loaded gifts & pledges sub-list for one expanded campaign (dark overlay
+ *  panel — deliberately kept dark against the light table, mirrors EvidencePanel). */
+function GiftsPanel({ campaignId, canEdit, listGifts, createGift, updateGift, removeGift }) {
+  const [items, setItems] = useState(null) // null = not yet loaded
+  const [loading, setLoading] = useState(true)
+  const [adding, setAdding] = useState(false)
+  const [editingId, setEditingId] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.resolve()
+      .then(() => listGifts(campaignId))
+      .then((rows) => {
+        if (!cancelled) setItems(rows)
+      })
+      .catch(() => {
+        if (!cancelled) setItems([])
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campaignId])
+
+  const reload = async () => {
+    const rows = await listGifts(campaignId)
+    setItems(rows)
+  }
+
+  const onCreate = async (body) => {
+    await createGift(campaignId, body)
+    await reload()
+  }
+  const onEditSubmit = (giftId) => async (body) => {
+    await updateGift(giftId, body)
+    await reload()
+  }
+  const onWriteOff = async (g) => {
+    if (window.confirm(`Write off this ${g.kind}? Its outstanding pledge stops counting.`)) {
+      await updateGift(g.id, { status: 'written_off' })
+      await reload()
+    }
+  }
+  const onDelete = async (g) => {
+    if (window.confirm('Delete this entry?')) {
+      await removeGift(g.id)
+      await reload()
+    }
+  }
+
+  return (
+    <div className="border-t border-white/10 bg-navy/40 px-6 py-4">
+      <p className="mb-3 flex items-center gap-1.5 text-[12px] text-white/50">
+        <ShieldCheck size={13} className="text-gold-light" />
+        Aggregate only — record amounts, never donor names. &ldquo;Raised&rdquo; is the sum of what has been received.
+      </p>
+
+      {loading || items === null ? (
+        <p className="text-[13px] text-white/50">Loading gifts &amp; pledges…</p>
+      ) : items.length === 0 ? (
+        <p className="text-[13px] text-white/55">No gifts or pledges recorded yet.</p>
+      ) : (
+        <ul className="space-y-2">
+          {items.map((g) => {
+            const Icon = g.kind === 'pledge' ? HandCoins : GiftIcon
+            const pledgeUnfulfilled = g.kind === 'pledge' && g.status !== 'written_off' && g.receivedAmount < g.amount
+            if (editingId === g.id) {
+              return (
+                <li key={g.id}>
+                  <GiftForm
+                    initial={{
+                      kind: g.kind,
+                      amount: String(g.amount),
+                      receivedAmount: String(g.receivedAmount),
+                      occurredOn: g.occurredOn ?? '',
+                      label: g.label ?? '',
+                      source: g.source ?? '',
+                      note: g.note ?? '',
+                    }}
+                    onCancel={() => setEditingId(null)}
+                    onSubmit={onEditSubmit(g.id)}
+                  />
+                </li>
+              )
+            }
+            return (
+              <li
+                key={g.id}
+                className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-navy/50 px-3 py-2"
+              >
+                <div className="flex min-w-0 items-center gap-2">
+                  <Icon size={15} className="shrink-0 text-gold-light" />
+                  <span className={`text-[14px] font-semibold text-white ${g.status === 'written_off' ? 'line-through opacity-60' : ''}`}>
+                    {fmtMoneyFull(g.amount)}
+                  </span>
+                  <span
+                    className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[11px] font-semibold ${GIFT_STATUS_CLS[g.status] ?? GIFT_STATUS_CLS.pledged}`}
+                  >
+                    {GIFT_STATUS_LABEL[g.status] ?? g.status}
+                  </span>
+                  {g.kind === 'pledge' ? (
+                    <span className="text-[12px] text-white/55">
+                      {fmtMoneyFull(g.receivedAmount)} received of {fmtMoneyFull(g.amount)}
+                    </span>
+                  ) : null}
+                  {g.label ? <span className="truncate text-[12px] text-white/45">· {g.label}</span> : null}
+                  {g.occurredOn ? (
+                    <span className="shrink-0 text-[11px] text-white/40">{shortDate(g.occurredOn) ?? g.occurredOn}</span>
+                  ) : null}
+                </div>
+                {canEdit ? (
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {pledgeUnfulfilled ? (
+                      <button
+                        type="button"
+                        onClick={() => setEditingId(g.id)}
+                        className="rounded-lg border-2 border-gold/40 bg-gold/10 px-2 py-1 text-[12px] font-semibold text-gold-light hover:bg-gold/20"
+                      >
+                        Record payment
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setEditingId(g.id)}
+                        aria-label="Edit entry"
+                        className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-gold/60 hover:text-white"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                    )}
+                    {g.status !== 'written_off' ? (
+                      <button
+                        type="button"
+                        onClick={() => onWriteOff(g)}
+                        aria-label="Write off"
+                        title="Write off"
+                        className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-red-400/60 hover:text-red-200"
+                      >
+                        <TrendingDown size={14} />
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => onDelete(g)}
+                      aria-label="Delete entry"
+                      className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-red-400/60 hover:text-red-200"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ) : null}
+              </li>
+            )
+          })}
+        </ul>
+      )}
+
+      {canEdit ? (
+        adding ? (
+          <GiftForm onCancel={() => setAdding(false)} onSubmit={onCreate} />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="mt-3 inline-flex items-center gap-1.5 rounded-lg border-2 border-white/20 px-3 py-1.5 text-[13px] font-semibold text-white/70 hover:border-gold/60 hover:text-gold-light"
+          >
+            <Plus size={14} /> Add gift / pledge
+          </button>
+        )
+      ) : null}
+    </div>
+  )
+}
+
 // ═══════════════════════════ LIGHT REGISTER TABLE ═══════════════════════════
 
-function CampaignsTable({ campaigns, loading, error, canEdit, reduce, onEdit, onDelete }) {
+function CampaignsTable({ campaigns, loading, error, canEdit, reduce, expanded, onToggle, onEdit, onDelete }) {
   if (loading) return <StateRow><p className="text-[14px] text-muted">Loading campaigns…</p></StateRow>
   if (error)
     return (
@@ -417,13 +759,16 @@ function CampaignsTable({ campaigns, loading, error, canEdit, reduce, onEdit, on
           <Th>Progress</Th>
           <Th right>Raised · Goal</Th>
           <Th>Close</Th>
-          {canEdit ? <Th right>Actions</Th> : null}
+          <Th right>Gifts</Th>
         </>
       }
     >
       <AnimatePresence initial={false}>
         {campaigns.map((c) => {
           const pctLabel = fmtPct(c.pctOfGoal)
+          const isOpen = expanded === c.id
+          const outstanding = typeof c.pledgedOutstanding === 'number' ? c.pledgedOutstanding : 0
+          const giftCount = typeof c.giftCount === 'number' ? c.giftCount : 0
           return (
             <motion.tr
               key={c.id}
@@ -456,16 +801,33 @@ function CampaignsTable({ campaigns, loading, error, canEdit, reduce, onEdit, on
                 <span className="text-muted">
                   {typeof c.goalAmount === 'number' ? ` / ${fmtMoneyFull(c.goalAmount)}` : ''}
                 </span>
+                {outstanding > 0 ? (
+                  <div className="mt-0.5 text-[11.5px] font-semibold text-[#7a5e00]">
+                    +{fmtMoneyFull(outstanding)} pledged
+                  </div>
+                ) : null}
               </td>
               <td className="px-4 py-3 text-muted">{c.closeDate ? (shortDate(c.closeDate) ?? c.closeDate) : '—'}</td>
-              {canEdit ? (
-                <td className="px-4 py-3">
-                  <div className="flex justify-end gap-1.5 opacity-60 transition group-hover:opacity-100">
-                    <IconAction Icon={Pencil} onClick={() => onEdit(c)} label={`Edit ${c.name}`} />
-                    <IconAction Icon={Trash2} danger onClick={() => onDelete(c)} label={`Delete ${c.name}`} />
-                  </div>
-                </td>
-              ) : null}
+              <td className="px-4 py-3">
+                <div className="flex justify-end gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => onToggle(c.id)}
+                    aria-label={isOpen ? `Collapse gifts for ${c.name}` : `Expand gifts for ${c.name}`}
+                    title={isOpen ? 'Collapse gifts & pledges' : 'Gifts & pledges'}
+                    className="inline-flex items-center gap-1 rounded-lg border border-rule/60 px-2 py-1 text-[12px] font-semibold text-muted transition hover:border-gold/60 hover:text-navy"
+                  >
+                    {giftCount > 0 ? giftCount : ''}
+                    {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  </button>
+                  {canEdit ? (
+                    <span className="flex gap-1.5 opacity-60 transition group-hover:opacity-100">
+                      <IconAction Icon={Pencil} onClick={() => onEdit(c)} label={`Edit ${c.name}`} />
+                      <IconAction Icon={Trash2} danger onClick={() => onDelete(c)} label={`Delete ${c.name}`} />
+                    </span>
+                  ) : null}
+                </div>
+              </td>
             </motion.tr>
           )
         })}
@@ -494,18 +856,30 @@ function AdvancementWorkspace() {
     createItem,
     updateItem,
     removeItem,
+    listGifts,
+    createGift,
+    updateGift,
+    removeGift,
   } = useAdvancement(schoolId)
 
   const [tab, setTab] = useState('campaigns')
   const [modal, setModal] = useState(null) // { entity } | null
+  const [expanded, setExpanded] = useState(null) // expanded campaign id, or null
 
   const openCreate = () => setModal({ entity: null })
   const openEdit = (entity) => setModal({ entity })
   const closeModal = () => setModal(null)
+  const toggleExpanded = (id) => setExpanded((cur) => (cur === id ? null : id))
 
   const onDelete = async (c) => {
-    if (window.confirm(`Delete "${c.name}"?`)) await removeItem(c.id)
+    if (window.confirm(`Delete "${c.name}"?`)) {
+      if (expanded === c.id) setExpanded(null)
+      await removeItem(c.id)
+    }
   }
+
+  // The expanded campaign (kept in sync as the list refetches after a rollup change).
+  const expandedCampaign = expanded ? items.find((c) => c.id === expanded) ?? null : null
 
   // ── KPIs (computed from the summary) ───────────────────────────────────────
   const kpis = useMemo(() => {
@@ -633,6 +1007,8 @@ function AdvancementWorkspace() {
       error={error}
       canEdit={canEdit}
       reduce={reduce}
+      expanded={expanded}
+      onToggle={toggleExpanded}
       onEdit={openEdit}
       onDelete={onDelete}
     />
@@ -683,6 +1059,71 @@ function AdvancementWorkspace() {
         registerTable={registerTable}
         attentionItems={attentionItems}
       />
+
+      {/* Expanded campaign → its gifts & pledges, shown as a light-wrapped dark panel
+          below the center (the register rows can't host their own sub-row cleanly, so
+          the open campaign's entries live here — mirrors the accreditation evidence UX). */}
+      {expandedCampaign ? (
+        <div className="mx-auto max-w-[1180px] px-4 pb-8 sm:px-10">
+          <motion.div
+            layout={!reduce}
+            initial={reduce ? false : { opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="overflow-hidden rounded-2xl border-2 border-gold/20 bg-navy-gradient shadow-navy-glow"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <HeartHandshake size={16} className="shrink-0 text-gold-light" />
+                <span className="truncate text-[14px] font-semibold text-white">
+                  {expandedCampaign.name}
+                </span>
+                <span className="rounded-md border border-white/20 bg-white/5 px-2 py-0.5 text-[11px] font-semibold text-white/70">
+                  Gifts &amp; pledges
+                </span>
+              </div>
+              <div className="flex items-center gap-4 text-[12px]">
+                <span className="text-white/70">
+                  Raised{' '}
+                  <span className="font-semibold text-emerald-200">
+                    {fmtMoneyFull(expandedCampaign.raisedAmount ?? 0)}
+                  </span>
+                </span>
+                <span className="text-white/70">
+                  Pledged{' '}
+                  <span className="font-semibold text-gold-light">
+                    {fmtMoneyFull(expandedCampaign.pledgedOutstanding ?? 0)}
+                  </span>
+                </span>
+                <span className="text-white/70">
+                  Goal{' '}
+                  <span className="font-semibold text-white">
+                    {typeof expandedCampaign.goalAmount === 'number'
+                      ? fmtMoneyFull(expandedCampaign.goalAmount)
+                      : '—'}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setExpanded(null)}
+                  aria-label="Close gifts panel"
+                  className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-gold/60 hover:text-white"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+            <GiftsPanel
+              key={expandedCampaign.id}
+              campaignId={expandedCampaign.id}
+              canEdit={canEdit}
+              listGifts={listGifts}
+              createGift={createGift}
+              updateGift={updateGift}
+              removeGift={removeGift}
+            />
+          </motion.div>
+        </div>
+      ) : null}
 
       {modal ? (
         <CampaignFormModal

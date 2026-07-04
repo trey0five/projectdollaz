@@ -3,6 +3,7 @@ import { AuthModule } from '../auth/auth.module.js'
 import { BillingModule } from '../billing/billing.module.js'
 import { AuditModule } from '../common/audit/audit.module.js'
 import { CampaignController } from './campaign.controller.js'
+import { GiftController } from './gift.controller.js'
 import { AdvancementService } from './advancement.service.js'
 
 /**
@@ -19,7 +20,7 @@ import { AdvancementService } from './advancement.service.js'
  */
 @Module({
   imports: [AuthModule, BillingModule, AuditModule],
-  controllers: [CampaignController],
+  controllers: [CampaignController, GiftController],
   providers: [AdvancementService],
   exports: [AdvancementService],
 })
