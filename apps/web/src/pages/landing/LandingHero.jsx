@@ -18,7 +18,7 @@ import { Link } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
 import { ChevronDown } from 'lucide-react'
 import StudioBackdrop from '../../components/penny/studio/StudioBackdrop.jsx'
-import PennyAvatar from '../../components/penny/PennyAvatar.jsx'
+import PennyMascot from './PennyMascot.jsx'
 import PennyDemo from './PennyDemo.jsx'
 import { EASE } from './Reveal.jsx'
 import { HERO } from './landingContent.js'
@@ -35,7 +35,7 @@ const AV_Y = 6 + 12 + 22
 // and unfolds into the chat. Nav stays interactive throughout; click skips.
 const BEATS = [200, 750, 1250, 2050, 2750, 3350]
 
-export default function LandingHero() {
+export default function LandingHero({ onIntroOpen }) {
   const reduce = useReducedMotion()
   const sectionRef = useRef(null)
   const chatRef = useRef(null) // the (unscaled) grid cell wrapping the chat box
@@ -79,8 +79,17 @@ export default function LandingHero() {
   const coinStaged = phase >= 3
   const coinFlown = phase >= 4
   const chatExpand = phase >= 5
-  const textIn = phase >= 5
+  // The headline racks in the moment the mascot starts moving right (phase 4),
+  // not after the chat has finished unfolding.
+  const textIn = phase >= 4
   const settled = phase >= 6
+
+  // Tell the page the "screen" is on, so the fixed nav can reveal with the hero
+  // (it stays hidden over the dark pre-open field). Fires immediately under
+  // reduced motion (phase starts settled → open is already true).
+  useEffect(() => {
+    if (open) onIntroOpen?.()
+  }, [open, onIntroOpen])
 
   // Mascot animation. It appears center-stage (big), flies to the avatar spot
   // (lg only), then fades as the chat unfolds from underneath it.
@@ -253,7 +262,7 @@ export default function LandingHero() {
           boxShadow: '0 0 36px rgba(212,180,122,.5)',
         }}
       >
-        <PennyAvatar size={COIN} />
+        <PennyMascot size={COIN} playing={coinStaged && !chatExpand} />
       </motion.div>
 
       {/* Scroll cue — appears with the settle. */}

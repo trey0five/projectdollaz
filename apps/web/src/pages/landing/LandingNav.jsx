@@ -10,7 +10,9 @@ import { useAuth } from '../../context/AuthContext.jsx'
 
 const FOCUS_RING = 'outline-none focus-visible:ring-2 focus-visible:ring-gold/60'
 
-export default function LandingNav() {
+// `show` gates the nav's entrance: on the landing it stays hidden over the hero's
+// dark pre-"power-on" field and reveals once the hero's TV-bloom opens.
+export default function LandingNav({ show = true }) {
   const reduce = useReducedMotion()
   const { isAuthenticated } = useAuth()
   const [scrolled, setScrolled] = useState(false)
@@ -24,10 +26,12 @@ export default function LandingNav() {
 
   return (
     <motion.header
-      initial={reduce ? false : { opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.4 }}
+      initial={reduce ? false : { opacity: 0, y: -10 }}
+      animate={{ opacity: show ? 1 : 0, y: show ? 0 : -10 }}
+      transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
       className={`fixed inset-x-0 top-0 z-40 transition-colors duration-300 ${
+        show ? '' : 'pointer-events-none'
+      } ${
         scrolled
           ? 'border-b border-white/10 bg-navy-deep/85 backdrop-blur-md'
           : 'border-b border-transparent bg-transparent'
