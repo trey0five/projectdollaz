@@ -20,7 +20,9 @@ import {
   FileSpreadsheet,
   Landmark,
   Library,
+  RotateCcw,
   Sparkles,
+  Undo2,
   Wrench,
 } from 'lucide-react'
 import AppliedCard from './AppliedCard.jsx'
@@ -36,7 +38,7 @@ const DESTINATIONS = [
 ]
 const DESTINATION_LABEL = Object.fromEntries(DESTINATIONS.map((d) => [d.key, d.label]))
 
-export default function ProposalCard({ proposal, index, messageIndex, onConfirm, onCancel }) {
+export default function ProposalCard({ proposal, index, messageIndex, onConfirm, onCancel, onUndo }) {
   const action = proposal?.action
   const status = proposal?.status
   const isImport = action?.kind === 'import_trial_balance'
@@ -52,8 +54,15 @@ export default function ProposalCard({ proposal, index, messageIndex, onConfirm,
   const [chosen, setChosen] = useState(hasDestination ? payload.destination : 'knowledge')
 
   // Autonomous writes ride the same proposals[] array, flagged applied:true with a
-  // terminal status — render the receipt card instead of the confirm UI below.
-  if (proposal?.applied) return <AppliedCard proposal={proposal} />
+  // terminal status — render the receipt card instead of the confirm UI below. It
+  // carries its own inline Undo when the action is reversible.
+  if (proposal?.applied)
+    return (
+      <AppliedCard
+        proposal={proposal}
+        onUndo={onUndo ? () => onUndo(messageIndex, index, proposal) : undefined}
+      />
+    )
 
   const confidence =
     typeof payload.confidence === 'number' && Number.isFinite(payload.confidence)
@@ -143,9 +152,41 @@ export default function ProposalCard({ proposal, index, messageIndex, onConfirm,
       ) : status === 'applying' ? (
         <p className="mt-1 text-[14px] text-muted">Applying…</p>
       ) : status === 'applied' ? (
-        <p className="mt-1 inline-flex items-center gap-1 text-[14px] font-semibold text-[#7a5e00]">
-          <CheckCircle2 size={14} aria-hidden /> Applied
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-1 text-[14px] font-semibold text-[#7a5e00]">
+            <CheckCircle2 size={14} aria-hidden /> Applied
+          </span>
+          {proposal?.reversible && proposal?.auditId && onUndo ? (
+            <button
+              type="button"
+              onClick={() => onUndo(messageIndex, index, proposal)}
+              className="inline-flex items-center gap-1 rounded-lg border border-navy/15 bg-white px-2.5 py-1 text-[13px] font-semibold text-navy/80 transition-colors hover:border-navy/30 hover:text-navy focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+            >
+              <Undo2 size={13} aria-hidden /> Undo
+            </button>
+          ) : null}
+        </div>
+      ) : status === 'undoing' ? (
+        <p className="mt-1 inline-flex items-center gap-1.5 text-[14px] text-muted">
+          <RotateCcw size={13} aria-hidden className="motion-safe:animate-spin" /> Undoing…
         </p>
+      ) : status === 'undone' ? (
+        <p className="mt-1 inline-flex items-center gap-1 text-[14px] font-semibold text-emerald-700">
+          <CheckCircle2 size={14} aria-hidden /> Undone
+        </p>
+      ) : status === 'undo-error' ? (
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          <span className="text-[14px] text-danger">Couldn’t undo — try again.</span>
+          {onUndo ? (
+            <button
+              type="button"
+              onClick={() => onUndo(messageIndex, index, proposal)}
+              className="inline-flex items-center gap-1 rounded-lg border border-navy/15 bg-white px-2.5 py-1 text-[13px] font-semibold text-navy/80 transition-colors hover:border-navy/30 hover:text-navy"
+            >
+              <Undo2 size={13} aria-hidden /> Retry undo
+            </button>
+          ) : null}
+        </div>
       ) : status === 'error' ? (
         <p className="mt-1 text-[14px] text-danger">Couldn’t apply — try again.</p>
       ) : (

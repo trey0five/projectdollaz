@@ -535,6 +535,11 @@ export const assistantApi = {
   chat: (schoolId, body) => api.post(`/schools/${schoolId}/assistant/chat`, body),
   // Apply a user-confirmed proposal (write — owner/accountant).
   apply: (schoolId, action) => api.post(`/schools/${schoolId}/assistant/apply`, action),
+  // Penny action log: the recent changes she made (owner/accountant).
+  getActivity: (schoolId) => api.get(`/schools/${schoolId}/assistant/activity`),
+  // Undo one logged action by its audit-log id (owner/accountant).
+  undoActivity: (schoolId, auditId) =>
+    api.post(`/schools/${schoolId}/assistant/activity/${auditId}/undo`),
   // ── Penny AI upgrade: URL builders for the raw fetch loops (SSE + TTS) ──────
   // These return the proxied path only; the hooks (useTextToSpeech / usePennyChat)
   // do the fetch themselves with `Authorization: Bearer ${tokenStore.getAccess()}`

@@ -19,6 +19,7 @@ export default function PennyMessageList({
   onRetry,
   onConfirmProposal,
   onSetProposalStatus,
+  onUndoProposal,
 }) {
   const scrollRef = useRef(null)
   const pinnedRef = useRef(true)
@@ -78,6 +79,7 @@ export default function PennyMessageList({
             onOpenImage={onOpenImage}
             onConfirmProposal={onConfirmProposal}
             onSetProposalStatus={onSetProposalStatus}
+            onUndoProposal={onUndoProposal}
           />
         )
       })}

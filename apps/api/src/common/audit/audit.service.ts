@@ -42,4 +42,32 @@ export class AuditService {
       this.logger.warn(`Failed to write audit log for ${entry.action}: ${String(err)}`)
     }
   }
+
+  /**
+   * Like {@link write}, but returns the new row's id so a caller (Penny's action
+   * log) can reference this entry later — e.g. to render an inline Undo keyed on it,
+   * or to record a matching `undone` marker. Still best-effort: on a write failure it
+   * logs and returns null rather than throwing, so it never blocks the mutation it
+   * accompanies. Callers must treat a null id as "no log entry" (no Undo offered).
+   */
+  async writeReturning(entry: AuditEntry): Promise<string | null> {
+    try {
+      const row = await this.prisma.auditLog.create({
+        data: {
+          organizationId: entry.organizationId ?? null,
+          schoolId: entry.schoolId ?? null,
+          userId: entry.userId ?? null,
+          action: entry.action,
+          targetType: entry.targetType ?? null,
+          targetId: entry.targetId ?? null,
+          metadata: entry.metadata ?? undefined,
+        },
+        select: { id: true },
+      })
+      return row.id
+    } catch (err) {
+      this.logger.warn(`Failed to write audit log for ${entry.action}: ${String(err)}`)
+      return null
+    }
+  }
 }

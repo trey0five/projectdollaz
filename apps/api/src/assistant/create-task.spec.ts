@@ -57,6 +57,7 @@ function makeService(opts: {
     stub, // facilities
     stub, // advancement
     stub, // orgBriefing
+    stub, // audit
   )
   return { svc, tasksCreate, membershipFindFirst }
 }
@@ -169,10 +170,18 @@ describe('create_task — applyAction (assignee resolution, real write)', () => 
     )
   })
 
-  it('returns { applied: true, summary }', async () => {
+  it('returns { applied: true, summary } (+ additive action-log fields)', async () => {
     const { svc } = makeService()
     const res = await apply(svc, baseAction({ title: 'T' }))
-    expect(res).toEqual({ applied: true, summary: 'Create task' })
+    // Backward-compatible core contract preserved; extra fields are additive. A
+    // created task is reversible and carries its captured id.
+    expect(res).toMatchObject({
+      applied: true,
+      summary: 'Create task',
+      targetType: 'create_task',
+      targetId: 't1',
+      reversible: true,
+    })
   })
 })
 

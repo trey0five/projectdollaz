@@ -54,8 +54,8 @@ function makeService(opts: { orgId?: string | null } = {}) {
   const orgBriefing = { getOrgBriefing }
   const stub = {} as never
 
-  // Positional constructor: prisma(0), periods(1), … orgBriefing(25, LAST).
-  const args: unknown[] = Array(26).fill(stub)
+  // Positional constructor: prisma(0), periods(1), … orgBriefing(25), audit(26, LAST).
+  const args: unknown[] = Array(27).fill(stub)
   args[0] = prisma
   args[1] = periods
   args[25] = orgBriefing

@@ -19,6 +19,7 @@ export default function PennyMessage({
   onOpenImage,
   onConfirmProposal,
   onSetProposalStatus,
+  onUndoProposal,
   messageIndex,
 }) {
   if (message.role === 'user') {
@@ -86,6 +87,7 @@ export default function PennyMessage({
             messageIndex={messageIndex}
             onConfirm={onConfirmProposal}
             onCancel={onSetProposalStatus}
+            onUndo={onUndoProposal}
           />
         ))}
       </div>

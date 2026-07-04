@@ -7,9 +7,11 @@ import {
   BadRequestException,
   Injectable,
   Logger,
+  NotFoundException,
   ServiceUnavailableException,
+  UnprocessableEntityException,
 } from '@nestjs/common'
-import type { User } from '@finrep/db'
+import type { Prisma, User } from '@finrep/db'
 import type { NormalizedRow } from '@finrep/ingestion'
 import {
   computeDriverBudget,
@@ -63,6 +65,7 @@ import type { CreateMeetingDto } from '../governance/dto/create-meeting.dto.js'
 import type { CreateStandardDto } from '../accreditation/dto/create-standard.dto.js'
 import type { CreateMaintenanceDto } from '../facilities/dto/create-maintenance.dto.js'
 import type { CreateCampaignDto } from '../advancement/dto/create-campaign.dto.js'
+import { AuditService } from '../common/audit/audit.service.js'
 import { AssistantClient } from './assistant.client.js'
 import {
   AssistantFilesService,
@@ -134,6 +137,30 @@ const REFRESH: Record<ProposedAction['kind'], RefreshKey[]> = {
   create_maintenance_item: ['facilities'],
   create_campaign: ['advancement'],
 }
+
+// Penny action-log stamps. Every applied action is written to the AuditLog under
+// this action string (source:'assistant') so /assistant/activity can read the log
+// back; an undo writes the paired marker so the log reflects it + double-undo no-ops.
+const AUDIT_APPLIED = 'assistant.action.applied'
+const AUDIT_UNDONE = 'assistant.action.undone'
+
+// Action kinds we can UNDO by deleting the single row we captured at apply time. An
+// action is offered an Undo only when its kind is in here AND we captured a targetId
+// (so a compound file_document→facilities filing — a maintenance item PLUS a doc, no
+// single reversible id — is deliberately excluded). import_monthly_actuals is left
+// out for v1: its reversal (MonthlySnapshotsService.remove) is keyed by periodId +
+// monthKey, not a single created id, so it has no captured targetId to undo from.
+const REVERSIBLE_KINDS = new Set<ProposedAction['kind']>([
+  'create_policy',
+  'create_committee',
+  'create_meeting',
+  'create_standard',
+  'create_maintenance_item',
+  'create_campaign',
+  'create_task',
+  'file_document',
+  'import_trial_balance',
+])
 
 // Tools that perform a write. Membership UNCHANGED — but the meaning flips from
 // "propose for confirmation" to "execute autonomously, then report what changed".
@@ -392,6 +419,13 @@ export type StreamEvent =
       details?: AppliedDetail[]
       periodId: string
       refresh?: RefreshKey[]
+      // Penny action-log fields — let the receipt render an inline Undo. targetType is
+      // the tool kind; targetId is the created row (null when nothing single-id was
+      // created); auditId is this action's log entry; reversible gates the Undo button.
+      targetType?: WriteToolName
+      targetId?: string | null
+      auditId?: string | null
+      reversible?: boolean
     }
   | { type: 'guide'; steps: GuideStep[] }
   | { type: 'error'; text: string }
@@ -430,6 +464,32 @@ export interface AssistantReply {
   proposals: ProposedAction[]
 }
 
+/**
+ * applyAction's result. `applied` + `summary` are the ORIGINAL contract (a caller
+ * reading only those still works unchanged); the rest drive Penny's action log +
+ * inline Undo. `targetId` is the created row (null when nothing single-id was made),
+ * `auditId` the log entry, `reversible` whether an Undo may be offered.
+ */
+export interface ApplyResult {
+  applied: boolean
+  summary: string
+  targetType: ProposedAction['kind']
+  targetId: string | null
+  auditId: string | null
+  reversible: boolean
+}
+
+/** One row of Penny's action log (GET /assistant/activity). */
+export interface ActivityEntry {
+  id: string
+  createdAt: Date
+  tool: string
+  summary: string
+  targetId: string | null
+  reversible: boolean
+  undone: boolean
+}
+
 @Injectable()
 export class AssistantService {
   private readonly logger = new Logger(AssistantService.name)
@@ -463,6 +523,10 @@ export class AssistantService {
     // Read-only ORG roster for the cross-school list_schools_status tool. Added
     // LAST so existing positional-arg unit specs stay valid; DI is by type.
     private readonly orgBriefing: OrgBriefingService,
+    // Best-effort audit writer for Penny's action log. Appended AFTER orgBriefing so
+    // existing positional-arg unit specs (which stop at orgBriefing) still construct;
+    // in those `this.audit` is undefined and every write below is optional-chained.
+    private readonly audit: AuditService,
   ) {}
 
   isConfigured(): boolean {
@@ -751,6 +815,12 @@ export class AssistantService {
           summary: res.summary,
           periodId: action.periodId,
           refresh: REFRESH[action.kind],
+          // Action-log fields so the receipt can render an inline Undo (only import_*
+          // are autonomous WRITE_TOOLS today; a TB import is reversible via its id).
+          targetType: res.targetType,
+          targetId: res.targetId,
+          auditId: res.auditId,
+          reversible: res.reversible,
           ...(action.kind === 'import_trial_balance'
             ? { details: this.importDetails(action) }
             : action.kind === 'import_monthly_actuals'
@@ -1643,12 +1713,197 @@ export class AssistantService {
     return deepMerge(base, overrides)
   }
 
-  /** Apply a user-confirmed proposal. Deterministic — no LLM. owner/accountant only. */
-  async applyAction(
+  /**
+   * Apply a user-confirmed proposal, then stamp it into Penny's action log.
+   * Deterministic — no LLM. owner/accountant only (route @Roles). Runs the domain
+   * write via {@link dispatchApply} (which returns the created row id where one
+   * exists), records ONE assistant-scoped AuditLog entry, and returns the log id +
+   * reversibility so the caller can render an inline Undo. Backward-compatible:
+   * `applied` + `summary` are unchanged; the extra fields are purely additive.
+   */
+  async applyAction(schoolId: string, user: User, action: ProposedAction): Promise<ApplyResult> {
+    const { summary, createdId } = await this.dispatchApply(schoolId, user, action)
+    const reversible = REVERSIBLE_KINDS.has(action.kind) && createdId != null
+    const metadata: Record<string, unknown> = {
+      tool: action.kind,
+      summary,
+      source: 'assistant',
+      reversible,
+      createdId: createdId ?? null,
+      periodId: action.periodId || null,
+    }
+    // A TB import records which slot (cy/py/audit) it filled — useful log context.
+    if (action.kind === 'import_trial_balance' && typeof action.payload.role === 'string') {
+      metadata.importRole = action.payload.role
+    }
+    // Best-effort: a log write failure must NEVER fail the write the user just made,
+    // and in unit specs (which construct without an AuditService) this.audit is
+    // undefined, so both the service and its method are optional-chained.
+    const auditId =
+      (await this.audit?.writeReturning?.({
+        schoolId,
+        userId: user.id,
+        action: AUDIT_APPLIED,
+        targetType: action.kind,
+        targetId: createdId ?? null,
+        metadata: metadata as Prisma.InputJsonValue,
+      })) ?? null
+    return {
+      applied: true,
+      summary,
+      targetType: action.kind,
+      targetId: createdId ?? null,
+      auditId,
+      reversible,
+    }
+  }
+
+  /**
+   * Penny's action log — the 30 most-recent things she changed in this school. Reads
+   * the assistant-scoped AuditLog entries and marks each one `undone` when a paired
+   * `assistant.action.undone` marker exists for it. Tenant-scoped (schoolId); the
+   * route restricts it to owner/accountant.
+   */
+  async listActivity(schoolId: string): Promise<ActivityEntry[]> {
+    const applied = await this.prisma.auditLog.findMany({
+      where: { schoolId, action: AUDIT_APPLIED },
+      orderBy: { createdAt: 'desc' },
+      take: 30,
+    })
+    // An undo writes a marker whose targetId is the ORIGINAL applied entry's id. Pull
+    // the markers for exactly these rows so the log can show what's already undone.
+    const markers = applied.length
+      ? await this.prisma.auditLog.findMany({
+          where: {
+            schoolId,
+            action: AUDIT_UNDONE,
+            targetId: { in: applied.map((a) => a.id) },
+          },
+          select: { targetId: true },
+        })
+      : []
+    const undone = new Set(
+      markers.map((m) => m.targetId).filter((id): id is string => typeof id === 'string'),
+    )
+    return applied.map((r) => {
+      const md = (r.metadata ?? {}) as Record<string, unknown>
+      return {
+        id: r.id,
+        createdAt: r.createdAt,
+        tool: typeof md.tool === 'string' ? md.tool : (r.targetType ?? 'action'),
+        summary: typeof md.summary === 'string' ? md.summary : '',
+        targetId: r.targetId,
+        reversible: md.reversible === true && !!r.targetId,
+        undone: undone.has(r.id),
+      }
+    })
+  }
+
+  /**
+   * Undo one logged action. Loads the applied entry (tenant-checked → 404 if it isn't
+   * this school's or isn't an applied entry), rejects a non-reversible one (422), and
+   * is idempotent: an already-undone entry is a no-op, and a NotFound from the reverse
+   * call (the record was already deleted from the normal screen) is treated as an
+   * already-undone no-op. On success it records the `undone` marker (targetId = the
+   * original entry id) so the log reflects it and a second undo no-ops. owner/accountant
+   * only (route @Roles). Reuses each domain service's own tenant checks.
+   */
+  async undoActivity(
+    schoolId: string,
+    user: User,
+    auditId: string,
+  ): Promise<{ undone: boolean; alreadyUndone?: boolean }> {
+    const row = await this.prisma.auditLog.findUnique({ where: { id: auditId } })
+    if (!row || row.schoolId !== schoolId || row.action !== AUDIT_APPLIED) {
+      throw new NotFoundException('That activity entry was not found.')
+    }
+    const md = (row.metadata ?? {}) as Record<string, unknown>
+    if (md.reversible !== true || !row.targetId) {
+      throw new UnprocessableEntityException('That action can’t be undone here.')
+    }
+    // Idempotent: if we already logged an undo for this entry, don't reverse twice.
+    const existing = await this.prisma.auditLog.findFirst({
+      where: { schoolId, action: AUDIT_UNDONE, targetId: auditId },
+      select: { id: true },
+    })
+    if (existing) return { undone: true, alreadyUndone: true }
+
+    const tool = typeof md.tool === 'string' ? md.tool : (row.targetType ?? '')
+    let alreadyGone = false
+    try {
+      await this.reverseApplied(user, schoolId, tool, row.targetId)
+    } catch (e) {
+      // The record was already removed from the normal screen → treat as undone.
+      if (e instanceof NotFoundException) alreadyGone = true
+      else throw e
+    }
+    await this.audit?.write?.({
+      schoolId,
+      userId: user.id,
+      action: AUDIT_UNDONE,
+      targetType: tool,
+      targetId: auditId,
+      metadata: { tool, source: 'assistant', undoneOf: auditId, alreadyGone },
+    })
+    return alreadyGone ? { undone: true, alreadyUndone: true } : { undone: true }
+  }
+
+  /**
+   * Dispatch an undo to the existing tenant-checked reverse method for a tool kind.
+   * All the domain removes take (schoolId, id, userId); imports.remove takes (user,
+   * schoolId, importId). A NotFound bubbles up so undoActivity can no-op it.
+   */
+  private async reverseApplied(
+    user: User,
+    schoolId: string,
+    tool: string,
+    targetId: string,
+  ): Promise<void> {
+    switch (tool) {
+      case 'create_policy':
+        await this.policies.remove(schoolId, targetId, user.id)
+        return
+      case 'create_committee':
+        await this.committees.remove(schoolId, targetId, user.id)
+        return
+      case 'create_meeting':
+        await this.meetings.remove(schoolId, targetId, user.id)
+        return
+      case 'create_standard':
+        await this.accreditation.removeStandard(schoolId, targetId, user.id)
+        return
+      case 'create_maintenance_item':
+        await this.facilities.removeMaintenance(schoolId, targetId, user.id)
+        return
+      case 'create_campaign':
+        await this.advancement.removeCampaign(schoolId, targetId, user.id)
+        return
+      case 'create_task':
+        await this.tasks.remove(schoolId, targetId, user.id)
+        return
+      case 'file_document':
+        await this.documents.deleteDocument(schoolId, targetId, user.id)
+        return
+      case 'import_trial_balance':
+        await this.imports.remove(user, schoolId, targetId)
+        return
+      default:
+        throw new UnprocessableEntityException('That action can’t be undone here.')
+    }
+  }
+
+  /**
+   * The deterministic dispatch behind {@link applyAction}: run the domain write and
+   * return its summary plus the CREATED row id where the write yields one (null
+   * otherwise). The reversible branches assign the returned row instead of discarding
+   * it, so applyAction can offer an Undo keyed on that id. UNTRUSTED payload — every
+   * branch re-validates exactly as before; NO domain audit write here was changed.
+   */
+  private async dispatchApply(
     schoolId: string,
     user: User,
     action: ProposedAction,
-  ): Promise<{ applied: boolean; summary: string }> {
+  ): Promise<{ summary: string; createdId: string | null }> {
     const userId = user.id
     const periodId = action.periodId
     const p = action.payload ?? {}
@@ -1666,7 +1921,7 @@ export class AssistantService {
         { assumptions } as unknown as Parameters<BudgetService['upsertDriver']>[2],
         userId,
       )
-      return { applied: true, summary: action.summary }
+      return { summary: action.summary, createdId: null }
     }
     if (action.kind === 'set_budget') {
       const dto: Record<string, unknown> = {}
@@ -1684,7 +1939,7 @@ export class AssistantService {
         ;(dto.lines as Record<string, Record<string, number>>)[type][p.categoryKey] = p.amount
       }
       await this.budget.upsert(schoolId, periodId, dto, userId)
-      return { applied: true, summary: action.summary }
+      return { summary: action.summary, createdId: null }
     }
     if (action.kind === 'set_explanation') {
       const type = p.categoryType === 'expense' ? 'expense' : 'revenue'
@@ -1697,7 +1952,7 @@ export class AssistantService {
         { explanations: { [type]: { [key]: text } } },
         userId,
       )
-      return { applied: true, summary: action.summary }
+      return { summary: action.summary, createdId: null }
     }
     if (action.kind === 'apply_forecast') {
       const assumptions = (p.assumptions ?? {}) as Record<string, unknown>
@@ -1710,7 +1965,7 @@ export class AssistantService {
         >[2],
         userId,
       )
-      return { applied: true, summary: action.summary }
+      return { summary: action.summary, createdId: null }
     }
     if (action.kind === 'set_feeder_enrollment') {
       const feeder = (p.feederEnrollmentByGrade ?? {}) as Record<string, number>
@@ -1722,7 +1977,7 @@ export class AssistantService {
         >[2],
         userId,
       )
-      return { applied: true, summary: action.summary }
+      return { summary: action.summary, createdId: null }
     }
     if (action.kind === 'create_task') {
       // Untrusted payload (a forged /apply can hit this directly) — re-derive and
@@ -1741,7 +1996,7 @@ export class AssistantService {
         typeof p.sourceRef === 'string' && p.sourceRef.trim()
           ? p.sourceRef.trim().slice(0, 200)
           : undefined
-      await this.tasks.create(
+      const created = await this.tasks.create(
         schoolId,
         {
           title,
@@ -1753,7 +2008,7 @@ export class AssistantService {
         },
         userId,
       )
-      return { applied: true, summary: action.summary }
+      return { summary: action.summary, createdId: created?.id ?? null }
     }
     if (action.kind === 'submit_for_approval') {
       // Untrusted payload — re-validate taskId + re-resolve EACH approver to an
@@ -1767,7 +2022,7 @@ export class AssistantService {
       const approverIds: string[] = []
       for (const a of raw) approverIds.push(await this.resolveApprover(schoolId, user, a))
       await this.tasks.submitForApproval(schoolId, taskId, approverIds, userId)
-      return { applied: true, summary: action.summary }
+      return { summary: action.summary, createdId: null }
     }
     if (action.kind === 'decide_approval') {
       // Untrusted payload — re-validate; tasks.decide ENFORCES caller===current
@@ -1778,7 +2033,7 @@ export class AssistantService {
       if (!decision) throw new Error('Invalid decision.')
       const note = typeof p.note === 'string' && p.note.trim() ? p.note.slice(0, 2000) : null
       await this.tasks.decide(schoolId, taskId, decision, note, user)
-      return { applied: true, summary: action.summary }
+      return { summary: action.summary, createdId: null }
     }
     if (action.kind === 'file_document') {
       // UNTRUSTED payload (a forged /apply can hit this directly) — re-validate EVERY
@@ -1862,9 +2117,11 @@ export class AssistantService {
           sourceRef,
         } as CreateDocumentDto
         await this.documents.createDocument(schoolId, file, dto, userId)
+        // COMPOUND (maintenance item + linked doc) → no single reversible id; the log
+        // records it but offers no Undo (createdId null → reversible false upstream).
         return {
-          applied: true,
           summary: 'Filed to Facilities: created a maintenance item + a linked Knowledge copy.',
+          createdId: null,
         }
       }
 
@@ -1882,8 +2139,8 @@ export class AssistantService {
           sourceType,
           ...(sourceRef ? { sourceRef } : {}),
         } as CreateDocumentDto
-        await this.documents.createDocument(schoolId, file, dto, userId)
-        return { applied: true, summary: action.summary }
+        const doc = await this.documents.createDocument(schoolId, file, dto, userId)
+        return { summary: action.summary, createdId: doc?.id ?? null }
       }
 
       // destination === 'knowledge' (and default) — UNCHANGED path.
@@ -1896,8 +2153,8 @@ export class AssistantService {
       } as CreateDocumentDto
       // Reused wholesale: S3 put + row + orphan cleanup + resolveLink tenant validation
       // (a forged/cross-tenant sourceRef 404s here) + MIME allowlist + 25MB re-check.
-      await this.documents.createDocument(schoolId, file, dto, userId)
-      return { applied: true, summary: action.summary }
+      const doc = await this.documents.createDocument(schoolId, file, dto, userId)
+      return { summary: action.summary, createdId: doc?.id ?? null }
     }
     if (action.kind === 'create_policy') {
       // UNTRUSTED payload (a forged /apply can hit this directly) — re-derive and
@@ -1932,8 +2189,8 @@ export class AssistantService {
         ...(reviewIntervalMonths ? { reviewIntervalMonths } : {}),
         ...(notes ? { notes } : {}),
       }
-      await this.policies.create(schoolId, dto, userId)
-      return { applied: true, summary: action.summary }
+      const created = await this.policies.create(schoolId, dto, userId)
+      return { summary: action.summary, createdId: created?.id ?? null }
     }
     if (action.kind === 'create_committee') {
       // UNTRUSTED payload — re-validate; CommitteesService.create re-checks the tenant.
@@ -1953,8 +2210,8 @@ export class AssistantService {
         ...(chair ? { chair } : {}),
         ...(description ? { description } : {}),
       }
-      await this.committees.create(schoolId, dto, userId)
-      return { applied: true, summary: action.summary }
+      const created = await this.committees.create(schoolId, dto, userId)
+      return { summary: action.summary, createdId: created?.id ?? null }
     }
     if (action.kind === 'create_meeting') {
       // UNTRUSTED payload — re-validate; MeetingsService.create re-checks the tenant AND
@@ -1983,8 +2240,8 @@ export class AssistantService {
         ...(location ? { location } : {}),
         ...(agenda ? { agenda } : {}),
       }
-      await this.meetings.create(schoolId, dto, userId)
-      return { applied: true, summary: action.summary }
+      const created = await this.meetings.create(schoolId, dto, userId)
+      return { summary: action.summary, createdId: created?.id ?? null }
     }
     if (action.kind === 'create_standard') {
       // UNTRUSTED payload — re-validate; AccreditationService.createStandard re-checks tenant.
@@ -2012,8 +2269,8 @@ export class AssistantService {
         ...(owner ? { owner } : {}),
         ...(notes ? { notes } : {}),
       }
-      await this.accreditation.createStandard(schoolId, dto, userId)
-      return { applied: true, summary: action.summary }
+      const created = await this.accreditation.createStandard(schoolId, dto, userId)
+      return { summary: action.summary, createdId: created?.id ?? null }
     }
     if (action.kind === 'create_maintenance_item') {
       // UNTRUSTED payload — re-validate; FacilitiesService.createMaintenance re-checks tenant.
@@ -2053,8 +2310,8 @@ export class AssistantService {
         ...(targetDate ? { targetDate } : {}),
         ...(notes ? { notes } : {}),
       }
-      await this.facilities.createMaintenance(schoolId, dto, userId)
-      return { applied: true, summary: action.summary }
+      const created = await this.facilities.createMaintenance(schoolId, dto, userId)
+      return { summary: action.summary, createdId: created?.id ?? null }
     }
     if (action.kind === 'create_campaign') {
       // UNTRUSTED payload — re-validate; AdvancementService.createCampaign re-checks tenant.
@@ -2084,8 +2341,8 @@ export class AssistantService {
         ...(closeDate ? { closeDate } : {}),
         ...(notes ? { notes } : {}),
       }
-      await this.advancement.createCampaign(schoolId, dto, userId)
-      return { applied: true, summary: action.summary }
+      const created = await this.advancement.createCampaign(schoolId, dto, userId)
+      return { summary: action.summary, createdId: created?.id ?? null }
     }
     // draft_cap_entry
     await this.correctiveAction.upsertEntries(
@@ -2105,7 +2362,7 @@ export class AssistantService {
       },
       userId,
     )
-    return { applied: true, summary: action.summary }
+    return { summary: action.summary, createdId: null }
   }
 
   /**
@@ -2118,7 +2375,7 @@ export class AssistantService {
     user: User,
     schoolId: string,
     action: ProposedAction,
-  ): Promise<{ applied: boolean; summary: string }> {
+  ): Promise<{ summary: string; createdId: string | null }> {
     const p = (action.payload ?? {}) as Record<string, unknown>
     const role = p.role
     if (role !== 'cy' && role !== 'py' && role !== 'audit') {
@@ -2175,7 +2432,9 @@ export class AssistantService {
         `import applied but statement regen skipped: ${e instanceof Error ? e.message : String(e)}`,
       )
     }
-    return { applied: true, summary: action.summary }
+    // The immutable import row's id is the undo handle — imports.remove(user, schoolId,
+    // importId) deletes that role slot AND re-reconciles the period snapshot.
+    return { summary: action.summary, createdId: created?.id ?? null }
   }
 
   /**
@@ -2189,7 +2448,7 @@ export class AssistantService {
     user: User,
     schoolId: string,
     action: ProposedAction,
-  ): Promise<{ applied: boolean; summary: string }> {
+  ): Promise<{ summary: string; createdId: string | null }> {
     const p = (action.payload ?? {}) as Record<string, unknown>
     const monthKey = typeof p.monthKey === 'string' ? p.monthKey.trim() : ''
     if (!MONTH_KEY_RE.test(monthKey)) {
@@ -2227,7 +2486,9 @@ export class AssistantService {
       sourceName,
       rows,
     })
-    return { applied: true, summary: action.summary }
+    // Not undoable in v1: its reversal (MonthlySnapshotsService.remove) is keyed by
+    // periodId + monthKey, not a single created id — so no reversible targetId.
+    return { summary: action.summary, createdId: null }
   }
 
   private parseArgs(raw: string): Record<string, unknown> {

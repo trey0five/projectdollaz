@@ -27,6 +27,7 @@ export default function StudioConversation({ chat }) {
           onRetry={chat.retry}
           onConfirmProposal={chat.confirmProposal}
           onSetProposalStatus={chat.setProposalStatus}
+          onUndoProposal={chat.undoApplied}
         />
       </div>
 

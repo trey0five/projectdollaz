@@ -34,6 +34,7 @@ export default function PennyChat({ open, onClose }) {
     retry,
     setProposalStatus,
     confirmProposal,
+    undoApplied,
     sessions,
     activeSessionId,
     newChat,
@@ -227,6 +228,7 @@ export default function PennyChat({ open, onClose }) {
               onRetry={retry}
               onConfirmProposal={confirmProposal}
               onSetProposalStatus={setProposalStatus}
+              onUndoProposal={undoApplied}
             />
 
             <PennyInputBar busy={busy} onSubmit={send} inputRef={inputRef} tts={tts} />

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   Param,
   Post,
   Res,
@@ -97,5 +98,23 @@ export class AssistantController {
   @Roles('owner', 'accountant')
   apply(@Param('schoolId') schoolId: string, @Body() dto: ApplyActionDto, @CurrentUser() user: User) {
     return this.assistant.applyAction(schoolId, user, dto)
+  }
+
+  /** Penny's action log — the recent changes she made in this school. */
+  @Get('activity')
+  @Roles('owner', 'accountant')
+  activity(@Param('schoolId') schoolId: string) {
+    return this.assistant.listActivity(schoolId)
+  }
+
+  /** Undo one logged action (reverses the safely-reversible set). Owner/accountant only. */
+  @Post('activity/:auditId/undo')
+  @Roles('owner', 'accountant')
+  undo(
+    @Param('schoolId') schoolId: string,
+    @Param('auditId') auditId: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.assistant.undoActivity(schoolId, user, auditId)
   }
 }

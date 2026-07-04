@@ -31,6 +31,21 @@ const CONFIRM_REFRESH_KEYS = {
   create_campaign: 'advancement',
 }
 
+// tool → the domain refresh keys to broadcast after an UNDO reverses that action, so
+// an open register/data page refetches without a reload. Mirrors each create's own
+// refresh keys (an unknown/off-page key is a harmless no-op via agentRefresh).
+const UNDO_REFRESH_KEYS = {
+  create_policy: ['governance'],
+  create_committee: ['governance'],
+  create_meeting: ['governance'],
+  create_standard: ['accreditation'],
+  create_maintenance_item: ['facilities'],
+  create_campaign: ['advancement'],
+  create_task: ['tasks'],
+  file_document: ['knowledge', 'facilities'],
+  import_trial_balance: ['dataStatus', 'metrics'],
+}
+
 // Map a locally-staged attachment to the FROZEN wire shape the backend expects.
 // Local: { local_id, name, mime, kind, dataBase64, preview?, status }
 // Wire:  { name, kind, mimeType, size, dataBase64 }
@@ -131,6 +146,42 @@ export default function usePennyChat() {
     })
   }, [])
 
+  // Merge an arbitrary patch onto one proposal (used to attach undo affordances +
+  // flip a card to Undone). Same immutable-copy shape as setProposalStatus.
+  const patchProposal = useCallback((mi, pi, patch) => {
+    setMessages((m) => {
+      const copy = [...m]
+      const msg = { ...copy[mi] }
+      const props = [...(msg.proposals || [])]
+      props[pi] = { ...props[pi], ...patch }
+      msg.proposals = props
+      copy[mi] = msg
+      return copy
+    })
+  }, [])
+
+  // Undo a reversible action straight from its chat receipt. Reads the audit id +
+  // tool the card captured (from either the autonomous `applied` event or the
+  // confirm-then-apply response), calls the undo route, then flips the card to
+  // "Undone" and broadcasts the reverse's refresh keys. Already-undone is idempotent
+  // server-side (200), so a double-tap is safe; a hard failure shows a soft error.
+  const undoApplied = useCallback(
+    async (mi, pi, proposal) => {
+      const auditId = proposal?.auditId
+      const tool = proposal?.undoTool || proposal?.tool || proposal?.targetType
+      if (!auditId || proposal?.undone || proposal?.status === 'undoing') return
+      patchProposal(mi, pi, { status: 'undoing' })
+      try {
+        await assistantApi.undoActivity(activeIdRef.current, auditId)
+        patchProposal(mi, pi, { undone: true, status: 'undone' })
+        pennyRef.current?.agentRefresh?.(UNDO_REFRESH_KEYS[tool] || [])
+      } catch {
+        patchProposal(mi, pi, { status: 'undo-error' })
+      }
+    },
+    [patchProposal],
+  )
+
   const confirmProposal = useCallback(
     // `destination` is an OPTIONAL override from the file_document destination picker
     // (ProposalCard). When present we merge it into the action payload so the backend
@@ -142,8 +193,18 @@ export default function usePennyChat() {
           action?.kind === 'file_document' && destination
             ? { ...action, payload: { ...(action.payload ?? {}), destination } }
             : action
-        await assistantApi.apply(activeIdRef.current, outbound) // UNCHANGED apply path
-        setProposalStatus(mi, pi, 'applied')
+        const res = await assistantApi.apply(activeIdRef.current, outbound) // UNCHANGED apply path
+        const applied = res?.data || {}
+        // Attach the action-log affordances so the confirmed card can offer an inline
+        // Undo (auditId + reversible come from the extended /apply response). undoTool
+        // pins the kind so undoApplied broadcasts the right refresh keys.
+        patchProposal(mi, pi, {
+          status: 'applied',
+          auditId: applied.auditId ?? null,
+          targetId: applied.targetId ?? null,
+          reversible: !!applied.reversible,
+          undoTool: action?.kind,
+        })
         // A confirmed create_task now exists server-side — broadcast so an open
         // Tasks page (useTasks) refetches. The autonomous 'applied' SSE path already
         // refreshes via ev.refresh; the proposal/confirm path needs this explicitly.
@@ -174,7 +235,7 @@ export default function usePennyChat() {
         setProposalStatus(mi, pi, 'error')
       }
     },
-    [setProposalStatus],
+    [setProposalStatus, patchProposal],
   )
 
   // ── The core send(). text is the typed prompt; opts.attachments are locally
@@ -316,6 +377,12 @@ export default function usePennyChat() {
                   summary: ev.summary,
                   details: ev.details || [],
                   periodId: ev.periodId,
+                  // Action-log affordances so the receipt can render an inline Undo
+                  // (only a TB import is reversible among the autonomous write tools).
+                  targetType: ev.targetType,
+                  targetId: ev.targetId ?? null,
+                  auditId: ev.auditId ?? null,
+                  reversible: !!ev.reversible,
                   status: ev.tool === 'import_trial_balance' ? 'imported' : 'applied',
                 },
               ]
@@ -447,6 +514,7 @@ export default function usePennyChat() {
     retry,
     setProposalStatus,
     confirmProposal,
+    undoApplied,
     sessions: sessions.sessions,
     activeSessionId: sessions.activeSessionId,
     newChat,

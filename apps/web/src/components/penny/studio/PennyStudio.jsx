@@ -23,6 +23,7 @@ import StudioCapabilityTiles from './StudioCapabilityTiles.jsx'
 import StudioRecipes from './StudioRecipes.jsx'
 import StudioActionInbox from './StudioActionInbox.jsx'
 import StudioRail from './StudioRail.jsx'
+import StudioActivity from './StudioActivity.jsx'
 import StudioConversation from './StudioConversation.jsx'
 
 const PERIOD_KEY = 'finrep_active_period'
@@ -276,7 +277,10 @@ export default function PennyStudio() {
                 <StudioRecipes onRun={runPrompt} />
                 <div className="grid items-start gap-5 lg:grid-cols-[1.35fr_1fr]">
                   <StudioActionInbox schoolId={activeId} periodId={periodId} onHandle={runPrompt} />
-                  <StudioRail chat={engagedChat} onPick={runPrompt} />
+                  <div className="space-y-5">
+                    <StudioRail chat={engagedChat} onPick={runPrompt} />
+                    <StudioActivity schoolId={activeId} canEdit={canEdit} />
+                  </div>
                 </div>
               </motion.div>
             )}

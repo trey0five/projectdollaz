@@ -58,6 +58,7 @@ function makeService(opts: { configured?: boolean } = {}) {
     stub, // facilities
     stub, // advancement
     stub, // orgBriefing
+    stub, // audit
   )
   return { svc, createDocument, isConfigured }
 }
@@ -178,7 +179,15 @@ describe('file_document — applyAction (re-validate + reuse DocumentsService)',
     expect((dto as { sourceType: string }).sourceType).toBe('manual')
     expect((dto as { tags?: string[] }).tags).toEqual(['governance'])
     expect(userId).toBe(USER.id)
-    expect(res).toEqual({ applied: true, summary: 'File a document' })
+    // Backward-compatible core contract preserved; a Knowledge filing is reversible
+    // and carries the created document id.
+    expect(res).toMatchObject({
+      applied: true,
+      summary: 'File a document',
+      targetType: 'file_document',
+      targetId: 'doc1',
+      reversible: true,
+    })
   })
 
   it('re-validates a blank title → throws, createDocument NOT called', async () => {

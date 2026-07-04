@@ -12,13 +12,18 @@
 // A11Y: role=status so screen readers announce the result. Reduced motion skips
 // the entrance animation. Navy/gold/emerald theme.
 import { motion, useReducedMotion } from 'framer-motion'
-import { CheckCircle2, FileSpreadsheet } from 'lucide-react'
+import { CheckCircle2, FileSpreadsheet, RotateCcw, Undo2 } from 'lucide-react'
 
-export default function AppliedCard({ proposal }) {
+export default function AppliedCard({ proposal, onUndo }) {
   const reduce = useReducedMotion()
   const isImport = proposal?.tool === 'import_trial_balance'
   const summary = proposal?.summary || ''
   const details = Array.isArray(proposal?.details) ? proposal.details : []
+  const status = proposal?.status
+  const undone = proposal?.undone || status === 'undone'
+  // Offer an inline Undo only for a genuinely reversible action that still carries a
+  // log id and a handler, and hasn't already been undone.
+  const canUndo = !undone && !!proposal?.reversible && !!proposal?.auditId && !!onUndo
 
   const Icon = isImport ? FileSpreadsheet : CheckCircle2
   const header = isImport ? 'Imported your trial balance' : 'Done — here’s what I changed'
@@ -50,9 +55,43 @@ export default function AppliedCard({ proposal }) {
         </dl>
       )}
 
-      <p className="mt-1.5 text-[12px] italic text-muted">
-        Reversible from the normal screen if you’d like to change it.
-      </p>
+      {undone ? (
+        <p className="mt-1.5 inline-flex items-center gap-1 text-[13px] font-semibold text-emerald-700">
+          <CheckCircle2 size={13} aria-hidden /> Undone
+        </p>
+      ) : status === 'undoing' ? (
+        <p className="mt-1.5 inline-flex items-center gap-1.5 text-[13px] text-muted">
+          <RotateCcw size={12} aria-hidden className="motion-safe:animate-spin" /> Undoing…
+        </p>
+      ) : status === 'undo-error' ? (
+        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+          <span className="text-[13px] text-danger">Couldn’t undo — try again.</span>
+          {onUndo ? (
+            <button
+              type="button"
+              onClick={onUndo}
+              className="inline-flex items-center gap-1 rounded-lg border border-navy/15 bg-white px-2.5 py-1 text-[12.5px] font-semibold text-navy/80 transition-colors hover:border-navy/30 hover:text-navy"
+            >
+              <Undo2 size={12} aria-hidden /> Retry undo
+            </button>
+          ) : null}
+        </div>
+      ) : canUndo ? (
+        <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-[12px] italic text-muted">Changed your mind?</span>
+          <button
+            type="button"
+            onClick={onUndo}
+            className="inline-flex items-center gap-1 rounded-lg border border-emerald-300/80 bg-white px-2.5 py-1 text-[12.5px] font-semibold text-emerald-800 transition-colors hover:border-emerald-400 hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
+          >
+            <Undo2 size={12} aria-hidden /> Undo
+          </button>
+        </div>
+      ) : (
+        <p className="mt-1.5 text-[12px] italic text-muted">
+          Reversible from the normal screen if you’d like to change it.
+        </p>
+      )}
     </motion.div>
   )
 }
