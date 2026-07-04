@@ -64,6 +64,7 @@ function makeService(opts: {
     stub, // orgBriefing
     stub, // audit
     stub, // alerts
+    stub, // schools (LAST) — only invite_member paths touch it
   )
   return { svc, tasksCreate, membershipFindFirst }
 }

@@ -716,6 +716,32 @@ export const TOOL_SCHEMAS = [
   {
     type: 'function',
     function: {
+      name: 'invite_member',
+      description:
+        'PROPOSE inviting a teammate to this school by email (they receive an email invitation) for the user to CONFIRM before it is sent (like create_task — this does NOT send it; the user must confirm). Use when the user wants to add a member — e.g. someone to assign tasks to when the school has no suitable member yet. Ask for the person’s email and role if not given. role is one of owner/accountant/viewer (accountant = finance edit access; viewer = board / read-only). Set orgWide=true ONLY if the user explicitly wants the person on every school in the organization. OWNER-ONLY: only a school owner can invite members.',
+      parameters: {
+        type: 'object',
+        properties: {
+          email: { type: 'string', description: 'The teammate’s email address.' },
+          role: {
+            type: 'string',
+            enum: ['owner', 'accountant', 'viewer'],
+            description:
+              'Membership role: owner, accountant (finance edit), or viewer (board / read-only).',
+          },
+          orgWide: {
+            type: 'boolean',
+            description:
+              'True = access to EVERY school in the organization (multi-school orgs only). Omit/false = this school only.',
+          },
+        },
+        required: ['email', 'role'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'render_chart',
       description:
         'Draw a chart for the user. Call this to visualize numbers you have already fetched (a trend, a comparison, a breakdown). Pick the chart type that fits and give a clear title.',
@@ -951,6 +977,7 @@ export const TOOL_LABELS: Record<string, string> = {
   create_maintenance_item: 'Logging a maintenance item…',
   create_campaign: 'Starting a campaign…',
   create_alert: 'Setting up an alert…',
+  invite_member: 'Inviting a teammate…',
   list_open_tasks: 'Reading your open tasks…',
   submit_for_approval: 'Routing for sign-off…',
   decide_approval: 'Recording your decision…',

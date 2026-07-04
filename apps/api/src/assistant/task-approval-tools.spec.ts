@@ -47,6 +47,7 @@ function makeService(opts: { member?: { userId: string } | null } = {}) {
     stub, // orgBriefing
     stub, // audit
     stub, // alerts
+    stub, // schools (LAST) — only invite_member paths touch it
   )
   return { svc, submitForApproval, decide, list, membershipFindFirst }
 }

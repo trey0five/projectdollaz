@@ -52,7 +52,8 @@ function makeService() {
     stub, // advancement
     stub, // orgBriefing
     stub, // audit
-    alerts as never, // alerts (LAST)
+    alerts as never, // alerts
+    stub, // schools (LAST) — only invite_member paths touch it
   )
   return { svc, alertsCreate }
 }

@@ -60,6 +60,7 @@ function makeService(opts: { configured?: boolean } = {}) {
     stub, // orgBriefing
     stub, // audit
     stub, // alerts
+    stub, // schools (LAST) — only invite_member paths touch it
   )
   return { svc, createDocument, isConfigured }
 }

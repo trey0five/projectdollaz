@@ -5,6 +5,7 @@
 // to the school (the controller's RolesGuard) and the period (getOwnedPeriod).
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -60,6 +61,7 @@ import { AccreditationService } from '../accreditation/accreditation.service.js'
 import { FacilitiesService } from '../facilities/facilities.service.js'
 import { AdvancementService } from '../advancement/advancement.service.js'
 import { AlertService, ALERT_METRIC_KEYS } from '../alerts/alert.service.js'
+import { SchoolsService } from '../schools/schools.service.js'
 import type { CreatePolicyDto } from '../governance/dto/create-policy.dto.js'
 import type { CreateCommitteeDto } from '../governance/dto/create-committee.dto.js'
 import type { CreateMeetingDto } from '../governance/dto/create-meeting.dto.js'
@@ -138,6 +140,10 @@ const REFRESH: Record<ProposedAction['kind'], RefreshKey[]> = {
   create_maintenance_item: ['facilities'],
   create_campaign: ['advancement'],
   create_alert: ['alerts'],
+  // No RefreshKey exists for the Settings Members section (it refetches on visit and
+  // has no penny:data-changed listener), and invite_member is a CONFIRM tool (this
+  // map only feeds the autonomous-WRITE 'applied' event), so the entry is empty.
+  invite_member: [],
 }
 
 // Penny action-log stamps. Every applied action is written to the AuditLog under
@@ -163,6 +169,9 @@ const REVERSIBLE_KINDS = new Set<ProposedAction['kind']>([
   'create_task',
   'file_document',
   'import_trial_balance',
+  // Undo = revoke the still-pending invitation (SchoolsService.revokeInvitation:
+  // tenant-checked, NotFound → already-gone no-op, already-accepted → clear 400).
+  'invite_member',
 ])
 
 // Tools that perform a write. Membership UNCHANGED — but the meaning flips from
@@ -195,6 +204,9 @@ const CONFIRM_TOOLS = new Set([
   'create_maintenance_item',
   'create_campaign',
   'create_alert',
+  // OWNER-ONLY on top of the confirm gate (the REST route is @Roles('owner')) —
+  // enforced both at propose time (runToolCall) and at apply time (dispatchApply).
+  'invite_member',
 ])
 
 // Role-gate the tools OFFERED to the model. A viewer (Board) is read-only: every
@@ -220,6 +232,12 @@ function toolsForRole(role: 'owner' | 'accountant' | 'viewer' | null | undefined
 // 'critical', and campaign statuses are planned/active/closed (no 'paused').
 const POLICY_STATUSES = new Set(['active', 'draft', 'retired'])
 const MAINTENANCE_PRIORITIES = new Set(['low', 'medium', 'high', 'critical'])
+// invite_member role vocab — kept BYTE-IDENTICAL to CreateInvitationDto's @IsIn and
+// the Settings Members UI ROLES list (all three roles are offerable, exactly as the UI).
+const INVITE_ROLES = new Set(['owner', 'accountant', 'viewer'])
+// Light email shape check for invite_member. The REST route's @IsEmail is stricter;
+// this guards the proposal AND the untrusted /apply payload (which skips the DTO).
+const INVITE_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 // ~5MB RAW cap on a filable attachment. Base64 inflates ~4/3 → ~6.7MB, and with the
 // rest of the /apply JSON payload it stays comfortably under main.ts's 8MB JSON body
@@ -248,6 +266,7 @@ export interface ProposedAction {
     | 'create_maintenance_item'
     | 'create_campaign'
     | 'create_alert'
+    | 'invite_member'
   periodId: string
   summary: string
   payload: Record<string, unknown>
@@ -537,6 +556,11 @@ export class AssistantService {
     // unit specs (which stop at audit) still construct; only the create_alert
     // build/apply/reverse paths touch `this.alerts`, so undefined elsewhere is safe.
     private readonly alerts: AlertService,
+    // invite_member confirm-tool — reuses the REAL invitation flow (dup checks +
+    // token + email + revoke-for-undo). Added LAST (after alerts) so existing
+    // positional-arg unit specs still construct; only the invite_member
+    // build/apply/reverse paths touch `this.schools`, so undefined elsewhere is safe.
+    private readonly schools: SchoolsService,
   ) {}
 
   isConfigured(): boolean {
@@ -796,10 +820,18 @@ export class AssistantService {
         const canPropose =
           name === 'decide_approval'
             ? ctx.role === 'owner' || ctx.role === 'accountant' || ctx.role === 'viewer'
-            : ctx.role === 'owner' || ctx.role === 'accountant'
+            : name === 'invite_member'
+              ? // Inviting a member is OWNER-ONLY (mirrors POST /schools/:id/invitations
+                // @Roles('owner')) — don't even OFFER an accountant a proposal that the
+                // apply-time re-check would reject.
+                ctx.role === 'owner'
+              : ctx.role === 'owner' || ctx.role === 'accountant'
         if (!canPropose) {
           return {
-            error: "You don't have edit access, so I can't do that — ask an owner or accountant.",
+            error:
+              name === 'invite_member' && (ctx.role === 'owner' || ctx.role === 'accountant')
+                ? 'Only a school owner can invite members — ask an owner to send the invitation.'
+                : "You don't have edit access, so I can't do that — ask an owner or accountant.",
           }
         }
         if (!ctx.user) {
@@ -930,6 +962,9 @@ export class AssistantService {
     }
     if (name === 'create_alert') {
       return this.buildAlertProposal(args, ctx)
+    }
+    if (name === 'invite_member') {
+      return this.buildInviteProposal(args, ctx)
     }
     const periodId = await this.resolvePeriod(args, ctx)
     if (name === 'set_budget') {
@@ -1641,6 +1676,28 @@ export class AssistantService {
   }
 
   /**
+   * Build a confirmable invite_member proposal (NO mutation — no invitation row, no
+   * email until the user confirms). Validates the email shape + role against the SAME
+   * vocab as CreateInvitationDto. The propose-time gate in runToolCall has already
+   * restricted this to owners; dispatchApply re-checks (untrusted /apply).
+   */
+  private buildInviteProposal(args: Record<string, unknown>, ctx: Ctx): ProposedAction {
+    const email = typeof args.email === 'string' ? args.email.trim().toLowerCase() : ''
+    if (!email || !INVITE_EMAIL_RE.test(email)) {
+      throw new Error('invite_member needs a valid email address.')
+    }
+    const role = typeof args.role === 'string' && INVITE_ROLES.has(args.role) ? args.role : ''
+    if (!role) throw new Error('invite_member needs a role of owner, accountant, or viewer.')
+    const orgWide = args.orgWide === true
+    return {
+      kind: 'invite_member',
+      periodId: ctx.periodId ?? '',
+      summary: `Invite ${email} as ${role}${orgWide ? ' (all schools in the organization)' : ''} — they’ll receive an email invitation.`,
+      payload: { email, role, ...(orgWide ? { orgWide } : {}) },
+    }
+  }
+
+  /**
    * Resolve an approver string to an ACTIVE-member userId of THIS school, or THROW.
    * Unlike resolveAssignee (null on empty), an approver is REQUIRED — "me" → the
    * caller; an email → the active member with that email (case-insensitive) or a
@@ -1947,6 +2004,19 @@ export class AssistantService {
       case 'create_alert':
         await this.alerts.remove(schoolId, targetId, user.id)
         return
+      case 'invite_member': {
+        // Revoking an invitation is OWNER-ONLY at REST (@Roles('owner')) but the
+        // generic undo route allows owner+accountant — re-check here, fail closed.
+        const undoerRole = await this.resolveRole(schoolId, user.id)
+        if (undoerRole !== 'owner') {
+          throw new ForbiddenException('Only a school owner can revoke an invitation.')
+        }
+        // Revoke the still-pending invitation. NotFound (already revoked/expired-and-
+        // purged) bubbles up → undoActivity treats it as already-undone; an ALREADY
+        // ACCEPTED invite surfaces the service's clear 400 (membership isn't unwound).
+        await this.schools.revokeInvitation(user, schoolId, targetId)
+        return
+      }
       case 'create_task':
         await this.tasks.remove(schoolId, targetId, user.id)
         return
@@ -2449,6 +2519,44 @@ export class AssistantService {
       const created = await this.alerts.create(schoolId, dto, userId)
       return { summary: action.summary, createdId: created?.id ?? null }
     }
+    if (action.kind === 'invite_member') {
+      // OWNER-ONLY, re-checked HERE because /assistant/apply itself allows
+      // owner+accountant (the REST invite route is @Roles('owner')). UNTRUSTED
+      // payload (a forged /apply can hit this directly) — a null/unresolved role
+      // fails CLOSED.
+      const callerRole = await this.resolveRole(schoolId, user.id)
+      if (callerRole !== 'owner') {
+        throw new ForbiddenException('Only a school owner can invite members.')
+      }
+      const email = typeof p.email === 'string' ? p.email.trim().toLowerCase() : ''
+      if (!email || !INVITE_EMAIL_RE.test(email)) {
+        throw new Error('A valid email address is required.')
+      }
+      const role =
+        typeof p.role === 'string' && INVITE_ROLES.has(p.role)
+          ? (p.role as 'owner' | 'accountant' | 'viewer')
+          : null
+      if (!role) throw new Error('Role must be owner, accountant, or viewer.')
+      const orgWide = p.orgWide === true
+      // Anti-duplicate (mirrors create_task's debounce): if a PENDING invitation for
+      // this email already exists, reuse it instead of sending a second email —
+      // SchoolsService.createInvitation only rejects existing MEMBERS, not pending
+      // invites. Re-applying the same confirmed proposal twice stays a no-op.
+      const pending = await this.prisma.invitation.findFirst({
+        where: { schoolId, email, acceptedAt: null, expiresAt: { gt: new Date() } },
+        orderBy: { createdAt: 'desc' },
+      })
+      if (pending) {
+        return {
+          summary: `${email} already has a pending invitation (as ${pending.role}) — I didn’t send a duplicate.`,
+          createdId: pending.id,
+        }
+      }
+      // Reuses the REAL flow wholesale: already-a-member rejection (clear 400), token
+      // generation, expiry, and the invitation email.
+      const res = await this.schools.createInvitation(schoolId, { email, role, orgWide })
+      return { summary: action.summary, createdId: res?.invitation?.id ?? null }
+    }
     // draft_cap_entry
     await this.correctiveAction.upsertEntries(
       schoolId,
@@ -2703,8 +2811,13 @@ export class AssistantService {
       'task exists until the user confirms. Offering create_task is a natural way to act on a briefing item. ' +
       'OWNER: do NOT silently leave a task unassigned — before proposing it, ASK who should own it (or confirm ' +
       'they want it unassigned for now). If there is no suitable person (e.g. the school has no other members), ' +
-      'say so and offer to help them invite a teammate from Settings → Members, rather than defaulting to no ' +
-      'owner. NO DUPLICATES: never create the same task twice — if you already created (or proposed) a task this ' +
+      'say so and OFFER to invite a teammate yourself via invite_member — another confirm-then-apply proposal ' +
+      '(propose → the user confirms → the email invitation is sent; NEVER autonomous). Ask for the person’s ' +
+      'email and role (accountant = finance edit access; viewer = board / read-only) rather than sending the ' +
+      'user to Settings; only set orgWide when they explicitly want every school in the organization. Only a ' +
+      'school OWNER can invite; never claim an invitation was sent until the user confirms, and note that the ' +
+      'person can be assigned tasks once they accept the emailed invite. ' +
+      'NO DUPLICATES: never create the same task twice — if you already created (or proposed) a task this ' +
       'conversation, or an identical open one already exists, reference that one instead of proposing/applying it ' +
       'again, even if the user says "yes to all" across several turns. ' +
       'submit_for_approval and decide_approval are ALSO confirm-then-apply tools (propose → the user confirms → ' +

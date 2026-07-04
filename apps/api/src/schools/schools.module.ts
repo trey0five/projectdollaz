@@ -10,5 +10,9 @@ import { SchoolsService } from './schools.service.js'
   imports: [PrismaModule, AuthModule, AuditModule, BillingModule],
   controllers: [SchoolsController],
   providers: [SchoolsService],
+  // Exported so Penny's invite_member confirm-tool (AssistantModule) can reuse the
+  // REAL invitation flow (member/dup checks + token + email + revoke). No cycle:
+  // SchoolsModule imports nothing assistant-side.
+  exports: [SchoolsService],
 })
 export class SchoolsModule {}

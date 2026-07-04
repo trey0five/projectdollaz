@@ -15,6 +15,7 @@ import { AccreditationModule } from '../accreditation/accreditation.module.js'
 import { FacilitiesModule } from '../facilities/facilities.module.js'
 import { AdvancementModule } from '../advancement/advancement.module.js'
 import { AlertModule } from '../alerts/alert.module.js'
+import { SchoolsModule } from '../schools/schools.module.js'
 import { AuditModule } from '../common/audit/audit.module.js'
 import { AssistantController } from './assistant.controller.js'
 import { AssistantService } from './assistant.service.js'
@@ -53,6 +54,10 @@ import { AssistantFilesService } from './assistant-files.service.js'
     // confirm-tool can create standing requests. No cycle: AlertModule imports no
     // AssistantModule.
     AlertModule,
+    // Exports SchoolsService so Penny's invite_member confirm-tool can reuse the real
+    // invitation flow (dup checks + token + invitation email + revoke-for-undo). No
+    // cycle: SchoolsModule imports no AssistantModule.
+    SchoolsModule,
     // Shared best-effort audit writer — Penny stamps every applied action into the
     // AuditLog (source:'assistant') so the action log + inline Undo can read it back.
     AuditModule,
