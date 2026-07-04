@@ -42,9 +42,15 @@ export default function LandingHero({ onIntroOpen }) {
   const [phase, setPhase] = useState(reduce ? 6 : 0)
   // lg+ gets the full fly-to-chat; phones fade the coin at center instead (the
   // chat would be below the fold, so flying to it would leave the frame).
-  const [flyToChat] = useState(
+  const [flyToChat, setFlyToChat] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches,
   )
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)')
+    const onChange = (e) => setFlyToChat(e.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
   // Where the mascot sits (its resting base = the chat avatar spot) and the
   // translate that carries it up to stage-center.
   const [coinPos, setCoinPos] = useState({ left: 0, top: 0 })
@@ -53,19 +59,26 @@ export default function LandingHero({ onIntroOpen }) {
   useLayoutEffect(() => {
     const measure = () => {
       const s = sectionRef.current
-      const c = chatRef.current
-      if (!s || !c) return
+      if (!s) return
       const sr = s.getBoundingClientRect()
-      const cr = c.getBoundingClientRect() // outer cell = full-size layout box
-      const avX = cr.left - sr.left + AV_X
-      const avY = cr.top - sr.top + AV_Y
-      setCoinPos({ left: avX - COIN / 2, top: avY - COIN / 2 })
-      setToCenter({ x: sr.width / 2 - avX, y: sr.height / 2 - avY })
+      if (flyToChat && chatRef.current) {
+        const cr = chatRef.current.getBoundingClientRect() // outer cell = full-size layout box
+        const avX = cr.left - sr.left + AV_X
+        const avY = cr.top - sr.top + AV_Y
+        setCoinPos({ left: avX - COIN / 2, top: avY - COIN / 2 })
+        setToCenter({ x: sr.width / 2 - avX, y: sr.height / 2 - avY })
+      } else {
+        // Mobile: the mascot just appears at the viewport center and fades — the
+        // chat lives in its own section below, so there's nothing to fly to.
+        const cy = Math.min(sr.height, window.innerHeight) / 2
+        setCoinPos({ left: sr.width / 2 - COIN / 2, top: cy - COIN / 2 })
+        setToCenter({ x: 0, y: 0 })
+      }
     }
     measure()
     window.addEventListener('resize', measure)
     return () => window.removeEventListener('resize', measure)
-  }, [])
+  }, [flyToChat])
 
   useEffect(() => {
     if (reduce) return undefined
@@ -131,6 +144,7 @@ export default function LandingHero({ onIntroOpen }) {
   })
 
   return (
+    <>
     <section
       ref={sectionRef}
       aria-labelledby="hero-title"
@@ -148,7 +162,7 @@ export default function LandingHero({ onIntroOpen }) {
         <StudioBackdrop sweep={false} />
         <span aria-hidden="true" className="pointer-events-none absolute inset-0 bg-navy-radial" />
 
-        <div className="relative mx-auto grid min-h-[100svh] max-w-6xl items-center gap-12 px-5 pb-24 pt-32 sm:px-8 lg:grid-cols-[1fr_minmax(380px,460px)]">
+        <div className="relative mx-auto grid min-h-[100svh] max-w-6xl items-start gap-12 px-5 pb-24 pt-32 sm:px-8 lg:grid-cols-[1fr_minmax(380px,460px)] lg:items-center">
           <div>
             <motion.p
               {...rise(0.04)}
@@ -217,31 +231,30 @@ export default function LandingHero({ onIntroOpen }) {
             </motion.div>
           </div>
 
-          {/* The chat cell. chatRef stays full-size (the coin's flight target is
-              measured from it); the inner frame unfolds from the mascot's landing
-              point — transform-origin at the header-avatar corner on lg. */}
-          <div ref={chatRef}>
-            <motion.div
-              initial={reduce ? false : { scale: flyToChat ? 0.08 : 0.9, opacity: 0 }}
-              animate={
-                reduce || chatExpand
-                  ? { scale: 1, opacity: 1 }
-                  : { scale: flyToChat ? 0.08 : 0.9, opacity: 0 }
-              }
-              transition={{ duration: 0.6, ease: EASE }}
-              style={{ transformOrigin: flyToChat ? `${AV_X}px ${AV_Y}px` : 'center' }}
-            >
+          {/* The chat cell — DESKTOP ONLY. chatRef is the coin's flight target;
+              the frame unfolds from the mascot's landing point (transform-origin
+              at the header-avatar corner). On mobile the chat lives in its own
+              section below the hero (so it isn't clipped by the 100svh screen). */}
+          {flyToChat && (
+            <div ref={chatRef}>
               <motion.div
-                animate={reduce || !settled ? undefined : { y: [0, -8, 0] }}
-                transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut' }}
-                className="rounded-2xl border border-gold/25 bg-white/[0.04] p-1.5 shadow-lift backdrop-blur-sm"
+                initial={reduce ? false : { scale: 0.08, opacity: 0 }}
+                animate={reduce || chatExpand ? { scale: 1, opacity: 1 } : { scale: 0.08, opacity: 0 }}
+                transition={{ duration: 0.6, ease: EASE }}
+                style={{ transformOrigin: `${AV_X}px ${AV_Y}px` }}
               >
-                <div className="overflow-hidden rounded-xl bg-cream">
-                  <PennyDemo />
-                </div>
+                <motion.div
+                  animate={reduce || !settled ? undefined : { y: [0, -8, 0] }}
+                  transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut' }}
+                  className="rounded-2xl border border-gold/25 bg-white/[0.04] p-1.5 shadow-lift backdrop-blur-sm"
+                >
+                  <div className="overflow-hidden rounded-xl bg-cream">
+                    <PennyDemo />
+                  </div>
+                </motion.div>
               </motion.div>
-            </motion.div>
-          </div>
+            </div>
+          )}
         </div>
       </motion.div>
 
@@ -284,7 +297,7 @@ export default function LandingHero({ onIntroOpen }) {
         initial={reduce ? false : { opacity: 0 }}
         animate={{ opacity: settled ? 1 : 0 }}
         transition={{ duration: 0.6, delay: 0.3 }}
-        className="pointer-events-none absolute inset-x-0 bottom-5 z-20 flex flex-col items-center gap-1"
+        className="pointer-events-none absolute inset-x-0 bottom-5 z-20 hidden flex-col items-center gap-1 lg:flex"
       >
         <ChevronDown size={20} className="text-gold/60 motion-safe:animate-float" />
         <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/60">
@@ -292,5 +305,21 @@ export default function LandingHero({ onIntroOpen }) {
         </span>
       </motion.div>
     </section>
+
+    {/* MOBILE ONLY: the live Penny chat, in its own navy band below the hero
+        (on desktop it lives inside the hero, beside the headline). */}
+    {!flyToChat && (
+      <section aria-label="Penny in action" className="bg-navy-deep px-5 pb-14 pt-2">
+        <p className="mb-4 text-center text-[12px] font-bold uppercase tracking-[0.22em] text-gold-light">
+          See Penny work
+        </p>
+        <div className="mx-auto max-w-md rounded-2xl border border-gold/25 bg-white/[0.04] p-1.5 shadow-lift backdrop-blur-sm">
+          <div className="overflow-hidden rounded-xl bg-cream">
+            <PennyDemo />
+          </div>
+        </div>
+      </section>
+    )}
+    </>
   )
 }
