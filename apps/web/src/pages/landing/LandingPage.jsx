@@ -5,7 +5,7 @@
 // in landingContent.js. Default export, loaded via React.lazy from App.jsx so
 // authed users never download it.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import LandingNav from './LandingNav.jsx'
 import LandingHero from './LandingHero.jsx'
 import LedgerSpine from './LedgerSpine.jsx'
@@ -47,14 +47,16 @@ function LicensingSection() {
 export default function LandingPage() {
   // The acts container the ledger spine measures its scroll-draw against.
   const actsRef = useRef(null)
-  // The fixed nav stays hidden until the hero's TV-bloom "powers on".
+  // The fixed nav stays hidden until the hero's TV-bloom "powers on". The
+  // callback is memoized so the hero's reveal timer isn't reset each phase.
   const [navShown, setNavShown] = useState(false)
+  const revealNav = useCallback(() => setNavShown(true), [])
 
   return (
     <div className="bg-cream text-ink">
       <LandingNav show={navShown} />
       <main id="main">
-        <LandingHero onIntroOpen={() => setNavShown(true)} />
+        <LandingHero onIntroOpen={revealNav} />
         {/* Acts I–VI share one relative container so the spine spans them all. */}
         <div ref={actsRef} className="relative">
           <LedgerSpine containerRef={actsRef} />

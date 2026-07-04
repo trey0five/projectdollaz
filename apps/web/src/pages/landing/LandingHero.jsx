@@ -18,7 +18,7 @@ import { Link } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
 import { ChevronDown } from 'lucide-react'
 import StudioBackdrop from '../../components/penny/studio/StudioBackdrop.jsx'
-import PennyMascot from './PennyMascot.jsx'
+import PennyAvatar from '../../components/penny/PennyAvatar.jsx'
 import PennyDemo from './PennyDemo.jsx'
 import { EASE } from './Reveal.jsx'
 import { HERO } from './landingContent.js'
@@ -84,12 +84,20 @@ export default function LandingHero({ onIntroOpen }) {
   const textIn = phase >= 4
   const settled = phase >= 6
 
-  // Tell the page the "screen" is on, so the fixed nav can reveal with the hero
-  // (it stays hidden over the dark pre-open field). Fires immediately under
-  // reduced motion (phase starts settled → open is already true).
+  // Reveal the fixed nav only once the TV-bloom has FULLY finished (it stays
+  // hidden over the dark pre-open field). We wait out the clip transition after
+  // the open beat; reduced motion (already settled) reveals it immediately.
+  // (onIntroOpen is memoized by the parent, so later phase re-renders don't
+  // reset this timer.)
   useEffect(() => {
-    if (open) onIntroOpen?.()
-  }, [open, onIntroOpen])
+    if (!open) return undefined
+    if (reduce) {
+      onIntroOpen?.()
+      return undefined
+    }
+    const id = setTimeout(() => onIntroOpen?.(), 760) // ≈ the 0.72s open transition
+    return () => clearTimeout(id)
+  }, [open, reduce, onIntroOpen])
 
   // Mascot animation. It appears center-stage (big), flies to the avatar spot
   // (lg only), then fades as the chat unfolds from underneath it.
@@ -262,7 +270,7 @@ export default function LandingHero({ onIntroOpen }) {
           boxShadow: '0 0 36px rgba(212,180,122,.5)',
         }}
       >
-        <PennyMascot size={COIN} playing={coinStaged && !chatExpand} />
+        <PennyAvatar size={COIN} />
       </motion.div>
 
       {/* Scroll cue — appears with the settle. */}
