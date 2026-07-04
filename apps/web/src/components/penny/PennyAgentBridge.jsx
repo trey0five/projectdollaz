@@ -22,7 +22,8 @@ import { usePenny } from '../../context/PennyContext.jsx'
 function pageToPath(page, section) {
   switch (page) {
     case 'home':
-      return '/'
+      // The authed briefing moved to /app ('/' is the public marketing landing).
+      return '/app'
     case 'data':
       return '/data'
     case 'statements':

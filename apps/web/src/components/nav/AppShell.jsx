@@ -237,7 +237,7 @@ export default function AppShell({ children }) {
 
   const brand = (
     <Link
-      to="/"
+      to="/app"
       aria-label="Go to home dashboard"
       title="Home dashboard"
       className="flex min-w-0 items-center gap-3 rounded-lg px-1 py-1 outline-none ring-gold/50 transition-opacity hover:opacity-90 focus-visible:ring-2"

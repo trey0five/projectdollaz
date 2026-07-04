@@ -55,7 +55,7 @@ function FinanceHeader() {
   return (
     <div className="mb-6">
       <Link
-        to="/"
+        to="/app"
         className="inline-flex items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.1em] text-muted transition-colors hover:text-navy"
       >
         <ArrowLeft size={14} /> Back to Home
@@ -321,7 +321,7 @@ export default function FinancePage() {
         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gold/25 bg-gold/[0.05] px-4 py-3 text-[14px] text-navy">
           <Building2 size={16} className="text-gold" />
           <span>Looking for the whole organization? Consolidated finance lives on</span>
-          <Link to="/" className="font-semibold text-gold hover:text-gold-light">
+          <Link to="/app" className="font-semibold text-gold hover:text-gold-light">
             Home
           </Link>
           <span>and the</span>

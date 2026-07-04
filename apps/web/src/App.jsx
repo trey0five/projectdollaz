@@ -1,13 +1,17 @@
-// Router. Public auth pages live behind PublicOnlyRoute; the authed app (the
-// existing smart-intake Dashboard, scoped to the selected school) lives behind
-// ProtectedRoute. SchoolProvider wraps the authed branch so the switcher +
-// report preview can read the user's schools.
+// Router. "/" is the PUBLIC marketing homepage (RootRoute: authed users are
+// forwarded to the briefing at /app, logged-out visitors get the lazy-loaded
+// LandingPage). Public auth pages live behind PublicOnlyRoute; the authed app
+// (the existing smart-intake Dashboard, scoped to the selected school) lives
+// behind ProtectedRoute. SchoolProvider wraps the authed branch so the
+// switcher + report preview can read the user's schools.
+import { Suspense, lazy } from 'react'
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { SchoolProvider, useSchools } from './context/SchoolContext.jsx'
 import { ScopeProvider } from './context/ScopeContext.jsx'
 import { BillingProvider } from './context/BillingContext.jsx'
 import { PersistenceProvider } from './context/PersistenceContext.jsx'
-import { ProtectedRoute, PublicOnlyRoute } from './components/auth/RouteGuards.jsx'
+import { useAuth } from './context/AuthContext.jsx'
+import { ProtectedRoute, PublicOnlyRoute, BootSplash } from './components/auth/RouteGuards.jsx'
 import Onboarding from './components/onboarding/Onboarding.jsx'
 import { PennyProvider } from './context/PennyContext.jsx'
 import Penny from './components/penny/Penny.jsx'
@@ -49,6 +53,23 @@ import RegisterPage from './pages/RegisterPage.jsx'
 import VerifyEmailPage from './pages/VerifyEmailPage.jsx'
 import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx'
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx'
+
+// The public marketing homepage — lazy so authed users never download it.
+const LandingPage = lazy(() => import('./pages/landing/LandingPage.jsx'))
+
+// "/" — OUTSIDE AuthedLayout. Waits for the auth rehydrate (navy BootSplash, so
+// there's no white flash into the navy hero), then forwards authed users to the
+// briefing at /app and shows logged-out visitors the marketing landing.
+function RootRoute() {
+  const { isAuthenticated, ready } = useAuth()
+  if (!ready) return <BootSplash />
+  if (isAuthenticated) return <Navigate to="/app" replace />
+  return (
+    <Suspense fallback={<BootSplash />}>
+      <LandingPage />
+    </Suspense>
+  )
+}
 
 // First-login gate: once the user's schools have loaded, a user with none is sent
 // to onboarding (create your first school) instead of an empty dashboard. The QB
@@ -94,6 +115,7 @@ function AuthedLayout() {
 export default function App() {
   return (
     <Routes>
+      <Route path="/" element={<RootRoute />} />
       <Route
         path="/login"
         element={
@@ -129,7 +151,7 @@ export default function App() {
         }
       />
       <Route element={<AuthedLayout />}>
-        <Route path="/" element={<HomePage />} />
+        <Route path="/app" element={<HomePage />} />
         <Route path="/penny" element={<PennyStudioPage />} />
         <Route path="/data" element={<DataHubPage />} />
         <Route path="/finance" element={<FinancePage />} />
@@ -164,6 +186,9 @@ export default function App() {
           <Route path="billing" element={<BillingSection />} />
         </Route>
       </Route>
+      {/* Catch-all stays "/" on purpose: RootRoute forwards authed users to
+          /app, and a logged-out dead link lands on marketing, not a login
+          bounce. */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

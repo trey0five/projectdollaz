@@ -37,7 +37,8 @@ export default function LoginPage() {
     setBusy(true)
     try {
       await login(email.trim().toLowerCase(), password)
-      const dest = location.state?.from && location.state.from !== '/login' ? location.state.from : '/'
+      const dest =
+        location.state?.from && location.state.from !== '/login' ? location.state.from : '/app'
       navigate(dest, { replace: true })
     } catch (err) {
       if (isEmailNotVerified(err)) {

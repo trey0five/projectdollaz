@@ -160,7 +160,7 @@ export default function StatementsWorkspace() {
   return (
     <div className="mx-auto max-w-[1460px] px-4 py-6 sm:px-10">
       <Link
-        to="/"
+        to="/app"
         className="mb-4 inline-flex items-center gap-1.5 text-[15px] font-semibold text-muted transition-colors hover:text-gold"
       >
         <ArrowLeft size={15} /> Back to dashboard

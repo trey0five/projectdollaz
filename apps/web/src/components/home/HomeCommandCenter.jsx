@@ -335,7 +335,7 @@ export default function HomeCommandCenter({
             triage board below (which lists them all). */}
         {top && (
           <Link
-            to={top.link || '/'}
+            to={top.link || '/app'}
             className="group relative flex items-start gap-3 overflow-hidden rounded-xl border border-white/12 bg-navy-deep/40 px-4 py-3 transition-all duration-300 hover:border-gold/40 hover:bg-navy-deep/60 hover:shadow-[0_0_26px_-8px_rgba(214,178,92,0.5)]"
           >
             {/* Gold shine that sweeps across on hover. */}

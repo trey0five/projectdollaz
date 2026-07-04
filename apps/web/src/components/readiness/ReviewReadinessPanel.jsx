@@ -42,7 +42,7 @@ function PageHeader() {
   return (
     <div className="mb-5">
       <Link
-        to="/"
+        to="/app"
         className="mb-4 inline-flex items-center gap-1.5 text-[15px] font-semibold text-muted transition-colors hover:text-gold"
       >
         <ArrowLeft size={15} /> Back to dashboard
@@ -177,7 +177,7 @@ export default function ReviewReadinessPanel() {
           <p className="mt-1 text-[15px] text-muted">
             Generate and save a period on the dashboard to run the readiness checks.
           </p>
-          <Link to="/" className="btn-primary mt-6">
+          <Link to="/app" className="btn-primary mt-6">
             Go to dashboard
           </Link>
         </div>

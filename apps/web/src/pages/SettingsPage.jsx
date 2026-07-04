@@ -16,7 +16,7 @@ export default function SettingsPage() {
             Settings
           </h1>
           <Link
-            to="/"
+            to="/app"
             className="flex min-h-[44px] items-center gap-2 text-[15px] font-semibold text-white/70 transition-colors hover:text-gold-light"
           >
             <ArrowLeft size={15} /> Back to dashboard

@@ -56,7 +56,7 @@ export default function Onboarding() {
           : {}),
       })
       if (created?.id) setActiveSchool(created.id)
-      navigate('/')
+      navigate('/app')
     } catch (e) {
       setErr(apiErrorMessage(e, 'Could not finish setup. Please try again.'))
       setBusy(false)
