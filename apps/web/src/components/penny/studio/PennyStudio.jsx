@@ -20,6 +20,7 @@ import { usePersistence } from '../../../context/PersistenceContext.jsx'
 import StudioHero from './StudioHero.jsx'
 import StudioAskBar from './StudioAskBar.jsx'
 import StudioCapabilityTiles from './StudioCapabilityTiles.jsx'
+import StudioRecipes from './StudioRecipes.jsx'
 import StudioActionInbox from './StudioActionInbox.jsx'
 import StudioRail from './StudioRail.jsx'
 import StudioConversation from './StudioConversation.jsx'
@@ -249,6 +250,7 @@ export default function PennyStudio() {
             ) : (
               <motion.div key="l" {...swap} className="space-y-10 pb-24">
                 <StudioCapabilityTiles onSelect={onSelectTile} canEdit={canEdit} />
+                <StudioRecipes onRun={runPrompt} />
                 <div className="grid items-start gap-5 lg:grid-cols-[1.35fr_1fr]">
                   <StudioActionInbox schoolId={activeId} periodId={periodId} onHandle={runPrompt} />
                   <StudioRail chat={chat} onPick={runPrompt} />
