@@ -26,7 +26,12 @@ function makeService(opts: {
 } = {}) {
   const membershipFindFirst =
     opts.membershipSpy ?? vi.fn(async () => opts.member ?? null)
-  const prisma = { membership: { findFirst: membershipFindFirst } }
+  // task.findFirst backs the anti-duplicate guard in create_task apply; default to no
+  // existing task so the create path runs.
+  const prisma = {
+    membership: { findFirst: membershipFindFirst },
+    task: { findFirst: vi.fn(async () => null) },
+  }
   const tasksCreate = vi.fn(async (schoolId: string, dto: unknown) => ({ id: 't1', schoolId, dto }))
   const tasks = { create: tasksCreate }
   const stub = {} as never

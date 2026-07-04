@@ -2065,6 +2065,26 @@ export class AssistantService {
         typeof p.sourceRef === 'string' && p.sourceRef.trim()
           ? p.sourceRef.trim().slice(0, 200)
           : undefined
+      // Anti-duplicate: across a multi-step approval the model can re-apply the SAME
+      // task on each "yes" (the reported bug: 3 identical tasks). If an open task with
+      // this exact title already exists for the school, reuse it instead of spawning a
+      // duplicate. A user who genuinely wants a second copy can still add one from the
+      // Tasks screen; this guard only debounces Penny's own repeated applies.
+      const existingOpen = await this.prisma.task.findFirst({
+        where: {
+          schoolId,
+          title,
+          status: { not: 'done' },
+          ...(sourceRef ? { sourceRef } : {}),
+        },
+        orderBy: { createdAt: 'asc' },
+      })
+      if (existingOpen) {
+        return {
+          summary: `“${title}” already exists — I didn’t create a duplicate.`,
+          createdId: existingOpen.id,
+        }
+      }
       const created = await this.tasks.create(
         schoolId,
         {
@@ -2681,6 +2701,12 @@ export class AssistantService {
       'referenced item, accept an assignee ("me" or a school member’s email — it must be an active member of ' +
       'this school) and a due date (only if the user states one — never invent a due date), and never claim the ' +
       'task exists until the user confirms. Offering create_task is a natural way to act on a briefing item. ' +
+      'OWNER: do NOT silently leave a task unassigned — before proposing it, ASK who should own it (or confirm ' +
+      'they want it unassigned for now). If there is no suitable person (e.g. the school has no other members), ' +
+      'say so and offer to help them invite a teammate from Settings → Members, rather than defaulting to no ' +
+      'owner. NO DUPLICATES: never create the same task twice — if you already created (or proposed) a task this ' +
+      'conversation, or an identical open one already exists, reference that one instead of proposing/applying it ' +
+      'again, even if the user says "yes to all" across several turns. ' +
       'submit_for_approval and decide_approval are ALSO confirm-then-apply tools (propose → the user confirms → ' +
       'apply; NEVER autonomous). submit_for_approval routes an existing task to an ORDERED list of approvers ' +
       '("me" or member emails; sign-off happens in that order). decide_approval records YOUR approve/reject on a ' +
