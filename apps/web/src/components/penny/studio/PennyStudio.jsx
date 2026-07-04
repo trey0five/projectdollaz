@@ -43,15 +43,38 @@ export default function PennyStudio() {
   // straight into a full-screen chat. Once (per visit), reset to a fresh chat so
   // the hero + tiles + inbox show first; the prior chat stays in Recent
   // conversations for the user to resume deliberately.
+  //
+  // CRITICAL: only reset a *hydrated* prior session — NOT the user's own first
+  // send. `engagedRef` flips true the instant the user sends or resumes (via the
+  // wrapped `engagedChat` below), so a first message on a school with no prior
+  // session enters the conversation instead of being wiped.
+  const engagedRef = useRef(false)
   const didResetRef = useRef(false)
   useEffect(() => {
     if (didResetRef.current) return
-    if (chat.messages.length > 0) {
+    if (chat.messages.length > 0 && !engagedRef.current) {
       didResetRef.current = true
       chat.newChat()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chat.messages.length])
+
+  // A view of the engine whose send/switchSession mark the visit "engaged" so the
+  // landing-reset above never wipes a conversation the user themselves started.
+  const engagedChat = useMemo(
+    () => ({
+      ...chat,
+      send: (text, opts) => {
+        engagedRef.current = true
+        return chat.send(text, opts)
+      },
+      switchSession: (id) => {
+        engagedRef.current = true
+        return chat.switchSession(id)
+      },
+    }),
+    [chat],
+  )
 
   // ── Period: the inbox + chat must agree. Prefer the stored active period; else
   // fall back to the newest snapshot period and persist it (PeriodSelector writes
@@ -138,16 +161,16 @@ export default function PennyStudio() {
   }
 
   // ── Actions ──────────────────────────────────────────────────────────────────
-  const runPrompt = useCallback((text) => chat.send(text), [chat])
+  const runPrompt = useCallback((text) => engagedChat.send(text), [engagedChat])
   const onSelectTile = useCallback(
     (tile) => {
-      if (tile.mode === 'send') chat.send(tile.prompt)
+      if (tile.mode === 'send') engagedChat.send(tile.prompt)
       else {
         setValue(tile.prompt)
         setFocusNonce((n) => n + 1)
       }
     },
-    [chat],
+    [engagedChat],
   )
 
   // ── Drop-anything auto-file ──────────────────────────────────────────────────
@@ -202,13 +225,13 @@ export default function PennyStudio() {
     const files = Array.from(e.dataTransfer.files || [])
     if (!files.length) return
     const staged = await stageFiles(files, setToast)
-    if (staged.length) chat.send('', { attachments: staged })
+    if (staged.length) engagedChat.send('', { attachments: staged })
   }
 
   const askBar = (
     <StudioAskBar
       variant={inConversation ? 'docked' : 'hero'}
-      chat={chat}
+      chat={engagedChat}
       staging={staging}
       value={value}
       onChange={setValue}
@@ -236,7 +259,7 @@ export default function PennyStudio() {
         <StudioHero
           compact={inConversation}
           name={name}
-          chat={chat}
+          chat={engagedChat}
           askBar={inConversation ? null : askBar}
           onNewChat={chat.newChat}
         />
@@ -245,7 +268,7 @@ export default function PennyStudio() {
           <AnimatePresence mode="wait">
             {inConversation ? (
               <motion.div key="c" {...swap}>
-                <StudioConversation chat={chat} />
+                <StudioConversation chat={engagedChat} />
               </motion.div>
             ) : (
               <motion.div key="l" {...swap} className="space-y-10 pb-24">
@@ -253,7 +276,7 @@ export default function PennyStudio() {
                 <StudioRecipes onRun={runPrompt} />
                 <div className="grid items-start gap-5 lg:grid-cols-[1.35fr_1fr]">
                   <StudioActionInbox schoolId={activeId} periodId={periodId} onHandle={runPrompt} />
-                  <StudioRail chat={chat} onPick={runPrompt} />
+                  <StudioRail chat={engagedChat} onPick={runPrompt} />
                 </div>
               </motion.div>
             )}
