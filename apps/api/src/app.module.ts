@@ -16,6 +16,7 @@ import { BillingModule } from './billing/billing.module.js'
 import { AnalyticsModule } from './analytics/analytics.module.js'
 import { ComplianceModule } from './compliance/compliance.module.js'
 import { ReportScheduleModule } from './report-schedule/report-schedule.module.js'
+import { AlertModule } from './alerts/alert.module.js'
 import { IntegrationsModule } from './integrations/integrations.module.js'
 import { BoardReportModule } from './board-report/board-report.module.js'
 import { SchedulesModule } from './schedules/schedules.module.js'
@@ -54,6 +55,7 @@ import { KnowledgeModule } from './knowledge/knowledge.module.js'
     AnalyticsModule,
     ComplianceModule,
     ReportScheduleModule,
+    AlertModule,
     IntegrationsModule,
     BoardReportModule,
     SchedulesModule,

@@ -46,6 +46,7 @@ function makeService(opts: { member?: { userId: string } | null } = {}) {
     stub, stub, stub, stub, stub, stub, // policies, committees, meetings, accreditation, facilities, advancement
     stub, // orgBriefing
     stub, // audit
+    stub, // alerts
   )
   return { svc, submitForApproval, decide, list, membershipFindFirst }
 }

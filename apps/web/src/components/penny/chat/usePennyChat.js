@@ -29,6 +29,7 @@ const CONFIRM_REFRESH_KEYS = {
   create_standard: 'accreditation',
   create_maintenance_item: 'facilities',
   create_campaign: 'advancement',
+  create_alert: 'alerts',
 }
 
 // tool → the domain refresh keys to broadcast after an UNDO reverses that action, so
@@ -41,6 +42,7 @@ const UNDO_REFRESH_KEYS = {
   create_standard: ['accreditation'],
   create_maintenance_item: ['facilities'],
   create_campaign: ['advancement'],
+  create_alert: ['alerts'],
   create_task: ['tasks'],
   file_document: ['knowledge', 'facilities'],
   import_trial_balance: ['dataStatus', 'metrics'],

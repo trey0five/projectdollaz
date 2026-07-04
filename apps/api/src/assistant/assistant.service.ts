@@ -59,6 +59,7 @@ import { MeetingsService } from '../governance/meetings.service.js'
 import { AccreditationService } from '../accreditation/accreditation.service.js'
 import { FacilitiesService } from '../facilities/facilities.service.js'
 import { AdvancementService } from '../advancement/advancement.service.js'
+import { AlertService, ALERT_METRIC_KEYS } from '../alerts/alert.service.js'
 import type { CreatePolicyDto } from '../governance/dto/create-policy.dto.js'
 import type { CreateCommitteeDto } from '../governance/dto/create-committee.dto.js'
 import type { CreateMeetingDto } from '../governance/dto/create-meeting.dto.js'
@@ -136,6 +137,7 @@ const REFRESH: Record<ProposedAction['kind'], RefreshKey[]> = {
   create_standard: ['accreditation'],
   create_maintenance_item: ['facilities'],
   create_campaign: ['advancement'],
+  create_alert: ['alerts'],
 }
 
 // Penny action-log stamps. Every applied action is written to the AuditLog under
@@ -157,6 +159,7 @@ const REVERSIBLE_KINDS = new Set<ProposedAction['kind']>([
   'create_standard',
   'create_maintenance_item',
   'create_campaign',
+  'create_alert',
   'create_task',
   'file_document',
   'import_trial_balance',
@@ -191,6 +194,7 @@ const CONFIRM_TOOLS = new Set([
   'create_standard',
   'create_maintenance_item',
   'create_campaign',
+  'create_alert',
 ])
 
 // Role-gate the tools OFFERED to the model. A viewer (Board) is read-only: every
@@ -243,6 +247,7 @@ export interface ProposedAction {
     | 'create_standard'
     | 'create_maintenance_item'
     | 'create_campaign'
+    | 'create_alert'
   periodId: string
   summary: string
   payload: Record<string, unknown>
@@ -391,6 +396,7 @@ type RefreshKey =
   | 'accreditation'
   | 'facilities'
   | 'advancement'
+  | 'alerts'
 
 /** A flat label/value row on the "what I changed" card. */
 export interface AppliedDetail {
@@ -527,6 +533,10 @@ export class AssistantService {
     // existing positional-arg unit specs (which stop at orgBriefing) still construct;
     // in those `this.audit` is undefined and every write below is optional-chained.
     private readonly audit: AuditService,
+    // Phase 4E — proactive alerts. Added LAST (after audit) so existing positional-arg
+    // unit specs (which stop at audit) still construct; only the create_alert
+    // build/apply/reverse paths touch `this.alerts`, so undefined elsewhere is safe.
+    private readonly alerts: AlertService,
   ) {}
 
   isConfigured(): boolean {
@@ -907,6 +917,9 @@ export class AssistantService {
     }
     if (name === 'create_campaign') {
       return this.buildCampaignProposal(args, ctx)
+    }
+    if (name === 'create_alert') {
+      return this.buildAlertProposal(args, ctx)
     }
     const periodId = await this.resolvePeriod(args, ctx)
     if (name === 'set_budget') {
@@ -1575,6 +1588,49 @@ export class AssistantService {
   }
 
   /**
+   * Build a confirmable create_alert proposal (NO mutation). Validates the type and
+   * its per-type fields; the recipient defaults to the current user at CREATE time
+   * (AlertService.create resolves it from userId). See buildPolicyProposal.
+   */
+  private buildAlertProposal(args: Record<string, unknown>, ctx: Ctx): ProposedAction {
+    const type = args.type === 'threshold' ? 'threshold' : args.type === 'digest' ? 'digest' : ''
+    if (!type) throw new Error('create_alert needs a type of "digest" or "threshold".')
+    const label =
+      typeof args.label === 'string' && args.label.trim() ? args.label.trim().slice(0, 200) : undefined
+
+    if (type === 'digest') {
+      const cadence = ['daily', 'weekly', 'monthly'].includes(String(args.cadence))
+        ? (args.cadence as string)
+        : 'weekly'
+      return {
+        kind: 'create_alert',
+        periodId: ctx.periodId ?? '',
+        summary: `Set up a ${cadence} financial digest emailed to you.`,
+        payload: { type, cadence, ...(label ? { label } : {}) },
+      }
+    }
+
+    // threshold
+    const metricKey = typeof args.metricKey === 'string' ? args.metricKey.trim() : ''
+    if (!metricKey || !ALERT_METRIC_KEYS.has(metricKey)) {
+      throw new Error('create_alert (threshold) needs a valid metricKey.')
+    }
+    const operator = args.operator === 'lt' || args.operator === 'gt' ? args.operator : ''
+    if (!operator) throw new Error('create_alert (threshold) needs an operator (lt or gt).')
+    if (typeof args.threshold !== 'number' || !Number.isFinite(args.threshold)) {
+      throw new Error('create_alert (threshold) needs a numeric threshold.')
+    }
+    const threshold = args.threshold
+    const word = operator === 'lt' ? 'below' : 'above'
+    return {
+      kind: 'create_alert',
+      periodId: ctx.periodId ?? '',
+      summary: `Alert you when ${metricKey} goes ${word} ${threshold}.`,
+      payload: { type, metricKey, operator, threshold, ...(label ? { label } : {}) },
+    }
+  }
+
+  /**
    * Resolve an approver string to an ACTIVE-member userId of THIS school, or THROW.
    * Unlike resolveAssignee (null on empty), an approver is REQUIRED — "me" → the
    * caller; an email → the active member with that email (case-insensitive) or a
@@ -1877,6 +1933,9 @@ export class AssistantService {
         return
       case 'create_campaign':
         await this.advancement.removeCampaign(schoolId, targetId, user.id)
+        return
+      case 'create_alert':
+        await this.alerts.remove(schoolId, targetId, user.id)
         return
       case 'create_task':
         await this.tasks.remove(schoolId, targetId, user.id)
@@ -2342,6 +2401,22 @@ export class AssistantService {
         ...(notes ? { notes } : {}),
       }
       const created = await this.advancement.createCampaign(schoolId, dto, userId)
+      return { summary: action.summary, createdId: created?.id ?? null }
+    }
+    if (action.kind === 'create_alert') {
+      // UNTRUSTED payload — AlertService.create re-validates every field by type and
+      // defaults the recipient to the creator's email. Returns the created row id so
+      // an Undo can be offered.
+      const type = p.type === 'threshold' ? 'threshold' : 'digest'
+      const dto = {
+        type,
+        ...(typeof p.cadence === 'string' ? { cadence: p.cadence } : {}),
+        ...(typeof p.metricKey === 'string' ? { metricKey: p.metricKey } : {}),
+        ...(typeof p.operator === 'string' ? { operator: p.operator } : {}),
+        ...(typeof p.threshold === 'number' ? { threshold: p.threshold } : {}),
+        ...(typeof p.label === 'string' ? { label: p.label } : {}),
+      } as Parameters<AlertService['create']>[1]
+      const created = await this.alerts.create(schoolId, dto, userId)
       return { summary: action.summary, createdId: created?.id ?? null }
     }
     // draft_cap_entry

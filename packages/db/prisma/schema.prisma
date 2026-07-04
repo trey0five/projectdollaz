@@ -113,6 +113,7 @@ model School {
   budgets            PeriodBudget[]
   analyticsDashboard AnalyticsDashboard?
   reportSchedule     ReportSchedule?
+  alerts             Alert[]
   qboConnection      QboConnection?
   boardReports       BoardReport[]
   capitalSchedules   CapitalSchedule[]
@@ -216,6 +217,7 @@ model User {
   advancementCampaignsCreated  AdvancementCampaign[]   @relation("AdvancementCampaignCreatedBy")
   advancementGiftsCreated      AdvancementGift[]       @relation("AdvancementGiftCreatedBy")
   knowledgeDocumentsUploaded   KnowledgeDocument[]     @relation("KnowledgeDocumentUploadedBy")
+  alertsCreated                Alert[]                 @relation("AlertCreatedBy")
 
   @@index([email])
   @@map("users")
@@ -671,6 +673,38 @@ model ReportSchedule {
   school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
   @@map("report_schedules")
+}
+
+// Phase 4E — proactive alerts / standing requests. A user (or Penny) sets a
+// standing request that the AlertService scheduler evaluates on a 30-min tick and
+// emails when due: a scheduled DIGEST (cadence) or an edge-triggered THRESHOLD
+// alert (metricKey/operator/threshold). MANY rows per school/user (NOT unique on
+// schoolId, unlike ReportSchedule). lastBreached edge-triggers thresholds so a
+// metric that stays below the line does not re-email every tick.
+model Alert {
+  id              String    @id @default(uuid()) @db.Uuid
+  schoolId        String    @map("school_id") @db.Uuid
+  createdByUserId String?   @map("created_by_user_id") @db.Uuid
+  type            String // 'digest' | 'threshold'
+  cadence         String? // 'daily' | 'weekly' | 'monthly' (digest only)
+  metricKey       String?   @map("metric_key") // e.g. 'days_cash_on_hand' (threshold only)
+  operator        String? // 'lt' | 'gt' (threshold only)
+  threshold       Float?
+  recipientEmail  String    @map("recipient_email") // defaults to creator's email at create time
+  enabled         Boolean   @default(true)
+  lastSentAt      DateTime? @map("last_sent_at")
+  lastValue       Float?    @map("last_value")
+  lastBreached    Boolean   @default(false) @map("last_breached") // edge-trigger state
+  label           String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  school        School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  createdByUser User?  @relation("AlertCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([schoolId])
+  @@index([enabled])
+  @@map("alerts")
 }
 
 /// Phase 6 — a school's QuickBooks Online OAuth connection (one per school). Tokens

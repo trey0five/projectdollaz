@@ -3,7 +3,7 @@
 // change (mirrors the app's existing mobile dropdown pattern). Both deep-link
 // to nested /settings/* routes so a hard refresh lands on the right section.
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { User, Users, Building2, Briefcase, CreditCard, CalendarClock, Plug } from 'lucide-react'
+import { User, Users, Building2, Briefcase, CreditCard, CalendarClock, Plug, Bell } from 'lucide-react'
 
 const NAV = [
   { to: 'account', label: 'My Account', Icon: User },
@@ -11,6 +11,7 @@ const NAV = [
   { to: 'school', label: 'School', Icon: Building2 },
   { to: 'organization', label: 'Organization', Icon: Briefcase },
   { to: 'reports', label: 'Board Reports', Icon: CalendarClock },
+  { to: 'alerts', label: 'Alerts', Icon: Bell },
   { to: 'integrations', label: 'Integrations', Icon: Plug },
   { to: 'billing', label: 'Billing', Icon: CreditCard },
 ]

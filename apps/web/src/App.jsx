@@ -40,6 +40,7 @@ import MembersSection from './components/settings/MembersSection.jsx'
 import SchoolSection from './components/settings/SchoolSection.jsx'
 import OrgSection from './components/settings/OrgSection.jsx'
 import ReportScheduleSection from './components/settings/ReportScheduleSection.jsx'
+import AlertsSection from './components/settings/AlertsSection.jsx'
 import IntegrationsSection from './components/settings/IntegrationsSection.jsx'
 import BillingSection from './components/settings/BillingSection.jsx'
 import QbCallbackPage from './pages/QbCallbackPage.jsx'
@@ -158,6 +159,7 @@ export default function App() {
           <Route path="school" element={<SchoolSection />} />
           <Route path="organization" element={<OrgSection />} />
           <Route path="reports" element={<ReportScheduleSection />} />
+          <Route path="alerts" element={<AlertsSection />} />
           <Route path="integrations" element={<IntegrationsSection />} />
           <Route path="billing" element={<BillingSection />} />
         </Route>

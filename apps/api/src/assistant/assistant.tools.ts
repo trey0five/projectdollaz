@@ -678,6 +678,44 @@ export const TOOL_SCHEMAS = [
   {
     type: 'function',
     function: {
+      name: 'create_alert',
+      description:
+        'PROPOSE a standing alert / proactive request for the user to CONFIRM before it is created (like create_task — this does NOT create it; the user must confirm). Use when the user asks to be notified/emailed on a schedule or when a metric crosses a line, e.g. "email me a cash summary every Monday" or "alert me if days-cash drops below 30". Set type="digest" for a recurring email summary (also set cadence: daily/weekly/monthly), OR type="threshold" for a metric watch (also set metricKey, operator lt/gt, and a numeric threshold). Valid metricKey values: operating_margin, days_cash_on_hand, months_operating_reserve, tuition_dependency, cost_per_pupil, net_tuition_per_student, financial_aid_per_student, aid_per_aided_student, tuition_discount_rate, pct_students_on_aid, enrollment_change_yoy, student_teacher_ratio. Threshold is the raw metric value (a percent like operating_margin is a whole number, e.g. 5 for 5%; days/months/currency are their own units). The email goes to the current user by default. Alert, not period-scoped.',
+      parameters: {
+        type: 'object',
+        properties: {
+          type: {
+            type: 'string',
+            enum: ['digest', 'threshold'],
+            description: 'digest = scheduled email summary; threshold = metric-crossing watch.',
+          },
+          cadence: {
+            type: 'string',
+            enum: ['daily', 'weekly', 'monthly'],
+            description: 'For a digest: how often to email. Defaults to weekly.',
+          },
+          metricKey: {
+            type: 'string',
+            description: 'For a threshold: which metric to watch, e.g. days_cash_on_hand.',
+          },
+          operator: {
+            type: 'string',
+            enum: ['lt', 'gt'],
+            description: 'For a threshold: lt = alert when below, gt = alert when above.',
+          },
+          threshold: {
+            type: 'number',
+            description: 'For a threshold: the raw metric value to compare against, e.g. 30.',
+          },
+          label: { type: 'string', description: 'Optional short label for the alert.' },
+        },
+        required: ['type'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'render_chart',
       description:
         'Draw a chart for the user. Call this to visualize numbers you have already fetched (a trend, a comparison, a breakdown). Pick the chart type that fits and give a clear title.',
@@ -912,6 +950,7 @@ export const TOOL_LABELS: Record<string, string> = {
   create_standard: 'Adding a standard…',
   create_maintenance_item: 'Logging a maintenance item…',
   create_campaign: 'Starting a campaign…',
+  create_alert: 'Setting up an alert…',
   list_open_tasks: 'Reading your open tasks…',
   submit_for_approval: 'Routing for sign-off…',
   decide_approval: 'Recording your decision…',

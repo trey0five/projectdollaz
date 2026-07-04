@@ -21,6 +21,7 @@ const APPLY_KINDS = [
   'create_standard',
   'create_maintenance_item',
   'create_campaign',
+  'create_alert',
 ] as const
 
 /** A user-confirmed assistant proposal to apply. Mirrors ProposedAction. */

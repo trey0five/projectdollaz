@@ -530,6 +530,15 @@ export const reportScheduleApi = {
   sendNow: (schoolId) => api.post(`/schools/${schoolId}/report-schedule/send-now`),
 }
 
+// ── Phase 4E: proactive alerts / standing requests (per school) ──────────────
+export const alertsApi = {
+  list: (schoolId) => api.get(`/schools/${schoolId}/alerts`),
+  create: (schoolId, body) => api.post(`/schools/${schoolId}/alerts`, body),
+  update: (schoolId, alertId, body) => api.patch(`/schools/${schoolId}/alerts/${alertId}`, body),
+  remove: (schoolId, alertId) => api.delete(`/schools/${schoolId}/alerts/${alertId}`),
+  test: (schoolId, alertId) => api.post(`/schools/${schoolId}/alerts/${alertId}/test`),
+}
+
 // ── AI assistant (agentic, tool-calling) ─────────────────────────────────────
 export const assistantApi = {
   chat: (schoolId, body) => api.post(`/schools/${schoolId}/assistant/chat`, body),

@@ -14,6 +14,7 @@ import { GovernanceModule } from '../governance/governance.module.js'
 import { AccreditationModule } from '../accreditation/accreditation.module.js'
 import { FacilitiesModule } from '../facilities/facilities.module.js'
 import { AdvancementModule } from '../advancement/advancement.module.js'
+import { AlertModule } from '../alerts/alert.module.js'
 import { AuditModule } from '../common/audit/audit.module.js'
 import { AssistantController } from './assistant.controller.js'
 import { AssistantService } from './assistant.service.js'
@@ -48,6 +49,10 @@ import { AssistantFilesService } from './assistant-files.service.js'
     AccreditationModule,
     FacilitiesModule,
     AdvancementModule,
+    // Phase 4E — proactive alerts. Exports AlertService so Penny's create_alert
+    // confirm-tool can create standing requests. No cycle: AlertModule imports no
+    // AssistantModule.
+    AlertModule,
     // Shared best-effort audit writer — Penny stamps every applied action into the
     // AuditLog (source:'assistant') so the action log + inline Undo can read it back.
     AuditModule,

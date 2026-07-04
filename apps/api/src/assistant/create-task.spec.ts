@@ -58,6 +58,7 @@ function makeService(opts: {
     stub, // advancement
     stub, // orgBriefing
     stub, // audit
+    stub, // alerts
   )
   return { svc, tasksCreate, membershipFindFirst }
 }

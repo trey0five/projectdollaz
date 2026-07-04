@@ -59,6 +59,16 @@ export class MailerService {
     await this.deliver(email, subject, text, `Board summary for ${email}: ${link}`)
   }
 
+  /**
+   * Phase 4E — proactive alerts / standing requests. A pre-composed subject+body
+   * (scheduled digest OR edge-triggered threshold alert) from AlertService. Sends
+   * real SMTP when configured, else a [DEV MAIL] console stub — the alert is still
+   * recorded as sent by the caller (lastSentAt) regardless.
+   */
+  async sendAlert(email: string, subject: string, text: string): Promise<void> {
+    await this.deliver(email, subject, text, `Alert email for ${email}: ${subject}`)
+  }
+
   async sendPasswordResetEmail(email: string, code: string): Promise<void> {
     await this.deliver(
       email,
