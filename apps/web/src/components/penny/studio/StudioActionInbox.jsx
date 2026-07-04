@@ -5,9 +5,14 @@
 //
 // States: loading → skeletons; empty → all-caught-up card; notEntitled (402) →
 // hide the panel; error with no items → render nothing (fail-soft).
+import { useState } from 'react'
 import { ArrowRight, Clock, Sparkles } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useBriefing } from '../../../hooks/useBriefing.js'
+
+// How many items to show before the "Show all" affordance kicks in — keeps the
+// landing calm (the mockup showed a short inbox) without hiding anything.
+const COLLAPSED_COUNT = 5
 
 const SOURCE_LABEL = {
   metric: 'Finance',
@@ -66,6 +71,7 @@ function RowSkeleton() {
 
 export default function StudioActionInbox({ schoolId, periodId, onHandle }) {
   const { items, loading, error, notEntitled } = useBriefing(schoolId, periodId)
+  const [expanded, setExpanded] = useState(false)
 
   // Gated → hide the panel entirely (like the rest of the gated dashboard).
   if (notEntitled) return null
@@ -74,6 +80,8 @@ export default function StudioActionInbox({ schoolId, periodId, onHandle }) {
 
   const openCount = items.length
   const anyCritical = items.some((i) => i.severity === 'critical')
+  const hasOverflow = openCount > COLLAPSED_COUNT
+  const visibleItems = expanded ? items : items.slice(0, COLLAPSED_COUNT)
 
   return (
     <section className="overflow-hidden rounded-2xl border border-rule/60 bg-white shadow-card">
@@ -109,7 +117,7 @@ export default function StudioActionInbox({ schoolId, periodId, onHandle }) {
           </div>
         </div>
       ) : (
-        items.map((item) => (
+        visibleItems.map((item) => (
           <article key={item.id} className="flex gap-3 border-b border-rule/60 px-[18px] py-[15px] last:border-b-0">
             <span className={`w-1 shrink-0 rounded ${SEV_BAR[item.severity] ?? SEV_BAR.info}`} aria-hidden />
             <div className="min-w-0 flex-1">
@@ -147,6 +155,16 @@ export default function StudioActionInbox({ schoolId, periodId, onHandle }) {
             </div>
           </article>
         ))
+      )}
+
+      {!loading && hasOverflow && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="w-full border-t border-rule/60 px-[18px] py-3 text-[13px] font-semibold text-navy transition-colors hover:bg-section focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+        >
+          {expanded ? 'Show less' : `Show all ${openCount}`}
+        </button>
       )}
     </section>
   )

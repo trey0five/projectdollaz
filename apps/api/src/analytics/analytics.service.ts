@@ -9,6 +9,7 @@ import {
   type MetricResult,
   type MetricTrend,
   type PeriodOperational,
+  type TrendPoint,
   type TrendSeriesEntry,
 } from '@finrep/analytics'
 import { PrismaService } from '../prisma/prisma.service.js'
@@ -17,6 +18,7 @@ import { BillingService } from '../billing/billing.service.js'
 import { OperationalService } from './operational.service.js'
 import { categoryActualsFromBundle } from './category-actuals.js'
 import { entitledModulesForSchool, filterMetricsByEntitlement } from './metric-gating.js'
+import { fyElapsed } from '../monthly/fy-elapsed.js'
 
 /** Prisma Decimal -> plain number (null-safe), for the pure analytics layer. */
 function dec(v: Prisma.Decimal | null): number | null {
@@ -481,6 +483,121 @@ export class AnalyticsService {
         operational: opByPeriod.get(p.id) ?? null,
       }))
 
-    return computeTrend(metricKey, series)
+    const annual = computeTrend(metricKey, series)
+
+    // Annual path is authoritative whenever ≥2 fiscal periods have a snapshot —
+    // NEVER perturbed by the fallback below (byte-identical to the prior behavior).
+    if (series.length >= 2) return annual
+
+    // <2 annual points => the sparkline would show the "builds as you save more
+    // periods" placeholder. Fall back to MONTHLY snapshots within a single FY so the
+    // chart can still draw. Only replaces the annual result when it yields ≥2 real
+    // (non-null) monthly points; otherwise the annual placeholder stands unchanged.
+    const monthly = await this.monthlyTrendFallback(schoolId, metricKey, annual)
+    return monthly ?? annual
   }
+
+  /**
+   * MONTHLY-derived trend fallback: one point per monthly snapshot within a SINGLE
+   * fiscal year, using the same partial-year-correct compute path as
+   * monthly-actuals.service.ts (computeMetricsForPeriod with the fyElapsed basis, so
+   * days_cash_on_hand / months_operating_reserve annualize off the elapsed period).
+   *
+   * Month selection: pick the ONE fiscal period with the MOST monthly snapshots
+   * (tie-break: the latest period by periodEndDate). Confining the series to a
+   * single FY keeps the month labels ('Jan 26' …) unambiguous and the elapsed basis
+   * monotonic. Returns null (=> caller keeps the annual placeholder) unless the
+   * chosen FY yields ≥2 non-null points, which is what the sparkline needs to draw.
+   */
+  private async monthlyTrendFallback(
+    schoolId: string,
+    metricKey: MetricKey,
+    annual: MetricTrend,
+  ): Promise<MetricTrend | null> {
+    const snaps = await this.prisma.monthlySnapshot.findMany({
+      where: { schoolId },
+      orderBy: { monthKey: 'asc' },
+      select: { fiscalPeriodId: true, monthKey: true, payload: true },
+    })
+    if (snaps.length < 2) return null
+
+    // Group months by fiscal period, then choose the period with the most months.
+    const byPeriod = new Map<
+      string,
+      { monthKey: string; payload: ReportBundle }[]
+    >()
+    for (const s of snaps) {
+      const arr = byPeriod.get(s.fiscalPeriodId) ?? []
+      arr.push({ monthKey: s.monthKey, payload: s.payload as unknown as ReportBundle })
+      byPeriod.set(s.fiscalPeriodId, arr)
+    }
+
+    let chosenPeriodId: string | null = null
+    let chosenMonths: { monthKey: string; payload: ReportBundle }[] = []
+    for (const [periodId, months] of byPeriod) {
+      // Prefer more months; tie-break on the latest (largest) monthKey in the group.
+      if (
+        months.length > chosenMonths.length ||
+        (months.length === chosenMonths.length &&
+          months[months.length - 1].monthKey >
+            (chosenMonths[chosenMonths.length - 1]?.monthKey ?? ''))
+      ) {
+        chosenPeriodId = periodId
+        chosenMonths = months
+      }
+    }
+    if (!chosenPeriodId || chosenMonths.length < 2) return null
+
+    // Ascending by monthKey (already sorted by the query, but be explicit).
+    const ordered = [...chosenMonths].sort((a, b) =>
+      a.monthKey < b.monthKey ? -1 : a.monthKey > b.monthKey ? 1 : 0,
+    )
+
+    const points: TrendPoint[] = ordered.map(({ monthKey, payload }) => {
+      // Same partial-year-correct compute path as monthly-actuals.service.ts: the
+      // elapsed basis annualizes the two partial-year metrics honestly at month-end.
+      const { elapsedDays, elapsedMonths } = fyElapsed(monthKey)
+      const metrics = computeMetricsForPeriod({ current: payload, elapsedDays, elapsedMonths })
+      const m = metrics.find((r) => r.key === metricKey)
+      return {
+        periodId: chosenPeriodId as string,
+        label: monthLabel(monthKey),
+        periodEndDate: monthEndDate(monthKey),
+        value: m && m.available ? m.value : null,
+        available: !!m && m.available,
+      }
+    })
+
+    // Only replace the annual placeholder when the sparkline can actually draw.
+    const drawable = points.filter((p) => p.value !== null).length
+    if (drawable < 2) return null
+
+    return {
+      metric: annual.metric,
+      label: annual.label,
+      unit: annual.unit,
+      goodDirection: annual.goodDirection,
+      points,
+      granularity: 'monthly',
+    }
+  }
+}
+
+/** 'YYYY-MM' -> short month + 2-digit year, e.g. '2026-01' -> 'Jan 26'. */
+function monthLabel(monthKey: string): string {
+  const MONTHS = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ]
+  const yyyy = monthKey.slice(0, 4)
+  const mm = Number(monthKey.slice(5, 7))
+  return `${MONTHS[mm - 1]} ${yyyy.slice(2)}`
+}
+
+/** 'YYYY-MM' -> the month-END ISO date, e.g. '2026-01' -> '2026-01-31'. */
+function monthEndDate(monthKey: string): string {
+  const yyyy = Number(monthKey.slice(0, 4))
+  const mm = Number(monthKey.slice(5, 7)) // 1-based
+  // Day 0 of the NEXT month (mm as a 0-based index) === last day of THIS month.
+  return new Date(Date.UTC(yyyy, mm, 0)).toISOString().slice(0, 10)
 }

@@ -391,4 +391,12 @@ export interface MetricTrend {
   unit: MetricUnit
   goodDirection: GoodDirection
   points: TrendPoint[]
+  /**
+   * Granularity of the trend's X axis. 'annual' (DEFAULT) = one point per fiscal
+   * PERIOD (the historical behavior). 'monthly' = one point per MONTHLY snapshot
+   * within a single fiscal year — the fallback the API emits when a FY doesn't yet
+   * have ≥2 annual statement periods but does have ≥2 monthly snapshots, so the
+   * sparkline can draw. The X-axis labels are months, not years, in that case.
+   */
+  granularity?: 'annual' | 'monthly'
 }

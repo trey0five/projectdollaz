@@ -34,8 +34,18 @@ export default function TrendChart({ trend }) {
     )
   }
 
+  // Monthly fallback: the X axis is months of the current FY (not fiscal years),
+  // emitted when a FY doesn't yet have ≥2 annual periods. A subtle caption so the
+  // reader knows the axis basis. Absent/'annual' => nothing (backward-compatible).
+  const monthly = trend.granularity === 'monthly'
+
   return (
     <div className="h-52 w-full sm:h-64">
+      {monthly && (
+        <p className="mb-1 text-[11px] font-medium italic text-muted">
+          Monthly (this year)
+        </p>
+      )}
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
           <defs>

@@ -188,6 +188,9 @@ export function computeTrend(
     unit: def.unit,
     goodDirection: def.goodDirection,
     points,
+    // Annual path: one point per fiscal PERIOD. The API's monthly fallback builds
+    // its own MetricTrend with granularity 'monthly'.
+    granularity: 'annual',
   }
 }
 
