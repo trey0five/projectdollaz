@@ -1,4 +1,5 @@
-import { IsDateString, IsOptional, IsString, MaxLength, MinLength } from 'class-validator'
+import { IsDateString, IsIn, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator'
+import { STANDARD_RATINGS, type StandardRating } from '@finrep/compliance'
 
 /**
  * Patch an accreditation standard. ALL fields optional (partial PATCH). Hand-written
@@ -25,6 +26,16 @@ export class UpdateStandardDto {
   @IsString()
   @MaxLength(80)
   category?: string | null
+
+  /** Re-parent in the hierarchy: a UUID moves under that standard, explicit null makes it
+   *  top-level, omitted keeps the current parent. Service guards same-school + cycles. */
+  @IsOptional()
+  @IsUUID()
+  parentId?: string | null
+
+  @IsOptional()
+  @IsIn(STANDARD_RATINGS)
+  rating?: StandardRating
 
   @IsOptional()
   @IsDateString()

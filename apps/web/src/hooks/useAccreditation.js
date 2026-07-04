@@ -12,9 +12,19 @@
 import { useState, useEffect, useCallback } from 'react'
 import { accreditationApi, isModuleNotLicensed, isPaymentRequired } from '../lib/api.js'
 
+const EMPTY_RATING_SUMMARY = {
+  leafCount: 0,
+  metCount: 0,
+  partiallyMetCount: 0,
+  notMetCount: 0,
+  notStartedCount: 0,
+  ratingCoveragePct: 0,
+}
+
 export function useAccreditation(schoolId) {
   const [standards, setStandards] = useState([])
   const [summary, setSummary] = useState({ total: 0, withEvidence: 0, gaps: 0, pctCovered: 0 })
+  const [ratingSummary, setRatingSummary] = useState(EMPTY_RATING_SUMMARY)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [notLicensed, setNotLicensed] = useState(false)
@@ -28,16 +38,20 @@ export function useAccreditation(schoolId) {
       const res = await accreditationApi.listStandards(sid)
       setStandards(res.data?.standards ?? [])
       setSummary(res.data?.summary ?? { total: 0, withEvidence: 0, gaps: 0, pctCovered: 0 })
+      setRatingSummary(res.data?.ratingSummary ?? EMPTY_RATING_SUMMARY)
     } catch (e) {
       if (isModuleNotLicensed(e)) {
         setNotLicensed(true)
         setStandards([])
+        setRatingSummary(EMPTY_RATING_SUMMARY)
       } else if (isPaymentRequired(e)) {
         setNotEntitled(true)
         setStandards([])
+        setRatingSummary(EMPTY_RATING_SUMMARY)
       } else {
         setError('Could not load your accreditation standards.')
         setStandards([])
+        setRatingSummary(EMPTY_RATING_SUMMARY)
       }
     } finally {
       setLoading(false)
@@ -131,6 +145,15 @@ export function useAccreditation(schoolId) {
     [schoolId, load],
   )
 
+  const updateEvidence = useCallback(
+    async (standardId, evidenceId, body) => {
+      if (!schoolId) return
+      await accreditationApi.updateEvidence(schoolId, standardId, evidenceId, body)
+      await load(schoolId) // refresh coverage counts + any linkage change
+    },
+    [schoolId, load],
+  )
+
   const removeEvidence = useCallback(
     async (standardId, evidenceId) => {
       if (!schoolId) return
@@ -143,6 +166,7 @@ export function useAccreditation(schoolId) {
   return {
     standards,
     summary,
+    ratingSummary,
     loading,
     error,
     notLicensed,
@@ -154,6 +178,7 @@ export function useAccreditation(schoolId) {
     listEvidenceSources,
     listEvidence,
     createEvidence,
+    updateEvidence,
     removeEvidence,
   }
 }

@@ -1,4 +1,5 @@
-import { IsDateString, IsOptional, IsString, MaxLength, MinLength } from 'class-validator'
+import { IsDateString, IsIn, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator'
+import { STANDARD_RATINGS, type StandardRating } from '@finrep/compliance'
 
 /**
  * Create an accreditation standard. forbidNonWhitelisted-SAFE: EVERY field is
@@ -27,6 +28,17 @@ export class CreateStandardDto {
   @IsString()
   @MaxLength(80)
   category?: string | null
+
+  /** Parent standard for the NESTED hierarchy (self-relation). null/omitted = top-level.
+   *  The service validates parent∈same-school + forbids self-parent/cycles. */
+  @IsOptional()
+  @IsUUID()
+  parentId?: string | null
+
+  /** Accreditor rating — @IsIn the shared closed set; defaults 'not_started' in the service. */
+  @IsOptional()
+  @IsIn(STANDARD_RATINGS)
+  rating?: StandardRating
 
   @IsOptional()
   @IsDateString()

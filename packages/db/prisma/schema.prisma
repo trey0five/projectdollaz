@@ -926,12 +926,26 @@ model Meeting {
 model AccreditationStandard {
   id              String    @id @default(uuid()) @db.Uuid
   schoolId        String    @map("school_id") @db.Uuid
+  // Phase 4 depth — SELF-RELATION for a nested standard hierarchy (real accreditor
+  // frameworks are trees: domain → standard → indicator). A NULL parentId is a
+  // top-level node; a node with NO children is a LEAF (coverage/rating roll up over
+  // leaves). onDelete: SetNull → deleting a parent RE-PARENTS its children to
+  // top-level (parentId→NULL) rather than cascade-deleting a whole subtree — the
+  // safe rule (no accidental mass-delete of a domain's indicators). The service also
+  // guards same-school + self-parent + cycles before writing parentId.
+  parentId        String?   @map("parent_id") @db.Uuid
   // Framework code, free text v1 (e.g. 'MSA-3','Std 1.2') — schools name their own;
   // bounded only by the DTO @MaxLength, deliberately NOT unique (v1 tolerates dups).
   code            String
   title           String
   // Free text v1 (e.g. 'Governance','Finance','Teaching & Learning'), nullable.
   category        String?
+  // Per-standard accreditor RATING (met/partial/not-met lifecycle). TEXT + @default
+  // so the migration needs NO backfill — every existing row reads 'not_started'. The
+  // DTO @IsIn (STANDARD_RATINGS) + service normalizeRating enforce the closed set;
+  // schema.prisma and the DDL stay in lockstep (like the evidence sourceType pattern).
+  // 'not_started' | 'not_met' | 'partially_met' | 'met'
+  rating          String    @default("not_started")
   // Next scheduled accreditation review/visit date. Unlike a Policy (anchor +
   // interval), this is the review date DIRECTLY (drives "review approaching").
   reviewDate      DateTime? @map("review_date") @db.Date
@@ -942,10 +956,15 @@ model AccreditationStandard {
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
   school        School                  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  // Self-relation: deleting a parent SETS children's parentId to NULL (re-parent to
+  // top-level), NEVER cascade — a subtree is never silently mass-deleted.
+  parent        AccreditationStandard?  @relation("AccreditationStandardHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children       AccreditationStandard[] @relation("AccreditationStandardHierarchy")
   updatedByUser User?                   @relation("AccreditationStandardUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
   evidence      AccreditationEvidence[]
 
   @@index([schoolId])
+  @@index([schoolId, parentId])
   @@map("accreditation_standards")
 }
 

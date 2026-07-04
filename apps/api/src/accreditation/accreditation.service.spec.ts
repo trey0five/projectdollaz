@@ -62,6 +62,7 @@ function makeService(over: {
     findMany: vi.fn(async () => []),
     findFirst: vi.fn(async () => null),
     create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => evRow(data)),
+    update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => evRow(data)),
     delete: vi.fn(async () => evRow()),
     groupBy: vi.fn(async () => []),
     count: vi.fn(async () => 0),
@@ -407,5 +408,186 @@ describe('AccreditationService — toEvidencePublic source fields + coverage', (
     expect(res.standards[0].coverage).toBe('covered')
     expect(res.standards[0].evidenceCount).toBe(1)
     expect(res.summary.withEvidence).toBe(1)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 4 depth — NESTED hierarchy (parent validation + cycle guard) + the rating
+// rollup over leaves. Backward-compat: existing flat-standard specs above are green.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** A findFirst mock keyed by where.id (for parent-walk / resolve over a small tree). */
+function keyedFindFirst(rows: Record<string, unknown>[]) {
+  const byId = new Map(rows.map((r) => [r.id as string, r]))
+  return vi.fn(async ({ where }: { where: { id: string; schoolId?: string } }) => byId.get(where.id) ?? null)
+}
+
+describe('AccreditationService — hierarchy (parent validation + cycle guard)', () => {
+  it('createStandard with a same-school parent scopes parentId; foreign parent → BadRequest', async () => {
+    // Valid parent in the same school.
+    const ok = makeService({
+      standard: { findFirst: keyedFindFirst([stdRow({ id: 'p1', schoolId: 'school-A' })]) },
+    })
+    await ok.svc.createStandard('school-A', { code: 'C', title: 'Child', parentId: 'p1' }, 'user-1')
+    expect(ok.standard.create.mock.calls[0][0].data.parentId).toBe('p1')
+
+    // Parent not found in this school → BadRequest, nothing created.
+    const bad = makeService({ standard: { findFirst: vi.fn(async () => null) } })
+    await expect(
+      bad.svc.createStandard('school-A', { code: 'C', title: 'Child', parentId: 'ghost' }, 'user-1'),
+    ).rejects.toBeInstanceOf(BadRequestException)
+    expect(bad.standard.create).not.toHaveBeenCalled()
+  })
+
+  it('updateStandard: a standard cannot be its own parent → BadRequest', async () => {
+    const { svc, standard } = makeService({
+      standard: { findFirst: keyedFindFirst([stdRow({ id: 's1', schoolId: 'school-A' })]) },
+    })
+    await expect(
+      svc.updateStandard('school-A', 's1', { parentId: 's1' }, 'user-1'),
+    ).rejects.toBeInstanceOf(BadRequestException)
+    expect(standard.update).not.toHaveBeenCalled()
+  })
+
+  it('updateStandard: re-parenting under a DESCENDANT is a cycle → BadRequest', async () => {
+    // Tree: s1 (root) → s2 (child of s1). Moving s1 UNDER s2 would create a cycle.
+    const rows = [
+      stdRow({ id: 's1', schoolId: 'school-A', parentId: null }),
+      stdRow({ id: 's2', schoolId: 'school-A', parentId: 's1' }),
+    ]
+    const { svc, standard } = makeService({ standard: { findFirst: keyedFindFirst(rows) } })
+    await expect(
+      svc.updateStandard('school-A', 's1', { parentId: 's2' }, 'user-1'),
+    ).rejects.toBeInstanceOf(BadRequestException)
+    expect(standard.update).not.toHaveBeenCalled()
+  })
+
+  it('updateStandard: a valid, non-cyclic re-parent writes parentId', async () => {
+    // Tree: s1 (root), s2 (root). Moving s2 UNDER s1 is fine.
+    const rows = [
+      stdRow({ id: 's1', schoolId: 'school-A', parentId: null }),
+      stdRow({ id: 's2', schoolId: 'school-A', parentId: null }),
+    ]
+    const { svc, standard } = makeService({ standard: { findFirst: keyedFindFirst(rows) } })
+    await svc.updateStandard('school-A', 's2', { parentId: 's1' }, 'user-1')
+    expect(standard.update.mock.calls[0][0].data.parentId).toBe('s1')
+  })
+
+  it('updateStandard: explicit parentId:null promotes to top-level (no parent query)', async () => {
+    const { svc, standard } = makeService({
+      standard: { findFirst: keyedFindFirst([stdRow({ id: 's2', schoolId: 'school-A', parentId: 's1' })]) },
+    })
+    await svc.updateStandard('school-A', 's2', { parentId: null }, 'user-1')
+    expect(standard.update.mock.calls[0][0].data.parentId).toBeNull()
+  })
+})
+
+describe('AccreditationService — rating rollup over leaves', () => {
+  it('listStandards: pre-order tree with depth + per-node leafSummary + school ratingSummary', async () => {
+    const NOW = new Date('2026-07-01T12:00:00.000Z')
+    // Tree: s1 (root, parent) → [s2 met, s3 partially_met]; s4 (root leaf, not_met).
+    const rows = [
+      stdRow({ id: 's1', code: 'A', title: 'Domain', parentId: null, rating: 'not_started' }),
+      stdRow({ id: 's2', code: 'A.1', title: 'Ind 1', parentId: 's1', rating: 'met' }),
+      stdRow({ id: 's3', code: 'A.2', title: 'Ind 2', parentId: 's1', rating: 'partially_met' }),
+      stdRow({ id: 's4', code: 'B', title: 'Standalone', parentId: null, rating: 'not_met' }),
+    ]
+    const { svc } = makeService({ standard: { findMany: vi.fn(async () => rows) } })
+    const res = await svc.listStandards('school-A', NOW)
+    const byId = Object.fromEntries(res.standards.map((s) => [s.id, s]))
+
+    // Depth + leaf flags.
+    expect(byId.s1.depth).toBe(0)
+    expect(byId.s1.isLeaf).toBe(false)
+    expect(byId.s2.depth).toBe(1)
+    expect(byId.s2.isLeaf).toBe(true)
+    expect(byId.s4.depth).toBe(0)
+    expect(byId.s4.isLeaf).toBe(true)
+
+    // Parent s1 rolls up its 2 descendant leaves (met + partially_met) = (1 + 0.5)/2 = 75%.
+    expect(byId.s1.leafSummary).toEqual({
+      leafCount: 2,
+      metCount: 1,
+      partiallyMetCount: 1,
+      notMetCount: 0,
+      notStartedCount: 0,
+      ratingCoveragePct: 75,
+    })
+
+    // School rating rollup is over the 3 LEAVES only (s2,s3,s4 — NOT the parent s1):
+    // (1 met + 0.5 partial) / 3 = 50%.
+    expect(res.ratingSummary).toEqual({
+      leafCount: 3,
+      metCount: 1,
+      partiallyMetCount: 1,
+      notMetCount: 1,
+      notStartedCount: 0,
+      ratingCoveragePct: 50,
+    })
+
+    // Pre-order: the parent immediately precedes its children in the flat list.
+    const order = res.standards.map((s) => s.id)
+    expect(order.indexOf('s1')).toBeLessThan(order.indexOf('s2'))
+    expect(order.indexOf('s1')).toBeLessThan(order.indexOf('s3'))
+  })
+
+  it('listStandards: evidence-coverage summary is UNCHANGED (rating is a separate dimension)', async () => {
+    const NOW = new Date('2026-07-01T12:00:00.000Z')
+    const rows = [
+      stdRow({ id: 's1', code: 'A', parentId: null, rating: 'met' }),
+      stdRow({ id: 's2', code: 'B', parentId: null, rating: 'not_started' }),
+    ]
+    const { svc } = makeService({
+      standard: { findMany: vi.fn(async () => rows) },
+      evidence: { groupBy: vi.fn(async () => [{ standardId: 's1', _count: { _all: 2 } }]) },
+    })
+    const res = await svc.listStandards('school-A', NOW)
+    // Byte-for-byte the pre-existing summary shape (no rating keys leaked into it).
+    expect(res.summary).toEqual({ total: 2, withEvidence: 1, gaps: 1, pctCovered: 50 })
+  })
+})
+
+describe('AccreditationService — evidence PATCH (editable)', () => {
+  it('updateEvidence: edits a manual field, keeps others, audits "updated"', async () => {
+    const { svc, evidence, audit } = makeService({
+      standard: { findFirst: vi.fn(async () => stdRow({ id: 's1', schoolId: 'school-A' })) },
+      evidence: { findFirst: vi.fn(async () => evRow({ id: 'e1', title: 'Old', notes: 'keep me' })) },
+    })
+    await svc.updateEvidence('school-A', 's1', 'e1', { title: 'New title' }, 'user-1')
+    const data = evidence.update.mock.calls[0][0].data
+    expect(data.title).toBe('New title')
+    expect(data.notes).toBe('keep me') // omitted → kept
+    expect(evidence.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'e1' } }))
+    expect(audit.write).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'accreditation.evidence.updated' }),
+    )
+  })
+
+  it('updateEvidence: explicit null clears a nullable field (reference)', async () => {
+    const { svc, evidence } = makeService({
+      standard: { findFirst: vi.fn(async () => stdRow({ id: 's1', schoolId: 'school-A' })) },
+      evidence: { findFirst: vi.fn(async () => evRow({ id: 'e1', reference: 'http://old' })) },
+    })
+    await svc.updateEvidence('school-A', 's1', 'e1', { reference: null }, 'user-1')
+    expect(evidence.update.mock.calls[0][0].data.reference).toBeNull()
+  })
+
+  it('updateEvidence: foreign standard → NotFound, never updates', async () => {
+    const { svc, evidence } = makeService({ standard: { findFirst: vi.fn(async () => null) } })
+    await expect(
+      svc.updateEvidence('school-B', 'std-of-A', 'e1', { title: 'hijack' }, 'user-1'),
+    ).rejects.toBeInstanceOf(NotFoundException)
+    expect(evidence.update).not.toHaveBeenCalled()
+  })
+
+  it('updateEvidence: cross-standard evidenceId (right school, wrong standard) → NotFound', async () => {
+    const { svc, evidence } = makeService({
+      standard: { findFirst: vi.fn(async () => stdRow({ id: 's1', schoolId: 'school-A' })) },
+      evidence: { findFirst: vi.fn(async () => null) },
+    })
+    await expect(
+      svc.updateEvidence('school-A', 's1', 'ev-of-other', { title: 'x' }, 'user-1'),
+    ).rejects.toBeInstanceOf(NotFoundException)
+    expect(evidence.update).not.toHaveBeenCalled()
   })
 })

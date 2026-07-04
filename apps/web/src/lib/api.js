@@ -424,6 +424,8 @@ export const accreditationApi = {
     api.get(`/schools/${schoolId}/accreditation/standards/${standardId}/evidence`),
   createEvidence: (schoolId, standardId, body) =>
     api.post(`/schools/${schoolId}/accreditation/standards/${standardId}/evidence`, body),
+  updateEvidence: (schoolId, standardId, evidenceId, body) =>
+    api.patch(`/schools/${schoolId}/accreditation/standards/${standardId}/evidence/${evidenceId}`, body),
   removeEvidence: (schoolId, standardId, evidenceId) =>
     api.delete(`/schools/${schoolId}/accreditation/standards/${standardId}/evidence/${evidenceId}`),
 }

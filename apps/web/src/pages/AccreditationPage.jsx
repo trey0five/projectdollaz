@@ -57,6 +57,45 @@ const REVIEW_BADGE = {
 const KIND_ICON = { document: FileText, link: LinkIcon, note: StickyNote }
 const EVIDENCE_KINDS = ['document', 'link', 'note']
 
+// ── Per-standard accreditor rating (met / partial / not-met lifecycle) ────────
+const RATING_OPTIONS = [
+  { value: 'not_started', label: 'Not started' },
+  { value: 'not_met', label: 'Not met' },
+  { value: 'partially_met', label: 'Partially met' },
+  { value: 'met', label: 'Met' },
+]
+const RATING_BADGE = {
+  met: { label: 'Met', cls: 'border-emerald-300/70 bg-emerald-50 text-emerald-700' },
+  partially_met: { label: 'Partially met', cls: 'border-gold/40 bg-gold/10 text-[#7a5e00]' },
+  not_met: { label: 'Not met', cls: 'border-danger/30 bg-danger/10 text-danger' },
+  not_started: { label: 'Not started', cls: 'border-rule/60 bg-section text-muted' },
+}
+
+function RatingBadge({ rating }) {
+  const b = RATING_BADGE[rating] ?? RATING_BADGE.not_started
+  return (
+    <span
+      className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[12px] font-semibold ${b.cls}`}
+    >
+      {b.label}
+    </span>
+  )
+}
+
+/** A parent standard's rating rollup over its descendant leaves ("3/5 met · 70%"). */
+function RollupBadge({ leafSummary }) {
+  if (!leafSummary || leafSummary.leafCount === 0) return null
+  const { metCount, leafCount, ratingCoveragePct } = leafSummary
+  return (
+    <span
+      className="inline-flex items-center rounded-md border border-navy/20 bg-navy/5 px-2 py-0.5 text-[12px] font-semibold text-navy"
+      title={`${metCount} of ${leafCount} indicators met · ${ratingCoveragePct}% weighted`}
+    >
+      {metCount}/{leafCount} met · {ratingCoveragePct}%
+    </span>
+  )
+}
+
 function CoverageBadge({ coverage, evidenceCount }) {
   const b = COVERAGE_BADGE[coverage] ?? COVERAGE_BADGE['no-evidence']
   return (
@@ -173,20 +212,57 @@ function GatePanel({ notLicensed }) {
 
 // ═══════════════════════════ STANDARD MODAL (dark overlay) ══════════════════
 
-const EMPTY_FORM = { code: '', title: '', category: '', reviewDate: '', owner: '', notes: '' }
+const EMPTY_FORM = {
+  code: '',
+  title: '',
+  category: '',
+  parentId: '',
+  rating: 'not_started',
+  reviewDate: '',
+  owner: '',
+  notes: '',
+}
 
 function toStandardBody(form) {
   return {
     code: form.code.trim(),
     title: form.title.trim(),
     category: form.category.trim() ? form.category.trim() : null,
+    parentId: form.parentId ? form.parentId : null,
+    rating: form.rating || 'not_started',
     reviewDate: form.reviewDate ? form.reviewDate : null,
     owner: form.owner.trim() ? form.owner.trim() : null,
     notes: form.notes.trim() ? form.notes.trim() : null,
   }
 }
 
-function StandardFormModal({ open, initial, onClose, onSave, reduce }) {
+/** Parent-select options: every OTHER standard except the node being edited and its
+ *  descendants (choosing one of those would create a cycle — the API rejects it too). */
+function parentOptions(standards, editingId) {
+  if (!editingId) return standards
+  const childrenOf = new Map()
+  for (const s of standards) {
+    const pid = s.parentId ?? null
+    if (!pid) continue
+    const arr = childrenOf.get(pid) ?? []
+    arr.push(s.id)
+    childrenOf.set(pid, arr)
+  }
+  const banned = new Set([editingId])
+  const stack = [editingId]
+  while (stack.length) {
+    const id = stack.pop()
+    for (const kid of childrenOf.get(id) ?? []) {
+      if (!banned.has(kid)) {
+        banned.add(kid)
+        stack.push(kid)
+      }
+    }
+  }
+  return standards.filter((s) => !banned.has(s.id))
+}
+
+function StandardFormModal({ open, initial, onClose, onSave, reduce, standards = [], editingId = null }) {
   const [form, setForm] = useState(initial ?? EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
@@ -263,6 +339,35 @@ function StandardFormModal({ open, initial, onClose, onSave, reduce }) {
               />
             </label>
             <label className="block text-[13px] text-white/70">
+              Parent standard
+              <select
+                value={form.parentId}
+                onChange={set('parentId')}
+                className="mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-white outline-none focus:border-gold/60"
+              >
+                <option value="">Top-level (no parent)</option>
+                {parentOptions(standards, editingId).map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.code} — {s.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-[13px] text-white/70">
+              Rating
+              <select
+                value={form.rating}
+                onChange={set('rating')}
+                className="mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-white outline-none focus:border-gold/60"
+              >
+                {RATING_OPTIONS.map((r) => (
+                  <option key={r.value} value={r.value}>
+                    {r.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-[13px] text-white/70">
               Owner
               <input
                 value={form.owner}
@@ -323,12 +428,15 @@ function EvidencePanel({
   listEvidence,
   listEvidenceSources,
   createEvidence,
+  updateEvidence,
   removeEvidence,
 }) {
   const [items, setItems] = useState(null) // null = not yet loaded
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
   const [form, setForm] = useState({ title: '', kind: 'document', reference: '', capturedAt: '' })
+  const [editingId, setEditingId] = useState(null)
+  const [editForm, setEditForm] = useState({ title: '', kind: 'document', reference: '', capturedAt: '' })
   const [err, setErr] = useState('')
   // "Attach from operations" picker: null = closed, undefined = loading, object = loaded sources.
   const [sources, setSources] = useState(null)
@@ -415,6 +523,38 @@ function EvidencePanel({
     }
   }
 
+  const startEdit = (ev) => {
+    setEditingId(ev.id)
+    setEditForm({
+      title: ev.title ?? '',
+      kind: ev.kind ?? 'document',
+      reference: ev.reference ?? '',
+      capturedAt: ev.capturedAt ?? '',
+    })
+    setErr('')
+  }
+
+  const submitEdit = async (e) => {
+    e.preventDefault()
+    if (!editForm.title.trim()) {
+      setErr('A title is required.')
+      return
+    }
+    setErr('')
+    try {
+      await updateEvidence(standardId, editingId, {
+        title: editForm.title.trim(),
+        kind: editForm.kind,
+        reference: editForm.reference.trim() ? editForm.reference.trim() : null,
+        capturedAt: editForm.capturedAt ? editForm.capturedAt : null,
+      })
+      setEditingId(null)
+      await reload()
+    } catch {
+      setErr('Could not update this evidence.')
+    }
+  }
+
   const onDelete = async (ev) => {
     if (window.confirm(`Delete evidence "${ev.title}"?`)) {
       await removeEvidence(standardId, ev.id)
@@ -432,6 +572,60 @@ function EvidencePanel({
         <ul className="space-y-2">
           {items.map((ev) => {
             const Icon = KIND_ICON[ev.kind] ?? FileText
+            if (canEdit && editingId === ev.id) {
+              return (
+                <li key={ev.id} className="rounded-lg border border-gold/30 bg-navy/60 px-3 py-2">
+                  <form onSubmit={submitEdit} className="grid grid-cols-2 gap-2">
+                    <input
+                      value={editForm.title}
+                      onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))}
+                      maxLength={200}
+                      placeholder="Evidence title"
+                      className="col-span-2 rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-1.5 text-[13px] text-white outline-none focus:border-gold/60"
+                    />
+                    <select
+                      value={editForm.kind}
+                      onChange={(e) => setEditForm((f) => ({ ...f, kind: e.target.value }))}
+                      className="rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-1.5 text-[13px] text-white outline-none focus:border-gold/60"
+                    >
+                      {EVIDENCE_KINDS.map((k) => (
+                        <option key={k} value={k}>
+                          {k}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="date"
+                      value={editForm.capturedAt}
+                      onChange={(e) => setEditForm((f) => ({ ...f, capturedAt: e.target.value }))}
+                      className="rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-1.5 text-[13px] text-white outline-none focus:border-gold/60"
+                    />
+                    <input
+                      value={editForm.reference}
+                      onChange={(e) => setEditForm((f) => ({ ...f, reference: e.target.value }))}
+                      maxLength={2000}
+                      placeholder="Reference (URL / doc path / citation)"
+                      className="col-span-2 rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-1.5 text-[13px] text-white outline-none focus:border-gold/60"
+                    />
+                    <div className="col-span-2 flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditingId(null)}
+                        className="rounded-lg border-2 border-white/20 px-3 py-1.5 text-[13px] font-semibold text-white/70 hover:border-white/40 hover:text-white"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="rounded-lg border-2 border-gold/60 bg-gold/15 px-3 py-1.5 text-[13px] font-semibold text-gold-light hover:bg-gold/25"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  </form>
+                </li>
+              )
+            }
             return (
               <li
                 key={ev.id}
@@ -463,14 +657,24 @@ function EvidencePanel({
                   ) : null}
                 </div>
                 {canEdit ? (
-                  <button
-                    type="button"
-                    onClick={() => onDelete(ev)}
-                    aria-label={`Delete evidence ${ev.title}`}
-                    className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-red-400/60 hover:text-red-200"
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => startEdit(ev)}
+                      aria-label={`Edit evidence ${ev.title}`}
+                      className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-gold/60 hover:text-gold-light"
+                    >
+                      <Pencil size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDelete(ev)}
+                      aria-label={`Delete evidence ${ev.title}`}
+                      className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-red-400/60 hover:text-red-200"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 ) : null}
               </li>
             )
@@ -689,7 +893,7 @@ function StandardsTable({
         <>
           <Th>Code</Th>
           <Th>Standard</Th>
-          <Th>Category</Th>
+          <Th>Rating</Th>
           <Th>Coverage</Th>
           <Th>Review</Th>
           <Th right>{canEdit ? 'Actions' : ''}</Th>
@@ -709,12 +913,33 @@ function StandardsTable({
               className="group border-t border-rule/50 align-top"
             >
               <td className="px-4 py-3">
-                <span className="rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[12px] font-semibold text-muted">
-                  {s.code}
-                </span>
+                <div
+                  className="flex items-center gap-1.5"
+                  style={{ paddingLeft: `${(s.depth ?? 0) * 18}px` }}
+                >
+                  {(s.depth ?? 0) > 0 ? (
+                    <ChevronRight size={12} className="shrink-0 text-muted/50" aria-hidden />
+                  ) : null}
+                  <span className="rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[12px] font-semibold text-muted">
+                    {s.code}
+                  </span>
+                </div>
               </td>
-              <td className="px-4 py-3 font-semibold text-navy">{s.title}</td>
-              <td className="px-4 py-3 text-muted">{s.category ?? '—'}</td>
+              <td className="px-4 py-3">
+                <div className="font-semibold text-navy" style={{ paddingLeft: `${(s.depth ?? 0) * 18}px` }}>
+                  {s.title}
+                  {s.category ? (
+                    <span className="ml-2 text-[12px] font-normal text-muted">· {s.category}</span>
+                  ) : null}
+                </div>
+              </td>
+              <td className="px-4 py-3">
+                {s.isLeaf === false ? (
+                  <RollupBadge leafSummary={s.leafSummary} />
+                ) : (
+                  <RatingBadge rating={s.rating} />
+                )}
+              </td>
               <td className="px-4 py-3">
                 <CoverageBadge coverage={s.coverage} evidenceCount={s.evidenceCount} />
               </td>
@@ -767,6 +992,7 @@ function AccreditationWorkspace() {
   const {
     standards,
     summary,
+    ratingSummary,
     loading,
     error,
     notLicensed,
@@ -777,6 +1003,7 @@ function AccreditationWorkspace() {
     listEvidenceSources,
     listEvidence,
     createEvidence,
+    updateEvidence,
     removeEvidence,
   } = useAccreditation(schoolId)
 
@@ -801,6 +1028,8 @@ function AccreditationWorkspace() {
       code: editing.code ?? '',
       title: editing.title ?? '',
       category: editing.category ?? '',
+      parentId: editing.parentId ?? '',
+      rating: editing.rating ?? 'not_started',
       reviewDate: editing.reviewDate ?? '',
       owner: editing.owner ?? '',
       notes: editing.notes ?? '',
@@ -849,12 +1078,29 @@ function AccreditationWorkspace() {
           : { icon: Check, text: 'all evidenced', tone: 'good' },
     }
 
-    // 3) Standards.
-    const standardsKpi = {
-      label: 'Standards',
-      value: String(total),
-      status: 'neutral',
-      sub: { icon: BadgeCheck, text: 'in your register', tone: 'neutral' },
+    // 3) Rating coverage (met %) over LEAF standards — the accreditor-judgement
+    //    dimension, distinct from evidence coverage above. Total standards live in the
+    //    Coverage card's "N/M" so this slot surfaces the rating rollup.
+    const leafCount = ratingSummary?.leafCount ?? 0
+    const metCount = ratingSummary?.metCount ?? 0
+    const ratingPct = ratingSummary?.ratingCoveragePct ?? 0
+    const ratingKpi = {
+      label: 'Rating met',
+      value: total === 0 ? '—' : `${ratingPct}%`,
+      status:
+        total === 0 || leafCount === 0
+          ? 'neutral'
+          : ratingPct >= 80
+            ? 'good'
+            : ratingPct >= 50
+              ? 'watch'
+              : 'risk',
+      sub:
+        total === 0 || leafCount === 0
+          ? { icon: BadgeCheck, text: `${total} in your register`, tone: 'neutral' }
+          : ratingPct >= 80
+            ? { icon: Check, text: `${metCount}/${leafCount} leaves met`, tone: 'good' }
+            : { icon: TrendingDown, text: `${metCount}/${leafCount} leaves met`, tone: ratingPct >= 50 ? 'neutral' : 'bad' },
     }
 
     // 4) Review due (past-due or approaching, from reviewStatus).
@@ -873,8 +1119,8 @@ function AccreditationWorkspace() {
           : { icon: Check, text: 'all current', tone: 'good' },
     }
 
-    return [coverageKpi, gapsKpi, standardsKpi, reviewKpi]
-  }, [summary, standards])
+    return [coverageKpi, ratingKpi, gapsKpi, reviewKpi]
+  }, [summary, ratingSummary, standards])
 
   // ── Needs-attention items (most-urgent first, capped at 6) ─────────────────
   const attentionItems = useMemo(() => {
@@ -986,6 +1232,7 @@ function AccreditationWorkspace() {
               listEvidenceSources={listEvidenceSources}
               listEvidence={listEvidence}
               createEvidence={createEvidence}
+              updateEvidence={updateEvidence}
               removeEvidence={removeEvidence}
             />
           </motion.div>
@@ -999,6 +1246,8 @@ function AccreditationWorkspace() {
         onClose={() => setModalOpen(false)}
         onSave={onSave}
         reduce={reduce}
+        standards={standards}
+        editingId={editing ? editing.id : null}
       />
     </>
   )

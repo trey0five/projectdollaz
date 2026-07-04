@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { summarizeRatings } from '@finrep/compliance'
 import { BriefingService } from './briefing.service.js'
 import type { StandardPublic, StandardListResponse } from '../accreditation/accreditation.service.js'
 
@@ -12,11 +13,14 @@ const PERIOD = { id: 'period-1', label: 'FY 2025' }
 const CLEAN_METRICS = { metrics: [] as unknown[] }
 
 function standard(over: Partial<StandardPublic>): StandardPublic {
+  const rating = over.rating ?? 'not_started'
   return {
     id: over.id ?? 's1',
     code: over.code ?? 'MSA-1',
     title: over.title ?? 'Test Standard',
     category: over.category ?? null,
+    parentId: over.parentId ?? null,
+    rating,
     reviewDate: over.reviewDate ?? null,
     owner: over.owner ?? null,
     notes: over.notes ?? null,
@@ -24,6 +28,9 @@ function standard(over: Partial<StandardPublic>): StandardPublic {
     coverage: over.coverage ?? 'no-evidence',
     reviewStatus: over.reviewStatus ?? 'unknown',
     daysUntilReview: over.daysUntilReview ?? null,
+    depth: over.depth ?? 0,
+    isLeaf: over.isLeaf ?? true,
+    leafSummary: over.leafSummary ?? summarizeRatings([{ rating }]),
     createdAt: over.createdAt ?? '2025-01-01T00:00:00.000Z',
     updatedAt: over.updatedAt ?? '2025-01-01T00:00:00.000Z',
   }
@@ -34,7 +41,10 @@ function register(standards: StandardPublic[]): StandardListResponse {
   const withEvidence = standards.filter((s) => s.coverage === 'covered').length
   const gaps = total - withEvidence
   const pctCovered = total === 0 ? 0 : Math.round((withEvidence / total) * 100)
-  return { standards, summary: { total, withEvidence, gaps, pctCovered } }
+  const ratingSummary = summarizeRatings(
+    standards.filter((s) => s.isLeaf).map((s) => ({ rating: s.rating })),
+  )
+  return { standards, summary: { total, withEvidence, gaps, pctCovered }, ratingSummary }
 }
 
 /** Build a BriefingService. `over` swaps in the accreditation gate + register. The

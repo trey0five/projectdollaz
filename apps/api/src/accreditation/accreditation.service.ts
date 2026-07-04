@@ -3,9 +3,13 @@ import type { AccreditationStandard, AccreditationEvidence } from '@finrep/db'
 import {
   computeStandardCoverage,
   summarizeCoverage,
+  summarizeRatings,
+  normalizeRating,
   type CoverageStatus,
   type ReviewStatus,
   type SchoolCoverageSummary,
+  type StandardRating,
+  type RatingSummary,
 } from '@finrep/compliance'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { AuditService } from '../common/audit/audit.service.js'
@@ -17,6 +21,7 @@ import {
   type EvidenceKind,
   type EvidenceSourceType,
 } from './dto/create-evidence.dto.js'
+import type { UpdateEvidenceDto } from './dto/update-evidence.dto.js'
 
 /** One standard as returned to the client, with COMPUTED coverage + review urgency. */
 export interface StandardPublic {
@@ -24,6 +29,10 @@ export interface StandardPublic {
   code: string
   title: string
   category: string | null
+  /** Parent standard in the nested hierarchy (null = top-level). */
+  parentId: string | null
+  /** Accreditor rating (met/partial/not-met lifecycle); 'not_started' default. */
+  rating: StandardRating
   reviewDate: string | null
   owner: string | null
   notes: string | null
@@ -32,6 +41,12 @@ export interface StandardPublic {
   coverage: CoverageStatus
   reviewStatus: ReviewStatus
   daysUntilReview: number | null
+  /** Depth in the tree (0 = top-level) — drives the UI indent. COMPUTED, never stored. */
+  depth: number
+  /** True when this standard has NO children (rating/coverage roll up over leaves). */
+  isLeaf: boolean
+  /** Rating rollup over THIS node's descendant leaves (a leaf rolls up just itself). */
+  leafSummary: RatingSummary
   createdAt: string
   updatedAt: string
 }
@@ -59,7 +74,11 @@ export interface EvidencePublic {
 
 export interface StandardListResponse {
   standards: StandardPublic[]
+  /** UNCHANGED evidence-coverage summary (pctCovered/gaps/withEvidence/total). */
   summary: SchoolCoverageSummary
+  /** ADDITIVE, sibling-not-nested (keeps `summary`'s exact shape for the briefing +
+   *  existing specs): the met/partial/not-met rollup over LEAF standards. */
+  ratingSummary: RatingSummary
 }
 
 export interface EvidenceListResponse {
@@ -143,17 +162,23 @@ export class AccreditationService {
     private readonly audit: AuditService,
   ) {}
 
+  /** Extra computed tree fields; when omitted (single-row create/update response), the
+   *  row is treated as a top-level LEAF whose leafSummary rolls up just its own rating. */
   private toStandardPublic(
     row: AccreditationStandard,
     evidenceCount: number,
     now: Date,
+    tree?: { depth: number; isLeaf: boolean; leafSummary: RatingSummary },
   ): StandardPublic {
     const cov = computeStandardCoverage({ evidenceCount, reviewDate: row.reviewDate }, now)
+    const rating = normalizeRating(row.rating)
     return {
       id: row.id,
       code: row.code,
       title: row.title,
       category: row.category,
+      parentId: row.parentId ?? null,
+      rating,
       reviewDate: toIsoDate(row.reviewDate),
       owner: row.owner,
       notes: row.notes,
@@ -161,9 +186,123 @@ export class AccreditationService {
       coverage: cov.coverage,
       reviewStatus: cov.reviewStatus,
       daysUntilReview: cov.daysUntilReview,
+      depth: tree?.depth ?? 0,
+      isLeaf: tree?.isLeaf ?? true,
+      leafSummary: tree?.leafSummary ?? summarizeRatings([{ rating }]),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     }
+  }
+
+  /**
+   * Build the full standard TREE for one school in memory — loads all standards ONCE
+   * + one groupBy for evidence counts (NO N+1), then:
+   *   • sibling order = the existing gaps-first comparator, applied within each level,
+   *   • output = PRE-ORDER DFS (parent immediately followed by its subtree) with a
+   *     `depth` for the UI indent,
+   *   • per-node `leafSummary` = rating rollup over that node's DESCENDANT leaves (a
+   *     leaf rolls up just itself),
+   *   • `summary` = the UNCHANGED evidence coverage (summarizeCoverage) so the briefing
+   *     + existing specs never regress,
+   *   • `ratingSummary` = the rating rollup over ALL leaf standards school-wide.
+   * A parentId pointing outside the loaded set (shouldn't happen intra-school) is
+   * treated as a top-level root, so a broken link can never drop a node from the list.
+   */
+  private async computeStandardsTree(
+    schoolId: string,
+    now: Date,
+  ): Promise<{
+    standards: StandardPublic[]
+    summary: SchoolCoverageSummary
+    ratingSummary: RatingSummary
+    byId: Map<string, StandardPublic>
+  }> {
+    const rows = await this.prisma.accreditationStandard.findMany({ where: { schoolId } })
+    const counts = await this.prisma.accreditationEvidence.groupBy({
+      by: ['standardId'],
+      where: { schoolId },
+      _count: { _all: true },
+    })
+    const countBy = new Map<string, number>()
+    for (const c of counts) countBy.set(c.standardId, c._count._all)
+
+    const byRowId = new Map<string, AccreditationStandard>()
+    for (const r of rows) byRowId.set(r.id, r)
+
+    // Adjacency: parentId → children. A row whose parentId is null OR points outside the
+    // school set is a ROOT (defensive against a dangling link).
+    const childrenOf = new Map<string, AccreditationStandard[]>()
+    const roots: AccreditationStandard[] = []
+    for (const r of rows) {
+      const pid = r.parentId ?? null
+      if (pid && byRowId.has(pid)) {
+        const arr = childrenOf.get(pid) ?? []
+        arr.push(r)
+        childrenOf.set(pid, arr)
+      } else {
+        roots.push(r)
+      }
+    }
+
+    // Post-order: gather each node's descendant-leaf ratings (a leaf → just itself).
+    const leafRatingsOf = new Map<string, StandardRating[]>()
+    const collectLeaves = (r: AccreditationStandard, guard: Set<string>): StandardRating[] => {
+      if (guard.has(r.id)) return [] // cycle safety (writes are guarded, but never loop)
+      guard.add(r.id)
+      const kids = childrenOf.get(r.id) ?? []
+      let out: StandardRating[]
+      if (kids.length === 0) {
+        out = [normalizeRating(r.rating)]
+      } else {
+        out = []
+        for (const k of kids) out.push(...collectLeaves(k, guard))
+      }
+      leafRatingsOf.set(r.id, out)
+      return out
+    }
+    for (const r of rows) if (!leafRatingsOf.has(r.id)) collectLeaves(r, new Set())
+
+    // Sibling comparator: the EXISTING gaps-first → review → code → title → id order.
+    const publicOf = new Map<string, StandardPublic>()
+    const cmp = (a: AccreditationStandard, b: AccreditationStandard): number => {
+      const pa = this.toStandardPublic(a, countBy.get(a.id) ?? 0, now)
+      const pb = this.toStandardPublic(b, countBy.get(b.id) ?? 0, now)
+      const g = (pa.coverage === 'no-evidence' ? 0 : 1) - (pb.coverage === 'no-evidence' ? 0 : 1)
+      if (g !== 0) return g
+      const rr = REVIEW_ORDER[pa.reviewStatus] - REVIEW_ORDER[pb.reviewStatus]
+      if (rr !== 0) return rr
+      const c = pa.code.localeCompare(pb.code)
+      if (c !== 0) return c
+      const t = pa.title.localeCompare(pb.title)
+      return t !== 0 ? t : pa.id.localeCompare(pb.id)
+    }
+
+    // Pre-order DFS from sorted roots, carrying depth.
+    const standards: StandardPublic[] = []
+    const walk = (r: AccreditationStandard, depth: number, guard: Set<string>) => {
+      if (guard.has(r.id)) return
+      guard.add(r.id)
+      const kids = (childrenOf.get(r.id) ?? []).slice().sort(cmp)
+      const leaves = leafRatingsOf.get(r.id) ?? []
+      const pub = this.toStandardPublic(r, countBy.get(r.id) ?? 0, now, {
+        depth,
+        isLeaf: kids.length === 0,
+        leafSummary: summarizeRatings(leaves.map((rating) => ({ rating }))),
+      })
+      standards.push(pub)
+      publicOf.set(r.id, pub)
+      for (const k of kids) walk(k, depth + 1, guard)
+    }
+    const guard = new Set<string>()
+    for (const root of roots.slice().sort(cmp)) walk(root, 0, guard)
+
+    // Evidence coverage summary is UNCHANGED (over every standard, leaf or not).
+    const summary = summarizeCoverage(standards)
+    // Rating rollup is over LEAF standards only (a parent is scored via its indicators).
+    const ratingSummary = summarizeRatings(
+      standards.filter((s) => s.isLeaf).map((s) => ({ rating: s.rating })),
+    )
+    return { standards, summary, ratingSummary, byId: publicOf }
   }
 
   private toEvidencePublic(row: AccreditationEvidence): EvidencePublic {
@@ -203,43 +342,69 @@ export class AccreditationService {
     return std
   }
 
-  /** List all standards for one school, deterministically ordered + enriched, plus the summary. */
+  /**
+   * List all standards for one school as a PRE-ORDER TREE (parent then subtree, with a
+   * `depth` indent), enriched with coverage + review urgency + the per-node rating
+   * rollup, plus the UNCHANGED evidence-coverage `summary` AND the additive
+   * `ratingSummary`. One findMany + one groupBy (NO N+1).
+   */
   async listStandards(schoolId: string, now = new Date()): Promise<StandardListResponse> {
-    const rows = await this.prisma.accreditationStandard.findMany({ where: { schoolId } })
-    // Batch-count evidence per standard in ONE groupBy (avoid N+1).
-    const counts = await this.prisma.accreditationEvidence.groupBy({
-      by: ['standardId'],
-      where: { schoolId },
-      _count: { _all: true },
-    })
-    const countBy = new Map<string, number>()
-    for (const c of counts) countBy.set(c.standardId, c._count._all)
+    const { standards, summary, ratingSummary } = await this.computeStandardsTree(schoolId, now)
+    return { standards, summary, ratingSummary }
+  }
 
-    const standards = rows
-      .map((r) => this.toStandardPublic(r, countBy.get(r.id) ?? 0, now))
-      .sort((a, b) => {
-        // gaps first (no-evidence before covered)
-        const g = (a.coverage === 'no-evidence' ? 0 : 1) - (b.coverage === 'no-evidence' ? 0 : 1)
-        if (g !== 0) return g
-        const r = REVIEW_ORDER[a.reviewStatus] - REVIEW_ORDER[b.reviewStatus]
-        if (r !== 0) return r
-        const c = a.code.localeCompare(b.code)
-        if (c !== 0) return c
-        const t = a.title.localeCompare(b.title)
-        return t !== 0 ? t : a.id.localeCompare(b.id)
-      })
-    const summary = summarizeCoverage(standards)
-    return { standards, summary }
+  /**
+   * Validate a proposed parentId for the hierarchy and return the resolved id (or null).
+   * GUARDS: (1) parent must belong to the SAME school (a foreign/unknown id 400s);
+   * (2) a node cannot be its OWN parent; (3) no CYCLES — walk UP the proposed parent's
+   * ancestor chain and reject if we reach `nodeId` (i.e. the proposed parent is the node
+   * itself or a descendant of it). `nodeId` is undefined on CREATE (a brand-new node has
+   * no descendants, so only the same-school check applies). The walk is school-scoped +
+   * iteration-capped so a pre-existing corrupt cycle can never loop forever.
+   */
+  private async validateParent(
+    schoolId: string,
+    nodeId: string | undefined,
+    parentId: string,
+  ): Promise<string> {
+    if (nodeId && parentId === nodeId) {
+      throw new BadRequestException('A standard cannot be its own parent.')
+    }
+    const parent = await this.prisma.accreditationStandard.findFirst({
+      where: { id: parentId, schoolId },
+    })
+    if (!parent) throw new BadRequestException('Parent standard not found in this school.')
+    if (nodeId) {
+      let cursor: string | null = parent.parentId ?? null
+      let guard = 0
+      while (cursor && guard < 10000) {
+        if (cursor === nodeId) {
+          throw new BadRequestException('That parent would create a cycle in the hierarchy.')
+        }
+        const next: { parentId: string | null } | null =
+          await this.prisma.accreditationStandard.findFirst({
+            where: { id: cursor, schoolId },
+            select: { parentId: true },
+          })
+        cursor = next?.parentId ?? null
+        guard += 1
+      }
+    }
+    return parent.id
   }
 
   async createStandard(schoolId: string, dto: CreateStandardDto, userId: string): Promise<StandardPublic> {
     const reviewDate = parseIsoDate(dto.reviewDate, 'reviewDate') ?? null
+    const parentId =
+      dto.parentId != null ? await this.validateParent(schoolId, undefined, dto.parentId) : null
     const row = await this.prisma.accreditationStandard.create({
       data: {
         schoolId,
+        parentId,
         code: dto.code,
         title: dto.title,
         category: dto.category ?? null,
+        rating: normalizeRating(dto.rating),
         reviewDate,
         owner: dto.owner ?? null,
         notes: dto.notes ?? null,
@@ -253,8 +418,11 @@ export class AccreditationService {
       targetType: 'accreditation_standards',
       targetId: row.id,
     })
-    // A fresh standard has zero evidence.
-    return this.toStandardPublic(row, 0, new Date())
+    // Return the row placed in the (freshly recomputed) tree so depth/isLeaf/leafSummary
+    // are correct; a fresh leaf falls back to a top-level self-rollup if the tree query
+    // returns nothing (only happens under mocks — real DB always contains the new row).
+    const tree = await this.computeStandardsTree(schoolId, new Date())
+    return tree.byId.get(row.id) ?? this.toStandardPublic(row, 0, new Date())
   }
 
   async updateStandard(
@@ -267,12 +435,24 @@ export class AccreditationService {
     const pick = <T>(v: T | undefined, current: T): T => (v === undefined ? current : v)
     const reviewDate = parseIsoDate(dto.reviewDate, 'reviewDate')
 
+    // Re-parent: omitted → keep; explicit null → top-level; a UUID → validate (same
+    // school + no self-parent + no cycle) BEFORE writing.
+    let parentId: string | null | undefined = undefined
+    if (dto.parentId !== undefined) {
+      parentId =
+        dto.parentId === null
+          ? null
+          : await this.validateParent(schoolId, standardId, dto.parentId)
+    }
+
     const row = await this.prisma.accreditationStandard.update({
       where: { id: existing.id },
       data: {
+        parentId: pick(parentId, existing.parentId ?? null),
         code: pick(dto.code, existing.code),
         title: pick(dto.title, existing.title),
         category: pick(dto.category, existing.category),
+        rating: pick(dto.rating, normalizeRating(existing.rating)),
         reviewDate: pick(reviewDate, existing.reviewDate),
         owner: pick(dto.owner, existing.owner),
         notes: pick(dto.notes, existing.notes),
@@ -286,13 +466,16 @@ export class AccreditationService {
       targetType: 'accreditation_standards',
       targetId: row.id,
     })
+    const tree = await this.computeStandardsTree(schoolId, new Date())
     const count = await this.prisma.accreditationEvidence.count({ where: { schoolId, standardId: row.id } })
-    return this.toStandardPublic(row, count, new Date())
+    return tree.byId.get(row.id) ?? this.toStandardPublic(row, count, new Date())
   }
 
   async removeStandard(schoolId: string, standardId: string, userId: string): Promise<{ id: string }> {
     const existing = await this.resolveStandard(schoolId, standardId)
-    // Evidence cascades via the FK ON DELETE CASCADE (no manual sweep).
+    // Evidence cascades via the FK ON DELETE CASCADE (no manual sweep). CHILDREN are NOT
+    // cascade-deleted: the self-relation FK is ON DELETE SET NULL, so a deleted parent's
+    // children RE-PARENT to top-level (no accidental subtree mass-delete).
     await this.prisma.accreditationStandard.delete({ where: { id: existing.id } })
     await this.audit.write({
       schoolId,
@@ -448,6 +631,89 @@ export class AccreditationService {
         link: SOURCE_META.board_report.link,
       })),
     }
+  }
+
+  /**
+   * PATCH an evidence artifact (Phase 4 depth — evidence is now EDITABLE). Same tenant +
+   * cross-standard gate as delete: resolveStandard FIRST (foreign standard → 404), then
+   * the 3-filter findFirst (id + standardId + schoolId) — a cross-tenant/cross-standard
+   * evidenceId → 404, never mutated. Merge-pick: omitted keeps, explicit null clears the
+   * nullable fields. RE-LINKING (changing sourceType/sourceRef) is re-validated ∈ the
+   * path school exactly like create; manual evidence still requires a non-empty title.
+   */
+  async updateEvidence(
+    schoolId: string,
+    standardId: string,
+    evidenceId: string,
+    dto: UpdateEvidenceDto,
+    userId: string,
+  ): Promise<EvidencePublic> {
+    await this.resolveStandard(schoolId, standardId) // 404 if foreign/cross-tenant
+    const existing = await this.prisma.accreditationEvidence.findFirst({
+      where: { id: evidenceId, standardId, schoolId },
+    })
+    if (!existing) throw new NotFoundException('Evidence not found.')
+
+    const pick = <T>(v: T | undefined, current: T): T => (v === undefined ? current : v)
+    const capturedAt = parseIsoDate(dto.capturedAt, 'capturedAt')
+
+    let sourceType: EvidenceSourceType = (existing.sourceType ?? 'manual') as EvidenceSourceType
+    let sourceRef: string | null = existing.sourceRef ?? null
+    let title = pick(dto.title, existing.title)
+    let kind = dto.kind !== undefined ? normalizeKind(dto.kind) : normalizeKind(existing.kind)
+    let reference = pick(dto.reference, existing.reference)
+
+    // Re-link only when the caller touches sourceType or sourceRef.
+    if (dto.sourceType !== undefined || dto.sourceRef !== undefined) {
+      const nextType: EvidenceSourceType = dto.sourceType ?? sourceType
+      if (nextType === 'manual') {
+        sourceType = 'manual'
+        sourceRef = null
+      } else {
+        const ref = dto.sourceRef !== undefined ? dto.sourceRef : sourceRef
+        if (!ref) throw new BadRequestException('sourceRef is required when linking an artifact.')
+        // schoolId is the RESOLVED path school (== existing.schoolId): the same cross-tenant
+        // gate as create — a forged/foreign sourceRef → 404, evidence never re-linked.
+        if (nextType === 'policy') {
+          const p = await this.prisma.policy.findFirst({ where: { id: ref, schoolId } })
+          if (!p) throw new NotFoundException('Linked policy not found.')
+          sourceRef = p.id
+          if (dto.reference === undefined) reference = SOURCE_META.policy.link
+        } else {
+          const r = await this.prisma.boardReport.findFirst({ where: { id: ref, schoolId } })
+          if (!r) throw new NotFoundException('Linked board report not found.')
+          sourceRef = r.id
+          if (dto.reference === undefined) reference = SOURCE_META.board_report.link
+        }
+        sourceType = nextType
+        if (dto.kind === undefined) kind = 'link'
+      }
+    }
+
+    if (sourceType === 'manual' && !(title ?? '').trim()) {
+      throw new BadRequestException('A title is required for manual evidence.')
+    }
+
+    const row = await this.prisma.accreditationEvidence.update({
+      where: { id: existing.id },
+      data: {
+        title,
+        kind,
+        reference,
+        notes: pick(dto.notes, existing.notes),
+        capturedAt: pick(capturedAt, existing.capturedAt),
+        sourceType,
+        sourceRef,
+      },
+    })
+    await this.audit.write({
+      schoolId,
+      userId,
+      action: 'accreditation.evidence.updated',
+      targetType: 'accreditation_evidence',
+      targetId: row.id,
+    })
+    return this.toEvidencePublic(row)
   }
 
   async removeEvidence(

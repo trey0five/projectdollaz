@@ -120,12 +120,19 @@ export type {
   StandardCoverageInput,
   StandardCoverage,
   SchoolCoverageSummary,
+  // Phase 4 depth — per-standard rating rollup.
+  StandardRating,
+  RatingSummary,
 } from './accreditation-coverage.js'
 export {
   coverageForStandard,
   computeStandardCoverage,
   summarizeCoverage,
   ACCREDITATION_REVIEW_SOON_DAYS,
+  // Phase 4 depth — per-standard rating rollup (evidence coverage unchanged).
+  STANDARD_RATINGS,
+  normalizeRating,
+  summarizeRatings,
 } from './accreditation-coverage.js'
 
 // Phase 4 Facilities v1 — pure deferred-maintenance backlog (injectable now)

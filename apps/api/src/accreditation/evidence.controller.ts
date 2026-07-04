@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   UseGuards,
 } from '@nestjs/common'
@@ -17,6 +18,7 @@ import { EntitlementGuard } from '../billing/entitlement.guard.js'
 import { RequiresModule } from '../billing/requires-module.decorator.js'
 import { AccreditationService } from './accreditation.service.js'
 import { CreateEvidenceDto } from './dto/create-evidence.dto.js'
+import { UpdateEvidenceDto } from './dto/update-evidence.dto.js'
 
 /**
  * Phase 4 Accreditation v1 — the EVIDENCE routes, NESTED under a standard so the
@@ -26,7 +28,7 @@ import { CreateEvidenceDto } from './dto/create-evidence.dto.js'
  * The service resolves the parent standard (findFirst {id, schoolId}) FIRST on every
  * op, so a foreign/cross-tenant/cross-standard target is a 404 — evidence can never
  * be created under, listed from, or deleted under a standard the path school does
- * not own. v1 is CREATE + LIST + DELETE only (evidence edit deferred).
+ * not own. Supports CREATE + LIST + PATCH + DELETE (evidence is editable).
  */
 @Controller('schools/:schoolId/accreditation/standards/:standardId/evidence')
 @UseGuards(JwtAuthGuard, RolesGuard, EntitlementGuard)
@@ -52,6 +54,18 @@ export class EvidenceController {
     @CurrentUser() user: User,
   ) {
     return this.accreditation.createEvidence(schoolId, standardId, dto, user.id)
+  }
+
+  @Patch(':evidenceId')
+  @Roles('owner', 'accountant')
+  update(
+    @Param('schoolId', ParseUUIDPipe) schoolId: string,
+    @Param('standardId', ParseUUIDPipe) standardId: string,
+    @Param('evidenceId', ParseUUIDPipe) evidenceId: string,
+    @Body() dto: UpdateEvidenceDto,
+    @CurrentUser() user: User,
+  ) {
+    return this.accreditation.updateEvidence(schoolId, standardId, evidenceId, dto, user.id)
   }
 
   @Delete(':evidenceId')

@@ -4,6 +4,8 @@ import {
   coverageForStandard,
   computeStandardCoverage,
   summarizeCoverage,
+  normalizeRating,
+  summarizeRatings,
 } from '../src/accreditation-coverage.js'
 
 // A fixed injected `now` so review banding is deterministic + timezone-independent.
@@ -98,5 +100,54 @@ describe('accreditation coverage — review urgency bands (injected now)', () =>
     )
     expect(c.reviewStatus).toBe('overdue')
     expect(c.daysUntilReview).toBe(-30)
+  })
+})
+
+describe('accreditation — per-standard rating rollup (over leaves)', () => {
+  it('normalizeRating: valid passes through, unknown/null → not_started', () => {
+    expect(normalizeRating('met')).toBe('met')
+    expect(normalizeRating('partially_met')).toBe('partially_met')
+    expect(normalizeRating('not_met')).toBe('not_met')
+    expect(normalizeRating('not_started')).toBe('not_started')
+    expect(normalizeRating('bogus')).toBe('not_started')
+    expect(normalizeRating(null)).toBe('not_started')
+    expect(normalizeRating(undefined)).toBe('not_started')
+  })
+
+  it('summarizeRatings: met=1.0, partially_met=0.5 weighting over leaf count', () => {
+    // 2 met + 1 partial + 1 not_met + 0 not_started over 4 leaves
+    // = (2 + 0.5) / 4 = 0.625 → 63%
+    const s = summarizeRatings([
+      { rating: 'met' },
+      { rating: 'met' },
+      { rating: 'partially_met' },
+      { rating: 'not_met' },
+    ])
+    expect(s).toEqual({
+      leafCount: 4,
+      metCount: 2,
+      partiallyMetCount: 1,
+      notMetCount: 1,
+      notStartedCount: 0,
+      ratingCoveragePct: 63,
+    })
+  })
+
+  it('summarizeRatings: empty → all zeros (no divide-by-zero)', () => {
+    expect(summarizeRatings([])).toEqual({
+      leafCount: 0,
+      metCount: 0,
+      partiallyMetCount: 0,
+      notMetCount: 0,
+      notStartedCount: 0,
+      ratingCoveragePct: 0,
+    })
+  })
+
+  it('summarizeRatings: all met → 100%, all not_started → 0%', () => {
+    expect(summarizeRatings([{ rating: 'met' }, { rating: 'met' }]).ratingCoveragePct).toBe(100)
+    expect(
+      summarizeRatings([{ rating: 'not_started' }, { rating: 'not_started' }]).ratingCoveragePct,
+    ).toBe(0)
   })
 })

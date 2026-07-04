@@ -59,6 +59,67 @@ export function coverageForStandard(evidenceCount: number): CoverageStatus {
   return evidenceCount > 0 ? 'covered' : 'no-evidence'
 }
 
+// ── Phase 4 depth — per-standard RATING rollup (evidence coverage is UNCHANGED) ──
+// A SECOND, ORTHOGONAL health dimension layered on top of binary evidence coverage:
+// the accreditor's met/partial/not-met judgement per standard. Rollup is over LEAF
+// standards only (a parent's score is derived from its indicators, never scored
+// directly) — met counts 1.0, partially_met 0.5, everything else 0. PURE + no clock.
+
+/** The closed rating set — the ONE source of truth for the DTO @IsIn + the service. */
+export const STANDARD_RATINGS = ['not_started', 'not_met', 'partially_met', 'met'] as const
+export type StandardRating = (typeof STANDARD_RATINGS)[number]
+
+/** Coerce any stored/legacy value to a valid rating; unknown/null → 'not_started'. */
+export function normalizeRating(r: string | null | undefined): StandardRating {
+  return (STANDARD_RATINGS as readonly string[]).includes(r ?? '')
+    ? (r as StandardRating)
+    : 'not_started'
+}
+
+export interface RatingSummary {
+  /** Number of LEAF standards this summary rolls up (0 for an empty subtree). */
+  leafCount: number
+  metCount: number
+  partiallyMetCount: number
+  notMetCount: number
+  notStartedCount: number
+  /** 0..100 integer weighted score = round((met + 0.5*partiallyMet) / leafCount * 100); 0 when leafCount===0. */
+  ratingCoveragePct: number
+}
+
+/**
+ * Roll a list of LEAF ratings up into a RatingSummary. The caller is responsible for
+ * passing ONLY leaves (a parent's own rating is ignored — its score comes from its
+ * indicators). leafCount===0 → all zeros (honest empty, no divide-by-zero), mirroring
+ * summarizeCoverage.
+ */
+export function summarizeRatings(leaves: readonly { rating: StandardRating }[]): RatingSummary {
+  let metCount = 0
+  let partiallyMetCount = 0
+  let notMetCount = 0
+  let notStartedCount = 0
+  for (const l of leaves) {
+    switch (l.rating) {
+      case 'met':
+        metCount += 1
+        break
+      case 'partially_met':
+        partiallyMetCount += 1
+        break
+      case 'not_met':
+        notMetCount += 1
+        break
+      default:
+        notStartedCount += 1
+        break
+    }
+  }
+  const leafCount = leaves.length
+  const ratingCoveragePct =
+    leafCount === 0 ? 0 : Math.round(((metCount + 0.5 * partiallyMetCount) / leafCount) * 100)
+  return { leafCount, metCount, partiallyMetCount, notMetCount, notStartedCount, ratingCoveragePct }
+}
+
 /**
  * Full per-standard coverage: binary coverage + banded review urgency. `now` is
  * INJECTED for determinism (tests pin a fixed value; callers pass the current
