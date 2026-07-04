@@ -6,9 +6,10 @@
 
 export const NAV = {
   anchors: [
-    { label: 'Your day', href: '#your-day' },
-    { label: 'Inside', href: '#inside' },
-    { label: 'For dioceses', href: '#for-dioceses' },
+    { label: 'Home', href: '#top', top: true },
+    { label: 'How it works', href: '#your-day' },
+    { label: 'Platform', href: '#inside' },
+    { label: 'Networks', href: '#networks' },
   ],
   signIn: { label: 'Sign in', to: '/login' },
   getStarted: { label: 'Get started', to: '/register' },
@@ -138,11 +139,17 @@ export const DOMAINS = [
 ]
 
 export const DIOCESE = {
-  kicker: 'For dioceses & school networks',
+  kicker: 'For networks & multi-school organizations',
   h2: 'Every campus, one view.',
-  body: 'Consolidate finances and operations across a diocese or network. Ask Penny “which schools are behind on their June close?” and get an answer — then a rollup for the board.',
+  body: 'Consolidate finances and operations across every campus in a network, system, or diocese. Ask Penny “which schools are behind on their June close?” — and get a board-ready rollup in return.',
   cta: { label: 'Get started', to: '/register' },
-  seals: ['SA', 'HC', 'SB', 'SM', 'OL'],
+  // Illustrative rollup: generic campus nodes with a live status each — the
+  // center one is flagged (ties to the "behind on their June close?" copy).
+  campuses: [{ status: 'ok' }, { status: 'ok' }, { status: 'behind' }, { status: 'ok' }, { status: 'ok' }],
+  legend: [
+    { status: 'ok', label: 'On track' },
+    { status: 'behind', label: 'Needs attention' },
+  ],
 }
 
 export const LICENSING = {

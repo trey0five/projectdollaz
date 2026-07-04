@@ -72,6 +72,15 @@ export default function LandingNav({ show = true }) {
               <a
                 key={a.href}
                 href={a.href}
+                // "Home" scrolls smoothly to the top rather than jumping to an anchor.
+                onClick={
+                  a.top
+                    ? (e) => {
+                        e.preventDefault()
+                        window.scrollTo({ top: 0, behavior: 'smooth' })
+                      }
+                    : undefined
+                }
                 className={`rounded-md text-[13px] font-semibold text-white/70 transition-colors hover:text-gold-light ${FOCUS_RING}`}
               >
                 {a.label}
