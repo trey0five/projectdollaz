@@ -15,25 +15,17 @@ export const NAV = {
 }
 
 export const HERO = {
-  kicker: 'Meet Penny',
-  h1Line1: 'A hundred moving parts.',
-  h1Line2: 'One Penny.',
+  kicker: 'The digital COO for independent schools',
+  h1Line1: 'Your school has a hundred moving parts.',
+  h1Line2: 'Penny keeps every one of them moving.',
   subhead:
-    'The AI Digital COO for independent schools — finances, enrollment, board reports, all kept in motion.',
+    'Project Dollaz is a digital chief operating officer for private and independent schools. Every morning it hands you a prioritized briefing across finance, governance, accreditation, facilities, advancement, enrollment, and more — and its AI, Penny, does the work underneath: importing trial balances, generating statements, drafting board packets, filing documents, and asking before anything is saved.',
   ctaPrimary: { label: 'Get started', to: '/register' },
   ctaGhost: { label: 'Sign in', to: '/login' },
   trustLine: 'Built for heads of school, business officers, and diocese finance teams.',
   scrollHint: 'Follow the day',
   demoSrSummary:
     'Demo: Penny imports a trial balance, generates statements, files a document, and answers a multi-school question.',
-}
-
-// The live-demo band directly under the hero (the scripted PennyDemo moved
-// here from the hero so the gold-dust coin keeps a clean stage).
-export const SHOWCASE = {
-  kicker: 'Watch her work',
-  h2: 'A morning with Penny, in forty seconds.',
-  body: 'She imports a trial balance, generates the statements, files a dropped document, and answers a multi-school question — and asks before anything is saved. This is the real product, on a script.',
 }
 
 // The six timestamped acts of the school day. `visual` names the slot rendered
