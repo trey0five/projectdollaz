@@ -15,49 +15,17 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Loader2, Mic, Paperclip, Send } from 'lucide-react'
 import { useSpeechInput } from '../hooks/useSpeechInput.js'
 import PennyAttachmentChip from './PennyAttachmentChip.jsx'
+import {
+  ACCEPT,
+  MAX_FILES,
+  MAX_FILE_BYTES,
+  classifyFile,
+  readAsDataURL,
+  uid,
+} from './stageAttachments.js'
 
-const MAX_FILES = 4
-const MAX_FILE_BYTES = 8 * 1024 * 1024
 const MAX_ROWS = 4
 const ROW_PX = 24
-
-const ACCEPT = '.xlsx,.csv,application/pdf,image/png,image/jpeg,image/webp'
-
-// MIME / extension → frozen `kind`. CSV + XLSX sometimes arrive with empty or
-// generic MIME from the OS, so we fall back to the filename extension.
-function classifyFile(file) {
-  const mime = (file.type || '').toLowerCase()
-  const name = (file.name || '').toLowerCase()
-  if (mime === 'application/pdf' || name.endsWith('.pdf')) return { kind: 'pdf', ok: true }
-  if (mime.startsWith('image/')) {
-    if (['image/png', 'image/jpeg', 'image/webp'].includes(mime)) return { kind: 'image', ok: true }
-    return { kind: 'image', ok: false }
-  }
-  if (name.endsWith('.csv') || mime === 'text/csv') return { kind: 'csv', ok: true }
-  if (
-    name.endsWith('.xlsx') ||
-    name.endsWith('.xls') ||
-    mime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-    mime === 'application/vnd.ms-excel'
-  ) {
-    return { kind: 'xlsx', ok: true }
-  }
-  return { kind: 'pdf', ok: false }
-}
-
-function uid() {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
-  return `att-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
-}
-
-function readAsDataURL(file) {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader()
-    r.onload = () => resolve(r.result)
-    r.onerror = () => reject(r.error)
-    r.readAsDataURL(file)
-  })
-}
 
 export default function PennyInputBar({ busy, onSubmit, inputRef, tts }) {
   const [value, setValue] = useState('')

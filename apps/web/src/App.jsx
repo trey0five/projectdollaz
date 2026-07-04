@@ -15,6 +15,7 @@ import AppShell from './components/nav/AppShell.jsx'
 import PennyAgentBridge from './components/penny/PennyAgentBridge.jsx'
 import InviteResultToast from './components/InviteResultToast.jsx'
 import HomePage from './pages/HomePage.jsx'
+import PennyStudioPage from './pages/PennyStudioPage.jsx'
 import DataHubPage from './pages/DataHubPage.jsx'
 import FinancePage from './pages/FinancePage.jsx'
 import StatementsPage from './pages/StatementsPage.jsx'
@@ -128,6 +129,7 @@ export default function App() {
       />
       <Route element={<AuthedLayout />}>
         <Route path="/" element={<HomePage />} />
+        <Route path="/penny" element={<PennyStudioPage />} />
         <Route path="/data" element={<DataHubPage />} />
         <Route path="/finance" element={<FinancePage />} />
         <Route path="/statements" element={<StatementsPage />} />

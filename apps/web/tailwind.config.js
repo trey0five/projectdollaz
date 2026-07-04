@@ -67,6 +67,12 @@ export default {
           '0%, 100%': { backgroundPosition: '0% 50%' },
           '50%': { backgroundPosition: '100% 50%' },
         },
+        // Gold mote drifting up through the Penny Studio hero backdrop.
+        'studio-mote': {
+          '0%': { transform: 'translateY(0)', opacity: '0' },
+          '10%, 90%': { opacity: '.7' },
+          '100%': { transform: 'translateY(-380px)', opacity: '0' },
+        },
       },
       animation: {
         'fade-up': 'fade-up 0.5s ease both',
@@ -74,6 +80,7 @@ export default {
         'pulse-ring': 'pulse-ring 2s ease-out infinite',
         float: 'float 7s ease-in-out infinite',
         'gradient-pan': 'gradient-pan 6s ease infinite',
+        'studio-mote': 'studio-mote 12s linear infinite',
       },
     },
   },

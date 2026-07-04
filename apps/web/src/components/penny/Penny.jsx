@@ -24,6 +24,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
+import { useLocation } from 'react-router-dom'
 import { X, ChevronRight, ChevronLeft } from 'lucide-react'
 import { usePenny } from '../../context/PennyContext.jsx'
 import PennyAvatar from './PennyAvatar.jsx'
@@ -35,6 +36,7 @@ const HOME_Y = 20
 
 export default function Penny() {
   const reduce = useReducedMotion()
+  const { pathname } = useLocation()
   const { chatOpen, toggleChat, closeChat, guide, advance, dismissGuide } = usePenny()
 
   // The two sanctioned setState-in-effect writes: measured target rect + blink.
@@ -163,6 +165,11 @@ export default function Penny() {
   const showBubble = step && !chatOpen
   const lastIndex = guide ? guide.steps.length - 1 : 0
   const isLast = guide ? guide.index >= lastIndex : true
+
+  // On the full-page Penny Studio (/penny) the page mounts its OWN usePennyChat
+  // engine instance. Suppress the floating coin here (AFTER all hooks, so hook
+  // order is stable) so there's exactly one engine + one `penny:ai-ask` listener.
+  if (pathname.startsWith('/penny')) return null
 
   return (
     <div className="no-print">
