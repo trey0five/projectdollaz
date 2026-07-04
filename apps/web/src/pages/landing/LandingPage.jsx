@@ -8,6 +8,7 @@
 import { useRef } from 'react'
 import LandingNav from './LandingNav.jsx'
 import LandingHero from './LandingHero.jsx'
+import PennyShowcase from './PennyShowcase.jsx'
 import LedgerSpine from './LedgerSpine.jsx'
 import ActSection from './ActSection.jsx'
 import DomainPlates from './DomainPlates.jsx'
@@ -53,6 +54,8 @@ export default function LandingPage() {
       <LandingNav />
       <main id="main">
         <LandingHero />
+        {/* The live PennyDemo, moved out of the hero (gold-dust coin lives there now). */}
+        <PennyShowcase />
         {/* Acts I–VI share one relative container so the spine spans them all. */}
         <div ref={actsRef} className="relative">
           <LedgerSpine containerRef={actsRef} />
