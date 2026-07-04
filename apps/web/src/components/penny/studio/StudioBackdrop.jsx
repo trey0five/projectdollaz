@@ -6,13 +6,13 @@
 // <canvas> — all CSS/framer so it degrades cleanly.
 import { motion, useReducedMotion } from 'framer-motion'
 
-const MOTE_COUNT = 20
+const MOTE_COUNT = 26
 
 // Randomized mote placement computed ONCE at module load (never during render, so
 // it stays pure/idempotent). Keys are the stable array index, never a random value.
 const MOTES = Array.from({ length: MOTE_COUNT }, () => ({
   left: Math.random() * 100,
-  bottom: Math.random() * 30,
+  bottom: Math.random() * 55,
   delay: Math.random() * 12,
   duration: 9 + Math.random() * 7,
 }))

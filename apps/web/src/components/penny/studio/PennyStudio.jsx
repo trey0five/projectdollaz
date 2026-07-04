@@ -37,6 +37,21 @@ export default function PennyStudio() {
   const name = user?.first_name || 'there'
   const canEdit = activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'
 
+  // Always land on the rich landing, never a resumed transcript. usePennyChat
+  // hydrates the last session on mount (messages > 0), which would open the page
+  // straight into a full-screen chat. Once (per visit), reset to a fresh chat so
+  // the hero + tiles + inbox show first; the prior chat stays in Recent
+  // conversations for the user to resume deliberately.
+  const didResetRef = useRef(false)
+  useEffect(() => {
+    if (didResetRef.current) return
+    if (chat.messages.length > 0) {
+      didResetRef.current = true
+      chat.newChat()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chat.messages.length])
+
   // ── Period: the inbox + chat must agree. Prefer the stored active period; else
   // fall back to the newest snapshot period and persist it (PeriodSelector writes
   // the same key), so a first visit still scopes the briefing + Penny alike.
