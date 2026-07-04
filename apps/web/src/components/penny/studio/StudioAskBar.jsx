@@ -148,7 +148,7 @@ export default function StudioAskBar({ variant = 'hero', chat, staging, value, o
             void staging.stageFiles(files)
           }
         }}
-        className={`flex items-end gap-2.5 rounded-[18px] border bg-cream/95 px-3 py-2.5 pl-4 shadow-login transition focus-within:ring-2 focus-within:ring-gold/50 ${
+        className={`flex items-end gap-2.5 rounded-[18px] border bg-white px-3 py-2.5 pl-4 shadow-login transition focus-within:ring-2 focus-within:ring-gold/50 ${
           dragOver ? 'border-gold bg-[#fffef8] ring-2 ring-inset ring-gold/60' : 'border-gold/35'
         }`}
       >
@@ -185,7 +185,7 @@ export default function StudioAskBar({ variant = 'hero', chat, staging, value, o
           }}
           placeholder={chat.busy ? 'Penny is thinking…' : speech.listening ? 'Listening…' : PLACEHOLDERS[placeIdx]}
           aria-busy={chat.busy}
-          className={`max-h-[120px] min-h-[40px] flex-1 resize-none bg-transparent py-2 text-ink outline-none placeholder:text-muted/70 ${
+          className={`max-h-[120px] min-h-[40px] flex-1 resize-none bg-transparent py-2 text-[#16233d] outline-none placeholder:text-[#8a93a6] ${
             isHero ? 'text-[16.5px]' : 'text-[15px]'
           }`}
         />

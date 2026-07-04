@@ -15,7 +15,7 @@ export default function StudioConversation({ chat }) {
 
   return (
     <div className="mx-auto max-w-[820px]">
-      <div className="flex max-h-[calc(100vh-16rem)] min-h-[320px] flex-col overflow-hidden rounded-2xl border border-rule/60 bg-white shadow-card">
+      <div className="flex max-h-[calc(100vh-16rem)] min-h-[320px] flex-col overflow-hidden rounded-2xl border border-[#22406e] bg-[#152a4d]">
         <PennyMessageList
           messages={chat.messages}
           busy={chat.busy}

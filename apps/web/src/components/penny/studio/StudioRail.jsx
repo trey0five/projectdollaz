@@ -1,6 +1,6 @@
 // StudioRail — the right rail: recent conversations (from the engine's session
 // store) and a set of suggested prompts. Clicking a conversation switches to it
-// (entering the conversation state); clicking a chip prefills the ask bar.
+// (entering the conversation state); clicking a chip prefills the ask bar. Dark deck.
 import { MessageSquare } from 'lucide-react'
 
 const SUGGESTIONS = [
@@ -31,11 +31,11 @@ export default function StudioRail({ chat, onPick }) {
   const sessions = (chat.sessions || []).slice(0, 4)
 
   return (
-    <aside className="rounded-2xl border border-rule/60 bg-white p-4 shadow-card">
-      <h2 className="mb-3 px-0.5 font-serif text-[16px] font-semibold text-navy">Recent conversations</h2>
+    <aside className="rounded-2xl border border-[#22406e] bg-[#152a4d] p-4">
+      <h2 className="mb-3 px-0.5 font-serif text-[16px] font-semibold text-white">Recent conversations</h2>
 
       {sessions.length === 0 ? (
-        <p className="px-0.5 text-[13px] text-muted">No conversations yet — ask Penny anything to start one.</p>
+        <p className="px-0.5 text-[13px] text-[#93a6c4]">No conversations yet — ask Penny anything to start one.</p>
       ) : (
         <div className="space-y-0.5">
           {sessions.map((s) => (
@@ -43,17 +43,17 @@ export default function StudioRail({ chat, onPick }) {
               key={s.id}
               type="button"
               onClick={() => chat.switchSession(s.id)}
-              className="flex w-full items-start gap-2.5 rounded-xl p-2.5 text-left transition-colors hover:bg-section focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+              className="flex w-full items-start gap-2.5 rounded-xl p-2.5 text-left transition-colors hover:bg-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
             >
-              <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg bg-gold-gradient text-navy">
+              <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg bg-gold/15 text-gold-light">
                 <MessageSquare size={14} aria-hidden />
               </span>
               <span className="min-w-0">
-                <span className="block truncate text-[13.5px] font-semibold leading-tight text-ink">
+                <span className="block truncate text-[13.5px] font-semibold leading-tight text-white">
                   {s.title || 'Untitled chat'}
                 </span>
                 {relTime(s.updatedAt) && (
-                  <span className="mt-0.5 block text-[12px] text-muted">{relTime(s.updatedAt)}</span>
+                  <span className="mt-0.5 block text-[12px] text-[#93a6c4]">{relTime(s.updatedAt)}</span>
                 )}
               </span>
             </button>
@@ -61,16 +61,16 @@ export default function StudioRail({ chat, onPick }) {
         </div>
       )}
 
-      <div className="my-3.5 h-px bg-rule/60" />
+      <div className="my-3.5 h-px bg-[#22406e]" />
 
-      <p className="mb-2.5 px-0.5 text-[11px] font-bold uppercase tracking-[0.14em] text-muted">Suggested for you</p>
+      <p className="mb-2.5 px-0.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[#93a6c4]">Suggested for you</p>
       <div className="flex flex-wrap gap-2">
         {SUGGESTIONS.map((s) => (
           <button
             key={s}
             type="button"
             onClick={() => onPick(s)}
-            className="rounded-full border border-rule/70 bg-section px-3 py-1.5 text-[12.5px] text-muted transition-colors hover:border-gold hover:text-navy focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+            className="rounded-full border border-[#22406e] bg-white/5 px-3 py-1.5 text-[12.5px] text-[#c2d0e6] transition-colors hover:border-gold/60 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
           >
             {s}
           </button>
