@@ -28,6 +28,7 @@ import { AnalyticsService } from '../analytics/analytics.service.js'
 import { BudgetService } from '../analytics/budget.service.js'
 import { OperationalService } from '../analytics/operational.service.js'
 import { BudgetRollupService } from '../analytics/budget-rollup.service.js'
+import { OrgBriefingService } from '../analytics/org-briefing.service.js'
 import { BriefingService } from '../analytics/briefing.service.js'
 import { deriveFiscalYearStart } from '../analytics/budget.driver.js'
 import { ComplianceService } from '../compliance/compliance.service.js'
@@ -459,6 +460,9 @@ export class AssistantService {
     private readonly accreditation: AccreditationService,
     private readonly facilities: FacilitiesService,
     private readonly advancement: AdvancementService,
+    // Read-only ORG roster for the cross-school list_schools_status tool. Added
+    // LAST so existing positional-arg unit specs stay valid; DI is by type.
+    private readonly orgBriefing: OrgBriefingService,
   ) {}
 
   isConfigured(): boolean {
@@ -2237,6 +2241,27 @@ export class AssistantService {
 
   private async systemPrompt(ctx: Ctx): Promise<string> {
     const school = await this.prisma.school.findUnique({ where: { id: ctx.schoolId } })
+    // Only tell Penny about the ORG-WIDE roster when this school actually has
+    // siblings — a single-school user has nothing to roll up, and the clause would
+    // just confuse them. Cheap count; failure falls back to no clause.
+    let orgClause = ''
+    if (school?.organizationId) {
+      try {
+        const siblingCount = await this.prisma.school.count({
+          where: { organizationId: school.organizationId },
+        })
+        if (siblingCount > 1) {
+          orgClause =
+            'This school belongs to a multi-school ORGANIZATION, so you can also answer cross-school ' +
+            'questions across every school the user oversees — call list_schools_status to see which ' +
+            'schools have reported (current trial balance + statements) versus which are BEHIND, plus ' +
+            "each school's count of critical/warning attention items. Use it for questions like " +
+            '"which schools are behind on their trial balance?" or "which schools need attention?". '
+        }
+      } catch {
+        /* ignore — fall back to no org clause */
+      }
+    }
     let periodLabel = 'none selected'
     if (ctx.periodId) {
       try {
@@ -2266,6 +2291,7 @@ export class AssistantService {
       'For budget questions use get_budget (this school’s budget plan — imported spread, driver model, or ' +
       'manual), get_budget_vs_actual (budget vs. actuals), and get_budget_rollup (the organization-wide ' +
       'consolidation across the organization’s schools). ' +
+      orgClause +
       'You are an interactive agent, not just a chat box. You can NAVIGATE the user and ACT on their behalf. ' +
       'navigate_to_page takes the user to any page (home, data, statements, analytics, budget, readiness, ' +
       'reports, schedules, settings) — when page is "data" you may pass openModal to open a Data-hub modal ' +
@@ -2536,6 +2562,40 @@ export class AssistantService {
         }
         const r = await this.rollup.getRollup(user, school.organizationId, fys)
         return { fiscalYearStart: r.fiscalYearStart, schools: r.schools, consolidated: r.consolidated }
+      }
+      case 'list_schools_status': {
+        // Read-only ORG roster: which in-org schools have reported (current TB +
+        // statements) vs are BEHIND, plus each school's attention counts. Mirrors
+        // get_budget_rollup: getOrgBriefing self-authorizes from the caller's active
+        // memberships (no cross-org leak); we return a TRIMMED, model-friendly shape.
+        if (!ctx.userId) return { error: 'No user context for the organization roster.' }
+        const school = await this.prisma.school.findUnique({ where: { id: ctx.schoolId } })
+        if (!school?.organizationId) return { error: 'This school is not part of an organization.' }
+        const user = await this.prisma.user.findUnique({ where: { id: ctx.userId } })
+        if (!user) return { error: 'User not found.' }
+        let fys: string | null = null
+        try {
+          const pid = await this.resolvePeriod(args, ctx)
+          const p = await this.periods.getOwnedPeriod(ctx.schoolId, pid)
+          fys = deriveFiscalYearStart(p.periodEndDate.toISOString().slice(0, 10))
+        } catch {
+          /* fall back to each school's most-recent snapshot for the FY */
+        }
+        const b = await this.orgBriefing.getOrgBriefing(user, school.organizationId, fys)
+        return {
+          consolidated: b.consolidated,
+          schools: b.schools.map((s) => ({
+            name: s.name,
+            reported: s.reported,
+            periodLabel: s.periodLabel,
+            critical: s.summary?.critical ?? 0,
+            warn: s.summary?.warn ?? 0,
+          })),
+          behind: b.notReported.map((n) => n.name),
+          topItems: b.items
+            .slice(0, 8)
+            .map((i) => ({ school: i.schoolName, title: i.title, severity: i.severity })),
+        }
       }
       case 'get_corrective_action_plan': {
         const pid = await this.resolvePeriod(args, ctx)

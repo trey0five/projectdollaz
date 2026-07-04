@@ -205,6 +205,15 @@ export const TOOL_SCHEMAS = [
   {
     type: 'function',
     function: {
+      name: 'list_schools_status',
+      description:
+        "Organization-wide status roster across every school in this organization the user oversees — which schools have reported (current trial balance + statements) vs are BEHIND (notReported), and each school's count of critical/warn attention items. Use for cross-school questions like 'which schools are behind on their trial balance' or 'which schools need attention'.",
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'apply_driver_budget',
       description:
         'APPLY a budget built from driver assumptions immediately, then tell the user what changed (reversible in the UI). Provide ONLY the levers the user mentioned; everything else keeps its current value. Enrollment drives tuition; staffing drives salaries; other lines grow from last year by inflationPct.',
@@ -889,6 +898,7 @@ export const TOOL_LABELS: Record<string, string> = {
   get_budget_vs_actual: 'Pulling budget vs. actual…',
   get_budget: 'Reading the budget…',
   get_budget_rollup: 'Consolidating your organization budget…',
+  list_schools_status: "Checking all schools' status…",
   get_corrective_action_plan: 'Reading the corrective action plan…',
   get_trend: 'Loading the trend…',
   set_budget: 'Setting the budget…',

@@ -56,6 +56,7 @@ function makeService(opts: {
     stub, // accreditation
     stub, // facilities
     stub, // advancement
+    stub, // orgBriefing
   )
   return { svc, tasksCreate, membershipFindFirst }
 }

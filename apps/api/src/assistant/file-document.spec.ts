@@ -57,6 +57,7 @@ function makeService(opts: { configured?: boolean } = {}) {
     stub, // accreditation
     stub, // facilities
     stub, // advancement
+    stub, // orgBriefing
   )
   return { svc, createDocument, isConfigured }
 }

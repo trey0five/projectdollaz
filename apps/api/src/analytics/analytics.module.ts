@@ -89,6 +89,6 @@ import { AssistantClient } from '../assistant/assistant.client.js'
     // be a circular import. A second AssistantClient instance is harmless.
     AssistantClient,
   ],
-  exports: [InsightService, AnalyticsService, OperationalService, BudgetService, BudgetRollupService, StatementsRollupService, OrgMetricsService, BriefingService],
+  exports: [InsightService, AnalyticsService, OperationalService, BudgetService, BudgetRollupService, StatementsRollupService, OrgMetricsService, BriefingService, OrgBriefingService],
 })
 export class AnalyticsModule {}
