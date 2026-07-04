@@ -4,13 +4,15 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
-import { LineChart } from 'lucide-react'
+import { ArrowRight, LineChart } from 'lucide-react'
 import { NAV } from './landingContent.js'
+import { useAuth } from '../../context/AuthContext.jsx'
 
 const FOCUS_RING = 'outline-none focus-visible:ring-2 focus-visible:ring-gold/60'
 
 export default function LandingNav() {
   const reduce = useReducedMotion()
+  const { isAuthenticated } = useAuth()
   const [scrolled, setScrolled] = useState(false)
 
   useEffect(() => {
@@ -72,18 +74,31 @@ export default function LandingNav() {
               </a>
             ))}
           </div>
-          <Link
-            to={NAV.signIn.to}
-            className={`rounded-md text-[13px] font-semibold text-white/85 transition-colors hover:text-gold-light ${FOCUS_RING}`}
-          >
-            {NAV.signIn.label}
-          </Link>
-          <Link
-            to={NAV.getStarted.to}
-            className={`whitespace-nowrap rounded-xl bg-gold-gradient px-3.5 py-2 text-[12px] font-bold uppercase tracking-[0.14em] text-navy-deep shadow-glow transition-shadow hover:shadow-glow-lg md:px-5 md:py-2.5 md:text-[13px] ${FOCUS_RING}`}
-          >
-            {NAV.getStarted.label}
-          </Link>
+          {isAuthenticated ? (
+            // Signed-in visitors (they can reach the homepage via the app logo) get
+            // a single clear way back into the product instead of Sign in / Get started.
+            <Link
+              to="/app"
+              className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl bg-gold-gradient px-3.5 py-2 text-[12px] font-bold uppercase tracking-[0.14em] text-navy-deep shadow-glow transition-shadow hover:shadow-glow-lg md:px-5 md:py-2.5 md:text-[13px] ${FOCUS_RING}`}
+            >
+              Go to app <ArrowRight size={14} aria-hidden />
+            </Link>
+          ) : (
+            <>
+              <Link
+                to={NAV.signIn.to}
+                className={`rounded-md text-[13px] font-semibold text-white/85 transition-colors hover:text-gold-light ${FOCUS_RING}`}
+              >
+                {NAV.signIn.label}
+              </Link>
+              <Link
+                to={NAV.getStarted.to}
+                className={`whitespace-nowrap rounded-xl bg-gold-gradient px-3.5 py-2 text-[12px] font-bold uppercase tracking-[0.14em] text-navy-deep shadow-glow transition-shadow hover:shadow-glow-lg md:px-5 md:py-2.5 md:text-[13px] ${FOCUS_RING}`}
+              >
+                {NAV.getStarted.label}
+              </Link>
+            </>
+          )}
         </nav>
       </div>
     </motion.header>

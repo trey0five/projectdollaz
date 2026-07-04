@@ -237,9 +237,9 @@ export default function AppShell({ children }) {
 
   const brand = (
     <Link
-      to="/app"
-      aria-label="Go to home dashboard"
-      title="Home dashboard"
+      to="/"
+      aria-label="Project Dollaz — homepage"
+      title="Homepage"
       className="flex min-w-0 items-center gap-3 rounded-lg px-1 py-1 outline-none ring-gold/50 transition-opacity hover:opacity-90 focus-visible:ring-2"
     >
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gold-gradient text-navy-deep shadow-glow">

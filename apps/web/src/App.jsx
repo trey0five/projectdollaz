@@ -57,18 +57,26 @@ import ResetPasswordPage from './pages/ResetPasswordPage.jsx'
 // The public marketing homepage — lazy so authed users never download it.
 const LandingPage = lazy(() => import('./pages/landing/LandingPage.jsx'))
 
-// "/" — OUTSIDE AuthedLayout. Waits for the auth rehydrate (navy BootSplash, so
-// there's no white flash into the navy hero), then forwards authed users to the
-// briefing at /app and shows logged-out visitors the marketing landing.
+// "/" — OUTSIDE AuthedLayout — is the marketing homepage for EVERYONE (logged in
+// or out), so the app logo can bring a signed-in user here. The app lives at /app;
+// login navigates there, and the landing shows a "Go to app" affordance when the
+// visitor is authenticated. Waits for the auth rehydrate (navy BootSplash, no white
+// flash) so the landing's auth-aware nav renders correctly on first paint.
 function RootRoute() {
-  const { isAuthenticated, ready } = useAuth()
+  const { ready } = useAuth()
   if (!ready) return <BootSplash />
-  if (isAuthenticated) return <Navigate to="/app" replace />
   return (
     <Suspense fallback={<BootSplash />}>
       <LandingPage />
     </Suspense>
   )
+}
+
+// 404: send signed-in users back into the app, everyone else to the homepage.
+function NotFoundRoute() {
+  const { isAuthenticated, ready } = useAuth()
+  if (!ready) return <BootSplash />
+  return <Navigate to={isAuthenticated ? '/app' : '/'} replace />
 }
 
 // First-login gate: once the user's schools have loaded, a user with none is sent
@@ -186,10 +194,12 @@ export default function App() {
           <Route path="billing" element={<BillingSection />} />
         </Route>
       </Route>
-      {/* Catch-all stays "/" on purpose: RootRoute forwards authed users to
+      {/* Catch-all: auth-aware — signed-in users return to /app, guests to the
+          homepage (RootRoute previously did the forwarding; see NotFoundRoute).
+          Original note retained: RootRoute forwards authed users to
           /app, and a logged-out dead link lands on marketing, not a login
           bounce. */}
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<NotFoundRoute />} />
     </Routes>
   )
 }
