@@ -137,11 +137,15 @@ export type {
   MaintenanceUrgencyResult,
   MaintenanceBacklogSummary,
   MaintenanceBacklogInput,
+  MaintenanceRecurrence,
 } from './maintenance-backlog.js'
 export {
   computeMaintenanceUrgency,
   summarizeBacklog,
   MAINTENANCE_DUE_SOON_DAYS,
+  // Facilities depth — recurring-item next-occurrence date math (pure).
+  nextMaintenanceOccurrence,
+  MAINTENANCE_RECURRENCES,
 } from './maintenance-backlog.js'
 
 // Phase 4 Advancement v1 — pure campaign giving-progress + giving summary (injectable now)

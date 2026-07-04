@@ -9,7 +9,11 @@ import {
   Min,
   MinLength,
 } from 'class-validator'
-import { MAINTENANCE_PRIORITIES, MAINTENANCE_STATUSES } from './create-maintenance.dto.js'
+import {
+  MAINTENANCE_PRIORITIES,
+  MAINTENANCE_RECURRENCES,
+  MAINTENANCE_STATUSES,
+} from './create-maintenance.dto.js'
 
 /**
  * Patch a maintenance item. ALL fields optional (partial PATCH). Hand-written (not
@@ -50,8 +54,28 @@ export class UpdateMaintenanceDto {
   estimatedCost?: number | null
 
   @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(1_000_000_000)
+  actualCost?: number | null
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  vendor?: string | null
+
+  @IsOptional()
   @IsDateString()
   targetDate?: string | null
+
+  // Preventive maintenance (additive). seriesId is SERVER-ONLY — never accepted here.
+  @IsOptional()
+  @IsIn(MAINTENANCE_RECURRENCES as unknown as string[])
+  recurrence?: string
+
+  @IsOptional()
+  @IsDateString()
+  recurrenceUntil?: string | null
 
   @IsOptional()
   @IsString()

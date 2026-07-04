@@ -1010,8 +1010,27 @@ model MaintenanceItem {
   // Estimated repair/replacement cost. Decimal(14,2) — money, nullable. Coerced to
   // a JS number in the service's toPublic (Prisma.Decimal never reaches the pure helper).
   estimatedCost   Decimal?  @map("estimated_cost") @db.Decimal(14, 2)
+  // ── Facilities depth (additive) — ACTUAL-vs-estimated cost tracking. The realized
+  // spend once the work is done. Nullable until closed out; the service surfaces
+  // variance (actual − estimated) in the response. Same Decimal→number coercion in
+  // toPublic (Prisma.Decimal never reaches the pure helpers). Mirrors estimatedCost.
+  actualCost      Decimal?  @map("actual_cost") @db.Decimal(14, 2)
+  // ── Facilities depth (additive) — non-PII business/contractor name (e.g. 'ACME HVAC').
+  // Free text v1, nullable — NOT an identity of any individual.
+  vendor          String?
   // Target/desired-by completion date (drives overdue urgency). @db.Date UTC-midnight.
   targetDate      DateTime? @map("target_date") @db.Date
+  // ── Facilities depth (additive) — PREVENTIVE/RECURRING maintenance. MIRRORS the Task
+  // recurrence convention EXACTLY (see model Task): recurrence defaults 'none' so every
+  // existing row is valid post-migration with NO backfill (a 'none' item never spawns a
+  // successor). On the status transition INTO 'resolved', a 'none'!==recurrence item
+  // spawns its next occurrence (a fresh open item at the next interval) linked by
+  // seriesId; recurrenceUntil bounds the series (null = open-ended, hard-capped in the
+  // service). recurrence is a TEXT column with a @default (free text at DB level); the
+  // DTO @IsIn enforces the enum and the service normalizes stray reads to 'none'.
+  recurrence      String    @default("none") @map("recurrence") // none|weekly|monthly|quarterly|annual
+  recurrenceUntil DateTime? @map("recurrence_until") @db.Date
+  seriesId        String?   @map("series_id") @db.Uuid
   notes           String?
   createdByUserId String?   @map("created_by_user_id") @db.Uuid
   createdAt       DateTime  @default(now()) @map("created_at")
@@ -1021,6 +1040,8 @@ model MaintenanceItem {
   createdByUser User?  @relation("MaintenanceItemCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
 
   @@index([schoolId])
+  // Series lookups (all occurrences of one recurring item) stay school-scoped.
+  @@index([schoolId, seriesId])
   @@map("maintenance_items")
 }
 

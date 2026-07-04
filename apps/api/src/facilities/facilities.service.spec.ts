@@ -23,7 +23,12 @@ function itemRow(over: Record<string, unknown> = {}) {
     priority: 'medium',
     status: 'open',
     estimatedCost: null,
+    actualCost: null,
+    vendor: null,
     targetDate: null,
+    recurrence: 'none',
+    recurrenceUntil: null,
+    seriesId: null,
     notes: null,
     createdByUserId: null,
     createdAt: new Date('2025-01-01T00:00:00.000Z'),
@@ -152,5 +157,93 @@ describe('FacilitiesService — create + update + audit', () => {
     expect(data.location).toBeNull()
     expect(data.notes).toBe('keep me')
     expect(data.createdByUserId).toBeUndefined() // not in the update payload
+  })
+
+  it('exposes actualCost + variance (actual − estimated); over-budget variance is positive', async () => {
+    const { svc } = makeService({
+      item: {
+        findMany: vi.fn(async () => [
+          itemRow({ id: 'v', estimatedCost: decimal(1000), actualCost: decimal(1250) }),
+        ]),
+      },
+    })
+    const res = await svc.listMaintenance('school-A', NOW)
+    expect(res.items[0].actualCost).toBe(1250)
+    expect(res.items[0].variance).toBe(250) // over budget → positive (danger)
+  })
+})
+
+describe('FacilitiesService — recurrence spawn-on-resolve (preventive maintenance)', () => {
+  it('resolving a recurring item spawns the NEXT occurrence (open, actualCost cleared, next target, series linked)', async () => {
+    const existing = itemRow({
+      id: 'rec1',
+      status: 'open',
+      recurrence: 'monthly',
+      targetDate: new Date('2026-06-15T00:00:00.000Z'),
+      estimatedCost: decimal(500),
+      actualCost: decimal(480),
+      vendor: 'ACME HVAC',
+      priority: 'high',
+      category: 'HVAC',
+    })
+    const { svc, maintenanceItem, audit } = makeService({
+      item: { findFirst: vi.fn(async () => existing) },
+    })
+    await svc.updateMaintenance('school-A', 'rec1', { status: 'resolved', actualCost: 480 }, 'user-1')
+    // Exactly one resolve-update + one spawned create.
+    expect(maintenanceItem.update).toHaveBeenCalledTimes(1)
+    expect(maintenanceItem.create).toHaveBeenCalledTimes(1)
+    const spawned = maintenanceItem.create.mock.calls[0][0].data
+    expect(spawned.status).toBe('open')
+    expect(spawned.actualCost).toBeNull() // realized spend clears on the successor
+    expect(spawned.recurrence).toBe('monthly') // inherits the cadence
+    expect(spawned.vendor).toBe('ACME HVAC') // carries the durable definition
+    expect(spawned.priority).toBe('high')
+    expect(spawned.category).toBe('HVAC')
+    expect(spawned.seriesId).toBe('rec1') // first resolve seeds the series id
+    // Anchor-on-schedule: monthly past 2026-06-15 → 2026-07-15 (UTC-midnight).
+    expect((spawned.targetDate as Date).toISOString().slice(0, 10)).toBe('2026-07-15')
+    expect(audit.write).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'facilities.recurrence_spawned', targetType: 'maintenance_items' }),
+    )
+  })
+
+  it('does NOT spawn when a ONE-OFF (recurrence none) item is resolved', async () => {
+    const existing = itemRow({
+      id: 'x',
+      status: 'open',
+      recurrence: 'none',
+      targetDate: new Date('2026-06-15T00:00:00.000Z'),
+    })
+    const { svc, maintenanceItem } = makeService({ item: { findFirst: vi.fn(async () => existing) } })
+    await svc.updateMaintenance('school-A', 'x', { status: 'resolved' }, 'u')
+    expect(maintenanceItem.create).not.toHaveBeenCalled()
+  })
+
+  it('does NOT re-spawn on re-saving an ALREADY-resolved recurring item (double-spawn guard)', async () => {
+    const existing = itemRow({
+      id: 'y',
+      status: 'resolved', // pre-update status is already resolved → no transition
+      recurrence: 'monthly',
+      targetDate: new Date('2026-06-15T00:00:00.000Z'),
+    })
+    const { svc, maintenanceItem } = makeService({ item: { findFirst: vi.fn(async () => existing) } })
+    await svc.updateMaintenance('school-A', 'y', { notes: 'touch' }, 'u')
+    expect(maintenanceItem.create).not.toHaveBeenCalled()
+  })
+
+  it('carries the EXISTING seriesId onto later occurrences (series stays stable)', async () => {
+    const existing = itemRow({
+      id: 'occ2',
+      status: 'open',
+      recurrence: 'monthly',
+      seriesId: 'rec1', // already part of a series seeded by an earlier occurrence
+      targetDate: new Date('2026-07-15T00:00:00.000Z'),
+    })
+    const { svc, maintenanceItem } = makeService({ item: { findFirst: vi.fn(async () => existing) } })
+    await svc.updateMaintenance('school-A', 'occ2', { status: 'resolved' }, 'u')
+    const spawned = maintenanceItem.create.mock.calls[0][0].data
+    expect(spawned.seriesId).toBe('rec1') // NOT reseeded to occ2
+    expect((spawned.targetDate as Date).toISOString().slice(0, 10)).toBe('2026-08-15')
   })
 })

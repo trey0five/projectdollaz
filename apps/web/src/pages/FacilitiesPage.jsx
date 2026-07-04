@@ -24,6 +24,7 @@ import {
   TrendingDown,
   AlertTriangle,
   Clock,
+  RotateCw,
 } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
 import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
@@ -32,6 +33,7 @@ import { useFacilities } from '../hooks/useFacilities.js'
 
 const PRIORITIES = ['low', 'medium', 'high', 'critical']
 const STATUSES = ['open', 'scheduled', 'in_progress', 'resolved']
+const RECURRENCES = ['none', 'weekly', 'monthly', 'quarterly', 'annual']
 
 const PRIORITY_LABEL = { low: 'Low', medium: 'Medium', high: 'High', critical: 'Critical' }
 const STATUS_LABEL = {
@@ -39,6 +41,13 @@ const STATUS_LABEL = {
   scheduled: 'Scheduled',
   in_progress: 'In progress',
   resolved: 'Resolved',
+}
+const RECURRENCE_LABEL = {
+  none: 'One-off',
+  weekly: 'Weekly',
+  monthly: 'Monthly',
+  quarterly: 'Quarterly',
+  annual: 'Annual',
 }
 
 // ── Light-theme priority badge (restyled from the old dark pills) ────────────
@@ -165,23 +174,30 @@ const EMPTY_FORM = {
   title: '',
   location: '',
   category: '',
+  vendor: '',
   priority: 'medium',
   status: 'open',
   estimatedCost: '',
+  actualCost: '',
   targetDate: '',
+  recurrence: 'none',
   notes: '',
 }
 
 function toItemBody(form) {
   const cost = form.estimatedCost.trim()
+  const actual = form.actualCost.trim()
   return {
     title: form.title.trim(),
     location: form.location.trim() ? form.location.trim() : null,
     category: form.category.trim() ? form.category.trim() : null,
+    vendor: form.vendor.trim() ? form.vendor.trim() : null,
     priority: form.priority,
     status: form.status,
     estimatedCost: cost === '' ? null : Number(cost),
+    actualCost: actual === '' ? null : Number(actual),
     targetDate: form.targetDate ? form.targetDate : null,
+    recurrence: form.recurrence,
     notes: form.notes.trim() ? form.notes.trim() : null,
   }
 }
@@ -200,6 +216,10 @@ function MaintenanceFormModal({ open, initial, onClose, onSave, reduce }) {
     }
     if (form.estimatedCost.trim() && Number.isNaN(Number(form.estimatedCost))) {
       setErr('Estimated cost must be a number.')
+      return
+    }
+    if (form.actualCost.trim() && Number.isNaN(Number(form.actualCost))) {
+      setErr('Actual cost must be a number.')
       return
     }
     setSaving(true)
@@ -267,6 +287,16 @@ function MaintenanceFormModal({ open, initial, onClose, onSave, reduce }) {
                 className="mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-white outline-none focus:border-gold/60"
               />
             </label>
+            <label className="col-span-2 block text-[13px] text-white/70">
+              Vendor
+              <input
+                value={form.vendor}
+                onChange={set('vendor')}
+                maxLength={160}
+                placeholder="e.g. ACME Roofing Co."
+                className="mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-white outline-none focus:border-gold/60"
+              />
+            </label>
             <label className="block text-[13px] text-white/70">
               Priority
               <select
@@ -308,6 +338,18 @@ function MaintenanceFormModal({ open, initial, onClose, onSave, reduce }) {
               />
             </label>
             <label className="block text-[13px] text-white/70">
+              Actual cost ($)
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.actualCost}
+                onChange={set('actualCost')}
+                placeholder="e.g. 138500"
+                className="mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-white outline-none focus:border-gold/60"
+              />
+            </label>
+            <label className="block text-[13px] text-white/70">
               Target date
               <input
                 type="date"
@@ -315,6 +357,20 @@ function MaintenanceFormModal({ open, initial, onClose, onSave, reduce }) {
                 onChange={set('targetDate')}
                 className="mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-white outline-none focus:border-gold/60"
               />
+            </label>
+            <label className="block text-[13px] text-white/70">
+              Repeats
+              <select
+                value={form.recurrence}
+                onChange={set('recurrence')}
+                className="mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-white outline-none focus:border-gold/60"
+              >
+                {RECURRENCES.map((r) => (
+                  <option key={r} value={r}>
+                    {RECURRENCE_LABEL[r]}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="col-span-2 block text-[13px] text-white/70">
               Notes
@@ -383,7 +439,7 @@ function MaintenanceTable({ items, loading, error, canEdit, reduce, onEdit, onDe
           <Th>Location</Th>
           <Th>Priority</Th>
           <Th>Status</Th>
-          <Th right>Cost</Th>
+          <Th right>Est / Actual</Th>
           <Th>Target</Th>
           {canEdit ? <Th right>Actions</Th> : null}
         </>
@@ -401,11 +457,27 @@ function MaintenanceTable({ items, loading, error, canEdit, reduce, onEdit, onDe
           >
             <td className="px-4 py-3">
               <div className="font-semibold text-navy">{it.title}</div>
-              {it.category ? (
-                <span className="mt-0.5 inline-flex items-center rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[11px] font-semibold text-muted">
-                  {it.category}
-                </span>
-              ) : null}
+              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                {it.category ? (
+                  <span className="inline-flex items-center rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[11px] font-semibold text-muted">
+                    {it.category}
+                  </span>
+                ) : null}
+                {it.recurrence && it.recurrence !== 'none' ? (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-md border border-gold/40 bg-gold/10 px-2 py-0.5 text-[11px] font-semibold text-[#7a5e00]"
+                    title={`Preventive maintenance — spawns the next occurrence on resolve (${RECURRENCE_LABEL[it.recurrence] ?? it.recurrence})`}
+                  >
+                    <RotateCw size={11} />
+                    {RECURRENCE_LABEL[it.recurrence] ?? it.recurrence}
+                  </span>
+                ) : null}
+                {it.vendor ? (
+                  <span className="inline-flex items-center rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[11px] text-muted">
+                    {it.vendor}
+                  </span>
+                ) : null}
+              </div>
             </td>
             <td className="px-4 py-3 text-muted">{it.location ?? '—'}</td>
             <td className="px-4 py-3">
@@ -428,8 +500,23 @@ function MaintenanceTable({ items, loading, error, canEdit, reduce, onEdit, onDe
                 />
               </div>
             </td>
-            <td className="px-4 py-3 text-right font-semibold text-navy">
-              {typeof it.estimatedCost === 'number' ? fmtMoney(it.estimatedCost) : '—'}
+            <td className="px-4 py-3 text-right">
+              <div className="font-semibold text-navy">
+                {typeof it.estimatedCost === 'number' ? fmtMoney(it.estimatedCost) : '—'}
+              </div>
+              {typeof it.actualCost === 'number' ? (
+                <div className="mt-0.5 text-[12px] text-muted">
+                  act {fmtMoney(it.actualCost)}
+                  {typeof it.variance === 'number' && it.variance !== 0 ? (
+                    <span
+                      className={`ml-1 font-semibold ${it.variance > 0 ? 'text-danger' : 'text-emerald-600'}`}
+                    >
+                      {it.variance > 0 ? '+' : '−'}
+                      {fmtMoney(Math.abs(it.variance))}
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
             </td>
             <td className="px-4 py-3 text-muted">{it.targetDate ?? '—'}</td>
             {canEdit ? (
@@ -496,13 +583,19 @@ function FacilitiesWorkspace() {
       title: editing.title ?? '',
       location: editing.location ?? '',
       category: editing.category ?? '',
+      vendor: editing.vendor ?? '',
       priority: editing.priority ?? 'medium',
       status: editing.status ?? 'open',
       estimatedCost:
         editing.estimatedCost === null || editing.estimatedCost === undefined
           ? ''
           : String(editing.estimatedCost),
+      actualCost:
+        editing.actualCost === null || editing.actualCost === undefined
+          ? ''
+          : String(editing.actualCost),
       targetDate: editing.targetDate ?? '',
+      recurrence: editing.recurrence ?? 'none',
       notes: editing.notes ?? '',
     }
   }, [editing])

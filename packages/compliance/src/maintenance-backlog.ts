@@ -22,12 +22,52 @@
 // target is an operational-scale deadline (unlike the 180-day accreditation review
 // horizon), so the 60-day compliance/AUP cadence is the right default here.
 // ─────────────────────────────────────────────────────────────────────────────
-import { daysFromCivil, toCivil } from './review-status.js'
+import { addMonths, civilFromDays, civilToIso, daysFromCivil, toCivil } from './review-status.js'
 
 export type MaintenancePriority = 'low' | 'medium' | 'high' | 'critical'
 export type MaintenanceStatus = 'open' | 'scheduled' | 'in_progress' | 'resolved'
 /** 'none' = no targetDate, OR the item is resolved (a done item has no live clock). */
 export type MaintenanceUrgency = 'overdue' | 'due-soon' | 'on-track' | 'none'
+
+// ── Facilities depth — recurrence date math (pure, injected-now). MIRRORS the Task
+// recurrence convention EXACTLY (see task-urgency.ts nextTaskOccurrence) so the two
+// preventive/recurring engines share one shape. ─────────────────────────────────
+/** The cadence of a recurring maintenance item. 'none' = one-off (never spawns). */
+export type MaintenanceRecurrence = 'none' | 'weekly' | 'monthly' | 'quarterly' | 'annual'
+export const MAINTENANCE_RECURRENCES = ['none', 'weekly', 'monthly', 'quarterly', 'annual'] as const
+
+/**
+ * Compute the NEXT occurrence's target date (yyyy-mm-dd) from a base date, or null
+ * when the cadence is 'none' / unrecognized. PURE — reuses the shared civil day
+ * math (weekly = +7 days; monthly/quarterly/annual = +1/3/12 months via addMonths, so
+ * month-end is safe: Jan-31 monthly → Feb-28/29). The base is EXPLICIT (prevTarget when
+ * present, else `now` decomposed via UTC accessors) so this module constructs NO Date
+ * and reads only `now`'s UTC accessors — obeying the package purity guard. Byte-for-byte
+ * mirror of nextTaskOccurrence.
+ */
+export function nextMaintenanceOccurrence(
+  prevTarget: Date | string | null,
+  recurrence: string,
+  now: Date,
+): string | null {
+  if (
+    recurrence === 'none' ||
+    !(MAINTENANCE_RECURRENCES as readonly string[]).includes(recurrence)
+  ) {
+    return null
+  }
+  const base =
+    toCivil(prevTarget) ?? {
+      y: now.getUTCFullYear(),
+      m: now.getUTCMonth() + 1,
+      d: now.getUTCDate(),
+    }
+  if (recurrence === 'weekly') {
+    return civilToIso(civilFromDays(daysFromCivil(base.y, base.m, base.d) + 7))
+  }
+  const months = recurrence === 'monthly' ? 1 : recurrence === 'quarterly' ? 3 : 12
+  return civilToIso(addMonths(base, months))
+}
 
 /**
  * Default "due soon" horizon for a maintenance target date. Operational-scale, so

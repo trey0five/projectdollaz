@@ -13,6 +13,8 @@ import {
 /** Exported enum arrays so the service, tests, and FE stay in sync with the DTO. */
 export const MAINTENANCE_PRIORITIES = ['low', 'medium', 'high', 'critical'] as const
 export const MAINTENANCE_STATUSES = ['open', 'scheduled', 'in_progress', 'resolved'] as const
+/** Preventive-maintenance cadence (mirrors the Task TASK_RECURRENCES convention). */
+export const MAINTENANCE_RECURRENCES = ['none', 'weekly', 'monthly', 'quarterly', 'annual'] as const
 
 /**
  * Create a maintenance item. forbidNonWhitelisted-SAFE: EVERY field is
@@ -55,9 +57,34 @@ export class CreateMaintenanceDto {
   @Max(1_000_000_000)
   estimatedCost?: number | null
 
+  // Realized spend. Bounded 2-dp number (mirrors estimatedCost); the service surfaces
+  // variance (actual − estimated) in the response.
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(1_000_000_000)
+  actualCost?: number | null
+
+  // Non-PII business/contractor name. Free text v1.
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  vendor?: string | null
+
   @IsOptional()
   @IsDateString()
   targetDate?: string | null
+
+  // ── Preventive maintenance (additive). recurrence @IsIn the allowed cadence set;
+  // seriesId is SERVER-ONLY and NEVER accepted from the client (forbidNonWhitelisted
+  // 400s a stray series_id). Mirrors the Task recurrence DTO. ─────────────────────
+  @IsOptional()
+  @IsIn(MAINTENANCE_RECURRENCES as unknown as string[])
+  recurrence?: string
+
+  @IsOptional()
+  @IsDateString()
+  recurrenceUntil?: string | null
 
   @IsOptional()
   @IsString()
