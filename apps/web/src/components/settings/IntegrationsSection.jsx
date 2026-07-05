@@ -5,10 +5,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowRight, CheckCircle2, History, Plug, RefreshCw, Unplug, XCircle } from 'lucide-react'
+import { AlertTriangle, ArrowRight, CheckCircle2, History, Plug, RefreshCw, Unplug, XCircle } from 'lucide-react'
 import { useSchools } from '../../context/SchoolContext.jsx'
 import { usePersistence } from '../../context/PersistenceContext.jsx'
-import { qboApi, apiErrorMessage } from '../../lib/api.js'
+import { qboApi, importsApi, apiErrorMessage } from '../../lib/api.js'
 import { formatRelative } from '../../lib/format.js'
 import { FormError, FormSuccess } from '../auth/fields.jsx'
 import SettingsCard from './SettingsCard.jsx'
@@ -46,6 +46,11 @@ export default function IntegrationsSection() {
   const [history, setHistory] = useState([])
   const [err, setErr] = useState('')
   const [ok, setOk] = useState('')
+  // The active current-year import for the selected period (drives the "active
+  // source" line + the supersede confirm). `pendingSync` gates a sync that would
+  // supersede an uploaded file: 'one' | 'all' | null.
+  const [activeCy, setActiveCy] = useState(null)
+  const [pendingSync, setPendingSync] = useState(null)
 
   const load = useCallback(async (id) => {
     try {
@@ -88,6 +93,38 @@ export default function IntegrationsSection() {
     return p?.label || p?.periodEndDate || 'period'
   }
 
+  // The active (newest) current-year import for the selected period — so we can
+  // show which source drives the statements and warn before a sync supersedes an
+  // uploaded file.
+  const loadActiveCy = useCallback(async (id, pid) => {
+    if (!id || !pid) {
+      setActiveCy(null)
+      return
+    }
+    try {
+      const res = await importsApi.listForPeriod(id, pid)
+      const list = Array.isArray(res.data) ? res.data : []
+      setActiveCy(list.find((i) => i.role === 'cy' && i.active) || null)
+    } catch {
+      setActiveCy(null)
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.resolve().then(() => {
+      if (cancelled) return
+      if (status?.connected) loadActiveCy(activeId, selectedPeriod)
+      else setActiveCy(null)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [status?.connected, activeId, selectedPeriod, loadActiveCy])
+
+  // A sync would supersede an uploaded file when the active CY is a non-QBO source.
+  const wouldSupersedeFile = activeCy && activeCy.sourceType !== 'quickbooks'
+
   const connect = async () => {
     setErr('')
     setOk('')
@@ -116,8 +153,21 @@ export default function IntegrationsSection() {
     }
   }
 
+  // Sync entry points gate on the supersede confirm when an uploaded file is the
+  // active current-year source; otherwise they run straight away.
+  const requestSync = () => {
+    if (!selectedPeriod) return
+    if (wouldSupersedeFile) setPendingSync('one')
+    else sync()
+  }
+  const requestSyncAll = () => {
+    if (wouldSupersedeFile) setPendingSync('all')
+    else syncAll()
+  }
+
   const sync = async () => {
     if (!selectedPeriod) return
+    setPendingSync(null)
     setErr('')
     setOk('')
     setSyncResult(null)
@@ -127,8 +177,9 @@ export default function IntegrationsSection() {
     try {
       const res = await qboApi.sync(activeId, selectedPeriod)
       const scan = res.data?.scanSummary || null
-      // Refresh last-synced + history, then show an explicit "what happened" card.
+      // Refresh last-synced + history + active source, then show a "what happened" card.
       await load(activeId)
+      await loadActiveCy(activeId, selectedPeriod)
       setSyncResult({ label, scan })
     } catch (e) {
       setErr(apiErrorMessage(e, 'Could not sync from QuickBooks.'))
@@ -138,6 +189,7 @@ export default function IntegrationsSection() {
   }
 
   const syncAll = async () => {
+    setPendingSync(null)
     setErr('')
     setOk('')
     setSyncResult(null)
@@ -146,8 +198,9 @@ export default function IntegrationsSection() {
     try {
       const res = await qboApi.syncAll(activeId)
       setSyncAllResult(res.data)
-      // Refresh last-synced + history after the batch.
+      // Refresh last-synced + history + active source after the batch.
       await load(activeId)
+      await loadActiveCy(activeId, selectedPeriod)
     } catch (e) {
       setErr(apiErrorMessage(e, 'Could not sync all periods from QuickBooks.'))
     } finally {
@@ -223,6 +276,26 @@ export default function IntegrationsSection() {
             )}
           </p>
 
+          {/* Which source currently drives this period's statements. */}
+          {activeCy && (
+            <p className="mb-4 flex flex-wrap items-center gap-x-1.5 text-[14px] text-muted">
+              <span>Active current-year trial balance:</span>
+              <span className="font-semibold text-navy">
+                {activeCy.sourceType === 'quickbooks' ? 'QuickBooks Online' : activeCy.sourceName}
+              </span>
+              <span>· {activeCy.rowCount} accounts</span>
+              <span
+                className={`rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.06em] ${
+                  activeCy.sourceType === 'quickbooks'
+                    ? 'bg-emerald-50 text-emerald-700'
+                    : 'bg-navy/[0.06] text-navy/70'
+                }`}
+              >
+                {activeCy.sourceType === 'quickbooks' ? 'Synced' : 'Uploaded file'}
+              </span>
+            </p>
+          )}
+
           {canEdit && (
             <>
               <label className="mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-muted">
@@ -246,8 +319,8 @@ export default function IntegrationsSection() {
               <div className="mt-4 flex flex-wrap gap-3">
                 <motion.button
                   whileTap={{ scale: 0.98 }}
-                  onClick={sync}
-                  disabled={syncing || syncingAll || !selectedPeriod}
+                  onClick={requestSync}
+                  disabled={syncing || syncingAll || !selectedPeriod || !!pendingSync}
                   className="btn-primary inline-flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:px-8"
                 >
                   <RefreshCw size={15} className={syncing ? 'animate-spin' : ''} />
@@ -255,8 +328,8 @@ export default function IntegrationsSection() {
                 </motion.button>
                 <motion.button
                   whileTap={{ scale: 0.98 }}
-                  onClick={syncAll}
-                  disabled={syncing || syncingAll}
+                  onClick={requestSyncAll}
+                  disabled={syncing || syncingAll || !!pendingSync}
                   className="inline-flex items-center gap-2 rounded-lg border-2 border-gold/50 bg-gold/10 px-5 py-2.5 text-[15px] font-semibold text-navy transition-all hover:border-gold hover:bg-gold/20 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <RefreshCw size={15} className={syncingAll ? 'animate-spin' : ''} />
@@ -264,12 +337,49 @@ export default function IntegrationsSection() {
                 </motion.button>
                 <button
                   onClick={disconnect}
-                  disabled={busy || syncingAll}
+                  disabled={busy || syncingAll || !!pendingSync}
                   className="inline-flex items-center gap-2 rounded-lg border-2 border-border bg-white px-5 py-2.5 text-[15px] font-semibold text-navy transition-all hover:border-danger/40 hover:text-danger disabled:opacity-50"
                 >
                   <Unplug size={15} /> Disconnect
                 </button>
               </div>
+
+              {/* Supersede confirm — a QBO sync makes QuickBooks the active source,
+                  displacing an uploaded current-year file (kept, but no longer live). */}
+              {pendingSync && wouldSupersedeFile && (
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-4 rounded-lg border-2 border-gold/50 bg-gold/[0.07] px-4 py-3.5"
+                >
+                  <p className="flex items-start gap-2 text-[15px] font-semibold text-navy">
+                    <AlertTriangle size={17} className="mt-0.5 shrink-0 text-gold" />
+                    This will make QuickBooks your active current-year trial balance
+                    {pendingSync === 'all' ? ' for every period' : ` for ${periodLabel(selectedPeriod)}`}.
+                  </p>
+                  <p className="mt-1.5 text-[14px] leading-relaxed text-muted">
+                    Your uploaded file{' '}
+                    <span className="font-medium text-navy">{activeCy.sourceName}</span> (
+                    {activeCy.rowCount} accounts) is kept, but QuickBooks will drive your statements
+                    from now on. You can switch back by re-adding the file.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-3">
+                    <motion.button
+                      whileTap={{ scale: 0.98 }}
+                      onClick={pendingSync === 'all' ? syncAll : sync}
+                      className="btn-primary inline-flex items-center gap-2"
+                    >
+                      <RefreshCw size={15} /> Sync from QuickBooks
+                    </motion.button>
+                    <button
+                      onClick={() => setPendingSync(null)}
+                      className="inline-flex items-center gap-2 rounded-lg border-2 border-border bg-white px-5 py-2.5 text-[15px] font-semibold text-navy transition-colors hover:border-navy"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </motion.div>
+              )}
 
               {/* Single-period sync outcome — explicit about what it produced + where to see it. */}
               {syncResult && (
