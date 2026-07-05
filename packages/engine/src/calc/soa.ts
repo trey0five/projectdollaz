@@ -6,8 +6,9 @@
 // outputs are byte-for-byte identical; the SCoA `sign` field is
 // metadata that REFLECTS this (used for lineage), not a new code path.
 //
-// tuition uses an explicit acct list [401..409] (sumByAccts), NOT the
-// category sum, to match legacy exactly.
+// tuition uses the legacy explicit acct list [401..409] UNIONED with rows the
+// school's mapping assigns to the 'tuition' category (identical sets for
+// legacy data — see tuitionRows) so non-legacy numbering can reach the line.
 // ─────────────────────────────────────────────────────────────
 import type { Dataset } from '../types/rows.js'
 import type { SOAResult } from '../types/results.js'
@@ -16,23 +17,37 @@ import type { SCoaCategory } from '../scoa/categories.js'
 import {
   DEFAULT_CHART,
   type StandardChart,
-  sumByAccts,
   sumByCategory,
-  rowsByAccts,
   rowsByCategory,
 } from '../scoa/chart.js'
 
 const TUITION_ACCTS = [401, 402, 403, 404, 405, 409]
+const TUITION_SET = new Set(TUITION_ACCTS)
+
+/**
+ * Rows on the tuition LINE: the legacy explicit accounts PLUS any row the
+ * school's mapping assigns to the 'tuition' category (e.g. QuickBooks-derived
+ * accounts without legacy numbers, or a school's own numbering mapped via the
+ * review flow). For legacy data the two sets coincide (ACCT_MAP maps exactly
+ * 401–405/409 to 'tuition'), so outputs remain byte-for-byte identical —
+ * without this union, a non-legacy account mapped to 'tuition' fell out of
+ * BOTH the tuition line (not in the list) and 'other' (no longer its
+ * category), silently vanishing from totalRev.
+ */
+function tuitionRows(data: Dataset, chart: StandardChart) {
+  return data.filter(
+    (r) => TUITION_SET.has(r.acct) || chart.mapping.entries[r.acct] === 'tuition'
+  )
+}
 
 export function calcSOA(
   data: Dataset,
   chart: StandardChart = DEFAULT_CHART
 ): SOAResult {
-  const sumA = (accts: number[]) => sumByAccts(data, accts)
   const sumC = (cat: SCoaCategory) => sumByCategory(data, cat, chart)
 
   // Revenue accounts carry credit (negative) balances → negate to display.
-  const tuition = -sumA(TUITION_ACCTS)
+  const tuition = -tuitionRows(data, chart).reduce((s, r) => s + r.total, 0)
   const dev = -sumC('development')
   const studAct = -sumC('studActRev')
   const textbook = -sumC('textbook')
@@ -96,14 +111,14 @@ export function buildSOALineage(
     }
   }
 
-  // tuition uses explicit acct list, not category sum.
+  // tuition = legacy explicit accts ∪ category-'tuition' rows (see tuitionRows).
   lineage.tuition = {
     line: 'tuition',
     scoaCategory: 'tuition',
     statement: 'SOA',
     sign: -1,
     value: result.tuition,
-    sources: rowsByAccts(data, TUITION_ACCTS),
+    sources: tuitionRows(data, chart),
   }
   revLine('dev', 'development', result.dev)
   revLine('studAct', 'studActRev', result.studAct)

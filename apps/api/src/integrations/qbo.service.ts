@@ -6,6 +6,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import type { ImportRole, QboConnection, User } from '@finrep/db'
+import { SCOA_CATEGORIES, type SCoaCategory } from '@finrep/engine'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { PeriodsService } from '../periods/periods.service.js'
 import { ImportsService } from '../imports/imports.service.js'
@@ -14,8 +15,10 @@ import { AuditService } from '../common/audit/audit.service.js'
 import { MonthlySnapshotsService } from '../monthly/monthly-snapshots.service.js'
 import { MappingService } from '../mapping/mapping.service.js'
 import { fyMonthKeys, fyStartYearForPeriodEnd } from '../monthly/fy-elapsed.js'
+import type { MonthlyRowDto } from '../monthly/dto/create-monthly-snapshot.dto.js'
 import type { QbSyncScopeDto } from './dto/qbo.dto.js'
-import { QboClient } from './qbo.client.js'
+import { QboClient, qboPlSection } from './qbo.client.js'
+import { suggestCategory } from './qbo-review.suggest.js'
 
 /** Shift an ISO 'YYYY-MM-DD' by whole years (period-ends are month-ends, so the day is stable). */
 function shiftYears(iso: string, delta: number): string {
@@ -76,6 +79,35 @@ export interface QboSyncAllResult {
   succeeded: number
   failed: number
   results: QboSyncAllItem[]
+}
+
+/** One reviewable QuickBooks P&L account (engine 40000/60000 blocks). */
+export interface QboReviewAccount {
+  acct: number
+  /** `desc` from the newest import row containing this acct. */
+  name: string
+  /** Derived ONLY from the acct block, never from the amount's sign. */
+  section: 'revenue' | 'expense'
+  /** SIGNED engine total (debit+/credit−) from the newest period's row. */
+  amount: number
+  periodLabel: string | null
+  /** Current SCoA key: active mapping entry, else the block default. */
+  category: string
+  /** true while still on the auto-default ('other' / 'fixedOther'). */
+  isDefault: boolean
+  /** Name-heuristic SCoA key; always null once the user has picked a category. */
+  suggestion: string | null
+}
+
+export interface QboReviewAccountsResult {
+  accounts: QboReviewAccount[]
+  summary: { total: number; needsReview: number; revenue: number; expense: number }
+}
+
+export interface QboReviewApplyResult {
+  merged: number
+  statements: { rebuilt: number; failed: string[] }
+  monthly: { rebuilt: number; failed: string[] }
 }
 
 interface QboScopeOutcome {
@@ -558,5 +590,183 @@ export class QboService {
     }
     const succeeded = results.filter((r) => r.ok).length
     return { total: results.length, succeeded, failed: results.length - succeeded, results }
+  }
+
+  /**
+   * Every QuickBooks P&L account (engine 40000/60000 blocks) with its current
+   * category, for the "review your categories" step. Reads only LOCAL imports +
+   * mapping — works without a live connection (review survives a
+   * disconnect-keep-data). ALL import roles contribute (a QBO py comparative
+   * carries accounts too); the newest period's active import supplies each
+   * account's name/amount/periodLabel, older periods only ADD accounts.
+   */
+  async reviewAccounts(schoolId: string): Promise<QboReviewAccountsResult> {
+    const { mapping } = await this.mapping.ensureActive(schoolId)
+    const entries = (mapping.entries ?? {}) as Record<string, string>
+
+    const imports = await this.prisma.import.findMany({
+      where: { schoolId, metadata: { path: ['source'], equals: 'quickbooks' } },
+      include: { fiscalPeriod: { select: { label: true, periodEndDate: true } } },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    // Keep only the ACTIVE import per (period, role) — newest createdAt wins,
+    // and the list is already createdAt-desc so first-seen per key IS the
+    // active one. Then walk the survivors newest-period-first with cy BEFORE
+    // py/audit within a period — otherwise a later-created py comparative on
+    // the same period would win the first-seen union and the review card would
+    // show prior-year amounts for accounts that exist in both years.
+    const ROLE_PRIORITY: Record<string, number> = { cy: 0, py: 1, audit: 2 }
+    const activeByKey = new Map<string, (typeof imports)[number]>()
+    for (const imp of imports) {
+      const key = `${imp.fiscalPeriodId}/${imp.role}`
+      if (!activeByKey.has(key)) activeByKey.set(key, imp)
+    }
+    const survivors = [...activeByKey.values()].sort(
+      (a, b) =>
+        b.fiscalPeriod.periodEndDate.getTime() - a.fiscalPeriod.periodEndDate.getTime() ||
+        (ROLE_PRIORITY[a.role] ?? 9) - (ROLE_PRIORITY[b.role] ?? 9),
+    )
+
+    const byAcct = new Map<number, QboReviewAccount>()
+    for (const imp of survivors) {
+      const rows = (imp.rows ?? []) as Array<{ acct: number; desc: string; total: number }>
+      for (const row of rows) {
+        const section = qboPlSection(row.acct)
+        if (!section || byAcct.has(row.acct)) continue // first-seen (newest) wins
+        const def = section === 'revenue' ? 'other' : 'fixedOther'
+        const category = entries[String(row.acct)] ?? def
+        const isDefault = category === def
+        // Only suggest while still on the default, and never echo the current pick.
+        const suggested = isDefault ? suggestCategory(row.desc, section) : null
+        // A py-sourced row's amount is the PRIOR year's balance — say so.
+        const label = imp.fiscalPeriod.label ?? null
+        byAcct.set(row.acct, {
+          acct: row.acct,
+          name: row.desc,
+          section,
+          amount: row.total,
+          periodLabel: imp.role === 'py' && label ? `${label} · prior year` : label,
+          category,
+          isDefault,
+          suggestion: suggested === category ? null : suggested,
+        })
+      }
+    }
+
+    // Contract order: revenue before expense; within a section needs-review
+    // first, then |amount| descending, tie-broken by acct ascending.
+    const accounts = [...byAcct.values()].sort(
+      (a, b) =>
+        (a.section === 'revenue' ? 0 : 1) - (b.section === 'revenue' ? 0 : 1) ||
+        Number(b.isDefault) - Number(a.isDefault) ||
+        Math.abs(b.amount) - Math.abs(a.amount) ||
+        a.acct - b.acct,
+    )
+    return {
+      accounts,
+      summary: {
+        total: accounts.length,
+        needsReview: accounts.filter((a) => a.isDefault).length,
+        revenue: accounts.filter((a) => a.section === 'revenue').length,
+        expense: accounts.filter((a) => a.section === 'expense').length,
+      },
+    }
+  }
+
+  /**
+   * Persist the user's category picks for QuickBooks P&L accounts and recompute
+   * everything derived from the mapping. Validation is all-or-nothing (400
+   * BEFORE any persist); the ONE canonical persist is mergeEntries. Recomputes
+   * are resilient like syncAll — the mapping is already saved, so partial
+   * rebuild failures return 200 with the failed ids listed, never a 5xx.
+   */
+  async applyReview(
+    actor: User,
+    schoolId: string,
+    entries: Record<string, string>,
+  ): Promise<QboReviewApplyResult> {
+    const problems: string[] = []
+    for (const [key, value] of Object.entries(entries ?? {})) {
+      // No leading zeros: '040012' would persist verbatim yet never match the
+      // engine's String(acct) lookups — a dangling entry.
+      const section = /^[1-9]\d*$/.test(key) ? qboPlSection(Number(key)) : null
+      if (!section) {
+        problems.push(`Account ${key} is not a QuickBooks P&L account`)
+        continue
+      }
+      // Pickable = a real SCoA category of the same section that rolls into
+      // totals ('ancillary' excluded) and isn't statement-only ('studActExp').
+      const def = SCOA_CATEGORIES[value as SCoaCategory]
+      if (!def || def.section !== section || def.includedInTotals === false || value === 'studActExp') {
+        problems.push(`Category ${value} is not valid for account ${key}`)
+      }
+    }
+    if (problems.length) throw new BadRequestException(problems)
+
+    // The one canonical persist (re-validates categories — harmless). If it
+    // throws, nothing below runs and nothing was changed.
+    const { merged } = await this.mapping.mergeEntries(schoolId, entries)
+
+    // Rebuild statements for every period with ANY QuickBooks import (a py
+    // comparative feeds generate too). generate() re-reads the active mapping,
+    // so cy + py columns both reclassify; when a period's active cy is an
+    // uploaded file the rebuild is a harmless regenerate of the same source.
+    const statements = { rebuilt: 0, failed: [] as string[] }
+    const qboImports = await this.prisma.import.findMany({
+      where: { schoolId, metadata: { path: ['source'], equals: 'quickbooks' } },
+      select: { fiscalPeriodId: true },
+    })
+    for (const periodId of new Set(qboImports.map((i) => i.fiscalPeriodId))) {
+      // A period holding ONLY a py comparative (its cy pull failed) can't
+      // generate — skip it instead of failing on every save forever.
+      const cyCount = await this.prisma.import.count({
+        where: { schoolId, fiscalPeriodId: periodId, role: 'cy' as ImportRole },
+      })
+      if (cyCount === 0) continue
+      try {
+        await this.statements.generate(actor, schoolId, periodId, {})
+        statements.rebuilt++
+      } catch {
+        statements.failed.push(periodId)
+      }
+    }
+
+    // Rebuild QBO monthly snapshots from their STORED sourceRows — create() is
+    // an upsert on (period, monthKey) that re-runs the engine with the CURRENT
+    // mapping and stamps the new mappingVersion. Non-QBO months are untouched.
+    const monthly = { rebuilt: 0, failed: [] as string[] }
+    const months = await this.prisma.monthlySnapshot.findMany({
+      where: { schoolId, sourceName: 'QuickBooks Online' },
+      select: { fiscalPeriodId: true, monthKey: true, sourceRows: true },
+    })
+    for (const m of months) {
+      try {
+        await this.monthlySnapshots.create(actor, schoolId, m.fiscalPeriodId, {
+          monthKey: m.monthKey,
+          sourceName: 'QuickBooks Online',
+          rows: m.sourceRows as unknown as MonthlyRowDto[],
+        })
+        monthly.rebuilt++
+      } catch {
+        monthly.failed.push(`${m.fiscalPeriodId}/${m.monthKey}`)
+      }
+    }
+
+    await this.audit.write({
+      schoolId,
+      userId: actor.id,
+      action: 'qbo.categories_reviewed',
+      targetType: 'mapping',
+      targetId: schoolId,
+      metadata: {
+        merged,
+        statementsRebuilt: statements.rebuilt,
+        monthlyRebuilt: monthly.rebuilt,
+        failures: [...statements.failed, ...monthly.failed],
+      },
+    })
+
+    return { merged, statements, monthly }
   }
 }

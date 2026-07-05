@@ -5,6 +5,7 @@ import { RolesGuard } from '../common/guards/roles.guard.js'
 import { Roles } from '../common/decorators/roles.decorator.js'
 import { CurrentUser } from '../common/decorators/current-user.decorator.js'
 import { EntitlementGuard } from '../billing/entitlement.guard.js'
+import { MergeMappingDto } from '../mapping/dto/merge-mapping.dto.js'
 import { QboService } from './qbo.service.js'
 import { QbCallbackDto, QbSyncDto, QbSyncScopeDto } from './dto/qbo.dto.js'
 
@@ -85,5 +86,27 @@ export class QboController {
   @Roles('owner', 'accountant')
   syncAll(@Param('schoolId') schoolId: string, @CurrentUser() user: User) {
     return this.qbo.syncAll(user, schoolId)
+  }
+
+  /**
+   * Every QuickBooks P&L account with its current category, for the guided
+   * "review your categories" step. Local-data only (works after a
+   * disconnect-keep-data). Read-open like status.
+   */
+  @Get('review-accounts')
+  @Roles('owner', 'accountant', 'viewer')
+  reviewAccounts(@Param('schoolId') schoolId: string) {
+    return this.qbo.reviewAccounts(schoolId)
+  }
+
+  /** Save category picks + recompute statements/monthlies. Reuses MergeMappingDto. */
+  @Post('review-accounts')
+  @Roles('owner', 'accountant')
+  applyReview(
+    @Param('schoolId') schoolId: string,
+    @Body() dto: MergeMappingDto,
+    @CurrentUser() user: User,
+  ) {
+    return this.qbo.applyReview(user, schoolId, dto.entries)
   }
 }

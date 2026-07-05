@@ -575,6 +575,14 @@ export const qboApi = {
   syncScope: (schoolId, body) => api.post(`/schools/${schoolId}/integrations/qb/sync-scope`, body),
   syncAll: (schoolId) => api.post(`/schools/${schoolId}/integrations/qb/sync-all`),
   syncHistory: (schoolId) => api.get(`/schools/${schoolId}/integrations/qb/sync-history`),
+  // Guided category review: every QuickBooks P&L account with its current SCoA
+  // category + whether it's still on the auto-default. Works without a live
+  // connection (reads local imports/mapping only).
+  reviewAccounts: (schoolId) => api.get(`/schools/${schoolId}/integrations/qb/review-accounts`),
+  // Apply refined categories ({ [acct]: categoryKey }) — merges the mapping and
+  // rebuilds statements + monthly snapshots for affected periods.
+  applyReview: (schoolId, entries) =>
+    api.post(`/schools/${schoolId}/integrations/qb/review-accounts`, { entries }),
 }
 
 // ── Phase 2A: Florida scholarship AUP — Review Readiness ─────────────────────

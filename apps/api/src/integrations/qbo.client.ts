@@ -42,8 +42,20 @@ interface QboAccountMeta {
 // the QBO account type. Balance-sheet types collapse onto the engine's fixed SFP
 // numbers (multiple rows sharing one acct simply sum); P&L accounts get a UNIQUE
 // stable number (block + QBO account id) so each stays individually re-mappable.
-const QBO_REVENUE_BASE = 40000
-const QBO_EXPENSE_BASE = 60000
+export const QBO_REVENUE_BASE = 40000
+export const QBO_EXPENSE_BASE = 60000
+
+/**
+ * Which P&L section an ENGINE account number belongs to, per the QBO blocks
+ * above — the single source of truth for the block ranges. Returns null for
+ * everything else: balance-sheet accounts, the bare block bases (40000/60000
+ * are never assigned since QBO ids start at 1), and the ≥90000 synthetics.
+ */
+export function qboPlSection(acct: number): 'revenue' | 'expense' | null {
+  if (acct > QBO_REVENUE_BASE && acct < QBO_EXPENSE_BASE) return 'revenue'
+  if (acct > QBO_EXPENSE_BASE && acct < 90000) return 'expense'
+  return null
+}
 
 function deriveAcct(meta: QboAccountMeta): { acct: number; category: 'other' | 'fixedOther' | null } {
   const t = meta.accountType

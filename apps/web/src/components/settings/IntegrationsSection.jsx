@@ -12,6 +12,7 @@ import { qboApi, importsApi, apiErrorMessage } from '../../lib/api.js'
 import { formatRelative } from '../../lib/format.js'
 import { FormError, FormSuccess } from '../auth/fields.jsx'
 import SettingsCard from './SettingsCard.jsx'
+import QboCategoryReviewCard from './QboCategoryReviewCard.jsx'
 
 const inputCls =
   'w-full rounded-lg border-2 border-border bg-white px-4 py-3 text-base text-ink outline-none transition-colors focus:border-gold disabled:cursor-not-allowed disabled:bg-navy/[0.04] disabled:text-muted'
@@ -79,6 +80,19 @@ export default function IntegrationsSection() {
   // supersede an uploaded file: 'one' | 'all' | null.
   const [activeCy, setActiveCy] = useState(null)
   const [pendingSync, setPendingSync] = useState(null)
+  // QuickBooks P&L category review (GET /review-accounts). Owned here so the
+  // "N accounts to review" pill and the review card never disagree.
+  const [review, setReview] = useState(null)
+
+  // Best-effort like syncHistory: a review failure never blanks the card.
+  const loadReview = useCallback(async (id) => {
+    try {
+      const res = await qboApi.reviewAccounts(id)
+      setReview(res.data ?? res)
+    } catch {
+      setReview(null)
+    }
+  }, [])
 
   const load = useCallback(async (id) => {
     try {
@@ -104,12 +118,15 @@ export default function IntegrationsSection() {
   useEffect(() => {
     let cancelled = false
     Promise.resolve().then(() => {
-      if (!cancelled && activeId) load(activeId)
+      if (!cancelled && activeId) {
+        load(activeId)
+        loadReview(activeId)
+      }
     })
     return () => {
       cancelled = true
     }
-  }, [activeId, load])
+  }, [activeId, load, loadReview])
 
   // Effective selection without an effect: fall back to the first period.
   const selectedPeriod = periodId || (periods && periods[0]?.id) || ''
@@ -187,6 +204,8 @@ export default function IntegrationsSection() {
       } else {
         setOk('QuickBooks disconnected. Your imported data was kept.')
       }
+      // Keep-data leaves the category review alive; delete-data empties it.
+      await loadReview(activeId)
     } catch (e) {
       setErr(apiErrorMessage(e, 'Could not disconnect.'))
     } finally {
@@ -228,6 +247,7 @@ export default function IntegrationsSection() {
       // Refresh last-synced + history + active source, then show a per-scope card.
       await load(activeId)
       await loadActiveCy(activeId, selectedPeriod)
+      await loadReview(activeId)
       setScopeResult({ label, ...res.data })
     } catch (e) {
       setErr(apiErrorMessage(e, 'Could not import from QuickBooks.'))
@@ -249,6 +269,7 @@ export default function IntegrationsSection() {
       // Refresh last-synced + history + active source after the batch.
       await load(activeId)
       await loadActiveCy(activeId, selectedPeriod)
+      await loadReview(activeId)
     } catch (e) {
       setErr(apiErrorMessage(e, 'Could not sync all periods from QuickBooks.'))
     } finally {
@@ -265,10 +286,11 @@ export default function IntegrationsSection() {
   }
 
   return (
-    <SettingsCard
-      title="QuickBooks Online"
-      description="Pull the trial balance straight from QuickBooks instead of uploading a file."
-    >
+    <>
+      <SettingsCard
+        title="QuickBooks Online"
+        description="Pull the trial balance straight from QuickBooks instead of uploading a file."
+      >
       {status == null ? (
         <p className="text-[16px] text-muted">Checking connection…</p>
       ) : !status.configured ? (
@@ -342,6 +364,20 @@ export default function IntegrationsSection() {
                 {activeCy.sourceType === 'quickbooks' ? 'Synced' : 'Uploaded file'}
               </span>
             </p>
+          )}
+
+          {/* Entry point into the category review card below. */}
+          {canEdit && review?.summary?.needsReview > 0 && (
+            <button
+              onClick={() =>
+                document.getElementById('qb-review')?.scrollIntoView({ behavior: 'smooth' })
+              }
+              className="mb-4 inline-flex items-center gap-2 rounded-full border-2 border-gold/60 bg-gold/10 px-4 py-1.5 text-[13.5px] font-semibold text-navy transition-colors hover:border-gold hover:bg-gold/20"
+            >
+              <AlertTriangle size={14} className="shrink-0 text-gold" />
+              {review.summary.needsReview} account{review.summary.needsReview === 1 ? '' : 's'} to
+              review — refine categories
+            </button>
           )}
 
           {canEdit && (
@@ -599,6 +635,19 @@ export default function IntegrationsSection() {
                       />
                     ))}
                   </ul>
+                  {/* Post-import funnel: the imported accounts land on default
+                      categories — send the user straight to the review step. */}
+                  {review?.summary?.needsReview > 0 && (
+                    <button
+                      onClick={() =>
+                        document.getElementById('qb-review')?.scrollIntoView({ behavior: 'smooth' })
+                      }
+                      className="mt-2.5 inline-flex items-center gap-1.5 text-[14px] font-semibold text-navy underline-offset-2 hover:text-gold hover:underline"
+                    >
+                      Next step: review {review.summary.needsReview} imported categories{' '}
+                      <ArrowRight size={14} />
+                    </button>
+                  )}
                   <div className="mt-2.5 flex flex-wrap gap-4">
                     <Link
                       to="/statements"
@@ -705,6 +754,18 @@ export default function IntegrationsSection() {
           )}
         </>
       )}
-    </SettingsCard>
+      </SettingsCard>
+
+      {/* Guided category review — reads the SAME `review` as the pill above.
+          Renders nothing for viewers or schools with no QuickBooks P&L accounts.
+          Survives disconnect-keep-data (it reads local imports/mapping only). */}
+      <QboCategoryReviewCard
+        key={activeId}
+        schoolId={activeId}
+        review={review}
+        canEdit={canEdit}
+        onSaved={() => loadReview(activeId)}
+      />
+    </>
   )
 }

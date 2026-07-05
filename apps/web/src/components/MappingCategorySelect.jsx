@@ -44,6 +44,10 @@ const humanize = (k) =>
 
 const labelFor = (k) => LABELS[k] || humanize(k)
 
+// Named export so other surfaces (e.g. the QuickBooks category review card)
+// render category/suggestion labels from this ONE source.
+export { labelFor }
+
 // Build the grouped option lists ONCE at module scope (not per render). Exclude
 // categories that don't roll into the statement totals (ancillary) or have no
 // real accounts (studActExp) — mapping a flagged income account to those would
@@ -60,12 +64,31 @@ const EXPENSE_OPTS = Object.values(SCOA_CATEGORIES)
   .map((c) => ({ value: c.category, label: labelFor(c.category) }))
   .sort((a, b) => a.label.localeCompare(b.label))
 
-/** One unmapped-account row: identity + dollars + a gold category select. */
-export default function MappingCategorySelect({ row, busy, disabled, onPick }) {
+/**
+ * One account row: identity + dollars + a gold category select.
+ *
+ * Two modes:
+ * - Uncontrolled (intake "to review" panel — no `value` prop): defaultValue=""
+ *   with an "Assign category…" placeholder; the row exits once picked.
+ * - Controlled (`value` provided, e.g. the QuickBooks review card): the select
+ *   reflects `value`, no placeholder (every account already has a category).
+ * Optional `section` ('revenue'|'expense') narrows the options to that group.
+ */
+export default function MappingCategorySelect({ row, busy, disabled, onPick, value, section }) {
+  const controlled = value !== undefined
+  // Controlled safety: if the current value isn't among the rendered options
+  // (a wrong-section or non-pickable category set via another mapping surface),
+  // render it as an explicit extra option — otherwise the browser silently
+  // displays the FIRST option while the account's real category differs.
+  const renderedOpts = [
+    ...(section !== 'expense' ? REVENUE_OPTS : []),
+    ...(section !== 'revenue' ? EXPENSE_OPTS : []),
+  ]
+  const valueMissing = controlled && !!value && !renderedOpts.some((o) => o.value === value)
   const handleChange = (e) => {
-    const value = e.target.value
-    if (!value) return
-    onPick(row.acct, value)
+    const picked = e.target.value
+    if (!picked) return
+    onPick(row.acct, picked)
     // Intentionally do NOT clear the select — the row exits on the next
     // render once findUnmapped(activeChart) stops flagging this account.
   }
@@ -83,27 +106,36 @@ export default function MappingCategorySelect({ row, busy, disabled, onPick }) {
         <select
           aria-label={`Category for account ${row.acct} ${row.desc}`}
           disabled={busy || disabled}
-          defaultValue=""
+          {...(controlled ? { value } : { defaultValue: '' })}
           onChange={handleChange}
           className="w-full rounded-lg border-2 border-gold/40 bg-white px-2.5 py-1.5 text-[13px] text-navy transition-colors focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/30 disabled:cursor-not-allowed disabled:opacity-60 sm:w-56"
         >
-          <option value="" disabled>
-            Assign category…
-          </option>
-          <optgroup label="Revenue">
-            {REVENUE_OPTS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </optgroup>
-          <optgroup label="Expense">
-            {EXPENSE_OPTS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </optgroup>
+          {!controlled && (
+            <option value="" disabled>
+              Assign category…
+            </option>
+          )}
+          {section !== 'expense' && (
+            <optgroup label="Revenue">
+              {REVENUE_OPTS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {section !== 'revenue' && (
+            <optgroup label="Expense">
+              {EXPENSE_OPTS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {valueMissing && (
+            <option value={value}>{labelFor(value)} (current)</option>
+          )}
         </select>
         {busy && (
           <Loader2 size={15} className="shrink-0 animate-spin text-gold" aria-hidden="true" />
