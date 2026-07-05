@@ -73,6 +73,10 @@ export default function StudioBackdrop({ sweep = true }) {
                 bottom: `${m.bottom}%`,
                 animationDelay: `${m.delay}s`,
                 animationDuration: `${m.duration}s`,
+                // backwards → the 0% frame (opacity 0) applies DURING the delay,
+                // so motes stay invisible until they start rising (no stale dots
+                // parked at their start positions on load).
+                animationFillMode: 'backwards',
               }}
             />
           ))}
