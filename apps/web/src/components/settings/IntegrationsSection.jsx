@@ -3,8 +3,9 @@
 // (which auto-scans), and disconnect. Config-gated: when the server has no QB
 // credentials, the card explains it's disabled rather than offering Connect.
 import { useCallback, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { CheckCircle2, History, Plug, RefreshCw, Unplug, XCircle } from 'lucide-react'
+import { ArrowRight, CheckCircle2, History, Plug, RefreshCw, Unplug, XCircle } from 'lucide-react'
 import { useSchools } from '../../context/SchoolContext.jsx'
 import { usePersistence } from '../../context/PersistenceContext.jsx'
 import { qboApi, apiErrorMessage } from '../../lib/api.js'
@@ -40,6 +41,7 @@ export default function IntegrationsSection() {
   const [busy, setBusy] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [syncingAll, setSyncingAll] = useState(false)
+  const [syncResult, setSyncResult] = useState(null)
   const [syncAllResult, setSyncAllResult] = useState(null)
   const [history, setHistory] = useState([])
   const [err, setErr] = useState('')
@@ -118,15 +120,16 @@ export default function IntegrationsSection() {
     if (!selectedPeriod) return
     setErr('')
     setOk('')
+    setSyncResult(null)
+    setSyncAllResult(null)
     setSyncing(true)
+    const label = periodLabel(selectedPeriod)
     try {
       const res = await qboApi.sync(activeId, selectedPeriod)
-      const s = res.data?.scanSummary
-      setOk(
-        s
-          ? `Synced from QuickBooks. Auto-scan: ${s.material} material, ${s.reportable} reportable.`
-          : 'Synced from QuickBooks and generated statements.',
-      )
+      const scan = res.data?.scanSummary || null
+      // Refresh last-synced + history, then show an explicit "what happened" card.
+      await load(activeId)
+      setSyncResult({ label, scan })
     } catch (e) {
       setErr(apiErrorMessage(e, 'Could not sync from QuickBooks.'))
     } finally {
@@ -137,6 +140,7 @@ export default function IntegrationsSection() {
   const syncAll = async () => {
     setErr('')
     setOk('')
+    setSyncResult(null)
     setSyncAllResult(null)
     setSyncingAll(true)
     try {
@@ -175,11 +179,34 @@ export default function IntegrationsSection() {
         </div>
       ) : status.connected ? (
         <>
-          <div className="mb-4 flex items-center gap-2 rounded-lg border border-gold/30 bg-gold/10 px-4 py-3 text-[15px] text-navy">
+          <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-gold/30 bg-gold/10 px-4 py-3 text-[15px] text-navy">
             <Plug size={15} className="text-gold" />
-            Connected to QuickBooks ({status.environment}) · company{' '}
-            <span className="font-mono">{status.realmId}</span>
+            Connected to QuickBooks ({status.environment})
+            {status.companyName ? (
+              <>
+                {' '}· <span className="font-semibold">{status.companyName}</span>
+                <span className="font-mono text-[13px] text-muted">#{status.realmId}</span>
+              </>
+            ) : (
+              <>
+                {' '}· company <span className="font-mono">{status.realmId}</span>
+              </>
+            )}
           </div>
+
+          {/* What a sync actually does + where the data lands. */}
+          <p className="mb-3 text-[13.5px] leading-relaxed text-muted">
+            A sync pulls the selected period&apos;s{' '}
+            <span className="font-medium text-navy">trial balance</span> from QuickBooks and rebuilds
+            your statements — the result lands in{' '}
+            <Link
+              to="/statements"
+              className="font-semibold text-navy underline-offset-2 hover:text-gold hover:underline"
+            >
+              Statements &amp; Periods
+            </Link>{' '}
+            and flows into your dashboard and briefing.
+          </p>
 
           {/* Last synced — visible to all roles (not gated by canEdit). */}
           <p className="mb-4 text-[14px] tracking-[0.01em] text-muted">
@@ -189,7 +216,7 @@ export default function IntegrationsSection() {
                 <span className="font-semibold text-navy">
                   {syncRelativeTime(status.lastSyncedAt)}
                 </span>
-                {status.lastSyncRowCount != null && <> · {status.lastSyncRowCount} rows</>}
+                {status.lastSyncRowCount != null && <> · {status.lastSyncRowCount} accounts</>}
               </>
             ) : (
               'Never synced.'
@@ -244,6 +271,40 @@ export default function IntegrationsSection() {
                 </button>
               </div>
 
+              {/* Single-period sync outcome — explicit about what it produced + where to see it. */}
+              {syncResult && (
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-4 rounded-lg border border-gold/40 bg-gold/10 px-4 py-3"
+                >
+                  <p className="flex items-center gap-2 text-[15px] font-semibold text-navy">
+                    <CheckCircle2 size={16} className="shrink-0 text-gold" />
+                    {syncResult.label} synced from QuickBooks
+                  </p>
+                  <p className="mt-1 text-[14px] leading-relaxed text-muted">
+                    Pulled the trial balance and rebuilt this period&apos;s statements.
+                    {syncResult.scan
+                      ? ` The auto-scan flagged ${syncResult.scan.material} material and ${syncResult.scan.reportable} reportable.`
+                      : ''}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-4">
+                    <Link
+                      to="/statements"
+                      className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-navy underline-offset-2 hover:text-gold hover:underline"
+                    >
+                      View statements <ArrowRight size={14} />
+                    </Link>
+                    <Link
+                      to="/finance"
+                      className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-navy underline-offset-2 hover:text-gold hover:underline"
+                    >
+                      Open finance dashboard <ArrowRight size={14} />
+                    </Link>
+                  </div>
+                </motion.div>
+              )}
+
               {syncAllResult && (
                 <motion.div
                   initial={{ opacity: 0, y: 6 }}
@@ -260,6 +321,9 @@ export default function IntegrationsSection() {
                       <span className="text-danger"> · {syncAllResult.failed} skipped</span>
                     )}
                   </p>
+                  <p className="mt-1 text-[13.5px] text-muted">
+                    Each pulled that period&apos;s trial balance and rebuilt its statements.
+                  </p>
                   <ul className="mt-2 space-y-1">
                     {syncAllResult.results.map((r) => (
                       <li
@@ -274,12 +338,18 @@ export default function IntegrationsSection() {
                         <span>
                           <span className="font-medium text-navy">{r.label}</span>
                           {r.ok
-                            ? ` · ${r.rowCount} rows`
+                            ? ` · ${r.rowCount} accounts`
                             : ` · ${r.error || 'No QuickBooks data for this period.'}`}
                         </span>
                       </li>
                     ))}
                   </ul>
+                  <Link
+                    to="/statements"
+                    className="mt-2 inline-flex items-center gap-1.5 text-[14px] font-semibold text-navy underline-offset-2 hover:text-gold hover:underline"
+                  >
+                    View statements <ArrowRight size={14} />
+                  </Link>
                 </motion.div>
               )}
             </>

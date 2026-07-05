@@ -142,6 +142,19 @@ export class QboClient {
     return rows
   }
 
+  /** The QuickBooks company's display name (best-effort → null on any failure). */
+  async getCompanyName(realmId: string, accessToken: string): Promise<string | null> {
+    try {
+      const data = (await this.apiGet(realmId, accessToken, `companyinfo/${realmId}`)) as {
+        CompanyInfo?: { CompanyName?: string }
+      }
+      const name = data?.CompanyInfo?.CompanyName
+      return typeof name === 'string' && name.trim() ? name.trim() : null
+    } catch {
+      return null
+    }
+  }
+
   private async accountNumbersByName(
     realmId: string,
     accessToken: string,

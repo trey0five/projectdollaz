@@ -17,6 +17,7 @@ export interface QboStatus {
   configured: boolean
   connected: boolean
   realmId: string | null
+  companyName: string | null
   environment: string | null
   connectedAt: string | null
   lastSyncedAt: string | null
@@ -88,6 +89,8 @@ export class QboService {
       configured: this.client.isConfigured(),
       connected: !!conn,
       realmId: conn?.realmId ?? null,
+      // Lazy backfill for connections made before we stored the name.
+      companyName: conn ? await this.companyName(conn) : null,
       environment: conn?.environment ?? null,
       connectedAt: conn?.createdAt ? conn.createdAt.toISOString() : null,
       lastSyncedAt: last ? last.createdAt.toISOString() : null,
@@ -154,6 +157,26 @@ export class QboService {
       metadata: {},
     })
     return this.status(schoolId)
+  }
+
+  /**
+   * The QuickBooks company display name — returns the stored value, or fetches it
+   * from QBO and persists it (best-effort; null on any failure so status never
+   * breaks). This backfills connections made before the name was stored.
+   */
+  private async companyName(conn: QboConnection): Promise<string | null> {
+    if (conn.companyName) return conn.companyName
+    try {
+      const token = await this.accessToken(conn)
+      const name = await this.client.getCompanyName(conn.realmId, token)
+      if (name) {
+        await this.prisma.qboConnection.update({ where: { schoolId: conn.schoolId }, data: { companyName: name } })
+        conn.companyName = name
+      }
+      return name
+    } catch {
+      return null
+    }
   }
 
   /** A valid access token, refreshing (and persisting the rotated refresh token) when near expiry. */

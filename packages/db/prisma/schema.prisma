@@ -713,6 +713,7 @@ model QboConnection {
   id                String   @id @default(uuid()) @db.Uuid
   schoolId          String   @unique @map("school_id") @db.Uuid
   realmId           String   @map("realm_id")
+  companyName       String?  @map("company_name")
   accessToken       String   @map("access_token")
   refreshToken      String   @map("refresh_token")
   expiresAt         DateTime @map("expires_at")
