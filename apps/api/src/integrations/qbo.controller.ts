@@ -78,6 +78,13 @@ export class QboController {
     return this.qbo.syncHistory(schoolId)
   }
 
+  /** What QuickBooks data already exists for a period (so the chooser reflects reality). */
+  @Get('import-scope')
+  @Roles('owner', 'accountant', 'viewer')
+  importScope(@Param('schoolId') schoolId: string, @Query('periodId') periodId?: string) {
+    return this.qbo.importScope(schoolId, periodId ?? '')
+  }
+
   /**
    * Sync every period for the school (resilient: one period's failure doesn't abort
    * the batch). No request body — nothing to whitelist. Owner/accountant like sync.

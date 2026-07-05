@@ -575,6 +575,8 @@ export const qboApi = {
   syncScope: (schoolId, body) => api.post(`/schools/${schoolId}/integrations/qb/sync-scope`, body),
   syncAll: (schoolId) => api.post(`/schools/${schoolId}/integrations/qb/sync-all`),
   syncHistory: (schoolId) => api.get(`/schools/${schoolId}/integrations/qb/sync-history`),
+  importScope: (schoolId, periodId) =>
+    api.get(`/schools/${schoolId}/integrations/qb/import-scope`, { params: { periodId } }),
   // Guided category review: every QuickBooks P&L account with its current SCoA
   // category + whether it's still on the auto-default. Works without a live
   // connection (reads local imports/mapping only).

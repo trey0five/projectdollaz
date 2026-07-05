@@ -211,6 +211,40 @@ export class QboService {
     }
   }
 
+  /**
+   * What QuickBooks data ALREADY exists for a period — so the import chooser can
+   * reflect reality (checkboxes are otherwise transient form state that resets to
+   * defaults on reload). currentYear/priorYear = a QBO cy/py import on the period;
+   * monthly = QBO monthly snapshots; historyYears = distinct EARLIER periods that
+   * carry a QBO cy import (the "prior years of history" already pulled).
+   */
+  async importScope(
+    schoolId: string,
+    periodId: string,
+  ): Promise<{ currentYear: boolean; priorYear: boolean; monthly: boolean; historyYears: number }> {
+    const empty = { currentYear: false, priorYear: false, monthly: false, historyYears: 0 }
+    if (!periodId) return empty
+    const period = await this.prisma.fiscalPeriod.findFirst({ where: { id: periodId, schoolId } })
+    if (!period) return empty
+    const qbo = { path: ['source'], equals: 'quickbooks' } as const
+    const [cy, py, monthly, historyPeriods] = await Promise.all([
+      this.prisma.import.count({ where: { schoolId, fiscalPeriodId: periodId, role: 'cy' as ImportRole, metadata: qbo } }),
+      this.prisma.import.count({ where: { schoolId, fiscalPeriodId: periodId, role: 'py' as ImportRole, metadata: qbo } }),
+      this.prisma.monthlySnapshot.count({ where: { schoolId, fiscalPeriodId: periodId, sourceName: 'QuickBooks Online' } }),
+      this.prisma.import.findMany({
+        where: {
+          schoolId,
+          role: 'cy' as ImportRole,
+          metadata: qbo,
+          fiscalPeriod: { periodEndDate: { lt: period.periodEndDate } },
+        },
+        select: { fiscalPeriodId: true },
+        distinct: ['fiscalPeriodId'],
+      }),
+    ])
+    return { currentYear: cy > 0, priorYear: py > 0, monthly: monthly > 0, historyYears: historyPeriods.length }
+  }
+
   /** Recent 'qbo.synced' audit rows for the school (newest-first, capped). */
   async syncHistory(schoolId: string): Promise<QboSyncHistoryEntry[]> {
     const rows = await this.prisma.auditLog.findMany({

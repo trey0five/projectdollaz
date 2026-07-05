@@ -167,6 +167,37 @@ export default function IntegrationsSection() {
     }
   }, [status?.connected, activeId, selectedPeriod, loadActiveCy])
 
+  // Hydrate the "What to import" checkboxes from what QuickBooks data ALREADY
+  // exists for the period — otherwise this transient form state resets to
+  // defaults on every reload and looks like the selection was lost. (Current
+  // year is always the base; historyYears reflects prior-year periods pulled.)
+  const loadScope = useCallback(async (id, pid) => {
+    if (!id || !pid) return
+    try {
+      const res = await qboApi.importScope(id, pid)
+      const s = res.data ?? res
+      setScope({
+        priorYear: !!s.priorYear,
+        monthly: !!s.monthly,
+        historyYears: Math.min(Number(s.historyYears) || 0, 25),
+        // Reality gives a count, not the "all" intent; leave allHistory off.
+        allHistory: false,
+      })
+    } catch {
+      /* leave the current selection alone on a read failure */
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.resolve().then(() => {
+      if (!cancelled && status?.connected) loadScope(activeId, selectedPeriod)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [status?.connected, activeId, selectedPeriod, loadScope])
+
   // A sync would supersede an uploaded file when the active CY is a non-QBO source.
   const wouldSupersedeFile = activeCy && activeCy.sourceType !== 'quickbooks'
 
@@ -244,9 +275,12 @@ export default function IntegrationsSection() {
         historyYears: scope.historyYears,
         allHistory: scope.allHistory,
       })
-      // Refresh last-synced + history + active source, then show a per-scope card.
+      // Refresh last-synced + history + active source + what's imported + review,
+      // then show a per-scope card. (loadScope re-derives the checkboxes from the
+      // data that actually landed — a scope with no data unchecks itself.)
       await load(activeId)
       await loadActiveCy(activeId, selectedPeriod)
+      await loadScope(activeId, selectedPeriod)
       await loadReview(activeId)
       setScopeResult({ label, ...res.data })
     } catch (e) {
@@ -460,7 +494,7 @@ export default function IntegrationsSection() {
                       title={scope.allHistory ? 'Using every prior year with data' : undefined}
                       className="rounded-lg border-2 border-border bg-white px-2.5 py-1.5 text-[14px] text-ink outline-none focus:border-gold disabled:cursor-not-allowed disabled:bg-navy/[0.05] disabled:text-muted"
                     >
-                      {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20, 25].map((n) => (
+                      {Array.from({ length: 26 }, (_, n) => n).map((n) => (
                         <option key={n} value={n}>
                           {n}
                         </option>
