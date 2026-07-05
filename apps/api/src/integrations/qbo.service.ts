@@ -11,7 +11,23 @@ import { PeriodsService } from '../periods/periods.service.js'
 import { ImportsService } from '../imports/imports.service.js'
 import { StatementsService } from '../statements/statements.service.js'
 import { AuditService } from '../common/audit/audit.service.js'
+import { MonthlySnapshotsService } from '../monthly/monthly-snapshots.service.js'
+import { fyMonthKeys, fyStartYearForPeriodEnd } from '../monthly/fy-elapsed.js'
+import type { QbSyncScopeDto } from './dto/qbo.dto.js'
 import { QboClient } from './qbo.client.js'
+
+/** Shift an ISO 'YYYY-MM-DD' by whole years (period-ends are month-ends, so the day is stable). */
+function shiftYears(iso: string, delta: number): string {
+  const [y, m, d] = iso.split('-')
+  return `${Number(y) + delta}-${m}-${d}`
+}
+
+/** Last calendar day of a 'YYYY-MM' month, as an ISO 'YYYY-MM-DD' string. */
+function monthEndISO(monthKey: string): string {
+  const [y, m] = monthKey.split('-').map(Number)
+  const day = new Date(Date.UTC(y, m, 0)).getUTCDate() // day 0 of next month = last of this
+  return `${monthKey}-${String(day).padStart(2, '0')}`
+}
 
 export interface QboStatus {
   configured: boolean
@@ -46,6 +62,19 @@ export interface QboSyncAllResult {
   results: QboSyncAllItem[]
 }
 
+interface QboScopeOutcome {
+  ok: boolean
+  rowCount?: number
+  error?: string
+}
+
+export interface QboSyncScopeResult {
+  currentYear?: QboScopeOutcome
+  priorYear?: QboScopeOutcome
+  monthly?: { imported: number; skipped: number; errors: string[] }
+  history?: Array<{ year: number } & QboScopeOutcome>
+}
+
 /** Defensively read the keys we write into a `qbo.synced` audit row's Json metadata. */
 function readSyncMeta(metadata: unknown): { fiscalPeriodId: string | null; rowCount: number | null } {
   const m = (metadata ?? {}) as { fiscalPeriodId?: unknown; rowCount?: unknown }
@@ -64,6 +93,7 @@ export class QboService {
     private readonly periods: PeriodsService,
     private readonly imports: ImportsService,
     private readonly statements: StatementsService,
+    private readonly monthlySnapshots: MonthlySnapshotsService,
     private readonly audit: AuditService,
   ) {}
 
@@ -253,6 +283,130 @@ export class QboService {
       metadata: { fiscalPeriodId: periodId, rowCount: rows.length },
     })
     return { snapshot, rowCount: rows.length, label: period.label }
+  }
+
+  /**
+   * Scoped import: pull a chosen mix from QuickBooks in ONE action. Every scope
+   * runs under its own try/catch so a partial failure (or a year/month the sandbox
+   * has no data for) never aborts the rest. All pulls use the SAME trial-balance
+   * report at different "as of" dates. Returns a per-scope summary.
+   *  - currentYear (default on): the period's CY trial balance → statements.
+   *  - priorYear: the prior FY-end TB → the period's PY comparative → regenerate.
+   *  - monthly: a TB as of each month-end in the period's FY → monthly snapshots.
+   *  - historyYears N: each older FY-end → its own period's CY (multi-year trend).
+   */
+  async syncScope(actor: User, schoolId: string, dto: QbSyncScopeDto): Promise<QboSyncScopeResult> {
+    const conn = await this.prisma.qboConnection.findUnique({ where: { schoolId } })
+    if (!conn) throw new NotFoundException('QuickBooks is not connected for this school.')
+    const period = await this.periods.getOwnedPeriod(schoolId, dto.periodId)
+    const endDate = period.periodEndDate.toISOString().slice(0, 10)
+    const token = await this.accessToken(conn) // refresh once up front; reused below
+    const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
+    const result: QboSyncScopeResult = {}
+
+    // 1. Current year (CY) — the base. Reuses the single-period helper (audits too).
+    if (dto.currentYear !== false) {
+      try {
+        const r = await this.syncOnePeriod(actor, schoolId, conn, dto.periodId)
+        result.currentYear = { ok: true, rowCount: r.rowCount }
+      } catch (e) {
+        result.currentYear = { ok: false, error: msg(e) }
+      }
+    }
+
+    // 2. Prior-year comparative (PY) for THIS period (prior FY-end, same period slot).
+    if (dto.priorYear) {
+      try {
+        const priorEnd = shiftYears(endDate, -1)
+        const rows = await this.client.getTrialBalance(conn.realmId, token, priorEnd)
+        if (rows.length === 0) {
+          throw new BadRequestException('QuickBooks has no prior-year trial-balance data.')
+        }
+        await this.imports.create(actor, schoolId, {
+          role: 'py',
+          periodEndDate: endDate,
+          periodType: period.periodType,
+          label: period.label ?? undefined,
+          sourceName: 'QuickBooks Online',
+          rows,
+          metadata: { source: 'quickbooks', realmId: conn.realmId },
+        })
+        await this.statements.generate(actor, schoolId, dto.periodId, {})
+        result.priorYear = { ok: true, rowCount: rows.length }
+      } catch (e) {
+        result.priorYear = { ok: false, error: msg(e) }
+      }
+    }
+
+    // 3. Monthly snapshots — a TB as of each month-end in the period's FY.
+    if (dto.monthly) {
+      const monthKeys = fyMonthKeys(fyStartYearForPeriodEnd(period.periodEndDate))
+      let imported = 0
+      let skipped = 0
+      const errors: string[] = []
+      for (const mk of monthKeys) {
+        const monthEnd = monthEndISO(mk)
+        if (monthEnd > endDate) {
+          skipped++ // month falls after the period end → no data yet
+          continue
+        }
+        try {
+          const rows = await this.client.getTrialBalance(conn.realmId, token, monthEnd)
+          if (rows.length === 0) {
+            skipped++
+            continue
+          }
+          await this.monthlySnapshots.create(actor, schoolId, dto.periodId, {
+            monthKey: mk,
+            sourceName: 'QuickBooks Online',
+            rows,
+          })
+          imported++
+        } catch (e) {
+          errors.push(`${mk}: ${msg(e)}`)
+        }
+      }
+      result.monthly = { imported, skipped, errors }
+    }
+
+    // 4. Multiple prior years — each older FY-end into its OWN period (CY).
+    const historyYears = Math.max(0, Math.min(dto.historyYears ?? 0, 10))
+    if (historyYears > 0) {
+      result.history = []
+      for (let y = 1; y <= historyYears; y++) {
+        const yEnd = shiftYears(endDate, -y)
+        const yearNum = Number(yEnd.slice(0, 4))
+        try {
+          const rows = await this.client.getTrialBalance(conn.realmId, token, yEnd)
+          if (rows.length === 0) {
+            result.history.push({ year: yearNum, ok: false, error: 'No QuickBooks data for this year.' })
+            continue
+          }
+          const imp = await this.imports.create(actor, schoolId, {
+            role: 'cy',
+            periodEndDate: yEnd,
+            periodType: period.periodType,
+            label: `FY ${yearNum}`,
+            sourceName: 'QuickBooks Online',
+            rows,
+            metadata: { source: 'quickbooks', realmId: conn.realmId },
+          })
+          await this.statements.generate(actor, schoolId, imp.fiscalPeriodId, {})
+          await this.audit.write({
+            schoolId,
+            userId: actor.id,
+            action: 'qbo.synced',
+            targetType: 'statement_snapshots',
+            metadata: { fiscalPeriodId: imp.fiscalPeriodId, rowCount: rows.length },
+          })
+          result.history.push({ year: yearNum, ok: true, rowCount: rows.length })
+        } catch (e) {
+          result.history.push({ year: yearNum, ok: false, error: msg(e) })
+        }
+      }
+    }
+
+    return result
   }
 
   /**

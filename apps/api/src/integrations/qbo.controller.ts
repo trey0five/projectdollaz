@@ -6,7 +6,7 @@ import { Roles } from '../common/decorators/roles.decorator.js'
 import { CurrentUser } from '../common/decorators/current-user.decorator.js'
 import { EntitlementGuard } from '../billing/entitlement.guard.js'
 import { QboService } from './qbo.service.js'
-import { QbCallbackDto, QbSyncDto } from './dto/qbo.dto.js'
+import { QbCallbackDto, QbSyncDto, QbSyncScopeDto } from './dto/qbo.dto.js'
 
 /**
  * Phase 6 — QuickBooks Online connector. Membership-checked by RolesGuard on
@@ -52,6 +52,17 @@ export class QboController {
   @Roles('owner', 'accountant')
   sync(@Param('schoolId') schoolId: string, @Body() dto: QbSyncDto, @CurrentUser() user: User) {
     return this.qbo.sync(user, schoolId, dto.periodId)
+  }
+
+  /** Scoped import: pull a chosen mix (current/prior year, monthly, history) at once. */
+  @Post('sync-scope')
+  @Roles('owner', 'accountant')
+  syncScope(
+    @Param('schoolId') schoolId: string,
+    @Body() dto: QbSyncScopeDto,
+    @CurrentUser() user: User,
+  ) {
+    return this.qbo.syncScope(user, schoolId, dto)
   }
 
   /** Recent 'qbo.synced' audit rows (newest-first, capped). Read-open like status. */

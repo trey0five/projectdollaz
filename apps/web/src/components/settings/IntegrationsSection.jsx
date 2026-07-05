@@ -31,6 +31,23 @@ function syncRelativeTime(iso) {
   return formatRelative(iso)
 }
 
+// One line in the scoped-import result (a scope's ok/failed outcome).
+function ScopeRow({ ok, label, detail }) {
+  return (
+    <li className="flex items-start gap-2 text-muted">
+      {ok ? (
+        <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-gold" />
+      ) : (
+        <XCircle size={15} className="mt-0.5 shrink-0 text-danger" />
+      )}
+      <span>
+        <span className="font-medium text-navy">{label}</span>
+        {detail ? ` — ${detail}` : ''}
+      </span>
+    </li>
+  )
+}
+
 export default function IntegrationsSection() {
   const { activeId, activeSchool } = useSchools()
   const { periods } = usePersistence()
@@ -41,7 +58,10 @@ export default function IntegrationsSection() {
   const [busy, setBusy] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [syncingAll, setSyncingAll] = useState(false)
-  const [syncResult, setSyncResult] = useState(null)
+  // What to pull from QuickBooks (current year is always the base). historyYears =
+  // additional prior fiscal-years, each imported as its own period.
+  const [scope, setScope] = useState({ priorYear: false, monthly: false, historyYears: 0 })
+  const [scopeResult, setScopeResult] = useState(null)
   const [syncAllResult, setSyncAllResult] = useState(null)
   const [history, setHistory] = useState([])
   const [err, setErr] = useState('')
@@ -153,36 +173,42 @@ export default function IntegrationsSection() {
     }
   }
 
-  // Sync entry points gate on the supersede confirm when an uploaded file is the
+  // Import entry points gate on the supersede confirm when an uploaded file is the
   // active current-year source; otherwise they run straight away.
-  const requestSync = () => {
+  const requestImport = () => {
     if (!selectedPeriod) return
-    if (wouldSupersedeFile) setPendingSync('one')
-    else sync()
+    if (wouldSupersedeFile) setPendingSync('scoped')
+    else importScoped()
   }
   const requestSyncAll = () => {
     if (wouldSupersedeFile) setPendingSync('all')
     else syncAll()
   }
 
-  const sync = async () => {
+  // The scoped import: current year (base) + whatever else is checked, in one call.
+  const importScoped = async () => {
     if (!selectedPeriod) return
     setPendingSync(null)
     setErr('')
     setOk('')
-    setSyncResult(null)
+    setScopeResult(null)
     setSyncAllResult(null)
     setSyncing(true)
     const label = periodLabel(selectedPeriod)
     try {
-      const res = await qboApi.sync(activeId, selectedPeriod)
-      const scan = res.data?.scanSummary || null
-      // Refresh last-synced + history + active source, then show a "what happened" card.
+      const res = await qboApi.syncScope(activeId, {
+        periodId: selectedPeriod,
+        currentYear: true,
+        priorYear: scope.priorYear,
+        monthly: scope.monthly,
+        historyYears: scope.historyYears,
+      })
+      // Refresh last-synced + history + active source, then show a per-scope card.
       await load(activeId)
       await loadActiveCy(activeId, selectedPeriod)
-      setSyncResult({ label, scan })
+      setScopeResult({ label, ...res.data })
     } catch (e) {
-      setErr(apiErrorMessage(e, 'Could not sync from QuickBooks.'))
+      setErr(apiErrorMessage(e, 'Could not import from QuickBooks.'))
     } finally {
       setSyncing(false)
     }
@@ -192,7 +218,7 @@ export default function IntegrationsSection() {
     setPendingSync(null)
     setErr('')
     setOk('')
-    setSyncResult(null)
+    setScopeResult(null)
     setSyncAllResult(null)
     setSyncingAll(true)
     try {
@@ -298,8 +324,13 @@ export default function IntegrationsSection() {
 
           {canEdit && (
             <>
+              {!status.lastSyncedAt && (
+                <p className="mb-3 text-[15px] font-semibold text-navy">
+                  You’re connected — choose what to pull from QuickBooks:
+                </p>
+              )}
               <label className="mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-muted">
-                Sync a period
+                Import into period
               </label>
               <select
                 className={inputCls}
@@ -313,18 +344,75 @@ export default function IntegrationsSection() {
                 ))}
               </select>
 
+              {/* Import-scope chooser: current year is the base; the rest are opt-in. */}
+              <fieldset className="mt-4 rounded-lg border border-border bg-section/40 p-4">
+                <legend className="px-1 text-[13px] font-semibold uppercase tracking-[0.14em] text-muted">
+                  What to import
+                </legend>
+                <div className="space-y-2.5">
+                  <label className="flex items-start gap-2.5">
+                    <input type="checkbox" checked disabled className="mt-1 h-4 w-4 accent-gold" />
+                    <span className="text-[15px]">
+                      <span className="font-semibold text-navy">Current year</span>{' '}
+                      <span className="text-muted">— this year’s trial balance (the base; always included)</span>
+                    </span>
+                  </label>
+                  <label className="flex cursor-pointer items-start gap-2.5">
+                    <input
+                      type="checkbox"
+                      checked={scope.priorYear}
+                      onChange={(e) => setScope((s) => ({ ...s, priorYear: e.target.checked }))}
+                      className="mt-1 h-4 w-4 accent-gold"
+                    />
+                    <span className="text-[15px]">
+                      <span className="font-semibold text-navy">Prior year</span>{' '}
+                      <span className="text-muted">— last year’s TB for the comparative columns</span>
+                    </span>
+                  </label>
+                  <label className="flex cursor-pointer items-start gap-2.5">
+                    <input
+                      type="checkbox"
+                      checked={scope.monthly}
+                      onChange={(e) => setScope((s) => ({ ...s, monthly: e.target.checked }))}
+                      className="mt-1 h-4 w-4 accent-gold"
+                    />
+                    <span className="text-[15px]">
+                      <span className="font-semibold text-navy">Monthly actuals</span>{' '}
+                      <span className="text-muted">— a TB as of each month-end (powers the Monthly numbers card)</span>
+                    </span>
+                  </label>
+                  <label className="flex flex-wrap items-center gap-2.5">
+                    <span className="text-[15px]">
+                      <span className="font-semibold text-navy">Prior years of history</span>{' '}
+                      <span className="text-muted">— each older year as its own period (multi-year trend)</span>
+                    </span>
+                    <select
+                      value={scope.historyYears}
+                      onChange={(e) => setScope((s) => ({ ...s, historyYears: Number(e.target.value) }))}
+                      className="ml-auto rounded-lg border-2 border-border bg-white px-2.5 py-1.5 text-[14px] text-ink outline-none focus:border-gold"
+                    >
+                      {[0, 1, 2, 3, 4, 5].map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </fieldset>
+
               {err && <div className="mt-3"><FormError>{err}</FormError></div>}
               {ok && <div className="mt-3"><FormSuccess>{ok}</FormSuccess></div>}
 
               <div className="mt-4 flex flex-wrap gap-3">
                 <motion.button
                   whileTap={{ scale: 0.98 }}
-                  onClick={requestSync}
+                  onClick={requestImport}
                   disabled={syncing || syncingAll || !selectedPeriod || !!pendingSync}
                   className="btn-primary inline-flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:px-8"
                 >
                   <RefreshCw size={15} className={syncing ? 'animate-spin' : ''} />
-                  {syncing ? 'Syncing…' : 'Sync now'}
+                  {syncing ? 'Importing…' : 'Import from QuickBooks'}
                 </motion.button>
                 <motion.button
                   whileTap={{ scale: 0.98 }}
@@ -333,7 +421,7 @@ export default function IntegrationsSection() {
                   className="inline-flex items-center gap-2 rounded-lg border-2 border-gold/50 bg-gold/10 px-5 py-2.5 text-[15px] font-semibold text-navy transition-all hover:border-gold hover:bg-gold/20 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <RefreshCw size={15} className={syncingAll ? 'animate-spin' : ''} />
-                  {syncingAll ? 'Syncing all…' : 'Sync all periods'}
+                  {syncingAll ? 'Re-syncing…' : 'Re-sync all periods'}
                 </motion.button>
                 <button
                   onClick={disconnect}
@@ -366,10 +454,10 @@ export default function IntegrationsSection() {
                   <div className="mt-3 flex flex-wrap gap-3">
                     <motion.button
                       whileTap={{ scale: 0.98 }}
-                      onClick={pendingSync === 'all' ? syncAll : sync}
+                      onClick={pendingSync === 'all' ? syncAll : importScoped}
                       className="btn-primary inline-flex items-center gap-2"
                     >
-                      <RefreshCw size={15} /> Sync from QuickBooks
+                      <RefreshCw size={15} /> Import from QuickBooks
                     </motion.button>
                     <button
                       onClick={() => setPendingSync(null)}
@@ -381,8 +469,8 @@ export default function IntegrationsSection() {
                 </motion.div>
               )}
 
-              {/* Single-period sync outcome — explicit about what it produced + where to see it. */}
-              {syncResult && (
+              {/* Scoped import outcome — a line per scope, explicit + linked. */}
+              {scopeResult && (
                 <motion.div
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -390,15 +478,52 @@ export default function IntegrationsSection() {
                 >
                   <p className="flex items-center gap-2 text-[15px] font-semibold text-navy">
                     <CheckCircle2 size={16} className="shrink-0 text-gold" />
-                    {syncResult.label} synced from QuickBooks
+                    Imported from QuickBooks · {scopeResult.label}
                   </p>
-                  <p className="mt-1 text-[14px] leading-relaxed text-muted">
-                    Pulled the trial balance and rebuilt this period&apos;s statements.
-                    {syncResult.scan
-                      ? ` The auto-scan flagged ${syncResult.scan.material} material and ${syncResult.scan.reportable} reportable.`
-                      : ''}
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-4">
+                  <ul className="mt-2 space-y-1 text-[14px]">
+                    {scopeResult.currentYear && (
+                      <ScopeRow
+                        ok={scopeResult.currentYear.ok}
+                        label="Current year"
+                        detail={
+                          scopeResult.currentYear.ok
+                            ? `${scopeResult.currentYear.rowCount} accounts · statements rebuilt`
+                            : scopeResult.currentYear.error
+                        }
+                      />
+                    )}
+                    {scopeResult.priorYear && (
+                      <ScopeRow
+                        ok={scopeResult.priorYear.ok}
+                        label="Prior year"
+                        detail={
+                          scopeResult.priorYear.ok
+                            ? `${scopeResult.priorYear.rowCount} accounts · comparative columns`
+                            : scopeResult.priorYear.error
+                        }
+                      />
+                    )}
+                    {scopeResult.monthly && (
+                      <ScopeRow
+                        ok={scopeResult.monthly.imported > 0}
+                        label="Monthly actuals"
+                        detail={
+                          `${scopeResult.monthly.imported} month${scopeResult.monthly.imported === 1 ? '' : 's'} imported` +
+                          (scopeResult.monthly.skipped ? ` · ${scopeResult.monthly.skipped} skipped (no data)` : '') +
+                          (scopeResult.monthly.errors?.length ? ` · ${scopeResult.monthly.errors.length} errored` : '')
+                        }
+                      />
+                    )}
+                    {(scopeResult.history || []).map((h) => (
+                      <ScopeRow
+                        key={h.year}
+                        ok={h.ok}
+                        label={`FY ${h.year}`}
+                        detail={h.ok ? `${h.rowCount} accounts · new period` : h.error}
+                      />
+                    ))}
+                  </ul>
+                  <div className="mt-2.5 flex flex-wrap gap-4">
                     <Link
                       to="/statements"
                       className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-navy underline-offset-2 hover:text-gold hover:underline"

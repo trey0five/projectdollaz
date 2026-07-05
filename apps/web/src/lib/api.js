@@ -569,6 +569,7 @@ export const qboApi = {
   callback: (schoolId, body) => api.post(`/schools/${schoolId}/integrations/qb/callback`, body),
   disconnect: (schoolId) => api.delete(`/schools/${schoolId}/integrations/qb`),
   sync: (schoolId, periodId) => api.post(`/schools/${schoolId}/integrations/qb/sync`, { periodId }),
+  syncScope: (schoolId, body) => api.post(`/schools/${schoolId}/integrations/qb/sync-scope`, body),
   syncAll: (schoolId) => api.post(`/schools/${schoolId}/integrations/qb/sync-all`),
   syncHistory: (schoolId) => api.get(`/schools/${schoolId}/integrations/qb/sync-history`),
 }
