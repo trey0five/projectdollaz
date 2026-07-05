@@ -192,21 +192,7 @@ export default function StudioHero({ compact, name, chat, askBar, onNewChat }) {
               </span>
               Penny Studio · your AI chief of staff
             </p>
-            <div className="flex items-center gap-5 sm:gap-7">
-              {/* Large Penny mascot greeting the user — soft gold glow + gentle float. */}
-              <motion.div
-                className="relative shrink-0"
-                animate={reduce ? undefined : { y: [0, -7, 0] }}
-                transition={reduce ? undefined : { duration: 4.5, repeat: Infinity, ease: 'easeInOut' }}
-              >
-                <span
-                  aria-hidden
-                  className="pointer-events-none absolute left-1/2 top-1/2 h-[78%] w-[78%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-gold/25 blur-2xl"
-                />
-                <span className="relative block [&>svg]:h-[80px] [&>svg]:w-[80px] [&>svg]:drop-shadow-[0_12px_26px_rgba(184,150,80,0.5)] sm:[&>svg]:h-[116px] sm:[&>svg]:w-[116px]">
-                  <PennyAvatar size={116} active speaking={chat.tts.speaking} />
-                </span>
-              </motion.div>
+            <div className="flex items-center justify-between gap-5 sm:gap-10">
               <div className="min-w-0">
                 <h1 className="max-w-[16ch] font-serif text-[30px] font-semibold leading-[1.05] text-white sm:text-[44px]">
                   {greeting()}, {name}.
@@ -218,6 +204,20 @@ export default function StudioHero({ compact, name, chat, askBar, onNewChat }) {
                   every part of the platform, and tells you what needs a decision — you just approve.
                 </p>
               </div>
+              {/* Large Penny mascot on the right — soft gold glow + gentle float. */}
+              <motion.div
+                className="relative shrink-0"
+                animate={reduce ? undefined : { y: [0, -9, 0] }}
+                transition={reduce ? undefined : { duration: 4.5, repeat: Infinity, ease: 'easeInOut' }}
+              >
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute left-1/2 top-1/2 h-[85%] w-[85%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-gold/30 blur-2xl"
+                />
+                <span className="relative block [&>svg]:h-[92px] [&>svg]:w-[92px] [&>svg]:drop-shadow-[0_16px_36px_rgba(184,150,80,0.55)] sm:[&>svg]:h-[172px] sm:[&>svg]:w-[172px]">
+                  <PennyAvatar size={172} active speaking={chat.tts.speaking} />
+                </span>
+              </motion.div>
             </div>
           </div>
         )}
