@@ -13,6 +13,7 @@ import { formatRelative } from '../../lib/format.js'
 import { FormError, FormSuccess } from '../auth/fields.jsx'
 import SettingsCard from './SettingsCard.jsx'
 import QboCategoryReviewCard from './QboCategoryReviewCard.jsx'
+import OrgQuickBooksCard from './OrgQuickBooksCard.jsx'
 
 const inputCls =
   'w-full rounded-lg border-2 border-border bg-white px-4 py-3 text-base text-ink outline-none transition-colors focus:border-gold disabled:cursor-not-allowed disabled:bg-navy/[0.04] disabled:text-muted'
@@ -323,6 +324,9 @@ export default function IntegrationsSection() {
 
   return (
     <>
+      {/* Multi-school orgs get the org-wide console on top (hides itself for
+          single-school orgs): connect + sync every school without swapping. */}
+      <OrgQuickBooksCard />
       <SettingsCard
         title="QuickBooks Online"
         description="Pull the trial balance straight from QuickBooks instead of uploading a file."

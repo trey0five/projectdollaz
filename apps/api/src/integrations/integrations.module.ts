@@ -8,7 +8,9 @@ import { StatementsModule } from '../statements/statements.module.js'
 import { MonthlyModule } from '../monthly/monthly.module.js'
 import { MappingModule } from '../mapping/mapping.module.js'
 import { QboController } from './qbo.controller.js'
+import { QboOrgController } from './qbo-org.controller.js'
 import { QboService } from './qbo.service.js'
+import { QboOrgService } from './qbo-org.service.js'
 import { QboClient } from './qbo.client.js'
 
 /**
@@ -27,8 +29,8 @@ import { QboClient } from './qbo.client.js'
     MonthlyModule,
     MappingModule,
   ],
-  controllers: [QboController],
-  providers: [QboService, QboClient],
+  controllers: [QboController, QboOrgController],
+  providers: [QboService, QboOrgService, QboClient],
   exports: [QboService],
 })
 export class IntegrationsModule {}

@@ -587,6 +587,14 @@ export const qboApi = {
     api.post(`/schools/${schoolId}/integrations/qb/review-accounts`, { entries }),
 }
 
+// Org-level QuickBooks console: per-school connection overview across the
+// caller's organization + batch scoped sync of connected schools (optionally
+// narrowed to `schoolIds` for a single row's Sync button).
+export const qboOrgApi = {
+  overview: (orgId) => api.get(`/organizations/${orgId}/integrations/qb/overview`),
+  sync: (orgId, body = {}) => api.post(`/organizations/${orgId}/integrations/qb/sync`, body),
+}
+
 // ── Phase 2A: Florida scholarship AUP — Review Readiness ─────────────────────
 // Same axios `api` instance: inherits Bearer + proactive-refresh and surfaces the
 // entitlement 402 (isPaymentRequired) like every other paid read.
