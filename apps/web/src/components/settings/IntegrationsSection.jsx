@@ -59,10 +59,18 @@ export default function IntegrationsSection() {
   const [syncing, setSyncing] = useState(false)
   const [syncingAll, setSyncingAll] = useState(false)
   // What to pull from QuickBooks (current year is always the base). historyYears =
-  // additional prior fiscal-years, each imported as its own period.
-  const [scope, setScope] = useState({ priorYear: false, monthly: false, historyYears: 0 })
+  // additional prior fiscal-years, each imported as its own period; allHistory =
+  // every prior year with data (overrides the count).
+  const [scope, setScope] = useState({
+    priorYear: false,
+    monthly: false,
+    historyYears: 0,
+    allHistory: false,
+  })
   const [scopeResult, setScopeResult] = useState(null)
   const [syncAllResult, setSyncAllResult] = useState(null)
+  // Disconnect asks first (and offers to purge QuickBooks-imported data).
+  const [pendingDisconnect, setPendingDisconnect] = useState(false)
   const [history, setHistory] = useState([])
   const [err, setErr] = useState('')
   const [ok, setOk] = useState('')
@@ -158,14 +166,27 @@ export default function IntegrationsSection() {
     }
   }
 
-  const disconnect = async () => {
+  const doDisconnect = async (removeData) => {
+    setPendingDisconnect(false)
     setErr('')
     setOk('')
+    setScopeResult(null)
+    setSyncAllResult(null)
     setBusy(true)
     try {
-      const res = await qboApi.disconnect(activeId)
+      const res = await qboApi.disconnect(activeId, removeData)
       setStatus(res.data)
-      setOk('QuickBooks disconnected.')
+      const r = res.data?.removed
+      if (r) {
+        const parts = [
+          `${r.imports} trial-balance import${r.imports === 1 ? '' : 's'}`,
+          `${r.monthly} monthly snapshot${r.monthly === 1 ? '' : 's'}`,
+        ]
+        if (r.periods) parts.push(`${r.periods} period${r.periods === 1 ? '' : 's'} QuickBooks created`)
+        setOk(`QuickBooks disconnected and its data removed — ${parts.join(', ')}. Uploaded files were kept.`)
+      } else {
+        setOk('QuickBooks disconnected. Your imported data was kept.')
+      }
     } catch (e) {
       setErr(apiErrorMessage(e, 'Could not disconnect.'))
     } finally {
@@ -202,6 +223,7 @@ export default function IntegrationsSection() {
         priorYear: scope.priorYear,
         monthly: scope.monthly,
         historyYears: scope.historyYears,
+        allHistory: scope.allHistory,
       })
       // Refresh last-synced + history + active source, then show a per-scope card.
       await load(activeId)
@@ -381,23 +403,34 @@ export default function IntegrationsSection() {
                       <span className="text-muted">— a TB as of each month-end (powers the Monthly numbers card)</span>
                     </span>
                   </label>
-                  <label className="flex flex-wrap items-center gap-2.5">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                     <span className="text-[15px]">
                       <span className="font-semibold text-navy">Prior years of history</span>{' '}
                       <span className="text-muted">— each older year as its own period (multi-year trend)</span>
                     </span>
+                    <label className="ml-auto flex cursor-pointer items-center gap-1.5 text-[14px] font-semibold text-navy">
+                      <input
+                        type="checkbox"
+                        checked={scope.allHistory}
+                        onChange={(e) => setScope((s) => ({ ...s, allHistory: e.target.checked }))}
+                        className="h-4 w-4 accent-gold"
+                      />
+                      All prior years
+                    </label>
                     <select
                       value={scope.historyYears}
+                      disabled={scope.allHistory}
                       onChange={(e) => setScope((s) => ({ ...s, historyYears: Number(e.target.value) }))}
-                      className="ml-auto rounded-lg border-2 border-border bg-white px-2.5 py-1.5 text-[14px] text-ink outline-none focus:border-gold"
+                      title={scope.allHistory ? 'Using every prior year with data' : undefined}
+                      className="rounded-lg border-2 border-border bg-white px-2.5 py-1.5 text-[14px] text-ink outline-none focus:border-gold disabled:cursor-not-allowed disabled:bg-navy/[0.05] disabled:text-muted"
                     >
-                      {[0, 1, 2, 3, 4, 5].map((n) => (
+                      {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20, 25].map((n) => (
                         <option key={n} value={n}>
                           {n}
                         </option>
                       ))}
                     </select>
-                  </label>
+                  </div>
                 </div>
               </fieldset>
 
@@ -424,13 +457,56 @@ export default function IntegrationsSection() {
                   {syncingAll ? 'Re-syncing…' : 'Re-sync all periods'}
                 </motion.button>
                 <button
-                  onClick={disconnect}
-                  disabled={busy || syncingAll || !!pendingSync}
+                  onClick={() => setPendingDisconnect(true)}
+                  disabled={busy || syncingAll || !!pendingSync || pendingDisconnect}
                   className="inline-flex items-center gap-2 rounded-lg border-2 border-border bg-white px-5 py-2.5 text-[15px] font-semibold text-navy transition-all hover:border-danger/40 hover:text-danger disabled:opacity-50"
                 >
                   <Unplug size={15} /> Disconnect
                 </button>
               </div>
+
+              {/* Disconnect confirm — offers to also purge QuickBooks-imported data. */}
+              {pendingDisconnect && (
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-4 rounded-lg border-2 border-danger/30 bg-danger/[0.05] px-4 py-3.5"
+                >
+                  <p className="flex items-start gap-2 text-[15px] font-semibold text-navy">
+                    <AlertTriangle size={17} className="mt-0.5 shrink-0 text-danger" />
+                    Disconnect QuickBooks?
+                  </p>
+                  <p className="mt-1.5 text-[14px] leading-relaxed text-muted">
+                    You can also delete everything imported from QuickBooks — trial balances,
+                    monthly actuals, and any periods QuickBooks created — and rebuild your statements
+                    from remaining data. <span className="font-medium text-navy">Your uploaded files
+                    are never touched.</span>
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-3">
+                    <button
+                      onClick={() => doDisconnect(true)}
+                      disabled={busy}
+                      className="inline-flex items-center gap-2 rounded-lg border-2 border-danger/50 bg-danger/10 px-5 py-2.5 text-[15px] font-semibold text-danger transition-colors hover:bg-danger/15 disabled:opacity-50"
+                    >
+                      <Unplug size={15} /> Disconnect &amp; delete data
+                    </button>
+                    <button
+                      onClick={() => doDisconnect(false)}
+                      disabled={busy}
+                      className="inline-flex items-center gap-2 rounded-lg border-2 border-border bg-white px-5 py-2.5 text-[15px] font-semibold text-navy transition-colors hover:border-navy disabled:opacity-50"
+                    >
+                      Disconnect only (keep data)
+                    </button>
+                    <button
+                      onClick={() => setPendingDisconnect(false)}
+                      disabled={busy}
+                      className="inline-flex items-center gap-2 px-3 py-2.5 text-[15px] font-semibold text-muted transition-colors hover:text-navy disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </motion.div>
+              )}
 
               {/* Supersede confirm — a QBO sync makes QuickBooks the active source,
                   displacing an uploaded current-year file (kept, but no longer live). */}

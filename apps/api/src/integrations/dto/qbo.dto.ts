@@ -41,7 +41,12 @@ export class QbSyncScopeDto {
 
   @IsInt()
   @Min(0)
-  @Max(10)
+  @Max(25)
   @IsOptional()
   historyYears?: number
+
+  /** Pull EVERY prior year with data (ignores historyYears; scans back until QBO returns none). */
+  @IsBoolean()
+  @IsOptional()
+  allHistory?: boolean
 }

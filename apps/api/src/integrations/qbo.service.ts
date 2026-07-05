@@ -5,7 +5,7 @@
 // disabled (501-able) when QB_OAUTH_CLIENT_ID is unset.
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
-import type { QboConnection, User } from '@finrep/db'
+import type { ImportRole, QboConnection, User } from '@finrep/db'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { PeriodsService } from '../periods/periods.service.js'
 import { ImportsService } from '../imports/imports.service.js'
@@ -39,6 +39,11 @@ export interface QboStatus {
   lastSyncedAt: string | null
   lastSyncRowCount: number | null
   lastSyncFiscalPeriodId: string | null
+}
+
+export interface QboDisconnectResult extends QboStatus {
+  /** Non-null when the caller asked to purge QuickBooks-imported data. */
+  removed: { imports: number; monthly: number; periods: number } | null
 }
 
 export interface QboSyncHistoryEntry {
@@ -177,16 +182,81 @@ export class QboService {
     return this.status(schoolId)
   }
 
-  async disconnect(schoolId: string, userId: string): Promise<QboStatus> {
+  async disconnect(actor: User, schoolId: string, removeData = false): Promise<QboDisconnectResult> {
+    const removed = removeData ? await this.removeQboData(actor, schoolId) : null
     await this.prisma.qboConnection.deleteMany({ where: { schoolId } })
     await this.audit.write({
       schoolId,
-      userId,
+      userId: actor.id,
       action: 'qbo.disconnected',
       targetType: 'qbo_connections',
-      metadata: {},
+      metadata: { removedData: removeData, ...(removed ?? {}) },
     })
-    return this.status(schoolId)
+    const status = await this.status(schoolId)
+    return { ...status, removed }
+  }
+
+  /**
+   * Delete everything imported FROM QuickBooks (metadata.source='quickbooks'
+   * imports + 'QuickBooks Online' monthly snapshots) and reconcile each affected
+   * period's statements: regenerate from a remaining (e.g. uploaded) CY import, or
+   * clear the snapshots when none remains. A period left completely empty — no
+   * imports, monthly snapshots, or budget (i.e. a history year QuickBooks created)
+   * — is removed too. Uploaded files and any period with other data are untouched.
+   */
+  private async removeQboData(
+    actor: User,
+    schoolId: string,
+  ): Promise<{ imports: number; monthly: number; periods: number }> {
+    const qboImports = await this.prisma.import.findMany({
+      where: { schoolId, metadata: { path: ['source'], equals: 'quickbooks' } },
+      select: { id: true, fiscalPeriodId: true },
+    })
+    const qboMonthly = await this.prisma.monthlySnapshot.findMany({
+      where: { schoolId, sourceName: 'QuickBooks Online' },
+      select: { id: true, fiscalPeriodId: true },
+    })
+    const periodIds = new Set<string>([
+      ...qboImports.map((i) => i.fiscalPeriodId),
+      ...qboMonthly.map((m) => m.fiscalPeriodId),
+    ])
+
+    if (qboImports.length) {
+      await this.prisma.import.deleteMany({ where: { id: { in: qboImports.map((i) => i.id) } } })
+    }
+    if (qboMonthly.length) {
+      await this.prisma.monthlySnapshot.deleteMany({ where: { id: { in: qboMonthly.map((m) => m.id) } } })
+    }
+
+    let periodsDeleted = 0
+    for (const periodId of periodIds) {
+      const cyRemaining = await this.prisma.import.count({
+        where: { schoolId, fiscalPeriodId: periodId, role: 'cy' as ImportRole },
+      })
+      if (cyRemaining > 0) {
+        // A non-QBO CY (an uploaded file) still exists → rebuild statements from it.
+        try {
+          await this.statements.generate(actor, schoolId, periodId, {})
+        } catch {
+          /* leave the prior snapshot rather than half-clearing */
+        }
+      } else {
+        await this.prisma.statementSnapshot.deleteMany({ where: { schoolId, fiscalPeriodId: periodId } })
+      }
+      // Drop a period only when nothing user-owned remains (a QBO-created history
+      // year). Guarded on imports + monthly + budget so we never cascade real data.
+      const [importsLeft, monthlyLeft, budgetLeft] = await Promise.all([
+        this.prisma.import.count({ where: { fiscalPeriodId: periodId } }),
+        this.prisma.monthlySnapshot.count({ where: { fiscalPeriodId: periodId } }),
+        this.prisma.periodBudget.count({ where: { fiscalPeriodId: periodId } }),
+      ])
+      if (importsLeft === 0 && monthlyLeft === 0 && budgetLeft === 0) {
+        await this.prisma.fiscalPeriod.delete({ where: { id: periodId } })
+        periodsDeleted++
+      }
+    }
+
+    return { imports: qboImports.length, monthly: qboMonthly.length, periods: periodsDeleted }
   }
 
   /**
@@ -370,7 +440,11 @@ export class QboService {
     }
 
     // 4. Multiple prior years — each older FY-end into its OWN period (CY).
-    const historyYears = Math.max(0, Math.min(dto.historyYears ?? 0, 10))
+    // allHistory scans back until QuickBooks returns an empty year (bounded by a
+    // hard cap); otherwise it's the exact count requested.
+    const HISTORY_CAP = 30
+    const allHistory = dto.allHistory === true
+    const historyYears = allHistory ? HISTORY_CAP : Math.max(0, Math.min(dto.historyYears ?? 0, 25))
     if (historyYears > 0) {
       result.history = []
       for (let y = 1; y <= historyYears; y++) {
@@ -379,6 +453,7 @@ export class QboService {
         try {
           const rows = await this.client.getTrialBalance(conn.realmId, token, yEnd)
           if (rows.length === 0) {
+            if (allHistory) break // reached the years before the company existed → stop
             result.history.push({ year: yearNum, ok: false, error: 'No QuickBooks data for this year.' })
             continue
           }

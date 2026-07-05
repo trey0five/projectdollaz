@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, UseGuards } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, Post, Query, UseGuards } from '@nestjs/common'
 import type { User } from '@finrep/db'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js'
 import { RolesGuard } from '../common/guards/roles.guard.js'
@@ -41,10 +41,15 @@ export class QboController {
     return this.qbo.connect(schoolId, dto.code, dto.realmId, user.id)
   }
 
+  /** Disconnect. `?removeData=true` also purges everything imported from QuickBooks. */
   @Delete()
   @Roles('owner', 'accountant')
-  disconnect(@Param('schoolId') schoolId: string, @CurrentUser() user: User) {
-    return this.qbo.disconnect(schoolId, user.id)
+  disconnect(
+    @Param('schoolId') schoolId: string,
+    @Query('removeData') removeData: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.qbo.disconnect(user, schoolId, removeData === 'true')
   }
 
   /** Pull the trial balance for a period and generate a snapshot (auto-scanned). */
