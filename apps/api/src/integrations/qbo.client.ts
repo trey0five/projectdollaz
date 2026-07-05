@@ -23,6 +23,72 @@ export interface QboTrialBalanceRow {
   total: number // debit positive, credit negative
 }
 
+/** A pulled trial balance + the school-mapping entries its P&L rows need. */
+export interface QboTrialBalance {
+  rows: QboTrialBalanceRow[]
+  /** acct → SCoA category for type-derived P&L accounts (merge into the school mapping). */
+  plEntries: Record<string, string>
+}
+
+interface QboAccountMeta {
+  id: number
+  acctNum: number | null
+  accountType: string
+  accountSubType: string
+  classification: string
+}
+
+// Engine account-number blocks for QBO accounts WITHOUT an AcctNum, derived from
+// the QBO account type. Balance-sheet types collapse onto the engine's fixed SFP
+// numbers (multiple rows sharing one acct simply sum); P&L accounts get a UNIQUE
+// stable number (block + QBO account id) so each stays individually re-mappable.
+const QBO_REVENUE_BASE = 40000
+const QBO_EXPENSE_BASE = 60000
+
+function deriveAcct(meta: QboAccountMeta): { acct: number; category: 'other' | 'fixedOther' | null } {
+  const t = meta.accountType
+  const sub = meta.accountSubType
+  switch (t) {
+    case 'Bank':
+      return { acct: 100, category: null } // cash
+    case 'Accounts Receivable':
+      return { acct: 120, category: null } // → tuitionRec via the acct-120 desc reclass
+    case 'Other Current Asset':
+      if (sub === 'PrepaidExpenses') return { acct: 125, category: null }
+      if (sub === 'UndepositedFunds') return { acct: 100, category: null } // cash-equivalent
+      return { acct: 120, category: null }
+    case 'Fixed Asset':
+      return { acct: sub === 'AccumulatedDepreciation' ? 170 : 150, category: null } // ppNet
+    case 'Other Asset':
+      return { acct: 140, category: null } // ppNet
+    case 'Accounts Payable':
+    case 'Credit Card':
+    case 'Other Current Liability':
+      return { acct: 200, category: null } // apAccrued (lease-named rows split out)
+    case 'Long Term Liability':
+      return { acct: 260, category: null }
+    case 'Equity':
+      return { acct: 300, category: null } // feeds opening net assets
+    case 'Income':
+    case 'Other Income':
+      return { acct: QBO_REVENUE_BASE + meta.id, category: 'other' }
+    case 'Expense':
+    case 'Cost of Goods Sold':
+    case 'Other Expense':
+      return { acct: QBO_EXPENSE_BASE + meta.id, category: 'fixedOther' }
+    default: {
+      // Fall back on the coarse classification when the type is unrecognized.
+      const c = meta.classification
+      if (c === 'Asset') return { acct: 120, category: null }
+      if (c === 'Liability') return { acct: 200, category: null }
+      if (c === 'Equity') return { acct: 300, category: null }
+      if (c === 'Revenue') return { acct: QBO_REVENUE_BASE + meta.id, category: 'other' }
+      if (c === 'Expense') return { acct: QBO_EXPENSE_BASE + meta.id, category: 'fixedOther' }
+      return { acct: -1, category: null } // unknown → caller's synthetic fallback
+    }
+  }
+}
+
 @Injectable()
 export class QboClient {
   constructor(private readonly config: ConfigService) {}
@@ -110,24 +176,38 @@ export class QboClient {
   }
 
   /**
-   * Pull the Trial Balance as of `endDate` and map to engine rows. Account numbers
-   * come from the Account list (the TB report carries names, not AcctNum); rows
-   * without an account number fall back to a high synthetic code so they surface
-   * as unmapped rather than being dropped.
+   * Pull the Trial Balance for the [startDate, endDate] window and map to engine
+   * rows. BOTH dates are required: QuickBooks IGNORES a lone end_date on this
+   * report (it silently falls back to its default "this fiscal year to date"
+   * period), so an explicit window is the only way to get as-of data. Callers
+   * pass the fiscal-year start + the as-of date (a TB is cumulative-YTD within
+   * the fiscal year; balance-sheet accounts are as of endDate).
+   *
+   * Account numbers: use the account's real AcctNum when it has one (schools that
+   * number their chart NBOA-style keep their exact mapping). QuickBooks accounts
+   * WITHOUT numbers (QBO's default) are classified by their ACCOUNT TYPE instead —
+   * balance-sheet types collapse onto the engine's fixed SFP numbers, and P&L
+   * accounts get a unique stable number (block + QBO id) plus a school-mapping
+   * entry (revenue → 'other', expense → 'fixedOther') returned in `plEntries` for
+   * the caller to merge — so statements compute out of the box and each account
+   * remains individually re-mappable later. Truly unknown types fall back to a
+   * high synthetic code so they surface as unmapped rather than being dropped.
    */
   async getTrialBalance(
     realmId: string,
     accessToken: string,
+    startDate: string,
     endDate: string,
-  ): Promise<QboTrialBalanceRow[]> {
-    const acctNumByName = await this.accountNumbersByName(realmId, accessToken)
+  ): Promise<QboTrialBalance> {
+    const metaByName = await this.accountMetaByName(realmId, accessToken)
     const report = (await this.apiGet(
       realmId,
       accessToken,
-      `reports/TrialBalance?accounting_method=Accrual&end_date=${encodeURIComponent(endDate)}`,
+      `reports/TrialBalance?accounting_method=Accrual&start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`,
     )) as { Rows?: { Row?: Array<{ ColData?: Array<{ value?: string }> }> } }
 
     const rows: QboTrialBalanceRow[] = []
+    const plEntries: Record<string, string> = {}
     let synthetic = 90000
     for (const r of report?.Rows?.Row ?? []) {
       const cols = r.ColData ?? []
@@ -135,11 +215,20 @@ export class QboClient {
       if (!name) continue
       const debit = Number(cols[1]?.value ?? 0) || 0
       const credit = Number(cols[2]?.value ?? 0) || 0
-      const acctNum = acctNumByName.get(name.toLowerCase())
-      const acct = acctNum != null ? acctNum : synthetic++
+      const meta = metaByName.get(name.toLowerCase())
+      let acct: number
+      if (meta?.acctNum != null) {
+        acct = meta.acctNum
+      } else if (meta) {
+        const derived = deriveAcct(meta)
+        acct = derived.acct >= 0 ? derived.acct : synthetic++
+        if (derived.category && derived.acct >= 0) plEntries[String(acct)] = derived.category
+      } else {
+        acct = synthetic++
+      }
       rows.push({ acct, desc: name, total: debit - credit })
     }
-    return rows
+    return { rows, plEntries }
   }
 
   /** The QuickBooks company's display name (best-effort → null on any failure). */
@@ -155,19 +244,46 @@ export class QboClient {
     }
   }
 
-  private async accountNumbersByName(
+  /**
+   * Account metadata keyed by lowercase Name AND FullyQualifiedName (the TB report
+   * prints sub-accounts fully qualified, e.g. "Truck:Original Cost").
+   */
+  private async accountMetaByName(
     realmId: string,
     accessToken: string,
-  ): Promise<Map<string, number>> {
+  ): Promise<Map<string, QboAccountMeta>> {
     const data = (await this.apiGet(
       realmId,
       accessToken,
-      'query?query=' + encodeURIComponent('select Id, Name, AcctNum from Account maxresults 1000'),
-    )) as { QueryResponse?: { Account?: Array<{ Name?: string; AcctNum?: string }> } }
-    const map = new Map<string, number>()
+      'query?query=' +
+        encodeURIComponent(
+          'select Id, Name, FullyQualifiedName, AcctNum, Classification, AccountType, AccountSubType from Account maxresults 1000',
+        ),
+    )) as {
+      QueryResponse?: {
+        Account?: Array<{
+          Id?: string
+          Name?: string
+          FullyQualifiedName?: string
+          AcctNum?: string
+          Classification?: string
+          AccountType?: string
+          AccountSubType?: string
+        }>
+      }
+    }
+    const map = new Map<string, QboAccountMeta>()
     for (const a of data?.QueryResponse?.Account ?? []) {
       const num = Number(a.AcctNum)
-      if (a.Name && Number.isFinite(num)) map.set(a.Name.toLowerCase(), num)
+      const meta: QboAccountMeta = {
+        id: Number(a.Id) || 0,
+        acctNum: a.AcctNum != null && Number.isFinite(num) ? num : null,
+        accountType: a.AccountType ?? '',
+        accountSubType: a.AccountSubType ?? '',
+        classification: a.Classification ?? '',
+      }
+      if (a.Name) map.set(a.Name.toLowerCase(), meta)
+      if (a.FullyQualifiedName) map.set(a.FullyQualifiedName.toLowerCase(), meta)
     }
     return map
   }

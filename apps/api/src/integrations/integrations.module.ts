@@ -6,6 +6,7 @@ import { AuditModule } from '../common/audit/audit.module.js'
 import { ImportsModule } from '../imports/imports.module.js'
 import { StatementsModule } from '../statements/statements.module.js'
 import { MonthlyModule } from '../monthly/monthly.module.js'
+import { MappingModule } from '../mapping/mapping.module.js'
 import { QboController } from './qbo.controller.js'
 import { QboService } from './qbo.service.js'
 import { QboClient } from './qbo.client.js'
@@ -24,6 +25,7 @@ import { QboClient } from './qbo.client.js'
     ImportsModule,
     StatementsModule,
     MonthlyModule,
+    MappingModule,
   ],
   controllers: [QboController],
   providers: [QboService, QboClient],

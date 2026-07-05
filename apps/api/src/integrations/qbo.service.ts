@@ -12,6 +12,7 @@ import { ImportsService } from '../imports/imports.service.js'
 import { StatementsService } from '../statements/statements.service.js'
 import { AuditService } from '../common/audit/audit.service.js'
 import { MonthlySnapshotsService } from '../monthly/monthly-snapshots.service.js'
+import { MappingService } from '../mapping/mapping.service.js'
 import { fyMonthKeys, fyStartYearForPeriodEnd } from '../monthly/fy-elapsed.js'
 import type { QbSyncScopeDto } from './dto/qbo.dto.js'
 import { QboClient } from './qbo.client.js'
@@ -27,6 +28,16 @@ function monthEndISO(monthKey: string): string {
   const [y, m] = monthKey.split('-').map(Number)
   const day = new Date(Date.UTC(y, m, 0)).getUTCDate() // day 0 of next month = last of this
   return `${monthKey}-${String(day).padStart(2, '0')}`
+}
+
+/**
+ * The fiscal-year START for an annual period END date: one year earlier + 1 day
+ * (2026-06-30 → 2025-07-01). Works for any year-end convention, not just Jun 30.
+ */
+function fyStartISO(periodEndISO: string): string {
+  const d = new Date(`${shiftYears(periodEndISO, -1)}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + 1)
+  return d.toISOString().slice(0, 10)
 }
 
 export interface QboStatus {
@@ -80,6 +91,15 @@ export interface QboSyncScopeResult {
   history?: Array<{ year: number } & QboScopeOutcome>
 }
 
+/**
+ * True when a pulled trial balance carries any actual balances. QuickBooks'
+ * TrialBalance report returns the full ACCOUNT LIST even for as-of dates before
+ * the company existed (every total 0.00) — so "rows came back" is NOT "has data".
+ */
+function hasBalances(rows: Array<{ total: number }>): boolean {
+  return rows.some((r) => r.total !== 0)
+}
+
 /** Defensively read the keys we write into a `qbo.synced` audit row's Json metadata. */
 function readSyncMeta(metadata: unknown): { fiscalPeriodId: string | null; rowCount: number | null } {
   const m = (metadata ?? {}) as { fiscalPeriodId?: unknown; rowCount?: unknown }
@@ -99,8 +119,33 @@ export class QboService {
     private readonly imports: ImportsService,
     private readonly statements: StatementsService,
     private readonly monthlySnapshots: MonthlySnapshotsService,
+    private readonly mapping: MappingService,
     private readonly audit: AuditService,
   ) {}
+
+  /**
+   * Pull a trial balance and merge any type-derived P&L mapping entries into the
+   * school's chart mapping (revenue → 'other', expense → 'fixedOther') so the
+   * generated statements classify QuickBooks accounts out of the box. Merging is
+   * idempotent; a merge failure must not abort the sync (rows still import).
+   */
+  private async pullTrialBalance(
+    schoolId: string,
+    realmId: string,
+    token: string,
+    startDate: string,
+    endDate: string,
+  ) {
+    const { rows, plEntries } = await this.client.getTrialBalance(realmId, token, startDate, endDate)
+    if (rows.length > 0 && Object.keys(plEntries).length > 0) {
+      try {
+        await this.mapping.mergeEntries(schoolId, plEntries)
+      } catch {
+        /* keep the sync alive; unmapped accounts surface in review instead */
+      }
+    }
+    return rows
+  }
 
   /** The Intuit consent URL for a school (or null when the connector isn't configured). */
   authorizeUrl(schoolId: string): string {
@@ -328,9 +373,9 @@ export class QboService {
     const period = await this.periods.getOwnedPeriod(schoolId, periodId)
     const endDate = period.periodEndDate.toISOString().slice(0, 10)
     const token = await this.accessToken(conn)
-    const rows = await this.client.getTrialBalance(conn.realmId, token, endDate)
-    if (rows.length === 0) {
-      throw new BadRequestException('QuickBooks returned no trial-balance rows for this period.')
+    const rows = await this.pullTrialBalance(schoolId, conn.realmId, token, fyStartISO(endDate), endDate)
+    if (rows.length === 0 || !hasBalances(rows)) {
+      throw new BadRequestException('QuickBooks has no trial-balance data for this period.')
     }
 
     await this.imports.create(actor, schoolId, {
@@ -388,8 +433,8 @@ export class QboService {
     if (dto.priorYear) {
       try {
         const priorEnd = shiftYears(endDate, -1)
-        const rows = await this.client.getTrialBalance(conn.realmId, token, priorEnd)
-        if (rows.length === 0) {
+        const rows = await this.pullTrialBalance(schoolId, conn.realmId, token, fyStartISO(priorEnd), priorEnd)
+        if (rows.length === 0 || !hasBalances(rows)) {
           throw new BadRequestException('QuickBooks has no prior-year trial-balance data.')
         }
         await this.imports.create(actor, schoolId, {
@@ -421,9 +466,10 @@ export class QboService {
           continue
         }
         try {
-          const rows = await this.client.getTrialBalance(conn.realmId, token, monthEnd)
-          if (rows.length === 0) {
-            skipped++
+          // Cumulative fiscal-YTD: from the period's FY start through this month-end.
+          const rows = await this.pullTrialBalance(schoolId, conn.realmId, token, fyStartISO(endDate), monthEnd)
+          if (rows.length === 0 || !hasBalances(rows)) {
+            skipped++ // month predates the company's books (all-zero balances)
             continue
           }
           await this.monthlySnapshots.create(actor, schoolId, dto.periodId, {
@@ -451,9 +497,9 @@ export class QboService {
         const yEnd = shiftYears(endDate, -y)
         const yearNum = Number(yEnd.slice(0, 4))
         try {
-          const rows = await this.client.getTrialBalance(conn.realmId, token, yEnd)
-          if (rows.length === 0) {
-            if (allHistory) break // reached the years before the company existed → stop
+          const rows = await this.pullTrialBalance(schoolId, conn.realmId, token, fyStartISO(yEnd), yEnd)
+          if (rows.length === 0 || !hasBalances(rows)) {
+            if (allHistory) break // reached the years before the company's books began → stop
             result.history.push({ year: yearNum, ok: false, error: 'No QuickBooks data for this year.' })
             continue
           }
