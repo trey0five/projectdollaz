@@ -284,9 +284,14 @@ export default function PennyStudio() {
           <motion.div {...swap} className="mt-6 space-y-10 pb-24">
             <StudioCapabilityTiles onSelect={onSelectTile} canEdit={canEdit} />
             <StudioRecipes onRun={runPrompt} />
+            {/* min-w-0 on both tracks so the fr ratios are honoured — without it
+                a grid child defaults to min-content width (long activity rows that
+                won't wrap), ballooning the right track and crushing the inbox. */}
             <div className="grid items-start gap-5 lg:grid-cols-[1.35fr_1fr]">
-              <StudioActionInbox schoolId={activeId} periodId={periodId} onHandle={runPrompt} />
-              <div className="space-y-5">
+              <div className="min-w-0">
+                <StudioActionInbox schoolId={activeId} periodId={periodId} onHandle={runPrompt} />
+              </div>
+              <div className="min-w-0 space-y-5">
                 <StudioRail chat={engagedChat} onPick={runPrompt} />
                 <StudioActivity schoolId={activeId} canEdit={canEdit} />
               </div>
