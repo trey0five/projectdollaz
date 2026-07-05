@@ -71,6 +71,7 @@ model Organization {
 
   schools  School[]
   auditLog AuditLog[]
+  orgQboConnection OrgQboConnection?
 
   @@map("organizations")
 }
@@ -130,6 +131,7 @@ model School {
   campaigns              AdvancementCampaign[]
   advancementGifts       AdvancementGift[]
   documents              KnowledgeDocument[]
+  orgQboMappings         OrgQboMapping[]
 
   @@index([organizationId])
   @@map("schools")
@@ -725,6 +727,54 @@ model QboConnection {
   school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
   @@map("qbo_connections")
+}
+
+/// Topology B — ONE QuickBooks company for the whole organization, split by
+/// Location (QBO API: Department) or Class. Coexists with per-school
+/// QboConnection; a school's own connection always wins at import time.
+model OrgQboConnection {
+  id                String   @id @default(uuid()) @db.Uuid
+  organizationId    String   @unique @map("organization_id") @db.Uuid
+  realmId           String   @map("realm_id")
+  companyName       String?  @map("company_name")
+  accessToken       String   @map("access_token")
+  refreshToken      String   @map("refresh_token")
+  expiresAt         DateTime @map("expires_at")
+  environment       String   @default("sandbox")
+  /// Active split dimension: 'department' | 'class'. Mappings are stored per
+  /// dimension (both sets kept); only the active dimension is imported.
+  dimension         String   @default("department")
+  connectedByUserId String?  @map("connected_by_user_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  mappings     OrgQboMapping[]
+
+  @@map("org_qbo_connections")
+}
+
+/// One EXPLICIT decision per dimension value: mapped (schoolId set) or ignored
+/// (schoolId null). No row = unmapped (needs attention). qboId is the stable
+/// QBO entity Id; '__unspecified__' = the report's "Not Specified" column.
+/// Many values may map to one school (columns sum). qboName is a display
+/// snapshot refreshed on mapping reads.
+model OrgQboMapping {
+  id           String   @id @default(uuid()) @db.Uuid
+  connectionId String   @map("connection_id") @db.Uuid
+  dimension    String // 'department' | 'class'
+  qboId        String   @map("qbo_id")
+  qboName      String   @map("qbo_name")
+  schoolId     String?  @map("school_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  connection OrgQboConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  school     School?          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([connectionId, dimension, qboId])
+  @@index([schoolId])
+  @@map("org_qbo_mappings")
 }
 
 // ── Dashboard customization (Phase 4C) ────────────────────────────────────────

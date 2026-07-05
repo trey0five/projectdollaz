@@ -4,6 +4,9 @@
 // connector is config-gated, so live verification needs a sandbox app + company.
 import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
+// Type-only (erased at runtime, so no import cycle): the synth module owns the
+// summarized-report JSON shapes because it is the one that parses them.
+import type { QboSummarizedReport } from './qbo-company.synth.js'
 
 const AUTHORIZE_URL = 'https://appcenter.intuit.com/connect/oauth2'
 const TOKEN_URL = 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer'
@@ -30,12 +33,28 @@ export interface QboTrialBalance {
   plEntries: Record<string, string>
 }
 
-interface QboAccountMeta {
+export interface QboAccountMeta {
   id: number
   acctNum: number | null
   accountType: string
   accountSubType: string
   classification: string
+}
+
+/** Both lookup directions over the SAME account query: by QBO Id (summarized-
+ *  report rows carry ColData[0].id) and by lowercase Name/FullyQualifiedName
+ *  (the TrialBalance report prints names only). */
+export interface QboAccountMetaMaps {
+  byId: Map<number, QboAccountMeta>
+  byName: Map<string, QboAccountMeta>
+}
+
+/** A QBO Department (API name for "Location") or Class entity. */
+export interface QboDimensionEntity {
+  id: string
+  name: string
+  active: boolean
+  parentId: string | null
 }
 
 // Engine account-number blocks for QBO accounts WITHOUT an AcctNum, derived from
@@ -57,7 +76,7 @@ export function qboPlSection(acct: number): 'revenue' | 'expense' | null {
   return null
 }
 
-function deriveAcct(meta: QboAccountMeta): { acct: number; category: 'other' | 'fixedOther' | null } {
+export function deriveAcct(meta: QboAccountMeta): { acct: number; category: 'other' | 'fixedOther' | null } {
   const t = meta.accountType
   const sub = meta.accountSubType
   switch (t) {
@@ -258,12 +277,23 @@ export class QboClient {
 
   /**
    * Account metadata keyed by lowercase Name AND FullyQualifiedName (the TB report
-   * prints sub-accounts fully qualified, e.g. "Truck:Original Cost").
+   * prints sub-accounts fully qualified, e.g. "Truck:Original Cost"). Delegates to
+   * accountMeta — same query, name direction only.
    */
   private async accountMetaByName(
     realmId: string,
     accessToken: string,
   ): Promise<Map<string, QboAccountMeta>> {
+    return (await this.accountMeta(realmId, accessToken)).byName
+  }
+
+  /**
+   * Account metadata in BOTH directions — by QBO Id and by lowercase Name/FQN —
+   * from ONE Account query. The org-company summarized reports resolve rows by
+   * ColData[0].id when QBO emits it and fall back to the printed name, so both
+   * maps come from the same pull (one API call per import, not two).
+   */
+  async accountMeta(realmId: string, accessToken: string): Promise<QboAccountMetaMaps> {
     const data = (await this.apiGet(
       realmId,
       accessToken,
@@ -284,7 +314,8 @@ export class QboClient {
         }>
       }
     }
-    const map = new Map<string, QboAccountMeta>()
+    const byId = new Map<number, QboAccountMeta>()
+    const byName = new Map<string, QboAccountMeta>()
     for (const a of data?.QueryResponse?.Account ?? []) {
       const num = Number(a.AcctNum)
       const meta: QboAccountMeta = {
@@ -294,9 +325,68 @@ export class QboClient {
         accountSubType: a.AccountSubType ?? '',
         classification: a.Classification ?? '',
       }
-      if (a.Name) map.set(a.Name.toLowerCase(), meta)
-      if (a.FullyQualifiedName) map.set(a.FullyQualifiedName.toLowerCase(), meta)
+      if (meta.id > 0) byId.set(meta.id, meta)
+      if (a.Name) byName.set(a.Name.toLowerCase(), meta)
+      if (a.FullyQualifiedName) byName.set(a.FullyQualifiedName.toLowerCase(), meta)
     }
-    return map
+    return { byId, byName }
+  }
+
+  /**
+   * The company's Departments (QBO's API name for "Locations") or Classes —
+   * the dimension values an org connection splits its reports by. Includes
+   * inactive entities (historical columns can still carry balances); the
+   * caller decides how to surface them.
+   */
+  async listDimensions(
+    realmId: string,
+    accessToken: string,
+    type: 'department' | 'class',
+  ): Promise<QboDimensionEntity[]> {
+    const entity = type === 'department' ? 'Department' : 'Class'
+    const data = (await this.apiGet(
+      realmId,
+      accessToken,
+      'query?query=' +
+        encodeURIComponent(`select Id, Name, Active, ParentRef from ${entity} maxresults 1000`),
+    )) as {
+      QueryResponse?: Record<
+        string,
+        Array<{ Id?: string; Name?: string; Active?: boolean; ParentRef?: { value?: string } }>
+      >
+    }
+    const list = data?.QueryResponse?.[entity] ?? []
+    return list
+      .map((d) => ({
+        id: String(d.Id ?? '').trim(),
+        name: (d.Name ?? '').trim(),
+        active: d.Active !== false,
+        parentId: d.ParentRef?.value != null ? String(d.ParentRef.value) : null,
+      }))
+      .filter((d) => d.id !== '' && d.name !== '')
+  }
+
+  /**
+   * A P&L or Balance Sheet summarized into one Money column per dimension value
+   * (+ "Not Specified" + "Total"). This is the org-company split source — the
+   * TrialBalance report IGNORES summarize_column_by, so the per-location TB is
+   * reconstructed from these two reports instead. Returns the RAW parsed report
+   * (nested Rows.Row sections); the pure qbo-company.synth module parses it.
+   * Both dates are always sent (QBO silently ignores a lone end_date).
+   */
+  async getSummarizedReport(
+    realmId: string,
+    accessToken: string,
+    report: 'ProfitAndLoss' | 'BalanceSheet',
+    startDate: string,
+    endDate: string,
+    dimensionType: 'department' | 'class',
+  ): Promise<QboSummarizedReport> {
+    const by = dimensionType === 'department' ? 'Departments' : 'Classes'
+    return (await this.apiGet(
+      realmId,
+      accessToken,
+      `reports/${report}?accounting_method=Accrual&start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}&summarize_column_by=${by}`,
+    )) as QboSummarizedReport
   }
 }

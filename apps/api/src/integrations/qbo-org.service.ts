@@ -69,8 +69,9 @@ export class QboOrgService {
     private readonly qbo: QboService,
   ) {}
 
-  /** The caller's active memberships inside `orgId` (403 when they have none). */
-  private async orgMemberships(user: User, orgId: string) {
+  /** The caller's active memberships inside `orgId` (403 when they have none).
+   *  PUBLIC: OrgQboCompanyService reuses the exact same org-isolation gate. */
+  async orgMemberships(user: User, orgId: string) {
     const memberships = await this.prisma.membership.findMany({
       where: { userId: user.id, status: 'active' },
       include: { school: true },
@@ -135,8 +136,9 @@ export class QboOrgService {
    * actuals as a phantom snapshot. When the school has no eligible period,
    * resolve-or-create the current FY via resolveForImport (end-date keyed, so a
    * periodType-string mismatch can't spawn a duplicate period).
+   * PUBLIC: OrgQboCompanyService targets the same base period per school.
    */
-  private async resolveBasePeriod(schoolId: string): Promise<{ id: string; label: string }> {
+  async resolveBasePeriod(schoolId: string): Promise<{ id: string; label: string }> {
     const now = new Date()
     const endYear = now.getUTCMonth() >= 6 ? now.getUTCFullYear() + 1 : now.getUTCFullYear()
     const fyEnd = `${endYear}-06-30`

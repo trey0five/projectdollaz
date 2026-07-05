@@ -16,6 +16,11 @@ export default function QuickBooksCard({ quickbooks }) {
   const qb = quickbooks || { configured: false, connected: false }
   const connected = !!qb.connected
   const configured = !!qb.configured
+  // Diocesan QuickBooks: no direct connection, but the school is mapped in the
+  // organization's QuickBooks company — treat it as connected (green), just via
+  // the org. A direct connection always wins the display.
+  const orgFed = !connected && !!qb.orgFed
+  const orgFedNames = orgFed ? (qb.orgFed.valueNames ?? []) : []
 
   return (
     <motion.section
@@ -33,10 +38,10 @@ export default function QuickBooksCard({ quickbooks }) {
         <div className="flex items-start gap-3.5">
           <span
             className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${
-              connected ? 'bg-emerald-100 text-emerald-700' : 'bg-gold/15 text-gold'
+              connected || orgFed ? 'bg-emerald-100 text-emerald-700' : 'bg-gold/15 text-gold'
             }`}
           >
-            {connected ? <CheckCircle2 size={24} /> : <Plug size={22} />}
+            {connected || orgFed ? <CheckCircle2 size={24} /> : <Plug size={22} />}
           </span>
           <div className="min-w-0">
             {!configured ? (
@@ -66,6 +71,35 @@ export default function QuickBooksCard({ quickbooks }) {
                       {qb.environment ? ` · ${qb.environment}` : ''}.
                     </span>
                   ) : null}
+                </p>
+              </>
+            ) : orgFed ? (
+              <>
+                <h2 id="datahub-qbo-title" className="flex flex-wrap items-center gap-2 font-serif text-lg font-semibold text-navy">
+                  QuickBooks connected — through your organization
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[13px] font-bold uppercase tracking-[0.08em] text-emerald-700">
+                    <CheckCircle2 size={12} /> Via organization
+                  </span>
+                </h2>
+                <p className="mt-1 max-w-xl text-[15px] leading-relaxed text-muted">
+                  Your numbers flow in from{' '}
+                  <span className="font-semibold text-navy">
+                    {qb.orgFed.companyName || 'your organization’s QuickBooks company'}
+                  </span>
+                  {orgFedNames.length > 0 && (
+                    <>
+                      {' '}—{' '}
+                      {qb.orgFed.dimension === 'class'
+                        ? orgFedNames.length === 1
+                          ? 'class'
+                          : 'classes'
+                        : orgFedNames.length === 1
+                          ? 'location'
+                          : 'locations'}{' '}
+                      <span className="font-semibold text-navy">{orgFedNames.join(', ')}</span>
+                    </>
+                  )}
+                  . Imports run from the organization’s QuickBooks in Settings.
                 </p>
               </>
             ) : (
@@ -105,6 +139,13 @@ export default function QuickBooksCard({ quickbooks }) {
                   Manage connection
                 </Link>
               </>
+            ) : orgFed ? (
+              <Link
+                to="/settings/integrations"
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-gold-gradient px-4 py-2.5 text-[15px] font-bold uppercase tracking-[0.08em] text-navy shadow-glow transition-transform hover:-translate-y-0.5"
+              >
+                Manage in Settings <ArrowRight size={15} />
+              </Link>
             ) : (
               <Link
                 to="/settings/integrations"

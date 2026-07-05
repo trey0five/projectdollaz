@@ -42,6 +42,15 @@ export interface DataStatusResponse {
     connected: boolean
     realmId: string | null
     environment: string | null
+    /** Passed through from QboService.status: non-null when this school's data
+     *  is fed by the ORGANIZATION's company-level QuickBooks (Topology B). */
+    orgFed: {
+      orgId: string
+      companyName: string | null
+      dimension: string
+      valueNames: string[]
+      lastImportedAt: string | null
+    } | null
   }
   sources: Record<SourceKey, SourceState>
   summary: {
@@ -112,6 +121,7 @@ export class DataHubService {
         connected: qbo.connected,
         realmId: qbo.realmId,
         environment: qbo.environment,
+        orgFed: qbo.orgFed,
       },
       sources,
       summary: this.deriveSummary(sources),

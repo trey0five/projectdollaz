@@ -595,6 +595,23 @@ export const qboOrgApi = {
   sync: (orgId, body = {}) => api.post(`/organizations/${orgId}/integrations/qb/sync`, body),
 }
 
+// Diocesan QuickBooks (Topology B): ONE QuickBooks company for the whole
+// organization, split by Location (QBO "Department") or Class. Connect/status/
+// disconnect manage the org-level connection; mapping assigns each dimension
+// value to a school (or ignores it); import pulls every mapped school's share.
+export const qboCompanyApi = {
+  status: (orgId) => api.get(`/organizations/${orgId}/integrations/qb/company`),
+  connectUrl: (orgId) => api.get(`/organizations/${orgId}/integrations/qb/company/connect`),
+  callback: (orgId, body) => api.post(`/organizations/${orgId}/integrations/qb/company/callback`, body),
+  disconnect: (orgId, removeData = false) =>
+    api.delete(`/organizations/${orgId}/integrations/qb/company`, {
+      params: removeData ? { removeData: true } : {},
+    }),
+  mapping: (orgId) => api.get(`/organizations/${orgId}/integrations/qb/company/mapping`),
+  saveMapping: (orgId, body) => api.put(`/organizations/${orgId}/integrations/qb/company/mapping`, body),
+  import: (orgId, body = {}) => api.post(`/organizations/${orgId}/integrations/qb/company/import`, body),
+}
+
 // ── Phase 2A: Florida scholarship AUP — Review Readiness ─────────────────────
 // Same axios `api` instance: inherits Bearer + proactive-refresh and surfaces the
 // entitlement 402 (isPaymentRequired) like every other paid read.

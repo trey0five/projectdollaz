@@ -3,7 +3,7 @@
 // balance and feeds it through the SAME path as a file upload (ImportsService →
 // StatementsService.generate), which auto-scans on snapshot creation. Config-gated:
 // disabled (501-able) when QB_OAUTH_CLIENT_ID is unset.
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import type { ImportRole, QboConnection, User } from '@finrep/db'
 import { SCOA_CATEGORIES, type SCoaCategory } from '@finrep/engine'
@@ -53,6 +53,18 @@ export interface QboStatus {
   lastSyncedAt: string | null
   lastSyncRowCount: number | null
   lastSyncFiscalPeriodId: string | null
+  /**
+   * Non-null when this school has NO connection of its own but IS mapped in
+   * its organization's company-level connection (Topology B) — its data
+   * arrives via the org import, and the UI says so instead of "not connected".
+   */
+  orgFed: {
+    orgId: string
+    companyName: string | null
+    dimension: string
+    valueNames: string[]
+    lastImportedAt: string | null
+  } | null
 }
 
 export interface QboDisconnectResult extends QboStatus {
@@ -208,6 +220,44 @@ export class QboService {
       lastSyncedAt: last ? last.createdAt.toISOString() : null,
       lastSyncRowCount: lastMeta.rowCount,
       lastSyncFiscalPeriodId: lastMeta.fiscalPeriodId,
+      // A direct connection always wins — only a connection-less school can be org-fed.
+      orgFed: conn ? null : await this.orgFed(schoolId),
+    }
+  }
+
+  /**
+   * Topology-B feed detection for a school WITHOUT its own connection: mapped
+   * (schoolId set) in its org's OrgQboConnection under the ACTIVE dimension.
+   * lastImportedAt = the newest 'qbo.synced' audit row stamped via:'org'
+   * (fallback: newest 'qbo.synced' at all, for rows written before the stamp).
+   */
+  private async orgFed(schoolId: string): Promise<QboStatus['orgFed']> {
+    const school = await this.prisma.school.findUnique({ where: { id: schoolId } })
+    if (!school) return null
+    const orgConn = await this.prisma.orgQboConnection.findUnique({
+      where: { organizationId: school.organizationId },
+    })
+    if (!orgConn) return null
+    const rows = await this.prisma.orgQboMapping.findMany({
+      where: { connectionId: orgConn.id, dimension: orgConn.dimension, schoolId },
+      orderBy: { qboName: 'asc' },
+    })
+    if (rows.length === 0) return null
+    const lastOrg =
+      (await this.prisma.auditLog.findFirst({
+        where: { schoolId, action: 'qbo.synced', metadata: { path: ['via'], equals: 'org' } },
+        orderBy: { createdAt: 'desc' },
+      })) ??
+      (await this.prisma.auditLog.findFirst({
+        where: { schoolId, action: 'qbo.synced' },
+        orderBy: { createdAt: 'desc' },
+      }))
+    return {
+      orgId: school.organizationId,
+      companyName: orgConn.companyName,
+      dimension: orgConn.dimension,
+      valueNames: rows.map((r) => r.qboName),
+      lastImportedAt: lastOrg?.createdAt.toISOString() ?? null,
     }
   }
 
@@ -266,6 +316,19 @@ export class QboService {
   async connect(schoolId: string, code: string, realmId: string, userId: string): Promise<QboStatus> {
     if (!this.client.isConfigured()) {
       throw new BadRequestException('QuickBooks connector is not configured on this server.')
+    }
+    // Topology-B guard: one company must not be connected at both levels. The
+    // check runs BEFORE the code exchange so the one-time code isn't burned.
+    const school = await this.prisma.school.findUnique({ where: { id: schoolId } })
+    if (school) {
+      const orgConn = await this.prisma.orgQboConnection.findUnique({
+        where: { organizationId: school.organizationId },
+      })
+      if (orgConn && orgConn.realmId === realmId) {
+        throw new ConflictException(
+          'This QuickBooks company is connected at the organization level. Map this school to one of its locations instead.',
+        )
+      }
     }
     const tokens = await this.client.exchangeCode(code)
     const expiresAt = new Date(Date.now() + tokens.expiresInSec * 1000)

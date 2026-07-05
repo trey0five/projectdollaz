@@ -8,7 +8,7 @@ import { motion } from 'framer-motion'
 import { AlertTriangle, ArrowRight, CheckCircle2, History, Plug, RefreshCw, Unplug, XCircle } from 'lucide-react'
 import { useSchools } from '../../context/SchoolContext.jsx'
 import { usePersistence } from '../../context/PersistenceContext.jsx'
-import { qboApi, importsApi, apiErrorMessage } from '../../lib/api.js'
+import { qboApi, qboCompanyApi, importsApi, apiErrorMessage } from '../../lib/api.js'
 import { formatRelative } from '../../lib/format.js'
 import { FormError, FormSuccess } from '../auth/fields.jsx'
 import SettingsCard from './SettingsCard.jsx'
@@ -84,6 +84,10 @@ export default function IntegrationsSection() {
   // QuickBooks P&L category review (GET /review-accounts). Owned here so the
   // "N accounts to review" pill and the review card never disagree.
   const [review, setReview] = useState(null)
+  // Diocesan QuickBooks: this school is fed by the ORG-level company (status.orgFed
+  // non-null, no direct connection). "Import now" runs the org import scoped to
+  // just this school.
+  const [orgImporting, setOrgImporting] = useState(false)
 
   // Best-effort like syncHistory: a review failure never blanks the card.
   const loadReview = useCallback(async (id) => {
@@ -244,6 +248,35 @@ export default function IntegrationsSection() {
       setErr(apiErrorMessage(e, 'Could not disconnect.'))
     } finally {
       setBusy(false)
+    }
+  }
+
+  // Org-fed import: POST the org-level company import scoped to just this school.
+  // orgId comes from status.orgFed itself — no extra org lookup needed.
+  const importFromOrg = async () => {
+    const orgId = status?.orgFed?.orgId
+    if (!orgId) return
+    setErr('')
+    setOk('')
+    setOrgImporting(true)
+    try {
+      const res = await qboCompanyApi.import(orgId, { schoolIds: [activeId] })
+      const r =
+        res.data?.results?.find((x) => x.schoolId === activeId) ?? res.data?.results?.[0] ?? null
+      if (r?.status === 'synced') {
+        const rows = r.scope?.currentYear?.rowCount
+        setOk(
+          `Imported from the organization's QuickBooks${r.periodLabel ? ` into ${r.periodLabel}` : ''}${rows != null ? ` — ${rows} accounts` : ''}. Statements rebuilt.`,
+        )
+      } else {
+        setErr(r?.reason || 'The import did not complete for this school.')
+      }
+      await load(activeId)
+      await loadReview(activeId)
+    } catch (e) {
+      setErr(apiErrorMessage(e, "Could not import from the organization's QuickBooks."))
+    } finally {
+      setOrgImporting(false)
     }
   }
 
@@ -772,6 +805,85 @@ export default function IntegrationsSection() {
                 ))}
               </ul>
             </div>
+          )}
+        </>
+      ) : status.orgFed ? (
+        // Diocesan QuickBooks: no direct connection, but this school is mapped in
+        // the ORGANIZATION's QuickBooks company — numbers flow from there.
+        <>
+          <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-[15px] text-navy">
+            <CheckCircle2 size={15} className="shrink-0 text-emerald-600" />
+            Fed by your organization&apos;s QuickBooks
+            {status.orgFed.companyName && (
+              <>
+                {' '}· <span className="font-semibold">{status.orgFed.companyName}</span>
+              </>
+            )}
+          </div>
+          <p className="mb-3 text-[14.5px] leading-relaxed text-muted">
+            This school&apos;s numbers come from the organization&apos;s QuickBooks company
+            {(status.orgFed.valueNames?.length ?? 0) > 0 && (
+              <>
+                {' '}—{' '}
+                {status.orgFed.dimension === 'class'
+                  ? status.orgFed.valueNames.length === 1
+                    ? 'class'
+                    : 'classes'
+                  : status.orgFed.valueNames.length === 1
+                    ? 'location'
+                    : 'locations'}{' '}
+                <span className="font-semibold text-navy">{status.orgFed.valueNames.join(', ')}</span>
+              </>
+            )}
+            . An import pulls only this school&apos;s share of the books.
+          </p>
+          <p className="mb-4 text-[14px] tracking-[0.01em] text-muted">
+            {status.orgFed.lastImportedAt ? (
+              <>
+                Last imported{' '}
+                <span className="font-semibold text-navy">
+                  {syncRelativeTime(status.orgFed.lastImportedAt)}
+                </span>
+              </>
+            ) : (
+              'Never imported yet.'
+            )}
+          </p>
+
+          {err && <div className="mb-3"><FormError>{err}</FormError></div>}
+          {ok && <div className="mb-3"><FormSuccess>{ok}</FormSuccess></div>}
+
+          <div className="flex flex-wrap items-center gap-3">
+            {canEdit && (
+              <motion.button
+                whileTap={{ scale: 0.98 }}
+                onClick={importFromOrg}
+                disabled={orgImporting}
+                className="btn-primary inline-flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <RefreshCw size={15} className={orgImporting ? 'animate-spin' : ''} />
+                {orgImporting ? 'Importing…' : 'Import now'}
+              </motion.button>
+            )}
+            <button
+              type="button"
+              onClick={() =>
+                document.getElementById('org-quickbooks')?.scrollIntoView({ behavior: 'smooth' })
+              }
+              className="inline-flex items-center gap-1.5 rounded-lg border-2 border-border bg-white px-5 py-2.5 text-[15px] font-semibold text-navy transition-colors hover:border-gold disabled:opacity-50"
+            >
+              Manage in Organization QuickBooks <ArrowRight size={15} />
+            </button>
+          </div>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={connect}
+              disabled={busy || orgImporting}
+              className="mt-3 inline-flex items-center gap-1.5 text-[13.5px] font-semibold text-muted underline-offset-2 transition-colors hover:text-gold hover:underline disabled:opacity-50"
+            >
+              <Plug size={13} /> {busy ? 'Redirecting…' : "Connect this school's own QuickBooks instead"}
+            </button>
           )}
         </>
       ) : (
