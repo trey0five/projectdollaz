@@ -137,31 +137,41 @@ export default function DataHubPage() {
   // The hub is about getting data IN, so default to the live/active period (the one
   // you're building) — which is also the period the trial-balance intake uploads to,
   // keeping the card status and the modal in sync. Falls back to newest-with-snapshot.
+  // The default MUST belong to the current school's loaded periods — during a
+  // school swap the School and Persistence contexts update out of lockstep, so
+  // activePeriod can momentarily be the PREVIOUS school's. Validate it against
+  // `periods` so `defaultPeriodId` is always a real current-school id (or null).
   const defaultPeriodId =
-    activePeriod?.id ?? snapshotPeriods[0]?.id ?? (periods || [])[0]?.id ?? null
+    ((periods || []).some((p) => p.id === activePeriod?.id) ? activePeriod?.id : null) ??
+    snapshotPeriods[0]?.id ??
+    (periods || [])[0]?.id ??
+    null
 
-  // Local selection. Adopt the default once it resolves (periods load async),
-  // render-time per React docs — NOT setState-in-effect. The user's explicit
-  // pick wins thereafter (sync only fires while periodId is still unset).
+  // Local selection, adopted at render time (NOT setState-in-effect).
   const [periodId, setPeriodId] = useState(null)
-  // Reset the selection when the ACTIVE SCHOOL changes — otherwise a period id from
-  // the previous school lingers (it's non-null, so the adopt below never re-fires),
-  // and the status fetch hits /schools/<newSchool>/periods/<oldSchoolsPeriod> which
-  // isn't owned by the new school → 404 → "Couldn't load your data status" on every
-  // school toggle. Dropping it here re-adopts the new school's default next.
+  // Reset the selection when the ACTIVE SCHOOL changes so a stale cross-tenant id
+  // doesn't linger.
   const [lastSchoolId, setLastSchoolId] = useState(schoolId)
   if (schoolId !== lastSchoolId) {
     setLastSchoolId(schoolId)
     setPeriodId(null)
   }
-  if (defaultPeriodId && periodId == null) {
+  // Adopt the default whenever periodId isn't a VALID period for the current
+  // school. Guarding on validity — not just `== null` — self-heals the swap race:
+  // during a switch PersistenceContext briefly still holds the previous school's
+  // periods, so periodId can adopt that school's id; the old null-only guard then
+  // left it STUCK there → the data-status call 404s → the hub renders empty and
+  // QuickBooks reads "isn't set up". Once persistence catches up the stale id is no
+  // longer in `periods`, so we re-adopt the new school's default instead of sticking.
+  const periodValidForSchool = periodId != null && (periods || []).some((p) => p.id === periodId)
+  if (defaultPeriodId && !periodValidForSchool) {
     setPeriodId(defaultPeriodId)
   }
 
   const selectedPeriod = (periods || []).find((p) => p.id === periodId) || null
   const periodLabel = selectedPeriod?.label || ''
 
-  const { data, loading, error, notEntitled, refetch } = useDataStatus(schoolId, periodId)
+  const { data, error, notEntitled, refetch } = useDataStatus(schoolId, periodId)
   const sources = data?.sources || null
 
   // Forecast input embed needs the saved budget + budget context to seed the
@@ -348,20 +358,21 @@ export default function DataHubPage() {
           <NoPeriodCard onAdd={() => setModalKey('trialBalances')} />
         ) : (
           <>
-            {/* QuickBooks fast-path (top). */}
-            <QuickBooksCard quickbooks={data?.quickbooks} />
+            {/* QuickBooks fast-path (top). While data-status is unresolved (initial
+                load OR the school-swap refetch → `data` is null), show a skeleton
+                rather than the card's misleading "isn't set up on this server yet"
+                empty state (which is really just "no payload yet"). */}
+            {data ? (
+              <QuickBooksCard quickbooks={data.quickbooks} />
+            ) : (
+              <div className="mb-6 h-28 animate-pulse rounded-2xl border-2 border-gold/40 bg-white/60" />
+            )}
 
-            {/* Guided checklist. */}
-            {loading && !sources ? (
-              <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-3">
-                {SOURCES.map((s) => (
-                  <div
-                    key={s.key}
-                    className="h-44 animate-pulse rounded-2xl border-2 border-rule/40 bg-white/60"
-                  />
-                ))}
-              </div>
-            ) : notEntitled ? (
+            {/* Guided checklist. Show the skeleton whenever we have no `sources`
+                yet — covers the initial load AND the transient school-swap window
+                where data-status is null — so we never flash the empty "all
+                optional / 0 need you" cards for a school that actually has data. */}
+            {notEntitled ? (
               <div className="rounded-2xl border-2 border-rule/60 bg-white px-6 py-10 text-center">
                 <p className="font-serif text-lg text-navy">Your subscription is paused</p>
                 <p className="mt-1 text-[15px] text-muted">
@@ -379,6 +390,15 @@ export default function DataHubPage() {
                 >
                   Try again
                 </button>
+              </div>
+            ) : !sources ? (
+              <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-3">
+                {SOURCES.map((s) => (
+                  <div
+                    key={s.key}
+                    className="h-44 animate-pulse rounded-2xl border-2 border-rule/40 bg-white/60"
+                  />
+                ))}
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-3">
