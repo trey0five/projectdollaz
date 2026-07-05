@@ -30,16 +30,22 @@ const COIN = 52 // px — the flying mascot diameter (≈ the chat header avatar
 const AV_X = 6 + 16 + 22
 const AV_Y = 6 + 12 + 22
 
-// Beat schedule (ms from mount): [line, open, coin-in, coin-flies, expand+text,
-// settle]. The mascot gets a held gold beat center-stage before it flies right
-// and unfolds into the chat. Nav stays interactive throughout; click skips.
-const BEATS = [200, 750, 1250, 2050, 2750, 3350]
+// Beat schedule [ms, phase]: the hero opens on Penny centered, holds, then she
+// flies right and unfolds into the chat while the headline racks into focus.
+// (No TV-open; phases 1–2 are retired, so the timeline starts at phase 3.)
+const BEATS = [
+  [150, 3], // Penny fades in, center-stage
+  [1050, 4], // Penny flies right (desktop) + headline racks into focus
+  [1650, 5], // the chat unfolds from her
+  [2250, 6], // settle: subhead, CTAs, shine
+]
 
 export default function LandingHero({ onIntroOpen }) {
   const reduce = useReducedMotion()
   const sectionRef = useRef(null)
   const chatRef = useRef(null) // the (unscaled) grid cell wrapping the chat box
-  const [phase, setPhase] = useState(reduce ? 6 : 0)
+  // Start at phase 2 — the "screen" is already on (Penny will fade in center).
+  const [phase, setPhase] = useState(reduce ? 6 : 2)
   // lg+ gets the full fly-to-chat; phones fade the coin at center instead (the
   // chat would be below the fold, so flying to it would leave the frame).
   const [flyToChat, setFlyToChat] = useState(
@@ -82,13 +88,12 @@ export default function LandingHero({ onIntroOpen }) {
 
   useEffect(() => {
     if (reduce) return undefined
-    const ids = BEATS.map((t, i) => setTimeout(() => setPhase(i + 1), t))
+    const ids = BEATS.map(([t, p]) => setTimeout(() => setPhase(p), t))
     return () => ids.forEach(clearTimeout)
   }, [reduce])
 
   const skip = () => setPhase(6)
 
-  const open = phase >= 2
   const coinStaged = phase >= 3
   const coinFlown = phase >= 4
   const chatExpand = phase >= 5
@@ -97,20 +102,13 @@ export default function LandingHero({ onIntroOpen }) {
   const textIn = phase >= 4
   const settled = phase >= 6
 
-  // Reveal the fixed nav only once the TV-bloom has FULLY finished (it stays
-  // hidden over the dark pre-open field). We wait out the clip transition after
-  // the open beat; reduced motion (already settled) reveals it immediately.
-  // (onIntroOpen is memoized by the parent, so later phase re-renders don't
-  // reset this timer.)
+  // The hero now opens on Penny centered (no dark pre-open field), so the fixed
+  // nav just fades in shortly after mount. (onIntroOpen is memoized by the
+  // parent, so this runs once.)
   useEffect(() => {
-    if (!open) return undefined
-    if (reduce) {
-      onIntroOpen?.()
-      return undefined
-    }
-    const id = setTimeout(() => onIntroOpen?.(), 760) // ≈ the 0.72s open transition
+    const id = setTimeout(() => onIntroOpen?.(), reduce ? 0 : 250)
     return () => clearTimeout(id)
-  }, [open, reduce, onIntroOpen])
+  }, [reduce, onIntroOpen])
 
   // Mascot animation. It appears center-stage (big), flies to the avatar spot
   // (lg only), then fades as the chat unfolds from underneath it.
@@ -151,14 +149,8 @@ export default function LandingHero({ onIntroOpen }) {
       onClick={reduce || settled ? undefined : skip}
       className="relative isolate min-h-[100svh] overflow-hidden bg-[#0a1526]"
     >
-      {/* The "screen" that powers on: everything the TV-bloom reveals lives inside
-          this clip. Before phase 2 it's a thin center slit; then it opens fully. */}
-      <motion.div
-        className="absolute inset-0 bg-studio-hero"
-        initial={reduce ? false : { clipPath: 'inset(49.6% 0% 49.6% 0%)' }}
-        animate={{ clipPath: reduce || open ? 'inset(0% 0% 0% 0%)' : 'inset(49.6% 0% 49.6% 0%)' }}
-        transition={{ duration: 0.72, ease: EASE }}
-      >
+      {/* The hero backdrop (navy gradient + rising motes), shown from the start. */}
+      <div className="absolute inset-0 bg-studio-hero">
         <StudioBackdrop sweep={false} />
         <span aria-hidden="true" className="pointer-events-none absolute inset-0 bg-navy-radial" />
 
@@ -256,21 +248,7 @@ export default function LandingHero({ onIntroOpen }) {
             </div>
           )}
         </div>
-      </motion.div>
-
-      {/* The gold ignition line — above the screen so it reads on the dark field
-          before the bloom. Draws in (phase 1), fades as the screen opens. */}
-      <motion.span
-        aria-hidden="true"
-        className="pointer-events-none absolute left-[8%] right-[8%] top-1/2 z-20 h-px origin-center"
-        style={{ background: 'linear-gradient(90deg, transparent, rgba(212,180,122,0.9), transparent)' }}
-        initial={reduce ? false : { scaleX: 0, opacity: 0 }}
-        animate={{
-          scaleX: !reduce && phase >= 1 ? 1 : 0,
-          opacity: reduce ? 0 : open ? 0 : phase >= 1 ? 1 : 0,
-        }}
-        transition={{ duration: open ? 0.3 : 0.55, ease: 'easeOut' }}
-      />
+      </div>
 
       {/* The Penny mascot (the smiling gold coin). Appears center-stage, flies to
           the chat's header-avatar spot, then fades as the chat unfolds into it. */}
