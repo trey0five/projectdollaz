@@ -231,9 +231,11 @@ export default function IntegrationsSection() {
           `${r.monthly} monthly snapshot${r.monthly === 1 ? '' : 's'}`,
         ]
         if (r.periods) parts.push(`${r.periods} period${r.periods === 1 ? '' : 's'} QuickBooks created`)
-        setOk(`QuickBooks disconnected and its data removed — ${parts.join(', ')}. Uploaded files were kept.`)
+        setOk(
+          `QuickBooks disconnected and its data removed — ${parts.join(', ')}. Your statements and dashboard now reflect your uploaded files again.`,
+        )
       } else {
-        setOk('QuickBooks disconnected. Your imported data was kept.')
+        setOk('QuickBooks disconnected. Your imported data was kept — statements and dashboard are unchanged.')
       }
       // Keep-data leaves the category review alive; delete-data empties it.
       await loadReview(activeId)
@@ -540,39 +542,39 @@ export default function IntegrationsSection() {
                 <motion.div
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="mt-4 rounded-lg border-2 border-danger/30 bg-danger/[0.05] px-4 py-3.5"
+                  className="mt-4 rounded-lg border-2 border-gold/40 bg-gold/[0.06] px-4 py-3.5"
                 >
                   <p className="flex items-start gap-2 text-[15px] font-semibold text-navy">
-                    <AlertTriangle size={17} className="mt-0.5 shrink-0 text-danger" />
+                    <Unplug size={16} className="mt-0.5 shrink-0 text-gold" />
                     Disconnect QuickBooks?
                   </p>
                   <p className="mt-1.5 text-[14px] leading-relaxed text-muted">
-                    You can also delete everything imported from QuickBooks — trial balances,
-                    monthly actuals, and any periods QuickBooks created — and rebuild your statements
-                    from remaining data. <span className="font-medium text-navy">Your uploaded files
-                    are never touched.</span>
+                    By default we <span className="font-medium text-navy">keep everything already
+                    imported</span> — your statements and dashboard stay exactly as they are; you just
+                    stop syncing. You can also permanently delete the QuickBooks data, which rebuilds
+                    your statements from any uploaded files (so the dashboard reverts to those).
                   </p>
-                  <div className="mt-3 flex flex-wrap gap-3">
-                    <button
-                      onClick={() => doDisconnect(true)}
-                      disabled={busy}
-                      className="inline-flex items-center gap-2 rounded-lg border-2 border-danger/50 bg-danger/10 px-5 py-2.5 text-[15px] font-semibold text-danger transition-colors hover:bg-danger/15 disabled:opacity-50"
-                    >
-                      <Unplug size={15} /> Disconnect &amp; delete data
-                    </button>
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
                     <button
                       onClick={() => doDisconnect(false)}
                       disabled={busy}
-                      className="inline-flex items-center gap-2 rounded-lg border-2 border-border bg-white px-5 py-2.5 text-[15px] font-semibold text-navy transition-colors hover:border-navy disabled:opacity-50"
+                      className="btn-primary inline-flex items-center gap-2 disabled:opacity-50"
                     >
-                      Disconnect only (keep data)
+                      <Unplug size={15} /> Disconnect (keep data)
                     </button>
                     <button
                       onClick={() => setPendingDisconnect(false)}
                       disabled={busy}
-                      className="inline-flex items-center gap-2 px-3 py-2.5 text-[15px] font-semibold text-muted transition-colors hover:text-navy disabled:opacity-50"
+                      className="inline-flex items-center gap-2 rounded-lg border-2 border-border bg-white px-5 py-2.5 text-[15px] font-semibold text-navy transition-colors hover:border-navy disabled:opacity-50"
                     >
                       Cancel
+                    </button>
+                    <button
+                      onClick={() => doDisconnect(true)}
+                      disabled={busy}
+                      className="ml-auto inline-flex items-center gap-1.5 text-[13.5px] font-semibold text-danger/80 underline-offset-2 transition-colors hover:text-danger hover:underline disabled:opacity-50"
+                    >
+                      <AlertTriangle size={14} /> Disconnect &amp; delete QuickBooks data
                     </button>
                   </div>
                 </motion.div>
