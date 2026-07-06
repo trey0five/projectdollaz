@@ -35,17 +35,17 @@ const BEATS = [
     line: 'A trial balance export, five years of history, a folder someone hands you at drop-off.',
   },
   {
-    at: 0.24,
+    at: 0.26,
     title: 'Drop it on Penny.',
     line: 'She reads it, tells you where it belongs — with her confidence — and waits for your yes.',
   },
   {
-    at: 0.54,
+    at: 0.6,
     title: 'It lands where it belongs.',
     line: 'The rows re-lay into your four statements. Nothing re-keyed, nothing formatted.',
   },
   {
-    at: 0.78,
+    at: 0.84,
     title: 'Tomorrow, it’s in your briefing.',
     line: '“Good morning — three things need a decision.” The file never sat in a drawer.',
   },
@@ -87,19 +87,21 @@ function SheetCard() {
   )
 }
 
-/** The manila folder (back panel + tab + front flap the sheet rises from behind). */
+/** The manila folder (back panel + tab + front flap the sheet rises from behind).
+ *  The flap is tall enough to conceal the WHOLE sheet at rest — the scene opens
+ *  with the trial balance completely inside. */
 function Folder({ frontStyle }) {
   return (
-    <div className="relative h-36 w-52 sm:h-40 sm:w-60">
+    <div className="relative h-56 w-72 sm:h-64 sm:w-80">
       {/* Back panel + tab */}
-      <div className="absolute inset-x-0 bottom-0 top-4 rounded-xl border border-gold/50 bg-gold-pale shadow-card" />
-      <div className="absolute left-3 top-0 h-7 w-24 rounded-t-lg border border-b-0 border-gold/50 bg-gold-pale" />
+      <div className="absolute inset-x-0 bottom-0 top-5 rounded-2xl border border-gold/50 bg-gold-pale shadow-card" />
+      <div className="absolute left-4 top-0 h-8 w-32 rounded-t-xl border border-b-0 border-gold/50 bg-gold-pale" />
       {/* Front flap (above the sheet's z, so the sheet emerges from inside) */}
       <motion.div
         style={frontStyle}
-        className="absolute inset-x-0 bottom-0 z-20 flex h-[70%] origin-bottom items-end rounded-xl border border-gold/60 bg-gold-gradient p-3 shadow-card"
+        className="absolute inset-x-0 bottom-0 z-20 flex h-[82%] origin-bottom items-end rounded-2xl border border-gold/60 bg-gold-gradient p-4 shadow-card"
       >
-        <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-navy/80">
+        <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-navy/80">
           FY26 · Finance office
         </span>
       </motion.div>
@@ -219,29 +221,43 @@ export default function IngestScrolly({ act }) {
   })
 
   // ── The choreography (all string keyframes are stage-relative %) ───────────
-  // Folder: holds, front flap opens as the sheet leaves, then recedes.
-  const folderFlap = useTransform(p, [0.08, 0.3], [0, -68])
-  const folderFade = useTransform(p, [0.34, 0.52], [1, 0.35])
-  const folderShift = useTransform(p, [0.34, 0.52], ['0%', '-12%'])
-  // Sheet: rises out of the folder, arcs across, shrinks into the window.
-  const sheetLeft = useTransform(p, [0, 0.22, 0.54, 0.7], ['7%', '7%', '46%', '62%'])
-  const sheetTop = useTransform(p, [0, 0.22, 0.4, 0.54, 0.7], ['46%', '20%', '12%', '18%', '30%'])
-  const sheetRotate = useTransform(p, [0.22, 0.4, 0.6], [-7, 4, -2])
-  const sheetScale = useTransform(p, [0.54, 0.72], [1, 0.5])
-  const sheetFade = useTransform(p, [0.66, 0.73], [1, 0])
-  // Penny: appears for the hand-off, tracks under the sheet, then parks on the
-  // window's lower-left corner (z-30 — above the window, so she never hides).
-  const pennyLeft = useTransform(p, [0.2, 0.54, 0.8], ['12%', '40%', '26%'])
-  const pennyTop = useTransform(p, [0.2, 0.54, 0.8], ['66%', '52%', '78%'])
-  const pennyFade = useTransform(p, [0.16, 0.26], [0, 1])
-  // Window: slides in to receive the sheet; a gold ring flashes on absorb.
-  const winX = useTransform(p, [0.34, 0.54], ['26%', '0%'])
-  const winFade = useTransform(p, [0.34, 0.5], [0, 1])
-  const absorbFlash = useTransform(p, [0.64, 0.71, 0.8], [0, 0.85, 0])
+  // One focal point: the folder holds center-stage in the visual column, gives
+  // up the sheet, hands off to Penny, then the app window takes the same spot.
+  //
+  // Each phase owns its moment on the one focal spot — nothing overlaps:
+  //   rise (0.12–0.34) → drop onto Penny, clear of the folder (0.36–0.48) →
+  //   folder exits (0.36–0.5) → window arrives in its place (0.54–0.66) →
+  //   the pair delivers + absorb flash (0.6–0.82) → screens (0.8→).
+  //
+  // Folder: flap opens as the sheet leaves, then the folder bows out entirely
+  // (the window replaces it — the paper world yields to the platform).
+  const folderFlap = useTransform(p, [0.08, 0.24], [0, -72])
+  const folderFade = useTransform(p, [0.36, 0.5], [1, 0])
+  const folderShift = useTransform(p, [0.36, 0.5], ['0%', '14%'])
+  const folderScale = useTransform(p, [0.36, 0.5], [1, 0.92])
+  // Sheet: starts FULLY INSIDE the folder (concealed by the flap), rises clear,
+  // then DROPS down-left onto Penny — and from there the pair moves in lockstep
+  // (same keyframe stops) so she is unmistakably the one carrying it — until
+  // the window absorbs it.
+  const sheetLeft = useTransform(p, [0, 0.34, 0.46, 0.6, 0.74], ['32%', '32%', '10%', '14%', '42%'])
+  const sheetTop = useTransform(p, [0, 0.12, 0.34, 0.46, 0.6, 0.74], ['30%', '30%', '-8%', '36%', '38%', '24%'])
+  const sheetRotate = useTransform(p, [0.12, 0.34, 0.46, 0.6], [0, -6, 3, -1])
+  const sheetScale = useTransform(p, [0.7, 0.8], [1, 0.45])
+  const sheetFade = useTransform(p, [0.74, 0.81], [1, 0])
+  // Penny: slides in to CATCH the sheet (she sits on its lower edge, in front,
+  // z-30) and carries it to the window; same stops as the sheet from the catch.
+  const pennyLeft = useTransform(p, [0.28, 0.46, 0.6, 0.74, 0.86], ['-8%', '16%', '20%', '48%', '16%'])
+  const pennyTop = useTransform(p, [0.28, 0.46, 0.6, 0.74, 0.86], ['74%', '62%', '64%', '50%', '70%'])
+  const pennyFade = useTransform(p, [0.28, 0.38], [0, 1])
+  // Window: rises into the folder's old spot (only after it has gone) to
+  // receive the delivery; a gold ring flashes as the sheet lands.
+  const winY = useTransform(p, [0.54, 0.66], ['26%', '0%'])
+  const winFade = useTransform(p, [0.54, 0.65], [0, 1])
+  const absorbFlash = useTransform(p, [0.74, 0.8, 0.88], [0, 0.85, 0])
   // Screen layers: raw rows → statements → briefing.
-  const rawFade = useTransform(p, [0.5, 0.64, 0.74], [1, 1, 0])
-  const stmtFade = useTransform(p, [0.7, 0.78, 0.82, 0.88], [0, 1, 1, 0])
-  const briefFade = useTransform(p, [0.86, 0.94], [0, 1])
+  const rawFade = useTransform(p, [0.66, 0.76, 0.84], [1, 1, 0])
+  const stmtFade = useTransform(p, [0.8, 0.86, 0.89, 0.93], [0, 1, 1, 0])
+  const briefFade = useTransform(p, [0.91, 0.97], [0, 1])
 
   if (reduce) {
     // No pinning under reduced motion: the act reads as a normal section.
@@ -330,12 +346,14 @@ export default function IngestScrolly({ act }) {
 
             {/* ── The stage ──────────────────────────────────────────────── */}
             <div className="relative h-[46vh] min-h-[300px] sm:h-[54vh]" aria-hidden="true">
-              {/* Folder (sheet starts behind its front flap) */}
+              {/* Folder — the focal point of the visual column, level with the
+                  narration copy (and clear of the ledger spine). The sheet
+                  starts completely inside, behind the flap. */}
               <motion.div
-                style={{ opacity: folderFade, x: folderShift }}
-                className="absolute bottom-[8%] left-[2%] z-[15]"
+                style={{ opacity: folderFade, y: folderShift, scale: folderScale }}
+                className="absolute left-[22%] top-[22%] z-[15]"
               >
-                <Folder frontStyle={{ rotateX: folderFlap, transformPerspective: 600 }} />
+                <Folder frontStyle={{ rotateX: folderFlap, transformPerspective: 700 }} />
               </motion.div>
 
               {/* The traveling sheet */}
@@ -347,7 +365,7 @@ export default function IngestScrolly({ act }) {
                   scale: sheetScale,
                   opacity: sheetFade,
                 }}
-                className="absolute z-10"
+                className="absolute z-[22]"
               >
                 <SheetCard />
               </motion.div>
@@ -360,10 +378,10 @@ export default function IngestScrolly({ act }) {
                 <PennyAvatar size={64} glance={beat >= 3 ? 0 : 1} celebrate={beat === 3} active />
               </motion.div>
 
-              {/* The platform window */}
+              {/* The platform window — rises into the folder's old spot */}
               <motion.div
-                style={{ x: winX, opacity: winFade }}
-                className="absolute right-0 top-1/2 z-20 w-[62%] max-w-sm -translate-y-1/2"
+                style={{ y: winY, opacity: winFade }}
+                className="absolute left-[18%] top-[16%] z-20 w-[64%] max-w-sm"
               >
                 <div className="relative overflow-hidden rounded-2xl border border-navy/20 bg-white shadow-paper">
                   <div className="flex items-center gap-1.5 bg-navy-gradient px-3 py-2">
