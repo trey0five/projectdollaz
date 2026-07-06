@@ -31,9 +31,12 @@ import {
   ShieldCheck,
   Gift as GiftIcon,
   HandCoins,
+  Megaphone,
 } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
+import EntityFormModal, { Field, Select, fieldInput, fieldTextarea } from '../components/ui/EntityFormModal.jsx'
 import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
+import DatePicker from '../components/ui/DatePicker.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useAdvancement } from '../hooks/useAdvancement.js'
 
@@ -228,9 +231,6 @@ function toCampaignBody(form) {
   }
 }
 
-const inputCls =
-  'mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-white outline-none focus:border-gold/60'
-
 function CampaignFormModal({ initial, onClose, onSave, reduce }) {
   const [form, setForm] = useState(initial ?? EMPTY_FORM)
   const [saving, setSaving] = useState(false)
@@ -264,133 +264,98 @@ function CampaignFormModal({ initial, onClose, onSave, reduce }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <motion.div
-        initial={reduce ? false : { opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-lg rounded-2xl border-2 border-gold/30 bg-navy-gradient p-6 shadow-navy-glow"
-      >
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-serif text-[18px] uppercase tracking-[0.12em] text-gold-light">
-            {initial ? 'Edit campaign' : 'Add campaign'}
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-gold/60 hover:text-white"
-          >
-            <X size={18} />
-          </button>
-        </div>
-        <form onSubmit={submit} className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <label className="col-span-2 block text-[13px] text-white/70">
-              Campaign name
-              <input
-                value={form.name}
-                onChange={set('name')}
-                maxLength={200}
-                placeholder="e.g. 2026 Annual Fund"
-                className={inputCls}
-              />
-            </label>
-            <label className="block text-[13px] text-white/70">
-              Type
-              <select value={form.campaignType} onChange={set('campaignType')} className={inputCls}>
-                <option value="">—</option>
-                {CAMPAIGN_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {TYPE_LABEL[t]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-[13px] text-white/70">
-              Status
-              <select value={form.status} onChange={set('status')} className={inputCls}>
-                {STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {STATUS_LABEL[s]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-[13px] text-white/70">
-              Goal amount ($)
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={form.goalAmount}
-                onChange={set('goalAmount')}
-                placeholder="e.g. 250000"
-                className={inputCls}
-              />
-            </label>
-            <label className="block text-[13px] text-white/70">
-              Raised so far ($)
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={form.raisedAmount}
-                onChange={set('raisedAmount')}
-                placeholder="e.g. 135000"
-                className={inputCls}
-              />
-            </label>
-            <label className="block text-[13px] text-white/70">
-              Fiscal year
-              <input
-                type="number"
-                min="2000"
-                max="2100"
-                value={form.fiscalYear}
-                onChange={set('fiscalYear')}
-                placeholder="e.g. 2026"
-                className={inputCls}
-              />
-            </label>
-            <label className="block text-[13px] text-white/70">
-              Start date
-              <input type="date" value={form.startDate} onChange={set('startDate')} className={inputCls} />
-            </label>
-            <label className="block text-[13px] text-white/70">
-              Close date
-              <input type="date" value={form.closeDate} onChange={set('closeDate')} className={inputCls} />
-            </label>
-            <label className="col-span-2 block text-[13px] text-white/70">
-              Notes
-              <textarea
-                value={form.notes}
-                onChange={set('notes')}
-                maxLength={4000}
-                rows={2}
-                className={inputCls}
-              />
-            </label>
-          </div>
-          {err ? <p className="text-[13px] text-red-300">{err}</p> : null}
-          <div className="flex justify-end gap-2 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg border-2 border-white/20 px-4 py-2 text-[14px] font-semibold text-white/70 hover:border-white/40 hover:text-white"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded-lg border-2 border-gold/60 bg-gold/15 px-4 py-2 text-[14px] font-semibold text-gold-light hover:bg-gold/25 disabled:opacity-50"
-            >
-              {saving ? 'Saving…' : 'Save campaign'}
-            </button>
-          </div>
-        </form>
-      </motion.div>
-    </div>
+    <EntityFormModal
+      open
+      icon={Megaphone}
+      title={initial ? 'Edit campaign' : 'Add campaign'}
+      subtitle="A fundraising campaign"
+      onClose={onClose}
+      onSubmit={submit}
+      saving={saving}
+      error={err}
+      submitLabel={initial ? 'Save campaign' : 'Add campaign'}
+      reduce={reduce}
+    >
+      <Field label="Campaign name" span={2} index={0} reduce={reduce}>
+        <input
+          value={form.name}
+          onChange={set('name')}
+          maxLength={200}
+          placeholder="e.g. 2026 Annual Fund"
+          className={fieldInput}
+          autoFocus
+        />
+      </Field>
+      <Field label="Type" index={1} reduce={reduce}>
+        <Select value={form.campaignType} onChange={set('campaignType')}>
+          <option value="">—</option>
+          {CAMPAIGN_TYPES.map((t) => (
+            <option key={t} value={t}>
+              {TYPE_LABEL[t]}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      <Field label="Status" index={2} reduce={reduce}>
+        <Select value={form.status} onChange={set('status')}>
+          {STATUSES.map((s) => (
+            <option key={s} value={s}>
+              {STATUS_LABEL[s]}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      <Field label="Goal amount ($)" index={3} reduce={reduce}>
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          value={form.goalAmount}
+          onChange={set('goalAmount')}
+          placeholder="e.g. 250000"
+          className={fieldInput}
+        />
+      </Field>
+      <Field label="Raised so far ($)" index={4} reduce={reduce}>
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          value={form.raisedAmount}
+          onChange={set('raisedAmount')}
+          placeholder="e.g. 135000"
+          className={fieldInput}
+        />
+      </Field>
+      <Field label="Fiscal year" index={5} reduce={reduce}>
+        <input
+          type="number"
+          min="2000"
+          max="2100"
+          value={form.fiscalYear}
+          onChange={set('fiscalYear')}
+          placeholder="e.g. 2026"
+          className={fieldInput}
+        />
+      </Field>
+      <Field label="Start date" index={6} reduce={reduce}>
+        <DatePicker
+          value={form.startDate}
+          onChange={(v) => set('startDate')({ target: { value: v } })}
+          className={fieldInput}
+        />
+      </Field>
+      <Field label="Close date" index={7} reduce={reduce}>
+        <DatePicker
+          value={form.closeDate}
+          onChange={(v) => set('closeDate')({ target: { value: v } })}
+          className={fieldInput}
+        />
+      </Field>
+      <Field label="Notes" span={2} index={8} reduce={reduce}>
+        <textarea value={form.notes} onChange={set('notes')} maxLength={4000} rows={2} className={fieldTextarea} />
+      </Field>
+    </EntityFormModal>
   )
 }
 
@@ -506,7 +471,11 @@ function GiftForm({ initial, onCancel, onSubmit }) {
       ) : null}
       <label className="block text-[12px] text-white/60">
         Date
-        <input type="date" value={form.occurredOn} onChange={set('occurredOn')} className={`mt-1 w-full ${giftInputCls}`} />
+        <DatePicker
+          value={form.occurredOn}
+          onChange={(v) => set('occurredOn')({ target: { value: v } })}
+          className={`mt-1 w-full ${giftInputCls}`}
+        />
       </label>
       <label className={`block text-[12px] text-white/60 ${isPledge ? 'col-span-2' : ''}`}>
         Label (optional — no donor names)

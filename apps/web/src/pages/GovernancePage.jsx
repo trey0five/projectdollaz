@@ -29,7 +29,16 @@ import {
   CalendarClock,
   Clock,
   FileWarning,
+  ScrollText,
+  Users,
 } from 'lucide-react'
+import EntityFormModal, {
+  Field,
+  Select,
+  fieldInput,
+  fieldTextarea,
+} from '../components/ui/EntityFormModal.jsx'
+import DatePicker from '../components/ui/DatePicker.jsx'
 import BillingBanner from '../components/BillingBanner.jsx'
 import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
@@ -131,57 +140,6 @@ function StateRow({ children }) {
   )
 }
 
-// ── Shared dark modal shell (an overlay — deliberately kept dark) ─────────────
-function ModalShell({ title, onClose, reduce, children }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <motion.div
-        initial={reduce ? false : { opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-lg rounded-2xl border-2 border-gold/30 bg-navy-gradient p-6 shadow-navy-glow"
-      >
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-serif text-[18px] uppercase tracking-[0.12em] text-gold-light">
-            {title}
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-gold/60 hover:text-white"
-          >
-            <X size={18} />
-          </button>
-        </div>
-        {children}
-      </motion.div>
-    </div>
-  )
-}
-
-const inputCls =
-  'mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-white outline-none focus:border-gold/60'
-
-function ModalActions({ saving, onClose, label }) {
-  return (
-    <div className="flex justify-end gap-2 pt-1">
-      <button
-        type="button"
-        onClick={onClose}
-        className="rounded-lg border-2 border-white/20 px-4 py-2 text-[14px] font-semibold text-white/70 hover:border-white/40 hover:text-white"
-      >
-        Cancel
-      </button>
-      <button
-        type="submit"
-        disabled={saving}
-        className="rounded-lg border-2 border-gold/60 bg-gold/15 px-4 py-2 text-[14px] font-semibold text-gold-light hover:bg-gold/25 disabled:opacity-50"
-      >
-        {saving ? 'Saving…' : label}
-      </button>
-    </div>
-  )
-}
 
 // ── Light-theme entitlement / license gate ───────────────────────────────────
 function GatePanel({ notLicensed }) {
@@ -265,76 +223,70 @@ function PolicyFormModal({ initial, onClose, onSave, reduce }) {
   }
 
   return (
-    <ModalShell title={initial ? 'Edit policy' : 'Add policy'} onClose={onClose} reduce={reduce}>
-      <form onSubmit={submit} className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
-          <label className="col-span-2 block text-[13px] text-white/70">
-            Title
-            <input value={form.title} onChange={set('title')} maxLength={200} className={inputCls} />
-          </label>
-          <label className="block text-[13px] text-white/70">
-            Category
-            <input
-              value={form.category}
-              onChange={set('category')}
-              maxLength={80}
-              placeholder="e.g. Financial, HR, Safety"
-              className={inputCls}
-            />
-          </label>
-          <label className="block text-[13px] text-white/70">
-            Status
-            <select value={form.status} onChange={set('status')} className={inputCls}>
-              {STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block text-[13px] text-white/70">
-            Owner
-            <input value={form.owner} onChange={set('owner')} maxLength={200} className={inputCls} />
-          </label>
-          <label className="block text-[13px] text-white/70">
-            Review every (months)
-            <input
-              type="number"
-              min={1}
-              max={120}
-              value={form.reviewIntervalMonths}
-              onChange={set('reviewIntervalMonths')}
-              className={inputCls}
-            />
-          </label>
-          <label className="block text-[13px] text-white/70">
-            Adopted date
-            <input type="date" value={form.adoptedDate} onChange={set('adoptedDate')} className={inputCls} />
-          </label>
-          <label className="block text-[13px] text-white/70">
-            Last reviewed
-            <input
-              type="date"
-              value={form.lastReviewedDate}
-              onChange={set('lastReviewedDate')}
-              className={inputCls}
-            />
-          </label>
-          <label className="col-span-2 block text-[13px] text-white/70">
-            Notes
-            <textarea
-              value={form.notes}
-              onChange={set('notes')}
-              maxLength={4000}
-              rows={2}
-              className={inputCls}
-            />
-          </label>
-        </div>
-        {err ? <p className="text-[13px] text-red-300">{err}</p> : null}
-        <ModalActions saving={saving} onClose={onClose} label="Save policy" />
-      </form>
-    </ModalShell>
+    <EntityFormModal
+      open
+      icon={ScrollText}
+      title={initial ? 'Edit policy' : 'Add policy'}
+      subtitle="Board policy with a review cadence"
+      onClose={onClose}
+      onSubmit={submit}
+      saving={saving}
+      error={err}
+      submitLabel={initial ? 'Save policy' : 'Add policy'}
+      reduce={reduce}
+    >
+      <Field label="Title" span={2} index={0} reduce={reduce}>
+        <input value={form.title} onChange={set('title')} maxLength={200} className={fieldInput} autoFocus />
+      </Field>
+      <Field label="Category" index={1} reduce={reduce}>
+        <input
+          value={form.category}
+          onChange={set('category')}
+          maxLength={80}
+          placeholder="Financial, HR, Safety…"
+          className={fieldInput}
+        />
+      </Field>
+      <Field label="Status" index={2} reduce={reduce}>
+        <Select value={form.status} onChange={set('status')}>
+          {STATUSES.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      <Field label="Owner" index={3} reduce={reduce}>
+        <input value={form.owner} onChange={set('owner')} maxLength={200} className={fieldInput} />
+      </Field>
+      <Field label="Review every (months)" index={4} reduce={reduce}>
+        <input
+          type="number"
+          min={1}
+          max={120}
+          value={form.reviewIntervalMonths}
+          onChange={set('reviewIntervalMonths')}
+          className={fieldInput}
+        />
+      </Field>
+      <Field label="Adopted date" index={5} reduce={reduce}>
+        <DatePicker
+          value={form.adoptedDate}
+          onChange={(v) => setForm((f) => ({ ...f, adoptedDate: v }))}
+          className={fieldInput}
+        />
+      </Field>
+      <Field label="Last reviewed" index={6} reduce={reduce}>
+        <DatePicker
+          value={form.lastReviewedDate}
+          onChange={(v) => setForm((f) => ({ ...f, lastReviewedDate: v }))}
+          className={fieldInput}
+        />
+      </Field>
+      <Field label="Notes" span={2} index={7} reduce={reduce}>
+        <textarea value={form.notes} onChange={set('notes')} maxLength={4000} rows={2} className={fieldTextarea} />
+      </Field>
+    </EntityFormModal>
   )
 }
 
@@ -377,51 +329,52 @@ function CommitteeFormModal({ initial, onClose, onSave, reduce }) {
   }
 
   return (
-    <ModalShell title={initial ? 'Edit committee' : 'Add committee'} onClose={onClose} reduce={reduce}>
-      <form onSubmit={submit} className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
-          <label className="col-span-2 block text-[13px] text-white/70">
-            Name
-            <input value={form.name} onChange={set('name')} maxLength={200} className={inputCls} />
-          </label>
-          <label className="block text-[13px] text-white/70">
-            Kind
-            <select value={form.kind} onChange={set('kind')} className={inputCls}>
-              {COMMITTEE_KINDS.map((k) => (
-                <option key={k} value={k}>
-                  {k}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block text-[13px] text-white/70">
-            Chair
-            <input value={form.chair} onChange={set('chair')} maxLength={200} className={inputCls} />
-          </label>
-          <label className="col-span-2 block text-[13px] text-white/70">
-            Description
-            <textarea
-              value={form.description}
-              onChange={set('description')}
-              maxLength={2000}
-              rows={2}
-              className={inputCls}
-            />
-          </label>
-          <label className="col-span-2 flex items-center gap-2 text-[13px] text-white/70">
-            <input
-              type="checkbox"
-              checked={!!form.active}
-              onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))}
-              className="h-4 w-4 rounded border-white/30 bg-navy/40"
-            />
-            Active
-          </label>
-        </div>
-        {err ? <p className="text-[13px] text-red-300">{err}</p> : null}
-        <ModalActions saving={saving} onClose={onClose} label="Save committee" />
-      </form>
-    </ModalShell>
+    <EntityFormModal
+      open
+      icon={Users}
+      title={initial ? 'Edit committee' : 'Add committee'}
+      subtitle="A board or standing committee"
+      onClose={onClose}
+      onSubmit={submit}
+      saving={saving}
+      error={err}
+      submitLabel={initial ? 'Save committee' : 'Add committee'}
+      reduce={reduce}
+    >
+      <Field label="Name" span={2} index={0} reduce={reduce}>
+        <input value={form.name} onChange={set('name')} maxLength={200} className={fieldInput} autoFocus />
+      </Field>
+      <Field label="Kind" index={1} reduce={reduce}>
+        <Select value={form.kind} onChange={set('kind')}>
+          {COMMITTEE_KINDS.map((k) => (
+            <option key={k} value={k}>
+              {k}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      <Field label="Chair" index={2} reduce={reduce}>
+        <input value={form.chair} onChange={set('chair')} maxLength={200} className={fieldInput} />
+      </Field>
+      <Field label="Description" span={2} index={3} reduce={reduce}>
+        <textarea
+          value={form.description}
+          onChange={set('description')}
+          maxLength={2000}
+          rows={2}
+          className={fieldTextarea}
+        />
+      </Field>
+      <label className="flex cursor-pointer select-none items-center gap-2.5 text-[14px] font-medium text-white/80 sm:col-span-2">
+        <input
+          type="checkbox"
+          checked={!!form.active}
+          onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))}
+          className="h-[18px] w-[18px] rounded border-white/30 bg-navy-deep/50 accent-gold"
+        />
+        Active committee
+      </label>
+    </EntityFormModal>
   )
 }
 
@@ -478,75 +431,76 @@ function MeetingFormModal({ initial, committees, onClose, onSave, reduce }) {
   }
 
   return (
-    <ModalShell title={initial ? 'Edit meeting' : 'Add meeting'} onClose={onClose} reduce={reduce}>
-      <form onSubmit={submit} className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
-          <label className="col-span-2 block text-[13px] text-white/70">
-            Title
-            <input value={form.title} onChange={set('title')} maxLength={200} className={inputCls} />
-          </label>
-          <label className="block text-[13px] text-white/70">
-            Committee
-            <select value={form.committeeId} onChange={set('committeeId')} className={inputCls}>
-              <option value="">— none —</option>
-              {committees.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block text-[13px] text-white/70">
-            Meeting date
-            <input type="date" value={form.scheduledAt} onChange={set('scheduledAt')} className={inputCls} />
-          </label>
-          <label className="block text-[13px] text-white/70">
-            Location
-            <input value={form.location} onChange={set('location')} maxLength={200} className={inputCls} />
-          </label>
-          <label className="block text-[13px] text-white/70">
-            Status
-            <select value={form.status} onChange={set('status')} className={inputCls}>
-              {MEETING_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="col-span-2 block text-[13px] text-white/70">
-            Agenda
-            <textarea value={form.agenda} onChange={set('agenda')} maxLength={20000} rows={2} className={inputCls} />
-          </label>
-          <label className="col-span-2 block text-[13px] text-white/70">
-            Minutes
-            <textarea value={form.minutes} onChange={set('minutes')} maxLength={20000} rows={2} className={inputCls} />
-          </label>
-          <label className="col-span-2 block text-[13px] text-white/70">
-            Decisions
-            <textarea
-              value={form.decisions}
-              onChange={set('decisions')}
-              maxLength={20000}
-              rows={2}
-              className={inputCls}
-            />
-          </label>
-          <label className="block text-[13px] text-white/70">
-            Minutes status
-            <select value={form.minutesStatus} onChange={set('minutesStatus')} className={inputCls}>
-              {MINUTES_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {s.replace('_', ' ')}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        {err ? <p className="text-[13px] text-red-300">{err}</p> : null}
-        <ModalActions saving={saving} onClose={onClose} label="Save meeting" />
-      </form>
-    </ModalShell>
+    <EntityFormModal
+      open
+      wide
+      icon={CalendarClock}
+      title={initial ? 'Edit meeting' : 'Add meeting'}
+      subtitle="Agenda, minutes, and decisions"
+      onClose={onClose}
+      onSubmit={submit}
+      saving={saving}
+      error={err}
+      submitLabel={initial ? 'Save meeting' : 'Add meeting'}
+      reduce={reduce}
+    >
+      <Field label="Title" span={2} index={0} reduce={reduce}>
+        <input value={form.title} onChange={set('title')} maxLength={200} className={fieldInput} autoFocus />
+      </Field>
+      <Field label="Committee" index={1} reduce={reduce}>
+        <Select value={form.committeeId} onChange={set('committeeId')}>
+          <option value="">— none —</option>
+          {committees.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      <Field label="Meeting date" index={2} reduce={reduce}>
+        <DatePicker
+          value={form.scheduledAt}
+          onChange={(v) => setForm((f) => ({ ...f, scheduledAt: v }))}
+          className={fieldInput}
+        />
+      </Field>
+      <Field label="Location" index={3} reduce={reduce}>
+        <input value={form.location} onChange={set('location')} maxLength={200} className={fieldInput} />
+      </Field>
+      <Field label="Status" index={4} reduce={reduce}>
+        <Select value={form.status} onChange={set('status')}>
+          {MEETING_STATUSES.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      <Field label="Agenda" span={2} index={5} reduce={reduce}>
+        <textarea value={form.agenda} onChange={set('agenda')} maxLength={20000} rows={2} className={fieldTextarea} />
+      </Field>
+      <Field label="Minutes" span={2} index={6} reduce={reduce}>
+        <textarea value={form.minutes} onChange={set('minutes')} maxLength={20000} rows={2} className={fieldTextarea} />
+      </Field>
+      <Field label="Decisions" span={2} index={7} reduce={reduce}>
+        <textarea
+          value={form.decisions}
+          onChange={set('decisions')}
+          maxLength={20000}
+          rows={2}
+          className={fieldTextarea}
+        />
+      </Field>
+      <Field label="Minutes status" index={8} reduce={reduce}>
+        <Select value={form.minutesStatus} onChange={set('minutesStatus')}>
+          {MINUTES_STATUSES.map((s) => (
+            <option key={s} value={s}>
+              {s.replace('_', ' ')}
+            </option>
+          ))}
+        </Select>
+      </Field>
+    </EntityFormModal>
   )
 }
 

@@ -3,6 +3,7 @@ import { Pencil } from 'lucide-react'
 import { useApp } from '../context/AppContext.jsx'
 import { inferPeriod } from '@finrep/ingestion'
 import { formatShortDate } from '../lib/format.js'
+import DatePicker from './ui/DatePicker.jsx'
 
 const TYPE_LABEL = {
   ytd: 'Year-to-Date',
@@ -66,10 +67,9 @@ export default function PeriodControls() {
         <span className="mb-2 text-[14px] font-semibold uppercase tracking-[0.12em] text-muted">
           Period End Date
         </span>
-        <input
-          type="date"
+        <DatePicker
           value={periodDate}
-          onChange={(e) => setPeriodDate(e.target.value)}
+          onChange={(v) => setPeriodDate(v)}
           className={`cursor-pointer rounded-xl border-2 bg-white px-4 py-3 text-sm text-ink outline-none transition-colors focus:border-gold ${
             periodDate ? 'border-border' : 'border-gold shadow-glow'
           }`}

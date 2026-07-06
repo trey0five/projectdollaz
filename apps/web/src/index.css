@@ -155,6 +155,101 @@
     opacity: 1;
   }
 
+  /* ── Luxe entity-form modal (dark) — the shared "add / edit record" surface
+     across Governance / Accreditation / Facilities / Advancement / Tasks. A deep
+     navy pane lifted on a gold header glow, wrapped in the same flowing gold↔navy
+     gradient ring as the vital tiles (paused under reduced motion). Pairs with
+     components/ui/EntityFormModal.jsx. */
+  .modal-lux {
+    @apply relative rounded-[1.4rem];
+    background:
+      radial-gradient(135% 72% at 50% -18%, rgba(212, 178, 122, 0.24), transparent 60%),
+      linear-gradient(160deg, #17284c 0%, #1f3d72 62%, #24457e 122%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.1),
+      0 30px 66px -22px rgba(4, 10, 26, 0.78),
+      0 0 46px -12px rgba(184, 150, 80, 0.32);
+  }
+  .modal-lux::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1.5px;
+    background: linear-gradient(
+      115deg,
+      rgba(184, 150, 80, 0.9) 0%,
+      rgba(46, 80, 143, 0.5) 30%,
+      rgba(214, 178, 110, 0.95) 52%,
+      rgba(46, 80, 143, 0.5) 74%,
+      rgba(184, 150, 80, 0.9) 100%
+    );
+    background-size: 250% 100%;
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+    animation: cf-flow 6s ease-in-out infinite;
+    z-index: 1;
+  }
+  /* A diagonal glass glint that sweeps across the pane once as it opens. */
+  .modal-lux::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(
+      116deg,
+      transparent 42%,
+      rgba(255, 255, 255, 0.14) 49%,
+      rgba(214, 178, 92, 0.22) 52%,
+      transparent 60%
+    );
+    transform: translateX(-130%);
+    pointer-events: none;
+    z-index: 2;
+    animation: modal-lux-glint 1.1s ease-out 0.15s 1 both;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .modal-lux::before {
+      animation: none;
+    }
+    .modal-lux::after {
+      display: none;
+    }
+  }
+
+  /* Premium dark field: a recessed navy well that lifts + gains a soft gold focus
+     ring. Used by EntityFormModal's Field inputs/selects/textareas. */
+  .field-lux {
+    @apply mt-1.5 w-full rounded-xl border-2 border-white/15 bg-navy-deep/50 px-3.5 py-2.5 text-[15px]
+           text-white placeholder-white/30 outline-none transition-all duration-200
+           focus:border-gold/70 focus:bg-navy-deep/70;
+  }
+  .field-lux:focus {
+    box-shadow: 0 0 0 3px rgba(184, 150, 80, 0.22);
+  }
+
+  /* Gold primary action with the same sweeping sheen as .btn-primary. */
+  .btn-gold {
+    @apply relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl bg-gold-gradient
+           px-5 py-2.5 text-[13px] font-bold uppercase tracking-[0.12em] text-navy shadow-glow
+           transition-all duration-300 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98]
+           disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0;
+  }
+  .btn-gold::before {
+    content: '';
+    @apply pointer-events-none absolute inset-0 bg-sheen;
+    transform: translateX(-160%);
+    transition: transform 0.7s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .btn-gold:hover::before {
+    transform: translateX(160%);
+  }
+  .btn-gold:disabled::before {
+    content: none;
+  }
+
   /* ── Buttons (bigger + gradient + animated sheen) ─────── */
   .btn-primary {
     @apply relative inline-flex min-h-[44px] items-center justify-center gap-2.5 overflow-hidden rounded-xl
@@ -264,6 +359,12 @@
   0% { opacity: 0; transform: translateY(6px) scale(0.96); }
   60% { opacity: 1; transform: translateY(0) scale(1.01); }
   100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+/* One-shot diagonal glint sweeping across the luxe modal as it opens. */
+@keyframes modal-lux-glint {
+  0% { transform: translateX(-130%); opacity: 0; }
+  30% { opacity: 1; }
+  100% { transform: translateX(130%); opacity: 0; }
 }
 /* Staggered fade-up for the empty-state bento tiles. */
 @keyframes penny-fadeup {

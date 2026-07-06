@@ -20,6 +20,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import {
+  Award,
   BadgeCheck,
   Check,
   ChevronDown,
@@ -36,7 +37,9 @@ import {
   X,
 } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
+import EntityFormModal, { Field, Select, fieldInput, fieldTextarea } from '../components/ui/EntityFormModal.jsx'
 import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
+import DatePicker from '../components/ui/DatePicker.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useAccreditation } from '../hooks/useAccreditation.js'
 
@@ -286,136 +289,74 @@ function StandardFormModal({ open, initial, onClose, onSave, reduce, standards =
     }
   }
 
-  if (!open) return null
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <motion.div
-        initial={reduce ? false : { opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-lg rounded-2xl border-2 border-gold/30 bg-navy-gradient p-6 shadow-navy-glow"
-      >
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-serif text-[18px] uppercase tracking-[0.12em] text-gold-light">
-            {initial ? 'Edit standard' : 'Add standard'}
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-gold/60 hover:text-white"
-          >
-            <X size={18} />
-          </button>
-        </div>
-        <form onSubmit={submit} className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block text-[13px] text-white/70">
-              Code
-              <input
-                value={form.code}
-                onChange={set('code')}
-                maxLength={40}
-                placeholder="e.g. MSA-3"
-                className="mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-white outline-none focus:border-gold/60"
-              />
-            </label>
-            <label className="block text-[13px] text-white/70">
-              Category
-              <input
-                value={form.category}
-                onChange={set('category')}
-                maxLength={80}
-                placeholder="e.g. Governance"
-                className="mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-white outline-none focus:border-gold/60"
-              />
-            </label>
-            <label className="col-span-2 block text-[13px] text-white/70">
-              Title
-              <input
-                value={form.title}
-                onChange={set('title')}
-                maxLength={200}
-                className="mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-white outline-none focus:border-gold/60"
-              />
-            </label>
-            <label className="block text-[13px] text-white/70">
-              Parent standard
-              <select
-                value={form.parentId}
-                onChange={set('parentId')}
-                className="mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-white outline-none focus:border-gold/60"
-              >
-                <option value="">Top-level (no parent)</option>
-                {parentOptions(standards, editingId).map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.code} — {s.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-[13px] text-white/70">
-              Rating
-              <select
-                value={form.rating}
-                onChange={set('rating')}
-                className="mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-white outline-none focus:border-gold/60"
-              >
-                {RATING_OPTIONS.map((r) => (
-                  <option key={r.value} value={r.value}>
-                    {r.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-[13px] text-white/70">
-              Owner
-              <input
-                value={form.owner}
-                onChange={set('owner')}
-                maxLength={200}
-                className="mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-white outline-none focus:border-gold/60"
-              />
-            </label>
-            <label className="block text-[13px] text-white/70">
-              Review date
-              <input
-                type="date"
-                value={form.reviewDate}
-                onChange={set('reviewDate')}
-                className="mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-white outline-none focus:border-gold/60"
-              />
-            </label>
-            <label className="col-span-2 block text-[13px] text-white/70">
-              Notes
-              <textarea
-                value={form.notes}
-                onChange={set('notes')}
-                maxLength={4000}
-                rows={2}
-                className="mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-white outline-none focus:border-gold/60"
-              />
-            </label>
-          </div>
-          {err ? <p className="text-[13px] text-red-300">{err}</p> : null}
-          <div className="flex justify-end gap-2 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg border-2 border-white/20 px-4 py-2 text-[14px] font-semibold text-white/70 hover:border-white/40 hover:text-white"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded-lg border-2 border-gold/60 bg-gold/15 px-4 py-2 text-[14px] font-semibold text-gold-light hover:bg-gold/25 disabled:opacity-50"
-            >
-              {saving ? 'Saving…' : 'Save standard'}
-            </button>
-          </div>
-        </form>
-      </motion.div>
-    </div>
+    <EntityFormModal
+      open={open}
+      icon={Award}
+      title={initial ? 'Edit standard' : 'Add standard'}
+      subtitle="Accreditation standard with evidence and a review cadence"
+      onClose={onClose}
+      onSubmit={submit}
+      saving={saving}
+      error={err}
+      submitLabel={initial ? 'Save standard' : 'Add standard'}
+      reduce={reduce}
+    >
+      <Field label="Code" index={0} reduce={reduce}>
+        <input
+          value={form.code}
+          onChange={set('code')}
+          maxLength={40}
+          placeholder="e.g. MSA-3"
+          className={fieldInput}
+          autoFocus
+        />
+      </Field>
+      <Field label="Category" index={1} reduce={reduce}>
+        <input
+          value={form.category}
+          onChange={set('category')}
+          maxLength={80}
+          placeholder="e.g. Governance"
+          className={fieldInput}
+        />
+      </Field>
+      <Field label="Title" span={2} index={2} reduce={reduce}>
+        <input value={form.title} onChange={set('title')} maxLength={200} className={fieldInput} />
+      </Field>
+      <Field label="Parent standard" index={3} reduce={reduce}>
+        <Select value={form.parentId} onChange={set('parentId')}>
+          <option value="">Top-level (no parent)</option>
+          {parentOptions(standards, editingId).map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.code} — {s.title}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      <Field label="Rating" index={4} reduce={reduce}>
+        <Select value={form.rating} onChange={set('rating')}>
+          {RATING_OPTIONS.map((r) => (
+            <option key={r.value} value={r.value}>
+              {r.label}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      <Field label="Owner" index={5} reduce={reduce}>
+        <input value={form.owner} onChange={set('owner')} maxLength={200} className={fieldInput} />
+      </Field>
+      <Field label="Review date" index={6} reduce={reduce}>
+        <DatePicker
+          value={form.reviewDate}
+          onChange={(v) => set('reviewDate')({ target: { value: v } })}
+          className={fieldInput}
+        />
+      </Field>
+      <Field label="Notes" span={2} index={7} reduce={reduce}>
+        <textarea value={form.notes} onChange={set('notes')} maxLength={4000} rows={2} className={fieldTextarea} />
+      </Field>
+    </EntityFormModal>
   )
 }
 
@@ -594,10 +535,9 @@ function EvidencePanel({
                         </option>
                       ))}
                     </select>
-                    <input
-                      type="date"
+                    <DatePicker
                       value={editForm.capturedAt}
-                      onChange={(e) => setEditForm((f) => ({ ...f, capturedAt: e.target.value }))}
+                      onChange={(v) => setEditForm((f) => ({ ...f, capturedAt: v }))}
                       className="rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-1.5 text-[13px] text-white outline-none focus:border-gold/60"
                     />
                     <input
@@ -703,10 +643,9 @@ function EvidencePanel({
                 </option>
               ))}
             </select>
-            <input
-              type="date"
+            <DatePicker
               value={form.capturedAt}
-              onChange={(e) => setForm((f) => ({ ...f, capturedAt: e.target.value }))}
+              onChange={(v) => setForm((f) => ({ ...f, capturedAt: v }))}
               className="rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-1.5 text-[13px] text-white outline-none focus:border-gold/60"
             />
             <input

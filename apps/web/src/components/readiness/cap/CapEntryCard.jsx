@@ -12,6 +12,7 @@ import StatusDot from '../../analytics/StatusDot.jsx'
 import { complianceStatusMeta } from '../../../lib/complianceMeta.js'
 import { CAP_STATUS_OPTIONS, capStatusMeta } from '../../../lib/capMeta.js'
 import { activePillCls } from '../../../lib/activePill.js'
+import DatePicker from '../../ui/DatePicker.jsx'
 
 const labelCls =
   'mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-muted'
@@ -117,12 +118,11 @@ export default function CapEntryCard({
         </div>
         <div>
           <label className={labelCls}>Target date</label>
-          <input
-            type="date"
+          <DatePicker
             className={inputCls}
             value={draft.targetDate}
             disabled={disabled}
-            onChange={set('targetDate')}
+            onChange={(v) => set('targetDate')({ target: { value: v } })}
           />
           {entry.suggestedTimeframe && !draft.targetDate && (
             <p className="mt-1.5 text-[13px] italic text-muted">

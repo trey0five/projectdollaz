@@ -37,6 +37,8 @@ import {
 } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
 import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
+import DatePicker from '../components/ui/DatePicker.jsx'
+import EntityFormModal, { Field, Select, fieldInput, fieldTextarea } from '../components/ui/EntityFormModal.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useTasks } from '../hooks/useTasks.js'
 
@@ -200,159 +202,104 @@ function TaskFormModal({ open, initial, members, onClose, onSave, reduce }) {
     }
   }
 
-  if (!open) return null
   const linked = form.sourceType && form.sourceType !== 'manual'
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <motion.div
-        initial={reduce ? false : { opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-lg rounded-2xl border-2 border-gold/30 bg-navy-gradient p-6 shadow-navy-glow"
-      >
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-serif text-[18px] uppercase tracking-[0.12em] text-gold-light">
-            {initial ? 'Edit task' : 'Add task'}
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-gold/60 hover:text-white"
-          >
-            <X size={18} />
-          </button>
+    <EntityFormModal
+      open={open}
+      icon={ListChecks}
+      title={initial ? 'Edit task' : 'Add task'}
+      subtitle="Assign, prioritize, set a due date"
+      onClose={onClose}
+      onSubmit={submit}
+      saving={saving}
+      error={err}
+      submitLabel={initial ? 'Save task' : 'Add task'}
+      reduce={reduce}
+    >
+      {linked ? (
+        <div className="inline-flex items-center gap-1.5 self-start rounded-md border border-gold/40 bg-gold/10 px-2 py-1 text-[12px] font-semibold text-gold-light sm:col-span-2">
+          <Link2 size={13} /> Linked from {form.sourceType}
         </div>
-        {linked ? (
-          <div className="mb-3 inline-flex items-center gap-1.5 rounded-md border border-gold/40 bg-gold/10 px-2 py-1 text-[12px] font-semibold text-gold-light">
-            <Link2 size={13} /> Linked from {form.sourceType}
-          </div>
-        ) : null}
-        <form onSubmit={submit} className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <label className="col-span-2 block text-[13px] text-white/70">
-              Title
-              <input
-                value={form.title}
-                onChange={set('title')}
-                maxLength={200}
-                className="mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-white outline-none focus:border-gold/60"
-              />
-            </label>
-            <label className="block text-[13px] text-white/70">
-              Assignee
-              <select
-                value={form.assigneeUserId}
-                onChange={set('assigneeUserId')}
-                className="mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-white outline-none focus:border-gold/60"
-              >
-                <option value="">Unassigned</option>
-                {members.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {memberName(m)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-[13px] text-white/70">
-              Due date
-              <input
-                type="date"
-                value={form.dueDate}
-                onChange={set('dueDate')}
-                className="mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-white outline-none focus:border-gold/60"
-              />
-            </label>
-            <label className="block text-[13px] text-white/70">
-              Priority
-              <select
-                value={form.priority}
-                onChange={set('priority')}
-                className="mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-white outline-none focus:border-gold/60 capitalize"
-              >
-                {PRIORITIES.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-[13px] text-white/70">
-              Status
-              <select
-                value={form.status}
-                onChange={set('status')}
-                className="mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-white outline-none focus:border-gold/60"
-              >
-                {STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {s.replace('_', ' ')}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-[13px] text-white/70">
-              Repeats
-              <select
-                value={form.recurrence}
-                onChange={set('recurrence')}
-                className="mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-white outline-none focus:border-gold/60 capitalize"
-              >
-                {RECURRENCES.map((r) => (
-                  <option key={r} value={r}>
-                    {r === 'none' ? "Doesn't repeat" : r}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {form.recurrence !== 'none' ? (
-              <label className="block text-[13px] text-white/70">
-                Repeat until
-                <input
-                  type="date"
-                  value={form.recurrenceUntil}
-                  onChange={set('recurrenceUntil')}
-                  className="mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-white outline-none focus:border-gold/60"
-                />
-              </label>
-            ) : null}
-            {form.recurrence !== 'none' ? (
-              <p className="col-span-2 -mt-1 text-[12px] text-gold-light/80">
-                <Repeat size={12} className="mr-1 inline" />
-                Completing this task will auto-create the next one
-                {form.recurrenceUntil ? ` until ${form.recurrenceUntil}` : ''}.
-              </p>
-            ) : null}
-            <label className="col-span-2 block text-[13px] text-white/70">
-              Description
-              <textarea
-                value={form.description}
-                onChange={set('description')}
-                maxLength={4000}
-                rows={2}
-                className="mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-white outline-none focus:border-gold/60"
-              />
-            </label>
-          </div>
-          {err ? <p className="text-[13px] text-red-300">{err}</p> : null}
-          <div className="flex justify-end gap-2 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg border-2 border-white/20 px-4 py-2 text-[14px] font-semibold text-white/70 hover:border-white/40 hover:text-white"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded-lg border-2 border-gold/60 bg-gold/15 px-4 py-2 text-[14px] font-semibold text-gold-light hover:bg-gold/25 disabled:opacity-50"
-            >
-              {saving ? 'Saving…' : 'Save task'}
-            </button>
-          </div>
-        </form>
-      </motion.div>
-    </div>
+      ) : null}
+      <Field label="Title" span={2} index={0} reduce={reduce}>
+        <input
+          value={form.title}
+          onChange={set('title')}
+          maxLength={200}
+          className={fieldInput}
+          autoFocus
+        />
+      </Field>
+      <Field label="Assignee" index={1} reduce={reduce}>
+        <Select value={form.assigneeUserId} onChange={set('assigneeUserId')}>
+          <option value="">Unassigned</option>
+          {members.map((m) => (
+            <option key={m.id} value={m.id}>
+              {memberName(m)}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      <Field label="Due date" index={2} reduce={reduce}>
+        <DatePicker
+          value={form.dueDate}
+          onChange={(v) => set('dueDate')({ target: { value: v } })}
+          className={fieldInput}
+        />
+      </Field>
+      <Field label="Priority" index={3} reduce={reduce}>
+        <Select value={form.priority} onChange={set('priority')}>
+          {PRIORITIES.map((p) => (
+            <option key={p} value={p}>
+              {p}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      <Field label="Status" index={4} reduce={reduce}>
+        <Select value={form.status} onChange={set('status')}>
+          {STATUSES.map((s) => (
+            <option key={s} value={s}>
+              {s.replace('_', ' ')}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      <Field label="Repeats" index={5} reduce={reduce}>
+        <Select value={form.recurrence} onChange={set('recurrence')}>
+          {RECURRENCES.map((r) => (
+            <option key={r} value={r}>
+              {r === 'none' ? "Doesn't repeat" : r}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      {form.recurrence !== 'none' ? (
+        <Field label="Repeat until" index={6} reduce={reduce}>
+          <DatePicker
+            value={form.recurrenceUntil}
+            onChange={(v) => set('recurrenceUntil')({ target: { value: v } })}
+            className={fieldInput}
+          />
+        </Field>
+      ) : null}
+      {form.recurrence !== 'none' ? (
+        <p className="-mt-1 text-[12px] text-gold-light/80 sm:col-span-2">
+          <Repeat size={12} className="mr-1 inline" />
+          Completing this task will auto-create the next one
+          {form.recurrenceUntil ? ` until ${form.recurrenceUntil}` : ''}.
+        </p>
+      ) : null}
+      <Field label="Description" span={2} index={7} reduce={reduce}>
+        <textarea
+          value={form.description}
+          onChange={set('description')}
+          maxLength={4000}
+          rows={2}
+          className={fieldTextarea}
+        />
+      </Field>
+    </EntityFormModal>
   )
 }
 

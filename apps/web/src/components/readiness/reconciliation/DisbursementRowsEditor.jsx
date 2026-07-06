@@ -3,6 +3,7 @@ import { Plus, Trash2, Save } from 'lucide-react'
 import { PROGRAM_OPTIONS } from '../../../lib/complianceMeta.js'
 import { toApiRows } from '../../../lib/reconcileMapping.js'
 import { sanitizeDecimal } from '../../../lib/numericInput.js'
+import DatePicker from '../../ui/DatePicker.jsx'
 
 const blankRow = () => ({
   studentRef: '',
@@ -92,10 +93,9 @@ export default function DisbursementRowsEditor({ existing, onSave, onCancel, sav
                   </select>
                 </td>
                 <td className="px-1 py-1">
-                  <input
-                    type="date"
+                  <DatePicker
                     value={r.payDate}
-                    onChange={(e) => update(i, 'payDate', e.target.value)}
+                    onChange={(v) => update(i, 'payDate', v)}
                     className="rounded border border-border px-1.5 py-1 text-[14px]"
                   />
                 </td>

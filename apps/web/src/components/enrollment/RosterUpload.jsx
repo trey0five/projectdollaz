@@ -12,6 +12,7 @@ import { UploadCloud, FileText, CheckCircle2, AlertTriangle, X } from 'lucide-re
 import { enrollmentApi, apiErrorMessage } from '../../lib/api.js'
 import { FormError, FormSuccess } from '../auth/fields.jsx'
 import ByGradeChart from './ByGradeChart.jsx'
+import DatePicker from '../ui/DatePicker.jsx'
 
 const inputCls =
   'w-full rounded-lg border-2 border-border bg-white px-4 py-3 text-base text-ink outline-none transition-colors focus:border-gold disabled:cursor-not-allowed disabled:bg-navy/[0.04] disabled:text-muted'
@@ -130,10 +131,9 @@ export default function RosterUpload({ schoolId, canEdit, onApplied }) {
           <div className="mt-3 flex flex-wrap items-end gap-3">
             <label className="text-[13px] font-semibold text-muted">
               As-of date (optional)
-              <input
-                type="date"
+              <DatePicker
                 value={observedOn}
-                onChange={(e) => setObservedOn(e.target.value)}
+                onChange={(v) => setObservedOn(v)}
                 className={`${inputCls} mt-1 max-w-[200px]`}
               />
             </label>

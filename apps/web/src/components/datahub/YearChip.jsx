@@ -8,6 +8,7 @@ import {
   X,
 } from 'lucide-react'
 import { fmtDollar, formatShortDate } from '../../lib/format.js'
+import DatePicker from '../ui/DatePicker.jsx'
 
 // Save-phase visual states, mirroring FileStatusCard's ring idiom.
 const PHASE_RING = {
@@ -94,10 +95,9 @@ export default function YearChip({ candidate: c, canEdit, currentYear, onSetEndD
         {locked ? (
           <span className="font-medium text-navy">{formatShortDate(c.periodEndDate)}</span>
         ) : (
-          <input
-            type="date"
+          <DatePicker
             value={c.periodEndDate || ''}
-            onChange={(e) => onSetEndDate(c.key, e.target.value)}
+            onChange={(v) => onSetEndDate(c.key, v)}
             className="w-full rounded-md border border-border bg-white px-2 py-1 text-[13px] font-medium text-navy outline-none ring-gold/40 focus-visible:ring-2"
           />
         )}
