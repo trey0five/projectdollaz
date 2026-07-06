@@ -14,13 +14,13 @@
 // motion renders everything settled with a plain fade.
 // ─────────────────────────────────────────────────────────────────────────────
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
 import { ChevronDown } from 'lucide-react'
 import StudioBackdrop from '../../components/penny/studio/StudioBackdrop.jsx'
 import PennyAvatar from '../../components/penny/PennyAvatar.jsx'
 import PennyDemo from './PennyDemo.jsx'
-import IntroOverlay, { INTRO_BEATS, INTRO_VARIANTS } from './IntroFX.jsx'
+import IntroOverlay, { INTRO_BEATS } from './IntroFX.jsx'
 import { EASE } from './Reveal.jsx'
 import { HERO } from './landingContent.js'
 
@@ -34,12 +34,46 @@ const AV_Y = 6 + 12 + 22
 // Beat schedules live in IntroFX (per intro variant: classic / parts / drop /
 // mint); phases 3–6 mean the same thing in every variant.
 
+// ── "One platform." decoding out of NUMBERS ──────────────────────────────────
+// Each character cycles through digits and locks left-to-right into the final
+// gold serif text — a hundred numbers resolving into the one platform. Runs
+// once when `play` flips true; reduced motion renders the finished line.
+const DIGITS = '0123456789'
+function NumberDecode({ text, play, reduce }) {
+  const [out, setOut] = useState(() => (reduce ? text : text.replace(/[^ ]/g, '0')))
+  const ran = useRef(false)
+  useEffect(() => {
+    if (reduce || !play || ran.current) return undefined
+    ran.current = true
+    const chars = text.split('')
+    // Char i locks at 260ms + 55ms·i; until then it cycles digits.
+    const lockAt = chars.map((_, i) => 260 + i * 55)
+    const start = performance.now()
+    let raf
+    const tick = (now) => {
+      const t = now - start
+      let done = true
+      setOut(
+        chars
+          .map((c, i) => {
+            if (c === ' ') return ' '
+            if (t >= lockAt[i]) return c
+            done = false
+            // Deterministic cycle (no flicker-rand): pace by time + offset by slot.
+            return DIGITS[Math.floor(t / 42 + i * 3) % 10]
+          })
+          .join(''),
+      )
+      if (!done) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [play, reduce, text])
+  return <>{out}</>
+}
+
 export default function LandingHero({ onIntroOpen }) {
   const reduce = useReducedMotion()
-  // Alternate openings under comparison — ?intro=parts|drop|mint (default: classic).
-  const [params] = useSearchParams()
-  const introParam = params.get('intro')
-  const variant = INTRO_VARIANTS.includes(introParam) ? introParam : 'classic'
   const sectionRef = useRef(null)
   const chatRef = useRef(null) // the (unscaled) grid cell wrapping the chat box
   // Start at phase 2 — the "screen" is already on (Penny will fade in center).
@@ -86,9 +120,9 @@ export default function LandingHero({ onIntroOpen }) {
 
   useEffect(() => {
     if (reduce) return undefined
-    const ids = INTRO_BEATS[variant].map(([t, p]) => setTimeout(() => setPhase(p), t))
+    const ids = INTRO_BEATS.map(([t, p]) => setTimeout(() => setPhase(p), t))
     return () => ids.forEach(clearTimeout)
-  }, [reduce, variant])
+  }, [reduce])
 
   const skip = () => setPhase(6)
 
@@ -112,46 +146,27 @@ export default function LandingHero({ onIntroOpen }) {
   // (lg only), then fades as the chat unfolds from underneath it.
   const bigCenter = { x: toCenter.x, y: toCenter.y, scale: 2.5 }
   const home = { x: 0, y: 0, scale: 1 }
-  // 'drop' arrives with WEIGHT: keyframed fall + two bounces with squash, the
-  // ripple rings in IntroOverlay timed to the impacts. 'mint' pops in at the
-  // die strike. Other variants keep the gentle fade.
-  const dropIn = {
-    opacity: 1,
-    x: toCenter.x,
-    y: [toCenter.y - 620, toCenter.y, toCenter.y - 170, toCenter.y, toCenter.y - 55, toCenter.y],
-    scaleY: [1, 0.8, 1, 0.86, 1, 0.92],
-    scale: 2.5,
-  }
   const coinAnim = reduce
     ? { opacity: 0 }
     : chatExpand
       ? { opacity: 0, ...(flyToChat ? home : bigCenter) }
       : coinFlown
-        ? { opacity: 1, ...(flyToChat ? home : bigCenter), ...(variant === 'drop' && flyToChat ? { rotate: 540 } : {}) }
-        : coinStaged
-          ? variant === 'drop'
-            ? dropIn
-            : variant === 'mint'
-              ? { opacity: 1, ...bigCenter, scale: [3.1, 2.5] }
-              : { opacity: 1, ...bigCenter }
-          : { opacity: 0, ...bigCenter }
+        ? { opacity: 1, ...(flyToChat ? home : bigCenter) }
+        : { opacity: coinStaged ? 1 : 0, ...bigCenter }
   const coinTransition =
     coinFlown && !chatExpand && flyToChat
-      ? { duration: variant === 'drop' ? 0.8 : 0.6, ease: EASE } // the flight (a roll, for the drop)
+      ? { duration: 0.6, ease: EASE } // the flight
       : chatExpand
         ? { duration: 0.35, ease: EASE } // the fade
-        : coinStaged && variant === 'drop'
-          ? { duration: 1.7, times: [0, 0.42, 0.62, 0.78, 0.88, 1], ease: 'easeIn' } // the fall + bounces
-          : coinStaged && variant === 'mint'
-            ? { duration: 0.35, ease: EASE } // the strike pop
-            : { duration: 0.4, ease: EASE } // the appear
+        : { duration: 0.4, ease: EASE } // the appear
 
   const words1 = HERO.h1Line1.split(' ')
-  const words2 = HERO.h1Line2.split(' ')
+  // Line 1: each word rises out from behind its own baseline mask — a title-
+  // sequence entrance to pair with the shard convergence happening behind it.
   const word = (i) => ({
-    initial: reduce ? false : { opacity: 0, filter: 'blur(14px)' },
-    animate: textIn ? { opacity: 1, filter: 'blur(0px)' } : { opacity: 0, filter: 'blur(14px)' },
-    transition: { duration: 0.7, ease: EASE, delay: textIn ? i * 0.07 : 0 },
+    initial: reduce ? false : { y: '115%', opacity: 0 },
+    animate: textIn ? { y: '0%', opacity: 1 } : { y: '115%', opacity: 0 },
+    transition: { duration: 0.55, ease: EASE, delay: textIn ? 0.05 + i * 0.06 : 0 },
   })
   const rise = (delay = 0) => ({
     initial: reduce ? false : { opacity: 0, y: 16 },
@@ -172,8 +187,8 @@ export default function LandingHero({ onIntroOpen }) {
         <StudioBackdrop sweep={false} />
         <span aria-hidden="true" className="pointer-events-none absolute inset-0 bg-navy-radial" />
 
-        {/* Alternate-opening spectacle (?intro=parts|drop|mint; classic = none). */}
-        <IntroOverlay variant={variant} phase={phase} reduce={reduce} />
+        {/* The opening spectacle: the hundred parts drifting, then converging. */}
+        <IntroOverlay phase={phase} reduce={reduce} />
 
         <div className="relative mx-auto grid min-h-[100svh] max-w-6xl items-start gap-12 px-5 pb-24 pt-32 sm:px-8 lg:grid-cols-[1fr_minmax(380px,460px)] lg:items-center">
           <div>
@@ -191,33 +206,34 @@ export default function LandingHero({ onIntroOpen }) {
               <span className="block">
                 {words1.map((w, i) => (
                   <Fragment key={i}>
-                    <motion.span {...word(i)} className="inline-block text-white">
-                      {w}
-                    </motion.span>
+                    {/* Each word rises out of its own overflow mask (pb keeps
+                        descenders unclipped at rest). */}
+                    <span className="inline-block overflow-hidden pb-[0.12em] align-bottom">
+                      <motion.span {...word(i)} className="inline-block text-white">
+                        {w}
+                      </motion.span>
+                    </span>
                     {i < words1.length - 1 ? ' ' : ''}
                   </Fragment>
                 ))}
               </span>
-              {/* gold-text lives on each WORD (not the line): framer animates a
-                  per-word filter/opacity, which puts each word in its own layer
-                  and would break a parent-level background-clip:text. */}
+              {/* Line 2 DECODES from numbers. The text nodes swap characters
+                  (no per-word framer layers), so background-clip:text can live
+                  on the LINE wrapper — only its opacity animates. */}
               <span className="relative block">
-                {words2.map((w, i) => (
-                  <Fragment key={i}>
-                    {/* pb extends each word's background-clip:text paint box so
-                        descenders (the "p" in "platform") aren't cut off. */}
-                    <motion.span
-                      {...word(words1.length + i)}
-                      className="gold-text inline-block pb-[0.16em]"
-                    >
-                      {w}
-                    </motion.span>
-                    {i < words2.length - 1 ? ' ' : ''}
-                  </Fragment>
-                ))}
-                <span aria-hidden="true" className={`hero-shine ${settled ? 'is-glinting' : ''}`}>
-                  {HERO.h1Line2}
-                </span>
+                <motion.span
+                  initial={reduce ? false : { opacity: 0 }}
+                  animate={{ opacity: textIn ? 1 : 0 }}
+                  transition={{ duration: 0.3, ease: EASE }}
+                  className="gold-text inline-block pb-[0.16em]"
+                >
+                  <NumberDecode text={HERO.h1Line2} play={textIn} reduce={!!reduce} />
+                </motion.span>
+                {settled && (
+                  <span aria-hidden="true" className={`hero-shine ${settled ? 'is-glinting' : ''}`}>
+                    {HERO.h1Line2}
+                  </span>
+                )}
               </span>
             </h1>
 
