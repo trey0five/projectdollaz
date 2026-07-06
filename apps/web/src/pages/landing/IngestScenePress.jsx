@@ -10,7 +10,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion, useTransform } from 'framer-motion'
 import PennyAvatar from '../../components/penny/PennyAvatar.jsx'
-import { AppWindow, Folder, Press, SheetCard, WindowScreen } from './ingestShared.jsx'
+import { AppWindow, FolderBack, FolderFront, Press, SheetCard, WindowScreen } from './ingestShared.jsx'
 
 export const BEATS = [
   {
@@ -48,15 +48,15 @@ export function Stage({ p, beat }) {
   const folderScale = useTransform(p, [0.3, 0.52], [1, 0.92])
   // Sheet: rises out of the folder, ALIGNS level with the intake slot, then
   // feeds in perfectly horizontally (no diagonal drift) while the intake glows.
-  const sheetLeft = useTransform(p, [0, 0.14, 0.26, 0.34, 0.48], ['17%', '17%', '28%', '30%', '56%'])
-  const sheetTop = useTransform(p, [0.14, 0.24, 0.32], ['26%', '13%', '27%'])
+  const sheetLeft = useTransform(p, [0, 0.24, 0.34, 0.48], ['17%', '17%', '28%', '58%'])
+  const sheetTop = useTransform(p, [0, 0.14, 0.24, 0.32], ['25%', '25%', '7%', '27%'])
   const sheetRotate = useTransform(p, [0.14, 0.24, 0.32], [0, -4, 0])
-  const sheetScale = useTransform(p, [0.34, 0.48], [1, 0.88])
+  const sheetScale = useTransform(p, [0, 0.14, 0.26, 0.34, 0.48], [0.9, 0.9, 1, 1, 0.88])
   const sheetFade = useTransform(p, [0.5, 0.56], [1, 0])
   const intakeGlow = useTransform(p, [0.32, 0.38, 0.46, 0.52], [0, 1, 1, 0])
   // Penny: swoops in and lands ON TOP of the press (no button — the machine
   // wakes when she touches down, with a little dip), then hops to the window.
-  const pennyLeft = useTransform(p, [0.3, 0.4, 0.86, 0.95], ['-6%', '70%', '70%', '20%'])
+  const pennyLeft = useTransform(p, [0.3, 0.4, 0.86, 0.95], ['-6%', '72%', '72%', '20%'])
   const pennyTop = useTransform(p, [0.3, 0.4, 0.86, 0.95], ['-14%', '2%', '2%', '56%'])
   const pennyFade = useTransform(p, [0.28, 0.36], [0, 1])
   // Press internals — everything keys off Penny's touchdown at 0.4.
@@ -72,7 +72,7 @@ export function Stage({ p, beat }) {
   const pressFade = useTransform(p, [0.68, 0.8], [1, 0.22])
   const winFade = useTransform(p, [0.6, 0.66], [0, 1])
   const winScale = useTransform(p, [0.6, 0.74], [0.72, 1])
-  const winLeft = useTransform(p, [0.62, 0.78, 0.92], ['46%', '46%', '15%'])
+  const winLeft = useTransform(p, [0.62, 0.78, 0.92], ['48%', '48%', '15%'])
   const winTop = useTransform(p, [0.62, 0.78, 0.92], ['16%', '16%', '8%'])
   const winFlash = useTransform(p, [0.6, 0.66, 0.76], [0, 0.8, 0])
   const rawFade = useTransform(p, [0.76, 0.82], [1, 0])
@@ -81,21 +81,27 @@ export function Stage({ p, beat }) {
 
   return (
     <>
-      {/* The traveling sheet (z 10 — hides behind folder AND press) */}
+      {/* Folder BACK panel (z 12) — the sheet rises from INSIDE the folder,
+          sandwiched between the back panel and the front flap */}
+      <motion.div style={{ opacity: folderFade, scale: folderScale }} className="absolute left-[15%] top-[20%] z-[12]">
+        <FolderBack />
+      </motion.div>
+
+      {/* The traveling sheet (z 14 — inside the folder; behind the press) */}
       <motion.div
         style={{ left: sheetLeft, top: sheetTop, rotate: sheetRotate, scale: sheetScale, opacity: sheetFade }}
-        className="absolute z-10"
+        className="absolute z-[14]"
       >
         <SheetCard />
       </motion.div>
 
-      {/* Folder (z 15 — level with the press, right of the ledger spine) */}
-      <motion.div style={{ opacity: folderFade, scale: folderScale }} className="absolute left-[15%] top-[20%] z-[15]">
-        <Folder frontStyle={{ rotateX: folderFlap, transformPerspective: 700 }} />
+      {/* Folder FRONT flap (z 16) — conceals the sheet at rest; opens forward */}
+      <motion.div style={{ opacity: folderFade, scale: folderScale }} className="absolute left-[15%] top-[20%] z-[16]">
+        <FolderFront frontStyle={{ rotateX: folderFlap, transformPerspective: 700 }} />
       </motion.div>
 
       {/* THE PRESS (z 30 — swallows the sheet through the glowing intake) */}
-      <motion.div style={{ scale: pressDip, opacity: pressFade }} className="absolute left-[52%] top-[14%] z-30">
+      <motion.div style={{ scale: pressDip, opacity: pressFade }} className="absolute left-[54%] top-[14%] z-30">
         <Press
           gearRotate={gearRotate}
           gearRotateCcw={gearRotateCcw}

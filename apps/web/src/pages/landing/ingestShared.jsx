@@ -42,20 +42,39 @@ export function SheetCard({ rowStyles = null, className = 'w-40 sm:w-44' }) {
   )
 }
 
-/** The manila folder. A scene hides the sheet completely BEHIND it (lower z). */
-export function Folder({ frontStyle }) {
+/** The manila folder, split in two so a scene can sandwich the sheet BETWEEN
+ *  the panels (back < sheet < front) and have it rise from INSIDE. The front
+ *  flap is tall enough to conceal the sheet completely at rest. */
+export function FolderBack() {
   return (
-    <div className="relative h-40 w-52 sm:h-48 sm:w-56">
+    <div className="relative h-40 w-48 sm:h-44 sm:w-52">
       <div className="absolute inset-x-0 bottom-0 top-4 rounded-2xl border border-gold/50 bg-gold-pale shadow-card" />
-      <div className="absolute left-3 top-0 h-7 w-28 rounded-t-xl border border-b-0 border-gold/50 bg-gold-pale" />
+      <div className="absolute left-3 top-0 h-7 w-24 rounded-t-xl border border-b-0 border-gold/50 bg-gold-pale" />
+    </div>
+  )
+}
+
+export function FolderFront({ frontStyle }) {
+  return (
+    <div className="relative h-40 w-48 sm:h-44 sm:w-52">
       <motion.div
         style={frontStyle}
-        className="absolute inset-x-0 bottom-0 z-10 flex h-[78%] origin-bottom items-end rounded-2xl border border-gold/60 bg-gold-gradient p-3.5 shadow-card"
+        className="absolute inset-x-0 bottom-0 flex h-[85%] origin-bottom items-end rounded-2xl border border-gold/60 bg-gold-gradient p-3.5 shadow-card"
       >
         <span className="text-[10.5px] font-bold uppercase tracking-[0.18em] text-navy/80">
           FY26 · Finance office
         </span>
       </motion.div>
+    </div>
+  )
+}
+
+/** The composed folder (StaticFrame + simple uses). */
+export function Folder({ frontStyle }) {
+  return (
+    <div className="relative h-40 w-48 sm:h-44 sm:w-52">
+      <div className="absolute inset-0"><FolderBack /></div>
+      <div className="absolute inset-0"><FolderFront frontStyle={frontStyle} /></div>
     </div>
   )
 }
@@ -70,7 +89,7 @@ export function Press({ gearRotate, gearRotateCcw, lampOn, inkWidth, faceTextOpa
     <div className="relative h-52 w-60 sm:h-60 sm:w-72">
       <div className="absolute inset-x-6 top-0 flex h-9 items-center justify-center rounded-t-2xl border border-b-0 border-gold/50 bg-navy-deep">
         <span className="text-[9px] font-bold uppercase tracking-[0.3em] text-gold-light/90">
-          The Ledger Press
+          Penny AI
         </span>
       </div>
       <div className="absolute inset-x-0 bottom-0 top-8 overflow-hidden rounded-2xl border-2 border-gold/50 bg-navy-gradient shadow-navy-glow">
