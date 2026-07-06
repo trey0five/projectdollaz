@@ -21,6 +21,7 @@ import {
   Sparkles,
   CircleCheck,
   TrendingUp,
+  GraduationCap,
   X,
 } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
@@ -106,6 +107,18 @@ const SOURCES = [
       'A few questions about scholarships and banking so we can check your Florida scholarship review readiness — only needed when you’re preparing for an audit or readiness check.',
     action: 'embed',
     cta: 'Enter compliance inputs',
+  },
+  {
+    // Phase 2 — links OUT to the Enrollment page (connector + roster upload) rather
+    // than an embed modal. Its server data-status is optional (no key yet), so the
+    // card shows the neutral "optional" badge and simply guides to /enrollment.
+    key: 'enrollmentRoster',
+    title: 'Enrollment roster',
+    Icon: GraduationCap,
+    what:
+      'Connect your student information system or upload a roster file (OneRoster ZIP/CSV) to track headcount by grade and compare actual enrollment against your plan.',
+    cta: 'Connect or upload roster',
+    to: '/enrollment',
   },
 ]
 

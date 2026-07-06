@@ -156,6 +156,9 @@ export function sumOperational(
   if (present.length === 0) return null
   return {
     enrollment: foldNullable(present.map((r) => r.enrollment)),
+    // Phase 2: enrollmentPlan is extensive (a count), so the org plan = Σ present
+    // school plans → org enrollment_vs_plan = (Σenroll − Σplan)/Σplan by construction.
+    enrollmentPlan: foldNullable(present.map((r) => r.enrollmentPlan)),
     enrollmentFte: foldNullable(present.map((r) => r.enrollmentFte)),
     studentsOnAid: foldNullable(present.map((r) => r.studentsOnAid)),
     financialAidTotal: foldNullable(present.map((r) => r.financialAidTotal)),

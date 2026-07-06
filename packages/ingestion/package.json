@@ -11,6 +11,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./oneroster": {
+      "types": "./dist/oneroster/index.d.ts",
+      "import": "./dist/oneroster/index.js",
+      "default": "./dist/oneroster/index.js"
     }
   },
   "files": [
@@ -25,7 +30,10 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@finrep/analytics": "workspace:*",
+    "@finrep/db": "workspace:*",
     "@finrep/engine": "workspace:*",
+    "@types/node": "^22.0.0",
     "tsup": "^8.3.0",
     "typescript": "^5.6.3",
     "vitest": "^2.1.0"

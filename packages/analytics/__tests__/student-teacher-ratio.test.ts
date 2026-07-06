@@ -33,10 +33,12 @@ function ratio(enrollment: number | null, teachingFte: number | null) {
 }
 
 describe('student_teacher_ratio — registry wiring', () => {
-  it('is registered LAST (after enrollment_change_yoy), first 12 keys byte-identical', () => {
+  it('is registered after enrollment_change_yoy, first 12 keys byte-identical', () => {
     expect(METRIC_KEYS).toContain('student_teacher_ratio')
-    expect(METRIC_KEYS[METRIC_KEYS.length - 1]).toBe('student_teacher_ratio')
-    expect(METRIC_KEYS).toHaveLength(14)
+    // enrollment_vs_plan (Phase 2) was appended AFTER student_teacher_ratio, so STR
+    // is now the second-to-last key.
+    expect(METRIC_KEYS[METRIC_KEYS.length - 2]).toBe('student_teacher_ratio')
+    expect(METRIC_KEYS).toHaveLength(15)
     expect(METRIC_KEYS.slice(0, 12)).toEqual([
       'operating_margin', 'days_cash_on_hand', 'months_operating_reserve',
       'tuition_dependency', 'revenue_mix', 'expense_mix', 'cost_per_pupil',

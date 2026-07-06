@@ -39,16 +39,23 @@ export const SEV_RANK: Record<AttentionSeverity, number> = { critical: 0, warn: 
 export const SOURCE_RANK: Record<AttentionSource, number> = {
   data: 0,
   compliance: 1,
-  governance: 2,
-  accreditation: 3,
-  facilities: 4,
-  advancement: 5,
-  workflow: 6,
-  metric: 7,
+  // Phase 2 — the cross-domain enrollment→cash item is a financial-health signal;
+  // it sits right after compliance (before governance) in the legacy tiebreak.
+  enrollment: 2,
+  governance: 3,
+  accreditation: 4,
+  facilities: 5,
+  advancement: 6,
+  workflow: 7,
+  metric: 8,
 }
 
 /** Fixed sub-order for the non-metric items so the list is deterministic. */
 export const COMPLIANCE_ORDER = [
+  // Phase 2 — the cross-domain enrollment→cash item leads the non-metric block (it
+  // never actually ties with another source on the weight step, so this index is
+  // only ever consulted defensively — enrollment has a unique source weight).
+  'enrollment:below-plan',
   'compliance:reconciliation',
   'compliance:material',
   'compliance:reportable',
@@ -122,10 +129,16 @@ export const COMPLIANCE_ORDER = [
 // for the accountant). ADDITIVE — the accountant weighting == SOURCE_RANK, and
 // inserting advancement only shifts workflow/metric down by one, so the pre-
 // advancement accountant snapshot stays byte-identical for the existing ids.
+// Phase 2 — enrollment (the cross-domain enrollment→cash item) is a financial-
+// health signal, so for owner/viewer it sits WITH the metric headline (right after
+// metric, ahead of the board-oversight domains); for the accountant it keeps ==
+// SOURCE_RANK. ADDITIVE — enrollment is a new id, and inserting it only shifts the
+// existing sources down by one WITHOUT reordering them relative to each other, so
+// every pre-enrollment lens output stays byte-identical for the existing ids.
 const SOURCE_WEIGHT: Record<Lens, Record<AttentionSource, number>> = {
-  owner: { metric: 0, governance: 1, accreditation: 2, facilities: 3, advancement: 4, compliance: 5, data: 6, workflow: 7 },
-  viewer: { metric: 0, governance: 1, accreditation: 2, facilities: 3, advancement: 4, compliance: 5, data: 6, workflow: 7 },
-  accountant: { data: 0, compliance: 1, governance: 2, accreditation: 3, facilities: 4, advancement: 5, workflow: 6, metric: 7 }, // == SOURCE_RANK
+  owner: { metric: 0, enrollment: 1, governance: 2, accreditation: 3, facilities: 4, advancement: 5, compliance: 6, data: 7, workflow: 8 },
+  viewer: { metric: 0, enrollment: 1, governance: 2, accreditation: 3, facilities: 4, advancement: 5, compliance: 6, data: 7, workflow: 8 },
+  accountant: { data: 0, compliance: 1, enrollment: 2, governance: 3, accreditation: 4, facilities: 5, advancement: 6, workflow: 7, metric: 8 }, // == SOURCE_RANK
 }
 
 // ── VOICE: per-lens reframing tone (additive metadata, never a value rewrite) ──
@@ -193,6 +206,12 @@ function keepForViewer(item: AttentionItem): boolean {
   // the advancement register for development planning" — no per-donor PII, no
   // operator "go fix" CTA), so it passes through with no VIEWER_REFRAME entry.
   if (item.source === 'advancement') return true
+  // Phase 2 — enrollment vs plan drives tuition revenue and, downstream, cash/the
+  // reserve: a fiduciary board matter the board OWNS. KEPT for the viewer/board lens
+  // like the other oversight domains, UNLIKE operational workflow (dropped). The
+  // `why` is aggregate + outcome-voiced (headcount vs plan, tuition/cash impact — no
+  // PII, no operator "go fix" CTA), so it passes through with no VIEWER_REFRAME entry.
+  if (item.source === 'enrollment') return true
   if (item.source === 'compliance') return VIEWER_COMPLIANCE.has(item.id)
   // Workflow (operational tasks) are DROPPED for the board EXCEPT the caller-scoped
   // "awaiting YOUR sign-off" item: open tasks / the school-scoped pending COUNT are

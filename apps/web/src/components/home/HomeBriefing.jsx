@@ -30,6 +30,7 @@ import {
   ListChecks,
   BadgeCheck,
   Wrench,
+  GraduationCap,
 } from 'lucide-react'
 import { LensIndicator, LensSwitcher } from './LensControls.jsx'
 
@@ -110,12 +111,15 @@ const SOURCE_META = {
   accreditation: { label: 'Accreditation', Icon: BadgeCheck },
   facilities: { label: 'Facilities', Icon: Wrench },
   advancement: { label: 'Advancement', Icon: HeartHandshake },
+  // Phase 2 — the cross-domain enrollment→tuition→cash item.
+  enrollment: { label: 'Enrollment', Icon: GraduationCap },
 }
 
 const CTA_LABEL = {
   metric: 'Open analytics',
   compliance: 'Open readiness',
   data: 'Go to Data hub',
+  enrollment: 'Open enrollment',
 }
 
 // Map a briefing item.source to a valid TASK_SOURCE_TYPE (manual|policy|metric|
@@ -126,6 +130,8 @@ const TASK_SOURCE_MAP = {
   governance: 'policy',
   data: 'manual',
   workflow: 'manual',
+  // Enrollment items carry metricKey enrollment_vs_plan → the 'metric' task source.
+  enrollment: 'metric',
 }
 
 function ctaLabel(item) {

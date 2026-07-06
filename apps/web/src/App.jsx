@@ -34,6 +34,7 @@ import GovernancePage from './pages/GovernancePage.jsx'
 import AccreditationPage from './pages/AccreditationPage.jsx'
 import FacilitiesPage from './pages/FacilitiesPage.jsx'
 import AdvancementPage from './pages/AdvancementPage.jsx'
+import EnrollmentPage from './pages/EnrollmentPage.jsx'
 import TasksPage from './pages/TasksPage.jsx'
 import KnowledgePage from './pages/KnowledgePage.jsx'
 import SchedulesPage from './pages/SchedulesPage.jsx'
@@ -48,6 +49,7 @@ import AlertsSection from './components/settings/AlertsSection.jsx'
 import IntegrationsSection from './components/settings/IntegrationsSection.jsx'
 import BillingSection from './components/settings/BillingSection.jsx'
 import QbCallbackPage from './pages/QbCallbackPage.jsx'
+import EnrollmentBlackbaudCallbackPage from './pages/EnrollmentBlackbaudCallbackPage.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import RegisterPage from './pages/RegisterPage.jsx'
 import VerifyEmailPage from './pages/VerifyEmailPage.jsx'
@@ -87,7 +89,9 @@ function NotFoundRoute() {
 function OnboardingGate({ children }) {
   const { schools, loading } = useSchools()
   const onCallback =
-    typeof window !== 'undefined' && window.location.pathname.startsWith('/integrations/qb/callback')
+    typeof window !== 'undefined' &&
+    (window.location.pathname.startsWith('/integrations/qb/callback') ||
+      window.location.pathname.startsWith('/enrollment/blackbaud/callback'))
   if (!loading && schools.length === 0 && !onCallback) return <Onboarding />
   return children
 }
@@ -173,6 +177,7 @@ export default function App() {
         <Route path="/accreditation" element={<AccreditationPage />} />
         <Route path="/facilities" element={<FacilitiesPage />} />
         <Route path="/advancement" element={<AdvancementPage />} />
+        <Route path="/enrollment" element={<EnrollmentPage />} />
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/knowledge" element={<KnowledgePage />} />
         <Route path="/readiness/cap/print" element={<CapPrintPage />} />
@@ -182,6 +187,7 @@ export default function App() {
         <Route path="/reports/schedules" element={<SchedulesPage />} />
         <Route path="/reports/board/print" element={<BoardReportPrintPage />} />
         <Route path="/integrations/qb/callback" element={<QbCallbackPage />} />
+        <Route path="/enrollment/blackbaud/callback" element={<EnrollmentBlackbaudCallbackPage />} />
         {/* History folded into Statements & Periods — keep old links working. */}
         <Route path="/history" element={<Navigate to="/statements" replace />} />
         <Route path="/settings" element={<SettingsPage />}>

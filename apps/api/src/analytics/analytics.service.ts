@@ -4,6 +4,8 @@ import type { ReportBundle } from '@finrep/engine'
 import {
   computeMetricsForPeriod,
   computeTrend,
+  evenMonths,
+  fromBundle,
   isMetricKey,
   type MetricKey,
   type MetricResult,
@@ -16,6 +18,7 @@ import { PrismaService } from '../prisma/prisma.service.js'
 import { PeriodsService } from '../periods/periods.service.js'
 import { BillingService } from '../billing/billing.service.js'
 import { OperationalService } from './operational.service.js'
+import { EnrollmentPlanService, type ResolvedEnrollmentPlan } from './enrollment-plan.js'
 import { categoryActualsFromBundle } from './category-actuals.js'
 import { entitledModulesForSchool, filterMetricsByEntitlement } from './metric-gating.js'
 import { fyElapsed } from '../monthly/fy-elapsed.js'
@@ -40,6 +43,20 @@ export interface MetricsResponse {
   periodEndDate: string
   metrics: MetricResult[]
   freshness: MetricsFreshness
+}
+
+/** Phase 2 — the resolved inputs for the briefing's cross-domain enrollment step. */
+export interface EnrollmentSignalInputs {
+  /** Actual enrollment headcount for the period (operational row), or null. */
+  actual: number | null
+  /** The resolved enrollment plan, or null when no plan is set anywhere. */
+  plan: ResolvedEnrollmentPlan | null
+  /** Cash-runway projection inputs (any field null when unavailable). */
+  cash: {
+    openingCash: number | null
+    monthlyNetCashflow: number[] | null
+    annualExpense: number | null
+  }
 }
 
 /** One historical period's category actuals + operational drivers. */
@@ -104,6 +121,11 @@ export class AnalyticsService {
     // so BOTH the /metrics endpoint and the briefing (which consumes
     // computeMetricsResponse) share ONE gate point.
     private readonly billing: BillingService,
+    // Phase 2 Enrollment Intelligence — resolves the enrollment PLAN (driver budget
+    // grid OR plannedEnrollmentByGrade) so it can be threaded into the pure compute
+    // layer for enrollment_vs_plan (keeps the metric pure). PrismaService-only, so no
+    // DI cycle with BudgetService.
+    private readonly enrollmentPlan: EnrollmentPlanService,
   ) {}
 
   /**
@@ -198,6 +220,20 @@ export class AnalyticsService {
       ? await this.operational.operationalFor(schoolId, priorResolved.periodId)
       : null
 
+    // Phase 2 — thread the resolved enrollment PLAN total onto the CURRENT
+    // operational struct so the pure enrollment_vs_plan metric can compute (the
+    // package never reads the DB). Fail-soft: a plan-resolve hiccup leaves plan
+    // null → the metric is available:false (inputsMissing:['enrollmentPlan']), it
+    // never 500s the metrics/briefing surface.
+    if (currentOperational) {
+      // Optional-chain the dep so a lean unit-test construction (that omits the
+      // EnrollmentPlanService) resolves to no plan rather than throwing.
+      const plan = await Promise.resolve()
+        .then(() => this.enrollmentPlan?.resolve(schoolId, period.id) ?? null)
+        .catch(() => null)
+      currentOperational.enrollmentPlan = plan?.planTotal ?? null
+    }
+
     const allMetrics = computeMetricsForPeriod({
       current,
       prior,
@@ -226,6 +262,64 @@ export class AnalyticsService {
         dataAsOf: snapshot.createdAt.toISOString(),
         periodEndDate,
       },
+    }
+  }
+
+  /**
+   * Phase 2 — the inputs the briefing's cross-domain enrollment→tuition→cash STEP
+   * needs, resolved in ONE fail-soft fan-out so BriefingService only calls a single
+   * (mockable) method on the already-injected AnalyticsService (no new briefing
+   * dependency). NEVER throws — every leg fail-softs to a null so the briefing keeps
+   * its graceful-degradation guarantee:
+   *   • actual  — the period's actual enrollment headcount (operational row);
+   *   • plan    — the resolved enrollment plan {planTotal, planByGrade, netRate};
+   *   • cash    — the cash-runway inputs: opening SFP cash, the driver budget's even
+   *               monthly net cashflow, and the annual expense (driver total, else
+   *               the SOA total) — any of which may be null when unavailable.
+   * Tenant isolation via getOwnedPeriod (a foreign/unknown period throws BEFORE any
+   * read — the briefing already resolved the owned period, so this is belt-and-braces).
+   */
+  async enrollmentSignalInputs(
+    schoolId: string,
+    periodId: string,
+  ): Promise<EnrollmentSignalInputs> {
+    const period = await this.periods.getOwnedPeriod(schoolId, periodId)
+    const [op, plan, budget, snapshot] = await Promise.all([
+      this.operational.operationalFor(schoolId, period.id).catch(() => null),
+      this.enrollmentPlan.resolve(schoolId, period.id).catch(() => null),
+      this.prisma.periodBudget
+        .findUnique({ where: { schoolId_fiscalPeriodId: { schoolId, fiscalPeriodId: period.id } } })
+        .catch(() => null),
+      this.latestSnapshot(schoolId, period.id).catch(() => null),
+    ])
+
+    const actual = op?.enrollment ?? null
+
+    // Opening cash + the SOA-total fallback expense come from the latest snapshot.
+    let openingCash: number | null = null
+    let soaExpense: number | null = null
+    if (snapshot) {
+      const fin = fromBundle(snapshot.bundle)
+      openingCash = fin.hasSFP ? fin.cash : null
+      soaExpense = fin.totalExp > 0 ? fin.totalExp : null
+    }
+
+    // The driver budget (when applied) gives the annual expense + an even monthly
+    // net-cashflow spread (evenMonths(netIncome), matching the stored budget spread).
+    const lines = (budget?.lines as Record<string, unknown> | null) ?? null
+    const kpis = (lines?.driverModel as Record<string, unknown> | undefined)?.kpis as
+      | Record<string, unknown>
+      | undefined
+    const driverExpense =
+      kpis && typeof kpis.totalExpense === 'number' ? kpis.totalExpense : null
+    const driverNet = kpis && typeof kpis.netIncome === 'number' ? kpis.netIncome : null
+    const monthlyNetCashflow = driverNet !== null ? evenMonths(driverNet) : null
+    const annualExpense = driverExpense ?? soaExpense
+
+    return {
+      actual,
+      plan,
+      cash: { openingCash, monthlyNetCashflow, annualExpense },
     }
   }
 

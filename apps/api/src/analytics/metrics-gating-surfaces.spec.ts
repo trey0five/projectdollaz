@@ -59,7 +59,10 @@ function buildAnalytics(billing: BillingService): AnalyticsService {
     operationalFor: async (_schoolId: string, periodId: string) =>
       periodId === PERIOD.id ? CUR_OP : PRIOR_OP,
   } as unknown as OperationalService
-  return new AnalyticsService(prisma, periods, operational, billing)
+  // Phase 2 — the EnrollmentPlanService dep. No plan in this fixture (resolve→null),
+  // so enrollment_vs_plan stays unavailable and this spec's gating math is unchanged.
+  const enrollmentPlan = { resolve: async () => null } as unknown as import('./enrollment-plan.js').EnrollmentPlanService
+  return new AnalyticsService(prisma, periods, operational, billing, enrollmentPlan)
 }
 
 function billingMock(entitled: string[], trial = false): BillingService {

@@ -21,7 +21,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   // Pin the engine binary target to the container runtime (node:22-slim =
   // Debian, OpenSSL 3.x). Deterministic: the build stage downloads exactly the
   // engine the runner needs, avoiding a "native" target mismatch and shipping
@@ -69,8 +69,8 @@ model Organization {
   name      String
   createdAt DateTime @default(now()) @map("created_at")
 
-  schools  School[]
-  auditLog AuditLog[]
+  schools          School[]
+  auditLog         AuditLog[]
   orgQboConnection OrgQboConnection?
 
   @@map("organizations")
@@ -78,60 +78,62 @@ model Organization {
 
 /// The TENANT. Every domain table below is scoped by school_id.
 model School {
-  id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @map("organization_id") @db.Uuid
-  name           String
+  id                  String   @id @default(uuid()) @db.Uuid
+  organizationId      String   @map("organization_id") @db.Uuid
+  name                String
   // Beginning net-asset balances the engine needs to roll the SOA forward
   // (per-school). Decimal in the DB; converted to plain `number` at the API
   // boundary to match the engine's SchoolConfig (which uses number).
-  netAssetsBegin      Decimal @default(0) @map("net_assets_begin") @db.Decimal(18, 2)
-  pyNetAssetsBegin    Decimal @default(0) @map("py_net_assets_begin") @db.Decimal(18, 2)
-  auditNetAssetsBegin Decimal @default(0) @map("audit_net_assets_begin") @db.Decimal(18, 2)
+  netAssetsBegin      Decimal  @default(0) @map("net_assets_begin") @db.Decimal(18, 2)
+  pyNetAssetsBegin    Decimal  @default(0) @map("py_net_assets_begin") @db.Decimal(18, 2)
+  auditNetAssetsBegin Decimal  @default(0) @map("audit_net_assets_begin") @db.Decimal(18, 2)
   // Phase-1 Board Report branding (all nullable, additive). logoBase64 holds the
   // full data URL (size-guarded in the DTO + service); brandColor an optional hex
   // accent; defaultCommittee the committee-name prefill for new board reports.
-  logoBase64       String? @map("logo_base64") @db.Text
-  brandColor       String? @map("brand_color")
-  defaultCommittee String? @map("default_committee")
-  createdAt      DateTime @default(now()) @map("created_at")
+  logoBase64          String?  @map("logo_base64") @db.Text
+  brandColor          String?  @map("brand_color")
+  defaultCommittee    String?  @map("default_committee")
+  createdAt           DateTime @default(now()) @map("created_at")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  fiscalPeriods      FiscalPeriod[]
-  memberships        Membership[]
-  invitations        Invitation[]
-  imports            Import[]
-  mappings           Mapping[]
-  statementSnapshots StatementSnapshot[]
-  subscription       Subscription?
-  auditLog           AuditLog[]
-  operationalData    PeriodOperationalData[]
-  complianceInputs   PeriodComplianceInputs[]
+  fiscalPeriods            FiscalPeriod[]
+  memberships              Membership[]
+  invitations              Invitation[]
+  imports                  Import[]
+  mappings                 Mapping[]
+  statementSnapshots       StatementSnapshot[]
+  subscription             Subscription?
+  auditLog                 AuditLog[]
+  operationalData          PeriodOperationalData[]
+  complianceInputs         PeriodComplianceInputs[]
   scholarshipDisbursements ScholarshipDisbursement[]
-  correctiveActions  PeriodCorrectiveAction[]
-  checklistItems     PeriodChecklistItem[]
-  insights           PeriodInsight[]
-  budgets            PeriodBudget[]
-  analyticsDashboard AnalyticsDashboard?
-  reportSchedule     ReportSchedule?
-  alerts             Alert[]
-  qboConnection      QboConnection?
-  boardReports       BoardReport[]
-  capitalSchedules   CapitalSchedule[]
-  cashSchedules      CashSchedule[]
-  campaignSchedules  CampaignSchedule[]
-  monthlySnapshots   MonthlySnapshot[]
-  policies           Policy[]
-  committees         Committee[]
-  meetings           Meeting[]
-  tasks              Task[]
-  accreditationStandards AccreditationStandard[]
-  accreditationEvidence  AccreditationEvidence[]
-  maintenanceItems       MaintenanceItem[]
-  campaigns              AdvancementCampaign[]
-  advancementGifts       AdvancementGift[]
-  documents              KnowledgeDocument[]
-  orgQboMappings         OrgQboMapping[]
+  correctiveActions        PeriodCorrectiveAction[]
+  checklistItems           PeriodChecklistItem[]
+  insights                 PeriodInsight[]
+  budgets                  PeriodBudget[]
+  analyticsDashboard       AnalyticsDashboard?
+  reportSchedule           ReportSchedule?
+  alerts                   Alert[]
+  qboConnection            QboConnection?
+  boardReports             BoardReport[]
+  capitalSchedules         CapitalSchedule[]
+  cashSchedules            CashSchedule[]
+  campaignSchedules        CampaignSchedule[]
+  monthlySnapshots         MonthlySnapshot[]
+  policies                 Policy[]
+  committees               Committee[]
+  meetings                 Meeting[]
+  tasks                    Task[]
+  accreditationStandards   AccreditationStandard[]
+  accreditationEvidence    AccreditationEvidence[]
+  maintenanceItems         MaintenanceItem[]
+  campaigns                AdvancementCampaign[]
+  advancementGifts         AdvancementGift[]
+  documents                KnowledgeDocument[]
+  orgQboMappings           OrgQboMapping[]
+  enrollmentSources        EnrollmentSource[]
+  enrollmentSnapshots      EnrollmentSnapshot[]
 
   @@index([organizationId])
   @@map("schools")
@@ -147,20 +149,21 @@ model FiscalPeriod {
 
   school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
-  imports            Import[]
-  statementSnapshots StatementSnapshot[]
-  operationalData    PeriodOperationalData[]
-  complianceInputs   PeriodComplianceInputs[]
+  imports                  Import[]
+  statementSnapshots       StatementSnapshot[]
+  operationalData          PeriodOperationalData[]
+  complianceInputs         PeriodComplianceInputs[]
   scholarshipDisbursements ScholarshipDisbursement[]
-  correctiveActions  PeriodCorrectiveAction[]
-  checklistItems     PeriodChecklistItem[]
-  insights           PeriodInsight[]
-  budgets            PeriodBudget[]
-  boardReports       BoardReport[]
-  capitalSchedules   CapitalSchedule[]
-  cashSchedules      CashSchedule[]
-  campaignSchedules  CampaignSchedule[]
-  monthlySnapshots   MonthlySnapshot[]
+  correctiveActions        PeriodCorrectiveAction[]
+  checklistItems           PeriodChecklistItem[]
+  insights                 PeriodInsight[]
+  budgets                  PeriodBudget[]
+  boardReports             BoardReport[]
+  capitalSchedules         CapitalSchedule[]
+  cashSchedules            CashSchedule[]
+  campaignSchedules        CampaignSchedule[]
+  monthlySnapshots         MonthlySnapshot[]
+  enrollmentSnapshots      EnrollmentSnapshot[]
 
   // Phase 1C: DB-level idempotency for create-or-get under concurrency. The
   // natural key of a period is (school, period-end, type).
@@ -190,36 +193,37 @@ model User {
   lockedUntil                DateTime? @map("locked_until")
   createdAt                  DateTime  @default(now()) @map("created_at")
 
-  memberships   Membership[]
-  refreshTokens RefreshToken[]
-  imports       Import[]       @relation("ImportUploadedBy")
-  invitedMemberships Membership[] @relation("MembershipInvitedBy")
-  auditLog      AuditLog[]
-  operationalUpdates PeriodOperationalData[] @relation("OperationalUpdatedBy")
-  complianceInputsUpdates PeriodComplianceInputs[] @relation("ComplianceInputsUpdatedBy")
-  correctiveActionUpdates PeriodCorrectiveAction[] @relation("CorrectiveActionUpdatedBy")
-  checklistUpdates   PeriodChecklistItem[]  @relation("ChecklistUpdatedBy")
-  dashboardUpdates   AnalyticsDashboard[]   @relation("DashboardUpdatedBy")
-  boardReportUpdates BoardReport[]          @relation("BoardReportUpdatedBy")
-  capitalSchedulesUpdated CapitalSchedule[] @relation("CapitalScheduleUpdatedBy")
-  cashSchedulesUpdated    CashSchedule[]    @relation("CashScheduleUpdatedBy")
-  campaignSchedulesUpdated CampaignSchedule[] @relation("CampaignScheduleUpdatedBy")
-  monthlySnapshotsUploaded MonthlySnapshot[]  @relation("MonthlySnapshotUploadedBy")
-  policyUpdates            Policy[]           @relation("PolicyUpdatedBy")
-  committeeUpdates         Committee[]        @relation("CommitteeUpdatedBy")
-  meetingUpdates           Meeting[]          @relation("MeetingUpdatedBy")
-  meetingMinutesApproved   Meeting[]          @relation("MeetingMinutesApprovedBy")
-  tasksAssigned            Task[]             @relation("TaskAssignee")
-  tasksCreated             Task[]             @relation("TaskCreatedBy")
-  tasksToApprove           Task[]             @relation("TaskApprover")
-  tasksDecided             Task[]             @relation("TaskDecidedBy")
-  accreditationStandardUpdates AccreditationStandard[] @relation("AccreditationStandardUpdatedBy")
-  accreditationEvidenceCreated AccreditationEvidence[] @relation("AccreditationEvidenceCreatedBy")
-  maintenanceItemsCreated      MaintenanceItem[]       @relation("MaintenanceItemCreatedBy")
-  advancementCampaignsCreated  AdvancementCampaign[]   @relation("AdvancementCampaignCreatedBy")
-  advancementGiftsCreated      AdvancementGift[]       @relation("AdvancementGiftCreatedBy")
-  knowledgeDocumentsUploaded   KnowledgeDocument[]     @relation("KnowledgeDocumentUploadedBy")
-  alertsCreated                Alert[]                 @relation("AlertCreatedBy")
+  memberships                  Membership[]
+  refreshTokens                RefreshToken[]
+  imports                      Import[]                 @relation("ImportUploadedBy")
+  invitedMemberships           Membership[]             @relation("MembershipInvitedBy")
+  auditLog                     AuditLog[]
+  operationalUpdates           PeriodOperationalData[]  @relation("OperationalUpdatedBy")
+  complianceInputsUpdates      PeriodComplianceInputs[] @relation("ComplianceInputsUpdatedBy")
+  correctiveActionUpdates      PeriodCorrectiveAction[] @relation("CorrectiveActionUpdatedBy")
+  checklistUpdates             PeriodChecklistItem[]    @relation("ChecklistUpdatedBy")
+  dashboardUpdates             AnalyticsDashboard[]     @relation("DashboardUpdatedBy")
+  boardReportUpdates           BoardReport[]            @relation("BoardReportUpdatedBy")
+  capitalSchedulesUpdated      CapitalSchedule[]        @relation("CapitalScheduleUpdatedBy")
+  cashSchedulesUpdated         CashSchedule[]           @relation("CashScheduleUpdatedBy")
+  campaignSchedulesUpdated     CampaignSchedule[]       @relation("CampaignScheduleUpdatedBy")
+  monthlySnapshotsUploaded     MonthlySnapshot[]        @relation("MonthlySnapshotUploadedBy")
+  policyUpdates                Policy[]                 @relation("PolicyUpdatedBy")
+  committeeUpdates             Committee[]              @relation("CommitteeUpdatedBy")
+  meetingUpdates               Meeting[]                @relation("MeetingUpdatedBy")
+  meetingMinutesApproved       Meeting[]                @relation("MeetingMinutesApprovedBy")
+  tasksAssigned                Task[]                   @relation("TaskAssignee")
+  tasksCreated                 Task[]                   @relation("TaskCreatedBy")
+  tasksToApprove               Task[]                   @relation("TaskApprover")
+  tasksDecided                 Task[]                   @relation("TaskDecidedBy")
+  accreditationStandardUpdates AccreditationStandard[]  @relation("AccreditationStandardUpdatedBy")
+  accreditationEvidenceCreated AccreditationEvidence[]  @relation("AccreditationEvidenceCreatedBy")
+  maintenanceItemsCreated      MaintenanceItem[]        @relation("MaintenanceItemCreatedBy")
+  advancementCampaignsCreated  AdvancementCampaign[]    @relation("AdvancementCampaignCreatedBy")
+  advancementGiftsCreated      AdvancementGift[]        @relation("AdvancementGiftCreatedBy")
+  knowledgeDocumentsUploaded   KnowledgeDocument[]      @relation("KnowledgeDocumentUploadedBy")
+  alertsCreated                Alert[]                  @relation("AlertCreatedBy")
+  enrollmentSnapshotsCreated   EnrollmentSnapshot[]     @relation("EnrollmentSnapshotCreatedBy")
 
   @@index([email])
   @@map("users")
@@ -234,9 +238,9 @@ model Membership {
   invitedBy String?          @map("invited_by") @db.Uuid
   createdAt DateTime         @default(now()) @map("created_at")
 
-  user           User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  school         School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  invitedByUser  User?  @relation("MembershipInvitedBy", fields: [invitedBy], references: [id], onDelete: SetNull)
+  user          User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  school        School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  invitedByUser User?  @relation("MembershipInvitedBy", fields: [invitedBy], references: [id], onDelete: SetNull)
 
   @@unique([userId, schoolId])
   @@index([schoolId])
@@ -410,7 +414,7 @@ model Subscription {
   // client DTO accepts it (forbidNonWhitelisted-safe).
   licensedModules      Json?              @map("licensed_modules") @db.JsonB
   createdAt            DateTime           @default(now()) @map("created_at")
-  updatedAt           DateTime           @updatedAt @map("updated_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
 
   school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
@@ -449,28 +453,38 @@ model AuditLog {
 /// tuition discount rate). Decimals are converted to plain `number` at the API
 /// boundary to match the engine/analytics number convention.
 model PeriodOperationalData {
-  id                String   @id @default(uuid()) @db.Uuid
-  schoolId          String   @map("school_id") @db.Uuid
-  fiscalPeriodId    String   @map("fiscal_period_id") @db.Uuid
-  enrollment        Int?
-  enrollmentFte     Decimal? @map("enrollment_fte") @db.Decimal(10, 2)
-  studentsOnAid     Int?     @map("students_on_aid")
-  financialAidTotal Decimal? @map("financial_aid_total") @db.Decimal(18, 2)
+  id                       String   @id @default(uuid()) @db.Uuid
+  schoolId                 String   @map("school_id") @db.Uuid
+  fiscalPeriodId           String   @map("fiscal_period_id") @db.Uuid
+  enrollment               Int?
+  enrollmentFte            Decimal? @map("enrollment_fte") @db.Decimal(10, 2)
+  studentsOnAid            Int?     @map("students_on_aid")
+  financialAidTotal        Decimal? @map("financial_aid_total") @db.Decimal(18, 2)
   /// Phase 5 — actual STAFF FTEs (NOT the student-side enrollmentFte). teachingFte
   /// is the instructional/teaching subset of totalStaffFte. Drives the board KPIs
   /// teachingFte / totalStaffFte / teacherRatio. NULL = not entered. Cross-field
   /// teachingFte <= totalStaffFte enforced in OperationalService.upsert.
-  teachingFte       Decimal? @map("teaching_fte") @db.Decimal(10, 2)
-  totalStaffFte     Decimal? @map("total_staff_fte") @db.Decimal(10, 2)
-  notes             String?
+  teachingFte              Decimal? @map("teaching_fte") @db.Decimal(10, 2)
+  totalStaffFte            Decimal? @map("total_staff_fte") @db.Decimal(10, 2)
+  notes                    String?
   /// Phase 2 — anticipated INCOMING (net-new) students by grade from feeder
   /// sources. JSON object keyed by GradeKey (PK0–PK4, K, 1–8) → non-negative
   /// count. Drives the FY-End Forecast's tuition (merged additively into the
   /// driver enrollmentByGrade). NULL = none entered. A free input, NOT a linked school.
-  feederEnrollmentByGrade Json? @map("feeder_enrollment_by_grade") @db.JsonB
-  updatedByUserId   String?  @map("updated_by_user_id") @db.Uuid
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  feederEnrollmentByGrade  Json?    @map("feeder_enrollment_by_grade") @db.JsonB
+  /// Phase 2 Enrollment Intelligence — the PLANNED enrollment by grade (JSONB keyed
+  /// by GradeKey → non-negative count) a school targets for this period. A free input
+  /// (does NOT require a full driver budget); its total is one of the plan sources for
+  /// the enrollment_vs_plan metric. NULL = no plan entered.
+  plannedEnrollmentByGrade Json?    @map("planned_enrollment_by_grade") @db.JsonB
+  /// Phase 2 — provenance stamp for a PROMOTED `enrollment` value: the connector/CSV
+  /// provider that last filled it (e.g. 'blackbaud', 'oneroster_csv'). NULL when the
+  /// value was hand-entered — the promote path NEVER overwrites a manual entry, and
+  /// only re-promotes over a value it stamped itself (fill-when-null OR own stamp).
+  enrollmentSourceProvider String?  @map("enrollment_source_provider")
+  updatedByUserId          String?  @map("updated_by_user_id") @db.Uuid
+  createdAt                DateTime @default(now()) @map("created_at")
+  updatedAt                DateTime @updatedAt @map("updated_at")
 
   school        School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   fiscalPeriod  FiscalPeriod @relation(fields: [fiscalPeriodId], references: [id], onDelete: Cascade)
@@ -530,18 +544,18 @@ model PeriodComplianceInputs {
 /// @finrep/compliance reconcileScholarships(). `program` is one of FTC/FES_EO/
 /// FES_UA or null (flagged downstream). `source` is 'upload' | 'manual'.
 model ScholarshipDisbursement {
-  id             String   @id @default(uuid()) @db.Uuid
-  schoolId       String   @map("school_id") @db.Uuid
-  fiscalPeriodId String   @map("fiscal_period_id") @db.Uuid
-  studentRef     String?  @map("student_ref")
+  id             String    @id @default(uuid()) @db.Uuid
+  schoolId       String    @map("school_id") @db.Uuid
+  fiscalPeriodId String    @map("fiscal_period_id") @db.Uuid
+  studentRef     String?   @map("student_ref")
   program        String?
   payDate        DateTime? @map("pay_date") @db.Date
-  amount         Decimal  @db.Decimal(18, 2)
+  amount         Decimal   @db.Decimal(18, 2)
   term           String?
-  batchRef       String?  @map("batch_ref")
-  source         String   @default("upload")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  batchRef       String?   @map("batch_ref")
+  source         String    @default("upload")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
 
   school       School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   fiscalPeriod FiscalPeriod @relation(fields: [fiscalPeriodId], references: [id], onDelete: Cascade)
@@ -924,7 +938,7 @@ model Policy {
   // their own categories; bounded only by the DTO @MaxLength, not an enum.
   category             String
   status               String    @default("active") // 'active' | 'draft' | 'retired' (lifecycle)
-  owner                String?   // responsible party/role, free text, nullable
+  owner                String? // responsible party/role, free text, nullable
   adoptedDate          DateTime? @map("adopted_date") @db.Date
   lastReviewedDate     DateTime? @map("last_reviewed_date") @db.Date
   reviewIntervalMonths Int       @default(12) @map("review_interval_months")
@@ -1044,7 +1058,7 @@ model AccreditationStandard {
   // Self-relation: deleting a parent SETS children's parentId to NULL (re-parent to
   // top-level), NEVER cascade — a subtree is never silently mass-deleted.
   parent        AccreditationStandard?  @relation("AccreditationStandardHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
-  children       AccreditationStandard[] @relation("AccreditationStandardHierarchy")
+  children      AccreditationStandard[] @relation("AccreditationStandardHierarchy")
   updatedByUser User?                   @relation("AccreditationStandardUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
   evidence      AccreditationEvidence[]
 
@@ -1071,7 +1085,7 @@ model AccreditationEvidence {
   // migration needs NO backfill — every existing row reads as manual, source_ref NULL.
   sourceType      String    @default("manual") @map("source_type") // 'manual' | 'policy' | 'board_report'
   sourceRef       String?   @map("source_ref") @db.Uuid // Policy.id / BoardReport.id (both @db.Uuid)
-  reference       String?   // url / doc path / citation, free text, nullable
+  reference       String? // url / doc path / citation, free text, nullable
   notes           String?
   capturedAt      DateTime? @map("captured_at") @db.Date
   createdByUserId String?   @map("created_by_user_id") @db.Uuid
@@ -1306,10 +1320,10 @@ model Task {
   // school membership at write time — never a cross-tenant / non-member user.
   assigneeUserId  String?   @map("assignee_user_id") @db.Uuid
   dueDate         DateTime? @map("due_date") @db.Date
-  status          String    @default("open")   // 'open' | 'in_progress' | 'done' | 'cancelled'
+  status          String    @default("open") // 'open' | 'in_progress' | 'done' | 'cancelled'
   priority        String    @default("normal") // 'low' | 'normal' | 'high' (triage hint, not urgency)
   sourceType      String?   @map("source_type") // 'manual' | 'policy' | 'metric' | 'compliance'
-  sourceRef       String?   @map("source_ref")  // policyId / metricKey / briefing item id (soft link)
+  sourceRef       String?   @map("source_ref") // policyId / metricKey / briefing item id (soft link)
   createdByUserId String?   @map("created_by_user_id") @db.Uuid
   completedAt     DateTime? @map("completed_at")
   // ── Phase 3 Workflow v1 approval / sign-off (additive; single-approver). A task
@@ -1349,4 +1363,77 @@ model Task {
   @@index([schoolId, approvalStatus])
   @@index([schoolId, seriesId])
   @@map("tasks")
+}
+
+// ── Phase 2: Enrollment Intelligence — SIS/roster connector + snapshot series ──
+
+/// The enrollment/SIS providers a school can pull a roster from. `oneroster_csv`
+/// and `manual` never create an EnrollmentSource row (they carry a provider stamp
+/// on the snapshot instead); the API providers (blackbaud live; oneroster_api /
+/// facts / veracross built-to-spec + config-gated dark) store creds in a source.
+enum EnrollmentProvider {
+  oneroster_csv // universal file/ZIP upload — no stored source row
+  oneroster_api // OneRoster 1.1/1.2 REST (dark, config-gated)
+  blackbaud // SKY API OAuth2 + subscription key — LIVE-verifiable sandbox
+  facts // built-to-spec, config-gated dark
+  veracross // built-to-spec, config-gated dark
+  manual // hand-entered snapshot
+}
+
+/// Phase 2 — LIVE enrollment/SIS connector creds for one school (mirrors
+/// QboConnection: exists ONLY when a vendor API is configured). CSV/manual
+/// snapshots carry sourceId=null + a provider stamp on the snapshot instead.
+model EnrollmentSource {
+  id                String             @id @default(uuid()) @db.Uuid
+  schoolId          String             @unique @map("school_id") @db.Uuid
+  provider          EnrollmentProvider
+  accessToken       String?            @map("access_token") // OAuth (blackbaud)
+  refreshToken      String?            @map("refresh_token")
+  expiresAt         DateTime?          @map("expires_at")
+  apiKeyId          String?            @map("api_key_id") // key/basic providers
+  apiKeySecret      String?            @map("api_key_secret")
+  baseUrl           String?            @map("base_url")
+  externalOrgId     String?            @map("external_org_id") // SIS org sourcedId
+  subscriptionKey   String?            @map("subscription_key") // Blackbaud SKY
+  environment       String             @default("sandbox")
+  config            Json?              @db.JsonB
+  status            String             @default("connected") // connected | error
+  lastError         String?            @map("last_error")
+  lastSyncedAt      DateTime?          @map("last_synced_at")
+  connectedByUserId String?            @map("connected_by_user_id") @db.Uuid
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+
+  school    School               @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  snapshots EnrollmentSnapshot[]
+
+  @@map("enrollment_sources")
+}
+
+/// Phase 2 — DATED append-only roster observation (the enrollment TIME-SERIES;
+/// immutable, unlike the single mutable PeriodOperationalData row). Source-stamped.
+model EnrollmentSnapshot {
+  id              String             @id @default(uuid()) @db.Uuid
+  schoolId        String             @map("school_id") @db.Uuid
+  sourceId        String?            @map("source_id") @db.Uuid // null for CSV/manual
+  fiscalPeriodId  String?            @map("fiscal_period_id") @db.Uuid
+  observedOn      DateTime           @map("observed_on") @db.Date // as-of date (time axis)
+  provider        EnrollmentProvider
+  totalEnrolled   Int                @map("total_enrolled")
+  byGrade         Json               @map("by_grade") @db.JsonB // GradeKey -> count (active)
+  byStatus        Json?              @map("by_status") @db.JsonB // {enrolled,withdrawn?,applied?,accepted?}
+  fte             Decimal?           @db.Decimal(10, 2)
+  raw             Json?              @db.JsonB // rawGradeCounts, droppedRows, warnings
+  createdByUserId String?            @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime           @default(now()) @map("created_at")
+
+  school        School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  source        EnrollmentSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  fiscalPeriod  FiscalPeriod?     @relation(fields: [fiscalPeriodId], references: [id], onDelete: SetNull)
+  createdByUser User?             @relation("EnrollmentSnapshotCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([schoolId, sourceId, observedOn]) // idempotent re-import
+  @@index([schoolId, observedOn])
+  @@index([fiscalPeriodId])
+  @@map("enrollment_snapshots")
 }

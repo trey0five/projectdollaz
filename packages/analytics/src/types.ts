@@ -105,6 +105,9 @@ export type MetricKey =
   | 'pct_students_on_aid'
   // Tier-2 enrollment domain — first non-finance banded metric (thin wedge).
   | 'enrollment_change_yoy'
+  // Phase 2 Enrollment Intelligence — actual headcount vs the planned/budgeted
+  // enrollment for the period. Enrollment domain (auto-gated by the module).
+  | 'enrollment_vs_plan'
   // Tier-2 hr domain — banded staffing-load metric (reuses staff-FTE data).
   | 'student_teacher_ratio'
 
@@ -123,6 +126,17 @@ export type MetricKey =
 export interface PeriodOperational {
   /** Headcount (primary enrollment number). */
   enrollment: number | null
+  /**
+   * Phase 2 Enrollment Intelligence — the PLANNED/budgeted total enrollment for
+   * this period (the denominator of enrollment_vs_plan). Threaded in by the API
+   * from the driver-budget enrollmentByGrade total (or the free
+   * plannedEnrollmentByGrade), so the metric layer stays PURE (never reads the DB).
+   * OPTIONAL + additive: absent/null means NO PLAN entered → enrollment_vs_plan is
+   * available:false (inputsMissing:['enrollmentPlan']); a `0` or negative plan is
+   * treated the same (an undefined denominator, never a fabricated ratio). Extensive
+   * (an enrollment count), so the org rollup sums it like every other component.
+   */
+  enrollmentPlan?: number | null
   /** Optional full-time-equivalent enrollment. */
   enrollmentFte: number | null
   /** Count of students receiving aid. */

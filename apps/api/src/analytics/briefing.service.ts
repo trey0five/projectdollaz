@@ -1,5 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
-import { type MetricResult, formatMetricValueLong, resolveDisplayUnit } from '@finrep/analytics'
+import {
+  type MetricResult,
+  formatMetricValueLong,
+  projectCashRunway,
+  resolveDisplayUnit,
+} from '@finrep/analytics'
 import type { MembershipRole } from '@finrep/db'
 import { PeriodsService } from '../periods/periods.service.js'
 import { AnalyticsService } from './analytics.service.js'
@@ -53,6 +58,8 @@ export type AttentionSource =
   | 'accreditation'
   | 'facilities'
   | 'advancement'
+  // Phase 2 Enrollment Intelligence — the cross-domain enrollment→tuition→cash item.
+  | 'enrollment'
 
 /**
  * A task at least this many days past due escalates the workflow overdue item from
@@ -280,6 +287,7 @@ export class BriefingService {
       accreditationLicensed,
       facilitiesLicensed,
       advancementLicensed,
+      enrollmentLicensed,
     ] = await Promise.all([
       this.compliance.evaluateForPeriod(schoolId, period.id).catch(() => null),
       this.reconciliation.reconcileForPeriod(schoolId, period.id).catch(() => null),
@@ -294,6 +302,9 @@ export class BriefingService {
       this.billing.isEntitledForModule(schoolId, 'facilities').catch(() => false),
       // Phase 4 Advancement gate — same fan-out, fail CLOSED (hides advancement items).
       this.billing.isEntitledForModule(schoolId, 'advancement').catch(() => false),
+      // Phase 2 Enrollment gate — same fan-out, fail CLOSED (hides the cross-domain
+      // enrollment item for a finance-only school).
+      this.billing.isEntitledForModule(schoolId, 'enrollment').catch(() => false),
     ])
 
     // 2a — open 2A findings (material -> critical, reportable -> warn).
@@ -796,6 +807,109 @@ export class BriefingService {
             link: '/advancement',
             dueDate: earliest,
           })
+        }
+      }
+    }
+
+    // ── STEP 2.10: enrollment below plan — the CROSS-DOMAIN item ─────────────
+    // The Phase-2 centerpiece: enrollment → tuition → cash in ONE briefing item.
+    // When actual enrollment falls materially below plan, we quantify the tuition
+    // shortfall (gap × net tuition per student) and, when the driver budget + cash
+    // are available, the CASH consequence (days-cash breach via projectCashRunway,
+    // else an annualized days-cash estimate). GATED by the 'enrollment' module.
+    //
+    // GRACEFUL DEGRADATION LADDER (NEVER throws — every await fail-softs to null):
+    //   (1) full chain  — gap + tuition impact + a cash breach month;
+    //   (2) no-cash     — gap + tuition impact (no driver/cash data → no cash clause);
+    //   (3) no-netrate  — gap only (no plan netRate AND no net-tuition metric);
+    //   (4) no-plan     — skipped entirely (no plan → nothing to compare against).
+    // We only flag REAL shortfalls (gapPct < -2%); at/above plan emits nothing.
+    if (enrollmentLicensed) {
+      // ONE mockable call on the already-injected AnalyticsService (no new briefing
+      // dependency). The `?.` + Promise.resolve wrapper makes a missing method (older
+      // mocks) resolve to null rather than throw synchronously.
+      const signal = await Promise.resolve()
+        .then(() => this.analytics.enrollmentSignalInputs?.(schoolId, period.id) ?? null)
+        .catch(() => null)
+      const actual = signal?.actual ?? null
+      const plan = signal?.plan ?? null
+
+      if (actual !== null && plan && plan.planTotal > 0) {
+        const gap = actual - plan.planTotal // negative when below plan
+        const gapPct = gap / plan.planTotal
+        // Only real shortfalls (>2% below plan). At/above plan or within 2% → no item
+        // (and no metric:enrollment_vs_plan item exists to suppress — it's 'good').
+        if (gapPct < -0.02) {
+          const shortfall = Math.abs(gap)
+
+          // Net tuition per PLANNED student: prefer the driver-budget netRate, else
+          // the net_tuition_per_student metric value, else null (no tuition clause).
+          const ntps = metricsResponse.metrics.find((m) => m.key === 'net_tuition_per_student')
+          const netPerStudent =
+            plan.netRate ?? (ntps && ntps.available ? ntps.value : null) ?? null
+          const tuitionImpact = netPerStudent !== null ? gap * netPerStudent : null // negative $
+
+          // Cash consequence (degrade-safe). Prefer a projectCashRunway breach month;
+          // else an annualized days-cash estimate from the days_cash_on_hand metric.
+          let cashClause: string | null = null
+          if (tuitionImpact !== null) {
+            const dch = metricsResponse.metrics.find((m) => m.key === 'days_cash_on_hand')
+            const cashFromMetric = dch?.inputs?.find((i) => i.key === 'cash')?.value ?? null
+            const expFromMetric = dch?.inputs?.find((i) => i.key === 'totalExp')?.value ?? null
+            const openingCash = signal?.cash?.openingCash ?? cashFromMetric
+            const annualExpense = signal?.cash?.annualExpense ?? expFromMetric
+
+            const runway = projectCashRunway({
+              openingCash,
+              monthlyNetCashflow: signal?.cash?.monthlyNetCashflow ?? null,
+              annualExpense,
+              shockAnnual: tuitionImpact,
+              threshold: 60,
+            })
+            if (runway?.firstMonthBelowThreshold) {
+              cashClause = `days cash on hand would fall below 60 by ${runway.firstMonthBelowThreshold.monthLabel}`
+            } else if (
+              dch &&
+              dch.available &&
+              dch.value !== null &&
+              openingCash !== null &&
+              annualExpense !== null &&
+              annualExpense > 0
+            ) {
+              const projected = (openingCash + tuitionImpact) / (annualExpense / 365)
+              cashClause = `days cash on hand would fall from ${Math.round(dch.value)} to ~${Math.round(projected)}`
+            }
+          }
+
+          // Severity from the gap band: > 5% below plan is critical, else warn.
+          const severity: AttentionSeverity = gapPct <= -0.05 ? 'critical' : 'warn'
+
+          let why =
+            `Enrollment is ${shortfall} student${shortfall === 1 ? '' : 's'} below the plan of ` +
+            `${plan.planTotal} (${(gapPct * 100).toFixed(1)}%)`
+          // tuitionImpact is negative (revenue not collected); "less tuition"
+          // already states the direction, so show the magnitude, not "-$…".
+          if (tuitionImpact !== null)
+            why += ` — about ${fmtMoney(Math.abs(tuitionImpact))} less tuition this year`
+          if (cashClause) why += `; ${cashClause}`
+          why += '.'
+
+          items.push({
+            id: 'enrollment:below-plan',
+            severity,
+            source: 'enrollment',
+            title: `Enrollment ${shortfall} below plan`,
+            why,
+            metricKey: 'enrollment_vs_plan',
+            value: gapPct,
+            link: '/enrollment',
+            dueDate: null,
+          })
+
+          // SUPPRESS the plain metric item — this richer item replaces it. (The
+          // enrollment_change_yoy metric item, if any, is KEPT — a distinct signal.)
+          const dupIdx = items.findIndex((i) => i.id === 'metric:enrollment_vs_plan')
+          if (dupIdx !== -1) items.splice(dupIdx, 1)
         }
       }
     }

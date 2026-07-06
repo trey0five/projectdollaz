@@ -76,6 +76,37 @@ export interface AppConfig {
     environment: 'sandbox' | 'production'
     redirectUri: string
   }
+  // Phase 2 Enrollment Intelligence — SIS/roster connectors (optional, per provider).
+  // Empty keys => that provider is DARK (its adapter.isConfigured() is false): the
+  // Connect/key form is hidden and sync 400s, while the universal OneRoster CSV/ZIP
+  // upload path always works. Blackbaud is the one open dev sandbox (OAuth2 + a
+  // subscription-key header); FACTS/Veracross/OneRoster-REST are customer-gated and
+  // ship built-to-spec but disabled until their env keys are set. Mirrors `quickbooks`.
+  enrollment: {
+    blackbaud: {
+      clientId: string
+      clientSecret: string
+      redirectUri: string
+      subscriptionKey: string
+      studentRoleId: string
+      environment: 'sandbox' | 'production'
+    }
+    oneroster: {
+      clientId: string
+      clientSecret: string
+      baseUrl: string
+    }
+    facts: {
+      clientId: string
+      apiKey: string
+      baseUrl: string
+    }
+    veracross: {
+      clientId: string
+      clientSecret: string
+      baseUrl: string
+    }
+  }
   // Phase 4 Knowledge document store — AWS S3 object storage for uploaded files.
   // Empty bucket/creds => DocumentStorageService.isConfigured() is false, so the
   // upload/download endpoints return 503 while the app still BOOTS keyless and the
@@ -187,6 +218,33 @@ export function configuration(): AppConfig {
       clientSecret: process.env.QB_OAUTH_CLIENT_SECRET ?? '',
       environment: (process.env.QB_ENVIRONMENT ?? 'sandbox') as 'sandbox' | 'production',
       redirectUri: process.env.QB_REDIRECT_URI ?? `${webOrigin}/integrations/qb/callback`,
+    },
+    // Phase 2 Enrollment Intelligence — SIS connectors. All env-driven with empty
+    // defaults so the api BOOTS keyless (every provider dark; CSV upload still works).
+    enrollment: {
+      blackbaud: {
+        clientId: process.env.BLACKBAUD_OAUTH_CLIENT_ID ?? '',
+        clientSecret: process.env.BLACKBAUD_OAUTH_CLIENT_SECRET ?? '',
+        redirectUri: process.env.BLACKBAUD_REDIRECT_URI ?? `${webOrigin}/enrollment/blackbaud/callback`,
+        subscriptionKey: process.env.BLACKBAUD_SUBSCRIPTION_KEY ?? '',
+        studentRoleId: process.env.BLACKBAUD_STUDENT_ROLE_ID ?? '',
+        environment: (process.env.BLACKBAUD_ENVIRONMENT ?? 'sandbox') as 'sandbox' | 'production',
+      },
+      oneroster: {
+        clientId: process.env.ONEROSTER_OAUTH_CLIENT_ID ?? '',
+        clientSecret: process.env.ONEROSTER_OAUTH_CLIENT_SECRET ?? '',
+        baseUrl: process.env.ONEROSTER_BASE_URL ?? '',
+      },
+      facts: {
+        clientId: process.env.FACTS_CLIENT_ID ?? '',
+        apiKey: process.env.FACTS_SUBSCRIPTION_KEY ?? '',
+        baseUrl: process.env.FACTS_BASE_URL ?? '',
+      },
+      veracross: {
+        clientId: process.env.VERACROSS_CLIENT_ID ?? '',
+        clientSecret: process.env.VERACROSS_CLIENT_SECRET ?? '',
+        baseUrl: process.env.VERACROSS_BASE_URL ?? '',
+      },
     },
     // Safe empty defaults so the api BOOTS with no S3 creds (upload/download then
     // 503; list still works). region/prefix have benign defaults and are NOT part of

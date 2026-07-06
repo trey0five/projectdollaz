@@ -66,10 +66,12 @@ describe('metric metadata', () => {
     }
   })
 
-  it('boardLabel is declared on exactly the two board-aliased metrics', () => {
+  it('boardLabel is declared on exactly the board-aliased metrics', () => {
     const withAlias = METRIC_META.filter((m) => m.boardLabel)
     expect(withAlias.map((m) => m.key).sort()).toEqual([
       'cost_per_pupil',
+      // Phase 2 — enrollment_vs_plan carries a board alias (== its label).
+      'enrollment_vs_plan',
       'net_tuition_per_student',
     ])
     const byKey = Object.fromEntries(METRIC_META.map((m) => [m.key, m]))

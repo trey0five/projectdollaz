@@ -146,5 +146,15 @@ export type {
   EffectiveEnrollmentInput,
 } from './forecast.js'
 
+// Cash-runway shock projection (Phase 2) — pure, never-throws 12-month days-cash
+// projection under a one-off annual shock. Powers the cash-consequence clause of
+// the cross-domain enrollment→tuition→cash briefing item.
+export { projectCashRunway } from './cashRunway.js'
+export type {
+  CashRunwayInput,
+  CashRunwayBreach,
+  CashRunwayResult,
+} from './cashRunway.js'
+
 // Version
 export { ANALYTICS_VERSION } from './version.js'

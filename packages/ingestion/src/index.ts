@@ -47,6 +47,10 @@ export {
   FL_FISCAL_YEAR_END,
 } from './classify.js'
 
+// OneRoster 1.1/1.2 CSV enrollment parser is SERVER-ONLY (node:zlib for the ZIP)
+// and deliberately NOT re-exported here — import it from '@finrep/ingestion/oneroster'
+// so this browser-safe barrel never drags a node: builtin into the web bundle.
+
 // Budget-spread parser (format-agnostic; standard 'diocesan' spread template preset). Browser + node.
 export type {
   BudgetSpread,

@@ -20,6 +20,8 @@ export interface OperationalPublic {
   notes: string | null
   /** Phase 2 — anticipated incoming feeder students by grade; null when none. */
   feederEnrollmentByGrade: Record<string, number> | null
+  /** Phase 2 — planned/target enrollment by grade (the plan denominator); null when none. */
+  plannedEnrollmentByGrade: Record<string, number> | null
   updatedAt: string | null
 }
 
@@ -62,6 +64,7 @@ export class OperationalService {
         totalStaffFte: null,
         notes: null,
         feederEnrollmentByGrade: null,
+        plannedEnrollmentByGrade: null,
         updatedAt: null,
       }
     }
@@ -74,6 +77,11 @@ export class OperationalService {
       totalStaffFte: dec(row.totalStaffFte),
       notes: row.notes,
       feederEnrollmentByGrade: coerceFeeder(row.feederEnrollmentByGrade),
+      // Cast: plannedEnrollmentByGrade is an additive Phase-2 column — read
+      // defensively so this compiles even before the prisma client is regenerated.
+      plannedEnrollmentByGrade: coerceFeeder(
+        (row as { plannedEnrollmentByGrade?: unknown }).plannedEnrollmentByGrade,
+      ),
       updatedAt: row.updatedAt.toISOString(),
     }
   }
@@ -184,6 +192,20 @@ export class OperationalService {
         ? Prisma.JsonNull
         : (feederMerged as Prisma.InputJsonValue)
 
+    // Phase 2 — planned enrollment by grade: same merge-pick as feeder (omitted keeps
+    // stored, explicit null clears). Read the existing value defensively (additive
+    // column) so this compiles even before the prisma client is regenerated.
+    const plannedMerged = pick(
+      dto.plannedEnrollmentByGrade as Record<string, number> | null | undefined,
+      ((existing as { plannedEnrollmentByGrade?: unknown } | null)?.plannedEnrollmentByGrade as
+        | Record<string, number>
+        | null) ?? null,
+    )
+    const plannedWrite =
+      plannedMerged === null || plannedMerged === undefined
+        ? Prisma.JsonNull
+        : (plannedMerged as Prisma.InputJsonValue)
+
     const data = {
       enrollment,
       enrollmentFte,
@@ -193,13 +215,20 @@ export class OperationalService {
       totalStaffFte,
       notes,
       feederEnrollmentByGrade: feederWrite,
+      plannedEnrollmentByGrade: plannedWrite,
       updatedByUserId: userId,
     }
 
     const row = await this.prisma.periodOperationalData.upsert({
       where: { schoolId_fiscalPeriodId: { schoolId, fiscalPeriodId: period.id } },
-      create: { schoolId, fiscalPeriodId: period.id, ...data },
-      update: data,
+      // Cast: `data` carries the additive plannedEnrollmentByGrade column, which the
+      // generated Prisma input type gains once the client is regenerated for it.
+      create: {
+        schoolId,
+        fiscalPeriodId: period.id,
+        ...data,
+      } as Prisma.PeriodOperationalDataUncheckedCreateInput,
+      update: data as Prisma.PeriodOperationalDataUncheckedUpdateInput,
     })
 
     await this.audit.write({

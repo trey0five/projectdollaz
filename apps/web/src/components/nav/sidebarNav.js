@@ -14,11 +14,11 @@
 //
 // To extend declaratively: add a group row (with its `module` key) or an item —
 // no branching logic. ONLY include a group whose items have REAL routes; a
-// licensed-but-page-less module (enrollment/planning/hr) contributes NO group (its
-// value surfaces inside Analytics/briefing) and is upsold via the Add-ons list
-// (SELLABLE_MODULE_KEYS) only while UNLICENSED. (Facilities AND Advancement NOW have
-// a page/group — the maintenance + fundraising registers — so they appear here when
-// licensed.)
+// licensed-but-page-less module (planning/hr) contributes NO group (its value
+// surfaces inside Analytics/briefing) and is upsold via the Add-ons list
+// (SELLABLE_MODULE_KEYS) only while UNLICENSED. (Facilities, Advancement AND now
+// Enrollment have a page/group — the maintenance / fundraising registers + the
+// SIS-roster connector — so they appear here when licensed.)
 // ─────────────────────────────────────────────────────────────────────────────
 import {
   Sparkles,
@@ -36,6 +36,7 @@ import {
   Wrench,
   HeartHandshake,
   CircleDollarSign,
+  GraduationCap,
   Settings,
 } from 'lucide-react'
 
@@ -76,6 +77,17 @@ export const NAV_GROUPS = [
       // Readiness is finance audit/compliance readiness (same finance license, no
       // own module key) — it lives UNDER Finance, adjacent to Reports as before.
       { to: '/readiness', navId: 'nav-readiness', label: 'Readiness', Icon: ShieldCheck, match: (p) => p.startsWith('/readiness') },
+    ],
+  },
+  {
+    // Phase 2 Enrollment Intelligence — the SIS/roster connector + vs-plan page.
+    // Its own gated group (module:'enrollment'), placed right after Finance since
+    // enrollment drives tuition/cash. Shown only when the module is licensed.
+    id: 'enrollment',
+    label: 'Enrollment',
+    module: 'enrollment',
+    items: [
+      { to: '/enrollment', navId: 'nav-enrollment', label: 'Enrollment', Icon: GraduationCap, match: (p) => p.startsWith('/enrollment') },
     ],
   },
   {

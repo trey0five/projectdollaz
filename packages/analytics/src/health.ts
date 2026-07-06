@@ -37,6 +37,11 @@ export const DEFAULT_BANDS: Partial<Record<MetricKey, TargetBands>> = {
   // 5% = watch; a steeper-than-5% drop = risk (a genuine revenue-sustainability
   // threat for a tuition-dependent school). Tunable sector default.
   enrollment_change_yoy: { goodDirection: 'higher', good: 0, risk: -0.05 },
+  // Enrollment vs plan (Phase 2): within 2% of plan (or above) = good; a shortfall
+  // between 2% and 5% below plan = watch; more than 5% below plan = risk (a real
+  // tuition-revenue / cash threat — the cross-domain briefing item extends exactly
+  // this band). Tunable sector default, mirrors the enrollment_change_yoy scale.
+  enrollment_vs_plan: { goodDirection: 'higher', good: -0.02, risk: -0.05 },
   // HR (staffing load): ~12:1 or better = good; a load above 16:1 flags a
   // staffing-load / class-size concern worth a briefing item. Lower is better.
   // TUNABLE SECTOR DEFAULT (like enrollment_change_yoy) — private-school ratios

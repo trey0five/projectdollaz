@@ -25,6 +25,7 @@ import { aidPerAidedStudent } from './metrics/aidPerAidedStudent.js'
 import { tuitionDiscountRate } from './metrics/tuitionDiscountRate.js'
 import { pctStudentsOnAid } from './metrics/pctStudentsOnAid.js'
 import { enrollmentChangeYoy } from './metrics/enrollmentChangeYoy.js'
+import { enrollmentVsPlan } from './metrics/enrollmentVsPlan.js'
 import { studentTeacherRatio } from './metrics/studentTeacherRatio.js'
 
 export const METRIC_REGISTRY: Record<MetricKey, MetricDef> = {
@@ -43,6 +44,8 @@ export const METRIC_REGISTRY: Record<MetricKey, MetricDef> = {
   pct_students_on_aid: pctStudentsOnAid,
   // Tier-2 enrollment domain (thin wedge: first non-finance banded metric).
   enrollment_change_yoy: enrollmentChangeYoy,
+  // Phase 2 Enrollment Intelligence — actual-vs-plan (same enrollment domain gate).
+  enrollment_vs_plan: enrollmentVsPlan,
   // Tier-2 hr domain (banded staffing-load metric; reuses staff-FTE data).
   student_teacher_ratio: studentTeacherRatio,
 }
@@ -61,9 +64,11 @@ export const METRIC_KEYS: MetricKey[] = [
   'aid_per_aided_student',
   'tuition_discount_rate',
   'pct_students_on_aid',
-  // Appended LAST so the existing 12-key order/layout stays byte-identical.
+  // Appended after the existing 12 so their order/layout stays byte-identical.
   'enrollment_change_yoy',
   'student_teacher_ratio',
+  // Phase 2 Enrollment Intelligence — appended LAST (keeps the prior 14-key order).
+  'enrollment_vs_plan',
 ]
 
 /** All metric defs in default-layout order. */

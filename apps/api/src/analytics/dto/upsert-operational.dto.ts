@@ -84,4 +84,16 @@ export class UpsertOperationalDto {
   @ValidateNested()
   @Type(() => EnrollmentByGradeDto)
   feederEnrollmentByGrade?: EnrollmentByGradeDto | null
+
+  /**
+   * Phase 2 Enrollment Intelligence — the PLANNED enrollment by grade the school
+   * targets for this period. A FREE input (does NOT require a full driver budget);
+   * its total is one of the plan sources for the enrollment_vs_plan metric. Reuses
+   * the per-grade @Min(0) validation. Explicit null clears; omitted keeps stored.
+   */
+  @IsOptional()
+  @IsObject()
+  @ValidateNested()
+  @Type(() => EnrollmentByGradeDto)
+  plannedEnrollmentByGrade?: EnrollmentByGradeDto | null
 }

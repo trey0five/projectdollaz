@@ -562,6 +562,40 @@ export const dataHubApi = {
   status: (schoolId, periodId) => api.get(`/schools/${schoolId}/periods/${periodId}/data-status`),
 }
 
+// ── Phase 2 Enrollment Intelligence: SIS / roster connector (per school) ─────
+// School-scoped. Gated by the 'enrollment' module: an entitled-but-unlicensed
+// school gets a 402 { code:'MODULE_NOT_LICENSED', module:'enrollment' } (surface
+// via isModuleNotLicensed). CSV/ZIP roster upload is multipart (Content-Type
+// undefined so the browser sets the boundary) — mirrors documentsApi.upload.
+export const enrollmentApi = {
+  status: (schoolId) => api.get(`/schools/${schoolId}/enrollment/status`),
+  connectUrl: (schoolId) => api.get(`/schools/${schoolId}/enrollment/connect`),
+  callback: (schoolId, body) => api.post(`/schools/${schoolId}/enrollment/callback`, body),
+  // Configure a key/basic provider (FACTS / Veracross / OneRoster API).
+  connectKey: (schoolId, body) => api.post(`/schools/${schoolId}/enrollment/connect-key`, body),
+  // Roster file upload (OneRoster ZIP / CSV) — multipart. observedOn optional.
+  upload: (schoolId, formData) =>
+    api.post(`/schools/${schoolId}/enrollment/upload`, formData, {
+      headers: { 'Content-Type': undefined },
+    }),
+  // Pull the latest roster from a connected live provider (Blackbaud/OneRoster API).
+  sync: (schoolId, body = {}) => api.post(`/schools/${schoolId}/enrollment/sync`, body),
+  // Hand-enter a snapshot ({ observedOn, byGrade }).
+  manual: (schoolId, body) => api.post(`/schools/${schoolId}/enrollment/manual`, body),
+  snapshots: (schoolId, periodId) =>
+    api.get(`/schools/${schoolId}/enrollment/snapshots`, {
+      params: periodId ? { periodId } : {},
+    }),
+  summary: (schoolId, periodId) =>
+    api.get(`/schools/${schoolId}/enrollment/summary`, {
+      params: periodId ? { periodId } : {},
+    }),
+  disconnect: (schoolId, removeData = false) =>
+    api.delete(`/schools/${schoolId}/enrollment`, {
+      params: removeData ? { removeData: true } : {},
+    }),
+}
+
 // ── Phase 6: QuickBooks Online connector (per school) ────────────────────────
 export const qboApi = {
   status: (schoolId) => api.get(`/schools/${schoolId}/integrations/qb/status`),
