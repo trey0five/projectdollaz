@@ -33,6 +33,7 @@ import {
   GraduationCap,
 } from 'lucide-react'
 import { LensIndicator, LensSwitcher } from './LensControls.jsx'
+import { WhyText, titleProgress } from '../ui/briefingFx.jsx'
 
 function greeting() {
   const h = new Date().getHours()
@@ -65,6 +66,13 @@ function BriefMeButton() {
 
 // Per-severity theming: the folder tab colour, the faint corner wash, and the tab
 // label. critical→Critical, warn→Warning, info→Review.
+// The severity-tinted premium card surface (.card-attn in index.css).
+const CARD_ATTN = {
+  critical: 'card-attn card-attn-critical',
+  warn: 'card-attn card-attn-warn',
+  info: 'card-attn card-attn-info',
+}
+
 const SEVERITY = {
   critical: { label: 'Critical', tab: 'bg-danger', wash: 'rgba(139,26,26,0.07)' },
   warn: { label: 'Warning', tab: 'bg-gold', wash: 'rgba(184,150,80,0.09)' },
@@ -147,6 +155,7 @@ function fmtDue(iso) {
 
 function BriefingItemCard({ item, index, reduce, canEdit, onDismiss }) {
   const sev = SEVERITY[item.severity] ?? SEVERITY.info
+  const progress = titleProgress(item.title)
   const domain = SOURCE_META[item.source] ?? { label: item.source ?? 'Signal', Icon: Sparkles }
   const DomainIcon = domain.Icon
   const navigate = useNavigate()
@@ -175,7 +184,7 @@ function BriefingItemCard({ item, index, reduce, canEdit, onDismiss }) {
       exit={reduce ? { opacity: 0 } : { opacity: 0, x: 40, scale: 0.98 }}
       transition={{ duration: 0.38, delay: reduce ? 0 : index * 0.06, ease: [0.22, 1, 0.36, 1] }}
       whileHover={reduce ? undefined : { y: -3 }}
-      className="group relative overflow-hidden rounded-2xl border border-rule/70 bg-white shadow-card transition-shadow duration-300 hover:shadow-glow"
+      className={`group relative overflow-hidden rounded-2xl ${CARD_ATTN[item.severity] ?? CARD_ATTN.info}`}
     >
       {/* Faint severity corner wash */}
       <span
@@ -213,7 +222,22 @@ function BriefingItemCard({ item, index, reduce, canEdit, onDismiss }) {
         <h3 className="font-serif text-[19px] font-semibold leading-snug text-navy sm:text-[21px]">
           {item.title}
         </h3>
-        <p className="mt-1.5 text-[14.5px] leading-relaxed text-muted">{item.why}</p>
+        <p className="mt-1.5 text-[14.5px] leading-relaxed text-muted">
+          <WhyText text={item.why} />
+        </p>
+        {progress != null && (
+          <div className="mt-3 flex items-center gap-2.5" aria-hidden="true">
+            <div className="h-2 flex-1 overflow-hidden rounded-full bg-navy/10">
+              <motion.div
+                initial={reduce ? { width: `${progress}%` } : { width: 0 }}
+                animate={{ width: `${progress}%` }}
+                transition={{ duration: 0.9, delay: 0.3 + index * 0.05, ease: [0.22, 1, 0.36, 1] }}
+                className="h-full rounded-full bg-gold-gradient shadow-[0_0_8px_rgba(184,150,80,0.45)]"
+              />
+            </div>
+            <span className="text-[12px] font-bold tabular-nums text-[#7a5e00]">{progress}%</span>
+          </div>
+        )}
 
         {/* Inline actions */}
         <div className="mt-4 flex flex-wrap items-center gap-2">

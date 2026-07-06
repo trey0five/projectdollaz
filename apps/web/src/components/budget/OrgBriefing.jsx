@@ -14,6 +14,9 @@ import { Link } from 'react-router-dom'
 import {
   Clock,
   ArrowRight,
+  AlertCircle,
+  AlertTriangle,
+  Eye,
   ChevronDown,
   ChevronUp,
   Layers,
@@ -30,6 +33,7 @@ import {
   Wrench,
 } from 'lucide-react'
 import { LensIndicator, LensSwitcher } from '../home/LensControls.jsx'
+import { CountUp, WhyText, titleProgress } from '../ui/briefingFx.jsx'
 
 // Per-severity theming — folder-tab language shared with HomeBriefing: the tab
 // colour, a faint corner wash, the tab label, and a chip tint for the per-school
@@ -43,10 +47,17 @@ const SEVERITY = {
 // Triage-board lanes — one column per severity (decreasing urgency), matching
 // HomeBriefing. Server order is preserved within each lane.
 const LANES = [
-  { key: 'critical', label: 'Critical', bar: 'from-danger to-danger/40', dot: 'bg-danger', text: 'text-danger', empty: 'Nothing critical.' },
-  { key: 'warn', label: 'Warning', bar: 'from-gold to-gold/40', dot: 'bg-gold', text: 'text-gold-dark', empty: 'No warnings.' },
-  { key: 'info', label: 'To review', bar: 'from-navy-soft to-navy-soft/40', dot: 'bg-navy-soft', text: 'text-navy-soft', empty: 'Nothing to review.' },
+  { key: 'critical', label: 'Critical', bar: 'from-danger to-danger/40', dot: 'bg-danger', text: 'text-danger', empty: 'Nothing critical.', Icon: AlertCircle },
+  { key: 'warn', label: 'Warning', bar: 'from-gold to-gold/40', dot: 'bg-gold', text: 'text-gold-dark', empty: 'No warnings.', Icon: AlertTriangle },
+  { key: 'info', label: 'To review', bar: 'from-navy-soft to-navy-soft/40', dot: 'bg-navy-soft', text: 'text-navy-soft', empty: 'Nothing to review.', Icon: Eye },
 ]
+
+// The severity-tinted premium card surface (.card-attn in index.css).
+const CARD_ATTN = {
+  critical: 'card-attn card-attn-critical',
+  warn: 'card-attn card-attn-warn',
+  info: 'card-attn card-attn-info',
+}
 
 // Domain eyebrow: a label + an icon that rides inside the gold coin.
 const SOURCE_META = {
@@ -90,6 +101,7 @@ function OrgBriefingItemCard({ item, index, reduce }) {
   const sev = SEVERITY[item.severity] ?? SEVERITY.info
   const domain = SOURCE_META[item.source] ?? { label: item.source ?? 'Signal', Icon: Sparkles }
   const DomainIcon = domain.Icon
+  const progress = titleProgress(item.title)
   return (
     <motion.div
       initial={reduce ? { opacity: 0 } : { opacity: 0, y: 14 }}
@@ -99,7 +111,7 @@ function OrgBriefingItemCard({ item, index, reduce }) {
     >
       <Link
         to={item.link}
-        className="group relative block overflow-hidden rounded-2xl border border-rule/70 bg-white shadow-card transition-shadow duration-300 hover:shadow-glow"
+        className={`group relative block overflow-hidden rounded-2xl ${CARD_ATTN[item.severity] ?? CARD_ATTN.info}`}
       >
         <span
           aria-hidden
@@ -138,7 +150,22 @@ function OrgBriefingItemCard({ item, index, reduce }) {
           <h3 className="font-serif text-[19px] font-semibold leading-snug text-navy sm:text-[21px]">
             {item.title}
           </h3>
-          <p className="mt-1.5 text-[14.5px] leading-relaxed text-muted">{item.why}</p>
+          <p className="mt-1.5 text-[14.5px] leading-relaxed text-muted">
+            <WhyText text={item.why} />
+          </p>
+          {progress != null && (
+            <div className="mt-3 flex items-center gap-2.5" aria-hidden="true">
+              <div className="h-2 flex-1 overflow-hidden rounded-full bg-navy/10">
+                <motion.div
+                  initial={reduce ? { width: `${progress}%` } : { width: 0 }}
+                  animate={{ width: `${progress}%` }}
+                  transition={{ duration: 0.9, delay: 0.3 + index * 0.05, ease: [0.22, 1, 0.36, 1] }}
+                  className="h-full rounded-full bg-gold-gradient shadow-[0_0_8px_rgba(184,150,80,0.45)]"
+                />
+              </div>
+              <span className="text-[12px] font-bold tabular-nums text-[#7a5e00]">{progress}%</span>
+            </div>
+          )}
           <span className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-bold uppercase tracking-[0.06em] text-gold">
             {ctaLabel(item)}
             <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
@@ -185,11 +212,22 @@ function OrgTriageLane({ lane, items, reduce }) {
       <div className="relative overflow-hidden rounded-xl border border-rule/70 bg-white/80 px-4 py-3 shadow-sm backdrop-blur-sm">
         <span aria-hidden className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${lane.bar}`} />
         <div className="flex items-center gap-2.5">
-          <span className={`h-2.5 w-2.5 rounded-full ${lane.dot}`} />
-          <span className="text-[12.5px] font-bold uppercase tracking-[0.08em] text-navy">{lane.label}</span>
-          <span className={`ml-auto min-w-[1.75rem] rounded-full bg-section px-2 py-0.5 text-center text-[12.5px] font-extrabold tabular-nums ${lane.text}`}>
-            {count}
+          <span className="relative flex h-2.5 w-2.5" aria-hidden>
+            {lane.key === 'critical' && count > 0 && !reduce && (
+              <span className={`absolute inline-flex h-full w-full rounded-full ${lane.dot} opacity-60 motion-safe:animate-ping`} />
+            )}
+            <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${lane.dot}`} />
           </span>
+          <lane.Icon size={14} className={lane.text} aria-hidden />
+          <span className="text-[12.5px] font-bold uppercase tracking-[0.08em] text-navy">{lane.label}</span>
+          <motion.span
+            initial={reduce ? false : { scale: 0.6, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 20, delay: 0.15 }}
+            className={`ml-auto min-w-[1.75rem] rounded-full bg-section px-2 py-0.5 text-center text-[12.5px] font-extrabold tabular-nums ${lane.text}`}
+          >
+            <CountUp value={count} />
+          </motion.span>
         </div>
       </div>
       {count === 0 ? (
@@ -316,7 +354,8 @@ export default function OrgBriefing({
         <div className="space-y-1.5">
           <div className="flex items-center gap-3">
             <h2 className="font-serif text-xl font-semibold text-navy sm:text-2xl">
-              Across your {schoolCount} {schoolCount === 1 ? 'school' : 'schools'} — {total} thing
+              Across your {schoolCount} {schoolCount === 1 ? 'school' : 'schools'} —{' '}
+              <CountUp value={total} className="text-gold-dark" /> thing
               {total === 1 ? '' : 's'} need{total === 1 ? 's' : ''} attention.
             </h2>
             <span
@@ -325,21 +364,31 @@ export default function OrgBriefing({
             />
           </div>
           <p className="text-[14px] text-muted">
-            <span className="font-semibold text-danger">{critical} critical</span> ·{' '}
-            <span className="font-semibold text-gold">{warn} warnings</span> ·{' '}
-            <span className="font-semibold text-navy">{info} to review</span>
+            <span className="font-semibold text-danger"><CountUp value={critical} /> critical</span> ·{' '}
+            <span className="font-semibold text-gold"><CountUp value={warn} /> warnings</span> ·{' '}
+            <span className="font-semibold text-navy"><CountUp value={info} /> to review</span>
           </p>
         </div>
       )}
 
       {/* Coverage banner — OrgStatements idiom. */}
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-gold/30 bg-gold/5 px-5 py-3">
-        <p className="text-[13px] font-semibold text-navy">
-          {schoolsReporting} of {schoolCount} {schoolCount === 1 ? 'school' : 'schools'} reported
-        </p>
-        <p className="text-[11px] italic text-muted">
-          Advisory — rolled up from each school&rsquo;s latest period for this fiscal year.
-        </p>
+      <div className="rounded-2xl border border-gold/30 bg-gold/5 px-5 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-[13px] font-semibold text-navy">
+            {schoolsReporting} of {schoolCount} {schoolCount === 1 ? 'school' : 'schools'} reported
+          </p>
+          <p className="text-[11px] italic text-muted">
+            Advisory — rolled up from each school&rsquo;s latest period for this fiscal year.
+          </p>
+        </div>
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-navy/10" aria-hidden="true">
+          <motion.div
+            initial={reduce ? false : { width: 0 }}
+            animate={{ width: `${schoolCount > 0 ? Math.round((schoolsReporting / schoolCount) * 100) : 0}%` }}
+            transition={{ duration: 0.8, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            className="h-full rounded-full bg-gold-gradient"
+          />
+        </div>
       </div>
 
       {/* Triage board — cross-school items bucketed into severity lanes (server

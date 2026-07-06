@@ -155,6 +155,96 @@
     opacity: 1;
   }
 
+  /* ── Attention cards (briefing triage boards) — premium glass surface with a
+     severity-tinted gradient ring. At rest the ring is static; on hover it
+     FLOWS (cf-flow) and a diagonal glint sweeps across. Severity variants set
+     the ring colours via custom properties. Used by HomeBriefing + OrgBriefing. */
+  .card-attn {
+    @apply relative rounded-2xl transition-shadow duration-300;
+    background:
+      radial-gradient(120% 82% at 12% -12%, rgba(255, 255, 255, 0.97), transparent 55%),
+      linear-gradient(158deg, #ffffff 0%, #fdfbf6 60%, #f8f3e8 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.9),
+      0 8px 22px -12px rgba(26, 39, 68, 0.28),
+      0 2px 7px -4px rgba(26, 39, 68, 0.1);
+  }
+  .card-attn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1.25px;
+    background: linear-gradient(
+      115deg,
+      var(--attn-c) 0%,
+      rgba(26, 39, 68, 0.16) 30%,
+      var(--attn-c2, var(--attn-c)) 52%,
+      rgba(26, 39, 68, 0.16) 74%,
+      var(--attn-c) 100%
+    );
+    background-size: 250% 100%;
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+    transition: filter 0.3s ease;
+    z-index: 1;
+  }
+  /* Diagonal glass glint, swept on hover (same language as .card-vital). */
+  .card-attn::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(
+      116deg,
+      transparent 42%,
+      rgba(255, 255, 255, 0.45) 49%,
+      rgba(214, 178, 92, 0.22) 53%,
+      transparent 62%
+    );
+    transform: translateX(-130%);
+    opacity: 0;
+    pointer-events: none;
+    z-index: 2;
+    transition: transform 0.7s ease, opacity 0.7s ease;
+  }
+  .card-attn:hover {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.9),
+      0 16px 36px -14px rgba(26, 39, 68, 0.32),
+      0 0 24px -6px var(--attn-c);
+  }
+  .card-attn:hover::before {
+    animation: cf-flow 2.6s ease-in-out infinite;
+    filter: brightness(1.15);
+  }
+  .card-attn:hover::after {
+    transform: translateX(130%);
+    opacity: 1;
+  }
+  .card-attn-critical {
+    --attn-c: rgba(139, 26, 26, 0.55);
+    --attn-c2: rgba(196, 64, 64, 0.8);
+  }
+  .card-attn-warn {
+    --attn-c: rgba(184, 150, 80, 0.6);
+    --attn-c2: rgba(214, 178, 110, 0.9);
+  }
+  .card-attn-info {
+    --attn-c: rgba(46, 80, 143, 0.45);
+    --attn-c2: rgba(96, 134, 189, 0.7);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .card-attn:hover::before {
+      animation: none;
+    }
+    .card-attn::after {
+      display: none;
+    }
+  }
+
   /* ── Luxe entity-form modal (dark) — the shared "add / edit record" surface
      across Governance / Accreditation / Facilities / Advancement / Tasks. A deep
      navy pane lifted on a gold header glow, wrapped in the same flowing gold↔navy
