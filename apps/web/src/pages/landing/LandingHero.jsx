@@ -14,12 +14,13 @@
 // motion renders everything settled with a plain fade.
 // ─────────────────────────────────────────────────────────────────────────────
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
 import { ChevronDown } from 'lucide-react'
 import StudioBackdrop from '../../components/penny/studio/StudioBackdrop.jsx'
 import PennyAvatar from '../../components/penny/PennyAvatar.jsx'
 import PennyDemo from './PennyDemo.jsx'
+import IntroOverlay, { INTRO_BEATS, INTRO_VARIANTS } from './IntroFX.jsx'
 import { EASE } from './Reveal.jsx'
 import { HERO } from './landingContent.js'
 
@@ -30,18 +31,15 @@ const COIN = 52 // px — the flying mascot diameter (≈ the chat header avatar
 const AV_X = 6 + 16 + 22
 const AV_Y = 6 + 12 + 22
 
-// Beat schedule [ms, phase]: the hero opens on Penny centered, holds, then she
-// flies right and unfolds into the chat while the headline racks into focus.
-// (No TV-open; phases 1–2 are retired, so the timeline starts at phase 3.)
-const BEATS = [
-  [150, 3], // Penny fades in, center-stage
-  [1050, 4], // Penny flies right (desktop) + headline racks into focus
-  [1650, 5], // the chat unfolds from her
-  [2250, 6], // settle: subhead, CTAs, shine
-]
+// Beat schedules live in IntroFX (per intro variant: classic / parts / drop /
+// mint); phases 3–6 mean the same thing in every variant.
 
 export default function LandingHero({ onIntroOpen }) {
   const reduce = useReducedMotion()
+  // Alternate openings under comparison — ?intro=parts|drop|mint (default: classic).
+  const [params] = useSearchParams()
+  const introParam = params.get('intro')
+  const variant = INTRO_VARIANTS.includes(introParam) ? introParam : 'classic'
   const sectionRef = useRef(null)
   const chatRef = useRef(null) // the (unscaled) grid cell wrapping the chat box
   // Start at phase 2 — the "screen" is already on (Penny will fade in center).
@@ -88,9 +86,9 @@ export default function LandingHero({ onIntroOpen }) {
 
   useEffect(() => {
     if (reduce) return undefined
-    const ids = BEATS.map(([t, p]) => setTimeout(() => setPhase(p), t))
+    const ids = INTRO_BEATS[variant].map(([t, p]) => setTimeout(() => setPhase(p), t))
     return () => ids.forEach(clearTimeout)
-  }, [reduce])
+  }, [reduce, variant])
 
   const skip = () => setPhase(6)
 
@@ -114,19 +112,39 @@ export default function LandingHero({ onIntroOpen }) {
   // (lg only), then fades as the chat unfolds from underneath it.
   const bigCenter = { x: toCenter.x, y: toCenter.y, scale: 2.5 }
   const home = { x: 0, y: 0, scale: 1 }
+  // 'drop' arrives with WEIGHT: keyframed fall + two bounces with squash, the
+  // ripple rings in IntroOverlay timed to the impacts. 'mint' pops in at the
+  // die strike. Other variants keep the gentle fade.
+  const dropIn = {
+    opacity: 1,
+    x: toCenter.x,
+    y: [toCenter.y - 620, toCenter.y, toCenter.y - 170, toCenter.y, toCenter.y - 55, toCenter.y],
+    scaleY: [1, 0.8, 1, 0.86, 1, 0.92],
+    scale: 2.5,
+  }
   const coinAnim = reduce
     ? { opacity: 0 }
     : chatExpand
       ? { opacity: 0, ...(flyToChat ? home : bigCenter) }
       : coinFlown
-        ? { opacity: 1, ...(flyToChat ? home : bigCenter) }
-        : { opacity: coinStaged ? 1 : 0, ...bigCenter }
+        ? { opacity: 1, ...(flyToChat ? home : bigCenter), ...(variant === 'drop' && flyToChat ? { rotate: 540 } : {}) }
+        : coinStaged
+          ? variant === 'drop'
+            ? dropIn
+            : variant === 'mint'
+              ? { opacity: 1, ...bigCenter, scale: [3.1, 2.5] }
+              : { opacity: 1, ...bigCenter }
+          : { opacity: 0, ...bigCenter }
   const coinTransition =
     coinFlown && !chatExpand && flyToChat
-      ? { duration: 0.6, ease: EASE } // the flight
+      ? { duration: variant === 'drop' ? 0.8 : 0.6, ease: EASE } // the flight (a roll, for the drop)
       : chatExpand
         ? { duration: 0.35, ease: EASE } // the fade
-        : { duration: 0.4, ease: EASE } // the appear
+        : coinStaged && variant === 'drop'
+          ? { duration: 1.7, times: [0, 0.42, 0.62, 0.78, 0.88, 1], ease: 'easeIn' } // the fall + bounces
+          : coinStaged && variant === 'mint'
+            ? { duration: 0.35, ease: EASE } // the strike pop
+            : { duration: 0.4, ease: EASE } // the appear
 
   const words1 = HERO.h1Line1.split(' ')
   const words2 = HERO.h1Line2.split(' ')
@@ -153,6 +171,9 @@ export default function LandingHero({ onIntroOpen }) {
       <div className="absolute inset-0 bg-studio-hero">
         <StudioBackdrop sweep={false} />
         <span aria-hidden="true" className="pointer-events-none absolute inset-0 bg-navy-radial" />
+
+        {/* Alternate-opening spectacle (?intro=parts|drop|mint; classic = none). */}
+        <IntroOverlay variant={variant} phase={phase} reduce={reduce} />
 
         <div className="relative mx-auto grid min-h-[100svh] max-w-6xl items-start gap-12 px-5 pb-24 pt-32 sm:px-8 lg:grid-cols-[1fr_minmax(380px,460px)] lg:items-center">
           <div>
