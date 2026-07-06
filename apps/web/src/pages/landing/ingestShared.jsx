@@ -66,7 +66,7 @@ export function Folder({ frontStyle }) {
  * out-slot (right), gears that turn with the scroll, a status lamp, an
  * ink-progress bar, and the big gold button Penny operates.
  */
-export function Press({ gearRotate, gearRotateCcw, lampOn, buttonY, inkWidth, faceTextOpacity, glow }) {
+export function Press({ gearRotate, gearRotateCcw, lampOn, inkWidth, faceTextOpacity, glow, intakeGlow = 0 }) {
   return (
     <div className="relative h-52 w-60 sm:h-60 sm:w-72">
       <div className="absolute inset-x-6 top-0 flex h-9 items-center justify-center rounded-t-2xl border border-b-0 border-gold/50 bg-navy-deep">
@@ -74,10 +74,6 @@ export function Press({ gearRotate, gearRotateCcw, lampOn, buttonY, inkWidth, fa
           The Ledger Press
         </span>
       </div>
-      <motion.div
-        style={{ y: buttonY }}
-        className="absolute left-1/2 top-[-14px] h-7 w-16 -translate-x-1/2 rounded-full border border-gold/70 bg-gold-gradient shadow-glow"
-      />
       <div className="absolute inset-x-0 bottom-0 top-8 overflow-hidden rounded-2xl border-2 border-gold/50 bg-navy-gradient shadow-navy-glow">
         <div className="absolute inset-3 rounded-xl border border-white/10">
           <motion.div
@@ -106,8 +102,13 @@ export function Press({ gearRotate, gearRotateCcw, lampOn, buttonY, inkWidth, fa
           className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_60%_at_50%_45%,rgba(212,178,122,0.35),transparent_70%)]"
         />
       </div>
+      {/* In-slot with an intake glow that brightens while the sheet feeds */}
       <div className="absolute -left-1 top-[46%] h-16 w-2.5 rounded-full border border-gold/60 bg-navy-deep" />
-      <div className="absolute -right-1 top-[46%] h-20 w-2.5 rounded-full border border-gold/60 bg-navy-deep" />
+      <motion.div
+        style={{ opacity: intakeGlow }}
+        className="absolute -left-1.5 top-[44%] h-[74px] w-3.5 rounded-full bg-gold/70 blur-[3px]"
+        aria-hidden="true"
+      />
     </div>
   )
 }

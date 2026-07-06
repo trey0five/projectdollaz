@@ -47,7 +47,6 @@ function StaticFrame() {
         gearRotate={0}
         gearRotateCcw={0}
         lampOn={1}
-        buttonY={0}
         inkWidth={'70%'}
         faceTextOpacity={1}
         glow={0.5}
