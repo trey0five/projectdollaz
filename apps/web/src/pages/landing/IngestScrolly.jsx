@@ -3,14 +3,11 @@
 // the 320vh track, the sticky stage, the narration column (kicker + H2 static,
 // a beat line + progress ticks that advance with the scroll), the reduced-
 // motion static fallback, and beat bookkeeping. The actual choreography lives
-// in a SCENE module (BEATS + Stage): the shipped default is THE LEDGER PRESS;
-// two alternates — THE SCAN and THE FLIP — are kept behind a ?scene= query
-// param (?scene=scan / ?scene=flip) for design comparison. Pure framer-motion
+// in the scene module (BEATS + Stage): THE LEDGER PRESS. Pure framer-motion
 // (useScroll + useTransform on a sticky stage); scrubbing never re-renders —
 // the only state is the discrete beat index via useMotionValueEvent.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
 import {
   motion,
   useMotionValueEvent,
@@ -21,15 +18,7 @@ import {
 import { ArrowRight } from 'lucide-react'
 import { TimestampMedallion } from './LedgerSpine.jsx'
 import { AppWindow, Folder, Press, WindowScreen } from './ingestShared.jsx'
-import * as PressScene from './IngestScenePress.jsx'
-import * as ScanScene from './IngestSceneScan.jsx'
-import * as FlipScene from './IngestSceneFlip.jsx'
-
-const SCENES = {
-  press: PressScene,
-  scan: ScanScene,
-  flip: FlipScene,
-}
+import { BEATS, Stage } from './IngestScenePress.jsx'
 
 const beatIndexFor = (beats, p) => {
   let i = 0
@@ -63,10 +52,6 @@ function StaticFrame() {
 
 export default function IngestScrolly({ act }) {
   const reduce = useReducedMotion()
-  const [params] = useSearchParams()
-  const scene = SCENES[params.get('scene')] ?? SCENES.press
-  const { BEATS, Stage } = scene
-
   const trackRef = useRef(null)
   const { scrollYProgress } = useScroll({
     target: trackRef,

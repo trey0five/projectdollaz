@@ -1,9 +1,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// ingestShared — the stage props shared by every Act-II scrollytelling scene
-// (press / scan / flip): the trial-balance sheet, the manila folder, the app
-// window + its three crossfading screens, and the Ledger Press machine. Pure
-// presentation; every animated part arrives as MotionValue styles so scenes
-// scrub, never play.
+// ingestShared — the stage props for the Act-II scrollytelling scene: the
+// trial-balance sheet, the manila folder, the app window + its three
+// crossfading screens, and the Ledger Press machine. Pure presentation; every
+// animated part arrives as MotionValue styles so the scene scrubs, never plays.
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion } from 'framer-motion'
 import { FileSpreadsheet } from 'lucide-react'
@@ -17,7 +16,7 @@ export const SHEET_ROWS = [
 ]
 
 /** The trial-balance sheet — a mini spreadsheet card. `rowStyles[i]` lets a
- *  scene animate individual rows (the Scan scene ghosts rows as they're read). */
+ *  scene animate individual rows. */
 export function SheetCard({ rowStyles = null, className = 'w-40 sm:w-44' }) {
   return (
     <div className={`${className} overflow-hidden rounded-lg border border-rule/70 bg-white shadow-paper`}>
@@ -114,7 +113,7 @@ export function Press({ gearRotate, gearRotateCcw, lampOn, inkWidth, faceTextOpa
 }
 
 /** Inside-window screens: raw rows → statements → briefing (crossfaded layers).
- *  `rawRowStyles[i]` lets a scene land raw rows one at a time (the Scan). */
+ *  `rawRowStyles[i]` lets a scene land raw rows one at a time. */
 export function WindowScreen({ rawStyle, stmtStyle, briefStyle, rawRowStyles = null, rawCaption = 'Fresh off the press' }) {
   return (
     <div className="relative h-52 sm:h-56">
