@@ -10,6 +10,7 @@ import LandingNav from './LandingNav.jsx'
 import LandingHero from './LandingHero.jsx'
 import LedgerSpine from './LedgerSpine.jsx'
 import ActSection from './ActSection.jsx'
+import IngestScrolly from './IngestScrolly.jsx'
 import DomainPlates from './DomainPlates.jsx'
 import DioceseBand from './DioceseBand.jsx'
 import FinalCta from './FinalCta.jsx'
@@ -60,9 +61,15 @@ export default function LandingPage() {
         {/* Acts I–VI share one relative container so the spine spans them all. */}
         <div ref={actsRef} className="relative">
           <LedgerSpine containerRef={actsRef} />
-          {ACTS.slice(0, 4).map((act) => (
-            <ActSection key={act.id} act={act} />
-          ))}
+          {ACTS.slice(0, 4).map((act) =>
+            // Act II plays as the pinned scroll-driven set-piece (the hand-off:
+            // folder → Penny → platform); the other acts keep the two-column form.
+            act.id === 'act-2' ? (
+              <IngestScrolly key={act.id} act={act} />
+            ) : (
+              <ActSection key={act.id} act={act} />
+            ),
+          )}
           <DomainPlates />
           <ActSection act={ACTS[4]} />
         </div>
