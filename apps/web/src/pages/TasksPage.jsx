@@ -34,6 +34,8 @@ import {
   TrendingDown,
   Clock,
   AlertTriangle,
+  User,
+  ChevronRight,
 } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
 import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
@@ -88,54 +90,6 @@ const APPROVAL_BADGE = {
   pending: { label: 'Awaiting sign-off', cls: 'border-gold/40 bg-gold/10 text-[#7a5e00]' },
   approved: { label: 'Approved', cls: 'border-emerald-300/70 bg-emerald-50 text-emerald-700' },
   rejected: { label: 'Changes requested', cls: 'border-danger/30 bg-danger/10 text-danger' },
-}
-
-// ── Light-theme table primitives (shared idiom with GovernancePage) ──────────
-function Th({ children, right }) {
-  return (
-    <th
-      className={`px-4 py-2.5 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-muted ${
-        right ? 'text-right' : 'text-left'
-      }`}
-    >
-      {children}
-    </th>
-  )
-}
-
-function IconAction(props) {
-  const { onClick, label, title, danger, good } = props
-  const ActionIcon = props.Icon
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      title={title ?? label}
-      className={`rounded-lg border border-rule/60 p-1.5 text-muted transition hover:text-navy ${
-        danger
-          ? 'hover:border-danger/50 hover:text-danger'
-          : good
-            ? 'hover:border-emerald-400/60 hover:text-emerald-600'
-            : 'hover:border-gold/60'
-      }`}
-    >
-      <ActionIcon size={15} />
-    </button>
-  )
-}
-
-function TableShell({ children, cols }) {
-  return (
-    <div className="overflow-x-auto rounded-xl border border-rule/50">
-      <table className="w-full text-left text-[14px]">
-        <thead className="bg-cream">
-          <tr>{cols}</tr>
-        </thead>
-        <tbody>{children}</tbody>
-      </table>
-    </div>
-  )
 }
 
 function StateRow({ children }) {
@@ -594,23 +548,114 @@ function GatePanel() {
   )
 }
 
-// ═══════════════════════════ LIGHT TASKS TABLE ══════════════════════════════
+// ═══════════════════════════ TASK CARDS + DETAIL ════════════════════════════
 
-function TasksTable({
-  tasks,
-  members,
-  currentUserId,
-  loading,
-  error,
-  canEdit,
-  reduce,
-  emptyLabel,
-  onComplete,
-  onEdit,
-  onDelete,
-  onRequestSignoff,
-  onDecide,
-}) {
+const PRIORITY_META = {
+  high: { cls: 'border-danger/30 bg-danger/10 text-danger', Icon: ArrowUp },
+  normal: { cls: 'border-rule/60 bg-section text-muted', Icon: null },
+  low: { cls: 'border-rule/60 bg-section text-muted/80', Icon: ArrowDown },
+}
+
+// The left accent stripe reads a card's urgency at a glance: red overdue, gold
+// for due-soon or high priority, green when done, quiet otherwise.
+function accentClass(t) {
+  if (t.status === 'done') return 'bg-emerald-400/70'
+  if (t.urgency === 'overdue') return 'bg-danger'
+  if (t.urgency === 'due-soon' || t.priority === 'high') return 'bg-gold-gradient'
+  return 'bg-rule/50'
+}
+
+function Chip({ Icon, className = 'border-rule/60 bg-section text-muted', children }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[12px] font-medium capitalize ${className}`}
+    >
+      {Icon ? <Icon size={12} /> : null}
+      {children}
+    </span>
+  )
+}
+
+// A single task as a clickable card: title + a wrapping chip row (assignee, due,
+// priority, status, sign-off, source, recurrence) — so nothing gets cut off and
+// the list never scrolls sideways. Clicking anywhere opens the detail popup; a
+// hover-revealed check completes it inline.
+function TaskCard({ t, canEdit, reduce, onOpenDetail, onComplete }) {
+  const active = t.status !== 'done' && t.status !== 'cancelled'
+  const pr = PRIORITY_META[t.priority] ?? PRIORITY_META.normal
+  const badge = APPROVAL_BADGE[t.approvalStatus]
+  const open = () => onOpenDetail(t)
+  return (
+    <motion.div
+      layout={!reduce}
+      initial={reduce ? false : { opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={reduce ? undefined : { opacity: 0 }}
+      role="button"
+      tabIndex={0}
+      onClick={open}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          open()
+        }
+      }}
+      className="group relative flex cursor-pointer items-start gap-3 overflow-hidden rounded-2xl border border-rule/50 bg-white px-4 py-3.5 shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:border-gold/40 hover:shadow-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/50"
+    >
+      <span className={`absolute inset-y-2.5 left-0 w-1 rounded-full ${accentClass(t)}`} aria-hidden="true" />
+      <div className="min-w-0 flex-1 pl-2">
+        <p
+          className={`font-semibold leading-snug text-navy ${t.status === 'done' ? 'text-muted line-through' : ''}`}
+        >
+          {t.title}
+        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          <Chip Icon={User}>{assigneeName(t.assignee)}</Chip>
+          <UrgencyBadge urgency={t.urgency} dueDate={t.dueDate} daysUntilDue={t.daysUntilDue} />
+          <Chip Icon={pr.Icon} className={pr.cls}>
+            {t.priority}
+          </Chip>
+          <Chip>{t.status.replace('_', ' ')}</Chip>
+          {badge ? (
+            <span
+              className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[12px] font-semibold ${badge.cls}`}
+            >
+              {badge.label}
+            </span>
+          ) : null}
+          {t.sourceType && t.sourceType !== 'manual' ? (
+            <Chip Icon={Link2} className="border-gold/40 bg-gold/10 text-[#7a5e00]">
+              from {t.sourceType}
+            </Chip>
+          ) : null}
+          <RecurrenceBadge recurrence={t.recurrence} seriesId={t.seriesId} />
+        </div>
+      </div>
+      <div className="flex shrink-0 items-center gap-1.5 self-center">
+        {canEdit && active ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onComplete(t.id)
+            }}
+            aria-label={`Complete ${t.title}`}
+            title="Mark complete"
+            className="rounded-lg border border-rule/60 p-1.5 text-muted opacity-0 transition hover:border-emerald-400/60 hover:text-emerald-600 focus-visible:opacity-100 group-hover:opacity-100"
+          >
+            <Check size={15} />
+          </button>
+        ) : null}
+        <ChevronRight
+          size={18}
+          className="text-muted/40 transition group-hover:translate-x-0.5 group-hover:text-gold"
+        />
+      </div>
+    </motion.div>
+  )
+}
+
+function TasksList({ tasks, loading, error, canEdit, reduce, emptyLabel, onOpenDetail, onComplete }) {
   if (loading)
     return (
       <StateRow>
@@ -632,130 +677,239 @@ function TasksTable({
         </p>
       </StateRow>
     )
+  return (
+    <div className="flex flex-col gap-2.5">
+      <AnimatePresence initial={false}>
+        {tasks.map((t) => (
+          <TaskCard
+            key={t.id}
+            t={t}
+            canEdit={canEdit}
+            reduce={reduce}
+            onOpenDetail={onOpenDetail}
+            onComplete={onComplete}
+          />
+        ))}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+// ── Task detail popup — a light premium card (distinct from the dark edit form)
+// that opens on card click: full description, an at-a-glance detail grid, the
+// sign-off timeline, and every action in one place.
+function DetailRow({ label, children }) {
+  return (
+    <div>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted/80">{label}</p>
+      <div className="mt-1 text-[14px] text-navy">{children}</div>
+    </div>
+  )
+}
+
+const detailBtn =
+  'inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[13px] font-semibold transition-all'
+
+function TaskDetailModal({
+  task,
+  members,
+  currentUserId,
+  canEdit,
+  reduce,
+  onClose,
+  onComplete,
+  onEdit,
+  onDelete,
+  onRequestSignoff,
+  onDecide,
+}) {
+  useEffect(() => {
+    if (!task) return undefined
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prev
+    }
+  }, [task, onClose])
+
+  const active = task && task.status !== 'done' && task.status !== 'cancelled'
+  const canRequest =
+    active && (task?.approvalStatus === 'none' || task?.approvalStatus === 'rejected')
+  const pr = task ? PRIORITY_META[task.priority] ?? PRIORITY_META.normal : PRIORITY_META.normal
+  const badge = task ? APPROVAL_BADGE[task.approvalStatus] : null
 
   return (
-    <TableShell
-      cols={
-        <>
-          <Th>Task</Th>
-          <Th>Assignee</Th>
-          <Th>Due</Th>
-          <Th>Priority</Th>
-          <Th>Status</Th>
-          <Th>Approval</Th>
-          {canEdit ? <Th right>Actions</Th> : null}
-        </>
-      }
-    >
-      <AnimatePresence initial={false}>
-        {tasks.map((t) => {
-          const active = t.status !== 'done' && t.status !== 'cancelled'
-          const canRequest =
-            canEdit && active && (t.approvalStatus === 'none' || t.approvalStatus === 'rejected')
-          const iAmApprover = t.approvalStatus === 'pending' && t.approverUserId === currentUserId
-          const badge = APPROVAL_BADGE[t.approvalStatus]
-          return (
-            <motion.tr
-              key={t.id}
-              layout={!reduce}
-              initial={reduce ? false : { opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={reduce ? undefined : { opacity: 0 }}
-              className="group border-t border-rule/50 align-top"
-            >
-              <td className="px-4 py-3">
-                <div className="font-semibold text-navy">{t.title}</div>
-                <div className="mt-1 flex flex-wrap items-center gap-1">
-                  {t.sourceType && t.sourceType !== 'manual' ? (
-                    <span className="inline-flex items-center gap-1 rounded border border-gold/40 bg-gold/10 px-1.5 py-0.5 text-[11px] font-semibold text-[#7a5e00]">
-                      <Link2 size={11} /> from {t.sourceType}
-                    </span>
-                  ) : null}
-                  <RecurrenceBadge recurrence={t.recurrence} seriesId={t.seriesId} />
-                </div>
-              </td>
-              <td className="px-4 py-3 text-muted">{assigneeName(t.assignee)}</td>
-              <td className="px-4 py-3">
-                <UrgencyBadge
-                  urgency={t.urgency}
-                  dueDate={t.dueDate}
-                  daysUntilDue={t.daysUntilDue}
-                />
-              </td>
-              <td className="px-4 py-3">
-                <span className="rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[12px] capitalize text-muted">
-                  {t.priority}
-                </span>
-              </td>
-              <td className="px-4 py-3">
-                <span className="rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[12px] capitalize text-muted">
-                  {t.status.replace('_', ' ')}
-                </span>
-              </td>
-              <td className="px-4 py-3">
-                {badge ? (
-                  <div>
+    <AnimatePresence>
+      {task && (
+        <motion.div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <div className="absolute inset-0 bg-navy-deep/55 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+          <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-label={task.title}
+            initial={reduce ? { opacity: 0 } : { opacity: 0, y: 18, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={reduce ? { opacity: 0 } : { opacity: 0, y: 12, scale: 0.98 }}
+            transition={{ type: 'spring', stiffness: 340, damping: 30 }}
+            className="relative z-10 flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-[1.4rem] border border-gold/25 bg-cream shadow-[0_30px_66px_-22px_rgba(4,10,26,0.5)]"
+          >
+            <div className="h-1.5 w-full shrink-0 bg-gold-gradient" />
+            <div className="flex items-start gap-3.5 px-6 pb-4 pt-5">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gold-gradient text-navy shadow-glow">
+                <ListChecks size={20} />
+              </span>
+              <div className="min-w-0 flex-1 pt-0.5">
+                <h2
+                  className={`font-serif text-[20px] font-semibold leading-tight text-navy ${task.status === 'done' ? 'opacity-70 line-through' : ''}`}
+                >
+                  {task.title}
+                </h2>
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  <Chip Icon={pr.Icon} className={pr.cls}>
+                    {task.priority}
+                  </Chip>
+                  <Chip>{task.status.replace('_', ' ')}</Chip>
+                  {badge ? (
                     <span
                       className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[12px] font-semibold ${badge.cls}`}
-                      title={t.decisionNote || undefined}
                     >
                       {badge.label}
                     </span>
-                    {t.approvalStatus === 'pending' &&
-                    t.approver &&
-                    !(Array.isArray(t.approvalSteps) && t.approvalSteps.length > 1) ? (
-                      <div className="mt-1 text-[11px] text-muted">
-                        Approver: {assigneeName(t.approver)}
-                      </div>
-                    ) : null}
-                    <ChainProgress task={t} members={members} />
-                    {(t.approvalStatus === 'approved' || t.approvalStatus === 'rejected') &&
-                    t.decidedBy ? (
-                      <div className="mt-1 text-[11px] text-muted">
-                        Decided by {assigneeName(t.decidedBy)}
-                      </div>
-                    ) : null}
-                    {iAmApprover ? <DecideControls task={t} onDecide={onDecide} /> : null}
-                  </div>
-                ) : (
-                  <span className="text-[12px] text-muted/60">—</span>
-                )}
-              </td>
-              {canEdit ? (
-                <td className="px-4 py-3">
-                  <div className="flex justify-end gap-1.5 opacity-60 transition group-hover:opacity-100">
-                    {active ? (
-                      <IconAction
-                        Icon={Check}
-                        good
-                        onClick={() => onComplete(t.id)}
-                        label={`Complete ${t.title}`}
-                        title="Mark complete"
-                      />
-                    ) : null}
-                    {canRequest ? (
-                      <IconAction
-                        Icon={ShieldCheck}
-                        onClick={() => onRequestSignoff(t)}
-                        label={`Request sign-off for ${t.title}`}
-                        title="Request sign-off"
-                      />
-                    ) : null}
-                    <IconAction Icon={Pencil} onClick={() => onEdit(t)} label={`Edit ${t.title}`} />
-                    <IconAction
-                      Icon={Trash2}
-                      danger
-                      onClick={() => onDelete(t)}
-                      label={`Delete ${t.title}`}
+                  ) : null}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close"
+                className="rounded-lg border border-rule/60 p-1.5 text-muted transition-colors hover:border-gold/50 hover:text-navy"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-4">
+              {task.description ? (
+                <p className="whitespace-pre-wrap rounded-xl border border-rule/40 bg-white px-3.5 py-3 text-[14px] leading-relaxed text-ink">
+                  {task.description}
+                </p>
+              ) : (
+                <p className="text-[13.5px] italic text-muted">No description.</p>
+              )}
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3.5">
+                <DetailRow label="Assignee">
+                  <span className="inline-flex items-center gap-1.5">
+                    <User size={14} className="text-gold" />
+                    {assigneeName(task.assignee)}
+                  </span>
+                </DetailRow>
+                <DetailRow label="Due">
+                  <UrgencyBadge urgency={task.urgency} dueDate={task.dueDate} daysUntilDue={task.daysUntilDue} />
+                </DetailRow>
+                {task.sourceType && task.sourceType !== 'manual' ? (
+                  <DetailRow label="Source">
+                    <span className="inline-flex items-center gap-1 capitalize">
+                      <Link2 size={13} className="text-gold" />
+                      {task.sourceType}
+                    </span>
+                  </DetailRow>
+                ) : null}
+                {task.recurrence && task.recurrence !== 'none' ? (
+                  <DetailRow label="Repeats">
+                    <span className="capitalize">{task.recurrence}</span>
+                  </DetailRow>
+                ) : null}
+              </div>
+              {badge ? (
+                <div className="rounded-xl border border-gold/25 bg-gold/[0.05] px-3.5 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#7a5e00]">Sign-off</p>
+                  {task.approvalStatus === 'pending' &&
+                  task.approver &&
+                  !(Array.isArray(task.approvalSteps) && task.approvalSteps.length > 1) ? (
+                    <p className="mt-1 text-[13px] text-muted">Approver: {assigneeName(task.approver)}</p>
+                  ) : null}
+                  <ChainProgress task={task} members={members} />
+                  {(task.approvalStatus === 'approved' || task.approvalStatus === 'rejected') && task.decidedBy ? (
+                    <p className="mt-1.5 text-[13px] text-muted">Decided by {assigneeName(task.decidedBy)}</p>
+                  ) : null}
+                  {task.decisionNote ? (
+                    <p className="mt-1 text-[13px] italic text-muted">&ldquo;{task.decisionNote}&rdquo;</p>
+                  ) : null}
+                  {task.approvalStatus === 'pending' && task.approverUserId === currentUserId ? (
+                    <DecideControls
+                      task={task}
+                      onDecide={(id, d, n) => {
+                        onDecide(id, d, n)
+                        onClose()
+                      }}
                     />
-                  </div>
-                </td>
+                  ) : null}
+                </div>
               ) : null}
-            </motion.tr>
-          )
-        })}
-      </AnimatePresence>
-    </TableShell>
+            </div>
+
+            {canEdit ? (
+              <div className="flex flex-wrap items-center justify-end gap-2 border-t border-rule/50 bg-white/70 px-6 py-3.5">
+                {active ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onComplete(task.id)
+                      onClose()
+                    }}
+                    className={`${detailBtn} border-emerald-300/70 bg-emerald-50 text-emerald-700 hover:bg-emerald-100`}
+                  >
+                    <Check size={15} /> Complete
+                  </button>
+                ) : null}
+                {canRequest ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onRequestSignoff(task)
+                      onClose()
+                    }}
+                    className={`${detailBtn} border-gold/50 bg-gold/10 text-[#7a5e00] hover:bg-gold/20`}
+                  >
+                    <ShieldCheck size={15} /> Request sign-off
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose()
+                    onEdit(task)
+                  }}
+                  className={`${detailBtn} border-rule/60 bg-white text-navy hover:border-gold/50`}
+                >
+                  <Pencil size={14} /> Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onDelete(task)
+                    onClose()
+                  }}
+                  className={`${detailBtn} border-rule/60 bg-white text-danger/80 hover:border-danger/50 hover:text-danger`}
+                >
+                  <Trash2 size={14} /> Delete
+                </button>
+              </div>
+            ) : null}
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }
 
@@ -806,6 +960,7 @@ function TasksWorkspace() {
   const [editing, setEditing] = useState(null)
   const [prefill, setPrefill] = useState(null)
   const [approvalTask, setApprovalTask] = useState(null)
+  const [detailTask, setDetailTask] = useState(null)
 
   // A navigated-in prefill (from a "Create task" affordance elsewhere) opens the
   // create modal pre-seeded. Deferred to a microtask (setState-in-effect safe) and
@@ -1006,20 +1161,15 @@ function TasksWorkspace() {
         : tasks
 
   const registerTable = (
-    <TasksTable
+    <TasksList
       tasks={visibleTasks}
-      members={members}
-      currentUserId={currentUserId}
       loading={loading}
       error={error}
       canEdit={canEdit}
       reduce={reduce}
       emptyLabel={EMPTY_LABEL[tab] ?? EMPTY_LABEL.all}
+      onOpenDetail={setDetailTask}
       onComplete={complete}
-      onEdit={openEdit}
-      onDelete={onDelete}
-      onRequestSignoff={setApprovalTask}
-      onDecide={decide}
     />
   )
 
@@ -1057,6 +1207,20 @@ function TasksWorkspace() {
         onClose={() => setApprovalTask(null)}
         onSubmit={(approverUserIds) => submitApproval(approvalTask.id, approverUserIds)}
         reduce={reduce}
+      />
+
+      <TaskDetailModal
+        task={detailTask}
+        members={members}
+        currentUserId={currentUserId}
+        canEdit={canEdit}
+        reduce={reduce}
+        onClose={() => setDetailTask(null)}
+        onComplete={complete}
+        onEdit={openEdit}
+        onDelete={onDelete}
+        onRequestSignoff={setApprovalTask}
+        onDecide={decide}
       />
     </>
   )
