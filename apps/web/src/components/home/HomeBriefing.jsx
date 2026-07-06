@@ -204,11 +204,10 @@ function BriefingItemCard({ item, index, reduce, canEdit, onDismiss }) {
 
       <div className="relative px-5 pb-4 pt-8 sm:px-6">
         {/* Eyebrow: domain coin + label, and a due indicator on the right */}
-        <div className="mb-2 flex items-center gap-2.5">
-          <span className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.07em] text-muted">
-            <span className="flex h-5 w-5 items-center justify-center rounded-md bg-gold-gradient text-white shadow-[0_1px_4px_rgba(184,150,80,0.4)]">
-              <DomainIcon size={11} />
-            </span>
+        <div className="mb-2.5 flex items-center gap-2.5">
+          {/* Domain pill — same gold segment idiom as the org board's fused badge. */}
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-gold-gradient py-1 pl-2 pr-2.5 text-[10px] font-bold uppercase leading-4 tracking-[0.08em] text-white shadow-[0_1px_5px_rgba(184,150,80,0.35)] ring-1 ring-white/40">
+            <DomainIcon size={11} className="shrink-0 drop-shadow-sm" />
             {domain.label}
           </span>
           {item.dueDate && (

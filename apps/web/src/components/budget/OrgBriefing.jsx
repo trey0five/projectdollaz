@@ -128,16 +128,21 @@ function OrgBriefingItemCard({ item, index, reduce }) {
         </span>
 
         <div className="relative px-5 pb-4 pt-8 sm:px-6">
-          <div className="mb-2 flex flex-wrap items-center gap-2.5">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-navy px-2.5 py-0.5 text-[11px] font-semibold text-white">
-              <Building2 size={11} />
-              {item.schoolName}
-            </span>
-            <span className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.07em] text-muted">
-              <span className="flex h-5 w-5 items-center justify-center rounded-md bg-gold-gradient text-white shadow-[0_1px_4px_rgba(184,150,80,0.4)]">
-                <DomainIcon size={11} />
+          <div className="mb-2.5 flex flex-wrap items-center gap-2">
+            {/* Segmented attribution badge — school (navy) fused to domain (gold)
+                so the pair reads as one unit and wraps as one. */}
+            <span
+              className="inline-flex max-w-full items-stretch overflow-hidden rounded-full shadow-[0_1px_5px_rgba(23,42,77,0.18)] ring-1 ring-white/40"
+              title={`${item.schoolName} · ${domain.label}`}
+            >
+              <span className="inline-flex min-w-0 items-center gap-1.5 bg-navy py-1 pl-2.5 pr-2.5 text-[11px] font-semibold leading-4 text-white">
+                <Building2 size={11} className="shrink-0 opacity-80" />
+                <span className="truncate">{item.schoolName}</span>
               </span>
-              {domain.label}
+              <span className="inline-flex shrink-0 items-center gap-1.5 bg-gold-gradient py-1 pl-2 pr-2.5 text-[10px] font-bold uppercase leading-4 tracking-[0.08em] text-white">
+                <DomainIcon size={11} className="shrink-0 drop-shadow-sm" />
+                {domain.label}
+              </span>
             </span>
             {item.dueDate && (
               <span className="ml-auto inline-flex items-center gap-1.5 text-[12px] font-medium text-muted">
