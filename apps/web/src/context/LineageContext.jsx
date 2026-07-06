@@ -18,11 +18,19 @@ import { createContext, useContext } from 'react'
 
 const LineageContext = createContext(null)
 
-export function LineageProvider({ children, onOpenLineage, bundle, imports = null }) {
+export function LineageProvider({
+  children,
+  onOpenLineage,
+  bundle,
+  imports = null,
+  schoolId = null,
+  periodId = null,
+}) {
   // No useMemo needed: the host passes stable callbacks/values and re-renders
   // are cheap. Consumers read individual fields, not the object identity.
+  // schoolId/periodId let the drawer POST the QuickBooks transaction drill.
   return (
-    <LineageContext.Provider value={{ onOpenLineage, bundle, imports }}>
+    <LineageContext.Provider value={{ onOpenLineage, bundle, imports, schoolId, periodId }}>
       {children}
     </LineageContext.Provider>
   )

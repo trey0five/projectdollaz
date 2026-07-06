@@ -453,6 +453,23 @@ export class QboService {
     }
   }
 
+  /**
+   * PUBLIC read-only token accessor for same-tenant consumers (the transaction
+   * drill-down) that need to call the QBO API on a school's behalf. Loads the
+   * school's connection and returns it alongside a valid access token via the SAME
+   * refresh-and-persist path `sync` uses (the private accessToken below). Returns
+   * null when the school has no direct connection. This does NOT alter refresh
+   * semantics — it only exposes read access; the rotation/persist logic is untouched.
+   */
+  async connectionForSchool(
+    schoolId: string,
+  ): Promise<{ conn: QboConnection; token: string } | null> {
+    const conn = await this.prisma.qboConnection.findUnique({ where: { schoolId } })
+    if (!conn) return null
+    const token = await this.accessToken(conn)
+    return { conn, token }
+  }
+
   /** A valid access token, refreshing (and persisting the rotated refresh token) when near expiry. */
   private async accessToken(conn: QboConnection): Promise<string> {
     if (conn.expiresAt.getTime() - Date.now() > 60_000) return conn.accessToken

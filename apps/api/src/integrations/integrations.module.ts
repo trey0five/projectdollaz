@@ -13,6 +13,7 @@ import { QboCompanyController } from './qbo-company.controller.js'
 import { QboService } from './qbo.service.js'
 import { QboOrgService } from './qbo-org.service.js'
 import { OrgQboCompanyService } from './qbo-company.service.js'
+import { QboDrillService } from './qbo-drill.service.js'
 import { QboClient } from './qbo.client.js'
 
 /**
@@ -32,7 +33,9 @@ import { QboClient } from './qbo.client.js'
     MappingModule,
   ],
   controllers: [QboController, QboOrgController, QboCompanyController],
-  providers: [QboService, QboOrgService, OrgQboCompanyService, QboClient],
-  exports: [QboService],
+  providers: [QboService, QboOrgService, OrgQboCompanyService, QboDrillService, QboClient],
+  // QboDrillService is exported so AssistantModule's get_account_transactions handler
+  // can reuse the exact same drill orchestrator the REST route uses.
+  exports: [QboService, QboDrillService],
 })
 export class IntegrationsModule {}

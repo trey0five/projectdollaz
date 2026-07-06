@@ -16,6 +16,7 @@ import { FacilitiesModule } from '../facilities/facilities.module.js'
 import { AdvancementModule } from '../advancement/advancement.module.js'
 import { AlertModule } from '../alerts/alert.module.js'
 import { SchoolsModule } from '../schools/schools.module.js'
+import { IntegrationsModule } from '../integrations/integrations.module.js'
 import { AuditModule } from '../common/audit/audit.module.js'
 import { AssistantController } from './assistant.controller.js'
 import { OrgNarrationController } from './org-narration.controller.js'
@@ -60,6 +61,10 @@ import { BriefingNarrationService } from './briefing-narration.service.js'
     // invitation flow (dup checks + token + invitation email + revoke-for-undo). No
     // cycle: SchoolsModule imports no AssistantModule.
     SchoolsModule,
+    // Phase 6 drill-down — exports QboDrillService so Penny's read-only
+    // get_account_transactions tool reuses the same orchestrator as the REST route.
+    // No cycle: IntegrationsModule imports no AssistantModule.
+    IntegrationsModule,
     // Shared best-effort audit writer — Penny stamps every applied action into the
     // AuditLog (source:'assistant') so the action log + inline Undo can read it back.
     AuditModule,

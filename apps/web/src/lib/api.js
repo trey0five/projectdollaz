@@ -634,6 +634,12 @@ export const qboApi = {
   // rebuilds statements + monthly snapshots for affected periods.
   applyReview: (schoolId, entries) =>
     api.post(`/schools/${schoolId}/integrations/qb/review-accounts`, { entries }),
+  // Transaction drill-down (GL detail): the actual QuickBooks transactions
+  // behind a computed figure. Body = { periodId, statement?, variant?, lineKey?,
+  // metricKey?, accts?, basis?, limit? }; server resolves the line's accounts from
+  // the stored snapshot lineage and pulls live GL. Returns a QbDrillResult.
+  transactions: (schoolId, body) =>
+    api.post(`/schools/${schoolId}/integrations/qb/transactions`, body),
 }
 
 // Org-level QuickBooks console: per-school connection overview across the

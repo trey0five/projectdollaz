@@ -1,7 +1,9 @@
-import { lazy, Suspense, useEffect, useRef } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { X } from 'lucide-react'
+import { X, Receipt, Loader2 } from 'lucide-react'
 import { useTrends } from '../../hooks/useAnalytics.js'
+import { useQbDrill, DRILL_STATE_COPY } from '../../hooks/useQbDrill.js'
+import TransactionList from '../reports/TransactionList.jsx'
 import AnimatedMetricValue from './AnimatedMetricValue.jsx'
 import DeltaChip from './DeltaChip.jsx'
 import StatusChip from './StatusChip.jsx'
@@ -97,11 +99,21 @@ function TargetBandBar({ metric }) {
  * full TrendChart across periods. Esc / backdrop close; focus returns to the
  * opener; reduced-motion → fade only.
  */
-export default function MetricDrawer({ schoolId, metric, open, onClose }) {
+export default function MetricDrawer({ schoolId, metric, open, onClose, periodId = null }) {
   const reduce = useReducedMotion()
   const panelRef = useRef(null)
   const metricKey = metric?.key ?? null
   const { trend } = useTrends(open ? schoolId : null, open ? metricKey : null)
+  const drill = useQbDrill(schoolId)
+
+  // Reset the transaction drill when the drawer swaps to another metric, so a
+  // fresh metric never shows the previous one's transactions. Render-phase guard
+  // (not an effect) keeps it setState-in-effect-free.
+  const [prevMetricKey, setPrevMetricKey] = useState(metricKey)
+  if (metricKey !== prevMetricKey) {
+    setPrevMetricKey(metricKey)
+    drill.reset()
+  }
 
   useEffect(() => {
     if (!open) return undefined
@@ -119,6 +131,14 @@ export default function MetricDrawer({ schoolId, metric, open, onClose }) {
 
   const fmt = metric ? metricFormat(metric.key, metric.unit) : 'ratio'
   const isMix = metric ? isMixMetric(metric.key) : false
+
+  // Secondary drill surface: "what's in this metric?" A dollar metric drills to
+  // its transactions; a ratio comes back drillable:false + components[] which we
+  // expose as per-line drill buttons. Only offered when we can reach the API.
+  const canDrill = !!metric?.available && !!schoolId && !!periodId
+  const drillResult = drill.status === 'done' ? drill.result : null
+  const drillReason = drillResult && !drillResult.drillable ? drillResult.reason : null
+  const components = drillReason === 'ratio' ? drillResult?.components ?? [] : []
 
   return (
     <AnimatePresence>
@@ -272,6 +292,88 @@ export default function MetricDrawer({ schoolId, metric, open, onClose }) {
                       </li>
                     ))}
                   </ul>
+                </div>
+              )}
+
+              {/* QuickBooks transaction drill — "what's in this?" (secondary).
+                  Lazy: no fetch until the gold button is clicked. */}
+              {canDrill && (
+                <div className="no-print">
+                  <p className="mb-1.5 font-sans text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">
+                    What&apos;s in this?
+                  </p>
+
+                  {drill.status === 'idle' && (
+                    <button
+                      type="button"
+                      onClick={() => drill.run({ periodId, metricKey })}
+                      className="btn-gold w-full"
+                    >
+                      <Receipt size={15} />
+                      View the transactions
+                    </button>
+                  )}
+
+                  {drill.status === 'loading' && (
+                    <div className="rounded-lg border border-rule/50 bg-white p-3">
+                      <div className="mb-3 flex items-center gap-2 text-[13px] font-semibold text-navy">
+                        <Loader2 size={15} className="animate-spin text-gold" />
+                        Pulling the transactions behind this number…
+                      </div>
+                      <div className="space-y-2">
+                        {[0, 1, 2, 3].map((i) => (
+                          <div key={i} className="h-6 animate-pulse rounded bg-section" />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {drill.status === 'error' && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-[14px] text-amber-700">
+                      <p className="font-semibold">Couldn&apos;t load transactions.</p>
+                      <button
+                        type="button"
+                        onClick={() => drill.run({ periodId, metricKey })}
+                        className="mt-1.5 text-[13px] font-semibold text-navy underline decoration-gold underline-offset-2 hover:text-gold"
+                      >
+                        Try again
+                      </button>
+                    </div>
+                  )}
+
+                  {drill.status === 'done' && drillResult?.drillable && (
+                    <TransactionList result={drillResult} />
+                  )}
+
+                  {/* Ratio → drill each component line instead of one misleading list. */}
+                  {drill.status === 'done' && components.length > 0 && (
+                    <div>
+                      <p className="mb-2 text-[14px] italic text-muted">
+                        This is a ratio — drill its component lines:
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {components.map(({ lineKey, statement }) => (
+                          <button
+                            key={`${statement}:${lineKey}`}
+                            type="button"
+                            onClick={() =>
+                              drill.run({ periodId, statement, variant: 'cy', lineKey })
+                            }
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-gold/40 bg-white px-3 py-1.5 text-[13px] font-semibold text-navy transition-colors hover:border-gold hover:bg-gold/10"
+                          >
+                            <Receipt size={13} className="text-gold" />
+                            {lineKey}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {drill.status === 'done' && drillReason && components.length === 0 && (
+                    <p className="rounded-lg border border-rule/50 bg-section px-3 py-3 text-[14px] italic text-muted">
+                      {DRILL_STATE_COPY[drillReason] ?? 'Transaction detail is unavailable for this metric.'}
+                    </p>
+                  )}
                 </div>
               )}
 

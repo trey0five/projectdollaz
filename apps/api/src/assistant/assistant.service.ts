@@ -62,6 +62,7 @@ import { FacilitiesService } from '../facilities/facilities.service.js'
 import { AdvancementService } from '../advancement/advancement.service.js'
 import { AlertService, ALERT_METRIC_KEYS } from '../alerts/alert.service.js'
 import { SchoolsService } from '../schools/schools.service.js'
+import { QboDrillService } from '../integrations/qbo-drill.service.js'
 import type { CreatePolicyDto } from '../governance/dto/create-policy.dto.js'
 import type { CreateCommitteeDto } from '../governance/dto/create-committee.dto.js'
 import type { CreateMeetingDto } from '../governance/dto/create-meeting.dto.js'
@@ -561,6 +562,11 @@ export class AssistantService {
     // positional-arg unit specs still construct; only the invite_member
     // build/apply/reverse paths touch `this.schools`, so undefined elsewhere is safe.
     private readonly schools: SchoolsService,
+    // Phase 6 — QuickBooks transaction drill-down for the read-only
+    // get_account_transactions tool. Added LAST (after schools) so existing
+    // positional-arg unit specs still construct; only that one execute() case touches
+    // `this.qboDrill`, so undefined elsewhere is safe.
+    private readonly qboDrill: QboDrillService,
   ) {}
 
   isConfigured(): boolean {
@@ -2976,6 +2982,68 @@ export class AssistantService {
             dueDate: i.dueDate,
             voice: i.voice ?? null,
           })),
+        }
+      }
+      case 'get_account_transactions': {
+        // Read-only QuickBooks drill-down: the transactions behind a statement line
+        // or dollar metric. Resolve the period via the shared fallback, then return a
+        // COMPACT projection (≤15 txns, trimmed fields, reconcile kept) so the tool
+        // result stays under the 8000-char cap. Penny quotes ONLY these figures.
+        const pid = await this.resolvePeriod(args, ctx)
+        const statement =
+          args.statement === 'SOA' || args.statement === 'SFP' ? args.statement : undefined
+        const variant =
+          args.variant === 'cy' || args.variant === 'py' || args.variant === 'audit'
+            ? args.variant
+            : undefined
+        const lineKey = typeof args.lineKey === 'string' && args.lineKey ? args.lineKey : undefined
+        const metricKey = typeof args.metricKey === 'string' && args.metricKey ? args.metricKey : undefined
+        if (!statement && !metricKey) {
+          return {
+            error:
+              'To drill transactions, give a statement (SOA or SFP) + lineKey, or a metricKey.',
+          }
+        }
+        const CHAT_CAP = 15
+        const rawLimit = typeof args.limit === 'number' && args.limit > 0 ? Math.floor(args.limit) : CHAT_CAP
+        const limit = Math.min(rawLimit, CHAT_CAP)
+        const r = await this.qboDrill.drill(ctx.schoolId, {
+          periodId: pid,
+          ...(statement ? { statement } : {}),
+          ...(variant ? { variant } : {}),
+          ...(lineKey ? { lineKey } : {}),
+          ...(metricKey ? { metricKey } : {}),
+          limit,
+        })
+        if (!r.drillable) {
+          return {
+            drillable: false,
+            reason: r.reason,
+            line: { label: r.line.label, value: r.line.value },
+            ...(r.components ? { components: r.components } : {}),
+          }
+        }
+        return {
+          drillable: true,
+          line: { label: r.line.label, value: r.line.value },
+          window: r.window,
+          // Trimmed txn fields (drop deepLink/docNumber/account noise); already sorted
+          // by |amount| desc and capped to ≤15 by the drill service.
+          transactions: r.transactions.slice(0, CHAT_CAP).map((t) => ({
+            date: t.date,
+            type: t.type,
+            payee: t.payee,
+            amount: t.amount,
+          })),
+          reconcile: {
+            lineValue: r.reconcile.lineValue,
+            drilledSum: r.reconcile.drilledSum,
+            ...(r.reconcile.opening != null ? { opening: r.reconcile.opening } : {}),
+            ties: r.reconcile.ties,
+            shown: r.reconcile.shown,
+            total: r.reconcile.total,
+            ...(r.reconcile.note ? { note: r.reconcile.note } : {}),
+          },
         }
       }
       case 'get_budget_vs_actual': {

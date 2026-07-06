@@ -65,6 +65,7 @@ function makeService(opts: {
     stub, // audit
     stub, // alerts
     stub, // schools (LAST) — only invite_member paths touch it
+    stub, // qboDrill (LAST) — only get_account_transactions touches it
   )
   return { svc, tasksCreate, membershipFindFirst }
 }

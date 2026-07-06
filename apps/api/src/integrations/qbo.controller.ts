@@ -7,7 +7,9 @@ import { CurrentUser } from '../common/decorators/current-user.decorator.js'
 import { EntitlementGuard } from '../billing/entitlement.guard.js'
 import { MergeMappingDto } from '../mapping/dto/merge-mapping.dto.js'
 import { QboService } from './qbo.service.js'
+import { QboDrillService } from './qbo-drill.service.js'
 import { QbCallbackDto, QbSyncDto, QbSyncScopeDto } from './dto/qbo.dto.js'
+import { QbDrillDto } from './dto/qbo-drill.dto.js'
 
 /**
  * Phase 6 — QuickBooks Online connector. Membership-checked by RolesGuard on
@@ -16,7 +18,22 @@ import { QbCallbackDto, QbSyncDto, QbSyncScopeDto } from './dto/qbo.dto.js'
 @Controller('schools/:schoolId/integrations/qb')
 @UseGuards(JwtAuthGuard, RolesGuard, EntitlementGuard)
 export class QboController {
-  constructor(private readonly qbo: QboService) {}
+  constructor(
+    private readonly qbo: QboService,
+    private readonly drill: QboDrillService,
+  ) {}
+
+  /**
+   * Transaction drill-down: the actual QuickBooks transactions behind a computed
+   * figure (statement line, dollar metric, or explicit engine accts), reconciled to
+   * the line and deep-linkable into QuickBooks. Read-only, viewer-open (Board may
+   * view source truth). Server resolves accounts from the stored snapshot lineage.
+   */
+  @Post('transactions')
+  @Roles('owner', 'accountant', 'viewer')
+  transactions(@Param('schoolId') schoolId: string, @Body() dto: QbDrillDto) {
+    return this.drill.drill(schoolId, dto)
+  }
 
   @Get('status')
   @Roles('owner', 'accountant', 'viewer')

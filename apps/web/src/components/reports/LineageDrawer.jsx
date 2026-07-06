@@ -18,10 +18,12 @@
 // import summaries (importsApi.listForPeriod); it is OPTIONAL, so the Source
 // section degrades gracefully (e.g. live intake preview before a period is saved).
 // ─────────────────────────────────────────────────────────────
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { X, FileText, RefreshCw, CheckCircle2, AlertTriangle, Link2 } from 'lucide-react'
+import { X, FileText, RefreshCw, CheckCircle2, AlertTriangle, Link2, Receipt, Loader2 } from 'lucide-react'
 import { fmt, formatDate } from '../../lib/format.js'
+import { useQbDrill, DRILL_STATE_COPY } from '../../hooks/useQbDrill.js'
+import TransactionList from './TransactionList.jsx'
 
 // Map a statement id to the import role whose active version fed the column.
 const ROLE_BY_VARIANT = { cy: 'cy', py: 'py', audit: 'audit' }
@@ -69,9 +71,29 @@ function SourceBadge({ imp }) {
   )
 }
 
-export default function LineageDrawer({ open, onClose, selection, bundle, imports }) {
+export default function LineageDrawer({
+  open,
+  onClose,
+  selection,
+  bundle,
+  imports,
+  schoolId = null,
+  periodId = null,
+}) {
   const reduce = useReducedMotion()
   const panelRef = useRef(null)
+  const drill = useQbDrill(schoolId)
+
+  // Clear the transaction drill whenever the selected line changes, so a fresh
+  // line never shows the previous line's transactions. Adjusting state during
+  // render (guarded by the key) avoids a setState-in-effect — the same pattern
+  // Dashboard uses to reset its active tab.
+  const selKey = selection ? `${selection.statement}|${selection.variant}|${selection.lineKey}` : null
+  const [prevSelKey, setPrevSelKey] = useState(selKey)
+  if (selKey !== prevSelKey) {
+    setPrevSelKey(selKey)
+    drill.reset()
+  }
 
   useEffect(() => {
     if (!open) return undefined
@@ -99,6 +121,22 @@ export default function LineageDrawer({ open, onClose, selection, bundle, import
   const lineValue = line?.value ?? selection?.value ?? 0
   const diff = signedSum - lineValue
   const ties = Math.abs(diff) < 0.01
+
+  // QuickBooks transaction drill is offered ONLY when this column was synced from
+  // QuickBooks (source gate), the line has contributing accounts (subtotals have
+  // none), and we can reach the API (schoolId + periodId + a lineKey to resolve).
+  const isQbo = source?.sourceType === 'quickbooks'
+  const canDrill =
+    isQbo && hasAccounts && !!schoolId && !!periodId && !!selection?.lineKey
+  const drillResult = drill.status === 'done' ? drill.result : null
+  const drillReason = drillResult && !drillResult.drillable ? drillResult.reason : null
+  const runDrill = () =>
+    drill.run({
+      periodId,
+      statement: selection.statement,
+      variant: selection.variant,
+      lineKey: selection.lineKey,
+    })
 
   return (
     <AnimatePresence>
@@ -208,6 +246,61 @@ export default function LineageDrawer({ open, onClose, selection, bundle, import
                   </p>
                 )}
               </div>
+
+              {/* QuickBooks transaction drill — the fourth unfurl: from
+                  "these accounts" to the actual QuickBooks transactions inside
+                  them. Lazy: nothing fetches until the gold button is clicked. */}
+              {canDrill && (
+                <div className="no-print">
+                  {drill.status === 'idle' && (
+                    <button
+                      type="button"
+                      onClick={runDrill}
+                      className="btn-gold w-full"
+                    >
+                      <Receipt size={15} />
+                      View the transactions
+                    </button>
+                  )}
+
+                  {drill.status === 'loading' && (
+                    <div className="rounded-lg border border-rule/50 bg-white p-3">
+                      <div className="mb-3 flex items-center gap-2 text-[13px] font-semibold text-navy">
+                        <Loader2 size={15} className="animate-spin text-gold" />
+                        Pulling the transactions behind this number…
+                      </div>
+                      <div className="space-y-2">
+                        {[0, 1, 2, 3].map((i) => (
+                          <div key={i} className="h-6 animate-pulse rounded bg-section" />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {drill.status === 'error' && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-[14px] text-amber-700">
+                      <p className="font-semibold">Couldn&apos;t load transactions.</p>
+                      <button
+                        type="button"
+                        onClick={runDrill}
+                        className="mt-1.5 text-[13px] font-semibold text-navy underline decoration-gold underline-offset-2 hover:text-gold"
+                      >
+                        Try again
+                      </button>
+                    </div>
+                  )}
+
+                  {drill.status === 'done' && drillResult?.drillable && (
+                    <TransactionList result={drillResult} />
+                  )}
+
+                  {drill.status === 'done' && drillReason && (
+                    <p className="rounded-lg border border-rule/50 bg-section px-3 py-3 text-[14px] italic text-muted">
+                      {DRILL_STATE_COPY[drillReason] ?? 'Transaction detail is unavailable for this line.'}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* source provenance */}
               <div>

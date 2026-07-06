@@ -81,6 +81,7 @@ function makeService(opts?: {
     stub, // audit
     stub, // alerts
     schools as never, // schools (LAST)
+    undefined as never, // qboDrill (LAST) — only get_account_transactions touches it
   )
   return { svc, createInvitation, revokeInvitation, prisma }
 }

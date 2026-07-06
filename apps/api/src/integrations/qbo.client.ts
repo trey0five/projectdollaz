@@ -76,6 +76,27 @@ export function qboPlSection(acct: number): 'revenue' | 'expense' | null {
   return null
 }
 
+/** The account list from an accountMeta() pull, as a flat array (drops the id-0 rows). */
+export function metaList(maps: QboAccountMetaMaps): QboAccountMeta[] {
+  return [...maps.byId.values()]
+}
+
+/**
+ * Index a live account list by AcctNum → the accounts carrying that number (multiple
+ * QBO accounts can share one number). Used by the drill reverse-map for the
+ * real-AcctNum case; built once per reversal batch.
+ */
+export function buildByAcctNum(metas: QboAccountMeta[]): Map<number, QboAccountMeta[]> {
+  const out = new Map<number, QboAccountMeta[]>()
+  for (const m of metas) {
+    if (m.acctNum == null) continue
+    const arr = out.get(m.acctNum)
+    if (arr) arr.push(m)
+    else out.set(m.acctNum, [m])
+  }
+  return out
+}
+
 export function deriveAcct(meta: QboAccountMeta): { acct: number; category: 'other' | 'fixedOther' | null } {
   const t = meta.accountType
   const sub = meta.accountSubType
@@ -388,5 +409,53 @@ export class QboClient {
       accessToken,
       `reports/${report}?accounting_method=Accrual&start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}&summarize_column_by=${by}`,
     )) as QboSummarizedReport
+  }
+
+  /**
+   * Pull the General Ledger REPORT (raw JSON) for a window — the transaction-detail
+   * source behind the drill-down. BOTH dates are always sent (QBO ignores a lone
+   * end_date, same gotcha as every other report). The `account=` filter is sent when
+   * ids are supplied as a LATENCY optimization only — the pure parser (qbo-gl.ts) is
+   * filter-agnostic and the drill service filters server-side by account, so a QBO
+   * build that ignores the filter still returns correct results (Fallback A). Returns
+   * the RAW report JSON for qbo-gl.ts to parse.
+   */
+  async getGeneralLedger(
+    realmId: string,
+    accessToken: string,
+    opts: { accountIds?: string[]; startDate: string; endDate: string; basis?: 'Accrual' | 'Cash' },
+  ): Promise<unknown> {
+    const basis = opts.basis === 'Cash' ? 'Cash' : 'Accrual'
+    const columns = 'tx_date,txn_type,doc_num,name,memo,subt_nat_amount,account_name'
+    let path =
+      `reports/GeneralLedger?accounting_method=${basis}` +
+      `&start_date=${encodeURIComponent(opts.startDate)}&end_date=${encodeURIComponent(opts.endDate)}` +
+      `&columns=${columns}`
+    if (opts.accountIds && opts.accountIds.length) {
+      path += `&account=${encodeURIComponent(opts.accountIds.join(','))}`
+    }
+    return this.apiGet(realmId, accessToken, path)
+  }
+
+  /**
+   * Pull the flat Transaction List REPORT (raw JSON) — Fallback B when the GL JSON is
+   * unusable. Same window/date rules; carries account_name so the pure parser can
+   * post-group by account. Returns RAW JSON for qbo-gl.ts.
+   */
+  async getTransactionList(
+    realmId: string,
+    accessToken: string,
+    opts: { accountIds?: string[]; startDate: string; endDate: string; basis?: 'Accrual' | 'Cash' },
+  ): Promise<unknown> {
+    const basis = opts.basis === 'Cash' ? 'Cash' : 'Accrual'
+    const columns = 'tx_date,txn_type,doc_num,name,memo,subt_nat_amount,account_name'
+    let path =
+      `reports/TransactionList?accounting_method=${basis}` +
+      `&start_date=${encodeURIComponent(opts.startDate)}&end_date=${encodeURIComponent(opts.endDate)}` +
+      `&columns=${columns}`
+    if (opts.accountIds && opts.accountIds.length) {
+      path += `&account=${encodeURIComponent(opts.accountIds.join(','))}`
+    }
+    return this.apiGet(realmId, accessToken, path)
   }
 }

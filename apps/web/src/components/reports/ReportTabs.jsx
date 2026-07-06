@@ -62,7 +62,7 @@ export default function ReportTabs({ bundle, school, periodId = null, dateLabel 
 
   return (
     <ReportViewProvider bundle={bundle} school={school} dateLabel={dateLabel} periodLabel={periodLabel}>
-      <LineageHost bundle={bundle} imports={imports}>
+      <LineageHost bundle={bundle} imports={imports} schoolId={schoolId} periodId={periodId}>
       <div className="no-print border-b-2 border-rule bg-white">
         <nav className="scrollbar-none mx-auto flex w-full max-w-[1120px] items-stretch justify-center overflow-x-auto sm:px-10">
           {TABS.map((t) => (

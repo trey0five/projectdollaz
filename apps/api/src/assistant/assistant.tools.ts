@@ -951,6 +951,38 @@ export const TOOL_SCHEMAS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'get_account_transactions',
+      description:
+        'The actual QuickBooks transactions behind a computed figure — answers "what\'s in this number?". ' +
+        "Give a statement line (statement SOA|SFP + lineKey like 'tuition'/'instructional', variant cy|py|audit) " +
+        'OR a metricKey (e.g. net_tuition_per_student). Returns each transaction\'s date, type, payee, and amount, ' +
+        'plus a reconciliation of the transactions to the line total (whether they tie, and any opening-balance plug). ' +
+        'ONLY works when the period was synced from QuickBooks — it is QuickBooks-only. Ratios and calculated subtotals ' +
+        'are NOT drillable (it says so, and names the component lines to drill instead). ' +
+        'State ONLY the figures this tool returns — never invent a transaction or amount.',
+      parameters: {
+        type: 'object',
+        properties: {
+          periodId: { type: 'string', description: 'Fiscal period id; omit to use the current period.' },
+          statement: { type: 'string', enum: ['SOA', 'SFP'] },
+          lineKey: {
+            type: 'string',
+            description: "Statement line key, e.g. tuition, instructional, cash.",
+          },
+          variant: { type: 'string', enum: ['cy', 'py', 'audit'], description: 'Which column; defaults cy.' },
+          metricKey: {
+            type: 'string',
+            description: 'Use INSTEAD of statement/lineKey to drill a dollar metric.',
+          },
+          limit: { type: 'number', description: 'Max transactions to return (default 15 for chat).' },
+        },
+        required: [],
+      },
+    },
+  },
 ]
 
 /** Status-line labels shown while a tool runs (present tense; agentic). */
@@ -996,4 +1028,5 @@ export const TOOL_LABELS: Record<string, string> = {
   navigate_to_page: 'Taking you there…',
   start_walkthrough: 'Let me show you…',
   get_briefing: 'Reviewing what needs your attention…',
+  get_account_transactions: 'Pulling the transactions behind that number…',
 }

@@ -519,6 +519,7 @@ export default function AnalyticsDashboard() {
 
       <MetricDrawer
         schoolId={schoolId}
+        periodId={selectedPeriodId}
         metric={drawerMetric}
         open={Boolean(drawerMetric)}
         onClose={closeDrawer}

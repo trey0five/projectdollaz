@@ -12,7 +12,7 @@ import { useCallback, useState } from 'react'
 import { LineageProvider } from '../../context/LineageContext.jsx'
 import LineageDrawer from './LineageDrawer.jsx'
 
-export default function LineageHost({ bundle, imports = null, children }) {
+export default function LineageHost({ bundle, imports = null, schoolId = null, periodId = null, children }) {
   const [selection, setSelection] = useState(null)
   const [open, setOpen] = useState(false)
 
@@ -24,7 +24,13 @@ export default function LineageHost({ bundle, imports = null, children }) {
   const onClose = useCallback(() => setOpen(false), [])
 
   return (
-    <LineageProvider onOpenLineage={onOpenLineage} bundle={bundle} imports={imports}>
+    <LineageProvider
+      onOpenLineage={onOpenLineage}
+      bundle={bundle}
+      imports={imports}
+      schoolId={schoolId}
+      periodId={periodId}
+    >
       {children}
       <LineageDrawer
         open={open}
@@ -32,6 +38,8 @@ export default function LineageHost({ bundle, imports = null, children }) {
         selection={selection}
         bundle={bundle}
         imports={imports}
+        schoolId={schoolId}
+        periodId={periodId}
       />
     </LineageProvider>
   )
