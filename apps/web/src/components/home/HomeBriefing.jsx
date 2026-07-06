@@ -10,7 +10,7 @@
 // an error with no items renders nothing so a briefing hiccup never blocks the
 // vitals below. Dismiss is client-only (session-scoped).
 // ─────────────────────────────────────────────────────────────────────────────
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
 import {
@@ -42,12 +42,12 @@ function greeting() {
   return 'Good evening'
 }
 
+// "Brief me" now drives the narrated PennyMorningBrief card above the board: it
+// scrolls the card in and plays the spoken brief (the click is the user gesture
+// that lets audio prime). Conversational follow-up still lives on the card's
+// "Discuss with Penny" (penny:ai-ask). Label unchanged.
 function askPennyToBrief() {
-  window.dispatchEvent(
-    new CustomEvent('penny:ai-ask', {
-      detail: { text: 'Brief me on what needs my attention.' },
-    }),
-  )
+  window.dispatchEvent(new CustomEvent('penny:narrate'))
 }
 
 function BriefMeButton() {
@@ -55,7 +55,7 @@ function BriefMeButton() {
     <button
       type="button"
       onClick={askPennyToBrief}
-      aria-label="Ask Penny to brief me on what needs my attention"
+      aria-label="Play Penny's brief of what needs my attention"
       className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gold-gradient px-3.5 py-1.5 text-[13px] font-semibold text-white shadow-glow transition-transform hover:-translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
     >
       <Sparkles size={14} />
@@ -153,12 +153,22 @@ function fmtDue(iso) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-function BriefingItemCard({ item, index, reduce, canEdit, onDismiss }) {
+function BriefingItemCard({ item, index, reduce, canEdit, onDismiss, active = false }) {
   const sev = SEVERITY[item.severity] ?? SEVERITY.info
   const progress = titleProgress(item.title)
   const domain = SOURCE_META[item.source] ?? { label: item.source ?? 'Signal', Icon: Sparkles }
   const DomainIcon = domain.Icon
   const navigate = useNavigate()
+  // When Penny narrates this item, ring it gold and bring it into view so the
+  // board visibly follows her voice down the priority order.
+  const cardRef = useRef(null)
+  useEffect(() => {
+    if (active && cardRef.current) {
+      cardRef.current.scrollIntoView(
+        reduce ? { block: 'nearest' } : { block: 'nearest', behavior: 'smooth' },
+      )
+    }
+  }, [active, reduce])
 
   const createTaskFromItem = () => {
     const today = new Date().toISOString().slice(0, 10)
@@ -178,13 +188,14 @@ function BriefingItemCard({ item, index, reduce, canEdit, onDismiss }) {
 
   return (
     <motion.article
+      ref={cardRef}
       layout
       initial={reduce ? { opacity: 0 } : { opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       exit={reduce ? { opacity: 0 } : { opacity: 0, x: 40, scale: 0.98 }}
       transition={{ duration: 0.38, delay: reduce ? 0 : index * 0.06, ease: [0.22, 1, 0.36, 1] }}
       whileHover={reduce ? undefined : { y: -3 }}
-      className={`group relative overflow-hidden rounded-2xl ${CARD_ATTN[item.severity] ?? CARD_ATTN.info}`}
+      className={`group relative overflow-hidden rounded-2xl ${CARD_ATTN[item.severity] ?? CARD_ATTN.info} ${active ? 'ring-2 ring-gold shadow-glow' : ''}`}
     >
       {/* Faint severity corner wash */}
       <span
@@ -302,7 +313,7 @@ function StackExpander({ hidden, tab, onClick }) {
 // clear). When a lane holds more than LANE_COLLAPSE_AT cards, the overflow is
 // stacked behind an expander and revealed on click. Cards keep their folder-tab
 // design; the lane just groups by urgency.
-function TriageLane({ lane, items, reduce, canEdit, onDismiss }) {
+function TriageLane({ lane, items, reduce, canEdit, onDismiss, activeItemId }) {
   const count = items.length
   const [expanded, setExpanded] = useState(false)
   const collapsible = count > LANE_COLLAPSE_AT
@@ -343,6 +354,7 @@ function TriageLane({ lane, items, reduce, canEdit, onDismiss }) {
                 reduce={reduce}
                 canEdit={canEdit}
                 onDismiss={onDismiss}
+                active={activeItemId != null && item.id === activeItemId}
               />
             ))}
           </AnimatePresence>
@@ -390,6 +402,15 @@ export default function HomeBriefing({
 }) {
   const reduce = useReducedMotion()
   const [dismissed, setDismissed] = useState(() => new Set())
+  // The item Penny is currently narrating (from PennyMorningBrief) — the matching
+  // card gets a gold ring + scrolls into view. Event-driven (setState in a handler,
+  // not an effect body), so it stays lint-clean.
+  const [activeItemId, setActiveItemId] = useState(null)
+  useEffect(() => {
+    const onActive = (e) => setActiveItemId(e?.detail?.itemId ?? null)
+    window.addEventListener('penny:narrate-active', onActive)
+    return () => window.removeEventListener('penny:narrate-active', onActive)
+  }, [])
   const visible = useMemo(() => items.filter((i) => !dismissed.has(i.id)), [items, dismissed])
   const total = visible.length
   const dismiss = (id) => setDismissed((prev) => new Set(prev).add(id))
@@ -468,6 +489,7 @@ export default function HomeBriefing({
             reduce={reduce}
             canEdit={canEdit}
             onDismiss={dismiss}
+            activeItemId={activeItemId}
           />
         ))}
       </div>

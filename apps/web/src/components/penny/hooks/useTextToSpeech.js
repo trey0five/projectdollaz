@@ -54,7 +54,7 @@ function isSupported() {
   return typeof Audio !== 'undefined' || 'speechSynthesis' in window
 }
 
-export function useTextToSpeech(schoolId) {
+export function useTextToSpeech(schoolId, owner = 'chat') {
   const supported = isSupported()
   const [enabled, setEnabledState] = useState(() => {
     try {
@@ -81,12 +81,31 @@ export function useTextToSpeech(schoolId) {
   const enabledRef = useRef(enabled)
   // Keep the latest schoolId for the proxy URL without re-creating callbacks.
   const schoolIdRef = useRef(schoolId)
+  // This instance's voice "owner" ('chat' for Penny chat, 'brief' for the morning
+  // narration). Used for mutual-exclusion: whoever starts playing claims the voice
+  // and every OTHER owner stops itself — no double-Penny audio.
+  const ownerRef = useRef(owner)
   useEffect(() => {
     enabledRef.current = enabled
   }, [enabled])
   useEffect(() => {
     schoolIdRef.current = schoolId
   }, [schoolId])
+  useEffect(() => {
+    ownerRef.current = owner
+  }, [owner])
+
+  // Broadcast that THIS owner is now speaking, so the other transport stops. Fired
+  // as playback of a chunk begins.
+  function claimVoice() {
+    try {
+      window.dispatchEvent(
+        new CustomEvent('penny:voice-claim', { detail: { owner: ownerRef.current } }),
+      )
+    } catch {
+      /* ignore */
+    }
+  }
 
   function ensureAudio() {
     if (audioRef.current) return audioRef.current
@@ -108,7 +127,11 @@ export function useTextToSpeech(schoolId) {
   }
 
   const stop = useCallback(() => {
+    // Drop the queue, but first resolve any awaited-segment resolvers so a
+    // narration player awaiting speakSegment() never hangs when we stop early.
+    const dropped = textQueueRef.current
     textQueueRef.current = []
+    for (const entry of dropped) entry?.resolve?.()
     const a = audioRef.current
     if (a) {
       try {
@@ -187,7 +210,10 @@ export function useTextToSpeech(schoolId) {
         a.volume = 1
         void a
           .play()
-          .then(() => setSpeaking(true))
+          .then(() => {
+            claimVoice()
+            setSpeaking(true)
+          })
           .catch(() => {
             playResolveRef.current = null
             resolve()
@@ -219,6 +245,7 @@ export function useTextToSpeech(schoolId) {
         u.lang = (typeof navigator !== 'undefined' && navigator.language) || 'en-US'
         u.onend = finish
         u.onerror = finish
+        claimVoice()
         setSpeaking(true)
         window.speechSynthesis.speak(u)
       } catch {
@@ -273,34 +300,50 @@ export function useTextToSpeech(schoolId) {
 
   // Held in a ref so the stable enqueueText callback can invoke the latest
   // worker without listing a per-render function in its dependency array.
+  // Queue entries are `{ text, resolve?, force? }`. The chat feed/flush path pushes
+  // plain `{ text }` entries (resolver-less, non-forced) — its behavior is
+  // byte-identical to before. `force` entries (from speakSegment) play regardless
+  // of the persisted chat-TTS `enabled` toggle (a Play click IS the consent), and
+  // their `resolve` fires when the chunk finishes so a caller can await it.
   const drainQueueRef = useRef(null)
   async function drainQueue() {
     if (workerActiveRef.current) return
     workerActiveRef.current = true
     try {
-      while (enabledRef.current && textQueueRef.current.length > 0) {
-        const text = textQueueRef.current.shift()
+      while (textQueueRef.current.length > 0) {
+        const entry = textQueueRef.current[0]
+        const active = enabledRef.current || entry.force
+        // Chat voice toggled off (and not a forced segment) — leave it queued only
+        // if a later state flip could resume it; today, stop draining.
+        if (!active) break
+        textQueueRef.current.shift()
+        const { text, resolve, force } = entry
         // Fall straight to browser speech once we know the proxy is down.
         if (proxyAvailable === 'no') {
-          if (!enabledRef.current) break
           await speakBrowser(text)
+          resolve?.()
           continue
         }
         const url = await fetchMp3(text)
         if (!url) {
-          // fetchMp3 latched 'no' — speak this chunk with the browser voice
-          // so the user still hears it, then continue (next chunk skips fetch).
-          if (proxyAvailable === 'no' && enabledRef.current) {
+          // fetchMp3 latched 'no' — speak this chunk with the browser voice so the
+          // user still hears it, then continue (next chunk skips fetch). Re-read
+          // `enabled` AFTER the await: a chat entry whose toggle flipped off during
+          // the fetch must stay silent (a forced brief segment always speaks).
+          if (proxyAvailable === 'no' && (enabledRef.current || force)) {
             await speakBrowser(text)
           }
+          resolve?.()
           continue
         }
-        if (!enabledRef.current) {
+        if (!enabledRef.current && !force) {
           URL.revokeObjectURL(url)
+          resolve?.()
           break
         }
         await playUrl(url)
         URL.revokeObjectURL(url)
+        resolve?.()
       }
     } finally {
       workerActiveRef.current = false
@@ -316,9 +359,26 @@ export function useTextToSpeech(schoolId) {
   const enqueueText = useCallback((text) => {
     const trimmed = text.trim()
     if (!trimmed) return
-    textQueueRef.current.push(trimmed)
+    textQueueRef.current.push({ text: trimmed })
     if (!workerActiveRef.current) void drainQueueRef.current?.()
   }, [])
+
+  // ADDITIVE: speak one already-complete chunk and resolve when it finishes
+  // playing. Unlike feed/flush (which are gated on the chat `enabled` toggle),
+  // speakSegment FORCES playback — the morning-brief Play button is the user's
+  // consent — and returns a Promise the narration player awaits to advance
+  // segment-by-segment. Chat's feed/flush path is untouched.
+  const speakSegment = useCallback(
+    (text) => {
+      const trimmed = String(text ?? '').trim()
+      if (!trimmed || !supported) return Promise.resolve()
+      return new Promise((resolve) => {
+        textQueueRef.current.push({ text: trimmed, resolve, force: true })
+        if (!workerActiveRef.current) void drainQueueRef.current?.()
+      })
+    },
+    [supported],
+  )
 
   const feed = useCallback(
     (cumulativeText) => {
@@ -387,6 +447,17 @@ export function useTextToSpeech(schoolId) {
     }
   }, [supported, stop])
 
+  // Mutual exclusion: when a DIFFERENT owner claims the voice (chat vs. morning
+  // brief), stop ourselves so the two never talk over each other.
+  useEffect(() => {
+    const onClaim = (e) => {
+      const claimer = e?.detail?.owner
+      if (claimer && claimer !== ownerRef.current) stop()
+    }
+    window.addEventListener('penny:voice-claim', onClaim)
+    return () => window.removeEventListener('penny:voice-claim', onClaim)
+  }, [stop])
+
   return {
     supported,
     enabled,
@@ -397,5 +468,6 @@ export function useTextToSpeech(schoolId) {
     reset,
     stop,
     primeForGesture,
+    speakSegment,
   }
 }

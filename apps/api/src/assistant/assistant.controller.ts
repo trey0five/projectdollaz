@@ -17,9 +17,11 @@ import { CurrentUser } from '../common/decorators/current-user.decorator.js'
 import { EntitlementGuard } from '../billing/entitlement.guard.js'
 import { AssistantService } from './assistant.service.js'
 import { AssistantTtsService } from './assistant-tts.service.js'
+import { BriefingNarrationService } from './briefing-narration.service.js'
 import { ChatDto } from './dto/chat.dto.js'
 import { TtsDto } from './dto/tts.dto.js'
 import { ApplyActionDto } from './dto/apply-action.dto.js'
+import { NarrateBriefingDto } from './dto/narrate-briefing.dto.js'
 
 /**
  * Phase 4D+ — AI assistant. Read-only Q&A over the school's financial data via a
@@ -32,12 +34,28 @@ export class AssistantController {
   constructor(
     private readonly assistant: AssistantService,
     private readonly tts: AssistantTtsService,
+    private readonly narration: BriefingNarrationService,
   ) {}
 
   @Post('chat')
   @Roles('owner', 'accountant', 'viewer')
   chat(@Param('schoolId') schoolId: string, @Body() dto: ChatDto, @CurrentUser() user: User) {
     return this.assistant.chat(schoolId, dto.periodId ?? null, dto.messages, user)
+  }
+
+  /**
+   * The narrated "morning brief" — a server-composed, VALIDATED narration of the
+   * caller's lens-shaped briefing (segment array, source llm|template). Same guard
+   * chain as chat; all roles (a board member gets the advisory brief too).
+   */
+  @Post('briefing-narration')
+  @Roles('owner', 'accountant', 'viewer')
+  narrateBriefing(
+    @Param('schoolId') schoolId: string,
+    @Body() dto: NarrateBriefingDto,
+    @CurrentUser() user: User,
+  ) {
+    return this.narration.narrateSchool(schoolId, user, dto)
   }
 
   /** Streaming variant — Server-Sent Events (delta / status / chart / done). */

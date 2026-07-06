@@ -124,12 +124,11 @@ function TrialChip({ billing, isOwner }) {
   )
 }
 
+// The hero "Brief me" now plays the narrated PennyMorningBrief card just below
+// (scrolls it in + starts the spoken brief). Conversational follow-up lives on
+// that card's "Discuss with Penny".
 function askPennyToBrief() {
-  window.dispatchEvent(
-    new CustomEvent('penny:ai-ask', {
-      detail: { text: 'Brief me on what needs my attention across every area today.' },
-    }),
-  )
+  window.dispatchEvent(new CustomEvent('penny:narrate'))
 }
 
 // Count-up the headline number (0 → value) for a dynamic, eye-drawing reveal.

@@ -16,6 +16,7 @@ import { useOrgBriefing, useOrgMetrics } from '../../hooks/useAnalytics.js'
 import OrgBriefing from '../budget/OrgBriefing.jsx'
 import OrgKpiStrip from '../budget/OrgKpiStrip.jsx'
 import OrgSchoolsTable from '../budget/OrgSchoolsTable.jsx'
+import PennyMorningBrief from './PennyMorningBrief.jsx'
 
 function fyLabel(fiscalYearStart) {
   if (!fiscalYearStart) return null
@@ -101,6 +102,15 @@ export default function OrgHome({
       {/* Per-school summary table — also above the triage, so the board is the
           last, action-focused block. Only once the briefing has loaded. */}
       {briefing && <OrgSchoolsTable schools={briefing.schools || []} />}
+
+      {/* Penny narrates the org briefing — the spoken/written cross-school morning
+          brief, above the org triage board. */}
+      <PennyMorningBrief
+        scope="org"
+        orgId={orgId}
+        fiscalYearStart={fiscalYearStart}
+        lens={lens}
+      />
 
       {/* The multi-school attention briefing — the org "3 things today". Its
           headline stays attached to the triage board it introduces. */}

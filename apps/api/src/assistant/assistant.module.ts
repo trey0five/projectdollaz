@@ -18,10 +18,12 @@ import { AlertModule } from '../alerts/alert.module.js'
 import { SchoolsModule } from '../schools/schools.module.js'
 import { AuditModule } from '../common/audit/audit.module.js'
 import { AssistantController } from './assistant.controller.js'
+import { OrgNarrationController } from './org-narration.controller.js'
 import { AssistantService } from './assistant.service.js'
 import { AssistantClient } from './assistant.client.js'
 import { AssistantTtsService } from './assistant-tts.service.js'
 import { AssistantFilesService } from './assistant-files.service.js'
+import { BriefingNarrationService } from './briefing-narration.service.js'
 
 /**
  * Phase 4D+ — agentic AI assistant. Reuses AnalyticsService/BudgetService (analytics)
@@ -62,7 +64,19 @@ import { AssistantFilesService } from './assistant-files.service.js'
     // AuditLog (source:'assistant') so the action log + inline Undo can read it back.
     AuditModule,
   ],
-  controllers: [AssistantController],
-  providers: [AssistantService, AssistantClient, AssistantTtsService, AssistantFilesService],
+  // OrgNarrationController is a SECOND @Controller('organizations/:orgId') alongside
+  // OrgBriefingController — valid in Nest because the sub-paths differ (briefing vs
+  // briefing-narration). JwtAuthGuard-only, mirroring the org briefing read.
+  controllers: [AssistantController, OrgNarrationController],
+  providers: [
+    AssistantService,
+    AssistantClient,
+    AssistantTtsService,
+    AssistantFilesService,
+    // Path A — the server-composed, validated narration endpoint (both scopes).
+    // Reuses BriefingService/OrgBriefingService (AnalyticsModule, already imported)
+    // + AssistantClient; the chat get_briefing tool path is unchanged.
+    BriefingNarrationService,
+  ],
 })
 export class AssistantModule {}

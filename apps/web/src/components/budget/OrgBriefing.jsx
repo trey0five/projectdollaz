@@ -8,7 +8,7 @@
 //
 // Pure presentation over the `briefing` prop; everything derived at render (no
 // effects, no in-render component definitions — React-Compiler safe).
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import {
@@ -97,13 +97,23 @@ function fmtDue(iso) {
 // is a known integration caveat, out of this slice's scope).
 // Cross-school decision card — the same flashy folder-tab idiom as HomeBriefing,
 // with a school-attribution chip in the eyebrow. The whole card links to item.link.
-function OrgBriefingItemCard({ item, index, reduce }) {
+function OrgBriefingItemCard({ item, index, reduce, active = false }) {
   const sev = SEVERITY[item.severity] ?? SEVERITY.info
   const domain = SOURCE_META[item.source] ?? { label: item.source ?? 'Signal', Icon: Sparkles }
   const DomainIcon = domain.Icon
   const progress = titleProgress(item.title)
+  // When Penny narrates this cross-school item, ring it gold + scroll it in.
+  const cardRef = useRef(null)
+  useEffect(() => {
+    if (active && cardRef.current) {
+      cardRef.current.scrollIntoView(
+        reduce ? { block: 'nearest' } : { block: 'nearest', behavior: 'smooth' },
+      )
+    }
+  }, [active, reduce])
   return (
     <motion.div
+      ref={cardRef}
       initial={reduce ? { opacity: 0 } : { opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.38, delay: reduce ? 0 : index * 0.05, ease: [0.22, 1, 0.36, 1] }}
@@ -111,7 +121,7 @@ function OrgBriefingItemCard({ item, index, reduce }) {
     >
       <Link
         to={item.link}
-        className={`group relative block overflow-hidden rounded-2xl ${CARD_ATTN[item.severity] ?? CARD_ATTN.info}`}
+        className={`group relative block overflow-hidden rounded-2xl ${CARD_ATTN[item.severity] ?? CARD_ATTN.info} ${active ? 'ring-2 ring-gold shadow-glow' : ''}`}
       >
         <span
           aria-hidden
@@ -206,7 +216,7 @@ function StackExpander({ hidden, tab, onClick }) {
 // server-ranked cross-school cards for this severity (or a soft empty state). When
 // a lane holds more than LANE_COLLAPSE_AT cards, the overflow is stacked behind an
 // expander and revealed on click.
-function OrgTriageLane({ lane, items, reduce }) {
+function OrgTriageLane({ lane, items, reduce, activeItemId }) {
   const count = items.length
   const [expanded, setExpanded] = useState(false)
   const collapsible = count > LANE_COLLAPSE_AT
@@ -243,7 +253,13 @@ function OrgTriageLane({ lane, items, reduce }) {
         <motion.div layout className="flex flex-col gap-4">
           <AnimatePresence initial={false}>
             {shown.map((item, i) => (
-              <OrgBriefingItemCard key={item.orgItemId} item={item} index={i} reduce={reduce} />
+              <OrgBriefingItemCard
+                key={item.orgItemId}
+                item={item}
+                index={i}
+                reduce={reduce}
+                active={activeItemId != null && item.orgItemId === activeItemId}
+              />
             ))}
           </AnimatePresence>
 
@@ -275,6 +291,13 @@ export default function OrgBriefing({
   onLensChange,
 }) {
   const reduce = useReducedMotion()
+  // The org item Penny is narrating (keyed by orgItemId) — gold-ring the match.
+  const [activeItemId, setActiveItemId] = useState(null)
+  useEffect(() => {
+    const onActive = (e) => setActiveItemId(e?.detail?.itemId ?? null)
+    window.addEventListener('penny:narrate-active', onActive)
+    return () => window.removeEventListener('penny:narrate-active', onActive)
+  }, [])
 
   if (loading) {
     return (
@@ -407,6 +430,7 @@ export default function OrgBriefing({
                 lane={lane}
                 items={items.filter((it) => (it.severity ?? 'info') === lane.key)}
                 reduce={reduce}
+                activeItemId={activeItemId}
               />
             ))}
           </div>

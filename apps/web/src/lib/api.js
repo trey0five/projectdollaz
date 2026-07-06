@@ -329,6 +329,14 @@ export const analyticsApi = {
         ...(lens ? { lens } : {}),
       },
     }),
+  // ORG BRIEFING NARRATION ("Penny narrates the briefing"): server-composed,
+  // value-validated spoken/written morning brief over the org attention list.
+  // POST (may trigger an LLM compose); body is a NarrateOrgBriefingDto
+  // { fiscalYearStart?, lens?, dayPart?, regenerate? } — omit absent fields so the
+  // global forbidNonWhitelisted pipe doesn't 400. Sits beside orgBriefing (same
+  // JwtAuth-only org route family).
+  narrateOrgBriefing: (orgId, body) =>
+    api.post(`/organizations/${orgId}/briefing-narration`, body),
   // ── Phase 4C: per-school dashboard layout (owner customizes; all roles read) ──
   dashboard: (schoolId) => api.get(`/schools/${schoolId}/dashboard`),
   saveDashboard: (schoolId, body) => api.put(`/schools/${schoolId}/dashboard`, body),
@@ -542,6 +550,13 @@ export const alertsApi = {
 // ── AI assistant (agentic, tool-calling) ─────────────────────────────────────
 export const assistantApi = {
   chat: (schoolId, body) => api.post(`/schools/${schoolId}/assistant/chat`, body),
+  // BRIEFING NARRATION ("Penny narrates the briefing"): server-composed, value-
+  // validated spoken/written morning brief over the school attention list. POST
+  // (may trigger an LLM compose); body is a NarrateBriefingDto
+  // { periodId?, lens?, dayPart?, regenerate? } — omit absent fields so the global
+  // forbidNonWhitelisted pipe doesn't 400. Same guard chain as chat/tts.
+  narrateBriefing: (schoolId, body) =>
+    api.post(`/schools/${schoolId}/assistant/briefing-narration`, body),
   // Apply a user-confirmed proposal (write — owner/accountant).
   apply: (schoolId, action) => api.post(`/schools/${schoolId}/assistant/apply`, action),
   // Penny action log: the recent changes she made (owner/accountant).

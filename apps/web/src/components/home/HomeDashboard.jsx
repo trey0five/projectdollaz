@@ -26,6 +26,7 @@ import OrgHome from './OrgHome.jsx'
 import HomeHero from './HomeHero.jsx'
 import HomeCommandCenter from './HomeCommandCenter.jsx'
 import HomeBriefing from './HomeBriefing.jsx'
+import PennyMorningBrief from './PennyMorningBrief.jsx'
 import HomeVitals from './HomeVitals.jsx'
 import FeatureGateway from './FeatureGateway.jsx'
 import RecentPeriods from './RecentPeriods.jsx'
@@ -335,6 +336,15 @@ export default function HomeDashboard() {
 
       {/* Triage board — the vitals/Explore sit above it, mirroring the org view. */}
       <SectionDivider />
+
+      {/* Penny narrates the briefing — the spoken/written morning brief, directly
+          above the triage board it introduces. */}
+      <PennyMorningBrief
+        scope="school"
+        schoolId={schoolId}
+        periodId={selectedPeriodId}
+        lens={briefingLens}
+      />
 
       <HomeBriefing
         items={briefingItems}

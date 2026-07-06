@@ -28,6 +28,7 @@ import OrgRollup from '../components/budget/OrgRollup.jsx'
 import OrgStatements from '../components/budget/OrgStatements.jsx'
 import OrgKpiStrip from '../components/budget/OrgKpiStrip.jsx'
 import OrgBriefing from '../components/budget/OrgBriefing.jsx'
+import PennyMorningBrief from '../components/home/PennyMorningBrief.jsx'
 import BudgetVsActual from '../components/analytics/BudgetVsActual.jsx'
 import BudgetSummary from '../components/budget/BudgetSummary.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
@@ -296,7 +297,15 @@ export default function BudgetPage() {
   )
 
   const renderOrgBriefing = () => (
-    <div key="orgBriefing">
+    <div key="orgBriefing" className="space-y-5">
+      {/* Penny narrates the org briefing — the spoken/written cross-school morning
+          brief, above the org triage board. */}
+      <PennyMorningBrief
+        scope="org"
+        orgId={orgId}
+        fiscalYearStart={fiscalYearStart}
+        lens={orgBriefingLens}
+      />
       <OrgBriefing
         briefing={orgBriefing}
         loading={orgBriefingLoading}

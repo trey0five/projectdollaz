@@ -37,16 +37,28 @@ export function CountUp({ value, duration = 700, className }) {
 // Figures worth popping: $1,234.56 · 86.6% · 1,234 · 43 (word-bounded).
 const FIGURE_RE = /(\$[\d,]+(?:\.\d+)?|\d[\d,]*(?:\.\d+)?%|\b\d[\d,]*(?:\.\d+)?\b)/g
 
-/** The item's "why" prose with every figure set in semibold deep gold, so the
- *  numbers read at a glance instead of drowning in the sentence. */
-export function WhyText({ text }) {
+// Figure colour per surface tone. Light surfaces (the triage cards) use the deep
+// gold that reads on cream/white; the `dark` tone is for the navy narration hero,
+// where a lighter, glowing gold pops against the deep-navy glass. Same FIGURE_RE —
+// only the highlight colour changes (additive tone, not a second grammar).
+const FIGURE_TONE = {
+  light: 'font-semibold tabular-nums text-[#7a5e00]',
+  dark: 'font-semibold tabular-nums text-gold-light drop-shadow-[0_0_10px_rgba(212,180,122,0.45)]',
+}
+
+/** The item's "why" prose with every figure set in semibold gold, so the numbers
+ *  read at a glance instead of drowning in the sentence. `tone` picks the highlight
+ *  colour for the surface: 'light' (default, cream/white cards) or 'dark' (the navy
+ *  narration hero). */
+export function WhyText({ text, tone = 'light' }) {
   if (!text) return null
   const parts = String(text).split(FIGURE_RE)
+  const figureClass = FIGURE_TONE[tone] ?? FIGURE_TONE.light
   return (
     <>
       {parts.map((part, i) =>
         i % 2 === 1 ? (
-          <span key={i} className="font-semibold tabular-nums text-[#7a5e00]">
+          <span key={i} className={figureClass}>
             {part}
           </span>
         ) : (
