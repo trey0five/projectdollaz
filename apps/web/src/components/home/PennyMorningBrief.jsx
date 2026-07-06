@@ -104,6 +104,28 @@ function SegmentText({ text }) {
   )
 }
 
+// Org attribution reads as a consistent leading chip per point, so the school is
+// stripped from the DISPLAYED sentence to avoid saying it twice. Only the common
+// lead-ins are handled; anything else is left intact (graceful). The spoken brief
+// still uses the full segment text — the school is always heard.
+function capitalizeFirst(s) {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s
+}
+function stripLeadingSchool(text, name) {
+  if (!name) return text
+  const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const patterns = [
+    new RegExp(`^\\s*at\\s+${esc}\\s*[,:]\\s*`, 'i'), // "At {name}, " / "At {name}: "
+    new RegExp(`^\\s*${esc}['’]s\\s+`, 'i'), // "{name}'s "
+    new RegExp(`^\\s*${esc}\\s+(?=(?:has|is|now|also|reports?|shows?|carries)\\b)`, 'i'), // "{name} has/is …"
+  ]
+  for (const re of patterns) {
+    const t = text.replace(re, '')
+    if (t !== text) return capitalizeFirst(t)
+  }
+  return text
+}
+
 export default function PennyMorningBrief({
   scope = 'school',
   schoolId = null,
@@ -289,6 +311,8 @@ export default function PennyMorningBrief({
         <div className="space-y-2.5">
           {segments.map((seg, i) => {
             const isItem = seg.kind === 'item'
+            const orgSchool = isItem && scope === 'org' ? seg.schoolName : null
+            const displayText = orgSchool ? stripLeadingSchool(seg.text, orgSchool) : seg.text
             const active = player.playing && player.activeIndex === i
             const dimmed = player.playing && player.activeIndex !== i
             const rowBase =
@@ -328,23 +352,19 @@ export default function PennyMorningBrief({
                     />
                   )}
                   <div className="min-w-0 flex-1">
-                    <SegmentText text={seg.text} />
-                    {isItem && (
-                      <span className="ml-1.5 inline-flex translate-y-[1px] items-center gap-1 align-middle text-gold-light opacity-0 transition-opacity group-hover:opacity-100">
-                        {scope === 'org' && seg.schoolName && (
-                          <span className="mr-1 inline-flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-white/80">
-                            <Building2 size={10} />
-                            {seg.schoolName}
-                          </span>
-                        )}
-                        <ArrowUpRight size={13} />
+                    {/* Org: one consistent leading school chip per point, so
+                        attribution reads the same on every row instead of trailing
+                        at a ragged wrap position. */}
+                    {orgSchool && (
+                      <span className="mb-1 flex w-fit max-w-full items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.07em] text-gold-light/90 ring-1 ring-white/10">
+                        <Building2 size={10} className="shrink-0" />
+                        <span className="truncate">{orgSchool}</span>
                       </span>
                     )}
-                    {/* Persistent school chip for org rows (also visible when not hovering). */}
-                    {isItem && scope === 'org' && seg.schoolName && (
-                      <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 align-middle text-[10.5px] font-semibold uppercase tracking-[0.06em] text-white/70 group-hover:hidden">
-                        <Building2 size={10} />
-                        {seg.schoolName}
+                    <SegmentText text={displayText} />
+                    {isItem && (
+                      <span className="ml-1.5 inline-flex translate-y-[1px] items-center align-middle text-gold-light opacity-0 transition-opacity group-hover:opacity-100">
+                        <ArrowUpRight size={13} />
                       </span>
                     )}
                   </div>
