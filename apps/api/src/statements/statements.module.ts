@@ -7,6 +7,7 @@ import { BillingModule } from '../billing/billing.module.js'
 import { ComplianceModule } from '../compliance/compliance.module.js'
 import { StatementsController } from './statements.controller.js'
 import { StatementsService } from './statements.service.js'
+import { SnapshotHistoryService } from './snapshot-history.service.js'
 
 /**
  * Server-side canonical generate + persist. Reuses PeriodsService (tenant-checked
@@ -16,7 +17,7 @@ import { StatementsService } from './statements.service.js'
 @Module({
   imports: [AuthModule, AuditModule, PeriodsModule, MappingModule, BillingModule, ComplianceModule],
   controllers: [StatementsController],
-  providers: [StatementsService],
-  exports: [StatementsService],
+  providers: [StatementsService, SnapshotHistoryService],
+  exports: [StatementsService, SnapshotHistoryService],
 })
 export class StatementsModule {}

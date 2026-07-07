@@ -82,7 +82,8 @@ function makeService(opts?: {
     stub, // alerts
     schools as never, // schools (LAST)
     undefined as never, // qboDrill — only get_account_transactions touches it
-    undefined as never, // aging (LAST) — only get_cash_collections touches it
+    undefined as never, // aging — only get_cash_collections touches it
+    undefined as never, // snapshotHistory (LAST) — only get_value_history touches it
   )
   return { svc, createInvitation, revokeInvitation, prisma }
 }

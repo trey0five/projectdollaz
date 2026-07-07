@@ -936,7 +936,7 @@ export class OrgQboCompanyService {
           }
           const plugged = applyBalancePlug(built.rows)
           await this.mergeEntriesBestEffort(p.schoolId, built.plEntries)
-          await this.imports.create(user, p.schoolId, {
+          const cyImp = await this.imports.create(user, p.schoolId, {
             role: 'cy',
             periodEndDate: p.period!.endISO,
             periodType: p.period!.periodType,
@@ -945,7 +945,10 @@ export class OrgQboCompanyService {
             rows: plugged.rows,
             metadata: this.importMetadata(conn, p, plugged.balancePlug),
           })
-          await this.statements.generate(user, p.schoolId, p.period!.id, {})
+          await this.statements.generate(user, p.schoolId, p.period!.id, {}, {
+            trigger: 'quickbooks_sync',
+            sourceImportId: cyImp.id,
+          })
           // Same action as a direct sync (keeps every lastSyncedAt surface
           // working) with via:'org' so the school status can tell them apart.
           await this.audit.write({
@@ -994,7 +997,7 @@ export class OrgQboCompanyService {
           }
           const plugged = applyBalancePlug(built.rows)
           await this.mergeEntriesBestEffort(p.schoolId, built.plEntries)
-          await this.imports.create(user, p.schoolId, {
+          const pyImp = await this.imports.create(user, p.schoolId, {
             role: 'py',
             periodEndDate: p.period!.endISO,
             periodType: p.period!.periodType,
@@ -1003,7 +1006,10 @@ export class OrgQboCompanyService {
             rows: plugged.rows,
             metadata: this.importMetadata(conn, p, plugged.balancePlug),
           })
-          await this.statements.generate(user, p.schoolId, p.period!.id, {})
+          await this.statements.generate(user, p.schoolId, p.period!.id, {}, {
+            trigger: 'quickbooks_sync',
+            sourceImportId: pyImp.id,
+          })
           p.scope.priorYear = {
             ok: true,
             rowCount: plugged.rows.length,

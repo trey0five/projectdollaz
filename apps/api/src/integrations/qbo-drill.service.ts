@@ -20,6 +20,11 @@ import { QboService } from './qbo.service.js'
 import { QboClient, metaList } from './qbo.client.js'
 import { buildAccountLinkage, type AccountLinkage } from './qbo-drill.linkage.js'
 import { buildDeepLink, parseGeneralLedger, type GlTxn, type QboEnvironment } from './qbo-gl.js'
+import {
+  lineageMapFor,
+  type LineageEntry,
+  type SnapshotLineage,
+} from '../statements/snapshot-lineage.util.js'
 
 // ── Response contract (web + Penny build against this) ────────────────────────
 export type DrillReason =
@@ -89,27 +94,8 @@ interface CacheEntry {
   expires: number
 }
 
-// ── Stored-snapshot shapes (only what we read) ────────────────────────────────
-interface LineageEntry {
-  line: string
-  value: number
-  sign: 1 | -1
-  sources: Array<{ acct: number; desc?: string | null; total?: number }>
-}
-type LineageMap = Record<string, LineageEntry>
-interface SnapshotLineage {
-  soa?: { cy?: LineageMap | null; py?: LineageMap | null; audit?: LineageMap | null }
-  sfp?: { cy?: LineageMap | null; py?: LineageMap | null; audit?: LineageMap | null }
-  scf?: LineageMap | null
-  netAssets?: LineageMap | null
-}
-
-const STMT_KEY: Record<string, keyof SnapshotLineage> = {
-  SOA: 'soa',
-  SFP: 'sfp',
-  SCF: 'scf',
-  NetAssets: 'netAssets',
-}
+// Stored-snapshot lineage shapes + the variant-shaped walker (STMT_KEY, lineageMapFor)
+// now live in ../statements/snapshot-lineage.util.ts — shared with SnapshotHistoryService.
 
 /** Shift an ISO 'YYYY-MM-DD' by whole years (period-ends are month-ends → day stable). */
 function shiftYears(iso: string, delta: number): string {
@@ -293,20 +279,6 @@ export class QboDrillService {
     return payload?.lineage ?? null
   }
 
-  /** The variant-shaped lineage map for a statement (scf/netAssets ignore variant). */
-  private lineageMap(
-    lineage: SnapshotLineage,
-    statement: string,
-    variant: 'cy' | 'py' | 'audit',
-  ): LineageMap | null {
-    const key = STMT_KEY[statement]
-    if (!key) return null
-    const node = lineage[key]
-    if (!node) return null
-    if (key === 'scf' || key === 'netAssets') return node as LineageMap
-    return (node as Record<'cy' | 'py' | 'audit', LineageMap | null | undefined>)[variant] ?? null
-  }
-
   private async resolveStatementLine(
     schoolId: string,
     periodId: string,
@@ -322,7 +294,7 @@ export class QboDrillService {
       isBalance: statement === 'SFP',
     }
     if (!lineage) return { ...empty, reason: 'no-snapshot' }
-    const map = this.lineageMap(lineage, statement, variant)
+    const map = lineageMapFor(lineage, statement, variant)
     if (!map) return { ...empty, reason: 'no-snapshot' }
     const entry = map[lineKey]
     if (!entry) return { ...empty, reason: 'no-account-map' }
@@ -363,8 +335,8 @@ export class QboDrillService {
     const hasOperational = (def.inputs ?? []).some((i) => i.source === 'operational')
 
     // Which financial inputs resolve to a drillable line (non-empty sources)?
-    const soa = this.lineageMap(lineage, 'SOA', variant)
-    const sfp = this.lineageMap(lineage, 'SFP', variant)
+    const soa = lineageMapFor(lineage, 'SOA', variant)
+    const sfp = lineageMapFor(lineage, 'SFP', variant)
     const findLine = (key: string): { statement: 'SOA' | 'SFP'; entry: LineageEntry } | null => {
       if (soa?.[key]?.sources?.length) return { statement: 'SOA', entry: soa[key] }
       if (sfp?.[key]?.sources?.length) return { statement: 'SFP', entry: sfp[key] }

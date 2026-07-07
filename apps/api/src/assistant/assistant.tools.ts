@@ -996,6 +996,38 @@ export const TOOL_SCHEMAS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'get_value_history',
+      description:
+        'How a computed figure CHANGED over time — answers "how did this number move?" / "who changed it?". ' +
+        'Give a metricKey (e.g. tuition_dependency — works for ratios too) OR a statement line ' +
+        "(statement SOA|SFP|SCF|NetAssets + lineKey like 'tuition'/'instructional', variant cy|py|audit). " +
+        "Returns each version of the value across the period's statement snapshots — its value, the signed change " +
+        'vs. the prior version, and WHAT caused it (Manual, File upload, QuickBooks sync, Scheduled sync, or ' +
+        'Category remap) plus who acted and when. Unchanged re-syncs are collapsed; `collapsed` counts them. ' +
+        'Complements get_account_transactions (what is IN a number). ' +
+        'State ONLY the figures this tool returns — never invent a value, a change, or an actor.',
+      parameters: {
+        type: 'object',
+        properties: {
+          periodId: { type: 'string', description: 'Fiscal period id; omit to use the current period.' },
+          metricKey: {
+            type: 'string',
+            description: 'A metric to track over time, e.g. tuition_dependency. Use this OR statement+lineKey.',
+          },
+          statement: { type: 'string', enum: ['SOA', 'SFP', 'SCF', 'NetAssets'] },
+          lineKey: {
+            type: 'string',
+            description: 'Statement line key, e.g. tuition, instructional, cash.',
+          },
+          variant: { type: 'string', enum: ['cy', 'py', 'audit'], description: 'Which column; defaults cy.' },
+        },
+        required: [],
+      },
+    },
+  },
 ]
 
 /** Status-line labels shown while a tool runs (present tense; agentic). */
@@ -1043,4 +1075,5 @@ export const TOOL_LABELS: Record<string, string> = {
   get_briefing: 'Reviewing what needs your attention…',
   get_account_transactions: 'Pulling the transactions behind that number…',
   get_cash_collections: 'Checking receivables & payables…',
+  get_value_history: 'Tracing how that number changed…',
 }

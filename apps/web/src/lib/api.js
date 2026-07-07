@@ -230,6 +230,14 @@ export const statementsApi = {
     api.get(`/schools/${schoolId}/periods/${periodId}/statements`),
   list: (schoolId, periodId) =>
     api.get(`/schools/${schoolId}/periods/${periodId}/statements/history`),
+  // ── Audit trail / value-versioning: "how did this number change?" ──────────
+  // POST the selection (`{ metricKey }` for a metric, or `{ statement, variant,
+  // lineKey }` for a statement line — precedence metricKey → statement+lineKey);
+  // the server walks the period's append-only StatementSnapshot chain and returns
+  // a ValueHistoryResult (sparkline + attributed, band-aware version list). Read-
+  // only (owner/accountant/viewer). Same axios instance → inherits Bearer/refresh.
+  valueHistory: (schoolId, periodId, sel) =>
+    api.post(`/schools/${schoolId}/periods/${periodId}/statements/value-history`, sel),
 }
 
 export const mappingApi = {

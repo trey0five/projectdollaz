@@ -42,6 +42,7 @@ import { ImportsService } from '../imports/imports.service.js'
 import { MonthlySnapshotsService } from '../monthly/monthly-snapshots.service.js'
 import { fyElapsed, MONTH_KEY_RE } from '../monthly/fy-elapsed.js'
 import { StatementsService } from '../statements/statements.service.js'
+import { SnapshotHistoryService } from '../statements/snapshot-history.service.js'
 import { TasksService } from '../workflow/tasks.service.js'
 import {
   DocumentsService,
@@ -572,6 +573,10 @@ export class AssistantService {
     // (after qboDrill) so existing positional-arg unit specs still construct; only that
     // one execute() case touches `this.aging`, so undefined elsewhere is safe.
     private readonly aging: QboAgingService,
+    // Audit trail / value-versioning — the read-only get_value_history tool. Added LAST
+    // (after aging) so existing positional-arg unit specs still construct; only that one
+    // execute() case touches `this.snapshotHistory`, so undefined elsewhere is safe.
+    private readonly snapshotHistory: SnapshotHistoryService,
   ) {}
 
   isConfigured(): boolean {
@@ -2646,9 +2651,13 @@ export class AssistantService {
       ...(metadata ? { metadata } : {}),
     })
     // The import create-or-got the canonical period — regenerate that period's
-    // snapshot so statements/analytics/budget reflect the new trial balance.
+    // snapshot so statements/analytics/budget reflect the new trial balance. Stamp the
+    // snapshot's provenance as an upload driven by this import (value-history attribution).
     try {
-      await this.statements.generate(user, schoolId, created.fiscalPeriodId, {})
+      await this.statements.generate(user, schoolId, created.fiscalPeriodId, {}, {
+        trigger: 'upload',
+        sourceImportId: created.id,
+      })
     } catch (e) {
       // A CY import is required to generate; a PY/audit-only import legitimately
       // can't yet. The import is stored regardless — don't fail the apply.
@@ -3049,6 +3058,58 @@ export class AssistantService {
             total: r.reconcile.total,
             ...(r.reconcile.note ? { note: r.reconcile.note } : {}),
           },
+        }
+      }
+      case 'get_value_history': {
+        // Read-only value-versioning: how a line/metric moved across the period's
+        // snapshot chain, each version attributed to its trigger + actor. All figures
+        // come from stored snapshots (value-safe). NOT in WRITE_TOOLS/CONFIRM_TOOLS (no
+        // ApplyActionDto/ProposedAction change). Compact projection under the char cap;
+        // Penny narrates ONLY these figures.
+        const pid = await this.resolvePeriod(args, ctx)
+        const statement =
+          args.statement === 'SOA' ||
+          args.statement === 'SFP' ||
+          args.statement === 'SCF' ||
+          args.statement === 'NetAssets'
+            ? args.statement
+            : undefined
+        const variant =
+          args.variant === 'cy' || args.variant === 'py' || args.variant === 'audit'
+            ? args.variant
+            : undefined
+        const lineKey = typeof args.lineKey === 'string' && args.lineKey ? args.lineKey : undefined
+        const metricKey = typeof args.metricKey === 'string' && args.metricKey ? args.metricKey : undefined
+        if (!metricKey && !(statement && lineKey)) {
+          return {
+            error: 'To trace how a number changed, give a metricKey, or a statement + lineKey.',
+          }
+        }
+        const h = await this.snapshotHistory.valueHistory(ctx.schoolId, pid, {
+          ...(statement ? { statement } : {}),
+          ...(variant ? { variant } : {}),
+          ...(lineKey ? { lineKey } : {}),
+          ...(metricKey ? { metricKey } : {}),
+        })
+        const VERSION_CAP = 12
+        return {
+          kind: h.kind,
+          label: h.label,
+          unit: h.unit,
+          latest: h.latest,
+          first: h.first,
+          netChange: h.netChange,
+          collapsed: h.collapsed,
+          // Newest→oldest, trimmed for chat. Penny quotes these verbatim.
+          versions: h.versions.slice(0, VERSION_CAP).map((v) => ({
+            at: v.at.slice(0, 10),
+            value: v.value,
+            ...(v.absent ? { absent: true } : {}),
+            delta: v.delta,
+            trigger: v.source.label,
+            ...(v.source.actorName ? { by: v.source.actorName } : {}),
+            ...(v.source.sourceName ? { source: v.source.sourceName } : {}),
+          })),
         }
       }
       case 'get_cash_collections': {

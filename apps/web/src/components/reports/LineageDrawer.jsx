@@ -24,6 +24,7 @@ import { X, FileText, RefreshCw, CheckCircle2, AlertTriangle, Link2, Receipt, Lo
 import { fmt, formatDate } from '../../lib/format.js'
 import { useQbDrill, DRILL_STATE_COPY } from '../../hooks/useQbDrill.js'
 import TransactionList from './TransactionList.jsx'
+import ValueHistory from './ValueHistory.jsx'
 
 // Map a statement id to the import role whose active version fed the column.
 const ROLE_BY_VARIANT = { cy: 'cy', py: 'py', audit: 'audit' }
@@ -300,6 +301,24 @@ export default function LineageDrawer({
                     </p>
                   )}
                 </div>
+              )}
+
+              {/* value history — "how this line changed" across the period's
+                  snapshot chain. NOT QBO-gated (upload history matters too):
+                  enabled whenever we can reach the API for this line. */}
+              {!!schoolId && !!periodId && !!selection?.lineKey && (
+                <ValueHistory
+                  schoolId={schoolId}
+                  periodId={periodId}
+                  enabled
+                  noun="line"
+                  swapKey={selKey}
+                  selection={{
+                    statement: selection.statement,
+                    variant: selection.variant,
+                    lineKey: selection.lineKey,
+                  }}
+                />
               )}
 
               {/* source provenance */}

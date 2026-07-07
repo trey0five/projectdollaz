@@ -4,6 +4,7 @@ import { X, Receipt, Loader2 } from 'lucide-react'
 import { useTrends } from '../../hooks/useAnalytics.js'
 import { useQbDrill, DRILL_STATE_COPY } from '../../hooks/useQbDrill.js'
 import TransactionList from '../reports/TransactionList.jsx'
+import ValueHistory from '../reports/ValueHistory.jsx'
 import AnimatedMetricValue from './AnimatedMetricValue.jsx'
 import DeltaChip from './DeltaChip.jsx'
 import StatusChip from './StatusChip.jsx'
@@ -375,6 +376,21 @@ export default function MetricDrawer({ schoolId, metric, open, onClose, periodId
                     </p>
                   )}
                 </div>
+              )}
+
+              {/* value history — "how this metric changed" across the period's
+                  snapshot chain (a ratio the drill can't trace still has a value
+                  timeline). Enabled whenever we can reach the API for this metric. */}
+              {!!schoolId && !!periodId && !!metric.key && (
+                <ValueHistory
+                  schoolId={schoolId}
+                  periodId={periodId}
+                  enabled
+                  noun="metric"
+                  swapKey={metricKey}
+                  goodDirection={metric.goodDirection}
+                  selection={{ metricKey: metric.key }}
+                />
               )}
 
               {/* trend */}

@@ -12,6 +12,7 @@ import { PrismaService } from '../prisma/prisma.service.js'
 import { PeriodsService } from '../periods/periods.service.js'
 import { ImportsService } from '../imports/imports.service.js'
 import { StatementsService } from '../statements/statements.service.js'
+import type { SnapshotTrigger } from '../statements/snapshot-trigger.js'
 import { AuditService } from '../common/audit/audit.service.js'
 import { BillingService } from '../billing/billing.service.js'
 import { MonthlySnapshotsService } from '../monthly/monthly-snapshots.service.js'
@@ -678,7 +679,7 @@ export class QboService {
 
       // Entitled → the current-FY base period, then the SAME path sync() uses.
       const base = await this.resolveBasePeriod(schoolId)
-      const { rowCount } = await this.syncOnePeriod(actor, schoolId, conn, base.id)
+      const { rowCount } = await this.syncOnePeriod(actor, schoolId, conn, base.id, 'scheduled_sync')
       await this.captureAging(schoolId, conn) // best-effort, as-of today; never aborts
       return { status: 'synced', rowCount }
     } catch (e) {
@@ -727,6 +728,11 @@ export class QboService {
     schoolId: string,
     conn: QboConnection,
     periodId: string,
+    // Provenance trigger for the generated snapshot. The manual `sync()` path leaves
+    // the default; `runScheduledSync` passes 'scheduled_sync' so a nightly run is
+    // distinguishable from a hand-clicked one (correlation can't tell them apart —
+    // both write the same 'qbo.synced' audit row).
+    trigger: SnapshotTrigger = 'quickbooks_sync',
   ): Promise<{ snapshot: Awaited<ReturnType<StatementsService['generate']>>; rowCount: number; label: string }> {
     const period = await this.periods.getOwnedPeriod(schoolId, periodId)
     const endDate = period.periodEndDate.toISOString().slice(0, 10)
@@ -736,7 +742,7 @@ export class QboService {
       throw new BadRequestException('QuickBooks has no trial-balance data for this period.')
     }
 
-    await this.imports.create(actor, schoolId, {
+    const imp = await this.imports.create(actor, schoolId, {
       role: 'cy',
       periodEndDate: endDate,
       periodType: period.periodType,
@@ -746,7 +752,10 @@ export class QboService {
       metadata: { source: 'quickbooks', realmId: conn.realmId },
     })
 
-    const snapshot = await this.statements.generate(actor, schoolId, periodId, {})
+    const snapshot = await this.statements.generate(actor, schoolId, periodId, {}, {
+      trigger,
+      sourceImportId: imp.id,
+    })
 
     await this.audit.write({
       schoolId,
@@ -795,7 +804,7 @@ export class QboService {
         if (rows.length === 0 || !hasBalances(rows)) {
           throw new BadRequestException('QuickBooks has no prior-year trial-balance data.')
         }
-        await this.imports.create(actor, schoolId, {
+        const pyImp = await this.imports.create(actor, schoolId, {
           role: 'py',
           periodEndDate: endDate,
           periodType: period.periodType,
@@ -804,7 +813,10 @@ export class QboService {
           rows,
           metadata: { source: 'quickbooks', realmId: conn.realmId },
         })
-        await this.statements.generate(actor, schoolId, dto.periodId, {})
+        await this.statements.generate(actor, schoolId, dto.periodId, {}, {
+          trigger: 'quickbooks_sync',
+          sourceImportId: pyImp.id,
+        })
         result.priorYear = { ok: true, rowCount: rows.length }
       } catch (e) {
         result.priorYear = { ok: false, error: msg(e) }
@@ -870,7 +882,10 @@ export class QboService {
             rows,
             metadata: { source: 'quickbooks', realmId: conn.realmId },
           })
-          await this.statements.generate(actor, schoolId, imp.fiscalPeriodId, {})
+          await this.statements.generate(actor, schoolId, imp.fiscalPeriodId, {}, {
+            trigger: 'quickbooks_sync',
+            sourceImportId: imp.id,
+          })
           await this.audit.write({
             schoolId,
             userId: actor.id,
@@ -1052,7 +1067,9 @@ export class QboService {
       })
       if (cyCount === 0) continue
       try {
-        await this.statements.generate(actor, schoolId, periodId, {})
+        // A category remap regenerates from the SAME imports — no new Import row, so
+        // correlation would have nothing to latch onto. Stamp it as the reclass it is.
+        await this.statements.generate(actor, schoolId, periodId, {}, { trigger: 'remap' })
         statements.rebuilt++
       } catch {
         statements.failed.push(periodId)

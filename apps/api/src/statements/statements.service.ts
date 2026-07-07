@@ -29,6 +29,17 @@ import {
   type ResolverPeriod,
 } from './comparative-resolver.js'
 import type { GenerateStatementDto } from './dto/generate-statement.dto.js'
+import type { SnapshotTrigger } from './snapshot-trigger.js'
+
+/**
+ * Provenance stamp for a generated snapshot (audit trail / value-versioning). Written
+ * by generate() into the snapshot's soft-ref columns. Omitted → treated as a human
+ * 'manual' generate (no caller touched unless it knows the real trigger).
+ */
+export interface SnapshotProvenance {
+  trigger: SnapshotTrigger
+  sourceImportId?: string | null
+}
 
 export interface SnapshotPublic {
   id: string
@@ -148,6 +159,7 @@ export class StatementsService {
     schoolId: string,
     periodId: string,
     dto: GenerateStatementDto,
+    prov?: SnapshotProvenance,
   ): Promise<SnapshotPublic> {
     const period: FiscalPeriod = await this.periods.getOwnedPeriod(schoolId, periodId)
 
@@ -196,6 +208,11 @@ export class StatementsService {
         standardChartVersion: chartVersion.version,
         engineVersion: ENGINE_VERSION,
         payload: bundle as unknown as Prisma.InputJsonValue,
+        // Provenance stamp — what caused this version + who acted. Legacy/omitted →
+        // 'manual' (the human Generate button). actor is always the acting user.
+        trigger: prov?.trigger ?? 'manual',
+        sourceImportId: prov?.sourceImportId ?? null,
+        triggeredByUserId: actor.id,
       },
     })
 

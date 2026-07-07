@@ -353,6 +353,13 @@ model StatementSnapshot {
   payload              Json     @db.JsonB // ReportBundle from @finrep/engine
   createdAt            DateTime @default(now()) @map("created_at")
 
+  // Provenance stamp (audit trail / value-versioning). All nullable, no FK/relation
+  // (soft refs) — legacy rows are null and fall through to read-time correlation.
+  // trigger ∈ manual|upload|quickbooks_sync|scheduled_sync|remap (SnapshotTrigger).
+  trigger              String?  @map("trigger")
+  sourceImportId       String?  @map("source_import_id")
+  triggeredByUserId    String?  @map("triggered_by_user_id")
+
   school       School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   fiscalPeriod FiscalPeriod @relation(fields: [fiscalPeriodId], references: [id], onDelete: Cascade)
 
