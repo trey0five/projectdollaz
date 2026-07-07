@@ -15,6 +15,7 @@ import { QboOrgService } from './qbo-org.service.js'
 import { OrgQboCompanyService } from './qbo-company.service.js'
 import { QboDrillService } from './qbo-drill.service.js'
 import { QboAgingService } from './qbo-aging.service.js'
+import { OrgQboTokenService } from './qbo-org-token.service.js'
 import { QboCashFlowService } from './qbo-cashflow.service.js'
 import { QboSyncSchedulerService } from './qbo-sync-scheduler.service.js'
 import { QboClient } from './qbo.client.js'
@@ -42,6 +43,7 @@ import { QboClient } from './qbo.client.js'
     OrgQboCompanyService,
     QboDrillService,
     QboAgingService,
+    OrgQboTokenService,
     QboCashFlowService,
     QboSyncSchedulerService,
     QboClient,
@@ -53,6 +55,9 @@ import { QboClient } from './qbo.client.js'
   // directly via Prisma — the module rule that keeps AnalyticsModule off IntegrationsModule).
   // QboCashFlowService is exported for the same reason (the /cash cashflow route + Penny's
   // get_cash_flow tool share the one orchestrator; the briefing reads its snapshot via Prisma).
-  exports: [QboService, QboDrillService, QboAgingService, QboCashFlowService],
+  // OrgQboTokenService is exported so QboAgingService can resolve it via ModuleRef
+  // (lazy, cycle-safe) and any future org-fed consumer can reuse the one org-token
+  // accessor. It's a LEAF (Prisma + QboClient only) so exporting adds no graph risk.
+  exports: [QboService, QboDrillService, QboAgingService, OrgQboTokenService, QboCashFlowService],
 })
 export class IntegrationsModule {}

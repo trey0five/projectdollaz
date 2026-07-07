@@ -26,6 +26,11 @@ export interface GlTxn {
   acctId: string | null
   /** Account display name (from the section header or the account_name column). */
   acctName: string
+  /** Location/Department/Class name when the report carried a dimension column
+   *  (Topology B org pulls may request it); null otherwise. Additive — the drill's
+   *  server-side filter is account-based (Branch A `&department=` does the slicing),
+   *  so existing consumers ignore this field. */
+  dept: string | null
 }
 
 // ── QBO report JSON shapes (only the fields we read; everything else ignored) ──
@@ -60,6 +65,8 @@ interface ColIndex {
   memo: number
   amount: number
   account: number
+  /** Location/Department/Class column (dept_name/klass_name); -1 when absent. */
+  dept: number
 }
 
 /**
@@ -70,7 +77,7 @@ interface ColIndex {
  * column the report omitted, which the row reader treats as "absent".
  */
 function buildColIndex(cols: QboReportColumn[]): ColIndex {
-  const idx: ColIndex = { date: -1, type: -1, docNumber: -1, payee: -1, memo: -1, amount: -1, account: -1 }
+  const idx: ColIndex = { date: -1, type: -1, docNumber: -1, payee: -1, memo: -1, amount: -1, account: -1, dept: -1 }
   cols.forEach((c, i) => {
     const t = (c.ColType ?? '').toLowerCase()
     const title = (c.ColTitle ?? '').toLowerCase()
@@ -83,6 +90,7 @@ function buildColIndex(cols: QboReportColumn[]): ColIndex {
     else if (idx.memo < 0 && is(['memo', 'memo_description'], ['memo', 'description'])) idx.memo = i
     else if (idx.amount < 0 && is(['subt_nat_amount', 'amount'], ['amount'])) idx.amount = i
     else if (idx.account < 0 && is(['account_name', 'account'], ['account'])) idx.account = i
+    else if (idx.dept < 0 && is(['dept_name', 'klass_name'], ['location', 'department', 'class'])) idx.dept = i
   })
   return idx
 }
@@ -148,6 +156,7 @@ export function parseGeneralLedger(raw: unknown): GlTxn[] {
             amount: money(amountRaw),
             acctId: rowAcctName ? null : nextId,
             acctName: rowAcctName ?? nextName,
+            dept: cell(row.ColData, idx.dept),
           })
         }
       }
@@ -189,6 +198,7 @@ export function parseTransactionList(raw: unknown): GlTxn[] {
             amount: money(amountRaw),
             acctId: null,
             acctName,
+            dept: cell(row.ColData, idx.dept),
           })
         }
       }

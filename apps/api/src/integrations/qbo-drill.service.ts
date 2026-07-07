@@ -17,6 +17,7 @@ import { getMetric, isMetricKey } from '@finrep/analytics'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { PeriodsService } from '../periods/periods.service.js'
 import { QboService } from './qbo.service.js'
+import { OrgQboTokenService } from './qbo-org-token.service.js'
 import { QboClient, metaList } from './qbo.client.js'
 import { buildAccountLinkage, type AccountLinkage } from './qbo-drill.linkage.js'
 import { buildDeepLink, parseGeneralLedger, type GlTxn, type QboEnvironment } from './qbo-gl.js'
@@ -136,6 +137,9 @@ export class QboDrillService {
     private readonly periods: PeriodsService,
     private readonly qbo: QboService,
     private readonly client: QboClient,
+    // OrgQboTokenService is a LEAF (Prisma + QboClient); the drill has NO mutual
+    // dependency with it, so plain constructor injection is boot-safe (one-directional).
+    private readonly orgToken: OrgQboTokenService,
   ) {}
 
   /**
@@ -176,35 +180,51 @@ export class QboDrillService {
       return this.nonDrillable(resolved, window, this.emptySource())
     }
 
-    // QBO connection (token via the existing accessor). None → not-connected /
-    // org-fed → unsupported-topology-b.
+    // Resolve the QBO realm + token to drill against. Precedence: the school's OWN
+    // direct connection (Topology A) wins; otherwise the org company (Topology B,
+    // diocesan) filtered to the school's mapped Location(s). A school with neither is
+    // not-connected; an org-fed school mapped ONLY to "Not Specified" (no real
+    // dimension id to `&department=`-filter by) stays unsupported-topology-b.
     const connection = await this.qbo.connectionForSchool(schoolId)
-    if (!connection) {
-      const orgFed = await this.isOrgFed(schoolId)
-      return this.nonDrillable(
-        { ...resolved, reason: orgFed ? 'unsupported-topology-b' : 'not-connected' },
-        window,
-        null,
-      )
-    }
-    const { conn, token } = connection
-    const env = (conn.environment === 'production' ? 'production' : 'sandbox') as QboEnvironment
-    const source = {
-      realmId: conn.realmId,
-      environment: env,
-      companyName: conn.companyName ?? null,
-      topology: 'school' as const,
+    let realmId: string
+    let token: string
+    let env: QboEnvironment
+    let source: QbDrillResult['source']
+    let deptIds: string[] | null = null
+    if (connection) {
+      const { conn } = connection
+      token = connection.token
+      realmId = conn.realmId
+      env = (conn.environment === 'production' ? 'production' : 'sandbox') as QboEnvironment
+      source = { realmId, environment: env, companyName: conn.companyName ?? null, topology: 'school' }
+    } else {
+      const org = await this.orgToken.forSchool(schoolId).catch(() => null)
+      if (!org) {
+        return this.nonDrillable({ ...resolved, reason: 'not-connected' }, window, null)
+      }
+      if (org.filterableQboIds.length === 0) {
+        // Real org connection but only "__unspecified__" mapped — no id to filter by.
+        return this.nonDrillable({ ...resolved, reason: 'unsupported-topology-b' }, window, null)
+      }
+      token = org.token
+      realmId = org.conn.realmId
+      env = org.env
+      deptIds = org.filterableQboIds
+      source = { realmId, environment: env, companyName: org.conn.companyName ?? null, topology: 'org' }
     }
 
     // QBO-source gate: the period's active import for this variant must be QBO-sourced.
+    // (Org imports stamp metadata.source:'quickbooks' too, so org-fed periods pass.)
     if (!(await this.isQuickbooksSourced(schoolId, dto.periodId, variant))) {
       return this.nonDrillable(resolved, window, source, 'not-quickbooks')
     }
 
-    // Reverse-map engine accts → QBO account ids over a LIVE account pull.
+    // Reverse-map engine accts → QBO account ids over a LIVE account pull. For an
+    // org-fed school this pulls the ORG company's accounts — the same company the
+    // synthesized lineage was built from, so the reverse map lines up.
     let accounts: AccountLinkage[]
     try {
-      const meta = metaList(await this.client.accountMeta(conn.realmId, token))
+      const meta = metaList(await this.client.accountMeta(realmId, token))
       accounts = buildAccountLinkage(resolved.sources, meta)
     } catch (e) {
       this.logger.warn(`drill account-meta failed for ${schoolId}: ${errMsg(e)}`)
@@ -236,7 +256,7 @@ export class QboDrillService {
     }
     let rows: GlTxn[]
     try {
-      rows = await this.fetchGl(schoolId, dto.periodId, variant, basis, qboIds, conn.realmId, token, window)
+      rows = await this.fetchGl(schoolId, dto.periodId, variant, basis, qboIds, realmId, token, window, deptIds)
     } catch (e) {
       this.logger.warn(`drill GL fetch failed for ${schoolId}: ${errMsg(e)}`)
       return this.nonDrillable(resolved, window, source, 'not-connected')
@@ -390,24 +410,6 @@ export class QboDrillService {
     return count > 0
   }
 
-  /** True when this school has no own connection but IS mapped in its org's feed. */
-  private async isOrgFed(schoolId: string): Promise<boolean> {
-    try {
-      const school = await this.prisma.school.findUnique({ where: { id: schoolId } })
-      if (!school) return false
-      const orgConn = await this.prisma.orgQboConnection.findUnique({
-        where: { organizationId: school.organizationId },
-      })
-      if (!orgConn) return false
-      const rows = await this.prisma.orgQboMapping.count({
-        where: { connectionId: orgConn.id, dimension: orgConn.dimension, schoolId },
-      })
-      return rows > 0
-    } catch {
-      return false
-    }
-  }
-
   // ── GL fetch + cache ────────────────────────────────────────────────────────
   private async fetchGl(
     schoolId: string,
@@ -418,9 +420,14 @@ export class QboDrillService {
     realmId: string,
     token: string,
     window: { start: string; end: string },
+    deptIds: string[] | null,
   ): Promise<GlTxn[]> {
     const accountKey = [...qboIds].sort().join(',')
-    const key = `${schoolId}|${periodId}|${variant}|${basis}|${accountKey}`
+    // The dept slice MUST be in the cache key: an org-fed school pulls from the SAME
+    // realm as its siblings, so without the dept dimension School A could serve
+    // School B's cached rows.
+    const deptKey = deptIds && deptIds.length ? [...deptIds].sort().join(',') : ''
+    const key = `${schoolId}|${periodId}|${variant}|${basis}|${accountKey}|${deptKey}`
     const hit = this.cache.get(key)
     if (hit && hit.expires > Date.now()) {
       // Refresh recency (Map keeps insertion order → oldest first).
@@ -433,6 +440,7 @@ export class QboDrillService {
       startDate: window.start,
       endDate: window.end,
       basis,
+      ...(deptIds && deptIds.length ? { department: deptIds } : {}),
     })
     const txns = parseGeneralLedger(raw)
     this.store(key, txns)

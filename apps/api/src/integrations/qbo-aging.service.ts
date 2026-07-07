@@ -17,6 +17,7 @@ import { ModuleRef } from '@nestjs/core'
 import type { ReportBundle } from '@finrep/engine'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { QboService } from './qbo.service.js'
+import { OrgQboTokenService } from './qbo-org-token.service.js'
 import { QboClient } from './qbo.client.js'
 import type { QboEnvironment } from './qbo-gl.js'
 import {
@@ -33,6 +34,12 @@ import {
 
 const REGISTER_CAP = 25
 const TOP_N = 8
+
+// Soft honesty note for an org-fed (Topology B) school: its aging is the org
+// company's aged reports sliced to this school's Location(s) via `&department=`.
+// Invoices/bills booked at the org level (untagged) or across locations may not appear.
+const ORG_FED_AGING_NOTE =
+  "Aging reflects invoices/bills tagged to this school's location; interlocation and untagged items may not appear."
 
 // In-memory LRU + TTL (single API container — the drill-service pattern). refresh bypasses.
 const CACHE_MAX = 50
@@ -146,6 +153,14 @@ export class QboAgingService {
     return this.moduleRef.get(QboService, { strict: false })
   }
 
+  /** Lazily resolve the org-token accessor (Topology B). Resolved via ModuleRef — same
+   *  discipline as qboService() — so nothing new is materialized as a constructor
+   *  paramtype at class-eval time (boot-safety). OrgQboTokenService is a leaf, so this
+   *  never drags a heavy subgraph in either. */
+  private orgTokenService(): OrgQboTokenService {
+    return this.moduleRef.get(OrgQboTokenService, { strict: false })
+  }
+
   /** Today as an ISO 'YYYY-MM-DD' (UTC) — aging is always "as of now". */
   private today(): string {
     return new Date().toISOString().slice(0, 10)
@@ -160,8 +175,9 @@ export class QboAgingService {
   async getAging(schoolId: string, opts: { refresh?: boolean } = {}): Promise<AgingResponse> {
     const connection = await this.qboService().connectionForSchool(schoolId)
     if (!connection) {
-      const orgFed = await this.isOrgFed(schoolId)
-      return this.disconnected(orgFed)
+      // No direct connection — try the org company (Topology B, diocesan) sliced to
+      // this school's Location(s). Falls back to the honest disconnected/orgFed panel.
+      return this.orgFedAging(schoolId, opts)
     }
     const { conn, token } = connection
     const env: QboEnvironment = conn.environment === 'production' ? 'production' : 'sandbox'
@@ -193,6 +209,75 @@ export class QboAgingService {
     } catch (e) {
       this.logger.warn(`aging live pull failed for ${schoolId}: ${errMsg(e)}`)
       return this.staleFromStore(schoolId, env, conn.companyName ?? null)
+    }
+  }
+
+  /**
+   * Topology B (diocesan) aging: resolve the ORG company's token + this school's
+   * mapped Location(s) and pull the aged reports FILTERED to `&department=<ids>`
+   * (QBO honours this — live-probed). Flips connected:true ONLY when the filtered
+   * pull actually returned attributed items (never a wrong whole-company slice); a
+   * soft note explains that untagged/interlocation items may not appear. When the
+   * school maps only to "__unspecified__" (no id to filter by) or the slice is empty,
+   * keeps the honest orgFed panel. On a live failure, degrades to this school's last
+   * stored snapshot (never a throw).
+   */
+  private async orgFedAging(schoolId: string, opts: { refresh?: boolean }): Promise<AgingResponse> {
+    const org = await this.orgTokenService()
+      .forSchool(schoolId)
+      .catch(() => null)
+    // forSchool returns non-null IFF the school has an org connection + a mapping in
+    // the active dimension — so a non-null result IS the "org-fed" signal.
+    if (!org) return this.disconnected(false) // no org mapping → genuinely disconnected
+    if (org.filterableQboIds.length === 0) {
+      // Org-fed, but mapped ONLY to "__unspecified__" — no id to `&department=`-slice
+      // by. Keep the honest panel; never fabricate a whole-company slice.
+      return this.disconnected(true)
+    }
+    const env = org.env
+    const asOf = this.today()
+    try {
+      const pull = await this.pull(
+        schoolId,
+        org.conn.realmId,
+        org.token,
+        asOf,
+        env,
+        opts.refresh === true,
+        org.filterableQboIds,
+      )
+      // Honest gate: only "connected" when the department-filtered pull produced
+      // dimension-attributed items. An empty slice ⇒ this school's AR/AP isn't tagged
+      // to its Location — keep the panel rather than show a zeroed/wrong register.
+      if (pull.ar.length === 0 && pull.ap.length === 0) {
+        return this.disconnected(true)
+      }
+      const arRoll = rollupAging(pull.ar, TOP_N)
+      const apRoll = rollupAging(pull.ap, TOP_N)
+      const flows = await this.annualFlows(schoolId)
+      const response = this.assemble({
+        connected: true,
+        orgFed: true,
+        asOf,
+        stale: false,
+        source: pull.source,
+        env,
+        companyName: org.conn.companyName ?? null,
+        arRoll,
+        apRoll,
+        annualRevenue: flows?.revenue ?? null,
+        annualExpense: flows?.expense ?? null,
+      })
+      response.note = ORG_FED_AGING_NOTE
+      // Persist this school's OWN snapshot (keyed schoolId,asOfDate — the empty-guard
+      // protects a good prior snapshot; the dept-scoped cache prevents cross-school bleed).
+      await this.persist(schoolId, org.conn.realmId, env, asOf, 'page', response, arRoll, apRoll).catch((e) =>
+        this.logger.warn(`org-fed aging persist failed for ${schoolId}: ${errMsg(e)}`),
+      )
+      return response
+    } catch (e) {
+      this.logger.warn(`org-fed aging live pull failed for ${schoolId}: ${errMsg(e)}`)
+      return this.staleFromStore(schoolId, env, org.conn.companyName ?? null, true)
     }
   }
 
@@ -235,8 +320,12 @@ export class QboAgingService {
     asOf: string,
     env: QboEnvironment,
     refresh: boolean,
+    deptIds?: string[],
   ): Promise<PullResult> {
-    const key = `${schoolId}|${asOf}`
+    // The dept slice MUST be in the cache key: an org-fed school pulls from the SAME
+    // realm as its siblings, so without it School A could serve School B's cached rows.
+    const deptKey = deptIds && deptIds.length ? [...deptIds].sort().join(',') : ''
+    const key = `${schoolId}|${asOf}|${deptKey}`
     if (!refresh) {
       const hit = this.cache.get(key)
       if (hit && hit.expires > Date.now()) {
@@ -246,8 +335,8 @@ export class QboAgingService {
       }
     }
     const [ar, ap] = await Promise.all([
-      this.pullSide(realmId, token, asOf, 'ar', env),
-      this.pullSide(realmId, token, asOf, 'ap', env),
+      this.pullSide(realmId, token, asOf, 'ar', env, deptIds),
+      this.pullSide(realmId, token, asOf, 'ap', env, deptIds),
     ])
     // If BOTH sides fell back, stamp entity-fallback; else the primary detail source.
     const source: PullResult['source'] =
@@ -257,25 +346,39 @@ export class QboAgingService {
     return pull
   }
 
-  /** One side: the aging DETAIL report → parse; on parse-empty, the entity query. */
+  /**
+   * One side: the aging DETAIL report → parse; on parse-empty, the entity query.
+   * When `deptIds` is set (Topology B org pull) the detail report is `&department=`-
+   * sliced to this school's Location(s), and the entity fallback is SKIPPED — the
+   * open-invoice/bill entity query cannot be dimension-scoped, so falling back would
+   * return the WHOLE org company's AR/AP as this one school's slice (a wrong number).
+   * An empty org slice therefore returns [] (honest "no attributed items"); a failure
+   * throws so the caller degrades to the stored snapshot, never the whole-company set.
+   */
   private async pullSide(
     realmId: string,
     token: string,
     asOf: string,
     side: AgingSide,
     env: QboEnvironment,
+    deptIds?: string[],
   ): Promise<{ items: AgingItem[]; source: PullResult['source'] }> {
+    const deptOpts = deptIds && deptIds.length ? { department: deptIds } : undefined
     try {
       const raw =
         side === 'ar'
-          ? await this.client.getAgedReceivableDetail(realmId, token, asOf)
-          : await this.client.getAgedPayableDetail(realmId, token, asOf)
+          ? await this.client.getAgedReceivableDetail(realmId, token, asOf, deptOpts)
+          : await this.client.getAgedPayableDetail(realmId, token, asOf, deptOpts)
       const items = parseAgedDetail(raw, asOf, side, env)
       if (items.length > 0) return { items, source: 'aging-detail' }
     } catch (e) {
+      // Org (Topology B): never fall back to the non-dept-scoped entity query — propagate.
+      if (deptOpts) throw e
       this.logger.warn(`aged detail (${side}) failed, trying entity fallback: ${errMsg(e)}`)
     }
-    // Fallback — the entity query.
+    // Org: an empty department-filtered detail = no items tagged to this Location.
+    if (deptOpts) return { items: [], source: 'aging-detail' }
+    // Direct connection — fall back to the entity query.
     const rawEntities =
       side === 'ar'
         ? await this.client.queryOpenInvoices(realmId, token)
@@ -416,18 +519,24 @@ export class QboAgingService {
     })
   }
 
-  /** Return the last stored snapshot as a stale response (graceful degrade, no 500). */
+  /** Return the last stored snapshot as a stale response (graceful degrade, no 500).
+   *  `orgFed` carries through so an org-fed (Topology B) school with no stored
+   *  snapshot falls back to its honest panel instead of an empty "connected" register. */
   private async staleFromStore(
     schoolId: string,
     env: QboEnvironment,
     companyName: string | null,
+    orgFed = false,
   ): Promise<AgingResponse> {
     const row = await this.prisma.arApAgingSnapshot
       .findFirst({ where: { schoolId }, orderBy: { capturedAt: 'desc' } })
       .catch(() => null)
     if (!row) {
-      // Connected but never captured (and the live pull just failed) — connected:true,
-      // zeroed, with a soft note so the page can prompt a refresh instead of erroring.
+      // Org-fed with nothing captured and QBO unreachable — show the honest panel,
+      // not an empty "connected" register.
+      if (orgFed) return this.disconnected(true)
+      // Direct connection, never captured (and the live pull just failed) —
+      // connected:true, zeroed, with a soft note so the page can prompt a refresh.
       return {
         connected: true,
         orgFed: false,
@@ -447,7 +556,7 @@ export class QboAgingService {
     const apBuckets = (row.apBuckets ?? {}) as unknown as AgingBuckets
     return {
       connected: true,
-      orgFed: false,
+      orgFed,
       asOf,
       stale: true,
       source: (row.source as AgingResponse['source']) ?? null,
@@ -504,23 +613,6 @@ export class QboAgingService {
     }
   }
 
-  /** True when the school has no own connection but IS mapped in its org's QBO feed. */
-  private async isOrgFed(schoolId: string): Promise<boolean> {
-    try {
-      const school = await this.prisma.school.findUnique({ where: { id: schoolId } })
-      if (!school) return false
-      const orgConn = await this.prisma.orgQboConnection.findUnique({
-        where: { organizationId: school.organizationId },
-      })
-      if (!orgConn) return false
-      const rows = await this.prisma.orgQboMapping.count({
-        where: { connectionId: orgConn.id, dimension: orgConn.dimension, schoolId },
-      })
-      return rows > 0
-    } catch {
-      return false
-    }
-  }
 }
 
 function errMsg(e: unknown): string {

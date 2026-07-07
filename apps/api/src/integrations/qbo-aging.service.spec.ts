@@ -4,6 +4,7 @@
 // failure (last snapshot, never a throw), and not-connected.
 import { describe, expect, it } from 'vitest'
 import { QboAgingService } from './qbo-aging.service.js'
+import { OrgQboTokenService } from './qbo-org-token.service.js'
 
 const AS_OF_ROW = () => new Date()
 
@@ -45,10 +46,14 @@ interface Overrides {
   openBills?: unknown
   storedRow?: unknown
   snapshot?: unknown
+  /** The fake OrgQboTokenService.forSchool result (Topology B org-fed branch). */
+  orgToken?: unknown
 }
 
 function makeService(over: Overrides = {}) {
   const calls = { arDetail: 0, apDetail: 0, openInvoices: 0, openBills: 0, upsert: 0 }
+  // The last department opts each aged report received (Topology B slice assertions).
+  const deptSeen: { ar?: string[]; ap?: string[] } = {}
   const conn =
     over.connection === undefined
       ? { conn: { realmId: 'realm-1', environment: 'sandbox', companyName: 'Acme Co' }, token: 'tok' }
@@ -56,12 +61,14 @@ function makeService(over: Overrides = {}) {
 
   const qbo = { connectionForSchool: async () => conn }
   const client = {
-    getAgedReceivableDetail: async () => {
+    getAgedReceivableDetail: async (_r: string, _t: string, _asOf: string, opts?: { department?: string[] }) => {
       calls.arDetail++
+      deptSeen.ar = opts?.department
       return over.arReport ?? EMPTY_REPORT
     },
-    getAgedPayableDetail: async () => {
+    getAgedPayableDetail: async (_r: string, _t: string, _asOf: string, opts?: { department?: string[] }) => {
       calls.apDetail++
+      deptSeen.ap = opts?.department
       return over.apReport ?? EMPTY_REPORT
     },
     queryOpenInvoices: async () => {
@@ -89,10 +96,12 @@ function makeService(over: Overrides = {}) {
     orgQboConnection: { findUnique: async () => null },
     orgQboMapping: { count: async () => 0 },
   }
-  // QboService is resolved lazily via ModuleRef (breaks the eval-time import cycle).
-  const moduleRef = { get: () => qbo }
+  const orgToken = over.orgToken !== undefined ? over.orgToken : { forSchool: async () => null }
+  // QboService AND OrgQboTokenService are resolved lazily via ModuleRef (breaks the
+  // eval-time import cycle for the former; keeps the leaf accessor cycle-safe for the latter).
+  const moduleRef = { get: (token: unknown) => (token === OrgQboTokenService ? orgToken : qbo) }
   const svc = new QboAgingService(prisma as never, client as never, moduleRef as never)
-  return { svc, calls }
+  return { svc, calls, deptSeen }
 }
 
 describe('QboAgingService.getAging', () => {
@@ -193,5 +202,82 @@ describe('QboAgingService.getAging', () => {
     const res = await svc.getAging('school-1', {})
     expect(res.connected).toBe(false)
     expect(res.ar.total).toBe(0)
+  })
+
+  it('ORG-FED (Topology B) with attributed items → connected:true, dept-filtered, with a note', async () => {
+    const { svc, deptSeen, calls } = makeService({
+      connection: null, // no direct connection → org-fed branch
+      orgToken: {
+        forSchool: async () => ({
+          conn: { realmId: 'org-realm', companyName: 'Diocese of Example' },
+          token: 'org-tok',
+          env: 'sandbox',
+          dimension: 'department',
+          filterableQboIds: ['1'], // St. Mary Campus
+          includesUnspecified: false,
+          dimensionNames: ['St. Mary Campus'],
+        }),
+      },
+      arReport: arDetail([
+        ['Acme', '2026-06-20', '2000.00'], // overdue, tagged to this Location
+      ]),
+    })
+    const res = await svc.getAging('school-1', { refresh: true })
+    expect(res.connected).toBe(true)
+    expect(res.orgFed).toBe(true)
+    expect(res.companyName).toBe('Diocese of Example')
+    expect(res.ar.total).toBe(2000)
+    expect(res.note).toBeTruthy() // the honest "tagged to this school's location" note
+    // The aged reports were sliced to the school's mapped Location(s) via &department=.
+    expect(deptSeen.ar).toEqual(['1'])
+    expect(deptSeen.ap).toEqual(['1'])
+    expect(calls.upsert).toBe(1) // wrote the school's OWN snapshot
+  })
+
+  it('ORG-FED with NO attributed items → keeps the panel (connected:false, orgFed:true), no entity fallback', async () => {
+    const { svc, calls } = makeService({
+      connection: null,
+      orgToken: {
+        forSchool: async () => ({
+          conn: { realmId: 'org-realm', companyName: 'Diocese of Example' },
+          token: 'org-tok',
+          env: 'sandbox',
+          dimension: 'department',
+          filterableQboIds: ['1'],
+          includesUnspecified: false,
+          dimensionNames: ['St. Mary Campus'],
+        }),
+      },
+      arReport: EMPTY_REPORT,
+      apReport: EMPTY_REPORT,
+    })
+    const res = await svc.getAging('school-1', { refresh: true })
+    expect(res.connected).toBe(false)
+    expect(res.orgFed).toBe(true)
+    // The whole-company entity query must NOT run for an org-fed empty slice (wrong number).
+    expect(calls.openInvoices).toBe(0)
+    expect(calls.openBills).toBe(0)
+    expect(calls.upsert).toBe(0)
+  })
+
+  it('ORG-FED school mapped only to "Not Specified" → panel (no id to filter by)', async () => {
+    const { svc, calls } = makeService({
+      connection: null,
+      orgToken: {
+        forSchool: async () => ({
+          conn: { realmId: 'org-realm', companyName: 'Diocese of Example' },
+          token: 'org-tok',
+          env: 'sandbox',
+          dimension: 'department',
+          filterableQboIds: [], // only __unspecified__ mapped
+          includesUnspecified: true,
+          dimensionNames: [],
+        }),
+      },
+    })
+    const res = await svc.getAging('school-1', { refresh: true })
+    expect(res.connected).toBe(false)
+    expect(res.orgFed).toBe(true)
+    expect(calls.arDetail).toBe(0) // never pulled — no id to slice by
   })
 })

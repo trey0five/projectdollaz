@@ -47,6 +47,10 @@ export interface AgingItem {
   daysOverdue: number
   /** One-click link back into QuickBooks for this transaction; null when no txnId. */
   deepLink: string | null
+  /** Location/Department/Class name when the report carried a dimension column; null
+   *  otherwise. Additive — Topology B slices via `&department=` (Branch A), so the
+   *  rollup ignores this; it exists for an optional server-side dept filter. */
+  dept: string | null
 }
 
 /** A top debtor/creditor rolled up across their open items. */
@@ -118,6 +122,8 @@ interface ColIndex {
   openBal: number
   /** Fallback amount column when no open-balance column is present. */
   amount: number
+  /** Location/Department/Class column (dept_name/klass_name); -1 when absent. */
+  dept: number
 }
 
 /**
@@ -129,7 +135,7 @@ interface ColIndex {
  * in preference to the raw amount (the residual is what ages).
  */
 function buildColIndex(cols: QboReportColumn[]): ColIndex {
-  const idx: ColIndex = { txnDate: -1, type: -1, docNumber: -1, party: -1, dueDate: -1, openBal: -1, amount: -1 }
+  const idx: ColIndex = { txnDate: -1, type: -1, docNumber: -1, party: -1, dueDate: -1, openBal: -1, amount: -1, dept: -1 }
   cols.forEach((c, i) => {
     const t = (c.ColType ?? '').toLowerCase()
     const title = (c.ColTitle ?? '').toLowerCase()
@@ -146,6 +152,7 @@ function buildColIndex(cols: QboReportColumn[]): ColIndex {
     else if (idx.openBal < 0 && is(['subt_open_bal', 'open_bal', 'balance'], ['open balance', 'open bal', 'balance']))
       idx.openBal = i
     else if (idx.amount < 0 && is(['subt_nat_amount', 'amount'], ['amount'])) idx.amount = i
+    else if (idx.dept < 0 && is(['dept_name', 'klass_name'], ['location', 'department', 'class'])) idx.dept = i
   })
   return idx
 }
@@ -240,6 +247,7 @@ export function parseAgedDetail(raw: unknown, asOf: string, side: AgingSide, env
             bucket: bucketFor(daysOverdue),
             daysOverdue,
             deepLink: buildDeepLink(type, txnId, env),
+            dept: cell(row.ColData, idx.dept),
           })
         }
       }
@@ -296,6 +304,7 @@ export function parseEntityAging(
       bucket: bucketFor(daysOverdue),
       daysOverdue,
       deepLink: buildDeepLink(type, txnId, env),
+      dept: null, // the entity query carries no dimension column
     })
   }
   return out

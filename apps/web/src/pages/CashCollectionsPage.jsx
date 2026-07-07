@@ -279,6 +279,9 @@ function CashCollectionsWorkspace() {
   if (loading) return <LoadingPanel />
   if (error && !data) return <ErrorPanel />
   if (!data) return <LoadingPanel />
+  // Gate on data.connected: an org-fed (diocesan) school whose aging came back
+  // connected:true (real per-location aging) falls through to the normal register.
+  // Only an org-fed school that is NOT connected (no attributed slice) gets the panel.
   if (!connected) {
     if (orgFed) return <OrgFedPanel />
     return <ConnectNudge onGoToData={() => navigate('/data')} />
@@ -311,7 +314,10 @@ function CashCollectionsWorkspace() {
           {staleDays} day{staleDays === 1 ? '' : 's'} old
         </span>
       ) : null}
-      {data.note ? (
+      {/* Non-org-fed notes (e.g. the stale-degrade note) stay a compact header pill.
+          The org-fed aging note is surfaced instead as a fuller banner above the bars
+          (see beforeBody) so the same note is never shown twice. */}
+      {data.note && !orgFed ? (
         <span className="inline-flex items-center gap-1.5 rounded-full border border-gold/40 bg-gold/10 px-3 py-1.5 text-[12.5px] font-medium text-[#7a5e00]">
           <AlertTriangle size={13} />
           {data.note}
@@ -357,6 +363,15 @@ function CashCollectionsWorkspace() {
       headerAside={headerAside}
       beforeBody={
         <div className="space-y-6">
+          {/* Org-fed (diocesan) aging note — the school's slice comes from location-
+              tagged items in the org-wide QuickBooks company, so interlocation and
+              untagged items may not appear. Soft amber banner above the bars. */}
+          {orgFed && data.note ? (
+            <div className="flex items-start gap-2.5 rounded-xl border border-gold/40 bg-gold/10 px-4 py-3 text-[13.5px] font-medium text-[#7a5e00]">
+              <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+              <p>{data.note}</p>
+            </div>
+          ) : null}
           {cf?.cashflow ? (
             <CashFlowSection cashflow={cf.cashflow} runway={cf.runway} source={cf.source} />
           ) : null}

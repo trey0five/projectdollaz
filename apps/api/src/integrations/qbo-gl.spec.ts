@@ -107,6 +107,54 @@ describe('parseGeneralLedger', () => {
     expect(parseGeneralLedger({})).toEqual([])
     expect(parseGeneralLedger({ Rows: { Row: [] } })).toEqual([])
   })
+
+  it('reads a Location/Department (dept_name) column when the report carries one (additive)', () => {
+    const withDept = {
+      Columns: {
+        Column: [
+          { ColTitle: 'Date', ColType: 'tx_date' },
+          { ColTitle: 'Transaction Type', ColType: 'txn_type' },
+          { ColTitle: 'Num', ColType: 'doc_num' },
+          { ColTitle: 'Name', ColType: 'name' },
+          { ColTitle: 'Memo', ColType: 'memo' },
+          { ColTitle: 'Amount', ColType: 'subt_nat_amount' },
+          { ColTitle: 'Account', ColType: 'account_name' },
+          { ColTitle: 'Location', ColType: 'dept_name' },
+        ],
+      },
+      Rows: {
+        Row: [
+          {
+            Header: { ColData: [{ value: 'Advertising', id: '7' }] },
+            Rows: {
+              Row: [
+                {
+                  ColData: [
+                    { value: '2025-09-01', id: '101' },
+                    { value: 'Bill' },
+                    { value: '' },
+                    { value: 'Vendor' },
+                    { value: '' },
+                    { value: '405.00' },
+                    { value: 'Advertising' },
+                    { value: 'St. Joseph Campus' },
+                  ],
+                },
+              ],
+            },
+          },
+        ],
+      },
+    }
+    const txns = parseGeneralLedger(withDept)
+    expect(txns).toHaveLength(1)
+    expect(txns[0]).toMatchObject({ txnId: '101', amount: 405, acctName: 'Advertising', dept: 'St. Joseph Campus' })
+  })
+
+  it('leaves dept null when the report carries no dimension column', () => {
+    const txns = parseGeneralLedger(GL_FIXTURE)
+    expect(txns.every((t) => t.dept === null)).toBe(true)
+  })
 })
 
 describe('parseTransactionList (fallback B)', () => {

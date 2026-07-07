@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { X, Receipt, Loader2 } from 'lucide-react'
+import { X, Receipt, Loader2, Building2 } from 'lucide-react'
 import { useTrends } from '../../hooks/useAnalytics.js'
 import { useQbDrill, DRILL_STATE_COPY } from '../../hooks/useQbDrill.js'
 import TransactionList from '../reports/TransactionList.jsx'
@@ -343,7 +343,17 @@ export default function MetricDrawer({ schoolId, metric, open, onClose, periodId
                   )}
 
                   {drill.status === 'done' && drillResult?.drillable && (
-                    <TransactionList result={drillResult} />
+                    <>
+                      {/* Diocesan (Topology B) drill: the rows come from the shared
+                          org-wide QuickBooks company, filtered to this school. */}
+                      {drillResult.source?.topology === 'org' && (
+                        <p className="mb-2 flex items-center gap-1.5 text-[12.5px] italic text-muted">
+                          <Building2 size={13} className="shrink-0 text-gold/80" />
+                          From your organization&apos;s QuickBooks company.
+                        </p>
+                      )}
+                      <TransactionList result={drillResult} />
+                    </>
                   )}
 
                   {/* Ratio → drill each component line instead of one misleading list. */}

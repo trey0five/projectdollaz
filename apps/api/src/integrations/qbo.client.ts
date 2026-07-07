@@ -81,6 +81,13 @@ export function metaList(maps: QboAccountMetaMaps): QboAccountMeta[] {
   return [...maps.byId.values()]
 }
 
+/** The `&department=<ids>` query suffix for the aged reports (Topology B slice), or ''. */
+function agedDeptParam(opts?: { department?: string[] }): string {
+  return opts?.department && opts.department.length
+    ? `&department=${encodeURIComponent(opts.department.join(','))}`
+    : ''
+}
+
 /**
  * Index a live account list by AcctNum → the accounts carrying that number (multiple
  * QBO accounts can share one number). Used by the drill reverse-map for the
@@ -423,7 +430,17 @@ export class QboClient {
   async getGeneralLedger(
     realmId: string,
     accessToken: string,
-    opts: { accountIds?: string[]; startDate: string; endDate: string; basis?: 'Accrual' | 'Cash' },
+    opts: {
+      accountIds?: string[]
+      startDate: string
+      endDate: string
+      basis?: 'Accrual' | 'Cash'
+      /** Topology B (diocesan): the school's mapped Location (Department) ids — QBO
+       *  honours `&department=` on GeneralLedger (live-probed), so the org company's
+       *  report comes back already sliced to this school. Omitted for direct
+       *  per-school connections. */
+      department?: string[]
+    },
   ): Promise<unknown> {
     const basis = opts.basis === 'Cash' ? 'Cash' : 'Accrual'
     const columns = 'tx_date,txn_type,doc_num,name,memo,subt_nat_amount,account_name'
@@ -433,6 +450,9 @@ export class QboClient {
       `&columns=${columns}`
     if (opts.accountIds && opts.accountIds.length) {
       path += `&account=${encodeURIComponent(opts.accountIds.join(','))}`
+    }
+    if (opts.department && opts.department.length) {
+      path += `&department=${encodeURIComponent(opts.department.join(','))}`
     }
     return this.apiGet(realmId, accessToken, path)
   }
@@ -445,7 +465,14 @@ export class QboClient {
   async getTransactionList(
     realmId: string,
     accessToken: string,
-    opts: { accountIds?: string[]; startDate: string; endDate: string; basis?: 'Accrual' | 'Cash' },
+    opts: {
+      accountIds?: string[]
+      startDate: string
+      endDate: string
+      basis?: 'Accrual' | 'Cash'
+      /** Topology B: the school's mapped Location (Department) ids. See getGeneralLedger. */
+      department?: string[]
+    },
   ): Promise<unknown> {
     const basis = opts.basis === 'Cash' ? 'Cash' : 'Accrual'
     const columns = 'tx_date,txn_type,doc_num,name,memo,subt_nat_amount,account_name'
@@ -455,6 +482,9 @@ export class QboClient {
       `&columns=${columns}`
     if (opts.accountIds && opts.accountIds.length) {
       path += `&account=${encodeURIComponent(opts.accountIds.join(','))}`
+    }
+    if (opts.department && opts.department.length) {
+      path += `&department=${encodeURIComponent(opts.department.join(','))}`
     }
     return this.apiGet(realmId, accessToken, path)
   }
@@ -467,21 +497,33 @@ export class QboClient {
    * each open item against the as-of date; Accrual (aging is meaningless on cash).
    * Returns RAW JSON for the pure qbo-aging.ts parser (which computes buckets itself).
    */
-  getAgedReceivableDetail(realmId: string, accessToken: string, asOf: string): Promise<unknown> {
+  getAgedReceivableDetail(
+    realmId: string,
+    accessToken: string,
+    asOf: string,
+    opts?: { department?: string[] },
+  ): Promise<unknown> {
     return this.apiGet(
       realmId,
       accessToken,
-      `reports/AgedReceivableDetail?report_date=${encodeURIComponent(asOf)}&aging_method=Report_Date&accounting_method=Accrual`,
+      `reports/AgedReceivableDetail?report_date=${encodeURIComponent(asOf)}&aging_method=Report_Date&accounting_method=Accrual${agedDeptParam(opts)}`,
     )
   }
 
   /** Pull the Aged Payable Detail REPORT (raw JSON) as of `asOf` — the AP counterpart
-   *  of getAgedReceivableDetail (same date/method rules). RAW JSON for qbo-aging.ts. */
-  getAgedPayableDetail(realmId: string, accessToken: string, asOf: string): Promise<unknown> {
+   *  of getAgedReceivableDetail (same date/method rules). RAW JSON for qbo-aging.ts.
+   *  `opts.department` slices the org company's report to a school's Location(s)
+   *  (Topology B) — QBO honours `&department=` on the aged reports (live-probed). */
+  getAgedPayableDetail(
+    realmId: string,
+    accessToken: string,
+    asOf: string,
+    opts?: { department?: string[] },
+  ): Promise<unknown> {
     return this.apiGet(
       realmId,
       accessToken,
-      `reports/AgedPayableDetail?report_date=${encodeURIComponent(asOf)}&aging_method=Report_Date&accounting_method=Accrual`,
+      `reports/AgedPayableDetail?report_date=${encodeURIComponent(asOf)}&aging_method=Report_Date&accounting_method=Accrual${agedDeptParam(opts)}`,
     )
   }
 
