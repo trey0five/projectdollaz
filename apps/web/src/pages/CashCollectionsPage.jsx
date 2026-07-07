@@ -32,9 +32,12 @@ import BillingBanner from '../components/BillingBanner.jsx'
 import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
 import AgingBars from '../components/cash/AgingBars.jsx'
 import AgingRegisterTable from '../components/cash/AgingRegisterTable.jsx'
+import CashFlowSection from '../components/cash/CashFlowSection.jsx'
+import ReconcileBadge from '../components/cash/ReconcileBadge.jsx'
 import PennyAvatar from '../components/penny/PennyAvatar.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useCashCollections } from '../hooks/useCashCollections.js'
+import { useCashFlow } from '../hooks/useCashFlow.js'
 import { formatShortDate } from '../lib/format.js'
 
 const BUCKET_LABEL = {
@@ -154,6 +157,13 @@ function CashCollectionsWorkspace() {
 
   const { data, loading, refreshing, error, connected, orgFed, refresh } =
     useCashCollections(schoolId)
+
+  // Independent second hook: the live cash-flow + reconciliation payload. Fully
+  // decoupled from the aging hook — it fails soft on its own (never blocks the
+  // aging surface), so the badge + cash-flow section only appear once it lands
+  // connected data of its own.
+  const cashFlow = useCashFlow(schoolId)
+  const cf = cashFlow.connected ? cashFlow.data : null
 
   const [tab, setTab] = useState('receivables')
 
@@ -286,6 +296,7 @@ function CashCollectionsWorkspace() {
 
   const headerAside = (
     <div className="flex flex-wrap items-center gap-2">
+      {cf?.reconciliation ? <ReconcileBadge reconciliation={cf.reconciliation} stale={!!cf.stale} /> : null}
       {data.asOf ? (
         <span className="inline-flex items-center gap-1.5 rounded-full border border-rule/60 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-muted">
           <Clock size={13} className="opacity-70" />
@@ -308,12 +319,17 @@ function CashCollectionsWorkspace() {
       ) : null}
       <button
         type="button"
-        onClick={refresh}
-        disabled={refreshing}
+        onClick={() => {
+          refresh()
+          // Re-verify the reconciliation badge too (it's a separate hook) — a trust
+          // check the user explicitly asked to re-run.
+          cashFlow.refresh()
+        }}
+        disabled={refreshing || cashFlow.refreshing}
         className="inline-flex items-center gap-1.5 rounded-full bg-gold-gradient px-3.5 py-1.5 text-[13px] font-semibold text-navy shadow-glow transition hover:brightness-105 disabled:opacity-60"
       >
-        <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-        {refreshing ? 'Refreshing…' : 'Refresh'}
+        <RefreshCw size={14} className={refreshing || cashFlow.refreshing ? 'animate-spin' : ''} />
+        {refreshing || cashFlow.refreshing ? 'Refreshing…' : 'Refresh'}
       </button>
     </div>
   )
@@ -339,7 +355,14 @@ function CashCollectionsWorkspace() {
       onTabChange={setTab}
       onNew={null}
       headerAside={headerAside}
-      beforeBody={<AgingBars ar={ar} ap={ap} arCounts={arCounts} apCounts={apCounts} />}
+      beforeBody={
+        <div className="space-y-6">
+          {cf?.cashflow ? (
+            <CashFlowSection cashflow={cf.cashflow} runway={cf.runway} source={cf.source} />
+          ) : null}
+          <AgingBars ar={ar} ap={ap} arCounts={arCounts} apCounts={apCounts} />
+        </div>
+      }
       registerTable={registerTable}
       attentionItems={attentionItems}
     />

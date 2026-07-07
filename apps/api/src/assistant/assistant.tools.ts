@@ -967,6 +967,19 @@ export const TOOL_SCHEMAS = [
   {
     type: 'function',
     function: {
+      name: 'get_cash_flow',
+      description:
+        'Cash flow & reconciliation — the school’s native QuickBooks cash-flow breakdown (operating / investing / financing → net change in cash), the "months of cash at current burn" runway, and the "Reconciled to QuickBooks" trust check that ties our computed statements to QuickBooks’ OWN reports (cash balance, net income, net change in cash — each shown as QuickBooks vs our figure, the difference, and whether they tie / differ / are an expected timing difference). Use for "does our cash flow tie to QuickBooks?", "are we reconciled?", "how much runway do we have?", "what was operating cash?", "months of cash". Live from QuickBooks (cached); read-only. ONLY works when the school is connected to QuickBooks (else it says so). State ONLY the figures this tool returns — never invent a balance, a difference, or a runway.',
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'get_account_transactions',
       description:
         'The actual QuickBooks transactions behind a computed figure — answers "what\'s in this number?". ' +
@@ -1075,5 +1088,6 @@ export const TOOL_LABELS: Record<string, string> = {
   get_briefing: 'Reviewing what needs your attention…',
   get_account_transactions: 'Pulling the transactions behind that number…',
   get_cash_collections: 'Checking receivables & payables…',
+  get_cash_flow: 'Reading cash flow & reconciliation…',
   get_value_history: 'Tracing how that number changed…',
 }

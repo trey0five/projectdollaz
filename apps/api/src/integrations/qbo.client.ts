@@ -512,4 +512,64 @@ export class QboClient {
         ),
     )
   }
+
+  /**
+   * Pull the native Statement of Cash Flows REPORT (raw JSON) for the [startDate,
+   * endDate] window — the operating/investing/financing breakdown behind the "months
+   * of cash" runway + the cash-change reconciliation comparand. BOTH dates are ALWAYS
+   * sent (QBO silently ignores a lone date, the same gotcha as every other report).
+   * Accrual to match our accrual-computed statements. Returns RAW JSON for the pure
+   * qbo-cashflow.ts parser (which reads sections structurally by `group`).
+   */
+  getCashFlow(
+    realmId: string,
+    accessToken: string,
+    startDate: string,
+    endDate: string,
+  ): Promise<unknown> {
+    return this.apiGet(
+      realmId,
+      accessToken,
+      `reports/CashFlow?accounting_method=Accrual&start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`,
+    )
+  }
+
+  /**
+   * Pull the plain (un-summarized) Profit & Loss REPORT (raw JSON) for the window —
+   * the company-total NET INCOME reconciliation comparand (STRONG check B). Distinct
+   * from getSummarizedReport, which splits by dimension; here we want the single
+   * headline "Net Income" summary row. Accrual + both dates always sent. RAW JSON for
+   * the pure parseNetIncome extractor.
+   */
+  getProfitAndLoss(
+    realmId: string,
+    accessToken: string,
+    startDate: string,
+    endDate: string,
+  ): Promise<unknown> {
+    return this.apiGet(
+      realmId,
+      accessToken,
+      `reports/ProfitAndLoss?accounting_method=Accrual&start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`,
+    )
+  }
+
+  /**
+   * Pull the plain (un-summarized) Balance Sheet REPORT (raw JSON) as of endDate —
+   * the company-total ENDING CASH reconciliation comparand (STRONG check A) + the
+   * runway's current-cash input. Both dates always sent (BS is as-of end_date; the
+   * lone-date gotcha still applies). RAW JSON for the pure parseBalanceSheetCash extractor.
+   */
+  getBalanceSheet(
+    realmId: string,
+    accessToken: string,
+    startDate: string,
+    endDate: string,
+  ): Promise<unknown> {
+    return this.apiGet(
+      realmId,
+      accessToken,
+      `reports/BalanceSheet?accounting_method=Accrual&start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`,
+    )
+  }
 }

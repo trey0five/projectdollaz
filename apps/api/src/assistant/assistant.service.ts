@@ -65,6 +65,7 @@ import { AlertService, ALERT_METRIC_KEYS } from '../alerts/alert.service.js'
 import { SchoolsService } from '../schools/schools.service.js'
 import { QboDrillService } from '../integrations/qbo-drill.service.js'
 import { QboAgingService } from '../integrations/qbo-aging.service.js'
+import { QboCashFlowService } from '../integrations/qbo-cashflow.service.js'
 import type { CreatePolicyDto } from '../governance/dto/create-policy.dto.js'
 import type { CreateCommitteeDto } from '../governance/dto/create-committee.dto.js'
 import type { CreateMeetingDto } from '../governance/dto/create-meeting.dto.js'
@@ -577,6 +578,11 @@ export class AssistantService {
     // (after aging) so existing positional-arg unit specs still construct; only that one
     // execute() case touches `this.snapshotHistory`, so undefined elsewhere is safe.
     private readonly snapshotHistory: SnapshotHistoryService,
+    // Phase 6 — live cash-flow + reconciliation for the read-only get_cash_flow tool.
+    // Added LAST (after snapshotHistory) so existing positional-arg unit specs still
+    // construct; only that one execute() case touches `this.cashFlow`, so undefined
+    // elsewhere is safe. DI is by type.
+    private readonly cashFlow: QboCashFlowService,
   ) {}
 
   isConfigured(): boolean {
@@ -3151,6 +3157,36 @@ export class AssistantService {
             top: a.ap.top.slice(0, 5).map(party),
           },
           netPosition: a.net,
+        }
+      }
+      case 'get_cash_flow': {
+        // Read-only cash-flow + reconciliation (live+cached; write-through-persists as a
+        // side effect). NOT in WRITE_TOOLS/CONFIRM_TOOLS (no ApplyActionDto/ProposedAction
+        // change). Compact projection under the 8000-char cap; value-safe (every figure is
+        // from QuickBooks' reports or our stored snapshot — never invented).
+        const c = await this.cashFlow.getCashFlow(ctx.schoolId, {})
+        if (!c.connected) {
+          return { connected: false, note: 'QuickBooks is not connected for this school.' }
+        }
+        return {
+          connected: true,
+          asOf: c.asOf,
+          stale: c.stale,
+          source: c.source,
+          period: c.period,
+          cashFlow: c.cashflow,
+          runway: c.runway,
+          reconciliation: {
+            status: c.reconciliation.status,
+            checks: c.reconciliation.checks.map((k) => ({
+              check: k.label,
+              quickBooks: k.qbo,
+              ourFigure: k.computed,
+              difference: k.diff,
+              status: k.status,
+              ...(k.note ? { note: k.note } : {}),
+            })),
+          },
         }
       }
       case 'get_budget_vs_actual': {

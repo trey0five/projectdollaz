@@ -135,6 +135,7 @@ model School {
   enrollmentSources        EnrollmentSource[]
   enrollmentSnapshots      EnrollmentSnapshot[]
   arApAgingSnapshots       ArApAgingSnapshot[]
+  cashFlowSnapshots        CashFlowSnapshot[]
 
   @@index([organizationId])
   @@map("schools")
@@ -807,6 +808,56 @@ model ArApAgingSnapshot {
   @@unique([schoolId, asOfDate])
   @@index([schoolId, capturedAt])
   @@map("ar_ap_aging_snapshots")
+}
+
+/// Live cash-flow + reconciliation "trust check" snapshot (sibling of
+/// ArApAgingSnapshot). PERIOD-scoped (keyed to the reconciled StatementSnapshot's
+/// fiscal period), unlike aging's as-of-now grain — so QuickBooks' native reports
+/// cover the SAME [fyStart, periodEnd] window as the computed statements they're
+/// reconciled against. The briefing reads the recon scalars DIRECTLY via Prisma
+/// (NO QboCashFlowService injection — the module rule). Topology A only.
+model CashFlowSnapshot {
+  id             String   @id @default(uuid()) @db.Uuid
+  schoolId       String   @map("school_id") @db.Uuid
+  fiscalPeriodId String   @map("fiscal_period_id") @db.Uuid
+  realmId        String?  @map("realm_id")
+  environment    String   @default("sandbox")
+  /// 'cashflow' (native reports/CashFlow) | 'computed-scf' (derived from our own SCF).
+  source         String   @default("cashflow")
+  /// 'sync' | 'page' | 'penny' — what triggered this capture.
+  capturedVia    String   @map("captured_via")
+
+  // QBO cash-flow breakdown (Float; null when the report is degenerate + no SCF).
+  operating   Float? @map("operating")
+  investing   Float? @map("investing")
+  financing   Float? @map("financing")
+  netChange   Float? @map("net_change")
+
+  // Sharpened runway (Float; null when uncomputable — value-safe).
+  openingCash  Float? @map("opening_cash")   // QBO BalanceSheet ending cash (current cash)
+  monthlyBurn  Float? @map("monthly_burn")   // QBO operating cash ÷ months elapsed in FY (signed)
+  runwayMonths Float? @map("runway_months")  // openingCash / |monthlyBurn| when burning; else null
+
+  // Reconciliation scalars (the briefing reads these directly — no JSON parse).
+  reconStatus    String  @default("unknown") @map("recon_status") // 'tied'|'differs'|'unknown'
+  cashDiff       Float?  @map("cash_diff")        // QBO BS cash − computed cash (STRONG check A)
+  netIncomeDiff  Float?  @map("net_income_diff")  // QBO P&L NI − computed netChange (STRONG check B)
+  cashChangeDiff Float?  @map("cash_change_diff") // QBO CF net-change − computed scf.netCashChange (LOOSE C)
+  cashTie        Boolean? @map("cash_tie")        // A within tie tolerance
+  netIncomeTie   Boolean? @map("net_income_tie")  // B within tie tolerance
+
+  // Per-check detail as JSON (page popover reads it; briefing reads the `material` flags).
+  detail Json? @db.JsonB // { cash:{qbo,computed,diff,status,note?,material}, net_income:{…}, cash_change:{…} }
+
+  capturedAt DateTime @default(now()) @map("captured_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, fiscalPeriodId])
+  @@index([schoolId, capturedAt])
+  @@map("cash_flow_snapshots")
 }
 
 /// Topology B — ONE QuickBooks company for the whole organization, split by

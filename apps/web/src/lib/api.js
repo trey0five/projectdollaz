@@ -653,6 +653,14 @@ export const qboApi = {
   // params = { refresh: true } bypasses the server cache + forces a fresh pull.
   aging: (schoolId, params) =>
     api.get(`/schools/${schoolId}/integrations/qb/aging`, { params }),
+  // Live cash flow + reconciliation ("Live cash flow"): QuickBooks' native
+  // cash-flow breakdown (operating/investing/financing → net change), a
+  // months-of-cash runway, and the reconciliation trust-check tying our computed
+  // statements to QBO's own reports. params = { refresh: true } bypasses the
+  // server cache + forces a fresh pull. Sibling of `aging` (same live+cached,
+  // never-500 posture) — see hooks/useCashFlow.js.
+  cashflow: (schoolId, params) =>
+    api.get(`/schools/${schoolId}/integrations/qb/cashflow`, { params }),
   // Automatic nightly sync: toggle the per-connection auto-sync flag (returns the
   // updated status), and a force "run now" hook that bypasses the freshness/window
   // gate for confidence/testing (returns { status, rowCount?, error?, lastRunAt }).

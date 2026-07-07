@@ -83,7 +83,8 @@ function makeService(opts?: {
     schools as never, // schools (LAST)
     undefined as never, // qboDrill — only get_account_transactions touches it
     undefined as never, // aging — only get_cash_collections touches it
-    undefined as never, // snapshotHistory (LAST) — only get_value_history touches it
+    undefined as never, // snapshotHistory — only get_value_history touches it
+    undefined as never, // cashFlow (LAST) — only get_cash_flow touches it
   )
   return { svc, createInvitation, revokeInvitation, prisma }
 }

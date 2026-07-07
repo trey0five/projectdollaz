@@ -36,6 +36,7 @@ import {
   type Lens,
 } from './briefing-lens.js'
 import { buildAgingAttentionItems } from './briefing-aging.js'
+import { buildReconciliationItems } from './briefing-reconciliation.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Phase 1 (slice 1) — the prioritised attention briefing. A READ-ONLY synthesis
@@ -202,6 +203,19 @@ export class BriefingService {
   }
 
   /**
+   * The latest persisted cash-flow + reconciliation snapshot for the school (by
+   * capturedAt). Fail-soft in BOTH directions (absent PrismaService / query error →
+   * null), so STEP 2.12 can never 500 the briefing. Read DIRECTLY via Prisma — NO
+   * QboCashFlowService injection, NO IntegrationsModule import (the module rule).
+   */
+  private async readCashFlowRow(schoolId: string) {
+    if (!this.prisma?.cashFlowSnapshot) return null
+    return this.prisma.cashFlowSnapshot
+      .findFirst({ where: { schoolId }, orderBy: { capturedAt: 'desc' } })
+      .catch(() => null)
+  }
+
+  /**
    * Build the prioritised briefing for one period. Reuses the existing services
    * (no recompute) and returns a RANKED AttentionItem[] + a summary. Tenant-safe:
    * getOwnedPeriod runs FIRST, so a wrong-tenant/unknown period throws a real 404
@@ -312,6 +326,7 @@ export class BriefingService {
       advancementLicensed,
       enrollmentLicensed,
       agingRow,
+      cashFlowRow,
     ] = await Promise.all([
       this.compliance.evaluateForPeriod(schoolId, period.id).catch(() => null),
       this.reconciliation.reconcileForPeriod(schoolId, period.id).catch(() => null),
@@ -333,6 +348,9 @@ export class BriefingService {
       // QboAgingService), inside this SAME parallel fan-out so latency stays slowest-
       // not-sum. CORE (no entitlement gate); fail-soft to null (readAgingRow catches).
       this.readAgingRow(schoolId),
+      // Cash-flow + reconciliation — reads the persisted snapshot DIRECTLY via Prisma
+      // (same module rule as aging), inside this SAME fan-out. CORE; fail-soft to null.
+      this.readCashFlowRow(schoolId),
     ])
 
     // 2a — open 2A findings (material -> critical, reportable -> warn).
@@ -950,6 +968,16 @@ export class BriefingService {
     // no party names) and returns [] when there is no snapshot (not connected / never
     // captured) — an honest non-signal. Fail-soft: a null row simply emits nothing.
     for (const it of buildAgingAttentionItems(agingRow, generatedAt)) items.push(it)
+
+    // ── STEP 2.12: cash-flow reconciliation "trust check" (source 'cash') ─────
+    // Reads the persisted CashFlowSnapshot (resolved as `cashFlowRow` in the STEP-2
+    // fan-out above, DIRECTLY via Prisma — the module rule: NO QboCashFlowService, NO
+    // IntegrationsModule import). CORE (Finance base license, NO entitlement wrap).
+    // buildReconciliationItems is edge-triggered + value-safe (aggregate $ deltas only,
+    // no accounts) and fires ONLY when the books materially fail to reconcile to
+    // QuickBooks (reconStatus 'differs' AND a STRONG check material) — an honest signal;
+    // a tie / immaterial gap / no-snapshot emits nothing. Fail-soft: null row → nothing.
+    for (const it of buildReconciliationItems(cashFlowRow, generatedAt)) items.push(it)
 
     // ── STEP 3: lens-shape (rank + filter + reframe) + summarise ─────────────
     // applyLens is the SINGLE source of ranking truth (shared with the org fan-

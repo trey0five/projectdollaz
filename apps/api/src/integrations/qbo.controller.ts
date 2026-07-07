@@ -9,6 +9,7 @@ import { MergeMappingDto } from '../mapping/dto/merge-mapping.dto.js'
 import { QboService } from './qbo.service.js'
 import { QboDrillService } from './qbo-drill.service.js'
 import { QboAgingService } from './qbo-aging.service.js'
+import { QboCashFlowService } from './qbo-cashflow.service.js'
 import { QboSyncSchedulerService } from './qbo-sync-scheduler.service.js'
 import { QbCallbackDto, QbSyncDto, QbSyncScopeDto } from './dto/qbo.dto.js'
 import { QbAutoSyncDto } from './dto/qbo-auto-sync.dto.js'
@@ -25,6 +26,7 @@ export class QboController {
     private readonly qbo: QboService,
     private readonly drill: QboDrillService,
     private readonly agingService: QboAgingService,
+    private readonly cashFlowService: QboCashFlowService,
     private readonly scheduler: QboSyncSchedulerService,
   ) {}
 
@@ -39,6 +41,21 @@ export class QboController {
   @Roles('owner', 'accountant', 'viewer')
   aging(@Param('schoolId') schoolId: string, @Query('refresh') refresh?: string) {
     return this.agingService.getAging(schoolId, { refresh: refresh === 'true' })
+  }
+
+  /**
+   * Live cash-flow + reconciliation — the native QuickBooks cash-flow breakdown
+   * (operating/investing/financing → net change), the "months of cash" runway, and
+   * the "Reconciled to QuickBooks" trust check (our computed statements vs QBO's own
+   * BalanceSheet/P&L/CashFlow reports). Read-only, viewer-open (Board may view the
+   * trust check). `?refresh=true` forces a live QuickBooks pull (else live+cached). NO
+   * request DTO — the only input is a query flag compared `=== 'true'` (the exact
+   * whitelist-safe idiom the aging route uses).
+   */
+  @Get('cashflow')
+  @Roles('owner', 'accountant', 'viewer')
+  cashflow(@Param('schoolId') schoolId: string, @Query('refresh') refresh?: string) {
+    return this.cashFlowService.getCashFlow(schoolId, { refresh: refresh === 'true' })
   }
 
   /**

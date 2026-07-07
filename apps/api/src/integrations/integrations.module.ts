@@ -15,6 +15,7 @@ import { QboOrgService } from './qbo-org.service.js'
 import { OrgQboCompanyService } from './qbo-company.service.js'
 import { QboDrillService } from './qbo-drill.service.js'
 import { QboAgingService } from './qbo-aging.service.js'
+import { QboCashFlowService } from './qbo-cashflow.service.js'
 import { QboSyncSchedulerService } from './qbo-sync-scheduler.service.js'
 import { QboClient } from './qbo.client.js'
 
@@ -41,6 +42,7 @@ import { QboClient } from './qbo.client.js'
     OrgQboCompanyService,
     QboDrillService,
     QboAgingService,
+    QboCashFlowService,
     QboSyncSchedulerService,
     QboClient,
   ],
@@ -49,6 +51,8 @@ import { QboClient } from './qbo.client.js'
   // exported so the /cash controller + Penny's get_cash_collections tool (AssistantModule)
   // share the one aging orchestrator; the briefing does NOT use it (it reads the snapshot
   // directly via Prisma — the module rule that keeps AnalyticsModule off IntegrationsModule).
-  exports: [QboService, QboDrillService, QboAgingService],
+  // QboCashFlowService is exported for the same reason (the /cash cashflow route + Penny's
+  // get_cash_flow tool share the one orchestrator; the briefing reads its snapshot via Prisma).
+  exports: [QboService, QboDrillService, QboAgingService, QboCashFlowService],
 })
 export class IntegrationsModule {}

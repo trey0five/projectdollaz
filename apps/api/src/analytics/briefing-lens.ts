@@ -66,6 +66,10 @@ export const COMPLIANCE_ORDER = [
   // not id-arbitrary. KEPT for the viewer lens (aggregate, board-legible cash matter).
   'cash:ar-overdue',
   'cash:ap-overdue',
+  // Cash-flow reconciliation "trust check" (books tie to QuickBooks?). Grouped with the
+  // other cash items, after the aging pair; a fiduciary trust matter so it is KEPT for
+  // the viewer/board lens via the existing source==='cash' keepForViewer branch.
+  'cash:reconciliation',
   'compliance:reconciliation',
   'compliance:material',
   'compliance:reportable',

@@ -22,6 +22,7 @@ import type { MonthlyRowDto } from '../monthly/dto/create-monthly-snapshot.dto.j
 import type { QbSyncScopeDto } from './dto/qbo.dto.js'
 import { QboClient, qboPlSection } from './qbo.client.js'
 import { QboAgingService } from './qbo-aging.service.js'
+import { QboCashFlowService } from './qbo-cashflow.service.js'
 import { decToken, encToken } from './qbo-crypto.js'
 import { suggestCategory } from './qbo-review.suggest.js'
 
@@ -230,6 +231,23 @@ export class QboService {
     } catch (e) {
       // Log + swallow (no logger on this service; a failed capture is non-fatal and
       // the page/briefing simply keep the last snapshot).
+      void e
+    }
+  }
+
+  /**
+   * Best-effort cash-flow + reconciliation capture after a sync (period-scoped —
+   * keyed to the latest StatementSnapshot's period). NEVER throws — a failing
+   * cash-flow pull must not abort the TB sync (mirrors captureAging exactly). Called
+   * beside captureAging from the same current-period entry points. QboService ⇄
+   * QboCashFlowService is a mutual dependency, so QboCashFlowService is resolved
+   * LAZILY via ModuleRef (never at class-eval — the ESM boot-cycle trap).
+   */
+  private async captureCashFlow(schoolId: string, conn: QboConnection): Promise<void> {
+    try {
+      const cashFlow = this.moduleRef.get(QboCashFlowService, { strict: false })
+      await cashFlow.captureFromSync(schoolId, { realmId: conn.realmId, environment: conn.environment })
+    } catch (e) {
       void e
     }
   }
@@ -585,6 +603,7 @@ export class QboService {
     if (!conn) throw new NotFoundException('QuickBooks is not connected for this school.')
     const { snapshot } = await this.syncOnePeriod(actor, schoolId, conn, periodId)
     await this.captureAging(schoolId, conn) // best-effort, as-of today; never aborts the sync
+    await this.captureCashFlow(schoolId, conn) // best-effort cash-flow + recon; never aborts
     return snapshot
   }
 
@@ -681,6 +700,7 @@ export class QboService {
       const base = await this.resolveBasePeriod(schoolId)
       const { rowCount } = await this.syncOnePeriod(actor, schoolId, conn, base.id, 'scheduled_sync')
       await this.captureAging(schoolId, conn) // best-effort, as-of today; never aborts
+      await this.captureCashFlow(schoolId, conn) // best-effort cash-flow + recon; never aborts
       return { status: 'synced', rowCount }
     } catch (e) {
       // Classify (order matters: a dead token can surface mid-pull too).
@@ -901,6 +921,7 @@ export class QboService {
     }
 
     await this.captureAging(schoolId, conn) // best-effort, as-of today; never aborts the sync
+    await this.captureCashFlow(schoolId, conn) // best-effort cash-flow + recon; never aborts
     return result
   }
 

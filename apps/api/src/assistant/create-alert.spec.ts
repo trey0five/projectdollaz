@@ -56,7 +56,8 @@ function makeService() {
     stub, // schools (LAST) — only invite_member paths touch it
     stub, // qboDrill — only get_account_transactions touches it
     stub, // aging — only get_cash_collections touches it
-    stub, // snapshotHistory (LAST) — only get_value_history touches it
+    stub, // snapshotHistory — only get_value_history touches it
+    stub, // cashFlow (LAST) — only get_cash_flow touches it
   )
   return { svc, alertsCreate }
 }
