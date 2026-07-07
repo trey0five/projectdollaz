@@ -941,12 +941,25 @@ export const TOOL_SCHEMAS = [
     function: {
       name: 'get_briefing',
       description:
-        "The prioritised attention briefing for a period — the SAME ranked, plain-language list the Home screen shows the user: everything that needs their decision right now (off-band financial metrics, AUP readiness/compliance gaps, scholarship reconciliation variance, open corrective actions, or data-not-yet-generated). Returns summary counts (total / critical / warn / info) and an ORDERED items[] already sorted critical→warn→info and lens-shaped for the caller's role: each item has severity, source (metric|compliance|data), title, why (a plain-language reason), an optional metricKey/value, a client link (deep-link route), an optional dueDate, and a voice tone hint. Call this FIRST when the user says 'brief me', 'what needs my attention', 'good morning', or asks broadly 'how are we doing', then narrate the items in order and offer to act on them. The list is already role-correct and complete; read-only, and NEVER invent, add, drop, or re-rank items beyond what this returns.",
+        "The prioritised attention briefing for a period — the SAME ranked, plain-language list the Home screen shows the user: everything that needs their decision right now (off-band financial metrics, AUP readiness/compliance gaps, scholarship reconciliation variance, open corrective actions, or data-not-yet-generated). Returns summary counts (total / critical / warn / info) and an ORDERED items[] already sorted critical→warn→info and lens-shaped for the caller's role: each item has severity, source (metric|compliance|data|cash), title, why (a plain-language reason), an optional metricKey/value, a client link (deep-link route), an optional dueDate, and a voice tone hint. Call this FIRST when the user says 'brief me', 'what needs my attention', 'good morning', or asks broadly 'how are we doing', then narrate the items in order and offer to act on them. The list is already role-correct and complete; read-only, and NEVER invent, add, drop, or re-rank items beyond what this returns.",
       parameters: {
         type: 'object',
         properties: {
           periodId: { type: 'string', description: 'Fiscal period id; omit to use the current period.' },
         },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_cash_collections',
+      description:
+        'Cash & Collections — the school’s AR/AP aging from QuickBooks: total and OVERDUE receivables (with the amount more than 90 days past due and how many accounts), total and past-due payables (and what is due soon), the aging buckets (current / 1–30 / 31–60 / 61–90 / 90+) for both sides, DSO / days-payable, and the top debtors/creditors. Use for "who owes us money?", "what bills are due?", "how are collections?", "what’s our AR/AP aging?". Live from QuickBooks (cached); read-only. ONLY works when the school is connected to QuickBooks (else it says so). State ONLY the figures this tool returns — never invent a balance or a party.',
+      parameters: {
+        type: 'object',
+        properties: {},
         required: [],
       },
     },
@@ -1029,4 +1042,5 @@ export const TOOL_LABELS: Record<string, string> = {
   start_walkthrough: 'Let me show you…',
   get_briefing: 'Reviewing what needs your attention…',
   get_account_transactions: 'Pulling the transactions behind that number…',
+  get_cash_collections: 'Checking receivables & payables…',
 }

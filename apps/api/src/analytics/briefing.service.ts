@@ -6,6 +6,7 @@ import {
   resolveDisplayUnit,
 } from '@finrep/analytics'
 import type { MembershipRole } from '@finrep/db'
+import { PrismaService } from '../prisma/prisma.service.js'
 import { PeriodsService } from '../periods/periods.service.js'
 import { AnalyticsService } from './analytics.service.js'
 import { ComplianceService } from '../compliance/compliance.service.js'
@@ -34,6 +35,7 @@ import {
   type AttentionVoice,
   type Lens,
 } from './briefing-lens.js'
+import { buildAgingAttentionItems } from './briefing-aging.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Phase 1 (slice 1) — the prioritised attention briefing. A READ-ONLY synthesis
@@ -60,6 +62,9 @@ export type AttentionSource =
   | 'advancement'
   // Phase 2 Enrollment Intelligence — the cross-domain enrollment→tuition→cash item.
   | 'enrollment'
+  // AR/AP aging — the Cash & Collections briefing STEP (reads the persisted snapshot
+  // directly via Prisma; value-safe aggregate $ + counts only).
+  | 'cash'
 
 /**
  * A task at least this many days past due escalates the workflow overdue item from
@@ -176,7 +181,25 @@ export class BriefingService {
     private readonly facilities: FacilitiesService,
     // Phase 4 Advancement v1 — the module gate + the campaign register read.
     private readonly advancement: AdvancementService,
+    // AR/AP aging — the briefing reads the persisted snapshot DIRECTLY via Prisma
+    // (the module rule: NO QboAgingService injection, NO IntegrationsModule import).
+    // Added LAST so existing positional-arg briefing specs (which stop at advancement)
+    // still construct; readAgingRow() guards `if (!this.prisma)` so an absent Prisma
+    // simply yields no cash item (fail-soft) rather than throwing.
+    private readonly prisma: PrismaService,
   ) {}
+
+  /**
+   * The latest persisted aging snapshot for the school (by capturedAt). Fail-soft in
+   * BOTH directions: an absent PrismaService (older positional-arg unit mocks) → null,
+   * and a query error → null. NEVER throws, so STEP 2.11 can never 500 the briefing.
+   */
+  private async readAgingRow(schoolId: string) {
+    if (!this.prisma?.arApAgingSnapshot) return null
+    return this.prisma.arApAgingSnapshot
+      .findFirst({ where: { schoolId }, orderBy: { capturedAt: 'desc' } })
+      .catch(() => null)
+  }
 
   /**
    * Build the prioritised briefing for one period. Reuses the existing services
@@ -288,6 +311,7 @@ export class BriefingService {
       facilitiesLicensed,
       advancementLicensed,
       enrollmentLicensed,
+      agingRow,
     ] = await Promise.all([
       this.compliance.evaluateForPeriod(schoolId, period.id).catch(() => null),
       this.reconciliation.reconcileForPeriod(schoolId, period.id).catch(() => null),
@@ -305,6 +329,10 @@ export class BriefingService {
       // Phase 2 Enrollment gate — same fan-out, fail CLOSED (hides the cross-domain
       // enrollment item for a finance-only school).
       this.billing.isEntitledForModule(schoolId, 'enrollment').catch(() => false),
+      // AR/AP aging — reads the persisted snapshot DIRECTLY via Prisma (NOT via
+      // QboAgingService), inside this SAME parallel fan-out so latency stays slowest-
+      // not-sum. CORE (no entitlement gate); fail-soft to null (readAgingRow catches).
+      this.readAgingRow(schoolId),
     ])
 
     // 2a — open 2A findings (material -> critical, reportable -> warn).
@@ -913,6 +941,15 @@ export class BriefingService {
         }
       }
     }
+
+    // ── STEP 2.11: cash & collections — AR/AP aging (source 'cash') ──────────
+    // Reads the persisted ArApAgingSnapshot (resolved as `agingRow` in the STEP-2
+    // fan-out above, DIRECTLY via Prisma — the module rule: NO QboAgingService,
+    // NO IntegrationsModule import). CORE (Finance base license, NO entitlement wrap).
+    // buildAgingAttentionItems is edge-triggered + value-safe (aggregate $ + counts,
+    // no party names) and returns [] when there is no snapshot (not connected / never
+    // captured) — an honest non-signal. Fail-soft: a null row simply emits nothing.
+    for (const it of buildAgingAttentionItems(agingRow, generatedAt)) items.push(it)
 
     // ── STEP 3: lens-shape (rank + filter + reframe) + summarise ─────────────
     // applyLens is the SINGLE source of ranking truth (shared with the org fan-

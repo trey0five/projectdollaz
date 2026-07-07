@@ -31,6 +31,7 @@ import {
   ListChecks,
   BadgeCheck,
   Wrench,
+  HandCoins,
 } from 'lucide-react'
 import { LensIndicator, LensSwitcher } from '../home/LensControls.jsx'
 import { CountUp, WhyText, titleProgress } from '../ui/briefingFx.jsx'
@@ -69,12 +70,14 @@ const SOURCE_META = {
   accreditation: { label: 'Accreditation', Icon: BadgeCheck },
   facilities: { label: 'Facilities', Icon: Wrench },
   advancement: { label: 'Advancement', Icon: HeartHandshake },
+  cash: { label: 'Cash', Icon: HandCoins },
 }
 
 const CTA_LABEL = {
   metric: 'Open analytics',
   compliance: 'Open readiness',
   data: 'Go to Data hub',
+  cash: 'Open Cash & Collections',
 }
 
 // Voice-aware CTA: a governance (board) lens never gets an imperative "go fix".

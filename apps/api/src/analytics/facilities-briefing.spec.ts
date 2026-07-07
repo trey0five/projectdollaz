@@ -113,6 +113,7 @@ function makeService(over: {
     accreditation as never,
     facilitiesSvc as never,
     advancement as never,
+    { arApAgingSnapshot: { findFirst: async () => null } } as never, // prisma (LAST)
   )
 }
 

@@ -107,6 +107,7 @@ function makeService(over: {
         summary: { total: 0, activeCount: 0, totalGoal: 0, totalRaised: 0, overallPctOfGoal: null, behindGoalActiveCount: 0, closingSoonActiveCount: 0, overdueActiveCount: 0 },
       }),
     } as never,
+    { arApAgingSnapshot: { findFirst: async () => null } } as never, // prisma (LAST)
   )
 }
 

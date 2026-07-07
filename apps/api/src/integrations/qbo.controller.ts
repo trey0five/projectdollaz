@@ -8,6 +8,7 @@ import { EntitlementGuard } from '../billing/entitlement.guard.js'
 import { MergeMappingDto } from '../mapping/dto/merge-mapping.dto.js'
 import { QboService } from './qbo.service.js'
 import { QboDrillService } from './qbo-drill.service.js'
+import { QboAgingService } from './qbo-aging.service.js'
 import { QbCallbackDto, QbSyncDto, QbSyncScopeDto } from './dto/qbo.dto.js'
 import { QbDrillDto } from './dto/qbo-drill.dto.js'
 
@@ -21,7 +22,21 @@ export class QboController {
   constructor(
     private readonly qbo: QboService,
     private readonly drill: QboDrillService,
+    private readonly agingService: QboAgingService,
   ) {}
+
+  /**
+   * AR/AP aging — the Cash & Collections payload (KPIs + aging buckets + AR/AP
+   * registers with QuickBooks deep-links). Read-only, viewer-open (Board may view
+   * cash/collections). `?refresh=true` forces a live QuickBooks pull (else live+
+   * cached). NO request DTO — the only input is a query flag compared `=== 'true'`
+   * (the exact whitelist-safe idiom disconnect(?removeData=true) uses).
+   */
+  @Get('aging')
+  @Roles('owner', 'accountant', 'viewer')
+  aging(@Param('schoolId') schoolId: string, @Query('refresh') refresh?: string) {
+    return this.agingService.getAging(schoolId, { refresh: refresh === 'true' })
+  }
 
   /**
    * Transaction drill-down: the actual QuickBooks transactions behind a computed

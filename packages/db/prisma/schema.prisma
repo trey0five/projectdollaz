@@ -134,6 +134,7 @@ model School {
   orgQboMappings           OrgQboMapping[]
   enrollmentSources        EnrollmentSource[]
   enrollmentSnapshots      EnrollmentSnapshot[]
+  arApAgingSnapshots       ArApAgingSnapshot[]
 
   @@index([organizationId])
   @@map("schools")
@@ -741,6 +742,53 @@ model QboConnection {
   school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
   @@map("qbo_connections")
+}
+
+/// AR/AP aging — the "as-of" Cash & Collections snapshot. UNLIKE statement
+/// snapshots this is NOT a reproducible fiscal-period artifact: it is an as-of
+/// capture of open receivables/payables aging, DATED by as_of_date (a same-day
+/// re-capture UPSERTS on (school_id, as_of_date), idempotent). Written best-effort
+/// at QBO sync time and write-through whenever the /cash page / Penny does a live
+/// pull. The briefing reads the LATEST row (by captured_at) DIRECTLY via Prisma;
+/// the page/Penny may bypass it with a live pull. Value-safe: only aggregate totals
+/// + top-N parties (JSON) are stored — no full open-invoice ledger at rest.
+model ArApAgingSnapshot {
+  id          String   @id @default(uuid()) @db.Uuid
+  schoolId    String   @map("school_id") @db.Uuid
+  asOfDate    DateTime @map("as_of_date") @db.Date
+  realmId     String?  @map("realm_id")
+  environment String   @default("sandbox")
+  /// 'aging-detail' (the detail report) | 'entity-fallback' (Invoice/Bill query).
+  source      String   @default("aging-detail")
+  /// 'sync' | 'page' | 'penny' — what triggered this capture.
+  capturedVia String   @map("captured_via")
+
+  // Headline totals as Float (the briefing reads these scalars, no JSON parse).
+  arTotal    Float @default(0) @map("ar_total")
+  arOverdue  Float @default(0) @map("ar_overdue")
+  ar90Plus   Float @default(0) @map("ar_90_plus")
+  apTotal    Float @default(0) @map("ap_total")
+  apOverdue  Float @default(0) @map("ap_overdue")
+  apDueSoon  Float @default(0) @map("ap_due_soon")
+  arAccounts Int   @default(0) @map("ar_accounts")   // distinct parties with an open balance
+  ar90Count  Int   @default(0) @map("ar_90_count")   // parties with any 90+ open balance
+  apVendors  Int   @default(0) @map("ap_vendors")
+
+  // Structured detail as JSON (small; read whole by the page, ignored by the briefing).
+  arBuckets Json @map("ar_buckets") @db.JsonB // { current, d1_30, d31_60, d61_90, d90_plus }
+  apBuckets Json @map("ap_buckets") @db.JsonB
+  arTop     Json @map("ar_top") @db.JsonB     // AgingParty[] (top debtors, capped 8)
+  apTop     Json @map("ap_top") @db.JsonB     // AgingParty[] (top creditors, capped 8)
+
+  capturedAt DateTime @default(now()) @map("captured_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, asOfDate])
+  @@index([schoolId, capturedAt])
+  @@map("ar_ap_aging_snapshots")
 }
 
 /// Topology B — ONE QuickBooks company for the whole organization, split by

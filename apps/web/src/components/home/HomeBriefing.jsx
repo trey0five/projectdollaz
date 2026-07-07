@@ -31,6 +31,7 @@ import {
   BadgeCheck,
   Wrench,
   GraduationCap,
+  HandCoins,
 } from 'lucide-react'
 import { LensIndicator, LensSwitcher } from './LensControls.jsx'
 import { WhyText, titleProgress } from '../ui/briefingFx.jsx'
@@ -121,6 +122,8 @@ const SOURCE_META = {
   advancement: { label: 'Advancement', Icon: HeartHandshake },
   // Phase 2 — the cross-domain enrollment→tuition→cash item.
   enrollment: { label: 'Enrollment', Icon: GraduationCap },
+  // AR/AP aging — the Cash & Collections finance item.
+  cash: { label: 'Cash', Icon: HandCoins },
 }
 
 const CTA_LABEL = {
@@ -128,6 +131,7 @@ const CTA_LABEL = {
   compliance: 'Open readiness',
   data: 'Go to Data hub',
   enrollment: 'Open enrollment',
+  cash: 'Open Cash & Collections',
 }
 
 // Map a briefing item.source to a valid TASK_SOURCE_TYPE (manual|policy|metric|

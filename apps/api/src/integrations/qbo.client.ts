@@ -458,4 +458,58 @@ export class QboClient {
     }
     return this.apiGet(realmId, accessToken, path)
   }
+
+  /**
+   * Pull the Aged Receivable Detail REPORT (raw JSON) as of `asOf` — the per-invoice
+   * open-item source behind the Cash & Collections AR register + aging buckets.
+   * ALWAYS sends report_date explicitly (QBO silently defaults an omitted date —
+   * the same lone-date gotcha as every other report). aging_method=Report_Date ages
+   * each open item against the as-of date; Accrual (aging is meaningless on cash).
+   * Returns RAW JSON for the pure qbo-aging.ts parser (which computes buckets itself).
+   */
+  getAgedReceivableDetail(realmId: string, accessToken: string, asOf: string): Promise<unknown> {
+    return this.apiGet(
+      realmId,
+      accessToken,
+      `reports/AgedReceivableDetail?report_date=${encodeURIComponent(asOf)}&aging_method=Report_Date&accounting_method=Accrual`,
+    )
+  }
+
+  /** Pull the Aged Payable Detail REPORT (raw JSON) as of `asOf` — the AP counterpart
+   *  of getAgedReceivableDetail (same date/method rules). RAW JSON for qbo-aging.ts. */
+  getAgedPayableDetail(realmId: string, accessToken: string, asOf: string): Promise<unknown> {
+    return this.apiGet(
+      realmId,
+      accessToken,
+      `reports/AgedPayableDetail?report_date=${encodeURIComponent(asOf)}&aging_method=Report_Date&accounting_method=Accrual`,
+    )
+  }
+
+  /**
+   * FALLBACK — open receivables via an entity query (`Balance > '0'`) when the aging
+   * DETAIL report JSON is unusable. Returns RAW JSON; parseEntityAging computes the
+   * aging from DueDate. Reuses the existing apiGet query path (maxresults 1000).
+   */
+  queryOpenInvoices(realmId: string, accessToken: string): Promise<unknown> {
+    return this.apiGet(
+      realmId,
+      accessToken,
+      'query?query=' +
+        encodeURIComponent(
+          "select Id, DocNumber, TxnDate, DueDate, Balance, TotalAmt, CustomerRef from Invoice where Balance > '0' maxresults 1000",
+        ),
+    )
+  }
+
+  /** FALLBACK — open bills via an entity query (`Balance > '0'`). RAW JSON for parseEntityAging. */
+  queryOpenBills(realmId: string, accessToken: string): Promise<unknown> {
+    return this.apiGet(
+      realmId,
+      accessToken,
+      'query?query=' +
+        encodeURIComponent(
+          "select Id, DocNumber, TxnDate, DueDate, Balance, TotalAmt, VendorRef from Bill where Balance > '0' maxresults 1000",
+        ),
+    )
+  }
 }

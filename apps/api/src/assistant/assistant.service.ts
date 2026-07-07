@@ -63,6 +63,7 @@ import { AdvancementService } from '../advancement/advancement.service.js'
 import { AlertService, ALERT_METRIC_KEYS } from '../alerts/alert.service.js'
 import { SchoolsService } from '../schools/schools.service.js'
 import { QboDrillService } from '../integrations/qbo-drill.service.js'
+import { QboAgingService } from '../integrations/qbo-aging.service.js'
 import type { CreatePolicyDto } from '../governance/dto/create-policy.dto.js'
 import type { CreateCommitteeDto } from '../governance/dto/create-committee.dto.js'
 import type { CreateMeetingDto } from '../governance/dto/create-meeting.dto.js'
@@ -567,6 +568,10 @@ export class AssistantService {
     // positional-arg unit specs still construct; only that one execute() case touches
     // `this.qboDrill`, so undefined elsewhere is safe.
     private readonly qboDrill: QboDrillService,
+    // Phase 6 — AR/AP aging for the read-only get_cash_collections tool. Added LAST
+    // (after qboDrill) so existing positional-arg unit specs still construct; only that
+    // one execute() case touches `this.aging`, so undefined elsewhere is safe.
+    private readonly aging: QboAgingService,
   ) {}
 
   isConfigured(): boolean {
@@ -3044,6 +3049,47 @@ export class AssistantService {
             total: r.reconcile.total,
             ...(r.reconcile.note ? { note: r.reconcile.note } : {}),
           },
+        }
+      }
+      case 'get_cash_collections': {
+        // Read-only AR/AP aging (live+cached; write-through-persists as a side effect).
+        // NOT in WRITE_TOOLS/CONFIRM_TOOLS (no ApplyActionDto/ProposedAction change).
+        // Compact projection (totals + buckets + top parties) under the 8000-char cap;
+        // Penny MAY name parties in chat (same finance read-auth as the /cash page).
+        const a = await this.aging.getAging(ctx.schoolId, {})
+        if (!a.connected) {
+          return { connected: false, orgFed: a.orgFed, note: 'QuickBooks is not connected for this school.' }
+        }
+        const party = (p: { party: string; total: number; overdue: number; oldestBucket: string; count: number }) => ({
+          party: p.party,
+          total: p.total,
+          overdue: p.overdue,
+          oldestBucket: p.oldestBucket,
+          openItems: p.count,
+        })
+        return {
+          connected: true,
+          asOf: a.asOf,
+          stale: a.stale,
+          ...(a.note ? { note: a.note } : {}),
+          receivables: {
+            total: a.ar.total,
+            overdue: a.ar.overdue,
+            over90Days: a.ar.over90,
+            accounts: a.ar.accounts,
+            dso: a.ar.dso,
+            buckets: a.ar.buckets,
+            top: a.ar.top.slice(0, 5).map(party),
+          },
+          payables: {
+            total: a.ap.total,
+            overdue: a.ap.overdue,
+            dueSoon: a.ap.dueSoon,
+            daysPayable: a.ap.daysPayable,
+            buckets: a.ap.buckets,
+            top: a.ap.top.slice(0, 5).map(party),
+          },
+          netPosition: a.net,
         }
       }
       case 'get_budget_vs_actual': {

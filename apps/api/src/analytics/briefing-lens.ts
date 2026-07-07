@@ -42,12 +42,17 @@ export const SOURCE_RANK: Record<AttentionSource, number> = {
   // Phase 2 — the cross-domain enrollment→cash item is a financial-health signal;
   // it sits right after compliance (before governance) in the legacy tiebreak.
   enrollment: 2,
-  governance: 3,
-  accreditation: 4,
-  facilities: 5,
-  advancement: 6,
-  workflow: 7,
-  metric: 8,
+  // AR/AP aging — a high-salience finance/cash signal; sits with enrollment (right
+  // after compliance, before the board-oversight domains). ADDITIVE — inserting it
+  // only shifts governance..metric down by one WITHOUT reordering them relative to
+  // each other, so every pre-cash accountant snapshot stays byte-identical.
+  cash: 3,
+  governance: 4,
+  accreditation: 5,
+  facilities: 6,
+  advancement: 7,
+  workflow: 8,
+  metric: 9,
 }
 
 /** Fixed sub-order for the non-metric items so the list is deterministic. */
@@ -56,6 +61,11 @@ export const COMPLIANCE_ORDER = [
   // never actually ties with another source on the weight step, so this index is
   // only ever consulted defensively — enrollment has a unique source weight).
   'enrollment:below-plan',
+  // AR/AP aging (Cash & Collections). Grouped with the financial-health block, right
+  // after enrollment; AR overdue leads AP past-due so a same-severity tie is curated,
+  // not id-arbitrary. KEPT for the viewer lens (aggregate, board-legible cash matter).
+  'cash:ar-overdue',
+  'cash:ap-overdue',
   'compliance:reconciliation',
   'compliance:material',
   'compliance:reportable',
@@ -135,10 +145,16 @@ export const COMPLIANCE_ORDER = [
 // SOURCE_RANK. ADDITIVE — enrollment is a new id, and inserting it only shifts the
 // existing sources down by one WITHOUT reordering them relative to each other, so
 // every pre-enrollment lens output stays byte-identical for the existing ids.
+// Cash/collections (AR/AP aging) is a high-salience finance signal, so for owner/
+// viewer it sits WITH the metric headline + enrollment (right after enrollment, ahead
+// of the board-oversight domains); for the accountant it keeps == SOURCE_RANK.
+// ADDITIVE — cash is a new source, and inserting it only shifts the existing sources
+// down by one WITHOUT reordering them relative to each other, so every pre-cash lens
+// output stays byte-identical for the existing ids.
 const SOURCE_WEIGHT: Record<Lens, Record<AttentionSource, number>> = {
-  owner: { metric: 0, enrollment: 1, governance: 2, accreditation: 3, facilities: 4, advancement: 5, compliance: 6, data: 7, workflow: 8 },
-  viewer: { metric: 0, enrollment: 1, governance: 2, accreditation: 3, facilities: 4, advancement: 5, compliance: 6, data: 7, workflow: 8 },
-  accountant: { data: 0, compliance: 1, enrollment: 2, governance: 3, accreditation: 4, facilities: 5, advancement: 6, workflow: 7, metric: 8 }, // == SOURCE_RANK
+  owner: { metric: 0, enrollment: 1, cash: 2, governance: 3, accreditation: 4, facilities: 5, advancement: 6, compliance: 7, data: 8, workflow: 9 },
+  viewer: { metric: 0, enrollment: 1, cash: 2, governance: 3, accreditation: 4, facilities: 5, advancement: 6, compliance: 7, data: 8, workflow: 9 },
+  accountant: { data: 0, compliance: 1, enrollment: 2, cash: 3, governance: 4, accreditation: 5, facilities: 6, advancement: 7, workflow: 8, metric: 9 }, // == SOURCE_RANK
 }
 
 // ── VOICE: per-lens reframing tone (additive metadata, never a value rewrite) ──
@@ -212,6 +228,12 @@ function keepForViewer(item: AttentionItem): boolean {
   // `why` is aggregate + outcome-voiced (headcount vs plan, tuition/cash impact — no
   // PII, no operator "go fix" CTA), so it passes through with no VIEWER_REFRAME entry.
   if (item.source === 'enrollment') return true
+  // AR/AP aging (Cash & Collections) drives cash/the reserve — a fiduciary board
+  // matter the board OWNS. KEPT for the viewer/board lens like the other finance/
+  // oversight domains, UNLIKE operational workflow (dropped). The item is aggregate
+  // ($ + counts, NO party names) + outcome-legible, so it passes through with no
+  // VIEWER_REFRAME entry (no "go fix" operator CTA to rewrite).
+  if (item.source === 'cash') return true
   if (item.source === 'compliance') return VIEWER_COMPLIANCE.has(item.id)
   // Workflow (operational tasks) are DROPPED for the board EXCEPT the caller-scoped
   // "awaiting YOUR sign-off" item: open tasks / the school-scoped pending COUNT are

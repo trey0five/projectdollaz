@@ -21,6 +21,11 @@
 //                    (null hides the +New button)
 //   registerTable    node — the active register's table (parent renders it)
 //   attentionItems   array of { id, tone, title, why, actions:[{label,onClick,primary}] }
+//   headerAside      node | null — extra header controls rendered to the LEFT of the
+//                    attention pill (e.g. an "as of" chip + Refresh button). Optional;
+//                    omitting it leaves the header byte-identical for existing callers.
+//   beforeBody       node | null — a full-width block rendered BETWEEN the KPI row and
+//                    the two-column body (e.g. Cash & Collections' aging bars). Optional.
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion, useReducedMotion } from 'framer-motion'
 import { Plus } from 'lucide-react'
@@ -56,6 +61,8 @@ export default function DomainCommandCenter({
   onNew,
   registerTable,
   attentionItems = [],
+  headerAside = null,
+  beforeBody = null,
 }) {
   const reduce = useReducedMotion()
 
@@ -78,7 +85,10 @@ export default function DomainCommandCenter({
             <h1 className="font-serif text-2xl font-semibold text-navy sm:text-[30px]">{title}</h1>
           </div>
         </div>
-        <AttentionPill count={attentionCount} />
+        <div className="flex flex-wrap items-center gap-3">
+          {headerAside}
+          <AttentionPill count={attentionCount} />
+        </div>
       </div>
 
       {/* ── KPI card row ───────────────────────────────────────────────────── */}
@@ -97,10 +107,15 @@ export default function DomainCommandCenter({
         </div>
       ) : null}
 
+      {/* ── Optional full-width block between the KPI row and the body ──────── */}
+      {beforeBody}
+
       {/* ── Two-column body ────────────────────────────────────────────────── */}
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* LEFT — the register (tabs + active table) */}
-        <div className="card-soft flex flex-col p-4 sm:p-5 lg:col-span-2">
+        {/* LEFT — the register (tabs + active table). min-w-0 lets a wide register
+            (e.g. Cash & Collections' aging table) scroll inside its own
+            overflow-x-auto instead of pushing the page body horizontally. */}
+        <div className="card-soft flex min-w-0 flex-col p-4 sm:p-5 lg:col-span-2">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div className="flex gap-1">
               {tabs.map((t) => {

@@ -54,7 +54,8 @@ function makeService() {
     stub, // audit
     alerts as never, // alerts
     stub, // schools (LAST) — only invite_member paths touch it
-    stub, // qboDrill (LAST) — only get_account_transactions touches it
+    stub, // qboDrill — only get_account_transactions touches it
+    stub, // aging (LAST) — only get_cash_collections touches it
   )
   return { svc, alertsCreate }
 }

@@ -29,6 +29,7 @@ import {
   FileStack,
   BarChart3,
   Wallet,
+  HandCoins,
   FileBarChart2,
   ShieldCheck,
   Landmark,
@@ -71,6 +72,7 @@ export const NAV_GROUPS = [
     Icon: CircleDollarSign,
     items: [
       { to: '/statements', navId: 'nav-statements', label: 'Statements', Icon: FileStack, match: (p) => p.startsWith('/statements') || p.startsWith('/history') },
+      { to: '/cash', navId: 'nav-cash', label: 'Cash & Collections', Icon: HandCoins, match: (p) => p.startsWith('/cash') },
       { to: '/analytics', navId: 'nav-analytics', label: 'Analytics', Icon: BarChart3, match: (p) => p.startsWith('/analytics') },
       { to: '/budget', navId: 'nav-budget', label: 'Budget', Icon: Wallet, match: (p) => p.startsWith('/budget') },
       { to: '/reports', navId: 'nav-reports', label: 'Reports', Icon: FileBarChart2, match: (p) => p.startsWith('/reports') },

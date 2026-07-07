@@ -640,6 +640,11 @@ export const qboApi = {
   // the stored snapshot lineage and pulls live GL. Returns a QbDrillResult.
   transactions: (schoolId, body) =>
     api.post(`/schools/${schoolId}/integrations/qb/transactions`, body),
+  // AR/AP aging ("Cash & Collections"): live+cached pull of aged receivables +
+  // payables (buckets, register rows with QuickBooks deep-links, top parties).
+  // params = { refresh: true } bypasses the server cache + forces a fresh pull.
+  aging: (schoolId, params) =>
+    api.get(`/schools/${schoolId}/integrations/qb/aging`, { params }),
 }
 
 // Org-level QuickBooks console: per-school connection overview across the

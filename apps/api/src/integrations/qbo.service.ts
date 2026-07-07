@@ -4,6 +4,7 @@
 // StatementsService.generate), which auto-scans on snapshot creation. Config-gated:
 // disabled (501-able) when QB_OAUTH_CLIENT_ID is unset.
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common'
+import { ModuleRef } from '@nestjs/core'
 import { ConfigService } from '@nestjs/config'
 import type { ImportRole, QboConnection, User } from '@finrep/db'
 import { SCOA_CATEGORIES, type SCoaCategory } from '@finrep/engine'
@@ -18,6 +19,7 @@ import { fyMonthKeys, fyStartYearForPeriodEnd } from '../monthly/fy-elapsed.js'
 import type { MonthlyRowDto } from '../monthly/dto/create-monthly-snapshot.dto.js'
 import type { QbSyncScopeDto } from './dto/qbo.dto.js'
 import { QboClient, qboPlSection } from './qbo.client.js'
+import { QboAgingService } from './qbo-aging.service.js'
 import { decToken, encToken } from './qbo-crypto.js'
 import { suggestCategory } from './qbo-review.suggest.js'
 
@@ -166,7 +168,32 @@ export class QboService {
     private readonly monthlySnapshots: MonthlySnapshotsService,
     private readonly mapping: MappingService,
     private readonly audit: AuditService,
+    // AR/AP aging capture (best-effort tail of sync()/syncScope()). QboService ⇄
+    // QboAgingService is a mutual dependency; a constructor injection (even forwardRef)
+    // crashes at MODULE LOAD because emitDecoratorMetadata references the paramtype at
+    // class-eval while the other class is still in the ESM temporal dead zone. So we
+    // resolve QboAgingService LAZILY via ModuleRef inside captureAging (never at eval).
+    private readonly moduleRef: ModuleRef,
   ) {}
+
+  /**
+   * Best-effort AR/AP aging capture (as-of TODAY) after a sync. NEVER throws — a
+   * failing aging pull must not abort the TB sync (mirrors companyName()'s posture).
+   * Deliberately called ONLY from sync()/syncScope() (the "current period the user is
+   * looking at" entry points), NOT syncOnePeriod()/history loops — aging is a "right
+   * now" concept, never captured as-of a historical period end.
+   */
+  private async captureAging(schoolId: string, conn: QboConnection): Promise<void> {
+    try {
+      // Lazy-resolve to break the eval-time import cycle (see the ctor note).
+      const aging = this.moduleRef.get(QboAgingService, { strict: false })
+      await aging.captureFromSync(schoolId, { realmId: conn.realmId, environment: conn.environment })
+    } catch (e) {
+      // Log + swallow (no logger on this service; a failed capture is non-fatal and
+      // the page/briefing simply keep the last snapshot).
+      void e
+    }
+  }
 
   /**
    * Pull a trial balance and merge any type-derived P&L mapping entries into the
@@ -503,6 +530,7 @@ export class QboService {
     const conn = await this.prisma.qboConnection.findUnique({ where: { schoolId } })
     if (!conn) throw new NotFoundException('QuickBooks is not connected for this school.')
     const { snapshot } = await this.syncOnePeriod(actor, schoolId, conn, periodId)
+    await this.captureAging(schoolId, conn) // best-effort, as-of today; never aborts the sync
     return snapshot
   }
 
@@ -675,6 +703,7 @@ export class QboService {
       }
     }
 
+    await this.captureAging(schoolId, conn) // best-effort, as-of today; never aborts the sync
     return result
   }
 
