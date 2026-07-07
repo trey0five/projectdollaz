@@ -60,6 +60,10 @@ import ResetPasswordPage from './pages/ResetPasswordPage.jsx'
 // The public marketing homepage — lazy so authed users never download it.
 const LandingPage = lazy(() => import('./pages/landing/LandingPage.jsx'))
 
+// Strategic Planning (Phase 5) — lazy so the flashy SVG-arc hero + its module
+// bundle only load for schools that actually open /strategy.
+const StrategyPage = lazy(() => import('./pages/StrategyPage.jsx'))
+
 // "/" — OUTSIDE AuthedLayout — is the marketing homepage for EVERYONE (logged in
 // or out), so the app logo can bring a signed-in user here. The app lives at /app;
 // login navigates there, and the landing shows a "Go to app" affordance when the
@@ -179,6 +183,14 @@ export default function App() {
         <Route path="/accreditation" element={<AccreditationPage />} />
         <Route path="/facilities" element={<FacilitiesPage />} />
         <Route path="/advancement" element={<AdvancementPage />} />
+        <Route
+          path="/strategy"
+          element={
+            <Suspense fallback={<div className="min-h-screen bg-cream" />}>
+              <StrategyPage />
+            </Suspense>
+          }
+        />
         <Route path="/enrollment" element={<EnrollmentPage />} />
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/knowledge" element={<KnowledgePage />} />

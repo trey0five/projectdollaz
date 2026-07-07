@@ -20,6 +20,7 @@ import { TasksService } from '../workflow/tasks.service.js'
 import { AccreditationService } from '../accreditation/accreditation.service.js'
 import { FacilitiesService } from '../facilities/facilities.service.js'
 import { AdvancementService } from '../advancement/advancement.service.js'
+import { StrategyService } from '../strategy/strategy.service.js'
 import {
   ACCREDITATION_REVIEW_SOON_DAYS,
   ADVANCEMENT_CLOSING_SOON_DAYS,
@@ -61,6 +62,8 @@ export type AttentionSource =
   | 'accreditation'
   | 'facilities'
   | 'advancement'
+  // Phase 5 Strategic Planning — the plan-health briefing signal (STEP 2.13).
+  | 'strategy'
   // Phase 2 Enrollment Intelligence — the cross-domain enrollment→tuition→cash item.
   | 'enrollment'
   // AR/AP aging — the Cash & Collections briefing STEP (reads the persisted snapshot
@@ -182,9 +185,16 @@ export class BriefingService {
     private readonly facilities: FacilitiesService,
     // Phase 4 Advancement v1 — the module gate + the campaign register read.
     private readonly advancement: AdvancementService,
+    // Phase 5 Strategic Planning — the module gate + the ACTIVE-plan computed read for
+    // STEP 2.13. Injected positional-last-BEFORE prisma so existing positional-arg
+    // briefing specs (which passed prisma last) get strategy=undefined; every strategy
+    // call is `this.strategy?.…`-guarded so an absent StrategyService simply yields no
+    // strategy item (fail-soft) rather than throwing. getActivePlanComputed itself
+    // NEVER throws (fail-soft to { hasPlan:false }), so STEP 2.13 can never 500.
+    private readonly strategy: StrategyService,
     // AR/AP aging — the briefing reads the persisted snapshot DIRECTLY via Prisma
     // (the module rule: NO QboAgingService injection, NO IntegrationsModule import).
-    // Added LAST so existing positional-arg briefing specs (which stop at advancement)
+    // Added LAST so existing positional-arg briefing specs (which stop at strategy)
     // still construct; readAgingRow() guards `if (!this.prisma)` so an absent Prisma
     // simply yields no cash item (fail-soft) rather than throwing.
     private readonly prisma: PrismaService,
@@ -324,6 +334,7 @@ export class BriefingService {
       accreditationLicensed,
       facilitiesLicensed,
       advancementLicensed,
+      strategyLicensed,
       enrollmentLicensed,
       agingRow,
       cashFlowRow,
@@ -341,6 +352,9 @@ export class BriefingService {
       this.billing.isEntitledForModule(schoolId, 'facilities').catch(() => false),
       // Phase 4 Advancement gate — same fan-out, fail CLOSED (hides advancement items).
       this.billing.isEntitledForModule(schoolId, 'advancement').catch(() => false),
+      // Phase 5 Strategic Planning gate — same fan-out, fail CLOSED (hides the
+      // strategy plan-health item for a school without the 'strategy' module).
+      this.billing.isEntitledForModule(schoolId, 'strategy').catch(() => false),
       // Phase 2 Enrollment gate — same fan-out, fail CLOSED (hides the cross-domain
       // enrollment item for a finance-only school).
       this.billing.isEntitledForModule(schoolId, 'enrollment').catch(() => false),
@@ -852,6 +866,93 @@ export class BriefingService {
             value: null,
             link: '/advancement',
             dueDate: earliest,
+          })
+        }
+      }
+    }
+
+    // ── STEP 2.13: strategic-plan health signals (source 'strategy') ──────────
+    // The 7th licensable module's briefing source — the ACTIVE strategic plan's health
+    // surfaced as up to THREE board/leadership signals. School-scoped (NOT period-
+    // bound), like governance/accreditation/facilities/advancement.
+    //
+    // GATED by the per-module entitlement (strategyLicensed, resolved in the STEP-2
+    // fan-out). Fail-soft in BOTH directions like advancement:
+    //   • isEntitledForModule throws → treated as NOT licensed (fail CLOSED), and
+    //   • getActivePlanComputed can't throw (fail-soft to { hasPlan:false }); the
+    //     `this.strategy?.…` guard + .catch keep an absent service / hiccup silent.
+    // Neither ever 500s the briefing. VALUE-SAFE: the worst goal's figures are quoted
+    // VERBATIM from the computed payload (already formatMetricValue strings), and the
+    // overall progress % is always numeric, so the narration numeric-guard passes.
+    if (strategyLicensed) {
+      const sp = await Promise.resolve()
+        .then(() => this.strategy?.getActivePlanComputed?.(schoolId) ?? null)
+        .catch(() => null)
+      if (sp?.hasPlan) {
+        const s = sp.summary
+        const pctTxt = `${Math.round((s.overallProgressPct ?? 0) * 100)}%`
+
+        // 2.13a — goals off pace. CRITICAL when any goal is BEHIND; WARN when only
+        // at-risk. The worst behind goal's figures are quoted verbatim (value-safe).
+        if (s.behindPaceGoalCount > 0 || s.atRiskGoalCount > 0) {
+          const critical = s.behindPaceGoalCount > 0
+          const count = critical ? s.behindPaceGoalCount : s.atRiskGoalCount
+          const label = critical ? 'behind pace' : 'at risk'
+          const worst = s.behindPaceGoals[0] ?? null
+          let why = `Overall plan progress is ${pctTxt}; ${count} goal${count === 1 ? ' is' : 's are'} ${label}.`
+          if (worst) {
+            const cur = worst.formattedCurrent ?? 'no reading yet'
+            const tgt = worst.formattedTarget ?? 'its target'
+            why += ` "${worst.title}" is at ${cur} against a target of ${tgt}${worst.targetDate ? ` by ${worst.targetDate}` : ''}.`
+          }
+          why += ' Review the strategic plan.'
+          items.push({
+            id: 'strategy:goals-behind-pace',
+            severity: critical ? 'critical' : 'warn',
+            source: 'strategy',
+            title: `${count} strategic goal${count === 1 ? '' : 's'} ${label}`,
+            why,
+            metricKey: worst?.metricKey ?? null,
+            value: null,
+            link: '/strategy',
+            dueDate: worst?.targetDate ?? null,
+          })
+        }
+
+        // 2.13b — stalled initiatives (WARN). The worst (longest-stale) is named.
+        if (s.staleInitiativeCount > 0) {
+          const worst = s.staleInitiatives[0] ?? null
+          const n = s.staleInitiativeCount
+          let why = `${n} strategic initiative${n === 1 ? ' has' : 's have'} stalled with no recent update.`
+          if (worst) {
+            why += ` "${worst.title}" has not been updated in ${worst.staleDays} days${worst.ownerName ? ` (owner ${worst.ownerName})` : ''}.`
+          }
+          why += ' Review the plan’s execution.'
+          items.push({
+            id: 'strategy:initiative-stale',
+            severity: 'warn',
+            source: 'strategy',
+            title: `${n} strategic initiative${n === 1 ? '' : 's'} stalled`,
+            why,
+            metricKey: null,
+            value: null,
+            link: '/strategy',
+            dueDate: null,
+          })
+        }
+
+        // 2.13c — plan review due this month (INFO nudge).
+        if (s.reviewDueThisMonth && s.nextReviewDate) {
+          items.push({
+            id: 'strategy:plan-review-due',
+            severity: 'info',
+            source: 'strategy',
+            title: 'Strategic plan review due this month',
+            why: `Your strategic plan is scheduled for review on ${s.nextReviewDate}. Revisit goals and pace with the board — overall progress is ${pctTxt}.`,
+            metricKey: null,
+            value: null,
+            link: '/strategy',
+            dueDate: s.nextReviewDate,
           })
         }
       }

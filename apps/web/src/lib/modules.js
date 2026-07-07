@@ -18,6 +18,7 @@ export const MODULE_KEYS = [
   'facilities',
   'advancement',
   'accreditation',
+  'strategy',
 ]
 
 /** The always-on module. Never gated, never sold. */
@@ -36,6 +37,7 @@ export const MODULE_META = {
   facilities: { key: 'facilities', label: 'Facilities', description: 'Capital projects & deferred maintenance.', core: false },
   advancement: { key: 'advancement', label: 'Advancement', description: 'Development, campaigns, giving, gift schedules.', core: false },
   accreditation: { key: 'accreditation', label: 'Accreditation', description: 'Compliance & accreditation readiness, self-study, evidence.', core: false },
+  strategy: { key: 'strategy', label: 'Strategic Planning', description: 'Strategic plans, pillars, goals & initiatives — self-measuring against your live financials.', core: false },
 }
 
 /** The sellable (non-core) module keys. */

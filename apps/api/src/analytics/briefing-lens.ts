@@ -51,8 +51,13 @@ export const SOURCE_RANK: Record<AttentionSource, number> = {
   accreditation: 5,
   facilities: 6,
   advancement: 7,
-  workflow: 8,
-  metric: 9,
+  // Strategic Planning — a board-oversight domain like advancement; sits right after
+  // it in the legacy/accountant order. ADDITIVE — inserting it only shifts workflow/
+  // metric down by one WITHOUT reordering them, so pre-strategy accountant snapshots
+  // stay byte-identical for the existing ids.
+  strategy: 8,
+  workflow: 9,
+  metric: 10,
 }
 
 /** Fixed sub-order for the non-metric items so the list is deterministic. */
@@ -100,6 +105,14 @@ export const COMPLIANCE_ORDER = [
   // facilities, before workflow (grouped with the board-oversight domains). KEPT
   // for the viewer lens (board/development-relevant) — see keepForViewer.
   'advancement:giving-progress',
+  // Strategic Planning items (Phase 5). Placed after advancement, before workflow
+  // (grouped with the board-oversight domains); goals-behind-pace (actionable, can
+  // escalate critical) leads the stale-initiative nudge, then the plan-review-due
+  // info item, so same-severity ties are curated, not id-arbitrary. KEPT for the
+  // viewer lens (board owns plan health) — see keepForViewer.
+  'strategy:goals-behind-pace',
+  'strategy:initiative-stale',
+  'strategy:plan-review-due',
   // Workflow task items (Phase 3). Placed after the governance items; overdue
   // leads (actionable now), then MY personal sign-off queue, then the school-scoped
   // sign-off backlog, then upcoming, so a same-severity tie is curated, not id-
@@ -155,10 +168,15 @@ export const COMPLIANCE_ORDER = [
 // ADDITIVE — cash is a new source, and inserting it only shifts the existing sources
 // down by one WITHOUT reordering them relative to each other, so every pre-cash lens
 // output stays byte-identical for the existing ids.
+// Strategic Planning (Phase 5) is a board-oversight domain like advancement, so for
+// owner/viewer it sits WITH the board-oversight block (right after advancement); for
+// the accountant it keeps == SOURCE_RANK. ADDITIVE — strategy is a new source, and
+// inserting it only shifts the existing sources down by one WITHOUT reordering them,
+// so every pre-strategy lens output stays byte-identical for the existing ids.
 const SOURCE_WEIGHT: Record<Lens, Record<AttentionSource, number>> = {
-  owner: { metric: 0, enrollment: 1, cash: 2, governance: 3, accreditation: 4, facilities: 5, advancement: 6, compliance: 7, data: 8, workflow: 9 },
-  viewer: { metric: 0, enrollment: 1, cash: 2, governance: 3, accreditation: 4, facilities: 5, advancement: 6, compliance: 7, data: 8, workflow: 9 },
-  accountant: { data: 0, compliance: 1, enrollment: 2, cash: 3, governance: 4, accreditation: 5, facilities: 6, advancement: 7, workflow: 8, metric: 9 }, // == SOURCE_RANK
+  owner: { metric: 0, enrollment: 1, cash: 2, governance: 3, accreditation: 4, facilities: 5, advancement: 6, strategy: 7, compliance: 8, data: 9, workflow: 10 },
+  viewer: { metric: 0, enrollment: 1, cash: 2, governance: 3, accreditation: 4, facilities: 5, advancement: 6, strategy: 7, compliance: 8, data: 9, workflow: 10 },
+  accountant: { data: 0, compliance: 1, enrollment: 2, cash: 3, governance: 4, accreditation: 5, facilities: 6, advancement: 7, strategy: 8, workflow: 9, metric: 10 }, // == SOURCE_RANK
 }
 
 // ── VOICE: per-lens reframing tone (additive metadata, never a value rewrite) ──
@@ -226,6 +244,13 @@ function keepForViewer(item: AttentionItem): boolean {
   // the advancement register for development planning" — no per-donor PII, no
   // operator "go fix" CTA), so it passes through with no VIEWER_REFRAME entry.
   if (item.source === 'advancement') return true
+  // Phase 5 — strategic plan health (goals off pace, stale initiatives, review due)
+  // is a fiduciary matter the board OWNS (the board adopts and monitors the plan) —
+  // KEPT for the viewer/board lens like the other oversight domains, UNLIKE
+  // operational workflow (dropped). The `why` is aggregate + outcome-voiced (goal
+  // counts + the worst goal's figures, no operator "go fix" CTA), so it passes
+  // through with no VIEWER_REFRAME entry.
+  if (item.source === 'strategy') return true
   // Phase 2 — enrollment vs plan drives tuition revenue and, downstream, cash/the
   // reserve: a fiduciary board matter the board OWNS. KEPT for the viewer/board lens
   // like the other oversight domains, UNLIKE operational workflow (dropped). The

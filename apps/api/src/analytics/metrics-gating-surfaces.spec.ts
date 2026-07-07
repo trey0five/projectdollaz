@@ -90,6 +90,7 @@ function buildBriefing(analytics: AnalyticsService, billing: BillingService): Br
     periods as never, analytics, nullSvc as never, checklist as never,
     recon as never, corrective as never, billing, policies as never,
     meetings as never, tasks as never, accreditation as never, facilities as never, advancement as never,
+    { getActivePlanComputed: async () => ({ hasPlan: false }) } as never, // strategy
     { arApAgingSnapshot: { findFirst: async () => null } } as never, // prisma (LAST)
   )
 }

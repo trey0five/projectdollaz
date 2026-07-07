@@ -74,6 +74,7 @@ function makeService(row: ArApAgingSnapshot | null) {
     accreditation as never,
     { listMaintenance: async () => ({ items: [], summary: { openCount: 0, highPriorityOpenCount: 0, criticalOpen: 0, overdueOpen: 0, backlogCost: 0 } }) } as never,
     advancement as never,
+    { getActivePlanComputed: async () => ({ hasPlan: false }) } as never, // strategy
     prisma as never,
   )
 }

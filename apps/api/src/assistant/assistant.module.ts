@@ -14,6 +14,7 @@ import { GovernanceModule } from '../governance/governance.module.js'
 import { AccreditationModule } from '../accreditation/accreditation.module.js'
 import { FacilitiesModule } from '../facilities/facilities.module.js'
 import { AdvancementModule } from '../advancement/advancement.module.js'
+import { StrategyModule } from '../strategy/strategy.module.js'
 import { AlertModule } from '../alerts/alert.module.js'
 import { SchoolsModule } from '../schools/schools.module.js'
 import { IntegrationsModule } from '../integrations/integrations.module.js'
@@ -53,6 +54,10 @@ import { BriefingNarrationService } from './briefing-narration.service.js'
     AccreditationModule,
     FacilitiesModule,
     AdvancementModule,
+    // Phase 5 — exports StrategyService so Penny's read-only get_plan_status tool
+    // reads the ACTIVE plan's computed progress. No cycle: StrategyModule imports no
+    // AssistantModule (BriefingService already injects it, proving it's safe).
+    StrategyModule,
     // Phase 4E — proactive alerts. Exports AlertService so Penny's create_alert
     // confirm-tool can create standing requests. No cycle: AlertModule imports no
     // AssistantModule.

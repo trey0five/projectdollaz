@@ -10,6 +10,7 @@ import { WorkflowModule } from '../workflow/workflow.module.js'
 import { AccreditationModule } from '../accreditation/accreditation.module.js'
 import { FacilitiesModule } from '../facilities/facilities.module.js'
 import { AdvancementModule } from '../advancement/advancement.module.js'
+import { StrategyModule } from '../strategy/strategy.module.js'
 import { AnalyticsController } from './analytics.controller.js'
 import { AnalyticsService } from './analytics.service.js'
 import { InsightService } from './insight.service.js'
@@ -62,6 +63,10 @@ import { AssistantClient } from '../assistant/assistant.client.js'
     // Exports AdvancementService for BriefingService's 'advancement' STEP. Edge is
     // analytics → advancement ONLY (advancement does not import analytics) — acyclic.
     AdvancementModule,
+    // Phase 5 — exports StrategyService for BriefingService's 'strategy' STEP (2.13).
+    // Edge is analytics → strategy ONLY (StrategyModule does NOT import analytics) —
+    // acyclic. StrategyProgressService injects Prisma-only, so no service cycle either.
+    StrategyModule,
   ],
   controllers: [
     AnalyticsController,

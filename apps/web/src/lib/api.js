@@ -502,6 +502,44 @@ export const advancementApi = {
   removeGift: (schoolId, giftId) => api.delete(`/schools/${schoolId}/advancement/gifts/${giftId}`),
 }
 
+// ── Phase 5 Strategic Planning v1: the strategic-plan register (plans → pillars →
+// goals → initiatives) + the COMPUTED progress payload (the self-measuring spine).
+// School-scoped. Gated by the 'strategy' module: an entitled-but-unlicensed school
+// gets a 402 { code:'MODULE_NOT_LICENSED', module:'strategy' } (surface via
+// isModuleNotLicensed). getActiveProgress / getPlanProgress return the COMPUTED
+// payload (fractions 0..1); getPlan is the raw editable tree. rebaseline re-freezes
+// a metric goal's baseline to its current live value.
+export const strategyApi = {
+  getPlans: (schoolId) => api.get(`/schools/${schoolId}/strategy/plans`),
+  getPlan: (schoolId, planId) => api.get(`/schools/${schoolId}/strategy/plans/${planId}`),
+  getPlanProgress: (schoolId, planId) =>
+    api.get(`/schools/${schoolId}/strategy/plans/${planId}/progress`),
+  getActiveProgress: (schoolId) => api.get(`/schools/${schoolId}/strategy/active/progress`),
+  createPlan: (schoolId, body) => api.post(`/schools/${schoolId}/strategy/plans`, body),
+  updatePlan: (schoolId, planId, body) =>
+    api.patch(`/schools/${schoolId}/strategy/plans/${planId}`, body),
+  deletePlan: (schoolId, planId) => api.delete(`/schools/${schoolId}/strategy/plans/${planId}`),
+  createPillar: (schoolId, planId, body) =>
+    api.post(`/schools/${schoolId}/strategy/plans/${planId}/pillars`, body),
+  updatePillar: (schoolId, pillarId, body) =>
+    api.patch(`/schools/${schoolId}/strategy/pillars/${pillarId}`, body),
+  deletePillar: (schoolId, pillarId) =>
+    api.delete(`/schools/${schoolId}/strategy/pillars/${pillarId}`),
+  createGoal: (schoolId, pillarId, body) =>
+    api.post(`/schools/${schoolId}/strategy/pillars/${pillarId}/goals`, body),
+  updateGoal: (schoolId, goalId, body) =>
+    api.patch(`/schools/${schoolId}/strategy/goals/${goalId}`, body),
+  deleteGoal: (schoolId, goalId) => api.delete(`/schools/${schoolId}/strategy/goals/${goalId}`),
+  rebaselineGoal: (schoolId, goalId) =>
+    api.post(`/schools/${schoolId}/strategy/goals/${goalId}/rebaseline`),
+  createInitiative: (schoolId, goalId, body) =>
+    api.post(`/schools/${schoolId}/strategy/goals/${goalId}/initiatives`, body),
+  updateInitiative: (schoolId, initiativeId, body) =>
+    api.patch(`/schools/${schoolId}/strategy/initiatives/${initiativeId}`, body),
+  deleteInitiative: (schoolId, initiativeId) =>
+    api.delete(`/schools/${schoolId}/strategy/initiatives/${initiativeId}`),
+}
+
 // ── Phase 3 Workflow v1 — the generic TASK engine. School-scoped. CORE (always
 // included, NOT a licensed module), so there is NO MODULE_NOT_LICENSED path — only
 // the base entitlement 402 (isPaymentRequired) applies, like any other core read.

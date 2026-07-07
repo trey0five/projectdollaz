@@ -1041,6 +1041,19 @@ export const TOOL_SCHEMAS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'get_plan_status',
+      description:
+        "The school's ACTIVE strategic plan — its overall progress, pace, and which measurable goals are on or off track. Returns the plan name/status, overallProgressPct (0..1) and overallPaceStatus, goalCounts (onTrack/atRisk/behind/achieved/noData), per-pillar and per-goal progress — each goal carrying its metricKey + metricLabel, current-vs-target (formatted), pctToTarget, and paceStatus (on_track|at_risk|behind|achieved|no_data) — plus the behind-pace goals and any stalled initiatives. Use for \"how is our strategic plan going?\", \"are we on track on our goals?\", \"which goals are behind?\", \"what's our plan progress?\". Read-only; EVERY metric goal's figure is COMPUTED live from the school's QuickBooks & enrollment data (never typed in). Says so when the school has no plan. To explain WHY a metric-bound goal is behind, chain into get_trend / get_cash_flow / get_account_transactions using that goal's metricKey. State ONLY the figures this tool returns — never invent a goal, a value, or a pace.",
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: [],
+      },
+    },
+  },
 ]
 
 /** Status-line labels shown while a tool runs (present tense; agentic). */
@@ -1090,4 +1103,5 @@ export const TOOL_LABELS: Record<string, string> = {
   get_cash_collections: 'Checking receivables & payables…',
   get_cash_flow: 'Reading cash flow & reconciliation…',
   get_value_history: 'Tracing how that number changed…',
+  get_plan_status: 'Reading the strategic plan…',
 }

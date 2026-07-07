@@ -52,6 +52,7 @@ function makeService(opts: { member?: { userId: string } | null } = {}) {
     stub, // aging — only get_cash_collections touches it
     stub, // snapshotHistory — only get_value_history touches it
     stub, // cashFlow (LAST) — only get_cash_flow touches it
+    stub, // strategy (LAST) — only get_plan_status touches it
   )
   return { svc, submitForApproval, decide, list, membershipFindFirst }
 }

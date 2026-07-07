@@ -41,6 +41,7 @@ import {
   UserCog,
   Building2,
   HeartHandshake,
+  Target,
   LineChart as PlanIcon,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
@@ -62,6 +63,7 @@ const NAV_BADGE_SOURCE = {
   '/facilities': 'facilities',
   '/accreditation': 'accreditation',
   '/advancement': 'advancement',
+  '/strategy': 'strategy',
 }
 // The Finance domain rolls up its finance-family attention sources.
 const FINANCE_BADGE_SOURCES = ['metric', 'compliance', 'data']
@@ -75,6 +77,7 @@ const LOCKED_ICON = {
   facilities: Building2,
   advancement: HeartHandshake,
   accreditation: BadgeCheck,
+  strategy: Target,
 }
 
 const itemClass = (active) =>

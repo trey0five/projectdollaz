@@ -61,6 +61,7 @@ import { MeetingsService } from '../governance/meetings.service.js'
 import { AccreditationService } from '../accreditation/accreditation.service.js'
 import { FacilitiesService } from '../facilities/facilities.service.js'
 import { AdvancementService } from '../advancement/advancement.service.js'
+import { StrategyService } from '../strategy/strategy.service.js'
 import { AlertService, ALERT_METRIC_KEYS } from '../alerts/alert.service.js'
 import { SchoolsService } from '../schools/schools.service.js'
 import { QboDrillService } from '../integrations/qbo-drill.service.js'
@@ -287,11 +288,11 @@ const DRIVER_FIELDS = [
   'overrides',
 ] as const
 
-// The 4 valid TASK_SOURCE_TYPES (mirror create-task.dto.ts). The briefing's own
+// The valid TASK_SOURCE_TYPES (mirror create-task.dto.ts). The briefing's own
 // item.source can also be 'governance'/'workflow', which are NOT valid here — those
 // must be clamped to 'manual' (or the caller maps governance→policy) before create,
 // or the CreateTaskDto @IsIn/forbidNonWhitelisted pipe would 400.
-const TASK_SOURCE_TYPES = ['manual', 'policy', 'metric', 'compliance'] as const
+const TASK_SOURCE_TYPES = ['manual', 'policy', 'metric', 'compliance', 'strategy'] as const
 type TaskSourceType = (typeof TASK_SOURCE_TYPES)[number]
 
 function clampTaskSourceType(v: unknown): TaskSourceType {
@@ -583,6 +584,11 @@ export class AssistantService {
     // construct; only that one execute() case touches `this.cashFlow`, so undefined
     // elsewhere is safe. DI is by type.
     private readonly cashFlow: QboCashFlowService,
+    // Phase 5 Strategic Planning — the ACTIVE-plan computed read for the read-only
+    // get_plan_status tool. Added LAST so existing positional-arg assistant specs stay
+    // near-unchanged (they append one `strategy` stub). getActivePlanComputed NEVER
+    // throws (fail-soft to { hasPlan:false }).
+    private readonly strategy: StrategyService,
   ) {}
 
   isConfigured(): boolean {
@@ -3187,6 +3193,53 @@ export class AssistantService {
               ...(k.note ? { note: k.note } : {}),
             })),
           },
+        }
+      }
+      case 'get_plan_status': {
+        // Read-only ACTIVE strategic-plan status. NOT in WRITE_TOOLS/CONFIRM_TOOLS (no
+        // ApplyActionDto/ProposedAction change) → exposed to all roles incl. viewer.
+        // getActivePlanComputed NEVER throws (fail-soft to { hasPlan:false }). COMPACT
+        // projection under the 8000-char cap; each goal carries metricKey+metricLabel so
+        // Penny can chain into get_trend/get_cash_flow for "why is <goal> behind".
+        const sp = await this.strategy.getActivePlanComputed(ctx.schoolId)
+        if (!sp.hasPlan) {
+          return { hasPlan: false, note: 'No strategic plan has been created for this school yet.' }
+        }
+        return {
+          hasPlan: true,
+          plan: {
+            name: sp.plan.name,
+            status: sp.plan.status,
+            overallProgressPct: sp.plan.overallProgressPct,
+            overallPaceStatus: sp.plan.overallPaceStatus,
+            dataAsOf: sp.plan.dataAsOf,
+            nextReviewDate: sp.plan.nextReviewDate,
+          },
+          goalCounts: sp.plan.goalCounts,
+          summary: {
+            behindPaceGoalCount: sp.summary.behindPaceGoalCount,
+            atRiskGoalCount: sp.summary.atRiskGoalCount,
+            staleInitiativeCount: sp.summary.staleInitiativeCount,
+            reviewDueThisMonth: sp.summary.reviewDueThisMonth,
+          },
+          pillars: sp.pillars.map((p) => ({
+            name: p.name,
+            progressPct: p.progressPct,
+            paceStatus: p.paceStatus,
+            goals: p.goals.map((g) => ({
+              title: g.title,
+              goalType: g.goalType,
+              paceStatus: g.paceStatus,
+              metricKey: g.metricKey,
+              metricLabel: g.metricLabel,
+              formattedCurrent: g.formattedCurrent,
+              formattedTarget: g.formattedTarget,
+              pctToTarget: g.pctToTarget,
+              targetDate: g.targetDate,
+            })),
+          })),
+          behindPaceGoals: sp.summary.behindPaceGoals,
+          staleInitiatives: sp.summary.staleInitiatives,
         }
       }
       case 'get_budget_vs_actual': {

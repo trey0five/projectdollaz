@@ -29,6 +29,7 @@ import { FacilitiesModule } from './facilities/facilities.module.js'
 import { AdvancementModule } from './advancement/advancement.module.js'
 import { KnowledgeModule } from './knowledge/knowledge.module.js'
 import { EnrollmentModule } from './enrollment/enrollment.module.js'
+import { StrategyModule } from './strategy/strategy.module.js'
 
 @Module({
   imports: [
@@ -69,6 +70,7 @@ import { EnrollmentModule } from './enrollment/enrollment.module.js'
     AdvancementModule,
     KnowledgeModule,
     EnrollmentModule,
+    StrategyModule,
   ],
 })
 export class AppModule {}

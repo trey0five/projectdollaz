@@ -16,8 +16,10 @@ export type TaskStatus = (typeof TASK_STATUSES)[number]
 export const TASK_PRIORITIES = ['low', 'normal', 'high'] as const
 export type TaskPriority = (typeof TASK_PRIORITIES)[number]
 
-/** The source-link discriminator (the "actionable pairing" — see the model). */
-export const TASK_SOURCE_TYPES = ['manual', 'policy', 'metric', 'compliance'] as const
+/** The source-link discriminator (the "actionable pairing" — see the model).
+ *  'strategy' links a task to a StrategyInitiative (sourceRef = initiative id) so the
+ *  strategic-plan Initiatives tab / task-rollup goals can read its done/total. */
+export const TASK_SOURCE_TYPES = ['manual', 'policy', 'metric', 'compliance', 'strategy'] as const
 export type TaskSourceType = (typeof TASK_SOURCE_TYPES)[number]
 
 /** Approval / sign-off lifecycle (Phase 3 v1). Co-located with TASK_STATUSES so the

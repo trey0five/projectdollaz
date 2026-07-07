@@ -36,6 +36,7 @@ import {
   BadgeCheck,
   Wrench,
   HeartHandshake,
+  Target,
   CircleDollarSign,
   GraduationCap,
   Settings,
@@ -122,6 +123,17 @@ export const NAV_GROUPS = [
     module: 'advancement',
     items: [
       { to: '/advancement', navId: 'nav-advancement', label: 'Advancement', Icon: HeartHandshake, match: (p) => p.startsWith('/advancement') },
+    ],
+  },
+  {
+    // Phase 5 Strategic Planning — the oversight-cluster group. Its own gated
+    // module ('strategy'); the strategic plan (pillars → goals → initiatives) that
+    // measures itself against the live financials. Shown only when licensed.
+    id: 'strategy',
+    label: 'Strategic Planning',
+    module: 'strategy',
+    items: [
+      { to: '/strategy', navId: 'nav-strategy', label: 'Strategic Planning', Icon: Target, match: (p) => p.startsWith('/strategy') },
     ],
   },
 ]

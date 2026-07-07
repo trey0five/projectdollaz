@@ -29,6 +29,7 @@ export const MODULE_KEYS = [
   'facilities',
   'advancement',
   'accreditation',
+  'strategy',
 ] as const
 
 export type ModuleKey = (typeof MODULE_KEYS)[number]
@@ -109,6 +110,12 @@ export const MODULE_META: Record<ModuleKey, ModuleDef> = {
     key: 'accreditation',
     label: 'Accreditation',
     description: 'Compliance & accreditation readiness, self-study, evidence.',
+    core: false,
+  },
+  strategy: {
+    key: 'strategy',
+    label: 'Strategic Planning',
+    description: 'Strategic plan, pillars, measurable goals & execution initiatives.',
     core: false,
   },
 }

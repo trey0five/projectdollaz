@@ -136,6 +136,10 @@ model School {
   enrollmentSnapshots      EnrollmentSnapshot[]
   arApAgingSnapshots       ArApAgingSnapshot[]
   cashFlowSnapshots        CashFlowSnapshot[]
+  strategicPlans           StrategicPlan[]
+  strategyPillars          StrategyPillar[]
+  strategyGoals            StrategyGoal[]
+  strategyInitiatives      StrategyInitiative[]
 
   @@index([organizationId])
   @@map("schools")
@@ -226,6 +230,12 @@ model User {
   knowledgeDocumentsUploaded   KnowledgeDocument[]      @relation("KnowledgeDocumentUploadedBy")
   alertsCreated                Alert[]                  @relation("AlertCreatedBy")
   enrollmentSnapshotsCreated   EnrollmentSnapshot[]     @relation("EnrollmentSnapshotCreatedBy")
+  strategicPlanUpdates         StrategicPlan[]          @relation("StrategicPlanUpdatedBy")
+  strategyPillarUpdates        StrategyPillar[]         @relation("StrategyPillarUpdatedBy")
+  strategyGoalUpdates          StrategyGoal[]           @relation("StrategyGoalUpdatedBy")
+  strategyGoalsOwned           StrategyGoal[]           @relation("StrategyGoalOwner")
+  strategyInitiativeUpdates    StrategyInitiative[]     @relation("StrategyInitiativeUpdatedBy")
+  strategyInitiativesOwned     StrategyInitiative[]     @relation("StrategyInitiativeOwner")
 
   @@index([email])
   @@map("users")
@@ -1451,8 +1461,8 @@ model Task {
   dueDate         DateTime? @map("due_date") @db.Date
   status          String    @default("open") // 'open' | 'in_progress' | 'done' | 'cancelled'
   priority        String    @default("normal") // 'low' | 'normal' | 'high' (triage hint, not urgency)
-  sourceType      String?   @map("source_type") // 'manual' | 'policy' | 'metric' | 'compliance'
-  sourceRef       String?   @map("source_ref") // policyId / metricKey / briefing item id (soft link)
+  sourceType      String?   @map("source_type") // 'manual' | 'policy' | 'metric' | 'compliance' | 'strategy'
+  sourceRef       String?   @map("source_ref") // policyId / metricKey / briefing item id / strategy initiative id (soft link)
   createdByUserId String?   @map("created_by_user_id") @db.Uuid
   completedAt     DateTime? @map("completed_at")
   // ── Phase 3 Workflow v1 approval / sign-off (additive; single-approver). A task
@@ -1565,4 +1575,140 @@ model EnrollmentSnapshot {
   @@index([schoolId, observedOn])
   @@index([fiscalPeriodId])
   @@map("enrollment_snapshots")
+}
+
+// ── Phase 5: Strategic Planning — plan → pillar → goal → initiative register ──
+
+/// The 7th sellable module ('strategy'). A school's multi-year strategic plan: a
+/// mission + a set of pillars, each holding measurable goals, each with execution
+/// initiatives. School-scoped (NOT period-scoped). The ACTIVE plan (the one the
+/// briefing/Penny/hero read) = the single `adopted` plan with the newest adoptedAt,
+/// else the most-recently-updated `draft`. startDate/endDate/adoptedAt are
+/// SERVER-DERIVED (never client fields): startDate = Jul 1 of fyStartYear, endDate =
+/// Jun 30 of fyEndYear (FY is Jul–Jun), adoptedAt stamped when status → 'adopted'.
+model StrategicPlan {
+  id              String    @id @default(uuid()) @db.Uuid
+  schoolId        String    @map("school_id") @db.Uuid
+  name            String
+  mission         String?
+  // 'draft' | 'adopted' | 'archived'. @default('draft') → migration needs no backfill.
+  status          String    @default("draft")
+  fyStartYear     Int       @map("fy_start_year")
+  fyEndYear       Int       @map("fy_end_year")
+  // Server-derived from the FY years (Jul–Jun); nullable so a lean create still works.
+  startDate       DateTime? @map("start_date") @db.Date
+  endDate         DateTime? @map("end_date") @db.Date
+  // Stamped when status first flips to 'adopted' (drives ACTIVE-plan resolution).
+  adoptedAt       DateTime? @map("adopted_at")
+  // Client-settable plan-review date (drives the 'plan-review-due' briefing signal).
+  nextReviewDate  DateTime? @map("next_review_date") @db.Date
+  updatedByUserId String?   @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  school        School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  updatedByUser User?            @relation("StrategicPlanUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  pillars       StrategyPillar[]
+
+  @@index([schoolId])
+  @@map("strategic_plans")
+}
+
+/// A strategic PILLAR (theme) under a plan — e.g. "Academic Excellence",
+/// "Financial Sustainability". Deleting a plan cascade-deletes its pillars.
+model StrategyPillar {
+  id              String   @id @default(uuid()) @db.Uuid
+  schoolId        String   @map("school_id") @db.Uuid
+  planId          String   @map("plan_id") @db.Uuid
+  name            String
+  description     String?
+  orderIndex      Int      @default(0) @map("order_index")
+  updatedByUserId String?  @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  school        School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  plan          StrategicPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  updatedByUser User?         @relation("StrategyPillarUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  goals         StrategyGoal[]
+
+  @@index([schoolId])
+  @@index([planId])
+  @@map("strategy_pillars")
+}
+
+/// A measurable GOAL under a pillar. goalType selects the progress source:
+///   'metric'      — bound to a canonical @finrep/analytics metricKey; current value
+///                   is COMPUTED live from the annual snapshot (never typed in), and
+///                   the baseline is FROZEN at bind (baselineValue/baselineDate/
+///                   baselineMetricPeriodId; persist-on-first-read backfill).
+///   'milestone'   — progress = done/total of the milestones JSON [{id,label,done}].
+///   'task_rollup' — progress = done/total of the workflow Tasks soft-linked to this
+///                   goal's initiatives (Task.sourceType='strategy', sourceRef=initiativeId).
+///   'manual'      — progress = manualProgressPct (0..1), set by hand.
+/// Percent/share metric targets are stored as a 0..1 fraction (the DTO/service
+/// convert). Mix keys (revenue_mix/expense_mix) are REJECTED at bind.
+model StrategyGoal {
+  id                     String    @id @default(uuid()) @db.Uuid
+  schoolId               String    @map("school_id") @db.Uuid
+  pillarId               String    @map("pillar_id") @db.Uuid
+  title                  String
+  description            String?
+  // 'metric' | 'milestone' | 'task_rollup' | 'manual'
+  goalType               String    @default("metric") @map("goal_type")
+  orderIndex             Int       @default(0) @map("order_index")
+  // Optional accountable owner — VALIDATED as an active school membership at write.
+  ownerUserId            String?   @map("owner_user_id") @db.Uuid
+  // Metric binding (goalType='metric' only). metricKey is a canonical MetricKey.
+  metricKey              String?   @map("metric_key")
+  targetValue            Decimal?  @map("target_value") @db.Decimal(18, 6)
+  // Baseline FROZEN at bind (never recomputed "earliest available" on read).
+  baselineValue          Decimal?  @map("baseline_value") @db.Decimal(18, 6)
+  baselineDate           DateTime? @map("baseline_date") @db.Date
+  baselineMetricPeriodId String?   @map("baseline_metric_period_id") @db.Uuid
+  startDate              DateTime? @map("start_date") @db.Date
+  targetDate             DateTime? @map("target_date") @db.Date
+  // goalType='manual' — hand-set progress fraction 0..1.
+  manualProgressPct      Decimal?  @map("manual_progress_pct") @db.Decimal(6, 4)
+  // goalType='milestone' — [{ id, label, done }] JSON.
+  milestones             Json?
+  updatedByUserId        String?   @map("updated_by_user_id") @db.Uuid
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+
+  school        School               @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  pillar        StrategyPillar       @relation(fields: [pillarId], references: [id], onDelete: Cascade)
+  owner         User?                @relation("StrategyGoalOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  updatedByUser User?                @relation("StrategyGoalUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  initiatives   StrategyInitiative[]
+
+  @@index([schoolId])
+  @@index([pillarId])
+  @@map("strategy_goals")
+}
+
+/// An execution INITIATIVE under a goal — the "how". Workflow Tasks soft-link to an
+/// initiative (Task.sourceType='strategy', sourceRef=initiative.id) to roll up.
+model StrategyInitiative {
+  id              String   @id @default(uuid()) @db.Uuid
+  schoolId        String   @map("school_id") @db.Uuid
+  goalId          String   @map("goal_id") @db.Uuid
+  title           String
+  description     String?
+  // 'planned' | 'in_progress' | 'blocked' | 'done' | 'cancelled'
+  status          String   @default("planned")
+  ownerUserId     String?  @map("owner_user_id") @db.Uuid
+  orderIndex      Int      @default(0) @map("order_index")
+  updatedByUserId String?  @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  school        School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  goal          StrategyGoal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  owner         User?        @relation("StrategyInitiativeOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  updatedByUser User?        @relation("StrategyInitiativeUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([schoolId])
+  @@index([goalId])
+  @@map("strategy_initiatives")
 }
