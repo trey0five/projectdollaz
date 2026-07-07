@@ -739,6 +739,17 @@ model QboConnection {
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
+  // Automated / scheduled nightly sync (QboSyncSchedulerService). Additive, all
+  // defaulted so existing rows inherit auto_sync_enabled=true, needs_reauth=false.
+  autoSyncEnabled           Boolean   @default(true)  @map("auto_sync_enabled")
+  needsReauth               Boolean   @default(false) @map("needs_reauth")
+  lastScheduledSyncAt       DateTime? @map("last_scheduled_sync_at")
+  lastScheduledSyncStatus   String?   @map("last_scheduled_sync_status")   // synced|no_data|not_entitled|reauth_required|error|no_actor
+  lastScheduledSyncError    String?   @map("last_scheduled_sync_error")    // short message when status=error
+  lastScheduledSyncRowCount Int?      @map("last_scheduled_sync_row_count")
+  reauthNotifiedAt          DateTime? @map("reauth_notified_at")           // de-dupes the reconnect email per dead-token episode
+  autoSyncFailures          Int       @default(0)     @map("auto_sync_failures") // consecutive transient failures (backoff)
+
   school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
   @@map("qbo_connections")
@@ -809,6 +820,18 @@ model OrgQboConnection {
   connectedByUserId String?  @map("connected_by_user_id") @db.Uuid
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
+
+  // Automated / scheduled sync — mirrored on the org connection for FORWARD-COMPAT
+  // only. Topology-B org connections are NOT swept in this slice (deferred to the
+  // diocesan/org auto-sync work); the fields exist so that path is additive later.
+  autoSyncEnabled           Boolean   @default(true)  @map("auto_sync_enabled")
+  needsReauth               Boolean   @default(false) @map("needs_reauth")
+  lastScheduledSyncAt       DateTime? @map("last_scheduled_sync_at")
+  lastScheduledSyncStatus   String?   @map("last_scheduled_sync_status")
+  lastScheduledSyncError    String?   @map("last_scheduled_sync_error")
+  lastScheduledSyncRowCount Int?      @map("last_scheduled_sync_row_count")
+  reauthNotifiedAt          DateTime? @map("reauth_notified_at")
+  autoSyncFailures          Int       @default(0)     @map("auto_sync_failures")
 
   organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   mappings     OrgQboMapping[]

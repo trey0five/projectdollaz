@@ -15,6 +15,7 @@ import { QboOrgService } from './qbo-org.service.js'
 import { OrgQboCompanyService } from './qbo-company.service.js'
 import { QboDrillService } from './qbo-drill.service.js'
 import { QboAgingService } from './qbo-aging.service.js'
+import { QboSyncSchedulerService } from './qbo-sync-scheduler.service.js'
 import { QboClient } from './qbo.client.js'
 
 /**
@@ -34,7 +35,15 @@ import { QboClient } from './qbo.client.js'
     MappingModule,
   ],
   controllers: [QboController, QboOrgController, QboCompanyController],
-  providers: [QboService, QboOrgService, OrgQboCompanyService, QboDrillService, QboAgingService, QboClient],
+  providers: [
+    QboService,
+    QboOrgService,
+    OrgQboCompanyService,
+    QboDrillService,
+    QboAgingService,
+    QboSyncSchedulerService,
+    QboClient,
+  ],
   // QboDrillService is exported so AssistantModule's get_account_transactions handler
   // can reuse the exact same drill orchestrator the REST route uses. QboAgingService is
   // exported so the /cash controller + Penny's get_cash_collections tool (AssistantModule)

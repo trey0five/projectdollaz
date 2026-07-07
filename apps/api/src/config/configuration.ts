@@ -75,6 +75,10 @@ export interface AppConfig {
     clientSecret: string
     environment: 'sandbox' | 'production'
     redirectUri: string
+    /** Global kill-switch for the nightly auto-sync sweep (default ON). */
+    autoSyncEnabled: boolean
+    /** Server-local overnight hour range 'startHour-endHour' (default '2-5'). */
+    autoSyncWindow: string
   }
   // Phase 2 Enrollment Intelligence — SIS/roster connectors (optional, per provider).
   // Empty keys => that provider is DARK (its adapter.isConfigured() is false): the
@@ -218,6 +222,9 @@ export function configuration(): AppConfig {
       clientSecret: process.env.QB_OAUTH_CLIENT_SECRET ?? '',
       environment: (process.env.QB_ENVIRONMENT ?? 'sandbox') as 'sandbox' | 'production',
       redirectUri: process.env.QB_REDIRECT_URI ?? `${webOrigin}/integrations/qb/callback`,
+      // Nightly auto-sync. Default ON; only an explicit 'false' disables the sweep.
+      autoSyncEnabled: (process.env.QBO_AUTOSYNC_ENABLED ?? 'true') !== 'false',
+      autoSyncWindow: process.env.QBO_AUTOSYNC_WINDOW ?? '2-5',
     },
     // Phase 2 Enrollment Intelligence — SIS connectors. All env-driven with empty
     // defaults so the api BOOTS keyless (every provider dark; CSV upload still works).

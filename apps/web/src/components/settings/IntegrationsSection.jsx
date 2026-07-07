@@ -88,6 +88,10 @@ export default function IntegrationsSection() {
   // non-null, no direct connection). "Import now" runs the org import scoped to
   // just this school.
   const [orgImporting, setOrgImporting] = useState(false)
+  // Automatic nightly sync: toggling the per-connection flag + a force "run now"
+  // hook (the underlying scheduled path — confidence/testing).
+  const [autoSyncBusy, setAutoSyncBusy] = useState(false)
+  const [runningNow, setRunningNow] = useState(false)
 
   // Best-effort like syncHistory: a review failure never blanks the card.
   const loadReview = useCallback(async (id) => {
@@ -347,6 +351,57 @@ export default function IntegrationsSection() {
     }
   }
 
+  // Flip the per-connection auto-sync flag, then refetch status so the toggle +
+  // chip reflect the server's re-armed truth (enabling also clears needsReauth).
+  const toggleAutoSync = async (enabled) => {
+    setErr('')
+    setOk('')
+    setAutoSyncBusy(true)
+    try {
+      await qboApi.setAutoSync(activeId, enabled)
+      await load(activeId)
+    } catch (e) {
+      setErr(apiErrorMessage(e, 'Could not update automatic sync.'))
+    } finally {
+      setAutoSyncBusy(false)
+    }
+  }
+
+  // Force the scheduled sync on demand (bypasses the freshness/overnight gate but
+  // still honours dead-token/entitlement) — surfaces the outcome inline.
+  const runAutoSyncNow = async () => {
+    setErr('')
+    setOk('')
+    setScopeResult(null)
+    setSyncAllResult(null)
+    setRunningNow(true)
+    try {
+      const res = await qboApi.runAutoSync(activeId)
+      const r = res.data ?? {}
+      if (r.status === 'synced') {
+        setOk(`Auto-sync ran — ${r.rowCount ?? 0} account${r.rowCount === 1 ? '' : 's'} refreshed from QuickBooks.`)
+      } else if (r.status === 'no_data') {
+        // Informational, not a failure — the run completed, QBO just had no data.
+        setOk('Auto-sync ran — QuickBooks returned no trial-balance data for the current period.')
+      } else if (r.status === 'not_entitled') {
+        // Informational — the keepalive refresh succeeded; only the data pull was skipped.
+        setOk('Auto-sync kept the QuickBooks connection alive; the data pull was skipped while this subscription is inactive.')
+      } else if (r.status === 'reauth') {
+        setErr('QuickBooks needs to be reconnected — automatic sync has been paused.')
+      } else if (r.status === 'no_actor') {
+        setErr('Auto-sync could not run — no owner is attached to this connection.')
+      } else {
+        setErr(r.error || 'Automatic sync could not complete.')
+      }
+      // Refetch so the chip's "last run" + status icon reflect this run.
+      await load(activeId)
+    } catch (e) {
+      setErr(apiErrorMessage(e, 'Could not run automatic sync.'))
+    } finally {
+      setRunningNow(false)
+    }
+  }
+
   if (!activeSchool) {
     return (
       <SettingsCard title="Integrations">
@@ -451,6 +506,81 @@ export default function IntegrationsSection() {
               {review.summary.needsReview} account{review.summary.needsReview === 1 ? '' : 's'} to
               review — refine categories
             </button>
+          )}
+
+          {/* Automatic nightly sync — a toggle + status chip + a force "run now"
+              hook. Gated by canEdit (owner/accountant); only shown once the API
+              reports the autoSync block so an older server degrades gracefully. */}
+          {canEdit && status.autoSync && (
+            <div className="mb-5 rounded-lg border border-border bg-section/40 px-4 py-3.5">
+              <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+                <div className="min-w-[14rem] flex-1">
+                  <p className="text-[15px] font-semibold text-navy">Automatic nightly sync</p>
+                  <p className="mt-0.5 text-[13.5px] leading-relaxed text-muted">
+                    Refreshes this school&apos;s trial balance and AR/AP aging every night — no
+                    clicks — and keeps your QuickBooks connection from expiring.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={!!status.autoSync.enabled}
+                  aria-label="Automatic nightly sync"
+                  onClick={() => toggleAutoSync(!status.autoSync.enabled)}
+                  disabled={autoSyncBusy}
+                  className={`relative mt-0.5 inline-flex h-6 w-11 shrink-0 items-center rounded-full border-2 outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-gold/60 disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none ${
+                    status.autoSync.enabled ? 'border-gold bg-gold' : 'border-border bg-navy/10'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200 motion-reduce:transition-none ${
+                      status.autoSync.enabled ? 'translate-x-[22px]' : 'translate-x-0.5'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Status chip: reauth (amber, with reconnect) → on (nightly + last run
+                  + ✓/⚠) → off. Reuses syncRelativeTime + the shared status icons. */}
+              <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+                {status.autoSync.needsReauth ? (
+                  <span className="inline-flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-[13.5px] font-medium text-amber-800">
+                    <AlertTriangle size={15} className="shrink-0 text-amber-600" />
+                    Reconnect QuickBooks to resume auto-sync
+                    <button
+                      type="button"
+                      onClick={connect}
+                      disabled={busy}
+                      className="font-semibold text-amber-900 underline underline-offset-2 hover:text-amber-950 disabled:opacity-50"
+                    >
+                      {busy ? 'Redirecting…' : 'Reconnect'}
+                    </button>
+                  </span>
+                ) : status.autoSync.enabled ? (
+                  <span className="inline-flex items-center gap-1.5 text-[13.5px] text-muted">
+                    Auto-syncs nightly · last run{' '}
+                    <span className="font-semibold text-navy">
+                      {syncRelativeTime(status.autoSync.lastRunAt) || 'not yet'}
+                    </span>
+                    {status.autoSync.lastStatus === 'synced' ? (
+                      <CheckCircle2 size={14} className="shrink-0 text-gold" />
+                    ) : status.autoSync.lastStatus ? (
+                      <AlertTriangle size={14} className="shrink-0 text-amber-500" />
+                    ) : null}
+                  </span>
+                ) : (
+                  <span className="text-[13.5px] text-muted">Automatic sync off</span>
+                )}
+                <button
+                  type="button"
+                  onClick={runAutoSyncNow}
+                  disabled={runningNow || autoSyncBusy}
+                  className="text-[13px] font-semibold text-navy underline-offset-2 transition-colors hover:text-gold hover:underline disabled:opacity-50"
+                >
+                  {runningNow ? 'Running…' : 'Run now'}
+                </button>
+              </div>
+            </div>
           )}
 
           {canEdit && (

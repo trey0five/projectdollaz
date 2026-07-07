@@ -645,6 +645,13 @@ export const qboApi = {
   // params = { refresh: true } bypasses the server cache + forces a fresh pull.
   aging: (schoolId, params) =>
     api.get(`/schools/${schoolId}/integrations/qb/aging`, { params }),
+  // Automatic nightly sync: toggle the per-connection auto-sync flag (returns the
+  // updated status), and a force "run now" hook that bypasses the freshness/window
+  // gate for confidence/testing (returns { status, rowCount?, error?, lastRunAt }).
+  setAutoSync: (schoolId, enabled) =>
+    api.post(`/schools/${schoolId}/integrations/qb/auto-sync`, { enabled }),
+  runAutoSync: (schoolId) =>
+    api.post(`/schools/${schoolId}/integrations/qb/auto-sync/run`, {}),
 }
 
 // Org-level QuickBooks console: per-school connection overview across the

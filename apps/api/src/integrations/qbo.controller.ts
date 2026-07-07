@@ -9,7 +9,9 @@ import { MergeMappingDto } from '../mapping/dto/merge-mapping.dto.js'
 import { QboService } from './qbo.service.js'
 import { QboDrillService } from './qbo-drill.service.js'
 import { QboAgingService } from './qbo-aging.service.js'
+import { QboSyncSchedulerService } from './qbo-sync-scheduler.service.js'
 import { QbCallbackDto, QbSyncDto, QbSyncScopeDto } from './dto/qbo.dto.js'
+import { QbAutoSyncDto } from './dto/qbo-auto-sync.dto.js'
 import { QbDrillDto } from './dto/qbo-drill.dto.js'
 
 /**
@@ -23,6 +25,7 @@ export class QboController {
     private readonly qbo: QboService,
     private readonly drill: QboDrillService,
     private readonly agingService: QboAgingService,
+    private readonly scheduler: QboSyncSchedulerService,
   ) {}
 
   /**
@@ -101,6 +104,31 @@ export class QboController {
     @CurrentUser() user: User,
   ) {
     return this.qbo.syncScope(user, schoolId, dto)
+  }
+
+  /**
+   * Toggle automatic nightly sync for this school. Enabling re-arms auto-sync
+   * (clears the dead-token episode). Returns the refreshed status (autoSync block).
+   */
+  @Post('auto-sync')
+  @Roles('owner', 'accountant')
+  setAutoSync(
+    @Param('schoolId') schoolId: string,
+    @Body() dto: QbAutoSyncDto,
+    @CurrentUser() user: User,
+  ) {
+    return this.qbo.setAutoSync(schoolId, dto.enabled, user.id)
+  }
+
+  /**
+   * Run the scheduled sync for this school NOW — the headless test hook + a
+   * user-facing "run now". Forces past the freshness/window gate (dead-token /
+   * entitlement still honoured). No body. Returns { status, rowCount?, error?, lastRunAt }.
+   */
+  @Post('auto-sync/run')
+  @Roles('owner', 'accountant')
+  runAutoSync(@Param('schoolId') schoolId: string) {
+    return this.scheduler.runNow(schoolId)
   }
 
   /** Recent 'qbo.synced' audit rows (newest-first, capped). Read-open like status. */

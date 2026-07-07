@@ -13,6 +13,7 @@ import { PeriodsService } from '../periods/periods.service.js'
 import { ImportsService } from '../imports/imports.service.js'
 import { StatementsService } from '../statements/statements.service.js'
 import { AuditService } from '../common/audit/audit.service.js'
+import { BillingService } from '../billing/billing.service.js'
 import { MonthlySnapshotsService } from '../monthly/monthly-snapshots.service.js'
 import { MappingService } from '../mapping/mapping.service.js'
 import { fyMonthKeys, fyStartYearForPeriodEnd } from '../monthly/fy-elapsed.js'
@@ -68,6 +69,34 @@ export interface QboStatus {
     valueNames: string[]
     lastImportedAt: string | null
   } | null
+  /**
+   * Automated nightly sync state (from the connection row). Null observability
+   * fields until the scheduler (or the run-now hook) has acted on this school.
+   */
+  autoSync: {
+    enabled: boolean
+    needsReauth: boolean
+    lastRunAt: string | null
+    lastStatus: string | null
+    lastError: string | null
+  }
+}
+
+/**
+ * The classified result of ONE scheduled sync attempt. runScheduledSync NEVER
+ * throws — it maps every path to one of these so the scheduler can persist status
+ * + decide on the reconnect email without a try/catch of its own.
+ *  - synced       TB pulled + statements generated + aging captured (rowCount set)
+ *  - no_data      TB returned no balances (token still refreshed → keepalive kept)
+ *  - not_entitled subscription lapsed → skipped the TB pull but refreshed the token
+ *  - reauth       dead/revoked refresh token (needs a human to reconnect)
+ *  - error        transient failure (network / 5xx / generate hiccup) — retry later
+ *  - no_actor     no connectedByUserId and no owner membership to attribute imports
+ */
+export interface ScheduledSyncOutcome {
+  status: 'synced' | 'no_data' | 'not_entitled' | 'reauth' | 'error' | 'no_actor'
+  rowCount?: number
+  error?: string
 }
 
 export interface QboDisconnectResult extends QboStatus {
@@ -147,6 +176,12 @@ function hasBalances(rows: Array<{ total: number }>): boolean {
   return rows.some((r) => r.total !== 0)
 }
 
+/** A short, DB-safe error message for the connection's last_scheduled_sync_error. */
+function shortMessage(e: unknown): string {
+  const raw = e instanceof Error ? e.message : String(e)
+  return raw.slice(0, 300)
+}
+
 /** Defensively read the keys we write into a `qbo.synced` audit row's Json metadata. */
 function readSyncMeta(metadata: unknown): { fiscalPeriodId: string | null; rowCount: number | null } {
   const m = (metadata ?? {}) as { fiscalPeriodId?: unknown; rowCount?: unknown }
@@ -168,6 +203,9 @@ export class QboService {
     private readonly monthlySnapshots: MonthlySnapshotsService,
     private readonly mapping: MappingService,
     private readonly audit: AuditService,
+    // Entitlement gate for scheduled syncs (mirrors syncOrg's per-school check). No
+    // cycle: BillingService does not depend on QboService, so a plain injection.
+    private readonly billing: BillingService,
     // AR/AP aging capture (best-effort tail of sync()/syncScope()). QboService ⇄
     // QboAgingService is a mutual dependency; a constructor injection (even forwardRef)
     // crashes at MODULE LOAD because emitDecoratorMetadata references the paramtype at
@@ -250,6 +288,14 @@ export class QboService {
       lastSyncFiscalPeriodId: lastMeta.fiscalPeriodId,
       // A direct connection always wins — only a connection-less school can be org-fed.
       orgFed: conn ? null : await this.orgFed(schoolId),
+      autoSync: {
+        // Defaults mirror the schema so a connection-less school reads sensibly.
+        enabled: conn?.autoSyncEnabled ?? true,
+        needsReauth: conn?.needsReauth ?? false,
+        lastRunAt: conn?.lastScheduledSyncAt ? conn.lastScheduledSyncAt.toISOString() : null,
+        lastStatus: conn?.lastScheduledSyncStatus ?? null,
+        lastError: conn?.lastScheduledSyncError ?? null,
+      },
     }
   }
 
@@ -368,6 +414,13 @@ export class QboService {
       expiresAt,
       environment,
       connectedByUserId: userId,
+      // Re-arm auto-sync on (re)connect: a fresh token clears any dead-token episode
+      // so the next nightly sweep resumes and a future death re-notifies. Mirrors
+      // AlertService re-enabling an edge trigger. Leaves autoSyncEnabled untouched
+      // (create defaults it true; a reconnect respects a prior opt-out).
+      needsReauth: false,
+      reauthNotifiedAt: null,
+      autoSyncFailures: 0,
     }
     await this.prisma.qboConnection.upsert({
       where: { schoolId },
@@ -532,6 +585,135 @@ export class QboService {
     const { snapshot } = await this.syncOnePeriod(actor, schoolId, conn, periodId)
     await this.captureAging(schoolId, conn) // best-effort, as-of today; never aborts the sync
     return snapshot
+  }
+
+  /**
+   * CONSERVATIVE dead-token classifier. The token endpoint throws
+   * `QBO token exchange failed (400)` when Intuit rejects a revoked/expired refresh
+   * token (invalid_grant) — a 400/401 there is the one unambiguous "reconnect"
+   * signal. Everything else — a 400 on a report call, a 5xx, a network blip — is
+   * treated as TRANSIENT (retry), NEVER as dead-token (disable). Erring toward
+   * retry is deliberate: a misclassified transient must not silently pause a school.
+   */
+  private isAuthError(e: unknown): boolean {
+    const msg = (e instanceof Error ? e.message : String(e)).toLowerCase()
+    // Explicit OAuth failure signals (belt-and-suspenders if the client surfaces them).
+    if (msg.includes('invalid_grant') || msg.includes('invalid_token')) return true
+    // The refresh endpoint returning 400/401 == a dead/revoked refresh token; a 5xx
+    // there is transient and must NOT match.
+    if (msg.includes('token exchange failed') && (msg.includes('(400)') || msg.includes('(401)'))) {
+      return true
+    }
+    // A bare 401 unauthorized on any QBO API call (token rejected).
+    if (msg.includes('(401)') || msg.includes('unauthorized')) return true
+    return false
+  }
+
+  /**
+   * Resolve a real User to attribute a headless scheduled sync to (imports.uploadedBy
+   * + audit userId). Prefers the connection's connectedByUserId; falls back to an
+   * owner membership of the school. Null when neither exists → the scheduler records
+   * `no_actor` and skips (never syncs with a fabricated actor).
+   */
+  private async resolveScheduledActor(schoolId: string, conn: QboConnection): Promise<User | null> {
+    if (conn.connectedByUserId) {
+      const u = await this.prisma.user.findUnique({ where: { id: conn.connectedByUserId } })
+      if (u) return u
+    }
+    const owner = await this.prisma.membership.findFirst({
+      where: { schoolId, role: 'owner', status: 'active' },
+      include: { user: true },
+      orderBy: { createdAt: 'asc' },
+    })
+    return owner?.user ?? null
+  }
+
+  /**
+   * The current-FY base period for a scheduled sync: the school's newest period NOT
+   * ending beyond the current fiscal year (Jul–Jun), bootstrapping the current FY
+   * period when the school has none. INLINED from QboOrgService.resolveBasePeriod
+   * (identical rule) rather than injected — a QboService↔QboOrgService constructor
+   * dep would crash at ESM load (QboOrgService injects QboService; the paramtype
+   * would be in the temporal dead zone). Only depends on the already-injected
+   * PeriodsService. Keep in sync with QboOrgService.resolveBasePeriod.
+   */
+  private async resolveBasePeriod(schoolId: string): Promise<{ id: string; label: string }> {
+    const now = new Date()
+    const endYear = now.getUTCMonth() >= 6 ? now.getUTCFullYear() + 1 : now.getUTCFullYear()
+    const fyEnd = `${endYear}-06-30`
+    const list = await this.periods.listPeriods(schoolId) // newest-first
+    const eligible = list.find((p) => p.periodEndDate.slice(0, 10) <= fyEnd)
+    if (eligible) return { id: eligible.id, label: eligible.label }
+    const { period } = await this.periods.resolveForImport(schoolId, fyEnd, undefined, `FY ${endYear}`)
+    return { id: period.id, label: period.label }
+  }
+
+  /**
+   * The ONE place a SCHEDULED sync happens. NEVER throws — every path resolves to a
+   * classified {@link ScheduledSyncOutcome} the scheduler persists. Runs the SAME
+   * TB + captureAging path the manual `sync()` uses (so statements/aging/briefing are
+   * identical whether a human or the timer triggered it, and the `qbo.synced` audit
+   * row that sync-history reads is still written by syncOnePeriod).
+   */
+  async runScheduledSync(schoolId: string): Promise<ScheduledSyncOutcome> {
+    try {
+      const conn = await this.prisma.qboConnection.findUnique({ where: { schoolId } })
+      if (!conn) return { status: 'error', error: 'QuickBooks is not connected for this school.' }
+
+      const actor = await this.resolveScheduledActor(schoolId, conn)
+      if (!actor) return { status: 'no_actor' }
+
+      // Entitlement gate (like syncOrg). Lapsed → SKIP the TB pull but still refresh
+      // the token via connectionForSchool (KEEPALIVE), so a paused account's refresh
+      // token stays alive and reactivation needs no QBO reconnect.
+      if (!(await this.billing.isEntitled(schoolId))) {
+        try {
+          await this.connectionForSchool(schoolId) // runs the refresh-and-persist path
+        } catch (e) {
+          if (this.isAuthError(e)) return { status: 'reauth' }
+          return { status: 'error', error: shortMessage(e) }
+        }
+        return { status: 'not_entitled' }
+      }
+
+      // Entitled → the current-FY base period, then the SAME path sync() uses.
+      const base = await this.resolveBasePeriod(schoolId)
+      const { rowCount } = await this.syncOnePeriod(actor, schoolId, conn, base.id)
+      await this.captureAging(schoolId, conn) // best-effort, as-of today; never aborts
+      return { status: 'synced', rowCount }
+    } catch (e) {
+      // Classify (order matters: a dead token can surface mid-pull too).
+      if (this.isAuthError(e)) return { status: 'reauth' }
+      const msg = e instanceof Error ? e.message : String(e)
+      if (msg.includes('no trial-balance data')) return { status: 'no_data' }
+      return { status: 'error', error: shortMessage(e) }
+    }
+  }
+
+  /**
+   * Toggle a school's automatic nightly sync. On ENABLE, also re-arm: clear
+   * needsReauth / reauthNotifiedAt / autoSyncFailures so a stale dead-token episode
+   * doesn't keep the row out of the next sweep (mirrors AlertService re-enable).
+   * Audited. Returns the refreshed status so the caller renders the autoSync block.
+   */
+  async setAutoSync(schoolId: string, enabled: boolean, userId: string): Promise<QboStatus> {
+    const conn = await this.prisma.qboConnection.findUnique({ where: { schoolId } })
+    if (!conn) throw new NotFoundException('QuickBooks is not connected for this school.')
+    await this.prisma.qboConnection.update({
+      where: { schoolId },
+      data: {
+        autoSyncEnabled: enabled,
+        ...(enabled ? { needsReauth: false, reauthNotifiedAt: null, autoSyncFailures: 0 } : {}),
+      },
+    })
+    await this.audit.write({
+      schoolId,
+      userId,
+      action: 'qbo.auto_sync.configured',
+      targetType: 'qbo_connections',
+      metadata: { enabled },
+    })
+    return this.status(schoolId)
   }
 
   /**
