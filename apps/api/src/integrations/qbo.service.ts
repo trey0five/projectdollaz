@@ -18,6 +18,7 @@ import { fyMonthKeys, fyStartYearForPeriodEnd } from '../monthly/fy-elapsed.js'
 import type { MonthlyRowDto } from '../monthly/dto/create-monthly-snapshot.dto.js'
 import type { QbSyncScopeDto } from './dto/qbo.dto.js'
 import { QboClient, qboPlSection } from './qbo.client.js'
+import { decToken, encToken } from './qbo-crypto.js'
 import { suggestCategory } from './qbo-review.suggest.js'
 
 /** Shift an ISO 'YYYY-MM-DD' by whole years (period-ends are month-ends, so the day is stable). */
@@ -335,8 +336,8 @@ export class QboService {
     const environment = this.config.get<string>('quickbooks.environment') ?? 'sandbox'
     const data = {
       realmId,
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
+      accessToken: encToken(tokens.accessToken),
+      refreshToken: encToken(tokens.refreshToken),
       expiresAt,
       environment,
       connectedByUserId: userId,
@@ -472,14 +473,15 @@ export class QboService {
 
   /** A valid access token, refreshing (and persisting the rotated refresh token) when near expiry. */
   private async accessToken(conn: QboConnection): Promise<string> {
-    if (conn.expiresAt.getTime() - Date.now() > 60_000) return conn.accessToken
-    const tokens = await this.client.refresh(conn.refreshToken)
+    // Stored tokens may be encrypted (v1:) or legacy plaintext — decToken handles both.
+    if (conn.expiresAt.getTime() - Date.now() > 60_000) return decToken(conn.accessToken)
+    const tokens = await this.client.refresh(decToken(conn.refreshToken))
     const expiresAt = new Date(Date.now() + tokens.expiresInSec * 1000)
     await this.prisma.qboConnection.update({
       where: { schoolId: conn.schoolId },
       data: {
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
+        accessToken: encToken(tokens.accessToken),
+        refreshToken: encToken(tokens.refreshToken),
         expiresAt,
       },
     })

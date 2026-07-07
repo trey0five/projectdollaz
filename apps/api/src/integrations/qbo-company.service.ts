@@ -28,6 +28,7 @@ import { MappingService } from '../mapping/mapping.service.js'
 import { AuditService } from '../common/audit/audit.service.js'
 import { fyMonthKeys, fyStartYearForPeriodEnd } from '../monthly/fy-elapsed.js'
 import { QboClient, type QboAccountMetaMaps, type QboDimensionEntity } from './qbo.client.js'
+import { decToken, encToken } from './qbo-crypto.js'
 import { QboOrgService } from './qbo-org.service.js'
 import {
   applyBalancePlug,
@@ -209,14 +210,15 @@ export class OrgQboCompanyService {
    * QboService.accessToken, same rotation discipline.
    */
   private async accessToken(conn: OrgQboConnection): Promise<string> {
-    if (conn.expiresAt.getTime() - Date.now() > 60_000) return conn.accessToken
-    const tokens = await this.client.refresh(conn.refreshToken)
+    // Stored tokens may be encrypted (v1:) or legacy plaintext — decToken handles both.
+    if (conn.expiresAt.getTime() - Date.now() > 60_000) return decToken(conn.accessToken)
+    const tokens = await this.client.refresh(decToken(conn.refreshToken))
     const expiresAt = new Date(Date.now() + tokens.expiresInSec * 1000)
     await this.prisma.orgQboConnection.update({
       where: { id: conn.id },
       data: {
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
+        accessToken: encToken(tokens.accessToken),
+        refreshToken: encToken(tokens.refreshToken),
         expiresAt,
       },
     })
@@ -318,8 +320,8 @@ export class OrgQboCompanyService {
     const companyName = await this.client.getCompanyName(realmId, tokens.accessToken)
     const data = {
       realmId,
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
+      accessToken: encToken(tokens.accessToken),
+      refreshToken: encToken(tokens.refreshToken),
       expiresAt,
       environment,
       connectedByUserId: user.id,
