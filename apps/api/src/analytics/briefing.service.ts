@@ -1,7 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
 import {
   type MetricResult,
+  bandsFor,
   formatMetricValueLong,
+  healthStatus,
   projectCashRunway,
   resolveDisplayUnit,
 } from '@finrep/analytics'
@@ -984,9 +986,13 @@ export class BriefingService {
       if (actual !== null && plan && plan.planTotal > 0) {
         const gap = actual - plan.planTotal // negative when below plan
         const gapPct = gap / plan.planTotal
-        // Only real shortfalls (>2% below plan). At/above plan or within 2% → no item
-        // (and no metric:enrollment_vs_plan item exists to suppress — it's 'good').
-        if (gapPct < -0.02) {
+        // CANONICALIZED: the gate + severity read the enrollment_vs_plan registry BANDS
+        // via healthStatus/bandsFor (good ≥ -2% / risk < -5%) instead of local -0.02/-0.05
+        // literals, so re-tuning the band propagates here automatically. The gap comes from
+        // enrollmentPlan.resolve() — the SAME source the metric's compute reads — so the
+        // published value equals the dashboard's enrollment_vs_plan by construction.
+        const evpStatus = healthStatus(gapPct, bandsFor('enrollment_vs_plan'), true)
+        if (evpStatus !== 'good') {
           const shortfall = Math.abs(gap)
 
           // Net tuition per PLANNED student: prefer the driver-budget netRate, else
@@ -998,6 +1004,8 @@ export class BriefingService {
 
           // Cash consequence (degrade-safe). Prefer a projectCashRunway breach month;
           // else an annualized days-cash estimate from the days_cash_on_hand metric.
+          // The days-cash "good" threshold comes from the registry band, not a literal.
+          const dcohGood = bandsFor('days_cash_on_hand')?.good ?? 60
           let cashClause: string | null = null
           if (tuitionImpact !== null) {
             const dch = metricsResponse.metrics.find((m) => m.key === 'days_cash_on_hand')
@@ -1011,10 +1019,10 @@ export class BriefingService {
               monthlyNetCashflow: signal?.cash?.monthlyNetCashflow ?? null,
               annualExpense,
               shockAnnual: tuitionImpact,
-              threshold: 60,
+              threshold: dcohGood,
             })
             if (runway?.firstMonthBelowThreshold) {
-              cashClause = `days cash on hand would fall below 60 by ${runway.firstMonthBelowThreshold.monthLabel}`
+              cashClause = `days cash on hand would fall below ${dcohGood} by ${runway.firstMonthBelowThreshold.monthLabel}`
             } else if (
               dch &&
               dch.available &&
@@ -1028,12 +1036,12 @@ export class BriefingService {
             }
           }
 
-          // Severity from the gap band: > 5% below plan is critical, else warn.
-          const severity: AttentionSeverity = gapPct <= -0.05 ? 'critical' : 'warn'
+          // Severity from the registry band: 'risk' (>5% below plan) is critical, else warn.
+          const severity: AttentionSeverity = evpStatus === 'risk' ? 'critical' : 'warn'
 
           let why =
             `Enrollment is ${shortfall} student${shortfall === 1 ? '' : 's'} below the plan of ` +
-            `${plan.planTotal} (${(gapPct * 100).toFixed(1)}%)`
+            `${plan.planTotal} (${formatMetricValueLong(gapPct, 'percent')})`
           // tuitionImpact is negative (revenue not collected); "less tuition"
           // already states the direction, so show the magnitude, not "-$…".
           if (tuitionImpact !== null)

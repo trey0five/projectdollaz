@@ -1947,7 +1947,9 @@ export class BoardReportService {
     const sentences: string[] = []
     const margin = data.keyIndicators.find((k) => k.key === 'operating_margin')
     const marginStr =
-      margin?.available && margin.value != null ? ` (${(Number(margin.value) * 100).toFixed(1)}% margin)` : ''
+      margin?.available && margin.value != null
+        ? ` (${formatMetricValueLong(Number(margin.value), 'percent')} margin)`
+        : ''
     const net = ops.netSurplus.actual
     sentences.push(
       `For ${data.label}, the school recorded total revenue of ${usd(ops.revenueTotals.actual)} against ` +

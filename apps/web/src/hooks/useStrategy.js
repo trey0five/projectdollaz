@@ -23,26 +23,35 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect, useCallback } from 'react'
 import { strategyApi, schoolsApi, isModuleNotLicensed, isPaymentRequired } from '../lib/api.js'
+import { metricLabel } from '../lib/metricMeta.js'
 
-// ── The bindable metric catalog (mirror of the semantic registry's bindable keys;
-// revenue_mix / expense_mix are deliberately excluded — they are not scalar). unit
-// drives the GoalForm target input: a 'percent' metric is entered in its natural
-// display unit (8.5 = 8.5%) and stored as the 0..1 fraction the API expects. ────
-export const METRIC_CATALOG = {
-  days_cash_on_hand: { label: 'Days Cash on Hand', unit: 'days' },
-  operating_margin: { label: 'Operating Margin', unit: 'percent' },
-  tuition_discount_rate: { label: 'Tuition Discount Rate', unit: 'percent' },
-  net_tuition_per_student: { label: 'Net Tuition per Student', unit: 'currency' },
-  months_operating_reserve: { label: 'Months of Operating Reserve', unit: 'months' },
-  enrollment: { label: 'Enrollment', unit: 'count' },
-  enrollment_change_yoy: { label: 'Enrollment Change (YoY)', unit: 'percent' },
-  student_teacher_ratio: { label: 'Student–Teacher Ratio', unit: 'ratio' },
-  cost_per_pupil: { label: 'Cost per Pupil', unit: 'currency' },
-  tuition_dependency: { label: 'Tuition Dependency', unit: 'percent' },
-  pct_students_on_aid: { label: '% Students on Aid', unit: 'percent' },
-  financial_aid_per_student: { label: 'Financial Aid per Student', unit: 'currency' },
-  aid_per_aided_student: { label: 'Aid per Aided Student', unit: 'currency' },
+// ── The bindable metric catalog (the semantic registry's bindable keys; revenue_mix
+// / expense_mix are deliberately excluded — they are not scalar). LABELS come from the
+// canonical registry (metricLabel) so a goal's metric name never drifts from the
+// dashboard/board. `unit` is a FORM-INPUT concern (the web-only 'count' for enrollment
+// + the percent-scaling rule) and stays local: a 'percent' metric is entered in its
+// natural display unit (8.5 = 8.5%) and stored as the 0..1 fraction the API expects. ──
+const BINDABLE_UNITS = {
+  days_cash_on_hand: 'days',
+  operating_margin: 'percent',
+  tuition_discount_rate: 'percent',
+  net_tuition_per_student: 'currency',
+  months_operating_reserve: 'months',
+  // NB: bare 'enrollment' is intentionally NOT here — it is not a registry metric key
+  // (the server's isMetricKey rejects it → a goal bound to it would 400). Only keys the
+  // semantic layer can actually self-measure are bindable; an enrollment-count target
+  // uses milestone mode. enrollment_change_yoy IS a real banded metric, so it stays.
+  enrollment_change_yoy: 'percent',
+  student_teacher_ratio: 'ratio',
+  cost_per_pupil: 'currency',
+  tuition_dependency: 'percent',
+  pct_students_on_aid: 'percent',
+  financial_aid_per_student: 'currency',
+  aid_per_aided_student: 'currency',
 }
+export const METRIC_CATALOG = Object.fromEntries(
+  Object.entries(BINDABLE_UNITS).map(([key, unit]) => [key, { label: metricLabel(key), unit }]),
+)
 
 /** Ordered [key, label] pairs for the metric-binding <Select>. */
 export const METRIC_OPTIONS = Object.entries(METRIC_CATALOG).map(([key, m]) => ({
