@@ -146,7 +146,14 @@ export default function IngestScrolly({ act }) {
             </div>
 
             {/* ── The stage (scene-owned choreography) ───────────────────── */}
-            <div className="relative h-[48vh] min-h-[320px] sm:h-[56vh]" aria-hidden="true">
+            {/* The scene's pieces are positioned/sized (w-60, left-54%…) for the wide
+                desktop 1.5fr column, so they overflow a narrow phone column. Scale the
+                whole stage down to fit — origin-center keeps the choreography intact,
+                just smaller — stepping back up to 1× once the 2-col layout gives it room. */}
+            <div
+              className="relative h-[42vh] min-h-[300px] origin-center scale-[0.66] sm:h-[56vh] sm:scale-[0.85] lg:scale-100"
+              aria-hidden="true"
+            >
               <Stage p={p} beat={beat} />
             </div>
           </div>

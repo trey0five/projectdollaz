@@ -118,7 +118,14 @@ function Shard({ s, converge, reduce }) {
 function PartsOverlay({ phase, reduce }) {
   const converge = phase >= 4
   return (
-    <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden" aria-hidden="true">
+    // The shards scatter across 4–96vw with fixed pixel widths, so on a narrow phone
+    // they read oversized and the right-edge ones clip. Scaling the whole field down
+    // (origin-center) shrinks each shard and pulls the outer ones inward so nothing is
+    // cut, then returns to 1× on tablet/desktop where there's room. Decorative + transient.
+    <div
+      className="pointer-events-none absolute inset-0 z-20 origin-center scale-[0.7] overflow-hidden sm:scale-90 lg:scale-100"
+      aria-hidden="true"
+    >
       {SHARDS.map((s) => (
         <Shard key={s.id} s={s} converge={converge} reduce={reduce} />
       ))}
