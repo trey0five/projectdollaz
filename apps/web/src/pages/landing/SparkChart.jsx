@@ -1,8 +1,15 @@
 // SparkChart — a purpose-built static inline-SVG spark-area card for Act III.
-// Navy line over a gold area fill; the line draws in via pathLength whileInView
-// (once). Deliberately NOT recharts/ChartRenderer — keeps the landing bundle
+// Navy line over a gold area fill; the line draws in via pathLength once the card
+// enters view. Deliberately NOT recharts/ChartRenderer — keeps the landing bundle
 // clean. Reduced motion: fully drawn from first paint.
-import { motion, useReducedMotion } from 'framer-motion'
+//
+// Reliability: the trigger is a REF-BASED useInView (once, amount 0.3) rather than
+// per-element whileInView + a negative viewport margin, which intermittently failed to
+// fire on mobile (fast scroll / mobile-Safari IntersectionObserver races) and left the
+// line stuck at pathLength 0 — i.e. an invisible graph. Driving every element off ONE
+// boolean guarantees the line always draws once the card is on screen.
+import { useRef } from 'react'
+import { motion, useInView, useReducedMotion } from 'framer-motion'
 import { SPARK_CAPTION } from './landingContent.js'
 
 const LINE =
@@ -11,8 +18,11 @@ const AREA = `${LINE} L254,96 L4,96 Z`
 
 export default function SparkChart() {
   const reduce = useReducedMotion()
+  const ref = useRef(null)
+  const inView = useInView(ref, { once: true, amount: 0.3 })
+  const show = reduce || inView
   return (
-    <div className="card-vital p-6">
+    <div ref={ref} className="card-vital p-6">
       <div className="relative z-[1]">
         <svg
           viewBox="0 0 260 100"
@@ -29,9 +39,8 @@ export default function SparkChart() {
           <motion.path
             d={AREA}
             fill="url(#landing-spark-gold)"
-            initial={reduce ? false : { opacity: 0 }}
-            whileInView={reduce ? undefined : { opacity: 1 }}
-            viewport={{ once: true, margin: '-60px' }}
+            initial={false}
+            animate={{ opacity: show ? 1 : 0 }}
             transition={{ duration: 0.6, delay: 0.55 }}
           />
           <motion.path
@@ -40,9 +49,8 @@ export default function SparkChart() {
             stroke="#1f3d72"
             strokeWidth="2.5"
             strokeLinecap="round"
-            initial={reduce ? false : { pathLength: 0 }}
-            whileInView={reduce ? undefined : { pathLength: 1 }}
-            viewport={{ once: true, margin: '-60px' }}
+            initial={false}
+            animate={{ pathLength: show ? 1 : 0 }}
             transition={{ duration: 0.9, ease: 'easeOut' }}
           />
           <motion.circle
@@ -50,9 +58,8 @@ export default function SparkChart() {
             cy="18"
             r="3.5"
             fill="#b89650"
-            initial={reduce ? false : { opacity: 0 }}
-            whileInView={reduce ? undefined : { opacity: 1 }}
-            viewport={{ once: true, margin: '-60px' }}
+            initial={false}
+            animate={{ opacity: show ? 1 : 0 }}
             transition={{ duration: 0.3, delay: 0.85 }}
           />
         </svg>

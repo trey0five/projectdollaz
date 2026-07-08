@@ -137,8 +137,12 @@ function PartsOverlay({ phase, reduce }) {
   return (
     // Full-bleed field (the parts fill the whole screen). On phones each shard is
     // sized down via sizeK — the field stays full-screen and well-distributed, just
-    // with proportionate pieces instead of oversized ones. Decorative + transient.
-    <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden" aria-hidden="true">
+    // with proportionate pieces instead of oversized ones — and the whole field is
+    // nudged slightly left so it reads centered on a narrow screen. Decorative + transient.
+    <div
+      className="pointer-events-none absolute inset-0 z-20 -translate-x-4 overflow-hidden sm:translate-x-0"
+      aria-hidden="true"
+    >
       {SHARDS.map((s) => (
         <Shard key={s.id} s={s} converge={converge} reduce={reduce} sizeK={sizeK} />
       ))}

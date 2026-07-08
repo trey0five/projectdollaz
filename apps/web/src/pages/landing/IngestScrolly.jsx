@@ -156,13 +156,15 @@ export default function IngestScrolly({ act }) {
                 full-width stage again. */}
             {/* The block carries a FIXED design size (600×340 — tall enough for the
                 press etc. at their %-positions) and is scaled to fit; the phone cell is
-                sized to the SCALED result (≈190px) so there's no dead space beneath the
-                scene. ≥sm/lg fall back to the fluid full-height stage. */}
+                sized to the SCALED result so there's no dead space beneath the scene.
+                pt nudges the scene down a touch; the small -translate-x re-centers the
+                (right-biased) content so the press doesn't clip at the higher scale.
+                ≥sm/lg fall back to the fluid full-height stage. */}
             <div
-              className="relative flex h-[190px] items-start justify-center overflow-hidden sm:h-[56vh] lg:block lg:h-[56vh] lg:overflow-visible"
+              className="relative flex h-[226px] items-start justify-center overflow-hidden pt-5 sm:h-[56vh] sm:pt-0 lg:block lg:h-[56vh] lg:overflow-visible"
               aria-hidden="true"
             >
-              <div className="relative h-[340px] w-[600px] shrink-0 origin-top scale-[0.6] sm:h-full sm:scale-[0.82] lg:w-full lg:scale-100">
+              <div className="relative h-[340px] w-[600px] shrink-0 origin-top -translate-x-4 scale-[0.64] sm:h-full sm:translate-x-0 sm:scale-[0.82] lg:w-full lg:scale-100">
                 <Stage p={p} beat={beat} />
               </div>
             </div>
