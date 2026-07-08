@@ -92,7 +92,7 @@ export default function IngestScrolly({ act }) {
       <div ref={trackRef} className="relative h-[320vh]">
         <div className="sticky top-0 flex h-screen items-center overflow-hidden">
           <TimestampMedallion time={act.time} />
-          <div className="relative z-[2] mx-auto grid w-full max-w-6xl gap-8 px-5 pl-14 sm:px-8 sm:pl-16 lg:grid-cols-[1fr_1.5fr] lg:items-center lg:gap-12 lg:px-8">
+          <div className="relative z-[2] mx-auto grid w-full max-w-6xl gap-3 px-5 pl-14 sm:gap-8 sm:px-8 sm:pl-16 lg:grid-cols-[1fr_1.5fr] lg:items-center lg:gap-12 lg:px-8">
             {/* ── Narration ──────────────────────────────────────────────── */}
             <div>
               <p className="text-[12px] font-bold uppercase tracking-[0.22em] text-[#7a5e00]">{act.kicker}</p>
@@ -146,15 +146,21 @@ export default function IngestScrolly({ act }) {
             </div>
 
             {/* ── The stage (scene-owned choreography) ───────────────────── */}
-            {/* The scene's pieces are positioned/sized (w-60, left-54%…) for the wide
-                desktop 1.5fr column, so they overflow a narrow phone column. Scale the
-                whole stage down to fit — origin-center keeps the choreography intact,
-                just smaller — stepping back up to 1× once the 2-col layout gives it room. */}
+            {/* The scene's folder/press/window are positioned by % of a WIDE desktop
+                column, where they sit cleanly apart. On a narrow phone the same %s
+                overlap — and scaling the phone-width stage can't fix that (it scales
+                the overlap too). So we render the stage at its full DESKTOP design
+                width (660px, where nothing overlaps) and scale that whole block down
+                to fit the phone, top-anchored so it sits high (close to the narration).
+                overflow-hidden clips the wide block to the column; ≥lg it's the natural
+                full-width stage again. */}
             <div
-              className="relative h-[42vh] min-h-[300px] origin-center scale-[0.66] sm:h-[56vh] sm:scale-[0.85] lg:scale-100"
+              className="relative flex h-[40vh] min-h-[300px] items-start justify-center overflow-hidden sm:h-[56vh] lg:block lg:h-[56vh] lg:overflow-visible"
               aria-hidden="true"
             >
-              <Stage p={p} beat={beat} />
+              <div className="relative h-full w-[660px] shrink-0 origin-top scale-[0.5] sm:scale-[0.78] lg:w-full lg:scale-100">
+                <Stage p={p} beat={beat} />
+              </div>
             </div>
           </div>
         </div>

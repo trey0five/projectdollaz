@@ -270,7 +270,7 @@ export default function AppShell({ children }) {
           to={heroItem.to}
           aria-label={heroItem.label}
           aria-current={heroItem.match(path) ? 'page' : undefined}
-          className={`group relative flex flex-col gap-1 overflow-hidden rounded-xl border-2 px-3.5 py-3 outline-none ring-gold/50 transition-all focus-visible:ring-2 ${
+          className={`group relative flex shrink-0 flex-col gap-1 overflow-hidden rounded-xl border-2 px-3.5 py-3 outline-none ring-gold/50 transition-all focus-visible:ring-2 ${
             heroItem.match(path)
               ? 'border-gold bg-gold/15 shadow-glow'
               : 'border-gold/35 bg-white/[0.06] hover:border-gold/70 hover:bg-white/[0.09]'
@@ -436,8 +436,8 @@ export default function AppShell({ children }) {
         {/* ── Content column (offset by the fixed rail on lg+) ─────────────────── */}
         <div className="app-content-offset flex min-w-0 flex-1 flex-col lg:pl-64">
           {/* Slim top strip: hamburger (<lg) + SchoolSwitcher + user/logout. */}
-          <header className="no-print sticky top-0 z-20 flex h-14 items-center justify-between gap-3 border-b-2 border-gold/30 bg-navy-gradient px-4 shadow-navy-glow sm:px-6">
-            <div className="flex min-w-0 items-center gap-3">
+          <header className="no-print sticky top-0 z-20 flex h-14 items-center justify-between gap-2 border-b-2 border-gold/30 bg-navy-gradient px-3 shadow-navy-glow sm:gap-3 sm:px-6">
+            <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
               <button
                 ref={hamburgerRef}
                 type="button"
@@ -445,7 +445,7 @@ export default function AppShell({ children }) {
                 aria-label={menuOpen ? 'Close menu' : 'Open menu'}
                 aria-expanded={menuOpen}
                 aria-controls="app-sidebar-drawer"
-                className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/15 text-white/80 transition-colors hover:bg-white/[0.06] hover:text-white lg:hidden"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/15 text-white/80 transition-colors hover:bg-white/[0.06] hover:text-white sm:h-10 sm:w-10 lg:hidden"
               >
                 {menuOpen ? <X size={20} /> : <Menu size={20} />}
               </button>

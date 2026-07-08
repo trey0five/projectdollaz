@@ -8,8 +8,24 @@
 // plays the same show. (The Coin Drop / Minting alternates were compared live
 // and retired.)
 // ─────────────────────────────────────────────────────────────────────────────
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { EASE } from './Reveal.jsx'
+
+// Phones get smaller shards (not a shrunk field) so the hundred parts still fill the
+// whole screen but read proportionate instead of oversized/clipping. matchMedia keeps
+// it out of the render path; defaults to desktop (1×) during SSR/first paint.
+function useShardSizeK() {
+  const [k, setK] = useState(1)
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px)')
+    const apply = () => setK(mq.matches ? 0.58 : 1)
+    apply()
+    mq.addEventListener('change', apply)
+    return () => mq.removeEventListener('change', apply)
+  }, [])
+  return k
+}
 
 // Beat schedule [ms, phase] — 3 Penny center · 4 pulse/converge + headline ·
 // 5 chat unfold · 6 settle. Padded so the shard-field gets its moment.
@@ -54,14 +70,14 @@ const SHARDS = (() => {
   })
 })()
 
-function Shard({ s, converge, reduce }) {
+function Shard({ s, converge, reduce, sizeK = 1 }) {
   // Converge target: the chat's corner of the hero (right column, mid height).
   const target = { left: '68vw', top: '44vh' }
   const body =
     s.kind === 'row' ? (
       <span className="flex items-center gap-1.5">
         <span className="h-1.5 w-6 rounded bg-white/25" />
-        <span className="h-1.5 rounded bg-gold/50" style={{ width: s.w * 0.5 }} />
+        <span className="h-1.5 rounded bg-gold/50" style={{ width: s.w * 0.5 * sizeK }} />
       </span>
     ) : s.kind === 'chip' ? (
       <span className="rounded-full border border-gold/40 bg-gold/15 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider text-gold-light/90">
@@ -70,7 +86,7 @@ function Shard({ s, converge, reduce }) {
     ) : s.kind === 'card' ? (
       <span
         className="block rounded-md border border-white/15 bg-white/[0.07] p-1.5"
-        style={{ width: s.w }}
+        style={{ width: s.w * sizeK }}
       >
         <span className="block h-1 w-2/3 rounded bg-white/30" />
         <span className="mt-1 block h-1 w-1/2 rounded bg-gold/40" />
@@ -83,7 +99,7 @@ function Shard({ s, converge, reduce }) {
     <motion.span
       className="absolute will-change-transform"
       style={{ left: `${s.x}vw`, top: `${s.y}vh` }}
-      initial={reduce ? false : { opacity: 0, rotate: s.rot, scale: s.scale }}
+      initial={reduce ? false : { opacity: 0, rotate: s.rot, scale: s.scale * sizeK }}
       animate={
         converge
           ? {
@@ -91,12 +107,12 @@ function Shard({ s, converge, reduce }) {
               left: target.left,
               top: target.top,
               rotate: 0,
-              scale: 0.2,
+              scale: 0.2 * sizeK,
             }
           : {
               opacity: 0.85,
               rotate: s.rot,
-              scale: s.scale,
+              scale: s.scale * sizeK,
               y: [0, -s.drift, 0],
             }
       }
@@ -117,17 +133,14 @@ function Shard({ s, converge, reduce }) {
 
 function PartsOverlay({ phase, reduce }) {
   const converge = phase >= 4
+  const sizeK = useShardSizeK()
   return (
-    // The shards scatter across 4–96vw with fixed pixel widths, so on a narrow phone
-    // they read oversized and the right-edge ones clip. Scaling the whole field down
-    // (origin-center) shrinks each shard and pulls the outer ones inward so nothing is
-    // cut, then returns to 1× on tablet/desktop where there's room. Decorative + transient.
-    <div
-      className="pointer-events-none absolute inset-0 z-20 origin-center scale-[0.7] overflow-hidden sm:scale-90 lg:scale-100"
-      aria-hidden="true"
-    >
+    // Full-bleed field (the parts fill the whole screen). On phones each shard is
+    // sized down via sizeK — the field stays full-screen and well-distributed, just
+    // with proportionate pieces instead of oversized ones. Decorative + transient.
+    <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden" aria-hidden="true">
       {SHARDS.map((s) => (
-        <Shard key={s.id} s={s} converge={converge} reduce={reduce} />
+        <Shard key={s.id} s={s} converge={converge} reduce={reduce} sizeK={sizeK} />
       ))}
       {/* Penny's pulse: one gold shockwave from center as the snap begins */}
       {converge && !reduce && (

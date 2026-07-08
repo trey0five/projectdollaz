@@ -33,7 +33,7 @@ export default function ScopeToggle() {
             role="tab"
             aria-selected={active}
             onClick={() => setScope(s.value)}
-            className={`relative z-10 flex min-h-[36px] items-center gap-1.5 rounded-md px-2.5 py-1 text-[12px] font-semibold uppercase tracking-[0.08em] outline-none ring-gold/50 transition-colors focus-visible:ring-2 ${
+            className={`relative z-10 flex min-h-[34px] items-center justify-center gap-1.5 rounded-md px-2 py-1 text-[12px] font-semibold uppercase tracking-[0.08em] outline-none ring-gold/50 transition-colors focus-visible:ring-2 sm:min-h-[36px] sm:px-2.5 ${
               active ? 'text-navy-deep' : 'text-white/60 hover:text-white'
             }`}
           >
@@ -46,8 +46,9 @@ export default function ScopeToggle() {
               />
             )}
             <s.Icon size={14} className="shrink-0" />
+            {/* Labels appear from sm up; on phones this is a clean, balanced two-icon
+                control (each button keeps its aria-label + the group's title tooltip). */}
             <span className="hidden sm:inline">{s.label}</span>
-            {s.shortLabel && <span className="sm:hidden">{s.shortLabel}</span>}
           </button>
         )
       })}
