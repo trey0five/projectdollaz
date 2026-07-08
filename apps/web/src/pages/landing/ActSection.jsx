@@ -28,11 +28,11 @@ export default function ActSection({ act }) {
     <section
       id={act.anchorId}
       aria-labelledby={`${act.id}-h2`}
-      className={`relative ${act.bg} scroll-mt-24 py-24`}
+      className={`relative ${act.bg} scroll-mt-24 py-14 sm:py-24`}
     >
       <TimestampMedallion time={act.time} />
       {/* z-[2]: content above the z-[1] spine (which is above section grounds). */}
-      <div className="relative z-[2] mx-auto grid max-w-6xl gap-12 px-5 pl-14 pt-12 sm:px-8 sm:pl-16 lg:grid-cols-2 lg:items-center lg:gap-20 lg:px-8 lg:pt-20">
+      <div className="relative z-[2] mx-auto grid max-w-6xl gap-12 px-5 pl-14 pt-8 sm:px-8 sm:pl-16 sm:pt-12 lg:grid-cols-2 lg:items-center lg:gap-20 lg:px-8 lg:pt-20">
         <div className={act.flip ? 'lg:order-2' : ''}>
           <Reveal>
             {/* Deep gold on light grounds — #b89650 on cream is ~2.6:1 (fails

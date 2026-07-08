@@ -89,7 +89,7 @@ export default function IngestScrolly({ act }) {
         Drop a trial balance on Penny and it becomes your four statements, then tomorrow’s
         briefing — no re-keying, no formatting.
       </p>
-      <div ref={trackRef} className="relative h-[320vh]">
+      <div ref={trackRef} className="relative h-[200vh] sm:h-[320vh]">
         <div className="sticky top-0 flex h-screen items-center overflow-hidden">
           <TimestampMedallion time={act.time} />
           <div className="relative z-[2] mx-auto grid w-full max-w-6xl gap-3 px-5 pl-14 sm:gap-8 sm:px-8 sm:pl-16 lg:grid-cols-[1fr_1.5fr] lg:items-center lg:gap-12 lg:px-8">
@@ -154,11 +154,15 @@ export default function IngestScrolly({ act }) {
                 to fit the phone, top-anchored so it sits high (close to the narration).
                 overflow-hidden clips the wide block to the column; ≥lg it's the natural
                 full-width stage again. */}
+            {/* The block carries a FIXED design size (600×340 — tall enough for the
+                press etc. at their %-positions) and is scaled to fit; the phone cell is
+                sized to the SCALED result (≈190px) so there's no dead space beneath the
+                scene. ≥sm/lg fall back to the fluid full-height stage. */}
             <div
-              className="relative flex h-[40vh] min-h-[300px] items-start justify-center overflow-hidden sm:h-[56vh] lg:block lg:h-[56vh] lg:overflow-visible"
+              className="relative flex h-[190px] items-start justify-center overflow-hidden sm:h-[56vh] lg:block lg:h-[56vh] lg:overflow-visible"
               aria-hidden="true"
             >
-              <div className="relative h-full w-[660px] shrink-0 origin-top scale-[0.5] sm:scale-[0.78] lg:w-full lg:scale-100">
+              <div className="relative h-[340px] w-[600px] shrink-0 origin-top scale-[0.6] sm:h-full sm:scale-[0.82] lg:w-full lg:scale-100">
                 <Stage p={p} beat={beat} />
               </div>
             </div>
