@@ -10,7 +10,7 @@
 // an error with no items renders nothing so a briefing hiccup never blocks the
 // vitals below. Dismiss is client-only (session-scoped).
 // ─────────────────────────────────────────────────────────────────────────────
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
 import {
@@ -163,16 +163,10 @@ function BriefingItemCard({ item, index, reduce, canEdit, onDismiss, active = fa
   const domain = SOURCE_META[item.source] ?? { label: item.source ?? 'Signal', Icon: Sparkles }
   const DomainIcon = domain.Icon
   const navigate = useNavigate()
-  // When Penny narrates this item, ring it gold and bring it into view so the
-  // board visibly follows her voice down the priority order.
-  const cardRef = useRef(null)
-  useEffect(() => {
-    if (active && cardRef.current) {
-      cardRef.current.scrollIntoView(
-        reduce ? { block: 'nearest' } : { block: 'nearest', behavior: 'smooth' },
-      )
-    }
-  }, [active, reduce])
+  // When Penny narrates this item we ring it gold (below) so the board visibly follows
+  // her voice — but we deliberately do NOT scrollIntoView. During morning-brief playback
+  // that yanked the whole page DOWN past the brief card the user is watching; the gold
+  // ring alone tracks the active item without hijacking the scroll position.
 
   const createTaskFromItem = () => {
     const today = new Date().toISOString().slice(0, 10)
@@ -192,7 +186,6 @@ function BriefingItemCard({ item, index, reduce, canEdit, onDismiss, active = fa
 
   return (
     <motion.article
-      ref={cardRef}
       layout
       initial={reduce ? { opacity: 0 } : { opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}

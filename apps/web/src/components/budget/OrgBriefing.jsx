@@ -8,7 +8,7 @@
 //
 // Pure presentation over the `briefing` prop; everything derived at render (no
 // effects, no in-render component definitions — React-Compiler safe).
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import {
@@ -105,18 +105,11 @@ function OrgBriefingItemCard({ item, index, reduce, active = false }) {
   const domain = SOURCE_META[item.source] ?? { label: item.source ?? 'Signal', Icon: Sparkles }
   const DomainIcon = domain.Icon
   const progress = titleProgress(item.title)
-  // When Penny narrates this cross-school item, ring it gold + scroll it in.
-  const cardRef = useRef(null)
-  useEffect(() => {
-    if (active && cardRef.current) {
-      cardRef.current.scrollIntoView(
-        reduce ? { block: 'nearest' } : { block: 'nearest', behavior: 'smooth' },
-      )
-    }
-  }, [active, reduce])
+  // When Penny narrates this cross-school item we ring it gold (below) — but we do NOT
+  // scrollIntoView: during brief playback that dragged the page down past the brief the
+  // user is watching. The gold ring tracks the active item without moving the scroll.
   return (
     <motion.div
-      ref={cardRef}
       initial={reduce ? { opacity: 0 } : { opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.38, delay: reduce ? 0 : index * 0.05, ease: [0.22, 1, 0.36, 1] }}
