@@ -52,7 +52,7 @@ export default function StudioConversation({ chat }) {
               type="button"
               onClick={() => setLightbox(null)}
               aria-label="Close image preview"
-              className="absolute right-4 top-4 grid h-10 w-10 place-items-center rounded-full bg-white/15 text-white hover:bg-white/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+              className="absolute right-4 top-4 grid h-10 w-10 place-items-center rounded-full bg-white/15 text-white hover:bg-white/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60"
             >
               <X size={18} aria-hidden />
             </button>

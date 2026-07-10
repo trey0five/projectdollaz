@@ -122,17 +122,17 @@ function HandsFree({ chat }) {
   return (
     <div className="ml-auto flex flex-wrap items-center justify-end gap-2.5">
       {on && listening && transcript && (
-        <span className="max-w-[24ch] break-words text-[13px] italic text-gold-light">“{transcript}”</span>
+        <span className="max-w-[24ch] break-words text-[13px] italic text-penny-light">“{transcript}”</span>
       )}
       <button
         type="button"
         onClick={() => (on ? disable() : enable())}
         aria-pressed={on}
         aria-label={on ? 'Turn off hands-free voice' : 'Turn on hands-free voice'}
-        className={`relative inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12.5px] font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 ${
+        className={`relative inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12.5px] font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60 ${
           on
             ? 'border-danger bg-danger text-white'
-            : 'border-gold/40 bg-gold/10 text-gold-light hover:border-gold/70 hover:text-white'
+            : 'border-penny/40 bg-penny/10 text-penny-light hover:border-penny/70 hover:text-white'
         }`}
       >
         {on && (
@@ -154,7 +154,7 @@ export default function StudioHero({ compact, name, chat, askBar, onNewChat }) {
       layout
       layoutId="studio-hero"
       transition={layoutTransition}
-      className={`relative overflow-hidden rounded-2xl border border-gold/20 bg-studio-hero shadow-navy-glow ${
+      className={`relative overflow-hidden rounded-2xl border border-penny/20 bg-studio-hero shadow-navy-glow ${
         // In a conversation the slim header stays pinned so "New chat" (the way back
         // to the Studio landing) is always reachable, even after scrolling a long
         // reply. `top-16` clears the app-shell's own sticky top strip (h-14 / z-20);
@@ -178,17 +178,17 @@ export default function StudioHero({ compact, name, chat, askBar, onNewChat }) {
             <button
               type="button"
               onClick={onNewChat}
-              className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-gold/40 bg-white/[0.06] px-3.5 py-1.5 text-[12.5px] font-semibold text-gold-light transition hover:border-gold/70 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+              className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-penny/40 bg-white/[0.06] px-3.5 py-1.5 text-[12.5px] font-semibold text-penny-light transition hover:border-penny/70 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60"
             >
               <Plus size={14} aria-hidden /> New chat
             </button>
           </div>
         ) : (
           <div className="px-6 pt-10 sm:px-10 sm:pt-12">
-            <p className="mb-3.5 inline-flex items-center gap-2 text-[12px] font-bold uppercase tracking-[0.2em] text-gold-light">
+            <p className="mb-3.5 inline-flex items-center gap-2 text-[12px] font-bold uppercase tracking-[0.2em] text-penny-light">
               <span aria-hidden className="relative flex h-[7px] w-[7px]">
-                <span className="absolute inline-flex h-full w-full rounded-full bg-gold-light opacity-70 motion-safe:animate-ping motion-reduce:hidden" />
-                <span className="relative inline-flex h-[7px] w-[7px] rounded-full bg-gold-light" />
+                <span className="absolute inline-flex h-full w-full rounded-full bg-penny-light opacity-70 motion-safe:animate-ping motion-reduce:hidden" />
+                <span className="relative inline-flex h-[7px] w-[7px] rounded-full bg-penny-light" />
               </span>
               Penny Studio · your AI chief of staff
             </p>
@@ -197,7 +197,7 @@ export default function StudioHero({ compact, name, chat, askBar, onNewChat }) {
                 <h1 className="max-w-[16ch] font-serif text-[30px] font-semibold leading-[1.05] text-white sm:text-[44px]">
                   {greeting()}, {name}.
                   <br />
-                  <em className="italic text-gold-light">What should we knock out today?</em>
+                  <em className="italic text-penny-light">What should we knock out today?</em>
                 </h1>
                 <p className="mt-3 max-w-[52ch] text-[15px] leading-relaxed text-white/75 sm:text-[17px]">
                   Upload anything, ask anything. Penny reads your files, drafts your reports, updates
@@ -212,7 +212,7 @@ export default function StudioHero({ compact, name, chat, askBar, onNewChat }) {
               >
                 <span
                   aria-hidden
-                  className="pointer-events-none absolute left-1/2 top-1/2 h-[85%] w-[85%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-gold/30 blur-2xl"
+                  className="pointer-events-none absolute left-1/2 top-1/2 h-[85%] w-[85%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-penny/30 blur-2xl"
                 />
                 <span className="relative block [&>svg]:h-[92px] [&>svg]:w-[92px] [&>svg]:drop-shadow-[0_16px_36px_rgba(184,150,80,0.55)] sm:[&>svg]:h-[172px] sm:[&>svg]:w-[172px]">
                   <PennyAvatar size={172} active speaking={chat.tts.speaking} />

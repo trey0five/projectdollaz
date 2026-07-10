@@ -1,3 +1,7 @@
+/* Design tokens FIRST: every theme color/font below resolves through these vars
+   (ui.v2 remap + .ui-v1 re-scope + print reset live there). */
+@import './styles/tokens.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -1269,5 +1273,21 @@
 @media (prefers-reduced-motion: reduce) {
   .hero-shine {
     display: none;
+  }
+}
+
+/* ── ui.v2 typography (the ONE scoped rule) ──────────────────────────────────
+   Display face swaps via --font-display in tokens.css; this adds the v2 display
+   tracking + the roomier 17px/1.65 body. @media screen so print self-exempts
+   (print keeps the classic 16px/1.5 + normal tracking); explicit text-[Npx]
+   classes and the mobile down-scale block are untouched. The .ui-v1 re-scope
+   (report preview) is counter-overridden in tokens.css. */
+@media screen {
+  html[data-ui='v2'] body {
+    font-size: 17px;
+    line-height: 1.65;
+  }
+  html[data-ui='v2'] .font-serif {
+    letter-spacing: -0.02em;
   }
 }

@@ -37,7 +37,7 @@ export default function AppliedCard({ proposal, onUndo, header: headerOverride, 
       initial={reduce ? false : { opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={reduce ? { duration: 0 } : { duration: 0.22, ease: 'easeOut' }}
-      className="mt-2 overflow-hidden rounded-xl border border-emerald-300/70 bg-emerald-50/70 p-2.5 shadow-glow"
+      className="mt-2 overflow-hidden rounded-xl border border-emerald-300/70 bg-emerald-50/70 p-2.5 shadow-penny-glow"
     >
       <p className="flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-[0.1em] text-emerald-700">
         <Icon size={13} aria-hidden /> {header}

@@ -111,7 +111,7 @@ export default function PennyChat({ open, onClose }) {
                 window.dispatchEvent(new CustomEvent('penny:ai-drop-files', { detail: { files } }))
               }
             }}
-            className="fixed z-50 flex flex-col overflow-hidden border border-gold/25 bg-cream shadow-login
+            className="fixed z-50 flex flex-col overflow-hidden border border-penny/25 bg-cream shadow-login
               inset-x-0 bottom-0 max-h-[92vh] rounded-t-2xl
               sm:inset-x-auto sm:bottom-24 sm:right-5 sm:h-[680px] sm:max-h-[calc(100vh-7rem)] sm:w-[440px] sm:max-w-[calc(100vw-2.5rem)] sm:rounded-2xl
               lg:h-[760px] lg:w-[500px]"
@@ -134,7 +134,7 @@ export default function PennyChat({ open, onClose }) {
                   style={{ backgroundSize: '220% 100%' }}
                 />
                 {/* Soft gold corner bloom. */}
-                <span className="absolute -right-6 -top-8 h-32 w-32 rounded-full bg-gold/25 blur-2xl" />
+                <span className="absolute -right-6 -top-8 h-32 w-32 rounded-full bg-penny/25 blur-2xl" />
               </span>
 
               {/* Animated Penny avatar with online pulse dot. */}
@@ -176,14 +176,14 @@ export default function PennyChat({ open, onClose }) {
                   title={tts.enabled ? 'Voice on — tap to mute' : 'Voice off — tap to enable'}
                   className={`relative inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-semibold transition ${
                     tts.enabled
-                      ? 'bg-gold-gradient text-navy shadow-sm'
+                      ? 'bg-penny-gradient text-navy shadow-sm'
                       : 'border border-white/25 bg-white/10 text-white/90 hover:bg-white/20 hover:text-white'
                   }`}
                 >
                   {tts.enabled && tts.speaking && (
                     <span
                       aria-hidden
-                      className="absolute inset-0 rounded-full bg-gold/40 motion-safe:animate-ping motion-reduce:hidden"
+                      className="absolute inset-0 rounded-full bg-penny/40 motion-safe:animate-ping motion-reduce:hidden"
                     />
                   )}
                   {tts.enabled ? (
@@ -238,9 +238,9 @@ export default function PennyChat({ open, onClose }) {
             {panelDrag && (
               <div
                 aria-hidden
-                className="pointer-events-none absolute inset-0 z-[60] flex items-center justify-center border-4 border-dashed border-gold/80 bg-gold/10"
+                className="pointer-events-none absolute inset-0 z-[60] flex items-center justify-center border-4 border-dashed border-penny/80 bg-penny/10"
               >
-                <div className="rounded-xl border border-gold/60 bg-white/95 px-4 py-2 text-[14px] font-semibold text-[#7a5e00] shadow-card">
+                <div className="rounded-xl border border-penny/60 bg-white/95 px-4 py-2 text-[14px] font-semibold text-[#7a5e00] shadow-card">
                   Drop a file for Penny to analyze
                 </div>
               </div>

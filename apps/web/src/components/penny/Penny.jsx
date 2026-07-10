@@ -177,7 +177,7 @@ export default function Penny() {
       {!reduce && box && step && (
         <motion.div
           aria-hidden="true"
-          className="pointer-events-none fixed z-[54] text-gold drop-shadow"
+          className="pointer-events-none fixed z-[54] text-penny drop-shadow"
           style={{
             left: travel.placeRight ? box.right + 2 : box.left - 26,
             top: box.top + box.height / 2 - 14,
@@ -210,7 +210,7 @@ export default function Penny() {
               initial={reduce ? false : { opacity: 0, y: 8, scale: 0.96 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={reduce ? undefined : { opacity: 0, y: 8, scale: 0.96 }}
-              className={`pointer-events-auto absolute bottom-[72px] w-[min(19rem,calc(100vw-3rem))] rounded-2xl border-2 border-gold/40 bg-white px-4 py-3 shadow-card ${
+              className={`pointer-events-auto absolute bottom-[72px] w-[min(19rem,calc(100vw-3rem))] rounded-2xl border-2 border-penny/40 bg-white px-4 py-3 shadow-card ${
                 travel.placeRight ? 'right-0 rounded-br-md' : 'left-0 rounded-bl-md'
               }`}
             >
@@ -227,13 +227,13 @@ export default function Penny() {
                 <button
                   type="button"
                   onClick={step.action.onClick}
-                  className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg bg-gold-gradient px-3 py-1.5 text-[14px] font-bold uppercase tracking-[0.08em] text-navy shadow-glow transition-transform hover:-translate-y-0.5"
+                  className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg bg-penny-gradient px-3 py-1.5 text-[14px] font-bold uppercase tracking-[0.08em] text-navy shadow-penny-glow transition-transform hover:-translate-y-0.5"
                 >
                   {step.action.label} <ChevronRight size={14} />
                 </button>
               )}
               {step.ctaLabel && (
-                <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-gold/15 px-2.5 py-0.5 text-[12.5px] font-semibold text-gold">
+                <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-penny/15 px-2.5 py-0.5 text-[12.5px] font-semibold text-penny">
                   <ChevronRight size={12} aria-hidden /> {step.ctaLabel}
                 </p>
               )}
@@ -245,7 +245,7 @@ export default function Penny() {
                   <button
                     type="button"
                     onClick={advance}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-gold-gradient px-3 py-1.5 text-[14px] font-bold uppercase tracking-[0.08em] text-navy shadow-glow transition-transform hover:-translate-y-0.5"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-penny-gradient px-3 py-1.5 text-[14px] font-bold uppercase tracking-[0.08em] text-navy shadow-penny-glow transition-transform hover:-translate-y-0.5"
                   >
                     {isLast ? 'Done' : 'Next'} <ChevronRight size={14} />
                   </button>
@@ -272,7 +272,7 @@ export default function Penny() {
             }}
             aria-label={chatOpen ? 'Close Penny AI' : 'Open Penny AI'}
             aria-expanded={chatOpen}
-            className="pointer-events-auto relative block rounded-full transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+            className="pointer-events-auto relative block rounded-full transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-penny/60"
           >
             <PennyAvatar size={coinPx} glance={glance} blink={blink} active={chatOpen} />
           </button>

@@ -18,7 +18,7 @@ import { ArrowRight, BadgeCheck, Flag, Sparkles, Target } from 'lucide-react'
 // bandStatus → the shared strategy verdict language (PaceChip tokens): watch is
 // amber-gold, risk is red. TEXT + colour (not colour alone) for accessibility.
 const BAND = {
-  watch: { label: 'Watch', chip: 'border-gold/40 bg-gold/10 text-[#7a5e00]' },
+  watch: { label: 'Watch', chip: 'border-penny/40 bg-penny/10 text-[#7a5e00]' },
   risk: { label: 'At risk', chip: 'border-danger/30 bg-danger/10 text-danger' },
 }
 
@@ -55,7 +55,7 @@ function GoalRow({ goal }) {
             ) : null}
             <span className="inline-flex items-center gap-1 text-[13px] font-semibold tabular-nums text-navy">
               {goal?.formattedCurrent}
-              <ArrowRight size={12} aria-hidden className="text-gold" />
+              <ArrowRight size={12} aria-hidden className="text-penny" />
               {goal?.formattedTarget}
             </span>
             <BandChip status={goal?.bandStatus} />
@@ -85,7 +85,7 @@ export default function DraftPlanProposalCard({ payload }) {
 
   return (
     <div>
-      <p className="flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-[0.1em] text-gold">
+      <p className="flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-[0.1em] text-penny">
         <Sparkles size={13} aria-hidden /> Penny drafted a strategic plan
       </p>
 

@@ -36,7 +36,7 @@ export default function BoardReportPrintDocument({ data }) {
   const accentStyle = { '--brd-accent': accent }
 
   return (
-    <div className="brd-print" style={accentStyle}>
+    <div className="ui-v1 brd-print" style={accentStyle}>
       {renderCover(data, accent)}
       {renderToc()}
       {renderMda(data)}

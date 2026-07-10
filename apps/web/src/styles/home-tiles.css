@@ -1,0 +1,254 @@
+/* ────────────────────────────────────────────────────────────────────────────
+   home-tiles.css — ALL custom CSS for the HOME v2 tile dashboard (ui.v2).
+
+   Scoped by component classes (.module-tile / .tile-* / .core-tile) that only
+   the v2 <HomeTiles> tree ever renders, so nothing here can leak into v1
+   surfaces, print, or the board packet. Each tile sets `--tile-hue` inline from
+   tileRegistry; everything hue-ish below derives from that one variable.
+
+   The hover "color flood" is a hue circle pinned at the arrow corner that
+   scales up (compositor-only transform — 60fps, no JS); the shine is a skewed
+   white gradient sweep. Both, plus the white text flip, live inside
+   prefers-reduced-motion: no-preference; reduced motion gets an instant,
+   motionless hover state (hue inset ring + hue title) instead. :focus-visible
+   mirrors :hover throughout for keyboard parity.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+.module-tile {
+  --tile-hue: #2563eb;
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid rgb(16 28 61 / 0.08);
+  background: #fff;
+  text-align: left;
+  outline: none;
+  box-shadow:
+    0 1px 2px rgb(16 28 61 / 0.05),
+    0 8px 22px -12px rgb(16 28 61 / 0.12);
+  transition:
+    box-shadow 0.35s ease,
+    border-color 0.35s ease;
+}
+.module-tile:hover,
+.module-tile:focus-visible {
+  border-color: color-mix(in srgb, var(--tile-hue) 55%, transparent);
+  box-shadow: 0 16px 36px -10px color-mix(in srgb, var(--tile-hue) 40%, transparent);
+}
+/* Keyboard ring — the tile hue, offset off the card so it reads on any ground. */
+.module-tile:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--tile-hue) 75%, #101c3d);
+  outline-offset: 3px;
+}
+
+/* Content sits above the flood (z 0) and under the shine (z 2). */
+.tile-body {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+}
+
+/* Hue-tinted art square; the SVG art inherits the hue via currentColor. */
+.tile-art {
+  display: flex;
+  height: 60px;
+  width: 60px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--tile-hue) 11%, transparent);
+  color: var(--tile-hue);
+}
+.tile-art svg {
+  height: 38px;
+  width: 38px;
+}
+
+/* Round arrow chip at the flood corner. */
+.tile-arrow {
+  display: flex;
+  height: 32px;
+  width: 32px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--tile-hue) 9%, transparent);
+  color: var(--tile-hue);
+}
+
+/* Status chip. Coral (#FF6B5E) = needs-attention ONLY (plan §4); the text tone
+   uses the AA-safe darkened coral, critical fills solid with white text. */
+.tile-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 9999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+.tile-chip--attention {
+  background: rgb(255 107 94 / 0.14);
+  color: #c2362b;
+}
+.tile-chip--critical {
+  background: #ff6b5e;
+  color: #fff;
+}
+.tile-chip--clear {
+  background: rgb(16 28 61 / 0.05);
+  color: rgb(16 28 61 / 0.55);
+}
+.tile-chip--none {
+  background: rgb(16 28 61 / 0.04);
+  color: rgb(16 28 61 / 0.4);
+}
+
+/* ── Motion layer: flood + shine + white flip (skipped under reduced motion) ── */
+@media (prefers-reduced-motion: no-preference) {
+  /* The flood: a hue circle pinned at the arrow (bottom-right) corner. */
+  .module-tile::before {
+    content: '';
+    position: absolute;
+    right: -44px;
+    bottom: -44px;
+    z-index: 0;
+    height: 120px;
+    width: 120px;
+    border-radius: 9999px;
+    background: var(--tile-hue);
+    transform: scale(0);
+    transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: transform;
+  }
+  .module-tile:hover::before,
+  .module-tile:focus-visible::before {
+    transform: scale(9);
+  }
+
+  /* The shine: a skewed translucent bar sweeping across on hover. */
+  .module-tile::after {
+    content: '';
+    position: absolute;
+    top: -30%;
+    bottom: -30%;
+    left: 0;
+    z-index: 2;
+    width: 34%;
+    pointer-events: none;
+    background: linear-gradient(100deg, transparent, rgb(255 255 255 / 0.32), transparent);
+    transform: translateX(-140%) skewX(-18deg);
+    transition: transform 0.7s ease;
+  }
+  .module-tile:hover::after,
+  .module-tile:focus-visible::after {
+    transform: translateX(420%) skewX(-18deg);
+  }
+
+  /* Everything flips to white over the flood. */
+  .module-tile .tile-title,
+  .module-tile .tile-sub,
+  .module-tile .tile-art,
+  .module-tile .tile-arrow,
+  .module-tile .tile-chip {
+    transition:
+      color 0.3s ease,
+      background-color 0.3s ease;
+  }
+  .module-tile:hover .tile-title,
+  .module-tile:focus-visible .tile-title {
+    color: #fff;
+  }
+  .module-tile:hover .tile-sub,
+  .module-tile:focus-visible .tile-sub {
+    color: rgb(255 255 255 / 0.85);
+  }
+  .module-tile:hover .tile-art,
+  .module-tile:focus-visible .tile-art,
+  .module-tile:hover .tile-arrow,
+  .module-tile:focus-visible .tile-arrow {
+    background: rgb(255 255 255 / 0.18);
+    color: #fff;
+  }
+  .module-tile:hover .tile-chip,
+  .module-tile:focus-visible .tile-chip {
+    background: rgb(255 255 255 / 0.2);
+    color: #fff;
+  }
+  .module-tile:hover .tile-chip--critical,
+  .module-tile:focus-visible .tile-chip--critical {
+    background: rgb(255 255 255 / 0.92);
+    color: #c2362b;
+  }
+}
+
+/* ── Reduced motion: nothing moves; hover/focus is a static hue accent. ────── */
+@media (prefers-reduced-motion: reduce) {
+  .module-tile {
+    transition: none;
+  }
+  .module-tile:hover,
+  .module-tile:focus-visible {
+    box-shadow:
+      inset 0 0 0 2px var(--tile-hue),
+      0 8px 22px -12px rgb(16 28 61 / 0.12);
+  }
+  .module-tile:hover .tile-title,
+  .module-tile:focus-visible .tile-title {
+    color: var(--tile-hue);
+  }
+}
+
+/* ── Locked (upsell) tile: dimmed, no flood/shine, Add-ons pattern. ────────── */
+.module-tile--locked::before,
+.module-tile--locked::after {
+  content: none;
+}
+.module-tile--locked {
+  cursor: pointer;
+  background: rgb(255 255 255 / 0.6);
+}
+.module-tile--locked .tile-art {
+  background: rgb(16 28 61 / 0.05);
+  color: rgb(16 28 61 / 0.35);
+}
+.module-tile--locked .tile-title {
+  color: rgb(16 28 61 / 0.55);
+}
+.module-tile--locked .tile-sub {
+  color: rgb(16 28 61 / 0.4);
+}
+.module-tile--locked:hover .tile-title,
+.module-tile--locked:focus-visible .tile-title {
+  color: rgb(16 28 61 / 0.75);
+}
+.module-tile--locked:hover,
+.module-tile--locked:focus-visible {
+  border-color: color-mix(in srgb, var(--tile-hue) 40%, transparent);
+  box-shadow: 0 10px 24px -12px color-mix(in srgb, var(--tile-hue) 30%, transparent);
+}
+/* The "+ Add" pill keeps the module hue so the upsell still reads branded. */
+.tile-add-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1.5px solid color-mix(in srgb, var(--tile-hue) 60%, transparent);
+  border-radius: 9999px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--tile-hue);
+}

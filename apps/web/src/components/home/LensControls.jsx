@@ -25,11 +25,11 @@ export function LensIndicator({ lens }) {
   const { label, Icon } = meta
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-full border border-gold/40 bg-gold/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.08em] text-navy shadow-[0_0_10px_rgba(184,150,80,0.18)]"
+      className="inline-flex items-center gap-1.5 rounded-full border border-gold/40 bg-gold/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.08em] text-navy shadow-[0_0_10px_rgb(var(--c-glow)/0.18)]"
       title={`This briefing is shaped for the ${label}.`}
     >
       <span
-        className="h-1.5 w-1.5 rotate-45 rounded-[1px] bg-gold/80 shadow-[0_0_8px_rgba(184,150,80,0.5)]"
+        className="h-1.5 w-1.5 rotate-45 rounded-[1px] bg-gold/80 shadow-[0_0_8px_rgb(var(--c-glow)/0.5)]"
         aria-hidden
       />
       <Icon size={13} className="text-gold" aria-hidden />

@@ -28,7 +28,7 @@ const SOURCE_LABEL = {
 // Severity → the left accent bar colour (mirrors HomeBriefing SEVERITY).
 const SEV_BAR = {
   critical: 'bg-danger',
-  warn: 'bg-gold',
+  warn: 'bg-penny',
   info: 'bg-navy-soft',
 }
 
@@ -108,7 +108,7 @@ export default function StudioActionInbox({ schoolId, periodId, onHandle }) {
         </>
       ) : openCount === 0 ? (
         <div className="flex items-center gap-4 px-[18px] py-8">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gold-gradient text-navy shadow-glow">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-penny-gradient text-navy shadow-penny-glow">
             <Sparkles size={22} aria-hidden />
           </span>
           <div>
@@ -138,14 +138,14 @@ export default function StudioActionInbox({ schoolId, periodId, onHandle }) {
                 <button
                   type="button"
                   onClick={() => onHandle(handlePrompt(item))}
-                  className="rounded-lg bg-gold-gradient px-3 py-1.5 text-[12.5px] font-bold text-navy shadow-sm transition-transform hover:-translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 motion-reduce:hover:translate-y-0"
+                  className="rounded-lg bg-penny-gradient px-3 py-1.5 text-[12.5px] font-bold text-navy shadow-sm transition-transform hover:-translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60 motion-reduce:hover:translate-y-0"
                 >
                   Handle it
                 </button>
                 {item.link && (
                   <Link
                     to={item.link}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-rule/70 px-3 py-1.5 text-[12.5px] font-semibold text-muted transition-colors hover:border-navy hover:text-navy focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-rule/70 px-3 py-1.5 text-[12.5px] font-semibold text-muted transition-colors hover:border-navy hover:text-navy focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60"
                   >
                     Open
                     <ArrowRight size={13} aria-hidden />
@@ -161,7 +161,7 @@ export default function StudioActionInbox({ schoolId, periodId, onHandle }) {
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="w-full border-t border-rule/60 px-[18px] py-3 text-[13px] font-semibold text-navy transition-colors hover:bg-section focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+          className="w-full border-t border-rule/60 px-[18px] py-3 text-[13px] font-semibold text-navy transition-colors hover:bg-section focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60"
         >
           {expanded ? 'Show less' : `Show all ${openCount}`}
         </button>

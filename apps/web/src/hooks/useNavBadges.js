@@ -11,6 +11,31 @@
 import { useEffect, useState } from 'react'
 import { briefingApi } from '../lib/api.js'
 
+// Shared pure reducer over briefing items — the ONE implementation behind both the
+// sidebar badges (this hook) and the HOME v2 tile chips (HomeTiles), so the two
+// surfaces can never drift. Without `sourcesMap` it groups by `item.source`
+// verbatim (the hook's original behavior). With `sourcesMap`
+// ({ [key]: AttentionSource[] }) it rolls sources up into the map's keys instead
+// (e.g. the finance tile's ['metric','compliance','data','cash']); sources absent
+// from the map are dropped. Returns { [key]: { count, critical } }.
+export function summariseBadges(items, sourcesMap) {
+  const next = {}
+  for (const item of items ?? []) {
+    const source = item?.source
+    if (!source) continue
+    const keys = sourcesMap
+      ? Object.keys(sourcesMap).filter((k) => sourcesMap[k].includes(source))
+      : [source]
+    for (const key of keys) {
+      const cur = next[key] ?? { count: 0, critical: false }
+      cur.count += 1
+      if (item.severity === 'critical') cur.critical = true
+      next[key] = cur
+    }
+  }
+  return next
+}
+
 export function useNavBadges(schoolId, periodId) {
   const [counts, setCounts] = useState({})
 
@@ -25,17 +50,7 @@ export function useNavBadges(schoolId, periodId) {
       try {
         const res = await briefingApi.get(schoolId, periodId)
         if (cancelled) return
-        const items = res.data?.items ?? []
-        const next = {}
-        for (const item of items) {
-          const source = item?.source
-          if (!source) continue
-          const cur = next[source] ?? { count: 0, critical: false }
-          cur.count += 1
-          if (item.severity === 'critical') cur.critical = true
-          next[source] = cur
-        }
-        setCounts(next)
+        setCounts(summariseBadges(res.data?.items ?? []))
       } catch {
         if (!cancelled) setCounts({})
       }

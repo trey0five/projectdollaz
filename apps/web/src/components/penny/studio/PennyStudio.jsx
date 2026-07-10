@@ -312,8 +312,8 @@ export default function PennyStudio() {
             aria-hidden
             className="pointer-events-none fixed inset-0 z-[65] flex items-center justify-center bg-navy-deep/40 backdrop-blur-sm"
           >
-            <div className="mx-4 flex items-center gap-3 rounded-2xl border-2 border-dashed border-gold bg-[#fffef8] px-6 py-5 text-center shadow-login">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold-gradient text-navy shadow-glow">
+            <div className="mx-4 flex items-center gap-3 rounded-2xl border-2 border-dashed border-penny bg-[#fffef8] px-6 py-5 text-center shadow-login">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-penny-gradient text-navy shadow-penny-glow">
                 <UploadCloud size={22} aria-hidden />
               </span>
               <p className="max-w-[38ch] text-[14px] font-semibold text-navy">

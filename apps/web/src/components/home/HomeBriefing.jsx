@@ -75,9 +75,9 @@ const CARD_ATTN = {
 }
 
 const SEVERITY = {
-  critical: { label: 'Critical', tab: 'bg-danger', wash: 'rgba(139,26,26,0.07)' },
-  warn: { label: 'Warning', tab: 'bg-gold', wash: 'rgba(184,150,80,0.09)' },
-  info: { label: 'Review', tab: 'bg-navy-soft', wash: 'rgba(46,80,143,0.06)' },
+  critical: { label: 'Critical', tab: 'bg-danger', wash: 'rgb(var(--c-danger) / 0.07)' },
+  warn: { label: 'Warning', tab: 'bg-gold', wash: 'rgb(var(--c-glow)/0.09)' },
+  info: { label: 'Review', tab: 'bg-navy-soft', wash: 'rgb(var(--c-navy-soft) / 0.06)' },
 }
 
 // Triage-board lanes. One column per severity, in decreasing urgency. `bar` is the
@@ -214,7 +214,7 @@ function BriefingItemCard({ item, index, reduce, canEdit, onDismiss, active = fa
         {/* Eyebrow: domain coin + label, and a due indicator on the right */}
         <div className="mb-2.5 flex items-center gap-2.5">
           {/* Domain pill — same gold segment idiom as the org board's fused badge. */}
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-gold-gradient py-1 pl-2 pr-2.5 text-[10px] font-bold uppercase leading-4 tracking-[0.08em] text-white shadow-[0_1px_5px_rgba(184,150,80,0.35)] ring-1 ring-white/40">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-gold-gradient py-1 pl-2 pr-2.5 text-[10px] font-bold uppercase leading-4 tracking-[0.08em] text-white shadow-[0_1px_5px_rgb(var(--c-glow)/0.35)] ring-1 ring-white/40">
             <DomainIcon size={11} className="shrink-0 drop-shadow-sm" />
             {domain.label}
           </span>
@@ -239,7 +239,7 @@ function BriefingItemCard({ item, index, reduce, canEdit, onDismiss, active = fa
                 initial={reduce ? { width: `${progress}%` } : { width: 0 }}
                 animate={{ width: `${progress}%` }}
                 transition={{ duration: 0.9, delay: 0.3 + index * 0.05, ease: [0.22, 1, 0.36, 1] }}
-                className="h-full rounded-full bg-gold-gradient shadow-[0_0_8px_rgba(184,150,80,0.45)]"
+                className="h-full rounded-full bg-gold-gradient shadow-[0_0_8px_rgb(var(--c-glow)/0.45)]"
               />
             </div>
             <span className="text-[12px] font-bold tabular-nums text-[#7a5e00]">{progress}%</span>

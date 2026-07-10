@@ -66,7 +66,7 @@ export default function PennyMessage({
         {isStreaming && (
           <span
             aria-hidden
-            className="ml-0.5 inline-block h-4 w-[3px] align-middle rounded-full bg-gold-gradient motion-safe:animate-pulse"
+            className="ml-0.5 inline-block h-4 w-[3px] align-middle rounded-full bg-penny-gradient motion-safe:animate-pulse"
           />
         )}
 

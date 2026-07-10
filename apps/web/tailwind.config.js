@@ -1,51 +1,75 @@
 /** @type {import('tailwindcss').Config} */
+// THEME VALUES LIVE IN src/styles/tokens.css — every color here resolves through
+// an RGB-channel CSS var (`rgb(var(--c-x) / <alpha-value>)`) so the ui.v2 flag
+// (html[data-ui="v2"]) can remap the palette without touching any component.
+// v1 (flag off) resolves to the exact pre-token hexes; opacity modifiers
+// (`border-gold/30` etc.) keep working via the <alpha-value> placeholder.
+// `penny-*` is PROTECTED mascot gold (never remapped); `coral`/`sky` are the
+// new v2-era accents (theme-stable).
 export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
       colors: {
         navy: {
-          DEFAULT: '#1f3d72',
-          deep: '#16284f',
-          soft: '#2e508f',
+          DEFAULT: 'rgb(var(--c-navy) / <alpha-value>)',
+          deep: 'rgb(var(--c-navy-deep) / <alpha-value>)',
+          soft: 'rgb(var(--c-navy-soft) / <alpha-value>)',
         },
         gold: {
-          DEFAULT: '#b89650',
-          light: '#d4b47a',
-          pale: '#e8d4a8',
+          DEFAULT: 'rgb(var(--c-gold) / <alpha-value>)',
+          light: 'rgb(var(--c-gold-light) / <alpha-value>)',
+          pale: 'rgb(var(--c-gold-pale) / <alpha-value>)',
         },
-        cream: '#faf8f4',
-        section: '#f4f1eb',
-        rule: '#d0c8b8',
-        border: '#c8bfaa',
-        muted: '#5a5244',
-        ink: '#1e1e1e',
-        danger: '#8b1a1a',
+        // Penny mascot gold — aliases of v1 gold, NEVER remapped under v2.
+        penny: {
+          DEFAULT: 'rgb(var(--c-penny) / <alpha-value>)',
+          light: 'rgb(var(--c-penny-light) / <alpha-value>)',
+          pale: 'rgb(var(--c-penny-pale) / <alpha-value>)',
+        },
+        coral: 'rgb(var(--c-coral) / <alpha-value>)',
+        sky: 'rgb(var(--c-sky) / <alpha-value>)',
+        cream: 'rgb(var(--c-cream) / <alpha-value>)',
+        section: 'rgb(var(--c-section) / <alpha-value>)',
+        rule: 'rgb(var(--c-rule) / <alpha-value>)',
+        border: 'rgb(var(--c-border) / <alpha-value>)',
+        muted: 'rgb(var(--c-muted) / <alpha-value>)',
+        ink: 'rgb(var(--c-ink) / <alpha-value>)',
+        danger: 'rgb(var(--c-danger) / <alpha-value>)',
       },
       fontFamily: {
-        serif: ['"EB Garamond"', 'Georgia', 'serif'],
-        sans: ['Montserrat', 'system-ui', 'sans-serif'],
+        serif: 'var(--font-display)',
+        sans: 'var(--font-body)',
       },
       boxShadow: {
         card: '0 4px 24px rgba(0,0,0,0.06)',
-        paper: '0 10px 40px rgba(26,39,68,0.08)',
-        lift: '0 22px 60px rgba(26,39,68,0.22)',
+        paper: '0 10px 40px rgb(var(--c-shade) / 0.08)',
+        lift: '0 22px 60px rgb(var(--c-shade) / 0.22)',
         login: '0 30px 90px rgba(0,0,0,0.45)',
-        glow: '0 0 0 1px rgba(184,150,80,0.45), 0 10px 34px rgba(184,150,80,0.28)',
-        'glow-lg': '0 0 0 1px rgba(184,150,80,0.5), 0 14px 50px rgba(184,150,80,0.4)',
-        'navy-glow': '0 12px 36px rgba(26,39,68,0.4)',
+        glow: '0 0 0 1px rgb(var(--c-glow) / 0.45), 0 10px 34px rgb(var(--c-glow) / 0.28)',
+        'glow-lg': '0 0 0 1px rgb(var(--c-glow) / 0.5), 0 14px 50px rgb(var(--c-glow) / 0.4)',
+        'navy-glow': '0 12px 36px rgb(var(--c-shade) / 0.4)',
+        // Penny's gold halo — the mascot-chrome twin of shadow-glow (never remaps).
+        'penny-glow':
+          '0 0 0 1px rgb(var(--c-penny) / 0.45), 0 10px 34px rgb(var(--c-penny) / 0.28)',
       },
       backgroundImage: {
         'navy-radial':
-          'radial-gradient(ellipse at 30% 20%, rgba(184,150,80,0.16) 0%, transparent 60%), radial-gradient(ellipse at 80% 80%, rgba(184,150,80,0.10) 0%, transparent 50%)',
-        'navy-gradient': 'linear-gradient(135deg, #16284f 0%, #1f3d72 58%, #2e508f 120%)',
-        'gold-gradient': 'linear-gradient(135deg, #e8d4a8 0%, #d4b47a 45%, #b89650 100%)',
+          'radial-gradient(ellipse at 30% 20%, rgb(var(--c-glow) / 0.16) 0%, transparent 60%), radial-gradient(ellipse at 80% 80%, rgb(var(--c-glow) / 0.10) 0%, transparent 50%)',
+        'navy-gradient':
+          'linear-gradient(135deg, var(--grad-navy-0) 0%, var(--grad-navy-1) 58%, var(--grad-navy-2) 120%)',
+        'gold-gradient':
+          'linear-gradient(135deg, var(--grad-cta-0) 0%, var(--grad-cta-1) 45%, var(--grad-cta-2) 100%)',
+        // Penny's gold gradient — identical to v1 gold-gradient, never remapped.
+        'penny-gradient':
+          'linear-gradient(135deg, var(--grad-penny-0) 0%, var(--grad-penny-1) 45%, var(--grad-penny-2) 100%)',
         'page-glow':
-          'radial-gradient(900px circle at 50% -120px, rgba(184,150,80,0.10) 0%, transparent 70%)',
+          'radial-gradient(900px circle at 50% -120px, rgb(var(--c-glow) / 0.10) 0%, transparent 70%)',
         sheen:
           'linear-gradient(110deg, transparent 25%, rgba(255,255,255,0.35) 50%, transparent 75%)',
         // Penny Studio dark "command deck" surfaces (named so the JIT always emits
         // them — comma'd arbitrary gradient classes drop out of incremental builds).
+        // EXEMPT from the token swap: Penny-owned chrome keeps its literals.
         'studio-page': 'linear-gradient(180deg, #0e2142 0%, #0a1830 100%)',
         'studio-hero': 'linear-gradient(150deg, #1f3d72 0%, #12294f 46%, #0b1b36 100%)',
         'studio-glow':
@@ -61,9 +85,9 @@ export default {
           '100%': { backgroundPosition: '200% 0' },
         },
         'pulse-ring': {
-          '0%': { boxShadow: '0 0 0 0 rgba(184,150,80,0.5)' },
-          '70%': { boxShadow: '0 0 0 14px rgba(184,150,80,0)' },
-          '100%': { boxShadow: '0 0 0 0 rgba(184,150,80,0)' },
+          '0%': { boxShadow: '0 0 0 0 rgb(var(--c-glow) / 0.5)' },
+          '70%': { boxShadow: '0 0 0 14px rgb(var(--c-glow) / 0)' },
+          '100%': { boxShadow: '0 0 0 0 rgb(var(--c-glow) / 0)' },
         },
         float: {
           '0%, 100%': { transform: 'translateY(0)' },

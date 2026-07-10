@@ -209,7 +209,7 @@ export default function PennyInputBar({ busy, onSubmit, inputRef, tts }) {
         }
       }}
       className={`flex flex-col gap-2 border-t border-rule bg-cream px-3 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] ${
-        dragOver ? 'ring-2 ring-inset ring-gold/70' : ''
+        dragOver ? 'ring-2 ring-inset ring-penny/70' : ''
       }`}
     >
       <label htmlFor="penny-chat-input" className="sr-only">
@@ -224,7 +224,7 @@ export default function PennyInputBar({ busy, onSubmit, inputRef, tts }) {
               <PennyAttachmentChip attachment={a} onRemove={() => removeAttachment(a.local_id)} />
               {a.status === 'reading' && (
                 <span className="absolute inset-0 flex items-center justify-center rounded-lg bg-white/60">
-                  <Loader2 size={14} className="animate-spin text-gold" aria-hidden />
+                  <Loader2 size={14} className="animate-spin text-penny" aria-hidden />
                 </span>
               )}
             </div>
@@ -236,7 +236,7 @@ export default function PennyInputBar({ busy, onSubmit, inputRef, tts }) {
       {toast && (
         <div
           role="status"
-          className="rounded-md border border-gold/40 bg-gold/[0.08] px-2 py-1 text-[11px] text-[#7a5e00]"
+          className="rounded-md border border-penny/40 bg-penny/[0.08] px-2 py-1 text-[11px] text-[#7a5e00]"
         >
           {toast}
         </div>
@@ -257,7 +257,7 @@ export default function PennyInputBar({ busy, onSubmit, inputRef, tts }) {
           disabled={attachments.length >= MAX_FILES}
           aria-label="Attach a file"
           title={attachments.length >= MAX_FILES ? `Up to ${MAX_FILES} files per message` : 'Attach a file'}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border bg-white text-muted transition hover:border-gold/60 hover:text-gold disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border bg-white text-muted transition hover:border-penny/60 hover:text-penny disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Paperclip size={18} aria-hidden />
         </button>
@@ -276,7 +276,7 @@ export default function PennyInputBar({ busy, onSubmit, inputRef, tts }) {
           }}
           placeholder={busy ? 'Thinking…' : speech.listening ? 'Listening…' : 'Ask a question…'}
           aria-busy={busy}
-          className="max-h-24 min-h-[40px] flex-1 resize-none rounded-lg border border-border bg-white px-3 py-2 text-[15px] text-ink outline-none transition focus:border-gold"
+          className="max-h-24 min-h-[40px] flex-1 resize-none rounded-lg border border-border bg-white px-3 py-2 text-[15px] text-ink outline-none transition focus:border-penny"
         />
 
         {/* Voice input — rendered only when the Web Speech API exists. */}
@@ -288,14 +288,14 @@ export default function PennyInputBar({ busy, onSubmit, inputRef, tts }) {
             aria-pressed={speech.listening}
             className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition ${
               speech.listening
-                ? 'bg-gold-gradient text-navy shadow-glow'
-                : 'border border-border bg-white text-muted hover:border-gold/60 hover:text-gold'
+                ? 'bg-penny-gradient text-navy shadow-penny-glow'
+                : 'border border-border bg-white text-muted hover:border-penny/60 hover:text-penny'
             }`}
           >
             {speech.listening && (
               <span
                 aria-hidden
-                className="absolute inset-0 rounded-lg bg-gold/40 motion-safe:animate-ping motion-reduce:hidden"
+                className="absolute inset-0 rounded-lg bg-penny/40 motion-safe:animate-ping motion-reduce:hidden"
               />
             )}
             <Mic size={18} className="relative" aria-hidden />
@@ -307,7 +307,7 @@ export default function PennyInputBar({ busy, onSubmit, inputRef, tts }) {
           disabled={!canSend}
           aria-label={busy ? 'Sending — please wait' : 'Send message'}
           aria-busy={busy}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gold-gradient text-navy shadow-sm transition-all hover:-translate-y-px hover:shadow-glow disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-sm motion-reduce:hover:translate-y-0"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-penny-gradient text-navy shadow-sm transition-all hover:-translate-y-px hover:shadow-penny-glow disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-sm motion-reduce:hover:translate-y-0"
         >
           {busy ? <Loader2 size={18} className="animate-spin" /> : <Send size={16} />}
         </button>

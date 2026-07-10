@@ -33,13 +33,13 @@ export default function StudioBackdrop({ sweep = true }) {
 
       {reduce ? (
         <>
-          <span className="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-gold/10 blur-3xl" />
+          <span className="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-penny/10 blur-3xl" />
           <span className="absolute -bottom-28 -left-16 h-60 w-60 rounded-full bg-navy-soft/20 blur-3xl" />
         </>
       ) : (
         <>
           <motion.span
-            className="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-gold/10 blur-3xl"
+            className="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-penny/10 blur-3xl"
             animate={{ x: [0, -30, 10, 0], y: [0, 26, -14, 0], scale: [1, 1.14, 0.94, 1], opacity: [0.55, 0.9, 0.6, 0.55] }}
             transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
           />
@@ -49,7 +49,7 @@ export default function StudioBackdrop({ sweep = true }) {
             transition={{ duration: 19, repeat: Infinity, ease: 'easeInOut' }}
           />
           <motion.span
-            className="absolute left-1/3 top-1/2 h-44 w-44 rounded-full bg-gold-light/10 blur-3xl"
+            className="absolute left-1/3 top-1/2 h-44 w-44 rounded-full bg-penny-light/10 blur-3xl"
             animate={{ x: [0, 66, -44, 0], y: [0, -32, 32, 0], opacity: [0.3, 0.6, 0.35, 0.3] }}
             transition={{ duration: 23, repeat: Infinity, ease: 'easeInOut' }}
           />
@@ -67,7 +67,7 @@ export default function StudioBackdrop({ sweep = true }) {
           {MOTES.map((m, i) => (
             <span
               key={i}
-              className="absolute h-[3px] w-[3px] rounded-full bg-gold-light shadow-[0_0_10px_rgba(212,180,122,0.95)] motion-safe:animate-studio-mote motion-reduce:hidden"
+              className="absolute h-[3px] w-[3px] rounded-full bg-penny-light shadow-[0_0_10px_rgba(212,180,122,0.95)] motion-safe:animate-studio-mote motion-reduce:hidden"
               style={{
                 left: `${m.left}%`,
                 bottom: `${m.bottom}%`,

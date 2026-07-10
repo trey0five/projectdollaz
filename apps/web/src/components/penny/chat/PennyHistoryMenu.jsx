@@ -101,7 +101,7 @@ export default function PennyHistoryMenu({
                       }`}
                     >
                       {isActive ? (
-                        <Check size={13} className="shrink-0 text-gold" aria-hidden />
+                        <Check size={13} className="shrink-0 text-penny" aria-hidden />
                       ) : (
                         <span className="w-[13px] shrink-0" aria-hidden />
                       )}

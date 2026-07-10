@@ -1,0 +1,166 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   Design tokens — the ONE place theme colors live (ui.v2 architecture).
+
+   Every Tailwind theme color in tailwind.config.js resolves through these vars
+   using the RGB-channel pattern (`rgb(var(--c-x) / <alpha-value>)`), so opacity
+   modifiers like `border-gold/30` keep working under both themes.
+
+   Scopes:
+   • :root, .ui-v1 ......... v1 = today's navy/gold values, verbatim. `.ui-v1` is a
+                              SUBTREE RE-SCOPE: custom properties inherit, so putting
+                              it on any element resets its whole subtree to v1 (used
+                              by #report-container + the four print documents so the
+                              on-screen preview matches the printed page).
+   • html[data-ui='v2'] .... the ui.v2 remap (Bright blue & coral, UX plan §4).
+   • @media print .......... full v1 reset — printing from a v2 session still emits
+                              the classic navy/gold documents (guard 1 of 3; guard 2
+                              is .ui-v1 on the doc roots; guard 3 is the packet print
+                              scopes' literal hexes).
+
+   PROTECTED: --c-penny* and --grad-penny-* are Penny-mascot gold. They alias v1
+   gold and are NEVER remapped — "Gold = Penny only" under v2.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+:root,
+.ui-v1 {
+  /* Core palette (v1 = current production values) */
+  --c-navy: 31 61 114; /* #1f3d72 */
+  --c-navy-deep: 22 40 79; /* #16284f */
+  --c-navy-soft: 46 80 143; /* #2e508f */
+  --c-gold: 184 150 80; /* #b89650 */
+  --c-gold-light: 212 180 122; /* #d4b47a */
+  --c-gold-pale: 232 212 168; /* #e8d4a8 */
+  --c-cream: 250 248 244; /* #faf8f4 */
+  --c-section: 244 241 235; /* #f4f1eb */
+  --c-rule: 208 200 184; /* #d0c8b8 */
+  --c-border: 200 191 170; /* #c8bfaa */
+  --c-muted: 90 82 68; /* #5a5244 */
+  --c-ink: 30 30 30; /* #1e1e1e */
+  --c-danger: 139 26 26; /* #8b1a1a */
+
+  /* Effect channels (shadows / glows / radial tints) */
+  --c-glow: 184 150 80; /* v1: gold glow */
+  --c-shade: 26 39 68; /* v1: deep-navy shade #1a2744 */
+
+  /* Gradient stops (whole hexes — no alpha compositing on these) */
+  --grad-navy-0: #16284f;
+  --grad-navy-1: #1f3d72;
+  --grad-navy-2: #2e508f;
+  --grad-cta-0: #e8d4a8;
+  --grad-cta-1: #d4b47a;
+  --grad-cta-2: #b89650;
+
+  /* Typography */
+  --font-display: 'EB Garamond', Georgia, serif;
+  --font-body: 'Montserrat', system-ui, sans-serif;
+
+  /* ── PROTECTED: Penny mascot gold — aliases of v1 gold, never remapped ──── */
+  --c-penny: 184 150 80; /* #b89650 */
+  --c-penny-light: 212 180 122; /* #d4b47a */
+  --c-penny-pale: 232 212 168; /* #e8d4a8 */
+  --grad-penny-0: #e8d4a8;
+  --grad-penny-1: #d4b47a;
+  --grad-penny-2: #b89650;
+
+  /* ── New v2-era accents (theme-stable; unused by v1 components) ─────────── */
+  --c-coral: 255 107 94; /* #FF6B5E — needs-attention chips/rails only */
+  --c-sky: 56 189 248; /* #38BDF8 — highlight/gradient stop */
+}
+
+/* ── ui.v2: Bright blue & coral (UX_Redesign_Plan.md §4) ───────────────────── */
+html[data-ui='v2'] {
+  --c-navy: 16 28 61; /* #101C3D ink */
+  --c-navy-deep: 10 18 41; /* #0A1229 */
+  --c-navy-soft: 37 99 235; /* #2563EB action blue */
+  --c-gold: 37 99 235; /* #2563EB — generic gold accents/CTAs go blue */
+  --c-gold-light: 56 189 248; /* #38BDF8 sky */
+  --c-gold-pale: 219 234 254; /* #DBEAFE */
+  --c-cream: 248 250 255; /* #F8FAFF ground */
+  --c-section: 239 243 251; /* #EFF3FB */
+  --c-rule: 217 226 242; /* #D9E2F2 */
+  --c-border: 195 208 232; /* #C3D0E8 */
+  --c-muted: 68 80 110; /* #44506E slate-blue */
+  --c-ink: 16 28 61; /* #101C3D */
+  --c-danger: 194 54 43; /* #C2362B — AA-safe darkened coral */
+
+  --c-glow: 37 99 235; /* blue glow */
+  --c-shade: 16 28 61; /* ink shade */
+
+  --grad-navy-0: #0a1229;
+  --grad-navy-1: #101c3d;
+  --grad-navy-2: #1e3a8a;
+  --grad-cta-0: #7dd3fc;
+  --grad-cta-1: #3b82f6;
+  --grad-cta-2: #2563eb;
+
+  --font-display: 'Montserrat', system-ui, sans-serif;
+  /* --font-body is unchanged; the penny tokens NEVER remap (mascot gold). */
+}
+
+/* Penny-gold gradient text — the mascot-chrome twin of `.gold-text` (identical
+   rendering in v1; stays gold under v2 while .gold-text follows the CTA remap).
+   Plain CSS (no @apply): tokens.css sits outside the Tailwind layer pipeline. */
+.penny-text {
+  background-image: linear-gradient(
+    135deg,
+    var(--grad-penny-0) 0%,
+    var(--grad-penny-1) 45%,
+    var(--grad-penny-2) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ── .ui-v1 typography re-scope under v2 ─────────────────────────────────────
+   The var reset above handles colors + font-family by inheritance; these undo
+   the v2 body sizing / display tracking inside a re-scoped subtree so the
+   on-screen report preview is exactly what prints. Scoped to [data-ui='v2'] so
+   v1 rendering is untouched (prime directive: flag-off is computed-identical). */
+html[data-ui='v2'] .ui-v1 {
+  font-size: 16px;
+  line-height: 1.5;
+}
+html[data-ui='v2'] .ui-v1 .font-serif,
+html[data-ui='v2'] .ui-v1.font-serif {
+  letter-spacing: normal;
+}
+
+/* ── PRINT: full v1 reset (guard 1 of 3) ─────────────────────────────────────
+   Any print context — including Ctrl+P of /statements from a v2 session —
+   resolves every token to v1, so PDFs/board documents never change. The v2
+   typography rules in index.css are @media screen, so they self-exempt. */
+@media print {
+  :root,
+  html[data-ui='v2'] {
+    --c-navy: 31 61 114;
+    --c-navy-deep: 22 40 79;
+    --c-navy-soft: 46 80 143;
+    --c-gold: 184 150 80;
+    --c-gold-light: 212 180 122;
+    --c-gold-pale: 232 212 168;
+    --c-cream: 250 248 244;
+    --c-section: 244 241 235;
+    --c-rule: 208 200 184;
+    --c-border: 200 191 170;
+    --c-muted: 90 82 68;
+    --c-ink: 30 30 30;
+    --c-danger: 139 26 26;
+    --c-glow: 184 150 80;
+    --c-shade: 26 39 68;
+    --grad-navy-0: #16284f;
+    --grad-navy-1: #1f3d72;
+    --grad-navy-2: #2e508f;
+    --grad-cta-0: #e8d4a8;
+    --grad-cta-1: #d4b47a;
+    --grad-cta-2: #b89650;
+    --font-display: 'EB Garamond', Georgia, serif;
+    --font-body: 'Montserrat', system-ui, sans-serif;
+    --c-penny: 184 150 80;
+    --c-penny-light: 212 180 122;
+    --c-penny-pale: 232 212 168;
+    --grad-penny-0: #e8d4a8;
+    --grad-penny-1: #d4b47a;
+    --grad-penny-2: #b89650;
+  }
+}

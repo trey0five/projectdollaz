@@ -71,7 +71,7 @@ export default function Dashboard() {
 
       <LineageHost bundle={reports} imports={null}>
       {/* report container */}
-      <main id="report-container" className="mx-auto max-w-[1120px] px-4 pb-20 pt-8 sm:px-10 sm:pb-24 sm:pt-10">
+      <main id="report-container" className="ui-v1 mx-auto max-w-[1120px] px-4 pb-20 pt-8 sm:px-10 sm:pb-24 sm:pt-10">
         {!reports ? (
           <motion.div
             initial={{ opacity: 0, y: 10 }}

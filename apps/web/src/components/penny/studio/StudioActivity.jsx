@@ -132,7 +132,7 @@ export default function StudioActivity({ schoolId, canEdit }) {
   return (
     <aside className="rounded-2xl border border-rule/60 bg-white p-4 shadow-card">
       <h2 className="mb-3 flex items-center gap-2 px-0.5 font-serif text-[16px] font-semibold text-navy">
-        <span className="grid h-[26px] w-[26px] place-items-center rounded-lg bg-gold-gradient text-navy">
+        <span className="grid h-[26px] w-[26px] place-items-center rounded-lg bg-penny-gradient text-navy">
           <History size={14} aria-hidden />
         </span>
         What Penny did lately
@@ -182,7 +182,7 @@ export default function StudioActivity({ schoolId, canEdit }) {
                     <button
                       type="button"
                       onClick={() => onUndo(it)}
-                      className="mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-lg border border-navy/15 bg-white px-2 py-1 text-[12.5px] font-semibold text-navy/80 transition-colors hover:border-navy/30 hover:text-navy focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+                      className="mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-lg border border-navy/15 bg-white px-2 py-1 text-[12.5px] font-semibold text-navy/80 transition-colors hover:border-navy/30 hover:text-navy focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60"
                     >
                       <Undo2 size={12} aria-hidden />
                       {st === 'error' ? 'Retry' : 'Undo'}

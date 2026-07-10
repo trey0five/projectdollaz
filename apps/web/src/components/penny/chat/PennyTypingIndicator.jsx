@@ -9,9 +9,9 @@ export default function PennyTypingIndicator() {
         aria-label="Penny is thinking"
         className="mr-auto inline-flex items-center gap-1.5 rounded-2xl rounded-bl-md border border-rule/70 bg-white px-3.5 py-2.5 shadow-card"
       >
-        <span className="h-2 w-2 rounded-full bg-gold-gradient motion-safe:animate-bounce [animation-delay:-0.32s]" />
-        <span className="h-2 w-2 rounded-full bg-gold-gradient motion-safe:animate-bounce [animation-delay:-0.16s]" />
-        <span className="h-2 w-2 rounded-full bg-gold-gradient motion-safe:animate-bounce" />
+        <span className="h-2 w-2 rounded-full bg-penny-gradient motion-safe:animate-bounce [animation-delay:-0.32s]" />
+        <span className="h-2 w-2 rounded-full bg-penny-gradient motion-safe:animate-bounce [animation-delay:-0.16s]" />
+        <span className="h-2 w-2 rounded-full bg-penny-gradient motion-safe:animate-bounce" />
       </div>
     </div>
   )

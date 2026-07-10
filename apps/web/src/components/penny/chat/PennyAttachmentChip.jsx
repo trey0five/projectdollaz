@@ -34,7 +34,7 @@ export default function PennyAttachmentChip({ attachment, onRemove }) {
   const Icon = kind === 'pdf' ? FileText : isImage ? ImageIcon : FileSpreadsheet
   return (
     <div className="group relative flex min-w-0 max-w-[220px] items-center gap-2 rounded-lg border border-rule/70 bg-white px-2.5 py-1.5 shadow-sm">
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-gold-gradient text-navy">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-penny-gradient text-navy">
         <Icon size={15} aria-hidden />
       </span>
       <div className="min-w-0">

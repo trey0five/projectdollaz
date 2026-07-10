@@ -43,9 +43,9 @@ export default function StudioRail({ chat, onPick }) {
               key={s.id}
               type="button"
               onClick={() => chat.switchSession(s.id)}
-              className="flex w-full items-start gap-2.5 rounded-xl p-2.5 text-left transition-colors hover:bg-section focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+              className="flex w-full items-start gap-2.5 rounded-xl p-2.5 text-left transition-colors hover:bg-section focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60"
             >
-              <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg bg-gold-gradient text-navy">
+              <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg bg-penny-gradient text-navy">
                 <MessageSquare size={14} aria-hidden />
               </span>
               <span className="min-w-0">
@@ -70,7 +70,7 @@ export default function StudioRail({ chat, onPick }) {
             key={s}
             type="button"
             onClick={() => onPick(s)}
-            className="rounded-full border border-rule/70 bg-section px-3 py-1.5 text-[12.5px] text-muted transition-colors hover:border-gold hover:text-navy focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+            className="rounded-full border border-rule/70 bg-section px-3 py-1.5 text-[12.5px] text-muted transition-colors hover:border-penny hover:text-navy focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60"
           >
             {s}
           </button>

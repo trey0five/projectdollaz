@@ -261,7 +261,7 @@ export default function WorkpapersPrintDocument({ packet }) {
   const rollup = checklist?.rollup
 
   return (
-    <div className="packet-print">
+    <div className="ui-v1 packet-print">
       {/* COVER */}
       <header className="packet-print-cover">
         <h1>Year-End Workpapers Packet</h1>

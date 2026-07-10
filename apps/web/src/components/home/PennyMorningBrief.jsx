@@ -65,10 +65,10 @@ function LensChip({ lens }) {
   const { label, Icon } = meta
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-full border border-gold/40 bg-gold/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.08em] text-gold-light"
+      className="inline-flex items-center gap-1.5 rounded-full border border-penny/40 bg-penny/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.08em] text-penny-light"
       title={`This brief is shaped for the ${label}.`}
     >
-      <Icon size={12} className="text-gold-light" />
+      <Icon size={12} className="text-penny-light" />
       {label}
     </span>
   )
@@ -76,7 +76,7 @@ function LensChip({ lens }) {
 
 const SEV_DOT = {
   critical: 'bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.7)]',
-  warn: 'bg-gold shadow-[0_0_8px_rgba(184,150,80,0.6)]',
+  warn: 'bg-penny shadow-[0_0_8px_rgba(184,150,80,0.6)]',
   info: 'bg-white/50',
 }
 
@@ -88,7 +88,7 @@ function Equalizer({ playing }) {
       {[0, 1, 2, 3].map((i) => (
         <span
           key={i}
-          className={`w-[3px] rounded-full bg-gold-light ${playing ? 'nb-eq-bar' : ''}`}
+          className={`w-[3px] rounded-full bg-penny-light ${playing ? 'nb-eq-bar' : ''}`}
           style={{ height: playing ? 16 : 5, animationDelay: `${i * 0.13}s` }}
         />
       ))}
@@ -265,8 +265,8 @@ export default function PennyMorningBrief({
             </motion.div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-[0.16em] text-gold/85">
-                  <Sparkles size={13} className="text-gold" />
+                <span className="inline-flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-[0.16em] text-penny/85">
+                  <Sparkles size={13} className="text-penny" />
                   Penny&rsquo;s morning brief
                 </span>
                 {periodChip && (
@@ -288,7 +288,7 @@ export default function PennyMorningBrief({
                 type="button"
                 onClick={onPlayToggle}
                 aria-label={player.playing ? 'Pause the morning brief' : 'Play the morning brief'}
-                className="group inline-flex items-center gap-2 rounded-full bg-gold-gradient px-4 py-2 text-[13px] font-semibold text-navy shadow-glow transition-transform hover:-translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 motion-reduce:hover:translate-y-0"
+                className="group inline-flex items-center gap-2 rounded-full bg-penny-gradient px-4 py-2 text-[13px] font-semibold text-navy shadow-penny-glow transition-transform hover:-translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60 motion-reduce:hover:translate-y-0"
               >
                 {player.playing ? <Pause size={15} /> : <Play size={15} />}
                 <span>{player.playing ? 'Pause' : 'Play'}</span>
@@ -300,7 +300,7 @@ export default function PennyMorningBrief({
               onClick={() => reload(true)}
               aria-label="Regenerate the morning brief"
               title="Regenerate"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-white/[0.06] text-white/70 transition-colors hover:border-gold/50 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-white/[0.06] text-white/70 transition-colors hover:border-penny/50 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/50"
             >
               <RotateCcw size={15} />
             </button>
@@ -318,7 +318,7 @@ export default function PennyMorningBrief({
             const rowBase =
               'relative rounded-lg py-1.5 pl-3.5 pr-2 transition-all duration-300 border-l-2'
             const rowState = active
-              ? 'border-gold bg-white/[0.05]'
+              ? 'border-penny bg-white/[0.05]'
               : 'border-transparent'
             const opacity = dimmed ? 'opacity-60' : 'opacity-100'
 
@@ -356,14 +356,14 @@ export default function PennyMorningBrief({
                         attribution reads the same on every row instead of trailing
                         at a ragged wrap position. */}
                     {orgSchool && (
-                      <span className="mb-1 flex w-fit max-w-full items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.07em] text-gold-light/90 ring-1 ring-white/10">
+                      <span className="mb-1 flex w-fit max-w-full items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.07em] text-penny-light/90 ring-1 ring-white/10">
                         <Building2 size={10} className="shrink-0" />
                         <span className="truncate">{orgSchool}</span>
                       </span>
                     )}
                     <SegmentText text={displayText} />
                     {isItem && (
-                      <span className="ml-1.5 inline-flex translate-y-[1px] items-center align-middle text-gold-light opacity-0 transition-opacity group-hover:opacity-100">
+                      <span className="ml-1.5 inline-flex translate-y-[1px] items-center align-middle text-penny-light opacity-0 transition-opacity group-hover:opacity-100">
                         <ArrowUpRight size={13} />
                       </span>
                     )}
@@ -373,7 +373,7 @@ export default function PennyMorningBrief({
                 {isItem && (
                   <span
                     aria-hidden
-                    className="pointer-events-none absolute bottom-0 left-3.5 h-px w-0 bg-gold-light/70 transition-all duration-300 group-hover:w-[calc(100%-1.5rem)]"
+                    className="pointer-events-none absolute bottom-0 left-3.5 h-px w-0 bg-penny-light/70 transition-all duration-300 group-hover:w-[calc(100%-1.5rem)]"
                   />
                 )}
               </motion.div>
@@ -388,7 +388,7 @@ export default function PennyMorningBrief({
           <button
             type="button"
             onClick={discussWithPenny}
-            className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-gold-light transition-colors hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50"
+            className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-penny-light transition-colors hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/50"
           >
             <MessagesSquare size={15} />
             Discuss with Penny

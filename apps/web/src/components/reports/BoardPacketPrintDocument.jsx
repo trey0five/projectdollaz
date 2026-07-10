@@ -66,7 +66,7 @@ export default function BoardPacketPrintDocument({
   const recon = reconciliation ?? null
 
   return (
-    <div className="board-print">
+    <div className="ui-v1 board-print">
       <header className="board-print-header">
         <p className="board-print-kicker">Board Financial Summary</p>
         <h1>{schoolName || 'School'}</h1>

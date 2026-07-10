@@ -106,7 +106,7 @@ export default function StudioAskBar({ variant = 'hero', chat, staging, value, o
               <PennyAttachmentChip attachment={a} onRemove={() => staging.removeAttachment(a.local_id)} />
               {a.status !== 'ready' && (
                 <span className="absolute inset-0 flex items-center justify-center rounded-lg bg-white/60">
-                  <Loader2 size={14} className="animate-spin text-gold" aria-hidden />
+                  <Loader2 size={14} className="animate-spin text-penny" aria-hidden />
                 </span>
               )}
             </div>
@@ -118,7 +118,7 @@ export default function StudioAskBar({ variant = 'hero', chat, staging, value, o
       {staging.toast && (
         <div
           role="status"
-          className="mb-2 rounded-md border border-gold/40 bg-gold/[0.08] px-2.5 py-1 text-[12px] text-[#7a5e00]"
+          className="mb-2 rounded-md border border-penny/40 bg-penny/[0.08] px-2.5 py-1 text-[12px] text-[#7a5e00]"
         >
           {staging.toast}
         </div>
@@ -148,8 +148,8 @@ export default function StudioAskBar({ variant = 'hero', chat, staging, value, o
             void staging.stageFiles(files)
           }
         }}
-        className={`flex items-end gap-2.5 rounded-[18px] border bg-white px-3 py-2.5 pl-4 shadow-login transition focus-within:ring-2 focus-within:ring-gold/50 ${
-          dragOver ? 'border-gold bg-[#fffef8] ring-2 ring-inset ring-gold/60' : 'border-gold/35'
+        className={`flex items-end gap-2.5 rounded-[18px] border bg-white px-3 py-2.5 pl-4 shadow-login transition focus-within:ring-2 focus-within:ring-penny/50 ${
+          dragOver ? 'border-penny bg-[#fffef8] ring-2 ring-inset ring-penny/60' : 'border-penny/35'
         }`}
       >
         <label htmlFor={`studio-ask-${variant}`} className="sr-only">
@@ -197,7 +197,7 @@ export default function StudioAskBar({ variant = 'hero', chat, staging, value, o
             disabled={staging.attachments.length >= MAX_FILES}
             aria-label="Attach a document"
             title={staging.attachments.length >= MAX_FILES ? `Up to ${MAX_FILES} files per message` : 'Attach a document'}
-            className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-xl border border-border bg-white text-muted transition hover:border-gold hover:text-navy focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-xl border border-border bg-white text-muted transition hover:border-penny hover:text-navy focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Paperclip size={18} aria-hidden />
           </button>
@@ -208,10 +208,10 @@ export default function StudioAskBar({ variant = 'hero', chat, staging, value, o
               onClick={toggleMic}
               aria-label={speech.listening ? 'Stop dictation' : 'Dictate a message'}
               aria-pressed={speech.listening}
-              className={`relative flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-xl border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 ${
+              className={`relative flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-xl border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60 ${
                 speech.listening
                   ? 'border-danger bg-danger text-white'
-                  : 'border-border bg-white text-muted hover:border-gold hover:text-navy'
+                  : 'border-border bg-white text-muted hover:border-penny hover:text-navy'
               }`}
             >
               {speech.listening && (
@@ -226,7 +226,7 @@ export default function StudioAskBar({ variant = 'hero', chat, staging, value, o
             disabled={!canSend}
             aria-label={chat.busy ? 'Sending — please wait' : 'Send'}
             aria-busy={chat.busy}
-            className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-xl bg-gold-gradient text-navy shadow-glow transition-transform hover:-translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 motion-reduce:hover:translate-y-0"
+            className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-xl bg-penny-gradient text-navy shadow-penny-glow transition-transform hover:-translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 motion-reduce:hover:translate-y-0"
           >
             {chat.busy ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
           </button>

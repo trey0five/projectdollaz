@@ -28,7 +28,7 @@ export default function CapPrintDocument({ schoolName, periodLabel, rulesetVersi
   })
 
   return (
-    <div className="cap-print">
+    <div className="ui-v1 cap-print">
       <header className="cap-print-header">
         <h1>Corrective Action Plan</h1>
         <div className="cap-print-meta">

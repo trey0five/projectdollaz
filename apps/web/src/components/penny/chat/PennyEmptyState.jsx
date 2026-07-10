@@ -65,17 +65,17 @@ export default function PennyEmptyState({ onPick }) {
       <div className="relative mb-3">
         <span
           aria-hidden
-          className="absolute -inset-4 rounded-full bg-gold/30 blur-2xl motion-safe:animate-[penny-pulse-glow_3.6s_ease-in-out_infinite] motion-reduce:hidden"
+          className="absolute -inset-4 rounded-full bg-penny/30 blur-2xl motion-safe:animate-[penny-pulse-glow_3.6s_ease-in-out_infinite] motion-reduce:hidden"
         />
         <span
           aria-hidden
-          className="absolute -inset-2 rounded-full bg-gold/40 blur-lg motion-safe:animate-[penny-pulse-glow_4.8s_ease-in-out_infinite] motion-reduce:hidden"
+          className="absolute -inset-2 rounded-full bg-penny/40 blur-lg motion-safe:animate-[penny-pulse-glow_4.8s_ease-in-out_infinite] motion-reduce:hidden"
         />
         <div className="relative">
           <PennyAvatar size={56} active />
         </div>
       </div>
-      <h2 className="gold-text text-[18px] font-bold tracking-tight">Hi! I’m Penny</h2>
+      <h2 className="penny-text text-[18px] font-bold tracking-tight">Hi! I’m Penny</h2>
       <p className="mt-1 max-w-[16rem] text-[13px] leading-snug text-muted">
         Pick a topic to see what I can do, or just type your question.
       </p>
@@ -94,16 +94,16 @@ export default function PennyEmptyState({ onPick }) {
               style={{ animationDelay: `${i * 60}ms`, animationFillMode: 'backwards' }}
               className={`group relative overflow-hidden rounded-2xl border bg-white p-3 text-left transition-all duration-200 motion-safe:animate-[penny-fadeup_360ms_ease-out] hover:-translate-y-0.5 motion-reduce:hover:translate-y-0 ${
                 isOpen
-                  ? 'border-gold/70 shadow-glow ring-1 ring-gold/40'
-                  : 'border-rule/60 shadow-card hover:border-gold/50'
+                  ? 'border-penny/70 shadow-penny-glow ring-1 ring-penny/40'
+                  : 'border-rule/60 shadow-card hover:border-penny/50'
               }`}
             >
               <span
                 aria-hidden
-                className="pointer-events-none absolute inset-0 bg-gradient-to-br from-gold/[0.10] to-transparent opacity-90"
+                className="pointer-events-none absolute inset-0 bg-gradient-to-br from-penny/[0.10] to-transparent opacity-90"
               />
               <div className="relative flex items-center gap-2">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gold-gradient text-navy shadow-sm">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-penny-gradient text-navy shadow-sm">
                   <Icon size={15} aria-hidden />
                 </span>
                 <div className="min-w-0">
@@ -124,7 +124,7 @@ export default function PennyEmptyState({ onPick }) {
               key={p}
               type="button"
               onClick={() => onPick(p)}
-              className="rounded-full border border-rule/70 bg-white px-3 py-1.5 text-[12.5px] text-navy transition-colors hover:border-gold/70 hover:text-gold"
+              className="rounded-full border border-rule/70 bg-white px-3 py-1.5 text-[12.5px] text-navy transition-colors hover:border-penny/70 hover:text-penny"
             >
               {p}
             </button>

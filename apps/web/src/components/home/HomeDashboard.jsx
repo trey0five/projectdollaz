@@ -119,7 +119,7 @@ function SectionDivider() {
   return (
     <div className="flex items-center gap-3 py-1" aria-hidden>
       <span className="h-px flex-1 bg-gradient-to-r from-transparent to-gold/40" />
-      <span className="h-1.5 w-1.5 rotate-45 rounded-[1px] bg-gold/70 shadow-[0_0_8px_rgba(184,150,80,0.5)]" />
+      <span className="h-1.5 w-1.5 rotate-45 rounded-[1px] bg-gold/70 shadow-[0_0_8px_rgb(var(--c-glow)/0.5)]" />
       <span className="h-px flex-1 bg-gradient-to-l from-transparent to-gold/40" />
     </div>
   )

@@ -23,14 +23,14 @@ export default function StudioRecipes({ onRun }) {
             key={r.id}
             type="button"
             onClick={() => onRun(r.prompt)}
-            className="card-soft group relative flex flex-col overflow-hidden p-[18px] text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-gold/50 hover:shadow-glow focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 motion-reduce:hover:translate-y-0"
+            className="card-soft group relative flex flex-col overflow-hidden p-[18px] text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-penny/50 hover:shadow-penny-glow focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60 motion-reduce:hover:translate-y-0"
           >
             {/* Gold sheen sweep on hover */}
             <span
               aria-hidden
-              className="pointer-events-none absolute inset-0 -translate-x-[130%] bg-gradient-to-r from-transparent via-gold/15 to-transparent transition-transform duration-700 ease-out group-hover:translate-x-[130%] motion-reduce:hidden"
+              className="pointer-events-none absolute inset-0 -translate-x-[130%] bg-gradient-to-r from-transparent via-penny/15 to-transparent transition-transform duration-700 ease-out group-hover:translate-x-[130%] motion-reduce:hidden"
             />
-            <span className="relative mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-gold-gradient text-navy shadow-glow">
+            <span className="relative mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-penny-gradient text-navy shadow-penny-glow">
               <r.Icon size={20} aria-hidden />
             </span>
             <h3 className="relative text-[15.5px] font-bold text-navy">{r.title}</h3>
@@ -40,7 +40,7 @@ export default function StudioRecipes({ onRun }) {
             <ol className="relative mt-3 space-y-1.5">
               {r.steps.map((step, i) => (
                 <li key={i} className="flex items-start gap-2 text-[12.5px] leading-snug text-muted">
-                  <span className="mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-gold/15 text-[10px] font-bold text-gold">
+                  <span className="mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-penny/15 text-[10px] font-bold text-penny">
                     {i + 1}
                   </span>
                   {step}
@@ -48,7 +48,7 @@ export default function StudioRecipes({ onRun }) {
               ))}
             </ol>
 
-            <span className="relative mt-3.5 inline-flex items-center gap-1.5 text-[12.5px] font-bold text-gold">
+            <span className="relative mt-3.5 inline-flex items-center gap-1.5 text-[12.5px] font-bold text-penny">
               Run it
               <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
             </span>

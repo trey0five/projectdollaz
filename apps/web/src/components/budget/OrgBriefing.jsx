@@ -40,9 +40,9 @@ import { CountUp, WhyText, titleProgress } from '../ui/briefingFx.jsx'
 // colour, a faint corner wash, the tab label, and a chip tint for the per-school
 // count pills.
 const SEVERITY = {
-  critical: { label: 'Critical', tab: 'bg-danger', wash: 'rgba(139,26,26,0.07)', chip: 'bg-danger/10 text-danger' },
-  warn: { label: 'Warning', tab: 'bg-gold', wash: 'rgba(184,150,80,0.09)', chip: 'bg-gold/15 text-gold' },
-  info: { label: 'Review', tab: 'bg-navy-soft', wash: 'rgba(46,80,143,0.06)', chip: 'bg-navy/10 text-navy' },
+  critical: { label: 'Critical', tab: 'bg-danger', wash: 'rgb(var(--c-danger) / 0.07)', chip: 'bg-danger/10 text-danger' },
+  warn: { label: 'Warning', tab: 'bg-gold', wash: 'rgb(var(--c-glow)/0.09)', chip: 'bg-gold/15 text-gold' },
+  info: { label: 'Review', tab: 'bg-navy-soft', wash: 'rgb(var(--c-navy-soft) / 0.06)', chip: 'bg-navy/10 text-navy' },
 }
 
 // Triage-board lanes — one column per severity (decreasing urgency), matching
@@ -171,7 +171,7 @@ function OrgBriefingItemCard({ item, index, reduce, active = false }) {
                   initial={reduce ? { width: `${progress}%` } : { width: 0 }}
                   animate={{ width: `${progress}%` }}
                   transition={{ duration: 0.9, delay: 0.3 + index * 0.05, ease: [0.22, 1, 0.36, 1] }}
-                  className="h-full rounded-full bg-gold-gradient shadow-[0_0_8px_rgba(184,150,80,0.45)]"
+                  className="h-full rounded-full bg-gold-gradient shadow-[0_0_8px_rgb(var(--c-glow)/0.45)]"
                 />
               </div>
               <span className="text-[12px] font-bold tabular-nums text-[#7a5e00]">{progress}%</span>
@@ -383,7 +383,7 @@ export default function OrgBriefing({
               {total === 1 ? '' : 's'} need{total === 1 ? 's' : ''} attention.
             </h2>
             <span
-              className="h-1.5 w-1.5 rotate-45 rounded-[1px] bg-gold/70 shadow-[0_0_8px_rgba(184,150,80,0.5)]"
+              className="h-1.5 w-1.5 rotate-45 rounded-[1px] bg-gold/70 shadow-[0_0_8px_rgb(var(--c-glow)/0.5)]"
               aria-hidden
             />
           </div>

@@ -101,13 +101,13 @@ export default function ProposalCard({ proposal, index, messageIndex, onConfirm,
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.22, ease: 'easeOut' }}
-      className="mt-2 overflow-hidden rounded-xl border border-gold/40 bg-gold/[0.07] p-2.5 shadow-glow"
+      className="mt-2 overflow-hidden rounded-xl border border-penny/40 bg-penny/[0.07] p-2.5 shadow-penny-glow"
     >
       {isDraftPlan ? (
         <DraftPlanProposalCard payload={payload} />
       ) : (
         <>
-          <p className="flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-[0.1em] text-gold">
+          <p className="flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-[0.1em] text-penny">
             {isImport ? <FileSpreadsheet size={13} aria-hidden /> : <Sparkles size={13} aria-hidden />}
             {heading}
           </p>
@@ -133,7 +133,7 @@ export default function ProposalCard({ proposal, index, messageIndex, onConfirm,
                   className={
                     'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[13px] font-semibold transition-colors ' +
                     (selected
-                      ? 'border-gold bg-gold-gradient text-navy shadow-sm'
+                      ? 'border-penny bg-penny-gradient text-navy shadow-sm'
                       : 'border-navy/15 bg-white text-navy/80 hover:border-navy/30 hover:text-navy')
                   }
                 >
@@ -166,7 +166,7 @@ export default function ProposalCard({ proposal, index, messageIndex, onConfirm,
             onClick={() =>
               onConfirm(messageIndex, index, action, hasDestination ? chosen : undefined)
             }
-            className="rounded-lg bg-gold-gradient px-3 py-1 text-[14px] font-semibold text-navy shadow-sm transition-transform hover:-translate-y-px active:translate-y-0 motion-reduce:hover:translate-y-0"
+            className="rounded-lg bg-penny-gradient px-3 py-1 text-[14px] font-semibold text-navy shadow-sm transition-transform hover:-translate-y-px active:translate-y-0 motion-reduce:hover:translate-y-0"
           >
             {confirmLabel}
           </button>
@@ -207,7 +207,7 @@ export default function ProposalCard({ proposal, index, messageIndex, onConfirm,
           primaryAction={
             <Link
               to="/strategy"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-gold-gradient px-3 py-1 text-[14px] font-semibold text-navy shadow-sm transition-transform hover:-translate-y-px active:translate-y-0 motion-reduce:hover:translate-y-0"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-penny-gradient px-3 py-1 text-[14px] font-semibold text-navy shadow-sm transition-transform hover:-translate-y-px active:translate-y-0 motion-reduce:hover:translate-y-0"
             >
               Open the plan <ArrowRight size={14} aria-hidden />
             </Link>
@@ -227,7 +227,7 @@ export default function ProposalCard({ proposal, index, messageIndex, onConfirm,
             <button
               type="button"
               onClick={() => onUndo(messageIndex, index, proposal)}
-              className="inline-flex items-center gap-1 rounded-lg border border-navy/15 bg-white px-2.5 py-1 text-[13px] font-semibold text-navy/80 transition-colors hover:border-navy/30 hover:text-navy focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+              className="inline-flex items-center gap-1 rounded-lg border border-navy/15 bg-white px-2.5 py-1 text-[13px] font-semibold text-navy/80 transition-colors hover:border-navy/30 hover:text-navy focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60"
             >
               <Undo2 size={13} aria-hidden /> Undo
             </button>
