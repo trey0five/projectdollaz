@@ -13,8 +13,10 @@
 // destination before confirming, and the chosen one is passed to onConfirm so it
 // OVERRIDES the payload destination on /apply.
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
+  ArrowRight,
   BadgeCheck,
   CheckCircle2,
   FileSpreadsheet,
@@ -26,6 +28,7 @@ import {
   Wrench,
 } from 'lucide-react'
 import AppliedCard from './AppliedCard.jsx'
+import DraftPlanProposalCard from './DraftPlanProposalCard.jsx'
 
 // The four auto-file destinations (label + icon), mirroring the API's closed set.
 // 'knowledge' is labelled "Knowledge only" to signal it does NOT create a module
@@ -43,6 +46,10 @@ export default function ProposalCard({ proposal, index, messageIndex, onConfirm,
   const status = proposal?.status
   const isImport = action?.kind === 'import_trial_balance'
   const isFileDoc = action?.kind === 'file_document'
+  // The "Penny drafts the plan" centerpiece — a whole strategy tree computed from
+  // live numbers. We swap the plain eyebrow/summary for the rich preview body but
+  // REUSE every confirm/cancel/applying/applied/error state below (no duplication).
+  const isDraftPlan = action?.kind === 'draft_strategy_plan'
   const payload = action?.payload ?? {}
   // Only offer the picker when the backend actually classified a destination.
   const hasDestination = isFileDoc && typeof payload.destination === 'string'
@@ -71,7 +78,23 @@ export default function ProposalCard({ proposal, index, messageIndex, onConfirm,
   const rationale = typeof payload.rationale === 'string' ? payload.rationale : ''
   const confirmLabel = hasDestination
     ? `Confirm & file to ${DESTINATION_LABEL[chosen] ?? 'Knowledge'}`
-    : 'Confirm'
+    : isDraftPlan
+      ? 'Create this plan'
+      : 'Confirm'
+
+  // Draft-plan receipt figures (read from the frozen §SEAM payload so the receipt
+  // is truthful without a round-trip). Used only in the applied branch below.
+  const draftPillars =
+    payload?.counts?.pillars ?? (Array.isArray(payload?.pillars) ? payload.pillars.length : 0)
+  const draftGoals =
+    payload?.counts?.goals ??
+    (Array.isArray(payload?.pillars)
+      ? payload.pillars.reduce((n, p) => n + (Array.isArray(p?.goals) ? p.goals.length : 0), 0)
+      : 0)
+  const draftHorizon =
+    payload?.fyStartYear && payload?.fyEndYear
+      ? `FY${payload.fyStartYear}–FY${payload.fyEndYear}`
+      : null
 
   return (
     <motion.div
@@ -80,11 +103,17 @@ export default function ProposalCard({ proposal, index, messageIndex, onConfirm,
       transition={{ duration: 0.22, ease: 'easeOut' }}
       className="mt-2 overflow-hidden rounded-xl border border-gold/40 bg-gold/[0.07] p-2.5 shadow-glow"
     >
-      <p className="flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-[0.1em] text-gold">
-        {isImport ? <FileSpreadsheet size={13} aria-hidden /> : <Sparkles size={13} aria-hidden />}
-        {heading}
-      </p>
-      <p className="mt-0.5 text-[14.5px] text-ink">{action?.summary}</p>
+      {isDraftPlan ? (
+        <DraftPlanProposalCard payload={payload} />
+      ) : (
+        <>
+          <p className="flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-[0.1em] text-gold">
+            {isImport ? <FileSpreadsheet size={13} aria-hidden /> : <Sparkles size={13} aria-hidden />}
+            {heading}
+          </p>
+          <p className="mt-0.5 text-[14.5px] text-ink">{action?.summary}</p>
+        </>
+      )}
 
       {hasDestination && status === 'pending' ? (
         <div className="mt-2.5 rounded-lg border border-navy/10 bg-white/60 p-2">
@@ -151,6 +180,44 @@ export default function ProposalCard({ proposal, index, messageIndex, onConfirm,
         </div>
       ) : status === 'applying' ? (
         <p className="mt-1 text-[14px] text-muted">Applying…</p>
+      ) : isDraftPlan &&
+        (status === 'applied' ||
+          status === 'undoing' ||
+          status === 'undone' ||
+          status === 'undo-error') ? (
+        // Rich receipt: reuse AppliedCard (custom header + a deep-link CTA) so the
+        // created plan reads as a real, reversible artifact with one tap to open it.
+        // Pass the LIVE status through so AppliedCard owns the undoing/undone/undo-error
+        // sub-states — the whole receipt stays intact through an Undo (not a bare line).
+        <AppliedCard
+          header="Created your strategic plan"
+          proposal={{
+            summary: payload?.isStarter
+              ? 'A starter plan to build on — connect your financials to compute live targets.'
+              : 'Your goals will now measure themselves against your live numbers.',
+            details: [
+              { label: 'Pillars', value: draftPillars },
+              { label: 'Goals', value: draftGoals },
+              ...(draftHorizon ? [{ label: 'Horizon', value: draftHorizon }] : []),
+            ],
+            reversible: !!proposal?.reversible,
+            auditId: proposal?.auditId ?? null,
+            status,
+          }}
+          primaryAction={
+            <Link
+              to="/strategy"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-gold-gradient px-3 py-1 text-[14px] font-semibold text-navy shadow-sm transition-transform hover:-translate-y-px active:translate-y-0 motion-reduce:hover:translate-y-0"
+            >
+              Open the plan <ArrowRight size={14} aria-hidden />
+            </Link>
+          }
+          onUndo={
+            proposal?.reversible && proposal?.auditId && onUndo
+              ? () => onUndo(messageIndex, index, proposal)
+              : undefined
+          }
+        />
       ) : status === 'applied' ? (
         <div className="mt-1 flex flex-wrap items-center gap-2">
           <span className="inline-flex items-center gap-1 text-[14px] font-semibold text-[#7a5e00]">

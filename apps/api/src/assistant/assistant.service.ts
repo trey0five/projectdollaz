@@ -18,6 +18,7 @@ import {
   computeDriverBudget,
   defaultAssumptions,
   formatMetricValueLong,
+  isMetricKey,
   resolveDisplayUnit,
   mergeFeederEnrollment,
   toDriverPriorContext,
@@ -62,6 +63,15 @@ import { AccreditationService } from '../accreditation/accreditation.service.js'
 import { FacilitiesService } from '../facilities/facilities.service.js'
 import { AdvancementService } from '../advancement/advancement.service.js'
 import { StrategyService } from '../strategy/strategy.service.js'
+import {
+  StrategyPlanDrafterService,
+  type DraftPlanTree,
+} from '../strategy/strategy-plan-drafter.service.js'
+import { INITIATIVE_STATUSES, MIX_METRIC_KEYS } from '../strategy/strategy.constants.js'
+import type { CreatePlanDto } from '../strategy/dto/create-plan.dto.js'
+import type { CreatePillarDto } from '../strategy/dto/create-pillar.dto.js'
+import type { CreateGoalDto } from '../strategy/dto/create-goal.dto.js'
+import type { CreateInitiativeDto } from '../strategy/dto/create-initiative.dto.js'
 import { AlertService, ALERT_METRIC_KEYS } from '../alerts/alert.service.js'
 import { SchoolsService } from '../schools/schools.service.js'
 import { QboDrillService } from '../integrations/qbo-drill.service.js'
@@ -149,6 +159,14 @@ const REFRESH: Record<ProposedAction['kind'], RefreshKey[]> = {
   // has no penny:data-changed listener), and invite_member is a CONFIRM tool (this
   // map only feeds the autonomous-WRITE 'applied' event), so the entry is empty.
   invite_member: [],
+  // Strategic Planning v2 — every strategy write refetches the /strategy surface. This
+  // is a TOTAL Record over ProposedAction['kind'], so TypeScript will not compile until
+  // all 5 new kinds have an entry — the forcing function that guarantees they're wired.
+  create_strategy_plan: ['strategy'],
+  create_strategy_pillar: ['strategy'],
+  create_strategy_goal: ['strategy'],
+  create_strategy_initiative: ['strategy'],
+  draft_strategy_plan: ['strategy'],
 }
 
 // Penny action-log stamps. Every applied action is written to the AuditLog under
@@ -177,6 +195,14 @@ const REVERSIBLE_KINDS = new Set<ProposedAction['kind']>([
   // Undo = revoke the still-pending invitation (SchoolsService.revokeInvitation:
   // tenant-checked, NotFound → already-gone no-op, already-accepted → clear 400).
   'invite_member',
+  // Strategic Planning v2 — every strategy create captures a single created row id.
+  // draft_strategy_plan's createdId is the PLAN id: one removePlan(planId) cascades the
+  // whole tree (pillars/goals/initiatives via FK ON DELETE CASCADE).
+  'create_strategy_plan',
+  'create_strategy_pillar',
+  'create_strategy_goal',
+  'create_strategy_initiative',
+  'draft_strategy_plan',
 ])
 
 // Tools that perform a write. Membership UNCHANGED — but the meaning flips from
@@ -212,6 +238,14 @@ const CONFIRM_TOOLS = new Set([
   // OWNER-ONLY on top of the confirm gate (the REST route is @Roles('owner')) —
   // enforced both at propose time (runToolCall) and at apply time (dispatchApply).
   'invite_member',
+  // Strategic Planning v2 — all owner/accountant (viewer denied by toolsForRole). Every
+  // strategy write is user-confirmed; draft_strategy_plan GENERATES the whole tree for
+  // one confirm, then dispatchApply creates plan→pillars→goals in sequence.
+  'create_strategy_plan',
+  'create_strategy_pillar',
+  'create_strategy_goal',
+  'create_strategy_initiative',
+  'draft_strategy_plan',
 ])
 
 // Role-gate the tools OFFERED to the model. A viewer (Board) is read-only: every
@@ -272,6 +306,11 @@ export interface ProposedAction {
     | 'create_campaign'
     | 'create_alert'
     | 'invite_member'
+    | 'create_strategy_plan'
+    | 'create_strategy_pillar'
+    | 'create_strategy_goal'
+    | 'create_strategy_initiative'
+    | 'draft_strategy_plan'
   periodId: string
   summary: string
   payload: Record<string, unknown>
@@ -421,6 +460,7 @@ type RefreshKey =
   | 'facilities'
   | 'advancement'
   | 'alerts'
+  | 'strategy'
 
 /** A flat label/value row on the "what I changed" card. */
 export interface AppliedDetail {
@@ -589,6 +629,12 @@ export class AssistantService {
     // near-unchanged (they append one `strategy` stub). getActivePlanComputed NEVER
     // throws (fail-soft to { hasPlan:false }).
     private readonly strategy: StrategyService,
+    // Strategic Planning v2 — Penny's deterministic "draft the plan" generator. Added
+    // LAST (after strategy) so existing positional-arg unit specs still construct; only
+    // the draft_strategy_plan build path touches `this.planDrafter`, so undefined
+    // elsewhere is safe. Boot-safe: it injects Prisma + StrategyProgressService + pure
+    // analytics only, and rides the existing acyclic AssistantModule→StrategyModule edge.
+    private readonly planDrafter: StrategyPlanDrafterService,
   ) {}
 
   isConfigured(): boolean {
@@ -993,6 +1039,21 @@ export class AssistantService {
     }
     if (name === 'invite_member') {
       return this.buildInviteProposal(args, ctx)
+    }
+    if (name === 'create_strategy_plan') {
+      return this.buildStrategyPlanProposal(args, ctx)
+    }
+    if (name === 'create_strategy_pillar') {
+      return this.buildStrategyPillarProposal(args, ctx)
+    }
+    if (name === 'create_strategy_goal') {
+      return this.buildStrategyGoalProposal(args, ctx)
+    }
+    if (name === 'create_strategy_initiative') {
+      return this.buildStrategyInitiativeProposal(args, ctx)
+    }
+    if (name === 'draft_strategy_plan') {
+      return this.buildDraftStrategyPlanProposal(args, ctx)
     }
     const periodId = await this.resolvePeriod(args, ctx)
     if (name === 'set_budget') {
@@ -1725,6 +1786,341 @@ export class AssistantService {
     }
   }
 
+  // ── Strategic Planning v2 — confirm-then-apply write builders (NO mutation) ──────
+  // Each returns a ProposedAction the user must CONFIRM; the REAL write happens in
+  // dispatchApply via the EXISTING StrategyService.create* (CRUD is never reimplemented
+  // here). periodId is carried as ctx.periodId ?? '' only because ProposedAction.periodId
+  // is required — strategy is NOT period-scoped and dispatchApply ignores it.
+
+  /** Validate/clamp a FY year to the CreatePlanDto window (2000..2100). */
+  private clampFyYear(v: unknown): number | undefined {
+    if (typeof v !== 'number' || !Number.isFinite(v)) return undefined
+    const y = Math.trunc(v)
+    return y >= 2000 && y <= 2100 ? y : undefined
+  }
+
+  /** Build a confirmable create_strategy_plan proposal. */
+  private buildStrategyPlanProposal(args: Record<string, unknown>, ctx: Ctx): ProposedAction {
+    const name = typeof args.name === 'string' ? args.name.trim().slice(0, 200) : ''
+    if (!name) throw new Error('create_strategy_plan needs a name.')
+    const mission =
+      typeof args.mission === 'string' && args.mission.trim()
+        ? args.mission.trim().slice(0, 4000)
+        : undefined
+    const fyStartYear = this.clampFyYear(args.fyStartYear)
+    const fyEndYear = this.clampFyYear(args.fyEndYear)
+    if (fyStartYear === undefined || fyEndYear === undefined) {
+      throw new Error('create_strategy_plan needs fyStartYear and fyEndYear (2000–2100).')
+    }
+    if (fyEndYear < fyStartYear) throw new Error('fyEndYear cannot be before fyStartYear.')
+    const nextReviewDate =
+      typeof args.nextReviewDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(args.nextReviewDate)
+        ? args.nextReviewDate
+        : undefined
+    return {
+      kind: 'create_strategy_plan',
+      periodId: ctx.periodId ?? '',
+      summary: `Create strategic plan “${name}” (FY${fyStartYear}–FY${fyEndYear}).`,
+      payload: {
+        name,
+        ...(mission ? { mission } : {}),
+        fyStartYear,
+        fyEndYear,
+        ...(nextReviewDate ? { nextReviewDate } : {}),
+      },
+    }
+  }
+
+  /** Build a confirmable create_strategy_pillar proposal (resolves the target plan). */
+  private async buildStrategyPillarProposal(
+    args: Record<string, unknown>,
+    ctx: Ctx,
+  ): Promise<ProposedAction> {
+    const planIdArg = typeof args.planId === 'string' ? args.planId.trim() : undefined
+    const plan = await this.resolveTargetPlan(ctx.schoolId, planIdArg)
+    const name = typeof args.name === 'string' ? args.name.trim().slice(0, 200) : ''
+    if (!name) throw new Error('create_strategy_pillar needs a name.')
+    const description =
+      typeof args.description === 'string' && args.description.trim()
+        ? args.description.trim().slice(0, 2000)
+        : undefined
+    const orderIndex =
+      typeof args.orderIndex === 'number' && Number.isFinite(args.orderIndex)
+        ? Math.max(0, Math.min(10000, Math.trunc(args.orderIndex)))
+        : undefined
+    return {
+      kind: 'create_strategy_pillar',
+      periodId: ctx.periodId ?? '',
+      summary: `Add pillar “${name}” to the plan “${plan.name}”.`,
+      payload: {
+        planId: plan.id,
+        name,
+        ...(description ? { description } : {}),
+        ...(orderIndex !== undefined ? { orderIndex } : {}),
+      },
+    }
+  }
+
+  /** Build a confirmable create_strategy_goal proposal (resolves the target pillar). */
+  private async buildStrategyGoalProposal(
+    args: Record<string, unknown>,
+    ctx: Ctx,
+  ): Promise<ProposedAction> {
+    const pillar = await this.resolvePillarRef(ctx.schoolId, {
+      pillarId: typeof args.pillarId === 'string' ? args.pillarId.trim() : undefined,
+      pillarName: typeof args.pillarName === 'string' ? args.pillarName.trim() : undefined,
+    })
+    const title = typeof args.title === 'string' ? args.title.trim().slice(0, 200) : ''
+    if (!title) throw new Error('create_strategy_goal needs a title.')
+    const goalType = args.goalType === 'milestone' ? 'milestone' : 'metric'
+    const description =
+      typeof args.description === 'string' && args.description.trim()
+        ? args.description.trim().slice(0, 2000)
+        : undefined
+    const payload: Record<string, unknown> = { pillarId: pillar.id, title, goalType }
+    if (description) payload.description = description
+
+    if (goalType === 'metric') {
+      const metricKey = typeof args.metricKey === 'string' ? args.metricKey.trim() : ''
+      // Validate with the SAME guards StrategyService uses, at PROPOSE time (so a doomed
+      // goal is declined before the user confirms). isMetricKey + mix-reject.
+      if (!metricKey || !isMetricKey(metricKey)) {
+        throw new Error('create_strategy_goal (metric) needs a valid metricKey.')
+      }
+      if ((MIX_METRIC_KEYS as readonly string[]).includes(metricKey)) {
+        throw new Error(`Metric “${metricKey}” is a mix breakdown and can’t be a goal target.`)
+      }
+      payload.metricKey = metricKey
+      if (typeof args.targetValue === 'number' && Number.isFinite(args.targetValue)) {
+        payload.targetValue = args.targetValue
+      }
+      if (typeof args.startDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(args.startDate)) {
+        payload.startDate = args.startDate
+      }
+      if (typeof args.targetDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(args.targetDate)) {
+        payload.targetDate = args.targetDate
+      }
+    } else {
+      // milestone — normalize to [{label, done?}]
+      const raw = Array.isArray(args.milestones) ? args.milestones : []
+      const milestones = raw
+        .map((m) => {
+          const o = (m ?? {}) as Record<string, unknown>
+          const label = typeof o.label === 'string' ? o.label.trim().slice(0, 200) : ''
+          if (!label) return null
+          return o.done === true ? { label, done: true } : { label }
+        })
+        .filter((m): m is { label: string; done?: boolean } => m !== null)
+      payload.milestones = milestones
+    }
+    return {
+      kind: 'create_strategy_goal',
+      periodId: ctx.periodId ?? '',
+      summary: `Add ${goalType} goal “${title}” to the pillar “${pillar.name}”.`,
+      payload,
+    }
+  }
+
+  /** Build a confirmable create_strategy_initiative proposal (resolves the target goal). */
+  private async buildStrategyInitiativeProposal(
+    args: Record<string, unknown>,
+    ctx: Ctx,
+  ): Promise<ProposedAction> {
+    const goal = await this.resolveGoalRef(ctx.schoolId, {
+      goalId: typeof args.goalId === 'string' ? args.goalId.trim() : undefined,
+      goalName: typeof args.goalName === 'string' ? args.goalName.trim() : undefined,
+    })
+    const title = typeof args.title === 'string' ? args.title.trim().slice(0, 200) : ''
+    if (!title) throw new Error('create_strategy_initiative needs a title.')
+    const description =
+      typeof args.description === 'string' && args.description.trim()
+        ? args.description.trim().slice(0, 2000)
+        : undefined
+    const status =
+      typeof args.status === 'string' &&
+      (INITIATIVE_STATUSES as readonly string[]).includes(args.status)
+        ? args.status
+        : undefined
+    const orderIndex =
+      typeof args.orderIndex === 'number' && Number.isFinite(args.orderIndex)
+        ? Math.max(0, Math.min(10000, Math.trunc(args.orderIndex)))
+        : undefined
+    return {
+      kind: 'create_strategy_initiative',
+      periodId: ctx.periodId ?? '',
+      summary: `Add initiative “${title}” to the goal “${goal.title}”.`,
+      payload: {
+        goalId: goal.id,
+        title,
+        ...(description ? { description } : {}),
+        ...(status ? { status } : {}),
+        ...(orderIndex !== undefined ? { orderIndex } : {}),
+      },
+    }
+  }
+
+  /**
+   * Build the confirmable draft_strategy_plan proposal — the centerpiece. Calls the
+   * READ-ONLY deterministic drafter (no writes), RE-VALIDATES the returned tree with
+   * the same guards the per-node builders use (so a malformed draft is rejected BEFORE
+   * the user sees a confirm card), and returns ONE ProposedAction whose payload IS the
+   * frozen §SEAM tree (the web card renders it directly; dispatchApply creates it).
+   */
+  private async buildDraftStrategyPlanProposal(
+    args: Record<string, unknown>,
+    ctx: Ctx,
+  ): Promise<ProposedAction> {
+    const tree = await this.planDrafter.draft(ctx.schoolId, {
+      ...(typeof args.name === 'string' ? { name: args.name } : {}),
+      ...(typeof args.mission === 'string' ? { mission: args.mission } : {}),
+      ...(this.clampFyYear(args.fyStartYear) !== undefined
+        ? { fyStartYear: this.clampFyYear(args.fyStartYear) }
+        : {}),
+      ...(this.clampFyYear(args.fyEndYear) !== undefined
+        ? { fyEndYear: this.clampFyYear(args.fyEndYear) }
+        : {}),
+      ...(typeof args.focus === 'string' ? { focus: args.focus } : {}),
+    })
+    this.assertDraftTreeValid(tree)
+    return {
+      kind: 'draft_strategy_plan',
+      periodId: ctx.periodId ?? '',
+      summary: `Draft a FY${tree.fyStartYear}–FY${tree.fyEndYear} strategic plan: ${tree.counts.pillars} pillars, ${tree.counts.goals} goals.`,
+      payload: tree as unknown as Record<string, unknown>,
+    }
+  }
+
+  /**
+   * Re-validate a drafted tree with the SAME guards the create path enforces (metricKey
+   * known + non-mix, finite target, fraction 0..1, non-empty pillars, FY order). Throws
+   * a clear error so a malformed draft never reaches the confirm card OR /apply.
+   */
+  private assertDraftTreeValid(tree: DraftPlanTree): void {
+    if (!tree || typeof tree.name !== 'string' || !tree.name.trim()) {
+      throw new Error('The drafted plan is missing a name.')
+    }
+    if (tree.fyEndYear < tree.fyStartYear) throw new Error('The drafted plan has an invalid FY range.')
+    if (!Array.isArray(tree.pillars) || tree.pillars.length === 0) {
+      throw new Error('The drafted plan has no pillars.')
+    }
+    for (const pil of tree.pillars) {
+      if (!pil.name || !Array.isArray(pil.goals) || pil.goals.length === 0) {
+        throw new Error('The drafted plan has an empty pillar.')
+      }
+      for (const g of pil.goals) {
+        if (g.goalType === 'metric') {
+          const key = g.metricKey
+          if (!key || !isMetricKey(key)) throw new Error('The drafted plan has an invalid metric goal.')
+          if ((MIX_METRIC_KEYS as readonly string[]).includes(key)) {
+            throw new Error('The drafted plan bound a mix metric to a goal.')
+          }
+          if (typeof g.targetValue !== 'number' || !Number.isFinite(g.targetValue)) {
+            throw new Error('The drafted plan has a metric goal with no numeric target.')
+          }
+        } else if (g.goalType !== 'milestone') {
+          throw new Error('The drafted plan has an unsupported goal type.')
+        }
+      }
+    }
+  }
+
+  // ── Strategy name-resolution (tenant-scoped, READ-only) ─────────────────────────
+  // Penny says "the Financial Sustainability pillar", not a UUID. These resolve a
+  // name/id to a row of THIS school (cross-tenant names are invisible), surfacing
+  // ambiguous/not-found at PROPOSE time so Penny can ask the user to clarify.
+
+  /**
+   * The target plan for a pillar create: an explicit planId (tenant-checked) or the
+   * school's ACTIVE plan (the FROZEN rule: adopted-newest → draft-newest). This mirrors
+   * StrategyService's private resolveActivePlanId — kept read-only here to avoid a new
+   * StrategyService surface; the rule lives in exactly two places and is trivially
+   * verifiable.
+   */
+  private async resolveTargetPlan(
+    schoolId: string,
+    planId?: string,
+  ): Promise<{ id: string; name: string }> {
+    if (planId) {
+      const plan = await this.prisma.strategicPlan.findFirst({
+        where: { id: planId, schoolId },
+        select: { id: true, name: true },
+      })
+      if (!plan) throw new Error('That strategic plan was not found in this school.')
+      return plan
+    }
+    const adopted = await this.prisma.strategicPlan.findFirst({
+      where: { schoolId, status: 'adopted' },
+      orderBy: [{ adoptedAt: 'desc' }, { updatedAt: 'desc' }],
+      select: { id: true, name: true },
+    })
+    if (adopted) return adopted
+    const draft = await this.prisma.strategicPlan.findFirst({
+      where: { schoolId, status: 'draft' },
+      orderBy: { updatedAt: 'desc' },
+      select: { id: true, name: true },
+    })
+    if (draft) return draft
+    throw new Error('No strategic plan yet — create one first (or use draft_strategy_plan).')
+  }
+
+  /** Resolve a pillar by id or (case-insensitive) name within the school's active plan. */
+  private async resolvePillarRef(
+    schoolId: string,
+    ref: { pillarId?: string; pillarName?: string },
+  ): Promise<{ id: string; name: string }> {
+    if (ref.pillarId) {
+      const pil = await this.prisma.strategyPillar.findFirst({
+        where: { id: ref.pillarId, schoolId },
+        select: { id: true, name: true },
+      })
+      if (!pil) throw new Error('That pillar was not found in this school.')
+      return pil
+    }
+    const name = ref.pillarName
+    if (!name) throw new Error('create_strategy_goal needs a pillarId or pillarName.')
+    const plan = await this.resolveTargetPlan(schoolId)
+    const matches = await this.prisma.strategyPillar.findMany({
+      where: { schoolId, planId: plan.id, name: { equals: name, mode: 'insensitive' } },
+      select: { id: true, name: true },
+    })
+    if (matches.length === 0) throw new Error(`No pillar named “${name}” in the plan “${plan.name}”.`)
+    if (matches.length > 1) {
+      throw new Error(`More than one pillar named “${name}” — say which one or use its id.`)
+    }
+    return matches[0]
+  }
+
+  /** Resolve a goal by id or (case-insensitive) title within the school's active plan. */
+  private async resolveGoalRef(
+    schoolId: string,
+    ref: { goalId?: string; goalName?: string },
+  ): Promise<{ id: string; title: string }> {
+    if (ref.goalId) {
+      const goal = await this.prisma.strategyGoal.findFirst({
+        where: { id: ref.goalId, schoolId },
+        select: { id: true, title: true },
+      })
+      if (!goal) throw new Error('That goal was not found in this school.')
+      return goal
+    }
+    const name = ref.goalName
+    if (!name) throw new Error('create_strategy_initiative needs a goalId or goalName.')
+    const plan = await this.resolveTargetPlan(schoolId)
+    const matches = await this.prisma.strategyGoal.findMany({
+      where: {
+        schoolId,
+        title: { equals: name, mode: 'insensitive' },
+        pillar: { is: { planId: plan.id } },
+      },
+      select: { id: true, title: true },
+    })
+    if (matches.length === 0) throw new Error(`No goal titled “${name}” in the plan “${plan.name}”.`)
+    if (matches.length > 1) {
+      throw new Error(`More than one goal titled “${name}” — say which one or use its id.`)
+    }
+    return matches[0]
+  }
+
   /**
    * Resolve an approver string to an ACTIVE-member userId of THIS school, or THROW.
    * Unlike resolveAssignee (null on empty), an approver is REQUIRED — "me" → the
@@ -2047,6 +2443,21 @@ export class AssistantService {
       }
       case 'create_task':
         await this.tasks.remove(schoolId, targetId, user.id)
+        return
+      // Strategy undo = delete the captured row. A draft_strategy_plan / create_strategy_plan
+      // undo is one removePlan(planId) — FK ON DELETE CASCADE unwinds the whole tree.
+      case 'create_strategy_plan':
+      case 'draft_strategy_plan':
+        await this.strategy.removePlan(schoolId, targetId, user.id)
+        return
+      case 'create_strategy_pillar':
+        await this.strategy.removePillar(schoolId, targetId, user.id)
+        return
+      case 'create_strategy_goal':
+        await this.strategy.removeGoal(schoolId, targetId, user.id)
+        return
+      case 'create_strategy_initiative':
+        await this.strategy.removeInitiative(schoolId, targetId, user.id)
         return
       case 'file_document':
         await this.documents.deleteDocument(schoolId, targetId, user.id)
@@ -2585,6 +2996,47 @@ export class AssistantService {
       const res = await this.schools.createInvitation(schoolId, { email, role, orgWide })
       return { summary: action.summary, createdId: res?.invitation?.id ?? null }
     }
+    if (action.kind === 'create_strategy_plan') {
+      const created = await this.strategy.createPlan(schoolId, this.planDtoFromPayload(p), userId)
+      return { summary: action.summary, createdId: created?.id ?? null }
+    }
+    if (action.kind === 'create_strategy_pillar') {
+      const planId = typeof p.planId === 'string' ? p.planId : ''
+      if (!planId) throw new Error('A pillar needs a planId.')
+      const created = await this.strategy.createPillar(
+        schoolId,
+        planId,
+        this.pillarDtoFromPayload(p),
+        userId,
+      )
+      return { summary: action.summary, createdId: created?.id ?? null }
+    }
+    if (action.kind === 'create_strategy_goal') {
+      const pillarId = typeof p.pillarId === 'string' ? p.pillarId : ''
+      if (!pillarId) throw new Error('A goal needs a pillarId.')
+      // createGoal re-validates metricKey (isMetricKey + mix-reject) + milestone-normalizes.
+      const created = await this.strategy.createGoal(
+        schoolId,
+        pillarId,
+        this.goalDtoFromPayload(p),
+        userId,
+      )
+      return { summary: action.summary, createdId: created?.id ?? null }
+    }
+    if (action.kind === 'create_strategy_initiative') {
+      const goalId = typeof p.goalId === 'string' ? p.goalId : ''
+      if (!goalId) throw new Error('An initiative needs a goalId.')
+      const created = await this.strategy.createInitiative(
+        schoolId,
+        goalId,
+        this.initiativeDtoFromPayload(p),
+        userId,
+      )
+      return { summary: action.summary, createdId: created?.id ?? null }
+    }
+    if (action.kind === 'draft_strategy_plan') {
+      return this.applyDraftStrategyPlan(schoolId, user, action)
+    }
     // draft_cap_entry
     await this.correctiveAction.upsertEntries(
       schoolId,
@@ -2604,6 +3056,178 @@ export class AssistantService {
       userId,
     )
     return { summary: action.summary, createdId: null }
+  }
+
+  // ── Strategic Planning v2 — UNTRUSTED-payload → CreateDto mappers ────────────────
+  // A forged /apply skips the DTO, so re-derive every field here. StrategyService.create*
+  // re-checks tenant + the metric/FY/milestone guards, so these are a clean first pass.
+
+  private planDtoFromPayload(p: Record<string, unknown>): CreatePlanDto {
+    const name = typeof p.name === 'string' ? p.name.trim().slice(0, 200) : ''
+    if (!name) throw new Error('A strategic plan needs a name.')
+    const fyStartYear = this.clampFyYear(p.fyStartYear)
+    const fyEndYear = this.clampFyYear(p.fyEndYear)
+    if (fyStartYear === undefined || fyEndYear === undefined) {
+      throw new Error('A strategic plan needs fyStartYear and fyEndYear (2000–2100).')
+    }
+    const mission =
+      typeof p.mission === 'string' && p.mission.trim() ? p.mission.trim().slice(0, 4000) : undefined
+    const nextReviewDate =
+      typeof p.nextReviewDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(p.nextReviewDate)
+        ? p.nextReviewDate
+        : undefined
+    return {
+      name,
+      fyStartYear,
+      fyEndYear,
+      ...(mission ? { mission } : {}),
+      ...(nextReviewDate ? { nextReviewDate } : {}),
+    }
+  }
+
+  private pillarDtoFromPayload(p: Record<string, unknown>): CreatePillarDto {
+    const name = typeof p.name === 'string' ? p.name.trim().slice(0, 200) : ''
+    if (!name) throw new Error('A pillar needs a name.')
+    const description =
+      typeof p.description === 'string' && p.description.trim()
+        ? p.description.trim().slice(0, 2000)
+        : undefined
+    const orderIndex =
+      typeof p.orderIndex === 'number' && Number.isFinite(p.orderIndex)
+        ? Math.max(0, Math.min(10000, Math.trunc(p.orderIndex)))
+        : undefined
+    return {
+      name,
+      ...(description ? { description } : {}),
+      ...(orderIndex !== undefined ? { orderIndex } : {}),
+    }
+  }
+
+  private goalDtoFromPayload(p: Record<string, unknown>): CreateGoalDto {
+    const title = typeof p.title === 'string' ? p.title.trim().slice(0, 200) : ''
+    if (!title) throw new Error('A goal needs a title.')
+    const goalType = p.goalType === 'milestone' ? 'milestone' : 'metric'
+    const description =
+      typeof p.description === 'string' && p.description.trim()
+        ? p.description.trim().slice(0, 2000)
+        : undefined
+    const orderIndex =
+      typeof p.orderIndex === 'number' && Number.isFinite(p.orderIndex)
+        ? Math.max(0, Math.min(10000, Math.trunc(p.orderIndex)))
+        : undefined
+    const dto: CreateGoalDto = {
+      title,
+      goalType,
+      ...(description ? { description } : {}),
+      ...(orderIndex !== undefined ? { orderIndex } : {}),
+    }
+    if (goalType === 'metric') {
+      // metricKey validated by StrategyService.createGoal (isMetricKey + mix-reject).
+      if (typeof p.metricKey === 'string') dto.metricKey = p.metricKey.trim()
+      if (typeof p.targetValue === 'number' && Number.isFinite(p.targetValue)) {
+        dto.targetValue = p.targetValue
+      }
+      if (typeof p.startDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(p.startDate)) {
+        dto.startDate = p.startDate
+      }
+      if (typeof p.targetDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(p.targetDate)) {
+        dto.targetDate = p.targetDate
+      }
+    } else {
+      const raw = Array.isArray(p.milestones) ? p.milestones : []
+      dto.milestones = raw
+        .map((m) => {
+          const o = (m ?? {}) as Record<string, unknown>
+          const label = typeof o.label === 'string' ? o.label.trim().slice(0, 200) : ''
+          if (!label) return null
+          return o.done === true ? { label, done: true } : { label }
+        })
+        .filter((m): m is { label: string; done?: boolean } => m !== null)
+    }
+    return dto
+  }
+
+  private initiativeDtoFromPayload(p: Record<string, unknown>): CreateInitiativeDto {
+    const title = typeof p.title === 'string' ? p.title.trim().slice(0, 200) : ''
+    if (!title) throw new Error('An initiative needs a title.')
+    const description =
+      typeof p.description === 'string' && p.description.trim()
+        ? p.description.trim().slice(0, 2000)
+        : undefined
+    const status =
+      typeof p.status === 'string' && (INITIATIVE_STATUSES as readonly string[]).includes(p.status)
+        ? (p.status as CreateInitiativeDto['status'])
+        : undefined
+    const orderIndex =
+      typeof p.orderIndex === 'number' && Number.isFinite(p.orderIndex)
+        ? Math.max(0, Math.min(10000, Math.trunc(p.orderIndex)))
+        : undefined
+    return {
+      title,
+      ...(description ? { description } : {}),
+      ...(status ? { status } : {}),
+      ...(orderIndex !== undefined ? { orderIndex } : {}),
+    }
+  }
+
+  /**
+   * Apply a confirmed draft_strategy_plan — the MULTI-CREATE. Creates the plan, then
+   * loops pillars→goals in sequence via the EXISTING StrategyService (whose per-node
+   * guards fire on each createGoal). On ANY mid-tree failure, run a compensating
+   * removePlan(planId) — FK ON DELETE CASCADE unwinds pillars/goals/initiatives so NO
+   * orphan survives — then rethrow. createdId = the PLAN id (undo cascades the tree).
+   * The payload is the UNTRUSTED §SEAM tree; display fields are ignored.
+   */
+  private async applyDraftStrategyPlan(
+    schoolId: string,
+    user: User,
+    action: ProposedAction,
+  ): Promise<{ summary: string; createdId: string | null }> {
+    const tree = (action.payload ?? {}) as unknown as DraftPlanTree
+    const userId = user.id
+    const plan = await this.strategy.createPlan(schoolId, this.planDtoFromPayload({
+      name: tree.name,
+      mission: tree.mission ?? undefined,
+      fyStartYear: tree.fyStartYear,
+      fyEndYear: tree.fyEndYear,
+    }), userId)
+    try {
+      const pillars = Array.isArray(tree.pillars) ? tree.pillars : []
+      for (const pil of pillars) {
+        const createdPillar = await this.strategy.createPillar(
+          schoolId,
+          plan.id,
+          this.pillarDtoFromPayload({
+            name: pil.name,
+            description: pil.description ?? undefined,
+            orderIndex: pil.orderIndex,
+          }),
+          userId,
+        )
+        const goals = Array.isArray(pil.goals) ? pil.goals : []
+        for (const g of goals) {
+          await this.strategy.createGoal(
+            schoolId,
+            createdPillar.id,
+            this.goalDtoFromPayload({
+              title: g.title,
+              goalType: g.goalType,
+              metricKey: g.metricKey,
+              targetValue: g.targetValue,
+              targetDate: g.targetDate,
+              milestones: g.milestones ?? undefined,
+              orderIndex: g.orderIndex,
+            }),
+            userId,
+          )
+        }
+      }
+    } catch (e) {
+      // Compensating delete — leave NO partial plan (cascade removes pillars/goals).
+      await this.strategy.removePlan(schoolId, plan.id, userId).catch(() => undefined)
+      throw e
+    }
+    return { summary: action.summary, createdId: plan.id }
   }
 
   /**

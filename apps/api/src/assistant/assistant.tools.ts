@@ -1054,6 +1054,121 @@ export const TOOL_SCHEMAS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'draft_strategy_plan',
+      description:
+        'GENERATE a full draft strategic plan (pillars + metric-bound goals with targets computed from THIS school’s live metrics) for the user to CONFIRM before anything is created. This does NOT create it; the user must confirm, then the whole tree is created at once. Use when the user asks Penny to "draft us a strategic plan", "build a plan", "start a strategic plan", etc. Every goal target is DERIVED from the school’s live numbers (the healthy sector threshold for each off-track metric) — never invented. Optional args only steer the framing; Penny can draft from live metrics with no args. FY runs Jul–Jun.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Optional plan name; defaults to a FY-derived name.' },
+          mission: { type: 'string', description: 'Optional mission statement.' },
+          fyStartYear: { type: 'integer', description: 'FY the plan starts (Jul–Jun). Defaults to the current FY.' },
+          fyEndYear: { type: 'integer', description: 'FY the plan ends. Defaults to a 3-year horizon.' },
+          focus: { type: 'string', description: 'Optional free-text steer, e.g. "lean into enrollment growth".' },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_strategy_plan',
+      description:
+        'PROPOSE a new (empty) strategic plan for the user to CONFIRM before it is created (this does NOT create it; the user must confirm). Use when the user wants to start a plan by hand rather than have Penny draft one — for a Penny-generated plan use draft_strategy_plan instead. FY runs Jul–Jun; the plan is created in draft status. Plan, not period-scoped.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Plan name, e.g. "FY2026–FY2028 Strategic Plan".' },
+          mission: { type: 'string', description: 'Optional mission statement.' },
+          fyStartYear: { type: 'integer', description: 'FY the plan starts; FY runs Jul–Jun.' },
+          fyEndYear: { type: 'integer', description: 'FY the plan ends (>= fyStartYear).' },
+          nextReviewDate: { type: 'string', description: 'YYYY-MM-DD; when the plan is next reviewed. Omit unless stated.' },
+        },
+        required: ['name', 'fyStartYear', 'fyEndYear'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_strategy_pillar',
+      description:
+        'PROPOSE a new pillar (a strategic theme) under a plan for the user to CONFIRM before it is created (this does NOT create it; the user must confirm). Omit planId to add it to the school’s active plan. Pillar, not period-scoped.',
+      parameters: {
+        type: 'object',
+        properties: {
+          planId: { type: 'string', description: 'Plan id; omit to use the active plan.' },
+          name: { type: 'string', description: 'Pillar name, e.g. "Financial Sustainability".' },
+          description: { type: 'string', description: 'Optional description.' },
+          orderIndex: { type: 'integer', description: 'Optional display order.' },
+        },
+        required: ['name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_strategy_goal',
+      description:
+        'PROPOSE a new goal under a pillar for the user to CONFIRM before it is created (this does NOT create it; the user must confirm). goalType="metric" binds a measurable metric with a target (progress is COMPUTED live); goalType="milestone" is a checklist of milestones. For a metric goal, give a metricKey and a numeric targetValue — percent/share targets are a 0..1 fraction (e.g. 0.03 for a 3% operating margin). Valid metricKey values: operating_margin, days_cash_on_hand, months_operating_reserve, tuition_dependency, cost_per_pupil, net_tuition_per_student, financial_aid_per_student, aid_per_aided_student, tuition_discount_rate, pct_students_on_aid, enrollment_change_yoy, student_teacher_ratio. Identify the pillar by pillarId, or by pillarName (its name, e.g. "Financial Sustainability"). Goal, not period-scoped.',
+      parameters: {
+        type: 'object',
+        properties: {
+          pillarId: { type: 'string', description: 'Pillar id.' },
+          pillarName: { type: 'string', description: 'The pillar’s name; used when pillarId is unknown.' },
+          title: { type: 'string', description: 'Goal title, e.g. "Reach 60 days cash on hand".' },
+          description: { type: 'string', description: 'Optional description.' },
+          goalType: { type: 'string', enum: ['metric', 'milestone'], description: 'metric = measurable target; milestone = checklist. Defaults to metric.' },
+          metricKey: { type: 'string', description: 'For goalType=metric; a canonical single-value metric (see the valid list).' },
+          targetValue: { type: 'number', description: 'For goalType=metric; percent/share targets are a 0..1 fraction.' },
+          startDate: { type: 'string', description: 'YYYY-MM-DD. Optional.' },
+          targetDate: { type: 'string', description: 'YYYY-MM-DD; when the target should be met. Optional.' },
+          milestones: {
+            type: 'array',
+            description: 'For goalType=milestone: the checklist.',
+            items: {
+              type: 'object',
+              properties: {
+                label: { type: 'string' },
+                done: { type: 'boolean' },
+              },
+              required: ['label'],
+            },
+          },
+        },
+        required: ['title'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_strategy_initiative',
+      description:
+        'PROPOSE a new initiative (an action item) under a goal for the user to CONFIRM before it is created (this does NOT create it; the user must confirm). Identify the goal by goalId, or by goalName (its title). status is one of planned/in_progress/blocked/done/cancelled. Initiative, not period-scoped.',
+      parameters: {
+        type: 'object',
+        properties: {
+          goalId: { type: 'string', description: 'Goal id.' },
+          goalName: { type: 'string', description: 'The goal’s title; used when goalId is unknown.' },
+          title: { type: 'string', description: 'Initiative title.' },
+          description: { type: 'string', description: 'Optional description.' },
+          status: {
+            type: 'string',
+            enum: ['planned', 'in_progress', 'blocked', 'done', 'cancelled'],
+            description: 'Execution status. Defaults to planned.',
+          },
+          orderIndex: { type: 'integer', description: 'Optional display order.' },
+        },
+        required: ['title'],
+      },
+    },
+  },
 ]
 
 /** Status-line labels shown while a tool runs (present tense; agentic). */
@@ -1104,4 +1219,9 @@ export const TOOL_LABELS: Record<string, string> = {
   get_cash_flow: 'Reading cash flow & reconciliation…',
   get_value_history: 'Tracing how that number changed…',
   get_plan_status: 'Reading the strategic plan…',
+  draft_strategy_plan: 'Drafting a strategic plan…',
+  create_strategy_plan: 'Creating the strategic plan…',
+  create_strategy_pillar: 'Adding a pillar to the plan…',
+  create_strategy_goal: 'Adding a goal to the plan…',
+  create_strategy_initiative: 'Adding an initiative…',
 }

@@ -14,7 +14,7 @@
 import { motion, useReducedMotion } from 'framer-motion'
 import { CheckCircle2, FileSpreadsheet, RotateCcw, Undo2 } from 'lucide-react'
 
-export default function AppliedCard({ proposal, onUndo }) {
+export default function AppliedCard({ proposal, onUndo, header: headerOverride, primaryAction }) {
   const reduce = useReducedMotion()
   const isImport = proposal?.tool === 'import_trial_balance'
   const summary = proposal?.summary || ''
@@ -26,7 +26,10 @@ export default function AppliedCard({ proposal, onUndo }) {
   const canUndo = !undone && !!proposal?.reversible && !!proposal?.auditId && !!onUndo
 
   const Icon = isImport ? FileSpreadsheet : CheckCircle2
-  const header = isImport ? 'Imported your trial balance' : 'Done — here’s what I changed'
+  // headerOverride lets a richer receipt (e.g. the draft-plan "Created your strategic
+  // plan") speak its own verdict; primaryAction hangs an optional deep-link CTA under
+  // the details. Both default off, so every existing caller is byte-identical.
+  const header = headerOverride || (isImport ? 'Imported your trial balance' : 'Done — here’s what I changed')
 
   return (
     <motion.div
@@ -54,6 +57,8 @@ export default function AppliedCard({ proposal, onUndo }) {
           ))}
         </dl>
       )}
+
+      {primaryAction ? <div className="mt-2">{primaryAction}</div> : null}
 
       {undone ? (
         <p className="mt-1.5 inline-flex items-center gap-1 text-[13px] font-semibold text-emerald-700">

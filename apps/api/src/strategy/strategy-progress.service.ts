@@ -160,6 +160,48 @@ export class StrategyProgressService {
   }
 
   /**
+   * The full CURRENT metric set for the school (the ONE dashboard values), resolved
+   * via the canonical one-period-one-compute path — the SAME snapshot→operational→
+   * computeMetricsForPeriod pipeline computeForPlan uses, run ONCE. Returns the
+   * period id + its end date + a key→MetricResult map, or null when the school has no
+   * snapshot yet. Prisma-only + pure @finrep/analytics (no service injection). The
+   * plan DRAFTER reads this to derive band-bound goal targets from live figures.
+   */
+  async resolveCurrentMetrics(
+    schoolId: string,
+  ): Promise<{ periodId: string; date: Date; byKey: Map<string, MetricResult> } | null> {
+    const period = await this.resolveCurrentPeriod(schoolId)
+    if (!period) return null
+    const snap = await this.prisma.statementSnapshot.findFirst({
+      where: { schoolId, fiscalPeriodId: period.id },
+      orderBy: { createdAt: 'desc' },
+    })
+    if (!snap) return null
+    const opRow = await this.prisma.periodOperationalData.findUnique({
+      where: { schoolId_fiscalPeriodId: { schoolId, fiscalPeriodId: period.id } },
+    })
+    const operational: PeriodOperational | null = opRow
+      ? {
+          enrollment: opRow.enrollment,
+          enrollmentFte: dec(opRow.enrollmentFte),
+          studentsOnAid: opRow.studentsOnAid,
+          financialAidTotal: dec(opRow.financialAidTotal),
+          teachingFte: dec(opRow.teachingFte),
+          totalStaffFte: dec(opRow.totalStaffFte),
+        }
+      : null
+    const results = computeMetricsForPeriod({
+      current: snap.payload as unknown as ReportBundle,
+      prior: null,
+      currentOperational: operational,
+      priorOperational: null,
+    })
+    const byKey = new Map<string, MetricResult>()
+    for (const r of results) byKey.set(r.key, r)
+    return { periodId: period.id, date: period.periodEndDate, byKey }
+  }
+
+  /**
    * Compute the FROZEN payload for one plan. Loads the plan tree, resolves the
    * period/snapshot/operational/metrics ONCE, backfills any unfrozen metric baselines
    * (persist-on-first-read — never recompute "earliest available"), then assembles

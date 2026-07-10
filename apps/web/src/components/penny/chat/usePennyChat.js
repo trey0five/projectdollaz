@@ -30,6 +30,13 @@ const CONFIRM_REFRESH_KEYS = {
   create_maintenance_item: 'facilities',
   create_campaign: 'advancement',
   create_alert: 'alerts',
+  // Strategic Planning v2 — "Penny drafts the plan". A confirmed draft (or any of
+  // the four single-entity creates) now exists, so an open /strategy refetches.
+  create_strategy_plan: 'strategy',
+  create_strategy_pillar: 'strategy',
+  create_strategy_goal: 'strategy',
+  create_strategy_initiative: 'strategy',
+  draft_strategy_plan: 'strategy',
 }
 
 // tool → the domain refresh keys to broadcast after an UNDO reverses that action, so
@@ -43,6 +50,12 @@ const UNDO_REFRESH_KEYS = {
   create_maintenance_item: ['facilities'],
   create_campaign: ['advancement'],
   create_alert: ['alerts'],
+  // Reversing a strategy create/draft (removePlan cascades) → refetch /strategy.
+  create_strategy_plan: ['strategy'],
+  create_strategy_pillar: ['strategy'],
+  create_strategy_goal: ['strategy'],
+  create_strategy_initiative: ['strategy'],
+  draft_strategy_plan: ['strategy'],
   create_task: ['tasks'],
   file_document: ['knowledge', 'facilities'],
   import_trial_balance: ['dataStatus', 'metrics'],

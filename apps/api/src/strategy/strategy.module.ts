@@ -8,6 +8,7 @@ import { GoalsController } from './goals.controller.js'
 import { InitiativesController } from './initiatives.controller.js'
 import { StrategyService } from './strategy.service.js'
 import { StrategyProgressService } from './strategy-progress.service.js'
+import { StrategyPlanDrafterService } from './strategy-plan-drafter.service.js'
 
 /**
  * Phase 5 Strategic Planning v1 — the plan → pillar → goal → initiative register and
@@ -27,7 +28,11 @@ import { StrategyProgressService } from './strategy-progress.service.js'
 @Module({
   imports: [AuthModule, BillingModule, AuditModule],
   controllers: [PlansController, PillarsController, GoalsController, InitiativesController],
-  providers: [StrategyService, StrategyProgressService],
-  exports: [StrategyService],
+  // StrategyPlanDrafterService (Penny's "draft the plan" generator) is EXPORTED so the
+  // AssistantModule (which already imports StrategyModule one-directionally) can inject
+  // it — no new module edge. It injects Prisma + StrategyProgressService + pure
+  // @finrep/analytics only (same boot-safe posture as StrategyProgressService).
+  providers: [StrategyService, StrategyProgressService, StrategyPlanDrafterService],
+  exports: [StrategyService, StrategyPlanDrafterService],
 })
 export class StrategyModule {}

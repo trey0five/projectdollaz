@@ -23,6 +23,11 @@ const APPLY_KINDS = [
   'create_campaign',
   'create_alert',
   'invite_member',
+  'create_strategy_plan',
+  'create_strategy_pillar',
+  'create_strategy_goal',
+  'create_strategy_initiative',
+  'draft_strategy_plan',
 ] as const
 
 /** A user-confirmed assistant proposal to apply. Mirrors ProposedAction. */

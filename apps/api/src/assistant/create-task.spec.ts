@@ -70,6 +70,7 @@ function makeService(opts: {
     stub, // snapshotHistory — only get_value_history touches it
     stub, // cashFlow (LAST) — only get_cash_flow touches it
     stub, // strategy (LAST) — only get_plan_status touches it
+    stub, // planDrafter (LAST) — only draft_strategy_plan touches it
   )
   return { svc, tasksCreate, membershipFindFirst }
 }
