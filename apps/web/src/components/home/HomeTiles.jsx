@@ -25,7 +25,7 @@ import { usePersistence } from '../../context/PersistenceContext.jsx'
 import { useBriefing } from '../../hooks/useBriefing.js'
 import { summariseBadges } from '../../hooks/useNavBadges.js'
 import EntitlementPausedPanel from '../analytics/EntitlementPausedPanel.jsx'
-import OrgHome from './OrgHome.jsx'
+import OrgTiles from './OrgTiles.jsx'
 import PennyMorningBrief from './PennyMorningBrief.jsx'
 import BriefingBand from './BriefingBand.jsx'
 import ModuleTile from './ModuleTile.jsx'
@@ -102,13 +102,14 @@ export default function HomeTiles() {
 
   const badges = useMemo(() => summariseBadges(briefingItems, TILE_SOURCES), [briefingItems])
 
-  // ── Organization scope: the consolidated Home, unchanged (JwtAuth-only —
-  // deliberately ABOVE the per-school entitlement gate, like HomeDashboard). ──
+  // ── Organization scope: the org TILE home (tiles + consolidated detail),
+  // JwtAuth-only — deliberately ABOVE the per-school entitlement gate, like
+  // HomeDashboard/OrgHome always were. ──
   if (orgMode) {
     const selectedPeriod =
       savedPeriods.find((p) => p.id === selectedPeriodId) ?? savedPeriods[0] ?? null
     return (
-      <OrgHome
+      <OrgTiles
         orgId={orgId}
         orgName={orgName}
         orgSchoolCount={orgSchoolCount}
