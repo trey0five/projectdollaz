@@ -1,0 +1,84 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   analytics-v2.css — the ONLY css owned by ENG-IA for the Phase-D analytics v2 IA.
+   Scope: the cross-link `flashring` keyframe + a couple of v2-analytics-only helpers
+   (leaderboard table + chip-row scroll). tokens.css is UNTOUCHED in Phase D — every
+   colour here is either an existing app token (navy/gold) or the chart palette that
+   charts already receive as a prop, so nothing global changes.
+
+   flashring: the shared pulse that fires when a cross-link lands on its target — a
+   scorecard row jumped-to from a chart, or a chart card jumped-to from a row. It is
+   colour-neutral (navy-tinted) so it reads on both the light card surface and the
+   cream section. prefers-reduced-motion collapses it to a STATIC ring (no pulse).
+   ───────────────────────────────────────────────────────────────────────────── */
+
+@keyframes av2-flashring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(184, 150, 80, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(184, 150, 80, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(184, 150, 80, 0);
+  }
+}
+
+/* A card/row toggles [data-flash="on"] for ~1s when a cross-link lands on it. */
+[data-flash='on'] {
+  animation: av2-flashring 1s ease-out 2;
+  border-radius: 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-flash='on'] {
+    animation: none;
+    box-shadow: 0 0 0 3px rgba(184, 150, 80, 0.55);
+  }
+}
+
+/* The leaderboard / scorecard tables: tabular numerals + a hairline-separated grid
+   that scrolls horizontally inside its own card (the page body never scrolls x). */
+.av2-lb {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.av2-lb th {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-align: left;
+  padding: 8px 10px;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+.av2-lb td {
+  padding: 10px;
+  vertical-align: middle;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.av2-lb td:first-child,
+.av2-lb th:first-child {
+  font-weight: 700;
+  position: sticky;
+  left: 0;
+}
+
+/* The scope chip row scrolls on a phone rather than wrapping into a tall stack. */
+.av2-chiprow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+@media (max-width: 640px) {
+  .av2-chiprow {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .av2-chiprow::-webkit-scrollbar {
+    display: none;
+  }
+}

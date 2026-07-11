@@ -323,6 +323,16 @@ export const analyticsApi = {
     api.get(`/organizations/${orgId}/metrics`, {
       params: fiscalYearStart ? { fiscalYearStart } : {},
     }),
+  // Phase D COMPARE surface: per-school registry metrics for the FY (same
+  // MetricResult values the single-school dashboard renders, computed by the
+  // per-school engine — never the org sums). Returns ALL in-org reporting schools;
+  // the Compare UI does the multi-select subset + byMetric pivot client-side.
+  // SINGLE call site. Omit fiscalYearStart entirely (not '') when no FY, to
+  // satisfy the global forbidNonWhitelisted ValidationPipe.
+  compareMetrics: (orgId, fiscalYearStart) =>
+    api.get(`/organizations/${orgId}/metrics/by-school`, {
+      params: fiscalYearStart ? { fiscalYearStart } : {},
+    }),
   // Organization ATTENTION BRIEFING: per-school attention rolled up
   // across the caller's org for a fiscal year — a ranked, school-attributed
   // cross-school item list + per-school summaries + consolidated counts. SINGLE

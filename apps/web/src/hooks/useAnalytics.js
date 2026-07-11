@@ -390,6 +390,58 @@ export function useOrgMetrics(orgId, fiscalYearStart) {
   return { metrics: data, loading, error }
 }
 
+// ── Phase D per-school COMPARE metrics — read-only ────────────────────────────
+// Mirrors useOrgMetrics EXACTLY (org-resolution guard + microtask-deferred
+// await-before-setState + cancelled flag). The compare route is JwtAuthGuard-only
+// (never 402s), so no notEntitled branch. Returns the full CompareMetricsResponse
+// plus the destructured schools/metricOrder/notReported the Compare UI consumes;
+// the multi-select SUBSET + any byMetric pivot are done CLIENT-SIDE (seriesIndex =
+// index in schools[] = palette order).
+export function useCompareMetrics(orgId, fiscalYearStart) {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  const load = useCallback(async (oid, fys) => {
+    setError('')
+    try {
+      const res = await analyticsApi.compareMetrics(oid, fys)
+      setData(res.data)
+    } catch {
+      setError('Could not load the school comparison.')
+      setData(null)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.resolve().then(() => {
+      if (cancelled) return
+      if (orgId) {
+        setLoading(true)
+        load(orgId, fiscalYearStart)
+      } else {
+        setData(null)
+        setLoading(false)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [orgId, fiscalYearStart, load])
+
+  return {
+    compare: data,
+    schools: data?.schools ?? [],
+    metricOrder: data?.metricOrder ?? [],
+    notReported: data?.notReported ?? [],
+    loading,
+    error,
+  }
+}
+
 // ── Org attention briefing — read-only ────────────────────────────────────────
 // Mirrors useStatementsRollup's loading/error + org-resolution guard +
 // microtask-deferred await-before-setState, so BudgetPage consumes it identically

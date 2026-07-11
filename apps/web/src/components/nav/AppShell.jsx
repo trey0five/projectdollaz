@@ -473,7 +473,10 @@ export default function AppShell({ children }) {
               <div className="flex min-w-0 shrink items-center gap-2 sm:gap-3">
                 {v2Brand}
                 <SchoolSwitcher />
-                {isMultiSchool && <ScopeToggle />}
+                {/* Analytics OWNS its scope space (its own scope bar); the global
+                    School↔Org toggle is suppressed on /analytics so the two axes
+                    can't disagree. Every other v2 route keeps the toggle. */}
+                {isMultiSchool && !path.startsWith('/analytics') && <ScopeToggle />}
               </div>
               <SearchBox />
               <div className="flex items-center gap-2 sm:gap-3">

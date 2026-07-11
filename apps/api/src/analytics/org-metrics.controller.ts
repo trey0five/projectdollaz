@@ -31,4 +31,20 @@ export class OrgMetricsController {
   ) {
     return this.orgMetrics.getMetrics(user, orgId, query.fiscalYearStart ?? null)
   }
+
+  /**
+   * Phase D COMPARE surface — per-school registry metrics for the FY. ZERO
+   * recompute: the service reuses getMetrics' resolution but runs the per-school
+   * engine (computeMetricsForPeriod) per contributing school, school-scoped
+   * entitlement-gated + registry-formatted. Same JwtAuthGuard-only posture and
+   * the SAME reused query DTO (single optional fiscalYearStart, YYYY-MM).
+   */
+  @Get('metrics/by-school')
+  getMetricsBySchool(
+    @CurrentUser() user: User,
+    @Param('orgId') orgId: string,
+    @Query() query: StatementsRollupQueryDto,
+  ) {
+    return this.orgMetrics.getMetricsBySchool(user, orgId, query.fiscalYearStart ?? null)
+  }
 }
