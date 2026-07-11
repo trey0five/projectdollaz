@@ -16,8 +16,9 @@
 // :focus-visible ring. Reduced-motion drops the sliding underline (static bar).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useRef } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
+import { ArrowLeft } from 'lucide-react'
 import { moduleAnatomy, moduleHue, moduleLabel, moduleTabs, TAB_LABEL } from './moduleAnatomy.js'
 
 /**
@@ -72,6 +73,17 @@ export default function ModuleTabs({ moduleKey, overview, addData, records, repo
 
   return (
     <div className="min-h-screen bg-section">
+      {/* Back to the tile dashboard — the sidebar is retired under v2, so this is
+          the explicit way home from every module page. */}
+      <div className="mx-auto max-w-[1180px] px-4 pt-4 sm:px-10">
+        <Link
+          to="/app"
+          className="inline-flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.1em] text-muted transition-colors hover:text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy/40"
+        >
+          <ArrowLeft size={14} /> Back to dashboard
+        </Link>
+      </div>
+
       {/* ── Module tab bar (hue-accented, sticky under the top strip) ─────────── */}
       <div className="border-b border-rule/60 bg-cream/60">
         <div className="mx-auto flex max-w-[1180px] items-center gap-3 px-4 sm:gap-5 sm:px-10">

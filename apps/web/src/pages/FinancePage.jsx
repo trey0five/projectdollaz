@@ -55,15 +55,21 @@ function budOf(lines, kind, key) {
 
 // ── Page header (mirrors AnalyticsDashboard's PageHeader) ─────────────────────
 function FinanceHeader() {
+  // Under v2 the ModuleTabs shell already renders the "Back to dashboard" link,
+  // so this header omits its own to avoid a duplicate; v1 (standalone page, no
+  // ModuleTabs) keeps it.
+  const uiV2 = useUiV2()
   return (
     <div className="mb-6">
-      <Link
-        to="/app"
-        className="inline-flex items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.1em] text-muted transition-colors hover:text-navy"
-      >
-        <ArrowLeft size={14} /> Back to Home
-      </Link>
-      <div className="mt-3 flex items-center gap-3">
+      {!uiV2 && (
+        <Link
+          to="/app"
+          className="inline-flex items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.1em] text-muted transition-colors hover:text-navy"
+        >
+          <ArrowLeft size={14} /> Back to dashboard
+        </Link>
+      )}
+      <div className={`${uiV2 ? '' : 'mt-3 '}flex items-center gap-3`}>
         <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gold-gradient text-navy shadow-glow">
           <CircleDollarSign size={22} />
         </span>
