@@ -44,6 +44,12 @@ import {
   Target,
   Sparkles,
   LineChart as PlanIcon,
+  LayoutGrid,
+  ListChecks,
+  Database,
+  Library,
+  FileBarChart2,
+  Settings as SettingsIcon,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useBilling } from '../../context/BillingContext.jsx'
@@ -70,6 +76,19 @@ const NAV_BADGE_SOURCE = {
 }
 // The Finance domain rolls up its finance-family attention sources.
 const FINANCE_BADGE_SOURCES = ['metric', 'compliance', 'data']
+
+// ui.v2 GLOBAL top nav — Home (→ the tile dashboard) + the core destinations, so
+// they're reachable from EVERY screen (the sidebar is retired). Reports is
+// finance-gated like the Core row on the home. Home shows a label from sm+; the
+// rest are icon+tooltip, revealing their label only on xl to stay compact.
+const V2_NAV = [
+  { to: '/app', label: 'Home', Icon: LayoutGrid, home: true },
+  { to: '/tasks', label: 'Tasks', Icon: ListChecks },
+  { to: '/data', label: 'Data', Icon: Database },
+  { to: '/knowledge', label: 'Knowledge', Icon: Library },
+  { to: '/reports', label: 'Reports', Icon: FileBarChart2, module: 'finance' },
+  { to: '/settings', label: 'Settings', Icon: SettingsIcon },
+]
 
 // Per-module icon for the (dimmed) Add-ons rows; falls back to a Lock badge.
 const LOCKED_ICON = {
@@ -468,10 +487,39 @@ export default function AppShell({ children }) {
             /* ── ui.v2 slim top bar: logo → /app, SchoolSwitcher, Search, Ask
                Penny, Sign Out. No hamburger/drawer (the sidebar is retired). ── */
             <header className="no-print sticky top-0 z-20 flex h-14 items-center gap-2 border-b-2 border-gold/30 bg-navy-gradient px-3 shadow-navy-glow sm:gap-3 sm:px-6">
-              {/* Left group is intrinsic-width (min-w-0 lets the switcher truncate);
-                  SearchBox owns the flex-1 grow so the two never overlap. */}
-              <div className="flex min-w-0 shrink items-center gap-2 sm:gap-3">
+              {/* Brand + GLOBAL top nav (Home + core destinations). */}
+              <div className="flex shrink-0 items-center gap-1">
                 {v2Brand}
+                <nav aria-label="Primary" className="flex items-center gap-0.5">
+                  {V2_NAV.filter((i) => !i.module || hasModule(i.module)).map((item) => {
+                    const active = item.home ? path === '/app' : path.startsWith(item.to)
+                    return (
+                      <Link
+                        key={item.to}
+                        to={item.to}
+                        title={item.label}
+                        aria-label={item.label}
+                        aria-current={active ? 'page' : undefined}
+                        className={`flex min-h-[38px] items-center gap-1.5 rounded-[10px] px-2.5 py-1.5 text-[13px] font-medium outline-none ring-gold/50 transition-colors focus-visible:ring-2 ${
+                          active
+                            ? 'bg-white/[0.14] text-white'
+                            : 'text-white/70 hover:bg-white/[0.06] hover:text-white'
+                        }`}
+                      >
+                        <item.Icon size={16} className="shrink-0" />
+                        {/* Home keeps its label from sm+; the rest are icon+tooltip
+                            (title) and only reveal labels on very wide screens so the
+                            bar never overflows into the right-side controls. */}
+                        <span className={item.home ? 'hidden sm:inline' : 'hidden 2xl:inline'}>
+                          {item.label}
+                        </span>
+                      </Link>
+                    )
+                  })}
+                </nav>
+              </div>
+              {/* Context controls (min-w-0 lets the switcher truncate). */}
+              <div className="flex min-w-0 items-center gap-2">
                 <SchoolSwitcher />
                 {/* Analytics OWNS its scope space (its own scope bar); the global
                     School↔Org toggle is suppressed on /analytics so the two axes

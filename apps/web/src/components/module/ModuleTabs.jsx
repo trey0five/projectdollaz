@@ -20,6 +20,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
 import { ArrowLeft } from 'lucide-react'
 import { moduleAnatomy, moduleHue, moduleLabel, moduleTabs, TAB_LABEL } from './moduleAnatomy.js'
+import ModuleFlowGuide from './ModuleFlowGuide.jsx'
 
 /**
  * The active-tab hook: reads/writes `?tab=`, validated against the module's present
@@ -142,6 +143,10 @@ export default function ModuleTabs({ moduleKey, overview, addData, records, repo
           </div>
         </div>
       </div>
+
+      {/* On Overview, a wordless visual FLOW guide (Add data → Records → Reports)
+          that both teaches and operates — click a step to jump to that tab. */}
+      {active === 'overview' && <ModuleFlowGuide moduleKey={moduleKey} tabs={tabs} onStep={setTab} />}
 
       {/* ── Active panel (each panel brings its own max-width container) ───────── */}
       <div role="tabpanel" id={`modulepanel-${moduleKey}`} aria-labelledby={`moduletab-${moduleKey}-${active}`}>
