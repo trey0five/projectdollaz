@@ -25,6 +25,10 @@ import {
 } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
 import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
+import ModuleTabs from '../components/module/ModuleTabs.jsx'
+import ModuleRegister from '../components/module/ModuleRegister.jsx'
+import { moduleHue } from '../components/module/moduleAnatomy.js'
+import AddDataTab from '../components/wizard/AddDataTab.jsx'
 import StrategyHorizon from '../components/strategy/StrategyHorizon.jsx'
 import PillarCard from '../components/strategy/PillarCard.jsx'
 import GoalCard from '../components/strategy/GoalCard.jsx'
@@ -37,6 +41,7 @@ import {
   goalToFormInitial,
 } from '../components/strategy/StrategyForms.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
+import { useUiV2 } from '../context/UiFlagContext.jsx'
 import { useStrategy } from '../hooks/useStrategy.js'
 
 const TABS = [
@@ -215,6 +220,7 @@ function StrategyWorkspace() {
   const schoolId = activeSchool?.id ?? null
   const canEdit = activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'
   const reduce = useReducedMotion()
+  const uiV2 = useUiV2()
 
   const strat = useStrategy(schoolId)
   const {
@@ -511,31 +517,60 @@ function StrategyWorkspace() {
     return null
   }
 
+  const errorBanner = error ? (
+    <div className="mx-auto max-w-[1180px] px-4 pt-4 sm:px-10">
+      <p className="rounded-xl border border-danger/30 bg-danger/10 px-4 py-2 text-[13px] font-semibold text-danger">
+        {error}
+      </p>
+    </div>
+  ) : null
+
+  const commandCenter = (
+    <DomainCommandCenter
+      eyebrow="Domain · Strategic Planning · self-measuring scorecard"
+      title="Strategic Planning"
+      Icon={Compass}
+      attentionCount={attentionItems.length}
+      kpis={kpis}
+      tabs={TABS}
+      activeTab={tab}
+      onTabChange={setTab}
+      onNew={onNew}
+      registerTable={registerTable}
+      attentionItems={attentionItems}
+      beforeBody={<StrategyHorizon plan={plan} pillars={pillars} summary={summary} />}
+    />
+  )
+
+  if (uiV2) {
+    return (
+      <>
+        {errorBanner}
+        <ModuleTabs
+          moduleKey="strategy"
+          overview={commandCenter}
+          addData={<AddDataTab module="strategy" schoolId={schoolId} canEdit={canEdit} />}
+          records={
+            <ModuleRegister
+              moduleKey="strategy"
+              hue={moduleHue('strategy')}
+              tabs={TABS}
+              activeTab={tab}
+              onTabChange={setTab}
+              onNew={onNew}
+              registerTable={registerTable}
+            />
+          }
+        />
+        {renderModal()}
+      </>
+    )
+  }
+
   return (
     <>
-      {error ? (
-        <div className="mx-auto max-w-[1180px] px-4 pt-4 sm:px-10">
-          <p className="rounded-xl border border-danger/30 bg-danger/10 px-4 py-2 text-[13px] font-semibold text-danger">
-            {error}
-          </p>
-        </div>
-      ) : null}
-
-      <DomainCommandCenter
-        eyebrow="Domain · Strategic Planning · self-measuring scorecard"
-        title="Strategic Planning"
-        Icon={Compass}
-        attentionCount={attentionItems.length}
-        kpis={kpis}
-        tabs={TABS}
-        activeTab={tab}
-        onTabChange={setTab}
-        onNew={onNew}
-        registerTable={registerTable}
-        attentionItems={attentionItems}
-        beforeBody={<StrategyHorizon plan={plan} pillars={pillars} summary={summary} />}
-      />
-
+      {errorBanner}
+      {commandCenter}
       {renderModal()}
     </>
   )

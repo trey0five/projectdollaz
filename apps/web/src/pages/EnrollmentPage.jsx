@@ -11,7 +11,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { GraduationCap } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
+import ModuleTabs from '../components/module/ModuleTabs.jsx'
+import AddDataTab from '../components/wizard/AddDataTab.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
+import { useUiV2 } from '../context/UiFlagContext.jsx'
 import { usePersistence } from '../context/PersistenceContext.jsx'
 import {
   enrollmentApi,
@@ -56,6 +59,7 @@ function GatePanel({ notLicensed }) {
 function EnrollmentWorkspace() {
   const { activeId, activeSchool } = useSchools()
   const { periods } = usePersistence()
+  const uiV2 = useUiV2()
   const canEdit = activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'
   const periodId = periods && periods[0] ? periods[0].id : null
 
@@ -132,35 +136,60 @@ function EnrollmentWorkspace() {
     )
   }
 
+  const header = (
+    <motion.header
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="mb-6 flex items-center gap-3"
+    >
+      <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gold-gradient text-navy shadow-glow">
+        <GraduationCap size={24} />
+      </span>
+      <div>
+        <p className="text-[11.5px] font-semibold uppercase tracking-[0.14em] text-muted">
+          Domain · Enrollment intelligence
+        </p>
+        <h1 className="font-serif text-2xl font-bold text-navy sm:text-3xl">Enrollment</h1>
+      </div>
+    </motion.header>
+  )
+
+  const connectCard = (
+    <EnrollmentConnectCard schoolId={activeId} canEdit={canEdit} status={status} onChanged={load} />
+  )
+
+  // v2: the connect card is the "Add data" surface (ENG-C2's AddDataTab wraps it),
+  // so the Overview shows only the vs-plan summary + by-grade breakdown.
+  if (uiV2) {
+    return (
+      <ModuleTabs
+        moduleKey="enrollment"
+        overview={
+          <div className="mx-auto max-w-[1180px] px-4 py-8 sm:px-10">
+            {header}
+            <div className="space-y-6">
+              <VsPlanKpi summary={summary} />
+              {summary?.latest?.byGrade && <ByGradeChart byGrade={summary.latest.byGrade} />}
+            </div>
+          </div>
+        }
+        addData={
+          <AddDataTab module="enrollment" schoolId={activeId} canEdit={canEdit} onDone={load} />
+        }
+      />
+    )
+  }
+
   return (
     <div className="mx-auto max-w-[1180px] px-4 py-8 sm:px-10">
-      <motion.header
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mb-6 flex items-center gap-3"
-      >
-        <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gold-gradient text-navy shadow-glow">
-          <GraduationCap size={24} />
-        </span>
-        <div>
-          <p className="text-[11.5px] font-semibold uppercase tracking-[0.14em] text-muted">
-            Domain · Enrollment intelligence
-          </p>
-          <h1 className="font-serif text-2xl font-bold text-navy sm:text-3xl">Enrollment</h1>
-        </div>
-      </motion.header>
+      {header}
 
       <div className="space-y-6">
         <VsPlanKpi summary={summary} />
 
         {summary?.latest?.byGrade && <ByGradeChart byGrade={summary.latest.byGrade} />}
 
-        <EnrollmentConnectCard
-          schoolId={activeId}
-          canEdit={canEdit}
-          status={status}
-          onChanged={load}
-        />
+        {connectCard}
       </div>
     </div>
   )

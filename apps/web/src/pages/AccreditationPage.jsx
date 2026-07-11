@@ -39,8 +39,13 @@ import {
 import BillingBanner from '../components/BillingBanner.jsx'
 import EntityFormModal, { Field, Select, fieldInput, fieldTextarea } from '../components/ui/EntityFormModal.jsx'
 import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
+import ModuleTabs from '../components/module/ModuleTabs.jsx'
+import ModuleRegister from '../components/module/ModuleRegister.jsx'
+import { moduleHue } from '../components/module/moduleAnatomy.js'
+import AddDataTab from '../components/wizard/AddDataTab.jsx'
 import DatePicker from '../components/ui/DatePicker.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
+import { useUiV2 } from '../context/UiFlagContext.jsx'
 import { useAccreditation } from '../hooks/useAccreditation.js'
 
 // ── Light-theme coverage badge (restyled from the old dark pills) ────────────
@@ -265,7 +270,7 @@ function parentOptions(standards, editingId) {
   return standards.filter((s) => !banned.has(s.id))
 }
 
-function StandardFormModal({ open, initial, onClose, onSave, reduce, standards = [], editingId = null }) {
+export function StandardFormModal({ open, initial, onClose, onSave, reduce, standards = [], editingId = null }) {
   const [form, setForm] = useState(initial ?? EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
@@ -362,7 +367,7 @@ function StandardFormModal({ open, initial, onClose, onSave, reduce, standards =
 
 /** The lazy-loaded evidence sub-list for one expanded standard row (dark overlay
  *  panel — deliberately kept dark against the light table). */
-function EvidencePanel({
+export function EvidencePanel({
   standardId,
   canEdit,
   reduce,
@@ -927,6 +932,7 @@ function AccreditationWorkspace() {
   const schoolId = activeSchool?.id ?? null
   const canEdit = activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'
   const reduce = useReducedMotion()
+  const uiV2 = useUiV2()
 
   const {
     standards,
@@ -1118,22 +1124,24 @@ function AccreditationWorkspace() {
 
   const expandedStandard = expanded ? standards.find((s) => s.id === expanded) : null
 
-  return (
-    <>
-      <DomainCommandCenter
-        eyebrow="Domain · Accreditation engine · system of record"
-        title="Accreditation"
-        Icon={BadgeCheck}
-        attentionCount={attentionItems.length}
-        kpis={kpis}
-        tabs={TABS}
-        activeTab={tab}
-        onTabChange={setTab}
-        onNew={canEdit ? openAdd : null}
-        registerTable={registerTable}
-        attentionItems={attentionItems}
-      />
+  const commandCenter = (
+    <DomainCommandCenter
+      eyebrow="Domain · Accreditation engine · system of record"
+      title="Accreditation"
+      Icon={BadgeCheck}
+      attentionCount={attentionItems.length}
+      kpis={kpis}
+      tabs={TABS}
+      activeTab={tab}
+      onTabChange={setTab}
+      onNew={canEdit ? openAdd : null}
+      registerTable={registerTable}
+      attentionItems={attentionItems}
+    />
+  )
 
+  const overlays = (
+    <>
       {/* Expanded standard → its evidence, shown as a light panel below the center
           (the register table rows can't host their own tbody sub-row cleanly, so the
           evidence for the open row lives here — the interaction is preserved). */}
@@ -1188,6 +1196,37 @@ function AccreditationWorkspace() {
         standards={standards}
         editingId={editing ? editing.id : null}
       />
+    </>
+  )
+
+  if (uiV2) {
+    return (
+      <>
+        <ModuleTabs
+          moduleKey="accreditation"
+          overview={commandCenter}
+          addData={<AddDataTab module="accreditation" schoolId={schoolId} canEdit={canEdit} />}
+          records={
+            <ModuleRegister
+              moduleKey="accreditation"
+              hue={moduleHue('accreditation')}
+              tabs={TABS}
+              activeTab={tab}
+              onTabChange={setTab}
+              onNew={canEdit ? openAdd : null}
+              registerTable={registerTable}
+            />
+          }
+        />
+        {overlays}
+      </>
+    )
+  }
+
+  return (
+    <>
+      {commandCenter}
+      {overlays}
     </>
   )
 }

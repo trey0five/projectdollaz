@@ -36,8 +36,13 @@ import {
 import BillingBanner from '../components/BillingBanner.jsx'
 import EntityFormModal, { Field, Select, fieldInput, fieldTextarea } from '../components/ui/EntityFormModal.jsx'
 import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
+import ModuleTabs from '../components/module/ModuleTabs.jsx'
+import ModuleRegister from '../components/module/ModuleRegister.jsx'
+import { moduleHue } from '../components/module/moduleAnatomy.js'
+import AddDataTab from '../components/wizard/AddDataTab.jsx'
 import DatePicker from '../components/ui/DatePicker.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
+import { useUiV2 } from '../context/UiFlagContext.jsx'
 import { useAdvancement } from '../hooks/useAdvancement.js'
 
 const STATUSES = ['planned', 'active', 'closed']
@@ -231,7 +236,7 @@ function toCampaignBody(form) {
   }
 }
 
-function CampaignFormModal({ initial, onClose, onSave, reduce }) {
+export function CampaignFormModal({ initial, onClose, onSave, reduce }) {
   const [form, setForm] = useState(initial ?? EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
@@ -382,7 +387,7 @@ const giftInputCls =
 
 /** Add / edit a single gift or pledge. `initial` null → add mode. Emits a ready-to-POST
  *  body (gift ⇒ receivedAmount omitted, server forces = amount). */
-function GiftForm({ initial, onCancel, onSubmit }) {
+export function GiftForm({ initial, onCancel, onSubmit }) {
   const [form, setForm] = useState(
     initial ?? { kind: 'gift', amount: '', receivedAmount: '', occurredOn: '', label: '', source: '', note: '' },
   )
@@ -814,6 +819,7 @@ function AdvancementWorkspace() {
   const schoolId = activeSchool?.id ?? null
   const canEdit = activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'
   const reduce = useReducedMotion()
+  const uiV2 = useUiV2()
 
   const {
     items,
@@ -1013,22 +1019,24 @@ function AdvancementWorkspace() {
       }
     : null
 
-  return (
-    <>
-      <DomainCommandCenter
-        eyebrow="Domain · Advancement engine · system of record"
-        title="Advancement"
-        Icon={HeartHandshake}
-        attentionCount={attentionItems.length}
-        kpis={kpis}
-        tabs={TABS}
-        activeTab={tab}
-        onTabChange={setTab}
-        onNew={onNew}
-        registerTable={registerTable}
-        attentionItems={attentionItems}
-      />
+  const commandCenter = (
+    <DomainCommandCenter
+      eyebrow="Domain · Advancement engine · system of record"
+      title="Advancement"
+      Icon={HeartHandshake}
+      attentionCount={attentionItems.length}
+      kpis={kpis}
+      tabs={TABS}
+      activeTab={tab}
+      onTabChange={setTab}
+      onNew={onNew}
+      registerTable={registerTable}
+      attentionItems={attentionItems}
+    />
+  )
 
+  const overlays = (
+    <>
       {/* Expanded campaign → its gifts & pledges, shown as a light-wrapped dark panel
           below the center (the register rows can't host their own sub-row cleanly, so
           the open campaign's entries live here — mirrors the accreditation evidence UX). */}
@@ -1103,6 +1111,37 @@ function AdvancementWorkspace() {
           reduce={reduce}
         />
       ) : null}
+    </>
+  )
+
+  if (uiV2) {
+    return (
+      <>
+        <ModuleTabs
+          moduleKey="advancement"
+          overview={commandCenter}
+          addData={<AddDataTab module="advancement" schoolId={schoolId} canEdit={canEdit} />}
+          records={
+            <ModuleRegister
+              moduleKey="advancement"
+              hue={moduleHue('advancement')}
+              tabs={TABS}
+              activeTab={tab}
+              onTabChange={setTab}
+              onNew={onNew}
+              registerTable={registerTable}
+            />
+          }
+        />
+        {overlays}
+      </>
+    )
+  }
+
+  return (
+    <>
+      {commandCenter}
+      {overlays}
     </>
   )
 }

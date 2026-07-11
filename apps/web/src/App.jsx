@@ -11,6 +11,7 @@ import { ScopeProvider } from './context/ScopeContext.jsx'
 import { BillingProvider } from './context/BillingContext.jsx'
 import { PersistenceProvider } from './context/PersistenceContext.jsx'
 import { useAuth } from './context/AuthContext.jsx'
+import { useUiV2 } from './context/UiFlagContext.jsx'
 import { ProtectedRoute, PublicOnlyRoute, BootSplash } from './components/auth/RouteGuards.jsx'
 import Onboarding from './components/onboarding/Onboarding.jsx'
 import { PennyProvider } from './context/PennyContext.jsx'
@@ -86,6 +87,14 @@ function NotFoundRoute() {
   const { isAuthenticated, ready } = useAuth()
   if (!ready) return <BootSplash />
   return <Navigate to={isAuthenticated ? '/app' : '/'} replace />
+}
+
+// /data — under ui.v2 the standalone Data hub is folded into each module's "Add
+// data" tab, so /data redirects to Finance's Add-data tab (the primary destination
+// + where the empty-finance CTA lands). Flag-off keeps the DataHubPage unchanged.
+function DataRoute() {
+  const uiV2 = useUiV2()
+  return uiV2 ? <Navigate to="/finance?tab=add" replace /> : <DataHubPage />
 }
 
 // First-login gate: once the user's schools have loaded, a user with none is sent
@@ -172,7 +181,7 @@ export default function App() {
       <Route element={<AuthedLayout />}>
         <Route path="/app" element={<HomePage />} />
         <Route path="/penny" element={<PennyStudioPage />} />
-        <Route path="/data" element={<DataHubPage />} />
+        <Route path="/data" element={<DataRoute />} />
         <Route path="/finance" element={<FinancePage />} />
         <Route path="/statements" element={<StatementsPage />} />
         <Route path="/cash" element={<CashCollectionsPage />} />

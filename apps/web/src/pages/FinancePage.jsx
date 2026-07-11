@@ -30,6 +30,9 @@ import { useSchools } from '../context/SchoolContext.jsx'
 import { useScope } from '../context/ScopeContext.jsx'
 import { useBilling } from '../context/BillingContext.jsx'
 import { usePersistence } from '../context/PersistenceContext.jsx'
+import { useUiV2 } from '../context/UiFlagContext.jsx'
+import ModuleTabs from '../components/module/ModuleTabs.jsx'
+import AddDataTab from '../components/wizard/AddDataTab.jsx'
 import { useAnalytics, useInsights, useBudget } from '../hooks/useAnalytics.js'
 import { useCompliance } from '../hooks/useCompliance.js'
 import { metricFormat, formatMetricValue } from '../lib/metricMeta.js'
@@ -108,6 +111,73 @@ function SectionCard(props) {
   )
 }
 
+// ── ui.v2 Records panel: a link board into the finance sub-registers (Statements,
+// Cash & Collections, Budget). Pure navigation — reuses SectionCard, no new API. ──
+function FinanceRecords() {
+  return (
+    <div className="mx-auto max-w-[1100px] px-4 py-6 sm:px-10 sm:py-8">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <SectionCard to="/statements" Icon={FileStack} title="Statements" viewLabel="Open statements">
+          <p className="text-[14.5px] text-muted">
+            Your financial statements and every saved period.
+          </p>
+        </SectionCard>
+        <SectionCard to="/cash" Icon={CircleDollarSign} title="Cash & Collections" viewLabel="Open cash">
+          <p className="text-[14.5px] text-muted">
+            Cash position, runway, and collections aging.
+          </p>
+        </SectionCard>
+        <SectionCard to="/budget" Icon={Wallet} title="Budget" viewLabel="Open budget">
+          <p className="text-[14.5px] text-muted">Budget vs. actual and the annual spread.</p>
+        </SectionCard>
+      </div>
+    </div>
+  )
+}
+
+// ── ui.v2 Reports panel: the Reports workspace + board-packet export + the print
+// documents. Finance is the only module with real report surfaces (locked D2). ──
+function FinanceReports({ periodId }) {
+  return (
+    <div className="mx-auto max-w-[1100px] space-y-4 px-4 py-6 sm:px-10 sm:py-8">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <SectionCard to="/reports" Icon={FileBarChart2} title="Reports workspace" viewLabel="Open Reports">
+          <p className="mb-3 text-[14.5px] text-muted">
+            Export a board-ready finance-committee packet for the selected period, or open the
+            Reports workspace.
+          </p>
+          {periodId && <BoardPacketExportButton periodId={periodId} />}
+        </SectionCard>
+        <div className="card-soft flex flex-col p-4 sm:p-5">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gold/15 text-gold">
+              <FileStack size={18} />
+            </span>
+            <h3 className="font-serif text-lg font-semibold text-navy">Print documents</h3>
+          </div>
+          <p className="mt-3 flex-1 text-[14.5px] text-muted">
+            Open a print-ready board document in a new tab.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link
+              to="/board-packet/print"
+              className="inline-flex items-center gap-1 rounded-lg border border-gold/50 bg-gold/10 px-3 py-1.5 text-[13px] font-semibold text-navy transition hover:bg-gold/20"
+            >
+              Board packet <ArrowRight size={13} />
+            </Link>
+            <Link
+              to="/reports/board/print"
+              className="inline-flex items-center gap-1 rounded-lg border border-gold/50 bg-gold/10 px-3 py-1.5 text-[13px] font-semibold text-navy transition hover:bg-gold/20"
+            >
+              Board report <ArrowRight size={13} />
+            </Link>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // A single labeled figure row (Statements card). value is a pre-formatted string
 // or '—' — NEVER a fabricated number (nulls are dashed upstream).
 function FigureRow({ label, value }) {
@@ -145,6 +215,7 @@ function VitalRow({ metric }) {
 
 export default function FinancePage() {
   const reduce = useReducedMotion()
+  const uiV2 = useUiV2()
   const { activeSchool } = useSchools()
   const { isMultiSchool } = useScope()
   // v1 is ALWAYS school-scoped — org finance already lives on the consolidated Home
@@ -244,21 +315,25 @@ export default function FinancePage() {
   const reportable = complianceSummary?.counts?.reportable ?? 0
   const readinessTone = material > 0 ? 'risk' : reportable > 0 ? 'watch' : 'good'
 
-  // ── Entitlement gate (mirror AnalyticsDashboard) — FIRST ─────────────────────
+  // ── The overview panel = gate | loading | empty | full aggregation. Under v2 the
+  // whole thing is wrapped in ModuleTabs (so the Add-data tab stays reachable even
+  // when finance is empty — the /data redirect lands on /finance?tab=add); flag-off
+  // returns the SAME node directly, byte-identical to the original early-returns. ──
+  const initialLoading = billingLoading || hydrating
+  const vitalsLoading = metricsLoading && !data
+
+  let overview
   if (!billingLoading && (!entitled || notEntitled)) {
-    return (
+    // ── Entitlement gate (mirror AnalyticsDashboard) — FIRST ─────────────────────
+    overview = (
       <div className="mx-auto max-w-[1100px] px-4 py-6 sm:px-10 sm:py-8">
         <FinanceHeader />
         <EntitlementPausedPanel />
       </div>
     )
-  }
-
-  const initialLoading = billingLoading || hydrating
-
-  // ── Loading skeleton ─────────────────────────────────────────────────────────
-  if (initialLoading) {
-    return (
+  } else if (initialLoading) {
+    // ── Loading skeleton ─────────────────────────────────────────────────────────
+    overview = (
       <div className="mx-auto max-w-[1100px] space-y-5 px-4 py-6 sm:space-y-8 sm:px-10 sm:py-8">
         <HeadlineSkeleton />
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -268,11 +343,9 @@ export default function FinancePage() {
         </div>
       </div>
     )
-  }
-
-  // ── Empty / onboarding (never blank/500) ─────────────────────────────────────
-  if (savedPeriods.length === 0) {
-    return (
+  } else if (savedPeriods.length === 0) {
+    // ── Empty / onboarding (never blank/500) ─────────────────────────────────────
+    overview = (
       <div className="mx-auto max-w-[1100px] px-4 py-6 sm:px-10 sm:py-8">
         <FinanceHeader />
         <motion.div
@@ -298,11 +371,8 @@ export default function FinancePage() {
         </motion.div>
       </div>
     )
-  }
-
-  const vitalsLoading = metricsLoading && !data
-
-  return (
+  } else {
+    overview = (
     <div className="mx-auto max-w-[1100px] space-y-5 px-4 py-6 sm:space-y-8 sm:px-10 sm:py-8">
       <FinanceHeader />
 
@@ -446,5 +516,27 @@ export default function FinancePage() {
         </SectionCard>
       </motion.div>
     </div>
-  )
+    )
+  }
+
+  if (uiV2) {
+    return (
+      <ModuleTabs
+        moduleKey="finance"
+        overview={overview}
+        addData={
+          <AddDataTab
+            module="finance"
+            schoolId={schoolId}
+            periodId={selectedPeriodId}
+            canEdit={activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'}
+          />
+        }
+        records={<FinanceRecords />}
+        reports={<FinanceReports periodId={selectedPeriodId} />}
+      />
+    )
+  }
+
+  return overview
 }

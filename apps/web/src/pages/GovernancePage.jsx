@@ -41,7 +41,12 @@ import EntityFormModal, {
 import DatePicker from '../components/ui/DatePicker.jsx'
 import BillingBanner from '../components/BillingBanner.jsx'
 import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
+import ModuleTabs from '../components/module/ModuleTabs.jsx'
+import ModuleRegister from '../components/module/ModuleRegister.jsx'
+import { moduleHue } from '../components/module/moduleAnatomy.js'
+import AddDataTab from '../components/wizard/AddDataTab.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
+import { useUiV2 } from '../context/UiFlagContext.jsx'
 import { usePolicies } from '../hooks/usePolicies.js'
 import { useCommittees } from '../hooks/useCommittees.js'
 import { useMeetings } from '../hooks/useMeetings.js'
@@ -198,7 +203,7 @@ function policyBody(form) {
   }
 }
 
-function PolicyFormModal({ initial, onClose, onSave, reduce }) {
+export function PolicyFormModal({ initial, onClose, onSave, reduce }) {
   const [form, setForm] = useState(initial ?? EMPTY_POLICY)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
@@ -775,6 +780,7 @@ function GovernanceWorkspace() {
   const schoolId = activeSchool?.id ?? null
   const canEdit = activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'
   const reduce = useReducedMotion()
+  const uiV2 = useUiV2()
 
   const policiesHook = usePolicies(schoolId)
   const committeesHook = useCommittees(schoolId)
@@ -1065,22 +1071,24 @@ function GovernanceWorkspace() {
       }
     : null
 
-  return (
-    <>
-      <DomainCommandCenter
-        eyebrow="Domain · Govern engine · system of record"
-        title="Governance"
-        Icon={Landmark}
-        attentionCount={attentionItems.length}
-        kpis={kpis}
-        tabs={TABS}
-        activeTab={tab}
-        onTabChange={setTab}
-        onNew={onNew}
-        registerTable={registerTable}
-        attentionItems={attentionItems}
-      />
+  const commandCenter = (
+    <DomainCommandCenter
+      eyebrow="Domain · Govern engine · system of record"
+      title="Governance"
+      Icon={Landmark}
+      attentionCount={attentionItems.length}
+      kpis={kpis}
+      tabs={TABS}
+      activeTab={tab}
+      onTabChange={setTab}
+      onNew={onNew}
+      registerTable={registerTable}
+      attentionItems={attentionItems}
+    />
+  )
 
+  const modals = (
+    <>
       {modal?.type === 'policy' ? (
         <PolicyFormModal
           key={modal.entity ? modal.entity.id : 'new'}
@@ -1109,6 +1117,37 @@ function GovernanceWorkspace() {
           reduce={reduce}
         />
       ) : null}
+    </>
+  )
+
+  if (uiV2) {
+    return (
+      <>
+        <ModuleTabs
+          moduleKey="governance"
+          overview={commandCenter}
+          addData={<AddDataTab module="governance" schoolId={schoolId} canEdit={canEdit} />}
+          records={
+            <ModuleRegister
+              moduleKey="governance"
+              hue={moduleHue('governance')}
+              tabs={TABS}
+              activeTab={tab}
+              onTabChange={setTab}
+              onNew={onNew}
+              registerTable={registerTable}
+            />
+          }
+        />
+        {modals}
+      </>
+    )
+  }
+
+  return (
+    <>
+      {commandCenter}
+      {modals}
     </>
   )
 }

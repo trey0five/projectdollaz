@@ -42,6 +42,7 @@ import {
   Building2,
   HeartHandshake,
   Target,
+  Sparkles,
   LineChart as PlanIcon,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
@@ -49,6 +50,8 @@ import { useBilling } from '../../context/BillingContext.jsx'
 import { useScope } from '../../context/ScopeContext.jsx'
 import { useSchools } from '../../context/SchoolContext.jsx'
 import { usePersistence } from '../../context/PersistenceContext.jsx'
+import { usePenny } from '../../context/PennyContext.jsx'
+import { useUiV2 } from '../../context/UiFlagContext.jsx'
 import { useNavBadges } from '../../hooks/useNavBadges.js'
 import { SELLABLE_MODULE_KEYS, MODULE_META } from '../../lib/modules.js'
 import SchoolSwitcher from '../SchoolSwitcher.jsx'
@@ -99,6 +102,8 @@ export default function AppShell({ children }) {
   const { isMultiSchool } = useScope()
   const { activeSchool } = useSchools()
   const { periods } = usePersistence()
+  const { openChat } = usePenny()
+  const uiV2 = useUiV2()
   const navigate = useNavigate()
 
   // Attention badges from the briefing (latest saved period, fail-soft).
@@ -237,6 +242,24 @@ export default function AppShell({ children }) {
       </Link>
     )
   }
+
+  // ui.v2 top-bar logo: a compact single-line mark linking to the app home (/app),
+  // sized for the slim strip (the tall two-line sidebar `brand` would crowd it).
+  const v2Brand = (
+    <Link
+      to="/app"
+      aria-label="Project Dollaz — home"
+      title="Home"
+      className="flex shrink-0 items-center gap-2 rounded-lg px-1 py-1 outline-none ring-gold/50 transition-opacity hover:opacity-90 focus-visible:ring-2"
+    >
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gold-gradient text-navy-deep shadow-glow">
+        <LineChart size={18} />
+      </span>
+      <span className="hidden font-serif text-[16px] font-semibold leading-none tracking-[0.01em] text-gold-light md:inline">
+        Project Dollaz
+      </span>
+    </Link>
+  )
 
   const brand = (
     <Link
@@ -426,53 +449,94 @@ export default function AppShell({ children }) {
   return (
     <>
       <div className="min-h-screen lg:flex">
-        {/* ── Desktop sidebar (lg+): fixed left rail, carries the frozen navIds ── */}
-        <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r-2 border-gold/30 bg-navy-gradient shadow-navy-glow lg:flex">
-          <div className="shrink-0 border-b border-white/10 px-4 py-4">{brand}</div>
-          {navBody(true)}
-          <div className="shrink-0 border-t border-white/10 px-3 py-3">{settingsLink(true)}</div>
-        </aside>
+        {/* ── Desktop sidebar (lg+): fixed left rail, carries the frozen navIds.
+            Under ui.v2 the whole rail is HIDDEN — the tile home + module tabs are
+            the nav; a slim top bar (below) carries the cross-cutting controls. ── */}
+        {!uiV2 && (
+          <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r-2 border-gold/30 bg-navy-gradient shadow-navy-glow lg:flex">
+            <div className="shrink-0 border-b border-white/10 px-4 py-4">{brand}</div>
+            {navBody(true)}
+            <div className="shrink-0 border-t border-white/10 px-3 py-3">{settingsLink(true)}</div>
+          </aside>
+        )}
 
-        {/* ── Content column (offset by the fixed rail on lg+) ─────────────────── */}
-        <div className="app-content-offset flex min-w-0 flex-1 flex-col lg:pl-64">
-          {/* Slim top strip: hamburger (<lg) + SchoolSwitcher + user/logout. */}
-          <header className="no-print sticky top-0 z-20 flex h-14 items-center justify-between gap-2 border-b-2 border-gold/30 bg-navy-gradient px-3 shadow-navy-glow sm:gap-3 sm:px-6">
-            <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
-              <button
-                ref={hamburgerRef}
-                type="button"
-                onClick={() => setMenuOpen((o) => !o)}
-                aria-label={menuOpen ? 'Close menu' : 'Open menu'}
-                aria-expanded={menuOpen}
-                aria-controls="app-sidebar-drawer"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/15 text-white/80 transition-colors hover:bg-white/[0.06] hover:text-white sm:h-10 sm:w-10 lg:hidden"
-              >
-                {menuOpen ? <X size={20} /> : <Menu size={20} />}
-              </button>
-              <SchoolSwitcher />
-              {/* Scope axis: School ↔ Organization — only for a multi-school caller. */}
-              {isMultiSchool && <ScopeToggle />}
-            </div>
-            {/* Middle: platform-wide search (desktop input + mobile icon overlay). */}
-            <SearchBox />
-            <div className="hidden items-center gap-3 lg:flex">
-              <motion.button
-                whileTap={reduce ? undefined : { scale: 0.96 }}
-                onClick={logout}
-                className="flex min-h-[38px] items-center gap-2 rounded-[10px] border border-white/15 px-4 py-1.5 text-[13px] font-medium text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white"
-              >
-                <LogOut size={15} /> Sign Out
-              </motion.button>
-            </div>
-          </header>
+        {/* ── Content column (offset by the fixed rail on lg+; no offset under v2) ── */}
+        <div
+          className={`flex min-w-0 flex-1 flex-col ${uiV2 ? '' : 'app-content-offset lg:pl-64'}`}
+        >
+          {uiV2 ? (
+            /* ── ui.v2 slim top bar: logo → /app, SchoolSwitcher, Search, Ask
+               Penny, Sign Out. No hamburger/drawer (the sidebar is retired). ── */
+            <header className="no-print sticky top-0 z-20 flex h-14 items-center gap-2 border-b-2 border-gold/30 bg-navy-gradient px-3 shadow-navy-glow sm:gap-3 sm:px-6">
+              {/* Left group is intrinsic-width (min-w-0 lets the switcher truncate);
+                  SearchBox owns the flex-1 grow so the two never overlap. */}
+              <div className="flex min-w-0 shrink items-center gap-2 sm:gap-3">
+                {v2Brand}
+                <SchoolSwitcher />
+                {isMultiSchool && <ScopeToggle />}
+              </div>
+              <SearchBox />
+              <div className="flex items-center gap-2 sm:gap-3">
+                <motion.button
+                  whileTap={reduce ? undefined : { scale: 0.96 }}
+                  onClick={openChat}
+                  aria-label="Ask Penny"
+                  className="flex min-h-[38px] items-center gap-2 rounded-[10px] border border-white/15 px-3 py-1.5 text-[13px] font-medium text-white/80 transition-colors hover:bg-white/[0.06] hover:text-white sm:px-4"
+                >
+                  <Sparkles size={15} />
+                  <span className="hidden sm:inline">Ask Penny</span>
+                </motion.button>
+                <motion.button
+                  whileTap={reduce ? undefined : { scale: 0.96 }}
+                  onClick={logout}
+                  aria-label="Sign Out"
+                  className="flex min-h-[38px] items-center gap-2 rounded-[10px] border border-white/15 px-3 py-1.5 text-[13px] font-medium text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white sm:px-4"
+                >
+                  <LogOut size={15} />
+                  <span className="hidden sm:inline">Sign Out</span>
+                </motion.button>
+              </div>
+            </header>
+          ) : (
+            /* Slim top strip: hamburger (<lg) + SchoolSwitcher + user/logout. */
+            <header className="no-print sticky top-0 z-20 flex h-14 items-center justify-between gap-2 border-b-2 border-gold/30 bg-navy-gradient px-3 shadow-navy-glow sm:gap-3 sm:px-6">
+              <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+                <button
+                  ref={hamburgerRef}
+                  type="button"
+                  onClick={() => setMenuOpen((o) => !o)}
+                  aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+                  aria-expanded={menuOpen}
+                  aria-controls="app-sidebar-drawer"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/15 text-white/80 transition-colors hover:bg-white/[0.06] hover:text-white sm:h-10 sm:w-10 lg:hidden"
+                >
+                  {menuOpen ? <X size={20} /> : <Menu size={20} />}
+                </button>
+                <SchoolSwitcher />
+                {/* Scope axis: School ↔ Organization — only for a multi-school caller. */}
+                {isMultiSchool && <ScopeToggle />}
+              </div>
+              {/* Middle: platform-wide search (desktop input + mobile icon overlay). */}
+              <SearchBox />
+              <div className="hidden items-center gap-3 lg:flex">
+                <motion.button
+                  whileTap={reduce ? undefined : { scale: 0.96 }}
+                  onClick={logout}
+                  className="flex min-h-[38px] items-center gap-2 rounded-[10px] border border-white/15 px-4 py-1.5 text-[13px] font-medium text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white"
+                >
+                  <LogOut size={15} /> Sign Out
+                </motion.button>
+              </div>
+            </header>
+          )}
 
           <main className="min-w-0 flex-1">{children}</main>
         </div>
       </div>
 
-      {/* ── Mobile drawer (<lg): off-canvas sidebar ───────────────────────────── */}
+      {/* ── Mobile drawer (<lg): off-canvas sidebar. Retired under ui.v2. ──────── */}
       <AnimatePresence>
-        {menuOpen && (
+        {!uiV2 && menuOpen && (
           <>
             <motion.div
               className="no-print fixed inset-0 z-40 bg-navy-deep/50 backdrop-blur-sm lg:hidden"

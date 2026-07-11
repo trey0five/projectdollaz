@@ -27,6 +27,10 @@ import {
 } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
 import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
+import ModuleTabs from '../components/module/ModuleTabs.jsx'
+import ModuleRegister from '../components/module/ModuleRegister.jsx'
+import { moduleHue } from '../components/module/moduleAnatomy.js'
+import AddDataTab from '../components/wizard/AddDataTab.jsx'
 import DatePicker from '../components/ui/DatePicker.jsx'
 import EntityFormModal, {
   Field,
@@ -35,6 +39,7 @@ import EntityFormModal, {
   fieldTextarea,
 } from '../components/ui/EntityFormModal.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
+import { useUiV2 } from '../context/UiFlagContext.jsx'
 import { useFacilities } from '../hooks/useFacilities.js'
 
 const PRIORITIES = ['low', 'medium', 'high', 'critical']
@@ -209,7 +214,7 @@ function toItemBody(form) {
   }
 }
 
-function MaintenanceFormModal({ open, initial, onClose, onSave, reduce }) {
+export function MaintenanceFormModal({ open, initial, onClose, onSave, reduce }) {
   const [form, setForm] = useState(initial ?? EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
@@ -505,6 +510,7 @@ function FacilitiesWorkspace() {
   const schoolId = activeSchool?.id ?? null
   const canEdit = activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'
   const reduce = useReducedMotion()
+  const uiV2 = useUiV2()
 
   const {
     items,
@@ -676,30 +682,61 @@ function FacilitiesWorkspace() {
 
   const onNew = canEdit ? openAdd : null
 
+  const commandCenter = (
+    <DomainCommandCenter
+      eyebrow="Domain · Facilities engine · system of record"
+      title="Facilities"
+      Icon={Wrench}
+      attentionCount={attentionItems.length}
+      kpis={kpis}
+      tabs={TABS}
+      activeTab={tab}
+      onTabChange={setTab}
+      onNew={onNew}
+      registerTable={registerTable}
+      attentionItems={attentionItems}
+    />
+  )
+
+  const modal = (
+    <MaintenanceFormModal
+      key={editing ? editing.id : 'new'}
+      open={modalOpen}
+      initial={initialForm}
+      onClose={() => setModalOpen(false)}
+      onSave={onSave}
+      reduce={reduce}
+    />
+  )
+
+  if (uiV2) {
+    return (
+      <>
+        <ModuleTabs
+          moduleKey="facilities"
+          overview={commandCenter}
+          addData={<AddDataTab module="facilities" schoolId={schoolId} canEdit={canEdit} />}
+          records={
+            <ModuleRegister
+              moduleKey="facilities"
+              hue={moduleHue('facilities')}
+              tabs={TABS}
+              activeTab={tab}
+              onTabChange={setTab}
+              onNew={onNew}
+              registerTable={registerTable}
+            />
+          }
+        />
+        {modal}
+      </>
+    )
+  }
+
   return (
     <>
-      <DomainCommandCenter
-        eyebrow="Domain · Facilities engine · system of record"
-        title="Facilities"
-        Icon={Wrench}
-        attentionCount={attentionItems.length}
-        kpis={kpis}
-        tabs={TABS}
-        activeTab={tab}
-        onTabChange={setTab}
-        onNew={onNew}
-        registerTable={registerTable}
-        attentionItems={attentionItems}
-      />
-
-      <MaintenanceFormModal
-        key={editing ? editing.id : 'new'}
-        open={modalOpen}
-        initial={initialForm}
-        onClose={() => setModalOpen(false)}
-        onSave={onSave}
-        reduce={reduce}
-      />
+      {commandCenter}
+      {modal}
     </>
   )
 }
