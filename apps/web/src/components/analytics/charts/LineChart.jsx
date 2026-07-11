@@ -131,25 +131,34 @@ export default function LineChart({
               if (dim) return null
               return (
                 <linearGradient key={si} id={`${uid}-g${si}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={s.color} stopOpacity="0.18" />
+                  <stop offset="0%" stopColor={s.color} stopOpacity="0.28" />
                   <stop offset="100%" stopColor={s.color} stopOpacity="0" />
                 </linearGradient>
               )
             })}
         </defs>
 
-        {/* hairline grid + Y ticks */}
+        {/* hairline grid + Y ticks — dashed slate-200/60, HORIZONTAL only */}
         {gridLines.map((g) => {
           const y = P.t + (ih * g) / 3
           const val = Math.round(min + (max - min) * (1 - g / 3))
           return (
             <g key={g}>
-              <line x1={P.l} x2={W - P.r} y1={y} y2={y} stroke={CHROME.grid} strokeWidth="1" />
+              <line
+                x1={P.l}
+                x2={W - P.r}
+                y1={y}
+                y2={y}
+                stroke="#E2E8F0"
+                strokeOpacity="0.6"
+                strokeWidth="1"
+                strokeDasharray="4 4"
+              />
               <text
                 x={P.l - 8}
                 y={y + 4}
                 textAnchor="end"
-                fill={CHROME.axis}
+                fill="#94A3B8"
                 fontSize="11"
                 style={{ fontVariantNumeric: 'tabular-nums' }}
               >
@@ -161,7 +170,7 @@ export default function LineChart({
 
         {/* X labels */}
         {labels.map((lb, i) => (
-          <text key={i} x={X(i)} y={h - 6} textAnchor="middle" fill={CHROME.axis} fontSize="11">
+          <text key={i} x={X(i)} y={h - 6} textAnchor="middle" fill="#94A3B8" fontSize="11">
             {lb}
           </text>
         ))}

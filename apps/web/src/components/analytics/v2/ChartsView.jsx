@@ -59,32 +59,33 @@ function TrendCard(trend, color, formatter) {
 function SchoolCharts({ school, onCrossToTable }) {
   const m = school.metricsByKey
   const t = school.sparkTrends || {}
+  const asOf = school.asOf
   const aid = m.pct_students_on_aid
   const ratio = m.student_teacher_ratio
   return (
     <div>
       <QuestionGroup title="How's the money?">
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <ChartCard id="chart-revmix" metricKey="revenue_mix" title="Where the money comes from" sub="Revenue mix" onViewAsTable={onCrossToTable}>
+          <ChartCard id="chart-revmix" metricKey="revenue_mix" title="Where the money comes from" sub="Revenue mix" asOf={asOf} onViewAsTable={onCrossToTable}>
             {DonutFromMix(m.revenue_mix)}
           </ChartCard>
-          <ChartCard id="chart-expmix" metricKey="expense_mix" title="Where the money goes" sub="Expense mix" onViewAsTable={onCrossToTable}>
+          <ChartCard id="chart-expmix" metricKey="expense_mix" title="Where the money goes" sub="Expense mix" asOf={asOf} onViewAsTable={onCrossToTable}>
             {DonutFromMix(m.expense_mix)}
           </ChartCard>
-          <ChartCard id="chart-margin" metricKey="operating_margin" title="Operating margin" sub="Across your saved periods" onViewAsTable={onCrossToTable}>
+          <ChartCard id="chart-margin" metricKey="operating_margin" title="Operating margin" sub="Across your saved periods" asOf={asOf} onViewAsTable={onCrossToTable}>
             {TrendCard(t.operating_margin, seriesColor(0), (v) => `${(v * 100).toFixed(1)}%`)}
           </ChartCard>
-          <ChartCard id="chart-cash" metricKey="days_cash_on_hand" title="Days cash on hand" sub="Liquidity trend" onViewAsTable={onCrossToTable}>
+          <ChartCard id="chart-cash" metricKey="days_cash_on_hand" title="Days cash on hand" sub="Liquidity trend" asOf={asOf} onViewAsTable={onCrossToTable}>
             {TrendCard(t.days_cash_on_hand, seriesColor(3), (v) => Math.round(v).toLocaleString())}
           </ChartCard>
         </div>
       </QuestionGroup>
       <QuestionGroup title="How's enrollment?">
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <ChartCard id="chart-enrollment" metricKey="enrollment_change_yoy" title="Enrollment change" sub="Year over year" onViewAsTable={onCrossToTable}>
+          <ChartCard id="chart-enrollment" metricKey="enrollment_change_yoy" title="Enrollment change" sub="Year over year" asOf={asOf} onViewAsTable={onCrossToTable}>
             {TrendCard(t.enrollment_change_yoy, seriesColor(2), (v) => `${(v * 100).toFixed(1)}%`)}
           </ChartCard>
-          <ChartCard id="chart-aidrate" metricKey="pct_students_on_aid" title="Students on aid" sub="Share of enrollment receiving aid" onViewAsTable={onCrossToTable}>
+          <ChartCard id="chart-aidrate" metricKey="pct_students_on_aid" title="Students on aid" sub="Share of enrollment receiving aid" asOf={asOf} onViewAsTable={onCrossToTable}>
             {aid?.value != null ? (
               <div className="flex flex-col items-center">
                 <ArcGauge pct={(aid.value ?? 0) * 100} label="on aid" />
@@ -118,7 +119,7 @@ function CompareCharts({ compare }) {
   return (
     <QuestionGroup title="How do we compare?">
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <ChartCard id="chart-ppc" metricKey="cost_per_pupil" title="Per-pupil economics" sub="Cost per pupil vs. net tuition per student">
+        <ChartCard id="chart-ppc" metricKey="cost_per_pupil" title="Per-pupil economics" sub="Cost per pupil vs. net tuition per student" asOf={compare.asOf}>
           <Legend
             items={[
               { id: 'cost', label: 'Cost per pupil', color: seriesColor(0) },
@@ -132,7 +133,7 @@ function CompareCharts({ compare }) {
             <p className="py-8 text-center text-[13px] italic text-muted">Select schools to compare.</p>
           )}
         </ChartCard>
-        <ChartCard id="chart-fingerprint" metricKey="days_cash_on_hand" title="School fingerprints" sub="Up to three schools across five health dimensions">
+        <ChartCard id="chart-fingerprint" metricKey="days_cash_on_hand" title="School fingerprints" sub="Up to three schools across five health dimensions" asOf={compare.asOf}>
           <Legend items={fp.series.map((s) => ({ id: s.id, label: s.id, color: s.color }))} onSpotlight={setSpotlight} />
           {fp.series.length ? (
             <div className="flex justify-center">
@@ -182,7 +183,7 @@ function DioceseCharts({ diocese }) {
   return (
     <div>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <ChartCard id="chart-cash" metricKey="days_cash_on_hand" title="Days cash — one school highlighted" sub="The rest are context">
+        <ChartCard id="chart-cash" metricKey="days_cash_on_hand" title="Days cash — one school highlighted" sub="The rest are context" asOf={diocese.asOf}>
           {series.length ? (
             <>
               <Legend items={series.map((s) => ({ id: s.id, label: s.label, color: s.color }))} onSpotlight={setSpotlight} />
@@ -192,7 +193,7 @@ function DioceseCharts({ diocese }) {
             <p className="py-8 text-center text-[13px] italic text-muted">No trend history yet.</p>
           )}
         </ChartCard>
-        <ChartCard id="chart-smalls" metricKey="days_cash_on_hand" title="Days cash, school by school" sub="Small multiples, same scale">
+        <ChartCard id="chart-smalls" metricKey="days_cash_on_hand" title="Days cash, school by school" sub="Small multiples, same scale" asOf={diocese.asOf}>
           <div className="grid grid-cols-2 gap-3">
             {series.map((s) => (
               <div key={s.id} className="rounded-lg border border-rule/50 p-2">
@@ -204,7 +205,7 @@ function DioceseCharts({ diocese }) {
         </ChartCard>
       </div>
       <div className="mt-4">
-        <ChartCard id="chart-race" metricKey="days_cash_on_hand" title="Days cash on hand — the race" sub="Watch the ranking move across the years">
+        <ChartCard id="chart-race" metricKey="days_cash_on_hand" title="Days cash on hand — the race" sub="Watch the ranking move across the years" asOf={diocese.asOf}>
           {frames.length ? (
             <BarRace frames={frames} />
           ) : (

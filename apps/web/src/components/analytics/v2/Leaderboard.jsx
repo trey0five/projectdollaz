@@ -6,19 +6,26 @@
 // Every cell prints the SERVER-STAMPED `formatted` string from the compare endpoint
 // (value parity with the single-school dashboard). The Diocese variant appends the
 // org roll-up row from useOrgMetrics (formatted via the canonical formatter).
+//
+// Visual language: the structure stays a sortable table, restyled — av2-card
+// chrome, 11px uppercase tracked slate-400 header, right-aligned tabular-nums
+// value cells, banded cells wear a tinted STATUS PILL (soft matching glow) around
+// the value, school hue dots unchanged (identity!), row hover tint (css).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState } from 'react'
 import { ArrowDown, ArrowUp } from 'lucide-react'
 import { seriesColor } from '../charts/palette.js'
-import { statusMeta } from '../../../lib/metricMeta.js'
+import { lightStatus } from './statusStyle.js'
 import { formatMetric } from './helpers.js'
 
-function StatusDotCell({ cell }) {
-  if (!cell || cell.status === 'neutral' || !cell.status) return <span>{cell?.formatted ?? '—'}</span>
-  const sm = statusMeta(cell.status)
+// Banded cell → the value INSIDE a status pill; contextual cell → plain value.
+function StatusCell({ cell }) {
+  if (!cell) return <span className="text-slate-300">—</span>
+  if (!cell.status || cell.status === 'neutral') return <span>{cell.formatted ?? '—'}</span>
+  const ls = lightStatus(cell.status)
   return (
-    <span className="inline-flex items-center gap-2">
-      <span className={`h-2.5 w-2.5 rounded-full ${sm.dot}`} />
+    <span className={ls.pill}>
+      <i aria-hidden="true" />
       {cell.formatted ?? '—'}
     </span>
   )
@@ -33,12 +40,21 @@ function useSort(defaultKey) {
 
 function SortHead({ label, active, dir, onClick, className = '' }) {
   return (
-    <th onClick={onClick} className={`text-muted ${className}`}>
+    <th onClick={onClick} className={className}>
       <span className="inline-flex items-center gap-1">
         {label}
         {active && (dir === 'desc' ? <ArrowDown size={11} /> : <ArrowUp size={11} />)}
       </span>
     </th>
+  )
+}
+
+function SchoolNameCell({ name, colorIndex }) {
+  return (
+    <span className="inline-flex items-center gap-2 text-navy">
+      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: seriesColor(colorIndex) }} />
+      {name}
+    </span>
   )
 }
 
@@ -55,7 +71,7 @@ export function CompareLeaderboard({ schools, columns }) {
     return sort.dir === 'desc' ? bv - av : av - bv
   })
   return (
-    <div className="card-soft overflow-x-auto p-4 sm:p-5">
+    <div className="av2-card overflow-x-auto p-4 sm:p-5">
       <h3 className="mb-1 font-serif text-base font-semibold text-navy">The metrics board</h3>
       <p className="mb-3 text-[13px] text-muted">Sortable — click a column to rank. Colour follows each school, not its rank.</p>
       <table className="av2-lb">
@@ -69,16 +85,13 @@ export function CompareLeaderboard({ schools, columns }) {
         </thead>
         <tbody>
           {sorted.map((s) => (
-            <tr key={s.schoolId} className="border-t border-rule/50 text-navy">
+            <tr key={s.schoolId} className="border-t border-slate-200/60 text-navy">
               <td className="bg-white">
-                <span className="inline-flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: seriesColor(s.seriesIndex ?? 0) }} />
-                  {s.schoolName}
-                </span>
+                <SchoolNameCell name={s.schoolName} colorIndex={s.seriesIndex ?? 0} />
               </td>
               {columns.map((c) => (
                 <td key={c.key} className="tabular-nums">
-                  <StatusDotCell cell={s.metrics?.[c.key]} />
+                  <StatusCell cell={s.metrics?.[c.key]} />
                 </td>
               ))}
             </tr>
@@ -104,7 +117,7 @@ export function DioceseScorecard({ schools, columns, orgMetrics }) {
     return sort.dir === 'desc' ? bv - av : av - bv
   })
   return (
-    <div className="card-soft overflow-x-auto p-4 sm:p-5">
+    <div className="av2-card overflow-x-auto p-4 sm:p-5">
       <h3 className="mb-1 font-serif text-base font-semibold text-navy">Diocese scorecard</h3>
       <p className="mb-3 text-[13px] text-muted">Every reporting school, plus the consolidated diocese roll-up row.</p>
       <table className="av2-lb">
@@ -118,22 +131,19 @@ export function DioceseScorecard({ schools, columns, orgMetrics }) {
         </thead>
         <tbody>
           {sorted.map((s, i) => (
-            <tr key={s.schoolId} className="border-t border-rule/50 text-navy">
+            <tr key={s.schoolId} className="border-t border-slate-200/60 text-navy">
               <td className="bg-white">
-                <span className="inline-flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: seriesColor(s.seriesIndex ?? i) }} />
-                  {s.schoolName}
-                </span>
+                <SchoolNameCell name={s.schoolName} colorIndex={s.seriesIndex ?? i} />
               </td>
               {columns.map((c) => (
                 <td key={c.key} className="tabular-nums">
-                  <StatusDotCell cell={s.metrics?.[c.key]} />
+                  <StatusCell cell={s.metrics?.[c.key]} />
                 </td>
               ))}
             </tr>
           ))}
           {orgMetrics && (
-            <tr className="border-t-2 border-gold/40 bg-gold/5 font-semibold text-navy">
+            <tr className="av2-total border-t-2 border-gold/40 bg-gold/5 font-semibold text-navy">
               <td className="bg-gold/5">⛪ Diocese (consolidated)</td>
               {columns.map((c) => (
                 <td key={c.key} className="tabular-nums">

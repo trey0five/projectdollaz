@@ -198,16 +198,26 @@ export default function AnalyticsV2() {
 
   const onCrossToTable = (metricKey) => nav.go({ view: 'scorecard', highlight: metricKey })
 
+  // ── "as of" trust stamp (display-only) — derived from the ACTIVE period the
+  // school scope already resolved (never invented); org scopes stamp the FY. ────
+  const activePeriod = useMemo(() => periods.find((p) => p.id === periodId) || null, [periods, periodId])
+  const schoolAsOf = activePeriod?.periodEndDate
+    ? `as of ${new Date(`${activePeriod.periodEndDate}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+    : fyLabel
+      ? `FY${fyLabel}`
+      : null
+  const orgAsOf = fyLabel ? `FY${fyLabel}` : null
+
   // ── Shaped context per scope ─────────────────────────────────────────────────
-  const schoolCtx = { id: primarySchool, periodId, metrics, metricsByKey, sparkTrends }
-  const compareCtx = { schools: selectedSchools, trends }
-  const dioceseCtx = { schools: perSchool, orgMetrics, trends }
+  const schoolCtx = { id: primarySchool, periodId, metrics, metricsByKey, sparkTrends, asOf: schoolAsOf }
+  const compareCtx = { schools: selectedSchools, trends, asOf: orgAsOf }
+  const dioceseCtx = { schools: perSchool, orgMetrics, trends, asOf: orgAsOf }
 
   const canCustomize = isOwner && entitled
 
   if (!billingLoading && !entitled) {
     return (
-      <div className="mx-auto max-w-[1100px] px-4 py-8 sm:px-10">
+      <div className="av2-ground mx-auto max-w-[1100px] px-4 py-8 sm:px-10">
         <Shell />
         <EntitlementPausedPanel />
       </div>
@@ -215,7 +225,7 @@ export default function AnalyticsV2() {
   }
 
   return (
-    <div className="mx-auto max-w-[1100px] px-4 py-8 sm:px-10">
+    <div className="av2-ground mx-auto max-w-[1100px] px-4 py-8 sm:px-10">
       <Shell />
 
       <AnalyticsScopeBar

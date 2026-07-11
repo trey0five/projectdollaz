@@ -1,27 +1,32 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Scorecard — the School-scope metrics TABLE. Reuses the EXACT v1 dashboard
+// Scorecard — the School-scope metrics view. Reuses the EXACT v1 dashboard
 // persistence: useDashboardLayout(schoolId) + CustomizeBar + CustomizePanel +
 // orderedVisibleKeys, so a customize done here (or on /dashboard) carries across
-// both surfaces — one server row, no migration. Renders a table (Metric · Value ·
-// Context · Status · chart →) instead of the hero/grid; AnalyticsDashboard.jsx is
-// never touched. Every value/delta is the SAME MetricResult the Overview tile and
-// the chart center render (value parity — @finrep/analytics is the one source).
+// both surfaces — one server row, no migration. Renders METRIC ROW-CARDS instead
+// of a spreadsheet: status-hue dot + name (+ band-target context line) | big
+// tabular-nums value | delta chip | an inline PROGRESS RAIL locating the value
+// between the risk→good band bounds (skipped when unbanded) | a tinted status
+// pill | the "chart →" affordance that surfaces on row hover (rest state calm).
+// AnalyticsDashboard.jsx is never touched. Every value/delta is the SAME
+// MetricResult the Overview tile and the chart center render (value parity —
+// @finrep/analytics is the one source).
 //
 // Cross-link: a row whose metric has a chart shows "chart →" (→ onCrossToChart);
-// a highlight prop (from ?highlight= / legacy ?metric=) scrolls+flashes the row,
-// then calls onHighlightConsumed to strip it.
+// a highlight prop (from ?highlight= / legacy ?metric=) scrolls+flashes the row
+// (av2-row-<key> + flashring), then calls onHighlightConsumed to strip it.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { ArrowRight, SlidersHorizontal } from 'lucide-react'
+import { ArrowDownRight, ArrowRight, ArrowUpRight, SlidersHorizontal } from 'lucide-react'
 import { useDashboardLayout } from '../../../hooks/useAnalytics.js'
 import { apiErrorMessage } from '../../../lib/api.js'
-import { statusMeta, deltaTone } from '../../../lib/metricMeta.js'
+import { deltaTone } from '../../../lib/metricMeta.js'
 import CustomizeBar from '../CustomizeBar.jsx'
 import CustomizePanel from '../CustomizePanel.jsx'
-import { formatMetric, formatMetricDeltaOf } from './helpers.js'
+import { formatMetric, formatMetricDeltaOf, formatMetricValue, metricFormat } from './helpers.js'
 import { hasChart } from './chartAnchors.js'
 import { flashElement } from './flash.js'
+import { lightStatus, DELTA_CHIP_LIGHT } from './statusStyle.js'
 
 const DEFAULT_KEYS = [
   'operating_margin', 'days_cash_on_hand', 'months_operating_reserve', 'tuition_dependency',
@@ -30,7 +35,109 @@ const DEFAULT_KEYS = [
   'pct_students_on_aid', 'enrollment_change_yoy', 'student_teacher_ratio',
 ]
 
-const TONE_TEXT = { good: 'text-[#2f7d4f]', bad: 'text-danger', neutral: 'text-muted' }
+// Where the value sits between the risk→good band bounds, as a 4–100 fill %
+// (clamped so even a deep-risk value shows a sliver). null → no rail (unbanded
+// or degenerate band). Mirrors helpers.bandNormalize's direction handling.
+function bandPct(m) {
+  const b = m?.bands
+  if (!b || m.value == null || !Number.isFinite(b.good) || !Number.isFinite(b.risk) || b.good === b.risk) return null
+  const dir = b.goodDirection ?? m.goodDirection
+  const t = dir === 'lower' ? (b.risk - m.value) / (b.risk - b.good) : (m.value - b.risk) / (b.good - b.risk)
+  if (!Number.isFinite(t)) return null
+  return Math.max(4, Math.min(100, t * 100))
+}
+
+// The band-target context line under the metric name ("Target ≥ 20%").
+function bandContext(m) {
+  const b = m?.bands
+  if (!b || !Number.isFinite(b.good)) return null
+  const dir = b.goodDirection ?? m.goodDirection
+  return `Target ${dir === 'lower' ? '≤' : '≥'} ${formatMetricValue(b.good, metricFormat(m.key, m.unit))}`
+}
+
+function MetricRow({ m, scope, onCrossToChart, index, reduce }) {
+  const ls = lightStatus(m.status)
+  const banded = m.status && m.status !== 'neutral'
+  const deltaText = formatMetricDeltaOf(m)
+  const tone = deltaTone(m.periodOverPeriodDelta, m.goodDirection)
+  const flat = m.periodOverPeriodDelta == null || m.periodOverPeriodDelta === 0
+  const Arrow = m.periodOverPeriodDelta > 0 ? ArrowUpRight : ArrowDownRight
+  const pct = bandPct(m)
+  const context = bandContext(m)
+  return (
+    <motion.div
+      id={`av2-row-${m.key}`}
+      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, delay: Math.min(index, 8) * 0.04, ease: 'easeOut' }}
+      className="av2-row group rounded-xl bg-white px-4 py-3 ring-1 ring-slate-200/60 transition-colors hover:bg-slate-50"
+    >
+      {/* metric identity */}
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: ls.dot }} />
+        <div className="min-w-0">
+          <p className="truncate text-[14px] font-semibold text-navy">{m.label}</p>
+          <p className="truncate text-[11.5px] text-slate-400 tabular-nums">{context ?? 'Contextual'}</p>
+        </div>
+      </div>
+
+      {/* value */}
+      <span className="text-right text-[19px] font-bold text-navy tabular-nums">{formatMetric(m)}</span>
+
+      {/* delta chip */}
+      <span className="av2-delta-cell justify-self-end">
+        {deltaText ? (
+          <span
+            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11.5px] font-semibold tabular-nums ${
+              DELTA_CHIP_LIGHT[flat ? 'neutral' : tone]
+            }`}
+          >
+            {!flat && <Arrow size={11} strokeWidth={2.5} />}
+            {deltaText}
+          </span>
+        ) : (
+          <span className="text-[12px] text-slate-300">—</span>
+        )}
+      </span>
+
+      {/* band progress rail */}
+      <span className="av2-rail-cell">
+        {pct != null ? (
+          <span className="av2-rail" role="img" aria-label={`${Math.round(pct)}% of the way to the healthy band`}>
+            <span className={ls.rail} style={{ width: `${pct}%` }} />
+          </span>
+        ) : (
+          <span aria-hidden="true" />
+        )}
+      </span>
+
+      {/* status pill */}
+      <span className="justify-self-end">
+        {banded ? (
+          <span className={ls.pill}>
+            <i aria-hidden="true" />
+            {ls.label}
+          </span>
+        ) : (
+          <span className="text-[12px] text-slate-300">—</span>
+        )}
+      </span>
+
+      {/* chart cross-link — surfaces on row hover / keyboard focus */}
+      <span className="text-right">
+        {hasChart(m.key, scope) && (
+          <button
+            type="button"
+            onClick={() => onCrossToChart?.(m.key)}
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12px] font-semibold text-navy-soft opacity-0 transition-opacity hover:text-navy focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 group-hover:opacity-100"
+          >
+            chart <ArrowRight size={12} />
+          </button>
+        )}
+      </span>
+    </motion.div>
+  )
+}
 
 export default function Scorecard({
   scope = 'school',
@@ -158,57 +265,18 @@ export default function Scorecard({
         )}
       </AnimatePresence>
 
-      <div className={`card-soft overflow-x-auto p-4 sm:p-5 ${customizing ? 'pointer-events-none opacity-50' : ''}`}>
-        <h3 className="mb-1 font-serif text-base font-semibold text-navy">This school&rsquo;s scorecard</h3>
-        <p className="mb-3 text-[13px] text-muted">
-          Every number, one table — click &ldquo;chart&nbsp;&rarr;&rdquo; to fly to its graph.
-        </p>
-        <table className="av2-lb">
-          <thead>
-            <tr className="text-muted">
-              <th className="bg-white">Metric</th>
-              <th>Value</th>
-              <th>Change</th>
-              <th>Status</th>
-              <th aria-label="Cross-link" />
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((m) => {
-              const sm = statusMeta(m.status)
-              const deltaText = formatMetricDeltaOf(m)
-              const tone = deltaTone(m.periodOverPeriodDelta, m.goodDirection)
-              return (
-                <tr key={m.key} id={`av2-row-${m.key}`} className="border-t border-rule/50 text-navy">
-                  <td className="bg-white text-navy">{m.label}</td>
-                  <td className="font-semibold tabular-nums">{formatMetric(m)}</td>
-                  <td className={`tabular-nums ${TONE_TEXT[tone]}`}>{deltaText ?? '—'}</td>
-                  <td>
-                    {m.status && m.status !== 'neutral' ? (
-                      <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11.5px] font-semibold ${sm.chip}`}>
-                        <span className={`h-2 w-2 rounded-full ${sm.dot}`} />
-                        {sm.label}
-                      </span>
-                    ) : (
-                      <span className="text-[12px] text-muted">—</span>
-                    )}
-                  </td>
-                  <td className="text-right">
-                    {hasChart(m.key, scope) && (
-                      <button
-                        type="button"
-                        onClick={() => onCrossToChart?.(m.key)}
-                        className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12px] font-semibold text-navy-soft transition-colors hover:text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/50"
-                      >
-                        chart <ArrowRight size={12} />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+      <div className={customizing ? 'pointer-events-none opacity-50' : ''}>
+        <div className="mb-3">
+          <h3 className="font-serif text-base font-semibold text-navy">This school&rsquo;s scorecard</h3>
+          <p className="text-[13px] text-muted">
+            Every number, one board — hover a row and click &ldquo;chart&nbsp;&rarr;&rdquo; to fly to its graph.
+          </p>
+        </div>
+        <div className="space-y-2">
+          {rows.map((m, i) => (
+            <MetricRow key={m.key} m={m} scope={scope} onCrossToChart={onCrossToChart} index={i} reduce={reduce} />
+          ))}
+        </div>
         {rows.length === 0 && (
           <p className="py-8 text-center text-[14px] italic text-muted">No metrics for this period yet.</p>
         )}

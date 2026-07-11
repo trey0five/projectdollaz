@@ -65,15 +65,15 @@ export default function ArcGauge({ pct = 0, label, subRows = [] }) {
             <stop offset="100%" stopColor={CHROME.gaugeTo} />
           </linearGradient>
         </defs>
-        <path d={arc(0, 1)} fill="none" stroke={CHROME.gaugeTrack} strokeWidth="13" strokeLinecap="round" />
+        <path d={arc(0, 1)} fill="none" stroke={CHROME.gaugeTrack} strokeWidth="15" strokeLinecap="round" />
         <path
           ref={fillRef}
           d={arc(0, p / 100)}
           fill="none"
           stroke={`url(#${uid}-g)`}
-          strokeWidth="13"
+          strokeWidth="15"
           strokeLinecap="round"
-          className="fr-glow"
+          style={{ filter: 'drop-shadow(0 3px 9px rgba(37, 99, 235, 0.25))' }}
         />
         <circle
           cx={tipP[0]}
