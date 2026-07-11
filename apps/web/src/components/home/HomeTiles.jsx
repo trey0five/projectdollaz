@@ -1,6 +1,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // HomeTiles — the HOME v2 tile dashboard (ui.v2 flag ON). The home becomes a
-// map: BriefingBand → module tile grid → core row → the narrated morning brief.
+// map: BriefingBand → module tile grid; the narrated morning brief opens as a
+// POPUP (BriefingModal) from the band's ▶ Play / "Open the briefing". The old
+// core row is gone (it duplicated the global top nav).
 //
 // GATES mirror HomeDashboard exactly: org scope renders <OrgHome/> unchanged
 // (same branch position), entitlement-paused renders the paused panel, loading
@@ -10,8 +12,8 @@
 // DATA: one useBriefing(schoolId, latestPeriodId) fetch — the period pinned the
 // SAME way AppShell pins the sidebar-badge period ((periods||[]).find(hasSnapshot))
 // so tile chips ≡ sidebar badges by construction. Per-tile counts come from the
-// shared summariseBadges reducer (useNavBadges.js) over TILE_SOURCES — the one
-// map that also feeds the core row's Tasks count. Zero new endpoints.
+// shared summariseBadges reducer (useNavBadges.js) over TILE_SOURCES. Zero new
+// endpoints.
 //
 // TILE STATES (tri-state hasModule, === false only — avoids the billing-load
 // upsell flash): licensed + routed → active tile; unlicensed → Add-ons-style
@@ -28,8 +30,8 @@ import EntitlementPausedPanel from '../analytics/EntitlementPausedPanel.jsx'
 import OrgTiles from './OrgTiles.jsx'
 import PennyMorningBrief from './PennyMorningBrief.jsx'
 import BriefingBand from './BriefingBand.jsx'
+import BriefingModal from './BriefingModal.jsx'
 import ModuleTile from './ModuleTile.jsx'
-import CoreRow from './CoreRow.jsx'
 import { HOME_TILES, TILE_SOURCES } from './tileRegistry.jsx'
 import '../../styles/home-tiles.css'
 
@@ -69,6 +71,9 @@ export default function HomeTiles() {
   // saved period via the EXACT derivation AppShell's sidebar badges use, so the
   // tile chips and the nav badges read from the same briefing by construction.
   const latestPeriodId = (periods || []).find((p) => p.hasSnapshot)?.id ?? null
+
+  // Morning-brief popup: null (closed) | 'open' | 'narrate' (autoplay on open).
+  const [brief, setBrief] = useState(null)
 
   // OrgHome still owns a period selector — same microtask-deferred default as
   // HomeDashboard (react-hooks/set-state-in-effect sanctioned pattern).
@@ -124,7 +129,7 @@ export default function HomeTiles() {
   // ── Entitlement gate (mirror HomeDashboard; 402 from the briefing counts). ──
   if (!billingLoading && (!entitled || notEntitled)) {
     return (
-      <div className="mx-auto max-w-[1100px] px-4 py-6 sm:px-10 sm:py-8">
+      <div className="mx-auto max-w-[1240px] px-4 py-6 sm:px-10 sm:py-8">
         <EntitlementPausedPanel />
       </div>
     )
@@ -133,9 +138,9 @@ export default function HomeTiles() {
   // ── Loading: tile-shaped skeletons. ─────────────────────────────────────────
   if (billingLoading || hydrating) {
     return (
-      <div className="mx-auto max-w-[1100px] space-y-5 px-4 py-6 sm:px-10 sm:py-8">
+      <div className="mx-auto max-w-[1240px] space-y-5 px-4 py-6 sm:px-10 sm:py-8">
         <div className="h-40 animate-pulse rounded-2xl bg-navy/10" />
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <TileSkeleton key={i} />
           ))}
@@ -157,20 +162,19 @@ export default function HomeTiles() {
     return { tile, locked: false }
   }).filter(Boolean)
 
-  const taskCount = chipsReady ? badges.workflow?.count ?? 0 : 0
-
   return (
-    <div className="mx-auto max-w-[1100px] space-y-5 px-4 py-6 sm:space-y-7 sm:px-10 sm:py-8">
+    <div className="home-ground mx-auto max-w-[1240px] space-y-5 px-4 py-6 sm:space-y-7 sm:px-10 sm:py-8">
       <BriefingBand
         schoolName={activeSchool?.name}
         summary={briefingSummary}
         badges={chipsReady ? badges : {}}
         lens={briefingLens}
         hasPeriod={hasPeriod}
+        onOpenBrief={setBrief}
       />
 
       <nav aria-label="Modules">
-        <ul role="list" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <ul role="list" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {tiles.map(({ tile, locked }, i) => (
             <ModuleTile
               key={tile.key}
@@ -184,19 +188,20 @@ export default function HomeTiles() {
         </ul>
       </nav>
 
-      <CoreRow hasModule={hasModule} taskCount={taskCount} />
-
-      {/* The narrated morning brief — the band's ▶ Play + "Open the briefing"
-          land here ('penny:narrate' / scroll target). Mounted exactly as
-          HomeDashboard mounts it. */}
-      <div id="home-morning-brief" className="scroll-mt-20">
+      {/* The narrated morning brief — a POPUP now. ▶ Play opens with autoNarrate
+          (the modal dispatches 'penny:narrate' after the brief mounts). */}
+      <BriefingModal
+        open={!!brief}
+        autoNarrate={brief === 'narrate'}
+        onClose={() => setBrief(null)}
+      >
         <PennyMorningBrief
           scope="school"
           schoolId={schoolId}
           periodId={latestPeriodId}
           lens={briefingLens}
         />
-      </div>
+      </BriefingModal>
     </div>
   )
 }

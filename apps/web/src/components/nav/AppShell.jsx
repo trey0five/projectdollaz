@@ -50,6 +50,7 @@ import {
   Library,
   FileBarChart2,
   Settings as SettingsIcon,
+  User as UserIcon,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useBilling } from '../../context/BillingContext.jsx'
@@ -62,6 +63,7 @@ import { useNavBadges } from '../../hooks/useNavBadges.js'
 import { SELLABLE_MODULE_KEYS, MODULE_META } from '../../lib/modules.js'
 import SchoolSwitcher from '../SchoolSwitcher.jsx'
 import ScopeToggle from './ScopeToggle.jsx'
+import ContextSwitcher from './ContextSwitcher.jsx'
 import SearchBox from '../search/SearchBox.jsx'
 import { NAV_GROUPS, SETTINGS_ITEM } from './sidebarNav.js'
 
@@ -79,15 +81,14 @@ const FINANCE_BADGE_SOURCES = ['metric', 'compliance', 'data']
 
 // ui.v2 GLOBAL top nav — Home (→ the tile dashboard) + the core destinations, so
 // they're reachable from EVERY screen (the sidebar is retired). Reports is
-// finance-gated like the Core row on the home. Home shows a label from sm+; the
-// rest are icon+tooltip, revealing their label only on xl to stay compact.
+// finance-gated. Settings lives in the avatar menu (right end), not here. Home
+// shows a label from sm+; the rest are icon+tooltip, labels only at 2xl.
 const V2_NAV = [
   { to: '/app', label: 'Home', Icon: LayoutGrid, home: true },
   { to: '/tasks', label: 'Tasks', Icon: ListChecks },
   { to: '/data', label: 'Data', Icon: Database },
   { to: '/knowledge', label: 'Knowledge', Icon: Library },
   { to: '/reports', label: 'Reports', Icon: FileBarChart2, module: 'finance' },
-  { to: '/settings', label: 'Settings', Icon: SettingsIcon },
 ]
 
 // Per-module icon for the (dimmed) Add-ons rows; falls back to a Lock badge.
@@ -113,6 +114,99 @@ const itemClass = (active) =>
 function ActiveRail({ active }) {
   if (!active) return null
   return <span aria-hidden="true" className="absolute inset-y-1.5 left-0 w-1 rounded-full bg-gold" />
+}
+
+// ui.v2 avatar menu — the header's right-end account entry: a circle with the
+// user's initial opening a small dropdown (Settings → /settings, Sign Out).
+// Replaces the standalone Sign Out button. Esc/outside-click close + focus
+// return to the trigger; reduced motion = fade-only.
+function AvatarMenu() {
+  const { user, logout } = useAuth()
+  const reduce = useReducedMotion()
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef(null)
+  const triggerRef = useRef(null)
+  const firstItemRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return undefined
+    const onClick = (e) => {
+      if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return undefined
+    const trigger = triggerRef.current
+    const onKey = (e) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    const raf = window.requestAnimationFrame(() => {
+      if (firstItemRef.current) firstItemRef.current.focus()
+    })
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.cancelAnimationFrame(raf)
+      if (trigger) trigger.focus()
+    }
+  }, [open])
+
+  const initial = (user?.first_name || user?.name || user?.email || '')
+    .trim()
+    .charAt(0)
+    .toUpperCase()
+
+  return (
+    <div ref={rootRef} className="relative shrink-0">
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="Account menu"
+        className="flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/[0.08] text-[14px] font-bold text-white outline-none ring-gold/50 transition-colors hover:bg-white/[0.14] focus-visible:ring-2"
+      >
+        {initial || <UserIcon size={16} />}
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            role="menu"
+            aria-label="Account"
+            initial={reduce ? { opacity: 0 } : { opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={reduce ? { opacity: 0 } : { opacity: 0, y: -6 }}
+            transition={{ duration: 0.15 }}
+            className="absolute right-0 z-50 mt-2 w-48 overflow-hidden rounded-xl border border-white/15 bg-navy-deep py-1 shadow-2xl"
+          >
+            <Link
+              ref={firstItemRef}
+              role="menuitem"
+              to="/settings"
+              onClick={() => setOpen(false)}
+              className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13.5px] text-white/80 outline-none ring-inset ring-gold/50 transition-colors hover:bg-white/[0.08] hover:text-white focus-visible:ring-2"
+            >
+              <SettingsIcon size={15} className="shrink-0 text-white/50" />
+              Settings
+            </Link>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={logout}
+              className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13.5px] text-white/80 outline-none ring-inset ring-gold/50 transition-colors hover:bg-white/[0.08] hover:text-white focus-visible:ring-2"
+            >
+              <LogOut size={15} className="shrink-0 text-white/50" />
+              Sign Out
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
 }
 
 export default function AppShell({ children }) {
@@ -484,8 +578,8 @@ export default function AppShell({ children }) {
           className={`flex min-w-0 flex-1 flex-col ${uiV2 ? '' : 'app-content-offset lg:pl-64'}`}
         >
           {uiV2 ? (
-            /* ── ui.v2 slim top bar: logo → /app, SchoolSwitcher, Search, Ask
-               Penny, Sign Out. No hamburger/drawer (the sidebar is retired). ── */
+            /* ── ui.v2 slim top bar: logo → /app, nav, ContextSwitcher, Search,
+               Ask Penny, avatar (Settings + Sign Out). No hamburger/drawer. ── */
             <header className="no-print sticky top-0 z-20 flex h-14 items-center gap-2 border-b-2 border-gold/30 bg-navy-gradient px-3 shadow-navy-glow sm:gap-3 sm:px-6">
               {/* Brand + GLOBAL top nav (Home + core destinations). */}
               <div className="flex shrink-0 items-center gap-1">
@@ -518,13 +612,12 @@ export default function AppShell({ children }) {
                   })}
                 </nav>
               </div>
-              {/* Context controls (min-w-0 lets the switcher truncate). */}
+              {/* ONE combined context picker (school ⇄ whole-org) — min-w-0 lets
+                  it truncate. Shown on /analytics too: analytics keeps its own
+                  scope bar for its URL state; this just switches the underlying
+                  context like the school switcher always did. */}
               <div className="flex min-w-0 items-center gap-2">
-                <SchoolSwitcher />
-                {/* Analytics OWNS its scope space (its own scope bar); the global
-                    School↔Org toggle is suppressed on /analytics so the two axes
-                    can't disagree. Every other v2 route keeps the toggle. */}
-                {isMultiSchool && !path.startsWith('/analytics') && <ScopeToggle />}
+                <ContextSwitcher />
               </div>
               <SearchBox />
               <div className="flex items-center gap-2 sm:gap-3">
@@ -537,15 +630,8 @@ export default function AppShell({ children }) {
                   <Sparkles size={15} />
                   <span className="hidden sm:inline">Ask Penny</span>
                 </motion.button>
-                <motion.button
-                  whileTap={reduce ? undefined : { scale: 0.96 }}
-                  onClick={logout}
-                  aria-label="Sign Out"
-                  className="flex min-h-[38px] items-center gap-2 rounded-[10px] border border-white/15 px-3 py-1.5 text-[13px] font-medium text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white sm:px-4"
-                >
-                  <LogOut size={15} />
-                  <span className="hidden sm:inline">Sign Out</span>
-                </motion.button>
+                {/* Account: Settings + Sign Out live behind the avatar. */}
+                <AvatarMenu />
               </div>
             </header>
           ) : (

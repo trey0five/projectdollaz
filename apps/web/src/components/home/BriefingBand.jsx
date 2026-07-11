@@ -2,22 +2,27 @@
 // BriefingBand — the slim HOME v2 band above the tile map. Renders entirely from
 // the briefing payload HomeTiles already holds (zero new data paths):
 //   greeting · "N things need a decision · M critical" · per-module chips that
-//   scroll to their tile · ▶ Play (dispatches the existing 'penny:narrate' event
-//   the mounted PennyMorningBrief listens for) · "Open the briefing →" (scrolls
-//   to that brief). Lens verb mirrors the v1 command center (LENS_VERB).
+//   scroll to their tile · ▶ Play (onOpenBrief('narrate') — opens the
+//   BriefingModal popup, which dispatches 'penny:narrate' once the brief mounts)
+//   · "Open the briefing" (onOpenBrief('open') — same popup, no narration).
+// The brief is no longer mounted at the bottom of the page. Lens verb mirrors
+// the v1 command center (LENS_VERB).
 // Empty school (no saved period): the band carries the onboarding line + the
 // "Go to the Data hub →" CTA instead of counts/chips (tiles still render).
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion, useReducedMotion } from 'framer-motion'
 import { Link } from 'react-router-dom'
-import { Sparkles, Play, ArrowRight, ArrowDown, Database } from 'lucide-react'
+import { Sparkles, Play, ArrowRight, Database } from 'lucide-react'
 import { HOME_TILES, tileLabel, LENS_VERB, greeting } from './tileRegistry.jsx'
 
-function playBrief() {
-  window.dispatchEvent(new CustomEvent('penny:narrate'))
-}
-
-export default function BriefingBand({ schoolName, summary, badges = {}, lens, hasPeriod }) {
+export default function BriefingBand({
+  schoolName,
+  summary,
+  badges = {},
+  lens,
+  hasPeriod,
+  onOpenBrief,
+}) {
   const reduce = useReducedMotion()
   const total = summary?.total ?? 0
   const critical = summary?.critical ?? 0
@@ -134,17 +139,17 @@ export default function BriefingBand({ schoolName, summary, badges = {}, lens, h
                   GOLD under ui.v2 ("gold = Penny only"); generic CTAs around it go blue. */}
               <button
                 type="button"
-                onClick={playBrief}
+                onClick={() => onOpenBrief?.('narrate')}
                 className="inline-flex items-center gap-1.5 rounded-full bg-penny-gradient px-4 py-2 text-[13px] font-semibold text-navy shadow-penny-glow transition-transform hover:-translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60 motion-reduce:hover:translate-y-0"
               >
                 <Play size={13} /> Play
               </button>
               <button
                 type="button"
-                onClick={() => scrollTo('home-morning-brief')}
+                onClick={() => onOpenBrief?.('open')}
                 className="inline-flex items-center gap-1.5 rounded-full border border-white/25 px-4 py-2 text-[13px] font-semibold text-white/80 transition-colors hover:border-gold/50 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
               >
-                Open the briefing <ArrowDown size={13} />
+                Open the briefing <ArrowRight size={13} />
               </button>
             </div>
           </>

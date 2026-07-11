@@ -14,6 +14,15 @@
    mirrors :hover throughout for keyboard parity.
    ──────────────────────────────────────────────────────────────────────────── */
 
+/* Ambient ground for the v2 home root — a quiet, STATIC blue wash so the wide
+   (max-w-[1240px]) gutters don't read as dead space. No animation; only the
+   HomeTiles/OrgTiles root ever carries this class, so it can't leak into v1. */
+.home-ground {
+  background:
+    radial-gradient(900px 420px at 15% -5%, rgb(37 99 235 / 0.06), transparent 60%),
+    radial-gradient(700px 380px at 90% 10%, rgb(56 189 248 / 0.05), transparent 55%);
+}
+
 .module-tile {
   --tile-hue: #2563eb;
   position: relative;

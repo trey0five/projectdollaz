@@ -1,9 +1,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // OrgTiles — the HOME v2 tile dashboard at ORGANIZATION scope. The org twin of
 // HomeTiles: the whole-org briefing band → the SAME module tile grid (chips now
-// count cross-school attention, aggregated from the org briefing) → the core row,
-// then the consolidated detail that OrgHome always showed (KPI strip + per-school
-// table + narrated org brief + the multi-school triage board).
+// count cross-school attention, aggregated from the org briefing), then the
+// consolidated detail that OrgHome always showed (KPI strip + per-school table +
+// the multi-school triage board). The narrated org brief opens as a POPUP
+// (BriefingModal) from the band; the core row is gone (duplicated the top nav).
 //
 // It reuses OrgHome's proven org hooks (useOrgBriefing / useOrgMetrics) and its
 // child components verbatim — nothing new server-side. Tiles navigate to each
@@ -22,8 +23,8 @@ import OrgSchoolsTable from '../budget/OrgSchoolsTable.jsx'
 import OrgBriefing from '../budget/OrgBriefing.jsx'
 import PennyMorningBrief from './PennyMorningBrief.jsx'
 import BriefingBand from './BriefingBand.jsx'
+import BriefingModal from './BriefingModal.jsx'
 import ModuleTile from './ModuleTile.jsx'
-import CoreRow from './CoreRow.jsx'
 import { HOME_TILES, TILE_SOURCES } from './tileRegistry.jsx'
 import '../../styles/home-tiles.css'
 
@@ -46,6 +47,8 @@ export default function OrgTiles({
   const { hasModule } = useBilling()
   // Owner-only "preview as" lens, same as OrgHome (org briefing is JwtAuth-only).
   const [previewLens, setPreviewLens] = useState(null)
+  // Morning-brief popup: null (closed) | 'open' | 'narrate' (autoplay on open).
+  const [brief, setBrief] = useState(null)
 
   const {
     briefing,
@@ -80,11 +83,10 @@ export default function OrgTiles({
     return { tile, locked: false }
   }).filter(Boolean)
 
-  const taskCount = chipsReady ? badges.workflow?.count ?? 0 : 0
   const fy = fyLabel(fiscalYearStart)
 
   return (
-    <div className="mx-auto max-w-[1100px] space-y-5 px-4 py-6 sm:space-y-7 sm:px-10 sm:py-8">
+    <div className="home-ground mx-auto max-w-[1240px] space-y-5 px-4 py-6 sm:space-y-7 sm:px-10 sm:py-8">
       {/* Org briefing band — the org twin of the school hero. "Across your N
           schools" reads through BriefingBand's schoolName slot. */}
       <BriefingBand
@@ -93,10 +95,11 @@ export default function OrgTiles({
         badges={chipsReady ? badges : {}}
         lens={lens}
         hasPeriod
+        onOpenBrief={setBrief}
       />
 
       <nav aria-label="Modules">
-        <ul role="list" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <ul role="list" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {tiles.map(({ tile, locked }, i) => (
             <ModuleTile
               key={tile.key}
@@ -109,8 +112,6 @@ export default function OrgTiles({
           ))}
         </ul>
       </nav>
-
-      <CoreRow hasModule={hasModule} taskCount={taskCount} />
 
       {/* ── Consolidated detail (everything OrgHome showed) ─────────────────── */}
       <motion.div
@@ -155,11 +156,15 @@ export default function OrgTiles({
 
       {briefing && <OrgSchoolsTable schools={briefing.schools || []} />}
 
-      {/* The band's ▶ Play / "Open the briefing" land here (penny:narrate + the
-          #home-morning-brief scroll target), org scope. */}
-      <div id="home-morning-brief" className="scroll-mt-20">
+      {/* The narrated org brief — a POPUP now. ▶ Play opens with autoNarrate
+          (the modal dispatches 'penny:narrate' after the brief mounts). */}
+      <BriefingModal
+        open={!!brief}
+        autoNarrate={brief === 'narrate'}
+        onClose={() => setBrief(null)}
+      >
         <PennyMorningBrief scope="org" orgId={orgId} fiscalYearStart={fiscalYearStart} lens={lens} />
-      </div>
+      </BriefingModal>
 
       <OrgBriefing
         briefing={briefing}
