@@ -32,6 +32,8 @@ import PennyMorningBrief from './PennyMorningBrief.jsx'
 import BriefingBand from './BriefingBand.jsx'
 import BriefingModal from './BriefingModal.jsx'
 import ModuleTile from './ModuleTile.jsx'
+import PennyTile from './PennyTile.jsx'
+import HomeVitalsStrip from './HomeVitalsStrip.jsx'
 import { HOME_TILES, TILE_SOURCES } from './tileRegistry.jsx'
 import '../../styles/home-tiles.css'
 
@@ -185,8 +187,14 @@ export default function HomeTiles() {
               index={i}
             />
           ))}
+          {/* The 8th tile: Penny Studio — always present (core, not a module). */}
+          <PennyTile index={tiles.length} />
         </ul>
       </nav>
+
+      {/* Live scoreboard under the map — fills the fold with real numbers.
+          Fail-soft: renders nothing until the period's metrics answer. */}
+      <HomeVitalsStrip schoolId={schoolId} periodId={latestPeriodId} />
 
       {/* The narrated morning brief — a POPUP now. ▶ Play opens with autoNarrate
           (the modal dispatches 'penny:narrate' after the brief mounts). */}
