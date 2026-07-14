@@ -321,7 +321,32 @@
            focus:border-gold/70 focus:bg-navy-deep/70;
   }
   .field-lux:focus {
-    box-shadow: 0 0 0 3px rgba(184, 150, 80, 0.22);
+    box-shadow: 0 0 0 3px rgb(var(--c-gold) / 0.22);
+  }
+
+  /* ── ui.v2: the record modal goes LIGHT (matches the homepage surfaces). ──────
+     The flowing accent ring + focus rings keep their --c-gold vars, so on a module
+     page they render in the module hue (see ModuleAccent). v1 keeps the navy pane. */
+  html[data-ui='v2'] .modal-lux {
+    background:
+      radial-gradient(135% 72% at 50% -18%, rgb(var(--c-gold-pale) / 0.55), transparent 60%),
+      linear-gradient(160deg, #ffffff 0%, #fdfcf8 62%, #f7f4ec 122%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.95),
+      0 30px 66px -22px rgb(var(--c-shade) / 0.38),
+      0 0 46px -12px rgb(var(--c-gold) / 0.26);
+  }
+  html[data-ui='v2'] .modal-lux::after {
+    background: linear-gradient(
+      116deg,
+      transparent 42%,
+      rgba(255, 255, 255, 0.55) 49%,
+      rgb(var(--c-gold) / 0.14) 52%,
+      transparent 60%
+    );
+  }
+  html[data-ui='v2'] .field-lux {
+    @apply border-rule/90 bg-white text-ink placeholder-muted/50 focus:bg-white;
   }
 
   /* Gold primary action with the same sweeping sheen as .btn-primary. */

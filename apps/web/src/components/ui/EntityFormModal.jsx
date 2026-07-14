@@ -11,6 +11,7 @@
 import { useEffect } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { X, ChevronDown } from 'lucide-react'
+import { useUiV2 } from '../../context/UiFlagContext.jsx'
 
 // Shared field class strings — a recessed navy well with a soft gold focus ring
 // (.field-lux). `fieldSelect` hides the native chrome; the caller adds a chevron.
@@ -22,6 +23,7 @@ const EASE = [0.2, 0.8, 0.2, 1]
 
 /** A native <select> styled as a luxe field, with a gold chevron overlay. */
 export function Select({ value, onChange, children, ...rest }) {
+  const v2 = useUiV2()
   return (
     <div className="relative">
       <select value={value} onChange={onChange} className={fieldSelect} {...rest}>
@@ -29,7 +31,9 @@ export function Select({ value, onChange, children, ...rest }) {
       </select>
       <ChevronDown
         size={16}
-        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gold-light/70"
+        className={`pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 ${
+          v2 ? 'text-gold/80' : 'text-gold-light/70'
+        }`}
       />
     </div>
   )
@@ -40,6 +44,7 @@ export function Select({ value, onChange, children, ...rest }) {
  * drives the staggered fade-up so fields cascade in as the modal opens.
  */
 export function Field({ label, hint, span = 1, index = 0, reduce, children }) {
+  const v2 = useUiV2()
   return (
     <motion.label
       initial={reduce ? false : { opacity: 0, y: 10 }}
@@ -47,11 +52,21 @@ export function Field({ label, hint, span = 1, index = 0, reduce, children }) {
       transition={{ delay: reduce ? 0 : 0.04 * index + 0.06, duration: 0.3, ease: EASE }}
       className={`block ${span === 2 ? 'sm:col-span-2' : ''}`}
     >
-      <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gold-light/80">
+      <span
+        className={`text-[11px] font-semibold uppercase tracking-[0.14em] ${
+          v2 ? 'text-gold' : 'text-gold-light/80'
+        }`}
+      >
         {label}
       </span>
       {children}
-      {hint ? <span className="mt-1 block text-[12px] leading-snug text-white/40">{hint}</span> : null}
+      {hint ? (
+        <span
+          className={`mt-1 block text-[12px] leading-snug ${v2 ? 'text-muted' : 'text-white/40'}`}
+        >
+          {hint}
+        </span>
+      ) : null}
     </motion.label>
   )
 }
@@ -79,6 +94,7 @@ export default function EntityFormModal({
 }) {
   const autoReduce = useReducedMotion()
   const reduce = reduceProp ?? autoReduce
+  const v2 = useUiV2()
 
   // Esc closes; body scroll locks while open.
   useEffect(() => {
@@ -127,14 +143,30 @@ export default function EntityFormModal({
                 {Icon ? <Icon size={22} strokeWidth={2.1} /> : null}
               </span>
               <div className="min-w-0 flex-1 pt-0.5">
-                <h2 className="font-serif text-[21px] font-semibold leading-tight text-white">{title}</h2>
-                {subtitle ? <p className="mt-0.5 text-[13px] leading-snug text-white/55">{subtitle}</p> : null}
+                <h2
+                  className={`font-serif text-[21px] font-semibold leading-tight ${
+                    v2 ? 'text-navy' : 'text-white'
+                  }`}
+                >
+                  {title}
+                </h2>
+                {subtitle ? (
+                  <p
+                    className={`mt-0.5 text-[13px] leading-snug ${v2 ? 'text-muted' : 'text-white/55'}`}
+                  >
+                    {subtitle}
+                  </p>
+                ) : null}
               </div>
               <button
                 type="button"
                 onClick={onClose}
                 aria-label="Close"
-                className="rounded-lg border border-white/15 p-1.5 text-white/60 transition-colors hover:border-gold/50 hover:text-white"
+                className={`rounded-lg border p-1.5 transition-colors ${
+                  v2
+                    ? 'border-rule text-muted hover:border-gold hover:text-navy'
+                    : 'border-white/15 text-white/60 hover:border-gold/50 hover:text-white'
+                }`}
               >
                 <X size={18} />
               </button>
@@ -145,13 +177,27 @@ export default function EntityFormModal({
                 {children}
               </div>
               {error ? (
-                <p className="px-6 pt-2.5 text-[13px] font-medium text-red-300">{error}</p>
+                <p
+                  className={`px-6 pt-2.5 text-[13px] font-medium ${
+                    v2 ? 'text-danger' : 'text-red-300'
+                  }`}
+                >
+                  {error}
+                </p>
               ) : null}
-              <div className="mt-3 flex items-center justify-end gap-2.5 border-t border-white/10 bg-navy-deep/40 px-6 py-4">
+              <div
+                className={`mt-3 flex items-center justify-end gap-2.5 border-t px-6 py-4 ${
+                  v2 ? 'border-rule/70 bg-section/70' : 'border-white/10 bg-navy-deep/40'
+                }`}
+              >
                 <button
                   type="button"
                   onClick={onClose}
-                  className="rounded-xl border-2 border-white/20 px-4 py-2.5 text-[13px] font-semibold uppercase tracking-[0.1em] text-white/75 transition-all hover:border-white/40 hover:text-white"
+                  className={`rounded-xl border-2 px-4 py-2.5 text-[13px] font-semibold uppercase tracking-[0.1em] transition-all ${
+                    v2
+                      ? 'border-rule text-muted hover:border-navy/40 hover:text-navy'
+                      : 'border-white/20 text-white/75 hover:border-white/40 hover:text-white'
+                  }`}
                 >
                   Cancel
                 </button>
