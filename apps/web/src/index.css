@@ -257,12 +257,12 @@
   .modal-lux {
     @apply relative rounded-[1.4rem];
     background:
-      radial-gradient(135% 72% at 50% -18%, rgba(212, 178, 122, 0.24), transparent 60%),
+      radial-gradient(135% 72% at 50% -18%, rgb(var(--c-gold-light) / 0.24), transparent 60%),
       linear-gradient(160deg, #17284c 0%, #1f3d72 62%, #24457e 122%);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.1),
       0 30px 66px -22px rgba(4, 10, 26, 0.78),
-      0 0 46px -12px rgba(184, 150, 80, 0.32);
+      0 0 46px -12px rgb(var(--c-gold) / 0.32);
   }
   .modal-lux::before {
     content: '';
@@ -272,11 +272,11 @@
     padding: 1.5px;
     background: linear-gradient(
       115deg,
-      rgba(184, 150, 80, 0.9) 0%,
+      rgb(var(--c-gold) / 0.9) 0%,
       rgba(46, 80, 143, 0.5) 30%,
-      rgba(214, 178, 110, 0.95) 52%,
+      rgb(var(--c-gold-light) / 0.95) 52%,
       rgba(46, 80, 143, 0.5) 74%,
-      rgba(184, 150, 80, 0.9) 100%
+      rgb(var(--c-gold) / 0.9) 100%
     );
     background-size: 250% 100%;
     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
@@ -296,7 +296,7 @@
       116deg,
       transparent 42%,
       rgba(255, 255, 255, 0.14) 49%,
-      rgba(214, 178, 92, 0.22) 52%,
+      rgb(var(--c-gold-light) / 0.22) 52%,
       transparent 60%
     );
     transform: translateX(-130%);

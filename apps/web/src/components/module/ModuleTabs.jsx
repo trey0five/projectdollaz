@@ -19,7 +19,7 @@ import { Fragment, useCallback, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
 import { ArrowLeft, ArrowRight, LayoutDashboard, Upload, Table2, FileBarChart2 } from 'lucide-react'
-import { moduleAnatomy, moduleHue, moduleLabel, moduleTabs, TAB_LABEL } from './moduleAnatomy.js'
+import { moduleAccentVars, moduleAnatomy, moduleHue, moduleLabel, moduleTabs, TAB_LABEL } from './moduleAnatomy.js'
 
 // The verb-icon for each tab (recognizable at a glance; folded in from the retired
 // ModuleFlowGuide so the tab bar ITSELF now draws the flow).
@@ -49,6 +49,16 @@ export function useModuleTab(tabs) {
   return [active, setTab]
 }
 
+/**
+ * ModuleAccent — wraps a module page's WHOLE v2 arm (ModuleTabs + its sibling
+ * modals) in the module's accent-var override. `display: contents` creates no box
+ * (zero layout impact) while the custom properties still inherit, so even modals
+ * mounted as fragment-siblings of ModuleTabs pick up the module hue.
+ */
+export function ModuleAccent({ moduleKey, children }) {
+  return <div style={{ display: 'contents', ...moduleAccentVars(moduleKey) }}>{children}</div>
+}
+
 export default function ModuleTabs({ moduleKey, overview, addData, records, reports }) {
   const anatomy = moduleAnatomy(moduleKey)
   const tabs = moduleTabs(moduleKey)
@@ -76,7 +86,10 @@ export default function ModuleTabs({ moduleKey, overview, addData, records, repo
   }
 
   return (
-    <div className="min-h-screen bg-section">
+    // The accent-var override re-themes EVERY v2 accent inside this page (CTAs,
+    // underlines, KPI dots, focus rings, the record modal) to the module hue —
+    // one scoped style, no per-component prop drilling.
+    <div className="min-h-screen bg-section" style={moduleAccentVars(moduleKey)}>
       {/* Back to the tile dashboard — the sidebar is retired under v2, so this is
           the explicit way home from every module page. */}
       <div className="mx-auto max-w-[1180px] px-4 pt-4 sm:px-10">

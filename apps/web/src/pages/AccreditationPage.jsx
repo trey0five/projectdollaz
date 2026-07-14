@@ -39,7 +39,7 @@ import {
 import BillingBanner from '../components/BillingBanner.jsx'
 import EntityFormModal, { Field, Select, fieldInput, fieldTextarea } from '../components/ui/EntityFormModal.jsx'
 import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
-import ModuleTabs from '../components/module/ModuleTabs.jsx'
+import ModuleTabs, { ModuleAccent } from '../components/module/ModuleTabs.jsx'
 import ModuleRegister from '../components/module/ModuleRegister.jsx'
 import { moduleHue } from '../components/module/moduleAnatomy.js'
 import AddDataTab from '../components/wizard/AddDataTab.jsx'
@@ -1201,7 +1201,7 @@ function AccreditationWorkspace() {
 
   if (uiV2) {
     return (
-      <>
+      <ModuleAccent moduleKey="accreditation">
         <ModuleTabs
           moduleKey="accreditation"
           overview={commandCenter}
@@ -1219,7 +1219,7 @@ function AccreditationWorkspace() {
           }
         />
         {overlays}
-      </>
+      </ModuleAccent>
     )
   }
 

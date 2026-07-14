@@ -95,3 +95,35 @@ export function moduleHue(key) {
 export function moduleLabel(key) {
   return MODULE_META[key]?.label ?? key
 }
+
+// ── Per-module accent theming ─────────────────────────────────────────────────
+// The v2 look colors every accent (CTAs, tab underlines, KPI dots, focus rings,
+// the record modal) through the --c-gold* / --c-glow / --grad-cta-* custom
+// properties (see styles/tokens.css). Overriding those SAME vars on a module
+// page's root re-themes the whole page — modals included, since they stay DOM
+// descendants — to the module's locked brand hue. Governance renders purple
+// throughout, Facilities its hue, etc. Penny's gold (--c-penny*) is untouched.
+const hexRgb = (hex) => {
+  const h = hex.replace('#', '')
+  const f = h.length === 3 ? h.split('').map((c) => c + c).join('') : h
+  return [parseInt(f.slice(0, 2), 16), parseInt(f.slice(2, 4), 16), parseInt(f.slice(4, 6), 16)]
+}
+const mixRgb = (rgb, target, t) => rgb.map((c, i) => Math.round(c + (target[i] - c) * t))
+const triplet = (rgb) => rgb.join(' ')
+const rgbHex = (rgb) => `#${rgb.map((c) => c.toString(16).padStart(2, '0')).join('')}`
+const WHITE = [255, 255, 255]
+const BLACK = [0, 0, 0]
+
+/** Inline-style object of accent-var overrides for a module page root. */
+export function moduleAccentVars(key) {
+  const rgb = hexRgb(moduleHue(key))
+  return {
+    '--c-gold': triplet(rgb),
+    '--c-gold-light': triplet(mixRgb(rgb, WHITE, 0.35)),
+    '--c-gold-pale': triplet(mixRgb(rgb, WHITE, 0.82)),
+    '--c-glow': triplet(rgb),
+    '--grad-cta-0': rgbHex(mixRgb(rgb, WHITE, 0.45)),
+    '--grad-cta-1': rgbHex(rgb),
+    '--grad-cta-2': rgbHex(mixRgb(rgb, BLACK, 0.18)),
+  }
+}

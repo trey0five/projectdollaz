@@ -25,7 +25,7 @@ import {
 } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
 import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
-import ModuleTabs from '../components/module/ModuleTabs.jsx'
+import ModuleTabs, { ModuleAccent } from '../components/module/ModuleTabs.jsx'
 import ModuleRegister from '../components/module/ModuleRegister.jsx'
 import { moduleHue } from '../components/module/moduleAnatomy.js'
 import AddDataTab from '../components/wizard/AddDataTab.jsx'
@@ -544,7 +544,7 @@ function StrategyWorkspace() {
 
   if (uiV2) {
     return (
-      <>
+      <ModuleAccent moduleKey="strategy">
         {errorBanner}
         <ModuleTabs
           moduleKey="strategy"
@@ -563,7 +563,7 @@ function StrategyWorkspace() {
           }
         />
         {renderModal()}
-      </>
+      </ModuleAccent>
     )
   }
 

@@ -41,7 +41,7 @@ import EntityFormModal, {
 import DatePicker from '../components/ui/DatePicker.jsx'
 import BillingBanner from '../components/BillingBanner.jsx'
 import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
-import ModuleTabs from '../components/module/ModuleTabs.jsx'
+import ModuleTabs, { ModuleAccent } from '../components/module/ModuleTabs.jsx'
 import ModuleRegister from '../components/module/ModuleRegister.jsx'
 import { moduleHue } from '../components/module/moduleAnatomy.js'
 import AddDataTab from '../components/wizard/AddDataTab.jsx'
@@ -1122,7 +1122,7 @@ function GovernanceWorkspace() {
 
   if (uiV2) {
     return (
-      <>
+      <ModuleAccent moduleKey="governance">
         <ModuleTabs
           moduleKey="governance"
           overview={commandCenter}
@@ -1140,7 +1140,7 @@ function GovernanceWorkspace() {
           }
         />
         {modals}
-      </>
+      </ModuleAccent>
     )
   }
 
