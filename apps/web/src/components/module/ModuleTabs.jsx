@@ -15,12 +15,15 @@
 // A11y: role=tablist/tab/tabpanel, roving tabindex + arrow-key nav, aria-selected,
 // :focus-visible ring. Reduced-motion drops the sliding underline (static bar).
 // ─────────────────────────────────────────────────────────────────────────────
-import { useCallback, useRef } from 'react'
+import { Fragment, useCallback, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, ArrowRight, LayoutDashboard, Upload, Table2, FileBarChart2 } from 'lucide-react'
 import { moduleAnatomy, moduleHue, moduleLabel, moduleTabs, TAB_LABEL } from './moduleAnatomy.js'
-import ModuleFlowGuide from './ModuleFlowGuide.jsx'
+
+// The verb-icon for each tab (recognizable at a glance; folded in from the retired
+// ModuleFlowGuide so the tab bar ITSELF now draws the flow).
+const TAB_ICON = { overview: LayoutDashboard, add: Upload, records: Table2, reports: FileBarChart2 }
 
 /**
  * The active-tab hook: reads/writes `?tab=`, validated against the module's present
@@ -85,68 +88,106 @@ export default function ModuleTabs({ moduleKey, overview, addData, records, repo
         </Link>
       </div>
 
-      {/* ── Module tab bar (hue-accented, sticky under the top strip) ─────────── */}
+      {/* ── Stepper tab bar: ONE piece of chrome that is both the navigation AND the
+          "how this module works" picture. Overview is the module's home chip; the
+          action tabs render as NUMBERED step chips (① Add data → ② Records →
+          ③ Reports) joined by arrows, so the 1-2-3 path reads at a glance. The
+          active chip fills with the module hue via a gliding pill (layoutId). ── */}
       <div className="border-b border-rule/60 bg-cream/60">
-        <div className="mx-auto flex max-w-[1180px] items-center gap-3 px-4 sm:gap-5 sm:px-10">
-          <div className="flex shrink-0 items-center gap-2 py-3">
+        <div className="mx-auto flex max-w-[1180px] items-center gap-3 px-4 py-2.5 sm:gap-4 sm:px-10">
+          <div className="flex shrink-0 items-center gap-2">
             {Icon ? (
               <span
-                className="flex h-7 w-7 items-center justify-center rounded-lg text-white shadow-sm"
+                className="flex h-8 w-8 items-center justify-center rounded-xl text-white shadow-sm"
                 style={{ backgroundColor: hue }}
               >
-                <Icon size={16} />
+                <Icon size={17} />
               </span>
             ) : null}
-            <span className="hidden text-[13px] font-semibold text-navy sm:inline">{label}</span>
+            <span className="hidden text-[14px] font-bold text-navy md:inline">{label}</span>
+            <span aria-hidden className="mx-1 hidden h-6 w-px bg-rule sm:block" />
           </div>
+
           <div
             role="tablist"
             aria-label={`${label} sections`}
-            className="-mb-px flex flex-1 gap-1 overflow-x-auto"
+            className="flex flex-1 items-center gap-1.5 overflow-x-auto py-0.5 sm:gap-2"
           >
             {tabs.map((key, i) => {
               const isActive = key === active
+              const TabIcon = TAB_ICON[key] ?? LayoutDashboard
+              const stepNo = key === 'overview' ? null : tabs.filter((t) => t !== 'overview').indexOf(key) + 1
               return (
-                <button
-                  key={key}
-                  ref={(el) => (tabRefs.current[i] = el)}
-                  role="tab"
-                  id={`moduletab-${moduleKey}-${key}`}
-                  aria-selected={isActive}
-                  aria-controls={`modulepanel-${moduleKey}`}
-                  tabIndex={isActive ? 0 : -1}
-                  onClick={() => setTab(key)}
-                  onKeyDown={(e) => onKeyDown(e, i)}
-                  className={`relative whitespace-nowrap rounded-t-md px-3 py-3 text-[14px] font-semibold outline-none transition-colors focus-visible:ring-2 ${
-                    isActive ? 'text-navy' : 'text-muted hover:text-navy'
-                  }`}
-                  style={{ '--tw-ring-color': hue }}
-                >
-                  {TAB_LABEL[key]}
-                  {isActive ? (
-                    reduce ? (
-                      <span
-                        className="absolute inset-x-2 -bottom-px h-[3px] rounded-full"
-                        style={{ backgroundColor: hue }}
-                      />
-                    ) : (
-                      <motion.span
-                        layoutId={`moduletab-underline-${moduleKey}`}
-                        className="absolute inset-x-2 -bottom-px h-[3px] rounded-full"
-                        style={{ backgroundColor: hue }}
-                      />
-                    )
-                  ) : null}
-                </button>
+                <Fragment key={key}>
+                  {/* Arrow joins the numbered steps (never before step 1). */}
+                  {stepNo != null && stepNo > 1 && (
+                    <ArrowRight
+                      size={16}
+                      aria-hidden="true"
+                      className="hidden shrink-0 sm:block"
+                      style={{ color: `${hue}88` }}
+                    />
+                  )}
+                  <motion.button
+                    ref={(el) => (tabRefs.current[i] = el)}
+                    role="tab"
+                    id={`moduletab-${moduleKey}-${key}`}
+                    aria-selected={isActive}
+                    aria-controls={`modulepanel-${moduleKey}`}
+                    tabIndex={isActive ? 0 : -1}
+                    onClick={() => setTab(key)}
+                    onKeyDown={(e) => onKeyDown(e, i)}
+                    whileHover={reduce || isActive ? undefined : { y: -2 }}
+                    whileTap={reduce ? undefined : { scale: 0.97 }}
+                    className={`relative flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-3 py-1.5 text-[13.5px] font-bold outline-none transition-colors focus-visible:ring-2 sm:px-3.5 ${
+                      isActive ? 'text-white' : 'text-navy'
+                    }`}
+                    style={{ '--tw-ring-color': hue }}
+                  >
+                    {/* Gliding active pill (static under reduced motion). */}
+                    {isActive &&
+                      (reduce ? (
+                        <span
+                          aria-hidden
+                          className="absolute inset-0 rounded-full"
+                          style={{ background: hue, boxShadow: `0 6px 18px -6px ${hue}cc` }}
+                        />
+                      ) : (
+                        <motion.span
+                          aria-hidden
+                          layoutId={`moduletab-pill-${moduleKey}`}
+                          className="absolute inset-0 rounded-full"
+                          style={{ background: hue, boxShadow: `0 6px 18px -6px ${hue}cc` }}
+                          transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                        />
+                      ))}
+                    {/* Icon square + step-number badge (the wordless flow cue). */}
+                    <span
+                      className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-lg shadow-sm"
+                      style={
+                        isActive
+                          ? { background: 'rgba(255,255,255,0.22)', color: '#fff' }
+                          : { background: hue, color: '#fff' }
+                      }
+                    >
+                      <TabIcon size={15} />
+                      {stepNo != null && (
+                        <span
+                          className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-white text-[10px] font-extrabold shadow"
+                          style={{ color: hue }}
+                        >
+                          {stepNo}
+                        </span>
+                      )}
+                    </span>
+                    <span className="relative">{TAB_LABEL[key]}</span>
+                  </motion.button>
+                </Fragment>
               )
             })}
           </div>
         </div>
       </div>
-
-      {/* On Overview, a wordless visual FLOW guide (Add data → Records → Reports)
-          that both teaches and operates — click a step to jump to that tab. */}
-      {active === 'overview' && <ModuleFlowGuide moduleKey={moduleKey} tabs={tabs} onStep={setTab} />}
 
       {/* ── Active panel (each panel brings its own max-width container) ───────── */}
       <div role="tabpanel" id={`modulepanel-${moduleKey}`} aria-labelledby={`moduletab-${moduleKey}-${active}`}>
