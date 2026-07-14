@@ -12,7 +12,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion, useReducedMotion } from 'framer-motion'
 import { Link } from 'react-router-dom'
-import { Sparkles, Play, ArrowRight, Database } from 'lucide-react'
+import { Sparkles, Play, ArrowRight, Database, Layers } from 'lucide-react'
 import { HOME_TILES, tileLabel, LENS_VERB, greeting } from './tileRegistry.jsx'
 
 export default function BriefingBand({
@@ -22,6 +22,9 @@ export default function BriefingBand({
   lens,
   hasPeriod,
   onOpenBrief,
+  // Org scope only: renders a third band action that opens the consolidated
+  // organization-view popup (KPIs / schools / triage). Omitted on school scope.
+  onOpenOrgView = null,
 }) {
   const reduce = useReducedMotion()
   const total = summary?.total ?? 0
@@ -151,6 +154,15 @@ export default function BriefingBand({
               >
                 Open the briefing <ArrowRight size={13} />
               </button>
+              {onOpenOrgView ? (
+                <button
+                  type="button"
+                  onClick={onOpenOrgView}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-white/25 px-4 py-2 text-[13px] font-semibold text-white/80 transition-colors hover:border-gold/50 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+                >
+                  <Layers size={13} /> Organization view <ArrowRight size={13} />
+                </button>
+              ) : null}
             </div>
           </>
         ) : (

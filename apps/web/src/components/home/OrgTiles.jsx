@@ -13,18 +13,15 @@
 // the org needs attention".
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo, useState } from 'react'
-import { motion, useReducedMotion } from 'framer-motion'
-import { Layers } from 'lucide-react'
 import { useBilling } from '../../context/BillingContext.jsx'
 import { useOrgBriefing, useOrgMetrics } from '../../hooks/useAnalytics.js'
 import { summariseBadges } from '../../hooks/useNavBadges.js'
-import OrgKpiStrip from '../budget/OrgKpiStrip.jsx'
-import OrgSchoolsTable from '../budget/OrgSchoolsTable.jsx'
-import OrgBriefing from '../budget/OrgBriefing.jsx'
 import PennyMorningBrief from './PennyMorningBrief.jsx'
 import BriefingBand from './BriefingBand.jsx'
 import BriefingModal from './BriefingModal.jsx'
+import OrgDetailModal from './OrgDetailModal.jsx'
 import ModuleTile from './ModuleTile.jsx'
+import PennyTile from './PennyTile.jsx'
 import { HOME_TILES, TILE_SOURCES } from './tileRegistry.jsx'
 import '../../styles/home-tiles.css'
 
@@ -43,12 +40,13 @@ export default function OrgTiles({
   selectedPeriodId,
   onSelectPeriod,
 }) {
-  const reduce = useReducedMotion()
   const { hasModule } = useBilling()
   // Owner-only "preview as" lens, same as OrgHome (org briefing is JwtAuth-only).
   const [previewLens, setPreviewLens] = useState(null)
   // Morning-brief popup: null (closed) | 'open' | 'narrate' (autoplay on open).
   const [brief, setBrief] = useState(null)
+  // The consolidated organization-view popup (tabbed KPIs / schools / triage).
+  const [orgDetail, setOrgDetail] = useState(false)
 
   const {
     briefing,
@@ -96,6 +94,7 @@ export default function OrgTiles({
         lens={lens}
         hasPeriod
         onOpenBrief={setBrief}
+        onOpenOrgView={() => setOrgDetail(true)}
       />
 
       <nav aria-label="Modules">
@@ -110,51 +109,10 @@ export default function OrgTiles({
               index={i}
             />
           ))}
+          {/* The 8th tile: Penny Studio — always present (core, not a module). */}
+          <PennyTile index={tiles.length} />
         </ul>
       </nav>
-
-      {/* ── Consolidated detail (everything OrgHome showed) ─────────────────── */}
-      <motion.div
-        initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-        className="card-soft flex flex-col gap-3 px-5 py-5 sm:flex-row sm:items-center sm:gap-5 sm:px-7 sm:py-6"
-      >
-        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gold-gradient text-white shadow-glow">
-          <Layers size={24} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-gold">
-            Organization · consolidated
-          </p>
-          <h2 className="truncate py-0.5 font-serif text-xl font-semibold leading-[1.35] text-navy sm:text-2xl">
-            {orgName || 'Organization'}
-          </h2>
-          <p className="text-[13px] text-muted">
-            Rolled up across {orgSchoolCount} schools{fy ? ` · ${fy}` : ''}.
-          </p>
-        </div>
-        {periods.length > 0 && (
-          <label className="flex shrink-0 flex-col gap-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
-            Fiscal year
-            <select
-              value={selectedPeriodId ?? ''}
-              onChange={(e) => onSelectPeriod?.(e.target.value)}
-              className="min-h-[40px] rounded-lg border-2 border-hair bg-white px-3 text-[14px] font-medium normal-case tracking-normal text-navy outline-none ring-gold/40 focus-visible:ring-2"
-            >
-              {periods.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.label || p.periodEndDate || p.id}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-      </motion.div>
-
-      <OrgKpiStrip metrics={metrics} loading={metricsLoading} error={metricsError} />
-
-      {briefing && <OrgSchoolsTable schools={briefing.schools || []} />}
 
       {/* The narrated org brief — a POPUP now. ▶ Play opens with autoNarrate
           (the modal dispatches 'penny:narrate' after the brief mounts). */}
@@ -166,10 +124,24 @@ export default function OrgTiles({
         <PennyMorningBrief scope="org" orgId={orgId} fiscalYearStart={fiscalYearStart} lens={lens} />
       </BriefingModal>
 
-      <OrgBriefing
+      {/* The consolidated ORGANIZATION VIEW — a tabbed popup now (KPIs / Schools /
+          Needs attention), opened from the band's "Organization view" action
+          instead of stacking the whole dashboard under the tile grid. */}
+      <OrgDetailModal
+        open={orgDetail}
+        onClose={() => setOrgDetail(false)}
+        orgName={orgName}
+        orgSchoolCount={orgSchoolCount}
+        fy={fy}
+        periods={periods}
+        selectedPeriodId={selectedPeriodId}
+        onSelectPeriod={onSelectPeriod}
+        metrics={metrics}
+        metricsLoading={metricsLoading}
+        metricsError={metricsError}
         briefing={briefing}
-        loading={briefingLoading}
-        error={briefingError}
+        briefingLoading={briefingLoading}
+        briefingError={briefingError}
         lens={lens}
         callerRole={callerRole}
         availableLenses={availableLenses}

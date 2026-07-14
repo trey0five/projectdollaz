@@ -17,7 +17,16 @@ import { useEffect, useRef } from 'react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { X } from 'lucide-react'
 
-export default function BriefingModal({ open, onClose, autoNarrate = false, children }) {
+export default function BriefingModal({
+  open,
+  onClose,
+  autoNarrate = false,
+  // Wide variant for dashboard-shaped content (the org consolidated view);
+  // default stays the reading-width brief.
+  wide = false,
+  ariaLabel = 'Morning brief',
+  children,
+}) {
   const reduce = useReducedMotion()
   const closeRef = useRef(null)
 
@@ -67,12 +76,14 @@ export default function BriefingModal({ open, onClose, autoNarrate = false, chil
           <motion.div
             role="dialog"
             aria-modal="true"
-            aria-label="Morning brief"
+            aria-label={ariaLabel}
             initial={reduce ? { opacity: 0 } : { opacity: 0, y: 16, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={reduce ? { opacity: 0 } : { opacity: 0, y: 16, scale: 0.98 }}
             transition={{ duration: 0.25, ease: 'easeOut' }}
-            className="relative max-h-[85vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-section p-4 shadow-2xl sm:p-6"
+            className={`relative max-h-[85vh] w-full overflow-y-auto rounded-2xl bg-section p-4 shadow-2xl sm:p-6 ${
+              wide ? 'max-w-[1240px]' : 'max-w-3xl'
+            }`}
           >
             <button
               ref={closeRef}
