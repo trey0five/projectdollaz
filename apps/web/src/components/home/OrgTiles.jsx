@@ -77,7 +77,7 @@ export default function OrgTiles({
   const tiles = HOME_TILES.map((tile) => {
     const locked = hasModule(tile.key) === false
     if (locked) return { tile, locked: true }
-    if (!tile.route) return null
+    if (!tile.route && !tile.surface) return null // page-less w/o a surface only
     return { tile, locked: false }
   }).filter(Boolean)
 

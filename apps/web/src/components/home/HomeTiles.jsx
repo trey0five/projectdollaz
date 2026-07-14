@@ -160,7 +160,9 @@ export default function HomeTiles() {
   const tiles = HOME_TILES.map((tile) => {
     const locked = entitled && hasModule(tile.key) === false
     if (locked) return { tile, locked: true }
-    if (!tile.route) return null // licensed but page-less → no tile (no dead ends)
+    // Licensed page-less: keep the tile when it declares a surface deep-link
+    // (a purchase must never vanish); drop it only if there is nowhere to go.
+    if (!tile.route && !tile.surface) return null
     return { tile, locked: false }
   }).filter(Boolean)
 

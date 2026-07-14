@@ -97,20 +97,24 @@ export const HOME_TILES = [
     badgeSources: ['strategy'],
   },
   {
-    // Page-less: upsell tile only (no route until HR gets a page in Phase C).
+    // Page-less (no route until HR gets a page in Phase C): locked → upsell tile;
+    // UNLOCKED → the tile stays on the map (a purchase must never vanish) and
+    // deep-links to `surface` — where the module's value actually lives.
     key: 'hr',
     hue: '#059669',
     route: null,
+    surface: { to: '/analytics?metric=student_teacher_ratio', label: 'Live in Analytics' },
     navId: 'tile-hr',
     tagline: 'Staffing and pay planning.',
     Art: HrArt,
     badgeSources: [],
   },
   {
-    // Page-less: upsell tile only (its value surfaces inside Analytics/briefing).
+    // Page-less (value surfaces inside Analytics/briefing): same rule as hr.
     key: 'planning',
     hue: '#0891B2',
     route: null,
+    surface: { to: '/analytics', label: 'Live in Analytics' },
     navId: 'tile-planning',
     tagline: 'Multi-year forecasts and what-if scenarios.',
     Art: PlanningArt,

@@ -96,6 +96,46 @@ export default function ModuleTile({ tile, badge, ready, locked = false, index =
     )
   }
 
+  // ── Unlocked but PAGE-LESS (hr/planning): the tile must NOT vanish after a
+  // purchase. It stays on the map as a full-color tile deep-linking to the
+  // surface where the module's value lives (e.g. HR → the Student-Teacher
+  // Ratio metric drawer in Analytics). ────────────────────────────────────────
+  if (!route && tile.surface) {
+    return (
+      <motion.li
+        {...ENTRANCE(reduce, index)}
+        whileHover={reduce ? undefined : { y: -4 }}
+        className="list-none"
+      >
+        <Link
+          id={navId}
+          to={tile.surface.to}
+          aria-label={`${label} — included with your plan; ${tile.surface.label}`}
+          className="module-tile"
+          style={{ '--tile-hue': hue }}
+        >
+          <div className="tile-body" aria-hidden="true">
+            <span className="tile-art">
+              <Art />
+            </span>
+            <div>
+              <h3 className="tile-title font-serif text-[17px] font-semibold leading-snug text-navy">
+                {label}
+              </h3>
+              <p className="tile-sub mt-1 text-[13.5px] leading-relaxed text-muted">{tagline}</p>
+            </div>
+            <div className="mt-auto flex items-center justify-between gap-3 pt-1">
+              <span className="tile-chip tile-chip--clear">{tile.surface.label}</span>
+              <span className="tile-arrow">
+                <ArrowRight size={16} />
+              </span>
+            </div>
+          </div>
+        </Link>
+      </motion.li>
+    )
+  }
+
   // ── Active tile ─────────────────────────────────────────────────────────────
   const chip = chipFor(badge, ready)
   return (

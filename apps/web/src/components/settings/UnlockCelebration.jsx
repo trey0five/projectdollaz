@@ -91,7 +91,7 @@ function CelebrationScene({ tile, onClose }) {
   }, [])
 
   const open = () => {
-    navigate(pageLess ? '/analytics' : route)
+    navigate(route ?? tile.surface?.to ?? '/analytics')
     onClose()
   }
 
