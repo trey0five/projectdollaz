@@ -16,8 +16,8 @@
 //   • Listens for 'penny:narrate' (from the "Brief me" CTAs) to scroll in + play.
 //   • Reduced-motion safe; llm vs template render identically (no scary badge).
 // ─────────────────────────────────────────────────────────────────────────────
-import { useEffect, useRef } from 'react'
-import { motion, useReducedMotion } from 'framer-motion'
+import { useEffect, useRef, useState } from 'react'
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import {
   Play,
@@ -126,6 +126,85 @@ function stripLeadingSchool(text, name) {
   return text
 }
 
+// What Penny "is doing" while the narration endpoint composes the brief — cycled
+// every ~1.7s so the wait reads as work happening, not a dead box.
+const COMPOSING_STEPS = [
+  'Reading your latest numbers…',
+  'Ranking what needs a decision…',
+  'Checking compliance and deadlines…',
+  'Writing your brief…',
+]
+
+// The branded loading state for the brief popup. Module-scope (owns a timer hook,
+// so it can't live inside the parent's conditional return). role=status so screen
+// readers hear one polite announcement instead of the cycling line.
+function ComposingCard({ reduce }) {
+  const [step, setStep] = useState(0)
+  useEffect(() => {
+    if (reduce) return undefined
+    const t = window.setInterval(() => setStep((s) => (s + 1) % COMPOSING_STEPS.length), 1700)
+    return () => window.clearInterval(t)
+  }, [reduce])
+
+  return (
+    <section
+      data-testid="penny-morning-brief"
+      data-playing="false"
+      role="status"
+      aria-label="Penny is preparing your brief"
+      className="no-print relative overflow-hidden rounded-2xl bg-navy-gradient p-5 shadow-navy-glow sm:p-7"
+    >
+      <div className="flex items-center gap-4">
+        <span className="relative shrink-0">
+          <span
+            aria-hidden
+            className="pointer-events-none absolute left-1/2 top-1/2 h-[130%] w-[130%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-penny/25 blur-xl"
+          />
+          <PennyAvatar size={56} active listening={!reduce} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="font-serif text-[18px] font-semibold leading-snug text-white sm:text-[20px]">
+            Penny is putting your brief together
+            {!reduce && (
+              <span aria-hidden className="inline-flex w-6 justify-start">
+                <motion.span
+                  animate={{ opacity: [0.2, 1, 0.2] }}
+                  transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
+                >
+                  …
+                </motion.span>
+              </span>
+            )}
+          </p>
+          <div className="mt-1 min-h-[20px]" aria-hidden>
+            {reduce ? (
+              <p className="text-[13.5px] text-penny-light/90">{COMPOSING_STEPS[0]}</p>
+            ) : (
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.p
+                  key={step}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.3 }}
+                  className="text-[13.5px] text-penny-light/90"
+                >
+                  {COMPOSING_STEPS[step]}
+                </motion.p>
+              </AnimatePresence>
+            )}
+          </div>
+          {/* The brief taking shape underneath. */}
+          <div className="mt-3 space-y-2" aria-hidden>
+            <div className="shimmer-bar h-3 w-3/4 rounded" />
+            <div className="shimmer-bar h-3 w-2/3 rounded" />
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 export default function PennyMorningBrief({
   scope = 'school',
   schoolId = null,
@@ -188,22 +267,7 @@ export default function PennyMorningBrief({
   if (error && !data) return null
 
   if (loading && !data) {
-    return (
-      <section
-        data-testid="penny-morning-brief"
-        data-playing="false"
-        className="no-print relative overflow-hidden rounded-2xl bg-navy-gradient p-5 shadow-navy-glow sm:p-7"
-      >
-        <div className="flex items-center gap-4">
-          <div className="h-14 w-14 shrink-0 rounded-full bg-white/10" />
-          <div className="flex-1 space-y-2.5">
-            <div className="shimmer-bar h-3 w-40 rounded" />
-            <div className="shimmer-bar h-3.5 w-3/4 rounded" />
-            <div className="shimmer-bar h-3.5 w-2/3 rounded" />
-          </div>
-        </div>
-      </section>
-    )
+    return <ComposingCard reduce={reduce} />
   }
 
   if (!data) return null
