@@ -175,23 +175,23 @@
       color 0.3s ease,
       background-color 0.3s ease;
   }
-  .module-tile:hover .tile-title,
-  .module-tile:focus-visible .tile-title {
+  .module-tile:not(.module-tile--locked):hover .tile-title,
+  .module-tile:not(.module-tile--locked):focus-visible .tile-title {
     color: #fff;
   }
-  .module-tile:hover .tile-sub,
-  .module-tile:focus-visible .tile-sub {
+  .module-tile:not(.module-tile--locked):hover .tile-sub,
+  .module-tile:not(.module-tile--locked):focus-visible .tile-sub {
     color: rgb(255 255 255 / 0.85);
   }
-  .module-tile:hover .tile-art,
-  .module-tile:focus-visible .tile-art,
-  .module-tile:hover .tile-arrow,
-  .module-tile:focus-visible .tile-arrow {
+  .module-tile:not(.module-tile--locked):hover .tile-art,
+  .module-tile:not(.module-tile--locked):focus-visible .tile-art,
+  .module-tile:not(.module-tile--locked):hover .tile-arrow,
+  .module-tile:not(.module-tile--locked):focus-visible .tile-arrow {
     background: rgb(255 255 255 / 0.18);
     color: #fff;
   }
-  .module-tile:hover .tile-chip,
-  .module-tile:focus-visible .tile-chip {
+  .module-tile:not(.module-tile--locked):hover .tile-chip,
+  .module-tile:not(.module-tile--locked):focus-visible .tile-chip {
     background: rgb(255 255 255 / 0.2);
     color: #fff;
   }
@@ -220,12 +220,9 @@
 }
 
 /* ── Locked (upsell) tile: dimmed, no flood/shine, Add-ons pattern. ──────────
-   Structure (a11y — no nested interactives): the card is a DIV holding two
-   SIBLING buttons — .tile-locked-hit (stretched, whole-card "+ Add" action)
-   and .tile-info-btn (the little (i) opening the module-pitch popup) — with
-   the visual .tile-body sandwiched between (aria-hidden, pointer-events off).
-   Card-level hover/focus styling therefore uses :focus-within so keyboard
-   focus on EITHER button still lights the card. */
+   Structure (a11y — no nested interactives): the card is a DIV; one stretched
+   .tile-locked-hit button covers the whole card and opens the module-pitch
+   popup (info + the add path). The visual body sits under it, inert. */
 .module-tile--locked::before,
 .module-tile--locked::after {
   content: none;
@@ -256,34 +253,6 @@
   position: relative;
   z-index: 0;
   pointer-events: none;
-}
-/* The (i) info button — above the stretched hit, next to the lock chip. */
-.tile-info-btn {
-  position: absolute;
-  top: 12px;
-  right: 52px;
-  z-index: 2;
-  display: flex;
-  height: 28px;
-  width: 28px;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: 9999px;
-  background: rgb(16 28 61 / 0.05);
-  color: rgb(16 28 61 / 0.45);
-  cursor: pointer;
-  transition:
-    color 0.2s ease,
-    background-color 0.2s ease;
-}
-.tile-info-btn:hover {
-  color: var(--tile-hue);
-  background: color-mix(in srgb, var(--tile-hue) 12%, transparent);
-}
-.tile-info-btn:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--tile-hue) 75%, #101c3d);
-  outline-offset: 2px;
 }
 .module-tile--locked .tile-art {
   background: rgb(16 28 61 / 0.05);

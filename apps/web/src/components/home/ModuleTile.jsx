@@ -6,17 +6,18 @@
 //     the entrance stagger + lift (FeatureGateway's idiom), all reduced-motion
 //     gated. aria-label carries "Label — chip text"; everything inside is
 //     decoration (aria-hidden) so SRs hear one clean sentence.
-//   • locked  — the Add-ons upsell (mirrors the sidebar rows): a <button> to
-//     /settings/billing, dimmed grayscale-ish art, lock over the arrow corner,
-//     "+ Add" pill, no flood.
+//   • locked  — the Add-ons upsell: the WHOLE tile is one button opening the
+//     module-pitch popup (info + the add path), dimmed art, lock chip,
+//     "+ Add" pill, no flood (and no hover white-out — locked tiles keep
+//     their ink on the white card).
 // Chip truth: `badge` = { count, critical } from the shared summariseBadges
 // reducer over the SAME briefing payload the sidebar badges use. No period /
 // no briefing → a neutral "—" chip (never crash, never invent a number).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
-import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight, Info, Lock, Plus } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { ArrowRight, Lock, Plus } from 'lucide-react'
 import { tileLabel } from './tileRegistry.jsx'
 import ModuleInfoPopup from './ModuleInfoPopup.jsx'
 
@@ -41,7 +42,6 @@ const ENTRANCE = (reduce, index) => ({
 
 export default function ModuleTile({ tile, badge, ready, locked = false, index = 0 }) {
   const reduce = useReducedMotion()
-  const navigate = useNavigate()
   // Hoisted ABOVE the locked/active split so hook order is stable if a tile
   // flips state (e.g. right after an unlock) without a remount.
   const [infoOpen, setInfoOpen] = useState(false)
@@ -49,10 +49,11 @@ export default function ModuleTile({ tile, badge, ready, locked = false, index =
   const label = tileLabel(key)
 
   // ── Locked → the Add-ons-style upsell tile ─────────────────────────────────
-  // A11y: NOT a <button> wrapper (the info control would nest interactives).
-  // The outer div keeps the navId + geometry (Penny tile-* anchors hold); two
-  // SIBLING buttons do the work — a stretched primary hit covering the card
-  // (routes to Membership) and a small (i) opening the module-pitch popup.
+  // ONE interaction: clicking anywhere on the tile (the + Add pill included)
+  // opens the module-pitch popup — the info AND the add path live there (its
+  // CTA routes to Membership). The outer div keeps the navId + geometry (Penny
+  // tile-* anchors hold); a single stretched button covers the card, the visual
+  // body sits under it pointer-events-none.
   if (locked) {
     return (
       <motion.li {...ENTRANCE(reduce, index)} className="list-none">
@@ -64,8 +65,9 @@ export default function ModuleTile({ tile, badge, ready, locked = false, index =
           <button
             type="button"
             className="tile-locked-hit"
-            aria-label={`Add ${label} module`}
-            onClick={() => navigate('/settings/billing#modules')}
+            aria-label={`About the ${label} module`}
+            aria-haspopup="dialog"
+            onClick={() => setInfoOpen(true)}
           />
           <div className="tile-body" aria-hidden="true" style={{ pointerEvents: 'none' }}>
             <div className="flex items-start justify-between gap-3">
@@ -88,15 +90,6 @@ export default function ModuleTile({ tile, badge, ready, locked = false, index =
               </span>
             </div>
           </div>
-          <button
-            type="button"
-            className="tile-info-btn"
-            aria-label={`About the ${label} module`}
-            aria-haspopup="dialog"
-            onClick={() => setInfoOpen(true)}
-          >
-            <Info size={13} />
-          </button>
         </div>
         <ModuleInfoPopup open={infoOpen} tile={tile} onClose={() => setInfoOpen(false)} />
       </motion.li>
