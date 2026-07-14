@@ -25,7 +25,7 @@ import { UpdateCampaignDto } from './dto/update-campaign.dto.js'
  * use of the per-module entitlement backbone (after governance + accreditation +
  * facilities): the class-level @RequiresModule('advancement') makes the shared
  * EntitlementGuard emit a 402 { code:'MODULE_NOT_LICENSED', module:'advancement' }
- * for an entitled-but-unlicensed school (a trial school gets all-access → passes).
+ * for an entitled-but-unlicensed school (trialing resolves like active: NULL → finance-only).
  * Guard ORDER matches the app: JwtAuthGuard (401) → RolesGuard (403) →
  * EntitlementGuard (402). The class-level decorator covers EVERY route (incl. GET),
  * so read access is 402-gated uniformly.

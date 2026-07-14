@@ -25,7 +25,7 @@ import { UpdatePolicyDto } from './dto/update-policy.dto.js'
  * use of the per-module entitlement backbone: the class-level @RequiresModule
  * ('governance') makes the shared EntitlementGuard emit a 402 { code:
  * 'MODULE_NOT_LICENSED', module:'governance' } for an entitled-but-unlicensed
- * school (a trial school gets all-access → passes). Guard ORDER matches the rest
+ * school (trialing resolves like active: NULL → finance-only). Guard ORDER matches the rest
  * of the app: JwtAuthGuard (401) → RolesGuard (403) → EntitlementGuard (402).
  *
  * All roles may READ; owner/accountant may WRITE. Tenant isolation lives in the

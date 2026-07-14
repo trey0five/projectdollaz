@@ -6,6 +6,7 @@ import {
   CORE_MODULE,
   DEFAULT_LICENSED_MODULES,
   MODULE_META,
+  Prisma,
   SELLABLE_MODULE_KEYS,
   isModuleKey,
 } from '@finrep/db'
@@ -22,10 +23,10 @@ export interface BillingView {
   cancelAtPeriodEnd: boolean
   daysLeft: number | null
   isEntitled: boolean
-  // Per-module entitlement (additive RESPONSE field). During a live trial this is
-  // the full sellable set (all-access); for an active sub it's the resolved
-  // licensed set (legacy/null → [{finance}]); when not entitled it's []. Never a
-  // client-sent field, so forbidNonWhitelisted is irrelevant.
+  // Per-module entitlement (additive RESPONSE field). When entitled (active OR
+  // live trial) this is the resolved licensed set (legacy/null → [{finance}]);
+  // when not entitled it's []. Never a client-sent field, so
+  // forbidNonWhitelisted is irrelevant.
   licensedModules: LicensedModule[]
 }
 
@@ -132,17 +133,65 @@ export class BillingService {
 
   /**
    * Module-aware entitlement. Semantics = ENTITLED (active / valid-trial) AND
-   * (core OR trial=all-access OR key ∈ resolved licensed set). A not-entitled
-   * school is false for EVERY module (so the guard emits SUBSCRIPTION_REQUIRED, not
-   * MODULE_NOT_LICENSED). A live trial passes EVERY module (all-access, no lockout).
-   * An active school with a legacy/null set resolves to finance-only.
+   * (core OR key ∈ resolved licensed set). A not-entitled school is false for
+   * EVERY module (so the guard emits SUBSCRIPTION_REQUIRED, not
+   * MODULE_NOT_LICENSED). TRIALING RESOLVES IDENTICALLY TO ACTIVE: a school with
+   * a legacy/NULL set resolves to finance-only, and sellable modules unlock
+   * per-key via the unlock endpoint (pre-Stripe stub) / future checkout.
    */
   async isEntitledForModule(schoolId: string, moduleKey: string): Promise<boolean> {
     const sub = await this.getOrCreateSubscription(schoolId)
     if (!this.computeEntitled(sub)) return false // not paying at all → false
     if (moduleKey === CORE_MODULE) return true // core is always-on when entitled
-    if (sub.status === 'trialing') return true // TRIAL = all-access to every module
     return this.resolveLicensed(sub).some((m) => m.key === moduleKey)
+  }
+
+  /**
+   * PRE-STRIPE FREE UNLOCK STUB — owner-only instant unlock of one sellable
+   * module. When per-module Stripe billing ships this becomes
+   * createCheckoutSession({ modules: [key] }) + webhook reconciliation; the
+   * route shape and BillingView response stay identical.
+   *
+   * Semantics:
+   *   • Resolve FIRST via resolveLicensed(sub) — the critical step: the first
+   *     unlock from a NULL/legacy set MATERIALIZES the resolved default
+   *     ([{finance}]) plus the new key, so finance is never dropped. An explicit
+   *     stored set is extended as-is (finance is NOT re-added).
+   *   • IDEMPOTENT: adding an already-owned key is a 200 no-op (no DB write, no
+   *     audit entry).
+   *   • Audit only on a real write: billing.module_unlocked / method free_stub.
+   *   • Returns the fresh BillingView (same shape as GET billing).
+   * No locking — this is a rare owner-only manual action; last-write-wins is
+   * acceptable.
+   */
+  async unlockModule(schoolId: string, key: ModuleKey): Promise<BillingView> {
+    // Defense-in-depth: the DTO's @IsIn(SELLABLE_MODULE_KEYS) already 400s bad
+    // keys (incl. 'core') at the pipe; this only fires on direct service calls.
+    if (!SELLABLE_MODULE_KEYS.includes(key)) {
+      throw new BadRequestException({
+        code: 'MODULE_NOT_SELLABLE',
+        message: `'${key}' is not a sellable module.`,
+      })
+    }
+
+    const sub = await this.getOrCreateSubscription(schoolId)
+    const resolved = this.resolveLicensed(sub)
+
+    if (!resolved.some((m) => m.key === key)) {
+      const next: LicensedModule[] = [...resolved, { key, tier: null }]
+      await this.prisma.subscription.update({
+        where: { schoolId },
+        data: { licensedModules: next as unknown as Prisma.InputJsonValue },
+      })
+      await this.audit.write({
+        schoolId,
+        action: 'billing.module_unlocked',
+        targetType: 'subscription',
+        metadata: { module: key, method: 'free_stub' },
+      })
+    }
+
+    return this.getBilling(schoolId)
   }
 
   // ── Read ────────────────────────────────────────────────────────────────────
@@ -159,17 +208,10 @@ export class BillingService {
       daysLeft = Math.max(0, Math.ceil((anchor.getTime() - Date.now()) / MS_PER_DAY))
     }
 
-    // Surface the licensed set so the FE matches the guard. A live trial shows the
-    // full sellable set (all-access); an active sub shows its resolved set
-    // (legacy/null → [{finance}]); not entitled → [] (nothing to render).
-    let licensedModules: LicensedModule[]
-    if (!isEntitled) {
-      licensedModules = []
-    } else if (sub.status === 'trialing') {
-      licensedModules = SELLABLE_MODULE_KEYS.map((key) => ({ key, tier: null }))
-    } else {
-      licensedModules = this.resolveLicensed(sub)
-    }
+    // Surface the licensed set so the FE matches the guard. TRIALING RESOLVES
+    // EXACTLY LIKE ACTIVE: the resolved set (legacy/null → [{finance}]);
+    // not entitled → [] (nothing to render).
+    const licensedModules: LicensedModule[] = isEntitled ? this.resolveLicensed(sub) : []
 
     return {
       status: sub.status,
@@ -550,8 +592,8 @@ export class BillingService {
     //     (omit the key) — never wipe a paid set on an unknown/misconfigured
     //     catalog or a malformed payload. This is the #1 fail-safe.
     //   • no items at all                      → LEAVE UNTOUCHED (omit the key).
-    // The stored set is IGNORED while trialing (trial = all-access) and only takes
-    // effect once the sub is active — so writing it during a trial is harmless.
+    // The stored set is honored in EVERY entitled status (trialing resolves like
+    // active), so webhook writes during a trial take effect immediately.
     const items = sub.items?.data ?? []
     const recognizedModules: ModuleKey[] = []
     let sawRecognizedPrice = false

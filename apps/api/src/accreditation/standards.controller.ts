@@ -25,7 +25,7 @@ import { UpdateStandardDto } from './dto/update-standard.dto.js'
  * use of the per-module entitlement backbone (after governance): the class-level
  * @RequiresModule('accreditation') makes the shared EntitlementGuard emit a 402
  * { code:'MODULE_NOT_LICENSED', module:'accreditation' } for an entitled-but-
- * unlicensed school (a trial school gets all-access → passes). Guard ORDER matches
+ * unlicensed school (trialing resolves like active: NULL → finance-only). Guard ORDER matches
  * the app: JwtAuthGuard (401) → RolesGuard (403) → EntitlementGuard (402).
  *
  * All roles may READ; owner/accountant may WRITE. Tenant isolation lives in the

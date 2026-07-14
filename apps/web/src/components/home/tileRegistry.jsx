@@ -123,6 +123,93 @@ export function tileLabel(key) {
   return MODULE_META[key]?.label ?? key
 }
 
+// Keyed lookup over the registry so the Membership cards, the locked-tile info
+// popup, and the unlock celebration all pull a module's hue/Art/route/tagline
+// from the ONE registry (no duplicated presentation config).
+export const TILE_BY_KEY = Object.fromEntries(HOME_TILES.map((t) => [t.key, t]))
+
+// Sell copy for the locked-tile info popup — a short pitch + concrete feature
+// bullets per sellable module, in the taglines' plain-language voice. FE-only
+// (the backend never touches copy); labels STAY in MODULE_META.
+export const MODULE_PITCH = {
+  enrollment: {
+    pitch:
+      "See who's enrolled, who's coming, and what it means for tuition — before the fall surprises you.",
+    bullets: [
+      'Live counts by grade, synced from your SIS (OneRoster CSV or Blackbaud)',
+      'Admissions funnel: inquiries → applications → enrolled',
+      'Retention and feeder-grade watchlists',
+      "The enrollment → tuition → cash briefing: what a soft grade does to next year's budget",
+      'Actuals vs. plan, year over year',
+    ],
+  },
+  governance: {
+    pitch: 'Board policies, meetings and minutes — organized, current, and ready for the next ask.',
+    bullets: [
+      'A policy register with owners and review dates',
+      'Overdue-review alerts in your morning briefing',
+      'Evidence-ready records when the board or an accreditor asks',
+      'Trustee-friendly: shows up in the Board lens',
+    ],
+  },
+  accreditation: {
+    pitch: 'Walk into your self-study with the evidence already filed.',
+    bullets: [
+      "A standards register that mirrors your accreditor's framework",
+      'Met / partially met / not met — rated at a glance',
+      'Evidence attached to every standard',
+      'Coverage-gap alerts in your briefing',
+      'A progress picture for the visiting team',
+    ],
+  },
+  facilities: {
+    pitch: "Every building, every repair, and what it'll cost — before it becomes an emergency.",
+    bullets: [
+      'A capital project and maintenance register',
+      'Recurring maintenance that never slips off the calendar',
+      'Actual cost vs. estimate on every job',
+      'Deferred-maintenance exposure in your briefing',
+    ],
+  },
+  advancement: {
+    pitch: 'Campaigns, gifts and pledges — with the follow-through numbers your board asks for.',
+    bullets: [
+      'A campaign register with goals and live progress',
+      'Gifts and pledges rolled up — booked vs. collected',
+      'Pledge follow-up flags in your briefing',
+      'Giving trends alongside your financials',
+    ],
+  },
+  strategy: {
+    pitch:
+      'Your strategic plan, measured against the live numbers — no more end-of-year scramble.',
+    bullets: [
+      'Goals bound to real metrics — progress computes itself from your actuals',
+      'Pace that knows direction: ahead, on track, or behind',
+      'A Horizon view of every pillar and goal',
+      'Plan check-ins in your morning briefing',
+      'Ask Penny how the plan is going — she answers with real figures',
+    ],
+  },
+  // Page-less modules — their value surfaces inside Analytics and the briefing.
+  hr: {
+    pitch: 'Staffing numbers that sharpen the ratios your board actually watches.',
+    bullets: [
+      'Student–teacher ratio, computed live',
+      'Staffing inputs that feed your benchmarks',
+      'Shows up inside Analytics and your briefing — no separate page to learn',
+    ],
+  },
+  planning: {
+    pitch: 'Multi-year forecasts and what-if scenarios, built on your real numbers.',
+    bullets: [
+      'Multi-year forecast foundations',
+      'Enrollment and tuition driver scenarios',
+      'Shows up inside Analytics and your briefing — no separate page to learn',
+    ],
+  },
+}
+
 // The sources-map handed to summariseBadges for the HOME v2 surface: every
 // tile's rollup, PLUS 'workflow' for the core row's Tasks count (same briefing
 // payload — no invented numbers). Built once from the registry so a new tile's

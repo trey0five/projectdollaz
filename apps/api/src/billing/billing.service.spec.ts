@@ -35,17 +35,24 @@ function sub(over: Partial<Subscription>): Subscription {
   } as Subscription
 }
 
-function makeService(fixture: Subscription): BillingService {
+function makeHarness(fixture: Subscription) {
+  const update = vi.fn().mockResolvedValue(fixture)
+  const auditWrite = vi.fn().mockResolvedValue(undefined)
   const prisma = {
     subscription: {
       findUnique: vi.fn().mockResolvedValue(fixture),
       upsert: vi.fn().mockResolvedValue(fixture),
+      update,
     },
   } as unknown as PrismaService
   const stripeClient = {} as StripeClientService
-  const audit = { write: vi.fn() } as unknown as AuditService
+  const audit = { write: auditWrite } as unknown as AuditService
   const config = { get: vi.fn().mockReturnValue(14) } as unknown as ConfigService
-  return new BillingService(prisma, stripeClient, audit, config)
+  return { svc: new BillingService(prisma, stripeClient, audit, config), update, auditWrite }
+}
+
+function makeService(fixture: Subscription): BillingService {
+  return makeHarness(fixture).svc
 }
 
 describe('BillingService.isEntitledForModule', () => {
@@ -76,11 +83,20 @@ describe('BillingService.isEntitledForModule', () => {
     expect(await svc.isEntitledForModule('school-1', 'planning')).toBe(false)
   })
 
-  it('trialing (future trialEnd) → EVERY module true (all-access)', async () => {
+  it('trialing (future trialEnd) + NULL → core:true, finance:true, others false (trial = active resolution)', async () => {
     const svc = makeService(sub({ status: 'trialing', trialEnd: FUTURE, licensedModules: null }))
-    for (const k of ['core', 'finance', 'planning', 'hr', 'governance', 'facilities']) {
-      expect(await svc.isEntitledForModule('school-1', k)).toBe(true)
-    }
+    expect(await svc.isEntitledForModule('school-1', 'core')).toBe(true)
+    expect(await svc.isEntitledForModule('school-1', 'finance')).toBe(true)
+    expect(await svc.isEntitledForModule('school-1', 'planning')).toBe(false)
+    expect(await svc.isEntitledForModule('school-1', 'hr')).toBe(false)
+    expect(await svc.isEntitledForModule('school-1', 'governance')).toBe(false)
+  })
+
+  it('trialing + [{governance}] → governance:true, finance:false, core:true (explicit set honored during trial)', async () => {
+    const svc = makeService(sub({ status: 'trialing', trialEnd: FUTURE, licensedModules: [{ key: 'governance' }] as unknown as Subscription['licensedModules'] }))
+    expect(await svc.isEntitledForModule('school-1', 'governance')).toBe(true)
+    expect(await svc.isEntitledForModule('school-1', 'finance')).toBe(false)
+    expect(await svc.isEntitledForModule('school-1', 'core')).toBe(true)
   })
 
   it('trialing EXPIRED trialEnd → all false (not entitled beats all-access)', async () => {
@@ -128,13 +144,19 @@ describe('BillingService.getBilling licensedModules', () => {
     expect(view.licensedModules).toEqual([{ key: 'finance', tier: 'plus' }])
   })
 
-  it('trialing → full sellable set (all non-core keys), all-access mirror', async () => {
+  it('trialing + NULL → [{key:finance,tier:null}] (trial resolves exactly like active)', async () => {
     const svc = makeService(sub({ status: 'trialing', trialEnd: FUTURE, licensedModules: null }))
     const view = await svc.getBilling('school-1')
-    const keys = view.licensedModules.map((m) => m.key)
-    expect(keys).toContain('finance')
-    expect(keys).toContain('planning')
-    expect(keys).not.toContain('core')
+    expect(view.licensedModules).toEqual([{ key: 'finance', tier: null }])
+  })
+
+  it('trialing + [{finance},{governance}] → exactly that set', async () => {
+    const svc = makeService(sub({ status: 'trialing', trialEnd: FUTURE, licensedModules: [{ key: 'finance' }, { key: 'governance' }] as unknown as Subscription['licensedModules'] }))
+    const view = await svc.getBilling('school-1')
+    expect(view.licensedModules).toEqual([
+      { key: 'finance', tier: null },
+      { key: 'governance', tier: null },
+    ])
   })
 
   it('not entitled (canceled) → []', async () => {
@@ -149,5 +171,100 @@ describe('BillingService.isEntitled (legacy default unchanged)', () => {
   it('active → true; canceled → false', async () => {
     expect(await makeService(sub({ status: 'active' })).isEntitled('school-1')).toBe(true)
     expect(await makeService(sub({ status: 'canceled', trialEnd: null })).isEntitled('school-1')).toBe(false)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// unlockModule — the PRE-STRIPE FREE UNLOCK STUB (owner-only endpoint logic).
+// Resolve-first merge semantics + idempotency + sellable-key defense-in-depth.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('BillingService.unlockModule', () => {
+  it('trialing + NULL unlock governance → writes [{finance},{governance}] (finance preserved), audits, returns BillingView', async () => {
+    const { svc, update, auditWrite } = makeHarness(
+      sub({ status: 'trialing', trialEnd: FUTURE, licensedModules: null }),
+    )
+    const view = await svc.unlockModule('school-1', 'governance')
+
+    expect(update).toHaveBeenCalledTimes(1)
+    expect(update).toHaveBeenCalledWith({
+      where: { schoolId: 'school-1' },
+      data: {
+        licensedModules: [
+          { key: 'finance', tier: null },
+          { key: 'governance', tier: null },
+        ],
+      },
+    })
+    expect(auditWrite).toHaveBeenCalledTimes(1)
+    expect(auditWrite).toHaveBeenCalledWith(
+      expect.objectContaining({
+        schoolId: 'school-1',
+        action: 'billing.module_unlocked',
+        targetType: 'subscription',
+        metadata: { module: 'governance', method: 'free_stub' },
+      }),
+    )
+    // BillingView shape (fixture mock still returns the pre-write row; shape is
+    // what matters here — the live path re-reads the updated row).
+    expect(view).toEqual(
+      expect.objectContaining({
+        status: expect.any(String),
+        isEntitled: expect.any(Boolean),
+        licensedModules: expect.any(Array),
+        daysLeft: expect.anything(),
+      }),
+    )
+  })
+
+  it('idempotent: key already owned → NO update, NO audit, still returns a BillingView', async () => {
+    const { svc, update, auditWrite } = makeHarness(
+      sub({
+        status: 'trialing',
+        trialEnd: FUTURE,
+        licensedModules: [{ key: 'finance' }, { key: 'governance' }] as unknown as Subscription['licensedModules'],
+      }),
+    )
+    const view = await svc.unlockModule('school-1', 'governance')
+    expect(update).not.toHaveBeenCalled()
+    expect(auditWrite).not.toHaveBeenCalled()
+    expect(view.licensedModules).toEqual([
+      { key: 'finance', tier: null },
+      { key: 'governance', tier: null },
+    ])
+  })
+
+  it('bogus key and core → BadRequestException MODULE_NOT_SELLABLE (defense-in-depth)', async () => {
+    const { svc, update } = makeHarness(sub({ status: 'trialing', trialEnd: FUTURE }))
+    for (const bad of ['bogus', 'core']) {
+      await expect(
+        svc.unlockModule('school-1', bad as never),
+      ).rejects.toMatchObject({ response: { code: 'MODULE_NOT_SELLABLE' } })
+    }
+    expect(update).not.toHaveBeenCalled()
+  })
+
+  it('active + [{planning}] unlock hr → writes [{planning},{hr}] (explicit set extended, finance NOT re-added)', async () => {
+    const { svc, update } = makeHarness(
+      sub({ status: 'active', licensedModules: [{ key: 'planning' }] as unknown as Subscription['licensedModules'] }),
+    )
+    await svc.unlockModule('school-1', 'hr')
+    expect(update).toHaveBeenCalledWith({
+      where: { schoolId: 'school-1' },
+      data: {
+        licensedModules: [
+          { key: 'planning', tier: null },
+          { key: 'hr', tier: null },
+        ],
+      },
+    })
+  })
+})
+
+describe('BillingController.addModule roles metadata', () => {
+  it('is owner-only', async () => {
+    const { BillingController } = await import('./billing.controller.js')
+    const { ROLES_KEY } = await import('../common/decorators/roles.decorator.js')
+    const roles = Reflect.getMetadata(ROLES_KEY, BillingController.prototype.addModule)
+    expect(roles).toEqual(['owner'])
   })
 })

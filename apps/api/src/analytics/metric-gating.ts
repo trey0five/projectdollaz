@@ -20,9 +20,10 @@
 //   • ONLY enrollment (→'enrollment') and hr (→'hr') are conditionally gated, each
 //     resolved with .catch(()=>false) → FAIL-CLOSED (a billing hiccup hides ONLY an
 //     enrollment/hr metric).
-//   • TRIAL = all-access (isEntitledForModule returns true for every module while
-//     trialing) → every metric shows; no gating effect during a trial.
-//   • DOCUMENTED BEHAVIOR CHANGE: an active finance-only school STOPS seeing
+//   • TRIALING RESOLVES LIKE ACTIVE (NULL/legacy → finance-only): a trial school
+//     WITHOUT the enrollment/hr modules has those metrics gated exactly like an
+//     active finance-only school — unlocking the module in Membership restores them.
+//   • DOCUMENTED BEHAVIOR: a finance-only school (trial or active) doesn't see
 //     enrollment_change_yoy and never sees student_teacher_ratio — correct per the
 //     module model (you licensed finance, not enrollment/hr).
 //

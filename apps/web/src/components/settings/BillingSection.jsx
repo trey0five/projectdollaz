@@ -1,26 +1,23 @@
 // Billing settings (Phase 1D). Owners see the current plan/status, trial days
 // left, Subscribe (Monthly / Yearly) and Manage-billing controls. Accountants /
 // viewers see the same status read-only. Handles the return from Checkout
-// (?checkout=success|cancel) by refreshing status.
-import { useEffect, useState } from 'react'
+// (?checkout=success|cancel) by refreshing status. The Membership Modules
+// manager below lets owners unlock sellable modules instantly (pre-Stripe stub).
+import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { useSearchParams } from 'react-router-dom'
-import { CreditCard, Check, AlertTriangle, Loader2, ExternalLink, Lock } from 'lucide-react'
+import { useLocation, useSearchParams } from 'react-router-dom'
+import { CreditCard, Check, AlertTriangle, Loader2, ExternalLink, Lock, Plus } from 'lucide-react'
 import { useBilling } from '../../context/BillingContext.jsx'
-import { useSchools } from '../../context/SchoolContext.jsx'
-import { billingApi, apiErrorMessage } from '../../lib/api.js'
+import { apiErrorMessage } from '../../lib/api.js'
 import { SELLABLE_MODULE_KEYS, MODULE_META } from '../../lib/modules.js'
+import { TILE_BY_KEY } from '../home/tileRegistry.jsx'
 import { FormError, FormSuccess } from '../auth/fields.jsx'
 import SettingsCard from './SettingsCard.jsx'
+import UnlockCelebration from './UnlockCelebration.jsx'
 
-// Fallback catalog derived from the web module mirror when the server catalog
-// field is unavailable (keyless dev still returns it, so this is a safety net).
-const FALLBACK_CATALOG = SELLABLE_MODULE_KEYS.map((key) => ({
-  key,
-  label: MODULE_META[key].label,
-  description: MODULE_META[key].description,
-  purchasable: false,
-}))
+// Page-less modules — no page of their own; their value surfaces inside
+// Analytics and the briefing (mirrors tileRegistry's route:null contract).
+const PAGE_LESS = new Set(['hr', 'planning'])
 
 const STATUS_META = {
   trialing: { label: 'Trial', cls: 'bg-gold/15 text-navy' },
@@ -54,126 +51,119 @@ function fmtDate(iso) {
   }
 }
 
-// Owner-only per-module picker. Pure UI from the catalog + the licensed set; the
-// Subscribe button hits the modular checkout (503 STRIPE_NOT_CONFIGURED in keyless
-// dev is caught and shown gracefully — the picker itself stays rendered).
-function ModulePicker() {
-  const { billing, hasModule, startModuleCheckout } = useBilling()
-  const { activeSchool } = useSchools()
-  const schoolId = activeSchool?.id ?? null
-
-  const [catalog, setCatalog] = useState(FALLBACK_CATALOG)
-  const [coreConfigured, setCoreConfigured] = useState(false)
-  const [selected, setSelected] = useState(null) // null = not yet seeded
-  const [busy, setBusy] = useState(false)
+// Membership Modules manager — one card per sellable module: art/hue from the
+// HOME tile registry, serif label from MODULE_META, the tile tagline as the
+// one-line benefit. Owners get an instant "Add module" button; everyone else
+// sees the same state read-only ("Owner can add").
+//
+// PRE-STRIPE STUB — "Add module" calls the free unlock endpoint
+// (POST /billing/modules); when per-module Stripe billing ships this handler
+// becomes startModuleCheckout([key]) and unlock happens on the webhook; the
+// card UI stays identical.
+function ModulesManager({ onUnlocked }) {
+  const { hasModule, unlockModule, isOwner, entitled } = useBilling()
+  const [busyKey, setBusyKey] = useState('') // '' | ModuleKey being unlocked
   const [err, setErr] = useState('')
+  const rootRef = useRef(null)
+  const { hash } = useLocation()
 
-  const isTrial = billing?.status === 'trialing'
-
-  // Load the server catalog once (works keyless — pure config/meta).
+  // Deep link: /settings/billing#modules scrolls the section into view.
+  const scrolledRef = useRef(false)
   useEffect(() => {
-    if (!schoolId) return
-    let cancelled = false
-    billingApi
-      .catalog(schoolId)
-      .then((res) => {
-        if (cancelled) return
-        if (Array.isArray(res.data?.modules)) setCatalog(res.data.modules)
-        setCoreConfigured(Boolean(res.data?.coreConfigured))
-      })
-      .catch(() => {
-        /* keep fallback catalog; picker still renders */
-      })
-    return () => {
-      cancelled = true
+    if (hash === '#modules' && !scrolledRef.current) {
+      scrolledRef.current = true
+      rootRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
-  }, [schoolId])
+  }, [hash])
 
-  // Seed the selection from the currently-licensed set at render time (repo
-  // convention: no setState-in-effect). Not during a trial (all-access, nothing
-  // "purchased" yet). Runs once (selected stays null until seeded).
-  if (selected === null && billing && !isTrial) {
-    const licensed = (billing.licensedModules ?? []).map((m) => m.key)
-    setSelected(new Set(licensed))
-  }
-  const chosen = selected ?? new Set()
-
-  const toggle = (key) => {
-    setSelected((prev) => {
-      const next = new Set(prev ?? [])
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
-  }
-
-  const subscribe = async () => {
-    if (busy) return
-    // Guard the empty selection: an empty modules[] would otherwise fall back to a
-    // legacy base-plan checkout — surprising. Require ≥1 module (core is implicit).
-    if (chosen.size === 0) {
-      setErr('Choose at least one module to subscribe (Core is always included).')
-      return
-    }
+  const add = async (key) => {
+    if (busyKey) return
     setErr('')
-    setBusy(true)
+    setBusyKey(key)
     try {
-      await startModuleCheckout(Array.from(chosen))
-      // On success the browser redirects; keyless dev throws (caught below).
+      await unlockModule(key)
+      onUnlocked(key)
     } catch (e) {
-      setErr(apiErrorMessage(e, 'Billing is not configured on this server yet.'))
+      setErr(apiErrorMessage(e, 'Could not add the module.'))
     } finally {
-      setBusy(false)
+      setBusyKey('')
     }
   }
 
   return (
-    <div className="mt-8 border-t border-border pt-6">
-      <h3 className="text-[17px] font-semibold text-navy">Modules</h3>
+    <div ref={rootRef} id="membership-modules" className="mt-8 border-t border-border pt-6">
+      <h3 className="font-serif text-[19px] font-semibold text-navy">Modules</h3>
       <p className="mt-1 text-[15px] text-muted">
-        {isTrial
-          ? 'All modules are included during your trial. Choose the modules to keep when you subscribe.'
-          : 'Choose the modules your school is licensed for. Core is always included.'}
+        Your plan includes Core and Finance. Add the modules your school needs — they unlock
+        instantly.
       </p>
 
-      <ul className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-        {catalog.map((m) => {
-          const licensed = hasModule(m.key)
-          const checked = chosen.has(m.key)
-          const disabled = !m.purchasable
+      <ul className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {SELLABLE_MODULE_KEYS.map((key) => {
+          const tile = TILE_BY_KEY[key]
+          if (!tile) return null
+          const { hue, Art, tagline } = tile
+          const label = MODULE_META[key]?.label ?? key
+          const unlocked = hasModule(key)
+          const busy = busyKey === key
           return (
-            <li key={m.key}>
-              <label
-                className={`flex h-full cursor-pointer items-start gap-3 rounded-xl border-2 px-4 py-3 transition-colors ${
-                  checked ? 'border-gold bg-gold/[0.06]' : 'border-border hover:border-gold/60'
-                } ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
-              >
-                <input
-                  type="checkbox"
-                  className="mt-1 h-4 w-4 accent-gold"
-                  checked={checked}
-                  disabled={disabled}
-                  onChange={() => toggle(m.key)}
-                />
-                <span className="min-w-0">
-                  <span className="flex items-center gap-2">
-                    <span className="text-[15px] font-semibold text-navy">{m.label}</span>
-                    {licensed && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-gold/15 px-2 py-0.5 text-[12px] font-semibold text-navy">
-                        <Check size={11} className="text-gold" /> Licensed
-                      </span>
-                    )}
-                  </span>
-                  <span className="mt-0.5 block text-[13px] leading-snug text-muted">
-                    {m.description}
-                  </span>
-                  {disabled && (
-                    <span className="mt-1 inline-flex items-center gap-1 text-[12px] font-medium text-muted">
-                      <Lock size={11} /> Not available yet
-                    </span>
-                  )}
+            <li
+              key={key}
+              className="flex h-full flex-col gap-3 rounded-xl border border-border bg-white px-4 py-4"
+            >
+              <div className="flex items-start gap-3">
+                <span
+                  aria-hidden="true"
+                  className="flex h-11 w-11 flex-none items-center justify-center rounded-xl"
+                  style={{ background: `color-mix(in srgb, ${hue} 12%, white)`, color: hue }}
+                >
+                  <Art width={28} height={28} />
                 </span>
-              </label>
+                <div className="min-w-0">
+                  <h4 className="font-serif text-[16px] font-semibold leading-snug text-navy">
+                    {label}
+                  </h4>
+                  <p className="mt-0.5 text-[13px] leading-snug text-muted">{tagline}</p>
+                  {PAGE_LESS.has(key) && (
+                    <p className="mt-1 text-[12px] italic text-muted/80">
+                      Lives inside Analytics and your briefing.
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="mt-auto">
+                {unlocked ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[12.5px] font-semibold text-emerald-700">
+                    <Check size={12} /> Unlocked
+                  </span>
+                ) : !entitled ? (
+                  // Expired trial / canceled sub: hasModule() is false for everything,
+                  // so without this branch every card (finance included) would offer
+                  // "Add module" that can't take effect. Subscription comes first.
+                  <span className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-muted">
+                    <Lock size={12} /> Subscribe to add modules
+                  </span>
+                ) : isOwner ? (
+                  <motion.button
+                    whileTap={{ scale: 0.98 }}
+                    type="button"
+                    onClick={() => add(key)}
+                    disabled={!!busyKey}
+                    className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full border-[1.5px] px-4 py-1 text-[12.5px] font-bold uppercase tracking-[0.06em] transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+                    style={{
+                      borderColor: `color-mix(in srgb, ${hue} 60%, transparent)`,
+                      color: hue,
+                    }}
+                  >
+                    {busy ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
+                    Add module
+                  </motion.button>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-muted">
+                    <Lock size={12} /> Owner can add
+                  </span>
+                )}
+              </div>
             </li>
           )
         })}
@@ -184,21 +174,6 @@ function ModulePicker() {
           <FormError>{err}</FormError>
         </div>
       )}
-
-      <motion.button
-        whileTap={{ scale: 0.98 }}
-        onClick={subscribe}
-        disabled={busy || chosen.size === 0}
-        className="btn-primary mt-5 inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:px-6"
-      >
-        {busy ? <Loader2 size={15} className="animate-spin" /> : <CreditCard size={15} />}
-        Subscribe / update plan
-      </motion.button>
-      {!coreConfigured && (
-        <p className="mt-2 text-[13px] text-muted">
-          Modular checkout is not configured on this server yet.
-        </p>
-      )}
     </div>
   )
 }
@@ -208,6 +183,7 @@ export default function BillingSection() {
   const [busy, setBusy] = useState('') // '' | 'monthly' | 'yearly' | 'portal'
   const [err, setErr] = useState('')
   const [ok, setOk] = useState('')
+  const [celebrateKey, setCelebrateKey] = useState('') // module just unlocked → celebration
   const [params, setParams] = useSearchParams()
 
   // Handle the Checkout return once (render-time transition — no setState-in-effect).
@@ -318,9 +294,10 @@ export default function BillingSection() {
           <div className="mb-5 flex items-start gap-2 rounded-lg bg-gold/10 px-4 py-3 text-[15px] text-navy">
             <Check size={16} className="mt-0.5 shrink-0 text-gold" />
             <span>
-              You have full access during your trial
-              {typeof daysLeft === 'number' ? ` — ${daysLeft} day${daysLeft === 1 ? '' : 's'} remaining` : ''}.
-              {isOwner ? ' Subscribe below to keep generating statements after it ends.' : ''}
+              Core and Finance are included during your trial
+              {typeof daysLeft === 'number' ? ` (${daysLeft} day${daysLeft === 1 ? '' : 's'} remaining)` : ''}
+              {' — add more modules below.'}
+              {isOwner ? ' Subscribe to keep generating statements after it ends.' : ''}
             </span>
           </div>
         )
@@ -386,8 +363,10 @@ export default function BillingSection() {
         </div>
       )}
 
-      {/* Owner-only per-module picker (additive; legacy buttons above unchanged). */}
-      {isOwner && <ModulePicker />}
+      {/* Membership Modules manager — ALL roles see module state; only owners
+          get the Add button. Unlocking fires the celebration below. */}
+      <ModulesManager onUnlocked={setCelebrateKey} />
+      <UnlockCelebration moduleKey={celebrateKey} onClose={() => setCelebrateKey('')} />
     </SettingsCard>
   )
 }

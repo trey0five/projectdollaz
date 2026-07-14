@@ -841,6 +841,12 @@ export const billingApi = {
       modules && modules.length ? { modules } : { plan },
     ),
   portal: (schoolId) => api.post(`/schools/${schoolId}/billing/portal`),
+  // PRE-STRIPE FREE UNLOCK STUB — owner-only instant module unlock. When
+  // per-module Stripe billing ships this becomes startModuleCheckout([key])
+  // (createCheckoutSession({ modules: [key] })) + webhook reconciliation; the
+  // route shape and the UI calling it stay identical. Returns the FULL billing
+  // payload (same shape as GET /billing) with the new key licensed.
+  addModule: (schoolId, key) => api.post(`/schools/${schoolId}/billing/modules`, { key }),
 }
 
 // The backend signals a lapsed trial / inactive subscription on a paid write

@@ -14,7 +14,7 @@ import { UpdatePlanDto } from './dto/update-plan.dto.js'
  * Phase 5 Strategic Planning — the PLANS controller (+ the computed reads). The 7th
  * licensable module: class-level @RequiresModule('strategy') makes the shared
  * EntitlementGuard emit 402 { code:'MODULE_NOT_LICENSED', module:'strategy' } for an
- * entitled-but-unlicensed school (a trial school gets all-access → passes). Guard
+ * entitled-but-unlicensed school (trialing resolves like active: NULL → finance-only). Guard
  * ORDER matches the app: JwtAuthGuard (401) → RolesGuard (403) → EntitlementGuard
  * (402). All roles READ; owner/accountant WRITE. Tenant isolation lives in the service.
  */

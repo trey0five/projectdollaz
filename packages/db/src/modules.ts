@@ -130,7 +130,7 @@ export function isCoreModule(key: string): boolean {
   return key === CORE_MODULE
 }
 
-/** The sellable (non-core) module keys — used to surface trial all-access. */
+/** The sellable (non-core) module keys — used by the catalog + unlock validation. */
 export const SELLABLE_MODULE_KEYS: ModuleKey[] = MODULE_KEYS.filter(
   (k) => k !== CORE_MODULE,
 )

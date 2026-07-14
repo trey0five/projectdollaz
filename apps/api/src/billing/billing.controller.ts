@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, HttpCode, Param, Post, UseGuards } from '@nestjs/common'
 import type { User } from '@finrep/db'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js'
 import { RolesGuard } from '../common/guards/roles.guard.js'
@@ -6,6 +6,7 @@ import { Roles } from '../common/decorators/roles.decorator.js'
 import { CurrentUser } from '../common/decorators/current-user.decorator.js'
 import { BillingService } from './billing.service.js'
 import { CreateCheckoutDto } from './dto/create-checkout.dto.js'
+import { AddModuleDto } from './dto/add-module.dto.js'
 
 @Controller('schools/:schoolId/billing')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -45,6 +46,23 @@ export class BillingController {
       })
     }
     return this.billing.createCheckoutSession(schoolId, dto.plan ?? 'monthly')
+  }
+
+  // Unlock a sellable module. OWNER only. PRE-STRIPE FREE UNLOCK STUB — when
+  // per-module Stripe billing ships this handler becomes
+  // createCheckoutSession({ modules: [dto.key] }) + webhook reconciliation; the
+  // route shape and BillingView response stay identical. Deliberately NO
+  // EntitlementGuard — billing routes must work for not-yet-entitled schools,
+  // same as checkout/portal. Idempotent: re-adding an owned key is a 200 no-op.
+  @Post('modules')
+  @HttpCode(200) // contract: 200 (incl. the idempotent no-op), not Nest's POST-default 201
+  @Roles('owner')
+  addModule(
+    @CurrentUser() _user: User,
+    @Param('schoolId') schoolId: string,
+    @Body() dto: AddModuleDto,
+  ) {
+    return this.billing.unlockModule(schoolId, dto.key)
   }
 
   // Create a Customer Portal session. OWNER only.

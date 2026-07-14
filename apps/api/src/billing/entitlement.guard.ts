@@ -20,10 +20,10 @@ import { REQUIRES_MODULE } from './requires-module.decorator.js'
  *     then isEntitledForModule → a DISTINCT 402 { code:'MODULE_NOT_LICENSED',
  *     module } for an entitled-but-unlicensed school.
  *
- * FAIL-SAFE DIRECTION: the ONLY newly-reachable 402 (MODULE_NOT_LICENSED) requires
- * an explicit tag AND an active school whose set omits the module — a trial gets
- * all-access and a legacy/null active sub resolves to {finance}, so no school that
- * passes today can 402.
+ * RESOLUTION: trialing and active subscriptions BOTH resolve their licensed set
+ * the same way (legacy/NULL → {finance} + always-on core), so a tagged sellable
+ * module 402s MODULE_NOT_LICENSED until it is unlocked via the membership
+ * section (pre-Stripe unlock stub / future per-module checkout).
  *
  * Resolves schoolId exactly like RolesGuard (params / x-school-id / body).
  */

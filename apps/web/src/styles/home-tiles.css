@@ -219,14 +219,71 @@
   }
 }
 
-/* ── Locked (upsell) tile: dimmed, no flood/shine, Add-ons pattern. ────────── */
+/* ── Locked (upsell) tile: dimmed, no flood/shine, Add-ons pattern. ──────────
+   Structure (a11y — no nested interactives): the card is a DIV holding two
+   SIBLING buttons — .tile-locked-hit (stretched, whole-card "+ Add" action)
+   and .tile-info-btn (the little (i) opening the module-pitch popup) — with
+   the visual .tile-body sandwiched between (aria-hidden, pointer-events off).
+   Card-level hover/focus styling therefore uses :focus-within so keyboard
+   focus on EITHER button still lights the card. */
 .module-tile--locked::before,
 .module-tile--locked::after {
   content: none;
 }
 .module-tile--locked {
+  position: relative;
   cursor: pointer;
   background: rgb(255 255 255 / 0.6);
+}
+/* The stretched primary hit — invisible, covers the whole card. */
+.tile-locked-hit {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border: none;
+  border-radius: inherit;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+.tile-locked-hit:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--tile-hue) 75%, #101c3d);
+  outline-offset: 3px;
+  border-radius: 18px;
+}
+/* Visuals sit under the hit and never intercept clicks. */
+.module-tile--locked .tile-body {
+  position: relative;
+  z-index: 0;
+  pointer-events: none;
+}
+/* The (i) info button — above the stretched hit, next to the lock chip. */
+.tile-info-btn {
+  position: absolute;
+  top: 12px;
+  right: 52px;
+  z-index: 2;
+  display: flex;
+  height: 28px;
+  width: 28px;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 9999px;
+  background: rgb(16 28 61 / 0.05);
+  color: rgb(16 28 61 / 0.45);
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease;
+}
+.tile-info-btn:hover {
+  color: var(--tile-hue);
+  background: color-mix(in srgb, var(--tile-hue) 12%, transparent);
+}
+.tile-info-btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--tile-hue) 75%, #101c3d);
+  outline-offset: 2px;
 }
 .module-tile--locked .tile-art {
   background: rgb(16 28 61 / 0.05);
@@ -239,11 +296,11 @@
   color: rgb(16 28 61 / 0.4);
 }
 .module-tile--locked:hover .tile-title,
-.module-tile--locked:focus-visible .tile-title {
+.module-tile--locked:focus-within .tile-title {
   color: rgb(16 28 61 / 0.75);
 }
 .module-tile--locked:hover,
-.module-tile--locked:focus-visible {
+.module-tile--locked:focus-within {
   border-color: color-mix(in srgb, var(--tile-hue) 40%, transparent);
   box-shadow: 0 10px 24px -12px color-mix(in srgb, var(--tile-hue) 30%, transparent);
 }

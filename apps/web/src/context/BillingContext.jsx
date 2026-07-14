@@ -96,20 +96,36 @@ export function BillingProvider({ children }) {
 
   // Per-module gate mirror of the backend isEntitledForModule. Order matches the
   // backend: entitlement is checked FIRST (a lapsed/canceled school is NOT
-  // licensed to anything — not even 'core'), THEN core-always / trial-all-access /
-  // the licensed set (legacy/null → finance). Defaults toward ACCESS only while
-  // billing is still loading (never flash a gate pre-load). Nothing hides today
-  // since every entitled school has finance.
+  // licensed to anything — not even 'core'), THEN core-always, THEN the licensed
+  // set (legacy/null → finance). Trialing resolves EXACTLY like active — the
+  // default plan is Core + Finance; other modules are added in Membership.
+  // Defaults toward ACCESS only while billing is still loading (never flash a
+  // gate pre-load).
   const hasModule = useCallback(
     (key) => {
       if (!billing) return true // still loading — don't flash a gate
       if (!billing.isEntitled) return false // parity with backend: not entitled → nothing, incl. core
       if (key === 'core') return true
-      if (billing.status === 'trialing') return true
       const set = billing.licensedModules ?? [{ key: 'finance' }]
       return set.some((m) => m.key === key)
     },
     [billing],
+  )
+
+  // Owner-only. PRE-STRIPE FREE UNLOCK STUB — instantly licenses a sellable
+  // module via POST /billing/modules. The endpoint returns the FULL billing
+  // payload, so we set state directly from the response (no second fetch);
+  // hasModule re-derives everywhere (tiles flip, sidebar upsells drop). When
+  // per-module Stripe billing ships this becomes startModuleCheckout([key]) +
+  // webhook reconciliation; callers stay identical.
+  const unlockModule = useCallback(
+    async (key) => {
+      if (!schoolId) throw new Error('No active school')
+      const res = await billingApi.addModule(schoolId, key)
+      setBilling(res.data)
+      return res.data
+    },
+    [schoolId],
   )
 
   const value = {
@@ -123,6 +139,7 @@ export function BillingProvider({ children }) {
     entitled: billing ? billing.isEntitled : true,
     licensedModules: billing?.licensedModules ?? [],
     hasModule,
+    unlockModule,
     refresh,
     startCheckout,
     startModuleCheckout,

@@ -273,7 +273,7 @@ export class OrgMetricsService {
     // metric if ANY reported school is entitled to the module (mirrors the org
     // ceiling = widest-in-org precedent). finance-family metrics are always kept.
     // A fully finance-only org sees neither org enrollment_change_yoy nor
-    // student_teacher_ratio; a trial (all-access on every school) sees all.
+    // student_teacher_ratio; trials resolve like active subs (NULL → finance-only).
     const entitled = await entitledModulesForOrg(
       reported.map((r) => r.schoolId),
       this.billing,
