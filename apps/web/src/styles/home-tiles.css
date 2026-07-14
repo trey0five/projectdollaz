@@ -219,6 +219,51 @@
   }
 }
 
+/* ── Command-center PANEL tiles (Finance home cards etc.): the module-tile
+   flood on cards with arbitrary body content. A stretched .tile-panel-hit link
+   makes the WHOLE card navigate; the body falls through to it except real
+   links/buttons inside (which stay clickable above the hit). On hover/focus the
+   body text flips white so the hue flood stays readable. ── */
+.module-tile--panel {
+  cursor: pointer;
+}
+.tile-panel-hit {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+}
+.tile-panel-hit:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--tile-hue) 75%, #101c3d);
+  outline-offset: 3px;
+  border-radius: 18px;
+}
+.module-tile--panel .tile-body {
+  z-index: 2;
+  pointer-events: none;
+}
+.module-tile--panel .tile-body :is(a, button) {
+  pointer-events: auto;
+}
+/* Compact art square for panel headers (the 60px home-tile art is too big). */
+.module-tile--panel .tile-art {
+  height: 36px;
+  width: 36px;
+  border-radius: 10px;
+}
+.module-tile--panel .tile-art svg {
+  height: 18px;
+  width: 18px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .module-tile--panel:hover .tile-body,
+  .module-tile--panel:focus-within .tile-body,
+  .module-tile--panel:hover .tile-body :is(h3, h4, p, dt, dd, span, div, li, time),
+  .module-tile--panel:focus-within .tile-body :is(h3, h4, p, dt, dd, span, div, li, time) {
+    color: #fff;
+  }
+}
+
 /* ── Locked (upsell) tile: dimmed, no flood/shine, Add-ons pattern. ──────────
    Structure (a11y — no nested interactives): the card is a DIV; one stretched
    .tile-locked-hit button covers the whole card and opens the module-pitch

@@ -32,6 +32,7 @@ import { useBilling } from '../context/BillingContext.jsx'
 import { usePersistence } from '../context/PersistenceContext.jsx'
 import { useUiV2 } from '../context/UiFlagContext.jsx'
 import ModuleTabs from '../components/module/ModuleTabs.jsx'
+import { moduleHue } from '../components/module/moduleAnatomy.js'
 import AddDataTab from '../components/wizard/AddDataTab.jsx'
 import { useAnalytics, useInsights, useBudget } from '../hooks/useAnalytics.js'
 import { useCompliance } from '../hooks/useCompliance.js'
@@ -82,37 +83,35 @@ function FinanceHeader() {
   )
 }
 
-// ── A reusable section card: gold-accented header IS a link to the sub-page,
-// a compact body, and a "View →" footer link. Not a nested component defined in
-// render — a module-scope helper (React-compiler discipline). ──────────────────
+// ── A reusable section card, styled like the HOME module tiles: the whole card
+// is clickable (a stretched link) and the finance-hue color-flood sweeps in on
+// hover (module-tile / module-tile--panel in home-tiles.css). Inner links or
+// buttons in the body stay independently clickable above the stretched hit.
+// Module-scope helper (React-compiler discipline). ──────────────────────────────
 function SectionCard(props) {
   const { to, title, viewLabel, children } = props
   const SectionIcon = props.Icon
   return (
-    <div className="card-soft flex flex-col p-4 sm:p-5">
-      <Link
-        to={to}
-        className="group flex items-center gap-2.5 outline-none"
-        aria-label={`Open ${title}`}
-      >
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gold/15 text-gold transition-colors group-hover:bg-gold-gradient group-hover:text-navy">
-          <SectionIcon size={18} />
+    <div
+      className="module-tile module-tile--panel"
+      style={{ '--tile-hue': moduleHue('finance') }}
+    >
+      <Link to={to} className="tile-panel-hit" aria-label={`Open ${title}`} />
+      <div className="tile-body">
+        <div className="flex items-center gap-2.5">
+          <span className="tile-art">
+            <SectionIcon size={18} />
+          </span>
+          <h3 className="tile-title font-serif text-lg font-semibold text-navy">{title}</h3>
+          <span className="tile-arrow ml-auto">
+            <ArrowRight size={16} />
+          </span>
+        </div>
+        <div className="flex-1">{children}</div>
+        <span className="inline-flex items-center gap-1 text-[13px] font-bold uppercase tracking-[0.08em] text-gold">
+          {viewLabel} <ArrowRight size={13} />
         </span>
-        <h3 className="font-serif text-lg font-semibold text-navy transition-colors group-hover:text-gold">
-          {title}
-        </h3>
-        <ArrowRight
-          size={16}
-          className="ml-auto text-muted transition-all group-hover:translate-x-0.5 group-hover:text-gold"
-        />
-      </Link>
-      <div className="mt-3 flex-1">{children}</div>
-      <Link
-        to={to}
-        className="mt-3 inline-flex items-center gap-1 text-[13px] font-bold uppercase tracking-[0.08em] text-gold transition-colors hover:text-gold-light"
-      >
-        {viewLabel} <ArrowRight size={13} />
-      </Link>
+      </div>
     </div>
   )
 }
