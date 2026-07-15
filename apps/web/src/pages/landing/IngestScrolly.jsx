@@ -127,7 +127,11 @@ export default function IngestScrolly({ act }) {
         briefing — no re-keying, no formatting.
       </p>
       <div ref={trackRef} className="relative h-[200vh] sm:h-[320vh]">
-        <div className="sticky top-0 flex h-screen items-center overflow-hidden">
+        {/* z-[3]: position:sticky boxes this subtree into its own stacking
+            context; without an explicit z it sits BELOW the sibling ledger
+            spine (z-[1]), so the medallion would render behind the line. Lift
+            it above the spine (still under the fixed nav at z-40). */}
+        <div className="sticky top-0 z-[3] flex h-screen items-center overflow-hidden">
           <TimestampMedallion time={act.time} active={active} />
           <div className="relative z-[2] mx-auto grid w-full max-w-6xl gap-3 px-5 pl-14 sm:gap-8 sm:px-8 sm:pl-16 lg:grid-cols-[1fr_1.5fr] lg:items-center lg:gap-12 lg:px-8">
             {/* ── Narration ──────────────────────────────────────────────── */}
