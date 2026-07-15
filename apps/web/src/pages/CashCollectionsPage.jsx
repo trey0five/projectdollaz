@@ -29,6 +29,7 @@ import {
   ArrowRight,
 } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
+import BackLink from '../components/ui/BackLink.jsx'
 import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
 import AgingBars from '../components/cash/AgingBars.jsx'
 import AgingRegisterTable from '../components/cash/AgingRegisterTable.jsx'
@@ -63,7 +64,8 @@ function bucketCounts(items) {
 // ── Full-page state panels (module-level so they're never re-defined in render) ──
 function PagePanel({ children }) {
   return (
-    <div className="mx-auto max-w-[1180px] px-4 py-6 sm:px-10 sm:py-8">
+    <div className="mx-auto max-w-[1180px] space-y-4 px-4 py-6 sm:px-10 sm:py-8">
+      <BackLink />
       <div className="card-soft flex flex-col items-center gap-3 px-6 py-14 text-center">
         {children}
       </div>
@@ -351,6 +353,7 @@ function CashCollectionsWorkspace() {
 
   return (
     <DomainCommandCenter
+      showBack
       eyebrow="Finance · Cash & Collections · live from QuickBooks"
       title="Cash & Collections"
       Icon={HandCoins}

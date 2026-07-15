@@ -22,6 +22,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Wallet, Scale, Building2, Landmark, ListChecks } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
+import BackLink from '../components/ui/BackLink.jsx'
 import PeriodSelector from '../components/analytics/PeriodSelector.jsx'
 import BudgetTabs from '../components/budget/BudgetTabs.jsx'
 import OrgRollup from '../components/budget/OrgRollup.jsx'
@@ -337,6 +338,7 @@ export default function BudgetPage() {
     <div className="min-h-screen">
       <BillingBanner />
       <div className="mx-auto max-w-[1280px] px-4 py-8 sm:px-10">
+        <BackLink className="mb-4" />
         {/* Page header: title + pinned school switcher & period selector. */}
         <div className="mb-5">
           <div className="flex flex-wrap items-center justify-between gap-3">

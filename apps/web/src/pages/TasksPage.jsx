@@ -1176,6 +1176,7 @@ function TasksWorkspace() {
   return (
     <>
       <DomainCommandCenter
+        showBack
         eyebrow="Core · Workflow engine · system of record"
         title="Tasks"
         Icon={ListChecks}

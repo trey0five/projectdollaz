@@ -26,6 +26,7 @@ import {
 import BillingBanner from '../components/BillingBanner.jsx'
 import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
 import ModuleTabs, { ModuleAccent } from '../components/module/ModuleTabs.jsx'
+import BackLink from '../components/ui/BackLink.jsx'
 import ModuleRegister from '../components/module/ModuleRegister.jsx'
 import { moduleHue } from '../components/module/moduleAnatomy.js'
 import AddDataTab from '../components/wizard/AddDataTab.jsx'
@@ -63,7 +64,8 @@ const PACE_TO_STATUS = { on_track: 'good', achieved: 'good', at_risk: 'watch', b
 // ── Light-theme gate / empty panels ──────────────────────────────────────────
 function CenteredPanel({ children }) {
   return (
-    <div className="mx-auto max-w-[1180px] px-4 py-6 sm:px-10 sm:py-8">
+    <div className="mx-auto max-w-[1180px] space-y-4 px-4 py-6 sm:px-10 sm:py-8">
+      <BackLink />
       <div className="card-soft flex flex-col items-center gap-3 px-6 py-14 text-center">
         <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gold-gradient text-navy shadow-glow">
           <Target size={26} />

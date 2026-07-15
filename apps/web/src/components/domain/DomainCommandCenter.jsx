@@ -31,6 +31,7 @@ import { motion, useReducedMotion } from 'framer-motion'
 import { Plus } from 'lucide-react'
 import DomainKpiCard from './DomainKpiCard.jsx'
 import NeedsAttentionPanel from './NeedsAttentionPanel.jsx'
+import BackLink from '../ui/BackLink.jsx'
 
 function AttentionPill({ count }) {
   const clear = !count
@@ -63,11 +64,16 @@ export default function DomainCommandCenter({
   attentionItems = [],
   headerAside = null,
   beforeBody = null,
+  showBack = false,
 }) {
   const reduce = useReducedMotion()
 
   return (
     <div className="mx-auto max-w-[1180px] space-y-6 px-4 py-6 sm:px-10 sm:py-8">
+      {/* Back to the dashboard — shown for standalone (non-module) domain pages
+          like Cash / Tasks / Knowledge that aren't wrapped in ModuleTabs (which
+          carries its own back link). */}
+      {showBack ? <BackLink className="-mb-1" /> : null}
       {/* ── Header row ─────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex items-center gap-3">

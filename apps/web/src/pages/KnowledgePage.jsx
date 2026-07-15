@@ -681,6 +681,7 @@ function KnowledgeWorkspace() {
       ) : null}
 
       <DomainCommandCenter
+        showBack
         eyebrow="Core · Knowledge engine · system of record"
         title="Knowledge"
         Icon={Library}

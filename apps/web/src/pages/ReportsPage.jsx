@@ -11,6 +11,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { FileBarChart2, Landmark, ArrowRight, ArrowLeft, Lock, CalendarClock, TrendingUp } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
+import BackLink from '../components/ui/BackLink.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { usePersistence } from '../context/PersistenceContext.jsx'
 import BoardReportWizard from '../components/reports/board/BoardReportWizard.jsx'
@@ -156,6 +157,7 @@ export default function ReportsPage() {
 function renderHub(onSelect) {
   return (
     <div key="hub">
+      <BackLink className="mb-5" />
       <motion.header
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}

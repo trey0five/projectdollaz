@@ -13,8 +13,9 @@
 // re-arms the mic only once Penny has FINISHED speaking (so it can't transcribe
 // its own TTS reply → feedback loop). The ask-bar dictation mic never auto-sends.
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
-import { Headphones, Plus } from 'lucide-react'
+import { ArrowLeft, Headphones, Plus } from 'lucide-react'
 import PennyAvatar from '../PennyAvatar.jsx'
 import { useSpeechInput } from '../hooks/useSpeechInput.js'
 import StudioBackdrop from './StudioBackdrop.jsx'
@@ -184,7 +185,13 @@ export default function StudioHero({ compact, name, chat, askBar, onNewChat }) {
             </button>
           </div>
         ) : (
-          <div className="px-6 pt-10 sm:px-10 sm:pt-12">
+          <div className="px-6 pt-6 sm:px-10 sm:pt-8">
+            <Link
+              to="/app"
+              className="mb-5 flex w-max items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.1em] text-white/55 transition-colors hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60"
+            >
+              <ArrowLeft size={14} /> Back to dashboard
+            </Link>
             <p className="mb-3.5 inline-flex items-center gap-2 text-[12px] font-bold uppercase tracking-[0.2em] text-penny-light">
               <span aria-hidden className="relative flex h-[7px] w-[7px]">
                 <span className="absolute inline-flex h-full w-full rounded-full bg-penny-light opacity-70 motion-safe:animate-ping motion-reduce:hidden" />
