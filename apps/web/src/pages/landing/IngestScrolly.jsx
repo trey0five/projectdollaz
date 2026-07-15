@@ -73,20 +73,36 @@ export default function IngestScrolly({ act }) {
 
   if (reduce) {
     return (
-      <section ref={sectionRef} id={act.anchorId} aria-labelledby={`${act.id}-h2`} className="relative bg-section scroll-mt-24 py-24">
+      <section
+        ref={sectionRef}
+        id={act.anchorId}
+        aria-labelledby={`${act.id}-h2`}
+        className={`relative scroll-mt-24 py-24 ${active ? 'bg-[#1D4ED8]' : 'bg-section'}`}
+      >
         <TimestampMedallion time={act.time} active={active} />
         <div className="relative z-[2] mx-auto max-w-6xl px-5 pl-14 pt-12 sm:px-8 sm:pl-16 lg:px-8">
           <p
-            className={`text-[12px] font-bold uppercase tracking-[0.22em] transition-colors duration-300 ${
-              active ? 'text-[#2563EB]' : 'text-[#7a5e00]'
+            className={`text-[12px] font-bold uppercase tracking-[0.22em] ${
+              active ? 'text-white' : 'text-[#7a5e00]'
             }`}
           >
             {act.kicker}
           </p>
-          <h2 id={`${act.id}-h2`} className="mt-3 max-w-3xl font-serif text-[32px] font-semibold leading-tight text-navy sm:text-[42px]">
+          <h2
+            id={`${act.id}-h2`}
+            className={`mt-3 max-w-3xl font-serif text-[32px] font-semibold leading-tight sm:text-[42px] ${
+              active ? 'text-white' : 'text-navy'
+            }`}
+          >
             {act.h2}
           </h2>
-          <p className="mt-4 max-w-2xl text-[16px] leading-relaxed text-muted">{act.body}</p>
+          <p
+            className={`mt-4 max-w-2xl text-[16px] leading-relaxed ${
+              active ? 'text-white/85' : 'text-muted'
+            }`}
+          >
+            {act.body}
+          </p>
           <div className="mt-10">
             <StaticFrame />
           </div>
@@ -97,6 +113,15 @@ export default function IngestScrolly({ act }) {
 
   return (
     <section ref={sectionRef} id={act.anchorId} aria-labelledby={`${act.id}-h2`} className="relative bg-section">
+      {/* Blue flood — fills the whole act while it's the centered timeframe. */}
+      <motion.span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 z-0"
+        style={{ background: 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 55%, #1E40AF 100%)' }}
+        initial={false}
+        animate={{ opacity: active ? 1 : 0 }}
+        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+      />
       <p className="sr-only">
         Drop a trial balance on Penny and it becomes your four statements, then tomorrow’s
         briefing — no re-keying, no formatting.
@@ -109,14 +134,16 @@ export default function IngestScrolly({ act }) {
             <div>
               <p
                 className={`text-[12px] font-bold uppercase tracking-[0.22em] transition-colors duration-300 ${
-                  active ? 'text-[#2563EB]' : 'text-[#7a5e00]'
+                  active ? 'text-white' : 'text-[#7a5e00]'
                 }`}
               >
                 {act.kicker}
               </p>
               <h2
                 id={`${act.id}-h2`}
-                className="mt-3 font-serif text-[26px] font-semibold leading-tight text-navy sm:text-[32px]"
+                className={`mt-3 font-serif text-[26px] font-semibold leading-tight transition-colors duration-300 sm:text-[32px] ${
+                  active ? 'text-white' : 'text-navy'
+                }`}
               >
                 {act.h2}
               </h2>
@@ -129,8 +156,20 @@ export default function IngestScrolly({ act }) {
                     transition={{ duration: 0.35, ease: [0.2, 0.8, 0.2, 1] }}
                     className={`absolute inset-x-0 top-0 ${beat === i ? '' : 'pointer-events-none'}`}
                   >
-                    <p className="font-serif text-[19px] font-semibold text-navy">{b.title}</p>
-                    <p className="mt-1.5 text-[15px] leading-relaxed text-muted">{b.line}</p>
+                    <p
+                      className={`font-serif text-[19px] font-semibold transition-colors duration-300 ${
+                        active ? 'text-white' : 'text-navy'
+                      }`}
+                    >
+                      {b.title}
+                    </p>
+                    <p
+                      className={`mt-1.5 text-[15px] leading-relaxed transition-colors duration-300 ${
+                        active ? 'text-white/85' : 'text-muted'
+                      }`}
+                    >
+                      {b.line}
+                    </p>
                   </motion.div>
                 ))}
               </div>
@@ -139,7 +178,9 @@ export default function IngestScrolly({ act }) {
                   <span
                     key={b.at}
                     className={`h-1 rounded-full transition-all duration-300 ${
-                      beat >= i ? 'w-7 bg-gold' : 'w-3.5 bg-rule/70'
+                      beat >= i
+                        ? `w-7 ${active ? 'bg-white' : 'bg-gold'}`
+                        : `w-3.5 ${active ? 'bg-white/40' : 'bg-rule/70'}`
                     }`}
                   />
                 ))}
@@ -154,7 +195,11 @@ export default function IngestScrolly({ act }) {
                   {act.chips.map((chip) => (
                     <li
                       key={chip}
-                      className="rounded-full border border-gold/40 bg-white px-3 py-1 text-[12.5px] font-semibold text-navy"
+                      className={`rounded-full border px-3 py-1 text-[12.5px] font-semibold transition-colors duration-300 ${
+                        active
+                          ? 'border-white/35 bg-white/15 text-white'
+                          : 'border-gold/40 bg-white text-navy'
+                      }`}
                     >
                       {chip}
                     </li>

@@ -69,20 +69,13 @@ export function TimestampMedallion({ time, tone = 'light', active = false }) {
     >
       <div
         className={`flex h-11 w-11 flex-col items-center justify-center rounded-full border transition-all duration-500 lg:h-[54px] lg:w-[54px] ${
+          // Active → a WHITE disc so it pops on the section's blue flood.
           active
-            ? tone === 'dark'
-              ? 'bg-navy-deep'
-              : 'bg-[#EFF4FF]'
-            : tone === 'dark'
-              ? 'bg-navy-deep'
-              : 'bg-cream'
-        } ${
-          active
-            ? 'scale-110 border-[#2563EB] shadow-[0_0_0_4px_rgba(37,99,235,0.16),0_8px_22px_-6px_rgba(37,99,235,0.55)]'
-            : lit
-              ? 'border-gold'
-              : 'border-rule'
-        } ${lit && !active && !reduce ? 'motion-safe:animate-[pulse-ring_1.4s_ease-out_1]' : ''}`}
+            ? 'scale-110 border-white bg-white shadow-[0_0_0_5px_rgba(255,255,255,0.35),0_10px_26px_-6px_rgba(37,99,235,0.7)]'
+            : `${tone === 'dark' ? 'bg-navy-deep' : 'bg-cream'} ${
+                lit ? 'border-gold' : 'border-rule'
+              } ${lit && !reduce ? 'motion-safe:animate-[pulse-ring_1.4s_ease-out_1]' : ''}`
+        }`}
       >
         <motion.span
           className="flex flex-col items-center leading-none"
@@ -92,14 +85,14 @@ export function TimestampMedallion({ time, tone = 'light', active = false }) {
         >
           <span
             className={`font-serif text-[13px] italic transition-colors duration-500 lg:text-[15px] ${
-              active ? (tone === 'dark' ? 'text-[#7DB0FF]' : 'text-[#2563EB]') : 'text-gold'
+              active ? 'text-[#2563EB]' : 'text-gold'
             }`}
           >
             {clock}
           </span>
           <span
             className={`mt-0.5 font-sans text-[8px] font-bold uppercase tracking-[0.18em] transition-colors duration-500 ${
-              active ? (tone === 'dark' ? 'text-[#7DB0FF]' : 'text-[#2563EB]') : 'text-gold'
+              active ? 'text-[#2563EB]' : 'text-gold'
             }`}
           >
             {meridiem}

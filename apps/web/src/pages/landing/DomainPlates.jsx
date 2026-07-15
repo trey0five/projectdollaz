@@ -29,13 +29,23 @@ export default function DomainPlates() {
       className="relative scroll-mt-24 bg-studio-page py-24"
     >
       <span aria-hidden="true" className="pointer-events-none absolute inset-0 bg-navy-radial" />
+      {/* Blue flood — washes the dark band action-blue while it's the centered
+          timeframe (z-0, under the plates + spine + medallion). */}
+      <motion.span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 z-0"
+        style={{ background: 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 55%, #1E40AF 100%)' }}
+        initial={false}
+        animate={{ opacity: active ? 1 : 0 }}
+        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+      />
       <TimestampMedallion time={DOMAIN_ACT.time} tone="dark" active={active} />
       {/* z-[2]: the plates span the center line — keep them above the z-[1] spine. */}
       <div className="relative z-[2] mx-auto max-w-6xl px-5 pl-14 pt-12 sm:px-8 sm:pl-16 lg:px-8 lg:pt-20">
         <Reveal>
           <p
             className={`text-[12px] font-bold uppercase tracking-[0.22em] transition-colors duration-300 ${
-              active ? 'text-[#7DB0FF]' : 'text-gold-light'
+              active ? 'text-white' : 'text-gold-light'
             }`}
           >
             {DOMAIN_ACT.kicker}
