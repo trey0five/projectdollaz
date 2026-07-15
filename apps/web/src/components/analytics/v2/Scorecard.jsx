@@ -139,6 +139,64 @@ function MetricRow({ m, scope, onCrossToChart, index, reduce }) {
   )
 }
 
+// Contextual metric TILE — the "no target" figures (mixes, per-student economics)
+// as a compact stat card instead of a full-width row of em-dashes: big value,
+// label, delta when present, and the chart cross-link on hover. Same av2-row-<key>
+// id so highlight flash + cross-links keep working.
+function ContextTile({ m, scope, onCrossToChart, index, reduce }) {
+  const deltaText = formatMetricDeltaOf(m)
+  const tone = deltaTone(m.periodOverPeriodDelta, m.goodDirection)
+  const flat = m.periodOverPeriodDelta == null || m.periodOverPeriodDelta === 0
+  const Arrow = m.periodOverPeriodDelta > 0 ? ArrowUpRight : ArrowDownRight
+  return (
+    <motion.div
+      id={`av2-row-${m.key}`}
+      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, delay: Math.min(index, 8) * 0.04, ease: 'easeOut' }}
+      className="group relative rounded-xl bg-white px-4 py-3.5 ring-1 ring-slate-200/60 transition-colors hover:bg-slate-50"
+    >
+      <p className="pr-6 text-[11.5px] font-bold uppercase tracking-[0.08em] text-muted">{m.label}</p>
+      <p className="mt-1.5 text-[22px] font-bold leading-none text-navy tabular-nums">{formatMetric(m)}</p>
+      <div className="mt-2 min-h-[20px]">
+        {deltaText ? (
+          <span
+            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11.5px] font-semibold tabular-nums ${
+              DELTA_CHIP_LIGHT[flat ? 'neutral' : tone]
+            }`}
+          >
+            {!flat && <Arrow size={11} strokeWidth={2.5} />}
+            {deltaText}
+          </span>
+        ) : (
+          <span className="text-[11.5px] text-slate-300">vs. prior — first period</span>
+        )}
+      </div>
+      {hasChart(m.key, scope) && (
+        <button
+          type="button"
+          onClick={() => onCrossToChart?.(m.key)}
+          aria-label={`Open the ${m.label} chart`}
+          className="absolute right-2.5 top-2.5 inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11.5px] font-semibold text-navy-soft opacity-0 transition-opacity hover:text-navy focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 group-hover:opacity-100"
+        >
+          chart <ArrowRight size={11} />
+        </button>
+      )}
+    </motion.div>
+  )
+}
+
+// Section eyebrow — a titled hairline that groups the board.
+function SectionRule({ title, hint }) {
+  return (
+    <div className="flex items-baseline gap-3 pt-1">
+      <h4 className="shrink-0 text-[12px] font-bold uppercase tracking-[0.14em] text-gold">{title}</h4>
+      {hint && <span className="hidden text-[12px] text-muted/70 sm:inline">{hint}</span>}
+      <span aria-hidden className="h-px flex-1 self-center bg-gradient-to-r from-rule/70 to-transparent" />
+    </div>
+  )
+}
+
 export default function Scorecard({
   scope = 'school',
   schoolId,
@@ -209,10 +267,21 @@ export default function Scorecard({
     return DEFAULT_KEYS
   }, [effectiveLayout])
 
-  // Only render rows whose metric is present in this period (gated/absent drop).
+  // Only render rows whose metric is present in this period (gated/absent drop),
+  // then SPLIT by nature: banded metrics (they carry a target) read as meter rows;
+  // contextual figures (no target — the old em-dash rows) read as stat tiles.
+  // Customize order is preserved WITHIN each group.
   const rows = useMemo(
     () => orderedKeys.map((k) => metricsByKey[k]).filter(Boolean),
     [orderedKeys, metricsByKey],
+  )
+  const healthRows = useMemo(
+    () => rows.filter((m) => (m.status && m.status !== 'neutral') || bandContext(m) != null),
+    [rows],
+  )
+  const contextRows = useMemo(
+    () => rows.filter((m) => !((m.status && m.status !== 'neutral') || bandContext(m) != null)),
+    [rows],
   )
 
   // Cross-link IN: scroll+flash the highlighted row once its data is present.
@@ -272,11 +341,24 @@ export default function Scorecard({
             Every number, one board — hover a row and click &ldquo;chart&nbsp;&rarr;&rdquo; to fly to its graph.
           </p>
         </div>
-        <div className="space-y-2">
-          {rows.map((m, i) => (
-            <MetricRow key={m.key} m={m} scope={scope} onCrossToChart={onCrossToChart} index={i} reduce={reduce} />
-          ))}
-        </div>
+        {healthRows.length > 0 && (
+          <div className="space-y-2">
+            <SectionRule title="Financial health" hint="measured against your targets" />
+            {healthRows.map((m, i) => (
+              <MetricRow key={m.key} m={m} scope={scope} onCrossToChart={onCrossToChart} index={i} reduce={reduce} />
+            ))}
+          </div>
+        )}
+        {contextRows.length > 0 && (
+          <div className="mt-5 space-y-2">
+            <SectionRule title="By the numbers" hint="context figures — no target, just the facts" />
+            <div className="grid grid-cols-2 gap-2 lg:grid-cols-3 xl:grid-cols-4">
+              {contextRows.map((m, i) => (
+                <ContextTile key={m.key} m={m} scope={scope} onCrossToChart={onCrossToChart} index={i} reduce={reduce} />
+              ))}
+            </div>
+          </div>
+        )}
         {rows.length === 0 && (
           <p className="py-8 text-center text-[14px] italic text-muted">No metrics for this period yet.</p>
         )}
