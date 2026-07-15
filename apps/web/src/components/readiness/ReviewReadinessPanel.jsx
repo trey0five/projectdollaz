@@ -24,6 +24,7 @@ import CorrectiveActionPlanSection from './cap/CorrectiveActionPlanSection.jsx'
 import YearEndChecklistSection from './checklist/YearEndChecklistSection.jsx'
 import ReadinessTabs from './ReadinessTabs.jsx'
 import RuleRow from './RuleRow.jsx'
+import BackLink from '../ui/BackLink.jsx'
 
 // Subtle tab badge chip reusing the health palette (good/watch/risk/neutral).
 function TabBadge({ palette, children }) {
@@ -41,12 +42,7 @@ function TabBadge({ palette, children }) {
 function PageHeader() {
   return (
     <div className="mb-5">
-      <Link
-        to="/app"
-        className="mb-4 inline-flex items-center gap-1.5 text-[15px] font-semibold text-muted transition-colors hover:text-gold"
-      >
-        <ArrowLeft size={15} /> Back to dashboard
-      </Link>
+      <BackLink className="mb-4" />
       <div className="flex items-center gap-2.5">
         <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gold-gradient text-white shadow-glow">
           <ShieldCheck size={22} />

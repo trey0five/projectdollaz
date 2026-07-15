@@ -36,6 +36,7 @@ import AnalyticsSubTabs from './AnalyticsSubTabs.jsx'
 import OverviewView from './OverviewView.jsx'
 import ChartsView from './ChartsView.jsx'
 import ScorecardView from './ScorecardView.jsx'
+import BackLink from '../../ui/BackLink.jsx'
 
 const SCHOOL_TREND_KEYS = [
   'operating_margin', 'days_cash_on_hand', 'months_operating_reserve', 'tuition_dependency', 'enrollment_change_yoy',
@@ -278,12 +279,7 @@ export default function AnalyticsV2() {
 function Shell() {
   return (
     <div className="mb-4">
-      <Link
-        to="/app"
-        className="mb-3 inline-flex items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.1em] text-muted transition-colors hover:text-navy"
-      >
-        ← Back to dashboard
-      </Link>
+      <BackLink className="mb-3" />
       <nav aria-label="Breadcrumb" className="mb-2 flex items-center gap-1 text-[12.5px] text-muted">
         <Link to="/app" className="hover:text-navy">Home</Link>
         <ChevronRight size={13} />

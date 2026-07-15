@@ -19,6 +19,7 @@ import { formatShortDate, PERIOD_LABELS } from '../../lib/format.js'
 import CreateSchoolForm from '../CreateSchoolForm.jsx'
 import ReportTabs from '../reports/ReportTabs.jsx'
 import SavedPeriodsRail from './SavedPeriodsRail.jsx'
+import BackLink from '../ui/BackLink.jsx'
 
 // Read-only statements view for one period (module scope — not an in-render def).
 function StatementsView({ bundle, label, periodId, periodEndDate, periodType, school, onBack }) {
@@ -158,19 +159,17 @@ export default function StatementsWorkspace() {
   if (hydrating) return <Splash />
 
   return (
-    <div className="mx-auto max-w-[1460px] px-4 py-6 sm:px-10">
-      <Link
-        to="/app"
-        className="mb-4 inline-flex items-center gap-1.5 text-[15px] font-semibold text-muted transition-colors hover:text-gold"
-      >
-        <ArrowLeft size={15} /> Back to dashboard
-      </Link>
+    <div className="mx-auto max-w-[1460px] bg-page-glow bg-no-repeat px-4 py-6 sm:px-10">
+      <BackLink className="mb-4" />
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2.5">
           <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gold-gradient text-white shadow-glow">
             <FileStack size={22} />
           </span>
           <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-gold">
+              Finance · Records
+            </p>
             <h1 className="font-serif text-xl font-semibold text-navy sm:text-2xl">
               Statements &amp; Periods
             </h1>
@@ -182,7 +181,7 @@ export default function StatementsWorkspace() {
         </div>
         <Link
           to="/data"
-          className="btn-ghost inline-flex shrink-0 items-center gap-1.5 self-start sm:self-auto"
+          className="btn-primary inline-flex shrink-0 items-center gap-1.5 self-start sm:self-auto"
         >
           <Database size={15} /> Go to Data hub
         </Link>

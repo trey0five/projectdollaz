@@ -20,6 +20,7 @@ import { formatMetricValue, deltaTone } from '../../../lib/metricMeta.js'
 import { schoolColor } from './chartPalette.js'
 import LineChart from '../charts/LineChart.jsx'
 import BarList from '../charts/BarList.jsx'
+import FancyDonut from '../charts/FancyDonut.jsx'
 import Legend from '../charts/Legend.jsx'
 import ChartCard from './ChartCard.jsx'
 import V2StatTile from './V2StatTile.jsx'
@@ -109,23 +110,19 @@ function MixBars({ metric, sub = 'Total revenue' }) {
   if (!parts) return <p className="py-8 text-center text-[13px] italic text-muted">Revenue mix not available.</p>
   const total = parts.reduce((a, p) => a + (Number.isFinite(p.value) ? p.value : 0), 0)
   return (
-    <div>
-      <p className="font-serif text-[26px] font-semibold leading-none text-navy">{formatMetric(metric)}</p>
-      <p className="mt-1 text-[12px] text-muted">{sub}</p>
-      <div className="mt-3">
-        <BarList
-          rows={parts.map((p) => ({
-            id: p.label,
-            label: p.label,
-            color: p.color,
-            value: p.value,
-            formatted: money(p.value),
-            share: total > 0 ? `${((p.value / total) * 100).toFixed(0)}%` : undefined,
-          }))}
-          formatter={money}
-        />
-      </div>
-    </div>
+    <FancyDonut
+      parts={parts.map((p) => ({
+        label: p.label,
+        value: p.value,
+        color: p.color,
+        formatted: money(p.value),
+        share: total > 0 ? `${((p.value / total) * 100).toFixed(0)}%` : undefined,
+        deemph: p.other,
+      }))}
+      centerTotal={formatMetric(metric)}
+      centerSub={sub}
+      formatter={money}
+    />
   )
 }
 

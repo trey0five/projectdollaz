@@ -63,23 +63,27 @@ export default function ReportTabs({ bundle, school, periodId = null, dateLabel 
   return (
     <ReportViewProvider bundle={bundle} school={school} dateLabel={dateLabel} periodLabel={periodLabel}>
       <LineageHost bundle={bundle} imports={imports} schoolId={schoolId} periodId={periodId}>
-      <div className="no-print border-b-2 border-rule bg-white">
-        <nav className="scrollbar-none mx-auto flex w-full max-w-[1120px] items-stretch justify-center overflow-x-auto sm:px-10">
+      <div className="no-print border-b border-rule/60 bg-white">
+        <nav className="scrollbar-none mx-auto flex w-full max-w-[1120px] items-center justify-center gap-1.5 overflow-x-auto px-3 py-2.5 sm:px-10">
           {TABS.map((t) => (
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
-              className={`relative -mb-0.5 shrink-0 whitespace-nowrap rounded-t-lg px-3 py-4 text-[13px] font-semibold uppercase tracking-wide transition-colors ${
-                tab === t.key ? 'text-navy' : 'text-muted hover:bg-section/60 hover:text-navy'
+              className={`relative shrink-0 whitespace-nowrap rounded-full px-3.5 py-2 text-[12.5px] font-semibold uppercase tracking-wide outline-none transition-colors focus-visible:ring-2 focus-visible:ring-gold/60 ${
+                tab === t.key ? 'text-white' : 'text-muted hover:bg-section/70 hover:text-navy'
               }`}
             >
-              {t.label}
+              {/* Active pill UNDER the label via paint order (never -z-10 — it would
+                  fall behind the white bar and vanish). */}
               {tab === t.key && (
                 <motion.span
-                  layoutId="history-tab-underline"
-                  className="absolute inset-x-0 -bottom-0.5 h-[4px] rounded-full bg-gold-gradient"
+                  aria-hidden
+                  layoutId="history-tab-pill"
+                  transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                  className="absolute inset-0 rounded-full bg-gold-gradient shadow-glow"
                 />
               )}
+              <span className="relative">{t.label}</span>
             </button>
           ))}
         </nav>

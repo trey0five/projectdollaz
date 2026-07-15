@@ -27,6 +27,7 @@ import {
   DonutSkeleton,
   HeadlineSkeleton,
 } from './skeletons.jsx'
+import BackLink from '../ui/BackLink.jsx'
 
 // Vital metrics shown as large hero tiles — exactly the band-bearing financial
 // health metrics. Hero treatment derives from this set BUT is reconciled against
@@ -86,12 +87,7 @@ const DOMAIN_SECTIONS = [
 function PageHeader() {
   return (
     <div className="mb-5">
-      <Link
-        to="/app"
-        className="mb-4 inline-flex items-center gap-1.5 text-[15px] font-semibold text-muted transition-colors hover:text-gold"
-      >
-        <ArrowLeft size={15} /> Back to dashboard
-      </Link>
+      <BackLink className="mb-4" />
       <div className="flex items-center gap-2.5">
         <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gold-gradient text-white shadow-glow">
           <BarChart3 size={22} />

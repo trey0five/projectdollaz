@@ -15,6 +15,7 @@ import { useCorrectiveActionPlan } from '../hooks/useCorrectiveActionPlan.js'
 import { useReconciliation } from '../hooks/useReconciliation.js'
 import BoardPacketPrintDocument from '../components/reports/BoardPacketPrintDocument.jsx'
 import EntitlementPausedPanel from '../components/analytics/EntitlementPausedPanel.jsx'
+import BackLink from '../components/ui/BackLink.jsx'
 
 export default function BoardPacketPrintPage() {
   const { activeSchool } = useSchools()
@@ -59,12 +60,7 @@ export default function BoardPacketPrintPage() {
     <div className="mx-auto max-w-[900px] px-4 py-8">
       {/* Screen-only toolbar (hidden in print). */}
       <div className="no-print mb-6 flex items-center justify-between">
-        <Link
-          to="/app"
-          className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-muted transition-colors hover:text-gold"
-        >
-          <ArrowLeft size={15} /> Back to dashboard
-        </Link>
+        <BackLink />
         <button onClick={() => window.print()} className="btn-primary inline-flex items-center gap-2">
           <Printer size={15} /> Print / Save as PDF
         </button>

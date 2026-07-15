@@ -55,13 +55,30 @@ export default function SavedPeriodsRail({
                   </span>
                 )}
               </div>
-              <p className="mt-0.5 text-[14px] text-muted">
-                Ends {formatShortDate(p.periodEndDate)} ·{' '}
-                {['cy', 'py', 'audit']
-                  .filter((r) => p.roles?.[r])
-                  .map((r) => r.toUpperCase())
-                  .join(' · ') || 'no imports'}
-              </p>
+              <p className="mt-0.5 text-[14px] text-muted">Ends {formatShortDate(p.periodEndDate)}</p>
+              {/* Import-role chips — colored so a card's data coverage reads at a glance. */}
+              <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                {['cy', 'py', 'audit'].filter((r) => p.roles?.[r]).length === 0 ? (
+                  <span className="text-[12px] italic text-muted/70">no imports</span>
+                ) : (
+                  ['cy', 'py', 'audit']
+                    .filter((r) => p.roles?.[r])
+                    .map((r) => (
+                      <span
+                        key={r}
+                        className={`rounded px-1.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wide ${
+                          r === 'cy'
+                            ? 'bg-gold/15 text-gold'
+                            : r === 'py'
+                              ? 'bg-navy-soft/15 text-navy-soft'
+                              : 'bg-emerald-100 text-emerald-700'
+                        }`}
+                      >
+                        {r === 'audit' ? 'Audit' : r.toUpperCase()}
+                      </span>
+                    ))
+                )}
+              </div>
             </div>
             <div className="flex shrink-0 items-center">
               {loadingId === p.id ? (
