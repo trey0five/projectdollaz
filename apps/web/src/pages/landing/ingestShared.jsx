@@ -3,6 +3,9 @@
 // trial-balance sheet, the manila folder, the app window + its three
 // crossfading screens, and the Ledger Press machine. Pure presentation; every
 // animated part arrives as MotionValue styles so the scene scrubs, never plays.
+// The folder + press roots carry `.ui-v1`: these props are period pieces (manila
+// paper, gold Penny machine) and must keep v1 navy/gold under the v2 remap.
+// The AppWindow/screens stay theme-following — they depict the product itself.
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion } from 'framer-motion'
 import { FileSpreadsheet } from 'lucide-react'
@@ -47,7 +50,7 @@ export function SheetCard({ rowStyles = null, className = 'w-40 sm:w-44' }) {
  *  flap is tall enough to conceal the sheet completely at rest. */
 export function FolderBack() {
   return (
-    <div className="relative h-40 w-48 sm:h-44 sm:w-52">
+    <div className="ui-v1 relative h-40 w-48 sm:h-44 sm:w-52">
       <div className="absolute inset-x-0 bottom-0 top-4 rounded-2xl border border-gold/50 bg-gold-pale shadow-card" />
       <div className="absolute left-3 top-0 h-7 w-24 rounded-t-xl border border-b-0 border-gold/50 bg-gold-pale" />
     </div>
@@ -56,7 +59,7 @@ export function FolderBack() {
 
 export function FolderFront({ frontStyle }) {
   return (
-    <div className="relative h-40 w-48 sm:h-44 sm:w-52">
+    <div className="ui-v1 relative h-40 w-48 sm:h-44 sm:w-52">
       <motion.div
         style={frontStyle}
         className="absolute inset-x-0 bottom-0 flex h-[85%] origin-bottom items-end rounded-2xl border border-gold/60 bg-gold-gradient p-3.5 shadow-card"
@@ -86,7 +89,7 @@ export function Folder({ frontStyle }) {
  */
 export function Press({ gearRotate, gearRotateCcw, lampOn, inkWidth, faceTextOpacity, glow, intakeGlow = 0 }) {
   return (
-    <div className="relative h-52 w-60 sm:h-60 sm:w-72">
+    <div className="ui-v1 relative h-52 w-60 sm:h-60 sm:w-72">
       <div className="absolute inset-x-6 top-0 flex h-9 items-center justify-center rounded-t-2xl border border-b-0 border-gold/50 bg-navy-deep">
         <span className="text-[9px] font-bold uppercase tracking-[0.3em] text-gold-light/90">
           Penny AI
