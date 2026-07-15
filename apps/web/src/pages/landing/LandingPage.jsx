@@ -8,6 +8,7 @@
 import { useCallback, useRef, useState } from 'react'
 import LandingNav from './LandingNav.jsx'
 import LandingHero from './LandingHero.jsx'
+import VideoHero from './VideoHero.jsx'
 import LedgerSpine from './LedgerSpine.jsx'
 import ActSection from './ActSection.jsx'
 import IngestScrolly from './IngestScrolly.jsx'
@@ -57,6 +58,10 @@ export default function LandingPage() {
     <div className="bg-cream text-ink">
       <LandingNav show={navShown} />
       <main id="main">
+        {/* The product video OPENS the page (cinematic entrance); the headline
+            hero now plays second, under it. VideoHero also reveals the fixed nav
+            so it doesn't wait for the below-the-fold hero intro. */}
+        <VideoHero onShown={revealNav} />
         <LandingHero onIntroOpen={revealNav} />
         {/* Acts I–VI share one relative container so the spine spans them all. */}
         <div ref={actsRef} className="relative">
