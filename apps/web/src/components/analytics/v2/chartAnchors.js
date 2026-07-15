@@ -40,7 +40,7 @@ export function chartAnchorFor(metricKey) {
 export const SCOPE_CHART_ANCHORS = {
   school: new Set(['chart-revmix', 'chart-expmix', 'chart-margin', 'chart-cash', 'chart-enrollment', 'chart-aidrate', 'chart-staffing']),
   compare: new Set(['chart-ppc', 'chart-fingerprint']),
-  diocese: new Set(['chart-cash', 'chart-smalls', 'chart-race']),
+  org: new Set(['chart-cash', 'chart-smalls', 'chart-race']),
 }
 
 /**

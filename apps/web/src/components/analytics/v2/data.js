@@ -3,7 +3,7 @@
 // setState + cancelled-flag, matching useAnalytics.js). These cover the reads the
 // existing hooks don't: a chosen school's snapshot periods (school scope can point
 // at any in-org school, not just the active one), per-key sparkline trends for the
-// calm Overview, and a multi-school trend fan-out for the compare/diocese time
+// calm Overview, and a multi-school trend fan-out for the compare/org time
 // charts (the compare endpoint is single-FY; time series come from /trends).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useEffect, useState } from 'react'
@@ -86,7 +86,7 @@ export function useSparkTrends(schoolId, keys) {
 
 /**
  * Fan out /trends for one metric across several schools → { [schoolId]: MetricTrend }.
- * Powers the compare/diocese multi-series line, emphasis line, small multiples, and
+ * Powers the compare/org multi-series line, emphasis line, small multiples, and
  * bar race — all from REAL registry trend points (no invented series).
  */
 export function useMultiSchoolTrends(schoolIds, metricKey) {

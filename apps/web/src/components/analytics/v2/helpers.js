@@ -3,15 +3,15 @@
 // fetching, NO rendering. Every number that reaches a chart still passes through
 // the canonical @finrep/analytics formatters at the render site (value parity).
 // ─────────────────────────────────────────────────────────────────────────────
-import { seriesColor } from '../charts/palette.js'
+import { schoolColor, DEEMPH } from './chartPalette.js'
 import { formatMetricValue, formatDelta, metricFormat } from '../../../lib/metricMeta.js'
 
 // Re-export the seam formatters so views import from one place. metricFormat already
 // applies the canonical mix→currency unit resolution (resolveDisplayUnit) internally.
 export { formatMetricValue, formatDelta, metricFormat }
 
-// The five REAL health dimensions the Compare radar fingerprints (contract-frozen).
-export const RADAR_DIMS = [
+// The five REAL health dimensions of the Compare fingerprint rows (contract-frozen).
+export const FINGERPRINT_DIMS = [
   { key: 'days_cash_on_hand', short: 'Cash' },
   { key: 'operating_margin', short: 'Margin' },
   { key: 'tuition_dependency', short: 'Tuition dep.' },
@@ -57,27 +57,42 @@ function minMaxNormalize(values, goodDirection) {
 }
 
 /**
- * Build the Radar axes + normalized series for the selected compare schools.
+ * Build the DimensionRows dims for the selected compare schools: each of the five
+ * health dimensions becomes a row-section with one cell per school (roster order,
+ * constant across dimensions — color follows the entity). Score is band-normalized
+ * (0 = risk bound, 100 = good bound) when the dim carries bands anywhere, else
+ * min-max across the compared schools so the shared band is still meaningful.
+ * Raw + formatted ride along so every bar can carry its direct value label.
  * @param {Array} schools  the CompareSchool[] subset (roster order = palette).
- * @returns {{axes:string[], series:[{id,color,vals}]}}
+ * @returns {Array<{key:string, short:string, cells:Array<{id,name,color,raw,formatted,score}>}>}
  */
-export function radarFingerprints(schools) {
-  const axes = RADAR_DIMS.map((d) => d.short)
-  // Per-dim normalization: band-normalize when the dim carries bands anywhere,
-  // else min-max across the compared schools so the axis is still meaningful.
-  const perDimNorm = RADAR_DIMS.map((dim) => {
-    const cells = schools.map((s) => s.metrics?.[dim.key])
+export function fingerprintDims(schools) {
+  return FINGERPRINT_DIMS.map((dim) => {
+    const cells = schools.map((s) => s.metrics?.[dim.key] ?? null)
     const anyBands = cells.find((c) => c?.bands)
-    if (anyBands) return cells.map((c) => bandNormalize(c?.value ?? null, c?.bands ?? null) ?? 0)
-    const gd = cells.find((c) => c)?.goodDirection ?? 'higher'
-    return minMaxNormalize(cells.map((c) => c?.value ?? null), gd).map((v) => v ?? 0)
+    let scores
+    if (anyBands) scores = cells.map((c) => bandNormalize(c?.value ?? null, c?.bands ?? null))
+    else {
+      const gd = cells.find((c) => c)?.goodDirection ?? 'higher'
+      scores = minMaxNormalize(cells.map((c) => c?.value ?? null), gd)
+    }
+    return {
+      key: dim.key,
+      short: dim.short,
+      cells: schools.map((s, si) => {
+        const c = cells[si]
+        const raw = c?.value ?? null
+        return {
+          id: s.schoolId,
+          name: s.schoolName,
+          color: schoolColor(s.seriesIndex ?? si),
+          raw,
+          formatted: c ? (c.formatted ?? formatMetric({ ...c, key: dim.key })) : null,
+          score: raw == null ? null : scores[si],
+        }
+      }),
+    }
   })
-  const series = schools.map((s, si) => ({
-    id: s.schoolName,
-    color: seriesColor(s.seriesIndex ?? si),
-    vals: RADAR_DIMS.map((_, di) => perDimNorm[di][si]),
-  }))
-  return { axes, series }
 }
 
 /** Pivot the compare schools onto one metric: [{schoolId,name,color,seriesIndex,cell}]. */
@@ -86,9 +101,28 @@ export function byMetric(schools, metricKey) {
     schoolId: s.schoolId,
     name: s.schoolName,
     seriesIndex: s.seriesIndex ?? i,
-    color: seriesColor(s.seriesIndex ?? i),
+    color: schoolColor(s.seriesIndex ?? i),
     cell: s.metrics?.[metricKey] ?? null,
   }))
+}
+
+/**
+ * Fold a mix metric's components into ≤ `cap` donut segments: sorted desc, the
+ * tail collapses into a DEEMPH-colored "Other" (dataviz: never cycle hues past
+ * the fixed slots). Colors are the categorical slots in order — mix components
+ * are a per-chart part-to-whole, not school entities, so slot order is stable
+ * within the chart.
+ * @returns {Array<{label:string, value:number, color:string, other?:boolean}>}
+ */
+export function foldMixComponents(components, cap = 6) {
+  const parts = (components || [])
+    .map((c) => ({ label: c.label, value: Number.isFinite(c.value) ? c.value : 0 }))
+    .sort((a, b) => b.value - a.value)
+  if (parts.length <= cap) return parts.map((p, i) => ({ ...p, color: schoolColor(i) }))
+  const kept = parts.slice(0, cap - 1).map((p, i) => ({ ...p, color: schoolColor(i) }))
+  const rest = parts.slice(cap - 1)
+  kept.push({ label: 'Other', value: rest.reduce((a, b) => a + b.value, 0), color: DEEMPH, other: true })
+  return kept
 }
 
 // ── Fiscal-year helpers (Jul–Jun; July anchor 'YYYY-07') ─────────────────────

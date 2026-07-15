@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ensureChartStyles } from './styles.js'
 import { useReducedMotion } from './useReducedMotion.js'
+import { useTooltip } from './Tooltip.jsx'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BarRace — ports the mockup's renderRace/playRace. A CSS-transition race: rows
@@ -14,6 +15,7 @@ import { useReducedMotion } from './useReducedMotion.js'
 export default function BarRace({ frames = [], max, autoplay = true, onReplay }) {
   ensureChartStyles()
   const reduce = useReducedMotion()
+  const tip = useTooltip()
   const lastIdx = Math.max(0, frames.length - 1)
   const [idx, setIdx] = useState(reduce ? lastIdx : 0)
   const timerRef = useRef(null)
@@ -116,10 +118,18 @@ export default function BarRace({ frames = [], max, autoplay = true, onReplay })
                 transform: `translateY(${rankOf[id] * ROW}px)`,
                 transition: reduce ? 'none' : undefined,
               }}
+              onMouseMove={(ev) =>
+                tip.show(
+                  { title: m.name, rows: [{ color: m.color, label: frame.year, value: finite(v).toLocaleString() }] },
+                  ev.clientX,
+                  ev.clientY,
+                )
+              }
+              onMouseLeave={() => tip.hide()}
             >
               <span className="fr-rname">
                 <i style={{ background: m.color }} />
-                {m.name}
+                <em title={m.name}>{m.name}</em>
               </span>
               <span className="fr-rbarwrap">
                 <span

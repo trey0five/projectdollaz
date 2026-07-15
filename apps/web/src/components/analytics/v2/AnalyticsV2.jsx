@@ -47,7 +47,7 @@ const DEFAULT_COLS = [
 
 export default function AnalyticsV2() {
   const reduce = useReducedMotion()
-  const { scope: globalScope, isMultiSchool, orgId } = useScope()
+  const { scope: globalScope, isMultiSchool, orgId, orgResolved } = useScope()
   const { activeSchool } = useSchools()
   const { loading: billingLoading, entitled, isOwner } = useBilling()
 
@@ -71,21 +71,23 @@ export default function AnalyticsV2() {
     }
   }, [activeSchool?.id])
 
-  // Read-only seed from the global scope (org→diocese, else school+activeSchool).
+  // Read-only seed from the global scope (org→'org', else school+activeSchool).
   // seed.schools is EMPTY so entering compare (via click or bare URL) does NOT write
   // the whole roster to ?schools= — that keeps schoolsExplicit false and lets the
   // smart 5-schools-with-data default apply; a chip pick then sets it explicitly.
   const seed = useMemo(
     () => ({
-      scope: globalScope === 'org' ? 'diocese' : 'school',
+      scope: globalScope === 'org' ? 'org' : 'school',
       school: activeSchool?.id ?? null,
       schools: [],
     }),
     [globalScope, activeSchool?.id],
   )
 
-  const nav = useAnalyticsNav({ isMultiSchool, seed })
-  const scopes = isMultiSchool ? ['school', 'compare', 'diocese'] : ['school']
+  // ready: the mount URL-normalization must wait until isMultiSchool is KNOWN
+  // (org roster resolved) — else it clamps a ?scope=org deep link to school.
+  const nav = useAnalyticsNav({ isMultiSchool, ready: orgResolved, seed })
+  const scopes = isMultiSchool ? ['school', 'compare', 'org'] : ['school']
 
   // ── School-year picker (drives school periodId + the org FY anchor) ──────────
   const primarySchool = nav.school || activeSchool?.id || null
@@ -112,13 +114,13 @@ export default function AnalyticsV2() {
   // ── Data reads (gated by scope so idle scopes don't fetch) ───────────────────
   const isSchool = nav.scope === 'school'
   const isCompare = nav.scope === 'compare'
-  const isDiocese = nav.scope === 'diocese'
-  const wantPerSchool = isCompare || isDiocese
+  const isOrg = nav.scope === 'org'
+  const wantPerSchool = isCompare || isOrg
 
   const { metrics } = useAnalytics(isSchool ? primarySchool : null, periodId)
   const sparkTrends = useSparkTrends(isSchool ? primarySchool : null, SCHOOL_TREND_KEYS)
   const { schools: compareAll } = useCompareMetrics(wantPerSchool ? orgId : null, fiscalYearStart || undefined)
-  const { metrics: orgMetrics } = useOrgMetrics(isDiocese ? orgId : null, fiscalYearStart || undefined)
+  const { metrics: orgMetrics } = useOrgMetrics(isOrg ? orgId : null, fiscalYearStart || undefined)
   const { layout } = useDashboardLayout(primarySchool)
 
   const metricsByKey = useMemo(() => {
@@ -161,12 +163,12 @@ export default function AnalyticsV2() {
     return perSchool.filter((s) => ids.has(s.schoolId))
   }, [perSchool, nav.schools, nav.schoolsExplicit, primarySchool])
 
-  // Multi-school trend fan-out for the compare/diocese time charts (real /trends).
+  // Multi-school trend fan-out for the compare/org time charts (real /trends).
   const trendIds = useMemo(() => {
     if (isCompare) return selectedSchools.map((s) => s.schoolId)
-    if (isDiocese) return perSchool.map((s) => s.schoolId)
+    if (isOrg) return perSchool.map((s) => s.schoolId)
     return []
-  }, [isCompare, isDiocese, selectedSchools, perSchool])
+  }, [isCompare, isOrg, selectedSchools, perSchool])
   const trends = useMultiSchoolTrends(trendIds, 'days_cash_on_hand')
 
   // Scorecard columns = the user's visible-metric set (shared by all three tables).
@@ -211,7 +213,7 @@ export default function AnalyticsV2() {
   // ── Shaped context per scope ─────────────────────────────────────────────────
   const schoolCtx = { id: primarySchool, periodId, metrics, metricsByKey, sparkTrends, asOf: schoolAsOf }
   const compareCtx = { schools: selectedSchools, trends, asOf: orgAsOf }
-  const dioceseCtx = { schools: perSchool, orgMetrics, trends, asOf: orgAsOf }
+  const orgCtx = { schools: perSchool, orgMetrics, trends, asOf: orgAsOf, primarySchoolId: primarySchool }
 
   const canCustomize = isOwner && entitled
 
@@ -250,17 +252,17 @@ export default function AnalyticsV2() {
 
       <div role="tabpanel" id="av2-panel" aria-labelledby={`av2-subtab-${nav.view}`} className="pt-5">
         {nav.view === 'overview' && (
-          <OverviewView scope={nav.scope} school={schoolCtx} compare={compareCtx} diocese={dioceseCtx} />
+          <OverviewView scope={nav.scope} school={schoolCtx} compare={compareCtx} org={orgCtx} />
         )}
         {nav.view === 'charts' && (
-          <ChartsView scope={nav.scope} school={schoolCtx} compare={compareCtx} diocese={dioceseCtx} onCrossToTable={onCrossToTable} />
+          <ChartsView scope={nav.scope} school={schoolCtx} compare={compareCtx} org={orgCtx} onCrossToTable={onCrossToTable} />
         )}
         {nav.view === 'scorecard' && (
           <ScorecardView
             scope={nav.scope}
             school={schoolCtx}
             compare={compareCtx}
-            diocese={dioceseCtx}
+            org={orgCtx}
             columns={columns}
             canCustomize={canCustomize}
             onCrossToChart={onCrossToChart}
@@ -293,7 +295,7 @@ function Shell() {
         </span>
         <div>
           <h1 className="font-serif text-xl font-semibold text-navy sm:text-2xl">Analytics</h1>
-          <p className="text-[14px] text-muted">One school, any school, or the whole diocese — the story, the graphs, the metrics.</p>
+          <p className="text-[14px] text-muted">One school, any school, or all your schools — the story, the graphs, the metrics.</p>
         </div>
       </div>
     </div>

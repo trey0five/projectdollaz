@@ -3,7 +3,7 @@
 // (useSearchParams, validate→default, push history) but over the TWO analytics axes
 // plus the chip selections:
 //
-//   ?scope=school|compare|diocese   (dropped when =school — the canonical default)
+//   ?scope=school|compare|org       (dropped when =school — the canonical default)
 //   &view=overview|charts|scorecard (dropped when =overview)
 //   &school=<id>                    (school scope only)
 //   &schools=<id>,<id>              (compare scope only, min 1)
@@ -12,9 +12,14 @@
 // Canonical clean URL = /analytics (school + overview, no chips). Every change
 // PUSHes history so the back button walks the trail. Per-scope last-view MEMORY
 // lives in a ref (viewByScope): switching scope restores the view you last had in
-// it. Storage persists the last {scope,view} as the fallback when the URL is clean;
-// URL always WINS over storage. The legacy ?metric=<key> drawer deep-link resolves
-// to view=scorecard&highlight=<key> (normalized once on mount).
+// it.
+//
+// Storage and the global-scope seed are folded INTO the URL once at mount (a
+// single replace — no history entry); afterwards the URL is the single source of
+// truth, so a clean URL unambiguously means school+overview and Back/forward walk
+// deterministically. The same mount pass normalizes the legacy pre-rename scope
+// alias (see SCOPE_ALIASES) and the legacy ?metric=<key> drawer deep-link
+// (→ view=scorecard&highlight=<key>).
 //
 // The hook never writes ScopeContext — analytics owns its scope space in the URL
 // only (read-only seed from the global scope happens in AnalyticsV2, passed as
@@ -23,14 +28,25 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
-export const SCOPES = ['school', 'compare', 'diocese']
+export const SCOPES = ['school', 'compare', 'org']
 export const VIEWS = ['overview', 'charts', 'scorecard']
 const STORAGE_KEY = 'finrep.analytics.nav'
+
+// Legacy scope alias — old links/storage may still carry scope=diocese; it maps to
+// 'org'. This is the ONLY place the string 'diocese' survives in the v2 folder
+// (code-only, never rendered).
+const SCOPE_ALIASES = { diocese: 'org' }
+
+function normalizeScope(raw) {
+  return SCOPES.includes(raw) ? raw : SCOPE_ALIASES[raw] ?? null
+}
 
 function readStored() {
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null')
-    if (raw && SCOPES.includes(raw.scope) && VIEWS.includes(raw.view)) return raw
+    if (!raw) return null
+    const scope = normalizeScope(raw.scope) // migrates legacy stored scope names
+    if (scope && VIEWS.includes(raw.view)) return { scope, view: raw.view }
   } catch {
     /* ignore */
   }
@@ -60,10 +76,15 @@ function buildSearch({ scope, view, school, schools, highlight }) {
 /**
  * @param {object} opts
  * @param {boolean} opts.isMultiSchool  false → every scope clamps to 'school'.
+ * @param {boolean} opts.ready  TRUE once isMultiSchool is actually KNOWN (the org
+ *        roster resolved). The mount normalization MUST wait for it: running while
+ *        isMultiSchool is still its loading default (false) would clamp a
+ *        ?scope=org deep link to school and REWRITE the URL — permanently locking
+ *        the page out of the org/compare scopes (the inverse of the stuck bug).
  * @param {{scope?:string, school?:string, schools?:string[]}} opts.seed  read-only
- *        seed from the global scope (org→diocese, else school+activeSchool).
+ *        seed from the global scope (org→'org', else school+activeSchool).
  */
-export function useAnalyticsNav({ isMultiSchool, seed }) {
+export function useAnalyticsNav({ isMultiSchool, ready = true, seed }) {
   const [params, setParams] = useSearchParams()
   const stored = useMemo(() => readStored(), [])
 
@@ -71,8 +92,16 @@ export function useAnalyticsNav({ isMultiSchool, seed }) {
   const rawView = params.get('view')
   const legacyMetric = params.get('metric') // pre-v2 drawer deep-link
 
-  // Effective scope: URL > storage > seed > 'school'; clamped for single-school.
-  let scope = SCOPES.includes(rawScope) ? rawScope : stored?.scope ?? seed?.scope ?? 'school'
+  // Flips true once the mount normalization below has committed the resolved state
+  // into the URL. Before that, render still falls back through storage/seed (so the
+  // very first paint of a clean URL honors them); after it, the URL alone decides.
+  const normalizedRef = useRef(false)
+
+  // Effective scope: URL (alias-normalized) > [pre-normalization only: storage >
+  // seed] > 'school'; clamped for single-school.
+  let scope =
+    normalizeScope(rawScope) ??
+    (normalizedRef.current ? 'school' : stored?.scope ?? seed?.scope ?? 'school')
   if (!isMultiSchool) scope = 'school'
 
   // Per-scope last-view memory (survives scope switches within the session). Read
@@ -80,12 +109,14 @@ export function useAnalyticsNav({ isMultiSchool, seed }) {
   // pair always comes from the URL. The ref is written in an effect below.
   const viewByScope = useRef({})
 
-  // Effective view: URL > (legacy metric ⇒ scorecard) > storage (seeded scope) >
-  // 'overview'. Scope switches restore per-scope memory via the handlers, which push
-  // the remembered view onto the URL — so render never needs to read the ref.
+  // Effective view: URL > (legacy metric ⇒ scorecard) > [pre-normalization only:
+  // storage for the resolved scope] > 'overview'. Scope switches restore per-scope
+  // memory via the handlers, which push the remembered view onto the URL — so
+  // render never needs to read the ref.
   let view
   if (VIEWS.includes(rawView)) view = rawView
   else if (legacyMetric) view = 'scorecard'
+  else if (normalizedRef.current) view = 'overview'
   else view = (stored?.scope === scope ? stored?.view : null) ?? 'overview'
 
   const highlight = params.get('highlight') || legacyMetric || null
@@ -105,21 +136,40 @@ export function useAnalyticsNav({ isMultiSchool, seed }) {
     writeStored(scope, view)
   }, [scope, view])
 
-  // Normalize the legacy ?metric= deep-link → ?view=scorecard&highlight= (replace,
-  // once), so a manual refresh/close doesn't reopen and the URL reads canonically.
+  // Mount normalization (replace, no history entry): fold (i) the legacy scope
+  // alias, (ii) the legacy ?metric= deep-link → view=scorecard&highlight=, and
+  // (iii) the storage/seed fallback into ONE explicit, self-describing URL. Only
+  // URL-carried chip params are re-emitted (never the seed), so the canonical
+  // clean URL stays clean and schoolsExplicit stays false until a real chip pick.
   useEffect(() => {
-    if (!legacyMetric) return
+    if (!ready) return undefined // wait for a KNOWN isMultiSchool before committing
     let cancelled = false
     Promise.resolve().then(() => {
       if (cancelled) return
-      const next = buildSearch({ scope, view: 'scorecard', school, schools, highlight: legacyMetric })
-      setParams(next, { replace: true })
+      let nextScope =
+        normalizeScope(params.get('scope')) ?? stored?.scope ?? seed?.scope ?? 'school'
+      if (!isMultiSchool) nextScope = 'school'
+      const urlView = params.get('view')
+      const nextView = VIEWS.includes(urlView)
+        ? urlView
+        : legacyMetric
+          ? 'scorecard'
+          : (stored?.scope === nextScope ? stored?.view : null) ?? 'overview'
+      const next = buildSearch({
+        scope: nextScope,
+        view: nextView,
+        school: params.get('school') || null,
+        schools: (params.get('schools') || '').split(',').filter(Boolean),
+        highlight: params.get('highlight') || legacyMetric || null,
+      })
+      if (next.toString() !== params.toString()) setParams(next, { replace: true })
+      normalizedRef.current = true
     })
     return () => {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [legacyMetric])
+  }, [legacyMetric, ready])
 
   const schoolsSig = schools.join(',')
   const current = { scope, view, school, schools, highlight }

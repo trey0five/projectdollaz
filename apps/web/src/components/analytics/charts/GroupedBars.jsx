@@ -1,85 +1,82 @@
 import { CHROME } from './palette.js'
 import { ensureChartStyles } from './styles.js'
 import { useReducedMotion } from './useReducedMotion.js'
-import { useMeasuredWidth } from './useMeasuredWidth.js'
 import { useTooltip } from './Tooltip.jsx'
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GroupedBars — ports the mockup's groupedBars(). Horizontal grouped bars with a
-// staggered growRect scaleX-in, 4px rounded ends, 2px gaps between the paired bars,
-// a row label + colored dot, the first bar's value labeled, and a per-bar tooltip.
-// Colors come IN via `colors` (one per series index within a row).
+// GroupedBars — horizontal grouped bars, rebuilt as an HTML grid (the old SVG
+// anchored labels textAnchor=end at the viewBox edge, which CLIPPED long school
+// names to "…eHigh School"). Each row: a real label column (ellipsis + measured
+// title attr only when the name genuinely overflows) with the school's identity
+// dot, then the paired 12px bars (2px gap, 4px rounded data-end, square at the
+// baseline, scaleX grow-in with stagger; static under reduced-motion), then BOTH
+// values right-aligned in a fixed gutter — never clipped. Measure hues come IN
+// via `colors` (one per series index); school identity = row label + dot. Every
+// bar is a hover/focus tooltip target with an aria-label; the caller renders the
+// Legend (2 series) above.
 //
 // props: rows=[{label,dot,vals:number[]}], colors:string[], names:string[], formatter?
 // ─────────────────────────────────────────────────────────────────────────────
+
+// Title attr only when the name genuinely overflows its cell (measured, not guessed).
+const fitTitle = (label) => (el) => {
+  if (!el) return
+  if (el.scrollWidth > el.clientWidth + 1) el.title = label
+  else el.removeAttribute('title')
+}
+
 export default function GroupedBars({ rows = [], colors = [], names = [], formatter = (v) => v }) {
   ensureChartStyles()
   const reduce = useReducedMotion()
   const tip = useTooltip()
-  const [containerRef, W] = useMeasuredWidth(520)
-
-  const bh = 13
-  const gap = 2
-  const rgap = 16
   const finite = (v) => (Number.isFinite(v) ? v : 0)
-  const P = { l: 96, r: 56, t: 4 }
-  const h = P.t + rows.length * (bh * 2 + gap + rgap)
-  const max = (rows.length ? Math.max(...rows.flatMap((r) => r.vals.map(finite))) : 1) * 1.05 || 1
+  const max = Math.max(1e-9, ...rows.flatMap((r) => r.vals.map(finite)))
+
+  const tipContent = (r, vi) => ({
+    title: r.label,
+    rows: [{ color: colors[vi], label: names[vi], value: formatter(r.vals[vi]) }],
+  })
 
   return (
-    <div ref={containerRef} style={{ width: '100%' }}>
-      <svg viewBox={`0 0 ${W} ${h}`} width="100%" height={h} role="img">
-        {rows.map((r, ri) => {
-          const y0 = P.t + ri * (bh * 2 + gap + rgap)
-          return (
-            <g key={r.label ?? ri}>
-              <text x={P.l - 10} y={y0 + bh + 3} textAnchor="end" fill={CHROME.ink} fontSize="12" fontWeight="700">
-                {r.label}
-              </text>
-              <circle cx={P.l - 84} cy={y0 + bh - 1} r="5" fill={r.dot} />
-              {r.vals.map((v, vi) => {
-                const w = Math.max(2, (W - P.l - P.r) * (finite(v) / max))
-                const y = y0 + vi * (bh + gap)
-                return (
-                  <g key={vi}>
-                    <rect
-                      x={P.l}
-                      y={y}
-                      width={w}
-                      height={bh}
-                      fill={colors[vi]}
-                      rx="4"
-                      ry="4"
-                      className={reduce ? undefined : 'fr-growx'}
-                      style={reduce ? undefined : { animationDelay: `${(ri * 2 + vi) * 0.06}s` }}
-                      onMouseMove={(ev) =>
-                        tip.show(
-                          { title: r.label, rows: [{ color: colors[vi], label: names[vi], value: formatter(v) }] },
-                          ev.clientX,
-                          ev.clientY,
-                        )
-                      }
-                      onMouseLeave={() => tip.hide()}
-                    />
-                    {vi === 0 && (
-                      <text
-                        x={P.l + w + 7}
-                        y={y + bh - 3}
-                        fill={CHROME.inkSoft}
-                        fontSize="11"
-                        style={{ fontVariantNumeric: 'tabular-nums', ...(reduce ? {} : { animationDelay: `${0.5 + ri * 0.08}s` }) }}
-                        className={reduce ? undefined : 'fr-fadein'}
-                      >
-                        {formatter(v)}
-                      </text>
-                    )}
-                  </g>
-                )
-              })}
-            </g>
-          )
-        })}
-      </svg>
+    <div role="list">
+      {rows.map((r, ri) => (
+        <div key={r.label ?? ri} role="listitem" className="fr-grouped-row">
+          <span className="fr-grouped-name" style={{ color: CHROME.ink }}>
+            <i aria-hidden="true" style={{ background: r.dot }} />
+            <em ref={fitTitle(r.label)}>{r.label}</em>
+          </span>
+          <span style={{ display: 'grid', gap: 2, minWidth: 0 }}>
+            {r.vals.map((v, vi) => (
+              <span
+                key={vi}
+                className={`fr-grouped-bar${reduce ? '' : ' fr-growx'}`}
+                tabIndex={0}
+                role="img"
+                aria-label={`${r.label}: ${names[vi]} ${formatter(v)}`}
+                style={{
+                  background: colors[vi],
+                  width: `${Math.max(1, (100 * finite(v)) / max)}%`,
+                  ...(reduce ? {} : { animationDelay: `${(ri * r.vals.length + vi) * 0.06}s` }),
+                }}
+                onMouseMove={(ev) => tip.show(tipContent(r, vi), ev.clientX, ev.clientY)}
+                onMouseLeave={() => tip.hide()}
+                onFocus={(ev) => {
+                  const rc = ev.currentTarget.getBoundingClientRect()
+                  tip.show(tipContent(r, vi), rc.left + rc.width / 2, rc.bottom)
+                }}
+                onBlur={() => tip.hide()}
+              />
+            ))}
+          </span>
+          <span style={{ display: 'grid', gap: 2 }}>
+            {r.vals.map((v, vi) => (
+              <span key={vi} className="fr-grouped-val" style={{ color: CHROME.inkSoft }}>
+                {formatter(v)}
+              </span>
+            ))}
+          </span>
+        </div>
+      ))}
     </div>
   )
 }

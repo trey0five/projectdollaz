@@ -60,7 +60,7 @@ export default function AnalyticsSubTabs({ view, onView }) {
             <span className={`text-[14px] font-semibold ${active ? 'text-navy' : 'text-muted'}`}>
               {meta.label}
             </span>
-            <span className="text-[11px] text-muted">{meta.caption}</span>
+            <span className="text-[10.5px] uppercase tracking-wide text-muted/80">{meta.caption}</span>
             {active &&
               (reduce ? (
                 <span className="absolute inset-x-3 -bottom-px h-[3px] rounded-full bg-gold" />

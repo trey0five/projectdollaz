@@ -1,11 +1,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Leaderboard — the Compare and Diocese scorecards: schools × metrics tables whose
-// COLUMNS are the user's visible-metric set (the same set that drives the School
-// scorecard, so the three surfaces agree). Click a column to sort (component-local;
-// a re-sort never recolours a school — the colour dot follows roster/seriesIndex).
-// Every cell prints the SERVER-STAMPED `formatted` string from the compare endpoint
-// (value parity with the single-school dashboard). The Diocese variant appends the
-// org roll-up row from useOrgMetrics (formatted via the canonical formatter).
+// Leaderboard — the Compare and All-schools scorecards: schools × metrics tables
+// whose COLUMNS are the user's visible-metric set (the same set that drives the
+// School scorecard, so the three surfaces agree). Click a column to sort
+// (component-local; a re-sort never recolours a school — the colour dot follows
+// roster/seriesIndex). Every cell prints the SERVER-STAMPED `formatted` string
+// from the compare endpoint (value parity with the single-school dashboard). The
+// Org variant appends the roll-up row from useOrgMetrics (canonical formatter).
 //
 // Visual language: the structure stays a sortable table, restyled — av2-card
 // chrome, 11px uppercase tracked slate-400 header, right-aligned tabular-nums
@@ -14,7 +14,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState } from 'react'
 import { ArrowDown, ArrowUp } from 'lucide-react'
-import { seriesColor } from '../charts/palette.js'
+import { schoolColor } from './chartPalette.js'
 import { lightStatus } from './statusStyle.js'
 import { formatMetric } from './helpers.js'
 
@@ -52,7 +52,7 @@ function SortHead({ label, active, dir, onClick, className = '' }) {
 function SchoolNameCell({ name, colorIndex }) {
   return (
     <span className="inline-flex items-center gap-2 text-navy">
-      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: seriesColor(colorIndex) }} />
+      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: schoolColor(colorIndex) }} />
       {name}
     </span>
   )
@@ -102,8 +102,8 @@ export function CompareLeaderboard({ schools, columns }) {
   )
 }
 
-/** Diocese scope: all reporting schools + a diocese roll-up row from org metrics. */
-export function DioceseScorecard({ schools, columns, orgMetrics }) {
+/** Org scope: every reporting school + the consolidated roll-up row from org metrics. */
+export function OrgScorecard({ schools, columns, orgMetrics }) {
   const [sort, toggle] = useSort(columns[0]?.key ?? '__name')
   const orgByKey = {}
   for (const m of orgMetrics?.metrics ?? []) orgByKey[m.key] = m
@@ -118,8 +118,8 @@ export function DioceseScorecard({ schools, columns, orgMetrics }) {
   })
   return (
     <div className="av2-card overflow-x-auto p-4 sm:p-5">
-      <h3 className="mb-1 font-serif text-base font-semibold text-navy">Diocese scorecard</h3>
-      <p className="mb-3 text-[13px] text-muted">Every reporting school, plus the consolidated diocese roll-up row.</p>
+      <h3 className="mb-1 font-serif text-base font-semibold text-navy">System scorecard</h3>
+      <p className="mb-3 text-[13px] text-muted">Every reporting school, plus the consolidated system roll-up row.</p>
       <table className="av2-lb">
         <thead>
           <tr>
@@ -144,7 +144,7 @@ export function DioceseScorecard({ schools, columns, orgMetrics }) {
           ))}
           {orgMetrics && (
             <tr className="av2-total border-t-2 border-gold/40 bg-gold/5 font-semibold text-navy">
-              <td className="bg-gold/5">⛪ Diocese (consolidated)</td>
+              <td className="bg-gold/5">All schools (consolidated)</td>
               {columns.map((c) => (
                 <td key={c.key} className="tabular-nums">
                   {orgByKey[c.key] ? formatMetric(orgByKey[c.key]) : '—'}

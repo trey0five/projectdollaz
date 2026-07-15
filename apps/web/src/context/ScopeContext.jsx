@@ -29,13 +29,19 @@ export function ScopeProvider({ children }) {
   // active school changes (the caller could switch into a different org's school).
   const { activeId } = useSchools()
   const [org, setOrg] = useState(null) // { id, name, schoolCount } | null
+  // True once the org fetch has RESOLVED (success, failure, or no-auth) — readers
+  // that must not act on a not-yet-loaded isMultiSchool gate on this.
+  const [orgResolved, setOrgResolved] = useState(false)
   const [scope, setScopeState] = useState(readStored)
 
   useEffect(() => {
     let cancelled = false
     Promise.resolve().then(async () => {
       if (!activeId) {
-        if (!cancelled) setOrg(null)
+        if (!cancelled) {
+          setOrg(null)
+          setOrgResolved(true)
+        }
         return
       }
       try {
@@ -44,8 +50,12 @@ export function ScopeProvider({ children }) {
         const d = res.data
         const schoolCount = Array.isArray(d?.schools) ? d.schools.length : 0
         setOrg(d?.id ? { id: d.id, name: d.name ?? 'Organization', schoolCount } : null)
+        setOrgResolved(true)
       } catch {
-        if (!cancelled) setOrg(null)
+        if (!cancelled) {
+          setOrg(null)
+          setOrgResolved(true)
+        }
       }
     })
     return () => {
@@ -75,8 +85,9 @@ export function ScopeProvider({ children }) {
       orgId: org?.id ?? null,
       orgName: org?.name ?? null,
       orgSchoolCount: org?.schoolCount ?? 0,
+      orgResolved,
     }),
-    [effectiveScope, setScope, isMultiSchool, org],
+    [effectiveScope, setScope, isMultiSchool, org, orgResolved],
   )
 
   return <ScopeContext.Provider value={value}>{children}</ScopeContext.Provider>
@@ -93,6 +104,7 @@ export function useScope() {
       orgId: null,
       orgName: null,
       orgSchoolCount: 0,
+      orgResolved: false,
     }
   }
   return ctx

@@ -1,19 +1,28 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// AnalyticsScopeBar — the persistent SCOPE axis (whose numbers): 🏫 My school ·
-// ⇄ Compare · ⛪ Diocese, plus a school-year picker and a chip row. School scope =
-// single-select chips; Compare = multi-select (min 1); Diocese = chips hidden. Chip
-// colour follows the roster INDEX (seriesColor) so it matches the charts' per-school
-// hue and never shifts on re-sort. A single-school org hides Compare + Diocese
-// (handled by the parent passing only ['school']).
+// AnalyticsScopeBar — the persistent SCOPE axis (whose numbers): My school ·
+// Compare · All schools, plus a school-year picker and a chip row. The ACTIVE
+// scope is unmistakable: a filled action-hue pill (gliding framer-motion layoutId,
+// static under reduced-motion) with white text + icon — the app-wide ModuleTabs
+// stepper-pill pattern. School scope = single-select chips; Compare = multi-select
+// (min 1); All-schools = chips hidden. Chip colour follows the roster INDEX
+// (schoolColor) so it matches the charts' per-school hue and never shifts on
+// re-sort. A single-school org hides Compare + All schools (handled by the parent
+// passing only ['school']).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useRef } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
-import { seriesColor } from '../charts/palette.js'
+import { School, ArrowLeftRight, LayoutGrid } from 'lucide-react'
+import { schoolColor } from './chartPalette.js'
+
+// The v2 action hue — moduleHue() fallback (#2563EB), inline like ModuleTabs
+// (comma'd arbitrary Tailwind classes drop out of the dev JIT).
+const ACTION_HUE = '#2563EB'
+const PILL_STYLE = { background: ACTION_HUE, boxShadow: `0 6px 18px -6px ${ACTION_HUE}cc` }
 
 const SCOPE_META = {
-  school: { icon: '🏫', label: 'My school' },
-  compare: { icon: '⇄', label: 'Compare' },
-  diocese: { icon: '⛪', label: 'Diocese' },
+  school: { Icon: School, label: 'My school' },
+  compare: { Icon: ArrowLeftRight, label: 'Compare' },
+  org: { Icon: LayoutGrid, label: 'All schools' },
 }
 
 export default function AnalyticsScopeBar({
@@ -50,12 +59,12 @@ export default function AnalyticsScopeBar({
     <div className="card-soft mb-4 overflow-hidden">
       {/* Scope buttons + year picker */}
       <div className="flex flex-wrap items-center gap-2 border-b border-rule/50 px-3 py-2.5 sm:px-4">
-        <div role="tablist" aria-label="Scope" className="av2-chiprow">
+        <div role="tablist" aria-label="Whose numbers" className="av2-chiprow">
           {scopes.map((key, i) => {
             const active = key === scope
-            const m = SCOPE_META[key]
+            const { Icon, label } = SCOPE_META[key]
             return (
-              <button
+              <motion.button
                 key={key}
                 ref={(el) => (tabRefs.current[i] = el)}
                 role="tab"
@@ -64,19 +73,30 @@ export default function AnalyticsScopeBar({
                 tabIndex={active ? 0 : -1}
                 onClick={() => onScope(key)}
                 onKeyDown={(e) => onScopeKeyDown(e, i)}
-                className={`relative flex shrink-0 items-center gap-1.5 rounded-[11px] px-3.5 py-2 text-[13.5px] font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-gold/50 ${
-                  active ? 'text-navy' : 'text-muted hover:bg-cream/70'
+                whileHover={!active && !reduce ? { y: -2 } : undefined}
+                style={{ '--tw-ring-color': ACTION_HUE }}
+                className={`relative flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-[13.5px] font-semibold outline-none transition-colors focus-visible:ring-2 ${
+                  active ? 'text-white' : 'text-navy hover:bg-cream/70'
                 }`}
               >
+                {/* Pill UNDER the content via paint order (rendered first + content
+                    lifted with relative) — NEVER -z-10, which drops it behind the
+                    card's opaque background and turns the active tab invisible. */}
                 {active &&
                   (reduce ? (
-                    <span className="absolute inset-0 -z-10 rounded-[11px] bg-gold/15" />
+                    <span aria-hidden className="absolute inset-0 rounded-full" style={PILL_STYLE} />
                   ) : (
-                    <motion.span layoutId="av2-scope-pill" className="absolute inset-0 -z-10 rounded-[11px] bg-gold/15" />
+                    <motion.span
+                      aria-hidden
+                      layoutId="av2-scope-pill"
+                      transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                      className="absolute inset-0 rounded-full"
+                      style={PILL_STYLE}
+                    />
                   ))}
-                <span aria-hidden>{m.icon}</span>
-                {m.label}
-              </button>
+                <Icon size={15} aria-hidden className="relative" />
+                <span className="relative">{label}</span>
+              </motion.button>
             )
           })}
         </div>
@@ -87,7 +107,8 @@ export default function AnalyticsScopeBar({
             <select
               value={fiscalYearStart ?? ''}
               onChange={(e) => onFy(e.target.value || null)}
-              className="rounded-lg border border-rule/60 bg-white px-2.5 py-1.5 text-[13px] font-semibold text-navy outline-none focus-visible:ring-2 focus-visible:ring-gold/50"
+              style={{ '--tw-ring-color': ACTION_HUE }}
+              className="rounded-lg border border-rule/60 bg-white px-2.5 py-1.5 text-[13px] font-semibold text-navy outline-none focus-visible:ring-2"
             >
               {fyOptions.map((o) => (
                 <option key={o.label} value={o.start}>
@@ -99,8 +120,8 @@ export default function AnalyticsScopeBar({
         )}
       </div>
 
-      {/* Chip row — school (single) / compare (multi). Diocese hides it. */}
-      {scope !== 'diocese' && roster.length > 0 && (
+      {/* Chip row — school (single) / compare (multi). All-schools scope hides it. */}
+      {scope !== 'org' && roster.length > 0 && (
         <div className="flex items-center gap-2 px-3 py-2.5 sm:px-4">
           <span className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
             {scope === 'compare' ? 'Compare' : 'School'}
@@ -108,7 +129,7 @@ export default function AnalyticsScopeBar({
           <div className="av2-chiprow">
             {roster.map((r) => {
               const idx = rosterIndex(r.id)
-              const color = seriesColor(idx < 0 ? 0 : idx)
+              const color = schoolColor(idx < 0 ? 0 : idx)
               const on =
                 scope === 'compare' ? selectedSchools.includes(r.id) : school === r.id
               return (

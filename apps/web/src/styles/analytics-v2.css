@@ -196,7 +196,7 @@
   background: #94a3b8;
 }
 
-/* ── The leaderboard tables (Compare / Diocese): tabular numerals, right-aligned
+/* ── The leaderboard tables (Compare / All-schools): tabular numerals, right-aligned
       value columns, 11px uppercase tracked slate-400 header, hover row tint, a
       hairline-separated grid that scrolls horizontally inside its own card (the
       page body never scrolls x). ── */
@@ -255,6 +255,39 @@
 }
 .fr-viztip.fr-viztip b {
   color: rgb(16 28 61 / 0.55);
+}
+
+/* ── Donut key list: one row per component — swatch dot · label · right-aligned
+      currency value. Text wears ink tokens (never the series hue); the folded
+      "Other" row wears the muted variant. ── */
+.av2-key {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
+  gap: 6px 10px;
+  align-items: center;
+  font-size: 12.5px;
+}
+.av2-key i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+.av2-key .av2-key-label {
+  color: #101c3d;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.av2-key .av2-key-val {
+  color: #3d4a6b;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.av2-key .av2-key-other {
+  color: #8a93ac;
 }
 
 /* The scope chip row scrolls on a phone rather than wrapping into a tall stack. */

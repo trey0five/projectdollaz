@@ -49,8 +49,12 @@ export default function V2StatTile({
       className={`relative flex min-w-0 flex-col gap-1.5 rounded-2xl p-4 ${ds.tile} ${ds.ring}`}
     >
       <span className="truncate text-[11px] font-bold uppercase tracking-[0.14em] text-white/60">{label}</span>
-      <span className="text-[32px] font-semibold leading-tight text-white tabular-nums">{display}</span>
+      {/* Big value wears proportional figures (tabular-nums makes 121 look loose
+          at display size); the delta chip below keeps tabular for alignment. */}
+      <span className="text-[32px] font-semibold leading-tight text-white">{display}</span>
 
+      {/* label / big value / context line. min-h keeps the tile rhythm; a tile
+          with neither delta nor sub renders NOTHING here (no stray em-dash). */}
       <div className="flex min-h-[22px] items-center">
         {deltaText != null ? (
           <span
@@ -61,9 +65,7 @@ export default function V2StatTile({
           </span>
         ) : sub ? (
           <span className="truncate text-[12px] text-white/50">{sub}</span>
-        ) : (
-          <span className="text-[12px] text-white/35">—</span>
-        )}
+        ) : null}
       </div>
 
       <div className="mt-auto h-10">

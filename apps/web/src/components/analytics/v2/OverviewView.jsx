@@ -6,9 +6,9 @@
 // LIGHT ASYMMETRIC BENTO below: revenue-mix donut (1/3) beside the days-cash
 // gradient-area trend (2/3), then the "what changed" callouts. Compare: the
 // liquidity leader/laggard tiles on the same hero + the multi-school days-cash
-// trend. Diocese: 4 org KPI tiles on the hero + the revenue-contribution bar.
-// Values are the SAME @finrep/analytics-formatted strings the Scorecard prints
-// (value parity); the motion gallery still lives in Charts.
+// trend. Org (all schools): 4 system KPI tiles on the hero + the per-school
+// revenue bar list. Values are the SAME @finrep/analytics-formatted strings the
+// Scorecard prints (value parity); the motion gallery still lives in Charts.
 //
 // Each scope is its OWN component so hooks stay unconditional across scope
 // switches. Entrances are staggered fade-ups (once); reduced-motion → opacity.
@@ -17,17 +17,18 @@ import { useMemo, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { TrendingDown, TrendingUp } from 'lucide-react'
 import { formatMetricValue, deltaTone } from '../../../lib/metricMeta.js'
-import { seriesColor } from '../charts/palette.js'
-import Donut from '../charts/Donut.jsx'
+import { schoolColor } from './chartPalette.js'
 import LineChart from '../charts/LineChart.jsx'
-import StackedBar from '../charts/StackedBar.jsx'
+import BarList from '../charts/BarList.jsx'
 import Legend from '../charts/Legend.jsx'
 import ChartCard from './ChartCard.jsx'
 import V2StatTile from './V2StatTile.jsx'
 import { lightStatus } from './statusStyle.js'
-import { formatMetric, formatMetricDeltaOf } from './helpers.js'
+import { formatMetric, formatMetricDeltaOf, foldMixComponents } from './helpers.js'
 
 const SCHOOL_KPI_KEYS = ['operating_margin', 'days_cash_on_hand', 'months_operating_reserve', 'tuition_dependency']
+
+const money = (v) => formatMetricValue(v, 'currency')
 
 /** The navy hero band the KPI tiles sit on — the home BriefingBand's sibling. */
 function HeroBand({ eyebrow, asOf, children }) {
@@ -98,6 +99,36 @@ function Callout({ metric, index = 0 }) {
   )
 }
 
+/** Composition as a BAR LIST (the dataviz "magnitude" form) with the total as a
+    headline. School revenue is heavily skewed (tuition ≈ 87%), which turns a
+    donut into one fat ring with crumbs — bars keep every category readable.
+    Segments are folded to ≤6 with a DEEMPH "Other" (foldMixComponents), so hues
+    never cycle past the fixed slots. */
+function MixBars({ metric, sub = 'Total revenue' }) {
+  const parts = metric?.components?.length ? foldMixComponents(metric.components) : null
+  if (!parts) return <p className="py-8 text-center text-[13px] italic text-muted">Revenue mix not available.</p>
+  const total = parts.reduce((a, p) => a + (Number.isFinite(p.value) ? p.value : 0), 0)
+  return (
+    <div>
+      <p className="font-serif text-[26px] font-semibold leading-none text-navy">{formatMetric(metric)}</p>
+      <p className="mt-1 text-[12px] text-muted">{sub}</p>
+      <div className="mt-3">
+        <BarList
+          rows={parts.map((p) => ({
+            id: p.label,
+            label: p.label,
+            color: p.color,
+            value: p.value,
+            formatted: money(p.value),
+            share: total > 0 ? `${((p.value / total) * 100).toFixed(0)}%` : undefined,
+          }))}
+          formatter={money}
+        />
+      </div>
+    </div>
+  )
+}
+
 // Build a LineChart series set from per-school trend fan-out for one metric.
 function trendSeries(schools, bySchool) {
   const series = []
@@ -109,7 +140,7 @@ function trendSeries(schools, bySchool) {
     series.push({
       id: s.schoolName,
       label: s.schoolName,
-      color: seriesColor(s.seriesIndex ?? 0),
+      color: schoolColor(s.seriesIndex ?? 0),
       vals: t.points.map((p) => p.value ?? 0),
     })
   }
@@ -118,8 +149,6 @@ function trendSeries(schools, bySchool) {
 
 function SchoolOverview({ school }) {
   const m = school.metricsByKey
-  const rev = m.revenue_mix
-  const revParts = rev?.components?.length ? rev.components : null
   const cashTrend = school.sparkTrends?.days_cash_on_hand
   const callouts = useMemo(
     () =>
@@ -156,23 +185,12 @@ function SchoolOverview({ school }) {
       {/* Asymmetric bento: donut 1/3 · days-cash gradient area 2/3. */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <ChartCard title="Where the money comes from" sub="Revenue mix" asOf={school.asOf} delay={0.06}>
-          {revParts ? (
-            <Donut
-              parts={revParts.map((c) => c.value ?? 0)}
-              colors={revParts.map((_, i) => seriesColor(i))}
-              names={revParts.map((c) => c.label)}
-              center={formatMetric(rev)}
-              sub="Total revenue"
-              formatter={(v) => formatMetricValue(v, 'currency')}
-            />
-          ) : (
-            <p className="py-8 text-center text-[13px] italic text-muted">Revenue mix not available.</p>
-          )}
+          <MixBars metric={m.revenue_mix} />
         </ChartCard>
         <ChartCard title="Days cash on hand" sub="Liquidity across your saved periods" asOf={school.asOf} delay={0.12} className="lg:col-span-2">
           {cashTrend?.points?.length >= 2 ? (
             <LineChart
-              series={[{ id: 'cash', label: 'Days cash', color: seriesColor(0), vals: cashTrend.points.map((p) => p.value ?? 0) }]}
+              series={[{ id: 'cash', label: 'Days cash', color: schoolColor(0), vals: cashTrend.points.map((p) => p.value ?? 0) }]}
               labels={cashTrend.points.map((p) => p.label)}
               area
               formatter={(v) => Math.round(v).toLocaleString()}
@@ -244,19 +262,37 @@ function CompareOverview({ compare }) {
   )
 }
 
-function DioceseOverview({ diocese }) {
-  const org = diocese.orgMetrics
+function OrgOverview({ org }) {
+  const om = org.orgMetrics
   const orgByKey = {}
-  for (const mm of org?.metrics ?? []) orgByKey[mm.key] = mm
-  const contrib = diocese.schools
-    .map((s, i) => ({ name: s.schoolName, value: s.metrics?.revenue_mix?.value ?? 0, color: seriesColor(s.seriesIndex ?? i) }))
-    .filter((x) => x.value > 0)
+  for (const mm of om?.metrics ?? []) orgByKey[mm.key] = mm
+  // One row per reporting school — magnitude form. Color follows the ENTITY
+  // (roster seriesIndex), never rank; BarList sorts desc without repainting.
+  const contribRows = org.schools
+    .map((s, i) => {
+      const cell = s.metrics?.revenue_mix
+      const value = cell?.value ?? 0
+      if (!(value > 0)) return null
+      return {
+        id: s.schoolId,
+        label: s.schoolName,
+        color: schoolColor(s.seriesIndex ?? i),
+        value,
+        formatted: cell?.formatted ?? money(value),
+      }
+    })
+    .filter(Boolean)
+  const contribTotal = contribRows.reduce((a, r) => a + r.value, 0)
+  const rows = contribRows.map((r) => ({
+    ...r,
+    share: contribTotal > 0 ? `${Math.round((100 * r.value) / contribTotal)}%` : null,
+  }))
   return (
     <div className="space-y-6">
-      <HeroBand eyebrow="Diocese vitals" asOf={diocese.asOf}>
+      <HeroBand eyebrow="System vitals" asOf={org.asOf}>
         <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
-          <V2StatTile index={0} label="Schools" value={String(org?.schoolCount ?? '—')} sub={`${org?.reportedCount ?? 0} reporting this year`} />
-          <V2StatTile index={1} label="Coverage" value={org ? `${org.reportedCount}/${org.schoolCount}` : '—'} sub="Schools with a saved FY" />
+          <V2StatTile index={0} label="Schools" value={String(om?.schoolCount ?? '—')} sub={`${om?.reportedCount ?? 0} reporting this year`} />
+          <V2StatTile index={1} label="Coverage" value={om ? `${om.reportedCount}/${om.schoolCount}` : '—'} sub="Schools with a saved FY" />
           <V2StatTile
             index={2}
             label="System operating margin"
@@ -271,21 +307,9 @@ function DioceseOverview({ diocese }) {
           />
         </div>
       </HeroBand>
-      <ChartCard title="Who drives the system's revenue" sub="One bar, every reporting school" asOf={diocese.asOf} delay={0.06}>
-        {contrib.length ? (
-          <>
-            <StackedBar
-              rows={[{ parts: contrib.map((c) => c.value) }]}
-              colors={contrib.map((c) => c.color)}
-              names={contrib.map((c) => c.name)}
-              height={30}
-              labelInside={false}
-              formatter={(v) => formatMetricValue(v, 'currency')}
-            />
-            <div className="mt-3">
-              <Legend items={contrib.map((c) => ({ id: c.name, label: c.name, color: c.color }))} onSpotlight={() => {}} />
-            </div>
-          </>
+      <ChartCard title="Who drives the system's revenue" sub="Every reporting school, largest first" asOf={org.asOf} delay={0.06}>
+        {rows.length ? (
+          <BarList rows={rows} formatter={money} />
         ) : (
           <p className="py-8 text-center text-[13px] italic text-muted">No revenue reported yet.</p>
         )}
@@ -294,8 +318,8 @@ function DioceseOverview({ diocese }) {
   )
 }
 
-export default function OverviewView({ scope, school, compare, diocese }) {
+export default function OverviewView({ scope, school, compare, org }) {
   if (scope === 'compare') return <CompareOverview compare={compare} />
-  if (scope === 'diocese') return <DioceseOverview diocese={diocese} />
+  if (scope === 'org') return <OrgOverview org={org} />
   return <SchoolOverview school={school} />
 }
