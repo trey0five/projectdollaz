@@ -27,8 +27,12 @@ export default function ChartCard({ id, metricKey, title, sub, asOf, onViewAsTab
     >
       <div className="mb-2 flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h4 className="font-serif text-[15px] font-semibold text-navy sm:text-base">{title}</h4>
-          {sub && <p className="mt-0.5 text-[12.5px] text-muted">{sub}</p>}
+          {sub && (
+            <p className="mb-0.5 text-[10.5px] font-bold uppercase tracking-[0.14em] text-gold">{sub}</p>
+          )}
+          <h4 className="font-serif text-[16px] font-semibold leading-snug text-navy sm:text-[17px]">
+            {title}
+          </h4>
         </div>
         <div className="flex shrink-0 items-center gap-2.5">
           {asOf && <span className="whitespace-nowrap text-[11px] font-medium text-slate-400 tabular-nums">{asOf}</span>}

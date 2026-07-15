@@ -92,7 +92,7 @@ export default function FancyDonut({ parts = [], centerTotal = '', centerSub = '
   const active = hover != null && !segs[hover]?.skip ? segs[hover] : null
 
   return (
-    <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
+    <div className="flex flex-col items-center gap-4">
       <motion.svg
         width={SIZE}
         height={SIZE}
@@ -173,26 +173,27 @@ export default function FancyDonut({ parts = [], centerTotal = '', centerSub = '
         )}
       </motion.svg>
 
-      {/* Key list — the figures live here (never on slices); rows cross-highlight. */}
-      <div className="min-w-[215px] max-w-[290px] flex-1" onMouseLeave={() => setHover(null)}>
+      {/* Key list UNDER the donut — full card width, strict grid columns
+          (dot · label · amount · share) so labels and amounts never collide. */}
+      <div className="w-full" onMouseLeave={() => setHover(null)}>
         {segs.map((s) => (
           <div
             key={s.i}
             onMouseEnter={() => setHover(s.i)}
-            className="flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors"
+            className="grid grid-cols-[12px_minmax(0,1fr)_auto_46px] items-center gap-x-3 rounded-lg px-2.5 py-1.5 transition-colors"
             style={{
               background: hover === s.i ? 'rgb(16 28 61 / 0.05)' : 'transparent',
               opacity: hover == null || hover === s.i ? 1 : 0.45,
             }}
           >
-            <i aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: s.color }} />
-            <span className={`min-w-0 flex-1 text-[13px] leading-tight ${s.deemph ? 'text-muted/70' : 'text-navy'}`}>
+            <i aria-hidden className="h-2.5 w-2.5 rounded-full" style={{ background: s.color }} />
+            <span className={`min-w-0 truncate text-[13.5px] ${s.deemph ? 'text-muted/70' : 'text-navy'}`} title={s.label}>
               {s.label}
             </span>
-            <span className={`text-[13px] font-semibold tabular-nums ${s.deemph ? 'text-muted/70' : 'text-navy'}`}>
+            <span className={`text-right text-[13.5px] font-semibold tabular-nums ${s.deemph ? 'text-muted/70' : 'text-navy'}`}>
               {s.formatted ?? formatter(s.value)}
             </span>
-            <span className="w-9 text-right text-[11.5px] tabular-nums text-muted">
+            <span className="text-right text-[12px] tabular-nums text-muted">
               {s.share ?? `${Math.round(s.frac * 100)}%`}
             </span>
           </div>
