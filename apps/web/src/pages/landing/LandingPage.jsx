@@ -64,7 +64,9 @@ export default function LandingPage() {
         <VideoHero onShown={revealNav} />
         <LandingHero onIntroOpen={revealNav} />
         {/* Acts I–VI share one relative container so the spine spans them all. */}
-        <div ref={actsRef} className="relative">
+        {/* Lengthened at the top: the straddling glass card's lower half overlaps
+            this cream ground, so Act I's own content starts below it. */}
+        <div ref={actsRef} className="relative pt-40 sm:pt-52 lg:pt-64">
           <LedgerSpine containerRef={actsRef} />
           {ACTS.slice(0, 4).map((act) =>
             // Act II plays as the pinned scroll-driven set-piece (the hand-off:
