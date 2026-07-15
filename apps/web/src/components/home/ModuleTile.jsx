@@ -40,7 +40,14 @@ const ENTRANCE = (reduce, index) => ({
   transition: { delay: index * 0.05, type: 'spring', stiffness: 240, damping: 24 },
 })
 
-export default function ModuleTile({ tile, badge, ready, locked = false, index = 0 }) {
+export default function ModuleTile({
+  tile,
+  badge,
+  ready,
+  locked = false,
+  index = 0,
+  onShowAttention = null,
+}) {
   const reduce = useReducedMotion()
   // Hoisted ABOVE the locked/active split so hook order is stable if a tile
   // flips state (e.g. right after an unlock) without a remount.
@@ -137,38 +144,56 @@ export default function ModuleTile({ tile, badge, ready, locked = false, index =
   }
 
   // ── Active tile ─────────────────────────────────────────────────────────────
+  // The whole card navigates (stretched .tile-panel-hit link). When there ARE
+  // attention items the status chip becomes a real button ABOVE the hit link that
+  // opens the briefing popup (the list of those items) — so the count is finally
+  // actionable — while clicking anywhere else still opens the module page.
   const chip = chipFor(badge, ready)
+  const count = ready ? badge?.count ?? 0 : 0
+  const hasAttention = count > 0 && typeof onShowAttention === 'function'
   return (
     <motion.li
       {...ENTRANCE(reduce, index)}
       whileHover={reduce ? undefined : { y: -4 }}
       className="list-none"
     >
-      <Link
+      <div
         id={navId}
-        to={route}
-        aria-label={`${label} — ${chip.text}`}
-        className="module-tile"
+        className="module-tile module-tile--hit"
         style={{ '--tile-hue': hue }}
       >
-        <div className="tile-body" aria-hidden="true">
-          <span className="tile-art">
+        <Link to={route} aria-label={`${label} — ${chip.text}`} className="tile-panel-hit" />
+        <div className="tile-body">
+          <span className="tile-art" aria-hidden="true">
             <Art />
           </span>
-          <div>
+          <div aria-hidden="true">
             <h3 className="tile-title font-serif text-[17px] font-semibold leading-snug text-navy">
               {label}
             </h3>
             <p className="tile-sub mt-1 text-[13.5px] leading-relaxed text-muted">{tagline}</p>
           </div>
           <div className="mt-auto flex items-center justify-between gap-3 pt-1">
-            <span className={`tile-chip tile-chip--${chip.tone}`}>{chip.text}</span>
-            <span className="tile-arrow">
+            {hasAttention ? (
+              <button
+                type="button"
+                onClick={() => onShowAttention(tile.key)}
+                aria-label={`View the ${count} item${count === 1 ? '' : 's'} that need attention in ${label}`}
+                className={`tile-chip tile-chip--${chip.tone} cursor-pointer underline decoration-transparent underline-offset-2 transition-[text-decoration-color] hover:decoration-current focus:outline-none focus-visible:ring-2 focus-visible:ring-navy/40`}
+              >
+                {chip.text}
+              </button>
+            ) : (
+              <span className={`tile-chip tile-chip--${chip.tone}`} aria-hidden="true">
+                {chip.text}
+              </span>
+            )}
+            <span className="tile-arrow" aria-hidden="true">
               <ArrowRight size={16} />
             </span>
           </div>
         </div>
-      </Link>
+      </div>
     </motion.li>
   )
 }

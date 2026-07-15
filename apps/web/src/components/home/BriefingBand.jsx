@@ -31,13 +31,6 @@ export default function BriefingBand({
   const critical = summary?.critical ?? 0
   const verb = LENS_VERB[lens] ?? 'need attention'
 
-  const scrollTo = (id) => {
-    document.getElementById(id)?.scrollIntoView({
-      behavior: reduce ? 'auto' : 'smooth',
-      block: 'center',
-    })
-  }
-
   // Registry-ordered chips for every module tile with open attention items.
   const chips = HOME_TILES.filter((t) => (badges[t.key]?.count ?? 0) > 0).map((t) => ({
     key: t.key,
@@ -111,8 +104,8 @@ export default function BriefingBand({
                   <button
                     key={c.key}
                     type="button"
-                    onClick={() => scrollTo(c.navId)}
-                    aria-label={`${c.label}: ${c.count} need${c.count === 1 ? 's' : ''} attention — jump to tile`}
+                    onClick={() => onOpenBrief?.('open')}
+                    aria-label={`${c.label}: ${c.count} need${c.count === 1 ? 's' : ''} attention — open the briefing`}
                     className={`inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 text-[13px] font-semibold transition-colors ${
                       c.critical
                         ? 'border-red-400/40 bg-red-500/10 text-red-200 hover:border-red-400/70'

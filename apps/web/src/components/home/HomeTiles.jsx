@@ -187,6 +187,7 @@ export default function HomeTiles() {
               ready={chipsReady}
               locked={locked}
               index={i}
+              onShowAttention={() => setBrief('open')}
             />
           ))}
           {/* The 8th tile: Penny Studio — always present (core, not a module). */}

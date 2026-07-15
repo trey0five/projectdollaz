@@ -264,6 +264,20 @@
   }
 }
 
+/* ── Attention tiles (active tile whose status chip opens the briefing): the
+   WHOLE card still navigates via a stretched .tile-panel-hit link, but the
+   "N need attention" chip stays a real button ABOVE it (opens the brief popup
+   listing the items). Reuses the panel pointer-events mechanic WITHOUT the
+   compact-art override, so the home-tile art keeps its full 60px size. ── */
+.module-tile--hit .tile-body {
+  position: relative;
+  z-index: 2;
+  pointer-events: none;
+}
+.module-tile--hit .tile-body :is(a, button) {
+  pointer-events: auto;
+}
+
 /* ── Locked (upsell) tile: dimmed, no flood/shine, Add-ons pattern. ──────────
    Structure (a11y — no nested interactives): the card is a DIV; one stretched
    .tile-locked-hit button covers the whole card and opens the module-pitch
