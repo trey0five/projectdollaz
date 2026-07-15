@@ -1,7 +1,8 @@
 // DomainPlates — Act V, the dark 3:00 PM band: everything else a school runs
 // on, as six glass plates on a navy command-deck ground. The ledger spine and
 // its medallion pass straight through the dark band.
-import { motion, useReducedMotion } from 'framer-motion'
+import { useRef } from 'react'
+import { motion, useInView, useReducedMotion } from 'framer-motion'
 import {
   BadgeCheck,
   HeartHandshake,
@@ -18,17 +19,25 @@ const ICONS = { Landmark, BadgeCheck, Wrench, HeartHandshake, ListChecks, Librar
 
 export default function DomainPlates() {
   const reduce = useReducedMotion()
+  // Scroll-spy: blue-highlight this timeframe while the dark band is centered.
+  const sectionRef = useRef(null)
+  const active = useInView(sectionRef, { margin: '-45% 0px -45% 0px' })
   return (
     <section
+      ref={sectionRef}
       aria-labelledby={`${DOMAIN_ACT.id}-h2`}
       className="relative scroll-mt-24 bg-studio-page py-24"
     >
       <span aria-hidden="true" className="pointer-events-none absolute inset-0 bg-navy-radial" />
-      <TimestampMedallion time={DOMAIN_ACT.time} tone="dark" />
+      <TimestampMedallion time={DOMAIN_ACT.time} tone="dark" active={active} />
       {/* z-[2]: the plates span the center line — keep them above the z-[1] spine. */}
       <div className="relative z-[2] mx-auto max-w-6xl px-5 pl-14 pt-12 sm:px-8 sm:pl-16 lg:px-8 lg:pt-20">
         <Reveal>
-          <p className="text-[12px] font-bold uppercase tracking-[0.22em] text-gold-light">
+          <p
+            className={`text-[12px] font-bold uppercase tracking-[0.22em] transition-colors duration-300 ${
+              active ? 'text-[#7DB0FF]' : 'text-gold-light'
+            }`}
+          >
             {DOMAIN_ACT.kicker}
           </p>
         </Reveal>

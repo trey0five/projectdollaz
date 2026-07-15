@@ -3,6 +3,8 @@
 // column, the act's visual in the other; `flip` mirrors the columns so the
 // acts alternate around the center ledger spine (which runs behind at
 // left-1/2 on desktop, x=26px on mobile — hence the mobile left gutter).
+import { useRef } from 'react'
+import { motion, useInView } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
 import Reveal from './Reveal.jsx'
 import { TimestampMedallion } from './LedgerSpine.jsx'
@@ -24,20 +26,42 @@ const VISUALS = {
 
 export default function ActSection({ act }) {
   const Visual = VISUALS[act.visual]
+  // Scroll-spy: this act is "active" while it straddles the viewport's vertical
+  // center (the -45%/-45% root margin collapses the viewport to a thin center
+  // band, so exactly one act is active at a time). Active → the timeframe
+  // highlights blue (medallion, kicker, and a left accent bar) so you can see
+  // which moment of the day you're currently reading.
+  const sectionRef = useRef(null)
+  const active = useInView(sectionRef, { margin: '-45% 0px -45% 0px' })
   return (
     <section
+      ref={sectionRef}
       id={act.anchorId}
       aria-labelledby={`${act.id}-h2`}
       className={`relative ${act.bg} scroll-mt-24 py-14 sm:py-24`}
     >
-      <TimestampMedallion time={act.time} />
+      <TimestampMedallion time={act.time} active={active} />
       {/* z-[2]: content above the z-[1] spine (which is above section grounds). */}
       <div className="relative z-[2] mx-auto grid max-w-6xl gap-12 px-5 pl-14 pt-8 sm:px-8 sm:pl-16 sm:pt-12 lg:grid-cols-2 lg:items-center lg:gap-20 lg:px-8 lg:pt-20">
-        <div className={act.flip ? 'lg:order-2' : ''}>
+        <div className={`relative ${act.flip ? 'lg:order-2' : ''}`}>
+          {/* Blue active accent bar — grows beside the timeframe when this act
+              is the one centered in the viewport. */}
+          <motion.span
+            aria-hidden="true"
+            className="absolute -left-4 top-1 w-[3px] rounded-full bg-[#2563EB] sm:-left-6"
+            initial={false}
+            animate={{ height: active ? '2.75rem' : '0rem', opacity: active ? 1 : 0 }}
+            transition={{ type: 'spring', stiffness: 260, damping: 30 }}
+          />
           <Reveal>
             {/* Deep gold on light grounds — #b89650 on cream is ~2.6:1 (fails
-                AA); #7a5e00 is the codebase's readable gold-on-light shade. */}
-            <p className="text-[12px] font-bold uppercase tracking-[0.22em] text-[#7a5e00]">
+                AA); #7a5e00 is the codebase's readable gold-on-light shade.
+                Turns action-blue while this act is the active timeframe. */}
+            <p
+              className={`text-[12px] font-bold uppercase tracking-[0.22em] transition-colors duration-300 ${
+                active ? 'text-[#2563EB]' : 'text-[#7a5e00]'
+              }`}
+            >
               {act.kicker}
             </p>
           </Reveal>

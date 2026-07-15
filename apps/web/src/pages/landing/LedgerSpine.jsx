@@ -44,7 +44,13 @@ export default function LedgerSpine({ containerRef }) {
 // One timestamp medallion, absolutely positioned on the spine near the top of
 // its act section (the section must be `relative`). Decorative — the time also
 // lives in the act's visible kicker text.
-export function TimestampMedallion({ time, tone = 'light' }) {
+//
+// Two lit states, layered:
+//   • `passed` (gold, once) — the spine's drawn edge has reached this act.
+//   • `active` (BLUE, live) — the act is the one currently centered in the
+//     viewport (a scroll-spy the parent section computes). Blue overrides gold
+//     so "you are here" reads at a glance as you scroll the day.
+export function TimestampMedallion({ time, tone = 'light', active = false }) {
   const reduce = useReducedMotion()
   const ref = useRef(null)
   // Ignite when the medallion crosses ~70% of the viewport — the same line the
@@ -62,11 +68,21 @@ export function TimestampMedallion({ time, tone = 'light' }) {
       className="pointer-events-none absolute left-[26px] top-10 z-10 -translate-x-1/2 lg:left-1/2"
     >
       <div
-        className={`flex h-11 w-11 flex-col items-center justify-center rounded-full border transition-colors duration-500 lg:h-[54px] lg:w-[54px] ${
-          tone === 'dark' ? 'bg-navy-deep' : 'bg-cream'
-        } ${lit ? 'border-gold' : 'border-rule'} ${
-          lit && !reduce ? 'motion-safe:animate-[pulse-ring_1.4s_ease-out_1]' : ''
-        }`}
+        className={`flex h-11 w-11 flex-col items-center justify-center rounded-full border transition-all duration-500 lg:h-[54px] lg:w-[54px] ${
+          active
+            ? tone === 'dark'
+              ? 'bg-navy-deep'
+              : 'bg-[#EFF4FF]'
+            : tone === 'dark'
+              ? 'bg-navy-deep'
+              : 'bg-cream'
+        } ${
+          active
+            ? 'scale-110 border-[#2563EB] shadow-[0_0_0_4px_rgba(37,99,235,0.16),0_8px_22px_-6px_rgba(37,99,235,0.55)]'
+            : lit
+              ? 'border-gold'
+              : 'border-rule'
+        } ${lit && !active && !reduce ? 'motion-safe:animate-[pulse-ring_1.4s_ease-out_1]' : ''}`}
       >
         <motion.span
           className="flex flex-col items-center leading-none"
@@ -74,8 +90,18 @@ export function TimestampMedallion({ time, tone = 'light' }) {
           animate={lit ? { scale: 1, rotate: 0, opacity: 1 } : undefined}
           transition={{ type: 'spring', stiffness: 300, damping: 20 }}
         >
-          <span className="font-serif text-[13px] italic text-gold lg:text-[15px]">{clock}</span>
-          <span className="mt-0.5 font-sans text-[8px] font-bold uppercase tracking-[0.18em] text-gold">
+          <span
+            className={`font-serif text-[13px] italic transition-colors duration-500 lg:text-[15px] ${
+              active ? (tone === 'dark' ? 'text-[#7DB0FF]' : 'text-[#2563EB]') : 'text-gold'
+            }`}
+          >
+            {clock}
+          </span>
+          <span
+            className={`mt-0.5 font-sans text-[8px] font-bold uppercase tracking-[0.18em] transition-colors duration-500 ${
+              active ? (tone === 'dark' ? 'text-[#7DB0FF]' : 'text-[#2563EB]') : 'text-gold'
+            }`}
+          >
             {meridiem}
           </span>
         </motion.span>

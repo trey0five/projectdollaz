@@ -10,6 +10,7 @@
 import { useRef, useState } from 'react'
 import {
   motion,
+  useInView,
   useMotionValueEvent,
   useReducedMotion,
   useScroll,
@@ -52,6 +53,11 @@ function StaticFrame() {
 
 export default function IngestScrolly({ act }) {
   const reduce = useReducedMotion()
+  // Scroll-spy: Act II is "active" (its timeframe highlights blue) the whole
+  // time its pinned set-piece straddles the viewport center. Same center-band
+  // margin the two-column ActSections use, so the highlight hands off cleanly.
+  const sectionRef = useRef(null)
+  const active = useInView(sectionRef, { margin: '-45% 0px -45% 0px' })
   const trackRef = useRef(null)
   const { scrollYProgress } = useScroll({
     target: trackRef,
@@ -67,10 +73,16 @@ export default function IngestScrolly({ act }) {
 
   if (reduce) {
     return (
-      <section id={act.anchorId} aria-labelledby={`${act.id}-h2`} className="relative bg-section scroll-mt-24 py-24">
-        <TimestampMedallion time={act.time} />
+      <section ref={sectionRef} id={act.anchorId} aria-labelledby={`${act.id}-h2`} className="relative bg-section scroll-mt-24 py-24">
+        <TimestampMedallion time={act.time} active={active} />
         <div className="relative z-[2] mx-auto max-w-6xl px-5 pl-14 pt-12 sm:px-8 sm:pl-16 lg:px-8">
-          <p className="text-[12px] font-bold uppercase tracking-[0.22em] text-[#7a5e00]">{act.kicker}</p>
+          <p
+            className={`text-[12px] font-bold uppercase tracking-[0.22em] transition-colors duration-300 ${
+              active ? 'text-[#2563EB]' : 'text-[#7a5e00]'
+            }`}
+          >
+            {act.kicker}
+          </p>
           <h2 id={`${act.id}-h2`} className="mt-3 max-w-3xl font-serif text-[32px] font-semibold leading-tight text-navy sm:text-[42px]">
             {act.h2}
           </h2>
@@ -84,18 +96,24 @@ export default function IngestScrolly({ act }) {
   }
 
   return (
-    <section id={act.anchorId} aria-labelledby={`${act.id}-h2`} className="relative bg-section">
+    <section ref={sectionRef} id={act.anchorId} aria-labelledby={`${act.id}-h2`} className="relative bg-section">
       <p className="sr-only">
         Drop a trial balance on Penny and it becomes your four statements, then tomorrow’s
         briefing — no re-keying, no formatting.
       </p>
       <div ref={trackRef} className="relative h-[200vh] sm:h-[320vh]">
         <div className="sticky top-0 flex h-screen items-center overflow-hidden">
-          <TimestampMedallion time={act.time} />
+          <TimestampMedallion time={act.time} active={active} />
           <div className="relative z-[2] mx-auto grid w-full max-w-6xl gap-3 px-5 pl-14 sm:gap-8 sm:px-8 sm:pl-16 lg:grid-cols-[1fr_1.5fr] lg:items-center lg:gap-12 lg:px-8">
             {/* ── Narration ──────────────────────────────────────────────── */}
             <div>
-              <p className="text-[12px] font-bold uppercase tracking-[0.22em] text-[#7a5e00]">{act.kicker}</p>
+              <p
+                className={`text-[12px] font-bold uppercase tracking-[0.22em] transition-colors duration-300 ${
+                  active ? 'text-[#2563EB]' : 'text-[#7a5e00]'
+                }`}
+              >
+                {act.kicker}
+              </p>
               <h2
                 id={`${act.id}-h2`}
                 className="mt-3 font-serif text-[26px] font-semibold leading-tight text-navy sm:text-[32px]"
