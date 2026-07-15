@@ -360,14 +360,9 @@ export default function AppShell({ children }) {
   // sized for the slim strip (the tall two-line sidebar `brand` would crowd it).
   const v2Brand = (
     <Link
-      to="/app"
-      aria-label="Project Dollaz — home"
-      title="Home"
-      onClick={() => {
-        // Already on the dashboard → the Link is a no-op, so scroll to top so the
-        // logo always DOES something (reads as "take me home" from anywhere).
-        if (path === '/app') window.scrollTo({ top: 0, behavior: 'smooth' })
-      }}
+      to="/"
+      aria-label="Project Dollaz — main site home"
+      title="Main site home"
       className="flex shrink-0 items-center gap-2 rounded-lg px-1 py-1 outline-none ring-gold/50 transition-opacity hover:opacity-90 focus-visible:ring-2"
     >
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gold-gradient text-navy-deep shadow-glow">
