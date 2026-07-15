@@ -17,7 +17,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { ArrowDownRight, ArrowRight, ArrowUpRight, SlidersHorizontal } from 'lucide-react'
+import { ArrowDownRight, ArrowRight, ArrowUpRight, SlidersHorizontal, Zap } from 'lucide-react'
 import { useDashboardLayout } from '../../../hooks/useAnalytics.js'
 import { apiErrorMessage } from '../../../lib/api.js'
 import { deltaTone } from '../../../lib/metricMeta.js'
@@ -27,6 +27,7 @@ import { formatMetric, formatMetricDeltaOf, formatMetricValue, metricFormat } fr
 import { hasChart } from './chartAnchors.js'
 import { flashElement } from './flash.js'
 import { lightStatus, DELTA_CHIP_LIGHT } from './statusStyle.js'
+import AnimatedMetricValue from '../AnimatedMetricValue.jsx'
 
 const DEFAULT_KEYS = [
   'operating_margin', 'days_cash_on_hand', 'months_operating_reserve', 'tuition_dependency',
@@ -70,11 +71,28 @@ function MetricRow({ m, scope, onCrossToChart, index, reduce }) {
       initial={reduce ? { opacity: 0 } : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, delay: Math.min(index, 8) * 0.04, ease: 'easeOut' }}
-      className="av2-row group rounded-xl bg-white px-4 py-3 ring-1 ring-slate-200/60 transition-colors hover:bg-slate-50"
+      whileHover={reduce ? undefined : { y: -2 }}
+      className="av2-row group relative overflow-hidden rounded-xl bg-white px-4 py-3 ring-1 ring-slate-200/60 transition-shadow hover:shadow-[0_10px_26px_-14px_rgba(16,28,61,0.3)]"
     >
+      {/* status accent: left rail + a faint corner wash so health reads at a glance */}
+      <span
+        aria-hidden="true"
+        className="absolute bottom-2 left-0 top-2 w-[3px] rounded-r-full"
+        style={{ background: ls.dot }}
+      />
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0"
+        style={{ background: `radial-gradient(120% 130% at 0% 50%, ${ls.dot}14, transparent 42%)` }}
+      />
       {/* metric identity */}
       <div className="flex min-w-0 items-center gap-2.5">
-        <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: ls.dot }} />
+        <span aria-hidden="true" className="relative h-2.5 w-2.5 shrink-0">
+          {m.status === 'risk' && !reduce && (
+            <span className="absolute inset-0 rounded-full motion-safe:animate-ping" style={{ background: ls.dot, opacity: 0.5 }} />
+          )}
+          <span className="absolute inset-0 rounded-full" style={{ background: ls.dot, boxShadow: `0 0 8px ${ls.dot}66` }} />
+        </span>
         <div className="min-w-0">
           <p className="truncate text-[14px] font-semibold text-navy">{m.label}</p>
           <p className="truncate text-[11.5px] text-slate-400 tabular-nums">{context ?? 'Contextual'}</p>
@@ -82,7 +100,13 @@ function MetricRow({ m, scope, onCrossToChart, index, reduce }) {
       </div>
 
       {/* value */}
-      <span className="text-right text-[19px] font-bold text-navy tabular-nums">{formatMetric(m)}</span>
+      <span className="text-right text-[19px] font-bold text-navy tabular-nums">
+        {typeof m.value === 'number' && Number.isFinite(m.value) ? (
+          <AnimatedMetricValue value={m.value} format={metricFormat(m.key, m.unit)} />
+        ) : (
+          formatMetric(m)
+        )}
+      </span>
 
       {/* delta chip */}
       <span className="av2-delta-cell justify-self-end">
@@ -104,7 +128,13 @@ function MetricRow({ m, scope, onCrossToChart, index, reduce }) {
       <span className="av2-rail-cell">
         {pct != null ? (
           <span className="av2-rail" role="img" aria-label={`${Math.round(pct)}% of the way to the healthy band`}>
-            <span className={ls.rail} style={{ width: `${pct}%` }} />
+            <motion.span
+              className={ls.rail}
+              initial={reduce ? { width: `${pct}%` } : { width: '0%' }}
+              animate={{ width: `${pct}%` }}
+              transition={reduce ? { duration: 0 } : { duration: 0.8, delay: 0.15 + Math.min(index, 8) * 0.06, ease: [0.22, 1, 0.36, 1] }}
+              style={{ boxShadow: `0 0 8px ${ls.dot}55` }}
+            />
           </span>
         ) : (
           <span aria-hidden="true" />
@@ -157,7 +187,13 @@ function ContextTile({ m, scope, onCrossToChart, index, reduce }) {
       className="group relative rounded-xl bg-white px-4 py-3.5 ring-1 ring-slate-200/60 transition-colors hover:bg-slate-50"
     >
       <p className="pr-6 text-[11.5px] font-bold uppercase tracking-[0.08em] text-muted">{m.label}</p>
-      <p className="mt-1.5 text-[22px] font-bold leading-none text-navy tabular-nums">{formatMetric(m)}</p>
+      <p className="mt-1.5 text-[22px] font-bold leading-none text-navy tabular-nums">
+        {typeof m.value === 'number' && Number.isFinite(m.value) ? (
+          <AnimatedMetricValue value={m.value} format={metricFormat(m.key, m.unit)} />
+        ) : (
+          formatMetric(m)
+        )}
+      </p>
       <div className="mt-2 min-h-[20px]">
         {deltaText ? (
           <span
@@ -212,6 +248,24 @@ export default function Scorecard({
 
   // Customize state — the SAME machinery as AnalyticsDashboard (server row shared).
   const [customizing, setCustomizing] = useState(false)
+  // "Attention first" — sort the health rows risk → watch → good (persisted).
+  const [attentionFirst, setAttentionFirst] = useState(() => {
+    try {
+      return localStorage.getItem('finrep.analytics.scorecardSort') === 'attention'
+    } catch {
+      return false
+    }
+  })
+  const toggleAttention = () => {
+    setAttentionFirst((v) => {
+      try {
+        localStorage.setItem('finrep.analytics.scorecardSort', v ? 'order' : 'attention')
+      } catch {
+        /* ignore */
+      }
+      return !v
+    })
+  }
   const [draft, setDraft] = useState(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -275,10 +329,12 @@ export default function Scorecard({
     () => orderedKeys.map((k) => metricsByKey[k]).filter(Boolean),
     [orderedKeys, metricsByKey],
   )
-  const healthRows = useMemo(
-    () => rows.filter((m) => (m.status && m.status !== 'neutral') || bandContext(m) != null),
-    [rows],
-  )
+  const healthRows = useMemo(() => {
+    const base = rows.filter((m) => (m.status && m.status !== 'neutral') || bandContext(m) != null)
+    if (!attentionFirst) return base
+    const rank = { risk: 0, watch: 1, good: 2 }
+    return [...base].sort((a, b) => (rank[a.status] ?? 3) - (rank[b.status] ?? 3))
+  }, [rows, attentionFirst])
   const contextRows = useMemo(
     () => rows.filter((m) => !((m.status && m.status !== 'neutral') || bandContext(m) != null)),
     [rows],
@@ -301,20 +357,30 @@ export default function Scorecard({
 
   return (
     <div className="space-y-4">
-      {canCustomize && (
-        <div className="flex justify-end">
-          {!customizing && (
-            <button
-              type="button"
-              onClick={enter}
-              disabled={layoutLoading}
-              className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border border-rule/60 px-3 py-1.5 text-[13px] font-semibold uppercase tracking-[0.08em] text-muted transition-colors hover:border-gold hover:text-navy disabled:opacity-50"
-            >
-              <SlidersHorizontal size={13} /> Customize
-            </button>
-          )}
-        </div>
-      )}
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={toggleAttention}
+          aria-pressed={attentionFirst}
+          className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[13px] font-semibold uppercase tracking-[0.08em] transition-colors ${
+            attentionFirst
+              ? 'border-gold bg-gold/10 text-navy'
+              : 'border-rule/60 text-muted hover:border-gold hover:text-navy'
+          }`}
+        >
+          <Zap size={13} className={attentionFirst ? 'text-gold' : ''} /> Attention first
+        </button>
+        {canCustomize && !customizing && (
+          <button
+            type="button"
+            onClick={enter}
+            disabled={layoutLoading}
+            className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border border-rule/60 px-3 py-1.5 text-[13px] font-semibold uppercase tracking-[0.08em] text-muted transition-colors hover:border-gold hover:text-navy disabled:opacity-50"
+          >
+            <SlidersHorizontal size={13} /> Customize
+          </button>
+        )}
+      </div>
 
       <AnimatePresence initial={false}>
         {customizing && draft && (
