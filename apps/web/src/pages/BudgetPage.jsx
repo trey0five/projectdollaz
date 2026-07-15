@@ -20,7 +20,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Wallet, Scale, Building2, Landmark, ListChecks } from 'lucide-react'
+import { Wallet, Scale, Building2, Landmark } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
 import BackLink from '../components/ui/BackLink.jsx'
 import PeriodSelector from '../components/analytics/PeriodSelector.jsx'
@@ -28,8 +28,6 @@ import BudgetTabs from '../components/budget/BudgetTabs.jsx'
 import OrgRollup from '../components/budget/OrgRollup.jsx'
 import OrgStatements from '../components/budget/OrgStatements.jsx'
 import OrgKpiStrip from '../components/budget/OrgKpiStrip.jsx'
-import OrgBriefing from '../components/budget/OrgBriefing.jsx'
-import PennyMorningBrief from '../components/home/PennyMorningBrief.jsx'
 import BudgetVsActual from '../components/analytics/BudgetVsActual.jsx'
 import BudgetSummary from '../components/budget/BudgetSummary.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
@@ -40,7 +38,6 @@ import {
   useBudgetRollup,
   useStatementsRollup,
   useOrgMetrics,
-  useOrgBriefing,
 } from '../hooks/useAnalytics.js'
 import { orgsApi } from '../lib/api.js'
 
@@ -49,7 +46,6 @@ const TABS = [
   { id: 'bva', label: 'Budget vs. Actual', Icon: Scale },
   { id: 'rollup', label: 'Organizational Roll-up', Icon: Building2 },
   { id: 'orgStatements', label: 'Consolidated Statements', Icon: Landmark },
-  { id: 'orgBriefing', label: 'Organization Briefing', Icon: ListChecks },
 ]
 
 // Organizations budget on a Jul–Jun fiscal year. Derive the 'YYYY-MM' fiscal-year
@@ -176,22 +172,6 @@ export default function BudgetPage() {
     error: orgMetricsError,
   } = useOrgMetrics(stmtOrgId, fiscalYearStart)
 
-  // Organization briefing — only fetched while its tab is active (the heaviest org
-  // endpoint: it fans BriefingService.getBriefing out across every reporting
-  // school), same FY as the other org views so all org tabs stay on one FY.
-  const briefingOrgId = activeTab === 'orgBriefing' ? orgId : null
-  // Scope × Lens: ephemeral "Preview as" selection for the org briefing (owner-
-  // only switcher). null = the caller's widest in-org role (server default). The
-  // server re-clamps to the live ceiling, so a stale wider lens can never leak.
-  const [orgPreviewLens, setOrgPreviewLens] = useState(null)
-  const {
-    briefing: orgBriefing,
-    lens: orgBriefingLens,
-    availableLenses: orgBriefingAvailableLenses,
-    loading: orgBriefingLoading,
-    error: orgBriefingError,
-  } = useOrgBriefing(briefingOrgId, fiscalYearStart, orgPreviewLens)
-
   // Does a budget exist for this period? (drives the summary-vs-empty state).
   // A budget "exists" if it has a spread or rev/exp lines.
   const hasBudget = !!(
@@ -297,27 +277,6 @@ export default function BudgetPage() {
     </div>
   )
 
-  const renderOrgBriefing = () => (
-    <div key="orgBriefing" className="space-y-5">
-      {/* Penny narrates the org briefing — the spoken/written cross-school morning
-          brief, above the org triage board. */}
-      <PennyMorningBrief
-        scope="org"
-        orgId={orgId}
-        fiscalYearStart={fiscalYearStart}
-        lens={orgBriefingLens}
-      />
-      <OrgBriefing
-        briefing={orgBriefing}
-        loading={orgBriefingLoading}
-        error={orgBriefingError}
-        lens={orgBriefingLens}
-        availableLenses={orgBriefingAvailableLenses}
-        onLensChange={setOrgPreviewLens}
-      />
-    </div>
-  )
-
   const renderActivePanel = () => {
     switch (activeTab) {
       case 'bva':
@@ -326,8 +285,6 @@ export default function BudgetPage() {
         return renderRollup()
       case 'orgStatements':
         return renderOrgStatements()
-      case 'orgBriefing':
-        return renderOrgBriefing()
       case 'budget':
       default:
         return renderBudget()
@@ -403,8 +360,7 @@ export default function BudgetPage() {
           >
             {hydrating &&
             activeTab !== 'rollup' &&
-            activeTab !== 'orgStatements' &&
-            activeTab !== 'orgBriefing' ? (
+            activeTab !== 'orgStatements' ? (
               <div className="card-soft animate-pulse px-6 py-14 text-center">
                 <p className="font-serif text-base italic text-muted">Loading your periods…</p>
               </div>

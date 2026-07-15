@@ -46,9 +46,7 @@ import {
   LineChart as PlanIcon,
   LayoutGrid,
   ListChecks,
-  Database,
   Library,
-  FileBarChart2,
   Settings as SettingsIcon,
   User as UserIcon,
 } from 'lucide-react'
@@ -80,15 +78,14 @@ const NAV_BADGE_SOURCE = {
 const FINANCE_BADGE_SOURCES = ['metric', 'compliance', 'data']
 
 // ui.v2 GLOBAL top nav — Home (→ the tile dashboard) + the core destinations, so
-// they're reachable from EVERY screen (the sidebar is retired). Reports is
-// finance-gated. Settings lives in the avatar menu (right end), not here. Home
-// shows a label from sm+; the rest are icon+tooltip, labels only at 2xl.
+// they're reachable from EVERY screen (the sidebar is retired). Data and Reports
+// are reached from the Finance home / tiles instead of the global bar. Settings
+// lives in the avatar menu (right end), not here. Home shows a label from sm+;
+// the rest are icon+tooltip, labels only at 2xl.
 const V2_NAV = [
   { to: '/app', label: 'Home', Icon: LayoutGrid, home: true },
   { to: '/tasks', label: 'Tasks', Icon: ListChecks },
-  { to: '/data', label: 'Data', Icon: Database },
   { to: '/knowledge', label: 'Knowledge', Icon: Library },
-  { to: '/reports', label: 'Reports', Icon: FileBarChart2, module: 'finance' },
 ]
 
 // Per-module icon for the (dimmed) Add-ons rows; falls back to a Lock badge.
