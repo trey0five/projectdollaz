@@ -1,42 +1,113 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+// ─────────────────────────────────────────────────────────────────────────────
+// ReviewReadinessPanel — the Florida scholarship AUP self-check, redesigned as a
+// GUIDED WIZARD. A first-time user should immediately understand "am I ready, and
+// what do I do next?" The flow follows the natural order: enter data → reconcile →
+// review findings → resolve exceptions → checklist & export. A flashy hero shows
+// the $250k verdict + progress ring + one next-action CTA; a stepper lets you
+// move freely (all readiness data is editable anytime). Each step reuses its
+// existing self-contained panel; only the active step renders.
+// ─────────────────────────────────────────────────────────────────────────────
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { ArrowLeft, ShieldCheck } from 'lucide-react'
+import {
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
+  ClipboardCheck,
+  FileDown,
+  PenLine,
+  Scale,
+  ShieldCheck,
+  Wrench,
+} from 'lucide-react'
 import { useSchools } from '../../context/SchoolContext.jsx'
 import { useBilling } from '../../context/BillingContext.jsx'
 import { usePersistence } from '../../context/PersistenceContext.jsx'
 import { useCompliance, useComplianceInputs } from '../../hooks/useCompliance.js'
 import { useCorrectiveActionPlan } from '../../hooks/useCorrectiveActionPlan.js'
 import { useChecklist } from '../../hooks/useChecklist.js'
+import { useReconciliation } from '../../hooks/useReconciliation.js'
 import { sectionTitle } from '../../lib/complianceMeta.js'
-import { statusMeta } from '../../lib/metricMeta.js'
 import MetricSection from '../analytics/MetricSection.jsx'
 import EntitlementPausedPanel from '../analytics/EntitlementPausedPanel.jsx'
 import ContextBar from '../analytics/ContextBar.jsx'
-import StatusDot from '../analytics/StatusDot.jsx'
 import { HeadlineSkeleton, MetricCardSkeleton } from '../analytics/skeletons.jsx'
 import DisclaimerBanner from './DisclaimerBanner.jsx'
-import TriggerHeader from './TriggerHeader.jsx'
 import ReadinessSummary from './ReadinessSummary.jsx'
 import ComplianceIntakePanel from './ComplianceIntakePanel.jsx'
 import ScholarshipReconciliationSection from './reconciliation/ScholarshipReconciliationSection.jsx'
 import CorrectiveActionPlanSection from './cap/CorrectiveActionPlanSection.jsx'
 import YearEndChecklistSection from './checklist/YearEndChecklistSection.jsx'
-import ReadinessTabs from './ReadinessTabs.jsx'
 import RuleRow from './RuleRow.jsx'
 import BackLink from '../ui/BackLink.jsx'
+import ReadinessWizardHero from './wizard/ReadinessWizardHero.jsx'
+import ReadinessStepper from './wizard/ReadinessStepper.jsx'
 
-// Subtle tab badge chip reusing the health palette (good/watch/risk/neutral).
-function TabBadge({ palette, children }) {
-  const meta = statusMeta(palette)
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[12px] font-bold leading-none tabular-nums ${meta.chip}`}
-    >
-      <StatusDot status={palette} size={6} />
-      {children}
-    </span>
-  )
+// ── Step catalog. `key` also selects the panel; `title`/`why` drive the intro. ──
+const STEPS = [
+  {
+    key: 'intake',
+    label: 'Your numbers',
+    hint: 'Enter & attest',
+    Icon: PenLine,
+    title: 'Enter your numbers',
+    why: 'The $250k trigger, your program tiers, and a few Yes/No attestations. Every readiness check below is computed from what you enter here.',
+  },
+  {
+    key: 'reconciliation',
+    label: 'Reconcile',
+    hint: 'Match funds',
+    Icon: Scale,
+    title: 'Reconcile your scholarships',
+    why: 'Upload the Step Up For Students disbursement detail and match it against the scholarship revenue recorded on your books.',
+  },
+  {
+    key: 'findings',
+    label: 'Readiness',
+    hint: 'Review findings',
+    Icon: ShieldCheck,
+    title: 'Review your readiness',
+    why: 'How each AUP procedure looks against your data. Green passes; amber and red need attention before your CPA engagement.',
+  },
+  {
+    key: 'cap',
+    label: 'Corrective',
+    hint: 'Resolve issues',
+    Icon: Wrench,
+    title: 'Resolve exceptions',
+    why: 'For anything reportable or material, record a corrective action plan your CPA can rely on.',
+  },
+  {
+    key: 'checklist',
+    label: 'Checklist',
+    hint: 'Attest & export',
+    Icon: ClipboardCheck,
+    title: 'Complete the checklist & export',
+    why: 'Attest the remaining procedures, gather the supporting documents, then export the workpapers packet for your CPA.',
+  },
+]
+const STEP_ORDER = STEPS.map((s) => s.key)
+
+// Intake is "complete" when every REQUIRED input is answered (null = unanswered).
+// Some fields only apply conditionally (see the compliance ruleset).
+function intakeComplete(inputs) {
+  if (!inputs) return false
+  const answered = (v) => v !== null && v !== undefined && v !== ''
+  if (!answered(inputs.scholarshipFundsReceived)) return false
+  if (!answered(inputs.yearsInOperation)) return false
+  const core = [
+    'fundsAtInsuredInstitution',
+    'avgDailyBalanceOver250k',
+    'reconciledWithin60Days',
+    'reconciliationIndependentlyReviewed',
+    'doeStatusApproved',
+  ]
+  for (const k of core) if (inputs[k] === null || inputs[k] === undefined) return false
+  if (inputs.avgDailyBalanceOver250k === true && inputs.bankRatingReviewedTopTwo == null) return false
+  if (Number(inputs.yearsInOperation) < 3 && inputs.suretyBondPosted == null) return false
+  if ((inputs.programs || []).includes('FES_UA') && inputs.fesuaAnyAccountOver50k == null) return false
+  return true
 }
 
 function PageHeader() {
@@ -48,11 +119,9 @@ function PageHeader() {
           <ShieldCheck size={22} />
         </span>
         <div>
-          <h1 className="font-serif text-xl font-semibold text-navy sm:text-2xl">
-            Review Readiness
-          </h1>
+          <h1 className="font-serif text-xl font-semibold text-navy sm:text-2xl">Review Readiness</h1>
           <p className="text-[15px] text-muted">
-            Self-check against the Florida scholarship AUP before your CPA engagement.
+            A guided self-check against the Florida scholarship AUP — before your CPA engagement.
           </p>
         </div>
       </div>
@@ -63,15 +132,13 @@ function PageHeader() {
 export default function ReviewReadinessPanel() {
   const { activeSchool } = useSchools()
   const schoolId = activeSchool?.id ?? null
+  const reduce = useReducedMotion()
   const { loading: billingLoading, entitled } = useBilling()
   const { periods, hydrating } = usePersistence()
 
   const canEdit = activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'
 
-  const savedPeriods = useMemo(
-    () => (periods || []).filter((p) => p.hasSnapshot),
-    [periods],
-  )
+  const savedPeriods = useMemo(() => (periods || []).filter((p) => p.hasSnapshot), [periods])
 
   const [selectedPeriodId, setSelectedPeriodId] = useState(null)
   useEffect(() => {
@@ -81,9 +148,7 @@ export default function ReviewReadinessPanel() {
       if (savedPeriods.length === 0) {
         setSelectedPeriodId((cur) => (cur === null ? cur : null))
       } else {
-        setSelectedPeriodId((cur) =>
-          savedPeriods.some((p) => p.id === cur) ? cur : savedPeriods[0].id,
-        )
+        setSelectedPeriodId((cur) => (savedPeriods.some((p) => p.id === cur) ? cur : savedPeriods[0].id))
       }
     })
     return () => {
@@ -109,49 +174,21 @@ export default function ReviewReadinessPanel() {
 
   const notEntitled = complianceBlocked || inputsBlocked
 
-  // Read-only badge instances (same endpoints the sections self-fetch; web-only).
-  // These drive the small count chips on the CAP + Checklist tab labels.
+  // Progress signals for step-gating (self-fetching status hooks).
   const { summary: capSummary } = useCorrectiveActionPlan(schoolId, selectedPeriodId)
   const { rollup: checklistRollup } = useChecklist(schoolId, selectedPeriodId)
+  const { result: reconResult } = useReconciliation(schoolId, selectedPeriodId)
 
-  // ── Robust sticky offset for the tab bar. ContextBar is `sticky top-2` (8px)
-  //    and collapses to a taller stacked column below the lg breakpoint, so a
-  //    hard-coded tab offset can crowd it at narrow widths. Measure the live
-  //    ContextBar height and park the tab bar just below it (8px top + height +
-  //    8px gap). Falls back to a safe default until measured. ──
-  const contextBarRef = useRef(null)
-  const [tabTop, setTabTop] = useState(64)
-  // Re-attaches the observer whenever the ContextBar mounts/unmounts (it is gated
-  // behind the skeleton + saved-period checks); the ref guard makes it a no-op
-  // while unmounted, and the ResizeObserver then tracks live height changes.
-  const contextBarMounted =
-    !(billingLoading || hydrating || ((complianceLoading || inputsLoading) && !data)) &&
-    savedPeriods.length > 0
-  useLayoutEffect(() => {
-    const el = contextBarRef.current
-    if (!el || typeof ResizeObserver === 'undefined') return undefined
-    const measure = () => setTabTop(Math.round(8 + el.offsetHeight + 8))
-    measure()
-    const ro = new ResizeObserver(measure)
-    ro.observe(el)
-    window.addEventListener('resize', measure)
-    return () => {
-      ro.disconnect()
-      window.removeEventListener('resize', measure)
-    }
-  }, [contextBarMounted])
-
-  // ── Active tab (default = findings). Reset to findings when the period changes,
-  //    adjusting state during render (per React docs) to avoid a cascading effect. ──
-  const reduce = useReducedMotion()
-  const [tab, setTab] = useState('findings')
+  // ── Active step. Resets to the first step when the period changes (render-time
+  //    adjustment per React docs — avoids a cascading effect). ──
+  const [step, setStep] = useState('intake')
   const [prevPeriodId, setPrevPeriodId] = useState(selectedPeriodId)
   if (selectedPeriodId !== prevPeriodId) {
     setPrevPeriodId(selectedPeriodId)
-    setTab('findings')
+    setStep('intake')
   }
 
-  // ── Entitlement gate (single paused panel) ─────────────────────────────────
+  // ── Entitlement gate ───────────────────────────────────────────────────────
   if (!billingLoading && (!entitled || notEntitled)) {
     return (
       <div className="mx-auto max-w-[1100px] px-4 py-8 sm:px-10">
@@ -171,7 +208,7 @@ export default function ReviewReadinessPanel() {
         <div className="card-soft border-dashed px-6 py-14 text-center">
           <p className="font-serif text-lg italic text-muted">No saved statements yet.</p>
           <p className="mt-1 text-[15px] text-muted">
-            Generate and save a period on the dashboard to run the readiness checks.
+            Generate and save a period on the dashboard to begin your readiness check.
           </p>
           <Link to="/app" className="btn-primary mt-6">
             Go to dashboard
@@ -181,15 +218,57 @@ export default function ReviewReadinessPanel() {
     )
   }
 
-  const showSkeleton =
-    initialLoading || ((complianceLoading || inputsLoading) && !data)
+  const showSkeleton = initialLoading || ((complianceLoading || inputsLoading) && !data)
+
+  // ── Derived readiness state (only meaningful once data is present) ──────────
+  const counts = summary?.counts ?? {}
+  const hasFigure =
+    inputs?.scholarshipFundsReceived !== null && inputs?.scholarshipFundsReceived !== undefined
+  const requiresAup = Boolean(summary?.requiresAup)
+
+  const capNoExceptions = (capSummary?.materialCount ?? 0) + (capSummary?.reportableCount ?? 0) === 0
+  const doneMap = {
+    intake: intakeComplete(inputs),
+    reconciliation: reconResult?.status === 'matched',
+    findings: (counts.needs_data ?? 0) === 0 && intakeComplete(inputs),
+    cap:
+      capNoExceptions ||
+      ((capSummary?.openCount ?? 0) === 0 && (capSummary?.inProgressCount ?? 0) === 0),
+    checklist: (checklistRollup?.pctComplete ?? 0) === 100,
+  }
+  const doneCount = STEP_ORDER.filter((k) => doneMap[k]).length
+  const allDone = doneCount === STEP_ORDER.length
+  const nextIncomplete = STEP_ORDER.find((k) => !doneMap[k]) || null
+
+  const stepMeta = STEPS.map((s) => ({ ...s, done: doneMap[s.key] }))
+  const activeIdx = STEP_ORDER.indexOf(step)
+  const activeStep = STEPS[activeIdx] ?? STEPS[0]
+
+  const openExport = () => {
+    if (selectedPeriodId) window.open(`/readiness/workpapers/print?period=${selectedPeriodId}`, '_blank')
+  }
+  const goNextIncomplete = () => {
+    if (allDone) openExport()
+    else if (nextIncomplete) setStep(nextIncomplete)
+  }
+  const nextIncompleteTitle = nextIncomplete
+    ? STEPS.find((s) => s.key === nextIncomplete)?.title
+    : null
+
+  const panelMotion = reduce
+    ? { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 } }
+    : {
+        initial: { opacity: 0, y: 12 },
+        animate: { opacity: 1, y: 0 },
+        exit: { opacity: 0, y: -8 },
+      }
 
   return (
     <div className="mx-auto max-w-[1100px] px-4 py-8 sm:px-10">
       <PageHeader />
 
       {!showSkeleton && savedPeriods.length > 0 && (
-        <div ref={contextBarRef}>
+        <div className="mb-4">
           <ContextBar
             periods={savedPeriods}
             activePeriodId={selectedPeriodId}
@@ -208,174 +287,187 @@ export default function ReviewReadinessPanel() {
           </div>
         </div>
       ) : (
-        (() => {
-          // ── PINNED OVERVIEW — always visible above the tabs. The disclaimer,
-          //    $250k trigger (+ program-tier selector) and summary never hide
-          //    behind a tab switch. ──
-          const counts = summary?.counts ?? {}
-          const material = counts.material ?? 0
-          const reportable = counts.reportable ?? 0
-          const findingsBadge =
-            material > 0 ? (
-              <TabBadge palette="risk">{material}</TabBadge>
-            ) : reportable > 0 ? (
-              <TabBadge palette="watch">{reportable}</TabBadge>
-            ) : null
+        <div className="space-y-6">
+          {/* ── HERO: verdict + progress + next action ── */}
+          <ReadinessWizardHero
+            hasFigure={hasFigure}
+            requiresAup={requiresAup}
+            scholarshipFunds={inputs?.scholarshipFundsReceived}
+            doneCount={doneCount}
+            totalSteps={STEP_ORDER.length}
+            allDone={allDone}
+            nextLabel={nextIncompleteTitle ? `Continue — ${nextIncompleteTitle}` : 'Review'}
+            onNext={goNextIncomplete}
+            rulesetVersion={data?.rulesetVersion}
+            statuteYear={data?.statuteYear}
+          />
 
-          const capOpen = capSummary?.openCount ?? 0
-          const capBadge = capOpen > 0 ? <TabBadge palette="watch">{capOpen}</TabBadge> : null
+          <DisclaimerBanner />
 
-          const checklistBadge = checklistRollup ? (
-            (() => {
-              const total = checklistRollup.total ?? 0
-              const cleared = (checklistRollup.done ?? 0) + (checklistRollup.na ?? 0)
-              const complete = total > 0 && cleared >= total
-              return (
-                <TabBadge palette={complete ? 'good' : 'neutral'}>
-                  {cleared}/{total}
-                </TabBadge>
-              )
-            })()
-          ) : null
+          {/* ── STEPPER ── */}
+          <div className="sticky top-2 z-10">
+            <ReadinessStepper
+              steps={stepMeta}
+              current={step}
+              onGoTo={setStep}
+              panelId="readiness-wizard-panel"
+            />
+          </div>
 
-          const tabs = [
-            { key: 'findings', label: 'Findings', short: 'Findings', badge: findingsBadge },
-            { key: 'intake', label: 'Compliance Intake', short: 'Intake' },
-            {
-              key: 'reconciliation',
-              label: 'Scholarship Reconciliation',
-              short: 'Reconciliation',
-            },
-            { key: 'cap', label: 'Corrective Actions', short: 'Corrective', badge: capBadge },
-            {
-              key: 'checklist',
-              label: 'Year-End Checklist',
-              short: 'Checklist',
-              badge: checklistBadge,
-            },
-          ]
+          {/* ── ACTIVE STEP ── */}
+          <div id="readiness-wizard-panel" role="tabpanel" aria-labelledby={`readiness-tab-${step}`}>
+            {/* Step intro */}
+            <div className="mb-4">
+              <p className="text-[12px] font-bold uppercase tracking-[0.14em] text-[#2563eb]">
+                Step {activeIdx + 1} of {STEP_ORDER.length}
+                {doneMap[step] ? ' · Complete' : ''}
+              </p>
+              <h2 className="mt-1 font-serif text-[24px] font-semibold text-navy sm:text-[28px]">
+                {activeStep.title}
+              </h2>
+              <p className="mt-1 max-w-2xl text-[15px] leading-relaxed text-muted">{activeStep.why}</p>
+            </div>
 
-          // Tabs other than findings gate on a selected period; fall back if missing.
-          const activeTab = !selectedPeriodId && tab !== 'findings' ? 'findings' : tab
-
-          const panelMotion = reduce
-            ? { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 } }
-            : {
-                initial: { opacity: 0, y: 12 },
-                animate: { opacity: 1, y: 0 },
-                exit: { opacity: 0, y: -8 },
-              }
-
-          return (
-            <div className="space-y-7">
-              {/* PINNED OVERVIEW */}
-              <DisclaimerBanner />
-
-              <TriggerHeader
-                summary={summary}
-                scholarshipFunds={inputs?.scholarshipFundsReceived ?? null}
-                rulesetVersion={data?.rulesetVersion}
-                statuteYear={data?.statuteYear}
-                programs={inputs?.programs ?? []}
-              />
-
-              <ReadinessSummary summary={summary} />
-
-              {/* STICKY TAB BAR — parks just below the sticky ContextBar (z-20)
-                  using a measured offset so it never crowds/overlaps ContextBar
-                  when it wraps to a taller stacked column at narrow widths.
-                  z-10 keeps it under ContextBar + any open dropdown menu (z-50). */}
-              <div
-                className="sticky z-10 -mx-4 px-4 sm:mx-0 sm:px-0"
-                style={{ top: tabTop }}
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={step}
+                initial={panelMotion.initial}
+                animate={panelMotion.animate}
+                exit={panelMotion.exit}
+                transition={{ duration: reduce ? 0.15 : 0.25 }}
               >
-                <ReadinessTabs tabs={tabs} value={activeTab} onChange={setTab} />
-              </div>
+                {step === 'intake' && (
+                  <ComplianceIntakePanel
+                    schoolId={schoolId}
+                    periodId={selectedPeriodId}
+                    periodLabel={data?.label}
+                    inputs={inputs}
+                    loading={inputsLoading}
+                    canEdit={canEdit}
+                    reloadInputs={reloadInputs}
+                    onSaved={reload}
+                  />
+                )}
 
-              {/* ACTIVE PANEL — only one detail area renders at a time. */}
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={activeTab}
-                  initial={panelMotion.initial}
-                  animate={panelMotion.animate}
-                  exit={panelMotion.exit}
-                  transition={{ duration: reduce ? 0.15 : 0.25 }}
-                >
-                  {activeTab === 'findings' && (
-                    /* The six AUP sections + Eligibility */
-                    <div className="space-y-6">
-                      {sections.map((group) => (
-                        <MetricSection
-                          key={group.section}
-                          title={`${group.section} · ${sectionTitle(group.section)}`}
-                          subtitle={`${group.findings.length} ${group.findings.length === 1 ? 'check' : 'checks'}`}
-                        >
-                          <div className="space-y-3">
-                            {group.findings.map((f, i) => (
-                              <RuleRow key={f.id} finding={f} index={i} />
-                            ))}
-                          </div>
-                        </MetricSection>
-                      ))}
-                    </div>
-                  )}
+                {step === 'reconciliation' && selectedPeriodId && (
+                  <ScholarshipReconciliationSection
+                    schoolId={schoolId}
+                    periodId={selectedPeriodId}
+                    canEdit={canEdit}
+                    onRecordedChanged={async () => {
+                      await reloadInputs()
+                      await reload()
+                    }}
+                  />
+                )}
 
-                  {activeTab === 'intake' && selectedPeriodId && (
-                    <ComplianceIntakePanel
-                      schoolId={schoolId}
-                      periodId={selectedPeriodId}
-                      periodLabel={data?.label}
-                      inputs={inputs}
-                      loading={inputsLoading}
-                      canEdit={canEdit}
-                      reloadInputs={reloadInputs}
-                      onSaved={reload}
-                    />
-                  )}
+                {step === 'findings' && (
+                  <div className="space-y-6">
+                    <ReadinessSummary summary={summary} />
+                    {sections.map((group) => (
+                      <MetricSection
+                        key={group.section}
+                        title={`${group.section} · ${sectionTitle(group.section)}`}
+                        subtitle={`${group.findings.length} ${group.findings.length === 1 ? 'check' : 'checks'}`}
+                      >
+                        <div className="space-y-3">
+                          {group.findings.map((f, i) => (
+                            <RuleRow key={f.id} finding={f} index={i} />
+                          ))}
+                        </div>
+                      </MetricSection>
+                    ))}
+                  </div>
+                )}
 
-                  {/* Phase 2B — Scholarship reconciliation (funding-org
-                      disbursements vs recorded scholarship revenue). Adopting the
-                      disbursed total as the recorded figure refreshes the 2A
-                      intake + findings too. */}
-                  {activeTab === 'reconciliation' && selectedPeriodId && (
-                    <ScholarshipReconciliationSection
-                      schoolId={schoolId}
-                      periodId={selectedPeriodId}
-                      canEdit={canEdit}
-                      onRecordedChanged={async () => {
-                        await reloadInputs()
-                        await reload()
-                      }}
-                    />
-                  )}
-
-                  {/* Phase 2D — Corrective Action Plan: editable, pre-filled
-                      remediation for each material / reportable finding.
-                      Self-fetching; export/print self-owned. */}
-                  {activeTab === 'cap' && selectedPeriodId && (
+                {step === 'cap' && selectedPeriodId && (
+                  <div className="space-y-4">
+                    {capNoExceptions && (
+                      <div className="flex items-start gap-3 rounded-xl border-2 border-emerald-200 bg-emerald-50 px-4 py-3">
+                        <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-emerald-600" />
+                        <p className="text-[15px] text-emerald-800">
+                          <span className="font-semibold">No exceptions to correct.</span> Nothing
+                          you entered is reportable or material — there's no corrective action plan
+                          required for this engagement.
+                        </p>
+                      </div>
+                    )}
                     <CorrectiveActionPlanSection
                       schoolId={schoolId}
                       periodId={selectedPeriodId}
                       canEdit={canEdit}
                     />
-                  )}
+                  </div>
+                )}
 
-                  {/* Phase 2C — Year-End Review Checklist: AUP-procedure groups +
-                      the documents-to-gather group, each with status + notes + a
-                      readiness progress rollup, plus the Workpapers Packet export.
-                      Self-fetching. */}
-                  {activeTab === 'checklist' && selectedPeriodId && (
+                {step === 'checklist' && selectedPeriodId && (
+                  <div className="space-y-5">
                     <YearEndChecklistSection
                       schoolId={schoolId}
                       periodId={selectedPeriodId}
                       canEdit={canEdit}
                     />
-                  )}
-                </motion.div>
-              </AnimatePresence>
+                    {/* Finish line: the workpapers export, spotlighted once everything
+                        is complete. */}
+                    <div
+                      className={`flex flex-col items-start gap-3 rounded-2xl border-2 p-5 sm:flex-row sm:items-center sm:justify-between ${
+                        allDone ? 'border-emerald-200 bg-emerald-50' : 'border-rule bg-white'
+                      }`}
+                    >
+                      <div>
+                        <p className="font-serif text-lg font-semibold text-navy">
+                          {allDone ? 'You’re ready for your CPA.' : 'Export the workpapers packet'}
+                        </p>
+                        <p className="mt-0.5 text-[14px] text-muted">
+                          A single print/PDF bundle of your inputs, findings, reconciliation, CAP,
+                          and checklist — hand it to your engaged CPA.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={openExport}
+                        className="btn-primary inline-flex shrink-0 items-center gap-2"
+                      >
+                        <FileDown size={16} /> Export workpapers
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            </AnimatePresence>
+
+            {/* ── Back / Next nav ── */}
+            <div className="mt-6 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => activeIdx > 0 && setStep(STEP_ORDER[activeIdx - 1])}
+                disabled={activeIdx === 0}
+                className="btn-ghost inline-flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <ArrowLeft size={15} /> Back
+              </button>
+              {activeIdx < STEP_ORDER.length - 1 ? (
+                <motion.button
+                  type="button"
+                  whileTap={reduce ? undefined : { scale: 0.97 }}
+                  onClick={() => setStep(STEP_ORDER[activeIdx + 1])}
+                  className="btn-primary inline-flex items-center gap-2"
+                >
+                  Next — {STEPS[activeIdx + 1].label} <ArrowRight size={15} />
+                </motion.button>
+              ) : (
+                <motion.button
+                  type="button"
+                  whileTap={reduce ? undefined : { scale: 0.97 }}
+                  onClick={openExport}
+                  className="btn-primary inline-flex items-center gap-2"
+                >
+                  <FileDown size={15} /> Export workpapers
+                </motion.button>
+              )}
             </div>
-          )
-        })()
+          </div>
+        </div>
       )}
     </div>
   )
