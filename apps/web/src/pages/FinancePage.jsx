@@ -23,11 +23,9 @@ import {
   ShieldCheck,
   ArrowRight,
   ArrowLeft,
-  Building2,
   Scale,
 } from 'lucide-react'
 import { useSchools } from '../context/SchoolContext.jsx'
-import { useScope } from '../context/ScopeContext.jsx'
 import { useBilling } from '../context/BillingContext.jsx'
 import { usePersistence } from '../context/PersistenceContext.jsx'
 import { useUiV2 } from '../context/UiFlagContext.jsx'
@@ -222,7 +220,6 @@ export default function FinancePage() {
   const reduce = useReducedMotion()
   const uiV2 = useUiV2()
   const { activeSchool } = useSchools()
-  const { isMultiSchool } = useScope()
   // v1 is ALWAYS school-scoped — org finance already lives on the consolidated Home
   // and the Budget org roll-up tabs, so we never null the schoolId for org mode.
   const schoolId = activeSchool?.id ?? null
@@ -391,21 +388,6 @@ export default function FinancePage() {
         billing={billing}
         isOwner={isOwner}
       />
-
-      {isMultiSchool && (
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gold/25 bg-gold/[0.05] px-4 py-3 text-[14px] text-navy">
-          <Building2 size={16} className="text-gold" />
-          <span>Looking for the whole organization? Consolidated finance lives on</span>
-          <Link to="/app" className="font-semibold text-gold hover:text-gold-light">
-            Home
-          </Link>
-          <span>and the</span>
-          <Link to="/budget" className="font-semibold text-gold hover:text-gold-light">
-            Budget
-          </Link>
-          <span>org tabs.</span>
-        </div>
-      )}
 
       <motion.div
         initial={reduce ? { opacity: 0 } : { opacity: 0, y: 16 }}
