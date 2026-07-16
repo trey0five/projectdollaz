@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // ContextSwitcher — the ui.v2 header's ONE "what am I viewing" picker, replacing
 // the SchoolSwitcher + ScopeToggle pair. The trigger names the current context
-// (org scope: "{orgName} · All schools"; school scope: the active school); the
+// (org scope: "Whole organization"; school scope: the active school); the
 // menu offers "Whole organization" (multi-school callers only) above the school
 // list. Selecting the org item → setScope('org'); selecting a school →
 // setActiveSchool(id) + setScope('school') — the SAME context writes the two old
@@ -57,9 +57,7 @@ export default function ContextSwitcher() {
 
   if (!activeSchool && !orgMode) return null
 
-  const label = orgMode
-    ? `${orgName || 'Organization'} · All schools`
-    : activeSchool?.name ?? ''
+  const label = orgMode ? 'Whole organization' : activeSchool?.name ?? ''
 
   const pickOrg = () => {
     setScope('org')
