@@ -10,15 +10,17 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
-import { Layers, Gauge, School, AlertTriangle } from 'lucide-react'
+import { Layers, Gauge, School, AlertTriangle, Blocks } from 'lucide-react'
 import BriefingModal from './BriefingModal.jsx'
 import OrgKpiStrip from '../budget/OrgKpiStrip.jsx'
 import OrgSchoolsTable from '../budget/OrgSchoolsTable.jsx'
 import OrgBriefing from '../budget/OrgBriefing.jsx'
+import OrgModulesMatrix from './OrgModulesMatrix.jsx'
 
 const TABS = [
   { key: 'kpis', label: 'Organization KPIs', Icon: Gauge },
   { key: 'schools', label: 'Schools', Icon: School },
+  { key: 'modules', label: 'Modules', Icon: Blocks },
   { key: 'attention', label: 'Needs attention', Icon: AlertTriangle },
 ]
 
@@ -129,6 +131,7 @@ export default function OrgDetailModal({
           <OrgKpiStrip metrics={metrics} loading={metricsLoading} error={metricsError} />
         )}
         {tab === 'schools' && <OrgSchoolsTable schools={briefing?.schools || []} />}
+        {tab === 'modules' && <OrgModulesMatrix schools={briefing?.schools || []} />}
         {tab === 'attention' && (
           <OrgBriefing
             briefing={briefing}
