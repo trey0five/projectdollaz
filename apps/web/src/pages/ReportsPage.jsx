@@ -174,57 +174,62 @@ function renderHub(onSelect) {
       <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-3">
         {REPORTS.map((r, i) => {
           const Icon = r.Icon || FileBarChart2
+          const cta =
+            r.action === 'navigate'
+              ? 'Open schedules'
+              : r.id === 'forecast'
+                ? 'View forecast'
+                : r.action === 'inline'
+                  ? 'Manage months'
+                  : 'Build report'
           return (
-          <motion.button
-            key={r.id}
-            id={r.id === 'board' ? 'reports-board-card' : undefined}
-            type="button"
-            disabled={!r.live}
-            onClick={() => r.live && onSelect(r)}
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.05 * i }}
-            whileHover={r.live ? { y: -3 } : undefined}
-            className={`group relative flex flex-col rounded-2xl border-2 p-3.5 text-left transition-all sm:p-5 ${
-              r.live
-                ? 'border-gold/30 bg-white shadow-card hover:border-gold/60 hover:shadow-glow'
-                : 'cursor-not-allowed border-rule/60 bg-white/60 opacity-70'
-            }`}
-          >
-            <span
-              className={`mb-2.5 flex h-9 w-9 items-center justify-center rounded-xl sm:mb-3 sm:h-11 sm:w-11 ${
-                r.live ? 'bg-gold/15 text-gold' : 'bg-navy/[0.06] text-muted'
-              }`}
+            <motion.button
+              key={r.id}
+              id={r.id === 'board' ? 'reports-board-card' : undefined}
+              type="button"
+              disabled={!r.live}
+              onClick={() => r.live && onSelect(r)}
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.05 * i }}
+              whileHover={r.live ? { y: -4 } : undefined}
+              // Same hue-flood tile as the Home dashboard: on hover the whole card
+              // fills blue and its text flips white (home-tiles.css). Reduced-motion
+              // and focus states come from the shared .module-tile rules for free.
+              className={`module-tile group text-left ${r.live ? '' : 'cursor-not-allowed opacity-70'}`}
+              style={{ '--tile-hue': '#2563eb' }}
             >
-              <Icon size={20} className="sm:hidden" />
-              <Icon size={22} className="hidden sm:block" />
-            </span>
-            <h2 className="font-serif text-base font-bold text-navy sm:text-xl">{r.title}</h2>
-            <p className="mt-1 flex-1 text-[12.5px] leading-relaxed text-muted sm:mt-1.5 sm:text-[15px]">
-              {r.blurb}
-            </p>
-            <span
-              id={r.id === 'board' ? 'reports-generate-button' : undefined}
-              className="mt-3 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] sm:mt-4 sm:text-[14px]"
-            >
-              {r.live ? (
-                <span className="inline-flex items-center gap-1.5 text-gold">
-                  {r.action === 'navigate'
-                    ? 'Open schedules'
-                    : r.id === 'forecast'
-                      ? 'View forecast'
-                      : r.action === 'inline'
-                        ? 'Manage months'
-                        : 'Build report'}
-                  <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
+              <span className="tile-body">
+                <span className={`tile-art ${r.live ? '' : 'opacity-60'}`}>
+                  <Icon aria-hidden="true" />
                 </span>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 text-muted">
-                  <Lock size={13} /> Coming soon
-                </span>
-              )}
-            </span>
-          </motion.button>
+                <div>
+                  <h2 className="tile-title font-serif text-[17px] font-semibold leading-snug text-navy">
+                    {r.title}
+                  </h2>
+                  <p className="tile-sub mt-1 text-[13.5px] leading-relaxed text-muted">{r.blurb}</p>
+                </div>
+                <div className="mt-auto flex items-center justify-between gap-3 pt-1">
+                  {r.live ? (
+                    <>
+                      <span
+                        id={r.id === 'board' ? 'reports-generate-button' : undefined}
+                        className="tile-chip tile-chip--clear"
+                      >
+                        {cta}
+                      </span>
+                      <span className="tile-arrow">
+                        <ArrowRight size={16} />
+                      </span>
+                    </>
+                  ) : (
+                    <span className="tile-chip tile-chip--none">
+                      <Lock size={13} /> Coming soon
+                    </span>
+                  )}
+                </div>
+              </span>
+            </motion.button>
           )
         })}
       </div>
