@@ -13,16 +13,16 @@
 // the org needs attention".
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo, useState } from 'react'
-import { useBilling } from '../../context/BillingContext.jsx'
 import { useOrgBriefing, useOrgMetrics } from '../../hooks/useAnalytics.js'
+import { useSchools } from '../../context/SchoolContext.jsx'
+import { useScope } from '../../context/ScopeContext.jsx'
 import { summariseBadges } from '../../hooks/useNavBadges.js'
 import PennyMorningBrief from './PennyMorningBrief.jsx'
 import BriefingBand from './BriefingBand.jsx'
 import BriefingModal from './BriefingModal.jsx'
 import OrgDetailModal from './OrgDetailModal.jsx'
-import ModuleTile from './ModuleTile.jsx'
-import PennyTile from './PennyTile.jsx'
-import { HOME_TILES, TILE_SOURCES } from './tileRegistry.jsx'
+import SchoolTile from './SchoolTile.jsx'
+import { TILE_SOURCES } from './tileRegistry.jsx'
 import '../../styles/home-tiles.css'
 
 function fyLabel(fiscalYearStart) {
@@ -40,7 +40,8 @@ export default function OrgTiles({
   selectedPeriodId,
   onSelectPeriod,
 }) {
-  const { hasModule } = useBilling()
+  const { setActiveSchool } = useSchools()
+  const { setScope } = useScope()
   // Owner-only "preview as" lens, same as OrgHome (org briefing is JwtAuth-only).
   const [previewLens, setPreviewLens] = useState(null)
   // Morning-brief popup: null (closed) | 'open' | 'narrate' (autoplay on open).
@@ -73,13 +74,15 @@ export default function OrgTiles({
   )
   const chipsReady = !briefingLoading && !briefingError
 
-  // Registry order; tri-state per tile exactly like HomeTiles.
-  const tiles = HOME_TILES.map((tile) => {
-    const locked = hasModule(tile.key) === false
-    if (locked) return { tile, locked: true }
-    if (!tile.route && !tile.surface) return null // page-less w/o a surface only
-    return { tile, locked: false }
-  }).filter(Boolean)
+  // The org's schools (from the briefing rollup) become the tile grid. Selecting
+  // one swaps the whole app to that school's view.
+  const schools = useMemo(() => briefing?.schools ?? [], [briefing])
+  const goToSchool = (schoolId) => {
+    if (!schoolId) return
+    setActiveSchool(schoolId)
+    setScope('school')
+    window.scrollTo({ top: 0, behavior: 'auto' })
+  }
 
   const fy = fyLabel(fiscalYearStart)
 
@@ -97,22 +100,37 @@ export default function OrgTiles({
         onOpenOrgView={() => setOrgDetail(true)}
       />
 
-      <nav aria-label="Modules">
-        <ul role="list" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {tiles.map(({ tile, locked }, i) => (
-            <ModuleTile
-              key={tile.key}
-              tile={tile}
-              badge={badges[tile.key]}
-              ready={chipsReady}
-              locked={locked}
-              index={i}
-            />
-          ))}
-          {/* The 8th tile: Penny Studio — always present (core, not a module). */}
-          <PennyTile index={tiles.length} />
-        </ul>
-      </nav>
+      {/* Jump into a school — each tile swaps the whole app to that school's
+          view (setActiveSchool + school scope). One colour per school. */}
+      <section aria-labelledby="org-schools-heading">
+        <div className="mb-3 flex items-baseline justify-between gap-3">
+          <h2 id="org-schools-heading" className="font-serif text-lg font-semibold text-navy">
+            Jump into a school
+          </h2>
+          <p className="text-[13px] text-muted">
+            {schools.length} school{schools.length === 1 ? '' : 's'} · select one to open its dashboard
+          </p>
+        </div>
+        {schools.length > 0 ? (
+          <ul role="list" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {schools.map((school, i) => (
+              <SchoolTile
+                key={school.schoolId}
+                school={school}
+                index={i}
+                ready={chipsReady}
+                onSelect={goToSchool}
+              />
+            ))}
+          </ul>
+        ) : (
+          <div className="card-soft border-dashed px-6 py-10 text-center">
+            <p className="text-[15px] italic text-muted">
+              {briefingLoading ? 'Loading your schools…' : 'No schools in this organization yet.'}
+            </p>
+          </div>
+        )}
+      </section>
 
       {/* The narrated org brief — a POPUP now. ▶ Play opens with autoNarrate
           (the modal dispatches 'penny:narrate' after the brief mounts). */}
