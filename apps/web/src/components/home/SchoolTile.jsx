@@ -22,8 +22,14 @@ const SCHOOL_HUES = [
   '#db2777',
 ]
 
-export function schoolHue(index) {
-  return SCHOOL_HUES[index % SCHOOL_HUES.length]
+// Stable hue per school ID (a small string hash), so a school reads the SAME
+// colour on its org tile AND on its own home briefing band — not tied to list
+// position.
+export function schoolHue(schoolId) {
+  const str = String(schoolId ?? '')
+  let h = 0
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0
+  return SCHOOL_HUES[h % SCHOOL_HUES.length]
 }
 
 function initials(name) {
@@ -55,7 +61,7 @@ const ENTRANCE = (reduce, index) => ({
 
 export default function SchoolTile({ school, index = 0, ready = true, onSelect }) {
   const reduce = useReducedMotion()
-  const hue = schoolHue(index)
+  const hue = schoolHue(school.schoolId)
   const chip = chipFor(school, ready)
 
   return (

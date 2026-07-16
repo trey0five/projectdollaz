@@ -32,6 +32,7 @@ import PennyMorningBrief from './PennyMorningBrief.jsx'
 import BriefingBand from './BriefingBand.jsx'
 import BriefingModal from './BriefingModal.jsx'
 import ModuleTile from './ModuleTile.jsx'
+import { schoolHue } from './SchoolTile.jsx'
 import PennyTile from './PennyTile.jsx'
 import HomeVitalsStrip from './HomeVitalsStrip.jsx'
 import { HOME_TILES, TILE_SOURCES } from './tileRegistry.jsx'
@@ -175,6 +176,10 @@ export default function HomeTiles() {
         lens={briefingLens}
         hasPeriod={hasPeriod}
         onOpenBrief={setBrief}
+        // In a multi-school org, tint the band as frosted glass in this school's
+        // identity colour (same as its org tile) and show the school name.
+        hue={isMultiSchool ? schoolHue(activeSchool?.id) : null}
+        schoolTitle={isMultiSchool ? activeSchool?.name : null}
       />
 
       <nav aria-label="Modules">

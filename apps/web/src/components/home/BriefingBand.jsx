@@ -12,7 +12,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion, useReducedMotion } from 'framer-motion'
 import { Link } from 'react-router-dom'
-import { Sparkles, Play, ArrowRight, Database, Layers } from 'lucide-react'
+import { Sparkles, Play, ArrowRight, Database, Layers, School } from 'lucide-react'
 import { HOME_TILES, tileLabel, LENS_VERB, greeting } from './tileRegistry.jsx'
 
 export default function BriefingBand({
@@ -25,11 +25,27 @@ export default function BriefingBand({
   // Org scope only: renders a third band action that opens the consolidated
   // organization-view popup (KPIs / schools / triage). Omitted on school scope.
   onOpenOrgView = null,
+  // School scope (from a multi-school org): `hue` is that school's identity
+  // colour (same as its org tile) and `schoolTitle` its name — the band renders
+  // as a FROSTED-GLASS panel tinted in the school's colour with the name shown.
+  hue = null,
+  schoolTitle = null,
 }) {
   const reduce = useReducedMotion()
   const total = summary?.total ?? 0
   const critical = summary?.critical ?? 0
   const verb = LENS_VERB[lens] ?? 'need attention'
+
+  // Frosted-glass tint from the school hue: a translucent dark-navy glass carrying
+  // the hue, so white text stays readable and the ground shows faintly through.
+  // Mix the hue against a NEUTRAL dark (not navy) so warm hues stay warm — mixing
+  // against a blue base cancels opponent colours and turns amber/coral muddy.
+  const glass = hue
+    ? (pct) => `color-mix(in srgb, ${hue} ${pct}%, rgba(15, 17, 24, 0.9))`
+    : null
+  const sectionStyle = glass
+    ? { background: `linear-gradient(135deg, ${glass(55)} 0%, ${glass(28)} 55%, ${glass(15)} 100%)` }
+    : undefined
 
   // Registry-ordered chips for every module tile with open attention items.
   const chips = HOME_TILES.filter((t) => (badges[t.key]?.count ?? 0) > 0).map((t) => ({
@@ -46,23 +62,41 @@ export default function BriefingBand({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
       aria-label="Daily briefing summary"
-      className="relative overflow-hidden rounded-2xl bg-navy-gradient p-5 shadow-navy-glow sm:p-6"
+      style={sectionStyle}
+      className={`relative overflow-hidden rounded-2xl p-5 shadow-navy-glow sm:p-6 ${
+        glass ? 'border border-white/15 backdrop-blur-xl' : 'bg-navy-gradient'
+      }`}
     >
       {/* Quiet decorative glow — static, cheap, reduced-motion safe. */}
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-gold/10 blur-3xl"
+        className={`pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full blur-3xl ${
+          glass ? '' : 'bg-gold/10'
+        }`}
+        style={glass ? { background: `color-mix(in srgb, ${hue} 45%, transparent)` } : undefined}
       />
       <span
         aria-hidden="true"
         className="pointer-events-none absolute inset-x-0 top-0 h-px"
-        style={{ background: 'linear-gradient(90deg, transparent, rgba(214,178,92,0.5), transparent)' }}
+        style={{
+          background: glass
+            ? `linear-gradient(90deg, transparent, ${hue}, transparent)`
+            : 'linear-gradient(90deg, transparent, rgba(214,178,92,0.5), transparent)',
+        }}
       />
 
       <div className="relative flex flex-col gap-4">
-        <span className="inline-flex items-center gap-1.5 font-sans text-[12px] font-bold uppercase tracking-[0.18em] text-gold/80">
-          <Sparkles size={13} className="text-gold" /> Daily briefing
-        </span>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <span className="inline-flex items-center gap-1.5 font-sans text-[12px] font-bold uppercase tracking-[0.18em] text-gold/80">
+            <Sparkles size={13} className="text-gold" /> Daily briefing
+          </span>
+          {schoolTitle && (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[12.5px] font-semibold text-white">
+              <School size={13} className="text-white/70" />
+              {schoolTitle}
+            </span>
+          )}
+        </div>
 
         {hasPeriod ? (
           <>
@@ -82,17 +116,23 @@ export default function BriefingBand({
               </h1>
               <p className="mt-1 text-[15px] leading-relaxed text-white/70">
                 {total === 0 ? (
-                  <>Nothing needs a decision across {schoolName || 'your school'} right now.</>
+                  schoolTitle ? (
+                    <>Nothing needs a decision right now.</>
+                  ) : (
+                    <>Nothing needs a decision across {schoolName || 'your school'} right now.</>
+                  )
                 ) : (
                   <>
-                    Across {schoolName || 'your school'}
+                    {!schoolTitle && <>Across {schoolName || 'your school'}</>}
                     {critical > 0 && (
                       <>
-                        {' '}
-                        · <span className="font-semibold text-red-300">{critical} critical</span>
+                        {schoolTitle ? '' : ' · '}
+                        <span className="font-semibold text-red-300">{critical} critical</span>
+                        {schoolTitle ? ' · ' : '. '}
                       </>
                     )}
-                    . The tiles below show where.
+                    {critical > 0 ? '' : schoolTitle ? '' : '. '}
+                    The tiles below show where.
                   </>
                 )}
               </p>
