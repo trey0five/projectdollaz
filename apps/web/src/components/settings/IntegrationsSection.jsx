@@ -359,6 +359,10 @@ export default function IntegrationsSection({ embedded = false }) {
       await loadActiveCy(activeId, selectedPeriod)
       await loadScope(activeId, selectedPeriod)
       await loadReview(activeId)
+      // A sync creates/updates the period + statements — refresh the shared period
+      // list so the surrounding app (Finance wizard, dashboard) shows the new data
+      // instead of "no reporting period yet".
+      await refreshPeriods()
       setScopeResult({ label, ...res.data })
     } catch (e) {
       setErr(apiErrorMessage(e, 'Could not import from QuickBooks.'))
@@ -381,6 +385,7 @@ export default function IntegrationsSection({ embedded = false }) {
       await load(activeId)
       await loadActiveCy(activeId, selectedPeriod)
       await loadReview(activeId)
+      await refreshPeriods()
     } catch (e) {
       setErr(apiErrorMessage(e, 'Could not sync all periods from QuickBooks.'))
     } finally {
