@@ -2,10 +2,9 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { FileSpreadsheet, Layers, Plug } from 'lucide-react'
 import { AppProvider } from '../../context/AppContext.jsx'
-import { useDataStatus } from '../../hooks/useDataStatus.js'
 import IntakeBar from '../IntakeBar.jsx'
 import BulkYearsUploader from '../BulkYearsUploader.jsx'
-import QuickBooksCard from './QuickBooksCard.jsx'
+import QboConnectPanel from './QboConnectPanel.jsx'
 
 const TABS = [
   { key: 'single', label: 'This year', Icon: FileSpreadsheet },
@@ -32,9 +31,6 @@ export default function TrialBalanceModalBody({
 }) {
   const [mode, setMode] = useState('single')
   const active = canEdit ? mode : 'single'
-  // QuickBooks connect lives here (connecting QBO syncs the trial balance). The
-  // status payload feeds the real OAuth connector card (same as the Data hub).
-  const { data: dataStatus } = useDataStatus(school?.id, activePeriod?.id)
 
   return (
     <div>
@@ -105,18 +101,11 @@ export default function TrialBalanceModalBody({
         </div>
       )}
 
-      {/* QuickBooks — the real OAuth connector card (leaves for QBO consent and
-          returns connected). Conditionally mounted; only for editors. */}
+      {/* QuickBooks — the real OAuth connector (school-level status; Connect starts
+          the Intuit redirect right here). Conditionally mounted; only for editors. */}
       {canEdit && active === 'qbo' && (
         <div className="p-5">
-          {dataStatus ? (
-            <QuickBooksCard quickbooks={dataStatus.quickbooks} />
-          ) : (
-            <div
-              className="h-28 animate-pulse rounded-2xl border-2 border-rule/50 bg-white/60"
-              aria-hidden="true"
-            />
-          )}
+          <QboConnectPanel schoolId={school?.id} canEdit={canEdit} />
         </div>
       )}
     </div>
