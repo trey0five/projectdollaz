@@ -1,13 +1,16 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { FileSpreadsheet, Layers } from 'lucide-react'
+import { FileSpreadsheet, Layers, Plug } from 'lucide-react'
 import { AppProvider } from '../../context/AppContext.jsx'
+import { useDataStatus } from '../../hooks/useDataStatus.js'
 import IntakeBar from '../IntakeBar.jsx'
 import BulkYearsUploader from '../BulkYearsUploader.jsx'
+import QuickBooksCard from './QuickBooksCard.jsx'
 
 const TABS = [
   { key: 'single', label: 'This year', Icon: FileSpreadsheet },
   { key: 'bulk', label: 'Add years', Icon: Layers },
+  { key: 'qbo', label: 'QuickBooks', Icon: Plug },
 ]
 
 /**
@@ -29,6 +32,9 @@ export default function TrialBalanceModalBody({
 }) {
   const [mode, setMode] = useState('single')
   const active = canEdit ? mode : 'single'
+  // QuickBooks connect lives here (connecting QBO syncs the trial balance). The
+  // status payload feeds the real OAuth connector card (same as the Data hub).
+  const { data: dataStatus } = useDataStatus(school?.id, activePeriod?.id)
 
   return (
     <div>
@@ -63,7 +69,9 @@ export default function TrialBalanceModalBody({
           <p className="mt-2 pb-3 text-[13.5px] text-muted">
             {active === 'bulk'
               ? 'Bring in several past years at once to build your year-over-year trend.'
-              : 'Upload this year’s books (add last year & audited to unlock comparatives).'}
+              : active === 'qbo'
+                ? 'Connect QuickBooks Online to sync your trial balance automatically — no more manual uploads.'
+                : 'Upload this year’s books (add last year & audited to unlock comparatives).'}
           </p>
         </div>
       )}
@@ -94,6 +102,21 @@ export default function TrialBalanceModalBody({
       {canEdit && (
         <div className={active === 'bulk' ? 'p-5' : 'hidden'}>
           <BulkYearsUploader canEdit={canEdit} onOpenMonthly={onOpenMonthly} />
+        </div>
+      )}
+
+      {/* QuickBooks — the real OAuth connector card (leaves for QBO consent and
+          returns connected). Conditionally mounted; only for editors. */}
+      {canEdit && active === 'qbo' && (
+        <div className="p-5">
+          {dataStatus ? (
+            <QuickBooksCard quickbooks={dataStatus.quickbooks} />
+          ) : (
+            <div
+              className="h-28 animate-pulse rounded-2xl border-2 border-rule/50 bg-white/60"
+              aria-hidden="true"
+            />
+          )}
         </div>
       )}
     </div>

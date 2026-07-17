@@ -51,7 +51,7 @@ import MonthlyActualsPanel from '../monthly/MonthlyActualsPanel.jsx'
 import BudgetSetup from '../budget/BudgetSetup.jsx'
 import OperationalDataPanel from '../analytics/OperationalDataPanel.jsx'
 import RosterUpload from '../enrollment/RosterUpload.jsx'
-import { QboConnectEmbed, EnrollmentConnectEmbed } from './wizardEmbeds.jsx'
+import { EnrollmentConnectEmbed } from './wizardEmbeds.jsx'
 import WizardStrategyGoal from './WizardStrategyGoal.jsx'
 
 // The exported page-private form modals (ENG-C1 adds the `export`; FROZEN names).
@@ -100,7 +100,7 @@ export const wizardConfigs = {
         Icon: FileSpreadsheet,
         label: 'Trial balance',
         blurb:
-          "Drop in your trial balance — the one list of every account and its balance. We turn it into your four statements automatically.",
+          'Drop in your trial balance — or connect QuickBooks to sync it automatically. We turn it into your four statements.',
         cta: 'Add trial balance',
         renderEmbed: (ctx, nav) => (
           <TrialBalanceModalBody
@@ -143,17 +143,9 @@ export const wizardConfigs = {
           />
         ),
       },
-      {
-        key: 'qbo',
-        kind: 'embed',
-        external: true,
-        Icon: Plug,
-        label: 'QuickBooks',
-        blurb:
-          'Connect QuickBooks Online to sync your trial balance automatically — no more manual uploads.',
-        cta: 'Connect QuickBooks',
-        renderEmbed: (ctx) => <QboConnectEmbed schoolId={ctx.schoolId} periodId={ctx.periodId} />,
-      },
+      // QuickBooks is NOT a separate option — connecting QBO syncs the trial
+      // balance, so it lives as a tab INSIDE the Trial balance flow
+      // (TrialBalanceModalBody) alongside the manual upload.
     ],
   },
 
