@@ -643,8 +643,10 @@ export default function IntegrationsSection({ embedded = false }) {
                     First, add the reporting period to import into.
                   </p>
                   <p className="mt-1 text-[13.5px] leading-relaxed text-muted">
-                    QuickBooks pulls your trial balance as of a fiscal year-end. Pick your year-end
-                    and we’ll create the period — then you can import.
+                    QuickBooks pulls your trial balance as of a fiscal year-end. Pick a{' '}
+                    <span className="font-semibold text-navy">completed</span> fiscal year QuickBooks
+                    has activity for — a current or future year-end can pull a balance sheet but no
+                    income statement yet.
                   </p>
                   <div className="mt-3 flex flex-wrap items-end gap-3">
                     <label className="flex flex-col gap-1 text-[13px] font-semibold uppercase tracking-[0.1em] text-muted">
