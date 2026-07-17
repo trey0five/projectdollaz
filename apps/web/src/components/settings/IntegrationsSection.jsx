@@ -50,7 +50,12 @@ function ScopeRow({ ok, label, detail }) {
   )
 }
 
-export default function IntegrationsSection() {
+// `embedded` = mounted OUTSIDE the Settings page (e.g. the Finance "Add data →
+// Trial balance → QuickBooks" tab), so the multi-school org console is hidden —
+// that belongs in Settings. The per-school connect + sync/import panel is the
+// point of embedding: connecting alone imports nothing, so a connected user can
+// pull their trial balance right where they added it, without leaving Finance.
+export default function IntegrationsSection({ embedded = false }) {
   const { activeId, activeSchool } = useSchools()
   const { periods } = usePersistence()
   const canEdit = activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'
@@ -413,8 +418,9 @@ export default function IntegrationsSection() {
   return (
     <>
       {/* Multi-school orgs get the org-wide console on top (hides itself for
-          single-school orgs): connect + sync every school without swapping. */}
-      <OrgQuickBooksCard />
+          single-school orgs): connect + sync every school without swapping.
+          Suppressed when embedded outside Settings — the org console lives there. */}
+      {!embedded && <OrgQuickBooksCard />}
       <SettingsCard
         title="QuickBooks Online"
         description="Pull the trial balance straight from QuickBooks instead of uploading a file."

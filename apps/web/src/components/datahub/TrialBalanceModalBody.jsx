@@ -4,7 +4,7 @@ import { FileSpreadsheet, Layers, Plug } from 'lucide-react'
 import { AppProvider } from '../../context/AppContext.jsx'
 import IntakeBar from '../IntakeBar.jsx'
 import BulkYearsUploader from '../BulkYearsUploader.jsx'
-import QboConnectPanel from './QboConnectPanel.jsx'
+import IntegrationsSection from '../settings/IntegrationsSection.jsx'
 
 const TABS = [
   { key: 'single', label: 'This year', Icon: FileSpreadsheet },
@@ -101,11 +101,12 @@ export default function TrialBalanceModalBody({
         </div>
       )}
 
-      {/* QuickBooks — the real OAuth connector (school-level status; Connect starts
-          the Intuit redirect right here). Conditionally mounted; only for editors. */}
+      {/* QuickBooks — the FULL per-school QBO panel (the same one from Settings):
+          connect, then pick a period and sync/import the trial balance right here.
+          `embedded` hides the org console. Conditionally mounted; only for editors. */}
       {canEdit && active === 'qbo' && (
         <div className="p-5">
-          <QboConnectPanel schoolId={school?.id} canEdit={canEdit} />
+          <IntegrationsSection embedded />
         </div>
       )}
     </div>
