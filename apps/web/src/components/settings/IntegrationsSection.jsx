@@ -8,7 +8,7 @@ import { motion } from 'framer-motion'
 import { AlertTriangle, ArrowRight, CheckCircle2, History, Plug, RefreshCw, Unplug, XCircle } from 'lucide-react'
 import { useSchools } from '../../context/SchoolContext.jsx'
 import { usePersistence } from '../../context/PersistenceContext.jsx'
-import { qboApi, qboCompanyApi, importsApi, apiErrorMessage } from '../../lib/api.js'
+import { qboApi, qboCompanyApi, importsApi, periodsApi, apiErrorMessage } from '../../lib/api.js'
 import { formatRelative } from '../../lib/format.js'
 import { FormError, FormSuccess } from '../auth/fields.jsx'
 import SettingsCard from './SettingsCard.jsx'
@@ -57,7 +57,7 @@ function ScopeRow({ ok, label, detail }) {
 // pull their trial balance right where they added it, without leaving Finance.
 export default function IntegrationsSection({ embedded = false }) {
   const { activeId, activeSchool } = useSchools()
-  const { periods } = usePersistence()
+  const { periods, refresh: refreshPeriods } = usePersistence()
   const canEdit = activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'
 
   const [status, setStatus] = useState(null)
@@ -65,6 +65,15 @@ export default function IntegrationsSection({ embedded = false }) {
   const [busy, setBusy] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [syncingAll, setSyncingAll] = useState(false)
+  // Bootstrapping a reporting period when a fresh school has none — a QBO import
+  // pulls a trial balance INTO a period, so one must exist first. Default to the
+  // most recently completed fiscal year-end (FY runs Jul–Jun → Jun 30).
+  const [newPeriodDate, setNewPeriodDate] = useState(() => {
+    const d = new Date()
+    const y = d.getFullYear()
+    return d.getMonth() >= 6 ? `${y}-06-30` : `${y - 1}-06-30`
+  })
+  const [creatingPeriod, setCreatingPeriod] = useState(false)
   // What to pull from QuickBooks (current year is always the base). historyYears =
   // additional prior fiscal-years, each imported as its own period; allHistory =
   // every prior year with data (overrides the count).
@@ -291,6 +300,29 @@ export default function IntegrationsSection({ embedded = false }) {
 
   // Import entry points gate on the supersede confirm when an uploaded file is the
   // active current-year source; otherwise they run straight away.
+  // Create the reporting period a QBO import needs (fresh school → empty dropdown).
+  const createPeriod = async () => {
+    if (!newPeriodDate || creatingPeriod) return
+    setErr('')
+    setOk('')
+    setCreatingPeriod(true)
+    try {
+      const endYear = Number(newPeriodDate.slice(0, 4))
+      const res = await periodsApi.createOrGet(activeId, {
+        periodEndDate: newPeriodDate,
+        periodType: 'fy',
+        label: `FY ${endYear}`,
+      })
+      await refreshPeriods()
+      if (res?.data?.id) setPeriodId(res.data.id)
+      setOk('Reporting period created — now choose what to pull and import from QuickBooks.')
+    } catch (e) {
+      setErr(apiErrorMessage(e, 'Could not create the reporting period.'))
+    } finally {
+      setCreatingPeriod(false)
+    }
+  }
+
   const requestImport = () => {
     if (!selectedPeriod) return
     if (wouldSupersedeFile) setPendingSync('scoped')
@@ -596,20 +628,57 @@ export default function IntegrationsSection({ embedded = false }) {
                   You’re connected — choose what to pull from QuickBooks:
                 </p>
               )}
-              <label className="mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-muted">
-                Import into period
-              </label>
-              <select
-                className={inputCls}
-                value={selectedPeriod}
-                onChange={(e) => setPeriodId(e.target.value)}
-              >
-                {(periods || []).map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.label || p.periodEndDate}
-                  </option>
-                ))}
-              </select>
+
+              {/* Fresh school with no reporting period yet: a QBO import pulls a
+                  trial balance INTO a period, so create one first. Otherwise the
+                  dropdown is empty and there's nothing to import into ("0 of 0"). */}
+              {(periods || []).length === 0 ? (
+                <div className="mb-4 rounded-lg border-2 border-gold/40 bg-gold/[0.06] p-4">
+                  <p className="text-[15px] font-semibold text-navy">
+                    First, add the reporting period to import into.
+                  </p>
+                  <p className="mt-1 text-[13.5px] leading-relaxed text-muted">
+                    QuickBooks pulls your trial balance as of a fiscal year-end. Pick your year-end
+                    and we’ll create the period — then you can import.
+                  </p>
+                  <div className="mt-3 flex flex-wrap items-end gap-3">
+                    <label className="flex flex-col gap-1 text-[13px] font-semibold uppercase tracking-[0.1em] text-muted">
+                      Fiscal year-end
+                      <input
+                        type="date"
+                        value={newPeriodDate}
+                        onChange={(e) => setNewPeriodDate(e.target.value)}
+                        className={`${inputCls} max-w-[220px]`}
+                      />
+                    </label>
+                    <motion.button
+                      whileTap={{ scale: 0.98 }}
+                      onClick={createPeriod}
+                      disabled={creatingPeriod || !newPeriodDate}
+                      className="btn-primary inline-flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {creatingPeriod ? 'Creating…' : 'Create period'}
+                    </motion.button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <label className="mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-muted">
+                    Import into period
+                  </label>
+                  <select
+                    className={inputCls}
+                    value={selectedPeriod}
+                    onChange={(e) => setPeriodId(e.target.value)}
+                  >
+                    {(periods || []).map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.label || p.periodEndDate}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
 
               {/* Import-scope chooser: current year is the base; the rest are opt-in. */}
               <fieldset className="mt-4 rounded-lg border border-border bg-section/40 p-4">
