@@ -15,10 +15,10 @@
 // A11y: role=tablist/tab/tabpanel, roving tabindex + arrow-key nav, aria-selected,
 // :focus-visible ring. Reduced-motion drops the sliding underline (static bar).
 // ─────────────────────────────────────────────────────────────────────────────
-import { Fragment, useCallback, useRef } from 'react'
+import { useCallback, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
-import { ArrowLeft, ArrowRight, LayoutDashboard, Upload, Table2, FileBarChart2 } from 'lucide-react'
+import { ArrowLeft, LayoutDashboard, Upload, Table2, FileBarChart2 } from 'lucide-react'
 import { moduleAccentVars, moduleAnatomy, moduleHue, moduleLabel, moduleTabs, TAB_LABEL } from './moduleAnatomy.js'
 
 // The verb-icon for each tab (recognizable at a glance; folded in from the retired
@@ -101,11 +101,11 @@ export default function ModuleTabs({ moduleKey, overview, addData, records, repo
         </Link>
       </div>
 
-      {/* ── Stepper tab bar: ONE piece of chrome that is both the navigation AND the
-          "how this module works" picture. Overview is the module's home chip; the
-          action tabs render as NUMBERED step chips (① Add data → ② Records →
-          ③ Reports) joined by arrows, so the 1-2-3 path reads at a glance. The
-          active chip fills with the module hue via a gliding pill (layoutId). ── */}
+      {/* ── Section tab bar: plain navigation between the module's sections
+          (Overview · Add data · Records · Reports). These are destinations you
+          move between freely — NOT a 1-2-3 wizard — so no step numbers or arrows.
+          The genuine wizard (Choose → Add → Done) lives INSIDE the Add-data panel.
+          The active tab fills with the module hue via a gliding pill (layoutId). ── */}
       <div className="border-b border-rule/60 bg-cream/60">
         <div className="mx-auto flex max-w-[1180px] items-center gap-3 px-4 py-2.5 sm:gap-4 sm:px-10">
           <div className="flex shrink-0 items-center gap-2">
@@ -129,73 +129,53 @@ export default function ModuleTabs({ moduleKey, overview, addData, records, repo
             {tabs.map((key, i) => {
               const isActive = key === active
               const TabIcon = TAB_ICON[key] ?? LayoutDashboard
-              const stepNo = key === 'overview' ? null : tabs.filter((t) => t !== 'overview').indexOf(key) + 1
               return (
-                <Fragment key={key}>
-                  {/* Arrow joins the numbered steps (never before step 1). */}
-                  {stepNo != null && stepNo > 1 && (
-                    <ArrowRight
-                      size={16}
-                      aria-hidden="true"
-                      className="hidden shrink-0 sm:block"
-                      style={{ color: `${hue}88` }}
-                    />
-                  )}
-                  <motion.button
-                    ref={(el) => (tabRefs.current[i] = el)}
-                    role="tab"
-                    id={`moduletab-${moduleKey}-${key}`}
-                    aria-selected={isActive}
-                    aria-controls={`modulepanel-${moduleKey}`}
-                    tabIndex={isActive ? 0 : -1}
-                    onClick={() => setTab(key)}
-                    onKeyDown={(e) => onKeyDown(e, i)}
-                    whileHover={reduce || isActive ? undefined : { y: -2 }}
-                    whileTap={reduce ? undefined : { scale: 0.97 }}
-                    className={`relative flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-3 py-1.5 text-[13.5px] font-bold outline-none transition-colors focus-visible:ring-2 sm:px-3.5 ${
-                      isActive ? 'text-white' : 'text-navy'
-                    }`}
-                    style={{ '--tw-ring-color': hue }}
+                <motion.button
+                  key={key}
+                  ref={(el) => (tabRefs.current[i] = el)}
+                  role="tab"
+                  id={`moduletab-${moduleKey}-${key}`}
+                  aria-selected={isActive}
+                  aria-controls={`modulepanel-${moduleKey}`}
+                  tabIndex={isActive ? 0 : -1}
+                  onClick={() => setTab(key)}
+                  onKeyDown={(e) => onKeyDown(e, i)}
+                  whileHover={reduce || isActive ? undefined : { y: -2 }}
+                  whileTap={reduce ? undefined : { scale: 0.97 }}
+                  className={`relative flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-3 py-1.5 text-[13.5px] font-bold outline-none transition-colors focus-visible:ring-2 sm:px-3.5 ${
+                    isActive ? 'text-white' : 'text-navy'
+                  }`}
+                  style={{ '--tw-ring-color': hue }}
+                >
+                  {/* Gliding active pill (static under reduced motion). */}
+                  {isActive &&
+                    (reduce ? (
+                      <span
+                        aria-hidden
+                        className="absolute inset-0 rounded-full"
+                        style={{ background: hue, boxShadow: `0 6px 18px -6px ${hue}cc` }}
+                      />
+                    ) : (
+                      <motion.span
+                        aria-hidden
+                        layoutId={`moduletab-pill-${moduleKey}`}
+                        className="absolute inset-0 rounded-full"
+                        style={{ background: hue, boxShadow: `0 6px 18px -6px ${hue}cc` }}
+                        transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                      />
+                    ))}
+                  <span
+                    className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-lg shadow-sm"
+                    style={
+                      isActive
+                        ? { background: 'rgba(255,255,255,0.22)', color: '#fff' }
+                        : { background: hue, color: '#fff' }
+                    }
                   >
-                    {/* Gliding active pill (static under reduced motion). */}
-                    {isActive &&
-                      (reduce ? (
-                        <span
-                          aria-hidden
-                          className="absolute inset-0 rounded-full"
-                          style={{ background: hue, boxShadow: `0 6px 18px -6px ${hue}cc` }}
-                        />
-                      ) : (
-                        <motion.span
-                          aria-hidden
-                          layoutId={`moduletab-pill-${moduleKey}`}
-                          className="absolute inset-0 rounded-full"
-                          style={{ background: hue, boxShadow: `0 6px 18px -6px ${hue}cc` }}
-                          transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-                        />
-                      ))}
-                    {/* Icon square + step-number badge (the wordless flow cue). */}
-                    <span
-                      className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-lg shadow-sm"
-                      style={
-                        isActive
-                          ? { background: 'rgba(255,255,255,0.22)', color: '#fff' }
-                          : { background: hue, color: '#fff' }
-                      }
-                    >
-                      <TabIcon size={15} />
-                      {stepNo != null && (
-                        <span
-                          className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-white text-[10px] font-extrabold shadow"
-                          style={{ color: hue }}
-                        >
-                          {stepNo}
-                        </span>
-                      )}
-                    </span>
-                    <span className="relative">{TAB_LABEL[key]}</span>
-                  </motion.button>
-                </Fragment>
+                    <TabIcon size={15} />
+                  </span>
+                  <span className="relative">{TAB_LABEL[key]}</span>
+                </motion.button>
               )
             })}
           </div>
