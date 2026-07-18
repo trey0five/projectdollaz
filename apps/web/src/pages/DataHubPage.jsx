@@ -4,7 +4,7 @@
 // + BudgetSetup unforked and LINKS out to /statements, /reports/schedules, /readiness.
 // A QuickBooks fast-path card sits on top, and the global Penny (usePenny) points
 // at the next incomplete step. Shell mirrors ReportsPage (AppShell chrome + BillingBanner +
-// max-w-[1100px] main). Period selector reuses the ReportsPage idiom verbatim:
+// max-w-page main). Period selector reuses the ReportsPage idiom verbatim:
 // snapshotPeriods[0]?.id ?? periods[0]?.id, with a local useState synced on key
 // (NOT setState-in-effect). SOURCES is a module-scope config array (like
 // ReportsPage's REPORTS) — never an in-render component def.
@@ -301,7 +301,7 @@ export default function DataHubPage() {
   return (
     <div className="min-h-screen bg-section">
       <BillingBanner />
-      <main className="mx-auto max-w-[1100px] px-4 py-8 sm:px-8">
+      <main className="mx-auto max-w-page px-4 py-8 sm:px-8">
         {/* Header */}
         <motion.header
           initial={{ opacity: 0, y: 10 }}
@@ -538,7 +538,7 @@ function DataEmbedModal({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 16, scale: 0.98 }}
             transition={{ duration: 0.2 }}
-            className={`relative z-10 flex max-h-[90vh] w-full flex-col overflow-hidden rounded-2xl border-2 border-gold/30 bg-section shadow-2xl ${isForecast ? 'max-w-[1360px]' : isWide ? 'max-w-[1040px]' : 'max-w-[760px]'}`}
+            className={`relative z-10 flex max-h-[90vh] w-full flex-col overflow-hidden rounded-2xl border-2 border-gold/30 bg-section shadow-2xl ${isForecast ? 'max-w-page' : isWide ? 'max-w-page' : 'max-w-[760px]'}`}
           >
             <div className="flex items-center justify-between border-b border-rule/60 bg-white px-5 py-3.5">
               <h2 className="font-serif text-lg font-semibold text-navy">{title}</h2>

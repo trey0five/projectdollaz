@@ -132,7 +132,7 @@ export default function HomeTiles() {
   // ── Entitlement gate (mirror HomeDashboard; 402 from the briefing counts). ──
   if (!billingLoading && (!entitled || notEntitled)) {
     return (
-      <div className="mx-auto max-w-[1240px] px-4 py-6 sm:px-10 sm:py-8">
+      <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
         <EntitlementPausedPanel />
       </div>
     )
@@ -141,7 +141,7 @@ export default function HomeTiles() {
   // ── Loading: tile-shaped skeletons. ─────────────────────────────────────────
   if (billingLoading || hydrating) {
     return (
-      <div className="mx-auto max-w-[1240px] space-y-5 px-4 py-6 sm:px-10 sm:py-8">
+      <div className="mx-auto max-w-page space-y-5 px-4 py-6 sm:px-10 sm:py-8">
         <div className="h-40 animate-pulse rounded-2xl bg-navy/10" />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -168,7 +168,7 @@ export default function HomeTiles() {
   }).filter(Boolean)
 
   return (
-    <div className="home-ground mx-auto max-w-[1240px] space-y-5 px-4 py-6 sm:space-y-7 sm:px-10 sm:py-8">
+    <div className="home-ground mx-auto max-w-page space-y-5 px-4 py-6 sm:space-y-7 sm:px-10 sm:py-8">
       <BriefingBand
         schoolName={activeSchool?.name}
         summary={briefingSummary}

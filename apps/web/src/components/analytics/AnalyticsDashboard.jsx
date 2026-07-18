@@ -341,7 +341,7 @@ export default function AnalyticsDashboard() {
   // ── Entitlement gate ───────────────────────────────────────────────────────
   if (!billingLoading && (!entitled || notEntitled)) {
     return (
-      <div className="mx-auto max-w-[1100px] px-4 py-8 sm:px-10">
+      <div className="mx-auto max-w-page px-4 py-8 sm:px-10">
         <PageHeader />
         <EntitlementPausedPanel />
       </div>
@@ -352,7 +352,7 @@ export default function AnalyticsDashboard() {
 
   if (!initialLoading && savedPeriods.length === 0) {
     return (
-      <div className="mx-auto max-w-[1100px] px-4 py-8 sm:px-10">
+      <div className="mx-auto max-w-page px-4 py-8 sm:px-10">
         <PageHeader />
         <div className="card-soft border-dashed px-6 py-14 text-center">
           <p className="font-serif text-lg italic text-muted">No saved statements yet.</p>
@@ -371,7 +371,7 @@ export default function AnalyticsDashboard() {
   const dimWhileCustomizing = customizing ? 'pointer-events-none opacity-50' : ''
 
   return (
-    <div className="mx-auto max-w-[1100px] px-4 py-8 sm:px-10">
+    <div className="mx-auto max-w-page px-4 py-8 sm:px-10">
       <PageHeader />
 
       {!showSkeleton && (

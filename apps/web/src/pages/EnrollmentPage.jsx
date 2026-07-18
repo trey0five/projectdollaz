@@ -29,7 +29,7 @@ import EnrollmentConnectCard from '../components/enrollment/EnrollmentConnectCar
 
 function GatePanel({ notLicensed }) {
   return (
-    <div className="mx-auto max-w-[1180px] space-y-4 px-4 py-6 sm:px-10 sm:py-8">
+    <div className="mx-auto max-w-page space-y-4 px-4 py-6 sm:px-10 sm:py-8">
       <BackLink />
       <div className="card-soft flex flex-col items-center gap-3 px-6 py-14 text-center">
         <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gold-gradient text-navy shadow-glow">
@@ -116,7 +116,7 @@ function EnrollmentWorkspace() {
 
   if (loading && !status) {
     return (
-      <div className="mx-auto max-w-[1180px] px-4 py-10 sm:px-10">
+      <div className="mx-auto max-w-page px-4 py-10 sm:px-10">
         <div className="h-40 animate-pulse rounded-2xl border-2 border-rule/40 bg-white/60" />
       </div>
     )
@@ -124,7 +124,7 @@ function EnrollmentWorkspace() {
 
   if (error) {
     return (
-      <div className="mx-auto max-w-[1180px] px-4 py-10 sm:px-10">
+      <div className="mx-auto max-w-page px-4 py-10 sm:px-10">
         <div className="rounded-2xl border border-danger/30 bg-danger/[0.06] px-6 py-10 text-center">
           <p className="text-[15px] text-danger">{error}</p>
           <button
@@ -167,7 +167,7 @@ function EnrollmentWorkspace() {
       <ModuleTabs
         moduleKey="enrollment"
         overview={
-          <div className="mx-auto max-w-[1180px] px-4 py-8 sm:px-10">
+          <div className="mx-auto max-w-page px-4 py-8 sm:px-10">
             {header}
             <div className="space-y-6">
               <VsPlanKpi summary={summary} />
@@ -183,7 +183,7 @@ function EnrollmentWorkspace() {
   }
 
   return (
-    <div className="mx-auto max-w-[1180px] px-4 py-8 sm:px-10">
+    <div className="mx-auto max-w-page px-4 py-8 sm:px-10">
       {header}
 
       <div className="space-y-6">

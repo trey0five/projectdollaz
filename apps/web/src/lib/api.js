@@ -333,6 +333,20 @@ export const analyticsApi = {
     api.get(`/organizations/${orgId}/metrics/by-school`, {
       params: fiscalYearStart ? { fiscalYearStart } : {},
     }),
+  // School Comparison PEER BENCHMARK: benchmark ONE owned school against its
+  // comparable peers (same org) chosen by size/county/district/type/grade with a
+  // relaxation ladder. Returns focus + peers + direction-aware stats + insights (or
+  // a friendly emptyState when there are no comparable peers). SINGLE call site.
+  // Omit-when-absent every param (never '') so the global forbidNonWhitelisted
+  // ValidationPipe never trips, matching the compareMetrics/orgMetrics idiom.
+  peerBenchmark: (orgId, schoolId, { fiscalYearStart, dims, minPeers } = {}) =>
+    api.get(`/organizations/${orgId}/metrics/peers/${schoolId}`, {
+      params: {
+        ...(fiscalYearStart ? { fiscalYearStart } : {}),
+        ...(dims && dims.length ? { dims: dims.join(',') } : {}),
+        ...(minPeers ? { minPeers } : {}),
+      },
+    }),
   // Organization ATTENTION BRIEFING: per-school attention rolled up
   // across the caller's org for a fiscal year — a ranked, school-attributed
   // cross-school item list + per-school summaries + consolidated counts. SINGLE

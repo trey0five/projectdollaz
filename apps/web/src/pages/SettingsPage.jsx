@@ -10,7 +10,7 @@ export default function SettingsPage() {
 
   return (
     <div className="min-h-screen bg-navy-deep bg-navy-radial">
-      <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-8 sm:py-10">
+      <main className="mx-auto w-full max-w-page px-4 py-6 sm:px-8 sm:py-10">
         <div className="mb-6 flex items-center justify-between">
           <h1 className="font-serif text-[24px] font-semibold text-gold-light sm:text-[28px]">
             Settings

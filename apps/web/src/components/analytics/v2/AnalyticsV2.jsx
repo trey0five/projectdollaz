@@ -22,7 +22,7 @@ import { useScope } from '../../../context/ScopeContext.jsx'
 import { useSchools } from '../../../context/SchoolContext.jsx'
 import { useBilling } from '../../../context/BillingContext.jsx'
 import { orgsApi } from '../../../lib/api.js'
-import { useAnalytics, useOrgMetrics, useCompareMetrics, useDashboardLayout } from '../../../hooks/useAnalytics.js'
+import { useAnalytics, useOrgMetrics, useCompareMetrics, usePeerBenchmark, useDashboardLayout } from '../../../hooks/useAnalytics.js'
 import { metricLabel } from '../../../lib/metricMeta.js'
 import EntitlementPausedPanel from '../EntitlementPausedPanel.jsx'
 import '../../../styles/analytics-v2.css'
@@ -36,6 +36,7 @@ import AnalyticsSubTabs from './AnalyticsSubTabs.jsx'
 import OverviewView from './OverviewView.jsx'
 import ChartsView from './ChartsView.jsx'
 import ScorecardView from './ScorecardView.jsx'
+import PeersView from './PeersView.jsx'
 import BackLink from '../../ui/BackLink.jsx'
 
 const SCHOOL_TREND_KEYS = [
@@ -49,7 +50,7 @@ const DEFAULT_COLS = [
 export default function AnalyticsV2() {
   const reduce = useReducedMotion()
   const { scope: globalScope, isMultiSchool, orgId, orgResolved } = useScope()
-  const { activeSchool } = useSchools()
+  const { activeSchool, setActiveSchool } = useSchools()
   const { loading: billingLoading, entitled, isOwner } = useBilling()
 
   // Roster (id + name) — the chip source (same call ScopeContext uses).
@@ -88,7 +89,36 @@ export default function AnalyticsV2() {
   // ready: the mount URL-normalization must wait until isMultiSchool is KNOWN
   // (org roster resolved) — else it clamps a ?scope=org deep link to school.
   const nav = useAnalyticsNav({ isMultiSchool, ready: orgResolved, seed })
-  const scopes = isMultiSchool ? ['school', 'compare', 'org'] : ['school']
+  const scopes = isMultiSchool ? ['school', 'compare', 'org', 'peers'] : ['school']
+
+  // Keep the analytics school scope in sync with the global header context: when
+  // the top-bar ContextSwitcher switches the ACTIVE school, mirror it into the
+  // school scope so "My school" follows the header (the request). We skip the
+  // initial mount value (the URL seed already applied it) and no-op when already
+  // in sync, so a ?scope=compare/org deep link is never clobbered on first load.
+  const lastActiveRef = useRef(undefined)
+  useEffect(() => {
+    const id = activeSchool?.id
+    if (!id) return
+    if (lastActiveRef.current === undefined) {
+      lastActiveRef.current = id // record the mount value without acting on it
+      return
+    }
+    if (lastActiveRef.current === id) return
+    lastActiveRef.current = id
+    if (nav.school !== id) nav.setSchool(id)
+    // Runs only on a real active-school change; nav is read from the current
+    // render's closure (fresh at execution). Intentionally keyed on the id alone.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSchool?.id])
+
+  // A school CHIP inside analytics drives the SAME active-school context the header
+  // does (in addition to pinning the analytics URL), so the header and the school
+  // section never diverge. The sync effect above no-ops on the echo.
+  const handleSchoolPick = (id) => {
+    setActiveSchool(id)
+    nav.setSchool(id)
+  }
 
   // ── School-year picker (drives school periodId + the org FY anchor) ──────────
   const primarySchool = nav.school || activeSchool?.id || null
@@ -116,12 +146,17 @@ export default function AnalyticsV2() {
   const isSchool = nav.scope === 'school'
   const isCompare = nav.scope === 'compare'
   const isOrg = nav.scope === 'org'
+  const isPeers = nav.scope === 'peers'
   const wantPerSchool = isCompare || isOrg
+
+  // Peers scope benchmarks ONE focus school (defaults to the primary/active).
+  const focusId = nav.focus || primarySchool
 
   const { metrics } = useAnalytics(isSchool ? primarySchool : null, periodId)
   const sparkTrends = useSparkTrends(isSchool ? primarySchool : null, SCHOOL_TREND_KEYS)
   const { schools: compareAll } = useCompareMetrics(wantPerSchool ? orgId : null, fiscalYearStart || undefined)
   const { metrics: orgMetrics } = useOrgMetrics(isOrg ? orgId : null, fiscalYearStart || undefined)
+  const peers = usePeerBenchmark(orgId, focusId, { fiscalYearStart: fiscalYearStart || undefined, dims: nav.dims }, isPeers)
   const { layout } = useDashboardLayout(primarySchool)
 
   const metricsByKey = useMemo(() => {
@@ -153,14 +188,20 @@ export default function AnalyticsV2() {
       const ids = chosen.length ? chosen : perSchool.map((s) => s.schoolId)
       return perSchool.filter((s) => ids.includes(s.schoolId))
     }
+    // Default (no explicit chip pick): show every REPORTED school (one that has a
+    // snapshot for this FY, i.e. present in the compare data) — primary school
+    // first, then schools that carry a headline value, capped at a readable 5.
+    // We deliberately do NOT drop schools that merely lack a days-cash/margin
+    // value: doing so made Compare collapse to a single line the moment one
+    // school reported one (the "compare stopped working when I added a school"
+    // bug). The primary school is always kept.
     const hasData = (s) =>
       Number.isFinite(s.metrics?.days_cash_on_hand?.value) ||
       Number.isFinite(s.metrics?.operating_margin?.value)
-    const pool = perSchool.filter(hasData)
-    const ranked = (pool.length ? pool : perSchool)
-      .slice()
-      .sort((a, b) => (a.schoolId === primarySchool ? -1 : 0) - (b.schoolId === primarySchool ? -1 : 0))
+    const rank = (s) => (s.schoolId === primarySchool ? -2 : 0) + (hasData(s) ? -1 : 0)
+    const ranked = perSchool.slice().sort((a, b) => rank(a) - rank(b))
     const ids = new Set(ranked.slice(0, 5).map((s) => s.schoolId))
+    if (primarySchool && present.has(primarySchool)) ids.add(primarySchool)
     return perSchool.filter((s) => ids.has(s.schoolId))
   }, [perSchool, nav.schools, nav.schoolsExplicit, primarySchool])
 
@@ -215,12 +256,13 @@ export default function AnalyticsV2() {
   const schoolCtx = { id: primarySchool, periodId, metrics, metricsByKey, sparkTrends, asOf: schoolAsOf }
   const compareCtx = { schools: selectedSchools, trends, asOf: orgAsOf }
   const orgCtx = { schools: perSchool, orgMetrics, trends, asOf: orgAsOf, primarySchoolId: primarySchool }
+  const peersCtx = { data: peers.data, loading: peers.loading }
 
   const canCustomize = isOwner && entitled
 
   if (!billingLoading && !entitled) {
     return (
-      <div className="av2-ground mx-auto max-w-[1100px] px-4 py-8 sm:px-10">
+      <div className="av2-ground mx-auto max-w-page px-4 py-8 sm:px-10">
         <Shell />
         <EntitlementPausedPanel />
       </div>
@@ -228,7 +270,7 @@ export default function AnalyticsV2() {
   }
 
   return (
-    <div className="av2-ground mx-auto max-w-[1100px] px-4 py-8 sm:px-10">
+    <div className="av2-ground mx-auto max-w-page px-4 py-8 sm:px-10">
       <Shell />
 
       <AnalyticsScopeBar
@@ -237,7 +279,7 @@ export default function AnalyticsV2() {
         onScope={nav.setScope}
         roster={roster}
         school={primarySchool}
-        onSchool={nav.setSchool}
+        onSchool={handleSchoolPick}
         selectedSchools={selectedSchools.map((s) => s.schoolId)}
         onToggleSchool={(id) => {
           const cur = selectedSchools.map((s) => s.schoolId)
@@ -247,29 +289,39 @@ export default function AnalyticsV2() {
         fyOptions={fyOptions}
         fiscalYearStart={fiscalYearStart}
         onFy={setFiscalYearStart}
+        focus={focusId}
+        onFocus={nav.setFocus}
+        dims={nav.dims}
+        onDims={nav.setDims}
       />
 
       <AnalyticsSubTabs view={nav.view} onView={nav.setView} />
 
       <div role="tabpanel" id="av2-panel" aria-labelledby={`av2-subtab-${nav.view}`} className="pt-5">
-        {nav.view === 'overview' && (
-          <OverviewView scope={nav.scope} school={schoolCtx} compare={compareCtx} org={orgCtx} />
-        )}
-        {nav.view === 'charts' && (
-          <ChartsView scope={nav.scope} school={schoolCtx} compare={compareCtx} org={orgCtx} onCrossToTable={onCrossToTable} />
-        )}
-        {nav.view === 'scorecard' && (
-          <ScorecardView
-            scope={nav.scope}
-            school={schoolCtx}
-            compare={compareCtx}
-            org={orgCtx}
-            columns={columns}
-            canCustomize={canCustomize}
-            onCrossToChart={onCrossToChart}
-            highlight={nav.highlight}
-            onHighlightConsumed={nav.clearHighlight}
-          />
+        {isPeers ? (
+          <PeersView peers={peersCtx} view={nav.view} />
+        ) : (
+          <>
+            {nav.view === 'overview' && (
+              <OverviewView scope={nav.scope} school={schoolCtx} compare={compareCtx} org={orgCtx} />
+            )}
+            {nav.view === 'charts' && (
+              <ChartsView scope={nav.scope} school={schoolCtx} compare={compareCtx} org={orgCtx} onCrossToTable={onCrossToTable} />
+            )}
+            {nav.view === 'scorecard' && (
+              <ScorecardView
+                scope={nav.scope}
+                school={schoolCtx}
+                compare={compareCtx}
+                org={orgCtx}
+                columns={columns}
+                canCustomize={canCustomize}
+                onCrossToChart={onCrossToChart}
+                highlight={nav.highlight}
+                onHighlightConsumed={nav.clearHighlight}
+              />
+            )}
+          </>
         )}
       </div>
     </div>

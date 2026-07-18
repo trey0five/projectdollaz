@@ -11,8 +11,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useRef } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
-import { School, ArrowLeftRight, LayoutGrid } from 'lucide-react'
+import { School, ArrowLeftRight, LayoutGrid, Users } from 'lucide-react'
 import { schoolColor } from './chartPalette.js'
+import PeerScopeBar from './PeerScopeBar.jsx'
 
 // The v2 action hue — moduleHue() fallback (#2563EB), inline like ModuleTabs
 // (comma'd arbitrary Tailwind classes drop out of the dev JIT).
@@ -23,6 +24,7 @@ const SCOPE_META = {
   school: { Icon: School, label: 'My school' },
   compare: { Icon: ArrowLeftRight, label: 'Compare' },
   org: { Icon: LayoutGrid, label: 'All schools' },
+  peers: { Icon: Users, label: 'Peers' },
 }
 
 export default function AnalyticsScopeBar({
@@ -37,6 +39,10 @@ export default function AnalyticsScopeBar({
   fyOptions,
   fiscalYearStart,
   onFy,
+  focus,
+  onFocus,
+  dims,
+  onDims,
 }) {
   const reduce = useReducedMotion()
   const rosterIndex = (id) => roster.findIndex((r) => r.id === id)
@@ -120,8 +126,13 @@ export default function AnalyticsScopeBar({
         )}
       </div>
 
-      {/* Chip row — school (single) / compare (multi). All-schools scope hides it. */}
-      {scope !== 'org' && roster.length > 0 && (
+      {/* Peers scope: the focus-school picker + dimension toggles (not the chips). */}
+      {scope === 'peers' && (
+        <PeerScopeBar roster={roster} focus={focus} onFocus={onFocus} dims={dims} onDims={onDims} />
+      )}
+
+      {/* Chip row — school (single) / compare (multi). All-schools + peers hide it. */}
+      {scope !== 'org' && scope !== 'peers' && roster.length > 0 && (
         <div className="flex items-center gap-2 px-3 py-2.5 sm:px-4">
           <span className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
             {scope === 'compare' ? 'Compare' : 'School'}

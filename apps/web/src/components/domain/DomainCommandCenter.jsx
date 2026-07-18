@@ -69,7 +69,7 @@ export default function DomainCommandCenter({
   const reduce = useReducedMotion()
 
   return (
-    <div className="mx-auto max-w-[1180px] space-y-6 px-4 py-6 sm:px-10 sm:py-8">
+    <div className="mx-auto max-w-page space-y-6 px-4 py-6 sm:px-10 sm:py-8">
       {/* Back to the dashboard — shown for standalone (non-module) domain pages
           like Cash / Tasks / Knowledge that aren't wrapped in ModuleTabs (which
           carries its own back link). */}

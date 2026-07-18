@@ -64,7 +64,7 @@ const PACE_TO_STATUS = { on_track: 'good', achieved: 'good', at_risk: 'watch', b
 // ── Light-theme gate / empty panels ──────────────────────────────────────────
 function CenteredPanel({ children }) {
   return (
-    <div className="mx-auto max-w-[1180px] space-y-4 px-4 py-6 sm:px-10 sm:py-8">
+    <div className="mx-auto max-w-page space-y-4 px-4 py-6 sm:px-10 sm:py-8">
       <BackLink />
       <div className="card-soft flex flex-col items-center gap-3 px-6 py-14 text-center">
         <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gold-gradient text-navy shadow-glow">
@@ -360,7 +360,7 @@ function StrategyWorkspace() {
   if (notLicensed || notEntitled) return <GatePanel notLicensed={notLicensed} />
   if (loading) {
     return (
-      <div className="mx-auto max-w-[1180px] px-4 py-10 sm:px-10">
+      <div className="mx-auto max-w-page px-4 py-10 sm:px-10">
         <div className="h-64 animate-pulse rounded-3xl bg-section" />
       </div>
     )
@@ -520,7 +520,7 @@ function StrategyWorkspace() {
   }
 
   const errorBanner = error ? (
-    <div className="mx-auto max-w-[1180px] px-4 pt-4 sm:px-10">
+    <div className="mx-auto max-w-page px-4 pt-4 sm:px-10">
       <p className="rounded-xl border border-danger/30 bg-danger/10 px-4 py-2 text-[13px] font-semibold text-danger">
         {error}
       </p>

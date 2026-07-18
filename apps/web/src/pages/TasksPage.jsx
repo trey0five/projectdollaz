@@ -536,7 +536,7 @@ function ChainProgress({ task, members }) {
 // ── Light-theme entitlement / license gate ───────────────────────────────────
 function GatePanel() {
   return (
-    <div className="mx-auto max-w-[1180px] px-4 py-6 sm:px-10 sm:py-8">
+    <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
       <div className="card-soft flex flex-col items-center gap-3 px-6 py-14 text-center">
         <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gold-gradient text-navy shadow-glow">
           <ListChecks size={26} />

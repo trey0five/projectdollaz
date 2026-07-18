@@ -191,7 +191,7 @@ function StateRow({ children }) {
 // ── Light-theme entitlement / license gate ───────────────────────────────────
 function GatePanel({ notLicensed }) {
   return (
-    <div className="mx-auto max-w-[1180px] space-y-4 px-4 py-6 sm:px-10 sm:py-8">
+    <div className="mx-auto max-w-page space-y-4 px-4 py-6 sm:px-10 sm:py-8">
       <BackLink />
       <div className="card-soft flex flex-col items-center gap-3 px-6 py-14 text-center">
         <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gold-gradient text-navy shadow-glow">
@@ -1148,7 +1148,7 @@ function AccreditationWorkspace() {
           (the register table rows can't host their own tbody sub-row cleanly, so the
           evidence for the open row lives here — the interaction is preserved). */}
       {expandedStandard ? (
-        <div className="mx-auto max-w-[1180px] px-4 pb-8 sm:px-10">
+        <div className="mx-auto max-w-page px-4 pb-8 sm:px-10">
           <motion.div
             layout={!reduce}
             initial={reduce ? false : { opacity: 0, y: 8 }}

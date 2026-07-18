@@ -42,7 +42,6 @@ import {
   Building2,
   HeartHandshake,
   Target,
-  Sparkles,
   LineChart as PlanIcon,
   LayoutGrid,
   ListChecks,
@@ -55,7 +54,6 @@ import { useBilling } from '../../context/BillingContext.jsx'
 import { useScope } from '../../context/ScopeContext.jsx'
 import { useSchools } from '../../context/SchoolContext.jsx'
 import { usePersistence } from '../../context/PersistenceContext.jsx'
-import { usePenny } from '../../context/PennyContext.jsx'
 import { useUiV2 } from '../../context/UiFlagContext.jsx'
 import { useNavBadges } from '../../hooks/useNavBadges.js'
 import { SELLABLE_MODULE_KEYS, MODULE_META } from '../../lib/modules.js'
@@ -212,7 +210,6 @@ export default function AppShell({ children }) {
   const { isMultiSchool } = useScope()
   const { activeSchool } = useSchools()
   const { periods } = usePersistence()
-  const { openChat } = usePenny()
   const uiV2 = useUiV2()
   const navigate = useNavigate()
 
@@ -575,12 +572,17 @@ export default function AppShell({ children }) {
           className={`flex min-w-0 flex-1 flex-col ${uiV2 ? '' : 'app-content-offset lg:pl-64'}`}
         >
           {uiV2 ? (
-            /* ── ui.v2 slim top bar: logo → /app, nav, ContextSwitcher, Search,
-               Ask Penny, avatar (Settings + Sign Out). No hamburger/drawer. ── */
+            /* ── ui.v2 slim top bar: logo pinned LEFT; nav + context picker +
+               search + account all clustered on the RIGHT. No Ask Penny button,
+               no hamburger/drawer. ── */
             <header className="no-print sticky top-0 z-20 flex h-14 items-center gap-2 border-b-2 border-gold/30 bg-navy-gradient px-3 shadow-navy-glow sm:gap-3 sm:px-6">
-              {/* Brand + GLOBAL top nav (Home + core destinations). */}
-              <div className="flex shrink-0 items-center gap-1">
-                {v2Brand}
+              {/* Brand — alone on the far left. */}
+              {v2Brand}
+
+              {/* RIGHT cluster (ml-auto hugs the right edge): GLOBAL top nav, the
+                  combined school⇄org context picker, platform search, then the
+                  account avatar. */}
+              <div className="ml-auto flex min-w-0 items-center gap-2 sm:gap-3">
                 <nav aria-label="Primary" className="flex items-center gap-0.5">
                   {V2_NAV.filter((i) => !i.module || hasModule(i.module)).map((item) => {
                     const active = item.home ? path === '/app' : path.startsWith(item.to)
@@ -600,7 +602,7 @@ export default function AppShell({ children }) {
                         <item.Icon size={16} className="shrink-0" />
                         {/* Home keeps its label from sm+; the rest are icon+tooltip
                             (title) and only reveal labels on very wide screens so the
-                            bar never overflows into the right-side controls. */}
+                            bar never overflows. */}
                         <span className={item.home ? 'hidden sm:inline' : 'hidden 2xl:inline'}>
                           {item.label}
                         </span>
@@ -608,25 +610,19 @@ export default function AppShell({ children }) {
                     )
                   })}
                 </nav>
-              </div>
-              {/* ONE combined context picker (school ⇄ whole-org) — min-w-0 lets
-                  it truncate. Shown on /analytics too: analytics keeps its own
-                  scope bar for its URL state; this just switches the underlying
-                  context like the school switcher always did. */}
-              <div className="flex min-w-0 items-center gap-2">
+
+                {/* Combined context picker (school ⇄ whole-org). min-w-0 lets it
+                    truncate. Shown on /analytics too (analytics keeps its own scope
+                    bar for URL state; this just switches the underlying context). */}
                 <ContextSwitcher />
-              </div>
-              <SearchBox />
-              <div className="flex items-center gap-2 sm:gap-3">
-                <motion.button
-                  whileTap={reduce ? undefined : { scale: 0.96 }}
-                  onClick={openChat}
-                  aria-label="Ask Penny"
-                  className="flex min-h-[38px] items-center gap-2 rounded-[10px] border border-white/15 px-3 py-1.5 text-[13px] font-medium text-white/80 transition-colors hover:bg-white/[0.06] hover:text-white sm:px-4"
-                >
-                  <Sparkles size={15} />
-                  <span className="hidden sm:inline">Ask Penny</span>
-                </motion.button>
+
+                {/* Platform search — a fixed-width box on desktop (no longer a
+                    grow-to-center element) so it sits inline in the right cluster;
+                    on mobile SearchBox renders its own icon + overlay. */}
+                <div className="flex min-w-0 sm:w-52 sm:shrink-0 md:w-60 lg:w-72">
+                  <SearchBox />
+                </div>
+
                 {/* Account: Settings + Sign Out live behind the avatar. */}
                 <AvatarMenu />
               </div>

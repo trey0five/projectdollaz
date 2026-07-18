@@ -28,7 +28,10 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
-export const SCOPES = ['school', 'compare', 'org']
+export const SCOPES = ['school', 'compare', 'org', 'peers']
+// The peer-picker dimensions (peers scope only). Default when ?dims= is absent.
+export const PEER_DIMS = ['size', 'county', 'district', 'type', 'grade']
+const DEFAULT_PEER_DIMS = ['size', 'type', 'grade']
 export const VIEWS = ['overview', 'charts', 'scorecard']
 const STORAGE_KEY = 'finrep.analytics.nav'
 
@@ -63,12 +66,16 @@ function writeStored(scope, view) {
 // Build the search string from a full nav state, applying the drop rules. Rebuilt
 // from scratch every push, so leaving a scope automatically clears its scope-only
 // params (school/schools) — they simply aren't re-emitted for the new scope.
-function buildSearch({ scope, view, school, schools, highlight }) {
+function buildSearch({ scope, view, school, schools, highlight, focus, dims }) {
   const p = new URLSearchParams()
   if (scope && scope !== 'school') p.set('scope', scope)
   if (view && view !== 'overview') p.set('view', view)
   if (scope === 'school' && school) p.set('school', school)
   if (scope === 'compare' && schools && schools.length) p.set('schools', schools.join(','))
+  // Peers scope only: the focus school + the active dimensions. Rebuilt from
+  // scratch every push, so leaving the scope auto-clears these (never re-emitted).
+  if (scope === 'peers' && focus) p.set('focus', focus)
+  if (scope === 'peers' && dims && dims.length) p.set('dims', dims.join(','))
   if (highlight) p.set('highlight', highlight)
   return p
 }
@@ -171,8 +178,17 @@ export function useAnalyticsNav({ isMultiSchool, ready = true, seed }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [legacyMetric, ready])
 
+  // Peers-scope selections (read from the URL; parent supplies the default focus).
+  const focus = params.get('focus') || null
+  const dims = useMemo(() => {
+    const raw = params.get('dims')
+    const parsed = raw ? raw.split(',').filter((d) => PEER_DIMS.includes(d)) : null
+    return parsed && parsed.length ? parsed : DEFAULT_PEER_DIMS
+  }, [params])
+
   const schoolsSig = schools.join(',')
-  const current = { scope, view, school, schools, highlight }
+  const dimsSig = dims.join(',')
+  const current = { scope, view, school, schools, highlight, focus, dims }
 
   // The one push primitive: merge a patch onto the current state + PUSH history.
   const go = useCallback(
@@ -188,13 +204,16 @@ export function useAnalyticsNav({ isMultiSchool, ready = true, seed }) {
       setParams(buildSearch(next))
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [scope, view, school, schoolsSig, highlight, isMultiSchool, setParams],
+    [scope, view, school, schoolsSig, highlight, focus, dimsSig, isMultiSchool, setParams],
   )
 
   const setScope = useCallback((next) => go({ scope: next }), [go])
   const setView = useCallback((next) => go({ view: next }), [go])
   const setSchool = useCallback((id) => go({ scope: 'school', school: id }), [go])
   const setSchools = useCallback((ids) => go({ scope: 'compare', schools: ids }), [go])
+  // Peers scope: pin the focus school / toggle the peer dimensions in the URL.
+  const setFocus = useCallback((id) => go({ scope: 'peers', focus: id }), [go])
+  const setDims = useCallback((next) => go({ scope: 'peers', dims: next }), [go])
 
   // Strip the highlight in place (replace, no history entry) — used after a cross-
   // link flash lands, mirroring v1's ?metric= self-strip.
@@ -204,5 +223,5 @@ export function useAnalyticsNav({ isMultiSchool, ready = true, seed }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [highlight, setParams, scope, view, school, schoolsSig])
 
-  return { scope, view, school, schools, schoolsExplicit, highlight, go, setScope, setView, setSchool, setSchools, clearHighlight }
+  return { scope, view, school, schools, schoolsExplicit, highlight, focus, dims, go, setScope, setView, setSchool, setSchools, setFocus, setDims, clearHighlight }
 }

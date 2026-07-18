@@ -159,7 +159,7 @@ export default function StatementsWorkspace() {
   if (hydrating) return <Splash />
 
   return (
-    <div className="mx-auto max-w-[1460px] bg-page-glow bg-no-repeat px-4 py-6 sm:px-10">
+    <div className="mx-auto max-w-page bg-page-glow bg-no-repeat px-4 py-6 sm:px-10">
       <BackLink className="mb-4" />
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2.5">

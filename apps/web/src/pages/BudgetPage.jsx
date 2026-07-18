@@ -294,7 +294,7 @@ export default function BudgetPage() {
   return (
     <div className="min-h-screen">
       <BillingBanner />
-      <div className="mx-auto max-w-[1280px] px-4 py-8 sm:px-10">
+      <div className="mx-auto max-w-page px-4 py-8 sm:px-10">
         <BackLink className="mb-4" />
         {/* Page header: title + pinned school switcher & period selector. */}
         <div className="mb-5">

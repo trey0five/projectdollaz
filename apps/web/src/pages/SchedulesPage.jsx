@@ -74,7 +74,7 @@ export default function SchedulesPage() {
   return (
     <div className="min-h-screen bg-section">
       <BillingBanner />
-      <main className="mx-auto max-w-[1100px] px-4 py-8 sm:px-8">
+      <main className="mx-auto max-w-page px-4 py-8 sm:px-8">
         <Link
           to="/reports"
           className="mb-5 inline-flex items-center gap-1.5 text-[15px] font-semibold text-muted transition-colors hover:text-gold"

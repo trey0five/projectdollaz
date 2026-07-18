@@ -26,7 +26,7 @@ export default function ModuleRegister({
   const multi = tabs.length > 1
 
   return (
-    <div className="mx-auto max-w-[1180px] px-4 py-6 sm:px-10 sm:py-8">
+    <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
       <div className="card-soft flex min-w-0 flex-col p-4 sm:p-5">
         {(multi || onNew) && (
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">

@@ -143,7 +143,7 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
     step === 'work' && option?.kind === 'embed' && option.needsPeriod && !ctx.periodId
 
   return (
-    <section aria-label={`Add ${moduleLabel} data`} className="mx-auto max-w-[1040px]">
+    <section aria-label={`Add ${moduleLabel} data`} className="mx-auto max-w-page">
       {/* Hue strip + header */}
       <div
         className="mb-5 rounded-2xl border-2 bg-white px-5 py-4 shadow-card"
