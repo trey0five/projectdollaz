@@ -7,6 +7,7 @@ import { AnalyticsModule } from '../analytics/analytics.module.js'
 import { SchedulesModule } from '../schedules/schedules.module.js'
 import { MonthlyModule } from '../monthly/monthly.module.js'
 import { AssistantClient } from '../assistant/assistant.client.js'
+import { BedrockModule } from '../assistant/bedrock.module.js'
 import { BoardReportController } from './board-report.controller.js'
 import { BoardReportService } from './board-report.service.js'
 
@@ -16,11 +17,12 @@ import { BoardReportService } from './board-report.service.js'
  * lookups, AuditModule for the saved audit. AuthModule supplies the guards;
  * BillingModule the reused EntitlementGuard.
  *
- * The AssistantClient is RE-PROVIDED here (a stateless leaf that only needs the
- * global ConfigService) rather than importing AssistantModule — AssistantModule
- * imports THIS module (for the board-report assistant tools), so importing it
- * back would be a circular dependency. A second AssistantClient instance is
- * harmless, exactly as AnalyticsModule does for BudgetService.advise().
+ * The AssistantClient is RE-PROVIDED here (a stateless leaf) rather than importing
+ * AssistantModule — AssistantModule imports THIS module (for the board-report
+ * assistant tools), so importing it back would be a circular dependency. A second
+ * AssistantClient instance is harmless, exactly as AnalyticsModule does. It now
+ * depends on BedrockClient, so BedrockModule must be imported for that DI to
+ * resolve (mirrors AnalyticsModule).
  */
 @Module({
   imports: [
@@ -31,6 +33,7 @@ import { BoardReportService } from './board-report.service.js'
     AnalyticsModule,
     SchedulesModule,
     MonthlyModule,
+    BedrockModule,
   ],
   controllers: [BoardReportController],
   providers: [BoardReportService, AssistantClient],

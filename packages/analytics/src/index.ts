@@ -156,5 +156,35 @@ export type {
   CashRunwayResult,
 } from './cashRunway.js'
 
+// School Comparison — peer-benchmarking vocabulary + pure group/stats math. The
+// ONE canonical home for size bands, school types, grade ordinals, the relaxation
+// ladder, and direction-aware distribution stats. Consumed by the API (forms the
+// group) AND the web (renders the dim controls) so the two never fork.
+export {
+  SIZE_BANDS,
+  SCHOOL_TYPES,
+  PEER_DIMS,
+  DEFAULT_PEER_DIMS,
+  sizeBandOf,
+  sizeBandLabel,
+  gradeOrdinal,
+  gradeRangeOverlap,
+  ordinal,
+  dimMatches,
+  resolvePeerGroup,
+  sampleTierOf,
+  computePeerStats,
+} from './peers.js'
+export type {
+  SizeBandKey,
+  SchoolType,
+  PeerDim,
+  PeerProfile,
+  MatchTier,
+  PeerGroupResult,
+  SampleTier,
+  PeerStats,
+} from './peers.js'
+
 // Version
 export { ANALYTICS_VERSION } from './version.js'

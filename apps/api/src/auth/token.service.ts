@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt'
 import { ConfigService } from '@nestjs/config'
 import { randomBytes } from 'node:crypto'
 import { PrismaService } from '../prisma/prisma.service.js'
+import { sha256hex, hashesEqual } from '../common/hash.js'
 
 export interface AccessPayload {
   sub: string
@@ -68,8 +69,11 @@ export class TokenService {
       expiresIn: this.refreshTtl as unknown as number,
     })
     const expiresAt = this.decodeExpiry(token)
+    // Store only a HASH of the token — a DB read never yields a usable refresh
+    // token. Lookups on rotate are by `jti` (from the verified JWT), then the
+    // presented token's hash is compared against this.
     await this.prisma.refreshToken.create({
-      data: { userId, token, jti, expiresAt, lastActivityAt: new Date() },
+      data: { userId, token: sha256hex(token), jti, expiresAt, lastActivityAt: new Date() },
     })
     return { token, jti }
   }
@@ -89,9 +93,16 @@ export class TokenService {
     if (payload.type !== 'refresh') {
       throw new UnauthorizedException('Wrong token type.')
     }
+    // Guard a legacy/malformed token with no jti → a clean 401, not a
+    // findUnique({jti: undefined}) 500.
+    if (!payload.jti) {
+      throw new UnauthorizedException('Invalid or expired refresh token.')
+    }
 
-    const row = await this.prisma.refreshToken.findUnique({ where: { token } })
-    if (!row || row.revokedAt) {
+    // Look up by jti (unique, from the verified payload), then constant-time
+    // compare the presented token's hash against the stored hash.
+    const row = await this.prisma.refreshToken.findUnique({ where: { jti: payload.jti } })
+    if (!row || row.revokedAt || !hashesEqual(sha256hex(token), row.token)) {
       throw new UnauthorizedException('Refresh token revoked.')
     }
     if (row.expiresAt.getTime() < Date.now()) {

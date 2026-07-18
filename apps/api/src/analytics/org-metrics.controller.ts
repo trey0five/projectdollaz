@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js'
 import { CurrentUser } from '../common/decorators/current-user.decorator.js'
 import { OrgMetricsService } from './org-metrics.service.js'
 import { StatementsRollupQueryDto } from './dto/statements-rollup-query.dto.js'
+import { PeerBenchmarkQueryDto } from './dto/peer-benchmark-query.dto.js'
 
 /**
  * Canonical semantic layer v1 — organization-wide METRICS roll-up. JwtAuthGuard
@@ -46,5 +47,25 @@ export class OrgMetricsController {
     @Query() query: StatementsRollupQueryDto,
   ) {
     return this.orgMetrics.getMetricsBySchool(user, orgId, query.fiscalYearStart ?? null)
+  }
+
+  /**
+   * School Comparison — internal peer benchmarking for ONE owned school. Same
+   * JwtAuthGuard-only posture (org isolation enforced in the service). Peers are
+   * grouped by size/county/district/type/grade with a relaxation ladder; the
+   * response carries the focus standing, the peer distribution, and insights.
+   */
+  @Get('metrics/peers/:schoolId')
+  getPeerBenchmark(
+    @CurrentUser() user: User,
+    @Param('orgId') orgId: string,
+    @Param('schoolId') schoolId: string,
+    @Query() query: PeerBenchmarkQueryDto,
+  ) {
+    return this.orgMetrics.getPeerBenchmark(user, orgId, schoolId, {
+      fiscalYearStart: query.fiscalYearStart ?? null,
+      dims: query.dims,
+      minPeers: query.minPeers,
+    })
   }
 }

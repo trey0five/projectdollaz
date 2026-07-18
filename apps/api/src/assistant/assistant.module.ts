@@ -23,6 +23,7 @@ import { AssistantController } from './assistant.controller.js'
 import { OrgNarrationController } from './org-narration.controller.js'
 import { AssistantService } from './assistant.service.js'
 import { AssistantClient } from './assistant.client.js'
+import { BedrockModule } from './bedrock.module.js'
 import { AssistantTtsService } from './assistant-tts.service.js'
 import { AssistantFilesService } from './assistant-files.service.js'
 import { BriefingNarrationService } from './briefing-narration.service.js'
@@ -34,6 +35,7 @@ import { BriefingNarrationService } from './briefing-narration.service.js'
  */
 @Module({
   imports: [
+    BedrockModule,
     AuthModule,
     PeriodsModule,
     BillingModule,

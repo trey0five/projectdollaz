@@ -25,6 +25,14 @@ export interface AppConfig {
     pass: string
     from: string
   }
+  // Outbound mail. provider: 'ses' (AWS SDK via the ECS task role — no static
+  // creds), 'smtp' (nodemailer), or '' (dev: log to console). `from` and region
+  // are shared; SES uses the verified `ourkyro.com` domain identity.
+  mail: {
+    provider: string
+    region: string
+    from: string
+  }
   // Phase 1D — Stripe subscription billing. All env-driven with safe empty
   // defaults so the api BOOTS with no Stripe key set (checkout/portal then
   // return a clear error; the webhook still verifies if a webhookSecret exists).
@@ -67,6 +75,13 @@ export interface AppConfig {
     apiKey: string
     voiceId: string
     model: string
+  }
+  // Amazon Polly — the in-account TTS used when the assistant provider is
+  // 'bedrock' (task-role creds; replaces ElevenLabs as an external sub-processor).
+  polly: {
+    region: string
+    voiceId: string
+    engine: string
   }
   // Phase 6 — QuickBooks Online connector (optional). Empty clientId = connector
   // disabled (the Connect button 501s); the app boots and file upload still works.
@@ -123,6 +138,29 @@ export interface AppConfig {
     accessKeyId: string
     secretAccessKey: string
     urlTtlSeconds: number
+    // Server-side encryption enforced on every upload. Default 'aws:kms' (the
+    // bucket policy DENIES un-encrypted puts); set 'none' only for a dev bucket
+    // that has no KMS default. sseKmsKeyId is optional — empty uses the bucket's
+    // default CMK.
+    serverSideEncryption: string
+    sseKmsKeyId: string
+  }
+  // Data-retention purge (RetentionService). auditDays=0 keeps audit rows forever
+  // (the default); >0 trims audit_log older than N days.
+  retention: {
+    auditDays: number
+  }
+  // FERPA guardrails + LLM provider for the Penny assistant. `ferpaMode` (default
+  // ON) enables PII tokenization + denies whole PDF/image egress to the model.
+  // `provider` selects the LLM transport: 'bedrock' (in-account, the compliant
+  // path — auto-selected when BEDROCK_MODEL_ID is present) or 'openrouter' (dev).
+  assistant: {
+    ferpaMode: boolean
+    provider: string
+    bedrock: {
+      region: string
+      modelId: string
+    }
   }
 }
 
@@ -187,7 +225,14 @@ export function configuration(): AppConfig {
       port: parseInt(process.env.SMTP_PORT ?? '587', 10),
       user: process.env.SMTP_USER ?? '',
       pass: process.env.SMTP_PASS ?? '',
-      from: process.env.SMTP_FROM ?? 'finrep <no-reply@finrep.dev>',
+      from: process.env.SMTP_FROM ?? 'KYRO <noreply@ourkyro.com>',
+    },
+    mail: {
+      // '' (dev) unless set. In prod set MAIL_PROVIDER=ses. Falls back to 'smtp'
+      // automatically when SMTP_HOST is present but MAIL_PROVIDER is unset.
+      provider: (process.env.MAIL_PROVIDER ?? (process.env.SMTP_HOST ? 'smtp' : '')).toLowerCase(),
+      region: process.env.AWS_REGION ?? 'us-east-1',
+      from: process.env.MAIL_FROM ?? process.env.SMTP_FROM ?? 'KYRO <noreply@ourkyro.com>',
     },
     stripe: {
       secretKey: process.env.STRIPE_SECRET_KEY ?? '',
@@ -216,6 +261,11 @@ export function configuration(): AppConfig {
       apiKey: process.env.ELEVENLABS_API_KEY ?? '',
       voiceId: process.env.ELEVENLABS_VOICE_ID ?? 'cgSgspJ2msm6clMCkdW9',
       model: process.env.ELEVENLABS_MODEL ?? 'eleven_turbo_v2_5',
+    },
+    polly: {
+      region: process.env.AWS_REGION ?? 'us-east-1',
+      voiceId: process.env.POLLY_VOICE_ID ?? 'Joanna',
+      engine: process.env.POLLY_ENGINE ?? 'neural',
     },
     quickbooks: {
       clientId: process.env.QB_OAUTH_CLIENT_ID ?? '',
@@ -262,7 +312,31 @@ export function configuration(): AppConfig {
       prefix: process.env.S3_DOCUMENTS_PREFIX ?? 'finrep/documents',
       accessKeyId: process.env.AWS_ACCESS_KEY_ID ?? '',
       secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? '',
-      urlTtlSeconds: parseInt(process.env.S3_DOCUMENTS_URL_TTL ?? '604800', 10),
+      // Default 15 minutes — a presigned URL is a bearer capability, so it must be
+      // short-lived (was 7 days). Overridable, but keep it tight for PII documents.
+      urlTtlSeconds: parseInt(process.env.S3_DOCUMENTS_URL_TTL ?? '900', 10),
+      serverSideEncryption: process.env.S3_DOCUMENTS_SSE ?? 'aws:kms',
+      sseKmsKeyId: process.env.S3_DOCUMENTS_SSE_KMS_KEY_ID ?? '',
+    },
+    retention: {
+      auditDays: parseInt(process.env.AUDIT_RETENTION_DAYS ?? '0', 10),
+    },
+    assistant: {
+      // FERPA mode ON by default; only an explicit 'false' disables the guardrails.
+      ferpaMode: (process.env.FERPA_MODE ?? 'true') !== 'false',
+      // Prefer Bedrock automatically wherever a model id is injected (AWS); local
+      // dev with no Bedrock falls back to OpenRouter.
+      provider:
+        process.env.ASSISTANT_LLM_PROVIDER ??
+        (process.env.BEDROCK_MODEL_ID ? 'bedrock' : 'openrouter'),
+      bedrock: {
+        region: process.env.AWS_REGION ?? 'us-east-1',
+        // Cross-region INFERENCE PROFILE id (the `us.` form) — current Claude
+        // models require an inference profile for on-demand Converse, not the
+        // bare model id.
+        modelId:
+          process.env.BEDROCK_MODEL_ID ?? 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
+      },
     },
   }
 }

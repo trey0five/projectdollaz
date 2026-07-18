@@ -1,3 +1,4 @@
+import './bootstrap-env.js' // MUST be first: assembles DATABASE_URL + enforces TLS before config/Prisma read env
 import 'reflect-metadata'
 import { NestFactory } from '@nestjs/core'
 import { ConfigService } from '@nestjs/config'
@@ -21,6 +22,14 @@ async function bootstrap(): Promise<void> {
   // parser. 8mb leaves headroom for the data-URL expansion + the rest of the body.
   app.useBodyParser('json', { limit: '8mb' })
   app.useBodyParser('urlencoded', { limit: '8mb', extended: true })
+
+  // Behind CloudFront + ALB — trust EXACTLY the proxy-chain hop count so req.ip is
+  // the real client from X-Forwarded-For and a client-INJECTED XFF entry (to the
+  // left of the trusted hops) is ignored. `true` would trust the spoofable
+  // leftmost entry, defeating the per-IP auth throttle. Default 2 (CloudFront+ALB);
+  // override via TRUST_PROXY_HOPS if the chain differs. The edge AWS WAF rate rule
+  // remains the primary IP defense; this is defense-in-depth.
+  app.set('trust proxy', parseInt(process.env.TRUST_PROXY_HOPS ?? '2', 10))
 
   app.useGlobalPipes(
     new ValidationPipe({

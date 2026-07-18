@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common'
+import { BedrockModule } from '../assistant/bedrock.module.js'
 import { AuthModule } from '../auth/auth.module.js'
 import { PeriodsModule } from '../periods/periods.module.js'
 import { BillingModule } from '../billing/billing.module.js'
@@ -45,6 +46,7 @@ import { AssistantClient } from '../assistant/assistant.client.js'
   // are analytics → X ONLY (neither imports analytics) — acyclic. BillingModule
   // already here supplies BillingService for the governance gate.
   imports: [
+    BedrockModule,
     AuthModule,
     PeriodsModule,
     BillingModule,

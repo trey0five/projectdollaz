@@ -9,6 +9,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
   ServiceUnavailableException,
   UnprocessableEntityException,
 } from '@nestjs/common'
@@ -33,6 +34,7 @@ import { BudgetService } from '../analytics/budget.service.js'
 import { OperationalService } from '../analytics/operational.service.js'
 import { BudgetRollupService } from '../analytics/budget-rollup.service.js'
 import { OrgBriefingService } from '../analytics/org-briefing.service.js'
+import { OrgMetricsService } from '../analytics/org-metrics.service.js'
 import { BriefingService } from '../analytics/briefing.service.js'
 import { deriveFiscalYearStart } from '../analytics/budget.driver.js'
 import { ComplianceService } from '../compliance/compliance.service.js'
@@ -84,7 +86,9 @@ import type { CreateStandardDto } from '../accreditation/dto/create-standard.dto
 import type { CreateMaintenanceDto } from '../facilities/dto/create-maintenance.dto.js'
 import type { CreateCampaignDto } from '../advancement/dto/create-campaign.dto.js'
 import { AuditService } from '../common/audit/audit.service.js'
+import { ConfigService } from '@nestjs/config'
 import { AssistantClient } from './assistant.client.js'
+import { Redactor, redactToolResult, makeStreamRestorer } from './redaction.js'
 import {
   AssistantFilesService,
   AttachmentError,
@@ -635,10 +639,22 @@ export class AssistantService {
     // elsewhere is safe. Boot-safe: it injects Prisma + StrategyProgressService + pure
     // analytics only, and rides the existing acyclic AssistantModule→StrategyModule edge.
     private readonly planDrafter: StrategyPlanDrafterService,
+    // FERPA guardrail config. Optional/last so positional-arg unit specs still
+    // construct (undefined → ferpaMode defaults ON).
+    private readonly config?: ConfigService,
+    // School Comparison — peer benchmarking for compare_school_peers. Optional +
+    // LAST so DI/tests that construct AssistantService without it still work;
+    // AnalyticsModule already exports OrgMetricsService (no module edit needed).
+    @Optional() private readonly orgMetrics?: OrgMetricsService,
   ) {}
 
   isConfigured(): boolean {
     return this.client.isConfigured()
+  }
+
+  /** FERPA mode gates PII tokenization of tool results (default ON). */
+  private get ferpaMode(): boolean {
+    return this.config?.get<boolean>('assistant.ferpaMode') ?? true
   }
 
   /** Resolve the caller's membership role on this school (same data RolesGuard uses). */
@@ -688,6 +704,10 @@ export class AssistantService {
       onGuide: () => {},
     }
 
+    // FERPA: tokenize PII in tool results before they enter the prompt; restore
+    // the final answer for the authenticated caller (who may see the real names).
+    const redactor = new Redactor(this.ferpaMode)
+
     const tools = toolsForRole(role)
     for (let turn = 0; turn < MAX_TURNS; turn++) {
       const msg = await this.client.chat(messages, tools)
@@ -697,14 +717,14 @@ export class AssistantService {
         ...(msg.tool_calls?.length ? { tool_calls: msg.tool_calls } : {}),
       })
       if (!msg.tool_calls?.length) {
-        return { configured: true, answer: msg.content ?? '', charts, proposals }
+        return { configured: true, answer: redactor.restore(msg.content ?? ''), charts, proposals }
       }
       for (const tc of msg.tool_calls) {
         const result = await this.runToolCall(tc, ctx, sinks)
         messages.push({
           role: 'tool',
           tool_call_id: tc.id,
-          content: JSON.stringify(result).slice(0, 8000),
+          content: JSON.stringify(redactToolResult(result, redactor)).slice(0, 8000),
         })
       }
     }
@@ -741,12 +761,16 @@ export class AssistantService {
     const system = await this.systemPrompt(ctx)
     const messages: unknown[] = [{ role: 'system', content: system }, ...history]
 
+    // FERPA: one redactor per request — tokenizes PII in tool results + the
+    // attachment digest, restores identities in the streamed answer.
+    const redactor = new Redactor(this.ferpaMode)
+
     // Attachments ride the LATEST user turn only. Prepare (validate + parse) BEFORE
     // any LLM call so a bad file emits error+done without burning a request.
     if (attachments?.length) {
       let prep: PreparedAttachments
       try {
-        prep = await this.files.prepare(attachments)
+        prep = await this.files.prepare(attachments, redactor)
       } catch (e) {
         const text =
           e instanceof AttachmentError
@@ -757,15 +781,17 @@ export class AssistantService {
         return
       }
       ctx.prep = prep
-      this.attachToLastUserTurn(messages, prep)
+      this.attachToLastUserTurn(messages, prep, redactor)
     }
 
     const tools = toolsForRole(role)
     try {
       for (let turn = 0; turn < MAX_TURNS; turn++) {
-        const msg = await this.client.streamChat(messages, tools, (text) =>
-          emit({ type: 'delta', text }),
-        )
+        // Restore tokenized identities in the streamed text as it flows (buffering
+        // just enough to never split a `[[TOKEN]]` across chunks).
+        const restorer = makeStreamRestorer(redactor, (text) => emit({ type: 'delta', text }))
+        const msg = await this.client.streamChat(messages, tools, (text) => restorer.push(text))
+        restorer.flush()
         messages.push({
           role: 'assistant',
           content: msg.content ?? '',
@@ -787,7 +813,7 @@ export class AssistantService {
           messages.push({
             role: 'tool',
             tool_call_id: tc.id,
-            content: JSON.stringify(result).slice(0, 8000),
+            content: JSON.stringify(redactToolResult(result, redactor)).slice(0, 8000),
           })
         }
       }
@@ -814,12 +840,20 @@ export class AssistantService {
    * content with [...vision/file blocks, {type:'text', text: original + digests}].
    * Digests are clearly-delimited UNTRUSTED data (prompt-injection hygiene).
    */
-  private attachToLastUserTurn(messages: unknown[], prep: PreparedAttachments): void {
+  private attachToLastUserTurn(
+    messages: unknown[],
+    prep: PreparedAttachments,
+    redactor: Redactor,
+  ): void {
     for (let i = messages.length - 1; i >= 0; i--) {
       const m = messages[i] as { role?: string; content?: unknown }
       if (m?.role !== 'user') continue
       const original = typeof m.content === 'string' ? m.content : ''
-      const digestText = prep.digests.length ? `\n\n${prep.digests.join('\n\n')}` : ''
+      // FERPA: text-redact each digest (masks emails/SSN in a spreadsheet's
+      // description column before it reaches the model).
+      const digestText = prep.digests.length
+        ? `\n\n${prep.digests.map((d) => redactor.redactText(d)).join('\n\n')}`
+        : ''
       m.content = [
         ...prep.llmContentBlocks,
         { type: 'text', text: `${original}${digestText}` },
@@ -3386,7 +3420,11 @@ export class AssistantService {
             'questions across every school the user oversees — call list_schools_status to see which ' +
             'schools have reported (current trial balance + statements) versus which are BEHIND, plus ' +
             "each school's count of critical/warning attention items. Use it for questions like " +
-            '"which schools are behind on their trial balance?" or "which schools need attention?". '
+            '"which schools are behind on their trial balance?" or "which schools need attention?". ' +
+            'You can also call compare_school_peers to benchmark ONE school against its comparable ' +
+            'peers (similar size/type/county/district/grade range) — the peer group, their key KPIs, ' +
+            'and where this school ranks (rank, peer median, percentile). Use it for "how do we ' +
+            'compare to similar schools?" or "are we above or below average on days cash?". '
         }
       } catch {
         /* ignore — fall back to no org clause */
@@ -3968,6 +4006,90 @@ export class AssistantService {
           topItems: b.items
             .slice(0, 8)
             .map((i) => ({ school: i.schoolName, title: i.title, severity: i.severity })),
+        }
+      }
+      case 'compare_school_peers': {
+        // Read-only PEER BENCHMARK: pick ONE in-org school and rank it against its
+        // comparable peers. Self-authorizes like list_schools_status (org resolved
+        // from the caller's active memberships; isolation enforced in the service).
+        if (!this.orgMetrics) return { error: 'Peer benchmarking is unavailable.' }
+        if (!ctx.userId) return { error: 'No user context for peer benchmarking.' }
+        const activeSchool = await this.prisma.school.findUnique({ where: { id: ctx.schoolId } })
+        if (!activeSchool?.organizationId) {
+          return { error: 'This school is not part of an organization.' }
+        }
+        const user = await this.prisma.user.findUnique({ where: { id: ctx.userId } })
+        if (!user) return { error: 'User not found.' }
+        const orgId = activeSchool.organizationId
+
+        // Resolve schoolName → an in-org schoolId; default the active school.
+        let targetSchoolId = ctx.schoolId
+        const wanted = typeof args.schoolName === 'string' ? args.schoolName.trim() : ''
+        if (wanted) {
+          const inOrg = await this.prisma.school.findMany({
+            where: { organizationId: orgId },
+            select: { id: true, name: true },
+          })
+          const lower = wanted.toLowerCase()
+          const hit =
+            inOrg.find((s) => s.name.toLowerCase() === lower) ??
+            inOrg.find((s) => s.name.toLowerCase().includes(lower))
+          if (hit) targetSchoolId = hit.id
+        }
+
+        // Derive the FY from the resolved period (fallback = most-recent per school).
+        let fys: string | null = null
+        try {
+          const pid = await this.resolvePeriod(args, ctx)
+          const p = await this.periods.getOwnedPeriod(ctx.schoolId, pid)
+          fys = deriveFiscalYearStart(p.periodEndDate.toISOString().slice(0, 10))
+        } catch {
+          /* fall back to each school's most-recent snapshot for the FY */
+        }
+
+        const dims = Array.isArray(args.dimensions)
+          ? (args.dimensions as unknown[]).map((d) => String(d))
+          : undefined
+        const r = await this.orgMetrics.getPeerBenchmark(user, orgId, targetSchoolId, {
+          fiscalYearStart: fys,
+          dims,
+        })
+
+        // Trimmed, model-friendly shape (like list_schools_status).
+        const metricKey = typeof args.metricKey === 'string' ? args.metricKey : ''
+        const rankEntries =
+          metricKey && r.stats[metricKey]
+            ? [[metricKey, r.stats[metricKey]] as const]
+            : (Object.entries(r.stats) as (readonly [string, (typeof r.stats)[string]])[])
+        return {
+          focus: {
+            name: r.focus.schoolName,
+            sizeBandLabel: r.focus.profile.sizeBandLabel,
+            enrollment: r.focus.profile.enrollment,
+            schoolType: r.focus.profile.schoolType,
+          },
+          matchTier: r.group.matchTier,
+          groupDescription: r.group.groupDescription,
+          peerCount: r.group.peerCount,
+          peers: r.peers.map((p) => ({
+            name: p.schoolName,
+            sizeBandLabel: p.profile.sizeBandLabel,
+            daysCash: p.metrics.days_cash_on_hand?.formatted,
+            operatingMargin: p.metrics.operating_margin?.formatted,
+          })),
+          ranks: rankEntries.map(([key, s]) => ({
+            metric: key,
+            focus: s.focusFormatted,
+            median: s.medianFormatted,
+            rank: s.rank,
+            percentile: s.percentile,
+          })),
+          insights: r.insights,
+          emptyState: r.emptyState
+            ? r.emptyState
+            : r.group.matchTier === 'none'
+              ? { reason: 'no_peers', message: `${r.focus.schoolName} is currently your only comparable school.` }
+              : null,
         }
       }
       case 'get_corrective_action_plan': {

@@ -20,6 +20,7 @@ import { AcceptInvitationDto } from './dto/accept-invitation.dto.js'
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto.js'
 import { UpdateMemberAccessDto } from './dto/update-member-access.dto.js'
 import { UpdateSchoolDto } from './dto/update-school.dto.js'
+import { DeleteSchoolDto } from './dto/delete-school.dto.js'
 
 @Controller()
 @UseGuards(JwtAuthGuard)
@@ -87,6 +88,19 @@ export class SchoolsController {
     @Body() dto: UpdateSchoolDto,
   ) {
     return this.schools.updateSchool(user, schoolId, dto, 'owner')
+  }
+
+  // Right-to-deletion: permanently erase a school + all its data (owner-only,
+  // typed-name confirmation). Irreversible.
+  @Delete('schools/:schoolId')
+  @UseGuards(RolesGuard)
+  @Roles('owner')
+  deleteSchool(
+    @CurrentUser() user: User,
+    @Param('schoolId') schoolId: string,
+    @Body() dto: DeleteSchoolDto,
+  ) {
+    return this.schools.deleteSchool(user, schoolId, dto.confirmName)
   }
 
   @Get('schools/:schoolId/invitations')

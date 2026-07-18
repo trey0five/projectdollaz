@@ -214,6 +214,34 @@ export const TOOL_SCHEMAS = [
   {
     type: 'function',
     function: {
+      name: 'compare_school_peers',
+      description:
+        "Benchmark ONE of your schools against its comparable peer schools in the same organization (schools of similar size, type, county, district, or grade range). Returns the peer group, how it was formed, each peer's key financial + enrollment KPIs, and where this school ranks (rank, peer median, percentile) with a plain-English standing like '3rd-largest K-8 in your organization'. Use for 'how do we compare to similar schools', 'who are our peers', 'are we above or below average on days cash'.",
+      parameters: {
+        type: 'object',
+        properties: {
+          schoolName: {
+            type: 'string',
+            description: 'Which of your schools to benchmark. Defaults to the active school.',
+          },
+          dimensions: {
+            type: 'array',
+            items: { type: 'string', enum: ['size', 'county', 'district', 'type', 'grade'] },
+            description: 'How to pick peers. Default: size, type, and grade range.',
+          },
+          metricKey: {
+            type: 'string',
+            description:
+              'Optional single metric to focus the ranking on (e.g. days_cash_on_hand).',
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'apply_driver_budget',
       description:
         'APPLY a budget built from driver assumptions immediately, then tell the user what changed (reversible in the UI). Provide ONLY the levers the user mentioned; everything else keeps its current value. Enrollment drives tuition; staffing drives salaries; other lines grow from last year by inflationPct.',
@@ -1181,6 +1209,7 @@ export const TOOL_LABELS: Record<string, string> = {
   get_budget: 'Reading the budget…',
   get_budget_rollup: 'Consolidating your organization budget…',
   list_schools_status: "Checking all schools' status…",
+  compare_school_peers: 'Benchmarking against peer schools…',
   get_corrective_action_plan: 'Reading the corrective action plan…',
   get_trend: 'Loading the trend…',
   set_budget: 'Setting the budget…',

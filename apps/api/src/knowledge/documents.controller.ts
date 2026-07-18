@@ -71,8 +71,9 @@ export class DocumentsController {
   downloadUrl(
     @Param('schoolId', ParseUUIDPipe) schoolId: string,
     @Param('documentId', ParseUUIDPipe) documentId: string,
+    @CurrentUser() user: User,
   ) {
-    return this.documents.getDownloadUrl(schoolId, documentId)
+    return this.documents.getDownloadUrl(schoolId, documentId, user.id)
   }
 
   @Patch(':documentId')

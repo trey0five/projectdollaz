@@ -93,6 +93,15 @@ model School {
   logoBase64          String?  @map("logo_base64") @db.Text
   brandColor          String?  @map("brand_color")
   defaultCommittee    String?  @map("default_committee")
+  // School Comparison — peer-benchmarking profile (all nullable, additive; no backfill).
+  // schoolType validated in the DTO (not a DB enum — cheap migrations, like periodType).
+  // gradeLow/High are GradeKey strings (PK3,PK4,K,1..12) — same vocab as plannedEnrollmentByGrade.
+  // Size band is NEVER stored: derived from PeriodOperationalData.enrollment at read time.
+  county              String?  @map("county")
+  district            String?  @map("district")
+  schoolType          String?  @map("school_type")
+  gradeLow            String?  @map("grade_low")
+  gradeHigh           String?  @map("grade_high")
   createdAt           DateTime @default(now()) @map("created_at")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)

@@ -3,15 +3,18 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common'
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 import type { MembershipRole, School, User } from '@finrep/db'
+import { gradeOrdinal } from '@finrep/analytics'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { MailerService } from '../auth/mailer.service.js'
 import { toUserPublic } from '../auth/user-public.js'
 import { AuditService } from '../common/audit/audit.service.js'
 import { BillingService } from '../billing/billing.service.js'
+import { DocumentStorageService } from '../knowledge/document-storage.service.js'
 import type { CreateSchoolDto } from './dto/create-school.dto.js'
 import type { CreateInvitationDto } from './dto/create-invitation.dto.js'
 import type { UpdateSchoolDto } from './dto/update-school.dto.js'
@@ -27,8 +30,38 @@ interface SchoolPublic {
   logoBase64: string | null
   brandColor: string | null
   defaultCommittee: string | null
+  // School Comparison — peer-benchmarking profile (all nullable, additive).
+  county: string | null
+  district: string | null
+  schoolType: string | null
+  gradeLow: string | null
+  gradeHigh: string | null
   role: string
   created_at: string
+}
+
+/** Read a School's profile fields defensively (compiles before the client regen). */
+function schoolProfileFields(school: School): {
+  county: string | null
+  district: string | null
+  schoolType: string | null
+  gradeLow: string | null
+  gradeHigh: string | null
+} {
+  const s = school as School & {
+    county?: string | null
+    district?: string | null
+    schoolType?: string | null
+    gradeLow?: string | null
+    gradeHigh?: string | null
+  }
+  return {
+    county: s.county ?? null,
+    district: s.district ?? null,
+    schoolType: s.schoolType ?? null,
+    gradeLow: s.gradeLow ?? null,
+    gradeHigh: s.gradeHigh ?? null,
+  }
 }
 
 /** Max decoded logo bytes (5MB). The DTO @MaxLength is a coarse pre-gate; this
@@ -38,12 +71,71 @@ const LOGO_DATA_URL = /^data:image\/(png|jpeg|jpg|svg\+xml);base64,([A-Za-z0-9+/
 
 @Injectable()
 export class SchoolsService {
+  private readonly logger = new Logger(SchoolsService.name)
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly mailer: MailerService,
     private readonly audit: AuditService,
     private readonly billing: BillingService,
+    private readonly storage: DocumentStorageService,
   ) {}
+
+  /**
+   * Right-to-deletion: permanently erase a school and ALL its tenant data. The DB
+   * cascade (school_id FKs) removes every domain row; we ALSO purge the school's
+   * S3 documents (the cascade never touches the object store). Owner-only (the
+   * RolesGuard enforces it) and gated on a typed name confirmation. Irreversible.
+   */
+  async deleteSchool(
+    user: User,
+    schoolId: string,
+    confirmName: string,
+  ): Promise<{ deleted: true; s3ObjectsDeleted: number }> {
+    const school = await this.prisma.school.findUnique({ where: { id: schoolId } })
+    if (!school) throw new NotFoundException('School not found.')
+    if ((confirmName ?? '').trim() !== school.name.trim()) {
+      throw new BadRequestException('The confirmation name does not match the school name.')
+    }
+    const organizationId = school.organizationId
+
+    // ATOMIC + DURABLE: in ONE transaction (all-or-nothing) —
+    //  1. erase the tenant's own AuditLog rows. Their metadata holds PII (e.g. a
+    //     document fileName), so a COMPLETE right-to-deletion must remove them
+    //     rather than leave them SetNull-orphaned. (If your legal basis instead
+    //     requires retaining the audit trail, replace this with a PII scrub.)
+    //  2. delete the school → cascades every school_id-scoped domain table.
+    //  3. write the org-level `school.deleted` record. It carries NO student PII
+    //     (just the school name) and is DURABLE — not best-effort — so an
+    //     irreversible deletion can never go unaudited.
+    await this.prisma.$transaction([
+      this.prisma.auditLog.deleteMany({ where: { schoolId } }),
+      this.prisma.school.delete({ where: { id: schoolId } }),
+      this.prisma.auditLog.create({
+        data: {
+          organizationId,
+          userId: user.id,
+          action: 'school.deleted',
+          targetType: 'school',
+          targetId: schoolId,
+          metadata: { schoolName: school.name },
+        },
+      }),
+    ])
+
+    // POST-COMMIT: the DB erasure is now the committed point of no return, so a
+    // failure here leaves orphaned S3 objects (logged) rather than a corrupt
+    // half-erased tenant. Best-effort.
+    let s3ObjectsDeleted = 0
+    try {
+      s3ObjectsDeleted = await this.storage.deleteByPrefix(this.storage.schoolPrefix(schoolId))
+    } catch (err) {
+      this.logger.warn(
+        `S3 cleanup for deleted school ${schoolId} failed — orphaned objects remain: ${String(err)}`,
+      )
+    }
+    return { deleted: true, s3ObjectsDeleted }
+  }
 
   /** Count of ACTIVE owners on a school (for last-owner protection). */
   private async activeOwnerCount(schoolId: string): Promise<number> {
@@ -72,6 +164,7 @@ export class SchoolsService {
       logoBase64: school.logoBase64 ?? null,
       brandColor: school.brandColor ?? null,
       defaultCommittee: school.defaultCommittee ?? null,
+      ...schoolProfileFields(school),
       role,
       created_at: school.createdAt.toISOString(),
     }
@@ -502,6 +595,11 @@ export class SchoolsService {
       logoBase64?: string | null
       brandColor?: string | null
       defaultCommittee?: string | null
+      county?: string | null
+      district?: string | null
+      schoolType?: string | null
+      gradeLow?: string | null
+      gradeHigh?: string | null
     } = {}
     if (dto.name !== undefined) data.name = dto.name
     if (dto.netAssetsBegin !== undefined) data.netAssetsBegin = dto.netAssetsBegin
@@ -514,6 +612,12 @@ export class SchoolsService {
     }
     if (dto.brandColor !== undefined) data.brandColor = dto.brandColor
     if (dto.defaultCommittee !== undefined) data.defaultCommittee = dto.defaultCommittee
+    // School Comparison profile fields (each null clears).
+    if (dto.county !== undefined) data.county = dto.county
+    if (dto.district !== undefined) data.district = dto.district
+    if (dto.schoolType !== undefined) data.schoolType = dto.schoolType
+    if (dto.gradeLow !== undefined) data.gradeLow = dto.gradeLow
+    if (dto.gradeHigh !== undefined) data.gradeHigh = dto.gradeHigh
 
     if (Object.keys(data).length === 0) {
       throw new BadRequestException('No fields to update.')
@@ -521,6 +625,15 @@ export class SchoolsService {
 
     const existing = await this.prisma.school.findUnique({ where: { id: schoolId } })
     if (!existing) throw new NotFoundException('School not found.')
+
+    // Grade-order guard on the RESULTING row (DTO field wins, else the stored value):
+    // a non-null low/high pair must satisfy gradeLow <= gradeHigh.
+    const existingProfile = schoolProfileFields(existing)
+    const effLow = dto.gradeLow !== undefined ? dto.gradeLow : existingProfile.gradeLow
+    const effHigh = dto.gradeHigh !== undefined ? dto.gradeHigh : existingProfile.gradeHigh
+    if (effLow != null && effHigh != null && gradeOrdinal(effLow) > gradeOrdinal(effHigh)) {
+      throw new BadRequestException('Grade low must be at or below grade high.')
+    }
 
     const updated = await this.prisma.school.update({ where: { id: schoolId }, data })
     await this.audit.write({
