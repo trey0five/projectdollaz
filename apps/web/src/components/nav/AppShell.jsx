@@ -293,7 +293,7 @@ export default function AppShell({ children }) {
 
   // Layer-cake split: the always-on Core group, its elevated Briefing hero, and the
   // licensed domain groups. The briefing is pulled OUT of the Core list and rendered
-  // as the prominent top entry (the digital-COO thesis); everything else keeps its
+  // as the prominent top entry (the AI-chief-of-staff thesis); everything else keeps its
   // frozen navId + behavior.
   const coreGroup = visibleGroups.find((g) => g.module === null)
   const domainGroups = visibleGroups.filter((g) => g.module !== null)
@@ -393,7 +393,7 @@ export default function AppShell({ children }) {
   // only; the mobile drawer passes withIds=false (no duplicate DOM ids).
   const navBody = (withIds) => (
     <nav aria-label="Primary" className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 py-4">
-      {/* ── The elevated Briefing — the digital COO, promoted above the rails ── */}
+      {/* ── The elevated Briefing — the AI chief of staff, promoted above the rails ── */}
       {heroItem && (
         <Link
           id={withIds ? heroItem.navId : undefined}

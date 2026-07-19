@@ -27,7 +27,7 @@ export const HERO = {
   scrollHint: 'Follow the day',
   // The top-left mascot lockup the coin flies into at the end of the intro.
   brandName: 'Penny',
-  brandTag: 'Your Digital COO',
+  brandTag: 'Your AI Chief of Staff',
   demoSrSummary:
     'Demo: Penny imports a trial balance, generates statements, files a document, and answers a multi-school question.',
 }
