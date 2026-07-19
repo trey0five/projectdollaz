@@ -55,7 +55,7 @@ export default function PennyDemo() {
             speaking={state.speaking}
           />
           <p className="flex items-center gap-2 font-serif text-[15px] font-semibold text-navy">
-            Penny · Digital COO
+            Penny · AI Chief of Staff
             <span className="h-2 w-2 rounded-full bg-gold shadow-glow motion-safe:animate-pulse" />
           </p>
         </div>

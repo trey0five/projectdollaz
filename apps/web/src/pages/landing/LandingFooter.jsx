@@ -11,14 +11,14 @@ export default function LandingFooter() {
       <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-6 px-5 sm:flex-row sm:px-8">
         <Link
           to="/"
-          aria-label="Project Dollaz — home"
+          aria-label="KYRO — home"
           className={`flex items-center gap-2.5 rounded-lg px-1 py-1 transition-opacity hover:opacity-90 ${FOCUS_RING}`}
         >
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gold-gradient text-navy-deep">
             <LineChart size={15} />
           </span>
           <span className="font-serif text-[15px] font-semibold text-gold-light">
-            Project Dollaz
+            KYRO
           </span>
         </Link>
         <p className="text-[13px] text-white/60">{FOOTER.copyright}</p>

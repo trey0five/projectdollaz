@@ -49,7 +49,7 @@ export const NAV_GROUPS = [
     pill: 'Included', // AppShell renders this as a gold "Included" badge.
     module: null, // null = always shown (never gated, never upsold).
     items: [
-      // `hero` marks the prioritised briefing — the digital-COO surface. AppShell
+      // `hero` marks the prioritised briefing — the AI-chief-of-staff surface. AppShell
       // pulls it OUT of the list and renders it as the elevated top entry. navId
       // stays nav-home (Penny's target registry anchors to it); the route is
       // '/app' ('/' is now the public marketing landing).

@@ -35,10 +35,10 @@ export default function AuthLayout({ title, subtitle, children, footer, width = 
         >
           <Link
             to="/"
-            aria-label="Project Dollaz — home"
+            aria-label="KYRO — home"
             className="mb-2 inline-flex items-center gap-2 rounded-md text-[14px] font-semibold uppercase tracking-[0.28em] text-gold outline-none transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-gold/50"
           >
-            <ShieldCheck size={16} /> Project Dollaz
+            <ShieldCheck size={16} /> KYRO
           </Link>
           <h1 className="mb-2 font-serif text-[26px] font-semibold leading-[1.1] text-navy sm:text-[30px]">
             {title}

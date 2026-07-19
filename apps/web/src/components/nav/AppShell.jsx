@@ -293,7 +293,7 @@ export default function AppShell({ children }) {
 
   // Layer-cake split: the always-on Core group, its elevated Briefing hero, and the
   // licensed domain groups. The briefing is pulled OUT of the Core list and rendered
-  // as the prominent top entry (the digital-COO thesis); everything else keeps its
+  // as the prominent top entry (the AI-chief-of-staff thesis); everything else keeps its
   // frozen navId + behavior.
   const coreGroup = visibleGroups.find((g) => g.module === null)
   const domainGroups = visibleGroups.filter((g) => g.module !== null)
@@ -355,7 +355,7 @@ export default function AppShell({ children }) {
   const v2Brand = (
     <Link
       to="/"
-      aria-label="Project Dollaz — main site home"
+      aria-label="KYRO — main site home"
       title="Main site home"
       className="flex shrink-0 items-center gap-2 rounded-lg px-1 py-1 outline-none ring-gold/50 transition-opacity hover:opacity-90 focus-visible:ring-2"
     >
@@ -363,7 +363,7 @@ export default function AppShell({ children }) {
         <LineChart size={18} />
       </span>
       <span className="hidden font-serif text-[16px] font-semibold leading-none tracking-[0.01em] text-gold-light md:inline">
-        Project Dollaz
+        KYRO
       </span>
     </Link>
   )
@@ -371,7 +371,7 @@ export default function AppShell({ children }) {
   const brand = (
     <Link
       to="/"
-      aria-label="Project Dollaz — homepage"
+      aria-label="KYRO — homepage"
       title="Homepage"
       className="flex min-w-0 items-center gap-3 rounded-lg px-1 py-1 outline-none ring-gold/50 transition-opacity hover:opacity-90 focus-visible:ring-2"
     >
@@ -380,10 +380,10 @@ export default function AppShell({ children }) {
       </span>
       <span className="flex min-w-0 flex-col">
         <span className="truncate font-serif text-[17px] font-semibold leading-tight tracking-[0.01em] text-gold-light">
-          Project Dollaz
+          KYRO
         </span>
         <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">
-          Digital COO
+          Knowledge Yielding Resource Optimizer
         </span>
       </span>
     </Link>
@@ -393,7 +393,7 @@ export default function AppShell({ children }) {
   // only; the mobile drawer passes withIds=false (no duplicate DOM ids).
   const navBody = (withIds) => (
     <nav aria-label="Primary" className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 py-4">
-      {/* ── The elevated Briefing — the digital COO, promoted above the rails ── */}
+      {/* ── The elevated Briefing — the AI chief of staff, promoted above the rails ── */}
       {heroItem && (
         <Link
           id={withIds ? heroItem.navId : undefined}

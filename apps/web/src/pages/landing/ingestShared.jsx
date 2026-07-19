@@ -210,7 +210,7 @@ export function AppWindow({ children }) {
         <span className="h-2 w-2 rounded-full bg-white/30" />
         <span className="h-2 w-2 rounded-full bg-gold" />
         <span className="ml-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/70">
-          Project Dollaz
+          KYRO
         </span>
       </div>
       {children}

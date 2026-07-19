@@ -27,7 +27,7 @@ export const HERO = {
   scrollHint: 'Follow the day',
   // The top-left mascot lockup the coin flies into at the end of the intro.
   brandName: 'Penny',
-  brandTag: 'Your Digital COO',
+  brandTag: 'Your AI Chief of Staff',
   demoSrSummary:
     'Demo: Penny imports a trial balance, generates statements, files a document, and answers a multi-school question.',
 }
@@ -155,7 +155,7 @@ export const DIOCESE = {
 export const LICENSING = {
   kicker: 'Licensed per module',
   h3: 'Start with finance. Add the rest when you’re ready.',
-  body: 'Project Dollaz is licensed per module — every school gets the core platform, the briefing, and Penny; Finance, Governance, Accreditation, Facilities, and Advancement are added as your office grows into them.',
+  body: 'KYRO is licensed per module — every school gets the core platform, the briefing, and Penny; Finance, Governance, Accreditation, Facilities, and Advancement are added as your office grows into them.',
 }
 
 export const FINALE = {
@@ -166,7 +166,7 @@ export const FINALE = {
 }
 
 export const FOOTER = {
-  copyright: '© 2026 Project Dollaz',
+  copyright: '© 2026 KYRO',
   links: [
     { label: 'Sign in', to: '/login' },
     { label: 'Create account', to: '/register' },

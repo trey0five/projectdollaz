@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Data hub — the ONE friendly, guided place to get a school's data into Dollaz.
+// Data hub — the ONE friendly, guided place to get a school's data into KYRO.
 // v1 REUSES existing surfaces: it EMBEDS MonthlyActualsPanel + OperationalDataPanel
 // + BudgetSetup unforked and LINKS out to /statements, /reports/schedules, /readiness.
 // A QuickBooks fast-path card sits on top, and the global Penny (usePenny) points
@@ -332,7 +332,7 @@ export default function DataHubPage() {
             <p className="text-[13px] font-bold uppercase tracking-[0.18em] text-gold">Data</p>
             <h1 className="mt-1 font-serif text-2xl font-semibold text-navy sm:text-3xl">Get your numbers in</h1>
             <p className="mt-1.5 text-[16px] leading-relaxed text-muted">
-              This is the one place to bring your school&apos;s data into Dollaz. Add what you have —
+              This is the one place to bring your school&apos;s data into KYRO. Add what you have —
               we&apos;ll turn it into your statements, board reports, and readiness checks. Penny will
               walk you through it. Most schools finish the essentials in a few minutes.
             </p>
