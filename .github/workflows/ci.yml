@@ -1,0 +1,52 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# CI — runs on every PR and branch push. Shift-left quality gate: cheap checks
+# fan out in parallel and FAIL FAST (fail-fast: true cancels the rest of the
+# matrix on the first failure; concurrency cancels superseded runs). Make this a
+# REQUIRED status check in branch protection so nothing merges to main red.
+# ─────────────────────────────────────────────────────────────────────────────
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches-ignore: [main] # main is validated via PR + deployed by CD
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: ${{ matrix.task }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: true
+      matrix:
+        task: [lint, typecheck, test, build]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.5.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      # Prisma client is needed for typecheck/build/test to resolve @finrep/db.
+      - name: Generate Prisma client
+        run: pnpm -F @finrep/db exec prisma generate
+
+      - name: Run ${{ matrix.task }}
+        run: pnpm run ${{ matrix.task }}

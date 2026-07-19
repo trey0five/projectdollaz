@@ -327,5 +327,6 @@ resource "cloudflare_record" "origin" {
 }
 
 output "cloudfront_domain" { value = aws_cloudfront_distribution.this.domain_name }
+output "cloudfront_distribution_arn" { value = aws_cloudfront_distribution.this.arn }
 output "alb_dns_name" { value = aws_lb.this.dns_name }
 output "target_group_arn" { value = aws_lb_target_group.api.arn }

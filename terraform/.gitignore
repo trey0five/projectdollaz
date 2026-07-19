@@ -10,3 +10,7 @@ override.tf.json
 *_override.tf.json
 .terraformrc
 terraform.rc
+
+# Local secret var files (auto-loaded by terraform, never committed)
+*.auto.tfvars
+secrets.auto.tfvars

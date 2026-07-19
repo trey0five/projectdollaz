@@ -40,3 +40,8 @@ output "restore_port_forward_cmd" {
     "--parameters '{\"host\":[\"${module.database.endpoint}\"],\"portNumber\":[\"5432\"],\"localPortNumber\":[\"5432\"]}'"
   ]) : null
 }
+
+output "cicd_deploy_role_arn" {
+  description = "Put this in the GitHub repo secret AWS_DEPLOY_ROLE_ARN (used by cd.yml)."
+  value       = module.cicd.deploy_role_arn
+}

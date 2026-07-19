@@ -125,3 +125,16 @@ variable "enable_bastion" {
   description = "Spin up an SSM-only jump host to restore the pg_dump into the private RDS. Set true → apply → restore → set false → apply (destroys it)."
   default     = false
 }
+
+# ── CI/CD (GitHub Actions OIDC deploy role) ──
+variable "github_repo" {
+  description = "owner/repo allowed to assume the CD deploy role (e.g. torreymunroe/kyro)"
+  type        = string
+  default     = ""
+}
+
+variable "github_oidc_provider_arn" {
+  description = "Existing GitHub OIDC provider ARN to reuse (shared account). Empty = create it."
+  type        = string
+  default     = ""
+}

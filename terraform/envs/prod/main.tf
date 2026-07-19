@@ -108,3 +108,13 @@ module "bastion" {
   subnet_id = module.network.app_subnet_ids[0]
   app_sg_id = module.network.app_sg_id
 }
+
+# GitHub Actions OIDC deploy role — the identity the CD workflow assumes (no static
+# keys). Put its ARN in the repo secret AWS_DEPLOY_ROLE_ARN.
+module "cicd" {
+  source                      = "../../modules/cicd"
+  prefix                      = local.prefix
+  github_repo                 = var.github_repo
+  cloudfront_distribution_arn = module.edge.cloudfront_distribution_arn
+  existing_oidc_provider_arn  = var.github_oidc_provider_arn
+}

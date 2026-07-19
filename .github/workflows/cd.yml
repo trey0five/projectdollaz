@@ -1,0 +1,112 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# CD — application deploy to AWS prod on merge to main (or manual dispatch).
+#
+# App-only: it consumes the resources Terraform PROVISIONED (ECR / ECS service /
+# S3 / CloudFront) and never touches Terraform state. The ECS service has
+# `lifecycle { ignore_changes = [task_definition] }`, so this force-new-deployment
+# re-pulls the :latest image WITHOUT causing Terraform drift. DB migrations run in
+# the container's start.sh (`prisma migrate deploy`) on boot — not here.
+#
+# Auth: GitHub OIDC → the Terraform-managed deploy role (no static keys).
+# Requires: repo secret AWS_DEPLOY_ROLE_ARN  (= terraform output cicd_deploy_role_arn)
+# Safety: uses the `production` environment — add required reviewers there for a
+# manual approval gate before any prod deploy.
+# ─────────────────────────────────────────────────────────────────────────────
+name: CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: cd-prod
+  cancel-in-progress: false # never interrupt an in-flight prod rollout
+
+permissions:
+  id-token: write # mint the OIDC token
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: ourkyro-prod-api
+  ECS_CLUSTER: ourkyro-prod-cluster
+  ECS_SERVICE: ourkyro-prod-api
+  SPA_BUCKET: ourkyro-prod-spa
+  DOMAIN: ourkyro.com
+
+jobs:
+  deploy:
+    name: Deploy prod
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # ── API image → ECR ──────────────────────────────────────────────────────
+      - name: Build & push API image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          set -euo pipefail
+          IMG="$REGISTRY/$ECR_REPOSITORY"
+          docker build -f apps/api/Dockerfile -t "$IMG:${{ github.sha }}" -t "$IMG:latest" .
+          docker push "$IMG:${{ github.sha }}"   # immutable, for audit/rollback
+          docker push "$IMG:latest"              # the tag the task def references
+
+      - name: Roll ECS service (migrations run on container boot)
+        run: |
+          set -euo pipefail
+          aws ecs update-service --cluster "$ECS_CLUSTER" --service "$ECS_SERVICE" \
+            --force-new-deployment >/dev/null
+          echo "Waiting for the service to stabilize…"
+          aws ecs wait services-stable --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE"
+
+      # ── Web SPA → S3 + CloudFront ────────────────────────────────────────────
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.5.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Build SPA
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm -F @finrep/web build
+
+      - name: Sync SPA & invalidate CloudFront
+        run: |
+          set -euo pipefail
+          aws s3 sync apps/web/dist "s3://$SPA_BUCKET" --delete
+          DIST=$(aws cloudfront list-distributions \
+            --query "DistributionList.Items[?contains(Aliases.Items, '$DOMAIN')].Id | [0]" \
+            --output text)
+          echo "CloudFront distribution: $DIST"
+          aws cloudfront create-invalidation --distribution-id "$DIST" --paths '/*' >/dev/null
+
+      - name: Smoke check /api/health
+        run: |
+          set -uo pipefail
+          for i in $(seq 1 20); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "https://$DOMAIN/api/health" || true)
+            echo "attempt $i → $code"
+            [ "$code" = "200" ] && echo "prod healthy ✅" && exit 0
+            sleep 15
+          done
+          echo "::error::/api/health did not return 200 after the rollout"; exit 1

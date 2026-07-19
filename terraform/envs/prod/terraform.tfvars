@@ -13,3 +13,4 @@ api_cpu           = 512
 api_memory        = 1024
 api_desired_count = 1
 api_image_tag     = "latest"
+github_repo = "trey0five/projectdollaz"
