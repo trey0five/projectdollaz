@@ -67,20 +67,25 @@ resource "aws_lb" "this" {
 }
 
 resource "aws_lb_target_group" "api" {
-  name        = "${var.prefix}-api-tg"
+  # name_prefix + create_before_destroy so a protocol change (which forces a new
+  # target group) can be swapped in before the old is torn down.
+  name_prefix = "oky-tg"
   port        = var.api_container_port
-  protocol    = "HTTP"
-  target_type = "ip" # Fargate awsvpc
+  protocol    = "HTTPS" # end-to-end TLS: the ALB reaches the task over HTTPS
+  target_type = "ip"     # Fargate awsvpc
   vpc_id      = var.vpc_id
 
   health_check {
     path                = "/health"
+    protocol            = "HTTPS"
     matcher             = "200"
     interval            = 30
     healthy_threshold   = 2
     unhealthy_threshold = 3
   }
   deregistration_delay = 30
+
+  lifecycle { create_before_destroy = true }
 }
 
 resource "aws_lb_listener" "https" {

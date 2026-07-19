@@ -103,6 +103,9 @@ resource "aws_ecs_task_definition" "api" {
       # Outbound mail via Amazon SES (SDK uses the task role — no SMTP creds).
       { name = "MAIL_PROVIDER", value = "ses" },
       { name = "MAIL_FROM", value = "KYRO <noreply@${var.domain_name}>" },
+      # Strict end-to-end TLS: start.sh generates a self-signed cert and the app
+      # serves HTTPS, so the ALB→task hop is encrypted (target group is HTTPS).
+      { name = "ENABLE_TLS", value = "true" },
     ]
 
     # App must assemble DATABASE_URL as:
