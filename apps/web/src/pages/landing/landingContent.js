@@ -165,11 +165,22 @@ export const FINALE = {
   ctaGhost: { label: 'Sign in', to: '/login' },
 }
 
+// Trust signals shown near the footer of the public homepage.
+export const TRUST = {
+  heading: 'Built for the trust schools require',
+  items: [
+    { icon: 'shield', label: 'FERPA-compliant', to: '/privacy' },
+    { icon: 'lock', label: 'End-to-end encrypted' },
+    { icon: 'server', label: 'Hosted on AWS · US' },
+  ],
+}
+
 export const FOOTER = {
-  copyright: '© 2026 KYRO',
+  copyright: '© 2026 KYRO. All rights reserved.',
   links: [
+    { label: 'Terms', to: '/terms' },
+    { label: 'Privacy', to: '/privacy' },
     { label: 'Sign in', to: '/login' },
-    { label: 'Create account', to: '/register' },
   ],
 }
 

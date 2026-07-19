@@ -12,7 +12,7 @@ CSS = """
   size: Letter;
   margin: 0.85in 0.8in 0.9in 0.8in;
   @bottom-center { content: counter(page) "  /  " counter(pages); font-size: 8.5pt; color: #6b6457; }
-  @bottom-right { content: "FinRep"; font-size: 8.5pt; color: #b89650; }
+  @bottom-right { content: "KYRO"; font-size: 8.5pt; color: #b89650; }
 }
 * { box-sizing: border-box; }
 body { font-family: "DejaVu Sans", "Helvetica", "Arial", sans-serif; font-size: 10.5pt;

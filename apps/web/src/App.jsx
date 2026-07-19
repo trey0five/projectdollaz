@@ -20,6 +20,8 @@ import AppShell from './components/nav/AppShell.jsx'
 import PennyAgentBridge from './components/penny/PennyAgentBridge.jsx'
 import InviteResultToast from './components/InviteResultToast.jsx'
 import HomePage from './pages/HomePage.jsx'
+import TermsPage from './pages/legal/TermsPage.jsx'
+import PrivacyPage from './pages/legal/PrivacyPage.jsx'
 import PennyStudioPage from './pages/PennyStudioPage.jsx'
 import DataHubPage from './pages/DataHubPage.jsx'
 import FinancePage from './pages/FinancePage.jsx'
@@ -163,6 +165,10 @@ export default function App() {
       />
       {/* verify-email is reachable while logged out OR in; it just reads ?token */}
       <Route path="/verify-email" element={<VerifyEmailPage />} />
+
+      {/* Public legal pages */}
+      <Route path="/terms" element={<TermsPage />} />
+      <Route path="/privacy" element={<PrivacyPage />} />
       <Route
         path="/forgot-password"
         element={

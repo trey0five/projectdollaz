@@ -16,6 +16,7 @@ import DomainPlates from './DomainPlates.jsx'
 import DioceseBand from './DioceseBand.jsx'
 import FinalCta from './FinalCta.jsx'
 import LandingFooter from './LandingFooter.jsx'
+import TrustBar from './TrustBar.jsx'
 import Reveal from './Reveal.jsx'
 import { ACTS, LICENSING } from './landingContent.js'
 
@@ -84,6 +85,7 @@ export default function LandingPage() {
         <LicensingSection />
         <FinalCta />
       </main>
+      <TrustBar />
       <LandingFooter />
     </div>
   )
