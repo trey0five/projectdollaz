@@ -37,6 +37,10 @@ services:
     environment:
       # Talk to the postgres SERVICE on the internal port 5432 (overrides .env).
       DATABASE_URL: postgresql://${POSTGRES_USER:-finrep}:${POSTGRES_PASSWORD:-finrep_dev_pw}@postgres:5432/${POSTGRES_DB:-finrep}?schema=public
+      # The prod image runs NODE_ENV=production, and bootstrap-env.ts would then
+      # force sslmode=require — but this local Postgres has no TLS. Disable it so a
+      # freshly-built prod image also boots against local dev (P1011 otherwise).
+      DATABASE_SSLMODE: disable
       PORT: "8000"
       # Phase 4 Knowledge document store — S3 config passed through from the host .env
       # via dollar-brace substitution ONLY (no literal secret values in this file).

@@ -451,6 +451,12 @@
 }
 
 @layer utilities {
+  /* Shared max-width for every main content page. Pair with `mx-auto` for the
+     centered page shell. Change the width once via --page-width (tokens.css). */
+  .max-w-page {
+    max-width: var(--page-width);
+  }
+
   /* Hide the scrollbar on horizontally-scrollable strips (tabs, report
      scroller) while keeping them scrollable. */
   .scrollbar-none {

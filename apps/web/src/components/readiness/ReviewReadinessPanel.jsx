@@ -191,7 +191,7 @@ export default function ReviewReadinessPanel() {
   // ── Entitlement gate ───────────────────────────────────────────────────────
   if (!billingLoading && (!entitled || notEntitled)) {
     return (
-      <div className="mx-auto max-w-[1100px] px-4 py-8 sm:px-10">
+      <div className="mx-auto max-w-page px-4 py-8 sm:px-10">
         <PageHeader />
         <EntitlementPausedPanel />
       </div>
@@ -203,7 +203,7 @@ export default function ReviewReadinessPanel() {
   // ── Empty state ────────────────────────────────────────────────────────────
   if (!initialLoading && savedPeriods.length === 0) {
     return (
-      <div className="mx-auto max-w-[1100px] px-4 py-8 sm:px-10">
+      <div className="mx-auto max-w-page px-4 py-8 sm:px-10">
         <PageHeader />
         <div className="card-soft border-dashed px-6 py-14 text-center">
           <p className="font-serif text-lg italic text-muted">No saved statements yet.</p>
@@ -264,7 +264,7 @@ export default function ReviewReadinessPanel() {
       }
 
   return (
-    <div className="mx-auto max-w-[1100px] px-4 py-8 sm:px-10">
+    <div className="mx-auto max-w-page px-4 py-8 sm:px-10">
       <PageHeader />
 
       {!showSkeleton && savedPeriods.length > 0 && (

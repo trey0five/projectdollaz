@@ -333,6 +333,20 @@ export const analyticsApi = {
     api.get(`/organizations/${orgId}/metrics/by-school`, {
       params: fiscalYearStart ? { fiscalYearStart } : {},
     }),
+  // School Comparison PEER BENCHMARK: benchmark ONE owned school against its
+  // comparable peers (same org) chosen by size/county/district/type/grade with a
+  // relaxation ladder. Returns focus + peers + direction-aware stats + insights (or
+  // a friendly emptyState when there are no comparable peers). SINGLE call site.
+  // Omit-when-absent every param (never '') so the global forbidNonWhitelisted
+  // ValidationPipe never trips, matching the compareMetrics/orgMetrics idiom.
+  peerBenchmark: (orgId, schoolId, { fiscalYearStart, dims, minPeers } = {}) =>
+    api.get(`/organizations/${orgId}/metrics/peers/${schoolId}`, {
+      params: {
+        ...(fiscalYearStart ? { fiscalYearStart } : {}),
+        ...(dims && dims.length ? { dims: dims.join(',') } : {}),
+        ...(minPeers ? { minPeers } : {}),
+      },
+    }),
   // Organization ATTENTION BRIEFING: per-school attention rolled up
   // across the caller's org for a fiscal year — a ranked, school-attributed
   // cross-school item list + per-school summaries + consolidated counts. SINGLE
@@ -665,6 +679,56 @@ export const enrollmentApi = {
     api.delete(`/schools/${schoolId}/enrollment`, {
       params: removeData ? { removeData: true } : {},
     }),
+  // ── Granular enrollment: per-school demographic + grade-mix read surface ────
+  // Latest snapshot's gender/ethnicity/race shares + diversityIndex + grade-mix
+  // for a period (defaults to the school's latest). Same 'enrollment' module gate.
+  getDemographics: (schoolId, periodId) =>
+    api.get(`/schools/${schoolId}/enrollment/demographics`, {
+      params: periodId ? { periodId } : {},
+    }),
+  // Reverse a diocesan-import supersede: restore the backed-up MANUAL enrollment
+  // figure into operational data, clearing the import stamp + snapshot flags
+  // (Decision C — reversible). Owner/accountant only (server-enforced).
+  revertManual: (schoolId, body) =>
+    api.post(`/schools/${schoolId}/enrollment/revert-manual`, body),
+}
+
+// ── Granular diocesan enrollment: ONE file / API-connect for ALL schools ─────
+// Org-scoped (@Controller('organizations/:orgId/enrollment')), JwtAuth-only (the
+// QBO-org precedent — RolesGuard/EntitlementGuard can't resolve a schoolId on an
+// org route; per-school role + 'enrollment' entitlement are enforced INSIDE the
+// service at apply time, so un-permitted/un-entitled schools become `skipped`,
+// never blocking the batch). Two-step: (1) upload/sync → parse + name-match →
+// persist a DURABLE staging batch (survives reload) → returns the review payload;
+// (2) reviewer overrides per-row → apply. `upload` is multipart (Content-Type
+// undefined so the browser sets the boundary) — mirrors enrollmentApi.upload.
+export const diocesanEnrollmentApi = {
+  // Step 1 — parse & match (NO promote). formData: file (+ optional observedOn).
+  upload: (orgId, formData) =>
+    api.post(`/organizations/${orgId}/enrollment/imports`, formData, {
+      headers: { 'Content-Type': undefined },
+    }),
+  // API-connect variant (dark / config-gated) — JSON body.
+  sync: (orgId, body = {}) =>
+    api.post(`/organizations/${orgId}/enrollment/imports/sync`, body),
+  // Re-fetch a staging batch's review payload → resume after a reload.
+  getImport: (orgId, importId) =>
+    api.get(`/organizations/${orgId}/enrollment/imports/${importId}`),
+  // Reviewer override on ONE row (persisted): { action:'match'|'skip'|'unmatch',
+  // schoolId?, learnAlias? }.
+  patchRow: (orgId, importId, rowId, body) =>
+    api.patch(`/organizations/${orgId}/enrollment/imports/${importId}/rows/${rowId}`, body),
+  // Step 2 — apply. body { observedOn?, rows?: RowDecisionInput[] } merges final
+  // per-row decisions over the persisted staging state → fans out into the
+  // existing snapshot+promote pipeline. Returns the apply result (per-school).
+  apply: (orgId, importId, body = {}) =>
+    api.post(`/organizations/${orgId}/enrollment/imports/${importId}/apply`, body),
+  // Discard a staging batch.
+  discard: (orgId, importId) =>
+    api.delete(`/organizations/${orgId}/enrollment/imports/${importId}`),
+  // Learned name→school aliases (per org) — list + unlearn one.
+  listAliases: (orgId) => api.get(`/organizations/${orgId}/enrollment/aliases`),
+  deleteAlias: (orgId, id) => api.delete(`/organizations/${orgId}/enrollment/aliases/${id}`),
 }
 
 // ── Phase 6: QuickBooks Online connector (per school) ────────────────────────

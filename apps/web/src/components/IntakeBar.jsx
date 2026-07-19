@@ -132,7 +132,7 @@ export default function IntakeBar() {
     <section className="no-print relative border-b border-rule bg-section py-4 sm:py-7">
       <DragOverlay />
 
-      <div className="mx-auto max-w-[1120px] px-4 sm:px-10">
+      <div className="mx-auto max-w-page px-4 sm:px-10">
       <AnimatePresence mode="wait">
         {/* ── EMPTY ── */}
         {intakeMode === 'empty' && (

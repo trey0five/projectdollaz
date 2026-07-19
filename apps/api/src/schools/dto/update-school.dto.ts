@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer'
 import {
+  IsIn,
   IsNumber,
   IsOptional,
   IsString,
@@ -9,10 +10,12 @@ import {
   MinLength,
   ValidateIf,
 } from 'class-validator'
+import { GRADE_KEYS, SCHOOL_TYPES } from '@finrep/analytics'
 
 /**
- * Partial school update (OWNER only). Every field is optional, but at least one
- * must be present — enforced via the `_hasAny` getter validated by ValidateIf.
+ * Partial school update (OWNER only). Every field is optional; the "at least one
+ * field present" invariant is enforced in SchoolsService.updateSchool (it throws
+ * BadRequestException when the assembled update object is empty).
  * Decimal balances validate as non-negative numbers; Prisma coerces to Decimal.
  *
  * Phase-1 Board Report branding (logoBase64/brandColor/defaultCommittee) MUST be
@@ -73,4 +76,43 @@ export class UpdateSchoolDto {
   @IsString()
   @MaxLength(120)
   defaultCommittee?: string | null
+
+  // ── School Comparison — peer-benchmarking profile (all optional; null clears) ──
+
+  /** School type from the canonical @finrep/analytics catalog, or null to clear. */
+  @IsOptional()
+  @ValidateIf((_o, v) => v !== null)
+  @IsString()
+  @IsIn(SCHOOL_TYPES as unknown as string[], {
+    message: `schoolType must be one of: ${SCHOOL_TYPES.join(', ')}.`,
+  })
+  schoolType?: string | null
+
+  /** County name, or null to clear. */
+  @IsOptional()
+  @ValidateIf((_o, v) => v !== null)
+  @IsString()
+  @MaxLength(120)
+  county?: string | null
+
+  /** District name, or null to clear. */
+  @IsOptional()
+  @ValidateIf((_o, v) => v !== null)
+  @IsString()
+  @MaxLength(120)
+  district?: string | null
+
+  /** Lowest grade served (GradeKey: PK3,PK4,K,1..12), or null to clear. */
+  @IsOptional()
+  @ValidateIf((_o, v) => v !== null)
+  @IsString()
+  @IsIn(GRADE_KEYS as unknown as string[], { message: 'gradeLow must be a valid grade key.' })
+  gradeLow?: string | null
+
+  /** Highest grade served (GradeKey: PK3,PK4,K,1..12), or null to clear. */
+  @IsOptional()
+  @ValidateIf((_o, v) => v !== null)
+  @IsString()
+  @IsIn(GRADE_KEYS as unknown as string[], { message: 'gradeHigh must be a valid grade key.' })
+  gradeHigh?: string | null
 }

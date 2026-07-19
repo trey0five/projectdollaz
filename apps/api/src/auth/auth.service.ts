@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   HttpException,
   HttpStatus,
@@ -7,9 +8,10 @@ import {
   UnauthorizedException,
 } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
-import { randomBytes, timingSafeEqual } from 'node:crypto'
+import { randomBytes, randomInt } from 'node:crypto'
 import type { User } from '@finrep/db'
 import { PrismaService } from '../prisma/prisma.service.js'
+import { sha256hex, hashesEqual } from '../common/hash.js'
 import { PasswordService } from './password.service.js'
 import { TokenService } from './token.service.js'
 import { MailerService } from './mailer.service.js'
@@ -62,7 +64,7 @@ export class AuthService {
         passwordSalt: salt,
         passwordHash: hash,
         emailVerified: false,
-        emailVerificationToken: token,
+        emailVerificationToken: sha256hex(token), // store hash; email the plaintext
         emailVerificationExpiresAt: new Date(Date.now() + VERIFY_TTL_MS),
       },
     })
@@ -75,21 +77,18 @@ export class AuthService {
   }
 
   async verifyEmail(token: string): Promise<{ message: string }> {
+    // Look up by the token HASH (tokens are stored hashed at rest).
+    const tokenHash = sha256hex(token)
     const user = await this.prisma.user.findFirst({
-      where: { emailVerificationToken: token },
+      where: { emailVerificationToken: tokenHash },
     })
     if (
       !user ||
       !user.emailVerificationToken ||
       !user.emailVerificationExpiresAt ||
-      user.emailVerificationExpiresAt.getTime() < Date.now()
+      user.emailVerificationExpiresAt.getTime() < Date.now() ||
+      !hashesEqual(tokenHash, user.emailVerificationToken)
     ) {
-      throw new BadRequestException('Invalid or expired verification token.')
-    }
-    // Constant-time compare on the matched row.
-    const a = Buffer.from(token)
-    const b = Buffer.from(user.emailVerificationToken)
-    if (a.length !== b.length || !timingSafeEqual(a, b)) {
       throw new BadRequestException('Invalid or expired verification token.')
     }
     await this.prisma.user.update({
@@ -111,7 +110,7 @@ export class AuthService {
       await this.prisma.user.update({
         where: { id: user.id },
         data: {
-          emailVerificationToken: token,
+          emailVerificationToken: sha256hex(token), // store hash; email the plaintext
           emailVerificationExpiresAt: new Date(Date.now() + VERIFY_TTL_MS),
         },
       })
@@ -131,6 +130,10 @@ export class AuthService {
     }
 
     if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
+      // NOTE: deliberately NOT audited per-request — the `auth.login.locked`
+      // event is written once at the lock transition below. Auditing every
+      // request during the 30-min lock window would let an attacker amplify
+      // unbounded AuditLog writes just by replaying a known email.
       throw new HttpException(
         'Account temporarily locked due to failed attempts. Try again later.',
         HttpStatus.LOCKED,
@@ -167,6 +170,13 @@ export class AuthService {
           lockedUntil: lock,
         },
       })
+      await this.audit.write({
+        userId: user.id,
+        action: lock ? 'auth.login.locked' : 'auth.login.failed',
+        targetType: 'user',
+        targetId: user.id,
+        metadata: { attempts },
+      })
       throw new UnauthorizedException('Invalid email or password.')
     }
 
@@ -179,6 +189,12 @@ export class AuthService {
 
     const { token: refresh_token, jti } = await this.tokens.issueRefresh(user.id)
     const access_token = this.tokens.signAccess(user.id, jti)
+    await this.audit.write({
+      userId: user.id,
+      action: 'auth.login',
+      targetType: 'user',
+      targetId: user.id,
+    })
     return { access_token, refresh_token, user: toUserPublic(user) }
   }
 
@@ -187,8 +203,79 @@ export class AuthService {
     return { access_token: access, refresh_token: refresh }
   }
 
+  /**
+   * Data-subject erasure: a user permanently deletes their OWN account. Password-
+   * confirmed. Blocked if they are the sole active owner of any school (would
+   * orphan it — delete/transfer those first). Deleting the User cascades their
+   * memberships + refresh tokens; any surviving access token is rejected at the
+   * next request (JwtAuthGuard loads the now-missing user). The deletion record
+   * carries only the opaque user id (no PII).
+   */
+  async deleteAccount(user: User, password: string): Promise<{ deleted: true }> {
+    // Re-auth with the password when one is set. A password-less account (no
+    // password to verify) relies on the already-authenticated session as proof —
+    // otherwise erasure would be impossible for such an account.
+    if (user.passwordHash) {
+      const ok = this.passwords.verify(
+        password,
+        user.passwordAlgo,
+        user.passwordIters,
+        user.passwordSalt,
+        user.passwordHash,
+      )
+      if (!ok) throw new UnauthorizedException('Current password is incorrect.')
+    }
+
+    try {
+      // SERIALIZABLE so the last-owner check + delete are atomic: two co-owners
+      // deleting concurrently can't both pass and orphan the school — one aborts.
+      await this.prisma.$transaction(
+        async (tx) => {
+          const ownerMemberships = await tx.membership.findMany({
+            where: { userId: user.id, role: 'owner', status: 'active' },
+            select: { schoolId: true },
+          })
+          for (const m of ownerMemberships) {
+            const owners = await tx.membership.count({
+              where: { schoolId: m.schoolId, role: 'owner', status: 'active' },
+            })
+            if (owners <= 1) {
+              throw new BadRequestException(
+                'You are the only owner of one or more schools. Delete those schools or add another owner before deleting your account.',
+              )
+            }
+          }
+          // Complete erasure: scrub the user's email from the two FK-less tables
+          // (SetNull can't reach them) — pending invites to them + alert recipients.
+          await tx.invitation.deleteMany({ where: { email: user.email } })
+          await tx.alert.deleteMany({ where: { recipientEmail: user.email } })
+          // Cascades memberships + refresh tokens; SetNulls authored rows.
+          await tx.user.delete({ where: { id: user.id } })
+          await tx.auditLog.create({
+            data: { action: 'user.deleted', targetType: 'user', targetId: user.id },
+          })
+        },
+        { isolationLevel: 'Serializable' },
+      )
+    } catch (e) {
+      if (e instanceof BadRequestException) throw e
+      if ((e as { code?: string }).code === 'P2034') {
+        // Serialization conflict (a concurrent co-owner deletion) — safe to retry.
+        throw new ConflictException('Please try again.')
+      }
+      throw e
+    }
+    return { deleted: true }
+  }
+
   async logout(userId: string): Promise<{ message: string }> {
     await this.tokens.revokeAll(userId)
+    await this.audit.write({
+      userId,
+      action: 'auth.logout',
+      targetType: 'user',
+      targetId: userId,
+    })
     return { message: 'Logged out.' }
   }
 
@@ -279,11 +366,13 @@ export class AuthService {
     const generic = { message: 'If that account exists, a reset code was sent.' }
     const user = await this.prisma.user.findUnique({ where: { email } })
     if (user) {
-      const code = String(Math.floor(100000 + Math.random() * 900000))
+      // High-entropy CSPRNG code (~8.5e11 space) — safe against brute force even
+      // if the per-IP throttle is evaded. Stored hashed at rest; emailed in clear.
+      const code = generateResetCode()
       await this.prisma.user.update({
         where: { id: user.id },
         data: {
-          passwordResetCode: code,
+          passwordResetCode: sha256hex(code),
           passwordResetExpiresAt: new Date(Date.now() + RESET_TTL_MS),
         },
       })
@@ -305,9 +394,7 @@ export class AuthService {
     ) {
       throw new BadRequestException('Invalid or expired reset code.')
     }
-    const a = Buffer.from(dto.reset_code)
-    const b = Buffer.from(user.passwordResetCode)
-    if (a.length !== b.length || !timingSafeEqual(a, b)) {
+    if (!hashesEqual(sha256hex(dto.reset_code), user.passwordResetCode)) {
       throw new BadRequestException('Invalid or expired reset code.')
     }
 
@@ -328,4 +415,14 @@ export class AuthService {
     await this.tokens.revokeAll(user.id)
     return { message: 'Password reset. You can now log in.' }
   }
+}
+
+// Readable, high-entropy reset code. 8 chars from a 31-symbol unambiguous alphabet
+// (no I/L/O/0/1) ≈ 8.5e11 — copy-pasteable from email, infeasible to brute force.
+// Each char drawn with an UNBIASED CSPRNG (randomInt), never modulo-reduced bytes.
+const RESET_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
+function generateResetCode(): string {
+  let out = ''
+  for (let i = 0; i < 8; i++) out += RESET_ALPHABET[randomInt(0, RESET_ALPHABET.length)]
+  return out
 }

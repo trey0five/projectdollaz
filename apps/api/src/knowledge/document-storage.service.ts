@@ -4,7 +4,9 @@ import {
   S3Client,
   PutObjectCommand,
   DeleteObjectCommand,
+  DeleteObjectsCommand,
   GetObjectCommand,
+  ListObjectsV2Command,
 } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import type { AppConfig } from '../config/configuration.js'
@@ -50,9 +52,13 @@ export class DocumentStorageService {
     this.cfg = config.getOrThrow<AppConfig['s3Documents']>('s3Documents')
   }
 
-  /** Truth test: bucket + BOTH creds present. region/prefix have benign defaults. */
+  /**
+   * Truth test: a bucket is set. Credentials are NOT required here — on ECS/Fargate
+   * they come from the task role via the default provider chain; static keys are
+   * only used in dev when explicitly provided.
+   */
   isConfigured(): boolean {
-    return Boolean(this.cfg.bucket && this.cfg.accessKeyId && this.cfg.secretAccessKey)
+    return Boolean(this.cfg.bucket)
   }
 
   /** TTL (seconds) for presigned download URLs — from config. */
@@ -64,12 +70,19 @@ export class DocumentStorageService {
   private getClient(): S3Client {
     if (!this.isConfigured()) throw new StorageNotConfiguredError()
     if (!this.client) {
+      const hasStaticCreds = Boolean(this.cfg.accessKeyId && this.cfg.secretAccessKey)
       this.client = new S3Client({
         region: this.cfg.region,
-        credentials: {
-          accessKeyId: this.cfg.accessKeyId,
-          secretAccessKey: this.cfg.secretAccessKey,
-        },
+        // On ECS/Fargate the task role supplies credentials via the default
+        // provider chain; only pass static keys when explicitly configured (dev).
+        ...(hasStaticCreds
+          ? {
+              credentials: {
+                accessKeyId: this.cfg.accessKeyId,
+                secretAccessKey: this.cfg.secretAccessKey,
+              },
+            }
+          : {}),
       })
     }
     return this.client
@@ -94,8 +107,24 @@ export class DocumentStorageService {
   }
 
   async putObject(buffer: Buffer, key: string, mimeType: string): Promise<void> {
+    const sse = this.cfg.serverSideEncryption
+    const encryption =
+      sse && sse !== 'none'
+        ? {
+            ServerSideEncryption: sse as 'aws:kms' | 'AES256',
+            ...(sse === 'aws:kms' && this.cfg.sseKmsKeyId
+              ? { SSEKMSKeyId: this.cfg.sseKmsKeyId }
+              : {}),
+          }
+        : {}
     await this.getClient().send(
-      new PutObjectCommand({ Bucket: this.cfg.bucket, Key: key, Body: buffer, ContentType: mimeType }),
+      new PutObjectCommand({
+        Bucket: this.cfg.bucket,
+        Key: key,
+        Body: buffer,
+        ContentType: mimeType,
+        ...encryption,
+      }),
     )
   }
 
@@ -111,5 +140,61 @@ export class DocumentStorageService {
     } catch (err) {
       this.logger.warn(`S3 deleteObject failed (best-effort): ${String(err)}`)
     }
+  }
+
+  /** The object-key prefix under which ALL of a school's documents live. */
+  schoolPrefix(schoolId: string): string {
+    const prefix = this.cfg.prefix.replace(/^\/+|\/+$/g, '')
+    return `${prefix}/${schoolId}/`
+  }
+
+  /**
+   * Delete EVERY object under a prefix (paginated; ≤1000 keys per delete batch).
+   * Used to erase a tenant's documents on school/org deletion — the DB cascade
+   * removes the metadata rows but never touches S3. Returns the count deleted.
+   * Throws on a real S3 error so the caller can decide (delete-school treats it
+   * as best-effort and proceeds with the DB erasure).
+   */
+  async deleteByPrefix(prefix: string): Promise<number> {
+    if (!this.isConfigured()) return 0
+    const client = this.getClient()
+    let deleted = 0
+    let continuationToken: string | undefined
+    do {
+      const listed = await client.send(
+        new ListObjectsV2Command({
+          Bucket: this.cfg.bucket,
+          Prefix: prefix,
+          ContinuationToken: continuationToken,
+        }),
+      )
+      const objects = (listed.Contents ?? [])
+        .map((o) => o.Key)
+        .filter((k): k is string => Boolean(k))
+        .map((Key) => ({ Key }))
+      if (objects.length) {
+        const res = await client.send(
+          new DeleteObjectsCommand({
+            Bucket: this.cfg.bucket,
+            Delete: { Objects: objects, Quiet: true },
+          }),
+        )
+        // Quiet mode returns only FAILURES in res.Errors. Surface them so a
+        // right-to-deletion never falsely reports objects erased that survive
+        // (e.g. Object-Lock retention, transient AccessDenied).
+        const errors = res.Errors ?? []
+        deleted += objects.length - errors.length
+        if (errors.length) {
+          throw new Error(
+            `S3 batch delete left ${errors.length} object(s): ${errors
+              .slice(0, 3)
+              .map((e) => `${e.Key} (${e.Code})`)
+              .join(', ')}`,
+          )
+        }
+      }
+      continuationToken = listed.IsTruncated ? listed.NextContinuationToken : undefined
+    } while (continuationToken)
+    return deleted
   }
 }

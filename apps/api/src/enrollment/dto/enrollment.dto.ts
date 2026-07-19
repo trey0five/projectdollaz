@@ -1,4 +1,4 @@
-import { IsDateString, IsIn, IsObject, IsOptional, IsString, MinLength } from 'class-validator'
+import { IsDateString, IsIn, IsObject, IsOptional, IsString, IsUUID, MinLength } from 'class-validator'
 import type { EnrollmentProviderKey } from '@finrep/db'
 
 /**
@@ -12,6 +12,8 @@ export const ENROLLMENT_PROVIDERS: EnrollmentProviderKey[] = [
   'facts',
   'veracross',
   'manual',
+  'diocesan_csv',
+  'diocesan_api',
 ]
 
 /** The providers a school connects with API keys (not OAuth, not file upload). */
@@ -79,4 +81,10 @@ export class EnrollmentManualDto {
 
   @IsObject()
   byGrade!: Record<string, number>
+}
+
+/** Revert a manual-supersede for one period (restores the backed-up manual value). */
+export class EnrollmentRevertManualDto {
+  @IsUUID()
+  periodId!: string
 }

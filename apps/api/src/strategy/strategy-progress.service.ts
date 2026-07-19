@@ -237,7 +237,7 @@ export class StrategyProgressService {
 
     // ── Resolve the metric basis ONCE (snapshot + operational + metrics) ──────────
     const period = await this.resolveCurrentPeriod(schoolId)
-    let metricsByKey = new Map<string, MetricResult>()
+    const metricsByKey = new Map<string, MetricResult>()
     let dataAsOf: string | null = null
     if (period) {
       const snap = await this.prisma.statementSnapshot.findFirst({
@@ -469,7 +469,7 @@ export class StrategyProgressService {
     let unit: string | null = null
     let baseline: number | null = null
     let current: number | null = null
-    let target: number | null = dec(g.targetValue)
+    const target: number | null = dec(g.targetValue)
     let formattedBaseline: string | null = null
     let formattedCurrent: string | null = null
     let formattedTarget: string | null = null

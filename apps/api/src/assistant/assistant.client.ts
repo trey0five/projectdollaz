@@ -3,6 +3,7 @@
 // the agent loop in AssistantService handles multi-turn tool use. Config-gated.
 import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
+import { BedrockClient } from './bedrock.client.js'
 
 const TIMEOUT_MS = 30000
 
@@ -19,14 +20,26 @@ export interface AssistantMessage {
 
 @Injectable()
 export class AssistantClient {
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    private readonly bedrock: BedrockClient,
+  ) {}
 
-  /** Tool calling needs the OpenAI-compatible shape → OpenRouter. */
+  private get provider(): string {
+    return this.config.get<string>('assistant.provider') ?? 'openrouter'
+  }
+
+  /**
+   * Bedrock (in-account) needs no key — creds come from the task role. OpenRouter
+   * (dev) needs an API key.
+   */
   isConfigured(): boolean {
+    if (this.provider === 'bedrock') return true
     return (this.config.get<string>('openrouter.apiKey') ?? '').length > 0
   }
 
   async chat(messages: unknown[], tools: unknown[]): Promise<AssistantMessage> {
+    if (this.provider === 'bedrock') return this.bedrock.chat(messages, tools)
     const apiKey = this.config.get<string>('openrouter.apiKey') ?? ''
     const baseUrl = this.config.get<string>('openrouter.baseUrl') ?? 'https://openrouter.ai/api/v1'
     const model = this.config.get<string>('openrouter.model') ?? 'anthropic/claude-haiku-4.5'
@@ -74,6 +87,7 @@ export class AssistantClient {
     tools: unknown[],
     onDelta: (text: string) => void,
   ): Promise<AssistantMessage> {
+    if (this.provider === 'bedrock') return this.bedrock.streamChat(messages, tools, onDelta)
     const apiKey = this.config.get<string>('openrouter.apiKey') ?? ''
     const baseUrl = this.config.get<string>('openrouter.baseUrl') ?? 'https://openrouter.ai/api/v1'
     const model = this.config.get<string>('openrouter.model') ?? 'anthropic/claude-haiku-4.5'

@@ -92,7 +92,7 @@ export default function ModuleTabs({ moduleKey, overview, addData, records, repo
     <div className="min-h-screen bg-section" style={moduleAccentVars(moduleKey)}>
       {/* Back to the tile dashboard — the sidebar is retired under v2, so this is
           the explicit way home from every module page. */}
-      <div className="mx-auto max-w-[1180px] px-4 pt-4 sm:px-10">
+      <div className="mx-auto max-w-page px-4 pt-4 sm:px-10">
         <Link
           to="/app"
           className="inline-flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.1em] text-muted transition-colors hover:text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy/40"
@@ -107,7 +107,7 @@ export default function ModuleTabs({ moduleKey, overview, addData, records, repo
           The genuine wizard (Choose → Add → Done) lives INSIDE the Add-data panel.
           The active tab fills with the module hue via a gliding pill (layoutId). ── */}
       <div className="border-b border-rule/60 bg-cream/60">
-        <div className="mx-auto flex max-w-[1180px] items-center gap-3 px-4 py-2.5 sm:gap-4 sm:px-10">
+        <div className="mx-auto flex max-w-page items-center gap-3 px-4 py-2.5 sm:gap-4 sm:px-10">
           <div className="flex shrink-0 items-center gap-2">
             {Icon ? (
               <span

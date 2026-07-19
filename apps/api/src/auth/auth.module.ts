@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common'
 import { JwtModule } from '@nestjs/jwt'
 import { ConfigModule, ConfigService } from '@nestjs/config'
+import { ThrottlerModule } from '@nestjs/throttler'
 import { PrismaModule } from '../prisma/prisma.module.js'
 import { AuditModule } from '../common/audit/audit.module.js'
 import { AuthController } from './auth.controller.js'
@@ -15,6 +16,8 @@ import { RolesGuard } from '../common/guards/roles.guard.js'
   imports: [
     PrismaModule,
     AuditModule,
+    // Default bucket; per-route @Throttle() overrides on the controller.
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 20 }]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

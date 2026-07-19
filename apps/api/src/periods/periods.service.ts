@@ -86,21 +86,28 @@ export class PeriodsService {
     fallbackType = 'fy',
     label?: string,
   ): Promise<{ period: FiscalPeriod; created: boolean }> {
+    const chosen = await this.resolveExistingForImport(schoolId, periodEndDate)
+    if (chosen) return { period: chosen, created: false }
+    return this.createOrGet(schoolId, { periodEndDate, periodType: fallbackType, label })
+  }
+
+  /**
+   * The period `resolveForImport` WOULD reuse for this end date — but read-only (never
+   * creates). Same end-date lookup + snapshot-bearing tie-break, so a supersede PREVIEW
+   * hint can target exactly the period a later apply() will. Null when none exists yet.
+   */
+  async resolveExistingForImport(schoolId: string, periodEndDate: string): Promise<FiscalPeriod | null> {
     const end = new Date(periodEndDate)
     const existing = await this.prisma.fiscalPeriod.findMany({
       where: { schoolId, periodEndDate: end },
       orderBy: { createdAt: 'asc' },
     })
-    if (existing.length > 0) {
-      const withSnap = await this.prisma.statementSnapshot.findFirst({
-        where: { fiscalPeriodId: { in: existing.map((p) => p.id) } },
-        select: { fiscalPeriodId: true },
-      })
-      const chosen =
-        (withSnap && existing.find((p) => p.id === withSnap.fiscalPeriodId)) || existing[0]
-      return { period: chosen, created: false }
-    }
-    return this.createOrGet(schoolId, { periodEndDate, periodType: fallbackType, label })
+    if (existing.length === 0) return null
+    const withSnap = await this.prisma.statementSnapshot.findFirst({
+      where: { fiscalPeriodId: { in: existing.map((p) => p.id) } },
+      select: { fiscalPeriodId: true },
+    })
+    return (withSnap && existing.find((p) => p.id === withSnap.fiscalPeriodId)) || existing[0]!
   }
 
   async createOrGetPublic(

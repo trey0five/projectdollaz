@@ -1,0 +1,11 @@
+# gitleaks config — extends the default ruleset, plus repo-specific allowlisting.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Template env files hold placeholder / empty values, not real secrets."
+paths = [
+  '''\.env\.example$''',
+  '''\.env\.sample$''',
+  '''\.env\..*\.sample$''',
+]

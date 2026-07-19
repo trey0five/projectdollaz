@@ -442,6 +442,52 @@ export function useCompareMetrics(orgId, fiscalYearStart) {
   }
 }
 
+// ── School Comparison PEER BENCHMARK — read-only ─────────────────────────────
+// Clones useCompareMetrics exactly (org-guard + microtask-deferred
+// await-before-setState + cancelled flag). The peer route is JwtAuthGuard-only
+// (never 402s — same read-auth as metrics), so there's NO notEntitled branch.
+// `enabled` gates the fetch to the peers scope so idle scopes don't fetch; we also
+// skip when the org or focus school isn't resolved yet. `dims` is passed straight
+// to the api client, which omits it when empty (forbidNonWhitelisted-safe).
+export function usePeerBenchmark(orgId, focusId, { fiscalYearStart, dims } = {}, enabled = true) {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  const dimsSig = Array.isArray(dims) ? dims.join(',') : ''
+  const load = useCallback(async (oid, sid, fys, dimsArr) => {
+    setError('')
+    try {
+      const res = await analyticsApi.peerBenchmark(oid, sid, { fiscalYearStart: fys, dims: dimsArr })
+      setData(res.data)
+    } catch {
+      setError('Could not load the peer comparison.')
+      setData(null)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.resolve().then(() => {
+      if (cancelled) return
+      if (enabled && orgId && focusId) {
+        setLoading(true)
+        load(orgId, focusId, fiscalYearStart, dimsSig ? dimsSig.split(',') : undefined)
+      } else {
+        setData(null)
+        setLoading(false)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [enabled, orgId, focusId, fiscalYearStart, dimsSig, load])
+
+  return { data, loading, error }
+}
+
 // ── Org attention briefing — read-only ────────────────────────────────────────
 // Mirrors useStatementsRollup's loading/error + org-resolution guard +
 // microtask-deferred await-before-setState, so BudgetPage consumes it identically

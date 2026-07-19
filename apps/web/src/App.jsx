@@ -37,6 +37,7 @@ import AccreditationPage from './pages/AccreditationPage.jsx'
 import FacilitiesPage from './pages/FacilitiesPage.jsx'
 import AdvancementPage from './pages/AdvancementPage.jsx'
 import EnrollmentPage from './pages/EnrollmentPage.jsx'
+import DiocesanImportPage from './pages/DiocesanImportPage.jsx'
 import TasksPage from './pages/TasksPage.jsx'
 import KnowledgePage from './pages/KnowledgePage.jsx'
 import SchedulesPage from './pages/SchedulesPage.jsx'
@@ -201,6 +202,7 @@ export default function App() {
           }
         />
         <Route path="/enrollment" element={<EnrollmentPage />} />
+        <Route path="/enrollment/diocesan-import" element={<DiocesanImportPage />} />
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/knowledge" element={<KnowledgePage />} />
         <Route path="/readiness/cap/print" element={<CapPrintPage />} />

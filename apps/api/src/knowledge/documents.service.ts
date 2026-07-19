@@ -227,6 +227,7 @@ export class DocumentsService {
   async getDownloadUrl(
     schoolId: string,
     documentId: string,
+    userId?: string,
   ): Promise<{ url: string; expiresIn: number }> {
     if (!this.storage.isConfigured()) {
       throw new ServiceUnavailableException('Document storage is not configured.')
@@ -236,6 +237,16 @@ export class DocumentsService {
     const row = await this.resolve(schoolId, documentId)
     const ttl = this.storage.ttlSeconds()
     const url = await this.storage.presignGetUrl(row.s3Key, ttl)
+    // FERPA access log (§99.32): record WHO accessed this document (a possible
+    // education record). Best-effort — never blocks the download.
+    await this.audit.write({
+      schoolId,
+      userId: userId ?? null,
+      action: 'document.downloaded',
+      targetType: 'knowledge_documents',
+      targetId: documentId,
+      metadata: { fileName: row.fileName },
+    })
     return { url, expiresIn: ttl }
   }
 

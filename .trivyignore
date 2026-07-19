@@ -1,0 +1,22 @@
+# Trivy IaC allowlist — DELIBERATE architecture decisions, reviewed. Each is a
+# HIGH "hardening" advisory that conflicts with the intended (lean, functional)
+# design, not a real vulnerability. Re-review when the architecture changes.
+
+# ALB is internet-facing BY DESIGN — it is CloudFront's `origin.<domain>` and is
+# locked to CloudFront at the security-group level. Making it internal breaks the
+# CDN → ALB path.
+AVD-AWS-0053
+
+# ECR image tags are mutable BY DESIGN — CD overwrites `:latest` (the task def
+# references it). Every deploy also pushes an immutable `:<sha>` tag for audit/rollback.
+AVD-AWS-0031
+
+# Log + CloudTrail buckets use SSE-S3 (AES256), not a KMS CMK — acceptable for
+# logs. The buckets holding actual data (docs) DO use the KMS CMK.
+AVD-AWS-0132
+AVD-AWS-0015
+
+# App/DB security groups allow unrestricted EGRESS (0.0.0.0/0) — required: the app
+# reaches RDS, S3, Bedrock, SES, and third-party APIs (Stripe/QBO/OpenRouter) via
+# the NAT. Ingress is tightly restricted; egress-open is the intended posture.
+AVD-AWS-0104

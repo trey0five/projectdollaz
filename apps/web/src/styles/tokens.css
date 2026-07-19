@@ -23,6 +23,9 @@
 
 :root,
 .ui-v1 {
+  /* Shared page-shell width — the ONE place to change how wide every main
+     content page runs. Applied via the `.max-w-page` utility (see index.css). */
+  --page-width: 1536px;
   /* Core palette (v1 = current production values) */
   --c-navy: 31 61 114; /* #1f3d72 */
   --c-navy-deep: 22 40 79; /* #16284f */

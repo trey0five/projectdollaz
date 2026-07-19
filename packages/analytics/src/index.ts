@@ -156,5 +156,80 @@ export type {
   CashRunwayResult,
 } from './cashRunway.js'
 
+// School Comparison — peer-benchmarking vocabulary + pure group/stats math. The
+// ONE canonical home for size bands, school types, grade ordinals, the relaxation
+// ladder, and direction-aware distribution stats. Consumed by the API (forms the
+// group) AND the web (renders the dim controls) so the two never fork.
+export {
+  SIZE_BANDS,
+  SCHOOL_TYPES,
+  PEER_DIMS,
+  DEFAULT_PEER_DIMS,
+  sizeBandOf,
+  sizeBandLabel,
+  gradeOrdinal,
+  gradeRangeOverlap,
+  ordinal,
+  dimMatches,
+  resolvePeerGroup,
+  sampleTierOf,
+  computePeerStats,
+  computeShareStats,
+} from './peers.js'
+export type {
+  SizeBandKey,
+  SchoolType,
+  PeerDim,
+  PeerProfile,
+  MatchTier,
+  PeerGroupResult,
+  SampleTier,
+  PeerStats,
+} from './peers.js'
+
+// School NAME matcher (diocesan enrollment routing) — PURE name-match vocab +
+// scoring. The API routes each diocesan file row to a school with it; the web
+// previews the same tiers. Never inlined in a component (moat rule).
+export {
+  GENERIC_TOKENS,
+  DISTINCTIVE_TOKENS,
+  MATCH,
+  normalizeSchoolName,
+  scoreNameMatch,
+  matchSchoolName,
+} from './school-match.js'
+export type {
+  MatchTier as NameMatchTier,
+  MatchSignals,
+  NameScore,
+  MatchCandidate,
+  RankedCandidate,
+  NameMatchResult,
+} from './school-match.js'
+
+// Demographic vocab + share/diversity math (granular enrollment) — canonical keys,
+// verbose→key labels, share + Blau/Simpson diversity. Consumed by the diocesan
+// parser, the snapshot persist, peer comparison, and the web mix cards.
+export {
+  GENDER_KEYS,
+  ETHNICITY_KEYS,
+  RACE_KEYS,
+  GENDER_LABELS,
+  ETHNICITY_LABELS,
+  RACE_LABELS,
+  demographicKeyFromLabel,
+  toShares,
+  diversityIndex,
+  gradeMixShares,
+} from './demographics.js'
+export type {
+  GenderKey,
+  EthnicityKey,
+  RaceKey,
+  DemographicDimension,
+  DemographicBreakdown,
+  DemographicHit,
+} from './demographics.js'
+
 // Version
 export { ANALYTICS_VERSION } from './version.js'

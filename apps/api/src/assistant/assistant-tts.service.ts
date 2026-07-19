@@ -10,6 +10,12 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
+import {
+  PollyClient,
+  SynthesizeSpeechCommand,
+  type Engine,
+  type VoiceId,
+} from '@aws-sdk/client-polly'
 
 const TIMEOUT_MS = 30000
 const ELEVENLABS_BASE = 'https://api.elevenlabs.io/v1/text-to-speech'
@@ -17,16 +23,59 @@ const ELEVENLABS_BASE = 'https://api.elevenlabs.io/v1/text-to-speech'
 @Injectable()
 export class AssistantTtsService {
   private readonly logger = new Logger(AssistantTtsService.name)
+  private pollyClient: PollyClient | null = null
 
   constructor(private readonly config: ConfigService) {}
 
-  /** True only when an ElevenLabs key is configured; otherwise the proxy 503s. */
+  /** In-account Polly is used when the assistant provider is Bedrock. */
+  private get usePolly(): boolean {
+    return (this.config.get<string>('assistant.provider') ?? 'openrouter') === 'bedrock'
+  }
+
+  /** Configured when Polly is active (task-role creds) or an ElevenLabs key is set. */
   isConfigured(): boolean {
+    if (this.usePolly) return true
     return (this.config.get<string>('elevenlabs.apiKey') ?? '').length > 0
+  }
+
+  private getPolly(): PollyClient {
+    if (!this.pollyClient) {
+      this.pollyClient = new PollyClient({
+        region: this.config.get<string>('polly.region') ?? 'us-east-1',
+      })
+    }
+    return this.pollyClient
+  }
+
+  /** Amazon Polly → MP3 bytes. Voice changes vs ElevenLabs (a Polly neural voice). */
+  private async pollySynthesize(text: string, voiceId?: string): Promise<Buffer> {
+    const voice =
+      (typeof voiceId === 'string' && voiceId.trim()) ||
+      this.config.get<string>('polly.voiceId') ||
+      'Joanna'
+    const engine = this.config.get<string>('polly.engine') || 'neural'
+    try {
+      const res = await this.getPolly().send(
+        new SynthesizeSpeechCommand({
+          Text: text,
+          OutputFormat: 'mp3',
+          VoiceId: voice as VoiceId,
+          Engine: engine as Engine,
+        }),
+      )
+      if (!res.AudioStream) throw new BadGatewayException('Voice service returned no audio.')
+      const bytes = await res.AudioStream.transformToByteArray()
+      return Buffer.from(bytes)
+    } catch (e) {
+      if (e instanceof ServiceUnavailableException || e instanceof BadGatewayException) throw e
+      this.logger.warn(`Polly TTS failed: ${e instanceof Error ? e.message : String(e)}`)
+      throw new ServiceUnavailableException('Voice service is unreachable — using the browser voice.')
+    }
   }
 
   /** Synthesize one text chunk to MP3 bytes. Callers must check isConfigured() first. */
   async synthesize(text: string, voiceId?: string): Promise<Buffer> {
+    if (this.usePolly) return this.pollySynthesize(text, voiceId)
     const apiKey = this.config.get<string>('elevenlabs.apiKey') ?? ''
     if (!apiKey) {
       // Should be guarded at the controller, but never call upstream without a key.

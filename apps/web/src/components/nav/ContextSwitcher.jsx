@@ -11,6 +11,7 @@
 // focus moves to the first menu item on open; reduced motion = fade-only.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { ChevronDown, Check, Building2, Layers } from 'lucide-react'
 import { useSchools } from '../../context/SchoolContext.jsx'
@@ -19,6 +20,8 @@ import { useScope } from '../../context/ScopeContext.jsx'
 export default function ContextSwitcher() {
   const { schools, activeSchool, setActiveSchool } = useSchools()
   const { scope, setScope, isMultiSchool, orgName, orgSchoolCount } = useScope()
+  const navigate = useNavigate()
+  const location = useLocation()
   const reduce = useReducedMotion()
   const [open, setOpen] = useState(false)
   const rootRef = useRef(null)
@@ -62,6 +65,11 @@ export default function ContextSwitcher() {
   const pickOrg = () => {
     setScope('org')
     setOpen(false)
+    // Analytics owns its OWN scope space (School · Compare · All schools) and
+    // ignores the global scope, so flipping to org here is otherwise inert there.
+    // Picking "Whole organization" from analytics means "take me to the org level"
+    // → land on the organization home (/app renders org mode under scope='org').
+    if (location.pathname.startsWith('/analytics')) navigate('/app')
   }
   const pickSchool = (id) => {
     setActiveSchool(id)

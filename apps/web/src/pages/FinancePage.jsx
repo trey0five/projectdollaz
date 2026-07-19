@@ -118,7 +118,7 @@ function SectionCard(props) {
 // Cash & Collections, Budget). Pure navigation — reuses SectionCard, no new API. ──
 function FinanceRecords() {
   return (
-    <div className="mx-auto max-w-[1100px] px-4 py-6 sm:px-10 sm:py-8">
+    <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         <SectionCard to="/statements" Icon={FileStack} title="Statements" viewLabel="Open statements">
           <p className="text-[14.5px] text-muted">
@@ -142,7 +142,7 @@ function FinanceRecords() {
 // documents. Finance is the only module with real report surfaces (locked D2). ──
 function FinanceReports({ periodId }) {
   return (
-    <div className="mx-auto max-w-[1100px] space-y-4 px-4 py-6 sm:px-10 sm:py-8">
+    <div className="mx-auto max-w-page space-y-4 px-4 py-6 sm:px-10 sm:py-8">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <SectionCard to="/reports" Icon={FileBarChart2} title="Reports workspace" viewLabel="Open Reports">
           <p className="mb-3 text-[14.5px] text-muted">
@@ -328,7 +328,7 @@ export default function FinancePage() {
   if (!billingLoading && (!entitled || notEntitled)) {
     // ── Entitlement gate (mirror AnalyticsDashboard) — FIRST ─────────────────────
     overview = (
-      <div className="mx-auto max-w-[1100px] px-4 py-6 sm:px-10 sm:py-8">
+      <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
         <FinanceHeader />
         <EntitlementPausedPanel />
       </div>
@@ -336,7 +336,7 @@ export default function FinancePage() {
   } else if (initialLoading) {
     // ── Loading skeleton ─────────────────────────────────────────────────────────
     overview = (
-      <div className="mx-auto max-w-[1100px] space-y-5 px-4 py-6 sm:space-y-8 sm:px-10 sm:py-8">
+      <div className="mx-auto max-w-page space-y-5 px-4 py-6 sm:space-y-8 sm:px-10 sm:py-8">
         <HeadlineSkeleton />
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -348,7 +348,7 @@ export default function FinancePage() {
   } else if (savedPeriods.length === 0) {
     // ── Empty / onboarding (never blank/500) ─────────────────────────────────────
     overview = (
-      <div className="mx-auto max-w-[1100px] px-4 py-6 sm:px-10 sm:py-8">
+      <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
         <FinanceHeader />
         <motion.div
           initial={reduce ? { opacity: 0 } : { opacity: 0, y: 16 }}
@@ -375,7 +375,7 @@ export default function FinancePage() {
     )
   } else {
     overview = (
-    <div className="mx-auto max-w-[1100px] space-y-5 px-4 py-6 sm:space-y-8 sm:px-10 sm:py-8">
+    <div className="mx-auto max-w-page space-y-5 px-4 py-6 sm:space-y-8 sm:px-10 sm:py-8">
       <FinanceHeader />
 
       <HomeHero

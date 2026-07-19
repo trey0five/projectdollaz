@@ -101,7 +101,7 @@ export default function ReportsPage() {
   return (
     <div className="min-h-screen bg-section">
       <BillingBanner />
-      <main className="mx-auto max-w-[1100px] px-4 py-8 sm:px-8">
+      <main className="mx-auto max-w-page px-4 py-8 sm:px-8">
         {openReport === 'board' ? (
           <>
             <button

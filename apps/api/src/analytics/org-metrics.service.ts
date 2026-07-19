@@ -4,15 +4,33 @@ import type { ReportBundle } from '@finrep/engine'
 import {
   computeMetricsForPeriod,
   computeOrgMetrics,
+  computePeerStats,
+  computeShareStats,
+  diversityIndex,
+  gradeMixShares,
+  toShares,
+  dimMatches,
   formatMetricDelta,
   formatMetricValue,
   fromBundle,
+  ordinal,
   resolveDisplayUnit,
+  resolvePeerGroup,
+  sampleTierOf,
+  sizeBandLabel,
+  sizeBandOf,
+  DEFAULT_PEER_DIMS,
   METRIC_KEYS,
+  PEER_DIMS,
+  type MatchTier,
   type MetricKey,
   type MetricResult,
   type OrgMetricResult,
+  type PeerDim,
+  type PeerProfile,
+  type SampleTier,
   type SchoolPeriodInputs,
+  type SizeBandKey,
 } from '@finrep/analytics'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { BillingService } from '../billing/billing.service.js'
@@ -98,6 +116,43 @@ export interface CompareSchoolMetric {
   goodDirection: MetricResult['goodDirection']
 }
 
+/**
+ * School Comparison — the peer-benchmarking profile block on a CompareSchool.
+ * The demographic + size dimensions the peer group is formed on. schoolType /
+ * county / district / gradeLow / gradeHigh come from the School record; enrollment
+ * comes from the FY's loaded operational row; sizeBand is DERIVED (never stored).
+ */
+export interface CompareSchoolProfile {
+  county: string | null
+  district: string | null
+  schoolType: string | null
+  gradeLow: string | null
+  gradeHigh: string | null
+  /** Headcount from the loaded operational row for the FY, or null. */
+  enrollment: number | null
+  /** sizeBandOf(enrollment); null when enrollment is null. */
+  sizeBand: SizeBandKey | null
+  /** Human label for the size band; null when sizeBand is null. */
+  sizeBandLabel: string | null
+  // Granular enrollment MIX (distribution stats only — NEVER a peer-forming dim).
+  // Sourced from the FY's latest EnrollmentSnapshot; null/{} when none.
+  /** Grade-mix shares (0..1) keyed by GradeKey. */
+  gradeMix: Record<string, number>
+  /** Demographic shares (0..1) per dimension: gender / ethnicity / race. */
+  demographicMix: { gender: Record<string, number>; ethnicity: Record<string, number>; race: Record<string, number> }
+  /** Blau/Simpson race diversity index (0..1); null when no race data. */
+  diversityIndex: number | null
+}
+
+/** The raw (non-derived) profile fields as stored on the School record. */
+interface SchoolProfileRaw {
+  county: string | null
+  district: string | null
+  schoolType: string | null
+  gradeLow: string | null
+  gradeHigh: string | null
+}
+
 /** A reporting school + its keyed registry metrics for the FY. */
 export interface CompareSchool {
   schoolId: string
@@ -108,9 +163,206 @@ export interface CompareSchool {
   hasSFP: boolean
   /** Whether the school had an operational row (Tier-2 coverage). */
   hasOperational: boolean
+  /** True when all 5 stored profile fields are non-null. */
+  profileComplete: boolean
+  /** Peer-benchmarking profile (demographics + derived size band). */
+  profile: CompareSchoolProfile
   /** Registry metrics keyed by MetricKey (already school-scoped entitlement-gated). */
   metrics: Record<string, CompareSchoolMetric>
 }
+
+// ── School Comparison — peer-benchmark response shapes ────────────────────────
+
+/** One metric's peer distribution + the focus school's standing within it. */
+export interface PeerStatEntry {
+  count: number
+  median: number
+  mean: number
+  p25: number
+  p75: number
+  min: number
+  max: number
+  focusValue: number | null
+  rank: number
+  percentile: number
+  sample: SampleTier
+  goodDirection: 'higher' | 'lower'
+  focusFormatted: string
+  medianFormatted: string
+}
+
+/** A peer school (a CompareSchool) + which dims it shares with the focus. */
+export interface PeerBenchmarkPeer extends CompareSchool {
+  matchReasons: string[]
+}
+
+export interface PeerGroupBlock {
+  matchTier: MatchTier
+  activeDims: PeerDim[]
+  relaxedDims: PeerDim[]
+  groupDescription: string
+  peerCount: number
+  peerIds: string[]
+  sample: SampleTier
+}
+
+export interface PeerBenchmarkResponse {
+  orgId: string
+  fiscalYearStart: string | null
+  generatedAt: string
+  requestedDims: PeerDim[]
+  focus: CompareSchool
+  group: PeerGroupBlock
+  peers: PeerBenchmarkPeer[]
+  stats: Record<string, PeerStatEntry>
+  insights: string[]
+  emptyState: { reason: 'single_school' | 'no_peers'; message: string } | null
+}
+
+/** Options for getPeerBenchmark (dims may arrive as CSV or an array). */
+export interface PeerBenchmarkOptions {
+  fiscalYearStart?: string | null
+  dims?: string | string[] | null
+  minPeers?: number
+}
+
+// ── Pure profile helpers (module-level; no I/O) ──────────────────────────────
+
+/** Read the 5 stored profile fields off a School record, defensively (empty → null). */
+function readProfileFields(school: unknown): SchoolProfileRaw {
+  const s = (school ?? {}) as Record<string, unknown>
+  const str = (v: unknown): string | null =>
+    typeof v === 'string' && v.trim().length ? v : null
+  return {
+    county: str(s.county),
+    district: str(s.district),
+    schoolType: str(s.schoolType),
+    gradeLow: str(s.gradeLow),
+    gradeHigh: str(s.gradeHigh),
+  }
+}
+
+function isProfileComplete(raw: SchoolProfileRaw): boolean {
+  return (
+    raw.county != null &&
+    raw.district != null &&
+    raw.schoolType != null &&
+    raw.gradeLow != null &&
+    raw.gradeHigh != null
+  )
+}
+
+/** Snapshot-derived granular mix (grade + demographics) for the compare profile. */
+interface EnrollmentMixRaw {
+  byGrade?: Record<string, number> | null
+  byDemographics?: {
+    gender?: Record<string, number>
+    ethnicity?: Record<string, number>
+    race?: Record<string, number>
+  } | null
+}
+
+function buildCompareProfile(
+  raw: SchoolProfileRaw,
+  enrollment: number | null,
+  mix?: EnrollmentMixRaw | null,
+): CompareSchoolProfile {
+  const band = sizeBandOf(enrollment)
+  const demo = mix?.byDemographics ?? null
+  const race = demo?.race ?? {}
+  return {
+    county: raw.county,
+    district: raw.district,
+    schoolType: raw.schoolType,
+    gradeLow: raw.gradeLow,
+    gradeHigh: raw.gradeHigh,
+    enrollment,
+    sizeBand: band,
+    sizeBandLabel: sizeBandLabel(band),
+    // Distribution mix (never a peer-forming dim). All shares via canonical analytics.
+    gradeMix: gradeMixShares((mix?.byGrade ?? {}) as Record<string, number>) as Record<string, number>,
+    demographicMix: {
+      gender: toShares(demo?.gender ?? {}),
+      ethnicity: toShares(demo?.ethnicity ?? {}),
+      race: toShares(race),
+    },
+    diversityIndex: demo?.race && Object.keys(demo.race).length ? diversityIndex(demo.race) : null,
+  }
+}
+
+function toPeerProfile(schoolId: string, p: CompareSchoolProfile): PeerProfile {
+  return {
+    schoolId,
+    enrollment: p.enrollment,
+    county: p.county,
+    district: p.district,
+    schoolType: p.schoolType,
+    gradeLow: p.gradeLow,
+    gradeHigh: p.gradeHigh,
+  }
+}
+
+/** Parse the dims input (CSV or array) into a de-duped valid PeerDim[] (default when empty). */
+function parseDims(dims: string | string[] | null | undefined): PeerDim[] {
+  const arr = Array.isArray(dims)
+    ? dims
+    : typeof dims === 'string' && dims.length
+      ? dims.split(',')
+      : []
+  const out: PeerDim[] = []
+  for (const raw of arr) {
+    const d = String(raw).trim()
+    if ((PEER_DIMS as readonly string[]).includes(d) && !out.includes(d as PeerDim)) {
+      out.push(d as PeerDim)
+    }
+  }
+  return out.length ? out : [...DEFAULT_PEER_DIMS]
+}
+
+/** Integer count formatting for the synthetic enrollment stat. */
+function formatCount(n: number | null): string {
+  if (n == null || !Number.isFinite(n)) return '—'
+  return Math.round(n).toLocaleString('en-US')
+}
+
+const DIM_REASON_LABEL: Record<PeerDim, string> = {
+  size: 'same size band',
+  county: 'same county',
+  district: 'same district',
+  type: 'same type',
+  grade: 'overlapping grades',
+}
+
+/** Which of the requested dims a peer actually shares with the focus. */
+function matchReasonsFor(
+  focus: PeerProfile,
+  cand: PeerProfile,
+  requestedDims: PeerDim[],
+): string[] {
+  return requestedDims.filter((d) => dimMatches(focus, cand, d)).map((d) => DIM_REASON_LABEL[d])
+}
+
+/** Plain-English description of the resolved peer group. */
+function describeGroup(profile: CompareSchoolProfile, activeDims: PeerDim[]): string {
+  if (activeDims.length === 0) return 'all your schools'
+  const typeActive = activeDims.includes('type') && profile.schoolType
+  const base = typeActive ? `${profile.schoolType} schools` : 'schools'
+  const quals: string[] = []
+  if (activeDims.includes('size')) quals.push('of similar size')
+  if (activeDims.includes('county') && profile.county) quals.push(`in ${profile.county} County`)
+  if (activeDims.includes('district') && profile.district) quals.push(`in ${profile.district}`)
+  if (activeDims.includes('grade')) quals.push('with a similar grade range')
+  return quals.length ? `${base} ${quals.join(', ')}` : base
+}
+
+/** Headline metrics the peer insights + KPI tiles focus on. */
+const HEADLINE_METRICS = [
+  'days_cash_on_hand',
+  'operating_margin',
+  'months_operating_reserve',
+  'tuition_dependency',
+  'cost_per_pupil',
+]
 
 export interface CompareMetricsResponse {
   orgId: string
@@ -337,8 +589,16 @@ export class OrgMetricsService {
     const org = await this.prisma.organization.findUnique({ where: { id: orgId } })
     if (!org) throw new NotFoundException('Organization not found.')
 
-    const schoolMap = new Map<string, { id: string; name: string }>()
-    for (const m of inOrg) schoolMap.set(m.school.id, { id: m.school.id, name: m.school.name })
+    // Carry the School's peer-benchmarking profile fields alongside id/name so the
+    // enriched CompareSchool.profile can be assembled without a second query.
+    const schoolMap = new Map<string, { id: string; name: string; profile: SchoolProfileRaw }>()
+    for (const m of inOrg) {
+      schoolMap.set(m.school.id, {
+        id: m.school.id,
+        name: m.school.name,
+        profile: readProfileFields(m.school),
+      })
+    }
     const schools = [...schoolMap.values()]
 
     const snapshots = await this.prisma.statementSnapshot.findMany({
@@ -361,6 +621,7 @@ export class OrgMetricsService {
     const reported: {
       schoolId: string
       name: string
+      profileRaw: SchoolProfileRaw
       periodId: string
       periodEndDate: string | null
       periodEnd: Date | null
@@ -379,6 +640,7 @@ export class OrgMetricsService {
       reported.push({
         schoolId: s.id,
         name: s.name,
+        profileRaw: s.profile,
         periodId: chosen.fiscalPeriodId,
         periodEndDate: chosen.fiscalPeriod?.periodEndDate?.toISOString().slice(0, 10) ?? null,
         periodEnd: chosen.fiscalPeriod?.periodEndDate ?? null,
@@ -398,6 +660,13 @@ export class OrgMetricsService {
         const priorOperational = prior
           ? await this.operational.operationalFor(r.schoolId, prior.periodId)
           : null
+        // Latest granular enrollment snapshot for THIS FY period (grade + demographic
+        // mix). Distribution stats only — never forms the peer group.
+        const enrollmentSnap = await this.prisma.enrollmentSnapshot.findFirst({
+          where: { schoolId: r.schoolId, fiscalPeriodId: r.periodId },
+          orderBy: { observedOn: 'desc' },
+          select: { byGrade: true, byDemographics: true },
+        })
 
         // The per-school engine — same one the single-school dashboard renders.
         const allMetrics = computeMetricsForPeriod({
@@ -434,12 +703,21 @@ export class OrgMetricsService {
           }
         }
 
+        // Enrich with the peer-benchmarking profile: stored demographics + the
+        // FY's enrollment (from the loaded operational row) → derived size band.
+        const profile = buildCompareProfile(r.profileRaw, operational?.enrollment ?? null, {
+          byGrade: enrollmentSnap?.byGrade as Record<string, number> | null,
+          byDemographics: enrollmentSnap?.byDemographics as EnrollmentMixRaw['byDemographics'],
+        })
+
         return {
           schoolId: r.schoolId,
           schoolName: r.name,
           periodEndDate: r.periodEndDate,
           hasSFP: fromBundle(r.bundle).hasSFP,
           hasOperational: operational != null,
+          profileComplete: isProfileComplete(r.profileRaw),
+          profile,
           metrics,
         }
       }),
@@ -453,6 +731,199 @@ export class OrgMetricsService {
       notReported,
       // Canonical registry order — ALL_METRICS order (METRIC_KEYS is its key list).
       metricOrder: [...METRIC_KEYS],
+    }
+  }
+
+  /**
+   * School Comparison — GET /organizations/:orgId/metrics/peers/:schoolId.
+   *
+   * Benchmarks ONE owned school against its comparable peers in the same org.
+   * REUSES getMetricsBySchool internally (same org resolution, isolation, per-school
+   * metrics + the enriched profile) — no risky extraction, both endpoints benefit.
+   * Forms the peer group with the PURE relaxation ladder (@finrep/analytics
+   * resolvePeerGroup), computes direction-aware distribution stats
+   * (computePeerStats), and adds plain-English insights. Degrades gracefully:
+   * single-school org / no reporters this FY → an emptyState, never a crash.
+   */
+  async getPeerBenchmark(
+    user: User,
+    orgId: string,
+    schoolId: string,
+    opts: PeerBenchmarkOptions = {},
+  ): Promise<PeerBenchmarkResponse> {
+    const generatedAt = new Date().toISOString()
+    const fiscalYearStart = opts.fiscalYearStart ?? null
+    const requestedDims = parseDims(opts.dims)
+    const minPeers = Math.min(50, Math.max(1, Math.trunc(opts.minPeers ?? 3)))
+
+    // Reuse the compare surface (org resolution + isolation + per-school metrics +
+    // profile). Throws NotFound/Forbidden exactly like the sibling metrics routes.
+    const compare = await this.getMetricsBySchool(user, orgId, fiscalYearStart)
+
+    const reportedById = new Map(compare.schools.map((s) => [s.schoolId, s]))
+    const notReportedIds = new Set(compare.notReported.map((n) => n.schoolId))
+    const totalInOrg = compare.schools.length + compare.notReported.length
+
+    // Cross-tenant guard: the focus must be an in-org school the caller can see.
+    if (!reportedById.has(schoolId) && !notReportedIds.has(schoolId)) {
+      throw new ForbiddenException('That school is not in your organization.')
+    }
+
+    // Focus block — the reported CompareSchool if it reported this FY, else a
+    // metrics-less shell carrying just its stored profile.
+    let focus: CompareSchool
+    const focusReported = reportedById.get(schoolId)
+    if (focusReported) {
+      focus = focusReported
+    } else {
+      const rec = await this.prisma.school.findUnique({ where: { id: schoolId } })
+      const raw = readProfileFields(rec)
+      focus = {
+        schoolId,
+        schoolName:
+          rec?.name ??
+          compare.notReported.find((n) => n.schoolId === schoolId)?.name ??
+          'This school',
+        periodEndDate: null,
+        hasSFP: false,
+        hasOperational: false,
+        profileComplete: isProfileComplete(raw),
+        profile: buildCompareProfile(raw, null),
+        metrics: {},
+      }
+    }
+
+    // Candidate pool = reported schools other than the focus (peers need metrics).
+    const candidates = compare.schools.filter((s) => s.schoolId !== schoolId)
+
+    const focusPeerProfile = toPeerProfile(schoolId, focus.profile)
+    const candProfiles = candidates.map((c) => toPeerProfile(c.schoolId, c.profile))
+    const grp = resolvePeerGroup(focusPeerProfile, candProfiles, requestedDims, { minPeers })
+
+    // No peers → friendly empty state (single-school org vs. no reporters this FY).
+    if (grp.matchTier === 'none' || grp.peerIds.length === 0) {
+      const reason: 'single_school' | 'no_peers' = totalInOrg <= 1 ? 'single_school' : 'no_peers'
+      const message =
+        reason === 'single_school'
+          ? 'Add another school to unlock peer benchmarking.'
+          : "Your other schools haven't reported this year yet."
+      return {
+        orgId,
+        fiscalYearStart,
+        generatedAt,
+        requestedDims,
+        focus,
+        group: {
+          matchTier: 'none',
+          activeDims: [],
+          relaxedDims: grp.relaxedDims,
+          groupDescription: describeGroup(focus.profile, []),
+          peerCount: 0,
+          peerIds: [],
+          sample: 'none',
+        },
+        peers: [],
+        stats: {},
+        insights: [],
+        emptyState: { reason, message },
+      }
+    }
+
+    // Materialize peers (preserve resolvePeerGroup order) + their match reasons.
+    const peers: PeerBenchmarkPeer[] = grp.peerIds
+      .map((id) => candidates.find((c) => c.schoolId === id))
+      .filter((c): c is CompareSchool => c != null)
+      .map((c) => ({
+        ...c,
+        matchReasons: matchReasonsFor(
+          focusPeerProfile,
+          toPeerProfile(c.schoolId, c.profile),
+          requestedDims,
+        ),
+      }))
+
+    // Distribution stats: one per metric present on the focus + synthetic enrollment.
+    const stats: Record<string, PeerStatEntry> = {}
+    for (const key of Object.keys(focus.metrics)) {
+      const fm = focus.metrics[key]
+      const peerValues = peers
+        .map((p) => p.metrics[key]?.value)
+        .filter((v): v is number => v != null)
+      // GoodDirection can be 'neutral' in the type; the peer stats are strictly
+      // direction-aware, so a neutral metric is treated as 'higher-is-better'.
+      const dir: 'higher' | 'lower' = fm.goodDirection === 'lower' ? 'lower' : 'higher'
+      const st = computePeerStats(fm.value, peerValues, dir)
+      const displayUnit = resolveDisplayUnit(key as MetricKey, fm.unit)
+      stats[key] = {
+        ...st,
+        focusValue: fm.value,
+        goodDirection: dir,
+        focusFormatted: fm.formatted,
+        medianFormatted: formatMetricValue(st.median, displayUnit),
+      }
+    }
+    // Synthetic enrollment stat (goodDirection 'higher', integer-count formatting).
+    const focusEnroll = focus.profile.enrollment
+    const peerEnroll = peers
+      .map((p) => p.profile.enrollment)
+      .filter((v): v is number => v != null)
+    const enrollStats = computePeerStats(focusEnroll, peerEnroll, 'higher')
+    stats.enrollment = {
+      ...enrollStats,
+      focusValue: focusEnroll,
+      goodDirection: 'higher',
+      focusFormatted: formatCount(focusEnroll),
+      medianFormatted: formatCount(enrollStats.median),
+    }
+
+    // Granular DIVERSITY distribution stat (Blau/Simpson index; 0..1, higher = more
+    // diverse). Distribution ONLY — demographics never form the peer group.
+    const focusDiv = focus.profile.diversityIndex
+    const peerDiv = peers
+      .map((p) => p.profile.diversityIndex)
+      .filter((v): v is number => v != null)
+    const divStats = computeShareStats(focusDiv, peerDiv)
+    stats.diversity_index = {
+      ...divStats,
+      focusValue: focusDiv,
+      goodDirection: 'higher',
+      focusFormatted: focusDiv == null ? '—' : focusDiv.toFixed(2),
+      medianFormatted: divStats.median.toFixed(2),
+    }
+
+    // Insights (built here — they need labels). Enrollment standing + quartiles.
+    const insights: string[] = []
+    if (focusEnroll != null && enrollStats.count >= 2) {
+      const typeLabel = focus.profile.schoolType ?? 'school'
+      insights.push(`${ordinal(enrollStats.rank)}-largest ${typeLabel} in your organization`)
+    }
+    for (const key of HEADLINE_METRICS) {
+      const st = stats[key]
+      if (!st || st.focusValue == null || st.count < 2 || st.sample === 'none') continue
+      const label = (focus.metrics[key]?.label ?? key).toLowerCase()
+      if (st.percentile >= 0.75) insights.push(`Top quartile on ${label}`)
+      else if (st.percentile <= 0.25) insights.push(`Bottom quartile on ${label}`)
+    }
+
+    return {
+      orgId,
+      fiscalYearStart,
+      generatedAt,
+      requestedDims,
+      focus,
+      group: {
+        matchTier: grp.matchTier,
+        activeDims: grp.activeDims,
+        relaxedDims: grp.relaxedDims,
+        groupDescription: describeGroup(focus.profile, grp.activeDims),
+        peerCount: peers.length,
+        peerIds: peers.map((p) => p.schoolId),
+        sample: sampleTierOf(peers.length),
+      },
+      peers,
+      stats,
+      insights,
+      emptyState: null,
     }
   }
 }

@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config'
 import { generateInsight, type MetricResult } from '@finrep/analytics'
 import { AnalyticsService } from './analytics.service.js'
 import { PrismaService } from '../prisma/prisma.service.js'
+import { BedrockClient } from '../assistant/bedrock.client.js'
 
 /** The insight endpoint response: the summary text + which path produced it. */
 export interface InsightResponse {
@@ -32,10 +33,16 @@ export class InsightService {
     private readonly analytics: AnalyticsService,
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
+    private readonly bedrock: BedrockClient,
   ) {}
 
-  /** True when any LLM provider key is configured (OpenRouter or Anthropic). */
+  private llmProvider(): string {
+    return this.config.get<string>('assistant.provider') ?? 'openrouter'
+  }
+
+  /** True when Bedrock is selected (task-role creds) or an LLM key is configured. */
   isConfigured(): boolean {
+    if (this.llmProvider() === 'bedrock') return true
     return this.openrouterKey().length > 0 || this.anthropicKey().length > 0
   }
 
@@ -91,7 +98,14 @@ export class InsightService {
           `${m.key}:${m.available ? m.value : 'x'}:${m.status}:${m.periodOverPeriodDelta ?? 'x'}`,
       )
       .join('|')
-    const provider = this.isConfigured() ? (this.openrouterKey() ? 'or' : 'an') : 'rule'
+    const provider =
+      this.llmProvider() === 'bedrock'
+        ? 'br'
+        : this.isConfigured()
+          ? this.openrouterKey()
+            ? 'or'
+            : 'an'
+          : 'rule'
     return createHash('sha256').update(`${provider}::${compact}`).digest('hex')
   }
 
@@ -150,6 +164,10 @@ export class InsightService {
    */
   private async callLlm(metrics: MetricResult[]): Promise<string | null> {
     const prompt = this.buildPrompt(metrics)
+    // Bedrock (in-account) is the compliant path; aggregate KPIs only, no PII.
+    if (this.llmProvider() === 'bedrock') {
+      return this.withTimeout(this.bedrock.invokeText(null, prompt, 200))
+    }
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), InsightService.TIMEOUT_MS)
     try {
@@ -159,6 +177,16 @@ export class InsightService {
     } finally {
       clearTimeout(timer)
     }
+  }
+
+  /** Bound a promise by the insight timeout; a timeout rejects → rule fallback. */
+  private withTimeout<T>(p: Promise<T>): Promise<T> {
+    return Promise.race([
+      p,
+      new Promise<T>((_, reject) =>
+        setTimeout(() => reject(new Error('LLM timeout')), InsightService.TIMEOUT_MS),
+      ),
+    ])
   }
 
   /** OpenRouter (OpenAI-compatible chat completions) → Claude. */

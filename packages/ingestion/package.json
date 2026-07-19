@@ -16,6 +16,11 @@
       "types": "./dist/oneroster/index.d.ts",
       "import": "./dist/oneroster/index.js",
       "default": "./dist/oneroster/index.js"
+    },
+    "./diocesan": {
+      "types": "./dist/diocesan/index.d.ts",
+      "import": "./dist/diocesan/index.js",
+      "default": "./dist/diocesan/index.js"
     }
   },
   "files": [

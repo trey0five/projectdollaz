@@ -64,7 +64,7 @@ export default function ReportTabs({ bundle, school, periodId = null, dateLabel 
     <ReportViewProvider bundle={bundle} school={school} dateLabel={dateLabel} periodLabel={periodLabel}>
       <LineageHost bundle={bundle} imports={imports} schoolId={schoolId} periodId={periodId}>
       <div className="no-print border-b border-rule/60 bg-white">
-        <nav className="scrollbar-none mx-auto flex w-full max-w-[1120px] items-center justify-center gap-1.5 overflow-x-auto px-3 py-2.5 sm:px-10">
+        <nav className="scrollbar-none mx-auto flex w-full max-w-page items-center justify-center gap-1.5 overflow-x-auto px-3 py-2.5 sm:px-10">
           {TABS.map((t) => (
             <button
               key={t.key}
@@ -89,7 +89,7 @@ export default function ReportTabs({ bundle, school, periodId = null, dateLabel 
         </nav>
       </div>
 
-      <main className="mx-auto max-w-[1120px] px-4 pb-20 pt-8 sm:px-10 sm:pb-24 sm:pt-10">
+      <main className="mx-auto max-w-page px-4 pb-20 pt-8 sm:px-10 sm:pb-24 sm:pt-10">
         <AnimatePresence mode="wait">
           <motion.div
             key={tab}

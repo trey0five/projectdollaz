@@ -55,7 +55,7 @@ export default function OrgHome({
   const fy = fyLabel(fiscalYearStart)
 
   return (
-    <div className="mx-auto max-w-[1100px] space-y-5 px-4 py-6 sm:space-y-8 sm:px-10 sm:py-8">
+    <div className="mx-auto max-w-page space-y-5 px-4 py-6 sm:space-y-8 sm:px-10 sm:py-8">
       {/* Org hero band */}
       <motion.div
         initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12 }}

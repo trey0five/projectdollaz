@@ -25,6 +25,7 @@ import {
   EnrollmentCallbackDto,
   EnrollmentConnectKeyDto,
   EnrollmentManualDto,
+  EnrollmentRevertManualDto,
   EnrollmentSyncDto,
   EnrollmentUploadDto,
 } from './dto/enrollment.dto.js'
@@ -134,6 +135,27 @@ export class EnrollmentController {
     @Query('periodId') periodId?: string,
   ) {
     return this.enrollment.summary(schoolId, periodId)
+  }
+
+  /** Latest-snapshot demographic + grade mix (shares + diversity). Read-open. */
+  @Get('demographics')
+  @Roles('owner', 'accountant', 'viewer')
+  demographics(
+    @Param('schoolId', ParseUUIDPipe) schoolId: string,
+    @Query('periodId') periodId?: string,
+  ) {
+    return this.enrollment.demographics(schoolId, periodId)
+  }
+
+  /** Revert a manual-supersede: restore the backed-up hand-entered enrollment. */
+  @Post('revert-manual')
+  @Roles('owner', 'accountant')
+  revertManual(
+    @Param('schoolId', ParseUUIDPipe) schoolId: string,
+    @Body() dto: EnrollmentRevertManualDto,
+    @CurrentUser() user: User,
+  ) {
+    return this.enrollment.revertManual(user, schoolId, dto.periodId)
   }
 
   /** Disconnect. `?removeData=true` purges snapshots + clears connector-stamped enrollment. */

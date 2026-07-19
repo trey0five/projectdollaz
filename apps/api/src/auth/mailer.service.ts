@@ -1,37 +1,45 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import nodemailer, { type Transporter } from 'nodemailer'
+import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2'
 
 /**
- * Pluggable mailer. When SMTP_HOST is configured, sends real email. Otherwise
- * (DEV) it logs the link/code to the console. Tokens are ALWAYS persisted in the
- * DB by the caller, so tests can retrieve them via psql even in dev. Tokens are
- * never returned in API responses.
+ * Pluggable mailer. Delivery path is chosen by `mail.provider`:
+ *   - 'ses'  → Amazon SES via the AWS SDK. On ECS the ECS task role supplies
+ *              credentials (no static SMTP secret); the From address uses the
+ *              verified `ourkyro.com` domain identity.
+ *   - 'smtp' → nodemailer over a configured SMTP host (SMTP_*).
+ *   - ''     → DEV: log the link/code to the console.
+ * Tokens are ALWAYS persisted in the DB by the caller, so tests can retrieve
+ * them via psql even in dev. Tokens are never returned in API responses.
  */
 @Injectable()
 export class MailerService {
   private readonly logger = new Logger(MailerService.name)
-  private readonly transporter: Transporter | null
+  private readonly provider: string
   private readonly from: string
   private readonly webOrigin: string
+  private readonly region: string
+  private smtpTransporter: Transporter | null = null
+  private sesClient: SESv2Client | null = null
 
   constructor(config: ConfigService) {
-    const host = config.get<string>('smtp.host')
-    this.from = config.get<string>('smtp.from') ?? 'finrep <no-reply@finrep.dev>'
+    this.provider = config.get<string>('mail.provider') ?? ''
+    this.from = config.get<string>('mail.from') ?? 'KYRO <noreply@ourkyro.com>'
+    this.region = config.get<string>('mail.region') ?? 'us-east-1'
     this.webOrigin = config.get<string>('webOrigin') ?? 'http://localhost:5173'
 
-    if (host) {
-      this.transporter = nodemailer.createTransport({
-        host,
-        port: config.get<number>('smtp.port') ?? 587,
-        secure: (config.get<number>('smtp.port') ?? 587) === 465,
+    if (this.provider === 'smtp') {
+      const port = config.get<number>('smtp.port') ?? 587
+      this.smtpTransporter = nodemailer.createTransport({
+        host: config.get<string>('smtp.host') ?? '',
+        port,
+        secure: port === 465,
         auth: {
           user: config.get<string>('smtp.user') ?? '',
           pass: config.get<string>('smtp.pass') ?? '',
         },
       })
-    } else {
-      this.transporter = null
     }
   }
 
@@ -39,8 +47,8 @@ export class MailerService {
     const link = `${this.webOrigin}/verify-email?token=${token}`
     await this.deliver(
       email,
-      'Verify your finrep email',
-      `Welcome to finrep! Verify your email:\n\n${link}\n`,
+      'Verify your KYRO email',
+      `Welcome to KYRO! Verify your email:\n\n${link}\n`,
       `Verification link for ${email}: ${link}`,
     )
   }
@@ -62,7 +70,7 @@ export class MailerService {
   /**
    * Phase 4E — proactive alerts / standing requests. A pre-composed subject+body
    * (scheduled digest OR edge-triggered threshold alert) from AlertService. Sends
-   * real SMTP when configured, else a [DEV MAIL] console stub — the alert is still
+   * real mail when configured, else a [DEV MAIL] console stub — the alert is still
    * recorded as sent by the caller (lastSentAt) regardless.
    */
   async sendAlert(email: string, subject: string, text: string): Promise<void> {
@@ -72,7 +80,7 @@ export class MailerService {
   async sendPasswordResetEmail(email: string, code: string): Promise<void> {
     await this.deliver(
       email,
-      'Your finrep password reset code',
+      'Your KYRO password reset code',
       `Your password reset code is: ${code}\n\nIt expires in 15 minutes.`,
       `Password reset code for ${email}: ${code}`,
     )
@@ -87,10 +95,15 @@ export class MailerService {
     const link = `${this.webOrigin}/login?invite=${token}`
     await this.deliver(
       email,
-      `You've been invited to ${schoolName} on finrep`,
+      `You've been invited to ${schoolName} on KYRO`,
       `You've been invited to join ${schoolName} as ${role}.\n\nSign in / create an account, then accept the invite:\n${link}\n\nInvitation token: ${token}`,
       `Invitation token for ${email} (school ${schoolName}, role ${role}): ${token}`,
     )
+  }
+
+  private getSes(): SESv2Client {
+    if (!this.sesClient) this.sesClient = new SESv2Client({ region: this.region })
+    return this.sesClient
   }
 
   private async deliver(
@@ -99,8 +112,23 @@ export class MailerService {
     text: string,
     devLog: string,
   ): Promise<void> {
-    if (this.transporter) {
-      await this.transporter.sendMail({ from: this.from, to, subject, text })
+    if (this.provider === 'ses') {
+      await this.getSes().send(
+        new SendEmailCommand({
+          FromEmailAddress: this.from,
+          Destination: { ToAddresses: [to] },
+          Content: {
+            Simple: {
+              Subject: { Data: subject },
+              Body: { Text: { Data: text } },
+            },
+          },
+        }),
+      )
+      return
+    }
+    if (this.smtpTransporter) {
+      await this.smtpTransporter.sendMail({ from: this.from, to, subject, text })
       return
     }
     // DEV mode — log to console; token also lives in the DB for test retrieval.

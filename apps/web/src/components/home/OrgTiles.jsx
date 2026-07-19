@@ -87,7 +87,7 @@ export default function OrgTiles({
   const fy = fyLabel(fiscalYearStart)
 
   return (
-    <div className="home-ground mx-auto max-w-[1240px] space-y-5 px-4 py-6 sm:space-y-7 sm:px-10 sm:py-8">
+    <div className="home-ground mx-auto max-w-page space-y-5 px-4 py-6 sm:space-y-7 sm:px-10 sm:py-8">
       {/* Org briefing band — the org twin of the school hero. "Across your N
           schools" reads through BriefingBand's schoolName slot. */}
       <BriefingBand

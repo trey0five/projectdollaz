@@ -214,6 +214,34 @@ export const TOOL_SCHEMAS = [
   {
     type: 'function',
     function: {
+      name: 'compare_school_peers',
+      description:
+        "Benchmark ONE of your schools against its comparable peer schools in the same organization (schools of similar size, type, county, district, or grade range). Returns the peer group, how it was formed, each peer's key financial + enrollment KPIs, and where this school ranks (rank, peer median, percentile) with a plain-English standing like '3rd-largest K-8 in your organization'. Use for 'how do we compare to similar schools', 'who are our peers', 'are we above or below average on days cash'.",
+      parameters: {
+        type: 'object',
+        properties: {
+          schoolName: {
+            type: 'string',
+            description: 'Which of your schools to benchmark. Defaults to the active school.',
+          },
+          dimensions: {
+            type: 'array',
+            items: { type: 'string', enum: ['size', 'county', 'district', 'type', 'grade'] },
+            description: 'How to pick peers. Default: size, type, and grade range.',
+          },
+          metricKey: {
+            type: 'string',
+            description:
+              'Optional single metric to focus the ranking on (e.g. days_cash_on_hand).',
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'apply_driver_budget',
       description:
         'APPLY a budget built from driver assumptions immediately, then tell the user what changed (reversible in the UI). Provide ONLY the levers the user mentioned; everything else keeps its current value. Enrollment drives tuition; staffing drives salaries; other lines grow from last year by inflationPct.',
@@ -548,6 +576,45 @@ export const TOOL_SCHEMAS = [
           },
         },
         required: ['attachmentId', 'title'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'import_diocesan_enrollment',
+      description:
+        'PROPOSE importing ONE diocesan enrollment file that covers MANY schools at once (an admissions dashboard of School/New/Returning/Total, or an enrollment-details grade+demographics matrix). Use ONLY when the user attached such a multi-school file and wants it imported across the organization. The server parses the file and name-matches each row to a school; on CONFIRM it applies ONLY the high-confidence auto-matched rows (ambiguous rows are left for the full review screen). Pass the attachmentId shown in the attachment digest — the server holds the file bytes, so NEVER retype them. observedOn (yyyy-mm-dd) is optional and overrides the file’s as-of date.',
+      parameters: {
+        type: 'object',
+        properties: {
+          attachmentId: {
+            type: 'string',
+            description: 'The attachmentId from the attachment digest for the diocesan file.',
+          },
+          observedOn: {
+            type: 'string',
+            description: 'Optional as-of date override, yyyy-mm-dd.',
+          },
+        },
+        required: ['attachmentId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_enrollment_demographics',
+      description:
+        'READ the current school’s latest enrollment demographic + grade mix (gender / ethnicity / race shares plus the Blau/Simpson diversity index, and grade-mix shares). Use when the user asks about the makeup / diversity / demographics of enrollment. Read-only.',
+      parameters: {
+        type: 'object',
+        properties: {
+          periodId: {
+            type: 'string',
+            description: 'Optional fiscal period id to scope to; defaults to the latest snapshot.',
+          },
+        },
       },
     },
   },
@@ -1181,6 +1248,7 @@ export const TOOL_LABELS: Record<string, string> = {
   get_budget: 'Reading the budget…',
   get_budget_rollup: 'Consolidating your organization budget…',
   list_schools_status: "Checking all schools' status…",
+  compare_school_peers: 'Benchmarking against peer schools…',
   get_corrective_action_plan: 'Reading the corrective action plan…',
   get_trend: 'Loading the trend…',
   set_budget: 'Setting the budget…',
@@ -1188,6 +1256,8 @@ export const TOOL_LABELS: Record<string, string> = {
   draft_cap_entry: 'Logging a corrective action…',
   create_task: 'Drafting a task…',
   file_document: 'Filing the document…',
+  import_diocesan_enrollment: 'Importing diocesan enrollment…',
+  get_enrollment_demographics: 'Reading enrollment demographics…',
   create_policy: 'Filing a policy…',
   create_committee: 'Setting up a committee…',
   create_meeting: 'Scheduling a meeting…',

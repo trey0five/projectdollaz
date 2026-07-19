@@ -6,6 +6,7 @@
 // re-decodes and re-checks every byte cap here — it NEVER trusts the client's
 // `size`. ingest() (xlsx/csv) is wrapped in try/catch with a time budget.
 import { Injectable, Logger } from '@nestjs/common'
+import { ConfigService } from '@nestjs/config'
 import {
   ingest,
   listTrialBalanceSheets,
@@ -13,6 +14,7 @@ import {
   type SheetCandidate,
   type SheetMetadata,
 } from '@finrep/ingestion'
+import { Redactor } from './redaction.js'
 
 const MAX_DECODED_BYTES = 8_000_000 // per file
 const MAX_TOTAL_DECODED_BYTES = 16_000_000 // across the turn
@@ -95,7 +97,25 @@ function randomId(): string {
 export class AssistantFilesService {
   private readonly logger = new Logger(AssistantFilesService.name)
 
-  async prepare(attachments: AttachmentInput[]): Promise<PreparedAttachments> {
+  constructor(private readonly config: ConfigService) {}
+
+  /**
+   * FERPA guardrail: when ON (default), whole PDFs/images are NEVER sent to the
+   * model — they may contain student records that can't be redacted. They are
+   * still stored/filed. Spreadsheets/CSV stay supported (only a small digest,
+   * separately redacted, ever reaches the model).
+   */
+  private get ferpaMode(): boolean {
+    return this.config.get<boolean>('assistant.ferpaMode') ?? true
+  }
+
+  async prepare(
+    attachments: AttachmentInput[],
+    redactor?: Redactor,
+  ): Promise<PreparedAttachments> {
+    // FERPA: the same request redactor so a NON-trial-balance spreadsheet's text
+    // column (which may hold family/student names) is tokenized in the digest.
+    const red = redactor ?? new Redactor(false)
     const llmContentBlocks: unknown[] = []
     const digests: string[] = []
     const parsed = new Map<string, ParsedFile>()
@@ -141,33 +161,43 @@ export class AssistantFilesService {
       })
 
       if (att.kind === 'image') {
-        const b64 = buf.toString('base64')
-        llmContentBlocks.push({
-          type: 'image_url',
-          image_url: { url: `data:${mime};base64,${b64}` },
-        })
+        // FERPA: do NOT send the image bytes to the model (may hold student
+        // records; images can't be redacted). Still stored/filable.
+        if (!this.ferpaMode) {
+          const b64 = buf.toString('base64')
+          llmContentBlocks.push({
+            type: 'image_url',
+            image_url: { url: `data:${mime};base64,${b64}` },
+          })
+        }
         digests.push(
           this.wrapDigest(
             att.name,
-            `kind: image\nattachmentId: ${attachmentId}\nThe image is attached above for you to view directly. To FILE it to Knowledge, call file_document with attachmentId "${attachmentId}".`,
+            this.ferpaMode
+              ? `kind: image\nattachmentId: ${attachmentId}\nAn image was uploaded and stored securely, but its CONTENTS are NOT shared with you (FERPA policy — images may contain student records). Tell the user you can't read image contents. You CAN file it to Knowledge via file_document with attachmentId "${attachmentId}", or ask them to share the underlying data as a spreadsheet/CSV.`
+              : `kind: image\nattachmentId: ${attachmentId}\nThe image is attached above for you to view directly. To FILE it to Knowledge, call file_document with attachmentId "${attachmentId}".`,
           ),
         )
         continue
       }
 
       if (att.kind === 'pdf') {
-        // Best-effort document block (OpenRouter/Claude file blocks). If the model
-        // can't use it, the labelled note still tells it a PDF was provided. No
-        // PDF parsing library is permitted, so we don't extract text server-side.
-        const b64 = buf.toString('base64')
-        llmContentBlocks.push({
-          type: 'file',
-          file: { filename: this.safeName(att.name), file_data: `data:application/pdf;base64,${b64}` },
-        })
+        // FERPA: do NOT inline the PDF bytes to the model (transcripts/discipline
+        // files can't be redacted). Still stored/filable. No server-side PDF
+        // text extraction (no parser permitted).
+        if (!this.ferpaMode) {
+          const b64 = buf.toString('base64')
+          llmContentBlocks.push({
+            type: 'file',
+            file: { filename: this.safeName(att.name), file_data: `data:application/pdf;base64,${b64}` },
+          })
+        }
         digests.push(
           this.wrapDigest(
             att.name,
-            `kind: pdf\nattachmentId: ${attachmentId}\nPDF received: ${this.safeName(att.name)} (${buf.length} bytes). Read it from the document attached to this turn if your tools support it; otherwise ask the user what they need from it. To FILE it to Knowledge, call file_document with attachmentId "${attachmentId}".`,
+            this.ferpaMode
+              ? `kind: pdf\nattachmentId: ${attachmentId}\nA PDF (${this.safeName(att.name)}) was uploaded and stored securely, but its CONTENTS are NOT shared with you (FERPA policy — PDFs may contain student records). Tell the user you can't read PDF contents. You CAN file it to Knowledge via file_document with attachmentId "${attachmentId}", or ask them to share the underlying data as a spreadsheet/CSV.`
+              : `kind: pdf\nattachmentId: ${attachmentId}\nPDF received: ${this.safeName(att.name)} (${buf.length} bytes). Read it from the document attached to this turn if your tools support it; otherwise ask the user what they need from it. To FILE it to Knowledge, call file_document with attachmentId "${attachmentId}".`,
           ),
         )
         continue
@@ -231,7 +261,7 @@ export class AssistantFilesService {
           ...(metadata?.sheet ? { sheet: metadata.sheet } : {}),
         })
       }
-      digests.push(this.buildSpreadsheetDigest(attachmentId, att.name, rows, metadata, candidate))
+      digests.push(this.buildSpreadsheetDigest(attachmentId, att.name, rows, metadata, candidate, red))
     }
 
     return { llmContentBlocks, digests, parsed, rawFiles, importCandidates }
@@ -349,12 +379,20 @@ export class AssistantFilesService {
     rows: NormalizedRow[],
     metadata: SheetMetadata | undefined,
     candidate: boolean,
+    redactor: Redactor,
   ): string {
     const top = [...rows]
       .filter((r) => r && Number.isFinite(r.total))
       .sort((a, b) => Math.abs(b.total) - Math.abs(a.total))
       .slice(0, MAX_DIGEST_ROWS)
-      .map((r) => `  ${r.acct}  ${this.clip(String(r.desc ?? ''), 48)}  ${r.total}`)
+      .map((r) => {
+        const descRaw = this.clip(String(r.desc ?? ''), 48)
+        // A confident trial balance's desc is a GL account name (safe, and the
+        // model needs it). Any OTHER spreadsheet's text column may be a person/
+        // family name → tokenize it (restored for the caller in the final answer).
+        const desc = candidate ? redactor.redactText(descRaw) : redactor.token(descRaw, 'PARTY')
+        return `  ${r.acct}  ${desc}  ${r.total}`
+      })
       .join('\n')
     const lines = [
       `kind: spreadsheet`,

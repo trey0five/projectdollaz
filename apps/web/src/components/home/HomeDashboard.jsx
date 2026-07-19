@@ -249,7 +249,7 @@ export default function HomeDashboard() {
   // ── Entitlement gate (mirror AnalyticsDashboard) ───────────────────────────
   if (!billingLoading && (!entitled || notEntitled)) {
     return (
-      <div className="mx-auto max-w-[1100px] px-4 py-6 sm:px-10 sm:py-8">
+      <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
         <HomeHero
           schoolName={activeSchool?.name}
           periods={[]}
@@ -267,7 +267,7 @@ export default function HomeDashboard() {
   // ── Loading skeleton ───────────────────────────────────────────────────────
   if (initialLoading) {
     return (
-      <div className="mx-auto max-w-[1100px] space-y-5 px-4 py-6 sm:space-y-8 sm:px-10 sm:py-8">
+      <div className="mx-auto max-w-page space-y-5 px-4 py-6 sm:space-y-8 sm:px-10 sm:py-8">
         <HeadlineSkeleton />
         <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -281,7 +281,7 @@ export default function HomeDashboard() {
   // ── Empty / onboarding ─────────────────────────────────────────────────────
   if (savedPeriods.length === 0) {
     return (
-      <div className="mx-auto max-w-[1100px] px-4 py-6 sm:px-10 sm:py-8">
+      <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
         <EmptyOnboarding schoolName={activeSchool?.name} billing={billing} isOwner={isOwner} />
         <div className="mt-8">
           <FeatureGateway
@@ -298,7 +298,7 @@ export default function HomeDashboard() {
   const vitalsLoading = metricsLoading && !data
 
   return (
-    <div className="mx-auto max-w-[1100px] space-y-5 px-4 py-6 sm:space-y-8 sm:px-10 sm:py-8">
+    <div className="mx-auto max-w-page space-y-5 px-4 py-6 sm:space-y-8 sm:px-10 sm:py-8">
       <HomeCommandCenter
         schoolName={activeSchool?.name}
         periods={savedPeriods}

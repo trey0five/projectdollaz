@@ -72,6 +72,8 @@ model Organization {
   schools          School[]
   auditLog         AuditLog[]
   orgQboConnection OrgQboConnection?
+  diocesanImports  DiocesanEnrollmentImport[]
+  nameAliases      SchoolNameAlias[]
 
   @@map("organizations")
 }
@@ -93,6 +95,15 @@ model School {
   logoBase64          String?  @map("logo_base64") @db.Text
   brandColor          String?  @map("brand_color")
   defaultCommittee    String?  @map("default_committee")
+  // School Comparison — peer-benchmarking profile (all nullable, additive; no backfill).
+  // schoolType validated in the DTO (not a DB enum — cheap migrations, like periodType).
+  // gradeLow/High are GradeKey strings (PK3,PK4,K,1..12) — same vocab as plannedEnrollmentByGrade.
+  // Size band is NEVER stored: derived from PeriodOperationalData.enrollment at read time.
+  county              String?  @map("county")
+  district            String?  @map("district")
+  schoolType          String?  @map("school_type")
+  gradeLow            String?  @map("grade_low")
+  gradeHigh           String?  @map("grade_high")
   createdAt           DateTime @default(now()) @map("created_at")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -140,6 +151,7 @@ model School {
   strategyPillars          StrategyPillar[]
   strategyGoals            StrategyGoal[]
   strategyInitiatives      StrategyInitiative[]
+  nameAliases              SchoolNameAlias[]
 
   @@index([organizationId])
   @@map("schools")
@@ -501,6 +513,13 @@ model PeriodOperationalData {
   /// value was hand-entered — the promote path NEVER overwrites a manual entry, and
   /// only re-promotes over a value it stamped itself (fill-when-null OR own stamp).
   enrollmentSourceProvider String?  @map("enrollment_source_provider")
+  /// Granular diocesan enrollment — REVERSIBLE manual backup (Decision C). When a
+  /// diocesan import supersedes a hand-entered `enrollment`, the original manual
+  /// value+fte are copied here (once, preserving the ORIGINAL across re-imports) and
+  /// `enrollmentSupersededAt` stamped, so revert-manual can restore it exactly.
+  enrollmentSupersededManual    Int?      @map("enrollment_superseded_manual")
+  enrollmentSupersededManualFte Decimal?  @map("enrollment_superseded_manual_fte") @db.Decimal(10, 2)
+  enrollmentSupersededAt        DateTime? @map("enrollment_superseded_at")
   updatedByUserId          String?  @map("updated_by_user_id") @db.Uuid
   createdAt                DateTime @default(now()) @map("created_at")
   updatedAt                DateTime @updatedAt @map("updated_at")
@@ -1517,6 +1536,8 @@ enum EnrollmentProvider {
   facts // built-to-spec, config-gated dark
   veracross // built-to-spec, config-gated dark
   manual // hand-entered snapshot
+  diocesan_csv // ONE org file routed to many schools by name (upload)
+  diocesan_api // diocesan API-connect variant (dark, config-gated)
 }
 
 /// Phase 2 — LIVE enrollment/SIS connector creds for one school (mirrors
@@ -1561,6 +1582,13 @@ model EnrollmentSnapshot {
   totalEnrolled   Int                @map("total_enrolled")
   byGrade         Json               @map("by_grade") @db.JsonB // GradeKey -> count (active)
   byStatus        Json?              @map("by_status") @db.JsonB // {enrolled,withdrawn?,applied?,accepted?}
+  // Granular diocesan enrollment — aggregate gender/ethnicity/race COUNTS (no PII).
+  // Canonical shape frozen in @finrep/analytics/demographics. NULL for shapes without it.
+  byDemographics     Json?     @map("by_demographics") @db.JsonB
+  // Manual-supersede provenance (Decision C): a hand-entered snapshot flagged when a
+  // connected/imported snapshot supersedes it for promote-to-operational. Reversible.
+  supersededByImport Boolean   @default(false) @map("superseded_by_import")
+  supersededAt       DateTime? @map("superseded_at")
   fte             Decimal?           @db.Decimal(10, 2)
   raw             Json?              @db.JsonB // rawGradeCounts, droppedRows, warnings
   createdByUserId String?            @map("created_by_user_id") @db.Uuid
@@ -1575,6 +1603,80 @@ model EnrollmentSnapshot {
   @@index([schoolId, observedOn])
   @@index([fiscalPeriodId])
   @@map("enrollment_snapshots")
+}
+
+// ── Granular diocesan enrollment — durable staging + learned name aliases ─────
+
+/// A ONE-org diocesan enrollment file (all schools at once), parsed + name-matched
+/// and PERSISTED so a 40-school review survives reload/resume before apply. Fans
+/// out into the per-school EnrollmentSnapshot + promote pipeline on apply.
+model DiocesanEnrollmentImport {
+  id               String             @id @default(uuid()) @db.Uuid
+  organizationId   String             @map("organization_id") @db.Uuid
+  observedOn       DateTime?          @map("observed_on") @db.Date
+  sourceShape      String             @map("source_shape") // 'admissions' | 'details'
+  // No DB-level @default: a newly-added enum value can't be used as a same-migration
+  // column default on Postgres. The service always sets provider explicitly.
+  provider         EnrollmentProvider
+  status           String             @default("reviewing") // reviewing | applied | discarded
+  fileName         String?            @map("file_name")
+  totalRows        Int                @default(0) @map("total_rows")
+  raw              Json?              @db.JsonB
+  uploadedByUserId String?            @map("uploaded_by_user_id") @db.Uuid
+  appliedAt        DateTime?          @map("applied_at")
+  createdAt        DateTime           @default(now()) @map("created_at")
+
+  organization Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  rows         DiocesanEnrollmentRow[]
+
+  @@index([organizationId, status])
+  @@map("diocesan_enrollment_imports")
+}
+
+/// One school's parsed row inside a staged diocesan import, carrying the match
+/// decision (persisted so a reviewer override survives reload).
+model DiocesanEnrollmentRow {
+  id              String   @id @default(uuid()) @db.Uuid
+  importId        String   @map("import_id") @db.Uuid
+  sourceName      String   @map("source_name")
+  normalizedName  String   @map("normalized_name")
+  matchedSchoolId String?  @map("matched_school_id") @db.Uuid
+  matchStatus     String   @map("match_status") // auto|review|unmatched|skipped|applied
+  confidence      Float?
+  matchTier       String?  @map("match_tier") // exact|alias|high|review|none
+  candidates      Json?    @db.JsonB
+  total           Int      @default(0)
+  byGrade         Json?    @db.JsonB
+  byStatus        Json?    @db.JsonB
+  byDemographics  Json?    @db.JsonB
+  warnings        Json?    @db.JsonB
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  import DiocesanEnrollmentImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+
+  @@index([importId])
+  @@map("diocesan_enrollment_rows")
+}
+
+/// A LEARNED (or manual) source-name → school mapping, per org. The `alias` is the
+/// EXACT NORMALIZED source name, so a learned alias can never fuzzy-mis-route: the
+/// next diocesan import auto-matches it at tier `alias`.
+model SchoolNameAlias {
+  id              String   @id @default(uuid()) @db.Uuid
+  organizationId  String   @map("organization_id") @db.Uuid
+  alias           String // NORMALIZED source name (exact key)
+  schoolId        String   @map("school_id") @db.Uuid
+  origin          String   @default("learned") // learned | manual
+  hitCount        Int      @default(0) @map("hit_count")
+  createdByUserId String?  @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  school       School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, alias]) // exact-normalized → a learned alias never fuzzy-mis-routes
+  @@index([organizationId])
+  @@map("school_name_aliases")
 }
 
 // ── Phase 5: Strategic Planning — plan → pillar → goal → initiative register ──

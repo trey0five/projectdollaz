@@ -16,10 +16,12 @@ import { DocumentsService, type UploadedDocumentFile } from './documents.service
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** First-call-first-arg of a vi mock, loosely typed (our mocks declare no arg types). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- test helper returns a deliberately loose mock arg
 function firstArg(fn: unknown): any {
   return (fn as ReturnType<typeof vi.fn>).mock.calls[0][0]
 }
 /** First-call return value of a vi mock, loosely typed. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- test helper returns a deliberately loose mock result
 function firstResult(fn: unknown): any {
   return (fn as ReturnType<typeof vi.fn>).mock.results[0].value
 }
