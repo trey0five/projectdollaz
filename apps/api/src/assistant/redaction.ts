@@ -110,6 +110,10 @@ const IDENTITY_KEYS: Record<string, PiiKind> = {
   studentName: 'STUDENT',
 }
 
+// AGGREGATE-SAFE by design: enrollment `byDemographics` (gender/ethnicity/race COUNTS)
+// and `byGrade` are nested numeric maps with non-identity keys — they are neither
+// IDENTITY_KEYS nor FREETEXT_KEYS, so they pass through untouched (no student PII).
+//
 // Free-text keys that may contain a stray name/email in narrative → passed through
 // redactText (masks emails/SSN + already-known identities; never touches account
 // descriptions, which are not in this set).

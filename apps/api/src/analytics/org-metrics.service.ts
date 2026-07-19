@@ -5,6 +5,10 @@ import {
   computeMetricsForPeriod,
   computeOrgMetrics,
   computePeerStats,
+  computeShareStats,
+  diversityIndex,
+  gradeMixShares,
+  toShares,
   dimMatches,
   formatMetricDelta,
   formatMetricValue,
@@ -130,6 +134,14 @@ export interface CompareSchoolProfile {
   sizeBand: SizeBandKey | null
   /** Human label for the size band; null when sizeBand is null. */
   sizeBandLabel: string | null
+  // Granular enrollment MIX (distribution stats only — NEVER a peer-forming dim).
+  // Sourced from the FY's latest EnrollmentSnapshot; null/{} when none.
+  /** Grade-mix shares (0..1) keyed by GradeKey. */
+  gradeMix: Record<string, number>
+  /** Demographic shares (0..1) per dimension: gender / ethnicity / race. */
+  demographicMix: { gender: Record<string, number>; ethnicity: Record<string, number>; race: Record<string, number> }
+  /** Blau/Simpson race diversity index (0..1); null when no race data. */
+  diversityIndex: number | null
 }
 
 /** The raw (non-derived) profile fields as stored on the School record. */
@@ -240,8 +252,24 @@ function isProfileComplete(raw: SchoolProfileRaw): boolean {
   )
 }
 
-function buildCompareProfile(raw: SchoolProfileRaw, enrollment: number | null): CompareSchoolProfile {
+/** Snapshot-derived granular mix (grade + demographics) for the compare profile. */
+interface EnrollmentMixRaw {
+  byGrade?: Record<string, number> | null
+  byDemographics?: {
+    gender?: Record<string, number>
+    ethnicity?: Record<string, number>
+    race?: Record<string, number>
+  } | null
+}
+
+function buildCompareProfile(
+  raw: SchoolProfileRaw,
+  enrollment: number | null,
+  mix?: EnrollmentMixRaw | null,
+): CompareSchoolProfile {
   const band = sizeBandOf(enrollment)
+  const demo = mix?.byDemographics ?? null
+  const race = demo?.race ?? {}
   return {
     county: raw.county,
     district: raw.district,
@@ -251,6 +279,14 @@ function buildCompareProfile(raw: SchoolProfileRaw, enrollment: number | null): 
     enrollment,
     sizeBand: band,
     sizeBandLabel: sizeBandLabel(band),
+    // Distribution mix (never a peer-forming dim). All shares via canonical analytics.
+    gradeMix: gradeMixShares((mix?.byGrade ?? {}) as Record<string, number>) as Record<string, number>,
+    demographicMix: {
+      gender: toShares(demo?.gender ?? {}),
+      ethnicity: toShares(demo?.ethnicity ?? {}),
+      race: toShares(race),
+    },
+    diversityIndex: demo?.race && Object.keys(demo.race).length ? diversityIndex(demo.race) : null,
   }
 }
 
@@ -624,6 +660,13 @@ export class OrgMetricsService {
         const priorOperational = prior
           ? await this.operational.operationalFor(r.schoolId, prior.periodId)
           : null
+        // Latest granular enrollment snapshot for THIS FY period (grade + demographic
+        // mix). Distribution stats only — never forms the peer group.
+        const enrollmentSnap = await this.prisma.enrollmentSnapshot.findFirst({
+          where: { schoolId: r.schoolId, fiscalPeriodId: r.periodId },
+          orderBy: { observedOn: 'desc' },
+          select: { byGrade: true, byDemographics: true },
+        })
 
         // The per-school engine — same one the single-school dashboard renders.
         const allMetrics = computeMetricsForPeriod({
@@ -662,7 +705,10 @@ export class OrgMetricsService {
 
         // Enrich with the peer-benchmarking profile: stored demographics + the
         // FY's enrollment (from the loaded operational row) → derived size band.
-        const profile = buildCompareProfile(r.profileRaw, operational?.enrollment ?? null)
+        const profile = buildCompareProfile(r.profileRaw, operational?.enrollment ?? null, {
+          byGrade: enrollmentSnap?.byGrade as Record<string, number> | null,
+          byDemographics: enrollmentSnap?.byDemographics as EnrollmentMixRaw['byDemographics'],
+        })
 
         return {
           schoolId: r.schoolId,
@@ -828,6 +874,21 @@ export class OrgMetricsService {
       goodDirection: 'higher',
       focusFormatted: formatCount(focusEnroll),
       medianFormatted: formatCount(enrollStats.median),
+    }
+
+    // Granular DIVERSITY distribution stat (Blau/Simpson index; 0..1, higher = more
+    // diverse). Distribution ONLY — demographics never form the peer group.
+    const focusDiv = focus.profile.diversityIndex
+    const peerDiv = peers
+      .map((p) => p.profile.diversityIndex)
+      .filter((v): v is number => v != null)
+    const divStats = computeShareStats(focusDiv, peerDiv)
+    stats.diversity_index = {
+      ...divStats,
+      focusValue: focusDiv,
+      goodDirection: 'higher',
+      focusFormatted: focusDiv == null ? '—' : focusDiv.toFixed(2),
+      medianFormatted: divStats.median.toFixed(2),
     }
 
     // Insights (built here — they need labels). Enrollment standing + quartiles.

@@ -582,6 +582,45 @@ export const TOOL_SCHEMAS = [
   {
     type: 'function',
     function: {
+      name: 'import_diocesan_enrollment',
+      description:
+        'PROPOSE importing ONE diocesan enrollment file that covers MANY schools at once (an admissions dashboard of School/New/Returning/Total, or an enrollment-details grade+demographics matrix). Use ONLY when the user attached such a multi-school file and wants it imported across the organization. The server parses the file and name-matches each row to a school; on CONFIRM it applies ONLY the high-confidence auto-matched rows (ambiguous rows are left for the full review screen). Pass the attachmentId shown in the attachment digest — the server holds the file bytes, so NEVER retype them. observedOn (yyyy-mm-dd) is optional and overrides the file’s as-of date.',
+      parameters: {
+        type: 'object',
+        properties: {
+          attachmentId: {
+            type: 'string',
+            description: 'The attachmentId from the attachment digest for the diocesan file.',
+          },
+          observedOn: {
+            type: 'string',
+            description: 'Optional as-of date override, yyyy-mm-dd.',
+          },
+        },
+        required: ['attachmentId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_enrollment_demographics',
+      description:
+        'READ the current school’s latest enrollment demographic + grade mix (gender / ethnicity / race shares plus the Blau/Simpson diversity index, and grade-mix shares). Use when the user asks about the makeup / diversity / demographics of enrollment. Read-only.',
+      parameters: {
+        type: 'object',
+        properties: {
+          periodId: {
+            type: 'string',
+            description: 'Optional fiscal period id to scope to; defaults to the latest snapshot.',
+          },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'create_policy',
       description:
         'PROPOSE a new governance Policy for the user to CONFIRM before it is created (like create_task — this does NOT create it; the user must confirm). Use when the user asks to add/file a policy to the Policy Register, or to turn a briefing/governance attention item (e.g. a missing or overdue policy) into a real record — pull the title and category from the referenced item. category is FREE TEXT (e.g. "board", "finance", "hr"). status defaults to active. Dates are yyyy-mm-dd; only pass ones the user stated. Policy, not period-scoped.',
@@ -1217,6 +1256,8 @@ export const TOOL_LABELS: Record<string, string> = {
   draft_cap_entry: 'Logging a corrective action…',
   create_task: 'Drafting a task…',
   file_document: 'Filing the document…',
+  import_diocesan_enrollment: 'Importing diocesan enrollment…',
+  get_enrollment_demographics: 'Reading enrollment demographics…',
   create_policy: 'Filing a policy…',
   create_committee: 'Setting up a committee…',
   create_meeting: 'Scheduling a meeting…',

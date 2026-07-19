@@ -339,3 +339,20 @@ export function computePeerStats(
 
   return { count, median, mean, p25, p75, min, max, rank, percentile, sample }
 }
+
+// ── Mix / diversity distribution stats (granular enrollment) ──────────────────
+//
+// Demographic + grade MIX is surfaced as DISTRIBUTION statistics only — it never
+// forms a peer group (PeerDim stays size|county|district|type|grade). These pure
+// helpers let the API describe where a focus school's diversity/mix sits within its
+// resolved peer group without inventing a new grouping dimension.
+
+/**
+ * Distribution of a focus SHARE/index value (0..1, higher = more) within its peers.
+ * A thin, direction-fixed ('higher') wrapper over computePeerStats so a demographic
+ * share or a diversity index gets the same median/quartile/rank/percentile surface
+ * the metric stats use — WITHOUT letting the mix become a peer-forming dimension.
+ */
+export function computeShareStats(focusShare: number | null, peerShares: number[]): PeerStats {
+  return computePeerStats(focusShare, peerShares, 'higher')
+}

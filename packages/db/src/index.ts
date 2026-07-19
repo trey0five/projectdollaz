@@ -35,4 +35,11 @@ export type { ModuleKey, ModuleTier, LicensedModule, ModuleDef } from './modules
 
 // Phase 2 Enrollment Intelligence — the pure seam types every SIS/roster adapter
 // emits (the parser lives in @finrep/ingestion; the connector in apps/api).
-export type { EnrollmentProviderKey, NormalizedEnrollmentSnapshot } from './enrollment-types.js'
+export type {
+  EnrollmentProviderKey,
+  NormalizedEnrollmentSnapshot,
+  DemographicBreakdown,
+  DiocesanSourceShape,
+  NormalizedDiocesanRow,
+  DiocesanParseResult,
+} from './enrollment-types.js'

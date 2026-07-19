@@ -24,6 +24,9 @@ import {
   mergeFeederEnrollment,
   toDriverPriorContext,
   GRADE_KEYS,
+  diversityIndex,
+  gradeMixShares,
+  toShares,
   type DriverAssumptions,
   type GradeKey,
 } from '@finrep/analytics'
@@ -35,6 +38,8 @@ import { OperationalService } from '../analytics/operational.service.js'
 import { BudgetRollupService } from '../analytics/budget-rollup.service.js'
 import { OrgBriefingService } from '../analytics/org-briefing.service.js'
 import { OrgMetricsService } from '../analytics/org-metrics.service.js'
+import { DiocesanEnrollmentService } from '../enrollment/diocesan/diocesan-enrollment.service.js'
+import type { DemographicBreakdown } from '@finrep/db'
 import { BriefingService } from '../analytics/briefing.service.js'
 import { deriveFiscalYearStart } from '../analytics/budget.driver.js'
 import { ComplianceService } from '../compliance/compliance.service.js'
@@ -145,6 +150,9 @@ const REFRESH: Record<ProposedAction['kind'], RefreshKey[]> = {
   draft_cap_entry: ['cap'],
   import_trial_balance: ['dataStatus', 'metrics'],
   import_monthly_actuals: ['dataStatus', 'metrics', 'monthly'],
+  // A diocesan import fans out enrollment across schools → refresh the data status +
+  // metrics surfaces so the promoted headcounts + size bands light up.
+  import_diocesan_enrollment: ['dataStatus', 'metrics'],
   create_task: ['tasks'],
   submit_for_approval: ['tasks'],
   decide_approval: ['tasks'],
@@ -232,6 +240,9 @@ const CONFIRM_TOOLS = new Set([
   'submit_for_approval',
   'decide_approval',
   'file_document',
+  // Diocesan enrollment import — confirm-then-apply (parses + name-matches, then on
+  // confirm applies only the high-confidence auto-matched rows).
+  'import_diocesan_enrollment',
   'create_policy',
   'create_committee',
   'create_meeting',
@@ -298,6 +309,7 @@ export interface ProposedAction {
     | 'set_feeder_enrollment'
     | 'import_trial_balance'
     | 'import_monthly_actuals'
+    | 'import_diocesan_enrollment'
     | 'create_task'
     | 'submit_for_approval'
     | 'decide_approval'
@@ -646,6 +658,11 @@ export class AssistantService {
     // LAST so DI/tests that construct AssistantService without it still work;
     // AnalyticsModule already exports OrgMetricsService (no module edit needed).
     @Optional() private readonly orgMetrics?: OrgMetricsService,
+    // Granular diocesan enrollment — the org multi-school import for the
+    // import_diocesan_enrollment confirm tool. Optional + LAST so positional-arg unit
+    // specs still construct; only that build/apply path touches it. DI is by type
+    // (AssistantModule imports EnrollmentModule, which exports the service).
+    @Optional() private readonly diocesan?: DiocesanEnrollmentService,
   ) {}
 
   isConfigured(): boolean {
@@ -1049,6 +1066,9 @@ export class AssistantService {
     }
     if (name === 'file_document') {
       return this.buildFileDocumentProposal(args, ctx)
+    }
+    if (name === 'import_diocesan_enrollment') {
+      return this.buildDiocesanImportProposal(args, ctx)
     }
     if (name === 'create_policy') {
       return this.buildPolicyProposal(args, ctx)
@@ -1513,6 +1533,35 @@ export class AssistantService {
         ...(rationale ? { rationale } : {}),
         fileName: raw.fileName,
         mimeType,
+        fileDataBase64: raw.buffer.toString('base64'),
+      },
+    }
+  }
+
+  /**
+   * Build a confirmable import_diocesan_enrollment proposal (NO mutation). Carries the
+   * attached file bytes (base64) in the payload — like buildFileDocumentProposal — so
+   * applyAction can parse + name-match + apply the HIGH-CONFIDENCE rows only on confirm.
+   * The LLM never supplies bytes; the server holds them in ctx.prep.rawFiles.
+   */
+  private buildDiocesanImportProposal(args: Record<string, unknown>, ctx: Ctx): ProposedAction {
+    const attachmentId = typeof args.attachmentId === 'string' ? args.attachmentId : ''
+    const raw = attachmentId ? ctx.prep?.rawFiles.get(attachmentId) : undefined
+    if (!raw || !raw.buffer || raw.buffer.length === 0) {
+      throw new Error('import_diocesan_enrollment needs a valid attachmentId from an attached diocesan file.')
+    }
+    const observedOn =
+      typeof args.observedOn === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(args.observedOn)
+        ? args.observedOn
+        : undefined
+    return {
+      kind: 'import_diocesan_enrollment',
+      periodId: ctx.periodId ?? '',
+      summary:
+        'Import one diocesan enrollment file across your schools — I’ll apply the high-confidence matches and leave the rest for the review screen.',
+      payload: {
+        fileName: raw.fileName,
+        ...(observedOn ? { observedOn } : {}),
         fileDataBase64: raw.buffer.toString('base64'),
       },
     }
@@ -2525,6 +2574,9 @@ export class AssistantService {
     if (action.kind === 'import_monthly_actuals') {
       return this.applyImportMonthlyActuals(user, schoolId, action)
     }
+    if (action.kind === 'import_diocesan_enrollment') {
+      return this.applyDiocesanImport(user, schoolId, action)
+    }
     if (action.kind === 'apply_driver_budget') {
       const assumptions = (p.assumptions ?? {}) as Record<string, unknown>
       await this.budget.upsertDriver(
@@ -3394,6 +3446,46 @@ export class AssistantService {
     return { summary: action.summary, createdId: null }
   }
 
+  /**
+   * Apply a confirmed diocesan enrollment import (org multi-school). Resolves the
+   * school's ORG, decodes the carried file bytes, and hands off to the SAME
+   * DiocesanEnrollmentService the REST route uses — applying only the high-confidence
+   * auto-matched rows (ambiguous rows stay in the durable batch for the review
+   * screen). Org isolation is re-checked inside the service (the Penny caller is a
+   * member of this school, hence the org). UNTRUSTED payload — bytes re-decoded here.
+   */
+  private async applyDiocesanImport(
+    user: User,
+    schoolId: string,
+    action: ProposedAction,
+  ): Promise<{ summary: string; createdId: string | null }> {
+    if (!this.diocesan) {
+      throw new ServiceUnavailableException('Diocesan enrollment import is not available.')
+    }
+    const p = (action.payload ?? {}) as Record<string, unknown>
+    const b64 = typeof p.fileDataBase64 === 'string' ? p.fileDataBase64 : ''
+    if (!b64) throw new Error('No file to import.')
+    const buffer = Buffer.from(b64, 'base64')
+    if (buffer.length === 0) throw new Error('No file to import.')
+    const fileName = typeof p.fileName === 'string' ? p.fileName : 'diocesan-enrollment'
+    const observedOn =
+      typeof p.observedOn === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(p.observedOn) ? p.observedOn : undefined
+
+    const school = await this.prisma.school.findUnique({ where: { id: schoolId }, select: { organizationId: true } })
+    if (!school) throw new NotFoundException('School not found.')
+
+    const file = { buffer, originalname: fileName, mimetype: 'application/octet-stream', size: buffer.length }
+    const result = await this.diocesan.importFromPenny(user, school.organizationId, file, observedOn)
+    const summary =
+      result.applied > 0
+        ? `Imported enrollment for ${result.applied} school${result.applied === 1 ? '' : 's'}` +
+          (result.superseded > 0 ? ` (${result.superseded} superseded a manual entry)` : '') +
+          (result.skipped > 0 ? `; ${result.skipped} left for review` : '') +
+          '.'
+        : `No schools were auto-matched confidently; open the review screen to match the ${result.skipped} remaining row${result.skipped === 1 ? '' : 's'}.`
+    return { summary, createdId: null }
+  }
+
   private parseArgs(raw: string): Record<string, unknown> {
     try {
       const v = JSON.parse(raw || '{}')
@@ -4113,6 +4205,28 @@ export class AssistantService {
         const metricKey = typeof args.metricKey === 'string' ? args.metricKey : ''
         const t = await this.analytics.trends(ctx.schoolId, metricKey)
         return t
+      }
+      case 'get_enrollment_demographics': {
+        const periodId = typeof args.periodId === 'string' ? args.periodId : undefined
+        const latest = await this.prisma.enrollmentSnapshot.findFirst({
+          where: { schoolId: ctx.schoolId, ...(periodId ? { fiscalPeriodId: periodId } : {}) },
+          orderBy: { observedOn: 'desc' },
+        })
+        if (!latest) return { hasData: false }
+        // Aggregate counts only (no student PII) — shares/diversity via canonical analytics.
+        const demo = (latest.byDemographics ?? {}) as DemographicBreakdown
+        const byGrade = (latest.byGrade ?? {}) as Record<string, number>
+        return {
+          hasData: true,
+          observedOn: latest.observedOn.toISOString().slice(0, 10),
+          totalEnrolled: latest.totalEnrolled,
+          gender: demo.gender ? { counts: demo.gender, shares: toShares(demo.gender) } : null,
+          ethnicity: demo.ethnicity ? { counts: demo.ethnicity, shares: toShares(demo.ethnicity) } : null,
+          race: demo.race
+            ? { counts: demo.race, shares: toShares(demo.race), diversityIndex: diversityIndex(demo.race) }
+            : null,
+          gradeMix: { counts: byGrade, shares: gradeMixShares(byGrade) },
+        }
       }
       case 'get_board_report': {
         const pid = await this.resolvePeriod(args, ctx)

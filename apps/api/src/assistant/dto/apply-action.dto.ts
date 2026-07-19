@@ -11,6 +11,7 @@ const APPLY_KINDS = [
   'set_feeder_enrollment',
   'import_trial_balance',
   'import_monthly_actuals',
+  'import_diocesan_enrollment',
   'create_task',
   'submit_for_approval',
   'decide_approval',

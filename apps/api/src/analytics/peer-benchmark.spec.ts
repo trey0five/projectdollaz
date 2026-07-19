@@ -66,6 +66,9 @@ function school(
       enrollment,
       sizeBand: sizeBand as never,
       sizeBandLabel,
+      gradeMix: {},
+      demographicMix: { gender: {}, ethnicity: {}, race: {} },
+      diversityIndex: null,
     },
     metrics: {
       days_cash_on_hand: metric('days_cash_on_hand', 'days', over.daysCash ?? 50, 'higher'),

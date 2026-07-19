@@ -22,10 +22,12 @@ import {
   CircleCheck,
   TrendingUp,
   GraduationCap,
+  Building2,
   X,
 } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
+import { useScope } from '../context/ScopeContext.jsx'
 import { usePersistence } from '../context/PersistenceContext.jsx'
 import { useDataStatus } from '../hooks/useDataStatus.js'
 import QuickBooksCard from '../components/datahub/QuickBooksCard.jsx'
@@ -122,6 +124,18 @@ const SOURCES = [
   },
 ]
 
+// Org-only card (appended for multi-school organizations): one diocesan file for
+// every school at once, with a match-review step. Links out to the org importer.
+const DIOCESAN_SOURCE = {
+  key: 'diocesanEnrollment',
+  title: 'Diocesan enrollment',
+  Icon: Building2,
+  what:
+    'Upload ONE diocesan enrollment file for all your schools at once — an admissions dashboard or the grade × demographic detail matrix. We route each row to the right school by name and let you review anything ambiguous before it’s applied.',
+  cta: 'Upload one file for all schools',
+  to: '/enrollment/diocesan-import',
+}
+
 // Per-card bubble copy for Penny's "Show me around" tour (moved verbatim out of the
 // former GuideMascot before it was deleted). Keyed by source key; falls back to s.what.
 const HINTS = {
@@ -136,7 +150,13 @@ const HINTS = {
 
 export default function DataHubPage() {
   const { activeSchool } = useSchools()
+  const { isMultiSchool } = useScope()
   const penny = usePenny()
+  // Diocese-wide import is only meaningful for a multi-school org; append it there.
+  const visibleSources = useMemo(
+    () => (isMultiSchool ? [...SOURCES, DIOCESAN_SOURCE] : SOURCES),
+    [isMultiSchool],
+  )
   const { periods, hydratedFiles, activePeriod, hydrationToken } = usePersistence()
   const schoolId = activeSchool?.id ?? null
   const isOwnerOrAccountant =
@@ -406,7 +426,7 @@ export default function DataHubPage() {
               </div>
             ) : !sources ? (
               <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-3">
-                {SOURCES.map((s) => (
+                {visibleSources.map((s) => (
                   <div
                     key={s.key}
                     className="h-44 animate-pulse rounded-2xl border-2 border-rule/40 bg-white/60"
@@ -415,7 +435,7 @@ export default function DataHubPage() {
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-3">
-                {SOURCES.map((s) => (
+                {visibleSources.map((s) => (
                   <SourceCard
                     key={s.key}
                     source={s}

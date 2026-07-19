@@ -1,7 +1,7 @@
 import { defineConfig } from 'tsup'
 
 export default defineConfig({
-  entry: ['src/index.ts', 'src/oneroster/index.ts'],
+  entry: ['src/index.ts', 'src/oneroster/index.ts', 'src/diocesan/index.ts'],
   format: ['esm'],
   dts: { compilerOptions: { composite: false, declarationMap: false } },
   tsconfig: 'tsconfig.build.json',

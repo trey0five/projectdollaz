@@ -9,7 +9,14 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import type { EnrollmentProvider, EnrollmentSource, NormalizedEnrollmentSnapshot, User } from '@finrep/db'
-import { GRADE_KEYS, type GradeKey } from '@finrep/analytics'
+import {
+  GRADE_KEYS,
+  diversityIndex,
+  gradeMixShares,
+  toShares,
+  type GradeKey,
+} from '@finrep/analytics'
+import type { DemographicBreakdown } from '@finrep/db'
 import { parseOneRosterCsv } from '@finrep/ingestion/oneroster'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { PeriodsService } from '../periods/periods.service.js'
@@ -44,7 +51,37 @@ export interface EnrollmentStatus {
 export interface EnrollmentIntakeResult {
   snapshot: { observedOn: string; totalEnrolled: number; byGrade: Partial<Record<GradeKey, number>> }
   promoted: boolean
+  /** True when this intake superseded a hand-entered manual enrollment (org import). */
+  superseded?: boolean
+  /** The manual value that was backed up when superseding (null otherwise). */
+  supersededManual?: number | null
   warnings: string[]
+}
+
+/** Options for the shared intake pipeline. */
+export interface IntakeOptions {
+  /** The connector source row id (null for CSV/manual/diocesan). */
+  sourceId?: string | null
+  /**
+   * When true (org diocesan import only), a hand-entered manual enrollment is
+   * SUPERSEDED (backed up + overwritten) rather than left untouched. Reversible.
+   */
+  supersedeManual?: boolean
+}
+
+/** Latest-snapshot demographic + grade mix read surface. */
+export interface EnrollmentDemographicsView {
+  observedOn: string
+  provider: EnrollmentProvider
+  totalEnrolled: number
+  gender: { counts: Record<string, number>; shares: Record<string, number> } | null
+  ethnicity: { counts: Record<string, number>; shares: Record<string, number> } | null
+  race: {
+    counts: Record<string, number>
+    shares: Record<string, number>
+    diversityIndex: number
+  } | null
+  gradeMix: { counts: Partial<Record<GradeKey, number>>; shares: Partial<Record<GradeKey, number>> }
 }
 
 export interface EnrollmentSnapshotView {
@@ -59,6 +96,12 @@ export interface EnrollmentSummary {
   latest: { observedOn: string; totalEnrolled: number; byGrade: Partial<Record<GradeKey, number>> } | null
   vsPlan: { planTotal: number; gap: number; gapPct: number } | null
   provider: EnrollmentProvider | null
+  /**
+   * Reconciliation state (Decision C): the backed-up hand-entered MANUAL enrollment
+   * that a diocesan import superseded for this period — the web "superseded by import"
+   * banner + Restore-manual button read this. Null when nothing is superseded.
+   */
+  supersededManual: { value: number; fte: number | null; at: string } | null
 }
 
 const ZIP_SIGNATURE = [0x50, 0x4b] // 'PK'
@@ -78,7 +121,9 @@ function fyEndForObservedOn(observedOn: string): string {
 
 @Injectable()
 export class EnrollmentService {
-  private readonly adapters: Record<EnrollmentProvider, EnrollmentAdapter>
+  // Partial: the diocesan providers have no live per-school adapter (org file-upload
+  // path), so they are intentionally absent — sync() guards on a missing adapter.
+  private readonly adapters: Partial<Record<EnrollmentProvider, EnrollmentAdapter>>
 
   constructor(
     private readonly prisma: PrismaService,
@@ -220,7 +265,27 @@ export class EnrollmentService {
   async disconnect(actor: User, schoolId: string, removeData = false): Promise<EnrollmentStatus> {
     if (removeData) {
       await this.prisma.enrollmentSnapshot.deleteMany({ where: { schoolId } })
-      // Clear ONLY values a connector stamped; a hand-entered enrollment (null stamp) stays.
+      // A purge that would blank a value which SUPERSEDED a manual entry instead
+      // RESTORES the backed-up manual figure (Decision C — reversible), so a
+      // hand-entered number is never silently lost by a disconnect.
+      const superseded = await this.prisma.periodOperationalData.findMany({
+        where: { schoolId, enrollmentSupersededAt: { not: null } },
+      })
+      for (const op of superseded) {
+        await this.prisma.periodOperationalData.update({
+          where: { id: op.id },
+          data: {
+            enrollment: op.enrollmentSupersededManual,
+            enrollmentFte: op.enrollmentSupersededManualFte,
+            enrollmentSourceProvider: null,
+            enrollmentSupersededManual: null,
+            enrollmentSupersededManualFte: null,
+            enrollmentSupersededAt: null,
+          },
+        })
+      }
+      // Clear ONLY the remaining connector-stamped values; a hand-entered enrollment
+      // (null stamp) stays.
       await this.prisma.periodOperationalData.updateMany({
         where: { schoolId, enrollmentSourceProvider: { not: null } },
         data: { enrollment: null, enrollmentSourceProvider: null },
@@ -257,7 +322,7 @@ export class EnrollmentService {
       throw new BadRequestException(e instanceof Error ? e.message : 'Could not parse the OneRoster export.')
     }
     // CSV/manual carry sourceId=null + a provider stamp on the snapshot (no source row).
-    return this.intake(actor, schoolId, normalized, null)
+    return this.intakeNormalized(actor, schoolId, normalized, { sourceId: null })
   }
 
   /** Live sync the connected provider (Blackbaud/OneRoster REST/FACTS/Veracross). */
@@ -282,7 +347,7 @@ export class EnrollmentService {
         .catch(() => undefined)
       throw new BadRequestException(message)
     }
-    const result = await this.intake(actor, schoolId, normalized, source.id)
+    const result = await this.intakeNormalized(actor, schoolId, normalized, { sourceId: source.id })
     await this.prisma.enrollmentSource
       .update({ where: { schoolId }, data: { status: 'connected', lastError: null, lastSyncedAt: new Date() } })
       .catch(() => undefined)
@@ -305,7 +370,7 @@ export class EnrollmentService {
       )
     }
     const normalized = normalizeManualSnapshot(byGrade, observedOn)
-    return this.intake(actor, schoolId, normalized, null)
+    return this.intakeNormalized(actor, schoolId, normalized, { sourceId: null })
   }
 
   // ── Reads ────────────────────────────────────────────────────────────────────
@@ -333,9 +398,12 @@ export class EnrollmentService {
       this.prisma.enrollmentSource.findUnique({ where: { schoolId } }),
     ])
     const provider = latest?.provider ?? source?.provider ?? null
-    if (!latest) return { latest: null, vsPlan: null, provider }
+    const resolvedPeriodId = periodId ?? latest?.fiscalPeriodId ?? null
+    const supersededManual = resolvedPeriodId
+      ? await this.supersededManualFor(schoolId, resolvedPeriodId)
+      : null
+    if (!latest) return { latest: null, vsPlan: null, provider, supersededManual }
 
-    const resolvedPeriodId = periodId ?? latest.fiscalPeriodId
     const planTotal = resolvedPeriodId ? await this.planTotalFor(schoolId, resolvedPeriodId) : null
     const total = latest.totalEnrolled
     const vsPlan =
@@ -350,22 +418,52 @@ export class EnrollmentService {
       },
       vsPlan,
       provider,
+      supersededManual,
+    }
+  }
+
+  /**
+   * The backed-up manual enrollment that a diocesan import superseded for this period
+   * (Decision C), read from the PeriodOperationalData supersede columns. Null when the
+   * period has no superseded manual entry. Drives the web reconciliation banner.
+   */
+  private async supersededManualFor(
+    schoolId: string,
+    fiscalPeriodId: string,
+  ): Promise<{ value: number; fte: number | null; at: string } | null> {
+    const op = await this.prisma.periodOperationalData.findUnique({
+      where: { schoolId_fiscalPeriodId: { schoolId, fiscalPeriodId } },
+      select: {
+        enrollmentSupersededManual: true,
+        enrollmentSupersededManualFte: true,
+        enrollmentSupersededAt: true,
+      },
+    })
+    if (!op || op.enrollmentSupersededAt == null || op.enrollmentSupersededManual == null) return null
+    return {
+      value: op.enrollmentSupersededManual,
+      fte: op.enrollmentSupersededManualFte != null ? Number(op.enrollmentSupersededManualFte) : null,
+      at: op.enrollmentSupersededAt.toISOString(),
     }
   }
 
   // ── Internals ─────────────────────────────────────────────────────────────────
 
   /**
-   * The shared intake pipeline: resolve the FY period from observedOn, upsert an
-   * idempotent snapshot (schoolId + sourceId + observedOn), then PROMOTE the
-   * headcount into PeriodOperationalData.enrollment. Audits imported (+ promoted).
+   * The shared intake pipeline (PUBLIC — the org diocesan fan-out calls it per
+   * school): resolve the FY period from observedOn, upsert an idempotent snapshot
+   * (schoolId + sourceId + observedOn, now carrying byDemographics), then PROMOTE
+   * the headcount into PeriodOperationalData.enrollment. `opts.supersedeManual`
+   * (org import only) lets the promote overwrite a hand-entered manual value with a
+   * reversible backup. Audits imported (+ promoted / superseded).
    */
-  private async intake(
+  async intakeNormalized(
     actor: User,
     schoolId: string,
     normalized: NormalizedEnrollmentSnapshot,
-    sourceId: string | null,
+    opts: IntakeOptions = {},
   ): Promise<EnrollmentIntakeResult> {
+    const sourceId = opts.sourceId ?? null
     const fiscalPeriodId = await this.resolveFiscalPeriodId(schoolId, normalized.observedOn)
     const observedOn = new Date(normalized.observedOn)
     const provider = normalized.provider as EnrollmentProvider
@@ -375,6 +473,7 @@ export class EnrollmentService {
       totalEnrolled: normalized.totalEnrolled,
       byGrade: normalized.byGrade as object,
       byStatus: (normalized.byStatus ?? undefined) as object | undefined,
+      byDemographics: (normalized.byDemographics ?? undefined) as object | undefined,
       fte: normalized.fte ?? null,
       raw: (normalized.raw ?? undefined) as object | undefined,
       fiscalPeriodId,
@@ -399,14 +498,18 @@ export class EnrollmentService {
       metadata: { provider, observedOn: normalized.observedOn, totalEnrolled: normalized.totalEnrolled, fiscalPeriodId },
     })
 
-    const promoted = await this.promote(actor, schoolId, fiscalPeriodId, normalized)
+    const promo = await this.promote(actor, schoolId, fiscalPeriodId, normalized, {
+      supersedeManual: opts.supersedeManual ?? false,
+    })
     return {
       snapshot: {
         observedOn: normalized.observedOn,
         totalEnrolled: normalized.totalEnrolled,
         byGrade: normalized.byGrade,
       },
-      promoted,
+      promoted: promo.promoted,
+      superseded: promo.superseded,
+      supersededManual: promo.supersededManual,
       warnings: normalized.warnings ?? [],
     }
   }
@@ -424,15 +527,44 @@ export class EnrollmentService {
     schoolId: string,
     fiscalPeriodId: string,
     normalized: NormalizedEnrollmentSnapshot,
-  ): Promise<boolean> {
+    opts: { supersedeManual?: boolean } = {},
+  ): Promise<{ promoted: boolean; superseded: boolean; supersededManual: number | null }> {
     const existing = await this.prisma.periodOperationalData.findUnique({
       where: { schoolId_fiscalPeriodId: { schoolId, fiscalPeriodId } },
     })
-    const isManual = !!existing && existing.enrollment != null && existing.enrollmentSourceProvider == null
-    if (isManual) return false // never clobber a hand-entered enrollment
+    // A "manual" operational enrollment is one a human entered: either the
+    // operational-data form (no stamp → null) OR the enrollment manual() endpoint
+    // (stamped 'manual'). Both are eligible to be superseded by an org import.
+    const isManual =
+      !!existing &&
+      existing.enrollment != null &&
+      (existing.enrollmentSourceProvider == null || existing.enrollmentSourceProvider === 'manual')
+
+    // BACKWARD-COMPATIBLE per-school guard: without opts.supersedeManual, a manual
+    // entry is left untouched exactly as before.
+    if (isManual && !opts.supersedeManual) {
+      return { promoted: false, superseded: false, supersededManual: null }
+    }
 
     const total = normalized.totalEnrolled
     const providerStamp = normalized.provider
+    let superseded = false
+    let supersededManual: number | null = null
+
+    // ORG-IMPORT SUPERSEDE (Decision C): back up the ORIGINAL manual value once
+    // (preserve it across repeat re-imports), then overwrite. Reversible via
+    // revertManual. Mark the school's manual snapshot rows superseded for history.
+    const backup: Record<string, unknown> = {}
+    if (isManual && opts.supersedeManual && existing) {
+      superseded = true
+      supersededManual = existing.enrollment
+      if (existing.enrollmentSupersededAt == null) {
+        backup.enrollmentSupersededManual = existing.enrollment
+        backup.enrollmentSupersededManualFte = existing.enrollmentFte
+        backup.enrollmentSupersededAt = new Date()
+      }
+    }
+
     await this.prisma.periodOperationalData.upsert({
       where: { schoolId_fiscalPeriodId: { schoolId, fiscalPeriodId } },
       create: {
@@ -449,8 +581,25 @@ export class EnrollmentService {
         ...(normalized.fte != null ? { enrollmentFte: normalized.fte } : {}),
         enrollmentSourceProvider: providerStamp,
         updatedByUserId: actor.id,
+        ...backup,
       },
     })
+
+    if (superseded) {
+      // Flag the school's manual snapshot rows for THIS period as superseded history.
+      await this.prisma.enrollmentSnapshot.updateMany({
+        where: { schoolId, fiscalPeriodId, provider: 'manual', supersededByImport: false },
+        data: { supersededByImport: true, supersededAt: new Date() },
+      })
+      await this.audit.write({
+        schoolId,
+        userId: actor.id,
+        action: 'enrollment.superseded_manual',
+        targetType: 'period_operational_data',
+        metadata: { fiscalPeriodId, enrollment: total, provider: providerStamp, supersededManual },
+      })
+    }
+
     await this.audit.write({
       schoolId,
       userId: actor.id,
@@ -458,7 +607,86 @@ export class EnrollmentService {
       targetType: 'period_operational_data',
       metadata: { fiscalPeriodId, enrollment: total, provider: providerStamp },
     })
-    return true
+    return { promoted: true, superseded, supersededManual }
+  }
+
+  /**
+   * REVERT a manual-supersede (Decision C, reversible). Restores the backed-up
+   * manual `enrollment`/`fte`, clears the connector stamp + backup columns, and
+   * un-flags the period's manual snapshot rows. No-op-safe when nothing was
+   * superseded. Audits enrollment.reverted_to_manual.
+   */
+  async revertManual(actor: User, schoolId: string, periodId: string): Promise<{ reverted: boolean; enrollment: number | null }> {
+    const op = await this.prisma.periodOperationalData.findUnique({
+      where: { schoolId_fiscalPeriodId: { schoolId, fiscalPeriodId: periodId } },
+    })
+    if (!op || op.enrollmentSupersededAt == null || op.enrollmentSupersededManual == null) {
+      return { reverted: false, enrollment: op?.enrollment ?? null }
+    }
+    const restored = op.enrollmentSupersededManual
+    await this.prisma.periodOperationalData.update({
+      where: { schoolId_fiscalPeriodId: { schoolId, fiscalPeriodId: periodId } },
+      data: {
+        enrollment: restored,
+        enrollmentFte: op.enrollmentSupersededManualFte,
+        enrollmentSourceProvider: null, // back to a hand-entered (manual) value
+        enrollmentSupersededManual: null,
+        enrollmentSupersededManualFte: null,
+        enrollmentSupersededAt: null,
+        updatedByUserId: actor.id,
+      },
+    })
+    await this.prisma.enrollmentSnapshot.updateMany({
+      where: { schoolId, fiscalPeriodId: periodId, provider: 'manual', supersededByImport: true },
+      data: { supersededByImport: false, supersededAt: null },
+    })
+    await this.audit.write({
+      schoolId,
+      userId: actor.id,
+      action: 'enrollment.reverted_to_manual',
+      targetType: 'period_operational_data',
+      metadata: { fiscalPeriodId: periodId, enrollment: restored },
+    })
+    return { reverted: true, enrollment: restored }
+  }
+
+  /**
+   * Latest-snapshot demographic + grade mix for a school (optionally period-scoped).
+   * Shares + Blau/Simpson diversity computed by the canonical @finrep/analytics
+   * (never inlined). Null dimensions when the latest snapshot carried no demographics.
+   */
+  async demographics(schoolId: string, periodId?: string): Promise<EnrollmentDemographicsView | null> {
+    const latest = await this.prisma.enrollmentSnapshot.findFirst({
+      where: { schoolId, ...(periodId ? { fiscalPeriodId: periodId } : {}) },
+      orderBy: { observedOn: 'desc' },
+    })
+    if (!latest) return null
+    const demo = (latest.byDemographics ?? {}) as DemographicBreakdown
+    const byGrade = (latest.byGrade ?? {}) as Partial<Record<GradeKey, number>>
+
+    const gender = demo.gender && Object.keys(demo.gender).length
+      ? { counts: demo.gender as Record<string, number>, shares: toShares(demo.gender) }
+      : null
+    const ethnicity = demo.ethnicity && Object.keys(demo.ethnicity).length
+      ? { counts: demo.ethnicity as Record<string, number>, shares: toShares(demo.ethnicity) }
+      : null
+    const race = demo.race && Object.keys(demo.race).length
+      ? {
+          counts: demo.race as Record<string, number>,
+          shares: toShares(demo.race),
+          diversityIndex: diversityIndex(demo.race),
+        }
+      : null
+
+    return {
+      observedOn: iso(latest.observedOn),
+      provider: latest.provider,
+      totalEnrolled: latest.totalEnrolled,
+      gender,
+      ethnicity,
+      race,
+      gradeMix: { counts: byGrade, shares: gradeMixShares(byGrade) },
+    }
   }
 
   /** Resolve (find-or-create) the FY period for an observed date via the periods helper. */
