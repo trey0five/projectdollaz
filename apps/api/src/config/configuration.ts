@@ -33,6 +33,9 @@ export interface AppConfig {
     region: string
     from: string
   }
+  auth: {
+    requireEmailVerification: boolean
+  }
   // Phase 1D — Stripe subscription billing. All env-driven with safe empty
   // defaults so the api BOOTS with no Stripe key set (checkout/portal then
   // return a clear error; the webhook still verifies if a webhookSecret exists).
@@ -233,6 +236,13 @@ export function configuration(): AppConfig {
       provider: (process.env.MAIL_PROVIDER ?? (process.env.SMTP_HOST ? 'smtp' : '')).toLowerCase(),
       region: process.env.AWS_REGION ?? 'us-east-1',
       from: process.env.MAIL_FROM ?? process.env.SMTP_FROM ?? 'KYRO <noreply@ourkyro.com>',
+    },
+    auth: {
+      // Whether a new user must verify their email before logging in. Defaults ON
+      // (secure). TEMPORARILY set REQUIRE_EMAIL_VERIFICATION=false while outbound
+      // email is unavailable (e.g. SES sandbox) so signups aren't blocked; flip
+      // back to true the moment email delivery works.
+      requireEmailVerification: (process.env.REQUIRE_EMAIL_VERIFICATION ?? 'true') !== 'false',
     },
     stripe: {
       secretKey: process.env.STRIPE_SECRET_KEY ?? '',
