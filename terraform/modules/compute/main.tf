@@ -106,6 +106,11 @@ resource "aws_ecs_task_definition" "api" {
       # Strict end-to-end TLS: start.sh generates a self-signed cert and the app
       # serves HTTPS, so the ALB→task hop is encrypted (target group is HTTPS).
       { name = "ENABLE_TLS", value = "true" },
+      # TEMPORARY — while Amazon SES is in the sandbox (can't deliver the signup
+      # verification email to arbitrary addresses), new accounts are auto-verified
+      # so signups aren't blocked. REMOVE this (or set "true") the moment real email
+      # delivery is available (SES production access, or a bridge provider).
+      { name = "REQUIRE_EMAIL_VERIFICATION", value = "false" },
     ]
 
     # App must assemble DATABASE_URL as:

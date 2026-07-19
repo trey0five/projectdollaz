@@ -31,6 +31,7 @@ const RESET_TTL_MS = 1000 * 60 * 15 // 15m
 @Injectable()
 export class AuthService {
   private readonly isProd: boolean
+  private readonly requireEmailVerification: boolean
 
   constructor(
     private readonly prisma: PrismaService,
@@ -41,6 +42,8 @@ export class AuthService {
     config: ConfigService,
   ) {
     this.isProd = (config.get<string>('nodeEnv') ?? 'development') === 'production'
+    this.requireEmailVerification =
+      config.get<boolean>('auth.requireEmailVerification') ?? true
   }
 
   async register(dto: RegisterDto): Promise<{ message: string; user: UserPublic }> {
@@ -63,15 +66,23 @@ export class AuthService {
         passwordIters: iters,
         passwordSalt: salt,
         passwordHash: hash,
-        emailVerified: false,
-        emailVerificationToken: sha256hex(token), // store hash; email the plaintext
-        emailVerificationExpiresAt: new Date(Date.now() + VERIFY_TTL_MS),
+        // When verification is disabled (email delivery unavailable), the account
+        // is created already-verified so login isn't blocked; no token is stored.
+        emailVerified: !this.requireEmailVerification,
+        emailVerificationToken: this.requireEmailVerification ? sha256hex(token) : null, // store hash; email the plaintext
+        emailVerificationExpiresAt: this.requireEmailVerification
+          ? new Date(Date.now() + VERIFY_TTL_MS)
+          : null,
       },
     })
-    await this.mailer.sendVerificationEmail(user.email, token)
+    if (this.requireEmailVerification) {
+      await this.mailer.sendVerificationEmail(user.email, token)
+    }
 
     return {
-      message: 'Account created. Check your email to verify your address.',
+      message: this.requireEmailVerification
+        ? 'Account created. Check your email to verify your address.'
+        : 'Account created. You can sign in now.',
       user: toUserPublic(user),
     }
   }
@@ -153,7 +164,7 @@ export class AuthService {
     // unverified user (after running the real verify above for timing parity).
     // This removes the password-confirmation oracle the reviewer flagged while
     // still requiring verification before issuing tokens.
-    if (!user.emailVerified) {
+    if (this.requireEmailVerification && !user.emailVerified) {
       throw new ForbiddenException({
         code: 'EMAIL_NOT_VERIFIED',
         message: 'Please verify your email before logging in.',
