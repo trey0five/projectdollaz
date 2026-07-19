@@ -30,5 +30,24 @@ echo "[start] seeding database (idempotent)..."
 # config is found. Idempotent upserts make this safe on every container start.
 ( cd packages/db && node_modules/.bin/prisma db seed ) || echo "[start] seed skipped/failed (non-fatal)"
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Strict end-to-end TLS: when ENABLE_TLS=true (prod), generate a self-signed cert
+# so the app serves HTTPS and the ALB→task hop inside the VPC is encrypted. The
+# ALB does not validate the backend cert (encryption-only), so a self-signed cert
+# is sufficient. Local dev leaves ENABLE_TLS unset → plain HTTP.
+# ─────────────────────────────────────────────────────────────────────────────
+if [ "${ENABLE_TLS:-}" = "true" ]; then
+  CERT_DIR="${TLS_CERT_DIR:-/app/certs}"
+  mkdir -p "$CERT_DIR"
+  if [ ! -s "$CERT_DIR/tls.crt" ]; then
+    echo "[start] generating self-signed TLS cert (ALB→task encryption)..."
+    openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
+      -keyout "$CERT_DIR/tls.key" -out "$CERT_DIR/tls.crt" \
+      -subj "/CN=ourkyro-api" >/dev/null 2>&1
+  fi
+  export HTTPS_KEY_FILE="$CERT_DIR/tls.key"
+  export HTTPS_CERT_FILE="$CERT_DIR/tls.crt"
+fi
+
 echo "[start] launching api..."
 exec node apps/api/dist/main.js

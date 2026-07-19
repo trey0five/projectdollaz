@@ -4,6 +4,7 @@ import { NestFactory } from '@nestjs/core'
 import { ConfigService } from '@nestjs/config'
 import { ValidationPipe } from '@nestjs/common'
 import type { NestExpressApplication } from '@nestjs/platform-express'
+import { readFileSync } from 'node:fs'
 import { AppModule } from './app.module.js'
 
 async function bootstrap(): Promise<void> {
@@ -12,8 +13,20 @@ async function bootstrap(): Promise<void> {
   // controller verifies the signature against req.rawBody, so every other route
   // keeps normal JSON parsing untouched and we avoid a direct `express` import
   // (express is only a transitive dep of @nestjs/platform-express).
+  // Strict end-to-end TLS: when the entrypoint provides a cert (ENABLE_TLS in
+  // prod → self-signed, generated in start.sh), serve HTTPS so the ALB→task hop
+  // inside the VPC is encrypted too. The ALB does not validate the backend cert
+  // (encryption-only). No cert → plain HTTP (local dev / docker-compose).
+  const httpsKey = process.env.HTTPS_KEY_FILE
+  const httpsCert = process.env.HTTPS_CERT_FILE
+  const httpsOptions =
+    httpsKey && httpsCert
+      ? { key: readFileSync(httpsKey), cert: readFileSync(httpsCert) }
+      : undefined
+
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true,
+    ...(httpsOptions ? { httpsOptions } : {}),
   })
 
   // Raise the JSON body limit above the ~100kb express default so the board-report
@@ -47,7 +60,9 @@ async function bootstrap(): Promise<void> {
 
   // No global prefix in 1A — /health is curled at the root.
   await app.listen(port, '0.0.0.0')
-  console.log(`[api] listening on :${port} (cors origin ${webOrigin})`)
+  console.log(
+    `[api] listening on :${port} (${httpsOptions ? 'HTTPS' : 'HTTP'}, cors origin ${webOrigin})`,
+  )
 }
 
 void bootstrap()
