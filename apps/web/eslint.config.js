@@ -23,6 +23,22 @@ export default [
     rules: {
       ...js.configs.recommended.rules,
       ...reactHooks.configs.recommended.rules,
+      // eslint-plugin-react-hooks v7 turns the React Compiler DIAGNOSTICS into
+      // errors in its recommended set. This codebase predates the compiler, so we
+      // adopt those hints INCREMENTALLY as warnings (visible, non-blocking) while
+      // keeping the proven bug-catchers (`rules-of-hooks`, `exhaustive-deps`) at
+      // their recommended levels. Promote these back to `error` as we clean them up.
+      'react-hooks/refs': 'warn',
+      'react-hooks/set-state-in-effect': 'warn',
+      'react-hooks/set-state-in-render': 'warn',
+      'react-hooks/immutability': 'warn',
+      'react-hooks/preserve-manual-memoization': 'warn',
+      'react-hooks/purity': 'warn',
+      'react-hooks/static-components': 'warn',
+      'react-hooks/use-memo': 'warn',
+      'react-hooks/globals': 'warn',
+      'react-hooks/error-boundaries': 'warn',
+      'react-hooks/gating': 'warn',
       // `motion` is imported solely as a JSX namespace (`<motion.div>`), which
       // base no-unused-vars does not track (no react/jsx-uses-vars plugin here),
       // so it would be flagged as unused in every animated component. Ignore it

@@ -8,5 +8,7 @@ export default defineConfig({
   clean: true,
   sourcemap: true,
   target: 'es2022',
-  external: ['@finrep/engine'],
+  // Never bundle a sibling workspace package — they resolve at runtime via
+  // node_modules (the diocesan parser imports @finrep/analytics + @finrep/db).
+  external: [/^@finrep\//],
 })

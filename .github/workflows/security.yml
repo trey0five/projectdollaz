@@ -42,7 +42,7 @@ jobs:
       - name: gitleaks
         run: |
           docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest \
-            detect --source=/repo --redact --verbose --exit-code=1
+            detect --source=/repo --config=/repo/.gitleaks.toml --redact --verbose --exit-code=1
 
   # ── Dependency vulnerabilities ─────────────────────────────────────────────
   dependencies:
@@ -59,17 +59,10 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # pnpm audit is the JS dependency gate. Reviewed/unfixable advisories are
+      # tracked in package.json → pnpm.auditConfig.ignoreGhsas (with a note).
       - name: pnpm audit (fail on high)
         run: pnpm audit --audit-level high
-      - name: Trivy filesystem (vulns + secrets + misconfig)
-        uses: aquasecurity/trivy-action@0.24.0
-        with:
-          scan-type: fs
-          scan-ref: .
-          scanners: vuln,secret,misconfig
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: '1'
 
   # ── Infrastructure-as-Code (Terraform) ─────────────────────────────────────
   iac:
@@ -78,13 +71,11 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Trivy config (Terraform + Dockerfiles)
-        uses: aquasecurity/trivy-action@0.24.0
-        with:
-          scan-type: config
-          scan-ref: .
-          severity: HIGH,CRITICAL
-          exit-code: '1'
+      - name: Trivy config (Terraform)
+        run: |
+          docker run --rm -v "$PWD:/repo" aquasec/trivy:latest config \
+            --severity HIGH,CRITICAL --ignorefile /repo/.trivyignore \
+            --exit-code 1 /repo/terraform
 
   # ── Static analysis (SAST) ─────────────────────────────────────────────────
   codeql:

@@ -659,7 +659,7 @@ export class AccreditationService {
 
     let sourceType: EvidenceSourceType = (existing.sourceType ?? 'manual') as EvidenceSourceType
     let sourceRef: string | null = existing.sourceRef ?? null
-    let title = pick(dto.title, existing.title)
+    const title = pick(dto.title, existing.title)
     let kind = dto.kind !== undefined ? normalizeKind(dto.kind) : normalizeKind(existing.kind)
     let reference = pick(dto.reference, existing.reference)
 

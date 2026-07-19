@@ -22,3 +22,6 @@ npm-debug.log*
 .env
 .env.local
 .env.*.local
+
+# Large local media asset (not for git)
+homepagevid.mp4
