@@ -34,6 +34,7 @@ env:
   ECS_SERVICE: ourkyro-prod-api
   SPA_BUCKET: ourkyro-prod-spa
   DOMAIN: ourkyro.com
+  CLOUDFRONT_DISTRIBUTION_ID: EAV9IL3VN9XXE
 
 jobs:
   deploy:
@@ -93,10 +94,23 @@ jobs:
       - name: Sync SPA & invalidate CloudFront
         run: |
           set -euo pipefail
-          aws s3 sync apps/web/dist "s3://$SPA_BUCKET" --delete
-          DIST=$(aws cloudfront list-distributions \
-            --query "DistributionList.Items[?contains(Aliases.Items, '$DOMAIN')].Id | [0]" \
-            --output text)
+          # Content-hashed assets are immutable → cache forever. index.html MUST
+          # NOT be cached: it points at the current asset hashes, so a stale cached
+          # index.html after a --delete leaves edges 404-ing the old chunks (white
+          # screen). Upload assets first (long cache, excluding index.html), then
+          # index.html with no-cache, then invalidate.
+          aws s3 sync apps/web/dist "s3://$SPA_BUCKET" --delete \
+            --cache-control "public,max-age=31536000,immutable" --exclude index.html
+          aws s3 cp apps/web/dist/index.html "s3://$SPA_BUCKET/index.html" \
+            --cache-control "no-cache, must-revalidate" --content-type "text/html"
+          # Use the known distribution id (stable). Fall back to a lookup only if
+          # it is somehow unset, so a bad lookup can never fail the deploy.
+          DIST="${CLOUDFRONT_DISTRIBUTION_ID:-}"
+          if [ -z "$DIST" ] || [ "$DIST" = "None" ]; then
+            DIST=$(aws cloudfront list-distributions \
+              --query "DistributionList.Items[?contains(Aliases.Items, '$DOMAIN')].Id | [0]" \
+              --output text)
+          fi
           echo "CloudFront distribution: $DIST"
           aws cloudfront create-invalidation --distribution-id "$DIST" --paths '/*' >/dev/null
 
