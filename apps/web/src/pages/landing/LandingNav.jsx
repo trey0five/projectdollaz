@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
-import { ArrowRight, LineChart } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import { NAV } from './landingContent.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 
@@ -51,17 +51,7 @@ export default function LandingNav({ show = true }) {
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
           className={`flex min-w-0 items-center gap-3 rounded-lg px-1 py-1 transition-opacity hover:opacity-90 ${FOCUS_RING}`}
         >
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gold-gradient text-navy-deep shadow-glow">
-            <LineChart size={18} />
-          </span>
-          <span className="flex min-w-0 flex-col">
-            <span className="truncate font-serif text-[17px] font-semibold leading-tight tracking-[0.01em] text-gold-light">
-              KYRO
-            </span>
-            <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">
-              Knowledge Yielding Resource Optimizer
-            </span>
-          </span>
+          <img src="/kyro-lockup.png" alt="KYRO" className="h-14 w-auto shrink-0 object-contain" />
         </Link>
 
         {/* Section anchors are md+ only; Sign in + Get started stay visible on

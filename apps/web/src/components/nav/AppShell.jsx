@@ -30,7 +30,6 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   LogOut,
-  LineChart,
   Menu,
   X,
   Lock,
@@ -359,12 +358,7 @@ export default function AppShell({ children }) {
       title="Main site home"
       className="flex shrink-0 items-center gap-2 rounded-lg px-1 py-1 outline-none ring-gold/50 transition-opacity hover:opacity-90 focus-visible:ring-2"
     >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gold-gradient text-navy-deep shadow-glow">
-        <LineChart size={18} />
-      </span>
-      <span className="hidden font-serif text-[16px] font-semibold leading-none tracking-[0.01em] text-gold-light md:inline">
-        KYRO
-      </span>
+      <img src="/kyro-lockup.png" alt="KYRO" className="h-14 w-auto shrink-0 object-contain" />
     </Link>
   )
 
@@ -375,17 +369,7 @@ export default function AppShell({ children }) {
       title="Homepage"
       className="flex min-w-0 items-center gap-3 rounded-lg px-1 py-1 outline-none ring-gold/50 transition-opacity hover:opacity-90 focus-visible:ring-2"
     >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gold-gradient text-navy-deep shadow-glow">
-        <LineChart size={18} />
-      </span>
-      <span className="flex min-w-0 flex-col">
-        <span className="truncate font-serif text-[17px] font-semibold leading-tight tracking-[0.01em] text-gold-light">
-          KYRO
-        </span>
-        <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">
-          Knowledge Yielding Resource Optimizer
-        </span>
-      </span>
+      <img src="/kyro-lockup.png" alt="KYRO" className="h-14 w-auto shrink-0 object-contain" />
     </Link>
   )
 

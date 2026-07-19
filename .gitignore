@@ -25,3 +25,6 @@ npm-debug.log*
 
 # Large local media asset (not for git)
 homepagevid.mp4
+
+# Large logo source (processed assets live in apps/web/public/)
+kyro logo-Photoroom.png

@@ -1,6 +1,5 @@
 // LandingFooter — small navy footer: brand, copyright, labeled footer nav.
 import { Link } from 'react-router-dom'
-import { LineChart } from 'lucide-react'
 import { FOOTER } from './landingContent.js'
 
 const FOCUS_RING = 'outline-none focus-visible:ring-2 focus-visible:ring-gold/60'
@@ -14,12 +13,7 @@ export default function LandingFooter() {
           aria-label="KYRO — home"
           className={`flex items-center gap-2.5 rounded-lg px-1 py-1 transition-opacity hover:opacity-90 ${FOCUS_RING}`}
         >
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gold-gradient text-navy-deep">
-            <LineChart size={15} />
-          </span>
-          <span className="font-serif text-[15px] font-semibold text-gold-light">
-            KYRO
-          </span>
+          <img src="/kyro-lockup.png" alt="KYRO" className="h-14 w-auto shrink-0 object-contain" />
         </Link>
         <p className="text-[13px] text-white/60">{FOOTER.copyright}</p>
         <nav aria-label="Footer" className="flex items-center gap-6">
