@@ -3,7 +3,6 @@
 // footer with the copyright + legal links. Deliberately plain (not the navy
 // marketing chrome) so long-form legal text stays legible.
 import { Link } from 'react-router-dom'
-import { LineChart } from 'lucide-react'
 import { FOOTER } from '../landing/landingContent.js'
 
 const FOCUS = 'outline-none focus-visible:ring-2 focus-visible:ring-gold/50'
@@ -25,9 +24,7 @@ export default function LegalPage({ title, updated, children }) {
       <header className="border-b border-navy/10 bg-white">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-5 py-4 sm:px-8">
           <Link to="/" aria-label="KYRO — home" className={`flex items-center gap-2.5 rounded-lg ${FOCUS}`}>
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gold-gradient text-navy-deep">
-              <LineChart size={15} />
-            </span>
+            <img src="/kyro-mark.png" alt="" className="h-8 w-8 object-contain" />
             <span className="font-serif text-[16px] font-semibold text-navy">KYRO</span>
           </Link>
           <Link to="/" className={`rounded-md text-[13px] font-semibold text-muted hover:text-navy ${FOCUS}`}>
