@@ -1,6 +1,6 @@
 /**
  * Tiny inline-markdown -> React node parser (ported from the Nagare AI renderer,
- * TS -> JS, re-themed to Dollaz navy/gold). Intentionally minimal, dependency-free.
+ * TS -> JS, re-themed to KYRO navy/gold). Intentionally minimal, dependency-free.
  * Covers:
  *   - # / ## / ### headings (all collapse to one visual weight)
  *   - **bold**

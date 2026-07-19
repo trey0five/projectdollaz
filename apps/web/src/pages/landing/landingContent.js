@@ -155,7 +155,7 @@ export const DIOCESE = {
 export const LICENSING = {
   kicker: 'Licensed per module',
   h3: 'Start with finance. Add the rest when you’re ready.',
-  body: 'Project Dollaz is licensed per module — every school gets the core platform, the briefing, and Penny; Finance, Governance, Accreditation, Facilities, and Advancement are added as your office grows into them.',
+  body: 'KYRO is licensed per module — every school gets the core platform, the briefing, and Penny; Finance, Governance, Accreditation, Facilities, and Advancement are added as your office grows into them.',
 }
 
 export const FINALE = {
@@ -166,7 +166,7 @@ export const FINALE = {
 }
 
 export const FOOTER = {
-  copyright: '© 2026 Project Dollaz',
+  copyright: '© 2026 KYRO',
   links: [
     { label: 'Sign in', to: '/login' },
     { label: 'Create account', to: '/register' },

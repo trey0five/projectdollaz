@@ -47,7 +47,7 @@ export default function LandingNav({ show = true }) {
         {/* Brand block (AppShell language; links to the landing root). */}
         <Link
           to="/"
-          aria-label="Project Dollaz — home"
+          aria-label="KYRO — home"
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
           className={`flex min-w-0 items-center gap-3 rounded-lg px-1 py-1 transition-opacity hover:opacity-90 ${FOCUS_RING}`}
         >
@@ -56,10 +56,10 @@ export default function LandingNav({ show = true }) {
           </span>
           <span className="flex min-w-0 flex-col">
             <span className="truncate font-serif text-[17px] font-semibold leading-tight tracking-[0.01em] text-gold-light">
-              Project Dollaz
+              KYRO
             </span>
             <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">
-              Digital COO
+              Knowledge Yielding Resource Optimizer
             </span>
           </span>
         </Link>

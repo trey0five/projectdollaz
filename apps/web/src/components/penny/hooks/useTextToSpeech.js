@@ -23,7 +23,7 @@
  *    click, Send button) — iOS Safari requires it before audio plays on later
  *    async data; also primes speechSynthesis.
  *
- * Ported from the Nagare AI reference, adapted to Dollaz's fetch + proxy
+ * Ported from the Nagare AI reference, adapted to KYRO's fetch + proxy
  * contract and extended with the browser-speech fallback.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
