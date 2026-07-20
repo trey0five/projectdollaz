@@ -597,10 +597,13 @@ export default function AppShell({ children }) {
             {/* 1. Logo — centered + prominent, with the tagline beneath it. */}
             <div className="flex shrink-0 flex-col items-center gap-1.5 border-b border-white/10 px-4 py-5">
               {v2RailBrand}
-              <span className="text-center text-[9.5px] font-semibold uppercase leading-tight tracking-[0.16em] text-white/45">
-                Knowledge Yielding
+              {/* Tagline in the logo's own per-word colours (blue / teal / orange). */}
+              <span className="text-center text-[9.5px] font-bold uppercase leading-tight tracking-[0.16em]">
+                <span style={{ color: '#2f90d8' }}>Knowledge</span>{' '}
+                <span style={{ color: '#1fc4a3' }}>Yielding</span>
                 <br />
-                Resource Optimizer
+                <span style={{ color: '#f5842b' }}>Resource</span>{' '}
+                <span style={{ color: '#f5842b' }}>Optimizer</span>
               </span>
             </div>
             {/* 2. School toggle — the combined context picker, above Home. */}

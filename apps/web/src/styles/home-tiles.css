@@ -75,19 +75,25 @@
   transform: rotate(-8deg);
   transition:
     opacity 0.4s ease,
+    color 0.35s ease,
     transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .tile-watermark svg {
   height: 138px;
   width: 138px;
 }
-.module-tile:hover .tile-watermark,
-.module-tile:focus-visible .tile-watermark,
-.module-tile:focus-within .tile-watermark {
-  opacity: 0;
-  transform: rotate(-8deg) scale(1.08);
+/* On hover the hue-flood fills the card, so the watermark flips to WHITE (and
+   stays visible) instead of fading out — it reads as a faint white emboss over
+   the flood. Locked tiles have no flood, so they're excluded (see below). */
+.module-tile:not(.module-tile--locked):hover .tile-watermark,
+.module-tile:not(.module-tile--locked):focus-visible .tile-watermark,
+.module-tile:not(.module-tile--locked):focus-within .tile-watermark {
+  color: #fff;
+  opacity: 0.18;
+  transform: rotate(-8deg) scale(1.06);
 }
-/* Locked upsell: keep it, but even quieter and in ink so it reads "dimmed". */
+/* Locked upsell: no flood — keep it quiet + in ink so it reads "dimmed", and
+   don't flip it white on hover (it would vanish on the white card). */
 .module-tile--locked .tile-watermark {
   color: rgb(16 28 61);
   opacity: 0.045;
