@@ -358,7 +358,7 @@ export default function AppShell({ children }) {
       title="Main site home"
       className="flex shrink-0 items-center gap-2 rounded-lg px-1 py-1 outline-none ring-gold/50 transition-opacity hover:opacity-90 focus-visible:ring-2"
     >
-      <img src="/kyro-lockup.png" alt="KYRO" className="h-14 w-auto shrink-0 object-contain" />
+      <img src="/kyro-lockup.png" alt="KYRO" className="h-16 w-auto shrink-0 object-contain" />
     </Link>
   )
 
@@ -369,7 +369,7 @@ export default function AppShell({ children }) {
       title="Homepage"
       className="flex min-w-0 items-center gap-3 rounded-lg px-1 py-1 outline-none ring-gold/50 transition-opacity hover:opacity-90 focus-visible:ring-2"
     >
-      <img src="/kyro-lockup.png" alt="KYRO" className="h-14 w-auto shrink-0 object-contain" />
+      <img src="/kyro-lockup.png" alt="KYRO" className="h-16 w-auto shrink-0 object-contain" />
     </Link>
   )
 
@@ -559,7 +559,7 @@ export default function AppShell({ children }) {
             /* ── ui.v2 slim top bar: logo pinned LEFT; nav + context picker +
                search + account all clustered on the RIGHT. No Ask Penny button,
                no hamburger/drawer. ── */
-            <header className="no-print sticky top-0 z-20 flex h-14 items-center gap-2 border-b-2 border-gold/30 bg-navy-gradient px-3 shadow-navy-glow sm:gap-3 sm:px-6">
+            <header className="no-print sticky top-0 z-20 flex h-16 items-center gap-2 border-b-2 border-gold/30 bg-navy-gradient px-3 shadow-navy-glow sm:gap-3 sm:px-6">
               {/* Brand — alone on the far left. */}
               {v2Brand}
 
@@ -613,7 +613,7 @@ export default function AppShell({ children }) {
             </header>
           ) : (
             /* Slim top strip: hamburger (<lg) + SchoolSwitcher + user/logout. */
-            <header className="no-print sticky top-0 z-20 flex h-14 items-center justify-between gap-2 border-b-2 border-gold/30 bg-navy-gradient px-3 shadow-navy-glow sm:gap-3 sm:px-6">
+            <header className="no-print sticky top-0 z-20 flex h-16 items-center justify-between gap-2 border-b-2 border-gold/30 bg-navy-gradient px-3 shadow-navy-glow sm:gap-3 sm:px-6">
               <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
                 <button
                   ref={hamburgerRef}
