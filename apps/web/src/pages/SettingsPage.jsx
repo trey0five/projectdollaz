@@ -2,7 +2,7 @@
 // and an animated cream panel that renders the active nested section via Outlet.
 import { motion } from 'framer-motion'
 import { Link, Outlet, useLocation } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import { BACK_PILL_DARK, BackPillBody } from '../components/ui/BackLink.jsx'
 import SettingsSidebar from '../components/settings/SettingsSidebar.jsx'
 
 export default function SettingsPage() {
@@ -15,11 +15,8 @@ export default function SettingsPage() {
           <h1 className="font-serif text-[24px] font-semibold text-gold-light sm:text-[28px]">
             Settings
           </h1>
-          <Link
-            to="/app"
-            className="flex min-h-[44px] items-center gap-2 text-[15px] font-semibold text-white/70 transition-colors hover:text-gold-light"
-          >
-            <ArrowLeft size={15} /> Back to dashboard
+          <Link to="/app" className={BACK_PILL_DARK}>
+            <BackPillBody label="Back to dashboard" tone="dark" />
           </Link>
         </div>
 

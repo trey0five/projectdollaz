@@ -626,12 +626,11 @@ export default function AppShell({ children }) {
           className={`flex min-w-0 flex-1 flex-col ${uiV2 ? 'lg:pl-64' : 'app-content-offset lg:pl-64'}`}
         >
           {uiV2 ? (
-            /* ── ui.v2 slim TOP STRIP: hamburger (<lg, opens the drawer), platform
-               search, and the account avatar. The logo, school toggle and nav all
-               live in the left rail now, not here. ── */
-            <header className="no-print sticky top-0 z-20 flex h-16 items-center gap-3 border-b-2 border-gold/30 bg-navy-gradient px-3 shadow-navy-glow sm:px-6">
-              {/* Hamburger opens the off-canvas rail on <lg (hidden once the rail
-                  is docked at lg+). Same refs/aria as the legacy strip. */}
+            /* ── ui.v2: NO desktop top bar (search + avatar removed by request —
+               the account lives in the rail foot). A slim MOBILE-ONLY bar carries
+               just the hamburger + compact logo so the off-canvas rail stays
+               reachable; on lg+ the rail is docked and this bar is hidden. ── */
+            <header className="no-print sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-gold/25 bg-navy-gradient px-3 shadow-navy-glow lg:hidden">
               <button
                 ref={hamburgerRef}
                 type="button"
@@ -639,20 +638,17 @@ export default function AppShell({ children }) {
                 aria-label={menuOpen ? 'Close menu' : 'Open menu'}
                 aria-expanded={menuOpen}
                 aria-controls="app-sidebar-drawer"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/15 text-white/80 transition-colors hover:bg-white/[0.06] hover:text-white sm:h-10 sm:w-10 lg:hidden"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/15 text-white/80 transition-colors hover:bg-white/[0.06] hover:text-white"
               >
                 {menuOpen ? <X size={20} /> : <Menu size={20} />}
               </button>
-
-              {/* Platform search — grows to fill, sits on the left. */}
-              <div className="flex min-w-0 flex-1 items-center">
-                <SearchBox />
-              </div>
-
-              {/* Account: Settings + Sign Out live behind the avatar, pinned right. */}
-              <div className="ml-auto flex shrink-0 items-center pl-2">
-                <AvatarMenu />
-              </div>
+              <Link
+                to="/"
+                aria-label="KYRO — main site home"
+                className="flex items-center rounded-lg outline-none ring-gold/50 transition-opacity hover:opacity-90 focus-visible:ring-2"
+              >
+                <img src="/kyro-lockup.png" alt="KYRO" className="h-9 w-auto object-contain" />
+              </Link>
             </header>
           ) : (
             /* Slim top strip: hamburger (<lg) + SchoolSwitcher + user/logout. */

@@ -18,8 +18,9 @@
 import { useCallback, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
-import { ArrowLeft, LayoutDashboard, Upload, Table2, FileBarChart2 } from 'lucide-react'
+import { LayoutDashboard, Upload, Table2, FileBarChart2 } from 'lucide-react'
 import { moduleAccentVars, moduleAnatomy, moduleHue, moduleLabel, moduleTabs, TAB_LABEL } from './moduleAnatomy.js'
+import { BACK_PILL, BackPillBody } from '../ui/BackLink.jsx'
 
 // The verb-icon for each tab (recognizable at a glance; folded in from the retired
 // ModuleFlowGuide so the tab bar ITSELF now draws the flow).
@@ -93,11 +94,8 @@ export default function ModuleTabs({ moduleKey, overview, addData, records, repo
       {/* Back to the tile dashboard — the sidebar is retired under v2, so this is
           the explicit way home from every module page. */}
       <div className="mx-auto max-w-page px-4 pt-4 sm:px-10">
-        <Link
-          to="/app"
-          className="inline-flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.1em] text-muted transition-colors hover:text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy/40"
-        >
-          <ArrowLeft size={14} /> Back to dashboard
+        <Link to="/app" className={BACK_PILL}>
+          <BackPillBody label="Back to dashboard" />
         </Link>
       </div>
 

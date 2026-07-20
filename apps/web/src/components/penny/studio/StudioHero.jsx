@@ -15,8 +15,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
-import { ArrowLeft, Headphones, Plus } from 'lucide-react'
+import { Headphones, Plus } from 'lucide-react'
 import PennyAvatar from '../PennyAvatar.jsx'
+import { BACK_PILL_DARK, BackPillBody } from '../../ui/BackLink.jsx'
 import { useSpeechInput } from '../hooks/useSpeechInput.js'
 import StudioBackdrop from './StudioBackdrop.jsx'
 
@@ -186,11 +187,8 @@ export default function StudioHero({ compact, name, chat, askBar, onNewChat }) {
           </div>
         ) : (
           <div className="px-6 pt-6 sm:px-10 sm:pt-8">
-            <Link
-              to="/app"
-              className="mb-5 flex w-max items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.1em] text-white/55 transition-colors hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60"
-            >
-              <ArrowLeft size={14} /> Back to dashboard
+            <Link to="/app" className={`mb-5 w-max ${BACK_PILL_DARK}`}>
+              <BackPillBody label="Back to dashboard" tone="dark" />
             </Link>
             <p className="mb-3.5 inline-flex items-center gap-2 text-[12px] font-bold uppercase tracking-[0.2em] text-penny-light">
               <span aria-hidden className="relative flex h-[7px] w-[7px]">
