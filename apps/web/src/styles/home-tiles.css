@@ -312,11 +312,19 @@
   width: 18px;
 }
 @media (prefers-reduced-motion: no-preference) {
+  /* Text flips white ONLY when the flood is actually up: on hover, or when the
+     stretched hit link has KEYBOARD focus (:focus-visible — which also floods,
+     below). Plain :focus-within was a bug: clicking an inner button (e.g. Board
+     packet) left the card focused after the flood receded → white-on-white. */
   .module-tile--panel:hover .tile-body,
-  .module-tile--panel:focus-within .tile-body,
+  .module-tile--panel:has(.tile-panel-hit:focus-visible) .tile-body,
   .module-tile--panel:hover .tile-body :is(h3, h4, p, dt, dd, span, div, li, time),
-  .module-tile--panel:focus-within .tile-body :is(h3, h4, p, dt, dd, span, div, li, time) {
+  .module-tile--panel:has(.tile-panel-hit:focus-visible) .tile-body :is(h3, h4, p, dt, dd, span, div, li, time) {
     color: #fff;
+  }
+  /* Keyboard parity: focusing the stretched hit link floods the card too. */
+  .module-tile:has(.tile-panel-hit:focus-visible)::before {
+    transform: scale(9);
   }
 }
 
