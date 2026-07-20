@@ -85,6 +85,15 @@ const V2_NAV = [
   { to: '/knowledge', label: 'Knowledge', Icon: Library },
 ]
 
+// The frozen Penny target-registry ids for the ui.v2 rail's primary links. Put on
+// the DESKTOP rail only (the mobile drawer copy passes withIds=false so a single
+// getElementById target survives — duplicate ids would break Penny's glide).
+const V2_NAV_ID = {
+  '/app': 'nav-home',
+  '/tasks': 'nav-tasks',
+  '/knowledge': 'nav-knowledge',
+}
+
 // Per-module icon for the (dimmed) Add-ons rows; falls back to a Lock badge.
 const LOCKED_ICON = {
   planning: PlanIcon,
@@ -349,19 +358,6 @@ export default function AppShell({ children }) {
     )
   }
 
-  // ui.v2 top-bar logo: a compact single-line mark linking to the app home (/app),
-  // sized for the slim strip (the tall two-line sidebar `brand` would crowd it).
-  const v2Brand = (
-    <Link
-      to="/"
-      aria-label="KYRO — main site home"
-      title="Main site home"
-      className="flex shrink-0 items-center gap-2 rounded-lg px-1 py-1 outline-none ring-gold/50 transition-opacity hover:opacity-90 focus-visible:ring-2"
-    >
-      <img src="/kyro-lockup.png" alt="KYRO" className="h-16 w-auto shrink-0 object-contain" />
-    </Link>
-  )
-
   const brand = (
     <Link
       to="/"
@@ -537,12 +533,54 @@ export default function AppShell({ children }) {
     </motion.button>
   )
 
+  // ── ui.v2 LEFT RAIL pieces ─────────────────────────────────────────────────
+  // The rail's logo: the KYRO lockup linking to the public home (/), sized down
+  // (h-14) so the two-line mark fits the top of a vertical rail.
+  const v2RailBrand = (
+    <Link
+      to="/"
+      aria-label="KYRO — main site home"
+      title="Main site home"
+      className="flex w-full items-center justify-center rounded-lg px-1 py-1 outline-none ring-gold/50 transition-opacity hover:opacity-90 focus-visible:ring-2"
+    >
+      <img src="/kyro-lockup.png" alt="KYRO" className="h-24 w-auto object-contain sm:h-28" />
+    </Link>
+  )
+
+  // One vertical primary-nav row. `withIds` puts the frozen Penny id on the
+  // DESKTOP rail only; the mobile drawer copy passes false.
+  const renderV2NavItem = (item, withIds) => {
+    const active = item.home ? path === '/app' : path.startsWith(item.to)
+    return (
+      <Link
+        key={item.to}
+        id={withIds ? V2_NAV_ID[item.to] : undefined}
+        to={item.to}
+        aria-label={item.label}
+        aria-current={active ? 'page' : undefined}
+        title={item.label}
+        className={itemClass(active)}
+      >
+        <ActiveRail active={active} />
+        <item.Icon size={17} className={`shrink-0 ${active ? 'text-gold-light' : 'text-white/70'}`} />
+        <span>{item.label}</span>
+      </Link>
+    )
+  }
+
+  // The rail's <nav> with the three global destinations.
+  const v2PrimaryNav = (withIds) => (
+    <nav aria-label="Primary" className="flex flex-col gap-1 px-3 py-3">
+      {V2_NAV.filter((i) => !i.module || hasModule(i.module)).map((item) =>
+        renderV2NavItem(item, withIds),
+      )}
+    </nav>
+  )
+
   return (
     <>
       <div className="min-h-screen lg:flex">
-        {/* ── Desktop sidebar (lg+): fixed left rail, carries the frozen navIds.
-            Under ui.v2 the whole rail is HIDDEN — the tile home + module tabs are
-            the nav; a slim top bar (below) carries the cross-cutting controls. ── */}
+        {/* ── Desktop sidebar (lg+): fixed left rail, carries the frozen navIds. ── */}
         {!uiV2 && (
           <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r-2 border-gold/30 bg-navy-gradient shadow-navy-glow lg:flex">
             <div className="shrink-0 border-b border-white/10 px-4 py-4">{brand}</div>
@@ -551,63 +589,68 @@ export default function AppShell({ children }) {
           </aside>
         )}
 
-        {/* ── Content column (offset by the fixed rail on lg+; no offset under v2) ── */}
+        {/* ── ui.v2 desktop LEFT RAIL (lg+): fixed w-64 column — logo, then the
+            school⇄org toggle up top, the three global destinations, and a foot
+            with Settings + the account menu. Carries the frozen Penny ids. ── */}
+        {uiV2 && (
+          <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r-2 border-gold/30 bg-navy-gradient shadow-navy-glow lg:flex">
+            {/* 1. Logo — centered + prominent, with the tagline beneath it. */}
+            <div className="flex shrink-0 flex-col items-center gap-1.5 border-b border-white/10 px-4 py-5">
+              {v2RailBrand}
+              {/* Tagline in the logo's own per-word colours (blue / teal / orange). */}
+              <span className="text-center text-[9.5px] font-bold uppercase leading-tight tracking-[0.16em]">
+                <span style={{ color: '#2f90d8' }}>Knowledge</span>{' '}
+                <span style={{ color: '#1fc4a3' }}>Yielding</span>
+                <br />
+                <span style={{ color: '#f5842b' }}>Resource</span>{' '}
+                <span style={{ color: '#f5842b' }}>Optimizer</span>
+              </span>
+            </div>
+            {/* 2. School toggle — the combined context picker, above Home. */}
+            <div className="shrink-0 border-b border-white/10 px-3 py-3">
+              <ContextSwitcher />
+            </div>
+            {/* 3. Primary nav (frozen ids on desktop). */}
+            {v2PrimaryNav(true)}
+            {/* 4. Spacer → foot: Settings + account. */}
+            <div className="flex-1" />
+            <div className="shrink-0 space-y-2 border-t border-white/10 px-3 py-3">
+              {settingsLink(true)}
+              <AvatarMenu />
+            </div>
+          </aside>
+        )}
+
+        {/* ── Content column (offset by the fixed rail on lg+, both v1 and v2) ── */}
         <div
-          className={`flex min-w-0 flex-1 flex-col ${uiV2 ? '' : 'app-content-offset lg:pl-64'}`}
+          className={`flex min-w-0 flex-1 flex-col ${uiV2 ? 'lg:pl-64' : 'app-content-offset lg:pl-64'}`}
         >
           {uiV2 ? (
-            /* ── ui.v2 slim top bar: logo pinned LEFT; nav + context picker +
-               search + account all clustered on the RIGHT. No Ask Penny button,
-               no hamburger/drawer. ── */
-            <header className="no-print sticky top-0 z-20 flex h-16 items-center gap-2 border-b-2 border-gold/30 bg-navy-gradient px-3 shadow-navy-glow sm:gap-3 sm:px-6">
-              {/* Brand — alone on the far left. */}
-              {v2Brand}
+            /* ── ui.v2 slim TOP STRIP: hamburger (<lg, opens the drawer), platform
+               search, and the account avatar. The logo, school toggle and nav all
+               live in the left rail now, not here. ── */
+            <header className="no-print sticky top-0 z-20 flex h-16 items-center gap-3 border-b-2 border-gold/30 bg-navy-gradient px-3 shadow-navy-glow sm:px-6">
+              {/* Hamburger opens the off-canvas rail on <lg (hidden once the rail
+                  is docked at lg+). Same refs/aria as the legacy strip. */}
+              <button
+                ref={hamburgerRef}
+                type="button"
+                onClick={() => setMenuOpen((o) => !o)}
+                aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+                aria-expanded={menuOpen}
+                aria-controls="app-sidebar-drawer"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/15 text-white/80 transition-colors hover:bg-white/[0.06] hover:text-white sm:h-10 sm:w-10 lg:hidden"
+              >
+                {menuOpen ? <X size={20} /> : <Menu size={20} />}
+              </button>
 
-              {/* RIGHT cluster (ml-auto hugs the right edge): GLOBAL top nav, the
-                  combined school⇄org context picker, platform search, then the
-                  account avatar. */}
-              <div className="ml-auto flex min-w-0 items-center gap-2 sm:gap-3">
-                <nav aria-label="Primary" className="flex items-center gap-0.5">
-                  {V2_NAV.filter((i) => !i.module || hasModule(i.module)).map((item) => {
-                    const active = item.home ? path === '/app' : path.startsWith(item.to)
-                    return (
-                      <Link
-                        key={item.to}
-                        to={item.to}
-                        title={item.label}
-                        aria-label={item.label}
-                        aria-current={active ? 'page' : undefined}
-                        className={`flex min-h-[38px] items-center gap-1.5 rounded-[10px] px-2.5 py-1.5 text-[13px] font-medium outline-none ring-gold/50 transition-colors focus-visible:ring-2 ${
-                          active
-                            ? 'bg-white/[0.14] text-white'
-                            : 'text-white/70 hover:bg-white/[0.06] hover:text-white'
-                        }`}
-                      >
-                        <item.Icon size={16} className="shrink-0" />
-                        {/* Home keeps its label from sm+; the rest are icon+tooltip
-                            (title) and only reveal labels on very wide screens so the
-                            bar never overflows. */}
-                        <span className={item.home ? 'hidden sm:inline' : 'hidden 2xl:inline'}>
-                          {item.label}
-                        </span>
-                      </Link>
-                    )
-                  })}
-                </nav>
+              {/* Platform search — grows to fill, sits on the left. */}
+              <div className="flex min-w-0 flex-1 items-center">
+                <SearchBox />
+              </div>
 
-                {/* Combined context picker (school ⇄ whole-org). min-w-0 lets it
-                    truncate. Shown on /analytics too (analytics keeps its own scope
-                    bar for URL state; this just switches the underlying context). */}
-                <ContextSwitcher />
-
-                {/* Platform search — a fixed-width box on desktop (no longer a
-                    grow-to-center element) so it sits inline in the right cluster;
-                    on mobile SearchBox renders its own icon + overlay. */}
-                <div className="flex min-w-0 sm:w-52 sm:shrink-0 md:w-60 lg:w-72">
-                  <SearchBox />
-                </div>
-
-                {/* Account: Settings + Sign Out live behind the avatar. */}
+              {/* Account: Settings + Sign Out live behind the avatar, pinned right. */}
+              <div className="ml-auto flex shrink-0 items-center pl-2">
                 <AvatarMenu />
               </div>
             </header>
@@ -648,9 +691,11 @@ export default function AppShell({ children }) {
         </div>
       </div>
 
-      {/* ── Mobile drawer (<lg): off-canvas sidebar. Retired under ui.v2. ──────── */}
+      {/* ── Mobile drawer (<lg): the off-canvas sidebar. Renders for BOTH ui
+          modes; under ui.v2 it carries the same rail content (logo, school
+          toggle, the 3 global links WITHOUT ids, then Settings + account). ── */}
       <AnimatePresence>
-        {!uiV2 && menuOpen && (
+        {menuOpen && (
           <>
             <motion.div
               className="no-print fixed inset-0 z-40 bg-navy-deep/50 backdrop-blur-sm lg:hidden"
@@ -672,7 +717,7 @@ export default function AppShell({ children }) {
               className="no-print fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col border-r-2 border-gold/30 bg-navy-gradient shadow-navy-glow lg:hidden"
             >
               <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-4 py-3">
-                {brand}
+                {uiV2 ? v2RailBrand : brand}
                 <button
                   ref={drawerCloseRef}
                   type="button"
@@ -683,14 +728,32 @@ export default function AppShell({ children }) {
                   <X size={20} />
                 </button>
               </div>
-              {navBody(false)}
-              <div className="shrink-0 space-y-2 border-t border-white/10 px-3 py-3">
-                {settingsLink(false)}
-                <div className="sm:hidden">
-                  <SchoolSwitcher />
-                </div>
-                {signOutButton}
-              </div>
+              {uiV2 ? (
+                <>
+                  {/* School toggle up top, mirroring the desktop rail. */}
+                  <div className="shrink-0 border-b border-white/10 px-3 py-3">
+                    <ContextSwitcher />
+                  </div>
+                  {/* Global nav — no frozen ids on the drawer copy. */}
+                  {v2PrimaryNav(false)}
+                  <div className="flex-1" />
+                  <div className="shrink-0 space-y-2 border-t border-white/10 px-3 py-3">
+                    {settingsLink(false)}
+                    <AvatarMenu />
+                  </div>
+                </>
+              ) : (
+                <>
+                  {navBody(false)}
+                  <div className="shrink-0 space-y-2 border-t border-white/10 px-3 py-3">
+                    {settingsLink(false)}
+                    <div className="sm:hidden">
+                      <SchoolSwitcher />
+                    </div>
+                    {signOutButton}
+                  </div>
+                </>
+              )}
             </motion.aside>
           </>
         )}

@@ -170,12 +170,14 @@ export default function HomeTiles() {
   return (
     <div className="home-ground mx-auto max-w-page space-y-5 px-4 py-6 sm:space-y-7 sm:px-10 sm:py-8">
       <BriefingBand
-        schoolName={activeSchool?.name}
         summary={briefingSummary}
-        badges={chipsReady ? badges : {}}
         lens={briefingLens}
         hasPeriod={hasPeriod}
         onOpenBrief={setBrief}
+        // School scope → the top-3 performer cards fetch metrics/trends against
+        // the active school's latest snapshot period.
+        schoolId={schoolId}
+        periodId={latestPeriodId}
         // In a multi-school org, tint the band as frosted glass in this school's
         // identity colour (same as its org tile) and show the school name.
         hue={isMultiSchool ? schoolHue(activeSchool?.id) : null}
