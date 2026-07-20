@@ -594,9 +594,14 @@ export default function AppShell({ children }) {
             with Settings + the account menu. Carries the frozen Penny ids. ── */}
         {uiV2 && (
           <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r-2 border-gold/30 bg-navy-gradient shadow-navy-glow lg:flex">
-            {/* 1. Logo — centered + prominent at the top of the rail. */}
-            <div className="flex shrink-0 items-center justify-center border-b border-white/10 px-4 py-5">
+            {/* 1. Logo — centered + prominent, with the tagline beneath it. */}
+            <div className="flex shrink-0 flex-col items-center gap-1.5 border-b border-white/10 px-4 py-5">
               {v2RailBrand}
+              <span className="text-center text-[9.5px] font-semibold uppercase leading-tight tracking-[0.16em] text-white/45">
+                Knowledge Yielding
+                <br />
+                Resource Optimizer
+              </span>
             </div>
             {/* 2. School toggle — the combined context picker, above Home. */}
             <div className="shrink-0 border-b border-white/10 px-3 py-3">

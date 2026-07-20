@@ -2,11 +2,11 @@
 // AuroraFlow — the "alive" decorative feature behind the daily-briefing hero.
 // Instead of dots / glowing orbs / a shimmer sweep, this is a slow FLOWING AURORA:
 // layered, blurred gradient RIBBONS (blue → purple → coral) that drift and breathe
-// like the light-streams in the reference, plus a few twinkling sparkle-stars.
-// Purely decorative (aria-hidden), pointer-events-none, and GPU-cheap (only
-// transform + opacity animate). Under reduced motion the ribbons render static.
-// Self-contained: no props, no data — drop it in as the first child of a
-// position:relative dark container that has overflow-hidden.
+// like the light-streams in the reference. Purely decorative (aria-hidden),
+// pointer-events-none, and GPU-cheap (only transform + opacity animate). Under
+// reduced motion the ribbons render static. Self-contained: no props, no data —
+// drop it in as the first child of a position:relative dark container that has
+// overflow-hidden.
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion, useReducedMotion } from 'framer-motion'
 
@@ -39,25 +39,6 @@ const RIBBONS = [
     drift: { x: [0, 18, -20, 0], y: [0, -10, 14, 0], duration: 23 },
   },
 ]
-
-// Twinkling sparkle-stars (four-point). Positioned in the SVG's 1000×320 space.
-const STARS = [
-  { x: megaX(0.9), y: 40, r: 6, delay: 0 },
-  { x: megaX(0.72), y: 96, r: 4, delay: 1.6 },
-  { x: megaX(0.83), y: 210, r: 5, delay: 3 },
-  { x: megaX(0.64), y: 250, r: 3.2, delay: 2.2 },
-]
-// Tiny helper so the star coords read as fractions of the 1000-wide viewBox.
-function megaX(frac) {
-  return Math.round(frac * 1000)
-}
-
-// A four-point star path centered at (cx, cy) with radius r (long points) and a
-// thin waist — the classic "sparkle".
-function starPath(cx, cy, r) {
-  const w = r * 0.34
-  return `M ${cx} ${cy - r} C ${cx + w} ${cy - w}, ${cx + w} ${cy - w}, ${cx + r} ${cy} C ${cx + w} ${cy + w}, ${cx + w} ${cy + w}, ${cx} ${cy + r} C ${cx - w} ${cy + w}, ${cx - w} ${cy + w}, ${cx - r} ${cy} C ${cx - w} ${cy - w}, ${cx - w} ${cy - w}, ${cx} ${cy - r} Z`
-}
 
 export default function AuroraFlow() {
   const reduce = useReducedMotion()
@@ -121,29 +102,6 @@ export default function AuroraFlow() {
                   opacity: [r.opacity * 0.75, r.opacity, r.opacity * 0.8, r.opacity * 0.75],
                 }}
                 transition={{ duration: r.drift.duration, repeat: Infinity, ease: 'easeInOut' }}
-              />
-            ),
-          )}
-        </g>
-
-        {/* Twinkling sparkle-stars over the ribbons. */}
-        <g fill="#fff">
-          {STARS.map((s, i) =>
-            reduce ? (
-              <path key={i} d={starPath(s.x, s.y, s.r)} opacity={0.55} />
-            ) : (
-              <motion.path
-                key={i}
-                d={starPath(s.x, s.y, s.r)}
-                initial={{ opacity: 0.2, scale: 0.7 }}
-                animate={{ opacity: [0.2, 0.95, 0.2], scale: [0.7, 1, 0.7] }}
-                transition={{
-                  duration: 3.2,
-                  delay: s.delay,
-                  repeat: Infinity,
-                  ease: 'easeInOut',
-                }}
-                style={{ transformOrigin: `${s.x}px ${s.y}px` }}
               />
             ),
           )}

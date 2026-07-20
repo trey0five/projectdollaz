@@ -76,8 +76,8 @@ export default function BriefingBand({
           {/* ── LEFT: greeting + actions ── */}
           <div className="flex min-w-0 flex-col gap-4 lg:max-w-[46%]">
             <div className="flex flex-wrap items-center gap-2.5">
-              <span className="inline-flex items-center gap-1.5 font-sans text-[12px] font-bold uppercase tracking-[0.18em] text-gold/80">
-                <Sparkles size={13} className="text-gold" /> Daily briefing
+              <span className="inline-flex items-center gap-1.5 font-sans text-[12px] font-bold uppercase tracking-[0.18em] text-white/55">
+                <Sparkles size={13} className="text-white/70" /> Daily briefing
               </span>
               {schoolTitle && (
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[12.5px] font-semibold text-white">
@@ -92,7 +92,7 @@ export default function BriefingBand({
                 {greeting()}
                 {firstName ? (
                   <>
-                    , <span className="gold-text">{firstName}</span>.
+                    , <span className="text-white">{firstName}</span>.
                   </>
                 ) : (
                   '.'
@@ -136,7 +136,7 @@ export default function BriefingBand({
                 type="button"
                 onClick={() => onOpenBrief?.('narrate')}
                 aria-label="Play — Penny reads the briefing aloud"
-                className="inline-flex items-center gap-1.5 rounded-full border border-gold/40 bg-gold/10 px-3.5 py-2 text-[13px] font-semibold text-gold-light transition-colors hover:border-gold/70 hover:bg-gold/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+                className="inline-flex items-center gap-1.5 rounded-full border border-penny/40 bg-penny/10 px-3.5 py-2 text-[13px] font-semibold text-penny-light transition-colors hover:border-penny/70 hover:bg-penny/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60"
               >
                 <Sparkles size={13} /> Play
               </button>
@@ -149,7 +149,7 @@ export default function BriefingBand({
                 <button
                   type="button"
                   onClick={onOpenOrgView}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-white/25 px-4 py-2 text-[13px] font-semibold text-white/80 transition-colors hover:border-gold/50 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-white/25 px-4 py-2 text-[13px] font-semibold text-white/80 transition-colors hover:border-white/45 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
                 >
                   <Layers size={13} /> Organization view <ArrowRight size={13} />
                 </button>
@@ -163,15 +163,15 @@ export default function BriefingBand({
       ) : (
         // ── Empty / onboarding: no saved period yet ──────────────────────────────
         <div className="relative flex flex-col gap-4">
-          <span className="inline-flex w-fit items-center gap-1.5 font-sans text-[12px] font-bold uppercase tracking-[0.18em] text-gold/80">
-            <Sparkles size={13} className="text-gold" /> Daily briefing
+          <span className="inline-flex w-fit items-center gap-1.5 font-sans text-[12px] font-bold uppercase tracking-[0.18em] text-white/55">
+            <Sparkles size={13} className="text-white/70" /> Daily briefing
           </span>
           <div>
             <h1 className="font-serif text-[26px] font-semibold leading-tight text-white sm:text-[32px]">
               {greeting()}
               {firstName ? (
                 <>
-                  , <span className="gold-text">{firstName}</span>.
+                  , <span className="text-white">{firstName}</span>.
                 </>
               ) : (
                 '.'
