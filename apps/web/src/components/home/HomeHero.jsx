@@ -6,6 +6,7 @@ import { motion, useReducedMotion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { Sparkles, Clock, BadgeCheck, Activity } from 'lucide-react'
 import PeriodSelector from '../analytics/PeriodSelector.jsx'
+import AuroraFlow from './AuroraFlow.jsx'
 
 // Severity-coded "signal board": each insight point is a tagged row (Risk / Watch
 // / Strength) with a colored marker — a finance-cockpit readout rather than a
@@ -57,7 +58,7 @@ function InsightBand({ statusLine, kind, reduce }) {
   const isAi = kind === 'llm'
   const signals = toSignals(statusLine)
   return (
-    <div className="overflow-hidden rounded-xl border border-white/10 bg-navy-deep/40 px-4 py-3">
+    <div className="relative overflow-hidden rounded-xl border border-white/10 bg-navy-deep/60 px-4 py-3 backdrop-blur-sm">
       <div className="mb-2.5 flex items-center gap-2 border-b border-white/10 pb-2.5">
         <span className="flex h-6 w-6 items-center justify-center rounded-md bg-gold-gradient text-navy">
           <Sparkles size={13} />
@@ -146,16 +147,17 @@ export default function HomeHero({
       transition={{ duration: 0.45 }}
       className="relative overflow-hidden rounded-2xl bg-navy-gradient p-5 shadow-navy-glow sm:p-8"
     >
-      <span aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-gold/10 blur-3xl" />
+      {/* Same living backdrop as the daily-briefing hero. */}
+      <AuroraFlow />
       <div className="relative flex flex-col gap-4 sm:gap-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="font-sans text-[13px] font-semibold uppercase tracking-[0.16em] text-gold/80">
+            <p className="font-sans text-[13px] font-semibold uppercase tracking-[0.16em] text-white/55">
               Command Center
             </p>
             <h1 className="mt-1 font-serif text-xl font-semibold leading-tight text-white sm:text-[28px]">
               Welcome back to{' '}
-              <span className="gold-text">{schoolName || 'your school'}</span>
+              <span className="text-white">{schoolName || 'your school'}</span>
             </h1>
           </div>
           <TrialChip billing={billing} isOwner={isOwner} />

@@ -47,6 +47,10 @@ import {
   Library,
   Settings as SettingsIcon,
   User as UserIcon,
+  LayoutDashboard,
+  Upload,
+  Table2,
+  FileBarChart2,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useBilling } from '../../context/BillingContext.jsx'
@@ -61,6 +65,10 @@ import ScopeToggle from './ScopeToggle.jsx'
 import ContextSwitcher from './ContextSwitcher.jsx'
 import SearchBox from '../search/SearchBox.jsx'
 import { NAV_GROUPS, SETTINGS_ITEM } from './sidebarNav.js'
+import { MODULE_ANATOMY, moduleTabs, moduleLabel, moduleHue, TAB_LABEL } from '../module/moduleAnatomy.js'
+
+// Verb-icon per module section (mirrors the retired in-page tab bar).
+const MODULE_TAB_ICON = { overview: LayoutDashboard, add: Upload, records: Table2, reports: FileBarChart2 }
 
 // Which briefing AttentionSource backs each nav route's attention badge.
 const NAV_BADGE_SOURCE = {
@@ -577,6 +585,57 @@ export default function AppShell({ children }) {
     </nav>
   )
 
+  // ── ui.v2 MODULE SECTION: while on a module page (/finance, /governance, …)
+  // the sidebar grows that module's sections (Overview · Add data · Records ·
+  // Reports) as nav rows — the in-page tab bar is retired. Links drive the same
+  // `?tab=` URL model the panels read, so deep links/back/reload still work. ──
+  const activeModuleKey =
+    Object.keys(MODULE_ANATOMY).find((k) => path === `/${k}`) ?? null
+  const v2ModuleSection = () => {
+    if (!activeModuleKey) return null
+    const tabs = moduleTabs(activeModuleKey)
+    if (!tabs.length) return null
+    const rawTab = new URLSearchParams(location.search).get('tab')
+    const activeTab = tabs.includes(rawTab) ? rawTab : 'overview'
+    const hue = moduleHue(activeModuleKey)
+    return (
+      <nav
+        aria-label={`${moduleLabel(activeModuleKey)} sections`}
+        className="flex flex-col gap-1 border-t border-white/10 px-3 py-3"
+      >
+        <div className="flex items-center gap-2 px-2 pb-1">
+          <span
+            aria-hidden="true"
+            className="h-2 w-2 shrink-0 rounded-full"
+            style={{ background: hue }}
+          />
+          <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/55">
+            {moduleLabel(activeModuleKey)}
+          </h2>
+          <span aria-hidden="true" className="h-px flex-1 bg-gradient-to-r from-white/10 to-transparent" />
+        </div>
+        {tabs.map((t) => {
+          const TabIcon = MODULE_TAB_ICON[t] ?? LayoutGrid
+          const active = t === activeTab
+          const to = t === 'overview' ? `/${activeModuleKey}` : `/${activeModuleKey}?tab=${t}`
+          return (
+            <Link
+              key={t}
+              to={to}
+              aria-label={`${moduleLabel(activeModuleKey)} — ${TAB_LABEL[t]}`}
+              aria-current={active ? 'page' : undefined}
+              className={itemClass(active)}
+            >
+              <ActiveRail active={active} />
+              <TabIcon size={17} className={`shrink-0 ${active ? 'text-gold-light' : 'text-white/70'}`} />
+              <span>{TAB_LABEL[t]}</span>
+            </Link>
+          )
+        })}
+      </nav>
+    )
+  }
+
   return (
     <>
       <div className="min-h-screen lg:flex">
@@ -612,10 +671,20 @@ export default function AppShell({ children }) {
             </div>
             {/* 3. Primary nav (frozen ids on desktop). */}
             {v2PrimaryNav(true)}
+            {/* 3b. Module sections while inside a module (Overview · Add data · …). */}
+            {v2ModuleSection()}
             {/* 4. Spacer → foot: Settings + account. */}
             <div className="flex-1" />
-            <div className="shrink-0 space-y-2 border-t border-white/10 px-3 py-3">
+            <div className="shrink-0 space-y-1.5 border-t border-white/10 px-3 py-3">
               {settingsLink(true)}
+              <button
+                type="button"
+                onClick={logout}
+                className="group relative flex min-h-[40px] w-full items-center gap-3 rounded-[10px] px-3 py-2 text-[13.5px] font-medium text-white/70 outline-none ring-gold/50 transition-colors hover:bg-danger/15 hover:text-white focus-visible:ring-2"
+              >
+                <LogOut size={17} className="shrink-0 text-white/70 transition-colors group-hover:text-danger" />
+                <span>Log out</span>
+              </button>
               <AvatarMenu />
             </div>
           </aside>
@@ -732,9 +801,19 @@ export default function AppShell({ children }) {
                   </div>
                   {/* Global nav — no frozen ids on the drawer copy. */}
                   {v2PrimaryNav(false)}
+                  {/* Module sections while inside a module. */}
+                  {v2ModuleSection()}
                   <div className="flex-1" />
-                  <div className="shrink-0 space-y-2 border-t border-white/10 px-3 py-3">
+                  <div className="shrink-0 space-y-1.5 border-t border-white/10 px-3 py-3">
                     {settingsLink(false)}
+                    <button
+                      type="button"
+                      onClick={logout}
+                      className="group relative flex min-h-[40px] w-full items-center gap-3 rounded-[10px] px-3 py-2 text-[13.5px] font-medium text-white/70 outline-none ring-gold/50 transition-colors hover:bg-danger/15 hover:text-white focus-visible:ring-2"
+                    >
+                      <LogOut size={17} className="shrink-0 text-white/70 transition-colors group-hover:text-danger" />
+                      <span>Log out</span>
+                    </button>
                     <AvatarMenu />
                   </div>
                 </>
