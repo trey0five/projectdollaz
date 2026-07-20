@@ -32,7 +32,13 @@
   overflow: hidden;
   border-radius: 18px;
   border: 1px solid rgb(16 28 61 / 0.08);
-  background: #fff;
+  /* Not flat white: a soft hue wash from the top-right + a whisper of cool light
+     bottom-left give the card depth. Sits below everything; the flood covers it
+     on hover. */
+  background:
+    radial-gradient(150% 130% at 100% 0%, color-mix(in srgb, var(--tile-hue) 8%, transparent), transparent 52%),
+    radial-gradient(120% 120% at 0% 100%, color-mix(in srgb, var(--tile-hue) 4%, transparent), transparent 46%),
+    #fff;
   text-align: left;
   outline: none;
   box-shadow:
@@ -51,6 +57,50 @@
 .module-tile:focus-visible {
   outline: 3px solid color-mix(in srgb, var(--tile-hue) 75%, #101c3d);
   outline-offset: 3px;
+}
+
+/* Oversized faint icon watermark, tucked into the bottom-right corner — gives
+   each card a branded background design instead of empty white space. Draws in
+   the tile hue via currentColor (like .tile-art), sits at z 0 below the body,
+   and fades out on hover so it never fights the color-flood. */
+.tile-watermark {
+  position: absolute;
+  right: -20px;
+  bottom: -26px;
+  z-index: 0;
+  display: block;
+  color: var(--tile-hue);
+  opacity: 0.07;
+  pointer-events: none;
+  transform: rotate(-8deg);
+  transition:
+    opacity 0.4s ease,
+    transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.tile-watermark svg {
+  height: 138px;
+  width: 138px;
+}
+.module-tile:hover .tile-watermark,
+.module-tile:focus-visible .tile-watermark,
+.module-tile:focus-within .tile-watermark {
+  opacity: 0;
+  transform: rotate(-8deg) scale(1.08);
+}
+/* Locked upsell: keep it, but even quieter and in ink so it reads "dimmed". */
+.module-tile--locked .tile-watermark {
+  color: rgb(16 28 61);
+  opacity: 0.045;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tile-watermark {
+    transition: opacity 0.4s ease;
+  }
+  .module-tile:hover .tile-watermark,
+  .module-tile:focus-visible .tile-watermark,
+  .module-tile:focus-within .tile-watermark {
+    transform: rotate(-8deg);
+  }
 }
 
 /* Content sits above the flood (z 0) and under the shine (z 2). */

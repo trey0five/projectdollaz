@@ -76,6 +76,9 @@ export default function ModuleTile({
             aria-haspopup="dialog"
             onClick={() => setInfoOpen(true)}
           />
+          <span className="tile-watermark" aria-hidden="true">
+            <Art />
+          </span>
           <div className="tile-body" aria-hidden="true" style={{ pointerEvents: 'none' }}>
             <div className="flex items-start justify-between gap-3">
               <span className="tile-art">
@@ -121,6 +124,9 @@ export default function ModuleTile({
           className="module-tile"
           style={{ '--tile-hue': hue }}
         >
+          <span className="tile-watermark" aria-hidden="true">
+            <Art />
+          </span>
           <div className="tile-body" aria-hidden="true">
             <span className="tile-art">
               <Art />
@@ -163,6 +169,9 @@ export default function ModuleTile({
         style={{ '--tile-hue': hue }}
       >
         <Link to={route} aria-label={`${label} — ${chip.text}`} className="tile-panel-hit" />
+        <span className="tile-watermark" aria-hidden="true">
+          <Art />
+        </span>
         <div className="tile-body">
           <span className="tile-art" aria-hidden="true">
             <Art />
