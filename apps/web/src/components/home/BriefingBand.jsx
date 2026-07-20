@@ -15,6 +15,75 @@ import { Link } from 'react-router-dom'
 import { Sparkles, Play, ArrowRight, Database, Layers, School } from 'lucide-react'
 import { HOME_TILES, tileLabel, LENS_VERB, greeting } from './tileRegistry.jsx'
 
+// ── BriefingBackdrop — the living decorative layer behind the briefing hero. ──
+// Gives the band a "design in the background" instead of a flat gradient: a faint
+// dot-grid texture, a top hairline, drifting glow orbs and a slow light-sweep.
+// Accents adapt to `hue` (the school's identity colour, frosted-glass path) or
+// fall back to gold on single-school navy. Purely decorative (aria-hidden) and
+// motion-safe: reduced motion drops the drift + sweep to static orbs.
+function BriefingBackdrop({ hue = null }) {
+  const reduce = useReducedMotion()
+  const orbA = hue ? `color-mix(in srgb, ${hue} 55%, transparent)` : 'rgba(214,178,92,0.20)'
+  const orbB = hue ? `color-mix(in srgb, ${hue} 34%, transparent)` : 'rgba(120,142,205,0.22)'
+  const orbC = hue ? `color-mix(in srgb, ${hue} 24%, transparent)` : 'rgba(214,178,92,0.12)'
+  const hair = hue ? hue : 'rgba(214,178,92,0.5)'
+
+  return (
+    <span aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
+      {/* Faint dot-grid texture — the quiet "design" behind the words. */}
+      <span
+        className="absolute inset-0 opacity-[0.07]"
+        style={{
+          backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.9) 1px, transparent 0)',
+          backgroundSize: '22px 22px',
+          maskImage: 'radial-gradient(120% 120% at 80% 0%, #000 30%, transparent 75%)',
+          WebkitMaskImage: 'radial-gradient(120% 120% at 80% 0%, #000 30%, transparent 75%)',
+        }}
+      />
+      {/* Top hairline. */}
+      <span
+        className="absolute inset-x-0 top-0 h-px"
+        style={{ background: `linear-gradient(90deg, transparent, ${hair}, transparent)` }}
+      />
+
+      {reduce ? (
+        <>
+          <span className="absolute -right-16 -top-20 h-56 w-56 rounded-full blur-3xl" style={{ background: orbA }} />
+          <span className="absolute -bottom-24 -left-12 h-52 w-52 rounded-full blur-3xl" style={{ background: orbB }} />
+        </>
+      ) : (
+        <>
+          <motion.span
+            className="absolute -right-16 -top-20 h-56 w-56 rounded-full blur-3xl"
+            style={{ background: orbA }}
+            animate={{ x: [0, -26, 8, 0], y: [0, 20, -12, 0], scale: [1, 1.12, 0.95, 1], opacity: [0.7, 1, 0.75, 0.7] }}
+            transition={{ duration: 17, repeat: Infinity, ease: 'easeInOut' }}
+          />
+          <motion.span
+            className="absolute -bottom-24 -left-12 h-52 w-52 rounded-full blur-3xl"
+            style={{ background: orbB }}
+            animate={{ x: [0, 30, -10, 0], y: [0, -16, 10, 0], scale: [1, 1.1, 0.96, 1], opacity: [0.6, 0.9, 0.65, 0.6] }}
+            transition={{ duration: 21, repeat: Infinity, ease: 'easeInOut' }}
+          />
+          <motion.span
+            className="absolute left-1/2 top-1/3 h-40 w-40 rounded-full blur-3xl"
+            style={{ background: orbC }}
+            animate={{ x: [0, 54, -38, 0], y: [0, -26, 24, 0], opacity: [0.4, 0.7, 0.45, 0.4] }}
+            transition={{ duration: 25, repeat: Infinity, ease: 'easeInOut' }}
+          />
+          {/* Slow diagonal light-sweep for a touch of motion. */}
+          <motion.span
+            className="absolute inset-y-[-30%] -left-1/3 w-1/3 -skew-x-12"
+            style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent)' }}
+            animate={{ x: ['0%', '440%'] }}
+            transition={{ duration: 7, repeat: Infinity, repeatDelay: 5, ease: 'easeInOut' }}
+          />
+        </>
+      )}
+    </span>
+  )
+}
+
 export default function BriefingBand({
   schoolName,
   summary,
@@ -67,23 +136,9 @@ export default function BriefingBand({
         glass ? 'border border-white/15 backdrop-blur-xl' : 'bg-navy-gradient'
       }`}
     >
-      {/* Quiet decorative glow — static, cheap, reduced-motion safe. */}
-      <span
-        aria-hidden="true"
-        className={`pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full blur-3xl ${
-          glass ? '' : 'bg-gold/10'
-        }`}
-        style={glass ? { background: `color-mix(in srgb, ${hue} 45%, transparent)` } : undefined}
-      />
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-px"
-        style={{
-          background: glass
-            ? `linear-gradient(90deg, transparent, ${hue}, transparent)`
-            : 'linear-gradient(90deg, transparent, rgba(214,178,92,0.5), transparent)',
-        }}
-      />
+      {/* Living decorative layer: dot-grid texture + hairline + drifting orbs +
+          slow sweep. Hue-tinted on the frosted-glass path, gold on navy. */}
+      <BriefingBackdrop hue={glass ? hue : null} />
 
       <div className="relative flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-2.5">
