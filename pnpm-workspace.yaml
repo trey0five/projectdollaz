@@ -15,6 +15,14 @@ auditConfig:
     - GHSA-p6gq-j5cr-w38f # nodemailer — addressparser DoS (fix: >=9.0.1, major)
     - GHSA-fx2h-pf6j-xcff # vite — fs.deny bypass (dev; fix: >=6.4.3)
     - GHSA-5xrq-8626-4rwp # vitest — UI server file read (dev; fix: >=3.2.6)
+# Force-patch transitive deps that have published fixes (a real patch beats an
+# ignoreGhsas allowlist entry). brace-expansion: GHSA-3jxr-9vmj-r5cp DoS — all
+# three affected major lines have in-range patches; pulled deep via exceljs /
+# @nestjs/cli / typescript-eslint glob chains.
+overrides:
+  'brace-expansion@<1.1.16': '1.1.16'
+  'brace-expansion@>=2.0.0 <2.1.2': '2.1.2'
+  'brace-expansion@>=3.0.0 <5.0.7': '5.0.7'
 allowBuilds:
   '@nestjs/core': true
   '@prisma/client': true
