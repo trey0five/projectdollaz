@@ -22,9 +22,9 @@ import {
   FileBarChart2,
   ShieldCheck,
   ArrowRight,
-  ArrowLeft,
   Scale,
 } from 'lucide-react'
+import { BACK_PILL, BackPillBody } from '../components/ui/BackLink.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useBilling } from '../context/BillingContext.jsx'
 import { usePersistence } from '../context/PersistenceContext.jsx'
@@ -61,11 +61,8 @@ function FinanceHeader() {
   return (
     <div className="mb-6">
       {!uiV2 && (
-        <Link
-          to="/app"
-          className="inline-flex items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.1em] text-muted transition-colors hover:text-navy"
-        >
-          <ArrowLeft size={14} /> Back to dashboard
+        <Link to="/app" className={BACK_PILL}>
+          <BackPillBody label="Back to dashboard" />
         </Link>
       )}
       <div className={`${uiV2 ? '' : 'mt-3 '}flex items-center gap-3`}>
