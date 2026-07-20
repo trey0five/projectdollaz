@@ -38,7 +38,10 @@ export default function ActSection({ act }) {
       ref={sectionRef}
       id={act.anchorId}
       aria-labelledby={`${act.id}-h2`}
-      className={`relative ${act.bg} scroll-mt-24 py-14 transition-shadow duration-500 sm:py-24 ${
+      // min-h-screen + centered content: each act fills the whole viewport at
+      // its reading position, so the blue flood covers the ENTIRE screen when
+      // the act is active (a py-only section left white neighbor bands showing).
+      className={`relative ${act.bg} flex min-h-screen scroll-mt-24 flex-col justify-center py-14 transition-shadow duration-500 sm:py-24 ${
         active ? 'shadow-[0_28px_70px_-30px_rgba(37,99,235,0.65)]' : ''
       }`}
     >
