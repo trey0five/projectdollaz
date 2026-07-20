@@ -16,7 +16,7 @@ import {
   useScroll,
   useSpring,
 } from 'framer-motion'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, ChevronDown } from 'lucide-react'
 import { TimestampMedallion } from './LedgerSpine.jsx'
 import { AppWindow, Folder, Press, WindowScreen } from './ingestShared.jsx'
 import { BEATS, Stage } from './IngestScenePress.jsx'
@@ -126,7 +126,12 @@ export default function IngestScrolly({ act }) {
         Drop a trial balance on Penny and it becomes your four statements, then tomorrow’s
         briefing — no re-keying, no formatting.
       </p>
-      <div ref={trackRef} className="relative h-[200vh] sm:h-[320vh]">
+      {/* Track height sets the SCRUB SPEED: progress runs over (height − 100vh)
+          of scroll, so taller = slower. 200/320vh made the 5-beat story fly by
+          in ~2 flicks; 340/520vh gives each beat roughly a half-screen of
+          scroll to breathe (the scene's fraction-keyed choreography slows
+          proportionally — nothing else changes). */}
+      <div ref={trackRef} className="relative h-[340vh] sm:h-[520vh]">
         {/* z-[3]: position:sticky boxes this subtree into its own stacking
             context; without an explicit z it sits BELOW the sibling ledger
             spine (z-[1]), so the medallion would render behind the line. Lift
@@ -189,6 +194,25 @@ export default function IngestScrolly({ act }) {
                   />
                 ))}
               </div>
+              {/* Pinned-section affordance: on the FIRST beat, a bobbing "keep
+                  scrolling" hint tells the reader the page is holding on purpose;
+                  it fades the moment they progress. */}
+              <motion.p
+                aria-hidden="true"
+                initial={false}
+                animate={{ opacity: beat === 0 && active ? 1 : 0 }}
+                transition={{ duration: 0.35 }}
+                className="mt-4 flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.14em] text-white/60"
+              >
+                <motion.span
+                  animate={reduce ? undefined : { y: [0, 4, 0] }}
+                  transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
+                  className="flex"
+                >
+                  <ChevronDown size={14} />
+                </motion.span>
+                Keep scrolling
+              </motion.p>
               {act.chips && (
                 <motion.ul
                   initial={false}
