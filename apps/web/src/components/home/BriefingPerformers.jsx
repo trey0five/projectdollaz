@@ -88,7 +88,9 @@ export default function BriefingPerformers({ schoolId, periodId }) {
   if (!schoolId || !periodId || loading || error || notEntitled || picks.length === 0) return null
 
   return (
-    <div className="grid w-full min-w-0 grid-cols-1 gap-3 sm:grid-cols-3 lg:flex-1">
+    // Mobile: a horizontal swipe row (scroll-snap) instead of three stacked
+    // cards — one card ≈ one swipe, no vertical scroll cost. sm+: the 3-col grid.
+    <div className="flex w-full min-w-0 snap-x snap-mandatory gap-3 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch] sm:grid sm:grid-cols-3 sm:overflow-visible sm:pb-0 lg:flex-1">
       {picks.map((m, i) => {
         const fmt = metricFormat(m.key, m.unit)
         const pts = trends[m.key]?.points
@@ -103,7 +105,7 @@ export default function BriefingPerformers({ schoolId, periodId }) {
             transition={{ delay: reduce ? 0 : 0.15 + i * 0.08, duration: 0.4 }}
             whileHover={reduce ? undefined : { y: -3 }}
             aria-label={`${m.label} — open in analytics`}
-            className="group flex min-w-0 flex-col gap-2 overflow-hidden rounded-2xl border border-white/12 bg-white/[0.07] p-3.5 text-left outline-none backdrop-blur-sm ring-gold/50 transition-colors hover:border-white/25 hover:bg-white/[0.11] focus-visible:ring-2"
+            className="group flex min-w-[72%] snap-start flex-col gap-2 overflow-hidden rounded-2xl border border-white/12 bg-white/[0.07] p-3.5 text-left outline-none backdrop-blur-sm ring-gold/50 transition-colors hover:border-white/25 hover:bg-white/[0.11] focus-visible:ring-2 sm:min-w-0"
           >
             <div className="flex items-center gap-2">
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/10 text-white/90">

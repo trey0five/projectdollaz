@@ -143,7 +143,7 @@ export default function HomeTiles() {
     return (
       <div className="mx-auto max-w-page space-y-5 px-4 py-6 sm:px-10 sm:py-8">
         <div className="h-40 animate-pulse rounded-2xl bg-navy/10" />
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <TileSkeleton key={i} />
           ))}
@@ -185,7 +185,7 @@ export default function HomeTiles() {
       />
 
       <nav aria-label="Modules">
-        <ul role="list" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <ul role="list" className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
           {tiles.map(({ tile, locked }, i) => (
             <ModuleTile
               key={tile.key}
