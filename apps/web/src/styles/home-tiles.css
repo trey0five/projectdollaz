@@ -180,6 +180,56 @@
   color: rgb(16 28 61 / 0.4);
 }
 
+/* ── Compact MOBILE tiles (<sm): the home map is a 2-col launcher grid, so each
+   tile slims to icon + title + status — the tagline is desktop detail. Cuts the
+   one-column scroll marathon to ~half the height. Scoped to the same component
+   classes; desktop unchanged. ── */
+@media (max-width: 639px) {
+  .module-tile {
+    border-radius: 14px;
+  }
+  .tile-body {
+    gap: 7px;
+    padding: 12px;
+  }
+  .tile-art {
+    height: 40px;
+    width: 40px;
+    border-radius: 11px;
+  }
+  .tile-art svg {
+    height: 25px;
+    width: 25px;
+  }
+  .tile-title {
+    font-size: 14.5px !important;
+  }
+  /* The tagline is hidden on phones — the label + status carry the tile. */
+  .tile-sub {
+    display: none;
+  }
+  .tile-chip {
+    padding: 3px 8px;
+    font-size: 11px;
+  }
+  .tile-arrow {
+    height: 26px;
+    width: 26px;
+  }
+  .tile-arrow svg {
+    height: 13px;
+    width: 13px;
+  }
+  .tile-watermark svg {
+    height: 96px;
+    width: 96px;
+  }
+  .tile-add-pill {
+    font-size: 10px;
+    padding: 2px 8px;
+  }
+}
+
 /* ── Motion layer: flood + shine + white flip (skipped under reduced motion) ── */
 @media (prefers-reduced-motion: no-preference) {
   /* The flood: a hue circle pinned at the arrow (bottom-right) corner. */
