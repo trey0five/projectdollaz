@@ -4,6 +4,7 @@
 import { Link } from 'react-router-dom'
 import StudioBackdrop from '../../components/penny/studio/StudioBackdrop.jsx'
 import Reveal from './Reveal.jsx'
+import PennyLottieScene from './PennyLottieScene.jsx'
 import { FINALE } from './landingContent.js'
 
 const FOCUS_RING = 'outline-none focus-visible:ring-2 focus-visible:ring-gold/60'
@@ -16,6 +17,8 @@ export default function FinalCta() {
     >
       <StudioBackdrop />
       <div className="relative mx-auto max-w-3xl px-5 text-center sm:px-8">
+        {/* Scroll-activated Penny vignette (plays as the section enters view). */}
+        <PennyLottieScene />
         <Reveal>
           <p className="text-[12px] font-bold uppercase tracking-[0.22em] text-gold-light">
             {FINALE.kicker}
