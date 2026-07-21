@@ -37,8 +37,12 @@ import {
   HeartHandshake,
   Target,
   Users,
+  Sparkles,
+  Play,
+  Clock,
 } from 'lucide-react'
 import PennyAvatar from '../../components/penny/PennyAvatar.jsx'
+import AuroraFlow from '../../components/home/AuroraFlow.jsx'
 import '../../styles/landing-orbit.css'
 
 // The eight domains — hue, proof line, and the payload stat. Real platform
@@ -143,16 +147,19 @@ function VizStacked({ hue }) {
 }
 
 function VizGauge({ hue }) {
+  // Semicircle fully INSIDE the viewBox (chord at y=80, apex at y=14 — the old
+  // 0..64 box clipped the arc's crown) + the 87% tip dot on the arc itself.
+  const arc = 'M14 80 A66 66 0 0 1 146 80'
   return (
-    <svg className="mx-auto h-16" viewBox="0 0 160 64" aria-hidden="true">
-      <path d="M14 58 A66 66 0 0 1 146 58" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="9" strokeLinecap="round" />
+    <svg className="mx-auto h-20" viewBox="0 0 160 92" aria-hidden="true">
+      <path d={arc} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="9" strokeLinecap="round" />
       <motion.path
-        d="M14 58 A66 66 0 0 1 146 58" fill="none" stroke={hue} strokeWidth="9" strokeLinecap="round"
+        d={arc} fill="none" stroke={hue} strokeWidth="9" strokeLinecap="round"
         initial={{ pathLength: 0 }} animate={{ pathLength: 0.87 }} transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
         style={{ filter: `drop-shadow(0 0 8px ${hue}aa)` }}
       />
       <motion.circle
-        cx="132" cy="22" r="4.5" fill="#fff"
+        cx="140.5" cy="54" r="4.5" fill="#fff"
         initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.9, type: 'spring', stiffness: 300, damping: 15 }}
         style={{ filter: `drop-shadow(0 0 6px ${hue})` }}
       />
@@ -353,7 +360,9 @@ export default function OrbitScrolly() {
     }
 
     // Giant type, core scale, payload + finale opacity.
-    if (typeRef.current) typeRef.current.style.opacity = String(0.9 * form * (1 - collapse))
+    // Giant type is GONE before the finale card arrives (was: faded with
+    // `collapse`, which left a ghost "HR" hanging behind the briefing).
+    if (typeRef.current) typeRef.current.style.opacity = String(0.9 * form * (1 - seg(v, 0.88, 0.93)))
     if (coreRef.current) {
       coreRef.current.style.transform = `scale(${1 + 0.5 * collapse})`
       coreRef.current.style.opacity = String(1 - seg(v, 0.94, 1))
@@ -524,19 +533,41 @@ export default function OrbitScrolly() {
             </motion.div>
           </div>
 
-          {/* Collapse finale: the system becomes tomorrow's briefing. */}
+          {/* Collapse finale: the system becomes tomorrow's briefing — styled
+              like the in-app briefing hero (aurora ribbons + gradient CTA). */}
           <div
             ref={finaleRef}
             aria-hidden="true"
-            className="pointer-events-none absolute left-1/2 top-[42%] z-[70] w-max max-w-[88vw] rounded-full border-[1.5px] border-penny bg-navy-gradient px-8 py-4 text-center opacity-0"
-            style={{ boxShadow: '0 0 80px rgba(212,180,122,0.4)' }}
+            className="pointer-events-none absolute left-1/2 top-[42%] z-[70] w-[min(560px,90vw)] opacity-0"
           >
-            <b className="whitespace-nowrap font-serif text-[clamp(16px,2.6vw,24px)] font-semibold text-white">
-              Good morning — 3 things need a decision.
-            </b>
-            <span className="mt-0.5 block font-mono text-[10.5px] uppercase tracking-[0.18em] text-penny">
-              Every orbit lands in one briefing · 7:02 AM
-            </span>
+            <div
+              className="relative overflow-hidden rounded-2xl border border-penny/60 bg-navy-gradient px-7 py-7 text-center sm:px-10"
+              style={{ boxShadow: '0 0 90px rgba(212,180,122,0.35), 0 30px 80px -20px rgba(0,0,0,0.6)' }}
+            >
+              <AuroraFlow />
+              <div className="relative">
+                <span className="inline-flex items-center gap-1.5 font-mono text-[10.5px] uppercase tracking-[0.22em] text-penny-light">
+                  <Sparkles size={12} /> Daily briefing · 7:02 AM
+                </span>
+                <b className="mt-2.5 block font-serif text-[clamp(20px,3.2vw,30px)] font-semibold leading-tight text-white">
+                  Good morning — 3 things need a decision.
+                </b>
+                <p className="mx-auto mt-2 max-w-sm text-[13.5px] leading-relaxed text-white/70">
+                  Every domain you just watched dock — distilled into one morning read.
+                </p>
+                <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+                  <span
+                    className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-[13.5px] font-semibold text-white shadow-lg shadow-black/25"
+                    style={{ backgroundImage: 'linear-gradient(100deg, #3b6ef5 0%, #8b5cf6 52%, #ff6b5c 100%)' }}
+                  >
+                    <Play size={14} className="fill-current" /> Open Daily Briefing
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-penny/40 bg-penny/10 px-3.5 py-2 text-[12.5px] font-semibold text-penny-light">
+                    <Clock size={13} /> 2 min read
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="absolute bottom-5 left-1/2 z-[9] -translate-x-1/2 font-mono text-[11px] uppercase tracking-[0.2em] text-white/45">
