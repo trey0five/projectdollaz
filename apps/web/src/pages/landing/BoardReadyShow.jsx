@@ -5,8 +5,8 @@
 // FINAL DEMO: a fanned three-page mock of the finance-committee packet itself.
 // Light-ground; auto-advance + micro-animations sit behind reduced motion.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useEffect, useState } from 'react'
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
+import { useEffect, useRef, useState } from 'react'
+import { motion, AnimatePresence, useInView, useReducedMotion } from 'framer-motion'
 import {
   ChevronLeft,
   ChevronRight,
@@ -135,37 +135,121 @@ function SlideVisual({ slideKey, reduce }) {
   )
 }
 
-// One page of the packet product-shot. DEALS OUT of the center stack on
-// scroll-in (spring, staggered), then idles with a gentle bob; hover lifts and
-// straightens it above the stack. Transforms compose: outer = deal position,
-// inner = idle float.
-function PacketPage({ x, y, rotate, z, scale = 1, delay, bobDelay = 0, reduce, children, wide = false }) {
-  return (
-    <motion.div
-      initial={reduce ? { opacity: 0 } : { opacity: 0, x: 0, y: 40, rotate: 0, scale: 0.7 }}
-      whileInView={reduce ? { opacity: 1 } : { opacity: 1, x, y, rotate, scale }}
-      viewport={{ once: true, margin: '-80px' }}
-      transition={{ delay, type: 'spring', stiffness: 180, damping: 20 }}
-      whileHover={reduce ? undefined : { rotate: 0, scale: scale + 0.05, zIndex: 50 }}
-      className="absolute left-1/2 top-1/2 -ml-[124px] -mt-[150px] sm:-ml-[140px] sm:-mt-[170px]"
-      style={{ zIndex: z }}
-    >
-      <motion.div
-        animate={reduce ? undefined : { y: [0, -7, 0] }}
-        transition={{ duration: 4.2, delay: bobDelay, repeat: Infinity, ease: 'easeInOut' }}
-        className={`rounded-2xl border border-navy/10 bg-white p-4 shadow-[0_30px_70px_-25px_rgba(16,28,61,0.5)] ${
-          wide ? 'w-[248px] sm:w-[280px]' : 'w-[232px] sm:w-[260px]'
-        }`}
-      >
-        {children}
-      </motion.div>
-    </motion.div>
-  )
-}
+// ── The packet COVERFLOW: three pages in real 3-D perspective. The front page
+// sits flat center-stage; the other two angle back at the sides. The deck
+// auto-rotates (and the side pages / labels are clickable), so it reads as
+// "flip through the packet" rather than scattered cards. Entrance: pages rise
+// from below and settle into the perspective arrangement, staggered. ──────────
+
+// Pose per slot: 0 = front-center, 1 = right-back, 2 = left-back.
+const PACKET_POSES = [
+  { x: 0, y: -10, rotateY: 0, scale: 1.05, opacity: 1, zIndex: 30, filter: 'blur(0px)' },
+  { x: 240, y: 16, rotateY: -38, scale: 0.85, opacity: 0.75, zIndex: 10, filter: 'blur(0.5px)' },
+  { x: -240, y: 16, rotateY: 38, scale: 0.85, opacity: 0.75, zIndex: 10, filter: 'blur(0.5px)' },
+]
+const PACKET_LABELS = ['Cover', 'KPI dashboard', 'Statements']
+
+// Page bodies (functions of `reduce` so one-shot flourishes stay motion-safe).
+const PACKET_PAGES = [
+  {
+    key: 'cover',
+    body: (reduce) => (
+      <>
+        <div className="relative overflow-hidden rounded-xl bg-navy-gradient px-4 py-6 text-center">
+          {!reduce && (
+            <motion.span
+              aria-hidden="true"
+              className="absolute inset-y-[-30%] left-0 w-1/3 -skew-x-12"
+              style={{ background: 'linear-gradient(100deg, transparent, rgba(255,255,255,0.06), rgba(212,180,122,0.35), rgba(255,255,255,0.06), transparent)' }}
+              initial={{ x: '-140%' }}
+              whileInView={{ x: '420%' }}
+              viewport={{ once: true }}
+              transition={{ duration: 1.1, delay: 1.1, ease: 'easeInOut' }}
+            />
+          )}
+          <span aria-hidden="true" className="mx-auto block h-px w-24 bg-gradient-to-r from-transparent via-penny-light/70 to-transparent" />
+          <span className="mt-3 block font-serif text-[20px] font-semibold leading-tight text-white">St. Brigid&rsquo;s School</span>
+          <span className="mt-1.5 block text-[9.5px] font-bold uppercase tracking-[0.2em] text-penny-light">Finance Committee Packet</span>
+          <motion.span
+            aria-hidden="true"
+            className="mx-auto mt-4 flex h-12 w-12 items-center justify-center rounded-full border-2 border-penny-light/60 text-penny-light"
+            initial={reduce ? false : { scale: 0, rotate: -30 }}
+            whileInView={{ scale: 1, rotate: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.7, type: 'spring', stiffness: 260, damping: 14 }}
+          >
+            <Check size={20} />
+          </motion.span>
+          <span className="mt-3 block text-[10.5px] text-white/65">June 2026 · FY26 close</span>
+          <span aria-hidden="true" className="mx-auto mt-3 block h-px w-24 bg-gradient-to-r from-transparent via-penny-light/70 to-transparent" />
+        </div>
+        <span className="mt-3 block text-center text-[9.5px] font-bold uppercase tracking-[0.16em] text-navy/45">Prepared with KYRO</span>
+      </>
+    ),
+  },
+  {
+    key: 'dash',
+    body: (reduce) => (
+      <>
+        <span className="block text-[10.5px] font-bold uppercase tracking-[0.14em] text-navy/50">Dashboard · June 2026</span>
+        <div className="mt-2.5 grid grid-cols-2 gap-2" aria-hidden="true">
+          {[['Op margin', '4.0%'], ['Days cash', '43'], ['Reserve', '7.7 mo'], ['Net tuition', '$9,647']].map(([l, v]) => (
+            <div key={l} className="rounded-lg bg-[#eef3fc] px-2.5 py-2">
+              <span className="block text-[9px] uppercase tracking-[0.1em] text-navy/45">{l}</span>
+              <span className="font-serif text-[16px] font-semibold text-navy">{v}</span>
+            </div>
+          ))}
+        </div>
+        <svg className="mt-2.5 w-full" height="38" viewBox="0 0 220 38" preserveAspectRatio="none" aria-hidden="true">
+          <motion.path
+            d="M4 32 L40 27 L76 29 L112 18 L148 21 L184 10 L216 5"
+            fill="none" stroke="#2563EB" strokeWidth="2.2" strokeLinecap="round"
+            initial={{ pathLength: reduce ? 1 : 0 }}
+            whileInView={{ pathLength: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 1.1, delay: 0.8, ease: 'easeOut' }}
+          />
+        </svg>
+      </>
+    ),
+  },
+  {
+    key: 'stmt',
+    body: () => (
+      <>
+        <span className="block text-[10.5px] font-bold uppercase tracking-[0.14em] text-navy/50">Statement of Activities</span>
+        <div className="mt-2.5 space-y-[6px] text-[11px] text-navy/75" aria-hidden="true">
+          {[['Tuition & fees, net', '10,850,000'], ['Contributions', '1,240,000'], ['Total revenue', '12,700,000'], ['Total expenses', '11,620,000']].map(([l, v], k) => (
+            <div key={l} className={`flex justify-between gap-2 ${k >= 2 ? 'border-t border-navy/15 pt-[4px] font-semibold text-navy' : ''}`}>
+              <span>{l}</span>
+              <span className="tabular-nums">{v}</span>
+            </div>
+          ))}
+          <div className="flex justify-between gap-2 border-t-2 border-navy/50 pt-1.5 text-[11.5px] font-bold text-navy">
+            <span>Change in net assets</span>
+            <span className="tabular-nums">1,080,000</span>
+          </div>
+        </div>
+      </>
+    ),
+  },
+]
 
 export default function BoardReadyShow() {
   const reduce = useReducedMotion()
   const [i, setI] = useState(0)
+
+  // Packet coverflow: which page is front-center; auto-rotates once on screen.
+  const stageRef = useRef(null)
+  const entered = useInView(stageRef, { once: true, margin: '-120px' })
+  const entranceDone = useRef(false)
+  const [front, setFront] = useState(0)
+  useEffect(() => {
+    if (!entered || reduce) return undefined
+    const settle = setTimeout(() => { entranceDone.current = true }, 1200)
+    const t = setInterval(() => setFront((v) => (v + 1) % 3), 3900)
+    return () => { clearTimeout(settle); clearInterval(t) }
+  }, [entered, reduce])
 
   useEffect(() => {
     if (reduce) return undefined
@@ -269,94 +353,64 @@ export default function BoardReadyShow() {
           </div>
         </div>
 
-        {/* ── The final demo: the packet as a PRODUCT SHOT — pages deal out of
-            a center stack over a glow aura, idle-float, and the navy cover gets
-            a gold-foil shine sweep. ── */}
+        {/* ── The final demo: the packet COVERFLOW — front page center-stage,
+            the others angled back in perspective; auto-rotates, labels/side
+            pages clickable, staggered rise-and-settle entrance. ── */}
         <div className="mt-16 text-center">
           <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-navy/50">
             The result — a committee packet your board can read in ten minutes
           </p>
         </div>
-        <div className="relative mx-auto mt-6 h-[380px] w-full max-w-3xl sm:h-[430px]">
-          {/* Glow aura + floor shadow grounding the stack. */}
+        <div
+          ref={stageRef}
+          className="relative mx-auto mt-4 h-[340px] w-full max-w-3xl scale-[0.62] sm:h-[440px] sm:scale-100"
+          style={{ perspective: 1200 }}
+        >
+          {/* Glow aura + floor shadow grounding the deck. */}
           <span aria-hidden="true" className="pointer-events-none absolute left-1/2 top-1/2 h-[340px] w-[340px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#2563EB]/15 blur-3xl sm:h-[420px] sm:w-[560px]" />
-          <span aria-hidden="true" className="pointer-events-none absolute left-1/2 top-[38%] h-40 w-40 -translate-x-1/2 rounded-full bg-gold/20 blur-3xl" />
-          <span aria-hidden="true" className="pointer-events-none absolute bottom-4 left-1/2 h-6 w-72 -translate-x-1/2 rounded-full bg-navy/15 blur-xl sm:w-96" />
+          <span aria-hidden="true" className="pointer-events-none absolute left-1/2 top-[36%] h-40 w-40 -translate-x-1/2 rounded-full bg-gold/20 blur-3xl" />
+          <span aria-hidden="true" className="pointer-events-none absolute bottom-3 left-1/2 h-6 w-80 -translate-x-1/2 rounded-full bg-navy/15 blur-xl" />
 
-          {/* Left page — the KPI dashboard, sparkline draws itself. */}
-          <PacketPage x={-210} y={16} rotate={-9} scale={0.94} z={10} delay={0.15} bobDelay={0.6} reduce={reduce}>
-            <span className="block text-[10.5px] font-bold uppercase tracking-[0.14em] text-navy/50">Dashboard · June 2026</span>
-            <div className="mt-2.5 grid grid-cols-2 gap-2" aria-hidden="true">
-              {[['Op margin', '4.0%'], ['Days cash', '43'], ['Reserve', '7.7 mo'], ['Net tuition', '$9,647']].map(([l, v]) => (
-                <div key={l} className="rounded-lg bg-[#eef3fc] px-2.5 py-2">
-                  <span className="block text-[9px] uppercase tracking-[0.1em] text-navy/45">{l}</span>
-                  <span className="font-serif text-[16px] font-semibold text-navy">{v}</span>
-                </div>
-              ))}
-            </div>
-            <svg className="mt-2.5 w-full" height="38" viewBox="0 0 220 38" preserveAspectRatio="none" aria-hidden="true">
-              <motion.path
-                d="M4 32 L40 27 L76 29 L112 18 L148 21 L184 10 L216 5"
-                fill="none" stroke="#2563EB" strokeWidth="2.2" strokeLinecap="round"
-                initial={{ pathLength: reduce ? 1 : 0 }}
-                whileInView={{ pathLength: 1 }}
-                viewport={{ once: true }}
-                transition={{ duration: 1.1, delay: 0.7, ease: 'easeOut' }}
-              />
-            </svg>
-          </PacketPage>
-
-          {/* Right page — the Statement of Activities. */}
-          <PacketPage x={210} y={22} rotate={8} scale={0.94} z={10} delay={0.28} bobDelay={1.4} reduce={reduce}>
-            <span className="block text-[10.5px] font-bold uppercase tracking-[0.14em] text-navy/50">Statement of Activities</span>
-            <div className="mt-2.5 space-y-[6px] text-[11px] text-navy/75" aria-hidden="true">
-              {[['Tuition & fees, net', '10,850,000'], ['Contributions', '1,240,000'], ['Total revenue', '12,700,000'], ['Total expenses', '11,620,000']].map(([l, v], k) => (
-                <div key={l} className={`flex justify-between gap-2 ${k >= 2 ? 'border-t border-navy/15 pt-[4px] font-semibold text-navy' : ''}`}>
-                  <span>{l}</span>
-                  <span className="tabular-nums">{v}</span>
-                </div>
-              ))}
-              <div className="flex justify-between gap-2 border-t-2 border-navy/50 pt-1.5 text-[11.5px] font-bold text-navy">
-                <span>Change in net assets</span>
-                <span className="tabular-nums">1,080,000</span>
-              </div>
-            </div>
-          </PacketPage>
-
-          {/* Cover — front and center: full navy page, gold rules, medallion,
-              and a one-shot gold-foil shine sweep. */}
-          <PacketPage x={0} y={-6} rotate={0} z={30} delay={0} bobDelay={0} reduce={reduce} wide>
-            <div className="relative overflow-hidden rounded-xl bg-navy-gradient px-4 py-6 text-center">
-              {/* foil shine sweep (one-shot) */}
-              {!reduce && (
-                <motion.span
-                  aria-hidden="true"
-                  className="absolute inset-y-[-30%] left-0 w-1/3 -skew-x-12"
-                  style={{ background: 'linear-gradient(100deg, transparent, rgba(255,255,255,0.06), rgba(212,180,122,0.35), rgba(255,255,255,0.06), transparent)' }}
-                  initial={{ x: '-140%' }}
-                  whileInView={{ x: '420%' }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 1.1, delay: 1.0, ease: 'easeInOut' }}
-                />
-              )}
-              <span aria-hidden="true" className="mx-auto block h-px w-24 bg-gradient-to-r from-transparent via-penny-light/70 to-transparent" />
-              <span className="mt-3 block font-serif text-[20px] font-semibold leading-tight text-white">St. Brigid&rsquo;s School</span>
-              <span className="mt-1.5 block text-[9.5px] font-bold uppercase tracking-[0.2em] text-penny-light">Finance Committee Packet</span>
-              <motion.span
-                aria-hidden="true"
-                className="mx-auto mt-4 flex h-12 w-12 items-center justify-center rounded-full border-2 border-penny-light/60 text-penny-light"
-                initial={reduce ? false : { scale: 0, rotate: -30 }}
-                whileInView={{ scale: 1, rotate: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: 0.6, type: 'spring', stiffness: 260, damping: 14 }}
+          {PACKET_PAGES.map((page, p) => {
+            const slot = (p - front + 3) % 3
+            const pose = PACKET_POSES[slot]
+            return (
+              <motion.div
+                key={page.key}
+                role={slot === 0 ? undefined : 'button'}
+                aria-label={slot === 0 ? undefined : `Show the ${PACKET_LABELS[p]} page`}
+                onClick={() => setFront(p)}
+                initial={reduce ? { opacity: 0 } : { opacity: 0, x: 0, y: 130, scale: 0.7, rotateY: 0 }}
+                animate={entered ? (reduce ? { opacity: 1, ...{ x: PACKET_POSES[slot].x, y: 0, rotateY: 0, scale: 0.9, zIndex: pose.zIndex } } : pose) : undefined}
+                transition={{ type: 'spring', stiffness: 200, damping: 23, delay: entranceDone.current ? 0 : p * 0.14 }}
+                whileHover={reduce || slot === 0 ? undefined : { scale: 0.92, opacity: 0.95 }}
+                className={`absolute left-1/2 top-1/2 -ml-[140px] -mt-[165px] ${slot === 0 ? '' : 'cursor-pointer'}`}
+                style={{ transformStyle: 'preserve-3d' }}
               >
-                <Check size={20} />
-              </motion.span>
-              <span className="mt-3 block text-[10.5px] text-white/65">June 2026 · FY26 close</span>
-              <span aria-hidden="true" className="mx-auto mt-3 block h-px w-24 bg-gradient-to-r from-transparent via-penny-light/70 to-transparent" />
-            </div>
-            <span className="mt-3 block text-center text-[9.5px] font-bold uppercase tracking-[0.16em] text-navy/45">Prepared with KYRO</span>
-          </PacketPage>
+                <div className="w-[280px] rounded-2xl border border-navy/10 bg-white p-4 shadow-[0_34px_80px_-28px_rgba(16,28,61,0.55)]">
+                  {page.body(reduce)}
+                </div>
+              </motion.div>
+            )
+          })}
+        </div>
+
+        {/* Page labels — the deck's navigation. */}
+        <div className="mt-2 flex items-center justify-center gap-2 sm:mt-6">
+          {PACKET_LABELS.map((l, p) => (
+            <button
+              key={l}
+              type="button"
+              onClick={() => setFront(p)}
+              className={`rounded-full px-3.5 py-1.5 text-[12px] font-semibold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-navy/40 ${
+                front === p
+                  ? 'bg-navy text-white shadow-[0_8px_20px_-8px_rgba(16,28,61,0.6)]'
+                  : 'border border-navy/15 bg-white/70 text-navy/60 hover:border-navy/35 hover:text-navy'
+              }`}
+            >
+              {l}
+            </button>
+          ))}
         </div>
       </div>
     </section>
