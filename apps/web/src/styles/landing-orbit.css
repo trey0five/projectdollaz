@@ -5,18 +5,6 @@
    prefers-reduced-motion: no-preference.
    ──────────────────────────────────────────────────────────────────────────── */
 
-/* Starfield dots (positions inlined per-dot; twinkle here). */
-@media (prefers-reduced-motion: no-preference) {
-  .orbit-star {
-    animation: orbit-twinkle var(--tw-dur, 3s) ease-in-out infinite;
-    animation-delay: var(--tw-delay, 0s);
-  }
-}
-@keyframes orbit-twinkle {
-  0%, 100% { opacity: 0.18; }
-  50% { opacity: 0.85; }
-}
-
 /* Beam packet flow (dashed overlay marching toward the core). */
 @media (prefers-reduced-motion: no-preference) {
   .orbit-beam-flow {

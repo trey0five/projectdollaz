@@ -55,7 +55,10 @@ export default function LandingPage() {
   const revealNav = useCallback(() => setNavShown(true), [])
 
   return (
-    <div className="bg-cream text-ink">
+    // Root ground is DARK now: the hero's transparent straddle block used to
+    // reveal cream between the video and the acts — with the Orbit composition
+    // that read as a white gap, so the root matches the orbit's deep space.
+    <div className="bg-[#070d1d] text-ink">
       <LandingNav show={navShown} />
       <main id="main">
         {/* The product video OPENS the page (cinematic entrance); the headline

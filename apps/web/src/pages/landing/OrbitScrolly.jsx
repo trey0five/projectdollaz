@@ -54,16 +54,6 @@ const DOMAINS = [
   { key: 'hr', label: 'HR', hue: '#059669', Icon: Users, line: 'Staffing feeds student-teacher ratio straight into analytics.', stat: 14, unit: 'students per teacher' },
 ]
 
-// Starfield — positions computed ONCE at module load (stable across renders).
-const STARS = Array.from({ length: 90 }, () => ({
-  left: Math.random() * 100,
-  top: Math.random() * 100,
-  size: Math.random() * 2 + 1,
-  gold: Math.random() > 0.8,
-  dur: 2.2 + Math.random() * 3,
-  delay: Math.random() * 4,
-}))
-
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v))
 const seg = (p, a, b) => clamp((p - a) / (b - a), 0, 1)
 const backOut = (t) => { const c = 1.70158; return 1 + (--t) * t * ((c + 1) * t + c) }
@@ -196,8 +186,10 @@ export default function OrbitScrolly() {
 
   return (
     <section aria-labelledby="orbit-h2" className="relative bg-[#070d1d]">
-      {/* Intro header — scrolls away before the pin engages. */}
-      <div className="mx-auto max-w-4xl px-5 pb-10 pt-24 text-center sm:px-8">
+      {/* Intro header — scrolls away before the pin engages. Top padding clears
+          the hero's straddling glass card (its -mb overhang lands here), so the
+          heading is never covered. */}
+      <div className="mx-auto max-w-4xl px-5 pb-10 pt-44 text-center sm:px-8 sm:pt-56 lg:pt-72">
         <p className="text-[12px] font-bold uppercase tracking-[0.22em] text-penny-light">One AI · Eight domains</p>
         <h2 id="orbit-h2" className="mt-3 font-serif text-[34px] font-semibold leading-tight text-white sm:text-[46px]">
           Everything orbits Penny.
@@ -213,33 +205,33 @@ export default function OrbitScrolly() {
           className="sticky top-0 flex h-screen flex-col items-center justify-center overflow-hidden transition-[background] duration-1000"
           style={{ background: `radial-gradient(760px 540px at 50% 34%, ${d.hue}40, transparent 65%), #070d1d` }}
         >
-          {/* Starfield (CSS twinkle; positions frozen at module load). */}
-          <span aria-hidden="true" className="pointer-events-none absolute inset-0">
-            {STARS.map((s, i) => (
-              <span
-                key={i}
-                className="orbit-star absolute rounded-full"
-                style={{
-                  left: `${s.left}%`, top: `${s.top}%`, width: s.size, height: s.size,
-                  background: s.gold ? '#e8d4a8' : '#fff', opacity: 0.2,
-                  '--tw-dur': `${s.dur}s`, '--tw-delay': `${s.delay}s`,
-                }}
-              />
-            ))}
-          </span>
-
-          {/* Giant kinetic type behind the system. */}
+          {/* Domain watermark behind the system — a refined treatment (was a
+              cropped 1px-outline giant, which read cheap): CONTAINED serif type
+              with a hue→white gradient FILL clipped to the glyphs, low opacity,
+              and a radial mask so it dissolves at the edges instead of hitting
+              the viewport crop. Rises softly on each dock. */}
           <AnimatePresence mode="popLayout">
             <motion.div
               key={d.key}
               ref={typeRef}
               aria-hidden="true"
-              initial={{ x: 60, opacity: 0 }}
-              animate={{ x: 0, opacity: 0.9 }}
-              exit={{ x: -60, opacity: 0 }}
-              transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-              className="pointer-events-none absolute left-1/2 top-[42%] z-0 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap font-serif font-bold"
-              style={{ fontSize: 'clamp(90px, 16vw, 220px)', color: 'transparent', WebkitTextStroke: '1.5px rgba(255,255,255,0.10)' }}
+              initial={{ y: 26, opacity: 0, scale: 0.97 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ y: -20, opacity: 0 }}
+              transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+              // Centered via left/right-0 + mx-auto + w-max (NOT translate — framer's
+              // animated transform would clobber a Tailwind -translate-x-1/2).
+              className="pointer-events-none absolute inset-x-0 top-[30%] z-0 mx-auto w-max select-none whitespace-nowrap font-serif font-semibold uppercase"
+              style={{
+                fontSize: 'clamp(52px, 8.4vw, 128px)',
+                letterSpacing: '0.06em',
+                backgroundImage: `linear-gradient(180deg, ${d.hue}59 0%, rgba(255,255,255,0.16) 55%, transparent 100%)`,
+                WebkitBackgroundClip: 'text',
+                backgroundClip: 'text',
+                color: 'transparent',
+                maskImage: 'radial-gradient(72% 90% at 50% 50%, #000 55%, transparent 100%)',
+                WebkitMaskImage: 'radial-gradient(72% 90% at 50% 50%, #000 55%, transparent 100%)',
+              }}
             >
               {d.label}
             </motion.div>
