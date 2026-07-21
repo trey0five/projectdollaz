@@ -290,6 +290,7 @@ export default function OrbitScrolly() {
   const reduce = useReducedMotion()
   const trackRef = useRef(null)
   const stageRef = useRef(null)
+  const introRef = useRef(null)
   const sysRef = useRef(null)
   const planetRefs = useRef([])
   const beamRef = useRef(null)
@@ -383,6 +384,7 @@ export default function OrbitScrolly() {
     // Giant type is GONE before the finale card arrives (was: faded with
     // `collapse`, which left a ghost "HR" hanging behind the briefing).
     if (typeRef.current) typeRef.current.style.opacity = String(0.9 * seg(v, 0.1, 0.14) * (1 - seg(v, 0.88, 0.93)))
+    if (introRef.current) introRef.current.style.opacity = String(1 - seg(v, 0.05, 0.11))
     if (coreRef.current) {
       coreRef.current.style.transform = `scale(${1 + 0.5 * collapse})`
       coreRef.current.style.opacity = String(1 - seg(v, 0.94, 1))
@@ -420,27 +422,31 @@ export default function OrbitScrolly() {
   }
 
   return (
-    <section aria-labelledby="orbit-h2" className="relative bg-[#070d1d]">
-      {/* Intro header — scrolls away before the pin engages. Top padding clears
-          the hero's straddling glass card (its -mb overhang lands here), so the
-          heading is never covered. */}
-      <div className="mx-auto max-w-4xl px-5 pb-10 pt-44 text-center sm:px-8 sm:pt-56 lg:pt-72">
-        <p className="text-[12px] font-bold uppercase tracking-[0.22em] text-penny-light">One AI · Eight domains</p>
-        <h2 id="orbit-h2" className="mt-3 font-serif text-[34px] font-semibold leading-tight text-white sm:text-[46px]">
-          Everything orbits Penny.
-        </h2>
-        <p className="mx-auto mt-4 max-w-xl text-[16px] leading-relaxed text-white/70">
-          Eight domains, one AI at the center. Scroll — every one of them docks, hands its
-          numbers to Penny, and lands in a single morning briefing.
-        </p>
-      </div>
-
+    // Top padding clears the hero's straddling glass card (its -mb overhang
+    // lands on this section). The heading lives INSIDE the pinned stage now —
+    // no standalone header block, no dead empty viewport before the scene.
+    <section aria-labelledby="orbit-h2" className="relative bg-[#070d1d] pt-44 sm:pt-56 lg:pt-64">
       <div ref={trackRef} className="relative h-[560vh]">
         <div
           ref={stageRef}
           className="sticky top-0 flex h-screen flex-col items-center justify-center overflow-hidden transition-[background] duration-1000"
           style={{ background: `radial-gradient(760px 540px at 50% 34%, ${d.hue}40, transparent 65%), #070d1d` }}
         >
+          {/* The heading, lowered INTO the scene: overlays the stage top during
+              Penny's entrance + formation, fades as the first dock lands. */}
+          <div
+            ref={introRef}
+            className="pointer-events-none absolute inset-x-0 top-[7%] z-[80] px-5 text-center"
+          >
+            <p className="text-[12px] font-bold uppercase tracking-[0.22em] text-penny-light">One AI · Eight domains</p>
+            <h2 id="orbit-h2" className="mt-2.5 font-serif text-[30px] font-semibold leading-tight text-white sm:text-[42px]">
+              Everything orbits Penny.
+            </h2>
+            <p className="mx-auto mt-3 max-w-xl text-[15px] leading-relaxed text-white/70">
+              Eight domains, one AI at the center. Scroll — every one of them docks, hands its
+              numbers to Penny, and lands in a single morning briefing.
+            </p>
+          </div>
           {/* Domain watermark behind the system — a refined treatment (was a
               cropped 1px-outline giant, which read cheap): CONTAINED serif type
               with a hue→white gradient FILL clipped to the glyphs, low opacity,
@@ -618,9 +624,6 @@ export default function OrbitScrolly() {
             </div>
           </div>
 
-          <div className="absolute bottom-5 left-1/2 z-[9] -translate-x-1/2 font-mono text-[11px] uppercase tracking-[0.2em] text-white/45">
-            scroll — formation · 8 stops · collapse
-          </div>
         </div>
       </div>
     </section>
