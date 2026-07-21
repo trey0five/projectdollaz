@@ -483,8 +483,10 @@ export default function OrbitScrolly() {
               itself draws the orbit). */}
           <div ref={sysRef} aria-hidden="true" className="relative z-[2] w-[min(560px,92vw)] flex-none" style={{ aspectRatio: '1 / 0.78' }}>
             <svg className="pointer-events-none absolute inset-0 z-[40] h-full w-full overflow-visible">
-              <line ref={beamRef} strokeWidth="3" strokeLinecap="round" style={{ stroke: d.hue, filter: `drop-shadow(0 0 8px ${d.hue})`, transition: 'opacity .3s' }} />
-              <line ref={beamFlowRef} className="orbit-beam-flow" stroke="#fff" strokeWidth="3" strokeLinecap="round" style={{ transition: 'opacity .3s' }} />
+              {/* opacity 0 initially — a zero-length round-cap line paints a dot
+                  at the svg origin before the first handler write. */}
+              <line ref={beamRef} strokeWidth="3" strokeLinecap="round" style={{ stroke: d.hue, filter: `drop-shadow(0 0 8px ${d.hue})`, transition: 'opacity .3s', opacity: 0 }} />
+              <line ref={beamFlowRef} className="orbit-beam-flow" stroke="#fff" strokeWidth="3" strokeLinecap="round" style={{ transition: 'opacity .3s', opacity: 0 }} />
             </svg>
 
             {/* Core: Penny (bigger) + hue flare + dock shockwave. The Lottie-style
@@ -494,7 +496,7 @@ export default function OrbitScrolly() {
               <div
                 ref={coreRef}
                 className="relative rounded-full transition-shadow duration-700 will-change-transform"
-                style={{ boxShadow: `0 0 80px ${d.hue}, 0 0 150px ${d.hue}66` }}
+                style={{ boxShadow: pennyIn ? `0 0 80px ${d.hue}, 0 0 150px ${d.hue}66` : 'none' }}
               >
                 <motion.div
                   initial={{ y: -150, opacity: 0 }}
@@ -529,6 +531,7 @@ export default function OrbitScrolly() {
                   key={key}
                   ref={(el) => (planetRefs.current[i] = el)}
                   className="absolute left-1/2 top-1/2 -m-10 w-20 text-center will-change-transform sm:-m-12 sm:w-24"
+                  style={{ opacity: 0 }}
                 >
                   <span
                     className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border-[1.5px] backdrop-blur-sm transition-all duration-500 sm:h-[68px] sm:w-[68px] sm:rounded-[20px]"
