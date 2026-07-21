@@ -138,7 +138,7 @@ function VizStacked({ hue }) {
       </div>
       <div className="mt-2 flex gap-4">
         {SEGS.map((s) => (
-          <span key={s.label} className="flex items-center gap-1.5 font-mono text-[9.5px] uppercase tracking-[0.1em] text-white/50">
+          <span key={s.label} className="flex items-center gap-1.5 font-mono text-[9.5px] uppercase tracking-[0.1em] text-navy/55">
             <i className="h-1.5 w-1.5 rounded-full" style={{ background: hue, opacity: s.o }} /> {s.label}
           </span>
         ))}
@@ -153,7 +153,7 @@ function VizGauge({ hue }) {
   const arc = 'M14 80 A66 66 0 0 1 146 80'
   return (
     <svg className="mx-auto h-20" viewBox="0 0 160 92" aria-hidden="true">
-      <path d={arc} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="9" strokeLinecap="round" />
+      <path d={arc} fill="none" stroke="rgba(16,28,61,0.12)" strokeWidth="9" strokeLinecap="round" />
       <motion.path
         d={arc} fill="none" stroke={hue} strokeWidth="9" strokeLinecap="round"
         initial={{ pathLength: 0 }} animate={{ pathLength: 0.87 }} transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
@@ -178,8 +178,8 @@ function VizRows({ hue }) {
     <div aria-hidden="true" className="w-full space-y-1.5">
       {ROWS.map((r, i) => (
         <div key={r.label} className="flex items-center gap-2.5">
-          <span className="w-14 font-mono text-[9.5px] uppercase tracking-[0.08em] text-white/50">{r.label}</span>
-          <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-white/10">
+          <span className="w-14 font-mono text-[9.5px] uppercase tracking-[0.08em] text-navy/55">{r.label}</span>
+          <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-navy/10">
             <motion.span
               className="block h-full rounded-full"
               style={{ background: `linear-gradient(90deg, ${hue}88, ${hue})` }}
@@ -197,7 +197,7 @@ function VizRows({ hue }) {
 function VizThermo({ hue }) {
   return (
     <div aria-hidden="true" className="relative w-full pt-1">
-      <div className="h-3.5 w-full overflow-hidden rounded-full bg-white/10">
+      <div className="h-3.5 w-full overflow-hidden rounded-full bg-navy/10">
         <motion.span
           className="relative block h-full rounded-full"
           style={{ background: `linear-gradient(90deg, ${hue}77, ${hue})` }}
@@ -211,7 +211,7 @@ function VizThermo({ hue }) {
         style={{ background: hue, left: 'calc(72% - 9px)', height: 18, width: 18, top: 1, filter: `drop-shadow(0 0 8px ${hue})` }}
         initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.8, type: 'spring', stiffness: 280, damping: 14 }}
       />
-      <span className="absolute right-0 top-0 font-mono text-[9.5px] uppercase tracking-[0.1em] text-white/45" style={{ top: -14 }}>
+      <span className="absolute right-0 top-0 font-mono text-[9.5px] uppercase tracking-[0.1em] text-navy/50" style={{ top: -14 }}>
         goal
       </span>
     </div>
@@ -221,12 +221,12 @@ function VizThermo({ hue }) {
 function VizMilestones({ hue }) {
   return (
     <div aria-hidden="true" className="relative flex w-full items-center justify-between px-1 py-2">
-      <span className="absolute inset-x-2 top-1/2 h-px bg-white/15" />
+      <span className="absolute inset-x-2 top-1/2 h-px bg-navy/15" />
       {Array.from({ length: 9 }).map((_, i) => (
         <motion.span
           key={i}
           className="relative h-3 w-3 rotate-45 rounded-[3px]"
-          style={{ background: i < 7 ? hue : 'rgba(255,255,255,0.18)', filter: i < 7 ? `drop-shadow(0 0 6px ${hue}aa)` : 'none' }}
+          style={{ background: i < 7 ? hue : 'rgba(16,28,61,0.15)', filter: i < 7 ? `drop-shadow(0 0 6px ${hue}aa)` : 'none' }}
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
           transition={{ delay: 0.15 + i * 0.07, type: 'spring', stiffness: 320, damping: 17 }}
@@ -249,7 +249,7 @@ function VizRatio({ hue }) {
           transition={{ delay: 0.12 + i * 0.05, type: 'spring', stiffness: 320, damping: 16 }}
         />
       ))}
-      <span className="mx-1 font-mono text-[13px] font-bold text-white/70">:</span>
+      <span className="mx-1 font-mono text-[13px] font-bold text-navy/60">:</span>
       <motion.span
         className="flex h-5 w-5 items-center justify-center rounded-full border-[1.5px] border-white text-white"
         style={{ background: hue }}
@@ -402,16 +402,16 @@ export default function OrbitScrolly() {
   // ── Reduced motion: one static, settled composition — no pin, no scrub. ────
   if (reduce) {
     return (
-      <section aria-labelledby="orbit-h2" className="relative overflow-hidden bg-[#070d1d] py-24">
+      <section aria-labelledby="orbit-h2" className="relative overflow-hidden bg-[#e9f0fb] py-24">
         <div className="mx-auto max-w-4xl px-5 text-center sm:px-8">
-          <p className="text-[12px] font-bold uppercase tracking-[0.22em] text-penny-light">One AI · Eight domains</p>
-          <h2 id="orbit-h2" className="mt-3 font-serif text-[32px] font-semibold leading-tight text-white sm:text-[42px]">
+          <p className="text-[12px] font-bold uppercase tracking-[0.22em] text-[#7a5e00]">One AI · Eight domains</p>
+          <h2 id="orbit-h2" className="mt-3 font-serif text-[32px] font-semibold leading-tight text-navy sm:text-[42px]">
             Everything orbits Penny.
           </h2>
           <div className="mx-auto mt-10 flex max-w-2xl flex-wrap items-center justify-center gap-3">
             <PennyAvatar size={72} />
             {DOMAINS.map(({ key, label, hue, Icon }) => (
-              <span key={key} className="inline-flex items-center gap-2 rounded-full border border-white/20 px-3 py-1.5 text-[13px] font-semibold text-white/85">
+              <span key={key} className="inline-flex items-center gap-2 rounded-full border border-navy/20 px-3 py-1.5 text-[13px] font-semibold text-navy/80">
                 <Icon size={14} style={{ color: hue }} /> {label}
               </span>
             ))}
@@ -425,12 +425,14 @@ export default function OrbitScrolly() {
     // Top padding clears the hero's straddling glass card (its -mb overhang
     // lands on this section). The heading lives INSIDE the pinned stage now —
     // no standalone header block, no dead empty viewport before the scene.
-    <section aria-labelledby="orbit-h2" className="relative bg-[#070d1d] pt-44 sm:pt-56 lg:pt-64">
+    <section aria-labelledby="orbit-h2" className="relative bg-[#e9f0fb] pt-44 sm:pt-56 lg:pt-64">
+      {/* Blend from the dark hero above into the light stage. */}
+      <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-80 bg-gradient-to-b from-[#070d1d] via-[#070d1d]/60 to-transparent" />
       <div ref={trackRef} className="relative h-[560vh]">
         <div
           ref={stageRef}
           className="sticky top-0 flex h-screen flex-col items-center justify-center overflow-hidden transition-[background] duration-1000"
-          style={{ background: `radial-gradient(760px 540px at 50% 34%, ${d.hue}40, transparent 65%), #070d1d` }}
+          style={{ background: `radial-gradient(760px 540px at 50% 34%, ${d.hue}30, transparent 65%), linear-gradient(168deg, #f4f7fd 0%, #e2ebf9 55%, #d4e1f6 100%)` }}
         >
           {/* The heading, lowered INTO the scene: overlays the stage top during
               Penny's entrance + formation, fades as the first dock lands. */}
@@ -438,11 +440,11 @@ export default function OrbitScrolly() {
             ref={introRef}
             className="pointer-events-none absolute inset-x-0 top-[7%] z-[80] px-5 text-center"
           >
-            <p className="text-[12px] font-bold uppercase tracking-[0.22em] text-penny-light">One AI · Eight domains</p>
-            <h2 id="orbit-h2" className="mt-2.5 font-serif text-[30px] font-semibold leading-tight text-white sm:text-[42px]">
+            <p className="text-[12px] font-bold uppercase tracking-[0.22em] text-[#7a5e00]">One AI · Eight domains</p>
+            <h2 id="orbit-h2" className="mt-2.5 font-serif text-[30px] font-semibold leading-tight text-navy sm:text-[42px]">
               Everything orbits Penny.
             </h2>
-            <p className="mx-auto mt-3 max-w-xl text-[15px] leading-relaxed text-white/70">
+            <p className="mx-auto mt-3 max-w-xl text-[15px] leading-relaxed text-muted">
               Eight domains, one AI at the center. Scroll — every one of them docks, hands its
               numbers to Penny, and lands in a single morning briefing.
             </p>
@@ -472,7 +474,7 @@ export default function OrbitScrolly() {
                 style={{
                   fontSize: 'clamp(52px, 8.4vw, 128px)',
                   letterSpacing: '0.06em',
-                  backgroundImage: `linear-gradient(180deg, ${d.hue}59 0%, rgba(255,255,255,0.16) 55%, transparent 100%)`,
+                  backgroundImage: `linear-gradient(180deg, ${d.hue}59 0%, rgba(16,28,61,0.10) 55%, transparent 100%)`,
                   WebkitBackgroundClip: 'text',
                   backgroundClip: 'text',
                   color: 'transparent',
@@ -544,13 +546,13 @@ export default function OrbitScrolly() {
                     style={
                       on
                         ? { background: hue, borderColor: '#fff', color: '#fff', boxShadow: `0 0 40px ${hue}, 0 0 90px ${hue}88` }
-                        : { background: 'rgba(255,255,255,0.08)', borderColor: 'rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.85)' }
+                        : { background: 'rgba(16,28,61,0.06)', borderColor: 'rgba(16,28,61,0.16)', color: '#16284f' }
                     }
                   >
                     <Icon className="h-6 w-6 sm:h-7 sm:w-7" />
                   </span>
                   <span
-                    className={`mt-1.5 block whitespace-nowrap font-mono text-[10.5px] tracking-[0.06em] transition-colors duration-500 ${on ? 'font-bold text-white' : 'text-white/60'}`}
+                    className={`mt-1.5 block whitespace-nowrap font-mono text-[10.5px] tracking-[0.06em] transition-colors duration-500 ${on ? 'font-bold text-navy' : 'text-navy/60'}`}
                   >
                     {label}
                   </span>
@@ -566,7 +568,7 @@ export default function OrbitScrolly() {
               initial={{ y: 16, rotate: -1.2, opacity: 0.2 }}
               animate={{ y: 0, rotate: 0, opacity: 1 }}
               transition={{ duration: 0.42, ease: [0.2, 0.9, 0.2, 1] }}
-              className="relative grid grid-cols-[1fr_auto] items-center gap-x-5 gap-y-1 overflow-hidden rounded-2xl border border-white/15 bg-[#0a1022]/75 px-6 py-4 backdrop-blur-md"
+              className="relative grid grid-cols-[1fr_auto] items-center gap-x-5 gap-y-1 overflow-hidden rounded-2xl border border-navy/10 bg-white/80 px-6 py-4 shadow-[0_24px_60px_-24px_rgba(16,28,61,0.35)] backdrop-blur-md"
             >
               {/* Domain-hue hairline across the card's top edge. */}
               <span
@@ -574,12 +576,12 @@ export default function OrbitScrolly() {
                 className="absolute inset-x-0 top-0 h-px"
                 style={{ background: `linear-gradient(90deg, transparent, ${d.hue}, transparent)` }}
               />
-              <b className="font-serif text-[24px] font-semibold text-white">{d.label}</b>
+              <b className="font-serif text-[24px] font-semibold text-navy">{d.label}</b>
               <div className="col-start-2 row-span-2 text-right">
-                <b className="font-serif text-[36px] tabular-nums text-penny-pale"><CountStat target={d.stat} /></b>
-                <span className="block font-mono text-[10px] uppercase tracking-[0.14em] text-white/50">{d.unit}</span>
+                <b className="font-serif text-[36px] tabular-nums text-[#8a6a20]"><CountStat target={d.stat} /></b>
+                <span className="block font-mono text-[10px] uppercase tracking-[0.14em] text-navy/55">{d.unit}</span>
               </div>
-              <p className="col-start-1 text-[13.5px] leading-snug text-white/70">{d.line}</p>
+              <p className="col-start-1 text-[13.5px] leading-snug text-muted">{d.line}</p>
               {/* Each domain deals in its OWN chart (area/bars/gauge/…), hue-lit. */}
               <div className="col-span-2 mt-3">
                 {(() => { const Viz = VIZ[d.key]; return <Viz hue={d.hue} /> })()}
