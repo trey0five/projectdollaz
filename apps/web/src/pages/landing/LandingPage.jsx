@@ -16,7 +16,6 @@ import OrbitScrolly from './OrbitScrolly.jsx'
 import BentoWall from './BentoWall.jsx'
 import TbToStatements from './TbToStatements.jsx'
 import BoardReadyShow from './BoardReadyShow.jsx'
-import FinalCta from './FinalCta.jsx'
 import LandingFooter from './LandingFooter.jsx'
 import TrustBar from './TrustBar.jsx'
 
@@ -47,7 +46,6 @@ export default function LandingPage() {
         <TbToStatements />
         {/* The board-ready path: slideshow + the demo packet. */}
         <BoardReadyShow />
-        <FinalCta />
       </main>
       <TrustBar />
       <LandingFooter />
