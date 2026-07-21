@@ -289,6 +289,7 @@ function CountStat({ target }) {
 export default function OrbitScrolly() {
   const reduce = useReducedMotion()
   const trackRef = useRef(null)
+  const stageRef = useRef(null)
   const sysRef = useRef(null)
   const planetRefs = useRef([])
   const beamRef = useRef(null)
@@ -307,8 +308,8 @@ export default function OrbitScrolly() {
 
   // Penny's Lottie-style entrance: drop-in with squash-and-stretch the first
   // time the orbit scrolls into view, then periodic blinks while it's on screen.
-  const pennyIn = useInView(trackRef, { once: true, amount: 0.02 })
-  const blinkOn = useInView(trackRef, { amount: 0.05 })
+  const pennyIn = useInView(stageRef, { once: true, amount: 0.55 })
+  const blinkOn = useInView(stageRef, { amount: 0.3 })
   const [blink, setBlink] = useState(false)
   useEffect(() => {
     if (!blinkOn || reduce) return undefined
@@ -436,6 +437,7 @@ export default function OrbitScrolly() {
 
       <div ref={trackRef} className="relative h-[560vh]">
         <div
+          ref={stageRef}
           className="sticky top-0 flex h-screen flex-col items-center justify-center overflow-hidden transition-[background] duration-1000"
           style={{ background: `radial-gradient(760px 540px at 50% 34%, ${d.hue}40, transparent 65%), #070d1d` }}
         >
@@ -444,32 +446,38 @@ export default function OrbitScrolly() {
               with a hue→white gradient FILL clipped to the glyphs, low opacity,
               and a radial mask so it dissolves at the edges instead of hitting
               the viewport crop. Rises softly on each dock. */}
-          <AnimatePresence mode="popLayout">
-            <motion.div
-              key={d.key}
-              ref={typeRef}
-              aria-hidden="true"
-              initial={{ y: 26, opacity: 0, scale: 0.97 }}
-              animate={{ y: 0, opacity: 1, scale: 1 }}
-              exit={{ y: -20, opacity: 0 }}
-              transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-              // Centered via left/right-0 + mx-auto + w-max (NOT translate — framer's
-              // animated transform would clobber a Tailwind -translate-x-1/2).
-              className="pointer-events-none absolute inset-x-0 top-[30%] z-0 mx-auto w-max select-none whitespace-nowrap font-serif font-semibold uppercase"
-              style={{
-                fontSize: 'clamp(52px, 8.4vw, 128px)',
-                letterSpacing: '0.06em',
-                backgroundImage: `linear-gradient(180deg, ${d.hue}59 0%, rgba(255,255,255,0.16) 55%, transparent 100%)`,
-                WebkitBackgroundClip: 'text',
-                backgroundClip: 'text',
-                color: 'transparent',
-                maskImage: 'radial-gradient(72% 90% at 50% 50%, #000 55%, transparent 100%)',
-                WebkitMaskImage: 'radial-gradient(72% 90% at 50% 50%, #000 55%, transparent 100%)',
-              }}
-            >
-              {d.label}
-            </motion.div>
-          </AnimatePresence>
+          {/* OUTER wrapper owns visibility (handler-written, STARTS hidden — the
+              inner framer entrance animates on mount and would otherwise show
+              the type before any scroll event fires). */}
+          <div
+            ref={typeRef}
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 top-[30%] z-0"
+            style={{ opacity: 0 }}
+          >
+            <AnimatePresence mode="popLayout">
+              <motion.div
+                key={d.key}
+                initial={{ y: 26, opacity: 0, scale: 0.97 }}
+                animate={{ y: 0, opacity: 1, scale: 1 }}
+                exit={{ y: -20, opacity: 0 }}
+                transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+                className="mx-auto w-max select-none whitespace-nowrap font-serif font-semibold uppercase"
+                style={{
+                  fontSize: 'clamp(52px, 8.4vw, 128px)',
+                  letterSpacing: '0.06em',
+                  backgroundImage: `linear-gradient(180deg, ${d.hue}59 0%, rgba(255,255,255,0.16) 55%, transparent 100%)`,
+                  WebkitBackgroundClip: 'text',
+                  backgroundClip: 'text',
+                  color: 'transparent',
+                  maskImage: 'radial-gradient(72% 90% at 50% 50%, #000 55%, transparent 100%)',
+                  WebkitMaskImage: 'radial-gradient(72% 90% at 50% 50%, #000 55%, transparent 100%)',
+                }}
+              >
+                {d.label}
+              </motion.div>
+            </AnimatePresence>
+          </div>
 
           {/* The system: beam + core + planets (rings retired — the motion
               itself draws the orbit). */}
@@ -543,7 +551,7 @@ export default function OrbitScrolly() {
           </div>
 
           {/* Live payload card — deals in on every dock. */}
-          <div ref={payWrapRef} className="relative z-[3] mt-3 w-[min(500px,90vw)]">
+          <div ref={payWrapRef} className="relative z-[3] mt-3 w-[min(500px,90vw)]" style={{ opacity: 0 }}>
             <motion.div
               key={d.key}
               initial={{ y: 16, rotate: -1.2, opacity: 0.2 }}
