@@ -14,39 +14,11 @@ import LandingHero from './LandingHero.jsx'
 import VideoHero from './VideoHero.jsx'
 import OrbitScrolly from './OrbitScrolly.jsx'
 import BentoWall from './BentoWall.jsx'
-import DioceseBand from './DioceseBand.jsx'
+import TbToStatements from './TbToStatements.jsx'
+import BoardReadyShow from './BoardReadyShow.jsx'
 import FinalCta from './FinalCta.jsx'
 import LandingFooter from './LandingFooter.jsx'
 import TrustBar from './TrustBar.jsx'
-import Reveal from './Reveal.jsx'
-import { LICENSING } from './landingContent.js'
-
-// Quiet centered licensing note between the diocese band and the finale.
-function LicensingSection() {
-  return (
-    <section aria-labelledby="licensing-h3" className="bg-transparent py-20">
-      <div className="mx-auto max-w-2xl px-5 text-center sm:px-8">
-        <Reveal>
-          {/* Deep gold: readable gold-on-light (see the ActSection kicker note). */}
-          <p className="text-[12px] font-bold uppercase tracking-[0.22em] text-[#7a5e00]">
-            {LICENSING.kicker}
-          </p>
-        </Reveal>
-        <Reveal delay={0.07}>
-          <h3
-            id="licensing-h3"
-            className="mt-3 font-serif text-[26px] font-semibold leading-tight text-navy sm:text-[30px]"
-          >
-            {LICENSING.h3}
-          </h3>
-        </Reveal>
-        <Reveal delay={0.14}>
-          <p className="mt-4 text-[16px] leading-relaxed text-muted">{LICENSING.body}</p>
-        </Reveal>
-      </div>
-    </section>
-  )
-}
 
 export default function LandingPage() {
   // The fixed nav stays hidden until the hero's TV-bloom "powers on". The
@@ -71,8 +43,10 @@ export default function LandingPage() {
         <OrbitScrolly />
         {/* The breadth: every current capability as a live bento cell. */}
         <BentoWall />
-        <DioceseBand />
-        <LicensingSection />
+        {/* TB → four statements, with the auto-cycling live example. */}
+        <TbToStatements />
+        {/* The board-ready path: slideshow + the demo packet. */}
+        <BoardReadyShow />
         <FinalCta />
       </main>
       <TrustBar />
