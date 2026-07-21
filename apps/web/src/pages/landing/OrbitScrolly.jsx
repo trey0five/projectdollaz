@@ -59,6 +59,211 @@ const seg = (p, a, b) => clamp((p - a) / (b - a), 0, 1)
 const backOut = (t) => { const c = 1.70158; return 1 + (--t) * t * ((c + 1) * t + c) }
 const smooth = (t) => t * t * (3 - 2 * t)
 
+// ── Per-domain payload visualizations — each dock deals in its OWN chart type
+// (area, bars, gauge, stacked status, thermometer, milestones, pictogram), hue-
+// colored and replayed on every dock (the card re-mounts per domain key). ──────
+function VizArea({ hue }) {
+  const line = 'M4 44 L64 36 L124 40 L184 24 L244 29 L304 14 L364 18 L436 6'
+  return (
+    <svg className="h-14 w-full" viewBox="0 0 440 56" preserveAspectRatio="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="orbit-area" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={hue} stopOpacity="0.45" />
+          <stop offset="100%" stopColor={hue} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <motion.path
+        d={`${line} L436 54 L4 54 Z`}
+        fill="url(#orbit-area)"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.4, duration: 0.5 }}
+      />
+      <motion.path
+        d={line} fill="none" stroke={hue} strokeWidth="2.5" strokeLinecap="round"
+        initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.9, ease: 'easeOut' }}
+      />
+      <motion.circle
+        cx="436" cy="6" r="4" fill="#fff"
+        initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.85, type: 'spring', stiffness: 300, damping: 16 }}
+        style={{ filter: `drop-shadow(0 0 7px ${hue})` }}
+      />
+    </svg>
+  )
+}
+
+function VizBars({ hue }) {
+  const H = [18, 24, 21, 30, 27, 36, 33, 46]
+  return (
+    <svg className="h-14 w-full" viewBox="0 0 440 56" preserveAspectRatio="none" aria-hidden="true">
+      {H.map((h, i) => (
+        <motion.rect
+          key={i}
+          x={10 + i * 55} width="34" rx="4"
+          fill={i === H.length - 1 ? hue : `${hue}55`}
+          initial={{ height: 0, y: 54 }}
+          animate={{ height: h, y: 54 - h }}
+          transition={{ delay: 0.15 + i * 0.07, duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+          style={i === H.length - 1 ? { filter: `drop-shadow(0 0 8px ${hue})` } : undefined}
+        />
+      ))}
+    </svg>
+  )
+}
+
+function VizStacked({ hue }) {
+  const SEGS = [
+    { label: 'Reviewed', w: 62, o: 1 },
+    { label: 'Current', w: 26, o: 0.55 },
+    { label: 'Due', w: 12, o: 0.25 },
+  ]
+  return (
+    <div aria-hidden="true" className="w-full">
+      <div className="flex h-4 w-full gap-1 overflow-hidden rounded-full">
+        {SEGS.map((s, i) => (
+          <motion.span
+            key={s.label}
+            className="h-full rounded-full"
+            style={{ background: hue, opacity: s.o }}
+            initial={{ width: 0 }}
+            animate={{ width: `${s.w}%` }}
+            transition={{ delay: 0.25 + i * 0.16, duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+          />
+        ))}
+      </div>
+      <div className="mt-2 flex gap-4">
+        {SEGS.map((s) => (
+          <span key={s.label} className="flex items-center gap-1.5 font-mono text-[9.5px] uppercase tracking-[0.1em] text-white/50">
+            <i className="h-1.5 w-1.5 rounded-full" style={{ background: hue, opacity: s.o }} /> {s.label}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function VizGauge({ hue }) {
+  return (
+    <svg className="mx-auto h-16" viewBox="0 0 160 64" aria-hidden="true">
+      <path d="M14 58 A66 66 0 0 1 146 58" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="9" strokeLinecap="round" />
+      <motion.path
+        d="M14 58 A66 66 0 0 1 146 58" fill="none" stroke={hue} strokeWidth="9" strokeLinecap="round"
+        initial={{ pathLength: 0 }} animate={{ pathLength: 0.87 }} transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
+        style={{ filter: `drop-shadow(0 0 8px ${hue}aa)` }}
+      />
+      <motion.circle
+        cx="132" cy="22" r="4.5" fill="#fff"
+        initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.9, type: 'spring', stiffness: 300, damping: 15 }}
+        style={{ filter: `drop-shadow(0 0 6px ${hue})` }}
+      />
+    </svg>
+  )
+}
+
+function VizRows({ hue }) {
+  const ROWS = [
+    { label: 'HVAC', w: 78 },
+    { label: 'Roofing', w: 52 },
+    { label: 'Grounds', w: 34 },
+  ]
+  return (
+    <div aria-hidden="true" className="w-full space-y-1.5">
+      {ROWS.map((r, i) => (
+        <div key={r.label} className="flex items-center gap-2.5">
+          <span className="w-14 font-mono text-[9.5px] uppercase tracking-[0.08em] text-white/50">{r.label}</span>
+          <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-white/10">
+            <motion.span
+              className="block h-full rounded-full"
+              style={{ background: `linear-gradient(90deg, ${hue}88, ${hue})` }}
+              initial={{ width: 0 }}
+              animate={{ width: `${r.w}%` }}
+              transition={{ delay: 0.2 + i * 0.14, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function VizThermo({ hue }) {
+  return (
+    <div aria-hidden="true" className="relative w-full pt-1">
+      <div className="h-3.5 w-full overflow-hidden rounded-full bg-white/10">
+        <motion.span
+          className="relative block h-full rounded-full"
+          style={{ background: `linear-gradient(90deg, ${hue}77, ${hue})` }}
+          initial={{ width: 0 }}
+          animate={{ width: '72%' }}
+          transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
+        />
+      </div>
+      <motion.span
+        className="absolute top-0.5 h-4.5 w-4.5 rounded-full border-2 border-white"
+        style={{ background: hue, left: 'calc(72% - 9px)', height: 18, width: 18, top: 1, filter: `drop-shadow(0 0 8px ${hue})` }}
+        initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.8, type: 'spring', stiffness: 280, damping: 14 }}
+      />
+      <span className="absolute right-0 top-0 font-mono text-[9.5px] uppercase tracking-[0.1em] text-white/45" style={{ top: -14 }}>
+        goal
+      </span>
+    </div>
+  )
+}
+
+function VizMilestones({ hue }) {
+  return (
+    <div aria-hidden="true" className="relative flex w-full items-center justify-between px-1 py-2">
+      <span className="absolute inset-x-2 top-1/2 h-px bg-white/15" />
+      {Array.from({ length: 9 }).map((_, i) => (
+        <motion.span
+          key={i}
+          className="relative h-3 w-3 rotate-45 rounded-[3px]"
+          style={{ background: i < 7 ? hue : 'rgba(255,255,255,0.18)', filter: i < 7 ? `drop-shadow(0 0 6px ${hue}aa)` : 'none' }}
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ delay: 0.15 + i * 0.07, type: 'spring', stiffness: 320, damping: 17 }}
+        />
+      ))}
+    </div>
+  )
+}
+
+function VizRatio({ hue }) {
+  return (
+    <div aria-hidden="true" className="flex w-full items-center justify-center gap-1.5 py-2">
+      {Array.from({ length: 14 }).map((_, i) => (
+        <motion.span
+          key={i}
+          className="h-2.5 w-2.5 rounded-full"
+          style={{ background: `${hue}cc` }}
+          initial={{ scale: 0, y: 6 }}
+          animate={{ scale: 1, y: 0 }}
+          transition={{ delay: 0.12 + i * 0.05, type: 'spring', stiffness: 320, damping: 16 }}
+        />
+      ))}
+      <span className="mx-1 font-mono text-[13px] font-bold text-white/70">:</span>
+      <motion.span
+        className="flex h-5 w-5 items-center justify-center rounded-full border-[1.5px] border-white text-white"
+        style={{ background: hue }}
+        initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.85, type: 'spring', stiffness: 280, damping: 14 }}
+      >
+        <Users size={11} />
+      </motion.span>
+    </div>
+  )
+}
+
+const VIZ = {
+  finance: VizArea,
+  enrollment: VizBars,
+  governance: VizStacked,
+  accreditation: VizGauge,
+  facilities: VizRows,
+  advancement: VizThermo,
+  strategy: VizMilestones,
+  hr: VizRatio,
+}
+
 // Payload stat that counts up on every dock.
 function CountStat({ target }) {
   const ref = useRef(null)
@@ -81,7 +286,6 @@ export default function OrbitScrolly() {
   const beamRef = useRef(null)
   const beamFlowRef = useRef(null)
   const coreRef = useRef(null)
-  const ringRefs = useRef([])
   const typeRef = useRef(null)
   const payWrapRef = useRef(null)
   const finaleRef = useRef(null)
@@ -145,8 +349,7 @@ export default function OrbitScrolly() {
       setShockKey((k) => k + 1)
     }
 
-    // Rings, giant type, core scale, payload + finale opacity.
-    ringRefs.current.forEach((r) => { if (r) r.style.opacity = String(form * (1 - collapse)) })
+    // Giant type, core scale, payload + finale opacity.
     if (typeRef.current) typeRef.current.style.opacity = String(0.9 * form * (1 - collapse))
     if (coreRef.current) {
       coreRef.current.style.transform = `scale(${1 + 0.5 * collapse})`
@@ -237,16 +440,9 @@ export default function OrbitScrolly() {
             </motion.div>
           </AnimatePresence>
 
-          {/* The system: rings + beam + core + planets. */}
+          {/* The system: beam + core + planets (rings retired — the motion
+              itself draws the orbit). */}
           <div ref={sysRef} aria-hidden="true" className="relative z-[2] w-[min(560px,92vw)] flex-none" style={{ aspectRatio: '1 / 0.78' }}>
-            {[{ w: '124%', h: '57%', o: 'border-white/5' }, { w: '100%', h: '46%', o: 'border-penny/25' }, { w: '74%', h: '33%', o: 'border-dashed border-white/10' }].map((r, i) => (
-              <span
-                key={i}
-                ref={(el) => (ringRefs.current[i] = el)}
-                className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-[50%] border ${r.o}`}
-                style={{ width: r.w, height: r.h }}
-              />
-            ))}
             <svg className="pointer-events-none absolute inset-0 z-[40] h-full w-full overflow-visible">
               <line ref={beamRef} strokeWidth="3" strokeLinecap="round" style={{ stroke: d.hue, filter: `drop-shadow(0 0 8px ${d.hue})`, transition: 'opacity .3s' }} />
               <line ref={beamFlowRef} className="orbit-beam-flow" stroke="#fff" strokeWidth="3" strokeLinecap="round" style={{ transition: 'opacity .3s' }} />
@@ -304,24 +500,24 @@ export default function OrbitScrolly() {
               initial={{ y: 16, rotate: -1.2, opacity: 0.2 }}
               animate={{ y: 0, rotate: 0, opacity: 1 }}
               transition={{ duration: 0.42, ease: [0.2, 0.9, 0.2, 1] }}
-              className="grid grid-cols-[1fr_auto] items-center gap-x-5 gap-y-1 rounded-2xl border border-white/15 bg-[#0a1022]/75 px-6 py-4 backdrop-blur-md"
+              className="relative grid grid-cols-[1fr_auto] items-center gap-x-5 gap-y-1 overflow-hidden rounded-2xl border border-white/15 bg-[#0a1022]/75 px-6 py-4 backdrop-blur-md"
             >
+              {/* Domain-hue hairline across the card's top edge. */}
+              <span
+                aria-hidden="true"
+                className="absolute inset-x-0 top-0 h-px"
+                style={{ background: `linear-gradient(90deg, transparent, ${d.hue}, transparent)` }}
+              />
               <b className="font-serif text-[24px] font-semibold text-white">{d.label}</b>
               <div className="col-start-2 row-span-2 text-right">
                 <b className="font-serif text-[36px] tabular-nums text-penny-pale"><CountStat target={d.stat} /></b>
                 <span className="block font-mono text-[10px] uppercase tracking-[0.14em] text-white/50">{d.unit}</span>
               </div>
               <p className="col-start-1 text-[13.5px] leading-snug text-white/70">{d.line}</p>
-              <svg className="col-span-2 mt-2 w-full" height="30" viewBox="0 0 440 30" preserveAspectRatio="none" aria-hidden="true">
-                <motion.path
-                  key={d.key}
-                  d="M4 25 L60 21 L116 23 L172 14 L228 17 L284 9 L340 12 L436 4"
-                  fill="none" stroke="#d4b47a" strokeWidth="2.4" strokeLinecap="round"
-                  initial={{ pathLength: 0 }}
-                  animate={{ pathLength: 1 }}
-                  transition={{ duration: 0.9, ease: 'easeOut' }}
-                />
-              </svg>
+              {/* Each domain deals in its OWN chart (area/bars/gauge/…), hue-lit. */}
+              <div className="col-span-2 mt-3">
+                {(() => { const Viz = VIZ[d.key]; return <Viz hue={d.hue} /> })()}
+              </div>
             </motion.div>
           </div>
 
