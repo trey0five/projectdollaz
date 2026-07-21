@@ -426,8 +426,6 @@ export default function OrbitScrolly() {
     // lands on this section). The heading lives INSIDE the pinned stage now —
     // no standalone header block, no dead empty viewport before the scene.
     <section aria-labelledby="orbit-h2" className="relative bg-[#e9f0fb] pt-44 sm:pt-56 lg:pt-64">
-      {/* Blend from the dark hero above into the light stage. */}
-      <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-80 bg-gradient-to-b from-[#070d1d] via-[#070d1d]/60 to-transparent" />
       <div ref={trackRef} className="relative h-[560vh]">
         <div
           ref={stageRef}

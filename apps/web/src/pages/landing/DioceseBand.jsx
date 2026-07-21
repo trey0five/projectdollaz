@@ -15,7 +15,7 @@ export default function DioceseBand() {
   const mid = Math.floor(DIOCESE.campuses.length / 2)
 
   return (
-    <section id="networks" aria-labelledby="diocese-h2" className="scroll-mt-24 bg-navy-gradient py-24">
+    <section id="networks" aria-labelledby="diocese-h2" className="scroll-mt-24 bg-transparent py-24">
       <div className="mx-auto max-w-3xl px-5 text-center sm:px-8">
         <Reveal>
           <div
@@ -47,7 +47,7 @@ export default function DioceseBand() {
 
         {/* Legend so the dots read as status, not decoration. */}
         <Reveal delay={0.05}>
-          <div className="mt-5 flex items-center justify-center gap-5 text-[11px] font-semibold uppercase tracking-[0.1em] text-white/50">
+          <div className="mt-5 flex items-center justify-center gap-5 text-[11px] font-semibold uppercase tracking-[0.1em] text-navy/55">
             {DIOCESE.legend.map((l) => (
               <span key={l.status} className="inline-flex items-center gap-1.5">
                 <span className={`h-2 w-2 rounded-full ${DOT[l.status]}`} aria-hidden />
@@ -58,20 +58,20 @@ export default function DioceseBand() {
         </Reveal>
 
         <Reveal delay={0.12}>
-          <p className="mt-10 text-[12px] font-bold uppercase tracking-[0.22em] text-gold-light">
+          <p className="mt-10 text-[12px] font-bold uppercase tracking-[0.22em] text-[#7a5e00]">
             {DIOCESE.kicker}
           </p>
         </Reveal>
         <Reveal delay={0.18}>
           <h2
             id="diocese-h2"
-            className="mt-3 font-serif text-[32px] font-semibold leading-tight text-white sm:text-[42px]"
+            className="mt-3 font-serif text-[32px] font-semibold leading-tight text-navy sm:text-[42px]"
           >
             {DIOCESE.h2}
           </h2>
         </Reveal>
         <Reveal delay={0.24}>
-          <p className="mx-auto mt-4 max-w-xl text-[16px] leading-relaxed text-white/70">
+          <p className="mx-auto mt-4 max-w-xl text-[16px] leading-relaxed text-muted">
             {DIOCESE.body}
           </p>
         </Reveal>

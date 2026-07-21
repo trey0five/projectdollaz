@@ -24,7 +24,7 @@ import { LICENSING } from './landingContent.js'
 // Quiet centered licensing note between the diocese band and the finale.
 function LicensingSection() {
   return (
-    <section aria-labelledby="licensing-h3" className="bg-cream py-20">
+    <section aria-labelledby="licensing-h3" className="bg-transparent py-20">
       <div className="mx-auto max-w-2xl px-5 text-center sm:px-8">
         <Reveal>
           {/* Deep gold: readable gold-on-light (see the ActSection kicker note). */}
@@ -55,10 +55,10 @@ export default function LandingPage() {
   const revealNav = useCallback(() => setNavShown(true), [])
 
   return (
-    // Root ground is DARK now: the hero's transparent straddle block used to
-    // reveal cream between the video and the acts — with the Orbit composition
-    // that read as a white gap, so the root matches the orbit's deep space.
-    <div className="bg-[#070d1d] text-ink">
+    // Light-blue page ground: the hero's transparent straddle block used to
+    // reveal the root between the video and the orbit; the whole page body now
+    // shares the orbit's light-blue ground (navs/footer keep their navy).
+    <div className="bg-[#e9f0fb] text-ink">
       <LandingNav show={navShown} />
       <main id="main">
         {/* The product video OPENS the page (cinematic entrance); the headline
