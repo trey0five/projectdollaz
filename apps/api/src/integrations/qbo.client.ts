@@ -2,7 +2,7 @@
 // dependency: plain fetch against Intuit's documented endpoints. Stateless; the
 // caller persists tokens. Endpoints/data shapes per Intuit's QBO API docs — the
 // connector is config-gated, so live verification needs a sandbox app + company.
-import { Injectable } from '@nestjs/common'
+import { Injectable, Logger } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 // Type-only (erased at runtime, so no import cycle): the synth module owns the
 // summarized-report JSON shapes because it is the one that parses them.
@@ -150,7 +150,16 @@ export function deriveAcct(meta: QboAccountMeta): { acct: number; category: 'oth
 
 @Injectable()
 export class QboClient {
+  private readonly logger = new Logger(QboClient.name)
+
   constructor(private readonly config: ConfigService) {}
+
+  // Intuit stamps every API/token response with an `intuit_tid` header — the
+  // request trace id their support team asks for when troubleshooting. Capture
+  // it so it lands in our logs (esp. on failures) and in the thrown error.
+  private tid(res: Response): string {
+    return res.headers.get('intuit_tid') ?? 'n/a'
+  }
 
   isConfigured(): boolean {
     return (this.config.get<string>('quickbooks.clientId') ?? '').length > 0
@@ -191,7 +200,9 @@ export class QboClient {
       body,
     })
     if (!res.ok) {
-      throw new Error(`QBO token exchange failed (${res.status})`)
+      const tid = this.tid(res)
+      this.logger.warn(`QBO token exchange failed (${res.status}) intuit_tid=${tid}`)
+      throw new Error(`QBO token exchange failed (${res.status}) [intuit_tid=${tid}]`)
     }
     const data = (await res.json()) as {
       access_token: string
@@ -229,7 +240,9 @@ export class QboClient {
       headers: { Accept: 'application/json', Authorization: `Bearer ${accessToken}` },
     })
     if (!res.ok) {
-      throw new Error(`QBO API ${path} failed (${res.status})`)
+      const tid = this.tid(res)
+      this.logger.warn(`QBO API ${path} failed (${res.status}) intuit_tid=${tid}`)
+      throw new Error(`QBO API ${path} failed (${res.status}) [intuit_tid=${tid}]`)
     }
     return res.json()
   }
