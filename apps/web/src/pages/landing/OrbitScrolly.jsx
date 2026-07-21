@@ -23,6 +23,7 @@ import {
   motion,
   AnimatePresence,
   animate,
+  useInView,
   useMotionValueEvent,
   useReducedMotion,
   useScroll,
@@ -304,6 +305,24 @@ export default function OrbitScrolly() {
   const [shockKey, setShockKey] = useState(0)
   const activeRef = useRef(0)
 
+  // Penny's Lottie-style entrance: drop-in with squash-and-stretch the first
+  // time the orbit scrolls into view, then periodic blinks while it's on screen.
+  const pennyIn = useInView(trackRef, { once: true, amount: 0.02 })
+  const blinkOn = useInView(trackRef, { amount: 0.05 })
+  const [blink, setBlink] = useState(false)
+  useEffect(() => {
+    if (!blinkOn || reduce) return undefined
+    let t2
+    const t = setInterval(() => {
+      setBlink(true)
+      t2 = setTimeout(() => setBlink(false), 160)
+    }, 3400)
+    return () => {
+      clearInterval(t)
+      clearTimeout(t2)
+    }
+  }, [blinkOn, reduce])
+
   useMotionValueEvent(p, 'change', (v) => {
     const sys = sysRef.current
     if (!sys) return
@@ -362,12 +381,12 @@ export default function OrbitScrolly() {
     // Giant type, core scale, payload + finale opacity.
     // Giant type is GONE before the finale card arrives (was: faded with
     // `collapse`, which left a ghost "HR" hanging behind the briefing).
-    if (typeRef.current) typeRef.current.style.opacity = String(0.9 * form * (1 - seg(v, 0.88, 0.93)))
+    if (typeRef.current) typeRef.current.style.opacity = String(0.9 * seg(v, 0.1, 0.14) * (1 - seg(v, 0.88, 0.93)))
     if (coreRef.current) {
       coreRef.current.style.transform = `scale(${1 + 0.5 * collapse})`
       coreRef.current.style.opacity = String(1 - seg(v, 0.94, 1))
     }
-    if (payWrapRef.current) payWrapRef.current.style.opacity = String(form * (1 - seg(v, 0.88, 0.94)))
+    if (payWrapRef.current) payWrapRef.current.style.opacity = String(seg(v, 0.1, 0.14) * (1 - seg(v, 0.88, 0.94)))
     if (finaleRef.current) {
       const f = seg(v, 0.94, 1)
       finaleRef.current.style.opacity = String(f)
@@ -460,14 +479,32 @@ export default function OrbitScrolly() {
               <line ref={beamFlowRef} className="orbit-beam-flow" stroke="#fff" strokeWidth="3" strokeLinecap="round" style={{ transition: 'opacity .3s' }} />
             </svg>
 
-            {/* Core: Penny + hue flare + dock shockwave. */}
+            {/* Core: Penny (bigger) + hue flare + dock shockwave. The Lottie-style
+                drop-in lives on an INNER wrapper so it composes with the outer
+                handler-driven collapse transform. */}
             <div className="absolute left-1/2 top-1/2 z-[60] -translate-x-1/2 -translate-y-1/2">
               <div
                 ref={coreRef}
                 className="relative rounded-full transition-shadow duration-700 will-change-transform"
-                style={{ boxShadow: `0 0 70px ${d.hue}, 0 0 130px ${d.hue}66` }}
+                style={{ boxShadow: `0 0 80px ${d.hue}, 0 0 150px ${d.hue}66` }}
               >
-                <PennyAvatar size={96} />
+                <motion.div
+                  initial={{ y: -150, opacity: 0 }}
+                  animate={
+                    pennyIn
+                      ? {
+                          y: [-150, 0, -18, 0],
+                          scaleY: [1, 0.82, 1.06, 1],
+                          scaleX: [1, 1.12, 0.97, 1],
+                          opacity: 1,
+                        }
+                      : {}
+                  }
+                  transition={{ duration: 0.9, times: [0, 0.55, 0.8, 1], ease: ['easeIn', 'easeOut', 'easeIn', 'easeOut'] }}
+                  style={{ transformOrigin: '50% 100%' }}
+                >
+                  <PennyAvatar size={128} blink={blink} />
+                </motion.div>
                 <span
                   key={shockKey}
                   className="orbit-shock pointer-events-none absolute inset-0 rounded-full border-2"
@@ -483,17 +520,17 @@ export default function OrbitScrolly() {
                 <div
                   key={key}
                   ref={(el) => (planetRefs.current[i] = el)}
-                  className="absolute left-1/2 top-1/2 -m-10 w-20 text-center will-change-transform"
+                  className="absolute left-1/2 top-1/2 -m-10 w-20 text-center will-change-transform sm:-m-12 sm:w-24"
                 >
                   <span
-                    className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border-[1.5px] backdrop-blur-sm transition-all duration-500"
+                    className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border-[1.5px] backdrop-blur-sm transition-all duration-500 sm:h-[68px] sm:w-[68px] sm:rounded-[20px]"
                     style={
                       on
                         ? { background: hue, borderColor: '#fff', color: '#fff', boxShadow: `0 0 40px ${hue}, 0 0 90px ${hue}88` }
                         : { background: 'rgba(255,255,255,0.08)', borderColor: 'rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.85)' }
                     }
                   >
-                    <Icon size={24} />
+                    <Icon className="h-6 w-6 sm:h-7 sm:w-7" />
                   </span>
                   <span
                     className={`mt-1.5 block whitespace-nowrap font-mono text-[10.5px] tracking-[0.06em] transition-colors duration-500 ${on ? 'font-bold text-white' : 'text-white/60'}`}
