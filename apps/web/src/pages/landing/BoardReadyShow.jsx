@@ -135,19 +135,30 @@ function SlideVisual({ slideKey, reduce }) {
   )
 }
 
-// One page of the fanned demo packet.
-function PacketPage({ rotate, z, children, delay, reduce }) {
+// One page of the packet product-shot. DEALS OUT of the center stack on
+// scroll-in (spring, staggered), then idles with a gentle bob; hover lifts and
+// straightens it above the stack. Transforms compose: outer = deal position,
+// inner = idle float.
+function PacketPage({ x, y, rotate, z, scale = 1, delay, bobDelay = 0, reduce, children, wide = false }) {
   return (
     <motion.div
-      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 40, rotate: 0 }}
-      whileInView={{ opacity: 1, y: 0, rotate }}
-      viewport={{ once: true, margin: '-60px' }}
-      transition={{ duration: 0.65, delay, ease: [0.16, 1.2, 0.3, 1] }}
-      whileHover={reduce ? undefined : { rotate: 0, y: -10, zIndex: 40 }}
-      className="w-56 shrink-0 rounded-xl border border-navy/15 bg-white p-4 shadow-[0_24px_55px_-22px_rgba(16,28,61,0.45)] sm:w-64"
+      initial={reduce ? { opacity: 0 } : { opacity: 0, x: 0, y: 40, rotate: 0, scale: 0.7 }}
+      whileInView={reduce ? { opacity: 1 } : { opacity: 1, x, y, rotate, scale }}
+      viewport={{ once: true, margin: '-80px' }}
+      transition={{ delay, type: 'spring', stiffness: 180, damping: 20 }}
+      whileHover={reduce ? undefined : { rotate: 0, scale: scale + 0.05, zIndex: 50 }}
+      className="absolute left-1/2 top-1/2 -ml-[124px] -mt-[150px] sm:-ml-[140px] sm:-mt-[170px]"
       style={{ zIndex: z }}
     >
-      {children}
+      <motion.div
+        animate={reduce ? undefined : { y: [0, -7, 0] }}
+        transition={{ duration: 4.2, delay: bobDelay, repeat: Infinity, ease: 'easeInOut' }}
+        className={`rounded-2xl border border-navy/10 bg-white p-4 shadow-[0_30px_70px_-25px_rgba(16,28,61,0.5)] ${
+          wide ? 'w-[248px] sm:w-[280px]' : 'w-[232px] sm:w-[260px]'
+        }`}
+      >
+        {children}
+      </motion.div>
     </motion.div>
   )
 }
@@ -258,56 +269,93 @@ export default function BoardReadyShow() {
           </div>
         </div>
 
-        {/* ── The final demo: the packet itself, fanned ── */}
+        {/* ── The final demo: the packet as a PRODUCT SHOT — pages deal out of
+            a center stack over a glow aura, idle-float, and the navy cover gets
+            a gold-foil shine sweep. ── */}
         <div className="mt-16 text-center">
           <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-navy/50">
             The result — a committee packet your board can read in ten minutes
           </p>
         </div>
-        <div className="mt-8 flex items-end justify-center gap-[-40px] [&>*]:-mx-5">
-          <PacketPage rotate={-6} z={10} delay={0} reduce={reduce}>
-            <div className="rounded-md bg-navy-gradient px-3 py-4 text-center">
-              <span className="block font-serif text-[15px] font-semibold text-white">St. Brigid&rsquo;s School</span>
-              <span className="mt-1 block text-[9px] uppercase tracking-[0.16em] text-penny-light">Finance Committee Packet</span>
-              <span className="mt-2 block text-[10px] text-white/60">June 2026 · FY26 close</span>
-            </div>
-            <div className="mt-3 space-y-1.5" aria-hidden="true">
-              <div className="h-1.5 w-2/3 rounded bg-navy/10" />
-              <div className="h-1.5 w-full rounded bg-navy/10" />
-              <div className="h-1.5 w-4/5 rounded bg-navy/10" />
-            </div>
-            <span className="mt-3 block text-center text-[9.5px] uppercase tracking-[0.12em] text-navy/40">Prepared with KYRO</span>
-          </PacketPage>
+        <div className="relative mx-auto mt-6 h-[380px] w-full max-w-3xl sm:h-[430px]">
+          {/* Glow aura + floor shadow grounding the stack. */}
+          <span aria-hidden="true" className="pointer-events-none absolute left-1/2 top-1/2 h-[340px] w-[340px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#2563EB]/15 blur-3xl sm:h-[420px] sm:w-[560px]" />
+          <span aria-hidden="true" className="pointer-events-none absolute left-1/2 top-[38%] h-40 w-40 -translate-x-1/2 rounded-full bg-gold/20 blur-3xl" />
+          <span aria-hidden="true" className="pointer-events-none absolute bottom-4 left-1/2 h-6 w-72 -translate-x-1/2 rounded-full bg-navy/15 blur-xl sm:w-96" />
 
-          <PacketPage rotate={0} z={20} delay={0.12} reduce={reduce}>
-            <span className="block text-[10px] font-bold uppercase tracking-[0.14em] text-navy/50">Dashboard · June 2026</span>
-            <div className="mt-2 grid grid-cols-2 gap-2" aria-hidden="true">
+          {/* Left page — the KPI dashboard, sparkline draws itself. */}
+          <PacketPage x={-210} y={16} rotate={-9} scale={0.94} z={10} delay={0.15} bobDelay={0.6} reduce={reduce}>
+            <span className="block text-[10.5px] font-bold uppercase tracking-[0.14em] text-navy/50">Dashboard · June 2026</span>
+            <div className="mt-2.5 grid grid-cols-2 gap-2" aria-hidden="true">
               {[['Op margin', '4.0%'], ['Days cash', '43'], ['Reserve', '7.7 mo'], ['Net tuition', '$9,647']].map(([l, v]) => (
-                <div key={l} className="rounded-lg bg-[#eef3fc] px-2 py-2">
-                  <span className="block text-[8.5px] uppercase tracking-[0.1em] text-navy/45">{l}</span>
-                  <span className="font-serif text-[15px] font-semibold text-navy">{v}</span>
+                <div key={l} className="rounded-lg bg-[#eef3fc] px-2.5 py-2">
+                  <span className="block text-[9px] uppercase tracking-[0.1em] text-navy/45">{l}</span>
+                  <span className="font-serif text-[16px] font-semibold text-navy">{v}</span>
                 </div>
               ))}
             </div>
-            <svg className="mt-2 w-full" height="34" viewBox="0 0 220 34" preserveAspectRatio="none" aria-hidden="true">
-              <path d="M4 28 L40 24 L76 26 L112 16 L148 19 L184 9 L216 5" fill="none" stroke="#2563EB" strokeWidth="2" strokeLinecap="round" />
+            <svg className="mt-2.5 w-full" height="38" viewBox="0 0 220 38" preserveAspectRatio="none" aria-hidden="true">
+              <motion.path
+                d="M4 32 L40 27 L76 29 L112 18 L148 21 L184 10 L216 5"
+                fill="none" stroke="#2563EB" strokeWidth="2.2" strokeLinecap="round"
+                initial={{ pathLength: reduce ? 1 : 0 }}
+                whileInView={{ pathLength: 1 }}
+                viewport={{ once: true }}
+                transition={{ duration: 1.1, delay: 0.7, ease: 'easeOut' }}
+              />
             </svg>
           </PacketPage>
 
-          <PacketPage rotate={6} z={10} delay={0.24} reduce={reduce}>
-            <span className="block text-[10px] font-bold uppercase tracking-[0.14em] text-navy/50">Statement of Activities</span>
-            <div className="mt-2 space-y-[5px] text-[10.5px] text-navy/75" aria-hidden="true">
+          {/* Right page — the Statement of Activities. */}
+          <PacketPage x={210} y={22} rotate={8} scale={0.94} z={10} delay={0.28} bobDelay={1.4} reduce={reduce}>
+            <span className="block text-[10.5px] font-bold uppercase tracking-[0.14em] text-navy/50">Statement of Activities</span>
+            <div className="mt-2.5 space-y-[6px] text-[11px] text-navy/75" aria-hidden="true">
               {[['Tuition & fees, net', '10,850,000'], ['Contributions', '1,240,000'], ['Total revenue', '12,700,000'], ['Total expenses', '11,620,000']].map(([l, v], k) => (
-                <div key={l} className={`flex justify-between gap-2 ${k >= 2 ? 'border-t border-navy/15 pt-[3px] font-semibold text-navy' : ''}`}>
+                <div key={l} className={`flex justify-between gap-2 ${k >= 2 ? 'border-t border-navy/15 pt-[4px] font-semibold text-navy' : ''}`}>
                   <span>{l}</span>
                   <span className="tabular-nums">{v}</span>
                 </div>
               ))}
-              <div className="flex justify-between gap-2 border-t-2 border-navy/50 pt-1 text-[11px] font-bold text-navy">
+              <div className="flex justify-between gap-2 border-t-2 border-navy/50 pt-1.5 text-[11.5px] font-bold text-navy">
                 <span>Change in net assets</span>
                 <span className="tabular-nums">1,080,000</span>
               </div>
             </div>
+          </PacketPage>
+
+          {/* Cover — front and center: full navy page, gold rules, medallion,
+              and a one-shot gold-foil shine sweep. */}
+          <PacketPage x={0} y={-6} rotate={0} z={30} delay={0} bobDelay={0} reduce={reduce} wide>
+            <div className="relative overflow-hidden rounded-xl bg-navy-gradient px-4 py-6 text-center">
+              {/* foil shine sweep (one-shot) */}
+              {!reduce && (
+                <motion.span
+                  aria-hidden="true"
+                  className="absolute inset-y-[-30%] left-0 w-1/3 -skew-x-12"
+                  style={{ background: 'linear-gradient(100deg, transparent, rgba(255,255,255,0.06), rgba(212,180,122,0.35), rgba(255,255,255,0.06), transparent)' }}
+                  initial={{ x: '-140%' }}
+                  whileInView={{ x: '420%' }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 1.1, delay: 1.0, ease: 'easeInOut' }}
+                />
+              )}
+              <span aria-hidden="true" className="mx-auto block h-px w-24 bg-gradient-to-r from-transparent via-penny-light/70 to-transparent" />
+              <span className="mt-3 block font-serif text-[20px] font-semibold leading-tight text-white">St. Brigid&rsquo;s School</span>
+              <span className="mt-1.5 block text-[9.5px] font-bold uppercase tracking-[0.2em] text-penny-light">Finance Committee Packet</span>
+              <motion.span
+                aria-hidden="true"
+                className="mx-auto mt-4 flex h-12 w-12 items-center justify-center rounded-full border-2 border-penny-light/60 text-penny-light"
+                initial={reduce ? false : { scale: 0, rotate: -30 }}
+                whileInView={{ scale: 1, rotate: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: 0.6, type: 'spring', stiffness: 260, damping: 14 }}
+              >
+                <Check size={20} />
+              </motion.span>
+              <span className="mt-3 block text-[10.5px] text-white/65">June 2026 · FY26 close</span>
+              <span aria-hidden="true" className="mx-auto mt-3 block h-px w-24 bg-gradient-to-r from-transparent via-penny-light/70 to-transparent" />
+            </div>
+            <span className="mt-3 block text-center text-[9.5px] font-bold uppercase tracking-[0.16em] text-navy/45">Prepared with KYRO</span>
           </PacketPage>
         </div>
       </div>
