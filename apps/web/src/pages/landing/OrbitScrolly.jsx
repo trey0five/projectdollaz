@@ -320,7 +320,10 @@ export default function OrbitScrolly() {
       const depth = (Math.sin(a) + 1) / 2 // 1 = front (bottom of ellipse)
       const sc = (0.62 + 0.55 * depth) * (form < 1 ? 0.5 + 0.5 * form : 1) * (1 - collapse * 0.7)
       el.style.transform = `translate(${x}px, ${y}px) scale(${sc})`
-      el.style.zIndex = String(30 + Math.round(depth * 40))
+      // Gathered near the core (formation start / collapse end) the planets sit
+      // BEHIND Penny (z < core's 60) and branch out from her; only once the
+      // orbit is formed do front-half passes layer above the coin.
+      el.style.zIndex = String(rf < 0.85 ? 10 + Math.round(depth * 20) : 30 + Math.round(depth * 40))
       el.style.opacity = String((0.45 + 0.55 * depth) * (1 - collapse))
       el.style.filter = depth < 0.35 ? 'blur(1.2px)' : 'none'
       if (i === activeRef.current) { frontX = x; frontY = y }
