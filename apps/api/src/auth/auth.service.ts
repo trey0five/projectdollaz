@@ -23,8 +23,11 @@ import type { ResetPasswordDto } from './dto/reset-password.dto.js'
 import type { UpdateProfileDto } from './dto/update-profile.dto.js'
 import type { ChangePasswordDto } from './dto/change-password.dto.js'
 
-const MAX_FAILED = 6
-const LOCK_MS = 1000 * 60 * 30 // 30 minutes
+// Exported: MfaService's code-failure path replays login's EXACT lockout block —
+// password failures and MFA-code failures share one 6-strikes/30-min pool.
+export const MAX_FAILED = 6
+export const LOCK_MS = 1000 * 60 * 30 // 30 minutes
+const MFA_CHALLENGE_TTL_MS = 1000 * 60 * 5 // 5m — matches TokenService's '300s' JWT TTL
 const VERIFY_TTL_MS = 1000 * 60 * 60 * 24 // 24h
 const RESET_TTL_MS = 1000 * 60 * 15 // 15m
 
@@ -132,7 +135,10 @@ export class AuthService {
 
   async login(
     dto: LoginDto,
-  ): Promise<{ access_token: string; refresh_token: string; user: UserPublic }> {
+  ): Promise<
+    | { access_token: string; refresh_token: string; user: UserPublic }
+    | { mfa_required: true; mfa_token: string; methods: ['totp', 'backup_code'] }
+  > {
     const user = await this.prisma.user.findUnique({ where: { email: dto.email } })
     if (!user) {
       // Equalize timing, then fail.
@@ -189,6 +195,31 @@ export class AuthService {
         metadata: { attempts },
       })
       throw new UnauthorizedException('Invalid email or password.')
+    }
+
+    if (user.totpEnabled) {
+      // MFA branch (password correct, code pending). Deliberately does NOT
+      // reset failedLoginAttempts: password failures and MFA-code failures
+      // share ONE 6-strikes/30-min pool, so a password-holding attacker can't
+      // refill their code-guess budget by re-entering the known password.
+      // No tokens and no user object leave the server until the code verifies.
+      const jti = randomBytes(24).toString('hex')
+      const mfa_token = this.tokens.signMfaChallenge(user.id, jti)
+      await this.prisma.mfaChallenge.create({
+        data: {
+          userId: user.id,
+          jti,
+          tokenHash: sha256hex(mfa_token), // hash at rest — a DB read never yields a usable token
+          expiresAt: new Date(Date.now() + MFA_CHALLENGE_TTL_MS),
+        },
+      })
+      await this.audit.write({
+        userId: user.id,
+        action: 'auth.login.mfa_challenge',
+        targetType: 'user',
+        targetId: user.id,
+      })
+      return { mfa_required: true, mfa_token, methods: ['totp', 'backup_code'] }
     }
 
     if (user.failedLoginAttempts !== 0 || user.lockedUntil) {
@@ -431,7 +462,9 @@ export class AuthService {
 // Readable, high-entropy reset code. 8 chars from a 31-symbol unambiguous alphabet
 // (no I/L/O/0/1) ≈ 8.5e11 — copy-pasteable from email, infeasible to brute force.
 // Each char drawn with an UNBIASED CSPRNG (randomInt), never modulo-reduced bytes.
-const RESET_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
+// Exported: MfaService draws its 10-char backup codes from the SAME alphabet
+// (disjoint shape from 6-digit TOTP codes, so /auth/login/mfa can route by shape).
+export const RESET_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
 function generateResetCode(): string {
   let out = ''
   for (let i = 0; i < 8; i++) out += RESET_ALPHABET[randomInt(0, RESET_ALPHABET.length)]

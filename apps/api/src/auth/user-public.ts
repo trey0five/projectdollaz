@@ -6,10 +6,11 @@ export interface UserPublic {
   first_name: string | null
   last_name: string | null
   email_verified: boolean
+  mfa_enabled: boolean
   created_at: string
 }
 
-/** Strips PBKDF2 material + all token/code columns from a User. */
+/** Strips PBKDF2 material + all token/code/TOTP columns from a User. */
 export function toUserPublic(user: User): UserPublic {
   return {
     id: user.id,
@@ -17,6 +18,8 @@ export function toUserPublic(user: User): UserPublic {
     first_name: user.firstName ?? null,
     last_name: user.lastName ?? null,
     email_verified: user.emailVerified,
+    // Boolean status ONLY — never any TOTP secret/backup-code material.
+    mfa_enabled: user.totpEnabled,
     created_at: user.createdAt.toISOString(),
   }
 }

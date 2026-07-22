@@ -10,6 +10,7 @@ const perMin = (limit: number) => ({ default: { limit, ttl: 60_000 } })
 import { CurrentUser } from '../common/decorators/current-user.decorator.js'
 import { CurrentSession } from '../common/decorators/current-session.decorator.js'
 import { AuthService } from './auth.service.js'
+import { MfaService } from './mfa.service.js'
 import { RegisterDto } from './dto/register.dto.js'
 import { LoginDto } from './dto/login.dto.js'
 import { VerifyEmailDto } from './dto/verify-email.dto.js'
@@ -20,12 +21,20 @@ import { RefreshDto } from './dto/refresh.dto.js'
 import { UpdateProfileDto } from './dto/update-profile.dto.js'
 import { ChangePasswordDto } from './dto/change-password.dto.js'
 import { DeleteAccountDto } from './dto/delete-account.dto.js'
+import { MfaLoginDto } from './dto/mfa-login.dto.js'
+import { MfaSetupDto } from './dto/mfa-setup.dto.js'
+import { MfaEnableDto } from './dto/mfa-enable.dto.js'
+import { MfaDisableDto } from './dto/mfa-disable.dto.js'
+import { MfaRegenerateBackupCodesDto } from './dto/mfa-regenerate-backup-codes.dto.js'
 
 @Controller('auth')
 @UseGuards(ThrottlerGuard)
 @Throttle(perMin(20))
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly mfa: MfaService,
+  ) {}
 
   @Post('register')
   @Throttle(perMin(5))
@@ -51,6 +60,17 @@ export class AuthController {
   @Throttle(perMin(10))
   login(@Body() dto: LoginDto) {
     return this.auth.login(dto)
+  }
+
+  // Second login step: challenge token + TOTP/backup code → normal token pair.
+  // Path is /auth/login/mfa (NOT /auth/mfa/verify) so the web client's
+  // isAuthEndpoint() ('/auth/login' substring) auto-excludes it from the
+  // Bearer-attach and 401-retry interceptors.
+  @Post('login/mfa')
+  @HttpCode(200)
+  @Throttle(perMin(10))
+  loginMfa(@Body() dto: MfaLoginDto) {
+    return this.mfa.verifyChallenge(dto)
   }
 
   @Post('refresh')
@@ -100,6 +120,62 @@ export class AuthController {
     @Body() dto: ChangePasswordDto,
   ) {
     return this.auth.changePassword(user, sid, dto)
+  }
+
+  // ── TOTP MFA management ────────────────────────────────────────────────────
+  // DELIBERATE deviation from the authed-routes-@SkipThrottle() norm: setup/
+  // enable/disable/regenerate all accept a guessable 6-digit code (or trigger
+  // password checks), so they keep a 10/min throttle even behind JwtAuthGuard.
+  // Only the read-only status route skips throttling.
+
+  @Post('mfa/setup')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard)
+  @Throttle(perMin(10))
+  mfaSetup(@CurrentUser() user: User, @Body() dto: MfaSetupDto) {
+    return this.mfa.setup(user, dto)
+  }
+
+  @Post('mfa/enable')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard)
+  @Throttle(perMin(10))
+  mfaEnable(
+    @CurrentUser() user: User,
+    @CurrentSession() sid: string | undefined,
+    @Body() dto: MfaEnableDto,
+  ) {
+    return this.mfa.enable(user, sid, dto)
+  }
+
+  @Post('mfa/disable')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard)
+  @Throttle(perMin(10))
+  mfaDisable(
+    @CurrentUser() user: User,
+    @CurrentSession() sid: string | undefined,
+    @Body() dto: MfaDisableDto,
+  ) {
+    return this.mfa.disable(user, sid, dto)
+  }
+
+  @Post('mfa/backup-codes/regenerate')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard)
+  @Throttle(perMin(10))
+  mfaRegenerateBackupCodes(
+    @CurrentUser() user: User,
+    @Body() dto: MfaRegenerateBackupCodesDto,
+  ) {
+    return this.mfa.regenerateBackupCodes(user, dto)
+  }
+
+  @Get('mfa/status')
+  @UseGuards(JwtAuthGuard)
+  @SkipThrottle()
+  mfaStatus(@CurrentUser() user: User) {
+    return this.mfa.status(user)
   }
 
   @Post('forgot-password')

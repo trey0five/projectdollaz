@@ -209,10 +209,21 @@ model User {
   passwordResetExpiresAt     DateTime? @map("password_reset_expires_at")
   failedLoginAttempts        Int       @default(0) @map("failed_login_attempts")
   lockedUntil                DateTime? @map("locked_until")
+  // TOTP MFA. Secrets are AES-256-GCM encrypted at rest (MFA_TOTP_KEY, AAD-bound
+  // to the user id) — never plaintext. `totpLastUsedStep` is the replay guard:
+  // the highest 30s time-step a code was accepted for (atomic compare-and-set).
+  totpEnabled                Boolean   @default(false) @map("totp_enabled")
+  totpSecretEnc              String?   @map("totp_secret_enc")
+  totpPendingSecretEnc       String?   @map("totp_pending_secret_enc")
+  totpPendingExpiresAt       DateTime? @map("totp_pending_expires_at")
+  totpEnrolledAt             DateTime? @map("totp_enrolled_at")
+  totpLastUsedStep           BigInt?   @map("totp_last_used_step")
   createdAt                  DateTime  @default(now()) @map("created_at")
 
   memberships                  Membership[]
   refreshTokens                RefreshToken[]
+  mfaBackupCodes               MfaBackupCode[]
+  mfaChallenges                MfaChallenge[]
   imports                      Import[]                 @relation("ImportUploadedBy")
   invitedMemberships           Membership[]             @relation("MembershipInvitedBy")
   auditLog                     AuditLog[]
@@ -306,6 +317,44 @@ model RefreshToken {
 
   @@index([userId])
   @@map("refresh_tokens")
+}
+
+/// TOTP MFA backup (recovery) codes. Stored as sha256hex ONLY — a DB read never
+/// yields a usable code. Single-use is enforced ATOMICALLY: the consume is an
+/// updateMany({ id, usedAt: null } → { usedAt: now }) compare-and-set, so a
+/// concurrent double-spend of one code yields exactly one success.
+model MfaBackupCode {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  codeHash  String    @map("code_hash")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("mfa_backup_codes")
+}
+
+/// MFA login challenges (the state between password-ok and code-ok). DB-backed
+/// deliberately (NOT a stateless JWT) so each challenge is single-use
+/// (`consumedAt` compare-and-set) and attempt-capped (5). `tokenHash` =
+/// sha256hex of the signed challenge JWT — the presented token must hash-match
+/// the row, so a forged/expired token can never reach code verification.
+model MfaChallenge {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  jti        String    @unique
+  tokenHash  String    @map("token_hash")
+  attempts   Int       @default(0)
+  expiresAt  DateTime  @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("mfa_challenges")
 }
 
 // ── Ingest & derivation ───────────────────────────────────────────────────────

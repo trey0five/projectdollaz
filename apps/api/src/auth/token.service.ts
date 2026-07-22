@@ -20,6 +20,19 @@ interface RefreshPayload {
   jti: string
 }
 
+// Short-lived MFA challenge token: proves "password OK, code pending" between
+// POST /auth/login and POST /auth/login/mfa. INERT everywhere else: verifyAccess
+// rejects type !== 'access' and rotateRefresh rejects type !== 'refresh', so an
+// mfa token can never authenticate a request or mint tokens by itself. The jti
+// keys a DB-backed mfa_challenges row (single-use + attempt-capped).
+interface MfaChallengePayload {
+  sub: string
+  type: 'mfa'
+  jti: string
+}
+
+const MFA_CHALLENGE_TTL = '300s' // 5 minutes to enter the code
+
 /**
  * Access (~15m) + refresh (~30d) JWTs. Refresh tokens are persisted in the
  * refresh_tokens table and ROTATED on use (old revoked, new issued), with an
@@ -59,6 +72,26 @@ export class TokenService {
       throw new UnauthorizedException('Wrong token type.')
     }
     return payload
+  }
+
+  /** Sign a 5-minute MFA challenge token (payload `{ sub, type: 'mfa', jti }`). */
+  signMfaChallenge(userId: string, jti: string): string {
+    const payload: MfaChallengePayload = { sub: userId, type: 'mfa', jti }
+    return this.jwt.sign(payload, { expiresIn: MFA_CHALLENGE_TTL as unknown as number })
+  }
+
+  /** Verify an MFA challenge token. Throws on bad signature/expiry/wrong type/no jti. */
+  verifyMfaChallenge(token: string): { sub: string; jti: string } {
+    let payload: MfaChallengePayload
+    try {
+      payload = this.jwt.verify<MfaChallengePayload>(token)
+    } catch {
+      throw new UnauthorizedException('Invalid or expired sign-in session. Sign in again.')
+    }
+    if (payload.type !== 'mfa' || !payload.jti || !payload.sub) {
+      throw new UnauthorizedException('Invalid or expired sign-in session. Sign in again.')
+    }
+    return { sub: payload.sub, jti: payload.jti }
   }
 
   /** Issue a fresh refresh token row + signed JWT. Returns the token and its jti. */
