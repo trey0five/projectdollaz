@@ -11,11 +11,22 @@ export default function TermsPage() {
         &ldquo;you&rdquo;) agrees to these Terms. If you do not agree, do not use the Service.
       </P>
 
-      <H2>1. The Service</H2>
+      <P>
+        These Terms also constitute the end-user license agreement (&ldquo;EULA&rdquo;) for the Service, including any
+        KYRO mobile or desktop applications we may offer.
+      </P>
+
+      <H2>1. The Service &amp; license</H2>
       <P>
         KYRO provides a financial and operational intelligence platform for schools, including financial reporting,
         analytics, benchmarking, enrollment intelligence, and the Penny AI assistant. Features may be added, changed,
         or removed over time. Access to certain modules may require a paid subscription.
+      </P>
+      <P>
+        Subject to these Terms, KYRO grants Customer a limited, non-exclusive, non-transferable, non-sublicensable
+        right for its authorized users to access and use the Service — including any KYRO applications — for
+        Customer&rsquo;s internal operations during the applicable subscription term. All rights not expressly granted
+        are reserved.
       </P>
 
       <H2>2. Accounts &amp; eligibility</H2>

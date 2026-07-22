@@ -166,8 +166,10 @@ export default function App() {
       {/* verify-email is reachable while logged out OR in; it just reads ?token */}
       <Route path="/verify-email" element={<VerifyEmailPage />} />
 
-      {/* Public legal pages */}
+      {/* Public legal pages. /eula aliases the Terms (they double as the EULA —
+          app-store reviews and integration approvals ask for that exact name). */}
       <Route path="/terms" element={<TermsPage />} />
+      <Route path="/eula" element={<TermsPage />} />
       <Route path="/privacy" element={<PrivacyPage />} />
       <Route
         path="/forgot-password"
