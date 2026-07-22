@@ -29,8 +29,8 @@ export default function VideoHero({ onShown }) {
         className="relative"
       >
         <video
-          src="/homepage-hero.mp4"
-          poster="/homepage-hero-poster.jpg"
+          src="/homepage-hero-v2.mp4"
+          poster="/homepage-hero-poster-v2.jpg"
           autoPlay
           muted
           loop
