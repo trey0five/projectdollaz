@@ -113,10 +113,12 @@ export default function IngestScrolly({ act }) {
 
   return (
     <section ref={sectionRef} id={act.anchorId} aria-labelledby={`${act.id}-h2`} className="relative bg-section">
-      {/* Blue flood — fills the whole act while it's the centered timeframe. */}
+      {/* Blue flood — FIXED to the viewport (matches ActSection): while this
+          act is the centered timeframe the WHOLE screen washes blue, no seam at
+          the section boundary during the hand-off. */}
       <motion.span
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 z-0"
+        className="pointer-events-none fixed inset-0 z-0"
         style={{ background: 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 55%, #1E40AF 100%)' }}
         initial={false}
         animate={{ opacity: active ? 1 : 0 }}

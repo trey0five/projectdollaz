@@ -6,7 +6,6 @@
 import { Link } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
 import { ShieldCheck, Lock, Server } from 'lucide-react'
-import StudioBackdrop from '../../components/penny/studio/StudioBackdrop.jsx'
 import Reveal, { EASE } from './Reveal.jsx'
 import { TRUST } from './landingContent.js'
 
@@ -24,7 +23,7 @@ function Badge({ icon, label, to, index }) {
       viewport={{ once: true, margin: '-60px' }}
       transition={{ duration: 0.5, ease: EASE, delay: 0.12 + index * 0.12 }}
       whileHover={reduce ? undefined : { y: -5, scale: 1.035 }}
-      className="group relative flex items-center gap-3.5 rounded-2xl border border-gold/25 bg-white/[0.05] px-6 py-4 shadow-navy-glow backdrop-blur-md transition-[box-shadow,border-color] duration-300 hover:border-gold/50 hover:shadow-glow"
+      className="group relative flex items-center gap-3.5 rounded-2xl border border-gold/40 bg-white/75 px-6 py-4 shadow-[0_14px_36px_-18px_rgba(16,28,61,0.35)] backdrop-blur-sm transition-[box-shadow,border-color] duration-300 hover:border-gold/50 hover:shadow-glow"
     >
       {/* gradient icon medallion */}
       <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold-gradient text-navy-deep shadow-glow">
@@ -39,7 +38,7 @@ function Badge({ icon, label, to, index }) {
           />
         )}
       </span>
-      <span className="whitespace-nowrap text-[15.5px] font-semibold tracking-[0.01em] text-white">
+      <span className="whitespace-nowrap text-[15.5px] font-semibold tracking-[0.01em] text-navy">
         {label}
       </span>
     </motion.div>
@@ -58,15 +57,14 @@ export default function TrustBar() {
   return (
     <section
       aria-label="Security & compliance"
-      className="relative isolate overflow-hidden bg-navy-gradient py-16"
+      className="relative isolate overflow-hidden bg-transparent py-16"
     >
-      <StudioBackdrop sweep={false} />
       {/* gold top hairline */}
       <span aria-hidden className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-gold/50 to-transparent" />
 
       <div className="relative mx-auto max-w-6xl px-5 sm:px-8">
         <Reveal className="text-center">
-          <p className="text-[12px] font-bold uppercase tracking-[0.22em] text-gold-light">
+          <p className="text-[12px] font-bold uppercase tracking-[0.22em] text-[#7a5e00]">
             {TRUST.heading}
           </p>
         </Reveal>

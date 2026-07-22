@@ -38,15 +38,22 @@ export default function ActSection({ act }) {
       ref={sectionRef}
       id={act.anchorId}
       aria-labelledby={`${act.id}-h2`}
-      className={`relative ${act.bg} scroll-mt-24 py-14 transition-shadow duration-500 sm:py-24 ${
+      // min-h-screen + centered content: each act fills the whole viewport at
+      // its reading position, so the blue flood covers the ENTIRE screen when
+      // the act is active (a py-only section left white neighbor bands showing).
+      className={`relative ${act.bg} flex min-h-screen scroll-mt-24 flex-col justify-center py-14 transition-shadow duration-500 sm:py-24 ${
         active ? 'shadow-[0_28px_70px_-30px_rgba(37,99,235,0.65)]' : ''
       }`}
     >
-      {/* The blue flood — fills the whole act while it's the centered timeframe
-          (z-0: under the spine, medallion, and content). */}
+      {/* The blue flood — FIXED to the viewport (not the section box), so when
+          this act is the centered timeframe the ENTIRE screen washes blue, with
+          no hard seam where a white neighbor still pokes into the viewport.
+          fixed z-0 paints above every in-flow section ground but below all
+          positioned content (the z-[1] spine/medallions and z-[2] act bodies),
+          so neighbors' cards/text float over the wash during the hand-off. */}
       <motion.span
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 z-0"
+        className="pointer-events-none fixed inset-0 z-0"
         style={{ background: 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 55%, #1E40AF 100%)' }}
         initial={false}
         animate={{ opacity: active ? 1 : 0 }}
