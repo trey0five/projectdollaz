@@ -573,6 +573,40 @@ describe('disable / regenerateBackupCodes', () => {
     expect(h.state.user.totpEnabled).toBe(false)
   })
 
+  it('wrong code on disable bumps the SHARED failedLoginAttempts pool and locks at the cap', async () => {
+    const h = makeHarness(makeUser({ failedLoginAttempts: 4 }))
+    await expect(
+      h.service.disable(h.state.user, 'sid', { password: 'correct-pw', code: '000000' }),
+    ).rejects.toThrow('Invalid code.')
+    expect(h.state.user.failedLoginAttempts).toBe(5)
+    expect(h.audit.write).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'mfa.manage.code_failed', metadata: { attempts: 5 } }),
+    )
+    // 6th strike → lock transition, counter reset, source-stamped audit.
+    await expect(
+      h.service.disable(h.state.user, 'sid', { password: 'correct-pw', code: '000000' }),
+    ).rejects.toThrow('Invalid code.')
+    expect(h.state.user.lockedUntil).not.toBeNull()
+    expect(h.state.user.failedLoginAttempts).toBe(0)
+    expect(h.audit.write).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'auth.login.locked',
+        metadata: { attempts: 6, source: 'mfa_manage' },
+      }),
+    )
+  })
+
+  it('an actively locked account gets 423 from disable/regenerate before any code check', async () => {
+    const h = makeHarness(makeUser({ lockedUntil: new Date(Date.now() + 60_000) }))
+    await expect(
+      h.service.disable(h.state.user, 'sid', { password: 'correct-pw', code: codeNow() }),
+    ).rejects.toThrow('Account temporarily locked due to failed attempts. Try again later.')
+    await expect(
+      h.service.regenerateBackupCodes(h.state.user, { password: 'correct-pw', code: codeNow() }),
+    ).rejects.toThrow('Account temporarily locked due to failed attempts. Try again later.')
+    expect(h.state.user.totpEnabled).toBe(true) // untouched
+  })
+
   it('regenerate replaces all codes (old ones dead) and audits count', async () => {
     const h = makeHarness(makeUser())
     h.seedBackupCodes(['AAAAAAAAAA', 'BBBBBBBBBB'])

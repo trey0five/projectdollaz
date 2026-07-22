@@ -40,6 +40,23 @@ const SWEEP_INTERVAL_MS = 1000 * 60 * 60 * 24
 // nor why the challenge died.
 const CHALLENGE_401 = 'Invalid or expired sign-in session. Sign in again.'
 const CODE_401 = 'Invalid code.'
+// Structured `code` fields (same pattern as MFA_NOT_CONFIGURED/MFA_SETUP_EXPIRED)
+// let the web discriminate the two classes without parsing English; the body
+// keeps the standard Nest { statusCode, message, error } shape.
+const challenge401 = () =>
+  new UnauthorizedException({
+    statusCode: HttpStatus.UNAUTHORIZED,
+    message: CHALLENGE_401,
+    error: 'Unauthorized',
+    code: 'MFA_CHALLENGE_INVALID',
+  })
+const code401 = () =>
+  new UnauthorizedException({
+    statusCode: HttpStatus.UNAUTHORIZED,
+    message: CODE_401,
+    error: 'Unauthorized',
+    code: 'MFA_CODE_INVALID',
+  })
 // Byte-identical to login's 423 body.
 const LOCKED_MESSAGE = 'Account temporarily locked due to failed attempts. Try again later.'
 
@@ -63,8 +80,9 @@ export interface MfaStatus {
  *     `count === 0 ⇒ reject`: challenge consume, per-challenge attempt cap,
  *     TOTP step-claim, backup-code spend. Concurrent double-use of any of them
  *     yields exactly one success.
- *   • MFA code failures share login's failedLoginAttempts pool (6 ⇒ 30-min
- *     lock); challenge-class failures do NOT touch that pool.
+ *   • MFA code failures — at login AND on the authed disable/regenerate
+ *     routes — share login's failedLoginAttempts pool (6 ⇒ 30-min lock);
+ *     challenge-class failures do NOT touch that pool.
  *   • Audit metadata never contains secrets or codes.
  */
 @Injectable()
@@ -128,12 +146,12 @@ export class MfaService implements OnModuleInit, OnModuleDestroy {
       !hashesEqual(sha256hex(dto.mfa_token), challenge.tokenHash) ||
       challenge.expiresAt.getTime() < Date.now()
     ) {
-      throw new UnauthorizedException(CHALLENGE_401)
+      throw challenge401()
     }
 
     const user = await this.prisma.user.findUnique({ where: { id: sub } })
     if (!user || !user.totpEnabled) {
-      throw new UnauthorizedException(CHALLENGE_401)
+      throw challenge401()
     }
 
     // 3. Lockout gate — byte-identical to login's 423. Deliberately NOT audited
@@ -155,7 +173,7 @@ export class MfaService implements OnModuleInit, OnModuleDestroy {
         where: { id: challenge.id, consumedAt: null },
         data: { consumedAt: new Date() },
       })
-      throw new UnauthorizedException(CHALLENGE_401)
+      throw challenge401()
     }
 
     // 5. Classify by shape (DTO guarantees \d{6} or [A-Z2-9]{10}) and verify.
@@ -213,7 +231,7 @@ export class MfaService implements OnModuleInit, OnModuleDestroy {
         // Transition-only `source` marks WHICH factor tripped the lock.
         metadata: lock ? { attempts, source: 'mfa' } : { attempts },
       })
-      throw new UnauthorizedException(CODE_401)
+      throw code401()
     }
 
     // 7. ATOMIC challenge consume — of two concurrent successes, exactly one
@@ -223,7 +241,7 @@ export class MfaService implements OnModuleInit, OnModuleDestroy {
       data: { consumedAt: new Date() },
     })
     if (consumed.count === 0) {
-      throw new UnauthorizedException(CHALLENGE_401)
+      throw challenge401()
     }
 
     // 8. Success: counters reset HERE (not at password stage), then the normal
@@ -467,8 +485,15 @@ export class MfaService implements OnModuleInit, OnModuleDestroy {
    * Second-factor proof for the AUTHED management routes (disable/regenerate):
    * same verification semantics as login — TOTP with atomic step-claim, or a
    * backup code spent atomically — one 401 message for every failure mode.
+   * Participates in login's SHARED lockout discipline: an active lock 423s
+   * before any code is checked, and every failure bumps failedLoginAttempts
+   * (6 ⇒ 30-min lock) — so these routes can't be used to grind codes without
+   * tripping the same lock the login second factor enforces.
    */
   private async verifySecondFactorOr401(user: User, code: string): Promise<void> {
+    if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
+      throw new HttpException(LOCKED_MESSAGE, HttpStatus.LOCKED)
+    }
     let ok = false
     if (/^\d{6}$/.test(code)) {
       const key = this.requireKey()
@@ -489,14 +514,37 @@ export class MfaService implements OnModuleInit, OnModuleDestroy {
     } else {
       ok = await this.spendBackupCode(user.id, code)
     }
-    if (!ok) throw new UnauthorizedException(CODE_401)
+    if (!ok) {
+      // Same lockout block as verifyChallenge step 6, on a FRESH attempts read.
+      const fresh = await this.prisma.user.findUnique({
+        where: { id: user.id },
+        select: { failedLoginAttempts: true },
+      })
+      const attempts = (fresh?.failedLoginAttempts ?? 0) + 1
+      const lock = attempts >= MAX_FAILED ? new Date(Date.now() + LOCK_MS) : null
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { failedLoginAttempts: lock ? 0 : attempts, lockedUntil: lock },
+      })
+      await this.audit.write({
+        userId: user.id,
+        action: lock ? 'auth.login.locked' : 'mfa.manage.code_failed',
+        targetType: 'user',
+        targetId: user.id,
+        // Transition-only `source` marks WHICH surface tripped the lock.
+        metadata: lock ? { attempts, source: 'mfa_manage' } : { attempts },
+      })
+      throw code401()
+    }
   }
 
   /**
    * Constant-workload backup-code spend: hash the presented code once, compare
    * against EVERY unused row (no early exit — response time never reveals how
-   * close a guess was), one dummy compare when there are zero rows, then an
-   * ATOMIC single-use consume of the match.
+   * close a guess was), then PAD with dummy compares up to BACKUP_CODE_COUNT so
+   * the number of comparisons is fixed regardless of how many codes remain
+   * (timing can't leak the remaining-code count either), then an ATOMIC
+   * single-use consume of the match.
    */
   private async spendBackupCode(userId: string, code: string): Promise<boolean> {
     const rows = await this.prisma.mfaBackupCode.findMany({
@@ -504,14 +552,17 @@ export class MfaService implements OnModuleInit, OnModuleDestroy {
       select: { id: true, codeHash: true },
     })
     const presentedHash = sha256hex(code)
+    const dummyHash = sha256hex('mfa-backup-dummy')
     let matchId: string | null = null
     for (const row of rows) {
       // Deliberately NOT `if (match) break` — every row is always compared.
       if (hashesEqual(presentedHash, row.codeHash) && matchId === null) matchId = row.id
     }
-    if (rows.length === 0) {
-      // Timing parity: an account with no unused codes still does one compare.
-      hashesEqual(presentedHash, sha256hex('mfa-backup-dummy'))
+    // Fixed-workload padding: always BACKUP_CODE_COUNT comparisons in total
+    // (rows.length can never exceed BACKUP_CODE_COUNT — codes are created as a
+    // full set and only ever consumed).
+    for (let i = rows.length; i < BACKUP_CODE_COUNT; i++) {
+      hashesEqual(presentedHash, dummyHash)
     }
     if (!matchId) return false
     const consumed = await this.prisma.mfaBackupCode.updateMany({

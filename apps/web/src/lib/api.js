@@ -95,6 +95,16 @@ const isAuthEndpoint = (url = '') =>
   url.includes('/auth/forgot-password') ||
   url.includes('/auth/reset-password')
 
+// Authed MFA management routes (setup/enable/disable/backup-codes/regenerate)
+// answer 401 when the password/code IN THE BODY is wrong — never for a stale
+// access token — so the one-shot refresh+retry would silently resubmit the
+// wrong credential (doubling latency and burning 2 of the 10/min throttle per
+// attempt). Response-interceptor use ONLY: these routes still need the
+// Bearer-attach, so they must NOT be added to isAuthEndpoint(). /auth/mfa/status
+// carries no body credentials and keeps the normal stale-token retry.
+const isMfaManageEndpoint = (url = '') =>
+  url.includes('/auth/mfa/') && !url.includes('/auth/mfa/status')
+
 // Request: attach Bearer + proactive refresh shortly before expiry.
 api.interceptors.request.use(async (config) => {
   if (isAuthEndpoint(config.url)) return config
@@ -116,7 +126,12 @@ api.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config || {}
-    if (error.response?.status === 401 && !isAuthEndpoint(original.url) && !original._retry) {
+    if (
+      error.response?.status === 401 &&
+      !isAuthEndpoint(original.url) &&
+      !isMfaManageEndpoint(original.url) &&
+      !original._retry
+    ) {
       const fresh = await refreshOnce()
       if (fresh) {
         original._retry = true
@@ -158,6 +173,18 @@ export const authApi = {
   forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
   resetPassword: (data) => api.post('/auth/reset-password', data),
   refresh: (refresh_token) => api.post('/auth/refresh', { refresh_token }),
+  // ── TOTP MFA ────────────────────────────────────────────────────────────────
+  // Second login step: exchange the short-lived mfa_token + a 6-digit TOTP (or a
+  // 10-char backup code) for real tokens. Path contains '/auth/login' on purpose:
+  // isAuthEndpoint() auto-excludes it from the Bearer-attach + 401-retry
+  // interceptors, so a wrong-code 401 never triggers a refresh dance.
+  loginMfa: (data) => api.post('/auth/login/mfa', data),
+  // Authed MFA lifecycle (Bearer-attached like any other authed route).
+  mfaSetup: (data) => api.post('/auth/mfa/setup', data),
+  mfaEnable: (data) => api.post('/auth/mfa/enable', data),
+  mfaDisable: (data) => api.post('/auth/mfa/disable', data),
+  mfaRegenerateBackupCodes: (data) => api.post('/auth/mfa/backup-codes/regenerate', data),
+  mfaStatus: () => api.get('/auth/mfa/status'),
 }
 
 export const schoolsApi = {

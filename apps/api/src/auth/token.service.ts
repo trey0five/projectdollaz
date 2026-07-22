@@ -33,6 +33,17 @@ interface MfaChallengePayload {
 
 const MFA_CHALLENGE_TTL = '300s' // 5 minutes to enter the code
 
+// Challenge-class 401 — same body (message + structured `code`) as the
+// challenge-class failures in MfaService, so the web treats a dead/garbled
+// mfa_token identically to a consumed/expired challenge row.
+const mfaChallenge401 = () =>
+  new UnauthorizedException({
+    statusCode: 401,
+    message: 'Invalid or expired sign-in session. Sign in again.',
+    error: 'Unauthorized',
+    code: 'MFA_CHALLENGE_INVALID',
+  })
+
 /**
  * Access (~15m) + refresh (~30d) JWTs. Refresh tokens are persisted in the
  * refresh_tokens table and ROTATED on use (old revoked, new issued), with an
@@ -86,10 +97,10 @@ export class TokenService {
     try {
       payload = this.jwt.verify<MfaChallengePayload>(token)
     } catch {
-      throw new UnauthorizedException('Invalid or expired sign-in session. Sign in again.')
+      throw mfaChallenge401()
     }
     if (payload.type !== 'mfa' || !payload.jti || !payload.sub) {
-      throw new UnauthorizedException('Invalid or expired sign-in session. Sign in again.')
+      throw mfaChallenge401()
     }
     return { sub: payload.sub, jti: payload.jti }
   }
