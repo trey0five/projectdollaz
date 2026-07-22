@@ -111,6 +111,11 @@ resource "aws_ecs_task_definition" "api" {
       # so signups aren't blocked. REMOVE this (or set "true") the moment real email
       # delivery is available (SES production access, or a bridge provider).
       { name = "REQUIRE_EMAIL_VERIFICATION", value = "false" },
+      # QuickBooks Online: production. Flips the API/token base URLs to the live
+      # Intuit endpoints (quickbooks.api.intuit.com). The production Client ID /
+      # Secret live in the ourkyro-prod-app secret (QB_OAUTH_CLIENT_ID/SECRET);
+      # the redirect URI defaults to https://${domain}/integrations/qb/callback.
+      { name = "QB_ENVIRONMENT", value = "production" },
     ]
 
     # App must assemble DATABASE_URL as:
