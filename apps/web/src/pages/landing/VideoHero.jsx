@@ -28,16 +28,24 @@ export default function VideoHero({ onShown }) {
         transition={reduce ? { duration: 0 } : { duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
         className="relative"
       >
+        {/* Web-optimized 1080p hero (SEO/CWV): a lightweight WebP poster is the LCP
+            element and preload="metadata" keeps the clip from competing with the
+            critical render; each browser plays the smallest format it supports
+            (AV1 1.6MB → VP9 2.4MB → H.264 2.7MB fallback), all muted so autoplay
+            never blocks. */}
         <video
-          src="/homepage-hero.mp4"
-          poster="/homepage-hero-poster.jpg"
+          poster="/homepage-hero-poster-v2.webp"
           autoPlay
           muted
           loop
           playsInline
-          preload="auto"
+          preload="metadata"
           className="h-[72svh] min-h-[420px] w-full object-cover"
-        />
+        >
+          <source src="/homepage-hero-v2-av1.webm" type='video/webm; codecs="av01.0.05M.08"' />
+          <source src="/homepage-hero-v2.webm" type='video/webm; codecs="vp9"' />
+          <source src="/homepage-hero-v2.mp4" type="video/mp4" />
+        </video>
         {/* Cinematic vignette; the base stays clear for the straddling card. */}
         <span
           aria-hidden="true"
