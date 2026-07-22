@@ -47,6 +47,7 @@ import {
   Library,
   Settings as SettingsIcon,
   User as UserIcon,
+  LifeBuoy,
   LayoutDashboard,
   Upload,
   Table2,
@@ -204,6 +205,15 @@ function AvatarMenu() {
               <SettingsIcon size={15} className="shrink-0 text-white/50" />
               Settings
             </Link>
+            <a
+              role="menuitem"
+              href="mailto:support@ourkyro.com?subject=KYRO%20support%20request"
+              onClick={() => setOpen(false)}
+              className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13.5px] text-white/80 outline-none ring-inset ring-gold/50 transition-colors hover:bg-white/[0.08] hover:text-white focus-visible:ring-2"
+            >
+              <LifeBuoy size={15} className="shrink-0 text-white/50" />
+              Contact support
+            </a>
             <button
               type="button"
               role="menuitem"
