@@ -129,6 +129,9 @@ resource "aws_ecs_task_definition" "api" {
       { name = "QB_OAUTH_CLIENT_ID", valueFrom = "${var.app_secret_arn}:QB_OAUTH_CLIENT_ID::" },
       { name = "QB_OAUTH_CLIENT_SECRET", valueFrom = "${var.app_secret_arn}:QB_OAUTH_CLIENT_SECRET::" },
       { name = "QBO_TOKEN_KEY", valueFrom = "${var.app_secret_arn}:QBO_TOKEN_KEY::" },
+      # TOTP MFA secret-at-rest key (32-byte base64). FAIL-CLOSED: the app 503s
+      # on MFA enrollment if this is unset — must exist in ourkyro-prod-app.
+      { name = "MFA_TOTP_KEY", valueFrom = "${var.app_secret_arn}:MFA_TOTP_KEY::" },
     ]
 
     logConfiguration = {
