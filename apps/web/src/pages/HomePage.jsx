@@ -6,6 +6,7 @@
 // flag-off renders the existing HomeDashboard byte-identically. BillingBanner is
 // billing truth (chrome, not theme) — it stays outside the branch in both worlds.
 import BillingBanner from '../components/BillingBanner.jsx'
+import MfaNudge from '../components/home/MfaNudge.jsx'
 import HomeDashboard from '../components/home/HomeDashboard.jsx'
 import HomeTiles from '../components/home/HomeTiles.jsx'
 import { useUiV2 } from '../context/UiFlagContext.jsx'
@@ -15,6 +16,9 @@ export default function HomePage() {
   return (
     <div className="min-h-screen">
       <BillingBanner />
+      {/* Account-security chrome, not theme — outside the uiV2 branch like
+          BillingBanner. Renders null unless user.mfa_enabled === false. */}
+      <MfaNudge />
       {uiV2 ? <HomeTiles /> : <HomeDashboard />}
     </div>
   )

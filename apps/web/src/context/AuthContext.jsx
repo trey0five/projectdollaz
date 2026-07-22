@@ -51,6 +51,23 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async (email, password) => {
     const res = await authApi.login({ email, password })
+    // MFA branch: password was correct but a second factor is required. The
+    // server sent NO tokens and NO user — we are NOT authenticated yet, so this
+    // is a pure return (zero setState). The mfa_token lives only in the caller's
+    // component state (never localStorage) and expires server-side in 5 minutes.
+    if (res.data?.mfa_required) {
+      return { mfaRequired: true, mfaToken: res.data.mfa_token }
+    }
+    const { access_token, refresh_token, user: u } = res.data
+    tokenStore.set(access_token, refresh_token)
+    setUser(u)
+    return u
+  }, [])
+
+  // Second login step: exchange the challenge token + a TOTP/backup code for
+  // real tokens. Mirrors login's token-store + setUser tail exactly.
+  const loginMfa = useCallback(async (mfaToken, code) => {
+    const res = await authApi.loginMfa({ mfa_token: mfaToken, code })
     const { access_token, refresh_token, user: u } = res.data
     tokenStore.set(access_token, refresh_token)
     setUser(u)
@@ -84,6 +101,7 @@ export function AuthProvider({ children }) {
     ready,
     isAuthenticated: !!user,
     login,
+    loginMfa,
     register,
     logout,
     refreshMe,

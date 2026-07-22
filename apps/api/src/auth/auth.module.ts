@@ -6,6 +6,7 @@ import { PrismaModule } from '../prisma/prisma.module.js'
 import { AuditModule } from '../common/audit/audit.module.js'
 import { AuthController } from './auth.controller.js'
 import { AuthService } from './auth.service.js'
+import { MfaService } from './mfa.service.js'
 import { PasswordService } from './password.service.js'
 import { TokenService } from './token.service.js'
 import { MailerService } from './mailer.service.js'
@@ -36,6 +37,7 @@ import { RolesGuard } from '../common/guards/roles.guard.js'
   controllers: [AuthController],
   providers: [
     AuthService,
+    MfaService,
     PasswordService,
     TokenService,
     MailerService,
