@@ -23,6 +23,7 @@ import { AuthService } from './auth.service.js'
 import { MfaService } from './mfa.service.js'
 import { RegisterDto } from './dto/register.dto.js'
 import { LoginDto } from './dto/login.dto.js'
+import { AdminLoginDto } from './dto/admin-login.dto.js'
 import { VerifyEmailDto } from './dto/verify-email.dto.js'
 import { ResendVerificationDto } from './dto/resend-verification.dto.js'
 import { ForgotPasswordDto } from './dto/forgot-password.dto.js'
@@ -76,6 +77,17 @@ export class AuthController {
     // falsify their city/state on the admin geo map. IP is read HERE (not the body)
     // — the LoginDto is forbidNonWhitelisted and rejects extra fields.
     return this.auth.login(dto, ip)
+  }
+
+  // Hidden super-admin console login. Username-based (NOT email), reached from the
+  // easter-egg entry on the public landing page. Throttled harder than user login;
+  // reuses the full login core (lockout + token issuance + geo capture) but only
+  // for usernames in the ADMIN_EMAILS allowlist — anyone else gets a generic 401.
+  @Post('admin-login')
+  @HttpCode(200)
+  @Throttle(perMin(6))
+  adminLogin(@Body() dto: AdminLoginDto, @Ip() ip: string) {
+    return this.auth.adminLogin(dto.username, dto.password, ip)
   }
 
   // Second login step: challenge token + TOTP/backup code → normal token pair.

@@ -93,6 +93,29 @@ export function AuthProvider({ children }) {
     return u
   }, [])
 
+  // Hidden super-admin console login (username-based). Mirrors login()'s token
+  // store + setUser + isAdmin enrichment; a successful sign-in here is always an
+  // admin, so the /admin gate opens immediately after refreshMe.
+  const adminLogin = useCallback(async (username, password) => {
+    const res = await authApi.adminLogin(username, password)
+    const { access_token, refresh_token, user: u } = res.data
+    tokenStore.set(access_token, refresh_token)
+    // Confirm isAdmin BEFORE returning (the admin-login response carries no
+    // isAdmin; only /auth/me does). Unlike the perf-sensitive user login this is
+    // an admin-only path, so awaiting me() is fine — and it means the /admin gate
+    // opens on the FIRST navigate instead of racing the async enrichment → /app.
+    let isAdmin = false
+    try {
+      const r = await authApi.me()
+      isAdmin = !!r.data?.isAdmin
+    } catch {
+      /* fall through with isAdmin=false */
+    }
+    const merged = { ...u, isAdmin }
+    if (mounted.current) setUser(merged)
+    return merged
+  }, [])
+
   const register = useCallback(async (data) => {
     // Returns { message, user } — does NOT log in (email must be verified first).
     const res = await authApi.register(data)
@@ -121,6 +144,7 @@ export function AuthProvider({ children }) {
     isAuthenticated: !!user,
     login,
     loginMfa,
+    adminLogin,
     register,
     logout,
     refreshMe,

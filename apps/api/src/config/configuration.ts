@@ -41,6 +41,8 @@ export interface AppConfig {
   // every /admin route on membership in this list (case-insensitive).
   admin: {
     emails: string[]
+    superadminUsername: string | null
+    superadminPassword: string | null
   }
   // Phase 1D — Stripe subscription billing. All env-driven with safe empty
   // defaults so the api BOOTS with no Stripe key set (checkout/portal then
@@ -250,12 +252,19 @@ export function configuration(): AppConfig {
       // back to true the moment email delivery works.
       requireEmailVerification: (process.env.REQUIRE_EMAIL_VERIFICATION ?? 'true') !== 'false',
     },
-    admin: {
-      emails: (process.env.ADMIN_EMAILS ?? '')
+    admin: (() => {
+      // The bootstrap super-admin (SUPERADMIN_USERNAME) logs in via the hidden
+      // /auth/admin-login and is ALWAYS treated as an admin — even when
+      // ADMIN_EMAILS is empty — so the console is reachable in dev and prod from
+      // env alone. SUPERADMIN_PASSWORD provisions/rotates the account on boot.
+      const superadminUsername = process.env.SUPERADMIN_USERNAME?.trim().toLowerCase() || null
+      const listed = (process.env.ADMIN_EMAILS ?? '')
         .split(',')
         .map((e) => e.trim().toLowerCase())
-        .filter(Boolean),
-    },
+        .filter(Boolean)
+      const emails = [...new Set([...listed, ...(superadminUsername ? [superadminUsername] : [])])]
+      return { emails, superadminUsername, superadminPassword: process.env.SUPERADMIN_PASSWORD || null }
+    })(),
     stripe: {
       secretKey: process.env.STRIPE_SECRET_KEY ?? '',
       webhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? '',

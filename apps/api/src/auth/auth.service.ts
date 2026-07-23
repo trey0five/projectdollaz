@@ -5,7 +5,9 @@ import {
   HttpException,
   HttpStatus,
   Injectable,
+  Logger,
   UnauthorizedException,
+  type OnModuleInit,
 } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { randomBytes, randomInt } from 'node:crypto'
@@ -74,10 +76,13 @@ function isPrivateIp(ip: string): boolean {
 }
 
 @Injectable()
-export class AuthService {
+export class AuthService implements OnModuleInit {
+  private readonly logger = new Logger(AuthService.name)
   private readonly isProd: boolean
   private readonly requireEmailVerification: boolean
   private readonly adminEmails: string[]
+  private readonly superadminUsername: string | null
+  private readonly superadminPassword: string | null
 
   constructor(
     private readonly prisma: PrismaService,
@@ -91,6 +96,65 @@ export class AuthService {
     this.requireEmailVerification =
       config.get<boolean>('auth.requireEmailVerification') ?? true
     this.adminEmails = config.get<string[]>('admin.emails') ?? []
+    this.superadminUsername = config.get<string | null>('admin.superadminUsername') ?? null
+    this.superadminPassword = config.get<string | null>('admin.superadminPassword') ?? null
+  }
+
+  // Boot-time: provision the bootstrap super-admin from env (idempotent). Runs in
+  // dev and prod alike; does nothing if the username/password aren't configured or
+  // the account already exists (never overwrites a live account).
+  async onModuleInit(): Promise<void> {
+    try {
+      await this.ensureSuperadmin()
+    } catch (e) {
+      this.logger.warn(`Super-admin bootstrap skipped: ${(e as Error).message}`)
+    }
+  }
+
+  private async ensureSuperadmin(): Promise<void> {
+    const uname = this.superadminUsername
+    const pw = this.superadminPassword
+    if (!uname || !pw) return
+    const existing = await this.prisma.user.findUnique({ where: { email: uname } })
+    if (existing) return
+    const { algo, iters, salt, hash } = this.passwords.hash(pw)
+    await this.prisma.user.create({
+      data: {
+        email: uname,
+        firstName: 'Platform',
+        lastName: 'Admin',
+        passwordAlgo: algo,
+        passwordIters: iters,
+        passwordSalt: salt,
+        passwordHash: hash,
+        emailVerified: true,
+        emailVerifiedAt: new Date(),
+      },
+    })
+    this.logger.log(`Bootstrapped super-admin '${uname}'.`)
+  }
+
+  // Hidden super-admin login (username-based). Only usernames in the ADMIN_EMAILS
+  // allowlist may authenticate here — everyone else gets a generic, timing-equalized
+  // 401 so this endpoint can't be used to probe accounts. Reuses login()'s lockout,
+  // password verify, token issuance, and best-effort geo capture.
+  async adminLogin(
+    username: string,
+    password: string,
+    clientIp?: string,
+  ): Promise<{ access_token: string; refresh_token: string; user: UserPublic }> {
+    const uname = username.trim().toLowerCase()
+    if (!this.adminEmails.includes(uname)) {
+      this.passwords.dummyVerify(password)
+      throw new UnauthorizedException('Invalid credentials.')
+    }
+    const result = await this.login({ email: uname, password } as LoginDto, clientIp)
+    if ('mfa_required' in result) {
+      // The bootstrap super-admin has no MFA; surface a clear error if one is set
+      // so the console doesn't silently drop the challenge.
+      throw new UnauthorizedException('Multi-factor is not supported on the admin console.')
+    }
+    return result
   }
 
   async register(dto: RegisterDto): Promise<{ message: string; user: UserPublic }> {

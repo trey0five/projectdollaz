@@ -116,6 +116,11 @@ resource "aws_ecs_task_definition" "api" {
       # Secret live in the ourkyro-prod-app secret (QB_OAUTH_CLIENT_ID/SECRET);
       # the redirect URI defaults to https://${domain}/integrations/qb/callback.
       { name = "QB_ENVIRONMENT", value = "production" },
+      # Platform super-admin console. ADMIN_EMAILS = comma-separated admin emails
+      # (may be empty). SUPERADMIN_USERNAME provisions/authorizes the username-based
+      # bootstrap admin reached via the hidden landing easter egg → /admin/login.
+      { name = "ADMIN_EMAILS", value = var.admin_emails },
+      { name = "SUPERADMIN_USERNAME", value = var.superadmin_username },
     ]
 
     # App must assemble DATABASE_URL as:
@@ -132,6 +137,8 @@ resource "aws_ecs_task_definition" "api" {
       # TOTP MFA secret-at-rest key (32-byte base64). FAIL-CLOSED: the app 503s
       # on MFA enrollment if this is unset — must exist in ourkyro-prod-app.
       { name = "MFA_TOTP_KEY", valueFrom = "${var.app_secret_arn}:MFA_TOTP_KEY::" },
+      # Super-admin bootstrap password. MUST exist as a key in ourkyro-prod-app.
+      { name = "SUPERADMIN_PASSWORD", valueFrom = "${var.app_secret_arn}:SUPERADMIN_PASSWORD::" },
     ]
 
     logConfiguration = {

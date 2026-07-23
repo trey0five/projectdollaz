@@ -42,6 +42,12 @@ services:
       # freshly-built prod image also boots against local dev (P1011 otherwise).
       DATABASE_SSLMODE: disable
       PORT: "8000"
+      # Platform super-admin console. ADMIN_EMAILS grants console access to listed
+      # emails; SUPERADMIN_USERNAME/PASSWORD provisions a username-based bootstrap
+      # admin on boot (reached via the hidden landing easter egg → /admin/login).
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      SUPERADMIN_USERNAME: ${SUPERADMIN_USERNAME:-tmunroe1}
+      SUPERADMIN_PASSWORD: ${SUPERADMIN_PASSWORD:-Teero05m??}
       # Phase 4 Knowledge document store — S3 config passed through from the host .env
       # via dollar-brace substitution ONLY (no literal secret values in this file).
       # An unset host var resolves empty => isConfigured()=false => upload/download 503;

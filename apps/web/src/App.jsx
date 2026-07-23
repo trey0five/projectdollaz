@@ -77,6 +77,7 @@ const AdminOverviewPage = lazy(() => import('./pages/admin/AdminOverviewPage.jsx
 const AdminGeoPage = lazy(() => import('./pages/admin/AdminGeoPage.jsx'))
 const AdminUsersPage = lazy(() => import('./pages/admin/AdminUsersPage.jsx'))
 const AdminOrgsPage = lazy(() => import('./pages/admin/AdminOrgsPage.jsx'))
+const AdminLoginPage = lazy(() => import('./pages/admin/AdminLoginPage.jsx'))
 
 // "/" — OUTSIDE AuthedLayout — is the marketing homepage for EVERYONE (logged in
 // or out), so the app logo can bring a signed-in user here. The app lives at /app;
@@ -249,6 +250,16 @@ export default function App() {
           <Route path="billing" element={<BillingSection />} />
         </Route>
       </Route>
+      {/* Hidden super-admin sign-in — PUBLIC (no gate); reached only from the
+          landing easter egg. Must be declared BEFORE the gated /admin layout. */}
+      <Route
+        path="/admin/login"
+        element={
+          <Suspense fallback={<BootSplash />}>
+            <AdminLoginPage />
+          </Suspense>
+        }
+      />
       {/* Platform admin — OUTSIDE AuthedLayout (no SchoolProvider / OnboardingGate
           / Penny), gated by AdminRoute (JWT + isAdmin; server AdminGuard is the
           real gate). Lazy-loaded behind a BootSplash. */}

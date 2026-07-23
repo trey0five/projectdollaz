@@ -88,6 +88,7 @@ function refreshOnce() {
 
 const isAuthEndpoint = (url = '') =>
   url.includes('/auth/login') ||
+  url.includes('/auth/admin-login') ||
   url.includes('/auth/register') ||
   url.includes('/auth/refresh') ||
   url.includes('/auth/verify-email') ||
@@ -164,6 +165,7 @@ export function isEmailNotVerified(err) {
 export const authApi = {
   register: (data) => api.post('/auth/register', data),
   login: (data) => api.post('/auth/login', data),
+  adminLogin: (username, password) => api.post('/auth/admin-login', { username, password }),
   logout: () => api.post('/auth/logout'),
   me: () => api.get('/auth/me'),
   updateMe: (data) => api.patch('/auth/me', data),
