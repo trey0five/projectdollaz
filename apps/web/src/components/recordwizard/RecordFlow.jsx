@@ -541,24 +541,36 @@ export default function RecordFlow({
 
   return (
     <div className="relative">
-      {/* A soft pool of hue light behind the pane so the frosted glass glows. */}
+      {/* A soft, restrained pool of hue light behind the pane. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -inset-2 rounded-[30px] opacity-70 blur-2xl"
+        className="pointer-events-none absolute -inset-3 rounded-[34px] opacity-45 blur-3xl"
         style={{
-          background: `radial-gradient(70% 60% at 25% 0%, ${hueRgba(hue, 0.4)}, transparent 72%)`,
+          background: `radial-gradient(65% 55% at 30% 6%, ${hueRgba(hue, 0.26)}, transparent 72%)`,
         }}
       />
       <div
         ref={rootRef}
-        className="relative overflow-hidden rounded-2xl border backdrop-blur-2xl"
+        className="relative overflow-hidden rounded-[22px] border border-white/60 backdrop-blur-[26px]"
         style={{
-          // Frosted glass, tinted with the module hue: a translucent hue wash so
-          // the ambient glow reads through, a bright inner top edge, and a soft
-          // hue-colored drop glow.
-          background: `linear-gradient(158deg, ${hueRgba(hue, 0.14)}, ${hueRgba(hue, 0.05)} 52%, rgba(255,255,255,0.5))`,
-          borderColor: hueRgba(hue, 0.3),
-          boxShadow: `0 28px 66px -26px ${hueRgba(hue, 0.55)}, inset 0 1px 0 rgba(255,255,255,0.7)`,
+          // Milky frosted glass: mostly translucent white with only a WHISPER of
+          // hue. Three background layers — a top-left specular sheen, a faint hue
+          // film, then the frost base — bake the "glass" look into the element
+          // itself (no overlays to fight the content's paint order).
+          background: [
+            'radial-gradient(closest-side at 14% -6%, rgba(255,255,255,0.9), transparent 42%)',
+            `linear-gradient(158deg, ${hueRgba(hue, 0.06)}, transparent 48%)`,
+            'linear-gradient(158deg, rgba(255,255,255,0.8), rgba(255,255,255,0.64))',
+          ].join(', '),
+          // Layered depth: contact + mid + a soft hue ambient, a bright top bevel,
+          // and an inner floor shade — reads as a lifted 3-D pane.
+          boxShadow: [
+            '0 2px 6px rgba(16,28,61,0.05)',
+            '0 16px 32px -12px rgba(16,28,61,0.14)',
+            `0 44px 78px -34px ${hueRgba(hue, 0.38)}`,
+            'inset 0 1px 0 rgba(255,255,255,0.95)',
+            'inset 0 -24px 44px -32px rgba(16,28,61,0.07)',
+          ].join(', '),
         }}
       >
       {/* Live regions — polite carries steps/queue/progress, assertive the
@@ -712,8 +724,11 @@ export default function RecordFlow({
                 }
               >
                 <div
-                  className="rounded-xl border bg-white/70 p-5 backdrop-blur-sm"
-                  style={{ borderColor: hueRgba(hue, 0.18) }}
+                  className="rounded-xl border border-white/70 bg-white/60 p-5 backdrop-blur-md"
+                  style={{
+                    boxShadow:
+                      'inset 0 1px 0 rgba(255,255,255,0.9), 0 12px 28px -18px rgba(16,28,61,0.18)',
+                  }}
                 >
                   {isReview ? (
                     <FlowReview
@@ -753,8 +768,8 @@ export default function RecordFlow({
 
           {/* 4 · Footer — outside the animated panel so buttons never slide. */}
           <div
-            className="flex items-center justify-between gap-3 border-t px-5 py-3.5 backdrop-blur"
-            style={{ borderColor: hueRgba(hue, 0.18), backgroundColor: 'rgba(255,255,255,0.55)' }}
+            className="flex items-center justify-between gap-3 border-t px-5 py-3.5 backdrop-blur-md"
+            style={{ borderColor: 'rgba(255,255,255,0.5)', backgroundColor: 'rgba(255,255,255,0.5)' }}
           >
             <button
               type="button"
