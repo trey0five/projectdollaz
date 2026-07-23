@@ -1021,8 +1021,13 @@ function GovernanceWorkspace() {
       />
     )
 
+  // "+ Add" launches the batch wizard for the active register's record type;
+  // openCreate/the modal below stay for EDITING an existing row.
   const onNew = canEdit
-    ? () => openCreate(tab === 'meetings' ? 'meeting' : tab === 'committees' ? 'committee' : 'policy')
+    ? () =>
+        navigate(
+          `/governance?tab=add&add=${tab === 'meetings' ? 'meeting' : tab === 'committees' ? 'committee' : 'policy'}`,
+        )
     : null
 
   const savePolicy = async (body) => {

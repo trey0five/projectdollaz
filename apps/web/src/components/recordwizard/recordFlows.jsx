@@ -251,7 +251,7 @@ export const recordFlows = {
     nounPlural: 'meetings',
     Icon: CalendarClock,
     loaders: {
-      committees: (ctx) => committeesApi.list(ctx.schoolId).then((r) => r.data),
+      committees: (ctx) => committeesApi.list(ctx.schoolId).then((r) => r.data.committees ?? []),
     },
     defaults: {
       // EMPTY_MEETING verbatim (GovernancePage.jsx:390)
@@ -363,7 +363,7 @@ export const recordFlows = {
     Icon: ClipboardCheck,
     loaders: {
       // Fixes today's modal-in-wizard gap (standards={[]} meant no parent select).
-      standards: (ctx) => accreditationApi.listStandards(ctx.schoolId).then((r) => r.data),
+      standards: (ctx) => accreditationApi.listStandards(ctx.schoolId).then((r) => r.data.standards ?? []),
     },
     defaults: {
       // EMPTY_FORM verbatim (AccreditationPage.jsx:225)
@@ -674,7 +674,7 @@ export const recordFlows = {
     nounPlural: 'gifts & pledges',
     Icon: Gift,
     loaders: {
-      campaigns: (ctx) => advancementApi.listCampaigns(ctx.schoolId).then((r) => r.data),
+      campaigns: (ctx) => advancementApi.listCampaigns(ctx.schoolId).then((r) => r.data.campaigns ?? []),
     },
     // Gifts REQUIRE a campaign to live under (the create URL is nested).
     gate: (data) =>
