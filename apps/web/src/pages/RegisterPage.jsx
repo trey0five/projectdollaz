@@ -6,7 +6,11 @@ import { useAuth } from '../context/AuthContext.jsx'
 import { apiErrorMessage } from '../lib/api.js'
 import { captureInviteFromUrl, getPendingInvite } from '../lib/pendingInvite.js'
 import AuthLayout from '../components/auth/AuthLayout.jsx'
-import { TextField, PasswordField, FormError } from '../components/auth/fields.jsx'
+import {
+  GlassTextField,
+  GlassPasswordField,
+  GlassFormError,
+} from '../components/auth/glassFields.jsx'
 import PasswordRequirements, { allRequirementsMet } from '../components/auth/PasswordRequirements.jsx'
 
 export default function RegisterPage() {
@@ -69,19 +73,19 @@ export default function RegisterPage() {
           <span className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gold/15 text-gold">
             <MailCheck size={30} />
           </span>
-          <p className="text-[16px] leading-relaxed text-ink">
+          <p className="text-[16px] leading-relaxed text-white/85">
             We sent a verification link to <strong>{email}</strong>. Click it to activate your
             account, then sign in.
           </p>
           <button
             onClick={resend}
             disabled={resent}
-            className="mt-6 text-[15px] font-semibold text-gold hover:underline disabled:text-muted"
+            className="mt-6 text-[15px] font-semibold text-gold-light hover:underline disabled:text-white/40"
           >
             {resent ? 'Verification email re-sent' : "Didn't get it? Resend"}
           </button>
-          <div className="mt-6 text-[15px] text-muted">
-            <Link to="/login" className="font-semibold text-gold hover:underline">
+          <div className="mt-6 text-[15px] text-white/60">
+            <Link to="/login" className="font-semibold text-gold-light hover:underline">
               Back to sign in
             </Link>
           </div>
@@ -93,7 +97,7 @@ export default function RegisterPage() {
   return (
     <AuthLayout title="Create your account" subtitle="Start building financial statements in minutes." width={500}>
       {hasInvite && (
-        <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-gold/40 bg-gold/10 px-4 py-3 text-[14px] leading-relaxed text-navy">
+        <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-gold/40 bg-gold/15 px-4 py-3 text-[14px] leading-relaxed text-white/90">
           <Mail size={16} className="mt-0.5 shrink-0 text-gold" />
           <span>
             You&rsquo;re accepting a school invite. Use{' '}
@@ -103,20 +107,20 @@ export default function RegisterPage() {
         </div>
       )}
       <div className="grid grid-cols-2 gap-4">
-        <TextField
+        <GlassTextField
           label="First name"
           value={firstName}
           autoComplete="given-name"
           onChange={(e) => setFirstName(e.target.value)}
         />
-        <TextField
+        <GlassTextField
           label="Last name"
           value={lastName}
           autoComplete="family-name"
           onChange={(e) => setLastName(e.target.value)}
         />
       </div>
-      <TextField
+      <GlassTextField
         label="Email"
         type="email"
         autoComplete="email"
@@ -125,17 +129,17 @@ export default function RegisterPage() {
         onChange={(e) => setEmail(e.target.value)}
       />
       <div className="mb-1">
-        <PasswordField
+        <GlassPasswordField
           label="Password"
           value={password}
           autoComplete="new-password"
           placeholder="Create a strong password"
           onChange={(e) => setPassword(e.target.value)}
         />
-        <PasswordRequirements password={password} />
+        <PasswordRequirements password={password} glass />
       </div>
       <div className="mt-5">
-        <PasswordField
+        <GlassPasswordField
           label="Confirm password"
           value={confirm}
           autoComplete="new-password"
@@ -144,24 +148,24 @@ export default function RegisterPage() {
           onEnter={submit}
         />
         {confirm.length > 0 && !matches && (
-          <p className="-mt-3 mb-2 text-[14px] text-danger">Passwords do not match.</p>
+          <p className="-mt-3 mb-2 text-[14px] text-red-300">Passwords do not match.</p>
         )}
       </div>
 
-      <FormError>{error}</FormError>
+      <GlassFormError>{error}</GlassFormError>
 
       <motion.button
         whileTap={{ scale: canSubmit ? 0.98 : 1 }}
         onClick={submit}
         disabled={!canSubmit}
-        className="btn-primary mt-3 w-full disabled:cursor-not-allowed disabled:opacity-50"
+        className="btn-gold mt-3 w-full py-3.5 text-[14px] disabled:cursor-not-allowed disabled:opacity-50"
       >
         {busy ? 'Creating account…' : 'Create Account'}
       </motion.button>
 
-      <div className="mt-6 text-center text-[15px] text-muted">
+      <div className="mt-6 text-center text-[15px] text-white/60">
         Already have an account?{' '}
-        <Link to="/login" className="font-semibold text-gold hover:underline">
+        <Link to="/login" className="font-semibold text-gold-light hover:underline">
           Sign in
         </Link>
       </div>

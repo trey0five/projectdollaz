@@ -4,7 +4,7 @@
 // (the existing smart-intake Dashboard, scoped to the selected school) lives
 // behind ProtectedRoute. SchoolProvider wraps the authed branch so the
 // switcher + report preview can read the user's schools.
-import { Suspense, lazy } from 'react'
+import { Suspense, lazy, useSyncExternalStore } from 'react'
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { SchoolProvider, useSchools } from './context/SchoolContext.jsx'
 import { ScopeProvider } from './context/ScopeContext.jsx'
@@ -14,6 +14,7 @@ import { useAuth } from './context/AuthContext.jsx'
 import { useUiV2 } from './context/UiFlagContext.jsx'
 import { ProtectedRoute, PublicOnlyRoute, BootSplash } from './components/auth/RouteGuards.jsx'
 import Onboarding from './components/onboarding/Onboarding.jsx'
+import { onboardingSession } from './components/onboarding/onboardingSession.js'
 import { PennyProvider } from './context/PennyContext.jsx'
 import Penny from './components/penny/Penny.jsx'
 import AppShell from './components/nav/AppShell.jsx'
@@ -101,15 +102,19 @@ function DataRoute() {
 }
 
 // First-login gate: once the user's schools have loaded, a user with none is sent
-// to onboarding (create your first school) instead of an empty dashboard. The QB
-// OAuth callback is exempt so an in-flight connect can still complete.
+// to onboarding (the multi-step setup wizard) instead of an empty dashboard. The
+// wizard creates the first school mid-flow, which would flip this condition and
+// eject the user before the optional MFA/QuickBooks steps — so the wizard also
+// holds a session flag that keeps the gate here until it actually finishes. The
+// QB OAuth callback is exempt so an in-flight connect can still complete.
 function OnboardingGate({ children }) {
   const { schools, loading } = useSchools()
+  const midOnboarding = useSyncExternalStore(onboardingSession.subscribe, onboardingSession.get)
   const onCallback =
     typeof window !== 'undefined' &&
     (window.location.pathname.startsWith('/integrations/qb/callback') ||
       window.location.pathname.startsWith('/enrollment/blackbaud/callback'))
-  if (!loading && schools.length === 0 && !onCallback) return <Onboarding />
+  if (!loading && (schools.length === 0 || midOnboarding) && !onCallback) return <Onboarding />
   return children
 }
 

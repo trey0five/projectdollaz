@@ -5,7 +5,7 @@ import { CheckCircle2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { apiErrorMessage } from '../lib/api.js'
 import AuthLayout from '../components/auth/AuthLayout.jsx'
-import { TextField, PasswordField, FormError } from '../components/auth/fields.jsx'
+import { GlassTextField, GlassPasswordField, GlassFormError } from '../components/auth/glassFields.jsx'
 import PasswordRequirements, { allRequirementsMet } from '../components/auth/PasswordRequirements.jsx'
 import { sanitizeInteger } from '../lib/numericInput.js'
 
@@ -47,9 +47,9 @@ export default function ResetPasswordPage() {
     return (
       <AuthLayout title="Password updated">
         <div className="flex flex-col items-center text-center">
-          <CheckCircle2 className="mb-4 h-16 w-16 text-emerald-600" />
-          <p className="text-[16px] text-ink">You can now sign in with your new password.</p>
-          <button onClick={() => navigate('/login')} className="btn-primary mt-6">
+          <CheckCircle2 className="mb-4 h-16 w-16 text-emerald-300" />
+          <p className="text-[16px] text-white/85">You can now sign in with your new password.</p>
+          <button onClick={() => navigate('/login')} className="btn-gold mt-6">
             Continue to sign in
           </button>
         </div>
@@ -59,14 +59,14 @@ export default function ResetPasswordPage() {
 
   return (
     <AuthLayout title="Set a new password" subtitle="Enter the code from your email and choose a new password.">
-      <TextField
+      <GlassTextField
         label="Email"
         type="email"
         value={email}
         placeholder="you@school.org"
         onChange={(e) => setEmail(e.target.value)}
       />
-      <TextField
+      <GlassTextField
         label="Reset code"
         inputMode="numeric"
         value={code}
@@ -74,17 +74,17 @@ export default function ResetPasswordPage() {
         onChange={(e) => setCode(sanitizeInteger(e.target.value))}
       />
       <div className="mb-1">
-        <PasswordField
+        <GlassPasswordField
           label="New password"
           value={password}
           autoComplete="new-password"
           placeholder="Create a strong password"
           onChange={(e) => setPassword(e.target.value)}
         />
-        <PasswordRequirements password={password} />
+        <PasswordRequirements password={password} glass />
       </div>
       <div className="mt-5">
-        <PasswordField
+        <GlassPasswordField
           label="Confirm new password"
           value={confirm}
           autoComplete="new-password"
@@ -93,23 +93,23 @@ export default function ResetPasswordPage() {
           onEnter={submit}
         />
         {confirm.length > 0 && !matches && (
-          <p className="-mt-3 mb-2 text-[14px] text-danger">Passwords do not match.</p>
+          <p className="-mt-3 mb-2 text-[14px] text-red-300">Passwords do not match.</p>
         )}
       </div>
 
-      <FormError>{error}</FormError>
+      <GlassFormError>{error}</GlassFormError>
 
       <motion.button
         whileTap={{ scale: canSubmit ? 0.98 : 1 }}
         onClick={submit}
         disabled={!canSubmit}
-        className="btn-primary mt-3 w-full disabled:cursor-not-allowed disabled:opacity-50"
+        className="btn-gold mt-3 w-full py-3.5 text-[14px] disabled:cursor-not-allowed disabled:opacity-50"
       >
         {busy ? 'Updating…' : 'Reset password'}
       </motion.button>
 
-      <div className="mt-6 text-center text-[15px] text-muted">
-        <Link to="/login" className="font-semibold text-gold hover:underline">
+      <div className="mt-6 text-center text-[15px] text-white/60">
+        <Link to="/login" className="font-semibold text-gold-light hover:underline">
           Back to sign in
         </Link>
       </div>

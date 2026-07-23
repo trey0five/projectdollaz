@@ -4,7 +4,7 @@ import { CheckCircle2, XCircle } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { apiErrorMessage } from '../lib/api.js'
 import AuthLayout from '../components/auth/AuthLayout.jsx'
-import { TextField, FormError, FormSuccess } from '../components/auth/fields.jsx'
+import { GlassTextField, GlassFormError, GlassFormSuccess } from '../components/auth/glassFields.jsx'
 
 export default function VerifyEmailPage() {
   const { verifyEmail, resendVerification } = useAuth()
@@ -44,7 +44,7 @@ export default function VerifyEmailPage() {
   if (state === 'verifying') {
     return (
       <AuthLayout title="Verifying your email" subtitle="One moment…">
-        <div className="h-2 w-full overflow-hidden rounded-full bg-navy/[0.06]">
+        <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
           <div className="h-full w-1/2 animate-pulse rounded-full bg-gold" />
         </div>
       </AuthLayout>
@@ -55,9 +55,9 @@ export default function VerifyEmailPage() {
     return (
       <AuthLayout title="Email verified">
         <div className="flex flex-col items-center text-center">
-          <CheckCircle2 className="mb-4 h-16 w-16 text-emerald-600" />
-          <p className="text-[16px] text-ink">{message}</p>
-          <Link to="/login" className="btn-primary mt-6 inline-block">
+          <CheckCircle2 className="mb-4 h-16 w-16 text-emerald-300" />
+          <p className="text-[16px] text-white/85">{message}</p>
+          <Link to="/login" className="btn-gold mt-6 inline-block">
             Continue to sign in
           </Link>
         </div>
@@ -77,24 +77,24 @@ export default function VerifyEmailPage() {
     >
       {state === 'error' && (
         <div className="mb-5 flex flex-col items-center text-center">
-          <XCircle className="mb-3 h-12 w-12 text-danger" />
-          <p className="text-[16px] text-ink">{message}</p>
+          <XCircle className="mb-3 h-12 w-12 text-red-300" />
+          <p className="text-[16px] text-white/85">{message}</p>
         </div>
       )}
-      <TextField
+      <GlassTextField
         label="Email"
         type="email"
         value={email}
         placeholder="you@school.org"
         onChange={(e) => setEmail(e.target.value)}
       />
-      <FormError>{null}</FormError>
-      <FormSuccess>{resent}</FormSuccess>
-      <button onClick={resend} disabled={!email} className="btn-primary mt-3 w-full disabled:opacity-50">
+      <GlassFormError>{null}</GlassFormError>
+      <GlassFormSuccess>{resent}</GlassFormSuccess>
+      <button onClick={resend} disabled={!email} className="btn-gold mt-3 w-full py-3.5 text-[14px] disabled:opacity-50">
         Resend verification link
       </button>
-      <div className="mt-6 text-center text-[15px] text-muted">
-        <Link to="/login" className="font-semibold text-gold hover:underline">
+      <div className="mt-6 text-center text-[15px] text-white/60">
+        <Link to="/login" className="font-semibold text-gold-light hover:underline">
           Back to sign in
         </Link>
       </div>
