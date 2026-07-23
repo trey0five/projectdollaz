@@ -61,8 +61,8 @@ function TileSkeleton() {
 
 export default function HomeTiles() {
   const { activeSchool } = useSchools()
-  const { scope, orgId, orgName, isMultiSchool, orgSchoolCount } = useScope()
-  const orgMode = scope === 'org' && isMultiSchool && !!orgId
+  const { scope, orgId, orgName, hasOrg, isMultiSchool, orgSchoolCount } = useScope()
+  const orgMode = scope === 'org' && hasOrg && !!orgId
   // Org mode parks the per-school hooks (null id → no-op) and renders <OrgHome/>.
   const schoolId = orgMode ? null : activeSchool?.id ?? null
   const { loading: billingLoading, entitled, hasModule } = useBilling()
