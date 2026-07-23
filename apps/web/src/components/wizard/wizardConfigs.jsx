@@ -3,9 +3,13 @@
 //
 // ONE reusable Choose → Enter/Upload → Confirm shell (AddDataWizard) is fed by
 // these 8 module configs. The wizard is CHROME: it never reimplements an importer
-// or a form. Each option is one of three kinds:
+// or a form. Each option is one of four kinds:
 //   • 'embed'   — mount an existing importer/panel UNCHANGED (its own applied UI
 //                 IS the Confirm). renderEmbed(ctx, nav) returns the element.
+//   • 'flow'    — mount the multi-step multi-item RecordFlow INSIDE the work step,
+//                 driven by a FlowDef from recordFlows.jsx (`flow` field). This is
+//                 the ADD path for module records; the page *FormModals remain the
+//                 EDIT path on the register tabs.
 //   • 'modal'   — launch an existing exported *FormModal, wiring onSave = the real
 //                 api.js create call (+ markSaved) and onClose. renderModal(ctx, h).
 //   • 'handoff' — hand off to Penny (no wizard confirm of our own); onHandoff(ctx).
@@ -20,11 +24,10 @@
 //   • finance monthly/budget/qbo + enrollment roster/connect + hr staff-counts are
 //     EMBED (the importer owns its save) — there is no monthlyApi.upsertSnapshot /
 //     budgetApi.putSpread to call from the wizard; those saves live in the panels.
-//   • accreditation EVIDENCE and advancement GIFT have no standalone exported
-//     *FormModal (they are page-private inline forms bound to a parent standard /
-//     campaign). Wrapping them cleanly is out of the CHROME contract, so those
-//     secondary options are omitted here (added from Records) and noted in the
-//     report rather than reimplemented.
+//   • accreditation EVIDENCE has no standalone exported *FormModal (page-private
+//     inline form bound to a parent standard) and stays omitted here (added from
+//     Records). Advancement GIFT is now covered by the 'gift' RecordFlow (nested
+//     create under a campaign, campaign-gated).
 //   • enrollment MANUAL/plan has no manual-entry component to embed; the SIS card
 //     already houses connect + roster upload, so it is the single "connect" option.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -41,10 +44,10 @@ import {
   Sparkles,
   Flag,
   Users,
+  Gift,
 } from 'lucide-react'
 
 import { HOME_TILES, tileLabel } from '../home/tileRegistry.jsx'
-import { policiesApi, accreditationApi, facilitiesApi, advancementApi } from '../../lib/api.js'
 
 import TrialBalanceModalBody from '../datahub/TrialBalanceModalBody.jsx'
 import MonthlyActualsPanel from '../monthly/MonthlyActualsPanel.jsx'
@@ -54,13 +57,9 @@ import RosterUpload from '../enrollment/RosterUpload.jsx'
 import { EnrollmentConnectEmbed } from './wizardEmbeds.jsx'
 import WizardStrategyGoal from './WizardStrategyGoal.jsx'
 
-// The exported page-private form modals (ENG-C1 adds the `export`; FROZEN names).
-// If an import isn't in the tree yet the integrated build flags it — that is the
-// documented counterpart dependency, not a wizard bug.
-import { PolicyFormModal } from '../../pages/GovernancePage.jsx'
-import { MaintenanceFormModal } from '../../pages/FacilitiesPage.jsx'
-import { StandardFormModal } from '../../pages/AccreditationPage.jsx'
-import { CampaignFormModal } from '../../pages/AdvancementPage.jsx'
+// The multi-step multi-item record flows (kind:'flow'). The page *FormModal
+// exports stay untouched — they remain the EDIT path on the register tabs.
+import { recordFlows } from '../recordwizard/recordFlows.jsx'
 
 // Per-module hue lookup — read straight from tileRegistry (the single source).
 const HUE = Object.fromEntries(HOME_TILES.map((t) => [t.key, t.hue]))
@@ -187,22 +186,30 @@ export const wizardConfigs = {
     options: [
       {
         key: 'policy',
-        kind: 'modal',
+        kind: 'flow',
         Icon: ScrollText,
         label: 'Board policy',
         blurb: 'Record a board policy — its category, owner, status and next review date.',
-        cta: 'Add a policy',
-        renderModal: (ctx, { onClose, markSaved }) => (
-          <PolicyFormModal
-            initial={null}
-            reduce={ctx.reduce}
-            onClose={onClose}
-            onSave={async (body) => {
-              await policiesApi.create(ctx.schoolId, body)
-              markSaved()
-            }}
-          />
-        ),
+        cta: 'Add policies',
+        flow: recordFlows['governance.policy'],
+      },
+      {
+        key: 'committee',
+        kind: 'flow',
+        Icon: Users,
+        label: 'Committee',
+        blurb: 'Add a board or standing committee — its chair, remit and status.',
+        cta: 'Add committees',
+        flow: recordFlows['governance.committee'],
+      },
+      {
+        key: 'meeting',
+        kind: 'flow',
+        Icon: CalendarClock,
+        label: 'Board meeting',
+        blurb: 'Log a board or committee meeting — agenda, minutes and decisions.',
+        cta: 'Add meetings',
+        flow: recordFlows['governance.meeting'],
       },
     ],
   },
@@ -213,25 +220,12 @@ export const wizardConfigs = {
     options: [
       {
         key: 'standard',
-        kind: 'modal',
+        kind: 'flow',
         Icon: ClipboardCheck,
         label: 'Standard',
         blurb: 'Add an accreditation standard to track its rating and gather evidence against it.',
-        cta: 'Add a standard',
-        renderModal: (ctx, { onClose, markSaved }) => (
-          <StandardFormModal
-            open
-            initial={null}
-            standards={[]}
-            editingId={null}
-            reduce={ctx.reduce}
-            onClose={onClose}
-            onSave={async (body) => {
-              await accreditationApi.createStandard(ctx.schoolId, body)
-              markSaved()
-            }}
-          />
-        ),
+        cta: 'Add standards',
+        flow: recordFlows['accreditation.standard'],
       },
     ],
   },
@@ -242,23 +236,12 @@ export const wizardConfigs = {
     options: [
       {
         key: 'maintenance',
-        kind: 'modal',
+        kind: 'flow',
         Icon: Wrench,
         label: 'Maintenance item',
         blurb: 'Log a maintenance or capital item — its category, cadence, and expected cost.',
         cta: 'Add maintenance',
-        renderModal: (ctx, { onClose, markSaved }) => (
-          <MaintenanceFormModal
-            open
-            initial={null}
-            reduce={ctx.reduce}
-            onClose={onClose}
-            onSave={async (body) => {
-              await facilitiesApi.createMaintenance(ctx.schoolId, body)
-              markSaved()
-            }}
-          />
-        ),
+        flow: recordFlows['facilities.maintenance'],
       },
     ],
   },
@@ -269,22 +252,21 @@ export const wizardConfigs = {
     options: [
       {
         key: 'campaign',
-        kind: 'modal',
+        kind: 'flow',
         Icon: HeartHandshake,
         label: 'Campaign',
         blurb: 'Start a fundraising campaign — its goal, timeframe and status. Log gifts against it later.',
-        cta: 'Add a campaign',
-        renderModal: (ctx, { onClose, markSaved }) => (
-          <CampaignFormModal
-            initial={null}
-            reduce={ctx.reduce}
-            onClose={onClose}
-            onSave={async (body) => {
-              await advancementApi.createCampaign(ctx.schoolId, body)
-              markSaved()
-            }}
-          />
-        ),
+        cta: 'Add campaigns',
+        flow: recordFlows['advancement.campaign'],
+      },
+      {
+        key: 'gift',
+        kind: 'flow',
+        Icon: Gift,
+        label: 'Gift or pledge',
+        blurb: 'Record gifts and pledges against a campaign — amounts only, never donor names.',
+        cta: 'Add gifts',
+        flow: recordFlows['advancement.gift'],
       },
     ],
   },

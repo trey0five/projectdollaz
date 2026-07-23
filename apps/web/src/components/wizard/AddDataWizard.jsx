@@ -19,6 +19,8 @@ import { ChevronLeft, CalendarClock, CheckCircle2 } from 'lucide-react'
 import WizardStepper from './WizardStepper.jsx'
 import WizardChoose from './WizardChoose.jsx'
 import WizardConfirm from './WizardConfirm.jsx'
+import RecordFlow from '../recordwizard/RecordFlow.jsx'
+import FlowConfirm from '../recordwizard/FlowConfirm.jsx'
 import { hueRgba, wizardModuleLabel } from './wizardConfigs.jsx'
 
 const PANEL_ID = 'wiz-panel'
@@ -47,6 +49,10 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
   const savedRef = useRef(false)
   const initHandoffRef = useRef(false)
   const headingRef = useRef(null)
+  // kind:'flow' — the batch result FlowConfirm renders, and the leave guard the
+  // mounted RecordFlow registers (returns false when it opened its own dialog).
+  const [flowResult, setFlowResult] = useState(null)
+  const flowGuardRef = useRef(null)
 
   const option = useMemo(
     () => options.find((o) => o.key === optionKey) || null,
@@ -59,6 +65,8 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
 
   // ── Option selection ──────────────────────────────────────────────────────
   const chooseOption = (key) => {
+    setFlowResult(null)
+    flowGuardRef.current = null
     const opt = options.find((o) => o.key === key)
     if (!opt) return
     setOptionKey(key)
@@ -73,6 +81,8 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
 
   // Cross-option jump from inside an embed (e.g. TB → Monthly).
   const goToOption = (key) => {
+    setFlowResult(null)
+    flowGuardRef.current = null
     const opt = options.find((o) => o.key === key)
     if (!opt) return
     setOptionKey(key)
@@ -81,10 +91,20 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
   }
 
   const backToChoose = () => {
+    setFlowResult(null)
+    flowGuardRef.current = null
     savedRef.current = false
     // Keep the single-option selected so the one card still reads naturally.
     if (options.length > 1) setOptionKey(null)
     setStep('choose')
+  }
+
+  // kind:'flow' leave guard — a mounted RecordFlow with queued/dirty work opens
+  // its own discard dialog (guard fn returns false) instead of us navigating.
+  const guardedLeave = (leave) => {
+    if (step === 'work' && option?.kind === 'flow' && flowGuardRef.current && !flowGuardRef.current())
+      return
+    leave()
   }
 
   // Modal close: advance to Confirm iff a save happened, else treat as cancel.
@@ -107,6 +127,8 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
   }
 
   const addAnother = () => {
+    setFlowResult(null)
+    flowGuardRef.current = null
     savedRef.current = false
     setOptionKey(null)
     setStep('choose')
@@ -115,6 +137,8 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
   // Confirm "Done" — we must NOT navigate (ENG-C1 owns tab routing), so reset the
   // frame to a fresh Choose, ready for the next add.
   const finish = () => {
+    setFlowResult(null)
+    flowGuardRef.current = null
     savedRef.current = false
     setOptionKey(null)
     setStep('choose')
@@ -162,7 +186,12 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
             </h2>
           </div>
         </div>
-        <WizardStepper current={step} hue={hue} panelId={PANEL_ID} onGoTo={setStep} />
+        <WizardStepper
+          current={step}
+          hue={hue}
+          panelId={PANEL_ID}
+          onGoTo={(s) => guardedLeave(() => setStep(s))}
+        />
       </div>
 
       {/* Polite live region — announces the active step for screen readers. */}
@@ -204,7 +233,7 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
                   <div className="flex items-center gap-2.5">
                     <button
                       type="button"
-                      onClick={backToChoose}
+                      onClick={() => guardedLeave(backToChoose)}
                       className="flex h-8 w-8 items-center justify-center rounded-lg text-muted outline-none transition-colors hover:bg-section hover:text-navy focus-visible:ring-2"
                       style={{ '--tw-ring-color': hueRgba(hue, 0.5) }}
                       aria-label="Back to options"
@@ -223,6 +252,22 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
 
                 {needsPeriodBlocked ? (
                   <NoPeriodNote hue={hue} />
+                ) : option.kind === 'flow' ? (
+                  <RecordFlow
+                    key={option.key}
+                    flow={option.flow}
+                    ctx={fullCtx}
+                    hue={hue}
+                    onDone={(result) => {
+                      setFlowResult(result)
+                      setStep('confirm')
+                    }}
+                    onCancel={backToChoose}
+                    goToOption={goToOption}
+                    registerGuard={(fn) => {
+                      flowGuardRef.current = fn
+                    }}
+                  />
                 ) : option.kind === 'modal' ? (
                   <>
                     {/* Context behind the *FormModal overlay it portals on top. */}
@@ -273,13 +318,23 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
                 <h3 ref={headingRef} tabIndex={-1} className="sr-only">
                   Done
                 </h3>
-                <WizardConfirm
-                  option={option}
-                  hue={hue}
-                  moduleLabel={moduleLabel}
-                  onAddAnother={addAnother}
-                  onDone={finish}
-                />
+                {flowResult ? (
+                  <FlowConfirm
+                    result={flowResult}
+                    hue={hue}
+                    moduleLabel={moduleLabel}
+                    onAddAnother={addAnother}
+                    onDone={finish}
+                  />
+                ) : (
+                  <WizardConfirm
+                    option={option}
+                    hue={hue}
+                    moduleLabel={moduleLabel}
+                    onAddAnother={addAnother}
+                    onDone={finish}
+                  />
+                )}
               </>
             )}
           </motion.div>
