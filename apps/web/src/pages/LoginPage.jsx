@@ -12,12 +12,15 @@ import { useAuth } from '../context/AuthContext.jsx'
 import { apiErrorCode, apiErrorMessage, isEmailNotVerified } from '../lib/api.js'
 import { captureInviteFromUrl, getPendingInvite } from '../lib/pendingInvite.js'
 import AuthLayout from '../components/auth/AuthLayout.jsx'
-import { TextField, PasswordField, FormError } from '../components/auth/fields.jsx'
+import {
+  GlassTextField,
+  GlassPasswordField,
+  GlassFormError,
+  glassInput,
+} from '../components/auth/glassFields.jsx'
 
-const codeInputCls =
-  'w-full rounded-lg border-2 border-border bg-white px-4 py-3 text-center font-mono text-[24px] tracking-[0.4em] text-ink outline-none transition-colors focus:border-gold'
-const backupInputCls =
-  'w-full rounded-lg border-2 border-border bg-white px-4 py-3 text-center font-mono text-[19px] tracking-[0.14em] text-ink outline-none transition-colors focus:border-gold'
+const codeInputCls = `${glassInput} text-center font-mono text-[24px] tracking-[0.4em]`
+const backupInputCls = `${glassInput} text-center font-mono text-[19px] tracking-[0.14em]`
 
 export default function LoginPage() {
   const { login, loginMfa } = useAuth()
@@ -158,11 +161,11 @@ export default function LoginPage() {
             transition={{ duration: 0.2 }}
           >
             {hasInvite && (
-              <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-gold/40 bg-gold/10 px-4 py-3 text-[14px] leading-relaxed text-navy">
+              <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-gold/40 bg-gold/15 px-4 py-3 text-[14px] leading-relaxed text-white/90">
                 <Mail size={16} className="mt-0.5 shrink-0 text-gold" />
                 <span>
                   You&rsquo;ve been invited to a school. Sign in — or{' '}
-                  <Link to="/register" className="font-semibold text-gold hover:underline">
+                  <Link to="/register" className="font-semibold text-gold-light hover:underline">
                     create an account
                   </Link>{' '}
                   — with <strong>the email the invite was sent to</strong>, and you&rsquo;ll join
@@ -170,7 +173,7 @@ export default function LoginPage() {
                 </span>
               </div>
             )}
-            <TextField
+            <GlassTextField
               label="Email"
               type="email"
               autoComplete="email"
@@ -178,7 +181,7 @@ export default function LoginPage() {
               placeholder="you@school.org"
               onChange={(e) => setEmail(e.target.value)}
             />
-            <PasswordField
+            <GlassPasswordField
               label="Password"
               value={password}
               autoComplete="current-password"
@@ -190,16 +193,16 @@ export default function LoginPage() {
             <div className="mb-4 text-right">
               <Link
                 to="/forgot-password"
-                className="text-[15px] font-semibold text-gold hover:underline"
+                className="text-[15px] font-semibold text-gold-light hover:underline"
               >
                 Forgot password?
               </Link>
             </div>
 
-            <FormError>{error}</FormError>
+            <GlassFormError>{error}</GlassFormError>
             {needsVerify && (
               <div className="mt-1 text-center text-[15px]">
-                <Link to="/verify-email" className="font-semibold text-gold hover:underline">
+                <Link to="/verify-email" className="font-semibold text-gold-light hover:underline">
                   Resend verification email
                 </Link>
               </div>
@@ -209,14 +212,14 @@ export default function LoginPage() {
               whileTap={{ scale: 0.98 }}
               onClick={submit}
               disabled={busy}
-              className="btn-primary mt-3 w-full disabled:opacity-60"
+              className="btn-gold mt-3 w-full py-3.5 text-[14px] disabled:opacity-60"
             >
               {busy ? 'Signing in…' : 'Sign In'}
             </motion.button>
 
-            <div className="mt-6 text-center text-[15px] text-muted">
+            <div className="mt-6 text-center text-[15px] text-white/60">
               No account?{' '}
-              <Link to="/register" className="font-semibold text-gold hover:underline">
+              <Link to="/register" className="font-semibold text-gold-light hover:underline">
                 Create one
               </Link>
             </div>
@@ -236,7 +239,7 @@ export default function LoginPage() {
             </div>
 
             <div className="mb-5">
-              <label className="mb-2 block text-center text-[14px] font-semibold uppercase tracking-[0.14em] text-muted">
+              <label className="mb-2 block text-center text-[13px] font-semibold uppercase tracking-[0.16em] text-white/55">
                 {useBackup ? 'Recovery code' : 'Verification code'}
               </label>
               <input
@@ -259,13 +262,13 @@ export default function LoginPage() {
               />
             </div>
 
-            <FormError>{error}</FormError>
+            <GlassFormError>{error}</GlassFormError>
 
             <motion.button
               whileTap={{ scale: 0.98 }}
               onClick={() => submitCode()}
               disabled={busy || (useBackup ? !backupReady : code.length !== 6)}
-              className="btn-primary mt-3 w-full disabled:opacity-60"
+              className="btn-gold mt-3 w-full py-3.5 text-[14px] disabled:opacity-60"
             >
               {busy ? 'Verifying…' : 'Verify'}
             </motion.button>
@@ -278,7 +281,7 @@ export default function LoginPage() {
                   setCode('')
                   setError('')
                 }}
-                className="text-[15px] font-semibold text-gold hover:underline"
+                className="text-[15px] font-semibold text-gold-light hover:underline"
               >
                 {useBackup ? 'Use your authenticator app instead' : 'Use a recovery code instead'}
               </button>
@@ -288,7 +291,7 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={backToSignIn}
-                className="inline-flex items-center gap-1.5 text-[15px] font-medium text-muted transition-colors hover:text-navy"
+                className="inline-flex items-center gap-1.5 text-[15px] font-medium text-white/55 transition-colors hover:text-white"
               >
                 <ArrowLeft size={15} />
                 Back to sign in
