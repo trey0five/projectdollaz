@@ -4,10 +4,13 @@
 // Distinct from SchoolContext (which school) and BillingContext (what's licensed).
 //
 // It resolves the caller's org once (orgsApi.me → { id, name, schools[] }); the
-// scope TOGGLE only ever surfaces when the caller belongs to a multi-school org
-// (schools.length > 1). Scope persists to localStorage, but is FORCED to 'school'
-// whenever the caller isn't multi-school — so a stale 'org' can never strand a
-// single-school user on an empty org view. Read-only resolution; no writes.
+// scope TOGGLE surfaces whenever the caller belongs to an organization — even a
+// single-school one (the onboarding wizard lets a signup NAME their org, so it
+// must be visible; a 1-school org view simply mirrors the school and is where
+// "add more schools" lives). Scope persists to localStorage, but is FORCED to
+// 'school' when the caller has NO org — a stale 'org' can never strand anyone on
+// an empty org view. isMultiSchool still gates the genuinely multi-school
+// features (compare/peers analytics, diocesan import). Read-only; no writes.
 // ─────────────────────────────────────────────────────────────────────────────
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { orgsApi } from '../lib/api.js'
@@ -63,9 +66,10 @@ export function ScopeProvider({ children }) {
     }
   }, [activeId])
 
+  const hasOrg = !!org?.id
   const isMultiSchool = (org?.schoolCount ?? 0) > 1
-  // A single-school caller is always in school scope, whatever localStorage holds.
-  const effectiveScope = isMultiSchool ? scope : 'school'
+  // A caller with no org is always in school scope, whatever localStorage holds.
+  const effectiveScope = hasOrg ? scope : 'school'
 
   const setScope = useCallback((next) => {
     const value = next === 'org' ? 'org' : 'school'
@@ -81,13 +85,14 @@ export function ScopeProvider({ children }) {
     () => ({
       scope: effectiveScope,
       setScope,
+      hasOrg,
       isMultiSchool,
       orgId: org?.id ?? null,
       orgName: org?.name ?? null,
       orgSchoolCount: org?.schoolCount ?? 0,
       orgResolved,
     }),
-    [effectiveScope, setScope, isMultiSchool, org, orgResolved],
+    [effectiveScope, setScope, hasOrg, isMultiSchool, org, orgResolved],
   )
 
   return <ScopeContext.Provider value={value}>{children}</ScopeContext.Provider>
@@ -100,6 +105,7 @@ export function useScope() {
     return {
       scope: 'school',
       setScope: () => {},
+      hasOrg: false,
       isMultiSchool: false,
       orgId: null,
       orgName: null,

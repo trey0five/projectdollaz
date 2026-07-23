@@ -26,6 +26,7 @@ import {
   RotateCw,
 } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
+import { useNavigate } from 'react-router-dom'
 import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
 import ModuleTabs, { ModuleAccent } from '../components/module/ModuleTabs.jsx'
 import BackLink from '../components/ui/BackLink.jsx'
@@ -527,13 +528,12 @@ function FacilitiesWorkspace() {
   } = useFacilities(schoolId)
 
   const [tab, setTab] = useState('maintenance')
+  const navigate = useNavigate()
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
 
-  const openAdd = () => {
-    setEditing(null)
-    setModalOpen(true)
-  }
+  // "+ Add" launches the batch wizard; the modal stays for EDITING an item.
+  const openAdd = () => navigate('/facilities?tab=add&add=maintenance')
   const openEdit = (it) => {
     setEditing(it)
     setModalOpen(true)

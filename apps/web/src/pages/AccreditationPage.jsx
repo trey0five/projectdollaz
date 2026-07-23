@@ -37,6 +37,7 @@ import {
   X,
 } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
+import { useNavigate } from 'react-router-dom'
 import EntityFormModal, { Field, Select, fieldInput, fieldTextarea } from '../components/ui/EntityFormModal.jsx'
 import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
 import ModuleTabs, { ModuleAccent } from '../components/module/ModuleTabs.jsx'
@@ -955,14 +956,14 @@ function AccreditationWorkspace() {
   } = useAccreditation(schoolId)
 
   const [tab, setTab] = useState('standards')
+  const navigate = useNavigate()
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const [expanded, setExpanded] = useState(null) // the expanded standard id, or null
 
-  const openAdd = () => {
-    setEditing(null)
-    setModalOpen(true)
-  }
+  // "+ Add" now launches the multi-step batch wizard (Add-data tab, deep-linked);
+  // the modal below stays for EDITING an existing standard.
+  const openAdd = () => navigate('/accreditation?tab=add&add=standard')
   const openEdit = (s) => {
     setEditing(s)
     setModalOpen(true)

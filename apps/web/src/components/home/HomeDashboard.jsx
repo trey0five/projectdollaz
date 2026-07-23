@@ -127,8 +127,8 @@ function SectionDivider() {
 
 export default function HomeDashboard() {
   const { activeSchool } = useSchools()
-  const { scope, orgId, orgName, isMultiSchool, orgSchoolCount } = useScope()
-  const orgMode = scope === 'org' && isMultiSchool && !!orgId
+  const { scope, orgId, orgName, hasOrg, isMultiSchool, orgSchoolCount } = useScope()
+  const orgMode = scope === 'org' && hasOrg && !!orgId
   // In org mode the per-school hooks are parked (null id → they no-op) — we render
   // the consolidated <OrgHome/> instead, so there's no point fetching school data.
   const schoolId = orgMode ? null : activeSchool?.id ?? null

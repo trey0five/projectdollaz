@@ -2,7 +2,8 @@
 // ContextSwitcher — the ui.v2 header's ONE "what am I viewing" picker, replacing
 // the SchoolSwitcher + ScopeToggle pair. The trigger names the current context
 // (org scope: "Whole organization"; school scope: the active school); the
-// menu offers "Whole organization" (multi-school callers only) above the school
+// menu offers "Whole organization" (whenever the caller has an org — even one
+// school, so a freshly named org from onboarding is visible) above the school
 // list. Selecting the org item → setScope('org'); selecting a school →
 // setActiveSchool(id) + setScope('school') — the SAME context writes the two old
 // controls made, just from one surface. v1 keeps SchoolSwitcher/ScopeToggle.
@@ -19,7 +20,7 @@ import { useScope } from '../../context/ScopeContext.jsx'
 
 export default function ContextSwitcher() {
   const { schools, activeSchool, setActiveSchool } = useSchools()
-  const { scope, setScope, isMultiSchool, orgName, orgSchoolCount } = useScope()
+  const { scope, setScope, hasOrg, orgName, orgSchoolCount } = useScope()
   const navigate = useNavigate()
   const location = useLocation()
   const reduce = useReducedMotion()
@@ -28,7 +29,7 @@ export default function ContextSwitcher() {
   const triggerRef = useRef(null)
   const firstItemRef = useRef(null)
 
-  const orgMode = scope === 'org' && isMultiSchool
+  const orgMode = scope === 'org' && hasOrg
 
   // Outside-click closes (mousedown, like SchoolSwitcher).
   useEffect(() => {
@@ -117,7 +118,7 @@ export default function ContextSwitcher() {
             transition={{ duration: 0.15 }}
             className="absolute left-0 z-50 mt-2 max-h-[70vh] w-72 overflow-y-auto rounded-xl border border-white/15 bg-navy-deep py-1 shadow-2xl"
           >
-            {isMultiSchool && (
+            {hasOrg && (
               <>
                 <button
                   ref={firstItemRef}
@@ -146,7 +147,7 @@ export default function ContextSwitcher() {
               return (
                 <button
                   key={s.id}
-                  ref={!isMultiSchool && i === 0 ? firstItemRef : undefined}
+                  ref={!hasOrg && i === 0 ? firstItemRef : undefined}
                   type="button"
                   role="menuitem"
                   onClick={() => pickSchool(s.id)}

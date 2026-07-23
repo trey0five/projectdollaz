@@ -35,6 +35,7 @@ import {
 } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
 import EntityFormModal, { Field, Select, fieldInput, fieldTextarea } from '../components/ui/EntityFormModal.jsx'
+import { useNavigate } from 'react-router-dom'
 import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
 import ModuleTabs, { ModuleAccent } from '../components/module/ModuleTabs.jsx'
 import BackLink from '../components/ui/BackLink.jsx'
@@ -842,6 +843,7 @@ function AdvancementWorkspace() {
   const [tab, setTab] = useState('campaigns')
   const [modal, setModal] = useState(null) // { entity } | null
   const [expanded, setExpanded] = useState(null) // expanded campaign id, or null
+  const navigate = useNavigate()
 
   const openCreate = () => setModal({ entity: null })
   const openEdit = (entity) => setModal({ entity })
@@ -991,7 +993,8 @@ function AdvancementWorkspace() {
     />
   )
 
-  const onNew = canEdit ? () => openCreate() : null
+  // "+ Add" launches the batch wizard; openCreate/the modal stay for EDITING.
+  const onNew = canEdit ? () => navigate('/advancement?tab=add&add=campaign') : null
 
   const onSave = async (body) => {
     if (modal?.entity) await updateItem(modal.entity.id, body)
