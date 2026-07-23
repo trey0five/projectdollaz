@@ -232,24 +232,30 @@
 
 /* ── Motion layer: flood + shine + white flip (skipped under reduced motion) ── */
 @media (prefers-reduced-motion: no-preference) {
-  /* The flood: a hue circle pinned at the arrow (bottom-right) corner. */
+  /* The flood: a hue circle centered on the arrow (bottom-right) corner that
+     scales up from nothing. It's sized RELATIVE to the tile (320% of the tile's
+     width, made square by aspect-ratio) and re-centered on the corner with the
+     50%/50% translate — so its radius (~1.6× the tile width) always clears the
+     far top-left corner on ANY tile shape, narrow home tiles and the wide
+     2-column wizard tiles alike. (The old fixed 120px circle × scale(9) was a
+     constant ~540px radius, which only reached ~half of a wide wizard tile.) */
   .module-tile::before {
     content: '';
     position: absolute;
-    right: -44px;
-    bottom: -44px;
+    right: 0;
+    bottom: 0;
     z-index: 0;
-    height: 120px;
-    width: 120px;
+    width: 320%;
+    aspect-ratio: 1;
     border-radius: 9999px;
     background: var(--tile-hue);
-    transform: scale(0);
+    transform: translate(50%, 50%) scale(0);
     transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
     will-change: transform;
   }
   .module-tile:hover::before,
   .module-tile:focus-visible::before {
-    transform: scale(9);
+    transform: translate(50%, 50%) scale(1);
   }
 
   /* The shine: a skewed translucent bar sweeping across on hover. */
@@ -374,7 +380,7 @@
   }
   /* Keyboard parity: focusing the stretched hit link floods the card too. */
   .module-tile:has(.tile-panel-hit:focus-visible)::before {
-    transform: scale(9);
+    transform: translate(50%, 50%) scale(1);
   }
 }
 
