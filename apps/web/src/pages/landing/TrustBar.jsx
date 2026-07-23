@@ -23,10 +23,10 @@ function Badge({ icon, label, to, index }) {
       viewport={{ once: true, margin: '-60px' }}
       transition={{ duration: 0.5, ease: EASE, delay: 0.12 + index * 0.12 }}
       whileHover={reduce ? undefined : { y: -5, scale: 1.035 }}
-      className="group relative flex items-center gap-3.5 rounded-2xl border border-gold/40 bg-white/75 px-6 py-4 shadow-[0_14px_36px_-18px_rgba(16,28,61,0.35)] backdrop-blur-sm transition-[box-shadow,border-color] duration-300 hover:border-gold/50 hover:shadow-glow"
+      className="group relative flex h-full flex-col items-center gap-2 rounded-2xl border border-gold/40 bg-white/75 px-2.5 py-4 text-center shadow-[0_14px_36px_-18px_rgba(16,28,61,0.35)] backdrop-blur-sm transition-[box-shadow,border-color] duration-300 hover:border-gold/50 hover:shadow-glow sm:h-auto sm:flex-row sm:gap-3.5 sm:px-6 sm:text-left"
     >
       {/* gradient icon medallion */}
-      <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold-gradient text-navy-deep shadow-glow">
+      <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gold-gradient text-navy-deep shadow-glow sm:h-11 sm:w-11">
         <Icon size={19} strokeWidth={2.4} />
         {/* soft pulsing halo */}
         {!reduce && (
@@ -38,7 +38,7 @@ function Badge({ icon, label, to, index }) {
           />
         )}
       </span>
-      <span className="whitespace-nowrap text-[15.5px] font-semibold tracking-[0.01em] text-navy">
+      <span className="text-[11.5px] font-semibold leading-tight tracking-[0.01em] text-navy sm:whitespace-nowrap sm:text-[15.5px]">
         {label}
       </span>
     </motion.div>
@@ -69,9 +69,9 @@ export default function TrustBar() {
           </p>
         </Reveal>
 
-        <ul className="mt-7 flex flex-wrap items-center justify-center gap-4 sm:gap-5">
+        <ul className="mx-auto mt-7 grid max-w-md grid-cols-3 items-stretch gap-2.5 sm:mt-8 sm:flex sm:max-w-none sm:flex-wrap sm:items-center sm:justify-center sm:gap-5">
           {TRUST.items.map((item, i) => (
-            <li key={item.label}>
+            <li key={item.label} className="sm:flex">
               <Badge {...item} index={i} />
             </li>
           ))}

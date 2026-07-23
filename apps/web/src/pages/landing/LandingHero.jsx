@@ -123,14 +123,15 @@ export default function LandingHero({ onIntroOpen }) {
         )}
       </div>
 
-      {/* MOBILE ONLY: the live Penny chat, in its own navy band. The band needs
-          top padding to clear the straddling card's -mb overlap. */}
+      {/* MOBILE ONLY: the live Penny chat as a clean FLOATING card on the light
+          page background (no navy slab) — mirroring how it floats on desktop. The
+          top padding clears the straddling hero card's -mb overlap. */}
       {!desktop && (
-        <section aria-label="Penny in action" className="bg-navy-deep px-5 pb-14 pt-32">
-          <p className="mb-4 text-center text-[12px] font-bold uppercase tracking-[0.22em] text-gold-light">
+        <section aria-label="Penny in action" className="px-5 pb-14 pt-32">
+          <p className="mb-4 text-center text-[12px] font-bold uppercase tracking-[0.22em] text-[#7a5e00]">
             See Penny work
           </p>
-          <div className="mx-auto max-w-md rounded-2xl border border-gold/25 bg-white/[0.04] p-1.5 shadow-lift backdrop-blur-sm">
+          <div className="mx-auto max-w-md rounded-2xl border border-gold/30 bg-white p-1.5 shadow-[0_26px_60px_-24px_rgba(16,28,61,0.3)]">
             <div className="overflow-hidden rounded-xl bg-cream">
               <PennyDemo />
             </div>
