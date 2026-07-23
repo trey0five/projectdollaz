@@ -540,16 +540,27 @@ export default function RecordFlow({
   const backLabel = stepIdx === 0 ? 'options' : railLabels[stepIdx - 1]
 
   return (
-    <div
-      ref={rootRef}
-      className="relative overflow-hidden rounded-2xl border border-rule/70 bg-white shadow-[0_20px_54px_-26px_rgba(16,28,61,0.45)]"
-    >
-      {/* Hue accent across the top edge — the card's one branded line. */}
-      <span
+    <div className="relative">
+      {/* A soft pool of hue light behind the pane so the frosted glass glows. */}
+      <div
         aria-hidden="true"
-        className="absolute inset-x-0 top-0 z-10 h-1"
-        style={{ background: `linear-gradient(90deg, ${hueRgba(hue, 0.65)}, ${hue})` }}
+        className="pointer-events-none absolute -inset-2 rounded-[30px] opacity-70 blur-2xl"
+        style={{
+          background: `radial-gradient(70% 60% at 25% 0%, ${hueRgba(hue, 0.4)}, transparent 72%)`,
+        }}
       />
+      <div
+        ref={rootRef}
+        className="relative overflow-hidden rounded-2xl border backdrop-blur-2xl"
+        style={{
+          // Frosted glass, tinted with the module hue: a translucent hue wash so
+          // the ambient glow reads through, a bright inner top edge, and a soft
+          // hue-colored drop glow.
+          background: `linear-gradient(158deg, ${hueRgba(hue, 0.14)}, ${hueRgba(hue, 0.05)} 52%, rgba(255,255,255,0.5))`,
+          borderColor: hueRgba(hue, 0.3),
+          boxShadow: `0 28px 66px -26px ${hueRgba(hue, 0.55)}, inset 0 1px 0 rgba(255,255,255,0.7)`,
+        }}
+      >
       {/* Live regions — polite carries steps/queue/progress, assertive the
           batch outcome + validation summaries. */}
       <p className="sr-only" aria-live="polite">
@@ -686,8 +697,8 @@ export default function RecordFlow({
             />
           )}
 
-          {/* 3 · Animated step panel — a white card on a whisper of the module hue. */}
-          <div className="px-5 py-5" style={{ backgroundColor: hueRgba(hue, 0.035) }}>
+          {/* 3 · Animated step panel — a frosted white pane on the glass card. */}
+          <div className="px-5 py-5">
             <AnimatePresence mode="wait" custom={dir} initial={false}>
               <motion.div
                 key={stepIdx}
@@ -700,7 +711,10 @@ export default function RecordFlow({
                   reduce ? { duration: 0.15 } : { duration: 0.44, ease: [0.22, 1, 0.36, 1] }
                 }
               >
-                <div className="rounded-xl border border-rule/60 bg-white p-5">
+                <div
+                  className="rounded-xl border bg-white/70 p-5 backdrop-blur-sm"
+                  style={{ borderColor: hueRgba(hue, 0.18) }}
+                >
                   {isReview ? (
                     <FlowReview
                       basket={basket}
@@ -738,7 +752,10 @@ export default function RecordFlow({
           </div>
 
           {/* 4 · Footer — outside the animated panel so buttons never slide. */}
-          <div className="flex items-center justify-between gap-3 border-t border-rule/60 bg-white px-5 py-3.5">
+          <div
+            className="flex items-center justify-between gap-3 border-t px-5 py-3.5 backdrop-blur"
+            style={{ borderColor: hueRgba(hue, 0.18), backgroundColor: 'rgba(255,255,255,0.55)' }}
+          >
             <button
               type="button"
               onClick={back}
@@ -880,6 +897,7 @@ export default function RecordFlow({
           </h4>
         </div>
       )}
+      </div>
     </div>
   )
 }
