@@ -223,7 +223,30 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
               </>
             )}
 
-            {step === 'work' && option && (
+            {step === 'work' &&
+              option &&
+              (option.kind === 'flow' ? (
+                // A record flow is its OWN self-contained premium card (glowing
+                // icon header, contextual back, progress rail) — no duplicate
+                // chrome header wrapped around it.
+                <RecordFlow
+                  key={option.key}
+                  flow={option.flow}
+                  title={option.label}
+                  subtitle={option.blurb}
+                  ctx={fullCtx}
+                  hue={hue}
+                  onDone={(result) => {
+                    setFlowResult(result)
+                    setStep('confirm')
+                  }}
+                  onCancel={backToChoose}
+                  goToOption={goToOption}
+                  registerGuard={(fn) => {
+                    flowGuardRef.current = fn
+                  }}
+                />
+              ) : (
               <div
                 className="overflow-hidden rounded-2xl border-2 bg-section"
                 style={{ borderColor: hueRgba(hue, 0.22) }}
@@ -252,22 +275,6 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
 
                 {needsPeriodBlocked ? (
                   <NoPeriodNote hue={hue} />
-                ) : option.kind === 'flow' ? (
-                  <RecordFlow
-                    key={option.key}
-                    flow={option.flow}
-                    ctx={fullCtx}
-                    hue={hue}
-                    onDone={(result) => {
-                      setFlowResult(result)
-                      setStep('confirm')
-                    }}
-                    onCancel={backToChoose}
-                    goToOption={goToOption}
-                    registerGuard={(fn) => {
-                      flowGuardRef.current = fn
-                    }}
-                  />
                 ) : option.kind === 'modal' ? (
                   <>
                     {/* Context behind the *FormModal overlay it portals on top. */}
@@ -311,7 +318,7 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
                   </>
                 )}
               </div>
-            )}
+              ))}
 
             {step === 'confirm' && (
               <>

@@ -18,7 +18,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Check, ChevronDown, ChevronRight, Loader2, Plus, RefreshCw, AlertCircle } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, ChevronLeft, Loader2, Plus, RefreshCw, AlertCircle } from 'lucide-react'
 import { hueRgba } from '../wizard/wizardConfigs.jsx'
 import { apiErrorMessage } from '../../lib/api.js'
 import { makeItemId } from './flowSchema.js'
@@ -28,11 +28,13 @@ import FlowField from './FlowField.jsx'
 import FlowBasket from './FlowBasket.jsx'
 import FlowReview from './FlowReview.jsx'
 
-// Directional slide (custom = dir); reduced motion crossfades opacity only.
+// Directional glide with depth: the entering step slides in from the travel
+// direction while sharpening from a soft blur + slight zoom; the leaving step
+// recedes the opposite way. Reduced motion crossfades opacity only (below).
 const panelVariants = {
-  enter: (dir) => ({ x: dir >= 0 ? 56 : -56, opacity: 0, scale: 0.985 }),
-  center: { x: 0, opacity: 1, scale: 1 },
-  exit: (dir) => ({ x: dir >= 0 ? -56 : 56, opacity: 0, scale: 0.985 }),
+  enter: (dir) => ({ x: dir >= 0 ? 60 : -60, opacity: 0, scale: 0.965, filter: 'blur(10px)' }),
+  center: { x: 0, opacity: 1, scale: 1, filter: 'blur(0px)' },
+  exit: (dir) => ({ x: dir >= 0 ? -44 : 44, opacity: 0, scale: 0.985, filter: 'blur(7px)' }),
 }
 const reducedVariants = {
   enter: { opacity: 0 },
@@ -40,7 +42,17 @@ const reducedVariants = {
   exit: { opacity: 0 },
 }
 
-export default function RecordFlow({ flow, ctx, hue, onDone, onCancel, goToOption, registerGuard }) {
+export default function RecordFlow({
+  flow,
+  ctx,
+  hue,
+  title,
+  subtitle,
+  onDone,
+  onCancel,
+  goToOption,
+  registerGuard,
+}) {
   const reduce = !!ctx.reduce
   const S = flow.steps.length // the framework-appended Review step's index
 
@@ -523,9 +535,21 @@ export default function RecordFlow({ flow, ctx, hue, onDone, onCancel, goToOptio
 
   const railLabels = [...flow.steps.map((s) => s.label), 'Review']
   const Icon = flow.Icon
+  // Contextual name for the prominent back control: the previous step's label,
+  // or "options" on the first step (where Back leaves the flow to the picker).
+  const backLabel = stepIdx === 0 ? 'options' : railLabels[stepIdx - 1]
 
   return (
-    <div ref={rootRef} className="relative">
+    <div
+      ref={rootRef}
+      className="relative overflow-hidden rounded-2xl border border-rule/70 bg-white shadow-[0_20px_54px_-26px_rgba(16,28,61,0.45)]"
+    >
+      {/* Hue accent across the top edge — the card's one branded line. */}
+      <span
+        aria-hidden="true"
+        className="absolute inset-x-0 top-0 z-10 h-1"
+        style={{ background: `linear-gradient(90deg, ${hueRgba(hue, 0.65)}, ${hue})` }}
+      />
       {/* Live regions — polite carries steps/queue/progress, assertive the
           batch outcome + validation summaries. */}
       <p className="sr-only" aria-live="polite">
@@ -565,13 +589,76 @@ export default function RecordFlow({ flow, ctx, hue, onDone, onCancel, goToOptio
         </div>
       ) : (
         <>
-          {/* 1 · Hue strip header: the inner micro rail + the queue badge. */}
-          <div
-            className="px-5 py-4"
-            style={{ background: `linear-gradient(100deg, ${hueRgba(hue, 0.14)}, transparent 60%)` }}
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0 flex-1">
+          {/* 1 · Header: contextual back + glowing record icon + title + queue
+              badge over a faint hue aurora, with the sleek progress rail beneath. */}
+          <div className="relative px-6 pt-5 pb-4">
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0"
+              style={{
+                background: `radial-gradient(120% 150% at 0% -10%, ${hueRgba(hue, 0.1)}, transparent 55%)`,
+              }}
+            />
+            <div className="relative">
+              <div className="mb-3.5 flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={back}
+                  disabled={submitting}
+                  className="group inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] font-bold outline-none transition-all hover:-translate-x-0.5 focus-visible:ring-2 disabled:opacity-50"
+                  style={{
+                    borderColor: hueRgba(hue, 0.35),
+                    color: hue,
+                    backgroundColor: hueRgba(hue, 0.05),
+                    '--tw-ring-color': hueRgba(hue, 0.5),
+                  }}
+                >
+                  <ChevronLeft size={16} className="transition-transform group-hover:-translate-x-0.5" />
+                  Back to {backLabel}
+                </button>
+                {basket.length > 0 && (
+                  <motion.span
+                    key={pulseKey}
+                    initial={false}
+                    animate={reduce ? undefined : { scale: [1, 1.18, 1] }}
+                    transition={{ duration: 0.45 }}
+                    className="shrink-0 rounded-full px-2.5 py-1 text-[12px] font-bold"
+                    style={{ backgroundColor: hueRgba(hue, 0.12), color: hue }}
+                  >
+                    {flowCount(basket.length, flow.noun, flow.nounPlural)} queued
+                  </motion.span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-3.5">
+                <span
+                  className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white"
+                  style={{
+                    background: `linear-gradient(135deg, ${hue}, ${hueRgba(hue, 0.72)})`,
+                    boxShadow: `0 10px 26px ${hueRgba(hue, 0.4)}`,
+                  }}
+                >
+                  {!reduce && (
+                    <motion.span
+                      aria-hidden="true"
+                      className="absolute inset-0 rounded-2xl"
+                      animate={{
+                        boxShadow: [`0 0 0 0 ${hueRgba(hue, 0.45)}`, `0 0 0 9px ${hueRgba(hue, 0)}`],
+                      }}
+                      transition={{ duration: 2.4, repeat: Infinity, ease: 'easeOut' }}
+                    />
+                  )}
+                  {Icon ? <Icon size={24} /> : <AlertCircle size={24} />}
+                </span>
+                <div className="min-w-0">
+                  <h3 className="font-serif text-[20px] font-semibold leading-tight text-navy">
+                    {title || flow.nounPlural}
+                  </h3>
+                  {subtitle && <p className="truncate text-[13px] text-muted">{subtitle}</p>}
+                </div>
+              </div>
+
+              <div className="mt-4">
                 <FlowStepRail
                   labels={railLabels}
                   current={stepIdx}
@@ -581,18 +668,6 @@ export default function RecordFlow({ flow, ctx, hue, onDone, onCancel, goToOptio
                   onGoTo={(i) => phase === 'editing' && go(i, -1)}
                 />
               </div>
-              {basket.length > 0 && (
-                <motion.span
-                  key={pulseKey}
-                  initial={false}
-                  animate={reduce ? undefined : { scale: [1, 1.18, 1] }}
-                  transition={{ duration: 0.45 }}
-                  className="shrink-0 rounded-full px-2.5 py-1 text-[12px] font-bold"
-                  style={{ backgroundColor: hueRgba(hue, 0.12), color: hue }}
-                >
-                  {flowCount(basket.length, flow.noun, flow.nounPlural)} queued
-                </motion.span>
-              )}
             </div>
           </div>
 
@@ -611,8 +686,8 @@ export default function RecordFlow({ flow, ctx, hue, onDone, onCancel, goToOptio
             />
           )}
 
-          {/* 3 · Animated step panel — a white card on the work card's bg-section. */}
-          <div className="px-5 py-5">
+          {/* 3 · Animated step panel — a white card on a whisper of the module hue. */}
+          <div className="px-5 py-5" style={{ backgroundColor: hueRgba(hue, 0.035) }}>
             <AnimatePresence mode="wait" custom={dir} initial={false}>
               <motion.div
                 key={stepIdx}
@@ -622,7 +697,7 @@ export default function RecordFlow({ flow, ctx, hue, onDone, onCancel, goToOptio
                 animate="center"
                 exit="exit"
                 transition={
-                  reduce ? { duration: 0.15 } : { duration: 0.32, ease: [0.22, 1, 0.36, 1] }
+                  reduce ? { duration: 0.15 } : { duration: 0.44, ease: [0.22, 1, 0.36, 1] }
                 }
               >
                 <div className="rounded-xl border border-rule/60 bg-white p-5">
@@ -668,9 +743,10 @@ export default function RecordFlow({ flow, ctx, hue, onDone, onCancel, goToOptio
               type="button"
               onClick={back}
               disabled={submitting}
-              className="text-[14px] font-semibold text-muted transition-colors hover:text-navy disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded-lg border border-rule px-3.5 py-2 text-[13.5px] font-semibold text-muted outline-none transition-colors hover:border-navy/30 hover:text-navy focus-visible:ring-2 disabled:opacity-50"
+              style={{ '--tw-ring-color': hueRgba(hue, 0.4) }}
             >
-              Back
+              <ChevronLeft size={15} /> Back
             </button>
             <div className="flex flex-wrap items-center justify-end gap-2.5">
               {!isReview && !lastFieldStep && (
