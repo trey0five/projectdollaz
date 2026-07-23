@@ -12,7 +12,7 @@ import { BillingProvider } from './context/BillingContext.jsx'
 import { PersistenceProvider } from './context/PersistenceContext.jsx'
 import { useAuth } from './context/AuthContext.jsx'
 import { useUiV2 } from './context/UiFlagContext.jsx'
-import { ProtectedRoute, PublicOnlyRoute, BootSplash } from './components/auth/RouteGuards.jsx'
+import { ProtectedRoute, PublicOnlyRoute, AdminRoute, BootSplash } from './components/auth/RouteGuards.jsx'
 import Onboarding from './components/onboarding/Onboarding.jsx'
 import { onboardingSession } from './components/onboarding/onboardingSession.js'
 import { PennyProvider } from './context/PennyContext.jsx'
@@ -68,6 +68,15 @@ const LandingPage = lazy(() => import('./pages/landing/LandingPage.jsx'))
 // Strategic Planning (Phase 5) — lazy so the flashy SVG-arc hero + its module
 // bundle only load for schools that actually open /strategy.
 const StrategyPage = lazy(() => import('./pages/StrategyPage.jsx'))
+
+// Platform admin console (super-admin only) — lazy so its cross-tenant tables +
+// SVG choropleth never ship to a normal tenant's bundle. Mounted OUTSIDE
+// AuthedLayout so OnboardingGate can't trap a school-less founder.
+const AdminShell = lazy(() => import('./pages/admin/AdminShell.jsx'))
+const AdminOverviewPage = lazy(() => import('./pages/admin/AdminOverviewPage.jsx'))
+const AdminGeoPage = lazy(() => import('./pages/admin/AdminGeoPage.jsx'))
+const AdminUsersPage = lazy(() => import('./pages/admin/AdminUsersPage.jsx'))
+const AdminOrgsPage = lazy(() => import('./pages/admin/AdminOrgsPage.jsx'))
 
 // "/" — OUTSIDE AuthedLayout — is the marketing homepage for EVERYONE (logged in
 // or out), so the app logo can bring a signed-in user here. The app lives at /app;
@@ -239,6 +248,25 @@ export default function App() {
           <Route path="integrations" element={<IntegrationsSection />} />
           <Route path="billing" element={<BillingSection />} />
         </Route>
+      </Route>
+      {/* Platform admin — OUTSIDE AuthedLayout (no SchoolProvider / OnboardingGate
+          / Penny), gated by AdminRoute (JWT + isAdmin; server AdminGuard is the
+          real gate). Lazy-loaded behind a BootSplash. */}
+      <Route
+        path="/admin"
+        element={
+          <AdminRoute>
+            <Suspense fallback={<BootSplash />}>
+              <AdminShell />
+            </Suspense>
+          </AdminRoute>
+        }
+      >
+        <Route index element={<Navigate to="overview" replace />} />
+        <Route path="overview" element={<AdminOverviewPage />} />
+        <Route path="geography" element={<AdminGeoPage />} />
+        <Route path="users" element={<AdminUsersPage />} />
+        <Route path="organizations" element={<AdminOrgsPage />} />
       </Route>
       {/* Catch-all: auth-aware — signed-in users return to /app, guests to the
           homepage (RootRoute previously did the forwarding; see NotFoundRoute).

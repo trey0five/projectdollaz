@@ -36,3 +36,19 @@ export function PublicOnlyRoute({ children }) {
   if (isAuthenticated) return <Navigate to="/app" replace />
   return children
 }
+
+// Super-admin gate for the /admin platform console. Waits for the auth rehydrate
+// (never flashes), bounces logged-out visitors to /login, and forwards a
+// signed-in NON-admin to /app (never a blank crash). `isAdmin` is merged onto the
+// user object from /auth/me by AuthContext; the server-side AdminGuard is the
+// real, load-bearing gate — this is only UX routing.
+export function AdminRoute({ children }) {
+  const { isAuthenticated, ready, user } = useAuth()
+  const location = useLocation()
+  if (!ready) return <BootSplash />
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />
+  }
+  if (!user?.isAdmin) return <Navigate to="/app" replace />
+  return children
+}

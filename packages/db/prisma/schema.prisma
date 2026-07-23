@@ -220,7 +220,21 @@ model User {
   totpLastUsedStep           BigInt?   @map("totp_last_used_step")
   createdAt                  DateTime  @default(now()) @map("created_at")
 
+  // ── Platform-admin analytics (additive, all nullable, no backfill) ──────────
+  // When the user verified their email (null = verified pre-migration → "unknown").
+  emailVerifiedAt  DateTime? @map("email_verified_at")
+  // Denormalized last-login geolocation (best-effort, offline geoip-lite). Never
+  // blocks/slows login; a private/localhost IP or geoip miss leaves geo null.
+  lastLoginAt      DateTime? @map("last_login_at")
+  lastLoginIp      String?   @map("last_login_ip")
+  lastLoginCountry String?   @map("last_login_country") // ISO alpha-2
+  lastLoginRegion  String?   @map("last_login_region")  // 2-letter US state code
+  lastLoginCity    String?   @map("last_login_city")
+  lastLoginLat     Float?    @map("last_login_lat")
+  lastLoginLon     Float?    @map("last_login_lon")
+
   memberships                  Membership[]
+  loginEvents                  UserLoginEvent[]
   refreshTokens                RefreshToken[]
   mfaBackupCodes               MfaBackupCode[]
   mfaChallenges                MfaChallenge[]
@@ -261,7 +275,31 @@ model User {
   strategyInitiativesOwned     StrategyInitiative[]     @relation("StrategyInitiativeOwner")
 
   @@index([email])
+  @@index([lastLoginRegion])
   @@map("users")
+}
+
+/// Lightweight per-login geolocation history (best-effort, offline geoip-lite).
+/// One row per successful login where an IP was present; powers the platform
+/// admin's recent-access view. Stores only city/region/lat/lon/ip — never any
+/// geoip DB internals. Additive; no FK-less PII.
+model UserLoginEvent {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  ip        String?
+  country   String?
+  region    String?
+  city      String?
+  lat       Float?
+  lon       Float?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([region])
+  @@index([createdAt])
+  @@map("user_login_events")
 }
 
 model Membership {

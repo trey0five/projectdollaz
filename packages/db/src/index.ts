@@ -30,6 +30,7 @@ export {
   DEFAULT_LICENSED_MODULES,
   isModuleKey,
   isCoreModule,
+  resolveLicensedModules,
 } from './modules.js'
 export type { ModuleKey, ModuleTier, LicensedModule, ModuleDef } from './modules.js'
 

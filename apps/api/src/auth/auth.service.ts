@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { randomBytes, randomInt } from 'node:crypto'
+import { createRequire } from 'node:module'
 import type { User } from '@finrep/db'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { sha256hex, hashesEqual } from '../common/hash.js'
@@ -31,10 +32,52 @@ const MFA_CHALLENGE_TTL_MS = 1000 * 60 * 5 // 5m — matches TokenService's '300
 const VERIFY_TTL_MS = 1000 * 60 * 60 * 24 // 24h
 const RESET_TTL_MS = 1000 * 60 * 15 // 15m
 
+// ── Offline geolocation (geoip-lite) ──────────────────────────────────────────
+// geoip-lite is CJS and bundles offline MaxMind GeoLite2 data (no network / key).
+// Load via createRequire to sidestep ESM default-interop quirks under NodeNext. A
+// load failure leaves capture a no-op — login is NEVER affected.
+interface GeoLookup {
+  country?: string
+  region?: string
+  city?: string
+  ll?: [number, number]
+}
+interface GeoipLite {
+  lookup(ip: string): GeoLookup | null
+}
+let geoip: GeoipLite | null = null
+try {
+  geoip = createRequire(import.meta.url)('geoip-lite') as GeoipLite
+} catch {
+  geoip = null
+}
+
+/** Non-routable / loopback / unspecified IPs geoip can never resolve. */
+function isPrivateIp(ip: string): boolean {
+  const raw = ip.trim().toLowerCase()
+  if (!raw) return true
+  // Strip an IPv4-mapped-IPv6 prefix (::ffff:10.0.0.1) down to the v4 tail.
+  const addr = raw.startsWith('::ffff:') ? raw.slice('::ffff:'.length) : raw
+  if (addr === '::1' || addr === '::' || addr === '0.0.0.0') return true
+  if (addr.startsWith('fc') || addr.startsWith('fd')) return true // fc00::/7 ULA
+  if (addr.startsWith('fe80')) return true // link-local
+  const m = addr.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+  if (!m) return false
+  const a = Number(m[1])
+  const b = Number(m[2])
+  if (a === 10) return true // 10.0.0.0/8
+  if (a === 127) return true // 127.0.0.0/8 loopback
+  if (a === 172 && b >= 16 && b <= 31) return true // 172.16.0.0/12
+  if (a === 192 && b === 168) return true // 192.168.0.0/16
+  if (a === 169 && b === 254) return true // 169.254.0.0/16 link-local
+  return false
+}
+
 @Injectable()
 export class AuthService {
   private readonly isProd: boolean
   private readonly requireEmailVerification: boolean
+  private readonly adminEmails: string[]
 
   constructor(
     private readonly prisma: PrismaService,
@@ -47,6 +90,7 @@ export class AuthService {
     this.isProd = (config.get<string>('nodeEnv') ?? 'development') === 'production'
     this.requireEmailVerification =
       config.get<boolean>('auth.requireEmailVerification') ?? true
+    this.adminEmails = config.get<string[]>('admin.emails') ?? []
   }
 
   async register(dto: RegisterDto): Promise<{ message: string; user: UserPublic }> {
@@ -109,6 +153,7 @@ export class AuthService {
       where: { id: user.id },
       data: {
         emailVerified: true,
+        emailVerifiedAt: new Date(),
         emailVerificationToken: null,
         emailVerificationExpiresAt: null,
       },
@@ -135,6 +180,7 @@ export class AuthService {
 
   async login(
     dto: LoginDto,
+    clientIp?: string,
   ): Promise<
     | { access_token: string; refresh_token: string; user: UserPublic }
     | { mfa_required: true; mfa_token: string; methods: ['totp', 'backup_code'] }
@@ -237,7 +283,61 @@ export class AuthService {
       targetType: 'user',
       targetId: user.id,
     })
+    // Best-effort geolocation capture: fired AFTER tokens are issued, never
+    // awaited, never throws — a geoip miss / private IP / DB hiccup can neither
+    // block nor slow login.
+    void this.captureLoginGeo(user.id, clientIp).catch(() => undefined)
     return { access_token, refresh_token, user: toUserPublic(user) }
+  }
+
+  /**
+   * Best-effort last-login geolocation. Wrapped end-to-end in try/catch and
+   * fire-and-forget by the caller. With no/private IP it records only the login
+   * TIME + raw IP (geo stays null — truthful). Otherwise it offline-resolves the
+   * IP with geoip-lite and denormalizes the geo onto the User plus appends a
+   * UserLoginEvent row. Stores ONLY country/region/city/lat/lon/ip — never any
+   * geoip DB internals.
+   */
+  async captureLoginGeo(userId: string, ip?: string): Promise<void> {
+    try {
+      if (!ip || isPrivateIp(ip)) {
+        await this.prisma.user.update({
+          where: { id: userId },
+          data: { lastLoginAt: new Date(), lastLoginIp: ip ?? null },
+        })
+        return
+      }
+      const geo = geoip ? geoip.lookup(ip) : null
+      const lat = geo?.ll?.[0] ?? null
+      const lon = geo?.ll?.[1] ?? null
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          lastLoginAt: new Date(),
+          lastLoginIp: ip,
+          lastLoginCountry: geo?.country ?? null,
+          lastLoginRegion: geo?.region ?? null,
+          lastLoginCity: geo?.city ?? null,
+          lastLoginLat: lat,
+          lastLoginLon: lon,
+        },
+      })
+      if (geo) {
+        await this.prisma.userLoginEvent.create({
+          data: {
+            userId,
+            ip,
+            country: geo.country ?? null,
+            region: geo.region ?? null,
+            city: geo.city ?? null,
+            lat,
+            lon,
+          },
+        })
+      }
+    } catch {
+      // Best-effort only — never surface a geo/DB error to the login path.
+    }
   }
 
   async refresh(token: string): Promise<{ access_token: string; refresh_token: string }> {
@@ -321,7 +421,9 @@ export class AuthService {
     return { message: 'Logged out.' }
   }
 
-  async me(user: User): Promise<{ user: UserPublic; memberships: unknown[] }> {
+  async me(
+    user: User,
+  ): Promise<{ user: UserPublic; memberships: unknown[]; isAdmin: boolean }> {
     const memberships = await this.prisma.membership.findMany({
       where: { userId: user.id, status: 'active' },
       include: { school: true },
@@ -333,6 +435,10 @@ export class AuthService {
         school_name: m.school.name,
         role: m.role,
       })),
+      // Additive top-level field — computed from the server-side allowlist against
+      // the JWT-loaded DB email (never a client field). Existing .user/.memberships
+      // consumers are untouched.
+      isAdmin: this.adminEmails.includes(user.email.trim().toLowerCase()),
     }
   }
 

@@ -940,6 +940,20 @@ export const billingApi = {
   addModule: (schoolId, key) => api.post(`/schools/${schoolId}/billing/modules`, { key }),
 }
 
+// ── Platform admin (super-admin only) ────────────────────────────────────────
+// CROSS-TENANT reads for the single founder super-admin. Every route is guarded
+// server-side by JwtAuthGuard + AdminGuard (email allowlist) — a non-admin JWT
+// gets 403. The `search` param is omitted when empty so the forbidNonWhitelisted
+// ValidationPipe never trips on a blank string. Same axios `api` instance →
+// inherits the Bearer + proactive-refresh interceptors.
+export const adminApi = {
+  stats: () => api.get('/admin/stats'),
+  users: ({ search, page = 1, pageSize = 25 } = {}) =>
+    api.get('/admin/users', { params: { ...(search ? { search } : {}), page, pageSize } }),
+  organizations: () => api.get('/admin/organizations'),
+  geo: () => api.get('/admin/geo'),
+}
+
 // The backend signals a lapsed trial / inactive subscription on a paid write
 // (statement generate, import create) with HTTP 402 + code SUBSCRIPTION_REQUIRED.
 // Per-module gating adds a DISTINCT 402 { code: 'MODULE_NOT_LICENSED', module }

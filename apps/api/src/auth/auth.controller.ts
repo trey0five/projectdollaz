@@ -1,4 +1,14 @@
-import { Body, Controller, Delete, Get, HttpCode, Patch, Post, UseGuards } from '@nestjs/common'
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Ip,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common'
 import { Throttle, SkipThrottle, ThrottlerGuard } from '@nestjs/throttler'
 import type { User } from '@finrep/db'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js'
@@ -58,8 +68,14 @@ export class AuthController {
   @Post('login')
   @HttpCode(200)
   @Throttle(perMin(10))
-  login(@Body() dto: LoginDto) {
-    return this.auth.login(dto)
+  login(@Body() dto: LoginDto, @Ip() ip: string) {
+    // Resolve the real client IP for best-effort geolocation. `trust proxy` is set
+    // to the exact hop count, so @Ip() already yields the true client IP by walking
+    // back the proxy chain. We must NOT prefer the raw first X-Forwarded-For hop /
+    // X-Real-IP: those are client-supplied and spoofable, letting an authed user
+    // falsify their city/state on the admin geo map. IP is read HERE (not the body)
+    // — the LoginDto is forbidNonWhitelisted and rejects extra fields.
+    return this.auth.login(dto, ip)
   }
 
   // Second login step: challenge token + TOTP/backup code → normal token pair.

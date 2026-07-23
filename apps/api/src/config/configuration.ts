@@ -36,6 +36,12 @@ export interface AppConfig {
   auth: {
     requireEmailVerification: boolean
   }
+  // Platform super-admin allowlist. Comma-separated ADMIN_EMAILS, normalized to
+  // trimmed lowercase. Empty ⇒ nobody is admin (fail-closed). The AdminGuard gates
+  // every /admin route on membership in this list (case-insensitive).
+  admin: {
+    emails: string[]
+  }
   // Phase 1D — Stripe subscription billing. All env-driven with safe empty
   // defaults so the api BOOTS with no Stripe key set (checkout/portal then
   // return a clear error; the webhook still verifies if a webhookSecret exists).
@@ -243,6 +249,12 @@ export function configuration(): AppConfig {
       // email is unavailable (e.g. SES sandbox) so signups aren't blocked; flip
       // back to true the moment email delivery works.
       requireEmailVerification: (process.env.REQUIRE_EMAIL_VERIFICATION ?? 'true') !== 'false',
+    },
+    admin: {
+      emails: (process.env.ADMIN_EMAILS ?? '')
+        .split(',')
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean),
     },
     stripe: {
       secretKey: process.env.STRIPE_SECRET_KEY ?? '',

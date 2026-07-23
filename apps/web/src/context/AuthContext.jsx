@@ -28,7 +28,9 @@ export function AuthProvider({ children }) {
       }
       try {
         const res = await authApi.me()
-        if (mounted.current) setUser(res.data.user)
+        // Merge the additive top-level `isAdmin` from /auth/me onto the user so
+        // the /admin gate + the "Platform admin" menu link can read user.isAdmin.
+        if (mounted.current) setUser({ ...res.data.user, isAdmin: res.data.isAdmin })
       } catch {
         tokenStore.clear()
         if (mounted.current) setUser(null)
@@ -61,6 +63,15 @@ export function AuthProvider({ children }) {
     const { access_token, refresh_token, user: u } = res.data
     tokenStore.set(access_token, refresh_token)
     setUser(u)
+    // The login response carries no `isAdmin` (only /auth/me does). Enrich in the
+    // background — non-blocking so login latency is unchanged — so a founder who
+    // just logged in has user.isAdmin populated for the /admin gate + menu link.
+    authApi
+      .me()
+      .then((r) => {
+        if (mounted.current) setUser((prev) => (prev ? { ...prev, isAdmin: r.data.isAdmin } : prev))
+      })
+      .catch(() => {})
     return u
   }, [])
 
@@ -71,6 +82,14 @@ export function AuthProvider({ children }) {
     const { access_token, refresh_token, user: u } = res.data
     tokenStore.set(access_token, refresh_token)
     setUser(u)
+    // Same background isAdmin enrichment as login() — the MFA response, like the
+    // password response, carries no isAdmin (only /auth/me does).
+    authApi
+      .me()
+      .then((r) => {
+        if (mounted.current) setUser((prev) => (prev ? { ...prev, isAdmin: r.data.isAdmin } : prev))
+      })
+      .catch(() => {})
     return u
   }, [])
 
@@ -92,7 +111,7 @@ export function AuthProvider({ children }) {
 
   const refreshMe = useCallback(async () => {
     const res = await authApi.me()
-    setUser(res.data.user)
+    setUser({ ...res.data.user, isAdmin: res.data.isAdmin })
     return res.data
   }, [])
 

@@ -137,3 +137,25 @@ export const SELLABLE_MODULE_KEYS: ModuleKey[] = MODULE_KEYS.filter(
 
 /** Legacy/null resolution target: an array of the default module(s). */
 export const DEFAULT_LICENSED_MODULES: LicensedModule[] = [{ key: DEFAULT_MODULE, tier: null }]
+
+/**
+ * FAIL-SAFE, PURE resolver for a subscription's stored `licensedModules` JSON.
+ * Byte-identical semantics to BillingService.resolveLicensed (billing.service.ts)
+ * but pure and reusable, so a cross-tenant read (e.g. the platform admin panel)
+ * can resolve modules WITHOUT calling getOrCreateSubscription (which would
+ * materialize trial rows). The NO-LOCKOUT linchpin: NULL / empty / non-array /
+ * all-invalid resolves to the DEFAULT ([{finance}]). Never throws.
+ */
+export function resolveLicensedModules(raw: unknown): LicensedModule[] {
+  if (!Array.isArray(raw)) return [...DEFAULT_LICENSED_MODULES]
+  const parsed = raw
+    .filter(
+      (m): m is { key: string; tier?: unknown } =>
+        !!m && typeof m === 'object' && isModuleKey((m as { key?: unknown }).key),
+    )
+    .map((m) => ({
+      key: m.key as ModuleKey,
+      tier: typeof m.tier === 'string' ? (m.tier as ModuleTier) : null,
+    }))
+  return parsed.length > 0 ? parsed : [...DEFAULT_LICENSED_MODULES]
+}

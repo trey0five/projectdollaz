@@ -52,6 +52,7 @@ import {
   Upload,
   Table2,
   FileBarChart2,
+  ShieldCheck,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useBilling } from '../../context/BillingContext.jsx'
@@ -231,7 +232,7 @@ function AvatarMenu() {
 }
 
 export default function AppShell({ children }) {
-  const { logout } = useAuth()
+  const { user, logout } = useAuth()
   const { hasModule, entitled } = useBilling()
   const { isMultiSchool } = useScope()
   const { activeSchool } = useSchools()
@@ -686,6 +687,16 @@ export default function AppShell({ children }) {
             {/* 4. Spacer → foot: Settings + account. */}
             <div className="flex-1" />
             <div className="shrink-0 space-y-1.5 border-t border-white/10 px-3 py-3">
+              {/* Super-admin only: jump to the cross-tenant platform console. */}
+              {user?.isAdmin && (
+                <Link
+                  to="/admin"
+                  className="group relative flex min-h-[40px] w-full items-center gap-3 rounded-[10px] px-3 py-2 text-[13.5px] font-medium text-white/70 outline-none ring-gold/50 transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:ring-2"
+                >
+                  <ShieldCheck size={17} className="shrink-0 text-white/70 transition-colors group-hover:text-white" />
+                  <span>Platform admin</span>
+                </Link>
+              )}
               {settingsLink(true)}
               <button
                 type="button"
