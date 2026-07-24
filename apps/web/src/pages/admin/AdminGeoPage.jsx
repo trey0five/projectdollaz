@@ -41,6 +41,8 @@ export default function AdminGeoPage() {
   const totals = geo?.totals || {}
   const totalIps = totals.ips ?? states.reduce((a, s) => a + (s.count || 0), 0)
   const totalSessions = totals.sessions ?? 0
+  const activeNow = totals.active ?? 0
+  const activeWindow = geo?.activeWindowMinutes ?? 15
   const ranked = [...states].sort((a, b) => b.count - a.count)
 
   return (
@@ -49,11 +51,23 @@ export default function AdminGeoPage() {
         tone={TONE}
         title="Where users sign in from"
         subtitle={`${totalIps.toLocaleString()} session IP${totalIps === 1 ? '' : 's'} across ${states.length} state${states.length === 1 ? '' : 's'} · ${totalSessions.toLocaleString()} sign-in${totalSessions === 1 ? '' : 's'}`}
+        right={
+          <span
+            className="inline-flex items-center gap-2 rounded-full border border-green-500/30 bg-green-500/10 px-3 py-1 text-xs font-semibold text-green-700"
+            title={`Sessions active in the last ${activeWindow} minutes`}
+          >
+            <span className="relative inline-flex h-2.5 w-2.5 items-center justify-center">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-500 opacity-70 motion-reduce:hidden" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
+            </span>
+            {activeNow.toLocaleString()} active now
+          </span>
+        }
       >
         {states.length === 0 && cities.length === 0 ? (
           <EmptyState label="No located sign-ins yet. Geo fills in as users log in from public IPs." />
         ) : (
-          <UsChoropleth states={states} cities={cities} />
+          <UsChoropleth states={states} cities={cities} activeWindowMinutes={activeWindow} />
         )}
         {unknown > 0 && (
           <p className="mt-4 text-xs text-muted">
@@ -68,7 +82,7 @@ export default function AdminGeoPage() {
         {ranked.length === 0 ? (
           <EmptyState />
         ) : (
-          <Table tone={TONE} head={['State', 'Session IPs', 'Sign-ins', 'Top cities']}>
+          <Table tone={TONE} head={['State', 'Session IPs', 'Sign-ins', 'Active now', 'Top cities']}>
             {ranked.map((s) => (
               <tr key={s.region} className="transition-colors hover:bg-cyan-500/[0.06]">
                 <td className="px-3 py-2">
@@ -77,6 +91,19 @@ export default function AdminGeoPage() {
                 </td>
                 <td className="px-3 py-2 tabular-nums">{s.count.toLocaleString()}</td>
                 <td className="px-3 py-2 tabular-nums text-muted">{(s.sessions ?? s.count).toLocaleString()}</td>
+                <td className="px-3 py-2 tabular-nums">
+                  {s.active > 0 ? (
+                    <span className="inline-flex items-center gap-1.5 font-medium text-green-700">
+                      <span className="relative inline-flex h-2 w-2 items-center justify-center">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-500 opacity-70 motion-reduce:hidden" />
+                        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-green-500" />
+                      </span>
+                      {s.active}
+                    </span>
+                  ) : (
+                    <span className="text-muted">—</span>
+                  )}
+                </td>
                 <td className="px-3 py-2 text-muted">
                   {(s.cities || [])
                     .slice(0, 4)

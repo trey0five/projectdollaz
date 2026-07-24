@@ -28,6 +28,11 @@ interface AdminRow {
 
 const MESSAGE_CHUNK = 1000
 
+// A session IP counts as "active" (currently online) if its most recent sign-in
+// landed within this many minutes. No heartbeat exists, so recency is the honest
+// proxy; the geo map pulses a green dot at every location with an active session.
+const ADMIN_ACTIVE_WINDOW_MINUTES = 15
+
 const DAY_MS = 1000 * 60 * 60 * 24
 const SIGNUP_WINDOW_DAYS = 30
 
@@ -289,38 +294,55 @@ export class AdminService {
       by: ['region', 'city', 'lat', 'lon', 'ip'],
       where: { country: 'US', region: { not: null } },
       _count: { _all: true },
+      _max: { createdAt: true }, // latest sign-in per IP@location → "active" test
     })
+
+    // An IP is an ACTIVE session if its most recent sign-in is within this window
+    // (no heartbeat exists, so recency is the truthful proxy for "currently on").
+    const activeCutoff = Date.now() - ADMIN_ACTIVE_WINDOW_MINUTES * 60_000
 
     type Loc = {
       city: string | null
       lat: number | null
       lon: number | null
       ips: Set<string>
+      active: Set<string>
       sessions: number
     }
-    const stateAgg = new Map<string, { ips: Set<string>; sessions: number; locs: Map<string, Loc> }>()
+    const stateAgg = new Map<
+      string,
+      { ips: Set<string>; active: Set<string>; sessions: number; locs: Map<string, Loc> }
+    >()
 
     for (const r of rows) {
       const region = r.region as string // not-null guaranteed by the where
       const ip = r.ip ?? 'unknown'
-      const st = stateAgg.get(region) ?? { ips: new Set<string>(), sessions: 0, locs: new Map() }
+      const isActive = r._max.createdAt != null && r._max.createdAt.getTime() >= activeCutoff
+      const st =
+        stateAgg.get(region) ??
+        { ips: new Set<string>(), active: new Set<string>(), sessions: 0, locs: new Map() }
       st.ips.add(ip)
+      if (isActive) st.active.add(ip)
       st.sessions += r._count._all
 
       // Key a location by its city name (per state). geoip returns one centroid
       // per city, so this collapses a city to a single mark and keeps lat/lon as a
       // matched pair from the same row (no independent _max drift across rows).
       const key = r.city ?? `${r.lat ?? ''}|${r.lon ?? ''}`
-      const loc = st.locs.get(key) ?? {
-        city: r.city,
-        lat: r.lat,
-        lon: r.lon,
-        ips: new Set<string>(),
-        sessions: 0,
-      }
+      const loc =
+        st.locs.get(key) ??
+        {
+          city: r.city,
+          lat: r.lat,
+          lon: r.lon,
+          ips: new Set<string>(),
+          active: new Set<string>(),
+          sessions: 0,
+        }
       if (loc.lat == null && r.lat != null) loc.lat = r.lat
       if (loc.lon == null && r.lon != null) loc.lon = r.lon
       loc.ips.add(ip)
+      if (isActive) loc.active.add(ip)
       loc.sessions += r._count._all
       st.locs.set(key, loc)
       stateAgg.set(region, st)
@@ -333,13 +355,19 @@ export class AdminService {
       lon: number
       count: number
       sessions: number
+      active: number
     }[] = []
 
     const states = [...stateAgg.entries()].map(([region, st]) => {
-      const cityList: { city: string; count: number; sessions: number }[] = []
+      const cityList: { city: string; count: number; sessions: number; active: number }[] = []
       for (const loc of st.locs.values()) {
         if (!loc.city) continue
-        cityList.push({ city: loc.city, count: loc.ips.size, sessions: loc.sessions })
+        cityList.push({
+          city: loc.city,
+          count: loc.ips.size,
+          sessions: loc.sessions,
+          active: loc.active.size,
+        })
         if (loc.lat != null && loc.lon != null) {
           cities.push({
             city: loc.city,
@@ -348,6 +376,7 @@ export class AdminService {
             lon: loc.lon,
             count: loc.ips.size, // distinct session IPs at this exact location
             sessions: loc.sessions,
+            active: loc.active.size, // distinct ACTIVE session IPs here
           })
         }
       }
@@ -355,6 +384,7 @@ export class AdminService {
         region,
         count: st.ips.size, // distinct session IPs in this state
         sessions: st.sessions,
+        active: st.active.size,
         cities: cityList.sort((a, b) => b.count - a.count),
       }
     })
@@ -368,10 +398,17 @@ export class AdminService {
     const totals = {
       ips: states.reduce((a, s) => a + s.count, 0),
       sessions: states.reduce((a, s) => a + s.sessions, 0),
+      active: states.reduce((a, s) => a + s.active, 0),
       states: states.length,
     }
 
-    return { states, cities, unknown: unplaced.length, totals }
+    return {
+      states,
+      cities,
+      unknown: unplaced.length,
+      totals,
+      activeWindowMinutes: ADMIN_ACTIVE_WINDOW_MINUTES,
+    }
   }
 
   // ── Admin management (super-admin only; SuperadminGuard on the routes) ─────────

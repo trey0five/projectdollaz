@@ -33,7 +33,7 @@ function rampColor(t) {
   return `rgb(${r} ${g} ${b})`
 }
 
-export default function UsChoropleth({ states = [], cities = [] }) {
+export default function UsChoropleth({ states = [], cities = [], activeWindowMinutes = 15 }) {
   const [tip, setTip] = useState(null) // { x, y, title, lines:[] }
 
   const byRegion = useMemo(() => new Map(states.map((s) => [s.region, s])), [states])
@@ -69,7 +69,8 @@ export default function UsChoropleth({ states = [], cities = [] }) {
     const head = `${s.count} session IP${s.count === 1 ? '' : 's'}${
       s.sessions != null ? ` · ${s.sessions} sign-in${s.sessions === 1 ? '' : 's'}` : ''
     }`
-    moveTip(e, name, [head, ...top])
+    const activeLine = s.active > 0 ? [`🟢 ${s.active} active now`] : []
+    moveTip(e, name, [head, ...activeLine, ...top])
   }
 
   return (
@@ -82,6 +83,12 @@ export default function UsChoropleth({ states = [], cities = [] }) {
             role="img"
             aria-label="US map of user sign-ins by state"
           >
+            <style>{`
+              .kyro-ping{transform-box:fill-box;transform-origin:center;pointer-events:none;
+                animation:kyroPing 1.8s cubic-bezier(0,0,.2,1) infinite}
+              @keyframes kyroPing{0%{transform:scale(1);opacity:.55}70%{opacity:0}100%{transform:scale(3.4);opacity:0}}
+              @media (prefers-reduced-motion:reduce){.kyro-ping{animation:none;opacity:0}}
+            `}</style>
             {/* State fills */}
             <g>
               {Object.entries(US_STATE_PATHS).map(([region, d]) => {
@@ -107,36 +114,39 @@ export default function UsChoropleth({ states = [], cities = [] }) {
                 )
               })}
             </g>
-            {/* City dots */}
+            {/* City dots — active locations pulse green; the rest are coral. */}
             <g>
-              {dots.map((d, i) => (
-                <circle
-                  key={`${d.region}-${d.city}-${i}`}
-                  cx={d.x}
-                  cy={d.y}
-                  r={d.r}
-                  fill="#F97316"
-                  fillOpacity={0.8}
-                  stroke="#fff"
-                  strokeWidth={0.75}
-                  className="cursor-pointer"
-                  onMouseEnter={(e) =>
-                    moveTip(e, `${d.city}, ${d.region}`, [
-                      `${d.count} session IP${d.count === 1 ? '' : 's'}`,
-                      ...(d.sessions != null ? [`${d.sessions} sign-in${d.sessions === 1 ? '' : 's'}`] : []),
-                    ])
-                  }
-                  onMouseMove={(e) =>
-                    moveTip(e, `${d.city}, ${d.region}`, [
-                      `${d.count} session IP${d.count === 1 ? '' : 's'}`,
-                      ...(d.sessions != null ? [`${d.sessions} sign-in${d.sessions === 1 ? '' : 's'}`] : []),
-                    ])
-                  }
-                  onMouseLeave={clearTip}
-                >
-                  <title>{`${d.city}, ${d.region} — ${d.count} session IP${d.count === 1 ? '' : 's'}`}</title>
-                </circle>
-              ))}
+              {dots.map((d, i) => {
+                const active = (d.active || 0) > 0
+                const tipLines = [
+                  `${d.count} session IP${d.count === 1 ? '' : 's'}`,
+                  ...(d.sessions != null ? [`${d.sessions} sign-in${d.sessions === 1 ? '' : 's'}`] : []),
+                  ...(active ? [`${d.active} active now`] : []),
+                ]
+                const onTip = (e) => moveTip(e, `${d.city}, ${d.region}`, tipLines)
+                return (
+                  <g key={`${d.region}-${d.city}-${i}`}>
+                    {active && (
+                      <circle className="kyro-ping" cx={d.x} cy={d.y} r={d.r} fill="#22C55E" fillOpacity={0.5} />
+                    )}
+                    <circle
+                      cx={d.x}
+                      cy={d.y}
+                      r={d.r}
+                      fill={active ? '#22C55E' : '#F97316'}
+                      fillOpacity={active ? 0.95 : 0.8}
+                      stroke="#fff"
+                      strokeWidth={0.75}
+                      className="cursor-pointer"
+                      onMouseEnter={onTip}
+                      onMouseMove={onTip}
+                      onMouseLeave={clearTip}
+                    >
+                      <title>{`${d.city}, ${d.region} — ${active ? `${d.active} active now, ` : ''}${d.count} session IP${d.count === 1 ? '' : 's'}`}</title>
+                    </circle>
+                  </g>
+                )
+              })}
             </g>
           </svg>
         </div>
@@ -167,6 +177,13 @@ export default function UsChoropleth({ states = [], cities = [] }) {
               style={{ background: '#F97316', opacity: 0.75 }}
             />
             <span className="text-[11px] text-muted">Location (size ∝ session IPs)</span>
+          </div>
+          <div className="mt-2 flex items-center gap-2">
+            <span className="relative inline-flex h-3 w-3 items-center justify-center">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-500 opacity-70 motion-reduce:hidden" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full border border-white bg-green-500" />
+            </span>
+            <span className="text-[11px] text-muted">Active now (≤{activeWindowMinutes}m)</span>
           </div>
         </div>
       </div>
