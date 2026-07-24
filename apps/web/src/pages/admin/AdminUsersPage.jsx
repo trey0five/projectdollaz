@@ -20,9 +20,12 @@ import {
   LoadState,
   ErrorState,
   EmptyState,
+  SECTION_TONE,
   fmtDateTime,
   relTime,
 } from './_ui.jsx'
+
+const TONE = SECTION_TONE.users
 
 const PAGE_SIZE = 25
 
@@ -48,7 +51,7 @@ function UserRow({ u, onMessage }) {
 
   return (
     <>
-      <tr className="align-top hover:bg-cream/60">
+      <tr className="align-top transition-colors hover:bg-violet-500/[0.05]">
         <td className="px-3 py-2">
           <button
             type="button"
@@ -175,7 +178,7 @@ export default function AdminUsersPage() {
   return (
     <>
     <SectionCard
-      title="Users"
+      tone={TONE}
       subtitle={loading ? 'Loading…' : `${total.toLocaleString()} user${total === 1 ? '' : 's'} across all tenants`}
       right={
         <div className="relative">
@@ -201,6 +204,7 @@ export default function AdminUsersPage() {
       ) : (
         <>
           <Table
+            tone={TONE}
             head={[
               'Name',
               'Email',

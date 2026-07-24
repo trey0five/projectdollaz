@@ -9,7 +9,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { Search, Send, Users, User as UserIcon, X } from 'lucide-react'
 import { adminApi, apiErrorMessage } from '../../lib/api.js'
-import { SectionCard } from './_ui.jsx'
+import { SectionCard, SECTION_TONE } from './_ui.jsx'
+
+const TONE = SECTION_TONE.messages
 import AdminToast from '../../components/admin/AdminToast.jsx'
 
 const LABEL_MAX = 80
@@ -182,7 +184,7 @@ export default function AdminMessagesPage() {
 
   return (
     <>
-      <SectionCard title="Messages" subtitle="Send a message to one user's inbox or broadcast to everyone.">
+      <SectionCard tone={TONE} title="Compose" subtitle="Send a message to one user's inbox or broadcast to everyone.">
         <div className="mx-auto max-w-2xl">
           <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">
             Audience

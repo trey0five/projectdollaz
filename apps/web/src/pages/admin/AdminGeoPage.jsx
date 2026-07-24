@@ -7,7 +7,9 @@ import { useEffect, useState } from 'react'
 import { adminApi, apiErrorMessage } from '../../lib/api.js'
 import { STATE_NAMES } from '../../data/usMapPaths.js'
 import UsChoropleth from '../../components/admin/UsChoropleth.jsx'
-import { SectionCard, Table, LoadState, ErrorState, EmptyState } from './_ui.jsx'
+import { SectionCard, Table, LoadState, ErrorState, EmptyState, SECTION_TONE } from './_ui.jsx'
+
+const TONE = SECTION_TONE.geography
 
 export default function AdminGeoPage() {
   const [geo, setGeo] = useState(null)
@@ -44,6 +46,7 @@ export default function AdminGeoPage() {
   return (
     <div className="space-y-6">
       <SectionCard
+        tone={TONE}
         title="Where users sign in from"
         subtitle={`${totalIps.toLocaleString()} session IP${totalIps === 1 ? '' : 's'} across ${states.length} state${states.length === 1 ? '' : 's'} · ${totalSessions.toLocaleString()} sign-in${totalSessions === 1 ? '' : 's'}`}
       >
@@ -61,13 +64,13 @@ export default function AdminGeoPage() {
         )}
       </SectionCard>
 
-      <SectionCard title="States by session IPs" subtitle="Distinct session IPs per state, most first">
+      <SectionCard tone={TONE} title="States by session IPs" subtitle="Distinct session IPs per state, most first">
         {ranked.length === 0 ? (
           <EmptyState />
         ) : (
-          <Table head={['State', 'Session IPs', 'Sign-ins', 'Top cities']}>
+          <Table tone={TONE} head={['State', 'Session IPs', 'Sign-ins', 'Top cities']}>
             {ranked.map((s) => (
-              <tr key={s.region} className="hover:bg-cream/60">
+              <tr key={s.region} className="transition-colors hover:bg-cyan-500/[0.06]">
                 <td className="px-3 py-2">
                   <span className="font-medium text-ink">{STATE_NAMES[s.region] || s.region}</span>
                   <span className="ml-1.5 text-xs text-muted">{s.region}</span>

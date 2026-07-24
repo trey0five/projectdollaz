@@ -6,6 +6,17 @@
 import { CheckCircle2, AlertCircle, ShieldCheck, ShieldOff } from 'lucide-react'
 import { MODULE_META } from '../../lib/modules.js'
 
+// Per-section accent hues — the single source shared by the sidebar, the page
+// headers and the section cards/tables so a section reads one consistent colour.
+export const SECTION_TONE = {
+  overview: ['#2563EB', '#3b82f6'],
+  geography: ['#06b6d4', '#22d3ee'],
+  users: ['#8b5cf6', '#a78bfa'],
+  organizations: ['#6366f1', '#818cf8'],
+  messages: ['#FF6B5E', '#ff9182'],
+  admins: ['#f59e0b', '#fbbf24'],
+}
+
 // ── Cards ────────────────────────────────────────────────────────────────────
 // StatCard — a colorful metric tile. `tone` is a [hue, hue2] pair that paints a
 // gradient icon chip, a tinted top hairline and a faint corner glow so the row of
@@ -44,11 +55,27 @@ export function StatCard({ label, value, sub, accent, icon: Icon, tone }) {
   )
 }
 
-export function SectionCard({ title, subtitle, right, children, className = '' }) {
+// SectionCard — optional `tone` ([hue, hue2]) paints a gradient top hairline and
+// a faint header wash so the card belongs to its section's colour, matching the
+// sidebar + page header. Omit tone for a plain white card.
+export function SectionCard({ title, subtitle, right, children, className = '', tone }) {
+  const [hue, hue2] = tone || []
   return (
-    <section className={`rounded-2xl border border-border bg-white shadow-card ${className}`}>
+    <section
+      className={`relative overflow-hidden rounded-2xl border border-border bg-white shadow-card ${className}`}
+    >
+      {tone && (
+        <span
+          aria-hidden
+          className="absolute inset-x-0 top-0 h-1"
+          style={{ background: `linear-gradient(90deg,${hue},${hue2})` }}
+        />
+      )}
       {(title || right) && (
-        <header className="flex items-start justify-between gap-3 border-b border-rule px-5 py-4">
+        <header
+          className="flex items-start justify-between gap-3 border-b border-rule px-5 py-4"
+          style={tone ? { background: `linear-gradient(180deg,${hue}0f,transparent)` } : undefined}
+        >
           <div className="min-w-0">
             {title && <h2 className="font-serif text-lg text-ink">{title}</h2>}
             {subtitle && <p className="mt-0.5 text-xs text-muted">{subtitle}</p>}
@@ -62,14 +89,20 @@ export function SectionCard({ title, subtitle, right, children, className = '' }
 }
 
 // ── Table shell ──────────────────────────────────────────────────────────────
-export function Table({ head, children }) {
+// `tone` ([hue, …]) tints the sticky header row and colours its labels in the
+// section hue; omit it for the neutral slate header.
+export function Table({ head, children, tone }) {
+  const [hue] = tone || []
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[720px] text-sm">
-        <thead className="sticky top-0 bg-section text-left text-[11px] font-semibold uppercase tracking-wide text-muted">
-          <tr>
+        <thead className="sticky top-0 text-left text-[11px] font-semibold uppercase tracking-wide">
+          <tr
+            className={tone ? '' : 'bg-section text-muted'}
+            style={tone ? { backgroundColor: `${hue}14`, color: hue } : undefined}
+          >
             {head.map((h, i) => (
-              <th key={i} className="whitespace-nowrap px-3 py-2 font-semibold">
+              <th key={i} className="whitespace-nowrap px-3 py-2.5 font-semibold">
                 {h}
               </th>
             ))}

@@ -10,7 +10,9 @@ import { useEffect, useState } from 'react'
 import { UserPlus, Lock } from 'lucide-react'
 import { adminApi, apiErrorMessage } from '../../lib/api.js'
 import { useAuth } from '../../context/AuthContext.jsx'
-import { SectionCard, Table, LoadState, ErrorState, EmptyState, fmtDate } from './_ui.jsx'
+import { SectionCard, Table, LoadState, ErrorState, EmptyState, SECTION_TONE, fmtDate } from './_ui.jsx'
+
+const TONE = SECTION_TONE.admins
 import AdminSourceBadge from '../../components/admin/AdminSourceBadge.jsx'
 import NewAdminModal from '../../components/admin/NewAdminModal.jsx'
 import AdminToast from '../../components/admin/AdminToast.jsx'
@@ -33,7 +35,7 @@ function AdminRow({ row, isSelf, onRevoked, onError }) {
   }
 
   return (
-    <tr className="align-middle hover:bg-cream/60">
+    <tr className="align-middle transition-colors hover:bg-amber-500/[0.06]">
       <td className="px-3 py-2 font-medium text-ink">{row.name || <span className="text-muted">—</span>}</td>
       <td className="px-3 py-2 text-muted">{row.email}</td>
       <td className="px-3 py-2">
@@ -136,7 +138,7 @@ export default function AdminAdminsPage() {
   return (
     <>
       <SectionCard
-        title="Admins"
+        tone={TONE}
         subtitle={
           loading
             ? 'Loading…'
@@ -159,7 +161,7 @@ export default function AdminAdminsPage() {
         ) : (admins || []).length === 0 ? (
           <EmptyState label="No admins yet." />
         ) : (
-          <Table head={['Admin', 'Email', 'Source', 'Added', '']}>
+          <Table tone={TONE} head={['Admin', 'Email', 'Source', 'Added', '']}>
             {admins.map((row) => (
               <AdminRow
                 key={row.id ?? `env:${row.email}`}

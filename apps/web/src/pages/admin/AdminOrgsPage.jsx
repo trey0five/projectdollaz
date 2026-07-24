@@ -13,8 +13,11 @@ import {
   LoadState,
   ErrorState,
   EmptyState,
+  SECTION_TONE,
   fmtDate,
 } from './_ui.jsx'
+
+const TONE = SECTION_TONE.organizations
 
 function OrgCard({ org }) {
   const [open, setOpen] = useState(false)
@@ -22,7 +25,12 @@ function OrgCard({ org }) {
   const schoolCount = org.schoolCount ?? org.schools?.length ?? 0
   const memberCount = org.memberCount ?? 0
   return (
-    <section className="rounded-2xl border border-border bg-white shadow-card">
+    <section className="relative overflow-hidden rounded-2xl border border-border bg-white shadow-card">
+      <span
+        aria-hidden
+        className="absolute inset-x-0 top-0 h-1"
+        style={{ background: `linear-gradient(90deg,${TONE[0]},${TONE[1]})` }}
+      />
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -31,7 +39,12 @@ function OrgCard({ org }) {
         <span className="text-muted">
           {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
         </span>
-        <Building2 size={18} className="shrink-0 text-navy" />
+        <span
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white"
+          style={{ background: `linear-gradient(135deg,${TONE[0]},${TONE[1]})`, boxShadow: `0 8px 18px -8px ${TONE[0]}` }}
+        >
+          <Building2 size={18} />
+        </span>
         <div className="min-w-0 flex-1">
           <div className="font-serif text-base text-ink">{org.name}</div>
           <div className="text-xs text-muted">
@@ -45,9 +58,9 @@ function OrgCard({ org }) {
           {members.length === 0 ? (
             <EmptyState label="No members in this organization." />
           ) : (
-            <Table head={['User', 'Email', 'School', 'Role', 'Status']}>
+            <Table tone={TONE} head={['User', 'Email', 'School', 'Role', 'Status']}>
               {members.map((m, i) => (
-                <tr key={`${m.userId}-${m.schoolId}-${i}`} className="hover:bg-cream/60">
+                <tr key={`${m.userId}-${m.schoolId}-${i}`} className="transition-colors hover:bg-indigo-500/[0.05]">
                   <td className="px-3 py-2 font-medium text-ink">{m.name}</td>
                   <td className="px-3 py-2 text-muted">{m.email}</td>
                   <td className="px-3 py-2 text-muted">{m.schoolName}</td>
@@ -102,13 +115,10 @@ export default function AdminOrgsPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="font-serif text-lg text-ink">Organizations</h2>
-          <p className="text-xs text-muted">
-            {orgs.length.toLocaleString()} organization{orgs.length === 1 ? '' : 's'} · expand any to
-            see all members and their role per school
-          </p>
-        </div>
+        <p className="text-sm text-muted">
+          {orgs.length.toLocaleString()} organization{orgs.length === 1 ? '' : 's'} · expand any to
+          see all members and their role per school
+        </p>
         <div className="relative">
           <Search
             size={15}
