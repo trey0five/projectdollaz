@@ -3,6 +3,7 @@
 // GET /admin/stats. The sparkline is a self-contained inline SVG (no chart lib).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useState } from 'react'
+import { Users, ShieldCheck, KeyRound, Building2, GraduationCap, TrendingUp } from 'lucide-react'
 import { adminApi, apiErrorMessage } from '../../lib/api.js'
 import { StatCard, SectionCard, LoadState, ErrorState } from './_ui.jsx'
 
@@ -29,14 +30,25 @@ function SignupsSparkline({ data }) {
       role="img"
       aria-label="Signups over the last 30 days"
     >
-      <path d={area} fill="#2563EB" fillOpacity={0.12} />
-      <path d={line} fill="none" stroke="#2563EB" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+      <defs>
+        <linearGradient id="spark-area" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#2563EB" stopOpacity={0.28} />
+          <stop offset="100%" stopColor="#2563EB" stopOpacity={0} />
+        </linearGradient>
+        <linearGradient id="spark-line" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#2563EB" />
+          <stop offset="100%" stopColor="#8b5cf6" />
+        </linearGradient>
+      </defs>
+      <path d={area} fill="url(#spark-area)" />
+      <path d={line} fill="none" stroke="url(#spark-line)" strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
       {data.map((d, i) => (
         <circle key={i} cx={x(i)} cy={y(d.count)} r={7} fill="transparent">
           <title>{`${d.date}: ${d.count} signup${d.count === 1 ? '' : 's'}`}</title>
         </circle>
       ))}
-      {last && <circle cx={last[0]} cy={last[1]} r={3.5} fill="#2563EB" />}
+      {last && <circle cx={last[0]} cy={last[1]} r={5} fill="#8b5cf6" fillOpacity={0.25} />}
+      {last && <circle cx={last[0]} cy={last[1]} r={3} fill="#8b5cf6" />}
     </svg>
   )
 }
@@ -73,25 +85,31 @@ export default function AdminOverviewPage() {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
-        <StatCard label="Total users" value={(t.users ?? 0).toLocaleString()} />
+        <StatCard label="Total users" value={(t.users ?? 0).toLocaleString()} icon={Users} tone={['#2563EB', '#3b82f6']} />
         <StatCard
           label="Verified users"
           value={(t.verifiedUsers ?? 0).toLocaleString()}
           sub={`${pct(t.verifiedUsers, t.users)} verified · ${(t.unverifiedUsers ?? 0).toLocaleString()} pending`}
           accent="up"
+          icon={ShieldCheck}
+          tone={['#059669', '#10b981']}
         />
         <StatCard
           label="MFA-enabled"
           value={(t.mfaEnabledUsers ?? 0).toLocaleString()}
           sub={`${pct(t.mfaEnabledUsers, t.users)} of users`}
+          icon={KeyRound}
+          tone={['#8b5cf6', '#a78bfa']}
         />
-        <StatCard label="Organizations" value={(t.organizations ?? 0).toLocaleString()} />
-        <StatCard label="Schools" value={(t.schools ?? 0).toLocaleString()} />
+        <StatCard label="Organizations" value={(t.organizations ?? 0).toLocaleString()} icon={Building2} tone={['#6366f1', '#818cf8']} />
+        <StatCard label="Schools" value={(t.schools ?? 0).toLocaleString()} icon={GraduationCap} tone={['#06b6d4', '#22d3ee']} />
         <StatCard
           label="Signups · 30d"
           value={signups30.toLocaleString()}
           sub="new users in the last 30 days"
           accent="up"
+          icon={TrendingUp}
+          tone={['#FF6B5E', '#ff9182']}
         />
       </div>
 

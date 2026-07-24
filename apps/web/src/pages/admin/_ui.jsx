@@ -7,16 +7,39 @@ import { CheckCircle2, AlertCircle, ShieldCheck, ShieldOff } from 'lucide-react'
 import { MODULE_META } from '../../lib/modules.js'
 
 // ── Cards ────────────────────────────────────────────────────────────────────
-export function StatCard({ label, value, sub, accent }) {
+// StatCard — a colorful metric tile. `tone` is a [hue, hue2] pair that paints a
+// gradient icon chip, a tinted top hairline and a faint corner glow so the row of
+// cards reads as a vibrant dashboard rather than flat white boxes. `icon` is a
+// lucide component. Both are optional (falls back to a plain blue-accented card).
+export function StatCard({ label, value, sub, accent, icon: Icon, tone }) {
+  const [hue, hue2] = tone || ['#2563EB', '#3b82f6']
   return (
-    <div className="rounded-2xl border border-border bg-white p-5 shadow-card">
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">{label}</div>
-      <div className="mt-1 font-serif text-3xl tabular-nums text-ink">{value}</div>
-      {sub != null && (
-        <div className={`mt-1 text-xs ${accent === 'up' ? 'text-emerald-600' : 'text-muted'}`}>
-          {sub}
+    <div className="relative overflow-hidden rounded-2xl border border-border bg-white p-5 shadow-card transition-transform duration-200 hover:-translate-y-0.5">
+      <span aria-hidden className="absolute inset-x-0 top-0 h-1" style={{ background: `linear-gradient(90deg,${hue},${hue2})` }} />
+      <span
+        aria-hidden
+        className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full opacity-[0.10]"
+        style={{ background: `radial-gradient(circle,${hue},transparent 70%)` }}
+      />
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">{label}</div>
+          <div className="mt-1 font-serif text-3xl tabular-nums text-ink">{value}</div>
+          {sub != null && (
+            <div className={`mt-1 text-xs ${accent === 'up' ? 'text-emerald-600' : 'text-muted'}`}>
+              {sub}
+            </div>
+          )}
         </div>
-      )}
+        {Icon && (
+          <span
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white"
+            style={{ background: `linear-gradient(135deg,${hue},${hue2})`, boxShadow: `0 8px 18px -8px ${hue}` }}
+          >
+            <Icon size={19} />
+          </span>
+        )}
+      </div>
     </div>
   )
 }
