@@ -14,3 +14,11 @@ api_memory        = 1024
 api_desired_count = 1
 api_image_tag     = "latest"
 github_repo = "trey0five/projectdollaz"
+
+# Brevo SMTP login for outbound email (NOT secret — it's just the account/login
+# identifier). Find it in Brevo → SMTP & API → SMTP tab, the "Login" value
+# (often looks like 8xxxxxxx@smtp-brevo.com). Uncomment and fill in:
+# brevo_smtp_user = "PASTE_YOUR_BREVO_SMTP_LOGIN_HERE"
+#
+# The SMTP KEY (the password) is a SECRET — do NOT put it here. Add it as an
+# SMTP_PASS key in the ourkyro-prod-app Secrets Manager secret instead.
