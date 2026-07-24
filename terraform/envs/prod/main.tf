@@ -89,6 +89,7 @@ module "compute" {
   app_secret_arn       = module.secrets.app_secret_arn
   docs_bucket_id       = module.storage.docs_bucket_id
   bedrock_model_id     = var.bedrock_model_ids[0]
+  brevo_smtp_user      = var.brevo_smtp_user
 
   # Ensure the ALB listener exists before the service registers with the TG.
   depends_on = [module.edge]

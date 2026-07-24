@@ -100,17 +100,22 @@ resource "aws_ecs_task_definition" "api" {
       { name = "S3_DOCUMENTS_BUCKET", value = var.docs_bucket_id },
       { name = "S3_DOCUMENTS_PREFIX", value = var.docs_prefix },
       { name = "BEDROCK_MODEL_ID", value = var.bedrock_model_id },
-      # Outbound mail via Amazon SES (SDK uses the task role — no SMTP creds).
-      { name = "MAIL_PROVIDER", value = "ses" },
+      # Outbound mail via Brevo's SMTP relay (SES production access never came
+      # through). MAIL_PROVIDER=smtp selects the nodemailer transport; SMTP_USER is
+      # the Brevo SMTP login and SMTP_PASS is the Brevo SMTP key (a secret, below).
+      # MAIL_FROM must be a sender/domain authenticated in Brevo (DKIM/SPF on
+      # ourkyro.com) or delivery is rejected.
+      { name = "MAIL_PROVIDER", value = "smtp" },
       { name = "MAIL_FROM", value = "KYRO <noreply@${var.domain_name}>" },
+      { name = "SMTP_HOST", value = "smtp-relay.brevo.com" },
+      { name = "SMTP_PORT", value = "587" },
+      { name = "SMTP_USER", value = var.brevo_smtp_user },
       # Strict end-to-end TLS: start.sh generates a self-signed cert and the app
       # serves HTTPS, so the ALB→task hop is encrypted (target group is HTTPS).
       { name = "ENABLE_TLS", value = "true" },
-      # TEMPORARY — while Amazon SES is in the sandbox (can't deliver the signup
-      # verification email to arbitrary addresses), new accounts are auto-verified
-      # so signups aren't blocked. REMOVE this (or set "true") the moment real email
-      # delivery is available (SES production access, or a bridge provider).
-      { name = "REQUIRE_EMAIL_VERIFICATION", value = "false" },
+      # Email verification REQUIRED: new signups receive a confirmation email and
+      # are NOT auto-approved until they click it (now that Brevo delivers).
+      { name = "REQUIRE_EMAIL_VERIFICATION", value = "true" },
       # QuickBooks Online: production. Flips the API/token base URLs to the live
       # Intuit endpoints (quickbooks.api.intuit.com). The production Client ID /
       # Secret live in the ourkyro-prod-app secret (QB_OAUTH_CLIENT_ID/SECRET);
@@ -139,6 +144,9 @@ resource "aws_ecs_task_definition" "api" {
       { name = "MFA_TOTP_KEY", valueFrom = "${var.app_secret_arn}:MFA_TOTP_KEY::" },
       # Super-admin bootstrap password. MUST exist as a key in ourkyro-prod-app.
       { name = "SUPERADMIN_PASSWORD", valueFrom = "${var.app_secret_arn}:SUPERADMIN_PASSWORD::" },
+      # Brevo SMTP key (outbound email). MUST exist as an SMTP_PASS key in
+      # ourkyro-prod-app before applying, or the task fails to pull the secret.
+      { name = "SMTP_PASS", valueFrom = "${var.app_secret_arn}:SMTP_PASS::" },
     ]
 
     logConfiguration = {

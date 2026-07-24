@@ -138,3 +138,10 @@ variable "github_oidc_provider_arn" {
   type        = string
   default     = ""
 }
+
+# ── Outbound email (Brevo SMTP relay) ──
+variable "brevo_smtp_user" {
+  description = "Brevo SMTP login (SMTP_USER) from Brevo → SMTP & API → SMTP. The SMTP key (SMTP_PASS) is a secret in ourkyro-prod-app, not here."
+  type        = string
+  default     = ""
+}

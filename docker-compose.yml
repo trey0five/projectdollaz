@@ -50,6 +50,19 @@ services:
       SUPERADMIN_PASSWORD: ${SUPERADMIN_PASSWORD:-Teero05m??}
       # In-app support form recipient (defaults to support@ourkyro.com in config).
       SUPPORT_EMAIL: ${SUPPORT_EMAIL:-support@ourkyro.com}
+      # Outbound email. Point SMTP_* at Brevo's relay (smtp-relay.brevo.com:587,
+      # user = Brevo SMTP login, pass = Brevo SMTP key) to actually DELIVER the
+      # signup confirmation + support mail. With SMTP_HOST set, the app auto-selects
+      # the 'smtp' provider; leave these unset in dev to fall back to console logging.
+      MAIL_PROVIDER: ${MAIL_PROVIDER:-}
+      MAIL_FROM: ${MAIL_FROM:-KYRO <noreply@ourkyro.com>}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      # Require email verification before login (secure default). New signups get a
+      # confirmation email and are NOT auto-approved until they verify.
+      REQUIRE_EMAIL_VERIFICATION: ${REQUIRE_EMAIL_VERIFICATION:-true}
       # Phase 4 Knowledge document store — S3 config passed through from the host .env
       # via dollar-brace substitution ONLY (no literal secret values in this file).
       # An unset host var resolves empty => isConfigured()=false => upload/download 503;

@@ -31,7 +31,7 @@ const MESSAGE_CHUNK = 1000
 // A session IP counts as "active" (currently online) if its most recent sign-in
 // landed within this many minutes. No heartbeat exists, so recency is the honest
 // proxy; the geo map pulses a green dot at every location with an active session.
-const ADMIN_ACTIVE_WINDOW_MINUTES = 15
+const ADMIN_ACTIVE_WINDOW_MINUTES = 30
 
 const DAY_MS = 1000 * 60 * 60 * 24
 const SIGNUP_WINDOW_DAYS = 30
