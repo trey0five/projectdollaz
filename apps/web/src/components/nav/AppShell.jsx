@@ -47,7 +47,6 @@ import {
   Library,
   Settings as SettingsIcon,
   User as UserIcon,
-  LifeBuoy,
   LayoutDashboard,
   Upload,
   Table2,
@@ -68,7 +67,7 @@ import ContextSwitcher from './ContextSwitcher.jsx'
 import SearchBox from '../search/SearchBox.jsx'
 import { NAV_GROUPS, SETTINGS_ITEM } from './sidebarNav.js'
 import { MODULE_ANATOMY, moduleTabs, moduleLabel, moduleHue, TAB_LABEL } from '../module/moduleAnatomy.js'
-import SupportModal from '../support/SupportModal.jsx'
+import SupportButton from '../support/SupportButton.jsx'
 import InboxBell from '../inbox/InboxBell.jsx'
 import { InboxProvider } from '../../context/InboxContext.jsx'
 
@@ -140,7 +139,6 @@ function AvatarMenu() {
   const { user, logout } = useAuth()
   const reduce = useReducedMotion()
   const [open, setOpen] = useState(false)
-  const [supportOpen, setSupportOpen] = useState(false)
   const rootRef = useRef(null)
   const triggerRef = useRef(null)
   const firstItemRef = useRef(null)
@@ -214,18 +212,6 @@ function AvatarMenu() {
             <button
               type="button"
               role="menuitem"
-              onClick={() => {
-                setOpen(false)
-                setSupportOpen(true)
-              }}
-              className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13.5px] text-white/80 outline-none ring-inset ring-gold/50 transition-colors hover:bg-white/[0.08] hover:text-white focus-visible:ring-2"
-            >
-              <LifeBuoy size={15} className="shrink-0 text-white/50" />
-              Contact support
-            </button>
-            <button
-              type="button"
-              role="menuitem"
               onClick={logout}
               className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13.5px] text-white/80 outline-none ring-inset ring-gold/50 transition-colors hover:bg-white/[0.08] hover:text-white focus-visible:ring-2"
             >
@@ -236,7 +222,6 @@ function AvatarMenu() {
         )}
       </AnimatePresence>
     </div>
-    <SupportModal open={supportOpen} onClose={() => setSupportOpen(false)} />
     </>
   )
 }
@@ -699,6 +684,8 @@ export default function AppShell({ children }) {
             <div className="shrink-0 space-y-1.5 border-t border-white/10 px-3 py-3">
               {/* Per-user inbox — messages from the admin team (unread pill). */}
               <InboxBell />
+              {/* Contact support → support@ourkyro.com */}
+              <SupportButton />
               {/* Super-admin only: jump to the cross-tenant platform console. */}
               {user?.isAdmin && (
                 <Link
@@ -840,6 +827,8 @@ export default function AppShell({ children }) {
                   <div className="shrink-0 space-y-1.5 border-t border-white/10 px-3 py-3">
                     {/* Per-user inbox — mirrors the desktop rail foot. */}
                     <InboxBell />
+                    {/* Contact support → support@ourkyro.com */}
+                    <SupportButton />
                     {settingsLink(false)}
                     <button
                       type="button"
