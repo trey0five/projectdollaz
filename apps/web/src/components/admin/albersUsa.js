@@ -4,15 +4,20 @@
 // d3.geoAlbersUsa; it's the single conic-equal-area lobe (the lower-48) plus two
 // hand-tuned insets for Alaska and Hawaii, matching the reference admin panels.
 //
-// Constants come from the reference panels (the `@svg-maps/usa` viewBox
-// "192 9 1028 746" is a DISTINCT coordinate space from d3's default, so TX/TY are
-// tuned to that art). If dots land slightly off, nudge TX/TY (and the AK/HI inset
-// translates) — see the CALIBRATION note in the spec. lat/lon are in degrees.
+// Constants are EMPIRICALLY CALIBRATED to the actual US_STATE_PATHS art (viewBox
+// "192 9 1028 746"), not hand-guessed: a least-squares fit of SCALE/TX/TY against
+// every lower-48 state's real pixel centroid (browser getBBox) versus its geo
+// centroid, then verified with canvas isPointInPath that projected cities land
+// INSIDE their state. This fixed coastal cities (Miami/Coral Springs, LA/SF/San
+// Diego, Boston, Chicago, Tallahassee) that the old 1320/766/304 constants threw
+// into the ocean — 18/20 sample cities land in-state (the 2 misses are NYC and
+// El Paso, both at their state's outermost coastal/border point). To re-fit after
+// changing the art, see scratchpad calibrate.mjs / pip.mjs. lat/lon in degrees.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SCALE = 1320
-const TX = 766
-const TY = 304
+const SCALE = 1289.02
+const TX = 764.552
+const TY = 303.385
 
 // Standard parallels + projection center for the contiguous US.
 const LON0 = -96
