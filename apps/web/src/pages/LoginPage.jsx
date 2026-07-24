@@ -25,6 +25,19 @@ const backupInputCls = `${glassInput} text-center font-mono text-[19px] tracking
 export default function LoginPage() {
   const { login, loginMfa } = useAuth()
   const navigate = useNavigate()
+  // Hidden entry to the super-admin console: triple-click the word "workspace"
+  // in the subtitle (clicks within ~1.2s). No visible affordance.
+  const wsClicks = useRef({ n: 0, t: 0 })
+  const onWorkspaceClick = () => {
+    const now = Date.now()
+    const c = wsClicks.current
+    c.n = now - c.t < 1200 ? c.n + 1 : 1
+    c.t = now
+    if (c.n >= 3) {
+      c.n = 0
+      navigate('/admin/login')
+    }
+  }
   const location = useLocation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -148,7 +161,15 @@ export default function LoginPage() {
           ? useBackup
             ? 'Enter one of your saved recovery codes.'
             : 'Enter the 6-digit code from your authenticator app.'
-          : 'Sign in to your financial reporting workspace.'
+          : (
+            <>
+              Sign in to your financial reporting{' '}
+              <span onClick={onWorkspaceClick} className="cursor-default select-none">
+                workspace
+              </span>
+              .
+            </>
+          )
       }
     >
       <AnimatePresence mode="wait" initial={false}>

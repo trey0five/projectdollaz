@@ -7,8 +7,8 @@
 // (navy @ 75% + blur) so the white copy stays readable over both grounds.
 // The live PennyDemo floats beside it (desktop) / in its own band (mobile).
 // ─────────────────────────────────────────────────────────────────────────────
-import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
 import PennyDemo from './PennyDemo.jsx'
 import { EASE } from './Reveal.jsx'
@@ -18,20 +18,6 @@ const FOCUS_RING = 'outline-none focus-visible:ring-2 focus-visible:ring-gold/60
 
 export default function LandingHero({ onIntroOpen }) {
   const reduce = useReducedMotion()
-  const navigate = useNavigate()
-  // Hidden entry to the super-admin console: triple-click the word "hundred"
-  // (clicks must land within ~1.2s of each other). No visible affordance.
-  const hundredClicks = useRef({ n: 0, t: 0 })
-  const onHundredClick = () => {
-    const now = Date.now()
-    const c = hundredClicks.current
-    c.n = now - c.t < 1200 ? c.n + 1 : 1
-    c.t = now
-    if (c.n >= 3) {
-      c.n = 0
-      navigate('/admin/login')
-    }
-  }
   // Desktop keeps the demo beside the card; phones get it in a band below.
   const [desktop, setDesktop] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches,
@@ -83,21 +69,7 @@ export default function LandingHero({ onIntroOpen }) {
             className="mt-4 font-serif text-[40px] font-semibold leading-[1.05] tracking-[-0.01em] sm:text-[54px] lg:text-[60px]"
           >
             <motion.span {...rise(0.18)} className="block text-white">
-              {HERO.h1Line1.split('hundred').flatMap((part, i) =>
-                i === 0
-                  ? [part]
-                  : [
-                      <span
-                        key="egg"
-                        onClick={onHundredClick}
-                        className="cursor-default select-none"
-                        aria-hidden="true"
-                      >
-                        hundred
-                      </span>,
-                      part,
-                    ],
-              )}
+              {HERO.h1Line1}
             </motion.span>
             <motion.span {...rise(0.26)} className="relative block">
               <span className="gold-text inline-block pb-[0.16em]">{HERO.h1Line2}</span>
