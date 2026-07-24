@@ -36,34 +36,36 @@ export default function AdminGeoPage() {
   const states = geo?.states || []
   const cities = geo?.cities || []
   const unknown = geo?.unknown || 0
-  const totalPlaced = states.reduce((a, s) => a + (s.count || 0), 0)
+  const totals = geo?.totals || {}
+  const totalIps = totals.ips ?? states.reduce((a, s) => a + (s.count || 0), 0)
+  const totalSessions = totals.sessions ?? 0
   const ranked = [...states].sort((a, b) => b.count - a.count)
 
   return (
     <div className="space-y-6">
       <SectionCard
         title="Where users sign in from"
-        subtitle={`${totalPlaced.toLocaleString()} located across ${states.length} states · ${unknown.toLocaleString()} unknown / non-US`}
+        subtitle={`${totalIps.toLocaleString()} session IP${totalIps === 1 ? '' : 's'} across ${states.length} state${states.length === 1 ? '' : 's'} · ${totalSessions.toLocaleString()} sign-in${totalSessions === 1 ? '' : 's'}`}
       >
         {states.length === 0 && cities.length === 0 ? (
-          <EmptyState label="No located sign-ins yet. Geo fills in as users log in." />
+          <EmptyState label="No located sign-ins yet. Geo fills in as users log in from public IPs." />
         ) : (
           <UsChoropleth states={states} cities={cities} />
         )}
         {unknown > 0 && (
           <p className="mt-4 text-xs text-muted">
-            <span className="font-medium text-ink">{unknown.toLocaleString()}</span> user
-            {unknown === 1 ? '' : 's'} with no captured US state (never logged in, private/localhost
-            IP, or outside the US).
+            <span className="font-medium text-ink">{unknown.toLocaleString()}</span> session IP
+            {unknown === 1 ? '' : 's'} with no captured US state (private/localhost IP or outside the
+            US). Sign-ins from private/localhost IPs aren&apos;t geolocated.
           </p>
         )}
       </SectionCard>
 
-      <SectionCard title="States by users" subtitle="Distinct users per state, most first">
+      <SectionCard title="States by session IPs" subtitle="Distinct session IPs per state, most first">
         {ranked.length === 0 ? (
           <EmptyState />
         ) : (
-          <Table head={['State', 'Users', 'Top cities']}>
+          <Table head={['State', 'Session IPs', 'Sign-ins', 'Top cities']}>
             {ranked.map((s) => (
               <tr key={s.region} className="hover:bg-cream/60">
                 <td className="px-3 py-2">
@@ -71,6 +73,7 @@ export default function AdminGeoPage() {
                   <span className="ml-1.5 text-xs text-muted">{s.region}</span>
                 </td>
                 <td className="px-3 py-2 tabular-nums">{s.count.toLocaleString()}</td>
+                <td className="px-3 py-2 tabular-nums text-muted">{(s.sessions ?? s.count).toLocaleString()}</td>
                 <td className="px-3 py-2 text-muted">
                   {(s.cities || [])
                     .slice(0, 4)

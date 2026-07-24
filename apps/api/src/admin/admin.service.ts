@@ -278,15 +278,53 @@ export class AdminService {
   }
 
   // ── GET /admin/geo ──────────────────────────────────────────────────────────────
+  // Session-level geography from user_login_events: EVERY sign-in is recorded with
+  // its own resolved IP + geoip coordinate, so a user who signs in from two cities
+  // shows in both — far more accurate than the single per-user last-login snapshot
+  // ("all hits" lumped at one point). Counts are DISTINCT IPs (session origins);
+  // `sessions` is the raw login count. Dots sit at the EXACT geoip lat/lon of each
+  // location (grouped by the coordinate itself, so no _max cross-row drift).
   async geo() {
-    // One row per user (each user has one lastLoginRegion/City), so grouping by
-    // (region, city) and counting rows yields DISTINCT users. US + non-null region only.
-    const grouped = await this.prisma.user.groupBy({
-      by: ['lastLoginRegion', 'lastLoginCity'],
-      where: { lastLoginCountry: 'US', lastLoginRegion: { not: null } },
+    const rows = await this.prisma.userLoginEvent.groupBy({
+      by: ['region', 'city', 'lat', 'lon', 'ip'],
+      where: { country: 'US', region: { not: null } },
       _count: { _all: true },
-      _max: { lastLoginLat: true, lastLoginLon: true },
     })
+
+    type Loc = {
+      city: string | null
+      lat: number | null
+      lon: number | null
+      ips: Set<string>
+      sessions: number
+    }
+    const stateAgg = new Map<string, { ips: Set<string>; sessions: number; locs: Map<string, Loc> }>()
+
+    for (const r of rows) {
+      const region = r.region as string // not-null guaranteed by the where
+      const ip = r.ip ?? 'unknown'
+      const st = stateAgg.get(region) ?? { ips: new Set<string>(), sessions: 0, locs: new Map() }
+      st.ips.add(ip)
+      st.sessions += r._count._all
+
+      // Key a location by its city name (per state). geoip returns one centroid
+      // per city, so this collapses a city to a single mark and keeps lat/lon as a
+      // matched pair from the same row (no independent _max drift across rows).
+      const key = r.city ?? `${r.lat ?? ''}|${r.lon ?? ''}`
+      const loc = st.locs.get(key) ?? {
+        city: r.city,
+        lat: r.lat,
+        lon: r.lon,
+        ips: new Set<string>(),
+        sessions: 0,
+      }
+      if (loc.lat == null && r.lat != null) loc.lat = r.lat
+      if (loc.lon == null && r.lon != null) loc.lon = r.lon
+      loc.ips.add(ip)
+      loc.sessions += r._count._all
+      st.locs.set(key, loc)
+      stateAgg.set(region, st)
+    }
 
     const cities: {
       city: string
@@ -294,37 +332,46 @@ export class AdminService {
       lat: number
       lon: number
       count: number
+      sessions: number
     }[] = []
-    const stateAgg = new Map<string, { count: number; cities: { city: string; count: number }[] }>()
 
-    for (const row of grouped) {
-      const region = row.lastLoginRegion as string // not-null guaranteed by the where
-      const count = row._count._all
-      const agg = stateAgg.get(region) ?? { count: 0, cities: [] }
-      agg.count += count
-      const city = row.lastLoginCity
-      const lat = row._max.lastLoginLat
-      const lon = row._max.lastLoginLon
-      if (city) {
-        agg.cities.push({ city, count })
-        if (lat != null && lon != null) {
-          cities.push({ city, region, lat, lon, count })
+    const states = [...stateAgg.entries()].map(([region, st]) => {
+      const cityList: { city: string; count: number; sessions: number }[] = []
+      for (const loc of st.locs.values()) {
+        if (!loc.city) continue
+        cityList.push({ city: loc.city, count: loc.ips.size, sessions: loc.sessions })
+        if (loc.lat != null && loc.lon != null) {
+          cities.push({
+            city: loc.city,
+            region,
+            lat: loc.lat,
+            lon: loc.lon,
+            count: loc.ips.size, // distinct session IPs at this exact location
+            sessions: loc.sessions,
+          })
         }
       }
-      stateAgg.set(region, agg)
-    }
-
-    const states = [...stateAgg.entries()].map(([region, agg]) => ({
-      region,
-      count: agg.count,
-      cities: agg.cities.sort((a, b) => b.count - a.count),
-    }))
-
-    const unknown = await this.prisma.user.count({
-      where: { OR: [{ lastLoginRegion: null }, { lastLoginCountry: { not: 'US' } }] },
+      return {
+        region,
+        count: st.ips.size, // distinct session IPs in this state
+        sessions: st.sessions,
+        cities: cityList.sort((a, b) => b.count - a.count),
+      }
     })
 
-    return { states, cities, unknown }
+    // Session origins (distinct IPs) we couldn't place in a US state.
+    const unplaced = await this.prisma.userLoginEvent.groupBy({
+      by: ['ip'],
+      where: { ip: { not: null }, OR: [{ region: null }, { country: { not: 'US' } }] },
+    })
+
+    const totals = {
+      ips: states.reduce((a, s) => a + s.count, 0),
+      sessions: states.reduce((a, s) => a + s.sessions, 0),
+      states: states.length,
+    }
+
+    return { states, cities, unknown: unplaced.length, totals }
   }
 
   // ── Admin management (super-admin only; SuperadminGuard on the routes) ─────────

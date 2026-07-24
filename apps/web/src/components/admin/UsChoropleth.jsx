@@ -9,8 +9,8 @@
 //   states: [{ region, count, cities:[{ city, count }] }]
 //   cities: [{ city, region, lat, lon, count }]
 //
-// Colour: states shade light→dark blue by DISTINCT-user count (sqrt-scaled so a
-// couple of dense states don't wash everyone else to white); no-data = slate.
+// Colour: states shade light→dark CYAN by distinct session-IP count (sqrt-scaled
+// so a couple of dense states don't wash everyone else to white); no-data = slate.
 // Dots: coral, radius ∝ √count. Hover anything → a cursor-following tooltip.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo, useState } from 'react'
@@ -18,8 +18,9 @@ import { US_STATE_PATHS, STATE_NAMES, MAP_VIEWBOX } from '../../data/usMapPaths.
 import { projectCity } from './albersUsa.js'
 
 // Choropleth ramp endpoints (raw hex — a continuous scale isn't a Tailwind token).
-const RAMP_LO = [219, 234, 254] // #DBEAFE
-const RAMP_HI = [30, 58, 138] //  #1E3A8A
+// Cyan theme: light cyan #CFFAFE → deep teal #0E7490 (matches the Geography hue).
+const RAMP_LO = [207, 250, 254] // #CFFAFE
+const RAMP_HI = [14, 116, 144] //  #0E7490
 const NO_DATA = 'rgb(226 232 240)' // slate-200
 
 function lerp(a, b, t) {
@@ -65,7 +66,10 @@ export default function UsChoropleth({ states = [], cities = [] }) {
     const top = (s.cities || [])
       .slice(0, 3)
       .map((c) => `${c.city} · ${c.count}`)
-    moveTip(e, name, [`${s.count} user${s.count === 1 ? '' : 's'}`, ...top])
+    const head = `${s.count} session IP${s.count === 1 ? '' : 's'}${
+      s.sessions != null ? ` · ${s.sessions} sign-in${s.sessions === 1 ? '' : 's'}` : ''
+    }`
+    moveTip(e, name, [head, ...top])
   }
 
   return (
@@ -112,23 +116,25 @@ export default function UsChoropleth({ states = [], cities = [] }) {
                   cy={d.y}
                   r={d.r}
                   fill="#F97316"
-                  fillOpacity={0.75}
+                  fillOpacity={0.8}
                   stroke="#fff"
                   strokeWidth={0.75}
                   className="cursor-pointer"
                   onMouseEnter={(e) =>
                     moveTip(e, `${d.city}, ${d.region}`, [
-                      `${d.count} user${d.count === 1 ? '' : 's'}`,
+                      `${d.count} session IP${d.count === 1 ? '' : 's'}`,
+                      ...(d.sessions != null ? [`${d.sessions} sign-in${d.sessions === 1 ? '' : 's'}`] : []),
                     ])
                   }
                   onMouseMove={(e) =>
                     moveTip(e, `${d.city}, ${d.region}`, [
-                      `${d.count} user${d.count === 1 ? '' : 's'}`,
+                      `${d.count} session IP${d.count === 1 ? '' : 's'}`,
+                      ...(d.sessions != null ? [`${d.sessions} sign-in${d.sessions === 1 ? '' : 's'}`] : []),
                     ])
                   }
                   onMouseLeave={clearTip}
                 >
-                  <title>{`${d.city}, ${d.region} — ${d.count} users`}</title>
+                  <title>{`${d.city}, ${d.region} — ${d.count} session IP${d.count === 1 ? '' : 's'}`}</title>
                 </circle>
               ))}
             </g>
@@ -138,7 +144,7 @@ export default function UsChoropleth({ states = [], cities = [] }) {
         {/* Legend — vertical light→dark swatches + the coral-dot key. */}
         <div className="shrink-0 lg:w-40">
           <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-            Users / state
+            Session IPs / state
           </div>
           <div className="mt-2 flex items-center gap-2">
             <div className="flex flex-col overflow-hidden rounded-md border border-border">
@@ -160,7 +166,7 @@ export default function UsChoropleth({ states = [], cities = [] }) {
               className="inline-block h-3 w-3 rounded-full border border-white"
               style={{ background: '#F97316', opacity: 0.75 }}
             />
-            <span className="text-[11px] text-muted">City (size ∝ users)</span>
+            <span className="text-[11px] text-muted">Location (size ∝ session IPs)</span>
           </div>
         </div>
       </div>
