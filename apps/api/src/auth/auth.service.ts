@@ -20,6 +20,7 @@ import { TokenService } from './token.service.js'
 import { MailerService } from './mailer.service.js'
 import { toUserPublic, type UserPublic } from './user-public.js'
 import { AuditService } from '../common/audit/audit.service.js'
+import { computeIsEffectiveAdmin, computeIsSuperadmin } from '../common/admin-access.js'
 import type { RegisterDto } from './dto/register.dto.js'
 import type { LoginDto } from './dto/login.dto.js'
 import type { ResetPasswordDto } from './dto/reset-password.dto.js'
@@ -160,6 +161,16 @@ export class AuthService implements OnModuleInit {
   async register(dto: RegisterDto): Promise<{ message: string; user: UserPublic }> {
     const strengthError = this.passwords.validateStrength(dto.password)
     if (strengthError) throw new BadRequestException(strengthError)
+
+    // Reserve the bootstrap super-admin email from the public self-registration
+    // path. The super-admin is provisioned ONLY from env (ensureSuperadmin); if
+    // SUPERADMIN_USERNAME is set but SUPERADMIN_PASSWORD is not, no account holds
+    // that email — without this guard a self-registered user could claim it and
+    // inherit super-admin (SuperadminGuard is email-derived). Same generic message
+    // as the collision case so the reserved slot isn't disclosed.
+    if (computeIsSuperadmin(dto.email, this.superadminUsername)) {
+      throw new BadRequestException('An account with this email already exists.')
+    }
 
     const existing = await this.prisma.user.findUnique({ where: { email: dto.email } })
     if (existing) {
@@ -487,7 +498,12 @@ export class AuthService implements OnModuleInit {
 
   async me(
     user: User,
-  ): Promise<{ user: UserPublic; memberships: unknown[]; isAdmin: boolean }> {
+  ): Promise<{
+    user: UserPublic
+    memberships: unknown[]
+    isAdmin: boolean
+    isSuperadmin: boolean
+  }> {
     const memberships = await this.prisma.membership.findMany({
       where: { userId: user.id, status: 'active' },
       include: { school: true },
@@ -499,10 +515,16 @@ export class AuthService implements OnModuleInit {
         school_name: m.school.name,
         role: m.role,
       })),
-      // Additive top-level field — computed from the server-side allowlist against
-      // the JWT-loaded DB email (never a client field). Existing .user/.memberships
+      // Additive top-level fields — computed server-side from the JWT-loaded DB
+      // user (never a client field). `isAdmin` is BROADENED to honor the DB flag
+      // in addition to the env allowlist + super-admin. Existing .user/.memberships
       // consumers are untouched.
-      isAdmin: this.adminEmails.includes(user.email.trim().toLowerCase()),
+      isAdmin: computeIsEffectiveAdmin(
+        { email: user.email, isAdmin: user.isAdmin },
+        this.adminEmails,
+        this.superadminUsername,
+      ),
+      isSuperadmin: computeIsSuperadmin(user.email, this.superadminUsername),
     }
   }
 

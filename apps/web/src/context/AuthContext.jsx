@@ -28,9 +28,15 @@ export function AuthProvider({ children }) {
       }
       try {
         const res = await authApi.me()
-        // Merge the additive top-level `isAdmin` from /auth/me onto the user so
-        // the /admin gate + the "Platform admin" menu link can read user.isAdmin.
-        if (mounted.current) setUser({ ...res.data.user, isAdmin: res.data.isAdmin })
+        // Merge the additive top-level `isAdmin` + `isSuperadmin` from /auth/me
+        // onto the user so the /admin gate + the "Platform admin" menu link read
+        // user.isAdmin, and the super-admin-only Admins section reads isSuperadmin.
+        if (mounted.current)
+          setUser({
+            ...res.data.user,
+            isAdmin: res.data.isAdmin,
+            isSuperadmin: res.data.isSuperadmin,
+          })
       } catch {
         tokenStore.clear()
         if (mounted.current) setUser(null)
@@ -69,7 +75,10 @@ export function AuthProvider({ children }) {
     authApi
       .me()
       .then((r) => {
-        if (mounted.current) setUser((prev) => (prev ? { ...prev, isAdmin: r.data.isAdmin } : prev))
+        if (mounted.current)
+          setUser((prev) =>
+            prev ? { ...prev, isAdmin: r.data.isAdmin, isSuperadmin: r.data.isSuperadmin } : prev,
+          )
       })
       .catch(() => {})
     return u
@@ -87,7 +96,10 @@ export function AuthProvider({ children }) {
     authApi
       .me()
       .then((r) => {
-        if (mounted.current) setUser((prev) => (prev ? { ...prev, isAdmin: r.data.isAdmin } : prev))
+        if (mounted.current)
+          setUser((prev) =>
+            prev ? { ...prev, isAdmin: r.data.isAdmin, isSuperadmin: r.data.isSuperadmin } : prev,
+          )
       })
       .catch(() => {})
     return u
@@ -105,13 +117,15 @@ export function AuthProvider({ children }) {
     // an admin-only path, so awaiting me() is fine — and it means the /admin gate
     // opens on the FIRST navigate instead of racing the async enrichment → /app.
     let isAdmin = false
+    let isSuperadmin = false
     try {
       const r = await authApi.me()
       isAdmin = !!r.data?.isAdmin
+      isSuperadmin = !!r.data?.isSuperadmin
     } catch {
       /* fall through with isAdmin=false */
     }
-    const merged = { ...u, isAdmin }
+    const merged = { ...u, isAdmin, isSuperadmin }
     if (mounted.current) setUser(merged)
     return merged
   }, [])
@@ -134,7 +148,11 @@ export function AuthProvider({ children }) {
 
   const refreshMe = useCallback(async () => {
     const res = await authApi.me()
-    setUser({ ...res.data.user, isAdmin: res.data.isAdmin })
+    setUser({
+      ...res.data.user,
+      isAdmin: res.data.isAdmin,
+      isSuperadmin: res.data.isSuperadmin,
+    })
     return res.data
   }, [])
 

@@ -52,3 +52,14 @@ export function AdminRoute({ children }) {
   if (!user?.isAdmin) return <Navigate to="/app" replace />
   return children
 }
+
+// Super-admin-ONLY sub-gate for the /admin/admins management screen. Nested INSIDE
+// AdminRoute (so auth + ready are already settled by the time this renders), it
+// forwards a regular db/env admin — who can use the console but must not manage
+// admins — back to the console overview. The server SuperadminGuard is the real,
+// load-bearing gate; this is only UX routing (never a blank crash).
+export function AdminsRoute({ children }) {
+  const { user } = useAuth()
+  if (!user?.isSuperadmin) return <Navigate to="/admin/overview" replace />
+  return children
+}

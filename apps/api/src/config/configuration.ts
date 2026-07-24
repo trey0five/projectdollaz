@@ -32,6 +32,9 @@ export interface AppConfig {
     provider: string
     region: string
     from: string
+    // Inbound support address the in-app support form emails (reply-to = the
+    // authenticated sender). Verified domain identity stays the From.
+    supportEmail: string
   }
   auth: {
     requireEmailVerification: boolean
@@ -244,6 +247,7 @@ export function configuration(): AppConfig {
       provider: (process.env.MAIL_PROVIDER ?? (process.env.SMTP_HOST ? 'smtp' : '')).toLowerCase(),
       region: process.env.AWS_REGION ?? 'us-east-1',
       from: process.env.MAIL_FROM ?? process.env.SMTP_FROM ?? 'KYRO <noreply@ourkyro.com>',
+      supportEmail: process.env.SUPPORT_EMAIL ?? 'support@ourkyro.com',
     },
     auth: {
       // Whether a new user must verify their email before logging in. Defaults ON

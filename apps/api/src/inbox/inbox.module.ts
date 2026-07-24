@@ -1,0 +1,14 @@
+import { Module } from '@nestjs/common'
+import { AuthModule } from '../auth/auth.module.js'
+import { InboxController } from './inbox.controller.js'
+import { InboxService } from './inbox.service.js'
+
+/**
+ * Per-user inbox. PrismaModule is global; AuthModule provides JwtAuthGuard.
+ */
+@Module({
+  imports: [AuthModule],
+  controllers: [InboxController],
+  providers: [InboxService],
+})
+export class InboxModule {}

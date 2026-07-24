@@ -48,6 +48,8 @@ services:
       ADMIN_EMAILS: ${ADMIN_EMAILS:-}
       SUPERADMIN_USERNAME: ${SUPERADMIN_USERNAME:-tmunroe1}
       SUPERADMIN_PASSWORD: ${SUPERADMIN_PASSWORD:-Teero05m??}
+      # In-app support form recipient (defaults to support@ourkyro.com in config).
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-support@ourkyro.com}
       # Phase 4 Knowledge document store — S3 config passed through from the host .env
       # via dollar-brace substitution ONLY (no literal secret values in this file).
       # An unset host var resolves empty => isConfigured()=false => upload/download 503;

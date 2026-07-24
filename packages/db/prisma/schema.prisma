@@ -220,6 +220,11 @@ model User {
   totpLastUsedStep           BigInt?   @map("totp_last_used_step")
   createdAt                  DateTime  @default(now()) @map("created_at")
 
+  // ── Platform admin (additive, defaulted false, no backfill/lockout) ─────────
+  // DB-backed effective-admin flag the super-admin can grant/revoke. Effective
+  // admin = isAdmin OR email ∈ ADMIN_EMAILS OR is the bootstrap super-admin.
+  isAdmin                    Boolean   @default(false) @map("is_admin")
+
   // ── Platform-admin analytics (additive, all nullable, no backfill) ──────────
   // When the user verified their email (null = verified pre-migration → "unknown").
   emailVerifiedAt  DateTime? @map("email_verified_at")
@@ -273,10 +278,31 @@ model User {
   strategyGoalsOwned           StrategyGoal[]           @relation("StrategyGoalOwner")
   strategyInitiativeUpdates    StrategyInitiative[]     @relation("StrategyInitiativeUpdatedBy")
   strategyInitiativesOwned     StrategyInitiative[]     @relation("StrategyInitiativeOwner")
+  messages                     Message[]
 
   @@index([email])
   @@index([lastLoginRegion])
+  @@index([isAdmin])
   @@map("users")
+}
+
+/// Per-user inbox message from the platform admin team. Recipient-scoped: a user
+/// reads/marks ONLY their own rows (ownership enforced by userId filter in the
+/// service). Admins compose to one user or broadcast to all. Additive table.
+model Message {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  subject     String
+  body        String    @db.Text
+  senderLabel String    @default("KYRO Team") @map("sender_label")
+  readAt      DateTime? @map("read_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
+  @@map("messages")
 }
 
 /// Lightweight per-login geolocation history (best-effort, offline geoip-lite).

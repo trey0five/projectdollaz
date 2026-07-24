@@ -9,11 +9,14 @@ import { NavLink, Outlet, Link } from 'react-router-dom'
 import { LogOut, ArrowLeft } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 
-const TABS = [
+// The always-present tabs. Messages (admin compose/broadcast) is available to any
+// admin; the Admins management tab is appended only for the super-admin (below).
+const BASE_TABS = [
   { to: 'overview', label: 'Overview' },
   { to: 'geography', label: 'Geography' },
   { to: 'users', label: 'Users' },
   { to: 'organizations', label: 'Organizations' },
+  { to: 'messages', label: 'Messages' },
 ]
 
 function tabClass({ isActive }) {
@@ -27,6 +30,12 @@ function tabClass({ isActive }) {
 
 export default function AdminShell() {
   const { user, logout } = useAuth()
+
+  // Super-admin-only: append the Admins management tab. A regular db/env admin
+  // never sees it (and AdminsRoute forwards them off the route server-side gate).
+  const tabs = user?.isSuperadmin
+    ? [...BASE_TABS, { to: 'admins', label: 'Admins' }]
+    : BASE_TABS
 
   return (
     <div className="min-h-screen bg-cream">
@@ -59,7 +68,7 @@ export default function AdminShell() {
         {/* Tab strip */}
         <nav className="border-t border-white/10 bg-navy-deep">
           <div className="mx-auto flex max-w-7xl gap-6 overflow-x-auto px-6">
-            {TABS.map((t) => (
+            {tabs.map((t) => (
               <NavLink key={t.to} to={t.to} className={tabClass}>
                 {t.label}
               </NavLink>

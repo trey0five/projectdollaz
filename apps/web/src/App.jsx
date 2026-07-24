@@ -12,7 +12,7 @@ import { BillingProvider } from './context/BillingContext.jsx'
 import { PersistenceProvider } from './context/PersistenceContext.jsx'
 import { useAuth } from './context/AuthContext.jsx'
 import { useUiV2 } from './context/UiFlagContext.jsx'
-import { ProtectedRoute, PublicOnlyRoute, AdminRoute, BootSplash } from './components/auth/RouteGuards.jsx'
+import { ProtectedRoute, PublicOnlyRoute, AdminRoute, AdminsRoute, BootSplash } from './components/auth/RouteGuards.jsx'
 import Onboarding from './components/onboarding/Onboarding.jsx'
 import { onboardingSession } from './components/onboarding/onboardingSession.js'
 import { PennyProvider } from './context/PennyContext.jsx'
@@ -77,6 +77,8 @@ const AdminOverviewPage = lazy(() => import('./pages/admin/AdminOverviewPage.jsx
 const AdminGeoPage = lazy(() => import('./pages/admin/AdminGeoPage.jsx'))
 const AdminUsersPage = lazy(() => import('./pages/admin/AdminUsersPage.jsx'))
 const AdminOrgsPage = lazy(() => import('./pages/admin/AdminOrgsPage.jsx'))
+const AdminMessagesPage = lazy(() => import('./pages/admin/AdminMessagesPage.jsx'))
+const AdminAdminsPage = lazy(() => import('./pages/admin/AdminAdminsPage.jsx'))
 const AdminLoginPage = lazy(() => import('./pages/admin/AdminLoginPage.jsx'))
 
 // "/" — OUTSIDE AuthedLayout — is the marketing homepage for EVERYONE (logged in
@@ -278,6 +280,17 @@ export default function App() {
         <Route path="geography" element={<AdminGeoPage />} />
         <Route path="users" element={<AdminUsersPage />} />
         <Route path="organizations" element={<AdminOrgsPage />} />
+        <Route path="messages" element={<AdminMessagesPage />} />
+        {/* Admin management — super-admin only (AdminsRoute forwards regular
+            admins to /admin/overview; the server SuperadminGuard is the real gate). */}
+        <Route
+          path="admins"
+          element={
+            <AdminsRoute>
+              <AdminAdminsPage />
+            </AdminsRoute>
+          }
+        />
       </Route>
       {/* Catch-all: auth-aware — signed-in users return to /app, guests to the
           homepage (RootRoute previously did the forwarding; see NotFoundRoute).

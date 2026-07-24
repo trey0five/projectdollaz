@@ -187,6 +187,21 @@ export const authApi = {
   mfaDisable: (data) => api.post('/auth/mfa/disable', data),
   mfaRegenerateBackupCodes: (data) => api.post('/auth/mfa/backup-codes/regenerate', data),
   mfaStatus: () => api.get('/auth/mfa/status'),
+  // In-app support → support@ourkyro.com (backend derives replyTo from the JWT).
+  // Body is exactly { subject, message } — no client sender field (the global
+  // forbidNonWhitelisted pipe 400s on anything else). Throttled 5/min server-side.
+  support: (data) => api.post('/support', data),
+}
+
+// ── Per-user inbox: messages the admin team sends to the user ─────────────────
+// All routes are the caller's own (server scopes every query by req.user.id). The
+// InboxBell polls unreadCount; the panel lists + marks read. Same axios `api`
+// instance → inherits the Bearer + proactive-refresh interceptors.
+export const inboxApi = {
+  list: () => api.get('/inbox'),
+  unreadCount: () => api.get('/inbox/unread-count'),
+  read: (id) => api.post(`/inbox/${id}/read`),
+  readAll: () => api.post('/inbox/read-all'),
 }
 
 export const schoolsApi = {
@@ -954,6 +969,16 @@ export const adminApi = {
     api.get('/admin/users', { params: { ...(search ? { search } : {}), page, pageSize } }),
   organizations: () => api.get('/admin/organizations'),
   geo: () => api.get('/admin/geo'),
+  // ── Admin management (super-admin only; server SuperadminGuard is the real gate) ──
+  admins: () => api.get('/admin/admins'),
+  // `data` MUST be a pre-built body — the caller omits absent optionals entirely
+  // (never sends password:'' / firstName:undefined) so the forbidNonWhitelisted
+  // pipe doesn't 400. Existing user → promote; no user + password → create.
+  createAdmin: (data) => api.post('/admin/admins', data),
+  revokeAdmin: (id) => api.post(`/admin/users/${id}/revoke-admin`),
+  // ── Admin → user inbox messages (admin-gated). `target` is FLAT: 'all' | 'users'
+  // with a top-level `userIds` only when target==='users'. ──
+  sendMessage: (data) => api.post('/admin/messages', data),
 }
 
 // The backend signals a lapsed trial / inactive subscription on a paid write

@@ -1,8 +1,32 @@
-import { Injectable } from '@nestjs/common'
-import type { ModuleKey, Prisma } from '@finrep/db'
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common'
+import { ConfigService } from '@nestjs/config'
+import type { ModuleKey, Prisma, User } from '@finrep/db'
 import { CORE_MODULE, MODULE_KEYS, MODULE_META, resolveLicensedModules } from '@finrep/db'
 import { PrismaService } from '../prisma/prisma.service.js'
+import { PasswordService } from '../auth/password.service.js'
+import { AuditService } from '../common/audit/audit.service.js'
+import { computeIsSuperadmin } from '../common/admin-access.js'
 import type { AdminUsersQueryDto } from './dto/admin-users-query.dto.js'
+import type { CreateAdminDto } from './dto/create-admin.dto.js'
+import type { SendMessageDto } from './dto/send-message.dto.js'
+
+/** One row of the admin-management list. Never carries any secret field. */
+interface AdminRow {
+  id: string | null
+  name: string | null
+  email: string
+  source: 'superadmin' | 'db' | 'env'
+  revocable: boolean
+  grantedAt: string | null
+}
+
+const MESSAGE_CHUNK = 1000
 
 const DAY_MS = 1000 * 60 * 60 * 24
 const SIGNUP_WINDOW_DAYS = 30
@@ -14,7 +38,12 @@ interface ModuleView {
 
 @Injectable()
 export class AdminService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly passwords: PasswordService,
+    private readonly config: ConfigService,
+    private readonly audit: AuditService,
+  ) {}
 
   /** "firstName lastName" | email local-part fallback. */
   private displayName(
@@ -296,5 +325,217 @@ export class AdminService {
     })
 
     return { states, cities, unknown }
+  }
+
+  // ── Admin management (super-admin only; SuperadminGuard on the routes) ─────────
+
+  private adminEmails(): string[] {
+    return this.config.get<string[]>('admin.emails') ?? []
+  }
+
+  private superadminUsername(): string | null {
+    return this.config.get<string | null>('admin.superadminUsername') ?? null
+  }
+
+  /** Classify an admin row's source + revocability. Only DB grants are revocable. */
+  private classifyAdmin(
+    email: string,
+    isAdmin: boolean,
+  ): { source: AdminRow['source']; revocable: boolean } {
+    if (computeIsSuperadmin(email, this.superadminUsername())) {
+      return { source: 'superadmin', revocable: false }
+    }
+    if (this.adminEmails().includes(email.trim().toLowerCase())) {
+      return { source: 'env', revocable: false }
+    }
+    // Reachable only for a real DB grant (callers pass isAdmin=true here).
+    return { source: 'db', revocable: isAdmin === true }
+  }
+
+  private sourceRank(source: AdminRow['source']): number {
+    return source === 'superadmin' ? 0 : source === 'db' ? 1 : 2
+  }
+
+  // ── GET /admin/admins ────────────────────────────────────────────────────────
+  async listAdmins(): Promise<{ admins: AdminRow[] }> {
+    const adminEmails = this.adminEmails()
+    // DB-flagged admins ∪ users whose email is on the env allowlist.
+    const users = await this.prisma.user.findMany({
+      where: { OR: [{ isAdmin: true }, { email: { in: adminEmails } }] },
+      select: { id: true, email: true, firstName: true, lastName: true, createdAt: true, isAdmin: true },
+    })
+
+    const rows: AdminRow[] = []
+    const seenEmails = new Set<string>()
+    for (const u of users) {
+      const { source, revocable } = this.classifyAdmin(u.email, u.isAdmin)
+      seenEmails.add(u.email.trim().toLowerCase())
+      rows.push({
+        id: u.id,
+        name: this.displayName(u.firstName, u.lastName, u.email),
+        email: u.email,
+        source,
+        revocable,
+        grantedAt: u.createdAt.toISOString(),
+      })
+    }
+
+    // Synthetic rows for env-allowlist emails that have no account yet.
+    for (const email of adminEmails) {
+      if (seenEmails.has(email)) continue
+      const isSuper = computeIsSuperadmin(email, this.superadminUsername())
+      rows.push({
+        id: null,
+        name: null,
+        email,
+        source: isSuper ? 'superadmin' : 'env',
+        revocable: false,
+        grantedAt: null,
+      })
+    }
+
+    rows.sort((a, b) => {
+      const r = this.sourceRank(a.source) - this.sourceRank(b.source)
+      return r !== 0 ? r : a.email.localeCompare(b.email)
+    })
+    return { admins: rows }
+  }
+
+  // ── POST /admin/admins ───────────────────────────────────────────────────────
+  async createOrPromoteAdmin(
+    dto: CreateAdminDto,
+  ): Promise<{ admin: AdminRow; created: boolean }> {
+    const email = dto.email.trim().toLowerCase()
+    const existing = await this.prisma.user.findUnique({ where: { email } })
+
+    if (existing) {
+      // Promote (idempotent). Any password sent for an existing user is ignored.
+      const updated =
+        existing.isAdmin === true
+          ? existing
+          : await this.prisma.user.update({ where: { id: existing.id }, data: { isAdmin: true } })
+      await this.audit.write({
+        action: 'admin.granted',
+        targetType: 'user',
+        targetId: updated.id,
+        metadata: { created: false },
+      })
+      return { admin: this.toAdminRow(updated), created: false }
+    }
+
+    if (!dto.password) {
+      throw new UnprocessableEntityException({
+        code: 'USER_NOT_FOUND',
+        message: 'No account exists for that email. Provide a password to create a new admin account.',
+      })
+    }
+    const strengthError = this.passwords.validateStrength(dto.password)
+    if (strengthError) throw new BadRequestException(strengthError)
+
+    const { algo, iters, salt, hash } = this.passwords.hash(dto.password)
+    const created = await this.prisma.user.create({
+      data: {
+        email,
+        firstName: dto.firstName ?? null,
+        lastName: dto.lastName ?? null,
+        passwordAlgo: algo,
+        passwordIters: iters,
+        passwordSalt: salt,
+        passwordHash: hash,
+        emailVerified: true,
+        emailVerifiedAt: new Date(),
+        isAdmin: true,
+      },
+    })
+    await this.audit.write({
+      action: 'admin.granted',
+      targetType: 'user',
+      targetId: created.id,
+      metadata: { created: true },
+    })
+    return { admin: this.toAdminRow(created), created: true }
+  }
+
+  /** Map a full User row to an AdminRow (never leaks secret columns). */
+  private toAdminRow(u: User): AdminRow {
+    const { source, revocable } = this.classifyAdmin(u.email, u.isAdmin)
+    return {
+      id: u.id,
+      name: this.displayName(u.firstName, u.lastName, u.email),
+      email: u.email,
+      source,
+      revocable,
+      grantedAt: u.createdAt.toISOString(),
+    }
+  }
+
+  // ── POST /admin/users/:id/revoke-admin ────────────────────────────────────────
+  async revokeAdmin(actingUser: User, id: string): Promise<{ ok: true; id: string }> {
+    const target = await this.prisma.user.findUnique({ where: { id } })
+    if (!target) {
+      throw new NotFoundException('User not found.')
+    }
+    if (target.id === actingUser.id) {
+      throw new ConflictException({ code: 'SELF_REVOKE', message: 'You cannot revoke your own admin access.' })
+    }
+    if (computeIsSuperadmin(target.email, this.superadminUsername())) {
+      throw new ConflictException({ code: 'NOT_REVOCABLE', message: 'The super-admin cannot be revoked.' })
+    }
+    if (this.adminEmails().includes(target.email.trim().toLowerCase())) {
+      throw new ConflictException({
+        code: 'NOT_REVOCABLE',
+        message: 'This admin is granted by the ADMIN_EMAILS allowlist and cannot be revoked here.',
+      })
+    }
+    if (target.isAdmin !== true) {
+      throw new ConflictException({ code: 'NOT_REVOCABLE', message: 'This user is not a database admin.' })
+    }
+    await this.prisma.user.update({ where: { id: target.id }, data: { isAdmin: false } })
+    await this.audit.write({
+      userId: actingUser.id,
+      action: 'admin.revoked',
+      targetType: 'user',
+      targetId: target.id,
+    })
+    return { ok: true, id: target.id }
+  }
+
+  // ── POST /admin/messages ──────────────────────────────────────────────────────
+  async sendMessages(dto: SendMessageDto): Promise<{ sent: number }> {
+    let targetIds: string[]
+    if (dto.target === 'users') {
+      if (!dto.userIds || dto.userIds.length === 0) {
+        throw new BadRequestException('userIds is required and must be non-empty when target is "users".')
+      }
+      const rows = await this.prisma.user.findMany({
+        where: { id: { in: dto.userIds } },
+        select: { id: true },
+      })
+      targetIds = rows.map((r) => r.id)
+    } else {
+      const rows = await this.prisma.user.findMany({ select: { id: true } })
+      targetIds = rows.map((r) => r.id)
+    }
+
+    const senderLabel = dto.senderLabel?.trim() || 'KYRO Team'
+    let sent = 0
+    for (let i = 0; i < targetIds.length; i += MESSAGE_CHUNK) {
+      const chunk = targetIds.slice(i, i + MESSAGE_CHUNK)
+      const res = await this.prisma.message.createMany({
+        data: chunk.map((userId) => ({
+          userId,
+          subject: dto.subject,
+          body: dto.body,
+          senderLabel,
+        })),
+      })
+      sent += res.count
+    }
+    await this.audit.write({
+      action: 'admin.message.sent',
+      targetType: 'message',
+      metadata: { target: dto.target, count: sent },
+    })
+    return { sent }
   }
 }

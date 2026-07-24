@@ -20,6 +20,7 @@ export class MailerService {
   private readonly from: string
   private readonly webOrigin: string
   private readonly region: string
+  private readonly supportEmail: string
   private smtpTransporter: Transporter | null = null
   private sesClient: SESv2Client | null = null
 
@@ -28,6 +29,7 @@ export class MailerService {
     this.from = config.get<string>('mail.from') ?? 'KYRO <noreply@ourkyro.com>'
     this.region = config.get<string>('mail.region') ?? 'us-east-1'
     this.webOrigin = config.get<string>('webOrigin') ?? 'http://localhost:5173'
+    this.supportEmail = config.get<string>('mail.supportEmail') ?? 'support@ourkyro.com'
 
     if (this.provider === 'smtp') {
       const port = config.get<number>('smtp.port') ?? 587
@@ -99,6 +101,57 @@ export class MailerService {
       `You've been invited to join ${schoolName} as ${role}.\n\nSign in / create an account, then accept the invite:\n${link}\n\nInvitation token: ${token}`,
       `Invitation token for ${email} (school ${schoolName}, role ${role}): ${token}`,
     )
+  }
+
+  /**
+   * In-app support request. Emails the verified support address with the message,
+   * setting Reply-To to the AUTHENTICATED sender so a reply reaches them — the From
+   * ALWAYS stays the verified domain identity (`this.from`), so the user is never
+   * spoofed into From. `replyTo` + subject are header-sanitized (CR/LF stripped) to
+   * prevent header injection; the message rides only in the Text body (newlines safe).
+   */
+  async sendSupportEmail(
+    fromUserEmail: string,
+    fromName: string,
+    subject: string,
+    message: string,
+  ): Promise<void> {
+    const replyTo = this.sanitizeHeader(fromUserEmail)
+    const safeSubject = `[KYRO Support] ${this.sanitizeHeader(subject)}`
+    const text = `From: ${fromName} <${replyTo}>\nUser email: ${replyTo}\n\n${message}\n`
+
+    if (this.provider === 'ses') {
+      await this.getSes().send(
+        new SendEmailCommand({
+          FromEmailAddress: this.from,
+          Destination: { ToAddresses: [this.supportEmail] },
+          ReplyToAddresses: [replyTo],
+          Content: {
+            Simple: {
+              Subject: { Data: safeSubject },
+              Body: { Text: { Data: text } },
+            },
+          },
+        }),
+      )
+      return
+    }
+    if (this.smtpTransporter) {
+      await this.smtpTransporter.sendMail({
+        from: this.from,
+        to: this.supportEmail,
+        replyTo,
+        subject: safeSubject,
+        text,
+      })
+      return
+    }
+    this.logger.log(`[DEV MAIL] Support from ${replyTo}: ${safeSubject}`)
+  }
+
+  /** Strip CR/LF (header-injection defense) + clamp length for any header value. */
+  private sanitizeHeader(s: string): string {
+    return s.replace(/[\r\n]+/g, ' ').trim().slice(0, 200)
   }
 
   private getSes(): SESv2Client {

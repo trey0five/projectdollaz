@@ -32,6 +32,8 @@ import { EnrollmentModule } from './enrollment/enrollment.module.js'
 import { StrategyModule } from './strategy/strategy.module.js'
 import { RetentionModule } from './retention/retention.module.js'
 import { AdminModule } from './admin/admin.module.js'
+import { SupportModule } from './support/support.module.js'
+import { InboxModule } from './inbox/inbox.module.js'
 
 @Module({
   imports: [
@@ -75,6 +77,8 @@ import { AdminModule } from './admin/admin.module.js'
     StrategyModule,
     RetentionModule,
     AdminModule,
+    SupportModule,
+    InboxModule,
   ],
 })
 export class AppModule {}

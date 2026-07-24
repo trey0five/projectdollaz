@@ -4,9 +4,11 @@
 // memberships. Modules/orgs/role(s) are pre-resolved server-side (contract §1).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Search, ChevronRight, ChevronDown } from 'lucide-react'
+import { Search, ChevronRight, ChevronDown, Send } from 'lucide-react'
 import { adminApi, apiErrorMessage } from '../../lib/api.js'
 import { STATE_NAMES } from '../../data/usMapPaths.js'
+import ComposeMessageModal from '../../components/admin/ComposeMessageModal.jsx'
+import AdminToast from '../../components/admin/AdminToast.jsx'
 import {
   SectionCard,
   Table,
@@ -36,7 +38,7 @@ function LastAccess({ user }) {
   )
 }
 
-function UserRow({ u }) {
+function UserRow({ u, onMessage }) {
   const [open, setOpen] = useState(false)
   const roles = useMemo(
     () => Array.from(new Set((u.memberships || []).map((m) => m.role))),
@@ -89,10 +91,20 @@ function UserRow({ u }) {
         <td className="px-3 py-2">
           <MfaBadge on={u.totpEnabled} />
         </td>
+        <td className="px-3 py-2 text-right">
+          <button
+            type="button"
+            onClick={() => onMessage(u)}
+            title={`Message ${u.name}`}
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-[11px] font-medium text-ink transition-colors hover:border-coral/40 hover:bg-coral/5 hover:text-coral"
+          >
+            <Send size={12} /> Message
+          </button>
+        </td>
       </tr>
       {open && (
         <tr className="bg-section/60">
-          <td colSpan={9} className="px-3 py-3">
+          <td colSpan={10} className="px-3 py-3">
             <div className="pl-5">
               <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
                 Memberships
@@ -125,6 +137,8 @@ export default function AdminUsersPage() {
   const [data, setData] = useState(null)
   const [err, setErr] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [composeUser, setComposeUser] = useState(null)
+  const [toast, setToast] = useState(null)
   const debounceRef = useRef(null)
 
   // Debounce the search box → resets to page 1.
@@ -159,6 +173,7 @@ export default function AdminUsersPage() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   return (
+    <>
     <SectionCard
       title="Users"
       subtitle={loading ? 'Loading…' : `${total.toLocaleString()} user${total === 1 ? '' : 's'} across all tenants`}
@@ -196,10 +211,11 @@ export default function AdminUsersPage() {
               'Role(s)',
               'Last access',
               'MFA',
+              '',
             ]}
           >
             {users.map((u) => (
-              <UserRow key={u.id} u={u} />
+              <UserRow key={u.id} u={u} onMessage={setComposeUser} />
             ))}
           </Table>
 
@@ -229,5 +245,17 @@ export default function AdminUsersPage() {
         </>
       )}
     </SectionCard>
+
+      <ComposeMessageModal
+        open={!!composeUser}
+        onClose={() => setComposeUser(null)}
+        audience={composeUser ? { target: 'users', userIds: [composeUser.id] } : null}
+        headerLabel={composeUser ? `To: ${composeUser.name} · ${composeUser.email}` : ''}
+        onSent={(sent) =>
+          setToast({ ok: true, message: `Sent to ${sent} user${sent === 1 ? '' : 's'}.` })
+        }
+      />
+      <AdminToast toast={toast} onDismiss={() => setToast(null)} />
+    </>
   )
 }
