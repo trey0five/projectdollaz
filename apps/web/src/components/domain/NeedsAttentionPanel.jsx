@@ -55,6 +55,7 @@ export default function NeedsAttentionPanel({ items = [] }) {
               <div className="min-w-0 flex-1">
                 <p className="text-[14px] font-semibold leading-snug text-navy">{item.title}</p>
                 <p className="mt-0.5 text-[12.5px] leading-snug text-muted">{item.why}</p>
+                {item.meta ?? null}
                 {item.actions?.length ? (
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {item.actions.map((action, ai) => (

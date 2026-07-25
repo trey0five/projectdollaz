@@ -18,18 +18,18 @@ import { ArrowLeft } from 'lucide-react'
 // The shared fancy back-button styling. Light surfaces (module pages, etc.) use
 // BACK_PILL; dark navy surfaces (Settings, Penny Studio) use BACK_PILL_DARK.
 export const BACK_PILL =
-  'group inline-flex items-center gap-2 rounded-full border border-navy/12 bg-white px-3 py-1.5 text-[13px] font-semibold text-navy shadow-sm transition-all hover:-translate-x-0.5 hover:border-navy/25 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy/40'
+  'group inline-flex items-center gap-2 rounded-full border back-pill-accent bg-white py-1.5 pl-2 pr-3.5 text-[13px] font-semibold text-navy shadow-sm transition-all hover:-translate-x-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy/40'
 export const BACK_PILL_DARK =
-  'group inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[13px] font-semibold text-white shadow-sm backdrop-blur-sm transition-all hover:-translate-x-0.5 hover:border-white/30 hover:bg-white/[0.16] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50'
+  'group inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 py-1.5 pl-2 pr-3.5 text-[13px] font-semibold text-white shadow-sm backdrop-blur-sm transition-all hover:-translate-x-0.5 hover:border-white/30 hover:bg-white/[0.16] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50'
 
 // The circled arrow + label shared by every back pill. `tone` matches the pill.
 export function BackPillBody({ label, tone = 'light' }) {
   const chip =
-    tone === 'dark' ? 'bg-white/15 text-white' : 'bg-navy/10 text-navy'
+    tone === 'dark' ? 'bg-white/15 text-white' : 'back-pill-chip'
   return (
     <>
       <span
-        className={`flex h-5 w-5 items-center justify-center rounded-full transition-transform group-hover:-translate-x-0.5 ${chip}`}
+        className={`flex h-[22px] w-[22px] items-center justify-center rounded-full transition-transform group-hover:-translate-x-0.5 ${chip}`}
       >
         <ArrowLeft size={13} />
       </span>

@@ -468,6 +468,21 @@
   }
 }
 
+/* Back pill — module-hued inside ModuleAccent, navy everywhere else.
+   --c-module is set ONLY by moduleAccentVars(), so pages outside a module
+   accent context fall back to the plain navy look. Plain CSS on purpose:
+   comma'd Tailwind arbitrary values drop out of the dev JIT. */
+.back-pill-accent {
+  border-color: rgb(var(--c-module, var(--c-navy)) / 0.12);
+}
+.back-pill-accent:hover {
+  border-color: rgb(var(--c-module, var(--c-navy)) / 0.3);
+}
+.back-pill-chip {
+  background-color: rgb(var(--c-module, var(--c-navy)) / 0.1);
+  color: rgb(var(--c-module, var(--c-navy)));
+}
+
 /* ─────────────────────────────────────────────────────────────────────────────
    PENNY AI — flashy chat keyframes (ported/renamed from Nagare nagare-*).
    All decorative; every consumer gates on motion-safe: and marks the element

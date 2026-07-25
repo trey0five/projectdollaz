@@ -21,8 +21,10 @@ import {
   Trash2,
   Check,
   TrendingDown,
+  TrendingUp,
   AlertTriangle,
   Clock,
+  MapPin,
   RotateCw,
 } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
@@ -43,6 +45,7 @@ import EntityFormModal, {
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useUiV2 } from '../context/UiFlagContext.jsx'
 import { useFacilities } from '../hooks/useFacilities.js'
+import { shortDate } from '../lib/dates.js'
 
 const PRIORITIES = ['low', 'medium', 'high', 'critical']
 const STATUSES = ['open', 'scheduled', 'in_progress', 'resolved']
@@ -94,6 +97,57 @@ function Pill({ def, suffix }) {
       {def.label}
       {suffix ?? ''}
     </span>
+  )
+}
+
+// ── Attention-rail meta chips (compact; reuse the register badge palettes) ───
+function AttentionChip({ cls, icon: ChipIcon, children }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-semibold ${cls}`}
+    >
+      {ChipIcon ? <ChipIcon size={11} /> : null}
+      {children}
+    </span>
+  )
+}
+
+/** The muted "where · what" line under an attention-rail title. */
+function attentionWhy(it) {
+  if (it.location && it.category) return `${it.location} · ${it.category}`
+  return it.location ?? it.category ?? 'Maintenance item'
+}
+
+/** The chip row under an attention-rail entry: urgency, priority, place, cost. */
+function attentionMeta(it) {
+  const days = typeof it.daysUntilTarget === 'number' ? it.daysUntilTarget : null
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+      {it.urgency === 'overdue' ? (
+        <AttentionChip cls={URGENCY_BADGE.overdue.cls} icon={AlertTriangle}>
+          {days != null ? `Overdue ${Math.abs(days)}d` : 'Overdue'}
+        </AttentionChip>
+      ) : it.urgency === 'due-soon' ? (
+        <AttentionChip cls={URGENCY_BADGE['due-soon'].cls} icon={Clock}>
+          {days != null ? `Due in ${days}d` : 'Due soon'}
+        </AttentionChip>
+      ) : null}
+      {PRIORITY_BADGE[it.priority] ? (
+        <AttentionChip cls={PRIORITY_BADGE[it.priority].cls}>
+          {PRIORITY_BADGE[it.priority].label}
+        </AttentionChip>
+      ) : null}
+      {it.location ? (
+        <AttentionChip cls="border-rule/60 bg-section text-muted" icon={MapPin}>
+          {it.location}
+        </AttentionChip>
+      ) : null}
+      {typeof it.estimatedCost === 'number' ? (
+        <AttentionChip cls="border-rule/60 bg-section text-muted">
+          {fmtMoney(it.estimatedCost)}
+        </AttentionChip>
+      ) : null}
+    </div>
   )
 }
 
@@ -441,7 +495,16 @@ function MaintenanceTable({ items, loading, error, canEdit, reduce, onEdit, onDe
                 ) : null}
               </div>
             </td>
-            <td className="px-4 py-3 text-muted">{it.location ?? '—'}</td>
+            <td className="px-4 py-3 text-muted">
+              {it.location ? (
+                <span className="inline-flex items-center gap-1">
+                  <MapPin size={13} className="shrink-0" />
+                  {it.location}
+                </span>
+              ) : (
+                '—'
+              )}
+            </td>
             <td className="px-4 py-3">
               <Pill def={PRIORITY_BADGE[it.priority]} />
             </td>
@@ -450,29 +513,28 @@ function MaintenanceTable({ items, loading, error, canEdit, reduce, onEdit, onDe
                 <span className="rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[12px] capitalize text-muted">
                   {STATUS_LABEL[it.status] ?? it.status}
                 </span>
-                <Pill
-                  def={URGENCY_BADGE[it.urgency]}
-                  suffix={
-                    it.urgency === 'overdue' && typeof it.daysUntilTarget === 'number'
-                      ? ` · ${Math.abs(it.daysUntilTarget)}d ago`
-                      : it.urgency === 'due-soon' && typeof it.daysUntilTarget === 'number'
-                        ? ` · in ${it.daysUntilTarget}d`
-                        : ''
-                  }
-                />
+                <Pill def={URGENCY_BADGE[it.urgency]} />
               </div>
             </td>
-            <td className="px-4 py-3 text-right">
+            <td className="px-4 py-3 text-right tabular-nums">
               <div className="font-semibold text-navy">
                 {typeof it.estimatedCost === 'number' ? fmtMoney(it.estimatedCost) : '—'}
+                {typeof it.actualCost === 'number' && typeof it.estimatedCost === 'number' ? (
+                  <span className="ml-1 text-[11px] font-normal text-muted">est</span>
+                ) : null}
               </div>
               {typeof it.actualCost === 'number' ? (
-                <div className="mt-0.5 text-[12px] text-muted">
-                  act {fmtMoney(it.actualCost)}
+                <div className="mt-0.5 flex items-center justify-end gap-1.5 text-[12px] text-muted">
+                  <span>act {fmtMoney(it.actualCost)}</span>
                   {typeof it.variance === 'number' && it.variance !== 0 ? (
                     <span
-                      className={`ml-1 font-semibold ${it.variance > 0 ? 'text-danger' : 'text-emerald-600'}`}
+                      className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${
+                        it.variance > 0
+                          ? 'bg-danger/10 text-danger'
+                          : 'bg-emerald-50 text-emerald-700'
+                      }`}
                     >
+                      {it.variance > 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
                       {it.variance > 0 ? '+' : '−'}
                       {fmtMoney(Math.abs(it.variance))}
                     </span>
@@ -480,7 +542,24 @@ function MaintenanceTable({ items, loading, error, canEdit, reduce, onEdit, onDe
                 </div>
               ) : null}
             </td>
-            <td className="px-4 py-3 text-muted">{it.targetDate ?? '—'}</td>
+            <td className="px-4 py-3">
+              {it.targetDate ? (
+                <>
+                  <div className="font-semibold text-navy">{shortDate(it.targetDate)}</div>
+                  {it.urgency === 'overdue' && typeof it.daysUntilTarget === 'number' ? (
+                    <div className="text-[11.5px] font-semibold text-danger">
+                      {Math.abs(it.daysUntilTarget)}d overdue
+                    </div>
+                  ) : it.urgency === 'due-soon' && typeof it.daysUntilTarget === 'number' ? (
+                    <div className="text-[11.5px] font-semibold text-[#7a5e00]">
+                      in {it.daysUntilTarget}d
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <span className="text-muted">—</span>
+              )}
+            </td>
             {canEdit ? (
               <td className="px-4 py-3">
                 <div className="flex justify-end gap-1.5 opacity-60 transition group-hover:opacity-100">
@@ -633,16 +712,13 @@ function FacilitiesWorkspace() {
     const overdueItems = openItems.filter((it) => it.urgency === 'overdue')
     for (const it of overdueItems) {
       seen.add(it.id)
-      const days = typeof it.daysUntilTarget === 'number' ? Math.abs(it.daysUntilTarget) : null
       list.push({
         id: `overdue-${it.id}`,
         tone: 'risk',
         sortKey: 0,
-        title: `${it.title} is overdue`,
-        why:
-          days != null
-            ? `${days} day${days === 1 ? '' : 's'} past its target date`
-            : 'Past its target date',
+        title: it.title,
+        why: attentionWhy(it),
+        meta: attentionMeta(it),
         actions: canEdit ? [{ label: 'Update', primary: true, onClick: () => openEdit(it) }] : [],
       })
     }
@@ -658,8 +734,9 @@ function FacilitiesWorkspace() {
         id: `high-${it.id}`,
         tone: it.priority === 'critical' ? 'risk' : 'watch',
         sortKey: it.priority === 'critical' ? 1 : 2,
-        title: `${it.title} needs attention`,
-        why: `high-priority · ${it.location ?? 'no location'}`,
+        title: it.title,
+        why: attentionWhy(it),
+        meta: attentionMeta(it),
         actions: canEdit ? [{ label: 'Update', primary: false, onClick: () => openEdit(it) }] : [],
       })
     }
@@ -697,6 +774,7 @@ function FacilitiesWorkspace() {
       onNew={onNew}
       registerTable={registerTable}
       attentionItems={attentionItems}
+      registerTitle="Maintenance register"
     />
   )
 

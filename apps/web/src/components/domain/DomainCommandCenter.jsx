@@ -26,6 +26,9 @@
 //                    omitting it leaves the header byte-identical for existing callers.
 //   beforeBody       node | null — a full-width block rendered BETWEEN the KPI row and
 //                    the two-column body (e.g. Cash & Collections' aging bars). Optional.
+//   registerTitle    string | null — heading shown in place of the tab bar when a
+//                    domain has ≤1 register tab (a single-entry tab bar is dead
+//                    chrome). Defaults to the lone tab's label. Optional.
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion, useReducedMotion } from 'framer-motion'
 import { Plus } from 'lucide-react'
@@ -65,6 +68,7 @@ export default function DomainCommandCenter({
   headerAside = null,
   beforeBody = null,
   showBack = false,
+  registerTitle = null,
 }) {
   const reduce = useReducedMotion()
 
@@ -123,29 +127,37 @@ export default function DomainCommandCenter({
             overflow-x-auto instead of pushing the page body horizontally. */}
         <div className="card-soft flex min-w-0 flex-col p-4 sm:p-5 lg:col-span-2">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex gap-1">
-              {tabs.map((t) => {
-                const active = t.key === activeTab
-                return (
-                  <button
-                    key={t.key}
-                    type="button"
-                    onClick={() => onTabChange?.(t.key)}
-                    className={`relative px-3 py-2 text-[14px] font-semibold transition-colors ${
-                      active ? 'text-navy' : 'text-muted hover:text-navy'
-                    }`}
-                  >
-                    {t.label}
-                    {active ? (
-                      <motion.span
-                        layoutId={reduce ? undefined : 'domain-tab-underline'}
-                        className="absolute inset-x-2 -bottom-[1px] h-[3px] rounded-full bg-gold-gradient"
-                      />
-                    ) : null}
-                  </button>
-                )
-              })}
-            </div>
+            {tabs.length <= 1 ? (
+              /* A single-entry tab bar is dead chrome — render a static register
+                 heading instead. Multi-tab domains keep the underlined tabs. */
+              <h2 className="px-1 font-serif text-lg font-semibold text-navy">
+                {registerTitle ?? tabs[0]?.label ?? 'Register'}
+              </h2>
+            ) : (
+              <div className="flex gap-1">
+                {tabs.map((t) => {
+                  const active = t.key === activeTab
+                  return (
+                    <button
+                      key={t.key}
+                      type="button"
+                      onClick={() => onTabChange?.(t.key)}
+                      className={`relative px-3 py-2 text-[14px] font-semibold transition-colors ${
+                        active ? 'text-navy' : 'text-muted hover:text-navy'
+                      }`}
+                    >
+                      {t.label}
+                      {active ? (
+                        <motion.span
+                          layoutId={reduce ? undefined : 'domain-tab-underline'}
+                          className="absolute inset-x-2 -bottom-[1px] h-[3px] rounded-full bg-gold-gradient"
+                        />
+                      ) : null}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
             {onNew ? (
               <button
                 type="button"

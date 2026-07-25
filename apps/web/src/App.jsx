@@ -39,6 +39,7 @@ import GovernancePage from './pages/GovernancePage.jsx'
 import AccreditationPage from './pages/AccreditationPage.jsx'
 import FacilitiesPage from './pages/FacilitiesPage.jsx'
 import AdvancementPage from './pages/AdvancementPage.jsx'
+import CampaignDetailPage from './pages/CampaignDetailPage.jsx'
 import EnrollmentPage from './pages/EnrollmentPage.jsx'
 import DiocesanImportPage from './pages/DiocesanImportPage.jsx'
 import TasksPage from './pages/TasksPage.jsx'
@@ -218,6 +219,7 @@ export default function App() {
         <Route path="/accreditation" element={<AccreditationPage />} />
         <Route path="/facilities" element={<FacilitiesPage />} />
         <Route path="/advancement" element={<AdvancementPage />} />
+        <Route path="/advancement/campaigns/:campaignId" element={<CampaignDetailPage />} />
         <Route
           path="/strategy"
           element={

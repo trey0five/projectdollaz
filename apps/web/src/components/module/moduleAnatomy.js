@@ -118,6 +118,7 @@ const BLACK = [0, 0, 0]
 export function moduleAccentVars(key) {
   const rgb = hexRgb(moduleHue(key))
   return {
+    '--c-module': triplet(rgb),
     '--c-gold': triplet(rgb),
     '--c-gold-light': triplet(mixRgb(rgb, WHITE, 0.35)),
     '--c-gold-pale': triplet(mixRgb(rgb, WHITE, 0.82)),
