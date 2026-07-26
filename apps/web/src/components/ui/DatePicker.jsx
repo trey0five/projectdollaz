@@ -65,12 +65,17 @@ export default function DatePicker({
     const base = sel || parseIso(todayIso())
     return { y: base.y, m0: base.m0 }
   })
+  // Drill-down mode: 'days' (default) → header click → 'months' → header click →
+  // 'years'. Picking a year returns to months, a month returns to days — so a far
+  // birth date is 3 clicks, not 100 arrow presses.
+  const [mode, setMode] = useState('days')
 
   // Open the popover, re-centering the grid on the selected month (or today).
   // Done here rather than in an effect so there's no setState-in-effect cascade.
   const openPicker = () => {
     const base = parseIso(value) || parseIso(todayIso())
     setView({ y: base.y, m0: base.m0 })
+    setMode('days')
     setOpen(true)
   }
 
@@ -105,11 +110,17 @@ export default function DatePicker({
     }
   }, [open])
 
+  // The header arrows step by month in day view, by year in month view, and by
+  // a 12-year page in year view.
   const step = (delta) => {
-    setView((v) => {
-      const m = v.m0 + delta
-      return { y: v.y + Math.floor(m / 12), m0: ((m % 12) + 12) % 12 }
-    })
+    if (mode === 'days') {
+      setView((v) => {
+        const m = v.m0 + delta
+        return { y: v.y + Math.floor(m / 12), m0: ((m % 12) + 12) % 12 }
+      })
+    } else {
+      setView((v) => ({ ...v, y: v.y + delta * (mode === 'years' ? 12 : 1) }))
+    }
   }
 
   const pick = (d) => {
@@ -119,11 +130,29 @@ export default function DatePicker({
 
   const today = todayIso()
   const outOfRange = (iso) => (min && iso < min) || (max && iso > max)
+  // A month/year is pickable if any day inside it can be in range.
+  const monthOutOfRange = (y, m0) =>
+    (min && toIso(y, m0, daysInMonth(y, m0)) < min) || (max && toIso(y, m0, 1) > max)
+  const yearOutOfRange = (y) =>
+    (min && `${y}-12-31` < min) || (max && `${y}-01-01` > max)
 
   // Build the day grid: leading blanks then 1..N.
   const lead = firstWeekday(view.y, view.m0)
   const total = daysInMonth(view.y, view.m0)
   const cells = [...Array(lead).fill(null), ...Array.from({ length: total }, (_, i) => i + 1)]
+
+  // Year view: a 12-year page anchored so the on-view year sits in the page.
+  const yearPageStart = view.y - ((view.y % 12) + 12) % 12
+  const yearCells = Array.from({ length: 12 }, (_, i) => yearPageStart + i)
+
+  const headerLabel =
+    mode === 'days'
+      ? `${MONTHS[view.m0]} ${view.y}`
+      : mode === 'months'
+        ? String(view.y)
+        : `${yearPageStart} – ${yearPageStart + 11}`
+  const prevAria = mode === 'days' ? 'Previous month' : mode === 'months' ? 'Previous year' : 'Previous years'
+  const nextAria = mode === 'days' ? 'Next month' : mode === 'months' ? 'Next year' : 'Next years'
 
   const popover = rect
     ? createPortal(
@@ -145,70 +174,151 @@ export default function DatePicker({
               role="dialog"
               aria-label="Choose a date"
             >
-              {/* Month nav */}
+              {/* Header nav — the label is a BUTTON that drills up: days → months
+                  → years. Arrows step a month / a year / a 12-year page. */}
               <div className="mb-2 flex items-center justify-between px-1">
                 <button
                   type="button"
                   onClick={() => step(-1)}
-                  aria-label="Previous month"
+                  aria-label={prevAria}
                   className="flex h-8 w-8 items-center justify-center rounded-lg text-navy/70 transition-colors hover:bg-gold/15 hover:text-navy"
                 >
                   <ChevronLeft size={18} />
                 </button>
-                <span className="font-serif text-[15px] font-semibold text-navy">
-                  {MONTHS[view.m0]} {view.y}
-                </span>
+                <button
+                  type="button"
+                  onClick={() => setMode((m) => (m === 'days' ? 'months' : 'years'))}
+                  disabled={mode === 'years'}
+                  aria-label={
+                    mode === 'days'
+                      ? 'Choose month and year'
+                      : mode === 'months'
+                        ? 'Choose year'
+                        : undefined
+                  }
+                  className={`rounded-lg px-2.5 py-1 font-serif text-[15px] font-semibold text-navy transition-colors ${
+                    mode === 'years' ? '' : 'hover:bg-gold/15'
+                  }`}
+                >
+                  {headerLabel}
+                </button>
                 <button
                   type="button"
                   onClick={() => step(1)}
-                  aria-label="Next month"
+                  aria-label={nextAria}
                   className="flex h-8 w-8 items-center justify-center rounded-lg text-navy/70 transition-colors hover:bg-gold/15 hover:text-navy"
                 >
                   <ChevronRight size={18} />
                 </button>
               </div>
 
-              {/* Weekday header */}
-              <div className="grid grid-cols-7 gap-0.5 px-0.5 pb-1">
-                {WEEKDAYS.map((w) => (
-                  <span
-                    key={w}
-                    className="py-1 text-center text-[11px] font-bold uppercase tracking-wide text-muted/70"
-                  >
-                    {w}
-                  </span>
-                ))}
-              </div>
+              {mode === 'days' ? (
+                <>
+                  {/* Weekday header */}
+                  <div className="grid grid-cols-7 gap-0.5 px-0.5 pb-1">
+                    {WEEKDAYS.map((w) => (
+                      <span
+                        key={w}
+                        className="py-1 text-center text-[11px] font-bold uppercase tracking-wide text-muted/70"
+                      >
+                        {w}
+                      </span>
+                    ))}
+                  </div>
 
-              {/* Day grid */}
-              <div className="grid grid-cols-7 gap-0.5 px-0.5">
-                {cells.map((d, i) => {
-                  if (d == null) return <span key={`b${i}`} />
-                  const iso = toIso(view.y, view.m0, d)
-                  const isSel = iso === value
-                  const isToday = iso === today
-                  const disabledDay = outOfRange(iso)
-                  return (
-                    <button
-                      key={iso}
-                      type="button"
-                      disabled={disabledDay}
-                      onClick={() => pick(d)}
-                      className={`flex h-9 items-center justify-center rounded-lg text-[13.5px] font-semibold transition-all ${
-                        isSel
-                          ? 'bg-gold-gradient text-navy shadow-glow'
-                          : disabledDay
-                            ? 'cursor-not-allowed text-muted/30'
-                            : isToday
-                              ? 'text-navy ring-1 ring-inset ring-gold/60 hover:bg-gold/15'
-                              : 'text-ink/80 hover:bg-gold/15 hover:text-navy'
-                      }`}
-                    >
-                      {d}
-                    </button>
-                  )
-                })}
-              </div>
+                  {/* Day grid */}
+                  <div className="grid grid-cols-7 gap-0.5 px-0.5">
+                    {cells.map((d, i) => {
+                      if (d == null) return <span key={`b${i}`} />
+                      const iso = toIso(view.y, view.m0, d)
+                      const isSel = iso === value
+                      const isToday = iso === today
+                      const disabledDay = outOfRange(iso)
+                      return (
+                        <button
+                          key={iso}
+                          type="button"
+                          disabled={disabledDay}
+                          onClick={() => pick(d)}
+                          className={`flex h-9 items-center justify-center rounded-lg text-[13.5px] font-semibold transition-all ${
+                            isSel
+                              ? 'bg-gold-gradient text-navy shadow-glow'
+                              : disabledDay
+                                ? 'cursor-not-allowed text-muted/30'
+                                : isToday
+                                  ? 'text-navy ring-1 ring-inset ring-gold/60 hover:bg-gold/15'
+                                  : 'text-ink/80 hover:bg-gold/15 hover:text-navy'
+                          }`}
+                        >
+                          {d}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </>
+              ) : mode === 'months' ? (
+                /* Month grid — pick a month, drop back to days. */
+                <div className="grid grid-cols-3 gap-1 px-0.5 py-1">
+                  {MONTHS.map((name, m0) => {
+                    const isCur = m0 === view.m0
+                    const isSelMonth = sel && sel.y === view.y && sel.m0 === m0
+                    const off = monthOutOfRange(view.y, m0)
+                    return (
+                      <button
+                        key={name}
+                        type="button"
+                        disabled={off}
+                        onClick={() => {
+                          setView((v) => ({ ...v, m0 }))
+                          setMode('days')
+                        }}
+                        className={`flex h-10 items-center justify-center rounded-lg text-[13px] font-semibold transition-all ${
+                          isSelMonth
+                            ? 'bg-gold-gradient text-navy shadow-glow'
+                            : off
+                              ? 'cursor-not-allowed text-muted/30'
+                              : isCur
+                                ? 'text-navy ring-1 ring-inset ring-gold/60 hover:bg-gold/15'
+                                : 'text-ink/80 hover:bg-gold/15 hover:text-navy'
+                        }`}
+                      >
+                        {name.slice(0, 3)}
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : (
+                /* Year grid — a 12-year page; pick a year, drop back to months. */
+                <div className="grid grid-cols-3 gap-1 px-0.5 py-1">
+                  {yearCells.map((y) => {
+                    const isCur = y === view.y
+                    const isSelYear = sel && sel.y === y
+                    const off = yearOutOfRange(y)
+                    return (
+                      <button
+                        key={y}
+                        type="button"
+                        disabled={off}
+                        onClick={() => {
+                          setView((v) => ({ ...v, y }))
+                          setMode('months')
+                        }}
+                        className={`flex h-10 items-center justify-center rounded-lg text-[13px] font-semibold tabular-nums transition-all ${
+                          isSelYear
+                            ? 'bg-gold-gradient text-navy shadow-glow'
+                            : off
+                              ? 'cursor-not-allowed text-muted/30'
+                              : isCur
+                                ? 'text-navy ring-1 ring-inset ring-gold/60 hover:bg-gold/15'
+                                : 'text-ink/80 hover:bg-gold/15 hover:text-navy'
+                        }`}
+                      >
+                        {y}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
 
               {/* Footer actions */}
               <div className="mt-2 flex items-center justify-between border-t border-rule/50 px-1 pt-2">
