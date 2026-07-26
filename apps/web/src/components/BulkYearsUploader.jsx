@@ -494,7 +494,7 @@ export default function BulkYearsUploader({ canEdit, onOpenMonthly }) {
             type="button"
             onClick={handleSave}
             disabled={saving || savable.length === 0}
-            className="inline-flex items-center gap-2 rounded-lg bg-gold-gradient px-5 py-2.5 text-[15px] font-bold uppercase tracking-[0.06em] text-navy shadow-glow transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+            className="inline-flex items-center gap-2 rounded-lg btn-cta px-5 py-2.5 text-[15px] font-bold uppercase tracking-[0.06em] transition-transform disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
           >
             {saving ? (
               <>

@@ -34,7 +34,7 @@ export default function FinalCta() {
           <div className="mt-9 flex flex-wrap items-center justify-center gap-4">
             <Link
               to={FINALE.ctaPrimary.to}
-              className={`card-flashy inline-flex items-center justify-center bg-gold-gradient px-9 py-4 text-[13px] font-bold uppercase tracking-[0.14em] text-navy-deep ${FOCUS_RING}`}
+              className={`card-flashy inline-flex items-center justify-center btn-cta px-9 py-4 text-[13px] font-bold uppercase tracking-[0.14em] text-navy-deep ${FOCUS_RING}`}
             >
               {FINALE.ctaPrimary.label}
             </Link>

@@ -301,7 +301,7 @@ export default function OrgQboCompanyPanel({ orgId, company, canManage, onChange
             type="button"
             onClick={connect}
             disabled={busy}
-            className="mt-3 inline-flex items-center gap-2 rounded-lg bg-gold-gradient px-5 py-2.5 text-[15px] font-bold text-navy shadow-glow transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-3 inline-flex items-center gap-2 rounded-lg btn-cta px-5 py-2.5 text-[15px] font-bold transition-transform disabled:cursor-not-allowed disabled:opacity-50"
           >
             {connecting ? <Loader2 size={15} className="animate-spin" /> : <Plug size={15} />}
             {connecting ? 'Redirecting…' : "Connect the organization's QuickBooks"}
@@ -404,7 +404,7 @@ export default function OrgQboCompanyPanel({ orgId, company, canManage, onChange
               type="button"
               onClick={() => doDisconnect(false)}
               disabled={disconnecting || importing || saving}
-              className="inline-flex items-center gap-2 rounded-lg bg-gold-gradient px-5 py-2.5 text-[15px] font-bold text-navy shadow-glow transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg btn-cta px-5 py-2.5 text-[15px] font-bold transition-transform disabled:cursor-not-allowed disabled:opacity-50"
             >
               {disconnecting ? <Loader2 size={15} className="animate-spin" /> : <Unplug size={15} />}
               Disconnect (keep data)
@@ -587,7 +587,7 @@ export default function OrgQboCompanyPanel({ orgId, company, canManage, onChange
                       type="button"
                       onClick={saveMapping}
                       disabled={busy}
-                      className="mt-3 inline-flex items-center gap-2 rounded-lg bg-gold-gradient px-5 py-2.5 text-[15px] font-bold text-navy shadow-glow transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="mt-3 inline-flex items-center gap-2 rounded-lg btn-cta px-5 py-2.5 text-[15px] font-bold transition-transform disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {saving ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
                       {saving ? 'Saving…' : 'Save mapping'}
@@ -633,7 +633,7 @@ export default function OrgQboCompanyPanel({ orgId, company, canManage, onChange
             disabled={busy || pendingDisconnect || importCount === 0}
             onClick={runImport}
             title={importCount === 0 ? 'Map at least one location to a school first' : undefined}
-            className="ml-auto inline-flex items-center gap-2 rounded-lg bg-gold-gradient px-4 py-2 text-[14.5px] font-bold text-navy shadow-glow transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
+            className="ml-auto inline-flex items-center gap-2 rounded-lg btn-cta px-4 py-2 text-[14.5px] font-bold transition-transform disabled:cursor-not-allowed disabled:opacity-50"
           >
             {importing ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
             Import all mapped schools ({importCount})

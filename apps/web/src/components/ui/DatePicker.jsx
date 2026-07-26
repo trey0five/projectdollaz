@@ -242,7 +242,7 @@ export default function DatePicker({
                           onClick={() => pick(d)}
                           className={`flex h-9 items-center justify-center rounded-lg text-[13.5px] font-semibold transition-all ${
                             isSel
-                              ? 'bg-gold-gradient text-navy shadow-glow'
+                              ? 'bg-gold-gradient text-white shadow-glow'
                               : disabledDay
                                 ? 'cursor-not-allowed text-muted/30'
                                 : isToday
@@ -274,7 +274,7 @@ export default function DatePicker({
                         }}
                         className={`flex h-10 items-center justify-center rounded-lg text-[13px] font-semibold transition-all ${
                           isSelMonth
-                            ? 'bg-gold-gradient text-navy shadow-glow'
+                            ? 'bg-gold-gradient text-white shadow-glow'
                             : off
                               ? 'cursor-not-allowed text-muted/30'
                               : isCur
@@ -305,7 +305,7 @@ export default function DatePicker({
                         }}
                         className={`flex h-10 items-center justify-center rounded-lg text-[13px] font-semibold tabular-nums transition-all ${
                           isSelYear
-                            ? 'bg-gold-gradient text-navy shadow-glow'
+                            ? 'bg-gold-gradient text-white shadow-glow'
                             : off
                               ? 'cursor-not-allowed text-muted/30'
                               : isCur

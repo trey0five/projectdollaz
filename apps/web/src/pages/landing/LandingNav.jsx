@@ -82,7 +82,7 @@ export default function LandingNav({ show = true }) {
             // a single clear way back into the product instead of Sign in / Get started.
             <Link
               to="/app"
-              className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl bg-gold-gradient px-3.5 py-2 text-[12px] font-bold uppercase tracking-[0.14em] text-navy-deep shadow-glow transition-shadow hover:shadow-glow-lg md:px-5 md:py-2.5 md:text-[13px] ${FOCUS_RING}`}
+              className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl btn-cta px-3.5 py-2 text-[12px] font-bold uppercase tracking-[0.14em] text-navy-deep transition-shadow hover:shadow-glow-lg md:px-5 md:py-2.5 md:text-[13px] ${FOCUS_RING}`}
             >
               Return to dashboard <ArrowRight size={14} aria-hidden />
             </Link>
@@ -96,7 +96,7 @@ export default function LandingNav({ show = true }) {
               </Link>
               <Link
                 to={NAV.getStarted.to}
-                className={`whitespace-nowrap rounded-xl bg-gold-gradient px-3.5 py-2 text-[12px] font-bold uppercase tracking-[0.14em] text-navy-deep shadow-glow transition-shadow hover:shadow-glow-lg md:px-5 md:py-2.5 md:text-[13px] ${FOCUS_RING}`}
+                className={`whitespace-nowrap rounded-xl btn-cta px-3.5 py-2 text-[12px] font-bold uppercase tracking-[0.14em] text-navy-deep transition-shadow hover:shadow-glow-lg md:px-5 md:py-2.5 md:text-[13px] ${FOCUS_RING}`}
               >
                 {NAV.getStarted.label}
               </Link>

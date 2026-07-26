@@ -374,7 +374,7 @@ export default function HomeCommandCenter({
           <button
             type="button"
             onClick={askPennyToBrief}
-            className="group relative inline-flex items-center gap-1.5 overflow-hidden rounded-full bg-gold-gradient px-4 py-2 text-[13px] font-semibold text-navy shadow-glow transition-transform hover:-translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 motion-reduce:hover:translate-y-0"
+            className="group relative inline-flex items-center gap-1.5 overflow-hidden rounded-full btn-cta px-4 py-2 text-[13px] font-semibold transition-transform hover:-translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 motion-reduce:hover:translate-y-0"
           >
             {/* Light shine sweeping across the CTA on hover. */}
             <span

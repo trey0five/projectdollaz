@@ -128,7 +128,7 @@ export default function QuickBooksCard({ quickbooks }) {
               <>
                 <Link
                   to="/settings/integrations"
-                  className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-gold-gradient px-4 py-2.5 text-[15px] font-bold uppercase tracking-[0.08em] text-navy shadow-glow transition-transform hover:-translate-y-0.5"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-lg btn-cta px-4 py-2.5 text-[15px] font-bold uppercase tracking-[0.08em] transition-transform"
                 >
                   Sync trial balance now <ArrowRight size={15} />
                 </Link>
@@ -142,14 +142,14 @@ export default function QuickBooksCard({ quickbooks }) {
             ) : orgFed ? (
               <Link
                 to="/settings/integrations"
-                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-gold-gradient px-4 py-2.5 text-[15px] font-bold uppercase tracking-[0.08em] text-navy shadow-glow transition-transform hover:-translate-y-0.5"
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg btn-cta px-4 py-2.5 text-[15px] font-bold uppercase tracking-[0.08em] transition-transform"
               >
                 Manage in Settings <ArrowRight size={15} />
               </Link>
             ) : (
               <Link
                 to="/settings/integrations"
-                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-gold-gradient px-4 py-2.5 text-[15px] font-bold uppercase tracking-[0.08em] text-navy shadow-glow transition-transform hover:-translate-y-0.5"
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg btn-cta px-4 py-2.5 text-[15px] font-bold uppercase tracking-[0.08em] transition-transform"
               >
                 Connect QuickBooks <ArrowRight size={15} />
               </Link>

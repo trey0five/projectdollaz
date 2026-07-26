@@ -55,7 +55,7 @@ export default function WizardStrategyGoal({ schoolId, reduce, onClose, markSave
               handoffDraftPlan()
               onClose()
             }}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-gold-gradient px-4 py-2.5 text-[14px] font-bold uppercase tracking-[0.06em] text-navy shadow-glow transition-transform hover:-translate-y-0.5"
+            className="inline-flex items-center gap-1.5 rounded-lg btn-cta px-4 py-2.5 text-[14px] font-bold uppercase tracking-[0.06em] transition-transform"
           >
             <Sparkles size={15} /> Draft with Penny
           </button>

@@ -323,7 +323,7 @@ export default function OrgQuickBooksCard() {
                             type="button"
                             disabled={busy || connectingId != null}
                             onClick={() => connect(s.schoolId)}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-gold-gradient px-3 py-1.5 text-[14px] font-bold text-navy shadow-glow transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="inline-flex items-center gap-1.5 rounded-lg btn-cta px-3 py-1.5 text-[14px] font-bold transition-transform disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             {connectingId === s.schoolId ? (
                               <Loader2 size={14} className="animate-spin" />
@@ -367,7 +367,7 @@ export default function OrgQuickBooksCard() {
                     type="button"
                     disabled={busy || connectedManageable.length === 0}
                     onClick={() => runSync(null)}
-                    className="ml-auto inline-flex items-center gap-2 rounded-lg bg-gold-gradient px-4 py-2 text-[14.5px] font-bold text-navy shadow-glow transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="ml-auto inline-flex items-center gap-2 rounded-lg btn-cta px-4 py-2 text-[14.5px] font-bold transition-transform disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {syncingId === 'all' ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
                     Sync all connected ({connectedManageable.length})

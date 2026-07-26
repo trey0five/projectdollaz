@@ -136,7 +136,7 @@ function ConnectNudge({ onGoToData }) {
       <button
         type="button"
         onClick={onGoToData}
-        className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-gold-gradient px-4 py-2 text-[14px] font-semibold text-navy shadow-glow transition hover:brightness-105"
+        className="mt-1 inline-flex items-center gap-1.5 rounded-full btn-cta px-4 py-2 text-[14px] font-semibold transition"
       >
         <Database size={16} /> Connect in the Data hub
         <ArrowRight size={15} />
@@ -334,7 +334,7 @@ function CashCollectionsWorkspace() {
           cashFlow.refresh()
         }}
         disabled={refreshing || cashFlow.refreshing}
-        className="inline-flex items-center gap-1.5 rounded-full bg-gold-gradient px-3.5 py-1.5 text-[13px] font-semibold text-navy shadow-glow transition hover:brightness-105 disabled:opacity-60"
+        className="inline-flex items-center gap-1.5 rounded-full btn-cta px-3.5 py-1.5 text-[13px] font-semibold transition disabled:opacity-60"
       >
         <RefreshCw size={14} className={refreshing || cashFlow.refreshing ? 'animate-spin' : ''} />
         {refreshing || cashFlow.refreshing ? 'Refreshing…' : 'Refresh'}

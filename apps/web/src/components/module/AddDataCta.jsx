@@ -15,7 +15,7 @@ export default function AddDataCta({ label = 'Add data', className = '' }) {
   return (
     <Link
       to="?tab=add"
-      className={`inline-flex items-center gap-2 rounded-full bg-gold-gradient px-4 py-2 text-[13.5px] font-semibold text-navy shadow-glow transition hover:-translate-y-0.5 hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy/40 ${className}`}
+      className={`inline-flex items-center gap-2 rounded-full btn-cta px-4 py-2 text-[13.5px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy/40 ${className}`}
     >
       <CloudUpload size={16} />
       {label}

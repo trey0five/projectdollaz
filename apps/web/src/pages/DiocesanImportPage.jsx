@@ -429,7 +429,7 @@ function UploadStep({ loading, dragOver, setDragOver, fileRef, observedOn, setOb
           type="button"
           disabled={loading}
           onClick={() => fileRef.current?.click()}
-          className="mt-1 inline-flex items-center gap-1.5 rounded-lg bg-gold-gradient px-4 py-2.5 text-[15px] font-bold uppercase tracking-[0.08em] text-navy shadow-glow transition-transform hover:-translate-y-0.5 disabled:opacity-50"
+          className="mt-1 inline-flex items-center gap-1.5 rounded-lg btn-cta px-4 py-2.5 text-[15px] font-bold uppercase tracking-[0.08em] transition-transform disabled:opacity-50"
         >
           Choose a file
         </button>

@@ -159,7 +159,7 @@ export default function BudgetVsActual({ metrics, ...props }) {
           <p className="text-[15px] text-navy">No budget set up for this period yet.</p>
           <Link
             to="/data"
-            className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-gold-gradient px-4 py-2 text-[13px] font-bold uppercase tracking-[0.08em] text-navy shadow-glow transition-transform hover:-translate-y-0.5"
+            className="mt-3 inline-flex items-center gap-1.5 rounded-lg btn-cta px-4 py-2 text-[13px] font-bold uppercase tracking-[0.08em] transition-transform"
           >
             Set up your budget in the Data hub
           </Link>

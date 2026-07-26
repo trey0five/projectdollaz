@@ -649,7 +649,7 @@ function DataEmbedModal({
                   <button
                     type="button"
                     onClick={onOpenTb}
-                    className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-gold-gradient px-4 py-2 text-[13.5px] font-bold uppercase tracking-[0.08em] text-navy shadow-glow transition-transform hover:-translate-y-0.5"
+                    className="mt-4 inline-flex items-center gap-1.5 rounded-lg btn-cta px-4 py-2 text-[13.5px] font-bold uppercase tracking-[0.08em] transition-transform"
                   >
                     Add a trial balance
                   </button>
@@ -723,7 +723,7 @@ function NoPeriodCard({ onAdd }) {
         id="datahub-noperiod-cta"
         type="button"
         onClick={onAdd}
-        className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-gold-gradient px-4 py-2.5 text-[15px] font-bold uppercase tracking-[0.08em] text-navy shadow-glow transition-transform hover:-translate-y-0.5"
+        className="mt-4 inline-flex items-center gap-1.5 rounded-lg btn-cta px-4 py-2.5 text-[15px] font-bold uppercase tracking-[0.08em] transition-transform"
       >
         Add a trial balance
       </button>

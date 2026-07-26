@@ -88,7 +88,7 @@ export default function LandingHero({ onIntroOpen }) {
             <div className="mt-7 flex flex-wrap items-center gap-4">
               <Link
                 to={HERO.ctaPrimary.to}
-                className={`inline-flex items-center justify-center rounded-xl bg-gold-gradient px-8 py-4 text-[13px] font-bold uppercase tracking-[0.14em] text-navy-deep shadow-glow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-glow motion-reduce:transform-none ${FOCUS_RING}`}
+                className={`inline-flex items-center justify-center rounded-xl btn-cta px-8 py-4 text-[13px] font-bold uppercase tracking-[0.14em] text-navy-deep shadow-glow-lg transition-all duration-200 hover:shadow-glow motion-reduce:transform-none ${FOCUS_RING}`}
               >
                 {HERO.ctaPrimary.label}
               </Link>

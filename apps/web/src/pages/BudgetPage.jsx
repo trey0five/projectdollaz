@@ -214,7 +214,7 @@ export default function BudgetPage() {
             </div>
             <Link
               to="/data"
-              className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl bg-gold-gradient px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.1em] text-navy shadow-glow outline-none ring-gold/50 transition-transform hover:-translate-y-0.5 focus-visible:ring-2"
+              className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl btn-cta px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.1em] outline-none ring-gold/50 transition-transform focus-visible:ring-2"
             >
               Go to Data hub →
             </Link>
@@ -236,7 +236,7 @@ export default function BudgetPage() {
         </p>
         <Link
           to="/data"
-          className="mt-5 inline-flex min-h-[40px] items-center gap-1.5 rounded-xl bg-gold-gradient px-5 py-2.5 text-[12px] font-semibold uppercase tracking-[0.1em] text-navy shadow-glow outline-none ring-gold/50 transition-transform hover:-translate-y-0.5 focus-visible:ring-2"
+          className="mt-5 inline-flex min-h-[40px] items-center gap-1.5 rounded-xl btn-cta px-5 py-2.5 text-[12px] font-semibold uppercase tracking-[0.1em] outline-none ring-gold/50 transition-transform focus-visible:ring-2"
         >
           Set up your budget in the Data hub →
         </Link>

@@ -78,7 +78,7 @@ export default function DioceseBand() {
         <Reveal delay={0.3}>
           <Link
             to={DIOCESE.cta.to}
-            className={`mt-8 inline-flex items-center justify-center rounded-xl bg-gold-gradient px-8 py-4 text-[13px] font-bold uppercase tracking-[0.14em] text-navy-deep shadow-glow transition-shadow hover:shadow-glow-lg ${FOCUS_RING}`}
+            className={`mt-8 inline-flex items-center justify-center rounded-xl btn-cta px-8 py-4 text-[13px] font-bold uppercase tracking-[0.14em] text-navy-deep transition-shadow hover:shadow-glow-lg ${FOCUS_RING}`}
           >
             {DIOCESE.cta.label}
           </Link>

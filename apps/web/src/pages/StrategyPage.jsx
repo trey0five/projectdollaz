@@ -109,7 +109,7 @@ function EmptyPlanPanel({ canEdit, onCreate }) {
         <button
           type="button"
           onClick={onCreate}
-          className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-gold-gradient px-4 py-2 text-[13px] font-semibold text-navy shadow-glow transition hover:brightness-105"
+          className="mt-2 inline-flex items-center gap-1.5 rounded-full btn-cta px-4 py-2 text-[13px] font-semibold transition"
         >
           <Plus size={15} /> Create strategic plan
         </button>
