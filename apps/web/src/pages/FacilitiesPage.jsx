@@ -971,6 +971,7 @@ function FacilitiesWorkspace() {
 
   const commandCenter = (
     <DomainCommandCenter
+      showAddData
       eyebrow="Domain · Facilities engine · system of record"
       title="Facilities"
       Icon={Wrench}

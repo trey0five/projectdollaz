@@ -439,6 +439,7 @@ function AdvancementWorkspace() {
 
   const commandCenter = (
     <DomainCommandCenter
+      showAddData
       eyebrow="Domain · Advancement engine · system of record"
       title="Advancement"
       Icon={HeartHandshake}

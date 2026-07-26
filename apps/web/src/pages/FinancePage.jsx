@@ -25,6 +25,7 @@ import {
   Scale,
 } from 'lucide-react'
 import { BACK_PILL, BackPillBody } from '../components/ui/BackLink.jsx'
+import AddDataCta from '../components/module/AddDataCta.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useBilling } from '../context/BillingContext.jsx'
 import { usePersistence } from '../context/PersistenceContext.jsx'
@@ -65,7 +66,7 @@ function FinanceHeader() {
           <BackPillBody label="Back to dashboard" />
         </Link>
       )}
-      <div className={`${uiV2 ? '' : 'mt-3 '}flex items-center gap-3`}>
+      <div className={`${uiV2 ? '' : 'mt-3 '}flex flex-wrap items-center gap-3`}>
         <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gold-gradient text-navy shadow-glow">
           <CircleDollarSign size={22} />
         </span>
@@ -73,6 +74,8 @@ function FinanceHeader() {
           <h1 className="font-serif text-2xl font-semibold text-navy sm:text-[28px]">Finance</h1>
           <p className="text-[15px] text-muted">Your finance command center</p>
         </div>
+        {/* On-page Add-data entry (mirrors the sidebar tab) — v2 module shell only. */}
+        {uiV2 && <AddDataCta className="ml-auto" />}
       </div>
     </div>
   )

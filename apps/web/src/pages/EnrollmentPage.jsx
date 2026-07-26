@@ -13,6 +13,7 @@ import { motion } from 'framer-motion'
 import { GraduationCap, RotateCcw, Building2, ArrowRight } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
 import ModuleTabs from '../components/module/ModuleTabs.jsx'
+import AddDataCta from '../components/module/AddDataCta.jsx'
 import ModuleRegister from '../components/module/ModuleRegister.jsx'
 import { moduleHue } from '../components/module/moduleAnatomy.js'
 import BackLink from '../components/ui/BackLink.jsx'
@@ -185,7 +186,7 @@ function EnrollmentWorkspace() {
     <motion.header
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="mb-6 flex items-center gap-3"
+      className="mb-6 flex flex-wrap items-center gap-3"
     >
       <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gold-gradient text-navy shadow-glow">
         <GraduationCap size={24} />
@@ -196,6 +197,8 @@ function EnrollmentWorkspace() {
         </p>
         <h1 className="font-serif text-2xl font-bold text-navy sm:text-3xl">Enrollment</h1>
       </div>
+      {/* On-page Add-data entry (mirrors the sidebar tab). */}
+      <AddDataCta className="ml-auto" />
     </motion.header>
   )
 

@@ -1498,6 +1498,7 @@ function AccreditationWorkspace() {
 
   const commandCenter = (
     <DomainCommandCenter
+      showAddData
       eyebrow="Domain · Accreditation engine · system of record"
       title="Accreditation"
       Icon={BadgeCheck}

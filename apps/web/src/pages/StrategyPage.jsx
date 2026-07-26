@@ -529,6 +529,7 @@ function StrategyWorkspace() {
 
   const commandCenter = (
     <DomainCommandCenter
+      showAddData
       eyebrow="Domain · Strategic Planning · self-measuring scorecard"
       title="Strategic Planning"
       Icon={Compass}
