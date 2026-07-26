@@ -37,7 +37,7 @@ export default function DomainKpiCard({ label, value, sub, status = 'neutral', i
       initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12 }}
       animate={reduce ? { opacity: 1 } : { opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05, type: 'spring', stiffness: 260, damping: 22 }}
-      className="card-soft relative flex flex-col overflow-hidden"
+      className="kpi-3d relative flex flex-col overflow-hidden rounded-2xl"
     >
       <div className="flex flex-col gap-3 p-4 pb-6 sm:p-5 sm:pb-7">
         <div className="flex items-start justify-between gap-2">

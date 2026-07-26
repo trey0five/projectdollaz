@@ -24,7 +24,7 @@ function KpiCard(props) {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05 }}
-      className="relative overflow-hidden rounded-2xl border-2 border-rule/50 bg-white p-4 shadow-card"
+      className="kpi-3d relative overflow-hidden rounded-2xl p-4"
     >
       <span
         aria-hidden="true"
