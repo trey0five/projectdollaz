@@ -15,6 +15,14 @@ export interface CommitteePublic {
   active: boolean
   createdAt: string
   updatedAt: string
+  /**
+   * Phase 2 ADDITIVE list-only fields (absent on create/update responses — the
+   * pre-Phase-2 shapes stay byte-identical). chairPersonName = the chair-ROLE
+   * membership's person name (the read-side effective chair; the legacy free-text
+   * `chair` string above is still returned untouched).
+   */
+  memberCount?: number
+  chairPersonName?: string | null
 }
 
 export interface CommitteeListResponse {
@@ -48,11 +56,34 @@ export class CommitteesService {
     }
   }
 
-  /** List all committees for one school, deterministically ordered (active first). */
+  /**
+   * List all committees for one school, deterministically ordered (active first).
+   * Phase 2 ADDITIVE: each row gains memberCount + chairPersonName (name of the
+   * chair-role member, if any) — everything else is byte-identical, and the
+   * legacy `chair` string is still returned untouched.
+   */
   async list(schoolId: string): Promise<CommitteeListResponse> {
-    const rows = await this.prisma.committee.findMany({ where: { schoolId } })
+    const rows = await this.prisma.committee.findMany({
+      where: { schoolId },
+      include: {
+        _count: { select: { memberships: true } },
+        memberships: {
+          where: { role: 'chair' },
+          // Deterministic when a committee has 2+ chair-role members: pick the
+          // alphabetically-first name — the SAME tie-break the governance report
+          // uses (role-then-name sort), so list and report never disagree.
+          orderBy: { person: { name: 'asc' } },
+          take: 1,
+          include: { person: { select: { name: true } } },
+        },
+      },
+    })
     const committees = rows
-      .map((r) => this.toPublic(r))
+      .map((r) => ({
+        ...this.toPublic(r),
+        memberCount: r._count?.memberships ?? 0,
+        chairPersonName: r.memberships?.[0]?.person.name ?? null,
+      }))
       .sort((a, b) => {
         if (a.active !== b.active) return a.active ? -1 : 1
         const n = a.name.localeCompare(b.name)

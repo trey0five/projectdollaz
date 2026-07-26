@@ -83,6 +83,7 @@ function makeService(opts: { failGoal?: boolean } = {}) {
     stub, stub, stub,
     strategy as never, // strategy (34)
     { draft } as never, // planDrafter (35)
+    stub, // governanceReport (36) — only get_governance_status touches it
   )
   return { svc, strategy, draft, calls }
 }

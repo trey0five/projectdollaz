@@ -136,6 +136,9 @@ export class DocumentsService {
       case 'maintenance':
         found = await this.prisma.maintenanceItem.findFirst({ where, select: { id: true } })
         break
+      case 'governance_person':
+        found = await this.prisma.governancePerson.findFirst({ where, select: { id: true } })
+        break
       default:
         throw new BadRequestException(`Unsupported sourceType: ${String(sourceType)}.`)
     }

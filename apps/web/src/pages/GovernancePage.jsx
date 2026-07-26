@@ -27,9 +27,14 @@ import {
   AlertTriangle,
   Check,
   CalendarClock,
+  CalendarRange,
+  ChevronRight,
   Clock,
+  FileText,
   FileWarning,
+  Printer,
   ScrollText,
+  UserRound,
   Users,
 } from 'lucide-react'
 import EntityFormModal, {
@@ -51,6 +56,18 @@ import { useUiV2 } from '../context/UiFlagContext.jsx'
 import { usePolicies } from '../hooks/usePolicies.js'
 import { useCommittees } from '../hooks/useCommittees.js'
 import { useMeetings } from '../hooks/useMeetings.js'
+import { usePeople } from '../hooks/usePeople.js'
+import PersonFormModal from '../components/governance/PersonFormModal.jsx'
+import PersonDetailPanel from '../components/governance/PersonDetailPanel.jsx'
+import CommitteeMembers from '../components/governance/CommitteeMembers.jsx'
+import {
+  GOV_HUE,
+  groupLabel,
+  termStatusOf,
+  TERM_BADGE,
+  effectiveChair,
+  isoDay,
+} from '../components/governance/peopleMeta.js'
 
 const STATUSES = ['active', 'draft', 'retired']
 const COMMITTEE_KINDS = ['board', 'finance', 'governance', 'advancement', 'academic', 'other']
@@ -590,7 +607,220 @@ function PoliciesTable({ policies, loading, error, canEdit, reduce, onEdit, onDe
   )
 }
 
-function CommitteesTable({ committees, loading, error, canEdit, reduce, onEdit, onDelete }) {
+// ═══════════════════════════ PEOPLE REGISTER (Phase 2) ══════════════════════
+
+const GROUP_PILLS = [
+  { key: 'all', label: 'All' },
+  { key: 'board', label: 'Board' },
+  { key: 'finance_team', label: 'Finance team' },
+  { key: 'staff', label: 'Staff' },
+]
+
+/** Purple group chip (the governance module hue, on the light register). */
+function GroupChip({ group }) {
+  return (
+    <span
+      className="inline-flex items-center rounded-md border px-2 py-0.5 text-[11.5px] font-semibold"
+      style={{ borderColor: `${GOV_HUE}55`, backgroundColor: `${GOV_HUE}14`, color: '#5B21B6' }}
+    >
+      {groupLabel(group)}
+    </span>
+  )
+}
+
+function PersonTermBadge({ person }) {
+  const status = termStatusOf(person)
+  const b = TERM_BADGE[status]
+  const end = isoDay(person.termEnd)
+  return (
+    <Pill cls={b.cls} title={end ? `Term ends ${end}` : 'No term end on file'}>
+      {b.label}
+      {status === 'expiring_90d' && end ? ` · ${shortDate(end)}` : ''}
+    </Pill>
+  )
+}
+
+function PeopleTable({
+  people,
+  loading,
+  error,
+  filter,
+  onFilter,
+  canEdit,
+  reduce,
+  onOpen,
+  onEdit,
+  onDelete,
+}) {
+  if (loading) return <StateRow><p className="text-[14px] text-muted">Loading people…</p></StateRow>
+  if (error)
+    return (
+      <StateRow>
+        <p className="text-[14px] text-danger">{error}</p>
+      </StateRow>
+    )
+
+  const filtered = filter === 'all' ? people : people.filter((p) => p.groups?.includes(filter))
+
+  const pills = (
+    <div className="mb-3 flex flex-wrap gap-1.5">
+      {GROUP_PILLS.map((g) => {
+        const active = g.key === filter
+        return (
+          <button
+            key={g.key}
+            type="button"
+            onClick={() => onFilter(g.key)}
+            aria-pressed={active}
+            className={`rounded-full border px-3 py-1 text-[12.5px] font-semibold transition ${
+              active ? 'text-white' : 'border-rule/70 bg-white text-muted hover:text-navy'
+            }`}
+            style={active ? { backgroundColor: GOV_HUE, borderColor: GOV_HUE } : undefined}
+          >
+            {g.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+
+  if (people.length === 0)
+    return (
+      <>
+        {pills}
+        <StateRow>
+          <p className="font-serif text-[16px] italic text-muted">No people yet.</p>
+          <p className="mt-1 text-[13px] text-muted">
+            Add your board members and finance team to track terms, committees, and credentials.
+          </p>
+        </StateRow>
+      </>
+    )
+
+  return (
+    <>
+      {pills}
+      {filtered.length === 0 ? (
+        <StateRow>
+          <p className="font-serif text-[16px] italic text-muted">No one in this group yet.</p>
+        </StateRow>
+      ) : (
+        <TableShell
+          cols={
+            <>
+              <Th>Person</Th>
+              <Th>Groups</Th>
+              <Th>Term</Th>
+              <Th>Docs</Th>
+              <Th>Status</Th>
+              {canEdit ? <Th right>Actions</Th> : null}
+            </>
+          }
+        >
+          <AnimatePresence initial={false}>
+            {filtered.map((p) => (
+              <motion.tr
+                key={p.id}
+                layout={!reduce}
+                initial={reduce ? false : { opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={reduce ? undefined : { opacity: 0 }}
+                onClick={() => onOpen(p)}
+                className="group cursor-pointer border-t border-rule/50 transition hover:bg-cream/60"
+              >
+                <td className="px-4 py-3">
+                  <div className="font-semibold text-navy">{p.name}</div>
+                  {p.title ? (
+                    <div className="mt-0.5 font-serif text-[12.5px] italic text-muted">{p.title}</div>
+                  ) : null}
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex flex-wrap gap-1">
+                    {(p.groups ?? []).length ? (
+                      p.groups.map((g) => <GroupChip key={g} group={g} />)
+                    ) : (
+                      <span className="text-[12px] text-muted/60">—</span>
+                    )}
+                  </div>
+                </td>
+                <td className="px-4 py-3">
+                  <PersonTermBadge person={p} />
+                </td>
+                <td className="px-4 py-3">
+                  <span
+                    className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[12px] font-semibold ${
+                      p.documentCount > 0
+                        ? 'border-emerald-300/70 bg-emerald-50 text-emerald-700'
+                        : 'border-rule/60 bg-section text-muted'
+                    }`}
+                    title={`${p.documentCount ?? 0} document${p.documentCount === 1 ? '' : 's'} on file`}
+                  >
+                    <FileText size={11} />
+                    {p.documentCount ?? 0}
+                  </span>
+                </td>
+                <td className="px-4 py-3">
+                  {p.active ? (
+                    <Pill cls="border-emerald-300/70 bg-emerald-50 text-emerald-700">Active</Pill>
+                  ) : (
+                    <Pill cls="border-rule/60 bg-section text-muted">Inactive</Pill>
+                  )}
+                </td>
+                {canEdit ? (
+                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex justify-end gap-1.5 opacity-60 transition group-hover:opacity-100">
+                      <IconAction Icon={Pencil} onClick={() => onEdit(p)} label={`Edit ${p.name}`} />
+                      <IconAction
+                        Icon={Trash2}
+                        danger
+                        onClick={() => onDelete(p)}
+                        label={`Delete ${p.name}`}
+                      />
+                    </div>
+                  </td>
+                ) : null}
+              </motion.tr>
+            ))}
+          </AnimatePresence>
+        </TableShell>
+      )}
+    </>
+  )
+}
+
+/** Chair cell — the frozen read-side rule: chair-role member's name wins; the
+ *  legacy Committee.chair free-text shows only when no chair membership exists,
+ *  labelled "legacy". */
+function ChairCell({ committee }) {
+  const { name, source } = effectiveChair(committee)
+  if (!name) return <span className="text-muted">—</span>
+  return (
+    <span className="inline-flex items-center gap-1.5 text-muted">
+      {name}
+      {source === 'legacy' ? (
+        <span
+          className="rounded-md border border-rule/60 bg-section px-1.5 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-muted"
+          title="From the committee's free-text chair note — add a chair-role member to replace it"
+        >
+          legacy
+        </span>
+      ) : null}
+    </span>
+  )
+}
+
+function CommitteesTable({
+  committees,
+  loading,
+  error,
+  canEdit,
+  reduce,
+  onEdit,
+  onDelete,
+  expandedId,
+  onToggle,
+  renderMembers,
+}) {
   if (loading) return <StateRow><p className="text-[14px] text-muted">Loading committees…</p></StateRow>
   if (error)
     return (
@@ -606,6 +836,8 @@ function CommitteesTable({ committees, loading, error, canEdit, reduce, onEdit, 
       </StateRow>
     )
 
+  const colCount = canEdit ? 6 : 5
+
   return (
     <TableShell
       cols={
@@ -613,45 +845,82 @@ function CommitteesTable({ committees, loading, error, canEdit, reduce, onEdit, 
           <Th>Committee</Th>
           <Th>Kind</Th>
           <Th>Chair</Th>
+          <Th>Members</Th>
           <Th>Status</Th>
           {canEdit ? <Th right>Actions</Th> : null}
         </>
       }
     >
       <AnimatePresence initial={false}>
-        {committees.map((c) => (
-          <motion.tr
-            key={c.id}
-            layout={!reduce}
-            initial={reduce ? false : { opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={reduce ? undefined : { opacity: 0 }}
-            className="group border-t border-rule/50"
-          >
-            <td className="px-4 py-3 font-semibold text-navy">{c.name}</td>
-            <td className="px-4 py-3">
-              <span className="rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[12px] capitalize text-muted">
-                {c.kind}
-              </span>
-            </td>
-            <td className="px-4 py-3 text-muted">{c.chair ?? '—'}</td>
-            <td className="px-4 py-3">
-              {c.active ? (
-                <Pill cls="border-emerald-300/70 bg-emerald-50 text-emerald-700">Active</Pill>
-              ) : (
-                <Pill cls="border-rule/60 bg-section text-muted">Inactive</Pill>
-              )}
-            </td>
-            {canEdit ? (
-              <td className="px-4 py-3">
-                <div className="flex justify-end gap-1.5 opacity-60 transition group-hover:opacity-100">
-                  <IconAction Icon={Pencil} onClick={() => onEdit(c)} label={`Edit ${c.name}`} />
-                  <IconAction Icon={Trash2} danger onClick={() => onDelete(c)} label={`Delete ${c.name}`} />
-                </div>
+        {committees.map((c) => {
+          const expanded = expandedId === c.id
+          return [
+            <motion.tr
+              key={c.id}
+              layout={!reduce}
+              initial={reduce ? false : { opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={reduce ? undefined : { opacity: 0 }}
+              onClick={() => onToggle(c.id)}
+              className="group cursor-pointer border-t border-rule/50 transition hover:bg-cream/60"
+            >
+              <td className="px-4 py-3 font-semibold text-navy">
+                <span className="inline-flex items-center gap-1.5">
+                  <ChevronRight
+                    size={14}
+                    className={`shrink-0 text-muted transition-transform ${expanded ? 'rotate-90' : ''}`}
+                    style={expanded ? { color: GOV_HUE } : undefined}
+                    aria-hidden
+                  />
+                  {c.name}
+                </span>
               </td>
-            ) : null}
-          </motion.tr>
-        ))}
+              <td className="px-4 py-3">
+                <span className="rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[12px] capitalize text-muted">
+                  {c.kind}
+                </span>
+              </td>
+              <td className="px-4 py-3">
+                <ChairCell committee={c} />
+              </td>
+              <td className="px-4 py-3">
+                <span
+                  className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[12px] font-semibold ${
+                    (c.memberCount ?? 0) > 0
+                      ? 'border-rule/60 bg-section text-navy'
+                      : 'border-gold/40 bg-gold/10 text-[#7a5e00]'
+                  }`}
+                  title={`${c.memberCount ?? 0} member${c.memberCount === 1 ? '' : 's'}`}
+                >
+                  <Users size={11} />
+                  {c.memberCount ?? 0}
+                </span>
+              </td>
+              <td className="px-4 py-3">
+                {c.active ? (
+                  <Pill cls="border-emerald-300/70 bg-emerald-50 text-emerald-700">Active</Pill>
+                ) : (
+                  <Pill cls="border-rule/60 bg-section text-muted">Inactive</Pill>
+                )}
+              </td>
+              {canEdit ? (
+                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex justify-end gap-1.5 opacity-60 transition group-hover:opacity-100">
+                    <IconAction Icon={Pencil} onClick={() => onEdit(c)} label={`Edit ${c.name}`} />
+                    <IconAction Icon={Trash2} danger onClick={() => onDelete(c)} label={`Delete ${c.name}`} />
+                  </div>
+                </td>
+              ) : null}
+            </motion.tr>,
+            expanded ? (
+              <tr key={`${c.id}-members`} className="border-t border-rule/30 bg-cream/30">
+                <td colSpan={colCount} className="px-4 py-3">
+                  {renderMembers(c)}
+                </td>
+              </tr>
+            ) : null,
+          ]
+        })}
       </AnimatePresence>
     </TableShell>
   )
@@ -769,6 +1038,7 @@ function shortDate(iso) {
 }
 
 const TABS = [
+  { key: 'people', label: 'People' },
   { key: 'meetings', label: 'Meetings' },
   { key: 'committees', label: 'Committees' },
   { key: 'policies', label: 'Policies' },
@@ -787,17 +1057,26 @@ function GovernanceWorkspace() {
   const policiesHook = usePolicies(schoolId)
   const committeesHook = useCommittees(schoolId)
   const meetingsHook = useMeetings(schoolId)
+  const peopleHook = usePeople(schoolId)
 
   const { policies } = policiesHook
   const { committees } = committeesHook
   const { meetings, summary, approveMinutes } = meetingsHook
+  const { people } = peopleHook
 
-  const [tab, setTab] = useState('meetings')
+  const [tab, setTab] = useState('people')
   const [modal, setModal] = useState(null) // { type, entity } | null
+  const [groupFilter, setGroupFilter] = useState('all')
+  const [panelPerson, setPanelPerson] = useState(null) // roster row | null (slide-over)
+  const [panelRefresh, setPanelRefresh] = useState(0)
+  const [expandedCommitteeId, setExpandedCommitteeId] = useState(null)
 
   const openCreate = (type) => setModal({ type, entity: null })
   const openEdit = (type, entity) => setModal({ type, entity })
   const closeModal = () => setModal(null)
+
+  const openPerson = (p) => setPanelPerson(p)
+  const closePerson = () => setPanelPerson(null)
 
   const createTaskFromPolicy = (p) => {
     const today = new Date().toISOString().slice(0, 10)
@@ -823,6 +1102,16 @@ function GovernanceWorkspace() {
   }
   const onDeleteMeeting = async (m) => {
     if (window.confirm(`Delete "${m.title}"? This cannot be undone.`)) await meetingsHook.remove(m.id)
+  }
+  const onDeletePerson = async (p) => {
+    if (
+      window.confirm(
+        `Delete "${p.name}"? Their committee seats are removed; documents stay in the knowledge library.`,
+      )
+    ) {
+      await peopleHook.remove(p.id)
+      if (panelPerson?.id === p.id) setPanelPerson(null)
+    }
   }
 
   // ── KPIs (computed from the hooks) ─────────────────────────────────────────
@@ -859,9 +1148,9 @@ function GovernanceWorkspace() {
             : { icon: Check, text: 'all signed off', tone: 'good' },
     }
 
-    // Committees.
+    // Committees (chair presence via the read-side rule: membership OR legacy note).
     const active = committees.filter((c) => c.active)
-    const noChair = active.filter((c) => !c.chair).length
+    const noChair = active.filter((c) => !effectiveChair(c).name).length
     const committeesKpi = {
       label: 'Committees',
       value: String(active.length),
@@ -870,6 +1159,56 @@ function GovernanceWorkspace() {
         noChair > 0
           ? { icon: AlertTriangle, text: `${noChair} without a chair`, tone: 'neutral' }
           : { icon: Check, text: 'all staffed', tone: 'good' },
+    }
+
+    // ── People (Phase 2): board roster, term horizon, finance credentials ─────
+    const activePeople = people.filter((p) => p.active)
+    const boardPeople = activePeople.filter((p) => p.groups?.includes('board'))
+    const boardKpi = {
+      label: 'Board members',
+      value: String(boardPeople.length),
+      status: boardPeople.length > 0 ? 'good' : 'neutral',
+      sub:
+        boardPeople.length > 0
+          ? { icon: UserRound, text: 'on the active roster', tone: 'good' }
+          : { icon: UserRound, text: 'add your board roster', tone: 'neutral' },
+    }
+
+    const expiredTerms = boardPeople.filter((p) => termStatusOf(p) === 'expired').length
+    const expiringTerms = boardPeople.filter((p) => termStatusOf(p) === 'expiring_90d').length
+    const termsKpi = {
+      label: 'Terms expiring (90d)',
+      value: expiredTerms > 0 ? `${expiringTerms} · ${expiredTerms} expired` : String(expiringTerms),
+      status: expiredTerms > 0 ? 'risk' : expiringTerms > 0 ? 'watch' : 'good',
+      sub:
+        expiredTerms > 0
+          ? { icon: AlertTriangle, text: `${expiredTerms} already expired`, tone: 'bad' }
+          : expiringTerms > 0
+            ? { icon: CalendarRange, text: 'renewals to plan', tone: 'neutral' }
+            : { icon: Check, text: 'no terms at risk', tone: 'good' },
+    }
+
+    const financePeople = activePeople.filter((p) => p.groups?.includes('finance_team'))
+    const withDocs = financePeople.filter((p) => (p.documentCount ?? 0) > 0).length
+    const credentialsKpi = {
+      label: 'Finance credentials on file',
+      value: `${withDocs}/${financePeople.length}`,
+      status:
+        financePeople.length === 0
+          ? 'neutral'
+          : withDocs < financePeople.length
+            ? 'watch'
+            : 'good',
+      sub:
+        financePeople.length === 0
+          ? { icon: FileText, text: 'no finance team yet', tone: 'neutral' }
+          : withDocs < financePeople.length
+            ? {
+                icon: FileWarning,
+                text: `${financePeople.length - withDocs} missing credentials`,
+                tone: 'neutral',
+              }
+            : { icon: Check, text: 'everyone documented', tone: 'good' },
     }
 
     // Next meeting.
@@ -898,8 +1237,8 @@ function GovernanceWorkspace() {
             },
     }
 
-    return [policiesKpi, minutesKpi, committeesKpi, nextKpi]
-  }, [policies, committees, meetings, summary])
+    return [boardKpi, termsKpi, credentialsKpi, policiesKpi, minutesKpi, committeesKpi, nextKpi]
+  }, [policies, committees, meetings, summary, people])
 
   // ── Needs-attention items (most-urgent first, capped at 6) ─────────────────
   const attentionItems = useMemo(() => {
@@ -970,19 +1309,124 @@ function GovernanceWorkspace() {
       })
     }
 
-    return items.sort((a, b) => a.sortKey - b.sortKey).slice(0, 6)
-  }, [meetings, policies, canEdit, approveMinutes])
+    // 4) Board terms expired / expiring within 90 days (Phase 2 people).
+    const activePeople = people.filter((p) => p.active)
+    for (const p of activePeople.filter((x) => x.groups?.includes('board'))) {
+      const status = termStatusOf(p)
+      if (status !== 'expired' && status !== 'expiring_90d') continue
+      const end = isoDay(p.termEnd)
+      items.push({
+        id: `term-${p.id}`,
+        tone: status === 'expired' ? 'risk' : 'watch',
+        sortKey: status === 'expired' ? 0 : 1,
+        title:
+          status === 'expired' ? `${p.name}'s board term has expired` : `${p.name}'s term expires soon`,
+        why:
+          status === 'expired'
+            ? `Term ended ${shortDate(end) ?? end} · reappoint or retire the seat`
+            : `Term ends ${shortDate(end) ?? end} · plan the renewal`,
+        actions: [
+          {
+            label: 'View',
+            primary: false,
+            onClick: () => {
+              setTab('people')
+              setPanelPerson(p)
+            },
+          },
+        ],
+      })
+    }
 
-  // ── Gate (shared across all three registers) ───────────────────────────────
+    // 5) Finance-team people with no credentials on file (accreditation gap).
+    for (const p of activePeople.filter((x) => x.groups?.includes('finance_team'))) {
+      if ((p.documentCount ?? 0) > 0) continue
+      items.push({
+        id: `creds-${p.id}`,
+        tone: 'watch',
+        sortKey: 2,
+        title: `${p.name} has no credentials on file`,
+        why: 'Accreditors ask for CVs and licenses · upload them to their profile',
+        meta: (
+          <span
+            className="mt-1 inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-semibold"
+            style={{ borderColor: `${GOV_HUE}55`, backgroundColor: `${GOV_HUE}14`, color: '#5B21B6' }}
+          >
+            <UserRound size={11} />
+            {p.title ?? 'Finance team'}
+          </span>
+        ),
+        actions: canEdit
+          ? [
+              {
+                label: 'Add credential',
+                primary: false,
+                onClick: () => {
+                  setTab('people')
+                  setPanelPerson(p)
+                },
+              },
+            ]
+          : [],
+      })
+    }
+
+    // 6) Active committees with nobody on them (memberCount is the additive
+    //    list field; undefined means the API predates it — stay silent then).
+    for (const c of committees.filter((x) => x.active && x.memberCount === 0)) {
+      items.push({
+        id: `empty-committee-${c.id}`,
+        tone: 'watch',
+        sortKey: 2,
+        title: `${c.name} has no members`,
+        why: 'Seat people on it so its meetings have owners',
+        actions: [
+          {
+            label: 'Add members',
+            primary: false,
+            onClick: () => {
+              setTab('committees')
+              setExpandedCommitteeId(c.id)
+            },
+          },
+        ],
+      })
+    }
+
+    return items.sort((a, b) => a.sortKey - b.sortKey).slice(0, 6)
+  }, [meetings, policies, people, committees, canEdit, approveMinutes])
+
+  // ── Gate (shared across all four registers) ────────────────────────────────
   const notLicensed =
-    policiesHook.notLicensed || committeesHook.notLicensed || meetingsHook.notLicensed
+    policiesHook.notLicensed ||
+    committeesHook.notLicensed ||
+    meetingsHook.notLicensed ||
+    peopleHook.notLicensed
   const notEntitled =
-    policiesHook.notEntitled || committeesHook.notEntitled || meetingsHook.notEntitled
+    policiesHook.notEntitled ||
+    committeesHook.notEntitled ||
+    meetingsHook.notEntitled ||
+    peopleHook.notEntitled
   if (notLicensed || notEntitled) return <GatePanel notLicensed={notLicensed} />
 
   // ── Active register table ──────────────────────────────────────────────────
   let registerTable = null
-  if (tab === 'meetings')
+  if (tab === 'people')
+    registerTable = (
+      <PeopleTable
+        people={people}
+        loading={peopleHook.loading}
+        error={peopleHook.error}
+        filter={groupFilter}
+        onFilter={setGroupFilter}
+        canEdit={canEdit}
+        reduce={reduce}
+        onOpen={openPerson}
+        onEdit={(p) => openEdit('person', p)}
+        onDelete={onDeletePerson}
+      />
+    )
+  else if (tab === 'meetings')
     registerTable = (
       <MeetingsTable
         meetings={meetings}
@@ -1005,6 +1449,19 @@ function GovernanceWorkspace() {
         reduce={reduce}
         onEdit={(c) => openEdit('committee', c)}
         onDelete={onDeleteCommittee}
+        expandedId={expandedCommitteeId}
+        onToggle={(id) => setExpandedCommitteeId((cur) => (cur === id ? null : id))}
+        renderMembers={(c) => (
+          <CommitteeMembers
+            committee={c}
+            people={people}
+            canEdit={canEdit}
+            listMembers={committeesHook.listMembers}
+            addMember={committeesHook.addMember}
+            updateMemberRole={committeesHook.updateMemberRole}
+            removeMember={committeesHook.removeMember}
+          />
+        )}
       />
     )
   else
@@ -1026,7 +1483,15 @@ function GovernanceWorkspace() {
   const onNew = canEdit
     ? () =>
         navigate(
-          `/governance?tab=add&add=${tab === 'meetings' ? 'meeting' : tab === 'committees' ? 'committee' : 'policy'}`,
+          `/governance?tab=add&add=${
+            tab === 'people'
+              ? 'person'
+              : tab === 'meetings'
+                ? 'meeting'
+                : tab === 'committees'
+                  ? 'committee'
+                  : 'policy'
+          }`,
         )
     : null
 
@@ -1041,6 +1506,12 @@ function GovernanceWorkspace() {
   const saveMeeting = async (body) => {
     if (modal?.entity) await meetingsHook.update(modal.entity.id, body)
     else await meetingsHook.create(body)
+  }
+  const savePerson = async (body) => {
+    if (modal?.entity) await peopleHook.update(modal.entity.id, body)
+    else await peopleHook.create(body)
+    // The slide-over re-pulls its detail when the refresh token bumps.
+    setPanelRefresh((n) => n + 1)
   }
 
   const policyInitial = modal?.entity
@@ -1077,6 +1548,31 @@ function GovernanceWorkspace() {
         minutesStatus: modal.entity.minutesStatus ?? 'none',
       }
     : null
+  const personInitial = modal?.entity
+    ? {
+        name: modal.entity.name ?? '',
+        title: modal.entity.title ?? '',
+        groups: Array.isArray(modal.entity.groups) ? modal.entity.groups : [],
+        termStart: isoDay(modal.entity.termStart),
+        termEnd: isoDay(modal.entity.termEnd),
+        email: modal.entity.email ?? '',
+        bio: modal.entity.bio ?? '',
+        active: modal.entity.active ?? true,
+      }
+    : null
+
+  // The accreditation-ready governance report — a dedicated print route (opens in
+  // a new tab so the command center stays put; auto-fires the print dialog there).
+  const reportButton = (
+    <a
+      href="/governance/report/print"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1.5 rounded-full border border-rule/70 bg-white px-3.5 py-1.5 text-[13px] font-semibold text-navy transition hover:border-gold/60 hover:text-gold"
+    >
+      <Printer size={14} /> Governance report
+    </a>
+  )
 
   const commandCenter = (
     <DomainCommandCenter
@@ -1091,6 +1587,7 @@ function GovernanceWorkspace() {
       onNew={onNew}
       registerTable={registerTable}
       attentionItems={attentionItems}
+      headerAside={reportButton}
     />
   )
 
@@ -1122,6 +1619,28 @@ function GovernanceWorkspace() {
           onClose={closeModal}
           onSave={saveMeeting}
           reduce={reduce}
+        />
+      ) : null}
+      {modal?.type === 'person' ? (
+        <PersonFormModal
+          key={modal.entity ? modal.entity.id : 'new'}
+          initial={personInitial}
+          onClose={closeModal}
+          onSave={savePerson}
+          reduce={reduce}
+        />
+      ) : null}
+      {panelPerson ? (
+        <PersonDetailPanel
+          key={panelPerson.id}
+          schoolId={schoolId}
+          person={people.find((p) => p.id === panelPerson.id) ?? panelPerson}
+          canEdit={canEdit}
+          refreshToken={panelRefresh}
+          onClose={closePerson}
+          onEdit={(p) => openEdit('person', p)}
+          onDelete={onDeletePerson}
+          onChanged={() => peopleHook.refresh()}
         />
       ) : null}
     </>

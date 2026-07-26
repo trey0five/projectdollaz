@@ -17,8 +17,10 @@ import { CurrentUser } from '../common/decorators/current-user.decorator.js'
 import { EntitlementGuard } from '../billing/entitlement.guard.js'
 import { RequiresModule } from '../billing/requires-module.decorator.js'
 import { CommitteesService } from './committees.service.js'
+import { PeopleService } from './people.service.js'
 import { CreateCommitteeDto } from './dto/create-committee.dto.js'
 import { UpdateCommitteeDto } from './dto/update-committee.dto.js'
+import { AddMemberDto, UpdateMemberDto } from './dto/person.dto.js'
 
 /**
  * Phase 3 Governance depth — the COMMITTEE register controller. Rides the SAME
@@ -32,7 +34,12 @@ import { UpdateCommitteeDto } from './dto/update-committee.dto.js'
 @UseGuards(JwtAuthGuard, RolesGuard, EntitlementGuard)
 @RequiresModule('governance')
 export class CommitteesController {
-  constructor(private readonly committees: CommitteesService) {}
+  constructor(
+    private readonly committees: CommitteesService,
+    // Phase 2 — membership routes are COMMITTEE-CENTRIC (they live here) but ALL
+    // membership persistence lives in PeopleService (the frozen split).
+    private readonly people: PeopleService,
+  ) {}
 
   @Get()
   @Roles('owner', 'accountant', 'viewer')
@@ -69,5 +76,50 @@ export class CommitteesController {
     @CurrentUser() user: User,
   ) {
     return this.committees.remove(schoolId, committeeId, user.id)
+  }
+
+  // ── Phase 2 — committee MEMBERSHIP (people register join) ───────────────────
+
+  @Get(':committeeId/members')
+  @Roles('owner', 'accountant', 'viewer')
+  listMembers(
+    @Param('schoolId', ParseUUIDPipe) schoolId: string,
+    @Param('committeeId', ParseUUIDPipe) committeeId: string,
+  ) {
+    return this.people.listMembers(schoolId, committeeId)
+  }
+
+  @Post(':committeeId/members')
+  @Roles('owner', 'accountant')
+  addMember(
+    @Param('schoolId', ParseUUIDPipe) schoolId: string,
+    @Param('committeeId', ParseUUIDPipe) committeeId: string,
+    @Body() dto: AddMemberDto,
+    @CurrentUser() user: User,
+  ) {
+    return this.people.addMember(schoolId, committeeId, dto, user.id)
+  }
+
+  @Patch(':committeeId/members/:membershipId')
+  @Roles('owner', 'accountant')
+  updateMember(
+    @Param('schoolId', ParseUUIDPipe) schoolId: string,
+    @Param('committeeId', ParseUUIDPipe) committeeId: string,
+    @Param('membershipId', ParseUUIDPipe) membershipId: string,
+    @Body() dto: UpdateMemberDto,
+    @CurrentUser() user: User,
+  ) {
+    return this.people.updateMemberRole(schoolId, committeeId, membershipId, dto, user.id)
+  }
+
+  @Delete(':committeeId/members/:membershipId')
+  @Roles('owner', 'accountant')
+  removeMember(
+    @Param('schoolId', ParseUUIDPipe) schoolId: string,
+    @Param('committeeId', ParseUUIDPipe) committeeId: string,
+    @Param('membershipId', ParseUUIDPipe) membershipId: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.people.removeMember(schoolId, committeeId, membershipId, user.id)
   }
 }

@@ -46,6 +46,7 @@ import TasksPage from './pages/TasksPage.jsx'
 import KnowledgePage from './pages/KnowledgePage.jsx'
 import SchedulesPage from './pages/SchedulesPage.jsx'
 import BoardReportPrintPage from './pages/BoardReportPrintPage.jsx'
+import GovernanceReportPrintPage from './pages/GovernanceReportPrintPage.jsx'
 import SettingsPage from './pages/SettingsPage.jsx'
 import AccountSection from './components/settings/AccountSection.jsx'
 import MembersSection from './components/settings/MembersSection.jsx'
@@ -238,6 +239,10 @@ export default function App() {
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/reports/schedules" element={<SchedulesPage />} />
         <Route path="/reports/board/print" element={<BoardReportPrintPage />} />
+        {/* Governance & accreditation report — print-clean like the other print
+            routes (the AppShell chrome is .no-print and the sidebar offset is
+            neutralized in the global print reset). */}
+        <Route path="/governance/report/print" element={<GovernanceReportPrintPage />} />
         <Route path="/integrations/qb/callback" element={<QbCallbackPage />} />
         <Route path="/enrollment/blackbaud/callback" element={<EnrollmentBlackbaudCallbackPage />} />
         {/* History folded into Statements & Periods — keep old links working. */}

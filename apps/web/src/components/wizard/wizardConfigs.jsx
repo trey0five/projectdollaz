@@ -44,6 +44,7 @@ import {
   Sparkles,
   Flag,
   Users,
+  UserRound,
   Gift,
 } from 'lucide-react'
 
@@ -184,6 +185,16 @@ export const wizardConfigs = {
     module: 'governance',
     hue: HUE.governance,
     options: [
+      {
+        key: 'person',
+        kind: 'flow',
+        Icon: UserRound,
+        label: 'Board & finance people',
+        blurb:
+          'Add your board members and finance team — their titles, terms and groups. Credentials attach from their profile.',
+        cta: 'Add people',
+        flow: recordFlows['governance.person'],
+      },
       {
         key: 'policy',
         kind: 'flow',

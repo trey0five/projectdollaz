@@ -475,6 +475,46 @@ export const committeesApi = {
     api.patch(`/schools/${schoolId}/governance/committees/${committeeId}`, body),
   remove: (schoolId, committeeId) =>
     api.delete(`/schools/${schoolId}/governance/committees/${committeeId}`),
+  // ── Governance Phase 2: committee MEMBERSHIP (committee-centric routes) ─────
+  // Members are GovernancePerson links with a role ('chair'|'vice_chair'|
+  // 'secretary'|'member'); duplicate person on a committee → 409.
+  listMembers: (schoolId, committeeId) =>
+    api.get(`/schools/${schoolId}/governance/committees/${committeeId}/members`),
+  addMember: (schoolId, committeeId, body) =>
+    api.post(`/schools/${schoolId}/governance/committees/${committeeId}/members`, body),
+  updateMemberRole: (schoolId, committeeId, membershipId, body) =>
+    api.patch(
+      `/schools/${schoolId}/governance/committees/${committeeId}/members/${membershipId}`,
+      body,
+    ),
+  removeMember: (schoolId, committeeId, membershipId) =>
+    api.delete(
+      `/schools/${schoolId}/governance/committees/${committeeId}/members/${membershipId}`,
+    ),
+}
+
+// ── Governance Phase 2: PEOPLE (board / finance team / staff roster) ──────────
+// School-scoped, same 'governance' module gate. People are REAL-WORLD governance
+// people (board members usually aren't app users) — userId is an optional link.
+// Person credentials/CVs live in the CORE knowledge store: upload via the existing
+// documentsApi.upload with formData sourceType:'governance_person' +
+// sourceRef:<personId> (tags convention: cv|license|degree|background_check);
+// download via the existing documentsApi.downloadUrl.
+export const governancePeopleApi = {
+  list: (schoolId, params) => api.get(`/schools/${schoolId}/governance/people`, { params }),
+  get: (schoolId, personId) => api.get(`/schools/${schoolId}/governance/people/${personId}`),
+  create: (schoolId, body) => api.post(`/schools/${schoolId}/governance/people`, body),
+  update: (schoolId, personId, body) =>
+    api.patch(`/schools/${schoolId}/governance/people/${personId}`, body),
+  remove: (schoolId, personId) =>
+    api.delete(`/schools/${schoolId}/governance/people/${personId}`),
+}
+
+// The accreditation-ready governance report (viewer-readable): board roster w/
+// term status, committees + members, finance-team credential coverage, policy
+// summary, minutes discipline. Compute-only on the server — the web does NO math.
+export const governanceReportApi = {
+  get: (schoolId) => api.get(`/schools/${schoolId}/governance/report`),
 }
 
 export const meetingsApi = {

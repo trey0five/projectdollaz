@@ -60,6 +60,7 @@ function makeService() {
     stub, // cashFlow (LAST) — only get_cash_flow touches it
     stub, // strategy (LAST) — only get_plan_status touches it
     stub, // planDrafter (LAST) — only draft_strategy_plan touches it
+    stub, // governanceReport (LAST) — only get_governance_status touches it
   )
   return { svc, alertsCreate }
 }

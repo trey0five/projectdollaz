@@ -87,6 +87,7 @@ function makeService(opts?: {
     undefined as never, // cashFlow (LAST) — only get_cash_flow touches it
     undefined as never, // strategy (LAST) — only get_plan_status touches it
     undefined as never, // planDrafter (LAST) — only draft_strategy_plan touches it
+    stub, // governanceReport (LAST) — only get_governance_status touches it
   )
   return { svc, createInvitation, revokeInvitation, prisma }
 }

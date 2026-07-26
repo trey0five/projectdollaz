@@ -18,6 +18,7 @@
 import {
   ScrollText,
   Users,
+  UserRound,
   CalendarClock,
   ClipboardCheck,
   Wrench,
@@ -29,6 +30,7 @@ import {
   policiesApi,
   committeesApi,
   meetingsApi,
+  governancePeopleApi,
   accreditationApi,
   facilitiesApi,
   advancementApi,
@@ -352,6 +354,143 @@ export const recordFlows = {
       ['Agenda', orDash(v.agenda)],
       ['Minutes', orDash(v.minutes)],
       ['Decisions', orDash(v.decisions)],
+    ],
+  },
+
+  // ══════════════════════ GOVERNANCE · PERSON (Phase 2) ══════════════════════
+  // Board / finance team / staff roster. `groups` is a string[] in the API
+  // (PERSON_GROUPS in apps/api/src/governance/dto/person.dto.ts: 'board' |
+  // 'finance_team' | 'staff') — the flow renders three checkboxes and toBody
+  // assembles the array (the framework has no multi-chip field type). Optional
+  // empties are OMITTED (never '' — every field is DTO-bounded).
+  'governance.person': {
+    key: 'governance.person',
+    noun: 'person',
+    nounPlural: 'people',
+    Icon: UserRound,
+    defaults: {
+      name: '',
+      title: '',
+      groupBoard: true,
+      groupFinance: false,
+      groupStaff: false,
+      termStart: '',
+      termEnd: '',
+      email: '',
+      bio: '',
+    },
+    steps: [
+      {
+        key: 'basics',
+        label: 'Basics',
+        title: 'First, who they are',
+        blurb: 'Their name, what they do, and which groups they belong to.',
+        fields: [
+          {
+            key: 'name',
+            label: 'What’s their name?',
+            type: 'text',
+            required: true,
+            requiredMsg: 'Give them a name',
+            maxLength: 200,
+            span: 2,
+            placeholder: 'e.g. Jane Alvarez',
+          },
+          {
+            key: 'title',
+            label: 'Title',
+            type: 'text',
+            maxLength: 200,
+            span: 2,
+            placeholder: 'Board Chair, Trustee, CFO, Business Manager…',
+          },
+          { key: 'groupBoard', label: 'Board', type: 'checkbox', placeholder: 'On the board' },
+          {
+            key: 'groupFinance',
+            label: 'Finance team',
+            type: 'checkbox',
+            placeholder: 'On the finance team',
+          },
+          { key: 'groupStaff', label: 'Staff', type: 'checkbox', placeholder: 'On staff' },
+        ],
+      },
+      {
+        key: 'details',
+        label: 'Details',
+        title: 'Add what you have',
+        optional: true,
+        blurb: 'Everything here is optional — terms and bios can come later.',
+        fields: [
+          { key: 'termStart', label: 'Term start', type: 'date' },
+          {
+            key: 'termEnd',
+            label: 'Term end',
+            type: 'date',
+            validate: (raw, v) =>
+              raw && v.termStart && raw < v.termStart ? 'The term can’t end before it starts' : null,
+          },
+          {
+            key: 'email',
+            label: 'Email',
+            type: 'text',
+            maxLength: 200,
+            placeholder: 'jane@example.org',
+            validate: (raw) => {
+              const t = String(raw ?? '').trim()
+              return t && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t)
+                ? 'That email address doesn’t look right'
+                : null
+            },
+          },
+          {
+            key: 'bio',
+            label: 'Bio / qualifications',
+            type: 'textarea',
+            rows: 3,
+            maxLength: 2000,
+            span: 2,
+            fold: true,
+          },
+        ],
+      },
+    ],
+    // CreatePersonDto ✓ — name + groups always; optional empties OMITTED (the
+    // create DTO is @IsOptional-per-field; null-clears are a PATCH-only concern).
+    toBody: (v) => {
+      const groups = []
+      if (v.groupBoard) groups.push('board')
+      if (v.groupFinance) groups.push('finance_team')
+      if (v.groupStaff) groups.push('staff')
+      const body = { name: v.name.trim(), groups }
+      if (v.title.trim()) body.title = v.title.trim()
+      if (v.termStart) body.termStart = v.termStart
+      if (v.termEnd) body.termEnd = v.termEnd
+      if (v.email.trim()) body.email = v.email.trim()
+      if (v.bio.trim()) body.bio = v.bio.trim()
+      return body
+    },
+    submit: (ctx, body) => governancePeopleApi.create(ctx.schoolId, body),
+    itemLabel: (v) => v.name.trim(),
+    itemSub: (v) => {
+      const g = []
+      if (v.groupBoard) g.push('board')
+      if (v.groupFinance) g.push('finance team')
+      if (v.groupStaff) g.push('staff')
+      return g.length ? `person · ${g.join(' + ')}` : 'person'
+    },
+    reviewPairs: (v) => [
+      ['Name', orDash(v.name)],
+      ['Title', orDash(v.title)],
+      [
+        'Groups',
+        [v.groupBoard && 'Board', v.groupFinance && 'Finance team', v.groupStaff && 'Staff']
+          .filter(Boolean)
+          .join(', ') || '—',
+      ],
+      ['Term start', orDash(v.termStart)],
+      ['Term end', orDash(v.termEnd)],
+      ['Email', orDash(v.email)],
+      ['Bio', orDash(v.bio)],
     ],
   },
 

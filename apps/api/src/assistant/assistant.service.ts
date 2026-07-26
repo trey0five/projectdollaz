@@ -66,6 +66,7 @@ import {
 import { PoliciesService } from '../governance/policies.service.js'
 import { CommitteesService } from '../governance/committees.service.js'
 import { MeetingsService } from '../governance/meetings.service.js'
+import { GovernanceReportService } from '../governance/governance-report.service.js'
 import { AccreditationService } from '../accreditation/accreditation.service.js'
 import { FacilitiesService } from '../facilities/facilities.service.js'
 import { AdvancementService } from '../advancement/advancement.service.js'
@@ -651,6 +652,11 @@ export class AssistantService {
     // elsewhere is safe. Boot-safe: it injects Prisma + StrategyProgressService + pure
     // analytics only, and rides the existing acyclic AssistantModule→StrategyModule edge.
     private readonly planDrafter: StrategyPlanDrafterService,
+    // Governance Phase 2 — the composed governance report for the read-only
+    // get_governance_status tool. Appended LAST among the REQUIRED deps (before the
+    // optional tail, which TS requires) so existing positional-arg assistant specs
+    // append one stub. report() is compute-only and never writes.
+    private readonly governanceReport: GovernanceReportService,
     // FERPA guardrail config. Optional/last so positional-arg unit specs still
     // construct (undefined → ferpaMode defaults ON).
     private readonly config?: ConfigService,
@@ -3994,6 +4000,59 @@ export class AssistantService {
           })),
           behindPaceGoals: sp.summary.behindPaceGoals,
           staleInitiatives: sp.summary.staleInitiatives,
+        }
+      }
+      case 'get_governance_status': {
+        // Governance Phase 2 — read-only governance health, derived from the SAME
+        // composed report the /governance/report route returns (one source of truth).
+        // NOT in WRITE_TOOLS/CONFIRM_TOOLS (no ApplyActionDto/ProposedAction change)
+        // → exposed to all roles incl. viewer. COMPACT frozen projection + a
+        // plain-language gaps list so Penny states figures, never invents them.
+        const gr = await this.governanceReport.report(ctx.schoolId)
+        const activeBoard = gr.boardRoster.filter((p) => p.active)
+        const termsExpiringSoon = gr.boardRoster.filter(
+          (p) => p.termStatus === 'expiring_90d',
+        ).length
+        const termsExpired = gr.boardRoster.filter((p) => p.termStatus === 'expired').length
+        const gaps: string[] = []
+        if (termsExpiringSoon > 0) {
+          gaps.push(
+            `${termsExpiringSoon} board term${termsExpiringSoon === 1 ? '' : 's'} expire${termsExpiringSoon === 1 ? 's' : ''} within 90 days`,
+          )
+        }
+        if (termsExpired > 0) {
+          gaps.push(`${termsExpired} board term${termsExpired === 1 ? ' has' : 's have'} expired`)
+        }
+        for (const p of gr.financeTeam.people) {
+          if (!p.hasCredentials) gaps.push(`${p.title ?? p.name} has no credentials on file`)
+        }
+        for (const c of gr.committees) {
+          if (c.memberCount === 0) gaps.push(`${c.name} committee has no members`)
+        }
+        if (gr.policySummary.pastReview > 0) {
+          gaps.push(
+            `${gr.policySummary.pastReview} polic${gr.policySummary.pastReview === 1 ? 'y is' : 'ies are'} past review`,
+          )
+        }
+        return {
+          boardSize: gr.boardRoster.length,
+          activeBoardSize: activeBoard.length,
+          termsExpiringSoon,
+          committees: gr.committees.map((c) => ({
+            name: c.name,
+            memberCount: c.memberCount,
+            hasChair: c.chairName !== null,
+          })),
+          financeCredentialCoverage: gr.financeTeam.coverage,
+          policies: {
+            total: gr.policySummary.total,
+            pastReview: gr.policySummary.pastReview,
+          },
+          minutes: {
+            approved: gr.minutesDiscipline.approvedMinutes,
+            lastApprovedAt: gr.minutesDiscipline.lastApprovedAt,
+          },
+          gaps,
         }
       }
       case 'get_budget_vs_actual': {

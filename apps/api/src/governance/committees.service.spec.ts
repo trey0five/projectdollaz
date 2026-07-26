@@ -48,8 +48,32 @@ describe('CommitteesService', () => {
       ]),
     })
     const res = await svc.list('school-A')
-    expect(committee.findMany).toHaveBeenCalledWith({ where: { schoolId: 'school-A' } })
+    expect(committee.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { schoolId: 'school-A' } }),
+    )
     expect(res.committees.map((c) => c.id)).toEqual(['c3', 'c1', 'c2'])
+  })
+
+  it('list carries the Phase 2 ADDITIVE fields: memberCount + chairPersonName', async () => {
+    const { svc } = makeService({
+      findMany: vi.fn(async () => [
+        row({
+          id: 'c1',
+          _count: { memberships: 3 },
+          memberships: [{ role: 'chair', person: { name: 'Jane Smith' } }],
+        }),
+        row({ id: 'c2', name: 'No chair', _count: { memberships: 0 }, memberships: [] }),
+      ]),
+    })
+    const res = await svc.list('school-A')
+    const c1 = res.committees.find((c) => c.id === 'c1')
+    const c2 = res.committees.find((c) => c.id === 'c2')
+    expect(c1?.memberCount).toBe(3)
+    expect(c1?.chairPersonName).toBe('Jane Smith')
+    expect(c2?.memberCount).toBe(0)
+    expect(c2?.chairPersonName).toBeNull()
+    // The legacy free-text chair string is still returned untouched.
+    expect(c1?.chair).toBeNull()
   })
 
   it('create scopes schoolId, defaults kind/active, writes audit', async () => {

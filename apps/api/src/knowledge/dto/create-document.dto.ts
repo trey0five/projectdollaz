@@ -22,6 +22,9 @@ export const DOCUMENT_SOURCE_TYPES = [
   'standard',
   'campaign',
   'maintenance',
+  // Governance Phase 2 — credential/CV docs attached to a GovernancePerson
+  // (sourceRef = personId; tag convention cv|license|degree|background_check).
+  'governance_person',
 ] as const
 export type DocumentSourceType = (typeof DOCUMENT_SOURCE_TYPES)[number]
 

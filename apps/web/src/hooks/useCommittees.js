@@ -97,5 +97,65 @@ export function useCommittees(schoolId) {
     [schoolId, load],
   )
 
-  return { committees, loading, error, notLicensed, notEntitled, refresh, create, update, remove }
+  // ── Governance Phase 2: committee MEMBERSHIP wiring ─────────────────────────
+  // Mutations re-pull the committees list so the additive memberCount /
+  // chairPersonName fields on each row stay honest after a change.
+
+  /** Members of one committee, ordered chair→vice_chair→secretary→member→name. */
+  const listMembers = useCallback(
+    async (committeeId) => {
+      if (!schoolId) return []
+      const res = await committeesApi.listMembers(schoolId, committeeId)
+      const d = res.data
+      return Array.isArray(d) ? d : (d?.members ?? [])
+    },
+    [schoolId],
+  )
+
+  const addMember = useCallback(
+    async (committeeId, body) => {
+      if (!schoolId) return null
+      const res = await committeesApi.addMember(schoolId, committeeId, body)
+      await load(schoolId)
+      return res.data ?? null
+    },
+    [schoolId, load],
+  )
+
+  const updateMemberRole = useCallback(
+    async (committeeId, membershipId, role) => {
+      if (!schoolId) return null
+      const res = await committeesApi.updateMemberRole(schoolId, committeeId, membershipId, {
+        role,
+      })
+      await load(schoolId)
+      return res.data ?? null
+    },
+    [schoolId, load],
+  )
+
+  const removeMember = useCallback(
+    async (committeeId, membershipId) => {
+      if (!schoolId) return
+      await committeesApi.removeMember(schoolId, committeeId, membershipId)
+      await load(schoolId)
+    },
+    [schoolId, load],
+  )
+
+  return {
+    committees,
+    loading,
+    error,
+    notLicensed,
+    notEntitled,
+    refresh,
+    create,
+    update,
+    remove,
+    listMembers,
+    addMember,
+    updateMemberRole,
+    removeMember,
+  }
 }

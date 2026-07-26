@@ -152,6 +152,8 @@ model School {
   strategyGoals            StrategyGoal[]
   strategyInitiatives      StrategyInitiative[]
   nameAliases              SchoolNameAlias[]
+  governancePeople         GovernancePerson[]
+  committeeMemberships     CommitteeMembership[]
 
   @@index([organizationId])
   @@map("schools")
@@ -279,6 +281,8 @@ model User {
   strategyInitiativeUpdates    StrategyInitiative[]     @relation("StrategyInitiativeUpdatedBy")
   strategyInitiativesOwned     StrategyInitiative[]     @relation("StrategyInitiativeOwner")
   messages                     Message[]
+  governancePersons            GovernancePerson[]       @relation("GovernancePersonUser")
+  governancePersonsUpdated     GovernancePerson[]       @relation("GovernancePersonUpdatedBy")
 
   @@index([email])
   @@index([lastLoginRegion])
@@ -1246,9 +1250,68 @@ model Committee {
   school        School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   updatedByUser User?     @relation("CommitteeUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
   meetings      Meeting[] // back-ref; deleting a committee SetNulls each meeting.committeeId (meeting history preserved)
+  memberships   CommitteeMembership[] // back-ref; deleting a committee CASCADES its memberships (join rows only)
 
   @@index([schoolId])
   @@map("governance_committees")
+}
+
+// ── Governance Phase 2 — PEOPLE + COMMITTEE MEMBERSHIP ────────────────────────
+// A GovernancePerson is a REAL-WORLD governance human (trustee, CFO, business
+// manager) — deliberately DISTINCT from auth Users (board members usually are not
+// app users; the optional userId link is additive). groups is a free string[]
+// bounded by the DTO (@IsIn PERSON_GROUPS: 'board'|'finance_team'|'staff') — NOT a
+// Postgres enum (cheap migrations, house convention). Credential documents attach
+// via the CORE knowledge store (sourceType 'governance_person', sourceRef=id) — no
+// FK here, mirroring every other sourceRef link.
+model GovernancePerson {
+  id              String    @id @default(uuid()) @db.Uuid
+  schoolId        String    @map("school_id") @db.Uuid
+  name            String
+  title           String? // free text: 'Board Chair','Trustee','CFO','Business Manager'
+  groups          String[]  @default([]) // 'board'|'finance_team'|'staff' — DTO-validated
+  termStart       DateTime? @map("term_start") @db.Date
+  termEnd         DateTime? @map("term_end") @db.Date
+  email           String?
+  bio             String? // qualifications / bio note
+  active          Boolean   @default(true)
+  userId          String?   @map("user_id") @db.Uuid // OPTIONAL auth-user link
+  updatedByUserId String?   @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  school        School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  user          User?   @relation("GovernancePersonUser", fields: [userId], references: [id], onDelete: SetNull)
+  updatedByUser User?   @relation("GovernancePersonUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  memberships   CommitteeMembership[]
+
+  @@index([schoolId])
+  @@map("governance_people")
+}
+
+// The committee↔person JOIN. role is free text bounded by the DTO (@IsIn
+// MEMBER_ROLES: 'chair'|'vice_chair'|'secretary'|'member'). The unique
+// (committeeId, personId) index makes a duplicate membership a DB-level 409.
+// NOTE: Committee.chair (legacy free-text string) is NEVER written by membership
+// paths — the effective chair is a READ-side rule (chair-role membership wins,
+// legacy string is a labeled fallback).
+model CommitteeMembership {
+  id          String   @id @default(uuid()) @db.Uuid
+  schoolId    String   @map("school_id") @db.Uuid
+  committeeId String   @map("committee_id") @db.Uuid
+  personId    String   @map("person_id") @db.Uuid
+  role        String   @default("member") // 'chair'|'vice_chair'|'secretary'|'member'
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  school    School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  committee Committee        @relation(fields: [committeeId], references: [id], onDelete: Cascade)
+  person    GovernancePerson @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@unique([committeeId, personId])
+  @@index([schoolId])
+  @@index([personId])
+  @@map("governance_committee_memberships")
 }
 
 model Meeting {

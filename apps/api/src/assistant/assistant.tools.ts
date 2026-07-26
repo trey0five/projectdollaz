@@ -1124,6 +1124,19 @@ export const TOOL_SCHEMAS = [
   {
     type: 'function',
     function: {
+      name: 'get_governance_status',
+      description:
+        "The school's GOVERNANCE health — board composition, committee membership, finance-team credentials, policy review, and minutes discipline, composed from the live governance registers. Returns boardSize/activeBoardSize, termsExpiringSoon (board terms ending within 90 days), per-committee memberCount + hasChair, financeCredentialCoverage (finance-team people with credential documents on file vs. total), policies (total + pastReview), minutes (approved count + lastApprovedAt), and a gaps list of plain-language governance gaps. Use for \"do we have proper governance?\", \"is our board in good shape?\", \"whose term is expiring?\", \"does the CFO have credentials on file?\", \"are our minutes approved?\". Read-only. State ONLY the figures this tool returns — never invent a person, a committee, a document, or a gap.",
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'draft_strategy_plan',
       description:
         'GENERATE a full draft strategic plan (pillars + metric-bound goals with targets computed from THIS school’s live metrics) for the user to CONFIRM before anything is created. This does NOT create it; the user must confirm, then the whole tree is created at once. Use when the user asks Penny to "draft us a strategic plan", "build a plan", "start a strategic plan", etc. Every goal target is DERIVED from the school’s live numbers (the healthy sector threshold for each off-track metric) — never invented. Optional args only steer the framing; Penny can draft from live metrics with no args. FY runs Jul–Jun.',
@@ -1289,6 +1302,7 @@ export const TOOL_LABELS: Record<string, string> = {
   get_cash_flow: 'Reading cash flow & reconciliation…',
   get_value_history: 'Tracing how that number changed…',
   get_plan_status: 'Reading the strategic plan…',
+  get_governance_status: 'Reviewing governance…',
   draft_strategy_plan: 'Drafting a strategic plan…',
   create_strategy_plan: 'Creating the strategic plan…',
   create_strategy_pillar: 'Adding a pillar to the plan…',

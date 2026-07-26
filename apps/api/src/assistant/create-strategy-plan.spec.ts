@@ -27,6 +27,7 @@ function makeService() {
     stub, stub, stub,
     strategy as never, // strategy (34)
     stub, // planDrafter (35)
+    stub, // governanceReport (36) — only get_governance_status touches it
   )
   return { svc, createPlan }
 }
