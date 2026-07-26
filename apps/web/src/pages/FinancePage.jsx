@@ -11,8 +11,8 @@
 // tabs). Structure/gates/skeleton/microtask-deferred-default mirror HomeDashboard
 // and AnalyticsDashboard exactly.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useEffect, useMemo, useState } from 'react'
-import { motion, useReducedMotion } from 'framer-motion'
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { animate, motion, useReducedMotion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import {
   CircleDollarSign,
@@ -89,10 +89,14 @@ function FinanceHeader() {
 function SectionCard(props) {
   const { to, title, viewLabel, children } = props
   const SectionIcon = props.Icon
+  // Broadcast the flood state so stat rows count up in sync with the CSS refill.
+  const [hovered, setHovered] = useState(false)
   return (
     <div
       className="module-tile module-tile--panel"
       style={{ '--tile-hue': moduleHue('finance') }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
     >
       <Link to={to} className="tile-panel-hit" aria-label={`Open ${title}`} />
       <div className="tile-body">
@@ -105,7 +109,9 @@ function SectionCard(props) {
             <ArrowRight size={16} />
           </span>
         </div>
-        <div className="flex-1">{children}</div>
+        <div className="flex-1">
+          <TileHoverCtx.Provider value={hovered}>{children}</TileHoverCtx.Provider>
+        </div>
         <span className="inline-flex items-center gap-1 text-[13px] font-bold uppercase tracking-[0.08em] text-gold">
           {viewLabel} <ArrowRight size={13} />
         </span>
@@ -181,13 +187,58 @@ function FinanceReports({ periodId }) {
   )
 }
 
-// A single labeled figure row (Statements card). value is a pre-formatted string
-// or '—' — NEVER a fabricated number (nulls are dashed upstream).
-function FigureRow({ label, value }) {
+// ── Live-on-hover stat machinery for the section cards ────────────────────────
+// TileHoverCtx broadcasts "the flood is up" from SectionCard to its stat rows so
+// the numbers COUNT UP from zero in sync with the CSS bar refill — the card feels
+// like it recomputes live under the cursor. Values at rest are always the real
+// figures (never a fabricated number; nulls stay dashed).
+const TileHoverCtx = createContext(false)
+
+// Rolls the displayed number 0 → amount each time the tile flood comes up.
+function CountUpValue({ amount, format, className = '' }) {
+  const hovered = useContext(TileHoverCtx)
+  const reduce = useReducedMotion()
+  const [display, setDisplay] = useState(amount)
+  const runRef = useRef(null)
+
+  useEffect(() => setDisplay(amount), [amount])
+  useEffect(() => {
+    if (!hovered || amount == null || reduce) return undefined
+    runRef.current?.stop()
+    runRef.current = animate(0, amount, {
+      duration: 0.8,
+      ease: [0.22, 1, 0.36, 1],
+      onUpdate: (v) => setDisplay(v),
+    })
+    return () => runRef.current?.stop()
+  }, [hovered, amount, reduce])
+
+  if (amount == null) return <span className={className}>—</span>
+  const v = format === 'currency' ? Math.round(display ?? amount) : (display ?? amount)
+  return <span className={className}>{formatMetricValue(v, format)}</span>
+}
+
+// A single labeled figure row (Statements card): label + counting value + a
+// hue magnitude bar (pct of the card's largest figure) that refills on hover.
+function FigureRow({ label, amount, format = 'currency', pct = null }) {
   return (
-    <div className="flex items-baseline justify-between gap-3 border-b border-rule/40 py-1.5 last:border-0">
-      <span className="text-[14.5px] text-muted">{label}</span>
-      <span className="tabular-nums text-[15px] font-semibold text-navy">{value}</span>
+    <div className="border-b border-rule/40 py-2 last:border-0">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="text-[14.5px] text-muted">{label}</span>
+        <CountUpValue
+          amount={amount}
+          format={format}
+          className="tabular-nums text-[15px] font-semibold text-navy"
+        />
+      </div>
+      {pct != null && amount != null ? (
+        <div className="stat-track mt-1.5" aria-hidden>
+          <div
+            className={`stat-fill${amount < 0 ? ' stat-fill--negative' : ''}`}
+            style={{ width: `${Math.max(4, Math.round(pct * 100))}%` }}
+          />
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -202,9 +253,11 @@ function VitalRow({ metric }) {
       <span className="min-w-0 flex-1 truncate text-[14.5px] text-ink">
         {metric?.label ?? 'Metric'}
       </span>
-      <span className="tabular-nums text-[15px] font-semibold text-navy">
-        {available ? formatMetricValue(metric.value, fmt) : '—'}
-      </span>
+      <CountUpValue
+        amount={available ? metric.value : null}
+        format={fmt}
+        className="tabular-nums text-[15px] font-semibold text-navy"
+      />
       {available && metric.periodOverPeriodDelta != null && (
         <DeltaChip
           delta={metric.periodOverPeriodDelta}
@@ -395,22 +448,28 @@ export default function FinancePage() {
         transition={{ duration: 0.4 }}
         className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"
       >
-        {/* (1) STATEMENTS */}
+        {/* (1) STATEMENTS — live rows: counting values + hue magnitude bars. */}
         <SectionCard to="/statements" Icon={FileStack} title="Statements" viewLabel="View statements">
-          <FigureRow
-            label="Total revenue"
-            value={totalRevenue != null ? formatMetricValue(totalRevenue, 'currency') : '—'}
-          />
-          <FigureRow
-            label="Total expense"
-            value={totalExpense != null ? formatMetricValue(totalExpense, 'currency') : '—'}
-          />
-          <FigureRow
-            label="Change in net assets"
-            value={
-              changeInNetAssets != null ? formatMetricValue(changeInNetAssets, 'currency') : '—'
-            }
-          />
+          {(() => {
+            const maxAbs = Math.max(
+              Math.abs(totalRevenue ?? 0),
+              Math.abs(totalExpense ?? 0),
+              Math.abs(changeInNetAssets ?? 0),
+              1,
+            )
+            const pctOf = (v) => (v == null ? null : Math.abs(v) / maxAbs)
+            return (
+              <>
+                <FigureRow label="Total revenue" amount={totalRevenue} pct={pctOf(totalRevenue)} />
+                <FigureRow label="Total expense" amount={totalExpense} pct={pctOf(totalExpense)} />
+                <FigureRow
+                  label="Change in net assets"
+                  amount={changeInNetAssets}
+                  pct={pctOf(changeInNetAssets)}
+                />
+              </>
+            )
+          })()}
         </SectionCard>
 
         {/* (2) ANALYTICS — Tier-1 vitals */}

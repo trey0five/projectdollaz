@@ -466,3 +466,42 @@
   letter-spacing: 0.08em;
   color: var(--tile-hue);
 }
+
+/* ── Live stat rows (Finance section cards): a magnitude bar under each figure.
+   At rest the fill wears the tile hue; when the flood is up it flips white and
+   REFILLS from zero (paired with the JS count-up on the numbers) so the card
+   feels like it's re-computing live on hover. ── */
+.stat-track {
+  height: 4px;
+  border-radius: 999px;
+  background: rgb(16 28 61 / 0.07);
+  overflow: hidden;
+}
+.stat-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--tile-hue, #2563eb);
+  opacity: 0.85;
+  transform-origin: left;
+  transition: background 0.25s ease, opacity 0.25s ease;
+}
+.stat-fill--negative {
+  background: #dc2626;
+}
+@keyframes stat-refill {
+  from {
+    transform: scaleX(0);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .module-tile--panel:hover .stat-fill,
+  .module-tile--panel:has(.tile-panel-hit:focus-visible) .stat-fill {
+    background: #fff;
+    opacity: 0.95;
+    animation: stat-refill 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .module-tile--panel:hover .stat-track,
+  .module-tile--panel:has(.tile-panel-hit:focus-visible) .stat-track {
+    background: rgb(255 255 255 / 0.22);
+  }
+}
