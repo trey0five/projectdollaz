@@ -3,7 +3,9 @@ import {
   MAINTENANCE_DUE_SOON_DAYS,
   computeMaintenanceUrgency,
   summarizeBacklog,
+  summarizeDecisions,
   type MaintenanceBacklogInput,
+  type MaintenanceDecisionInput,
 } from '../src/maintenance-backlog.js'
 
 // A fixed injected `now` so urgency banding is deterministic + timezone-independent.
@@ -115,5 +117,45 @@ describe('maintenance backlog — summary', () => {
       item({ status: 'open', estimatedCost: 200.2 }),
     ])
     expect(s.backlogCost).toBe(300.3)
+  })
+})
+
+describe('needs-decision summary (vendors/bids — FROZEN rule)', () => {
+  const d = (over: Partial<MaintenanceDecisionInput> = {}): MaintenanceDecisionInput => ({
+    status: 'open',
+    urgency: 'on-track',
+    pendingBidCount: 0,
+    ...over,
+  })
+
+  it('empty list → 0', () => {
+    expect(summarizeDecisions([]).needsDecisionCount).toBe(0)
+  })
+
+  it('2+ pending bids on a non-resolved item → counts', () => {
+    const s = summarizeDecisions([d({ pendingBidCount: 2 }), d({ pendingBidCount: 3 })])
+    expect(s.needsDecisionCount).toBe(2)
+  })
+
+  it('exactly 1 pending bid counts ONLY when the item is overdue', () => {
+    const s = summarizeDecisions([
+      d({ pendingBidCount: 1, urgency: 'overdue' }), // counts
+      d({ pendingBidCount: 1, urgency: 'due-soon' }), // does not
+      d({ pendingBidCount: 1, urgency: 'on-track' }), // does not
+    ])
+    expect(s.needsDecisionCount).toBe(1)
+  })
+
+  it('0 pending bids never counts, even overdue', () => {
+    const s = summarizeDecisions([d({ pendingBidCount: 0, urgency: 'overdue' })])
+    expect(s.needsDecisionCount).toBe(0)
+  })
+
+  it('resolved items drop out unconditionally (bids are inert history)', () => {
+    const s = summarizeDecisions([
+      d({ status: 'resolved', pendingBidCount: 5, urgency: 'overdue' }),
+      d({ status: 'in_progress', pendingBidCount: 2 }), // still counts (not resolved)
+    ])
+    expect(s.needsDecisionCount).toBe(1)
   })
 })

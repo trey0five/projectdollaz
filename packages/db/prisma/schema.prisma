@@ -139,6 +139,9 @@ model School {
   accreditationStandards   AccreditationStandard[]
   accreditationEvidence    AccreditationEvidence[]
   maintenanceItems         MaintenanceItem[]
+  vendors                  Vendor[]
+  maintenanceBids          MaintenanceBid[]
+  facilitiesSetting        FacilitiesSetting?
   campaigns                AdvancementCampaign[]
   advancementGifts         AdvancementGift[]
   documents                KnowledgeDocument[]
@@ -269,6 +272,10 @@ model User {
   accreditationStandardUpdates AccreditationStandard[]  @relation("AccreditationStandardUpdatedBy")
   accreditationEvidenceCreated AccreditationEvidence[]  @relation("AccreditationEvidenceCreatedBy")
   maintenanceItemsCreated      MaintenanceItem[]        @relation("MaintenanceItemCreatedBy")
+  maintenanceItemsDecided      MaintenanceItem[]        @relation("MaintenanceDecidedBy")
+  vendorsCreated               Vendor[]                 @relation("VendorCreatedBy")
+  maintenanceBidsCreated       MaintenanceBid[]         @relation("MaintenanceBidCreatedBy")
+  facilitiesSettingsUpdated    FacilitiesSetting[]      @relation("FacilitiesSettingUpdatedBy")
   advancementCampaignsCreated  AdvancementCampaign[]    @relation("AdvancementCampaignCreatedBy")
   advancementGiftsCreated      AdvancementGift[]        @relation("AdvancementGiftCreatedBy")
   knowledgeDocumentsUploaded   KnowledgeDocument[]      @relation("KnowledgeDocumentUploadedBy")
@@ -1565,16 +1572,108 @@ model MaintenanceItem {
   seriesId        String?   @map("series_id") @db.Uuid
   notes           String?
   createdByUserId String?   @map("created_by_user_id") @db.Uuid
+  // ── Facilities vendors/bids (additive) — optional structured vendor link. The legacy
+  // free-text `vendor` column above is UNTOUCHED (display fallback); the relation field
+  // is named `vendorRef` to avoid colliding with the legacy scalar.
+  vendorId        String?   @map("vendor_id") @db.Uuid
+  // Winning bid pointer. SOFT ref (NO FK — avoids an Item↔Bid relation cycle); the
+  // service validates it school-scoped. Null = no decision recorded.
+  selectedBidId   String?   @map("selected_bid_id") @db.Uuid
+  // Leadership decision stamp — naming mirrors Task approval EXACTLY
+  // (decidedByUserId/decidedAt/decisionNote, SET NULL on user delete).
+  decidedByUserId String?   @map("decided_by_user_id") @db.Uuid
+  decidedAt       DateTime? @map("decided_at")
+  decisionNote    String?   @map("decision_note")
+  // Stamped ONCE on the transition INTO 'resolved' (facilities-budget FY windowing);
+  // legacy resolved rows are null → windowing falls back to updatedAt.
+  resolvedAt      DateTime? @map("resolved_at")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  school        School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  createdByUser User?  @relation("MaintenanceItemCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  school        School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  createdByUser User?   @relation("MaintenanceItemCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  vendorRef     Vendor? @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  decidedByUser User?   @relation("MaintenanceDecidedBy", fields: [decidedByUserId], references: [id], onDelete: SetNull)
+  bids          MaintenanceBid[]
 
   @@index([schoolId])
   // Series lookups (all occurrences of one recurring item) stay school-scoped.
   @@index([schoolId, seriesId])
   @@map("maintenance_items")
+}
+
+// ── Facilities vendors/bids — the school's contractor register. Non-PII business
+// contact records (mirrors GovernancePerson's additive per-school register shape).
+// No unique on (schoolId, name): dedupe is an ADVISORY case-insensitive check in
+// the service on CREATE only (400 with a friendly message).
+model Vendor {
+  id              String   @id @default(uuid()) @db.Uuid
+  schoolId        String   @map("school_id") @db.Uuid
+  name            String
+  contactName     String?  @map("contact_name")
+  contactEmail    String?  @map("contact_email")
+  contactPhone    String?  @map("contact_phone")
+  category        String?
+  notes           String?
+  active          Boolean  @default(true)
+  createdByUserId String?  @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  school        School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  createdByUser User?  @relation("VendorCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  maintenanceItems MaintenanceItem[]
+  bids             MaintenanceBid[]
+
+  @@index([schoolId])
+  @@map("vendors")
+}
+
+// ── Facilities bids — competing vendor quotes on one maintenance item. status is
+// TEXT bounded by the DTO @IsIn ('pending' | 'accepted' | 'rejected' — house
+// convention, no PG enum). At least one of vendorId/vendorName is required
+// (service invariant). Accepting a bid (owner-only) rejects all pending siblings
+// atomically and stamps the ITEM (decision metadata lives on the item, not here).
+model MaintenanceBid {
+  id              String   @id @default(uuid()) @db.Uuid
+  schoolId        String   @map("school_id") @db.Uuid
+  itemId          String   @map("item_id") @db.Uuid
+  vendorId        String?  @map("vendor_id") @db.Uuid
+  vendorName      String?  @map("vendor_name")
+  amount          Decimal  @db.Decimal(14, 2)
+  notes           String?
+  status          String   @default("pending") // 'pending' | 'accepted' | 'rejected'
+  createdByUserId String?  @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  school        School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  item          MaintenanceItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  vendor        Vendor?         @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  createdByUser User?           @relation("MaintenanceBidCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([schoolId])
+  @@index([schoolId, itemId])
+  @@map("maintenance_bids")
+}
+
+// ── Facilities settings — one row per school (future-proof singleton, mirrors
+// ReportSchedule). budgetExpenseKeys = string[] ⊆ EXPENSE_LINE_KEYS (the
+// PeriodBudget lines.expense vocabulary) selecting which Finance budget lines the
+// Facilities module inherits; null/absent row = default ['facilities'].
+model FacilitiesSetting {
+  id                String   @id @default(uuid()) @db.Uuid
+  schoolId          String   @unique @map("school_id") @db.Uuid
+  budgetExpenseKeys Json?    @map("budget_expense_keys")
+  updatedByUserId   String?  @map("updated_by_user_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  school        School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  updatedByUser User?  @relation("FacilitiesSettingUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@map("facilities_settings")
 }
 
 // ── Phase 4 Advancement v1 — the fundraising campaign/appeal register ─────────

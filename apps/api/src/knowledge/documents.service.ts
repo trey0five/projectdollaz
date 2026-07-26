@@ -136,6 +136,9 @@ export class DocumentsService {
       case 'maintenance':
         found = await this.prisma.maintenanceItem.findFirst({ where, select: { id: true } })
         break
+      case 'maintenance_bid':
+        found = await this.prisma.maintenanceBid.findFirst({ where, select: { id: true } })
+        break
       case 'governance_person':
         found = await this.prisma.governancePerson.findFirst({ where, select: { id: true } })
         break

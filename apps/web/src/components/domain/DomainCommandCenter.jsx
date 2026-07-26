@@ -112,7 +112,11 @@ export default function DomainCommandCenter({
       {kpis.length ? (
         <div
           className={`grid grid-cols-2 gap-4 ${
-            kpis.length >= 5 ? 'sm:grid-cols-3 lg:grid-cols-5' : 'lg:grid-cols-4'
+            kpis.length >= 6
+              ? 'sm:grid-cols-3 lg:grid-cols-6'
+              : kpis.length >= 5
+                ? 'sm:grid-cols-3 lg:grid-cols-5'
+                : 'lg:grid-cols-4'
           }`}
         >
           {kpis.map((kpi, i) => (

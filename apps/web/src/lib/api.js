@@ -604,6 +604,41 @@ export const facilitiesApi = {
     api.patch(`/schools/${schoolId}/facilities/maintenance/${itemId}`, body),
   removeMaintenance: (schoolId, itemId) =>
     api.delete(`/schools/${schoolId}/facilities/maintenance/${itemId}`),
+
+  // ── Vendors (the reusable vendor register; maintenance items + bids reference
+  // them by vendorId; legacy free-text `vendor` strings keep working). ─────────
+  listVendors: (schoolId) => api.get(`/schools/${schoolId}/facilities/vendors`),
+  createVendor: (schoolId, body) => api.post(`/schools/${schoolId}/facilities/vendors`, body),
+  updateVendor: (schoolId, vendorId, body) =>
+    api.patch(`/schools/${schoolId}/facilities/vendors/${vendorId}`, body),
+  removeVendor: (schoolId, vendorId) =>
+    api.delete(`/schools/${schoolId}/facilities/vendors/${vendorId}`),
+
+  // ── Bids on a maintenance item (LAZY — fetched on panel open, never with the
+  // register list). Accept/reopen are OWNER-ONLY server-side (403 otherwise);
+  // accept stamps the item (selectedBidId, vendor, estimatedCost, decided*). ───
+  listBids: (schoolId, itemId) =>
+    api.get(`/schools/${schoolId}/facilities/maintenance/${itemId}/bids`),
+  createBid: (schoolId, itemId, body) =>
+    api.post(`/schools/${schoolId}/facilities/maintenance/${itemId}/bids`, body),
+  updateBid: (schoolId, itemId, bidId, body) =>
+    api.patch(`/schools/${schoolId}/facilities/maintenance/${itemId}/bids/${bidId}`, body),
+  removeBid: (schoolId, itemId, bidId) =>
+    api.delete(`/schools/${schoolId}/facilities/maintenance/${itemId}/bids/${bidId}`),
+  acceptBid: (schoolId, itemId, bidId, body) =>
+    api.post(`/schools/${schoolId}/facilities/maintenance/${itemId}/bids/${bidId}/accept`, body ?? {}),
+  reopenBid: (schoolId, itemId, bidId) =>
+    api.post(`/schools/${schoolId}/facilities/maintenance/${itemId}/bids/${bidId}/reopen`, {}),
+
+  // ── Inherited budget (READ-ONLY derivation over the Finance PeriodBudget —
+  // facilities never writes budget lines; config just picks which expense lines
+  // count as "facilities money"). ──────────────────────────────────────────────
+  getBudget: (schoolId, periodId) =>
+    api.get(`/schools/${schoolId}/facilities/budget`, {
+      params: periodId ? { periodId } : undefined,
+    }),
+  putBudgetConfig: (schoolId, keys) =>
+    api.put(`/schools/${schoolId}/facilities/budget/config`, { keys }),
 }
 
 // ── Phase 4 Advancement v1: the fundraising campaign/appeal register ──────────

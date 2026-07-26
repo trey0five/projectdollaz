@@ -613,12 +613,16 @@ export const recordFlows = {
     noun: 'maintenance item',
     nounPlural: 'maintenance items',
     Icon: Wrench,
+    loaders: {
+      vendors: (ctx) => facilitiesApi.listVendors(ctx.schoolId).then((r) => r.data.vendors ?? []),
+    },
     defaults: {
-      // EMPTY_FORM verbatim (FacilitiesPage.jsx:187)
+      // EMPTY_FORM verbatim (FacilitiesPage.jsx:187) + vendorId (vendor register)
       title: '',
       location: '',
       category: '',
       vendor: '',
+      vendorId: '',
       priority: 'medium',
       status: 'open',
       estimatedCost: '',
@@ -655,7 +659,19 @@ export const recordFlows = {
         optional: true,
         blurb: 'Everything here is optional — costs and dates can come later.',
         fields: [
-          { key: 'vendor', label: 'Vendor', type: 'text', maxLength: 160, placeholder: 'e.g. Acme Roofing' },
+          {
+            key: 'vendorId',
+            label: 'Vendor',
+            type: 'select',
+            emptyOptionLabel: '— none —',
+            lookupKey: 'vendors',
+            options: (data) =>
+              (data.vendors ?? [])
+                .filter((v) => v.active !== false)
+                .map((v) => ({ value: v.id, label: v.name })),
+            hint: 'Pick from your vendor register, or type a name below.',
+          },
+          { key: 'vendor', label: 'Or vendor name (free text)', type: 'text', maxLength: 160, placeholder: 'e.g. Acme Roofing' },
           { key: 'priority', label: 'Priority', type: 'select', options: opt(MAINTENANCE_PRIORITIES) },
           { key: 'status', label: 'Status', type: 'select', options: opt(MAINTENANCE_STATUSES) },
           { key: 'estimatedCost', label: 'Estimated cost ($)', type: 'number', money: true, min: 0 },
@@ -683,6 +699,7 @@ export const recordFlows = {
         location: v.location.trim() ? v.location.trim() : null,
         category: v.category.trim() ? v.category.trim() : null,
         vendor: v.vendor.trim() ? v.vendor.trim() : null,
+        vendorId: v.vendorId ? v.vendorId : null,
         priority: v.priority,
         status: v.status,
         estimatedCost: cost === '' ? null : Number(cost),
@@ -695,11 +712,16 @@ export const recordFlows = {
     submit: (ctx, body) => facilitiesApi.createMaintenance(ctx.schoolId, body),
     itemLabel: (v) => v.title.trim(),
     itemSub: (v) => `maintenance · ${human(v.priority).toLowerCase()}`,
-    reviewPairs: (v) => [
+    reviewPairs: (v, data) => [
       ['Title', orDash(v.title)],
       ['Location', orDash(v.location)],
       ['Category', orDash(v.category)],
-      ['Vendor', orDash(v.vendor)],
+      [
+        'Vendor',
+        v.vendorId
+          ? ((data?.vendors ?? []).find((vv) => vv.id === v.vendorId)?.name ?? '—')
+          : orDash(v.vendor),
+      ],
       ['Priority', human(v.priority)],
       ['Status', human(v.status)],
       ['Estimated cost', moneyDash(v.estimatedCost)],

@@ -10,6 +10,7 @@
 // ReportsPage's REPORTS) — never an in-render component def.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   FileSpreadsheet,
@@ -236,6 +237,30 @@ export default function DataHubPage() {
   const summary = data?.summary || null
 
   const [modalKey, setModalKey] = useState(null) // which embed panel is open in the modal
+
+  // Deep link: /data?open=budget opens the existing BudgetImport embed panel (the
+  // Facilities budget card's empty-state CTA lands here — Facilities inherits the
+  // Finance budget, it never duplicates the importer). Read ONCE on mount, then
+  // strip the param so refresh/back doesn't re-open the modal.
+  const [searchParams, setSearchParams] = useSearchParams()
+  useEffect(() => {
+    let cancelled = false
+    // Microtask defer (the codebase's set-state-in-effect-safe idiom).
+    Promise.resolve().then(() => {
+      if (cancelled) return
+      if (searchParams.get('open') === 'budget') {
+        setModalKey('budget')
+        const next = new URLSearchParams(searchParams)
+        next.delete('open')
+        setSearchParams(next, { replace: true })
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+    // Mount-only by design — a later param change shouldn't re-fire.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Penny agent: a `navigate` event with openModal dispatches this CustomEvent so
   // the hub opens the requested embed panel (e.g. she walks the user to the budget
@@ -472,6 +497,7 @@ export default function DataHubPage() {
         activePeriod={activePeriod}
         hydrationToken={hydrationToken}
         onOpenMonthly={() => setModalKey('monthly')}
+        onOpenTb={() => setModalKey('trialBalances')}
       />
     </div>
   )
@@ -498,6 +524,7 @@ function DataEmbedModal({
   activePeriod,
   hydrationToken,
   onOpenMonthly,
+  onOpenTb,
 }) {
   const isTb = openKey === 'trialBalances'
   const isBudget = openKey === 'budget'
@@ -605,6 +632,28 @@ function DataEmbedModal({
                   canEdit={canEdit}
                   onSaved={onSaved}
                 />
+              )}
+              {openKey === 'budget' && !periodId && (
+                // Deep-link landing (/data?open=budget — e.g. the Facilities budget
+                // CTA) on a school with NO fiscal periods yet: a budget lives inside
+                // a reporting period, so point at period setup instead of a blank body.
+                <div className="rounded-xl border border-rule/60 bg-white p-6 text-center">
+                  <p className="font-serif text-lg font-semibold text-navy">
+                    First, add a fiscal year
+                  </p>
+                  <p className="mx-auto mt-1.5 max-w-sm text-[14.5px] leading-relaxed text-muted">
+                    A budget lives inside a reporting period. Import a trial balance and
+                    we&apos;ll create your first fiscal year automatically — then come back
+                    here to set up the budget.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={onOpenTb}
+                    className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-gold-gradient px-4 py-2 text-[13.5px] font-bold uppercase tracking-[0.08em] text-navy shadow-glow transition-transform hover:-translate-y-0.5"
+                  >
+                    Add a trial balance
+                  </button>
+                </div>
               )}
               {openKey === 'forecast' && periodId && (
                 // Forecast INPUT, reused unforked from the (removed) Budget tab.

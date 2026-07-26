@@ -4,6 +4,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
   Max,
   MaxLength,
   Min,
@@ -65,11 +66,17 @@ export class CreateMaintenanceDto {
   @Max(1_000_000_000)
   actualCost?: number | null
 
-  // Non-PII business/contractor name. Free text v1.
+  // Non-PII business/contractor name. Free text v1 (kept — display fallback).
   @IsOptional()
   @IsString()
   @MaxLength(160)
   vendor?: string | null
+
+  // Structured vendor link (vendors register). School-ownership validated in the
+  // service (400 on a foreign/unknown vendor).
+  @IsOptional()
+  @IsUUID()
+  vendorId?: string | null
 
   @IsOptional()
   @IsDateString()

@@ -4,6 +4,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
   Max,
   MaxLength,
   Min,
@@ -63,6 +64,11 @@ export class UpdateMaintenanceDto {
   @IsString()
   @MaxLength(160)
   vendor?: string | null
+
+  // Structured vendor link — school-ownership validated in the service; null clears.
+  @IsOptional()
+  @IsUUID()
+  vendorId?: string | null
 
   @IsOptional()
   @IsDateString()

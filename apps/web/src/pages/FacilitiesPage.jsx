@@ -26,6 +26,9 @@ import {
   Clock,
   MapPin,
   RotateCw,
+  Gavel,
+  Wallet,
+  Trophy,
 } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
 import { useNavigate } from 'react-router-dom'
@@ -44,7 +47,10 @@ import EntityFormModal, {
 } from '../components/ui/EntityFormModal.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useUiV2 } from '../context/UiFlagContext.jsx'
-import { useFacilities } from '../hooks/useFacilities.js'
+import { useFacilities, useFacilitiesBudget } from '../hooks/useFacilities.js'
+import FacilitiesBudgetCard from '../components/facilities/FacilitiesBudgetCard.jsx'
+import MaintenanceBidsPanel from '../components/facilities/MaintenanceBidsPanel.jsx'
+import VendorsPanel, { VendorFormModal, vendorToForm } from '../components/facilities/VendorsPanel.jsx'
 import { shortDate } from '../lib/dates.js'
 
 const PRIORITIES = ['low', 'medium', 'high', 'critical']
@@ -151,6 +157,43 @@ function attentionMeta(it) {
   )
 }
 
+/** Chip row for a needs-decision rail entry: pending bids, urgency, bid range (spec
+ *  §4.5 — quote spread triage without opening the slide-over; falls back to the
+ *  item's estimate when the list didn't carry a range). */
+function attentionMetaBids(it) {
+  const n = it.pendingBidCount ?? 0
+  const days = typeof it.daysUntilTarget === 'number' ? it.daysUntilTarget : null
+  const hasRange = typeof it.pendingBidMin === 'number' && typeof it.pendingBidMax === 'number'
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+      <AttentionChip cls="border-[#EA580C]/50 bg-[#EA580C]/10 text-[#9A3412]" icon={Gavel}>
+        {n} bid{n === 1 ? '' : 's'} pending
+      </AttentionChip>
+      {it.urgency === 'overdue' ? (
+        <AttentionChip cls={URGENCY_BADGE.overdue.cls} icon={AlertTriangle}>
+          {days != null ? `Overdue ${Math.abs(days)}d` : 'Overdue'}
+        </AttentionChip>
+      ) : null}
+      {PRIORITY_BADGE[it.priority] ? (
+        <AttentionChip cls={PRIORITY_BADGE[it.priority].cls}>
+          {PRIORITY_BADGE[it.priority].label}
+        </AttentionChip>
+      ) : null}
+      {hasRange ? (
+        <AttentionChip cls="border-rule/60 bg-section text-muted">
+          {it.pendingBidMin === it.pendingBidMax
+            ? fmtMoney(it.pendingBidMin)
+            : `${fmtMoney(it.pendingBidMin)}–${fmtMoney(it.pendingBidMax)}`}
+        </AttentionChip>
+      ) : typeof it.estimatedCost === 'number' ? (
+        <AttentionChip cls="border-rule/60 bg-section text-muted">
+          {fmtMoney(it.estimatedCost)}
+        </AttentionChip>
+      ) : null}
+    </div>
+  )
+}
+
 // ── Light-theme register table primitives ────────────────────────────────────
 function Th({ children, right }) {
   return (
@@ -244,6 +287,7 @@ const EMPTY_FORM = {
   location: '',
   category: '',
   vendor: '',
+  vendorId: '',
   priority: 'medium',
   status: 'open',
   estimatedCost: '',
@@ -261,6 +305,7 @@ function toItemBody(form) {
     location: form.location.trim() ? form.location.trim() : null,
     category: form.category.trim() ? form.category.trim() : null,
     vendor: form.vendor.trim() ? form.vendor.trim() : null,
+    vendorId: form.vendorId ? form.vendorId : null,
     priority: form.priority,
     status: form.status,
     estimatedCost: cost === '' ? null : Number(cost),
@@ -271,7 +316,7 @@ function toItemBody(form) {
   }
 }
 
-export function MaintenanceFormModal({ open, initial, onClose, onSave, reduce }) {
+export function MaintenanceFormModal({ open, initial, vendors = [], onClose, onSave, reduce }) {
   const [form, setForm] = useState(initial ?? EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
@@ -344,7 +389,19 @@ export function MaintenanceFormModal({ open, initial, onClose, onSave, reduce })
           className={fieldInput}
         />
       </Field>
-      <Field label="Vendor" span={2} index={3} reduce={reduce}>
+      <Field label="Vendor" index={3} reduce={reduce}>
+        <Select value={form.vendorId} onChange={set('vendorId')}>
+          <option value="">— none —</option>
+          {vendors
+            .filter((v) => v.active !== false || v.id === form.vendorId)
+            .map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.name}
+              </option>
+            ))}
+        </Select>
+      </Field>
+      <Field label="Or vendor name (free text)" index={3} reduce={reduce}>
         <input
           value={form.vendor}
           onChange={set('vendor')}
@@ -424,7 +481,7 @@ export function MaintenanceFormModal({ open, initial, onClose, onSave, reduce })
 
 // ═══════════════════════════ LIGHT REGISTER TABLE ═══════════════════════════
 
-function MaintenanceTable({ items, loading, error, canEdit, reduce, onEdit, onDelete }) {
+function MaintenanceTable({ items, loading, error, canEdit, reduce, onEdit, onDelete, onOpenBids }) {
   if (loading)
     return (
       <StateRow>
@@ -488,10 +545,25 @@ function MaintenanceTable({ items, loading, error, canEdit, reduce, onEdit, onDe
                     {RECURRENCE_LABEL[it.recurrence] ?? it.recurrence}
                   </span>
                 ) : null}
-                {it.vendor ? (
+                {it.vendorName ?? it.vendor ? (
                   <span className="inline-flex items-center rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[11px] text-muted">
-                    {it.vendor}
+                    {it.vendorName ?? it.vendor}
                   </span>
+                ) : null}
+                {onOpenBids ? (
+                  <button
+                    type="button"
+                    onClick={() => onOpenBids(it)}
+                    title="Vendor bids on this item"
+                    className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-semibold transition ${
+                      (it.pendingBidCount ?? 0) > 0
+                        ? 'border-[#EA580C]/50 bg-[#EA580C]/10 text-[#9A3412] hover:brightness-95'
+                        : 'border-rule/60 bg-section text-muted hover:text-navy'
+                    }`}
+                  >
+                    {it.selectedBidId ? <Trophy size={11} /> : <Gavel size={11} />}
+                    Bids{(it.pendingBidCount ?? 0) > 0 ? ` (${it.pendingBidCount})` : ''}
+                  </button>
                 ) : null}
               </div>
             </td>
@@ -580,7 +652,19 @@ function MaintenanceTable({ items, loading, error, canEdit, reduce, onEdit, onDe
   )
 }
 
-const TABS = [{ key: 'maintenance', label: 'Maintenance' }]
+const TABS = [
+  { key: 'maintenance', label: 'Maintenance' },
+  { key: 'vendors', label: 'Vendors' },
+]
+
+// Frozen needs-decision rule (mirrors the server's summarizeDecisions helper):
+// an unresolved item with ≥2 pending bids, or ≥1 pending bid while overdue.
+function needsDecision(it) {
+  const pending = it.pendingBidCount ?? 0
+  return (
+    it.status !== 'resolved' && (pending >= 2 || (pending >= 1 && it.urgency === 'overdue'))
+  )
+}
 
 const HIGH_PRIORITIES = new Set(['high', 'critical'])
 const OPEN_STATUSES = new Set(['open', 'scheduled', 'in_progress'])
@@ -590,26 +674,45 @@ const OPEN_STATUSES = new Set(['open', 'scheduled', 'in_progress'])
 function FacilitiesWorkspace() {
   const { activeSchool } = useSchools()
   const schoolId = activeSchool?.id ?? null
-  const canEdit = activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'
+  const isOwner = activeSchool?.role === 'owner'
+  const canEdit = isOwner || activeSchool?.role === 'accountant'
   const reduce = useReducedMotion()
   const uiV2 = useUiV2()
 
   const {
     items,
+    vendors,
     summary,
     loading,
     error,
     notLicensed,
     notEntitled,
+    refresh,
     createItem,
     updateItem,
     removeItem,
+    createVendor,
+    updateVendor,
+    removeVendor,
   } = useFacilities(schoolId)
+
+  // The inherited Finance budget — re-derived whenever anything moves committed /
+  // actual (item saves/deletes, bid accepts) via the token.
+  const [budgetToken, setBudgetToken] = useState(0)
+  const bumpBudget = () => setBudgetToken((t) => t + 1)
+  const {
+    budget,
+    loading: budgetLoading,
+    saveConfig,
+  } = useFacilitiesBudget(schoolId, budgetToken)
 
   const [tab, setTab] = useState('maintenance')
   const navigate = useNavigate()
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
+  // Bids slide-over (lazy — bids fetch on open) + vendor add/edit modal.
+  const [bidsItem, setBidsItem] = useState(null)
+  const [vendorModal, setVendorModal] = useState(null) // { editing: vendor|null } | null
 
   // "+ Add" launches the batch wizard; the modal stays for EDITING an item.
   const openAdd = () => navigate('/facilities?tab=add&add=maintenance')
@@ -638,16 +741,38 @@ function FacilitiesWorkspace() {
       targetDate: editing.targetDate ?? '',
       recurrence: editing.recurrence ?? 'none',
       notes: editing.notes ?? '',
+      vendorId: editing.vendorId ?? '',
     }
   }, [editing])
 
   const onSave = async (body) => {
     if (editing) await updateItem(editing.id, body)
     else await createItem(body)
+    bumpBudget()
   }
 
   const onDelete = async (it) => {
-    if (window.confirm(`Delete "${it.title}"?`)) await removeItem(it.id)
+    if (window.confirm(`Delete "${it.title}"?`)) {
+      await removeItem(it.id)
+      bumpBudget()
+    }
+  }
+
+  // A bid accept/reopen/add moved committed money and the item stamps — re-pull
+  // the register AND re-derive the budget.
+  const onBidsChanged = () => {
+    refresh()
+    bumpBudget()
+  }
+
+  const vendorInitial = useMemo(
+    () => (vendorModal?.editing ? vendorToForm(vendorModal.editing) : null),
+    [vendorModal],
+  )
+
+  const onSaveVendor = async (body) => {
+    if (vendorModal?.editing) await updateVendor(vendorModal.editing.id, body)
+    else await createVendor(body)
   }
 
   // ── KPIs (computed from the summary) ───────────────────────────────────────
@@ -698,8 +823,34 @@ function FacilitiesWorkspace() {
       sub: { icon: Wrench, text: 'open maintenance cost', tone: 'neutral' },
     }
 
-    return [openKpi, highKpi, overdueKpi, backlogKpi]
-  }, [summary])
+    // KPI 5 — the inherited Finance budget's remaining headroom.
+    const hasBudget = !!budget?.hasBudget
+    const overBudget = !!budget?.overBudget
+    const budgetKpi = {
+      label: 'Budget remaining',
+      value: hasBudget ? fmtMoney(budget.remaining ?? 0) : '—',
+      status: overBudget ? 'risk' : hasBudget ? 'good' : 'neutral',
+      sub: overBudget
+        ? { icon: AlertTriangle, text: 'over budget', tone: 'bad' }
+        : hasBudget
+          ? { icon: Wallet, text: `of ${fmtMoney(budget.budgetTotal ?? 0)} inherited`, tone: 'neutral' }
+          : { icon: Wallet, text: 'inherit from Finance', tone: 'neutral' },
+    }
+
+    // KPI 6 — items whose bids await a Leadership decision.
+    const needsDecisionCount = summary.needsDecisionCount ?? 0
+    const decisionKpi = {
+      label: 'Needs decision',
+      value: String(needsDecisionCount),
+      status: needsDecisionCount > 0 ? 'watch' : 'good',
+      sub:
+        needsDecisionCount > 0
+          ? { icon: Gavel, text: 'bids await Leadership', tone: 'neutral' }
+          : { icon: Check, text: 'no bids waiting', tone: 'good' },
+    }
+
+    return [openKpi, highKpi, overdueKpi, backlogKpi, budgetKpi, decisionKpi]
+  }, [summary, budget])
 
   // ── Needs-attention items (most-urgent first, capped at 6) ─────────────────
   const attentionItems = useMemo(() => {
@@ -708,8 +859,42 @@ function FacilitiesWorkspace() {
 
     const openItems = items.filter((it) => OPEN_STATUSES.has(it.status))
 
-    // 1) Overdue open items.
-    const overdueItems = openItems.filter((it) => it.urgency === 'overdue')
+    // 0) Over-budget rail banner (the inherited Finance budget is blown).
+    if (budget?.hasBudget && budget.overBudget) {
+      list.push({
+        id: 'budget-over',
+        tone: 'risk',
+        sortKey: -1,
+        title: 'Facilities is over budget',
+        why: `${fmtMoney(Math.abs(budget.remaining ?? 0))} past the budget inherited from Finance`,
+        actions: [{ label: 'View budget', primary: true, onClick: () => navigate('/budget') }],
+      })
+    }
+
+    // 0.5) Needs-decision entries — pending bids awaiting Leadership. Sorted
+    // BETWEEN overdue (0) and high-priority (1/2); risk tone when the item is
+    // itself overdue, watch otherwise. "Review bids" opens the slide-over —
+    // readable by every role (Leadership alone can accept inside).
+    for (const it of openItems.filter(needsDecision)) {
+      seen.add(it.id)
+      const overdueNow = it.urgency === 'overdue'
+      const n = it.pendingBidCount ?? 0
+      list.push({
+        id: `decision-${it.id}`,
+        tone: overdueNow ? 'risk' : 'watch',
+        sortKey: overdueNow ? 0.5 : 1.5,
+        title: it.title,
+        why: `${n} bid${n === 1 ? '' : 's'} pending — Leadership picks the winner`,
+        meta: attentionMetaBids(it),
+        actions: [
+          { label: 'Review bids', primary: true, onClick: () => setBidsItem(it) },
+          ...(canEdit ? [{ label: 'Update', primary: false, onClick: () => openEdit(it) }] : []),
+        ],
+      })
+    }
+
+    // 1) Overdue open items (not already flagged as needing a decision).
+    const overdueItems = openItems.filter((it) => it.urgency === 'overdue' && !seen.has(it.id))
     for (const it of overdueItems) {
       seen.add(it.id)
       list.push({
@@ -742,24 +927,47 @@ function FacilitiesWorkspace() {
     }
 
     return list.sort((a, b) => a.sortKey - b.sortKey).slice(0, 6)
-  }, [items, canEdit])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, canEdit, budget])
 
   // ── Gate ───────────────────────────────────────────────────────────────────
   if (notLicensed || notEntitled) return <GatePanel notLicensed={notLicensed} />
 
-  const registerTable = (
-    <MaintenanceTable
-      items={items}
-      loading={loading}
-      error={error}
+  const registerTable =
+    tab === 'vendors' ? (
+      <VendorsPanel
+        vendors={vendors}
+        loading={loading}
+        canEdit={canEdit}
+        reduce={reduce}
+        onEdit={(v) => setVendorModal({ editing: v })}
+        onDelete={(v) => removeVendor(v.id)}
+        onToggleActive={(v) => updateVendor(v.id, { active: !v.active })}
+      />
+    ) : (
+      <MaintenanceTable
+        items={items}
+        loading={loading}
+        error={error}
+        canEdit={canEdit}
+        reduce={reduce}
+        onEdit={openEdit}
+        onDelete={onDelete}
+        onOpenBids={(it) => setBidsItem(it)}
+      />
+    )
+
+  const onNew = canEdit ? (tab === 'vendors' ? () => setVendorModal({ editing: null }) : openAdd) : null
+
+  // The inherited-budget card sits BETWEEN the KPI row and the register.
+  const budgetCard = (
+    <FacilitiesBudgetCard
+      budget={budget}
+      loading={budgetLoading}
       canEdit={canEdit}
-      reduce={reduce}
-      onEdit={openEdit}
-      onDelete={onDelete}
+      onSaveConfig={saveConfig}
     />
   )
-
-  const onNew = canEdit ? openAdd : null
 
   const commandCenter = (
     <DomainCommandCenter
@@ -774,19 +982,42 @@ function FacilitiesWorkspace() {
       onNew={onNew}
       registerTable={registerTable}
       attentionItems={attentionItems}
+      beforeBody={budgetCard}
       registerTitle="Maintenance register"
     />
   )
 
   const modal = (
-    <MaintenanceFormModal
-      key={editing ? editing.id : 'new'}
-      open={modalOpen}
-      initial={initialForm}
-      onClose={() => setModalOpen(false)}
-      onSave={onSave}
-      reduce={reduce}
-    />
+    <>
+      <MaintenanceFormModal
+        key={editing ? editing.id : 'new'}
+        open={modalOpen}
+        initial={initialForm}
+        vendors={vendors}
+        onClose={() => setModalOpen(false)}
+        onSave={onSave}
+        reduce={reduce}
+      />
+      <VendorFormModal
+        key={vendorModal?.editing ? `v-${vendorModal.editing.id}` : 'v-new'}
+        open={!!vendorModal}
+        initial={vendorInitial}
+        onClose={() => setVendorModal(null)}
+        onSave={onSaveVendor}
+        reduce={reduce}
+      />
+      {bidsItem ? (
+        <MaintenanceBidsPanel
+          schoolId={schoolId}
+          item={bidsItem}
+          vendors={vendors}
+          canEdit={canEdit}
+          isOwner={isOwner}
+          onClose={() => setBidsItem(null)}
+          onChanged={onBidsChanged}
+        />
+      ) : null}
+    </>
   )
 
   if (uiV2) {

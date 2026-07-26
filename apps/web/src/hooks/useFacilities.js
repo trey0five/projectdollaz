@@ -18,10 +18,12 @@ const EMPTY_SUMMARY = {
   criticalOpen: 0,
   overdueOpen: 0,
   backlogCost: 0,
+  needsDecisionCount: 0,
 }
 
 export function useFacilities(schoolId) {
   const [items, setItems] = useState([])
+  const [vendors, setVendors] = useState([])
   const [summary, setSummary] = useState(EMPTY_SUMMARY)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -33,9 +35,15 @@ export function useFacilities(schoolId) {
     setNotLicensed(false)
     setNotEntitled(false)
     try {
-      const res = await facilitiesApi.listMaintenance(sid)
+      // Vendors ride along with the register (they feed the vendor Select + the
+      // Vendors tab) but never block it — a vendors failure degrades to [].
+      const [res, vres] = await Promise.all([
+        facilitiesApi.listMaintenance(sid),
+        facilitiesApi.listVendors(sid).catch(() => null),
+      ])
       setItems(res.data?.items ?? [])
       setSummary(res.data?.summary ?? EMPTY_SUMMARY)
+      setVendors(vres?.data?.vendors ?? [])
     } catch (e) {
       if (isModuleNotLicensed(e)) {
         setNotLicensed(true)
@@ -112,8 +120,37 @@ export function useFacilities(schoolId) {
     [schoolId, load],
   )
 
+  // ── Vendor CRUD (reload the whole register — vendor names surface on items) ──
+  const createVendor = useCallback(
+    async (body) => {
+      if (!schoolId) return
+      await facilitiesApi.createVendor(schoolId, body)
+      await load(schoolId)
+    },
+    [schoolId, load],
+  )
+
+  const updateVendor = useCallback(
+    async (vendorId, body) => {
+      if (!schoolId) return
+      await facilitiesApi.updateVendor(schoolId, vendorId, body)
+      await load(schoolId)
+    },
+    [schoolId, load],
+  )
+
+  const removeVendor = useCallback(
+    async (vendorId) => {
+      if (!schoolId) return
+      await facilitiesApi.removeVendor(schoolId, vendorId)
+      await load(schoolId)
+    },
+    [schoolId, load],
+  )
+
   return {
     items,
+    vendors,
     summary,
     loading,
     error,
@@ -123,5 +160,66 @@ export function useFacilities(schoolId) {
     createItem,
     updateItem,
     removeItem,
+    createVendor,
+    updateVendor,
+    removeVendor,
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useFacilitiesBudget — the INHERITED Finance budget slice (read-only derivation
+// on the API; facilities never writes budget lines). `refreshToken` lets the page
+// re-derive after anything that moves committed/actual (item saves, bid accepts).
+// Module 402s degrade to budget:null silently — the page-level gate already
+// handles the not-licensed panel.
+// ─────────────────────────────────────────────────────────────────────────────
+export function useFacilitiesBudget(schoolId, refreshToken = 0) {
+  const [budget, setBudget] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  const load = useCallback(async (sid) => {
+    setError('')
+    try {
+      const res = await facilitiesApi.getBudget(sid)
+      setBudget(res.data ?? null)
+    } catch (e) {
+      if (isModuleNotLicensed(e) || isPaymentRequired(e)) {
+        setBudget(null)
+      } else {
+        setError('Could not load the facilities budget.')
+        setBudget(null)
+      }
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.resolve().then(() => {
+      if (cancelled) return
+      if (schoolId) {
+        setLoading(true)
+        load(schoolId)
+      } else {
+        setBudget(null)
+        setLoading(false)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [schoolId, refreshToken, load])
+
+  const saveConfig = useCallback(
+    async (keys) => {
+      if (!schoolId) return
+      await facilitiesApi.putBudgetConfig(schoolId, keys)
+      await load(schoolId)
+    },
+    [schoolId, load],
+  )
+
+  return { budget, loading, error, saveConfig }
 }

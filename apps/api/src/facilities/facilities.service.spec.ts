@@ -31,25 +31,96 @@ function itemRow(over: Record<string, unknown> = {}) {
     seriesId: null,
     notes: null,
     createdByUserId: null,
+    // Vendors/bids additive columns (all null on a legacy-shaped row).
+    vendorId: null,
+    vendorRef: null,
+    selectedBidId: null,
+    decidedByUserId: null,
+    decidedAt: null,
+    decisionNote: null,
+    resolvedAt: null,
     createdAt: new Date('2025-01-01T00:00:00.000Z'),
     updatedAt: new Date('2025-01-01T00:00:00.000Z'),
     ...over,
   }
 }
 
-function makeService(over: { item?: Record<string, unknown> } = {}) {
+function makeService(
+  over: { item?: Record<string, unknown>; bid?: Record<string, unknown>; vendor?: Record<string, unknown> } = {},
+) {
   const maintenanceItem = {
     findMany: vi.fn(async () => []),
     findFirst: vi.fn(async () => null),
     create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => itemRow(data)),
     update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => itemRow(data)),
     delete: vi.fn(async () => itemRow()),
+    count: vi.fn(async () => 0),
     ...over.item,
   }
-  const prisma = { maintenanceItem }
+  // Vendors/bids additions: pendingBidCount groupBy defaults to no bids; the
+  // single-item count defaults to 0 — legacy tests stay byte-identical.
+  const maintenanceBid = {
+    findMany: vi.fn(async () => []),
+    findFirst: vi.fn(async () => null),
+    groupBy: vi.fn(async () => []),
+    count: vi.fn(async () => 0),
+    create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => bidRow(data)),
+    update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => bidRow(data)),
+    updateMany: vi.fn(async () => ({ count: 0 })),
+    delete: vi.fn(async () => bidRow()),
+    ...over.bid,
+  }
+  const vendor = {
+    findMany: vi.fn(async () => []),
+    findFirst: vi.fn(async () => null),
+    create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => vendorRow(data)),
+    update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => vendorRow(data)),
+    delete: vi.fn(async () => vendorRow()),
+    count: vi.fn(async () => 0),
+    ...over.vendor,
+  }
+  const prisma: Record<string, unknown> = { maintenanceItem, maintenanceBid, vendor }
+  // Interactive $transaction: run the callback against the SAME mock delegates.
+  prisma.$transaction = vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma))
   const audit = { write: vi.fn(async () => undefined) }
   const svc = new FacilitiesService(prisma as never, audit as never)
-  return { svc, maintenanceItem, audit }
+  return { svc, maintenanceItem, maintenanceBid, vendor, audit }
+}
+
+function bidRow(over: Record<string, unknown> = {}) {
+  return {
+    id: 'b1',
+    schoolId: 'school-A',
+    itemId: 'm1',
+    vendorId: null,
+    vendorName: 'ACME HVAC',
+    amount: decimal(1000),
+    notes: null,
+    status: 'pending',
+    createdByUserId: null,
+    vendor: null,
+    createdAt: new Date('2025-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2025-01-01T00:00:00.000Z'),
+    ...over,
+  }
+}
+
+function vendorRow(over: Record<string, unknown> = {}) {
+  return {
+    id: 'v1',
+    schoolId: 'school-A',
+    name: 'ACME HVAC',
+    contactName: null,
+    contactEmail: null,
+    contactPhone: null,
+    category: null,
+    notes: null,
+    active: true,
+    createdByUserId: null,
+    createdAt: new Date('2025-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2025-01-01T00:00:00.000Z'),
+    ...over,
+  }
 }
 
 const NOW = new Date('2026-07-01T12:00:00.000Z')
@@ -66,7 +137,9 @@ describe('FacilitiesService — list + enrichment', () => {
       },
     })
     const res = await svc.listMaintenance('school-A', NOW)
-    expect(maintenanceItem.findMany).toHaveBeenCalledWith({ where: { schoolId: 'school-A' } })
+    expect(maintenanceItem.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { schoolId: 'school-A' } }),
+    )
     // open-before-resolved, then priority (critical<high): c1, h1, r1.
     expect(res.items.map((i) => i.id)).toEqual(['c1', 'h1', 'r1'])
     // urgency computed: c1 overdue, h1 due-soon (31d out).
@@ -129,7 +202,9 @@ describe('FacilitiesService — tenant isolation (findFirst {id, schoolId})', ()
       item: { findFirst: vi.fn(async () => itemRow({ id: 'm1', schoolId: 'school-A' })) },
     })
     await svc.updateMaintenance('school-A', 'm1', { status: 'resolved' }, 'user-1')
-    expect(maintenanceItem.findFirst).toHaveBeenCalledWith({ where: { id: 'm1', schoolId: 'school-A' } })
+    expect(maintenanceItem.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'm1', schoolId: 'school-A' } }),
+    )
   })
 })
 
@@ -245,5 +320,116 @@ describe('FacilitiesService — recurrence spawn-on-resolve (preventive maintena
     const spawned = maintenanceItem.create.mock.calls[0][0].data
     expect(spawned.seriesId).toBe('rec1') // NOT reseeded to occ2
     expect((spawned.targetDate as Date).toISOString().slice(0, 10)).toBe('2026-08-15')
+  })
+})
+
+describe('FacilitiesService — resolvedAt stamp (FY-window anchor)', () => {
+  it('stamps resolvedAt exactly on the transition INTO resolved', async () => {
+    const existing = itemRow({ id: 's1', status: 'in_progress' })
+    const { svc, maintenanceItem } = makeService({ item: { findFirst: vi.fn(async () => existing) } })
+    await svc.updateMaintenance('school-A', 's1', { status: 'resolved' }, 'u')
+    const data = maintenanceItem.update.mock.calls[0][0].data
+    expect(data.resolvedAt).toBeInstanceOf(Date)
+  })
+
+  it('NEVER re-stamps on a re-save of an already-resolved item (keeps the original)', async () => {
+    const original = new Date('2026-01-15T00:00:00.000Z')
+    const existing = itemRow({ id: 's2', status: 'resolved', resolvedAt: original })
+    const { svc, maintenanceItem } = makeService({ item: { findFirst: vi.fn(async () => existing) } })
+    await svc.updateMaintenance('school-A', 's2', { notes: 'touch' }, 'u')
+    const data = maintenanceItem.update.mock.calls[0][0].data
+    expect(data.resolvedAt).toBe(original)
+  })
+
+  it('a non-resolving update leaves resolvedAt null', async () => {
+    const existing = itemRow({ id: 's3', status: 'open' })
+    const { svc, maintenanceItem } = makeService({ item: { findFirst: vi.fn(async () => existing) } })
+    await svc.updateMaintenance('school-A', 's3', { priority: 'high' }, 'u')
+    expect(maintenanceItem.update.mock.calls[0][0].data.resolvedAt).toBeNull()
+  })
+})
+
+describe('FacilitiesService — recurrence successor copy-list (D9)', () => {
+  it('successor copies vendorId + legacy vendor but is born CLEAN of decision/close-out state', async () => {
+    const existing = itemRow({
+      id: 'rec9',
+      status: 'scheduled',
+      recurrence: 'monthly',
+      targetDate: new Date('2026-06-15T00:00:00.000Z'),
+      vendor: 'ACME HVAC',
+      vendorId: 'v1',
+      selectedBidId: 'b-won',
+      decidedByUserId: 'owner-1',
+      decidedAt: new Date('2026-06-01T00:00:00.000Z'),
+      decisionNote: 'go with ACME',
+      resolvedAt: null,
+      actualCost: decimal(999),
+    })
+    const { svc, maintenanceItem } = makeService({ item: { findFirst: vi.fn(async () => existing) } })
+    await svc.updateMaintenance('school-A', 'rec9', { status: 'resolved' }, 'u')
+    expect(maintenanceItem.create).toHaveBeenCalledTimes(1) // spawn still fires
+    const spawned = maintenanceItem.create.mock.calls[0][0].data
+    // Durable vendor definition carries over…
+    expect(spawned.vendor).toBe('ACME HVAC')
+    expect(spawned.vendorId).toBe('v1')
+    // …decision/close-out state NEVER does (absent from the create → null columns).
+    expect(spawned.selectedBidId).toBeUndefined()
+    expect(spawned.decidedByUserId).toBeUndefined()
+    expect(spawned.decidedAt).toBeUndefined()
+    expect(spawned.decisionNote).toBeUndefined()
+    expect(spawned.resolvedAt).toBeUndefined()
+    expect(spawned.actualCost).toBeNull()
+  })
+})
+
+describe('FacilitiesService — pendingBidCount enrichment + needsDecisionCount', () => {
+  it('one groupBy feeds per-item pendingBidCount; summary gains needsDecisionCount (frozen rule)', async () => {
+    const { svc, maintenanceBid } = makeService({
+      item: {
+        findMany: vi.fn(async () => [
+          // 2 pending bids, not resolved → needs decision.
+          itemRow({ id: 'two', status: 'open' }),
+          // 1 pending bid + overdue → needs decision.
+          itemRow({ id: 'one-late', status: 'open', targetDate: new Date('2026-06-01T00:00:00.000Z') }),
+          // 1 pending bid, on-track → NOT counted.
+          itemRow({ id: 'one-ok', status: 'open', targetDate: new Date('2026-12-01T00:00:00.000Z') }),
+          // resolved with bids → NOT counted.
+          itemRow({ id: 'done', status: 'resolved' }),
+        ]),
+      },
+      bid: {
+        groupBy: vi.fn(async () => [
+          { itemId: 'two', _count: { _all: 2 }, _min: { amount: 1200.5 }, _max: { amount: 2400 } },
+          { itemId: 'one-late', _count: { _all: 1 }, _min: { amount: 900 }, _max: { amount: 900 } },
+          { itemId: 'one-ok', _count: { _all: 1 }, _min: { amount: 50 }, _max: { amount: 50 } },
+          { itemId: 'done', _count: { _all: 3 }, _min: { amount: 1 }, _max: { amount: 3 } },
+        ]),
+      },
+    })
+    const res = await svc.listMaintenance('school-A', NOW)
+    expect(maintenanceBid.groupBy).toHaveBeenCalledTimes(1) // no per-item N+1
+    expect(res.items.find((i) => i.id === 'two')!.pendingBidCount).toBe(2)
+    expect(res.items.find((i) => i.id === 'one-late')!.pendingBidCount).toBe(1)
+    // Rail "bid amount range" rides the SAME groupBy (_min/_max — still no N+1).
+    expect(res.items.find((i) => i.id === 'two')!.pendingBidMin).toBe(1200.5)
+    expect(res.items.find((i) => i.id === 'two')!.pendingBidMax).toBe(2400)
+    expect(res.items.find((i) => i.id === 'one-ok')!.pendingBidMin).toBe(50)
+    expect(res.summary.needsDecisionCount).toBe(2)
+    // Pre-existing summary fields unchanged (briefing STEP 2.8 backward compat).
+    expect(res.summary.openCount).toBe(3)
+  })
+
+  it('vendorName resolves vendorRef.name over the legacy free-text vendor', async () => {
+    const { svc } = makeService({
+      item: {
+        findMany: vi.fn(async () => [
+          itemRow({ id: 'linked', vendorId: 'v1', vendorRef: { name: 'Structured Co' }, vendor: 'Old Text' }),
+          itemRow({ id: 'legacy', vendor: 'Legacy Plumber' }),
+        ]),
+      },
+    })
+    const res = await svc.listMaintenance('school-A', NOW)
+    expect(res.items.find((i) => i.id === 'linked')!.vendorName).toBe('Structured Co')
+    expect(res.items.find((i) => i.id === 'legacy')!.vendorName).toBe('Legacy Plumber')
   })
 })

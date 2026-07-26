@@ -4,7 +4,7 @@ import type {
   MaintenanceItemPublic,
   MaintenanceListResponse,
 } from '../facilities/facilities.service.js'
-import { summarizeBacklog } from '@finrep/compliance'
+import { summarizeBacklog, summarizeDecisions } from '@finrep/compliance'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Phase 4 Facilities v1 — the 'facilities' briefing STEP. Verifies the module gate,
@@ -36,20 +36,40 @@ function mItem(over: Partial<MaintenanceItemPublic>): MaintenanceItemPublic {
     createdByUserId: over.createdByUserId ?? null,
     urgency: over.urgency ?? 'none',
     daysUntilTarget: over.daysUntilTarget ?? null,
+    // Vendors/bids additive fields (null/0 on legacy-shaped fixtures).
+    vendorId: over.vendorId ?? null,
+    vendorName: over.vendorName ?? over.vendor ?? null,
+    selectedBidId: over.selectedBidId ?? null,
+    decidedByUserId: over.decidedByUserId ?? null,
+    decidedAt: over.decidedAt ?? null,
+    decisionNote: over.decisionNote ?? null,
+    resolvedAt: over.resolvedAt ?? null,
+    pendingBidCount: over.pendingBidCount ?? 0,
+    pendingBidMin: over.pendingBidMin ?? null,
+    pendingBidMax: over.pendingBidMax ?? null,
     createdAt: over.createdAt ?? '2025-01-01T00:00:00.000Z',
     updatedAt: over.updatedAt ?? '2025-01-01T00:00:00.000Z',
   }
 }
 
 function register(items: MaintenanceItemPublic[]): MaintenanceListResponse {
-  const summary = summarizeBacklog(
-    items.map((i) => ({
-      priority: i.priority,
-      status: i.status,
-      estimatedCost: i.estimatedCost,
-      urgency: i.urgency,
-    })),
-  )
+  const summary = {
+    ...summarizeBacklog(
+      items.map((i) => ({
+        priority: i.priority,
+        status: i.status,
+        estimatedCost: i.estimatedCost,
+        urgency: i.urgency,
+      })),
+    ),
+    ...summarizeDecisions(
+      items.map((i) => ({
+        status: i.status,
+        urgency: i.urgency,
+        pendingBidCount: i.pendingBidCount,
+      })),
+    ),
+  }
   return { items, summary }
 }
 

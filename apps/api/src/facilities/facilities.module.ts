@@ -3,7 +3,11 @@ import { AuthModule } from '../auth/auth.module.js'
 import { BillingModule } from '../billing/billing.module.js'
 import { AuditModule } from '../common/audit/audit.module.js'
 import { MaintenanceController } from './maintenance.controller.js'
+import { VendorsController } from './vendors.controller.js'
+import { BidsController } from './bids.controller.js'
+import { FacilitiesBudgetController } from './facilities-budget.controller.js'
 import { FacilitiesService } from './facilities.service.js'
+import { FacilitiesBudgetService } from './facilities-budget.service.js'
 
 /**
  * Phase 4 Facilities v1 — the deferred-maintenance register module. The THIRD
@@ -18,8 +22,13 @@ import { FacilitiesService } from './facilities.service.js'
  */
 @Module({
   imports: [AuthModule, BillingModule, AuditModule],
-  controllers: [MaintenanceController],
-  providers: [FacilitiesService],
+  controllers: [
+    MaintenanceController,
+    VendorsController,
+    BidsController,
+    FacilitiesBudgetController,
+  ],
+  providers: [FacilitiesService, FacilitiesBudgetService],
   exports: [FacilitiesService],
 })
 export class FacilitiesModule {}

@@ -151,6 +151,41 @@ export interface MaintenanceBacklogInput {
  * school backlog summary. Pure, deterministic; empty list → all zeros. backlogCost
  * accumulates in integer cents to avoid float drift, resolved items excluded.
  */
+// ── Facilities vendors/bids — the "needs a Leadership decision" rollup. PURE +
+// deterministic (no clock, no I/O), shared by the register summary and any future
+// briefing line so the two can never disagree. ────────────────────────────────
+
+export interface MaintenanceDecisionInput {
+  status: string
+  urgency: MaintenanceUrgency
+  /** COUNT of this item's bids with status 'pending' (computed by the service). */
+  pendingBidCount: number
+}
+
+export interface MaintenanceDecisionSummary {
+  /** Items awaiting a Leadership (owner) accept-bid decision. */
+  needsDecisionCount: number
+}
+
+/**
+ * FROZEN RULE: an item needs a decision iff it is NOT resolved AND
+ * (pendingBidCount >= 2 — competing quotes on the table — OR pendingBidCount >= 1
+ * while the item is already OVERDUE — a single quote on late work still needs a
+ * call). Resolved items drop out unconditionally (their bids are inert history).
+ */
+export function summarizeDecisions(
+  items: readonly MaintenanceDecisionInput[],
+): MaintenanceDecisionSummary {
+  let needsDecisionCount = 0
+  for (const it of items) {
+    if (it.status === 'resolved') continue
+    if (it.pendingBidCount >= 2 || (it.pendingBidCount >= 1 && it.urgency === 'overdue')) {
+      needsDecisionCount += 1
+    }
+  }
+  return { needsDecisionCount }
+}
+
 export function summarizeBacklog(
   items: readonly MaintenanceBacklogInput[],
 ): MaintenanceBacklogSummary {

@@ -22,6 +22,9 @@ export const DOCUMENT_SOURCE_TYPES = [
   'standard',
   'campaign',
   'maintenance',
+  // Facilities vendors/bids — quote documents attached to a MaintenanceBid
+  // (sourceRef = bidId, school-scoped in resolveLink).
+  'maintenance_bid',
   // Governance Phase 2 — credential/CV docs attached to a GovernancePerson
   // (sourceRef = personId; tag convention cv|license|degree|background_check).
   'governance_person',

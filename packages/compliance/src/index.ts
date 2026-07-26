@@ -173,10 +173,13 @@ export type {
   MaintenanceBacklogSummary,
   MaintenanceBacklogInput,
   MaintenanceRecurrence,
+  MaintenanceDecisionInput,
+  MaintenanceDecisionSummary,
 } from './maintenance-backlog.js'
 export {
   computeMaintenanceUrgency,
   summarizeBacklog,
+  summarizeDecisions,
   MAINTENANCE_DUE_SOON_DAYS,
   // Facilities depth — recurring-item next-occurrence date math (pure).
   nextMaintenanceOccurrence,
