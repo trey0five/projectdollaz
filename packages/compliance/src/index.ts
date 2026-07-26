@@ -135,6 +135,34 @@ export {
   summarizeRatings,
 } from './accreditation-coverage.js'
 
+// Accreditation Phase 3 — pure rubric-readiness engine (framework catalog / IEQ-style index)
+export type {
+  EvidenceTag,
+  StatusBand,
+  ReadinessFrameworkInput,
+  ReadinessLeafInput,
+  SchoolReadiness,
+  ReadinessGap,
+  TargetGap,
+  AssuranceLeafInput,
+  AssuranceStatus,
+} from './accreditation-readiness.js'
+export {
+  RUBRIC_MIN,
+  RUBRIC_MAX,
+  RUBRIC_WEIGHT,
+  EVIDENCE_WEIGHT,
+  EVIDENCE_TAGS,
+  BELOW_THRESHOLD_LABEL,
+  normalizeRubricScore,
+  standardReadiness,
+  bandForIndex,
+  schoolReadiness,
+  computeGaps,
+  computeTargetGap,
+  computeAssurances,
+} from './accreditation-readiness.js'
+
 // Phase 4 Facilities v1 — pure deferred-maintenance backlog (injectable now)
 export type {
   MaintenancePriority,

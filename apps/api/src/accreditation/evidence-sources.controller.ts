@@ -7,25 +7,41 @@ import { RequiresModule } from '../billing/requires-module.decorator.js'
 import { AccreditationService } from './accreditation.service.js'
 
 /**
- * Phase 4 Accreditation — the "attach from operations" DISCOVERY route. Enumerates the
- * caller-school's internal operational artifacts (v1: policies + board reports) so the
- * FE can offer one-click evidence attach. Its own controller because the base path
- * (`schools/:schoolId/accreditation/evidence-sources`) sits BESIDE, not under, the
- * nested `/standards/:standardId/evidence` route.
+ * Phase 4 Accreditation — the "attach from operations" DISCOVERY routes. The
+ * base path moved up one segment in Phase 3 so this ONE controller can serve
+ * both discovery routes (paths are byte-identical to before for
+ * evidence-sources):
+ *   GET .../accreditation/evidence-sources                      — the school's
+ *     linkable operational artifacts (policies + board reports, and the Phase 3
+ *     siblings: approved-minutes meetings, strategic plans, knowledge documents,
+ *     the virtual governance report).
+ *   GET .../accreditation/standards/:standardId/suggestions     — deterministic
+ *     tag-matched artifact suggestions for one catalog-linked standard ([] for
+ *     hand-made standards).
  *
- * Same guard chain + @RequiresModule('accreditation') as the standards controller; the
- * service filters both queries by the path schoolId, so only the caller-school's
- * artifacts are ever returned. All roles may READ (read-only discovery).
+ * Same guard chain + @RequiresModule('accreditation') as the standards
+ * controller; the service scopes every query by the path schoolId (and resolves
+ * the standard FIRST for suggestions — a foreign standardId 404s). All roles
+ * may READ (read-only discovery).
  */
-@Controller('schools/:schoolId/accreditation/evidence-sources')
+@Controller('schools/:schoolId/accreditation')
 @UseGuards(JwtAuthGuard, RolesGuard, EntitlementGuard)
 @RequiresModule('accreditation')
 export class EvidenceSourcesController {
   constructor(private readonly accreditation: AccreditationService) {}
 
-  @Get()
+  @Get('evidence-sources')
   @Roles('owner', 'accountant', 'viewer')
   list(@Param('schoolId', ParseUUIDPipe) schoolId: string) {
     return this.accreditation.listEvidenceSources(schoolId)
+  }
+
+  @Get('standards/:standardId/suggestions')
+  @Roles('owner', 'accountant', 'viewer')
+  suggestions(
+    @Param('schoolId', ParseUUIDPipe) schoolId: string,
+    @Param('standardId', ParseUUIDPipe) standardId: string,
+  ) {
+    return this.accreditation.listSuggestions(schoolId, standardId)
   }
 }

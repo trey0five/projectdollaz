@@ -9,7 +9,7 @@
 // panel rather than a raw crash. Evidence is loaded LAZILY per expanded standard
 // (listEvidence/createEvidence/removeEvidence) so the list stays cheap.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { accreditationApi, isModuleNotLicensed, isPaymentRequired } from '../lib/api.js'
 
 const EMPTY_RATING_SUMMARY = {
@@ -21,6 +21,19 @@ const EMPTY_RATING_SUMMARY = {
   ratingCoveragePct: 0,
 }
 
+// The chosen readiness target index (e.g. 280 "Accredited" / 320 "Merit") persists
+// per school so the hero remembers your ambition across sessions.
+const targetKey = (sid) => `accreditation.readinessTarget.${sid}`
+function readStoredTarget(sid) {
+  try {
+    const raw = window.localStorage.getItem(targetKey(sid))
+    const n = raw == null ? NaN : Number(raw)
+    return Number.isFinite(n) ? n : null
+  } catch {
+    return null
+  }
+}
+
 export function useAccreditation(schoolId) {
   const [standards, setStandards] = useState([])
   const [summary, setSummary] = useState({ total: 0, withEvidence: 0, gaps: 0, pctCovered: 0 })
@@ -29,17 +42,45 @@ export function useAccreditation(schoolId) {
   const [error, setError] = useState('')
   const [notLicensed, setNotLicensed] = useState(false)
   const [notEntitled, setNotEntitled] = useState(false)
+  // ── Phase 3 additive state: rubric readiness + framework catalog ────────────
+  const [readiness, setReadiness] = useState(null) // null until loaded / fail-soft
+  const [frameworks, setFrameworks] = useState(null) // null = not yet fetched
+
+  // STALE-RESPONSE GUARD: on a rapid school swap the previous school's in-flight
+  // responses can resolve LAST and pin its data on the new school's page (a
+  // cross-tenant display mix-up). Every awaited setter below checks that the sid
+  // it fetched for is still the active schoolId before writing state.
+  const activeSchoolRef = useRef(schoolId)
+  activeSchoolRef.current = schoolId
+
+  // Fail-soft readiness pull — a readiness hiccup must never blank the register.
+  const loadReadiness = useCallback(async (sid, targetOverride) => {
+    try {
+      const target = targetOverride !== undefined ? targetOverride : readStoredTarget(sid)
+      const res = await accreditationApi.getReadiness(sid, target != null ? { target } : {})
+      if (activeSchoolRef.current !== sid) return // stale school swap — drop
+      setReadiness(res.data ?? null)
+    } catch {
+      if (activeSchoolRef.current !== sid) return
+      setReadiness(null)
+    }
+  }, [])
 
   const load = useCallback(async (sid) => {
     setError('')
     setNotLicensed(false)
     setNotEntitled(false)
     try {
-      const res = await accreditationApi.listStandards(sid)
+      const [res] = await Promise.all([
+        accreditationApi.listStandards(sid),
+        loadReadiness(sid), // self-catching — never rejects
+      ])
+      if (activeSchoolRef.current !== sid) return // stale school swap — drop
       setStandards(res.data?.standards ?? [])
       setSummary(res.data?.summary ?? { total: 0, withEvidence: 0, gaps: 0, pctCovered: 0 })
       setRatingSummary(res.data?.ratingSummary ?? EMPTY_RATING_SUMMARY)
     } catch (e) {
+      if (activeSchoolRef.current !== sid) return // stale school swap — drop
       if (isModuleNotLicensed(e)) {
         setNotLicensed(true)
         setStandards([])
@@ -56,7 +97,7 @@ export function useAccreditation(schoolId) {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [loadReadiness])
 
   useEffect(() => {
     let cancelled = false
@@ -163,6 +204,91 @@ export function useAccreditation(schoolId) {
     [schoolId, load],
   )
 
+  // ── Phase 3: framework catalog + rubric readiness ──────────────────────────
+  // Lazy framework list (fetched when the adopt modal opens). Fail-soft to [].
+  const loadFrameworks = useCallback(async () => {
+    if (!schoolId) return []
+    try {
+      const res = await accreditationApi.listFrameworks(schoolId)
+      const list = res.data?.frameworks ?? []
+      setFrameworks(list)
+      return list
+    } catch {
+      setFrameworks([])
+      return []
+    }
+  }, [schoolId])
+
+  // Adopt (or re-adopt — idempotent, fills gaps) a framework into the register.
+  const adoptFramework = useCallback(
+    async (code) => {
+      if (!schoolId) return
+      await accreditationApi.adoptFramework(schoolId, code)
+      await Promise.all([load(schoolId), loadFrameworks()])
+    },
+    [schoolId, load, loadFrameworks],
+  )
+
+  // Pick a readiness target index (persisted per school); null reverts to the
+  // framework's defaultTarget server-side.
+  const setReadinessTarget = useCallback(
+    async (target) => {
+      if (!schoolId) return
+      try {
+        if (target == null) window.localStorage.removeItem(targetKey(schoolId))
+        else window.localStorage.setItem(targetKey(schoolId), String(target))
+      } catch {
+        /* private mode — target just won't persist */
+      }
+      await loadReadiness(schoolId, target)
+    },
+    [schoolId, loadReadiness],
+  )
+
+  // Self-score one standard on the 1–4 rubric (null clears). Optimistic paint,
+  // then the authoritative reload refreshes rollups + readiness (or reverts on error).
+  const setRubric = useCallback(
+    async (standardId, score) => {
+      if (!schoolId) return
+      setStandards((rows) =>
+        rows.map((s) => (s.id === standardId ? { ...s, rubricScore: score } : s)),
+      )
+      try {
+        await accreditationApi.updateStandard(schoolId, standardId, { rubricScore: score })
+      } finally {
+        await load(schoolId)
+      }
+    },
+    [schoolId, load],
+  )
+
+  // Deterministic evidence suggestions for one standard (catalog tag matching).
+  const fetchSuggestions = useCallback(
+    async (standardId) => {
+      if (!schoolId) return []
+      const res = await accreditationApi.getSuggestions(schoolId, standardId)
+      return res.data?.suggestions ?? []
+    },
+    [schoolId],
+  )
+
+  // Bind / clear a standard's strategy link (plan or goal). Passing a null type
+  // clears both fields (the API contract's explicit-null clear).
+  const linkStrategy = useCallback(
+    async (standardId, type, ref) => {
+      if (!schoolId) return
+      await accreditationApi.updateStandard(
+        schoolId,
+        standardId,
+        type
+          ? { strategySourceType: type, strategySourceRef: ref }
+          : { strategySourceType: null, strategySourceRef: null },
+      )
+      await load(schoolId)
+    },
+    [schoolId, load],
+  )
+
   return {
     standards,
     summary,
@@ -180,5 +306,14 @@ export function useAccreditation(schoolId) {
     createEvidence,
     updateEvidence,
     removeEvidence,
+    // Phase 3 additive surface
+    readiness,
+    frameworks,
+    loadFrameworks,
+    adoptFramework,
+    setReadinessTarget,
+    setRubric,
+    fetchSuggestions,
+    linkStrategy,
   }
 }

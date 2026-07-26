@@ -1,5 +1,15 @@
-import { IsDateString, IsIn, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator'
+import {
+  IsDateString,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  MinLength,
+} from 'class-validator'
 import { STANDARD_RATINGS, type StandardRating } from '@finrep/compliance'
+import { STRATEGY_SOURCE_TYPES, type StrategySourceType } from './create-standard.dto.js'
 
 /**
  * Patch an accreditation standard. ALL fields optional (partial PATCH). Hand-written
@@ -50,4 +60,21 @@ export class UpdateStandardDto {
   @IsString()
   @MaxLength(4000)
   notes?: string | null
+
+  // ── Phase 3 (additive) — omitted keeps, explicit null CLEARS (rubric/strategy) ──
+
+  /** Accreditor self-score 1..4; explicit null clears back to unscored. */
+  @IsOptional()
+  @IsInt()
+  @IsIn([1, 2, 3, 4])
+  rubricScore?: number | null
+
+  /** Strategy soft-link — set together with strategySourceRef; null clears both. */
+  @IsOptional()
+  @IsIn(STRATEGY_SOURCE_TYPES)
+  strategySourceType?: StrategySourceType | null
+
+  @IsOptional()
+  @IsUUID()
+  strategySourceRef?: string | null
 }

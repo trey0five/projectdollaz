@@ -5,7 +5,11 @@ import { AuditModule } from '../common/audit/audit.module.js'
 import { StandardsController } from './standards.controller.js'
 import { EvidenceController } from './evidence.controller.js'
 import { EvidenceSourcesController } from './evidence-sources.controller.js'
+import { AccreditationCatalogController } from './catalog.controller.js'
+import { AccreditationReadinessController } from './readiness.controller.js'
 import { AccreditationService } from './accreditation.service.js'
+import { AccreditationCatalogService } from './catalog.service.js'
+import { AccreditationReadinessService } from './readiness.service.js'
 
 /**
  * Phase 4 Accreditation v1 — the Standards + Evidence register module. The first
@@ -20,8 +24,14 @@ import { AccreditationService } from './accreditation.service.js'
  */
 @Module({
   imports: [AuthModule, BillingModule, AuditModule],
-  controllers: [StandardsController, EvidenceController, EvidenceSourcesController],
-  providers: [AccreditationService],
+  controllers: [
+    StandardsController,
+    EvidenceController,
+    EvidenceSourcesController,
+    AccreditationCatalogController,
+    AccreditationReadinessController,
+  ],
+  providers: [AccreditationService, AccreditationCatalogService, AccreditationReadinessService],
   exports: [AccreditationService],
 })
 export class AccreditationModule {}

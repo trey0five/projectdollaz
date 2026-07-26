@@ -1,5 +1,18 @@
-import { IsDateString, IsIn, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator'
+import {
+  IsDateString,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  MinLength,
+} from 'class-validator'
 import { STANDARD_RATINGS, type StandardRating } from '@finrep/compliance'
+
+/** Strategy soft-link targets — the closed @IsIn set (service validates ∈ school). */
+export const STRATEGY_SOURCE_TYPES = ['strategic_plan', 'strategy_goal'] as const
+export type StrategySourceType = (typeof STRATEGY_SOURCE_TYPES)[number]
 
 /**
  * Create an accreditation standard. forbidNonWhitelisted-SAFE: EVERY field is
@@ -53,4 +66,22 @@ export class CreateStandardDto {
   @IsString()
   @MaxLength(4000)
   notes?: string | null
+
+  // ── Phase 3 (additive; forbidNonWhitelisted-SAFE — every field decorated) ──
+
+  /** Accreditor self-score 1..4 (framework rubric); explicit null = unscored. */
+  @IsOptional()
+  @IsInt()
+  @IsIn([1, 2, 3, 4])
+  rubricScore?: number | null
+
+  /** Strategy soft-link — must be set together with strategySourceRef (service-enforced). */
+  @IsOptional()
+  @IsIn(STRATEGY_SOURCE_TYPES)
+  strategySourceType?: StrategySourceType | null
+
+  /** StrategicPlan.id / StrategyGoal.id — validated ∈ the path school in the service. */
+  @IsOptional()
+  @IsUUID()
+  strategySourceRef?: string | null
 }

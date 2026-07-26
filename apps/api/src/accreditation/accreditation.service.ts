@@ -6,6 +6,7 @@ import {
   summarizeRatings,
   normalizeRating,
   type CoverageStatus,
+  type EvidenceTag,
   type ReviewStatus,
   type SchoolCoverageSummary,
   type StandardRating,
@@ -47,6 +48,22 @@ export interface StandardPublic {
   isLeaf: boolean
   /** Rating rollup over THIS node's descendant leaves (a leaf rolls up just itself). */
   leafSummary: RatingSummary
+  // ── Phase 3 catalog/rubric depth (ADDITIVE — existing fields byte-identical) ──
+  /** Accreditor self-score 1..4; null = unscored. */
+  rubricScore: number | null
+  /** Framework rubric label for rubricScore; null when unscored/frameworkless. */
+  rubricLabel: string | null
+  frameworkId: string | null
+  catalogStandardId: string | null
+  /** Accreditor order on adopted trees; null on hand-made rows. */
+  sortOrder: number | null
+  /** Cognia binary assurance gate (from the catalog row; false when uncataloged). */
+  isAssurance: boolean
+  /** Soft link to a StrategicPlan/StrategyGoal ('strategic_plan' | 'strategy_goal'). */
+  strategySourceType: string | null
+  strategySourceRef: string | null
+  /** Linked plan name / goal title (batched lookup; null when unlinked/dangling). */
+  strategyLabel: string | null
   createdAt: string
   updatedAt: string
 }
@@ -97,6 +114,37 @@ export interface EvidenceSource {
 export interface EvidenceSourcesResponse {
   policies: EvidenceSource[]
   boardReports: EvidenceSource[]
+  // ── Phase 3 ADDITIVE sibling groups (policies/boardReports byte-identical) ──
+  /** Approved-minutes board meetings only. */
+  meetings: { id: string; label: string; date: string | null }[]
+  strategicPlans: {
+    id: string
+    label: string
+    fyStartYear: number
+    fyEndYear: number
+    /** True when the plan spans ≥5 fiscal years (fyEndYear - fyStartYear >= 4). */
+    fiveYear: boolean
+  }[]
+  knowledgeDocuments: { id: string; label: string; date: string | null }[]
+  /** The governance report is a VIRTUAL artifact — available when ≥1 person exists. */
+  governanceReport: { available: boolean }
+}
+
+/** One deterministic tag-matched artifact suggestion for a catalog-linked standard. */
+export interface EvidenceSuggestion {
+  tag: EvidenceTag
+  sourceType: Exclude<EvidenceSourceType, 'manual'>
+  /** null only for the virtual governance_report. */
+  sourceRef: string | null
+  label: string
+  date: string | null
+  alreadyAttached: boolean
+  /** Present ('strategy') on strategic-plan rows so the UI can offer "Link to plan". */
+  linkAction?: 'strategy'
+}
+
+export interface SuggestionsResponse {
+  suggestions: EvidenceSuggestion[]
 }
 
 /**
@@ -105,9 +153,24 @@ export interface EvidenceSourcesResponse {
  * title); `link` is the react-router route the badge navigates to. v1 links to the
  * domain page, not a per-artifact anchor (per-artifact deep-link deferred).
  */
-const SOURCE_META: Record<'policy' | 'board_report', { label: string; link: string }> = {
+const SOURCE_META: Record<Exclude<EvidenceSourceType, 'manual'>, { label: string; link: string }> = {
   policy: { label: 'Governance', link: '/governance' },
   board_report: { label: 'Reports', link: '/reports' },
+  // Phase 3 — MUST stay in lockstep with EVIDENCE_SOURCE_TYPES or badges blank.
+  meeting: { label: 'Meeting minutes', link: '/governance' },
+  governance_report: { label: 'Governance report', link: '/governance/report/print' },
+  strategic_plan: { label: 'Strategic plan', link: '/strategy' },
+  knowledge_document: { label: 'Document', link: '/knowledge' },
+}
+
+/** Batched Phase-3 lookups threaded through toStandardPublic (see buildEnrichmentCtx). */
+interface StandardEnrichmentCtx {
+  /** frameworkId → rubricLabels array[4] (index i = label for score i+1). */
+  rubricLabelsByFramework: Map<string, string[]>
+  /** Catalog ids flagged isAssurance (Cognia binary gates). */
+  assuranceCatalogIds: Set<string>
+  /** `${strategySourceType}:${strategySourceRef}` → plan name / goal title. */
+  strategyLabels: Map<string, string>
 }
 
 /** Deterministic list order: no-evidence first, then review pressure, then code. */
@@ -163,15 +226,23 @@ export class AccreditationService {
   ) {}
 
   /** Extra computed tree fields; when omitted (single-row create/update response), the
-   *  row is treated as a top-level LEAF whose leafSummary rolls up just its own rating. */
+   *  row is treated as a top-level LEAF whose leafSummary rolls up just its own rating.
+   *  `ctx` carries the BATCHED Phase-3 lookups (framework rubric labels, catalog
+   *  assurance flags, strategy labels) — when omitted those resolve to null/false. */
   private toStandardPublic(
     row: AccreditationStandard,
     evidenceCount: number,
     now: Date,
     tree?: { depth: number; isLeaf: boolean; leafSummary: RatingSummary },
+    ctx?: StandardEnrichmentCtx,
   ): StandardPublic {
     const cov = computeStandardCoverage({ evidenceCount, reviewDate: row.reviewDate }, now)
     const rating = normalizeRating(row.rating)
+    const rubricScore = row.rubricScore ?? null
+    const frameworkId = row.frameworkId ?? null
+    const catalogStandardId = row.catalogStandardId ?? null
+    const strategySourceType = row.strategySourceType ?? null
+    const strategySourceRef = row.strategySourceRef ?? null
     return {
       id: row.id,
       code: row.code,
@@ -189,9 +260,89 @@ export class AccreditationService {
       depth: tree?.depth ?? 0,
       isLeaf: tree?.isLeaf ?? true,
       leafSummary: tree?.leafSummary ?? summarizeRatings([{ rating }]),
+      rubricScore,
+      rubricLabel:
+        rubricScore != null && frameworkId
+          ? (ctx?.rubricLabelsByFramework.get(frameworkId)?.[rubricScore - 1] ?? null)
+          : null,
+      frameworkId,
+      catalogStandardId,
+      sortOrder: row.sortOrder ?? null,
+      isAssurance:
+        catalogStandardId != null && (ctx?.assuranceCatalogIds.has(catalogStandardId) ?? false),
+      strategySourceType,
+      strategySourceRef,
+      strategyLabel:
+        strategySourceType && strategySourceRef
+          ? (ctx?.strategyLabels.get(`${strategySourceType}:${strategySourceRef}`) ?? null)
+          : null,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     }
+  }
+
+  /**
+   * Batched Phase-3 enrichment lookups for one school's standards. EVERY query is
+   * SKIPPED entirely when no row references it (hand-made registers stay two
+   * queries total; dangling strategy refs simply resolve to a null label).
+   */
+  private async buildEnrichmentCtx(
+    schoolId: string,
+    rows: AccreditationStandard[],
+  ): Promise<StandardEnrichmentCtx> {
+    const frameworkIds = [
+      ...new Set(rows.map((r) => r.frameworkId).filter((id): id is string => !!id)),
+    ]
+    const catalogIds = [
+      ...new Set(rows.map((r) => r.catalogStandardId).filter((id): id is string => !!id)),
+    ]
+    const planRefs = [
+      ...new Set(
+        rows
+          .filter((r) => r.strategySourceType === 'strategic_plan' && r.strategySourceRef)
+          .map((r) => r.strategySourceRef as string),
+      ),
+    ]
+    const goalRefs = [
+      ...new Set(
+        rows
+          .filter((r) => r.strategySourceType === 'strategy_goal' && r.strategySourceRef)
+          .map((r) => r.strategySourceRef as string),
+      ),
+    ]
+
+    const rubricLabelsByFramework = new Map<string, string[]>()
+    if (frameworkIds.length > 0) {
+      const fws = await this.prisma.accreditationFramework.findMany({
+        where: { id: { in: frameworkIds } },
+        select: { id: true, rubricLabels: true },
+      })
+      for (const fw of fws) rubricLabelsByFramework.set(fw.id, (fw.rubricLabels as string[]) ?? [])
+    }
+    const assuranceCatalogIds = new Set<string>()
+    if (catalogIds.length > 0) {
+      const cats = await this.prisma.accreditationCatalogStandard.findMany({
+        where: { id: { in: catalogIds }, isAssurance: true },
+        select: { id: true },
+      })
+      for (const c of cats) assuranceCatalogIds.add(c.id)
+    }
+    const strategyLabels = new Map<string, string>()
+    if (planRefs.length > 0) {
+      const plans = await this.prisma.strategicPlan.findMany({
+        where: { id: { in: planRefs }, schoolId },
+        select: { id: true, name: true },
+      })
+      for (const p of plans) strategyLabels.set(`strategic_plan:${p.id}`, p.name)
+    }
+    if (goalRefs.length > 0) {
+      const goals = await this.prisma.strategyGoal.findMany({
+        where: { id: { in: goalRefs }, schoolId },
+        select: { id: true, title: true },
+      })
+      for (const g of goals) strategyLabels.set(`strategy_goal:${g.id}`, g.title)
+    }
+    return { rubricLabelsByFramework, assuranceCatalogIds, strategyLabels }
   }
 
   /**
@@ -225,6 +376,10 @@ export class AccreditationService {
     })
     const countBy = new Map<string, number>()
     for (const c of counts) countBy.set(c.standardId, c._count._all)
+
+    // Phase 3 enrichment (rubric labels / assurance flags / strategy labels) —
+    // every lookup is batched and SKIPPED when no row references it.
+    const ctx = await this.buildEnrichmentCtx(schoolId, rows)
 
     const byRowId = new Map<string, AccreditationStandard>()
     for (const r of rows) byRowId.set(r.id, r)
@@ -262,9 +417,15 @@ export class AccreditationService {
     }
     for (const r of rows) if (!leafRatingsOf.has(r.id)) collectLeaves(r, new Set())
 
-    // Sibling comparator: the EXISTING gaps-first → review → code → title → id order.
+    // Sibling comparator: accreditor sortOrder FIRST — but ONLY when BOTH siblings
+    // carry a non-null sortOrder (adopted trees keep catalog order); otherwise the
+    // EXISTING gaps-first → review → code → title → id order applies unchanged,
+    // so hand-made trees sort byte-identically to before (the frozen rule).
     const publicOf = new Map<string, StandardPublic>()
     const cmp = (a: AccreditationStandard, b: AccreditationStandard): number => {
+      const soA = a.sortOrder ?? null
+      const soB = b.sortOrder ?? null
+      if (soA != null && soB != null && soA !== soB) return soA - soB
       const pa = this.toStandardPublic(a, countBy.get(a.id) ?? 0, now)
       const pb = this.toStandardPublic(b, countBy.get(b.id) ?? 0, now)
       const g = (pa.coverage === 'no-evidence' ? 0 : 1) - (pb.coverage === 'no-evidence' ? 0 : 1)
@@ -284,11 +445,17 @@ export class AccreditationService {
       guard.add(r.id)
       const kids = (childrenOf.get(r.id) ?? []).slice().sort(cmp)
       const leaves = leafRatingsOf.get(r.id) ?? []
-      const pub = this.toStandardPublic(r, countBy.get(r.id) ?? 0, now, {
-        depth,
-        isLeaf: kids.length === 0,
-        leafSummary: summarizeRatings(leaves.map((rating) => ({ rating }))),
-      })
+      const pub = this.toStandardPublic(
+        r,
+        countBy.get(r.id) ?? 0,
+        now,
+        {
+          depth,
+          isLeaf: kids.length === 0,
+          leafSummary: summarizeRatings(leaves.map((rating) => ({ rating }))),
+        },
+        ctx,
+      )
       standards.push(pub)
       publicOf.set(r.id, pub)
       for (const k of kids) walk(k, depth + 1, guard)
@@ -393,10 +560,55 @@ export class AccreditationService {
     return parent.id
   }
 
+  /**
+   * Validate + resolve the strategy soft-link pair for a write. `undefined` when
+   * the caller touched NEITHER field (PATCH leaves the link alone). Explicit null
+   * on both (or on the only-set one at create) CLEARS the link; setting a type
+   * requires a ref and vice versa (400). The ref is validated ∈ the path school
+   * (StrategicPlan/StrategyGoal both carry a denormalized schoolId) — a forged/
+   * foreign/nonexistent ref → 404, never linked (the evidence sourceRef pattern).
+   */
+  private async resolveStrategyLink(
+    schoolId: string,
+    type: string | null | undefined,
+    ref: string | null | undefined,
+    existing?: { type: string | null; ref: string | null },
+  ): Promise<{ type: string | null; ref: string | null } | undefined> {
+    if (type === undefined && ref === undefined) return undefined
+    const nextType = type !== undefined ? type : (existing?.type ?? null)
+    const nextRef = ref !== undefined ? ref : (existing?.ref ?? null)
+    if (nextType == null && nextRef == null) return { type: null, ref: null }
+    if (nextType == null || nextRef == null) {
+      throw new BadRequestException(
+        'strategySourceType and strategySourceRef must be set together (or both cleared).',
+      )
+    }
+    if (nextType === 'strategic_plan') {
+      const plan = await this.prisma.strategicPlan.findFirst({
+        where: { id: nextRef, schoolId },
+        select: { id: true },
+      })
+      if (!plan) throw new NotFoundException('Linked strategic plan not found.')
+    } else {
+      // 'strategy_goal' (the only other @IsIn value)
+      const goal = await this.prisma.strategyGoal.findFirst({
+        where: { id: nextRef, schoolId },
+        select: { id: true },
+      })
+      if (!goal) throw new NotFoundException('Linked strategy goal not found.')
+    }
+    return { type: nextType, ref: nextRef }
+  }
+
   async createStandard(schoolId: string, dto: CreateStandardDto, userId: string): Promise<StandardPublic> {
     const reviewDate = parseIsoDate(dto.reviewDate, 'reviewDate') ?? null
     const parentId =
       dto.parentId != null ? await this.validateParent(schoolId, undefined, dto.parentId) : null
+    const strategy = await this.resolveStrategyLink(
+      schoolId,
+      dto.strategySourceType,
+      dto.strategySourceRef,
+    )
     const row = await this.prisma.accreditationStandard.create({
       data: {
         schoolId,
@@ -408,6 +620,9 @@ export class AccreditationService {
         reviewDate,
         owner: dto.owner ?? null,
         notes: dto.notes ?? null,
+        rubricScore: dto.rubricScore ?? null,
+        strategySourceType: strategy?.type ?? null,
+        strategySourceRef: strategy?.ref ?? null,
         updatedByUserId: userId,
       },
     })
@@ -445,6 +660,17 @@ export class AccreditationService {
           : await this.validateParent(schoolId, standardId, dto.parentId)
     }
 
+    // Strategy soft-link: undefined = untouched; validated ∈ school otherwise.
+    const strategy = await this.resolveStrategyLink(
+      schoolId,
+      dto.strategySourceType,
+      dto.strategySourceRef,
+      {
+        type: existing.strategySourceType ?? null,
+        ref: existing.strategySourceRef ?? null,
+      },
+    )
+
     const row = await this.prisma.accreditationStandard.update({
       where: { id: existing.id },
       data: {
@@ -456,6 +682,10 @@ export class AccreditationService {
         reviewDate: pick(reviewDate, existing.reviewDate),
         owner: pick(dto.owner, existing.owner),
         notes: pick(dto.notes, existing.notes),
+        // Explicit null clears the self-score; omitted keeps it.
+        rubricScore: pick(dto.rubricScore, existing.rubricScore ?? null),
+        strategySourceType: strategy ? strategy.type : (existing.strategySourceType ?? null),
+        strategySourceRef: strategy ? strategy.ref : (existing.strategySourceRef ?? null),
         updatedByUserId: userId,
       },
     })
@@ -525,6 +755,16 @@ export class AccreditationService {
     if (sourceType === 'manual') {
       // Byte-for-byte today's behavior: a non-empty title is required for manual.
       if (!title) throw new BadRequestException('A title is required for manual evidence.')
+    } else if (sourceType === 'governance_report') {
+      // VIRTUAL artifact — the server-composed governance report has no row to
+      // link. sourceRef must be null/omitted; no lookup; auto-title.
+      if (dto.sourceRef) {
+        throw new BadRequestException('governance_report is a virtual artifact — omit sourceRef.')
+      }
+      sourceRef = null
+      if (!title) title = 'Governance report'
+      if (!reference) reference = SOURCE_META.governance_report.link
+      if (dto.kind === undefined) kind = 'link'
     } else {
       if (!dto.sourceRef) {
         throw new BadRequestException('sourceRef is required when linking an artifact.')
@@ -541,9 +781,8 @@ export class AccreditationService {
         sourceRef = p.id
         if (!title) title = `${p.title}${p.category ? ` (${p.category})` : ''}`
         if (!reference) reference = SOURCE_META.policy.link
-        kind = 'link'
-      } else {
-        // sourceType === 'board_report' (the only remaining @IsIn value)
+        if (dto.kind === undefined) kind = 'link'
+      } else if (sourceType === 'board_report') {
         const r = await this.prisma.boardReport.findFirst({
           where: { id: dto.sourceRef, schoolId: std.schoolId },
           include: { fiscalPeriod: { select: { label: true } } },
@@ -552,7 +791,36 @@ export class AccreditationService {
         sourceRef = r.id
         if (!title) title = r.reportTitle?.trim() || `Board report — ${r.fiscalPeriod?.label ?? 'period'}`
         if (!reference) reference = SOURCE_META.board_report.link
-        kind = 'link'
+        if (dto.kind === undefined) kind = 'link'
+      } else if (sourceType === 'meeting') {
+        // Approved minutes only — a draft/pending meeting is not board evidence.
+        const m = await this.prisma.meeting.findFirst({
+          where: { id: dto.sourceRef, schoolId: std.schoolId, minutesStatus: 'approved' },
+        })
+        if (!m) throw new NotFoundException('Linked meeting with approved minutes not found.')
+        sourceRef = m.id
+        if (!title) title = `${m.title} — ${toIsoDate(m.scheduledAt) ?? 'undated'}`
+        if (!reference) reference = SOURCE_META.meeting.link
+        if (dto.kind === undefined) kind = 'link'
+      } else if (sourceType === 'strategic_plan') {
+        const plan = await this.prisma.strategicPlan.findFirst({
+          where: { id: dto.sourceRef, schoolId: std.schoolId },
+        })
+        if (!plan) throw new NotFoundException('Linked strategic plan not found.')
+        sourceRef = plan.id
+        if (!title) title = plan.name
+        if (!reference) reference = SOURCE_META.strategic_plan.link
+        if (dto.kind === undefined) kind = 'link'
+      } else {
+        // sourceType === 'knowledge_document' (the only remaining @IsIn value)
+        const doc = await this.prisma.knowledgeDocument.findFirst({
+          where: { id: dto.sourceRef, schoolId: std.schoolId },
+        })
+        if (!doc) throw new NotFoundException('Linked document not found.')
+        sourceRef = doc.id
+        if (!title) title = doc.title
+        if (!reference) reference = SOURCE_META.knowledge_document.link
+        if (dto.kind === undefined) kind = 'link'
       }
     }
 
@@ -590,7 +858,7 @@ export class AccreditationService {
    * may legitimately attach one policy to multiple standards).
    */
   async listEvidenceSources(schoolId: string): Promise<EvidenceSourcesResponse> {
-    const [policies, reports] = await Promise.all([
+    const [policies, reports, meetings, plans, documents, peopleCount] = await Promise.all([
       this.prisma.policy.findMany({
         where: { schoolId },
         select: {
@@ -613,8 +881,44 @@ export class AccreditationService {
         },
         orderBy: { createdAt: 'desc' },
       }),
+      // Phase 3 siblings — approved minutes ONLY (a draft is not board evidence).
+      this.prisma.meeting.findMany({
+        where: { schoolId, minutesStatus: 'approved' },
+        select: { id: true, title: true, scheduledAt: true },
+        orderBy: { scheduledAt: 'desc' },
+      }),
+      this.prisma.strategicPlan.findMany({
+        where: { schoolId },
+        select: { id: true, name: true, fyStartYear: true, fyEndYear: true },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.knowledgeDocument.findMany({
+        where: { schoolId },
+        select: { id: true, title: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      }),
+      this.prisma.governancePerson.count({ where: { schoolId } }),
     ])
     return {
+      meetings: meetings.map((m) => ({
+        id: m.id,
+        label: `${m.title} — ${toIsoDate(m.scheduledAt) ?? 'undated'}`,
+        date: toIsoDate(m.scheduledAt),
+      })),
+      strategicPlans: plans.map((p) => ({
+        id: p.id,
+        label: p.name,
+        fyStartYear: p.fyStartYear,
+        fyEndYear: p.fyEndYear,
+        fiveYear: p.fyEndYear - p.fyStartYear >= 4,
+      })),
+      knowledgeDocuments: documents.map((d) => ({
+        id: d.id,
+        label: d.title,
+        date: toIsoDate(d.createdAt),
+      })),
+      governanceReport: { available: peopleCount > 0 },
       policies: policies.map((p) => ({
         sourceType: 'policy' as const,
         sourceRef: p.id,
@@ -631,6 +935,222 @@ export class AccreditationService {
         link: SOURCE_META.board_report.link,
       })),
     }
+  }
+
+  /**
+   * Phase 3 — deterministic tag-matched artifact SUGGESTIONS for one standard
+   * (no LLM). [] for uncataloged (hand-made) standards. Each catalog evidenceTag
+   * maps to fixed, schoolId-scoped queries (§ the frozen matcher table); results
+   * are deduped by (sourceType, sourceRef) and flagged alreadyAttached from the
+   * standard's existing evidence (governance_report matches on sourceType alone —
+   * it is virtual and has no ref). Strategic-plan rows carry linkAction:'strategy'
+   * so the UI can offer "Link to plan" (PATCH strategySource*) beside "Add as
+   * evidence".
+   */
+  async listSuggestions(schoolId: string, standardId: string): Promise<SuggestionsResponse> {
+    const std = await this.resolveStandard(schoolId, standardId)
+    if (!std.catalogStandardId) return { suggestions: [] }
+    const catalog = await this.prisma.accreditationCatalogStandard.findFirst({
+      where: { id: std.catalogStandardId },
+      select: { evidenceTags: true },
+    })
+    const tags = (catalog?.evidenceTags ?? []) as EvidenceTag[]
+    if (tags.length === 0) return { suggestions: [] }
+
+    const attached = await this.prisma.accreditationEvidence.findMany({
+      where: { standardId: std.id, schoolId },
+      select: { sourceType: true, sourceRef: true },
+    })
+    const attachedKeys = new Set(attached.map((e) => `${e.sourceType}:${e.sourceRef ?? ''}`))
+    const attachedTypes = new Set(attached.map((e) => e.sourceType))
+    const isAttached = (type: string, ref: string | null): boolean =>
+      type === 'governance_report' ? attachedTypes.has(type) : attachedKeys.has(`${type}:${ref ?? ''}`)
+
+    const suggestions: EvidenceSuggestion[] = []
+    const seen = new Set<string>()
+    const push = (s: EvidenceSuggestion): void => {
+      const key = `${s.sourceType}:${s.sourceRef ?? ''}`
+      if (seen.has(key)) return
+      seen.add(key)
+      suggestions.push(s)
+    }
+    const pushDocs = async (tag: EvidenceTag, patterns: string[]): Promise<void> => {
+      const docs = await this.prisma.knowledgeDocument.findMany({
+        where: {
+          schoolId,
+          OR: patterns.map((p) => ({ title: { contains: p, mode: 'insensitive' as const } })),
+        },
+        select: { id: true, title: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      })
+      for (const d of docs) {
+        push({
+          tag,
+          sourceType: 'knowledge_document',
+          sourceRef: d.id,
+          label: d.title,
+          date: toIsoDate(d.createdAt),
+          alreadyAttached: isAttached('knowledge_document', d.id),
+        })
+      }
+    }
+    // Cache cross-tag facts so budget+fiscal_resources don't double-query.
+    let governanceAvailable: boolean | null = null
+    const hasGovernance = async (): Promise<boolean> => {
+      if (governanceAvailable === null) {
+        governanceAvailable = (await this.prisma.governancePerson.count({ where: { schoolId } })) > 0
+      }
+      return governanceAvailable
+    }
+    const pushBudgetReport = async (tag: EvidenceTag): Promise<void> => {
+      const budget = await this.prisma.periodBudget.findFirst({
+        where: { schoolId },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true },
+      })
+      if (budget) {
+        const report = await this.prisma.boardReport.findFirst({
+          where: { schoolId },
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            reportTitle: true,
+            generatedAt: true,
+            createdAt: true,
+            fiscalPeriod: { select: { label: true } },
+          },
+        })
+        if (report) {
+          push({
+            tag,
+            sourceType: 'board_report',
+            sourceRef: report.id,
+            label:
+              report.reportTitle?.trim() || `Board report — ${report.fiscalPeriod?.label ?? 'period'}`,
+            date: toIsoDate(report.generatedAt ?? report.createdAt),
+            alreadyAttached: isAttached('board_report', report.id),
+          })
+        }
+      }
+      await pushDocs(tag, ['budget'])
+    }
+
+    for (const tag of tags) {
+      switch (tag) {
+        case 'governance': {
+          if (await hasGovernance()) {
+            push({
+              tag,
+              sourceType: 'governance_report',
+              sourceRef: null,
+              label: 'Governance report',
+              date: null,
+              alreadyAttached: isAttached('governance_report', null),
+            })
+          }
+          break
+        }
+        case 'board_minutes': {
+          if (await hasGovernance()) {
+            push({
+              tag,
+              sourceType: 'governance_report',
+              sourceRef: null,
+              label: 'Governance report',
+              date: null,
+              alreadyAttached: isAttached('governance_report', null),
+            })
+          }
+          const meetings = await this.prisma.meeting.findMany({
+            where: { schoolId, minutesStatus: 'approved' },
+            select: { id: true, title: true, scheduledAt: true },
+            orderBy: { scheduledAt: 'desc' },
+            take: 3,
+          })
+          for (const m of meetings) {
+            push({
+              tag,
+              sourceType: 'meeting',
+              sourceRef: m.id,
+              label: `${m.title} — ${toIsoDate(m.scheduledAt) ?? 'undated'} (minutes approved)`,
+              date: toIsoDate(m.scheduledAt),
+              alreadyAttached: isAttached('meeting', m.id),
+            })
+          }
+          break
+        }
+        case 'policy_manual': {
+          const policies = await this.prisma.policy.findMany({
+            where: { schoolId },
+            select: { id: true, title: true, category: true, lastReviewedDate: true, adoptedDate: true },
+            orderBy: { updatedAt: 'desc' },
+            take: 5,
+          })
+          for (const p of policies) {
+            push({
+              tag,
+              sourceType: 'policy',
+              sourceRef: p.id,
+              label: `${p.title}${p.category ? ` (${p.category})` : ''}`,
+              date: toIsoDate(p.lastReviewedDate ?? p.adoptedDate),
+              alreadyAttached: isAttached('policy', p.id),
+            })
+          }
+          break
+        }
+        case 'financial_audit':
+          await pushDocs(tag, ['audit'])
+          break
+        case 'budget':
+        case 'fiscal_resources':
+          await pushBudgetReport(tag)
+          break
+        case 'strategic_plan': {
+          const plans = await this.prisma.strategicPlan.findMany({
+            where: { schoolId },
+            select: { id: true, name: true, fyStartYear: true, fyEndYear: true, startDate: true },
+            orderBy: { createdAt: 'desc' },
+          })
+          // 5-year plans first (the accreditor ask), then most recent.
+          plans.sort((a, b) => {
+            const fa = a.fyEndYear - a.fyStartYear >= 4 ? 0 : 1
+            const fb = b.fyEndYear - b.fyStartYear >= 4 ? 0 : 1
+            return fa - fb
+          })
+          for (const p of plans) {
+            push({
+              tag,
+              sourceType: 'strategic_plan',
+              sourceRef: p.id,
+              label: p.name,
+              date: toIsoDate(p.startDate),
+              alreadyAttached: isAttached('strategic_plan', p.id),
+              linkAction: 'strategy',
+            })
+          }
+          break
+        }
+        case 'enrollment_data':
+          await pushDocs(tag, ['enrollment'])
+          break
+        case 'staff_credentials':
+          await pushDocs(tag, ['credential', 'certif'])
+          break
+        case 'safety_plan':
+          await pushDocs(tag, ['safety', 'crisis'])
+          break
+        case 'survey':
+          await pushDocs(tag, ['survey'])
+          break
+        case 'marketing':
+          await pushDocs(tag, ['marketing'])
+          break
+        default:
+          break
+      }
+    }
+    return { suggestions }
   }
 
   /**
@@ -669,6 +1189,15 @@ export class AccreditationService {
       if (nextType === 'manual') {
         sourceType = 'manual'
         sourceRef = null
+      } else if (nextType === 'governance_report') {
+        // Virtual artifact — never carries a sourceRef.
+        if (dto.sourceRef) {
+          throw new BadRequestException('governance_report is a virtual artifact — omit sourceRef.')
+        }
+        sourceType = 'governance_report'
+        sourceRef = null
+        if (dto.reference === undefined) reference = SOURCE_META.governance_report.link
+        if (dto.kind === undefined) kind = 'link'
       } else {
         const ref = dto.sourceRef !== undefined ? dto.sourceRef : sourceRef
         if (!ref) throw new BadRequestException('sourceRef is required when linking an artifact.')
@@ -679,11 +1208,29 @@ export class AccreditationService {
           if (!p) throw new NotFoundException('Linked policy not found.')
           sourceRef = p.id
           if (dto.reference === undefined) reference = SOURCE_META.policy.link
-        } else {
+        } else if (nextType === 'board_report') {
           const r = await this.prisma.boardReport.findFirst({ where: { id: ref, schoolId } })
           if (!r) throw new NotFoundException('Linked board report not found.')
           sourceRef = r.id
           if (dto.reference === undefined) reference = SOURCE_META.board_report.link
+        } else if (nextType === 'meeting') {
+          const m = await this.prisma.meeting.findFirst({
+            where: { id: ref, schoolId, minutesStatus: 'approved' },
+          })
+          if (!m) throw new NotFoundException('Linked meeting with approved minutes not found.')
+          sourceRef = m.id
+          if (dto.reference === undefined) reference = SOURCE_META.meeting.link
+        } else if (nextType === 'strategic_plan') {
+          const plan = await this.prisma.strategicPlan.findFirst({ where: { id: ref, schoolId } })
+          if (!plan) throw new NotFoundException('Linked strategic plan not found.')
+          sourceRef = plan.id
+          if (dto.reference === undefined) reference = SOURCE_META.strategic_plan.link
+        } else {
+          // nextType === 'knowledge_document' (the only remaining @IsIn value)
+          const doc = await this.prisma.knowledgeDocument.findFirst({ where: { id: ref, schoolId } })
+          if (!doc) throw new NotFoundException('Linked document not found.')
+          sourceRef = doc.id
+          if (dto.reference === undefined) reference = SOURCE_META.knowledge_document.link
         }
         sourceType = nextType
         if (dto.kind === undefined) kind = 'link'

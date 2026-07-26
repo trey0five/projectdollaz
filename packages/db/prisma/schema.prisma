@@ -1355,6 +1355,65 @@ model Meeting {
 // a one-to-many — a single flat table could not model the whole point (a standard
 // with NO evidence yet, i.e. a coverage GAP).
 //
+// ── Accreditation Phase 3 — the PLATFORM-LEVEL framework catalog ──────────────
+// Real accreditor frameworks (Cognia 2022, MSA-CESS 2022, NSBECS) shipped as
+// seed data (idempotent boot-time upsert in AccreditationCatalogService — NOT
+// packages/db/seed.mjs, so the catalog exists in prod). NO schoolId: these are
+// shared reference rows; a school ADOPTS a framework, which copies the catalog
+// tree into its own AccreditationStandard rows (soft-FK'd back via
+// catalogStandardId, SetNull — deleting catalog rows never breaks a school).
+model AccreditationFramework {
+  id            String   @id @default(uuid()) @db.Uuid
+  code          String   @unique // 'cognia_2022' | 'msa_cess_2022' | 'nsbecs'
+  accreditor    String // 'Cognia' | 'MSA-CESS' | 'NSBECS/WCEA'
+  name          String
+  version       String
+  description   String?
+  // array[4]: index i = the rubric label for score i+1 (e.g. Cognia
+  // ['Insufficient','Initiating','Improving','Impacting']).
+  rubricLabels  Json     @map("rubric_labels")
+  // [{min:Int,label:String}] ascending by min; [] = the accreditor has no
+  // index→status bands (MSA/NSBECS).
+  statusBands   Json     @map("status_bands")
+  indexMin      Int?     @map("index_min") // 100 for Cognia; null = no index scale
+  indexMax      Int?     @map("index_max") // 400 for Cognia
+  defaultTarget Int?     @map("default_target") // 280 for Cognia ('Accredited')
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  standards       AccreditationCatalogStandard[]
+  schoolStandards AccreditationStandard[]
+
+  @@map("accreditation_frameworks")
+}
+
+// One node of a framework's catalog tree: domain rows are parents, standards are
+// leaves. evidenceTags is the CLOSED matcher vocabulary (seed-only, never
+// client-supplied); isAssurance marks Cognia's binary assurance gates (excluded
+// from rubric/index math). The (frameworkId, code) unique is the idempotent-seed
+// upsert key.
+model AccreditationCatalogStandard {
+  id           String   @id @default(uuid()) @db.Uuid
+  frameworkId  String   @map("framework_id") @db.Uuid
+  parentId     String?  @map("parent_id") @db.Uuid
+  code         String // 'COG-1'..'COG-31', 'COG-A1'..'COG-A6', 'MSA-1'..'MSA-5', 'NSBECS-1'..'NSBECS-13' + domain codes
+  title        String
+  description  String?
+  orderIndex   Int      @default(0) @map("order_index")
+  evidenceTags String[] @default([]) @map("evidence_tags")
+  isAssurance  Boolean  @default(false) @map("is_assurance")
+
+  framework       AccreditationFramework         @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
+  parent          AccreditationCatalogStandard?  @relation("CatalogTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children        AccreditationCatalogStandard[] @relation("CatalogTree")
+  schoolStandards AccreditationStandard[]
+
+  @@unique([frameworkId, code])
+  @@index([frameworkId, parentId])
+  @@map("accreditation_catalog_standards")
+}
+
 // Tenant scoping + @db.Date UTC-midnight discipline + audit-lite all mirror Policy.
 model AccreditationStandard {
   id              String    @id @default(uuid()) @db.Uuid
@@ -1384,11 +1443,27 @@ model AccreditationStandard {
   reviewDate      DateTime? @map("review_date") @db.Date
   owner           String?
   notes           String?
+  // ── Phase 3 catalog/rubric depth (ALL nullable — zero backfill; legacy `rating`
+  // and briefing inputs untouched). frameworkId/catalogStandardId link an ADOPTED
+  // row back to the platform catalog (SetNull — catalog cleanup never breaks a
+  // school's register). rubricScore is the accreditor SELF-SCORE 1..4 (null =
+  // unscored; deliberate: legacy rating stays the briefing's truth). sortOrder
+  // preserves accreditor order for adopted trees (null on hand-made rows).
+  // strategySource* is a SOFT link (no FK — evidence sourceRef pattern; validated
+  // ∈ school on write, tolerant of dangling on read) to a StrategicPlan/StrategyGoal.
+  frameworkId        String? @map("framework_id") @db.Uuid
+  catalogStandardId  String? @map("catalog_standard_id") @db.Uuid
+  rubricScore        Int?    @map("rubric_score") // 1..4
+  sortOrder          Int?    @map("sort_order")
+  strategySourceType String? @map("strategy_source_type") // 'strategic_plan' | 'strategy_goal'
+  strategySourceRef  String? @map("strategy_source_ref") @db.Uuid
   updatedByUserId String?   @map("updated_by_user_id") @db.Uuid
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  school        School                  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  school          School                        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  framework       AccreditationFramework?       @relation(fields: [frameworkId], references: [id], onDelete: SetNull)
+  catalogStandard AccreditationCatalogStandard? @relation(fields: [catalogStandardId], references: [id], onDelete: SetNull)
   // Self-relation: deleting a parent SETS children's parentId to NULL (re-parent to
   // top-level), NEVER cascade — a subtree is never silently mass-deleted.
   parent        AccreditationStandard?  @relation("AccreditationStandardHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
@@ -1396,6 +1471,9 @@ model AccreditationStandard {
   updatedByUser User?                   @relation("AccreditationStandardUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
   evidence      AccreditationEvidence[]
 
+  // Adopt idempotency backstop: a school holds each catalog node at most once.
+  // Postgres NULLS-DISTINCT → hand-made rows (catalogStandardId NULL) unconstrained.
+  @@unique([schoolId, catalogStandardId])
   @@index([schoolId])
   @@index([schoolId, parentId])
   @@map("accreditation_standards")
@@ -1417,8 +1495,10 @@ model AccreditationEvidence {
   // path school (a schoolId-scoped findFirst on the source table) BEFORE insert, so a
   // forged/foreign sourceRef → 404 and is never linked. @default("manual") means the
   // migration needs NO backfill — every existing row reads as manual, source_ref NULL.
-  sourceType      String    @default("manual") @map("source_type") // 'manual' | 'policy' | 'board_report'
-  sourceRef       String?   @map("source_ref") @db.Uuid // Policy.id / BoardReport.id (both @db.Uuid)
+  // 'manual' | 'policy' | 'board_report' | 'meeting' | 'governance_report' |
+  // 'strategic_plan' | 'knowledge_document' (DTO-level values; TEXT — no DDL churn)
+  sourceType      String    @default("manual") @map("source_type")
+  sourceRef       String?   @map("source_ref") @db.Uuid // linked artifact id (null for manual/governance_report)
   reference       String? // url / doc path / citation, free text, nullable
   notes           String?
   capturedAt      DateTime? @map("captured_at") @db.Date

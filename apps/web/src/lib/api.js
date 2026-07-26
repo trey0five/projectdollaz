@@ -552,6 +552,24 @@ export const accreditationApi = {
     api.patch(`/schools/${schoolId}/accreditation/standards/${standardId}/evidence/${evidenceId}`, body),
   removeEvidence: (schoolId, standardId, evidenceId) =>
     api.delete(`/schools/${schoolId}/accreditation/standards/${standardId}/evidence/${evidenceId}`),
+  // ── Phase 3 framework catalog + rubric readiness ────────────────────────────
+  // Frameworks are PLATFORM-level (Cognia / MSA-CESS / NSBECS) but listed under the
+  // school so adoption state rides along. adopt is idempotent (re-adopt fills gaps).
+  listFrameworks: (schoolId) => api.get(`/schools/${schoolId}/accreditation/frameworks`),
+  adoptFramework: (schoolId, code) =>
+    api.post(`/schools/${schoolId}/accreditation/frameworks/${code}/adopt`, {}),
+  // Readiness is COMPUTED server-side (rubric×evidence blend + projected index/band
+  // + gap list + assurances). Omit absent params (forbidNonWhitelisted-style hygiene).
+  getReadiness: (schoolId, { target, frameworkId } = {}) =>
+    api.get(`/schools/${schoolId}/accreditation/readiness`, {
+      params: {
+        ...(target != null ? { target } : {}),
+        ...(frameworkId ? { frameworkId } : {}),
+      },
+    }),
+  // Deterministic evidence suggestions for one standard (catalog evidence-tag match).
+  getSuggestions: (schoolId, standardId) =>
+    api.get(`/schools/${schoolId}/accreditation/standards/${standardId}/suggestions`),
 }
 
 // ── Phase 4 Knowledge document store: CORE (always included, NOT a licensed module).

@@ -26,6 +26,9 @@
 //                    omitting it leaves the header byte-identical for existing callers.
 //   beforeBody       node | null — a full-width block rendered BETWEEN the KPI row and
 //                    the two-column body (e.g. Cash & Collections' aging bars). Optional.
+//   aboveKpis        node | null — a full-width HERO block rendered BETWEEN the header
+//                    and the KPI row (e.g. Accreditation's readiness dial). Optional;
+//                    omitting it leaves existing callers byte-identical.
 //   registerTitle    string | null — heading shown in place of the tab bar when a
 //                    domain has ≤1 register tab (a single-entry tab bar is dead
 //                    chrome). Defaults to the lone tab's label. Optional.
@@ -67,6 +70,7 @@ export default function DomainCommandCenter({
   attentionItems = [],
   headerAside = null,
   beforeBody = null,
+  aboveKpis = null,
   showBack = false,
   registerTitle = null,
 }) {
@@ -101,9 +105,16 @@ export default function DomainCommandCenter({
         </div>
       </div>
 
-      {/* ── KPI card row ───────────────────────────────────────────────────── */}
+      {/* ── Optional full-width hero between the header and the KPI row ─────── */}
+      {aboveKpis}
+
+      {/* ── KPI card row (5-up when a domain carries a fifth KPI) ───────────── */}
       {kpis.length ? (
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div
+          className={`grid grid-cols-2 gap-4 ${
+            kpis.length >= 5 ? 'sm:grid-cols-3 lg:grid-cols-5' : 'lg:grid-cols-4'
+          }`}
+        >
           {kpis.map((kpi, i) => (
             <DomainKpiCard
               key={kpi.label}

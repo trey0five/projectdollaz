@@ -16,7 +16,7 @@
 // operations" SourcePicker). The evidence panel, source picker, and the standard
 // create/edit form modal remain dark navy/gold overlays over the light page.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import {
@@ -49,6 +49,13 @@ import DatePicker from '../components/ui/DatePicker.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useUiV2 } from '../context/UiFlagContext.jsx'
 import { useAccreditation } from '../hooks/useAccreditation.js'
+// ── Phase 3: framework catalog + rubric readiness + evidence warehouse ────────
+import ReadinessHero from '../components/accreditation/ReadinessHero.jsx'
+import AdoptFrameworkModal from '../components/accreditation/AdoptFrameworkModal.jsx'
+import RubricPicker from '../components/accreditation/RubricPicker.jsx'
+import SuggestionsStrip from '../components/accreditation/SuggestionsStrip.jsx'
+import StandardDocuments from '../components/accreditation/StandardDocuments.jsx'
+import StrategyLinkChip from '../components/accreditation/StrategyLinkChip.jsx'
 
 // ── Light-theme coverage badge (restyled from the old dark pills) ────────────
 const COVERAGE_BADGE = {
@@ -368,8 +375,44 @@ export function StandardFormModal({ open, initial, onClose, onSave, reduce, stan
   )
 }
 
+// One stable key per attachable artifact (governance_report has a null sourceRef).
+const attachKey = (src) => `${src.sourceType}:${src.sourceRef ?? ''}`
+
+/** Binary evidence-gate chip for ASSURANCE leaves (e.g. Cognia COG-A1..A6).
+ *  Assurances are excluded from ALL rubric/index/readiness math server-side, so
+ *  rendering rubric pips on them would be a dead control — instead we mirror the
+ *  hero assurances strip's satisfied/unmet gate state. `satisfied` mirrors
+ *  computeAssurances: any attached evidence satisfies the gate. */
+function AssuranceGateChip({ satisfied, dark = false }) {
+  const Icon = satisfied ? Check : ShieldAlert
+  return (
+    <span
+      title={
+        satisfied
+          ? 'Assurance satisfied — evidence attached'
+          : 'Assurance gate — attach evidence to satisfy it'
+      }
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] font-semibold ${
+        satisfied
+          ? dark
+            ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-300'
+            : 'border-emerald-600/30 bg-emerald-50 text-emerald-700'
+          : dark
+            ? 'border-[#F59E0B]/40 bg-[#F59E0B]/10 text-[#fde68a]'
+            : 'border-[#F59E0B]/40 bg-amber-50 text-amber-700'
+      }`}
+    >
+      <Icon size={12} aria-hidden />
+      {satisfied ? 'Assurance met' : 'Assurance unmet'}
+    </span>
+  )
+}
+
 /** The lazy-loaded evidence sub-list for one expanded standard row (dark overlay
- *  panel — deliberately kept dark against the light table). */
+ *  panel — deliberately kept dark against the light table). Phase 3 adds the
+ *  rubric pips + strategy link header, the deterministic suggestions strip, and
+ *  the document upload/list section (all additive — the evidence list, add form,
+ *  and source picker are unchanged). */
 export function EvidencePanel({
   standardId,
   canEdit,
@@ -379,6 +422,14 @@ export function EvidencePanel({
   createEvidence,
   updateEvidence,
   removeEvidence,
+  // ── Phase 3 (all optional — panel renders fine without them) ───────────────
+  schoolId = null,
+  standard = null,
+  rubricLabels = null,
+  onRubric = null,
+  fetchSuggestions = null,
+  linkStrategy = null,
+  clearStrategy = null,
 }) {
   const [items, setItems] = useState(null) // null = not yet loaded
   const [loading, setLoading] = useState(true)
@@ -390,7 +441,9 @@ export function EvidencePanel({
   // "Attach from operations" picker: null = closed, undefined = loading, object = loaded sources.
   const [sources, setSources] = useState(null)
   const [picking, setPicking] = useState(false)
-  const [attaching, setAttaching] = useState(null) // sourceRef currently attaching (spinner)
+  const [attaching, setAttaching] = useState(null) // attachKey currently attaching (spinner)
+  // Deterministic suggestions: null = loading, [] = none / not catalog-linked.
+  const [suggestions, setSuggestions] = useState(null)
 
   // Lazy load on first mount (the row was just expanded). setState-safe: deferred
   // to a microtask + cancelled flag, mirroring the hook pattern.
@@ -413,9 +466,40 @@ export function EvidencePanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [standardId])
 
+  // Suggestions ride the same lazy mount (catalog-linked standards only — the
+  // endpoint returns [] for hand-made rows, so skip the round-trip client-side).
+  useEffect(() => {
+    let cancelled = false
+    Promise.resolve().then(() => {
+      if (cancelled) return
+      if (!fetchSuggestions || !standard?.catalogStandardId) {
+        setSuggestions([])
+        return
+      }
+      fetchSuggestions(standardId)
+        .then((rows) => {
+          if (!cancelled) setSuggestions(rows)
+        })
+        .catch(() => {
+          if (!cancelled) setSuggestions([])
+        })
+    })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [standardId])
+
   const reload = async () => {
     const rows = await listEvidence(standardId)
     setItems(rows)
+    if (fetchSuggestions && standard?.catalogStandardId) {
+      try {
+        setSuggestions(await fetchSuggestions(standardId))
+      } catch {
+        /* keep the stale strip — evidence itself reloaded fine */
+      }
+    }
   }
 
   // Open the picker and lazily fetch the school's operational artifacts. Fetch runs in
@@ -434,12 +518,16 @@ export function EvidencePanel({
   }
 
   // Attach a discovered artifact as LINKED evidence. Title is omitted so the server
-  // auto-derives it from the artifact; kind is forced to 'link' server-side.
+  // auto-derives it from the artifact; kind is forced to 'link' server-side. The
+  // virtual governance_report source carries NO sourceRef (omit it — the global
+  // forbidNonWhitelisted pipe tolerates absence, the contract forbids a value).
   const attach = async (src) => {
-    setAttaching(src.sourceRef)
+    setAttaching(attachKey(src))
     setErr('')
     try {
-      await createEvidence(standardId, { sourceType: src.sourceType, sourceRef: src.sourceRef })
+      const body = { sourceType: src.sourceType }
+      if (src.sourceRef) body.sourceRef = src.sourceRef
+      await createEvidence(standardId, body)
       setPicking(false)
       setSources(null)
       await reload()
@@ -511,8 +599,52 @@ export function EvidencePanel({
     }
   }
 
+  // One-click suggestion attach (leaves the "Attach from operations" picker alone).
+  const attachSuggestion = async (sug) => {
+    const body = { sourceType: sug.sourceType }
+    if (sug.sourceRef) body.sourceRef = sug.sourceRef
+    await createEvidence(standardId, body)
+    await reload()
+  }
+  const linkPlanFromSuggestion = linkStrategy
+    ? async (sug) => {
+        await linkStrategy(standardId, 'strategic_plan', sug.sourceRef)
+      }
+    : null
+
   return (
     <div className="border-t border-white/10 bg-navy/40 px-6 py-4">
+      {/* ── Phase 3 header strip: rubric self-score + strategy link ─────────── */}
+      {standard && (standard.isLeaf !== false || linkStrategy) ? (
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          {standard.isLeaf !== false ? (
+            standard.isAssurance ? (
+              // Assurance leaves are binary evidence gates — no rubric pips.
+              <AssuranceGateChip dark satisfied={(standard.evidenceCount ?? 0) > 0} />
+            ) : (
+              <RubricPicker
+                dark
+                showLabel
+                value={standard.rubricScore ?? null}
+                labels={rubricLabels}
+                activeLabel={standard.rubricLabel ?? null}
+                disabled={!canEdit || !onRubric}
+                onChange={onRubric ? (v) => onRubric(standard.id, v) : undefined}
+              />
+            )
+          ) : null}
+          {linkStrategy ? (
+            <StrategyLinkChip
+              schoolId={schoolId}
+              standard={standard}
+              canEdit={canEdit}
+              onLink={linkStrategy}
+              onClear={clearStrategy}
+            />
+          ) : null}
+        </div>
+      ) : null}
+
       {loading || items === null ? (
         <p className="text-[13px] text-white/50">Loading evidence…</p>
       ) : items.length === 0 ? (
@@ -700,6 +832,31 @@ export function EvidencePanel({
         )
       ) : null}
 
+      {/* ── Phase 3: deterministic evidence suggestions (catalog-linked only) ── */}
+      {standard?.catalogStandardId ? (
+        <div className="mt-3">
+          <SuggestionsStrip
+            suggestions={suggestions}
+            canEdit={canEdit}
+            onAttach={attachSuggestion}
+            onLinkPlan={linkPlanFromSuggestion}
+          />
+        </div>
+      ) : null}
+
+      {/* ── Phase 3: file evidence via the CORE knowledge store ──────────────── */}
+      {schoolId ? (
+        <div className="mt-4 border-t border-white/10 pt-4">
+          <StandardDocuments
+            schoolId={schoolId}
+            standardId={standardId}
+            canEdit={canEdit}
+            createEvidence={createEvidence}
+            onChanged={reload}
+          />
+        </div>
+      ) : null}
+
       {picking ? (
         <SourcePicker
           sources={sources}
@@ -718,13 +875,47 @@ export function EvidencePanel({
   )
 }
 
-/** Grouped picker of the school's operational artifacts (policies + board reports). */
+/** Grouped picker of the school's operational artifacts (policies, board reports,
+ *  approved meeting minutes, strategic plans, knowledge documents, and the live
+ *  governance report). New groups carry {id,label,date}-shaped rows off the
+ *  evidence-sources siblings — normalized here to the {sourceType,sourceRef}
+ *  attach contract; the existing policies/boardReports rows pass through as-is. */
 function SourcePicker({ sources, attaching, err, reduce, onAttach, onClose }) {
   const loading = sources === undefined
   const groups = [
     { key: 'policies', label: 'Governance policies', empty: 'No policies yet' },
     { key: 'boardReports', label: 'Board reports', empty: 'No board reports yet' },
+    {
+      key: 'meetings',
+      label: 'Meeting minutes (approved)',
+      empty: 'No approved minutes yet',
+      sourceType: 'meeting',
+    },
+    {
+      key: 'strategicPlans',
+      label: 'Strategic plans',
+      empty: 'No strategic plans yet',
+      sourceType: 'strategic_plan',
+    },
+    {
+      key: 'knowledgeDocuments',
+      label: 'Knowledge documents',
+      empty: 'No documents in the library yet',
+      sourceType: 'knowledge_document',
+    },
   ]
+  // The live governance report is a VIRTUAL artifact (no sourceRef) — one row
+  // when the school has a governance roster.
+  const governanceRows = sources?.governanceReport?.available
+    ? [
+        {
+          sourceType: 'governance_report',
+          sourceRef: null,
+          label: 'Governance report — board roster, committees, minutes discipline (live)',
+          date: null,
+        },
+      ]
+    : []
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <motion.div
@@ -754,7 +945,16 @@ function SourcePicker({ sources, attaching, err, reduce, onAttach, onClose }) {
         ) : (
           <div className="space-y-4">
             {groups.map((g) => {
-              const list = sources?.[g.key] ?? []
+              // Normalize {id,…} rows from the new sibling groups to the
+              // {sourceType,sourceRef} attach contract; legacy rows pass through.
+              const list = (sources?.[g.key] ?? []).map((src) => ({
+                ...src,
+                sourceType: src.sourceType ?? g.sourceType,
+                sourceRef: src.sourceRef ?? src.id ?? null,
+              }))
+              // The legacy groups keep their friendly empty rows; new empty
+              // groups vanish so the picker stays scannable.
+              if (list.length === 0 && g.sourceType) return null
               return (
                 <div key={g.key}>
                   <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-[0.1em] text-white/50">
@@ -765,7 +965,7 @@ function SourcePicker({ sources, attaching, err, reduce, onAttach, onClose }) {
                   ) : (
                     <ul className="space-y-1.5">
                       {list.map((src) => (
-                        <li key={src.sourceRef}>
+                        <li key={attachKey(src)}>
                           <button
                             type="button"
                             disabled={attaching !== null}
@@ -775,13 +975,18 @@ function SourcePicker({ sources, attaching, err, reduce, onAttach, onClose }) {
                             <span className="min-w-0">
                               <span className="block truncate text-[13px] text-white/85">
                                 {src.label}
+                                {src.fiveYear ? (
+                                  <span className="ml-1.5 rounded-md border border-gold/40 bg-gold/10 px-1.5 py-0.5 text-[10.5px] font-semibold text-gold-light">
+                                    5-year
+                                  </span>
+                                ) : null}
                               </span>
                               {src.date ? (
                                 <span className="block text-[11px] text-white/45">{src.date}</span>
                               ) : null}
                             </span>
                             <span className="shrink-0 text-[12px] font-semibold text-gold-light">
-                              {attaching === src.sourceRef ? 'Attaching…' : 'Attach'}
+                              {attaching === attachKey(src) ? 'Attaching…' : 'Attach'}
                             </span>
                           </button>
                         </li>
@@ -791,6 +996,36 @@ function SourcePicker({ sources, attaching, err, reduce, onAttach, onClose }) {
                 </div>
               )
             })}
+
+            {/* The live governance report — one click, no sourceRef (virtual). */}
+            {governanceRows.length ? (
+              <div>
+                <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-[0.1em] text-white/50">
+                  Governance report
+                </h3>
+                <ul className="space-y-1.5">
+                  {governanceRows.map((src) => (
+                    <li key={attachKey(src)}>
+                      <button
+                        type="button"
+                        disabled={attaching !== null}
+                        onClick={() => onAttach(src)}
+                        className="flex w-full items-center justify-between gap-3 rounded-lg border border-white/10 bg-navy/50 px-3 py-2 text-left hover:border-gold/50 hover:bg-navy/70 disabled:opacity-50"
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate text-[13px] text-white/85">
+                            {src.label}
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-[12px] font-semibold text-gold-light">
+                          {attaching === attachKey(src) ? 'Attaching…' : 'Attach'}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </div>
         )}
         {err ? <p className="mt-4 text-[13px] text-red-300">{err}</p> : null}
@@ -811,6 +1046,8 @@ function StandardsTable({
   onToggle,
   onEdit,
   onDelete,
+  labelsFor = null, // (standard) => rubricLabels[4] | null — per-row framework labels
+  onRubric = null,
 }) {
   if (loading)
     return (
@@ -853,6 +1090,7 @@ function StandardsTable({
           return (
             <motion.tr
               key={s.id}
+              id={`accr-std-${s.id}`}
               layout={!reduce}
               initial={reduce ? false : { opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -878,13 +1116,33 @@ function StandardsTable({
                   {s.category ? (
                     <span className="ml-2 text-[12px] font-normal text-muted">· {s.category}</span>
                   ) : null}
+                  {s.strategySourceRef ? (
+                    <span className="ml-2 inline-flex align-middle">
+                      <StrategyLinkChip light standard={s} canEdit={false} />
+                    </span>
+                  ) : null}
                 </div>
               </td>
               <td className="px-4 py-3">
                 {s.isLeaf === false ? (
                   <RollupBadge leafSummary={s.leafSummary} />
                 ) : (
-                  <RatingBadge rating={s.rating} />
+                  <div className="flex flex-col items-start gap-1.5">
+                    <RatingBadge rating={s.rating} />
+                    {s.isAssurance ? (
+                      // Assurance leaves are binary evidence gates — rubric pips
+                      // would be a dead control (excluded from index/readiness).
+                      <AssuranceGateChip satisfied={(s.evidenceCount ?? 0) > 0} />
+                    ) : (
+                      <RubricPicker
+                        value={s.rubricScore ?? null}
+                        labels={labelsFor ? labelsFor(s) : null}
+                        activeLabel={s.rubricLabel ?? null}
+                        disabled={!canEdit || !onRubric}
+                        onChange={onRubric ? (v) => onRubric(s.id, v) : undefined}
+                      />
+                    )}
+                  </div>
                 )}
               </td>
               <td className="px-4 py-3">
@@ -953,6 +1211,15 @@ function AccreditationWorkspace() {
     createEvidence,
     updateEvidence,
     removeEvidence,
+    // Phase 3: framework catalog + rubric readiness
+    readiness,
+    frameworks,
+    loadFrameworks,
+    adoptFramework,
+    setReadinessTarget,
+    setRubric,
+    fetchSuggestions,
+    linkStrategy,
   } = useAccreditation(schoolId)
 
   const [tab, setTab] = useState('standards')
@@ -960,6 +1227,7 @@ function AccreditationWorkspace() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const [expanded, setExpanded] = useState(null) // the expanded standard id, or null
+  const [adoptOpen, setAdoptOpen] = useState(false)
 
   // "+ Add" now launches the multi-step batch wizard (Add-data tab, deep-linked);
   // the modal below stays for EDITING an existing standard.
@@ -969,6 +1237,43 @@ function AccreditationWorkspace() {
     setModalOpen(true)
   }
   const toggleExpanded = (id) => setExpanded((cur) => (cur === id ? null : id))
+
+  // ── Phase 3 derived state ──────────────────────────────────────────────────
+  // A framework is "adopted" when any standard carries a frameworkId.
+  const adopted = useMemo(() => standards.some((s) => s.frameworkId), [standards])
+  // Per-row rubric labels: the readiness payload carries the DOMINANT framework's
+  // labels, which are only correct for rows of that framework (or hand-made rows
+  // with no framework link). A row adopted from a DIFFERENT framework (a school
+  // may adopt several) must not borrow them — its own server-resolved
+  // s.rubricLabel still names the active score via RubricPicker's activeLabel.
+  const readinessFrameworkId = readiness?.framework?.id ?? null
+  const rubricLabels = readiness?.framework?.rubricLabels ?? null
+  const labelsFor = useCallback(
+    (s) => (!s?.frameworkId || s.frameworkId === readinessFrameworkId ? rubricLabels : null),
+    [readinessFrameworkId, rubricLabels],
+  )
+
+  const openAdoptModal = () => {
+    setAdoptOpen(true)
+    loadFrameworks() // lazy fetch — fail-soft to []
+  }
+
+  // Gap-list / assurance deep-scroll: expand the standard's evidence panel and
+  // scroll its register row into view.
+  const scrollToStandard = useCallback(
+    (standardId) => {
+      setTab('standards')
+      setExpanded(standardId)
+      window.setTimeout(() => {
+        document
+          .getElementById(`accr-std-${standardId}`)
+          ?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' })
+      }, 80)
+    },
+    [reduce],
+  )
+
+  const clearStrategy = (standardId) => linkStrategy(standardId, null)
 
   const initialForm = useMemo(() => {
     if (!editing) return null
@@ -1067,24 +1372,55 @@ function AccreditationWorkspace() {
           : { icon: Check, text: 'all current', tone: 'good' },
     }
 
+    // 5) Readiness (Phase 3) — the rubric×evidence blend, once a framework is
+    //    adopted. The grid flexes to 5-up (DomainCommandCenter handles cols).
+    if (adopted && readiness) {
+      const rPct = readiness.readinessPct ?? 0
+      const scored = readiness.scoredCount ?? 0
+      const rLeaves = readiness.leafCount ?? 0
+      return [
+        coverageKpi,
+        ratingKpi,
+        gapsKpi,
+        reviewKpi,
+        {
+          label: 'Readiness',
+          value: `${rPct}%`,
+          status: rLeaves === 0 ? 'neutral' : rPct >= 80 ? 'good' : rPct >= 50 ? 'watch' : 'risk',
+          sub:
+            scored < rLeaves
+              ? { icon: TrendingDown, text: `${scored}/${rLeaves} scored`, tone: rPct >= 50 ? 'neutral' : 'bad' }
+              : { icon: Check, text: `all ${rLeaves} scored`, tone: 'good' },
+        },
+      ]
+    }
+
     return [coverageKpi, ratingKpi, gapsKpi, reviewKpi]
-  }, [summary, ratingSummary, standards])
+  }, [summary, ratingSummary, standards, adopted, readiness])
 
   // ── Needs-attention items (most-urgent first, capped at 6) ─────────────────
+  // Phase 3: readiness entries are composed CLIENT-SIDE from the readiness
+  // endpoint (the frozen decision — briefing.service.ts is untouched this phase):
+  // unmet assurances upgrade their no-evidence row, unscored top gaps append.
   const attentionItems = useMemo(() => {
     if (!canEdit) return []
     const items = []
+    const assuranceUnmet = new Map(
+      (readiness?.assurances ?? []).filter((a) => !a.satisfied).map((a) => [a.standardId, a]),
+    )
 
-    // 1) Standards with no evidence → "«code» has no evidence".
+    // 1) Standards with no evidence → "«code» has no evidence" (assurance gates
+    //    get their sharper binary-gate framing).
     const noEvidence = standards.filter((s) => s.coverage === 'no-evidence')
     for (const s of noEvidence) {
+      const isGate = assuranceUnmet.has(s.id)
       items.push({
         id: `gap-${s.id}`,
         tone: 'risk',
-        sortKey: 0,
-        title: `${s.code} has no evidence`,
-        why: s.title,
-        actions: [{ label: 'Add evidence', primary: true, onClick: () => setExpanded(s.id) }],
+        sortKey: isGate ? -1 : 0,
+        title: isGate ? `Assurance ${s.code} is unmet` : `${s.code} has no evidence`,
+        why: isGate ? `${s.title} · binary accreditation gate — attach evidence` : s.title,
+        actions: [{ label: 'Add evidence', primary: true, onClick: () => scrollToStandard(s.id) }],
       })
     }
 
@@ -1105,8 +1441,26 @@ function AccreditationWorkspace() {
       })
     }
 
+    // 3) Unscored top readiness gaps → "«code» is unscored" (skip standards
+    //    already surfaced above so the rail never repeats itself).
+    const usedIds = new Set([...noEvidence.map((s) => s.id), ...reviewDue.map((s) => s.id)])
+    for (const g of readiness?.gaps ?? []) {
+      if (g.rubricScore != null || usedIds.has(g.standardId)) continue
+      const lift = typeof g.fullLift === 'number' ? Math.round(g.fullLift * 10) / 10 : null
+      items.push({
+        id: `score-${g.standardId}`,
+        tone: 'watch',
+        sortKey: 2,
+        title: `${g.code} is unscored`,
+        why: lift != null ? `${g.title} · worth +${lift} index pts at full marks` : g.title,
+        actions: [
+          { label: 'Score it', primary: true, onClick: () => scrollToStandard(g.standardId) },
+        ],
+      })
+    }
+
     return items.sort((a, b) => a.sortKey - b.sortKey).slice(0, 6)
-  }, [standards, canEdit])
+  }, [standards, canEdit, readiness, scrollToStandard])
 
   // ── Gate ───────────────────────────────────────────────────────────────────
   if (notLicensed || notEntitled) return <GatePanel notLicensed={notLicensed} />
@@ -1122,10 +1476,25 @@ function AccreditationWorkspace() {
       onToggle={toggleExpanded}
       onEdit={openEdit}
       onDelete={onDelete}
+      labelsFor={labelsFor}
+      onRubric={canEdit ? setRubric : null}
     />
   )
 
   const expandedStandard = expanded ? standards.find((s) => s.id === expanded) : null
+
+  // ── Phase 3 hero — readiness dial once adopted, adopt prompt otherwise ─────
+  const readinessHero = (
+    <ReadinessHero
+      readiness={readiness}
+      adopted={adopted}
+      canEdit={canEdit}
+      onAdopt={openAdoptModal}
+      onSelectTarget={setReadinessTarget}
+      onGapClick={scrollToStandard}
+      reduce={reduce}
+    />
+  )
 
   const commandCenter = (
     <DomainCommandCenter
@@ -1140,6 +1509,18 @@ function AccreditationWorkspace() {
       onNew={canEdit ? openAdd : null}
       registerTable={registerTable}
       attentionItems={attentionItems}
+      aboveKpis={readinessHero}
+      headerAside={
+        canEdit && adopted ? (
+          <button
+            type="button"
+            onClick={openAdoptModal}
+            className="inline-flex items-center gap-1.5 rounded-full border border-rule/70 bg-white px-3.5 py-1.5 text-[13px] font-semibold text-navy transition hover:border-[#F59E0B]/60"
+          >
+            <Award size={14} className="text-[#F59E0B]" /> Frameworks
+          </button>
+        ) : null
+      }
     />
   )
 
@@ -1184,6 +1565,13 @@ function AccreditationWorkspace() {
               createEvidence={createEvidence}
               updateEvidence={updateEvidence}
               removeEvidence={removeEvidence}
+              schoolId={schoolId}
+              standard={expandedStandard}
+              rubricLabels={labelsFor(expandedStandard)}
+              onRubric={canEdit ? setRubric : null}
+              fetchSuggestions={fetchSuggestions}
+              linkStrategy={linkStrategy}
+              clearStrategy={clearStrategy}
             />
           </motion.div>
         </div>
@@ -1198,6 +1586,14 @@ function AccreditationWorkspace() {
         reduce={reduce}
         standards={standards}
         editingId={editing ? editing.id : null}
+      />
+
+      <AdoptFrameworkModal
+        open={adoptOpen}
+        onClose={() => setAdoptOpen(false)}
+        frameworks={frameworks}
+        onAdopt={adoptFramework}
+        reduce={reduce}
       />
     </>
   )

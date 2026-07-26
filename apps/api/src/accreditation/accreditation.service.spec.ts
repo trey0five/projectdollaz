@@ -83,6 +83,12 @@ function makeService(over: {
     accreditationEvidence: evidence,
     policy,
     boardReport,
+    // Phase 3 additive delegates (listEvidenceSources siblings; empty by default).
+    meeting: { findMany: vi.fn(async () => []), findFirst: vi.fn(async () => null) },
+    strategicPlan: { findMany: vi.fn(async () => []), findFirst: vi.fn(async () => null) },
+    strategyGoal: { findMany: vi.fn(async () => []), findFirst: vi.fn(async () => null) },
+    knowledgeDocument: { findMany: vi.fn(async () => []), findFirst: vi.fn(async () => null) },
+    governancePerson: { count: vi.fn(async () => 0) },
   }
   const audit = { write: vi.fn(async () => undefined) }
   const svc = new AccreditationService(prisma as never, audit as never)
@@ -272,11 +278,15 @@ describe('AccreditationService — evidence-source discovery', () => {
     })
   })
 
-  it('empty school → { policies: [], boardReports: [] }', async () => {
+  it('empty school → empty groups (policies/boardReports byte-identical + Phase-3 siblings)', async () => {
     const { svc } = makeService({})
     await expect(svc.listEvidenceSources('school-A')).resolves.toEqual({
       policies: [],
       boardReports: [],
+      meetings: [],
+      strategicPlans: [],
+      knowledgeDocuments: [],
+      governanceReport: { available: false },
     })
   })
 })

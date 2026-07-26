@@ -31,6 +31,16 @@ function standard(over: Partial<StandardPublic>): StandardPublic {
     depth: over.depth ?? 0,
     isLeaf: over.isLeaf ?? true,
     leafSummary: over.leafSummary ?? summarizeRatings([{ rating }]),
+    // Phase 3 additive fields (typecheck-only here — the briefing never reads them).
+    rubricScore: over.rubricScore ?? null,
+    rubricLabel: over.rubricLabel ?? null,
+    frameworkId: over.frameworkId ?? null,
+    catalogStandardId: over.catalogStandardId ?? null,
+    sortOrder: over.sortOrder ?? null,
+    isAssurance: over.isAssurance ?? false,
+    strategySourceType: over.strategySourceType ?? null,
+    strategySourceRef: over.strategySourceRef ?? null,
+    strategyLabel: over.strategyLabel ?? null,
     createdAt: over.createdAt ?? '2025-01-01T00:00:00.000Z',
     updatedAt: over.updatedAt ?? '2025-01-01T00:00:00.000Z',
   }

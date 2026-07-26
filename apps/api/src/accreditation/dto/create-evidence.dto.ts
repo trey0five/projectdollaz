@@ -6,10 +6,22 @@ export type EvidenceKind = (typeof EVIDENCE_KINDS)[number]
 
 /**
  * Evidence source — the operational domain a linked evidence was attached FROM.
- * 'manual' = today's free-text evidence (the default). 'policy'/'board_report' link
- * an EXISTING internal artifact (validated ∈ the path school in the service).
+ * 'manual' = free-text evidence (the default). Every other value links an
+ * EXISTING internal artifact (validated ∈ the path school in the service):
+ * 'meeting' requires approved minutes; 'governance_report' is VIRTUAL (the
+ * server-composed governance report — sourceRef must be null/omitted). Growing
+ * this list REQUIRES a matching SOURCE_META entry in accreditation.service.ts
+ * in the same commit, or the evidence badge silently blanks.
  */
-export const EVIDENCE_SOURCE_TYPES = ['manual', 'policy', 'board_report'] as const
+export const EVIDENCE_SOURCE_TYPES = [
+  'manual',
+  'policy',
+  'board_report',
+  'meeting',
+  'governance_report',
+  'strategic_plan',
+  'knowledge_document',
+] as const
 export type EvidenceSourceType = (typeof EVIDENCE_SOURCE_TYPES)[number]
 
 /**
