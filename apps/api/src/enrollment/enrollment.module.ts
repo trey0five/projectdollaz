@@ -14,6 +14,8 @@ import { VeracrossAdapter } from './adapters/veracross.adapter.js'
 import { DiocesanEnrollmentController } from './diocesan/diocesan-enrollment.controller.js'
 import { DiocesanEnrollmentService } from './diocesan/diocesan-enrollment.service.js'
 import { NameMatchService } from './diocesan/name-match.service.js'
+import { StudentsController } from './students/students.controller.js'
+import { StudentsService } from './students/students.service.js'
 
 /**
  * Phase 2 — Enrollment Intelligence. Owns the per-school SIS/roster connector and the
@@ -24,9 +26,10 @@ import { NameMatchService } from './diocesan/name-match.service.js'
  */
 @Module({
   imports: [AuthModule, PeriodsModule, BillingModule, AuditModule],
-  controllers: [EnrollmentController, DiocesanEnrollmentController],
+  controllers: [EnrollmentController, DiocesanEnrollmentController, StudentsController],
   providers: [
     EnrollmentService,
+    StudentsService,
     EnrollmentClient,
     OneRosterCsvAdapter,
     BlackbaudAdapter,

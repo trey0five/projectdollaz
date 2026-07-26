@@ -221,6 +221,15 @@ export {
   toShares,
   diversityIndex,
   gradeMixShares,
+  // Phase 5 — Student-roster vocab (statuses, support flags, derived age bands).
+  STUDENT_STATUS_KEYS,
+  STUDENT_STATUS_LABELS,
+  STUDENT_FLAG_KEYS,
+  STUDENT_FLAG_LABELS,
+  AGE_BAND_KEYS,
+  AGE_BAND_LABELS,
+  ageFromBirthDate,
+  ageBandFromBirthDate,
 } from './demographics.js'
 export type {
   GenderKey,
@@ -229,6 +238,9 @@ export type {
   DemographicDimension,
   DemographicBreakdown,
   DemographicHit,
+  StudentStatusKey,
+  StudentFlagKey,
+  AgeBandKey,
 } from './demographics.js'
 
 // Version

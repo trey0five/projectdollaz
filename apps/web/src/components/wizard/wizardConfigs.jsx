@@ -46,6 +46,7 @@ import {
   Users,
   UserRound,
   Gift,
+  GraduationCap,
 } from 'lucide-react'
 
 import { HOME_TILES, tileLabel } from '../home/tileRegistry.jsx'
@@ -55,6 +56,7 @@ import MonthlyActualsPanel from '../monthly/MonthlyActualsPanel.jsx'
 import BudgetSetup from '../budget/BudgetSetup.jsx'
 import OperationalDataPanel from '../analytics/OperationalDataPanel.jsx'
 import RosterUpload from '../enrollment/RosterUpload.jsx'
+import StudentImport from '../enrollment/StudentImport.jsx'
 import { EnrollmentConnectEmbed } from './wizardEmbeds.jsx'
 import WizardStrategyGoal from './WizardStrategyGoal.jsx'
 
@@ -153,6 +155,29 @@ export const wizardConfigs = {
     module: 'enrollment',
     hue: HUE.enrollment,
     options: [
+      // Phase 5 — student-level roster (the Records-tab register's ADD paths).
+      {
+        key: 'students',
+        kind: 'flow',
+        Icon: GraduationCap,
+        label: 'Students',
+        blurb:
+          'Add students to your roster one by one — name, grade, status and support flags. The register and analytics update live.',
+        cta: 'Add students',
+        flow: recordFlows['enrollment.student'],
+      },
+      {
+        key: 'import-students',
+        kind: 'embed',
+        Icon: FileSpreadsheet,
+        label: 'Import roster CSV',
+        blurb:
+          'Bring your whole roster in from a CSV — OneRoster users.csv or a simple student list. Preview every row, then merge or replace.',
+        cta: 'Import students',
+        renderEmbed: (ctx) => (
+          <StudentImport schoolId={ctx.schoolId} canEdit={ctx.canEdit} onApplied={ctx.onSaved} />
+        ),
+      },
       {
         key: 'roster',
         kind: 'embed',

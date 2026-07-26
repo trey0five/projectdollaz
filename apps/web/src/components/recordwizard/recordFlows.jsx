@@ -24,6 +24,7 @@ import {
   Wrench,
   HeartHandshake,
   Gift,
+  GraduationCap,
 } from 'lucide-react'
 
 import {
@@ -34,7 +35,19 @@ import {
   accreditationApi,
   facilitiesApi,
   advancementApi,
+  enrollmentApi,
 } from '../../lib/api.js'
+import {
+  GRADE_KEYS,
+  STUDENT_STATUS_KEYS,
+  STUDENT_STATUS_LABELS,
+  GENDER_KEYS,
+  GENDER_LABELS,
+  RACE_KEYS,
+  RACE_LABELS,
+  ETHNICITY_KEYS,
+  ETHNICITY_LABELS,
+} from '../../lib/demographicVocab.js'
 
 // ── Enum sets (LOCAL mirrors — the DTO files are the source of truth) ─────────
 // apps/api/src/governance/dto/create-policy.dto.ts (POLICY_STATUSES)
@@ -72,7 +85,205 @@ const moneyDash = (v) => {
 /** Review-row label for a select value via its options list. */
 const pick = (options, v) => options.find((o) => o.value === v)?.label ?? orDash(v)
 
+// Grade labels for the enrollment.student flow (PK3/PK4/K read as-is; numerics
+// read 'Grade N'). Vocab mirrors @finrep/analytics via lib/demographicVocab.
+const gradeOpt = GRADE_KEYS.map((g) => ({
+  value: g,
+  label: /^\d+$/.test(g) ? `Grade ${g}` : g,
+}))
+const keyedOpt = (keys, labels) => keys.map((k) => ({ value: k, label: labels[k] ?? k }))
+
 export const recordFlows = {
+  // ══════════════════════ ENROLLMENT · STUDENT (Phase 5 roster) ══════════════
+  // The school's own roster record — DATA-MINIMAL by FERPA design (no address/
+  // phone/medical text; support needs are coarse booleans). Optional empties are
+  // OMITTED from the body (CreateStudentDto is @IsOptional-per-field); the three
+  // flags are always sent as REAL booleans (@IsBoolean).
+  'enrollment.student': {
+    key: 'enrollment.student',
+    noun: 'student',
+    nounPlural: 'students',
+    Icon: GraduationCap,
+    defaults: {
+      firstName: '',
+      lastName: '',
+      grade: 'K',
+      birthDate: '',
+      gender: '',
+      race: '',
+      ethnicity: '',
+      status: 'enrolled',
+      enrolledOn: '',
+      withdrawnOn: '',
+      hasIep: false,
+      has504: false,
+      ell: false,
+      notes: '',
+      externalId: '',
+    },
+    steps: [
+      {
+        key: 'identity',
+        label: 'Identity',
+        title: 'First, who they are',
+        blurb: 'Their name and grade — a birth date if you have it.',
+        fields: [
+          {
+            key: 'firstName',
+            label: 'First name',
+            type: 'text',
+            required: true,
+            requiredMsg: 'Give them a first name',
+            maxLength: 120,
+            placeholder: 'e.g. Maria',
+          },
+          {
+            key: 'lastName',
+            label: 'Last name',
+            type: 'text',
+            required: true,
+            requiredMsg: 'Give them a last name',
+            maxLength: 120,
+            placeholder: 'e.g. Alvarez',
+          },
+          { key: 'grade', label: 'Grade', type: 'select', options: gradeOpt },
+          {
+            key: 'birthDate',
+            label: 'Birth date',
+            type: 'date',
+            hint: 'Age is always derived — never stored.',
+          },
+        ],
+      },
+      {
+        key: 'demographics',
+        label: 'Demographics',
+        title: 'Demographics (optional)',
+        optional: true,
+        blurb: 'Feeds the aggregate mix analytics only. Leave anything as "Prefer not to record".',
+        fields: [
+          {
+            key: 'gender',
+            label: 'Gender',
+            type: 'select',
+            emptyOptionLabel: 'Prefer not to record',
+            options: keyedOpt(GENDER_KEYS, GENDER_LABELS),
+          },
+          {
+            key: 'race',
+            label: 'Race',
+            type: 'select',
+            emptyOptionLabel: 'Prefer not to record',
+            options: keyedOpt(RACE_KEYS, RACE_LABELS),
+          },
+          {
+            key: 'ethnicity',
+            label: 'Ethnicity',
+            type: 'select',
+            emptyOptionLabel: 'Prefer not to record',
+            options: keyedOpt(ETHNICITY_KEYS, ETHNICITY_LABELS),
+          },
+        ],
+      },
+      {
+        key: 'status',
+        label: 'Status',
+        title: 'Status & support',
+        optional: true,
+        blurb: 'Everything here is optional — status defaults to Enrolled.',
+        fields: [
+          {
+            key: 'status',
+            label: 'Status',
+            type: 'select',
+            options: keyedOpt(STUDENT_STATUS_KEYS, STUDENT_STATUS_LABELS),
+          },
+          { key: 'enrolledOn', label: 'Enrolled on', type: 'date' },
+          {
+            key: 'withdrawnOn',
+            label: 'Withdrawn on',
+            type: 'date',
+            hint: 'Needs status Withdrawn or Graduated.',
+            validate: (raw, v) =>
+              raw && !['withdrawn', 'graduated'].includes(v.status)
+                ? 'Set status to Withdrawn or Graduated when a withdrawal date is set'
+                : null,
+          },
+          { key: 'hasIep', label: 'IEP', type: 'checkbox', placeholder: 'Has an IEP' },
+          { key: 'has504', label: '504 plan', type: 'checkbox', placeholder: 'Has a 504 plan' },
+          { key: 'ell', label: 'ELL', type: 'checkbox', placeholder: 'English language learner' },
+          {
+            key: 'notes',
+            label: 'Notes',
+            type: 'textarea',
+            rows: 3,
+            maxLength: 2000,
+            span: 2,
+            fold: true,
+            hint: 'Operational notes only — do not record medical or diagnostic details.',
+          },
+          {
+            key: 'externalId',
+            label: 'SIS id',
+            type: 'text',
+            maxLength: 120,
+            fold: true,
+            hint: 'Matches CSV re-imports to this record.',
+          },
+        ],
+      },
+    ],
+    // CreateStudentDto ✓ — names/grade/status + REAL booleans always; optional
+    // empties OMITTED (never '' — @IsIn/@IsDateString would 400 on '').
+    toBody: (v) => {
+      const body = {
+        firstName: v.firstName.trim(),
+        lastName: v.lastName.trim(),
+        grade: v.grade,
+        status: v.status || 'enrolled',
+        hasIep: !!v.hasIep,
+        has504: !!v.has504,
+        ell: !!v.ell,
+      }
+      if (v.birthDate) body.birthDate = v.birthDate
+      if (v.gender) body.gender = v.gender
+      if (v.race) body.race = v.race
+      if (v.ethnicity) body.ethnicity = v.ethnicity
+      if (v.enrolledOn) body.enrolledOn = v.enrolledOn
+      if (v.withdrawnOn) body.withdrawnOn = v.withdrawnOn
+      if (v.notes.trim()) body.notes = v.notes.trim()
+      if (v.externalId.trim()) body.externalId = v.externalId.trim()
+      return body
+    },
+    submit: (ctx, body) => enrollmentApi.students.create(ctx.schoolId, body),
+    // Basket confirm goes through the transactional POST /students/batch (frozen
+    // spec): all-or-nothing, ONE audit row, ONE roster-snapshot sync. `submit`
+    // stays as the schema-required per-item fallback.
+    submitAll: (ctx, bodies) => enrollmentApi.students.batch(ctx.schoolId, bodies),
+    itemLabel: (v) => `${v.firstName.trim()} ${v.lastName.trim()}`.trim(),
+    itemSub: (v) => {
+      const g = /^\d+$/.test(v.grade) ? `Grade ${v.grade}` : v.grade
+      return `student · ${g}`
+    },
+    reviewPairs: (v) => [
+      ['Name', `${orDash(v.firstName)} ${v.lastName.trim() ? v.lastName.trim() : ''}`.trim()],
+      ['Grade', /^\d+$/.test(v.grade) ? `Grade ${v.grade}` : v.grade],
+      ['Birth date', orDash(v.birthDate)],
+      ['Gender', v.gender ? (GENDER_LABELS[v.gender] ?? v.gender) : 'Not recorded'],
+      ['Race', v.race ? (RACE_LABELS[v.race] ?? v.race) : 'Not recorded'],
+      ['Ethnicity', v.ethnicity ? (ETHNICITY_LABELS[v.ethnicity] ?? v.ethnicity) : 'Not recorded'],
+      ['Status', STUDENT_STATUS_LABELS[v.status] ?? human(v.status)],
+      ['Enrolled on', orDash(v.enrolledOn)],
+      ['Withdrawn on', orDash(v.withdrawnOn)],
+      [
+        'Support',
+        [v.hasIep && 'IEP', v.has504 && '504', v.ell && 'ELL'].filter(Boolean).join(', ') || '—',
+      ],
+      ['Notes', orDash(v.notes)],
+      ['SIS id', orDash(v.externalId)],
+    ],
+  },
+
   // ══════════════════════ GOVERNANCE · POLICY ════════════════════════════════
   'governance.policy': {
     key: 'governance.policy',

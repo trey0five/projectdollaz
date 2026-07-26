@@ -34,6 +34,59 @@ export const RACE_LABELS = {
 // The canonical enrollment grid order (mirrors @finrep/analytics GRADE_KEYS).
 export const GRADE_KEYS = ['PK3', 'PK4', 'K', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']
 
+// ── Phase 5 student-roster vocab (mirrors @finrep/analytics demographics.ts) ──
+export const STUDENT_STATUS_KEYS = ['enrolled', 'waitlist', 'withdrawn', 'graduated']
+export const STUDENT_STATUS_LABELS = {
+  enrolled: 'Enrolled',
+  waitlist: 'Waitlist',
+  withdrawn: 'Withdrawn',
+  graduated: 'Graduated',
+}
+
+export const STUDENT_FLAG_KEYS = ['iep', 'plan504', 'ell']
+export const STUDENT_FLAG_LABELS = { iep: 'IEP', plan504: '504', ell: 'ELL' }
+
+export const AGE_BAND_KEYS = ['under5', '5to10', '11to13', '14to18', '19plus', 'unknown']
+export const AGE_BAND_LABELS = {
+  under5: 'Under 5',
+  '5to10': '5–10',
+  '11to13': '11–13',
+  '14to18': '14–18',
+  '19plus': '19+',
+  unknown: 'Unknown',
+}
+
+/** Pure, never throws. null/invalid birthDate → 'unknown'. Age at `asOf` (default now). */
+export function ageBandFromBirthDate(birthDate, asOf) {
+  const age = ageFromBirthDate(birthDate, asOf)
+  if (age == null) return 'unknown'
+  if (age < 5) return 'under5'
+  if (age <= 10) return '5to10'
+  if (age <= 13) return '11to13'
+  if (age <= 18) return '14to18'
+  return '19plus'
+}
+
+/** Whole-year age at `asOf` (default now), or null when birthDate is absent/invalid. */
+export function ageFromBirthDate(birthDate, asOf) {
+  if (!birthDate) return null
+  const b = birthDate instanceof Date ? birthDate : new Date(String(birthDate).slice(0, 10) + 'T00:00:00Z')
+  if (Number.isNaN(b.getTime())) return null
+  const at = asOf instanceof Date && !Number.isNaN(asOf.getTime()) ? asOf : new Date()
+  let age = at.getUTCFullYear() - b.getUTCFullYear()
+  const m = at.getUTCMonth() - b.getUTCMonth()
+  if (m < 0 || (m === 0 && at.getUTCDate() < b.getUTCDate())) age -= 1
+  return age >= 0 && age < 130 ? age : null
+}
+
+/** FERPA min-cell display rule (CLIENT display-only — the API returns true counts):
+ *  categorical breakdown cells between 1 and 4 render as '<5'. Never applied to
+ *  headline KPI totals. */
+export function formatMinCell(n) {
+  const v = Number(n) || 0
+  return v > 0 && v < 5 ? '<5' : String(v)
+}
+
 const num = (v) => {
   const n = Number(v)
   return Number.isFinite(n) && n > 0 ? n : 0

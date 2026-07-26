@@ -157,6 +157,7 @@ model School {
   nameAliases              SchoolNameAlias[]
   governancePeople         GovernancePerson[]
   committeeMemberships     CommitteeMembership[]
+  students                 Student[]
 
   @@index([organizationId])
   @@map("schools")
@@ -290,6 +291,7 @@ model User {
   messages                     Message[]
   governancePersons            GovernancePerson[]       @relation("GovernancePersonUser")
   governancePersonsUpdated     GovernancePerson[]       @relation("GovernancePersonUpdatedBy")
+  createdStudents              Student[]                @relation("StudentCreatedBy")
 
   @@index([email])
   @@index([lastLoginRegion])
@@ -1893,6 +1895,7 @@ enum EnrollmentProvider {
   manual // hand-entered snapshot
   diocesan_csv // ONE org file routed to many schools by name (upload)
   diocesan_api // diocesan API-connect variant (dark, config-gated)
+  roster // Phase 5 — derived from the school's own Student roster (no source row)
 }
 
 /// Phase 2 — LIVE enrollment/SIS connector creds for one school (mirrors
@@ -1958,6 +1961,41 @@ model EnrollmentSnapshot {
   @@index([schoolId, observedOn])
   @@index([fiscalPeriodId])
   @@map("enrollment_snapshots")
+}
+
+/// Phase 5 — the school's own roster (system of record when no SIS). DATA-MINIMAL
+/// by design (FERPA): no SSN/address/phone/email/guardian/medical text. Support
+/// needs are coarse booleans, never diagnosis. Hard-delete allowed (stewardship).
+model Student {
+  id              String    @id @default(uuid()) @db.Uuid
+  schoolId        String    @map("school_id") @db.Uuid
+  firstName       String    @map("first_name")
+  lastName        String    @map("last_name")
+  grade           String // GRADE_KEYS: PK3|PK4|K|1..12 — TEXT + @IsIn convention
+  gender          String? // GENDER_KEYS: female|male|unknown (null = not recorded)
+  race            String? // RACE_KEYS: asian|black|hispanicLatino|mena|nhpi|twoOrMore|white
+  ethnicity       String? // ETHNICITY_KEYS: hispanic|nonHispanic
+  birthDate       DateTime? @map("birth_date") @db.Date // age is DERIVED, never stored
+  status          String    @default("enrolled") // STUDENT_STATUS_KEYS
+  enrolledOn      DateTime? @map("enrolled_on") @db.Date
+  withdrawnOn     DateTime? @map("withdrawn_on") @db.Date
+  hasIep          Boolean   @default(false) @map("has_iep")
+  has504          Boolean   @default(false) @map("has_504")
+  ell             Boolean   @default(false)
+  notes           String? // UI copy: "Operational notes only — no medical/diagnostic details."
+  externalId      String?   @map("external_id") // OneRoster sourcedId → idempotent re-import ('' normalized to null)
+  createdByUserId String?   @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  school        School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  createdByUser User?  @relation("StudentCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([schoolId, externalId])
+  @@index([schoolId, status])
+  @@index([schoolId, grade])
+  @@index([schoolId, lastName, firstName])
+  @@map("students")
 }
 
 // ── Granular diocesan enrollment — durable staging + learned name aliases ─────

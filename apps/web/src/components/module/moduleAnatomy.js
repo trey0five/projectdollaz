@@ -8,7 +8,7 @@
 // D2 (locked contract): OMIT a tab when a module has no existing content for it.
 // Universal core = Overview · Add data · Records where content exists; Reports
 // lives ONLY on finance (the only module with real report surfaces today).
-// Enrollment has no register → Overview · Add data only.
+// Enrollment gained a register in Phase 5 (the student roster) → full core trio.
 //
 // Presentation only — no data knowledge. ModuleTabs reads this; each module page
 // supplies the actual panel nodes.
@@ -45,7 +45,7 @@ export const MODULE_ANATOMY = {
     eyebrow: 'Finance command center',
   },
   enrollment: {
-    tabs: ['overview', 'add'],
+    tabs: ['overview', 'add', 'records'],
     Icon: GraduationCap,
     eyebrow: 'Enrollment intelligence',
   },

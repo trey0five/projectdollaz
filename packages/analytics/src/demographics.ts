@@ -120,6 +120,74 @@ export function demographicKeyFromLabel(label: string | null | undefined): Demog
   return null
 }
 
+// ── Phase 5 — Student-roster vocabulary (statuses, support flags, age bands) ──
+
+/** Roster lifecycle statuses (TEXT + @IsIn convention — no Postgres enum). */
+export const STUDENT_STATUS_KEYS = ['enrolled', 'waitlist', 'withdrawn', 'graduated'] as const
+export type StudentStatusKey = (typeof STUDENT_STATUS_KEYS)[number]
+
+export const STUDENT_STATUS_LABELS: Record<StudentStatusKey, string> = {
+  enrolled: 'Enrolled',
+  waitlist: 'Waitlist',
+  withdrawn: 'Withdrawn',
+  graduated: 'Graduated',
+}
+
+/** Coarse support-need flags (FERPA: booleans only, never diagnosis text). */
+export const STUDENT_FLAG_KEYS = ['iep', 'plan504', 'ell'] as const
+export type StudentFlagKey = (typeof STUDENT_FLAG_KEYS)[number]
+
+export const STUDENT_FLAG_LABELS: Record<StudentFlagKey, string> = {
+  iep: 'IEP',
+  plan504: '504',
+  ell: 'ELL',
+}
+
+/** Age bands — age is DERIVED from birthDate (never stored). `unknown` = no birthDate. */
+export const AGE_BAND_KEYS = ['under5', '5to10', '11to13', '14to18', '19plus', 'unknown'] as const
+export type AgeBandKey = (typeof AGE_BAND_KEYS)[number]
+
+export const AGE_BAND_LABELS: Record<AgeBandKey, string> = {
+  under5: 'Under 5',
+  '5to10': '5–10',
+  '11to13': '11–13',
+  '14to18': '14–18',
+  '19plus': '19+',
+  unknown: 'Unknown',
+}
+
+/**
+ * Whole-year age at `asOf` (default now), UTC-calendar arithmetic. Pure, never
+ * throws: null/invalid/future birth dates return null.
+ */
+export function ageFromBirthDate(
+  birthDate: string | Date | null | undefined,
+  asOf?: Date,
+): number | null {
+  if (birthDate == null) return null
+  const d = birthDate instanceof Date ? birthDate : new Date(birthDate)
+  if (Number.isNaN(d.getTime())) return null
+  const ref = asOf ?? new Date()
+  let age = ref.getUTCFullYear() - d.getUTCFullYear()
+  const m = ref.getUTCMonth() - d.getUTCMonth()
+  if (m < 0 || (m === 0 && ref.getUTCDate() < d.getUTCDate())) age--
+  return age < 0 ? null : age
+}
+
+/** Pure, never throws. null/invalid birthDate → 'unknown'. Age at `asOf` (default now). */
+export function ageBandFromBirthDate(
+  birthDate: string | Date | null | undefined,
+  asOf?: Date,
+): AgeBandKey {
+  const age = ageFromBirthDate(birthDate, asOf)
+  if (age == null) return 'unknown'
+  if (age < 5) return 'under5'
+  if (age <= 10) return '5to10'
+  if (age <= 13) return '11to13'
+  if (age <= 18) return '14to18'
+  return '19plus'
+}
+
 // ── Share + diversity math ────────────────────────────────────────────────────
 
 /**

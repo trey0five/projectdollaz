@@ -8,11 +8,13 @@
 // fetch effects + a cancelled guard, loading/error/empty on every fetch.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { GraduationCap, RotateCcw, Building2, ArrowRight } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
 import ModuleTabs from '../components/module/ModuleTabs.jsx'
+import ModuleRegister from '../components/module/ModuleRegister.jsx'
+import { moduleHue } from '../components/module/moduleAnatomy.js'
 import BackLink from '../components/ui/BackLink.jsx'
 import AddDataTab from '../components/wizard/AddDataTab.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
@@ -30,6 +32,9 @@ import ByGradeChart from '../components/enrollment/ByGradeChart.jsx'
 import EnrollmentConnectCard from '../components/enrollment/EnrollmentConnectCard.jsx'
 import DemographicMixCard from '../components/analytics/v2/DemographicMixCard.jsx'
 import GradeMixCard from '../components/analytics/v2/GradeMixCard.jsx'
+import EnrollmentKpiRow from '../components/enrollment/EnrollmentKpiRow.jsx'
+import RosterAnalyticsSection from '../components/enrollment/RosterAnalyticsSection.jsx'
+import StudentRegister from '../components/enrollment/StudentRegister.jsx'
 
 function GatePanel({ notLicensed }) {
   return (
@@ -67,6 +72,7 @@ function EnrollmentWorkspace() {
   const { periods } = usePersistence()
   const uiV2 = useUiV2()
   const { isMultiSchool } = useScope()
+  const [searchParams, setSearchParams] = useSearchParams()
   const canEdit = activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'
   const periodId = periods && periods[0] ? periods[0].id : null
 
@@ -115,6 +121,15 @@ function EnrollmentWorkspace() {
       setLoading(false)
     }
   }, [activeId, periodId])
+
+  // Register "+ New" → the Add-data tab's students RecordFlow (?add deep link;
+  // AddDataTab reads it on mount when the panel swaps in).
+  const goAddStudents = useCallback(() => {
+    const next = new URLSearchParams(searchParams)
+    next.set('tab', 'add')
+    next.set('add', 'students')
+    setSearchParams(next)
+  }, [searchParams, setSearchParams])
 
   const doRevert = useCallback(async () => {
     if (!activeId || !periodId) return
@@ -244,12 +259,26 @@ function EnrollmentWorkspace() {
       </Link>
     ) : null
 
+  // Phase 5 — the school's OWN roster is the system of record when no SIS is
+  // connected. In roster mode the mix cards give way to the richer, filterable
+  // RosterAnalyticsSection (aggregate-only); SIS/snapshot schools keep the
+  // existing cards byte-identical.
+  const rosterMode = status?.rosterMode === 'roster'
+
   // Shared overview extras (both the v2 tab and the flat page render these).
   const mixSection = (
     <>
       {supersedeBanner}
-      {byDemographics && <DemographicMixCard byDemographics={byDemographics} diversityIndex={dvIndex} />}
-      {mixByGrade && <GradeMixCard byGrade={mixByGrade} />}
+      {rosterMode ? (
+        <RosterAnalyticsSection schoolId={activeId} />
+      ) : (
+        <>
+          {byDemographics && (
+            <DemographicMixCard byDemographics={byDemographics} diversityIndex={dvIndex} />
+          )}
+          {mixByGrade && <GradeMixCard byGrade={mixByGrade} />}
+        </>
+      )}
       {diocesanLink}
     </>
   )
@@ -259,21 +288,43 @@ function EnrollmentWorkspace() {
   if (uiV2) {
     return (
       <ModuleTabs
-        moduleKey="enrollment"
-        overview={
-          <div className="mx-auto max-w-page px-4 py-8 sm:px-10">
-            {header}
-            <div className="space-y-6">
-              <VsPlanKpi summary={summary} />
-              {summary?.latest?.byGrade && <ByGradeChart byGrade={summary.latest.byGrade} />}
-              {mixSection}
+          moduleKey="enrollment"
+          overview={
+            <div className="mx-auto max-w-page px-4 py-8 sm:px-10">
+              {header}
+              <div className="space-y-6">
+                <EnrollmentKpiRow
+                  schoolId={activeId}
+                  rosterMode={status?.rosterMode}
+                  summary={summary}
+                />
+                <VsPlanKpi summary={summary} />
+                {summary?.latest?.byGrade && <ByGradeChart byGrade={summary.latest.byGrade} />}
+                {mixSection}
+              </div>
             </div>
-          </div>
-        }
-        addData={
-          <AddDataTab module="enrollment" schoolId={activeId} canEdit={canEdit} onDone={load} />
-        }
-      />
+          }
+          addData={
+            <AddDataTab module="enrollment" schoolId={activeId} canEdit={canEdit} onDone={load} />
+          }
+          records={
+            <ModuleRegister
+              moduleKey="enrollment"
+              hue={moduleHue('enrollment')}
+              tabs={[{ key: 'students', label: 'Student roster' }]}
+              activeTab="students"
+              onNew={canEdit ? goAddStudents : undefined}
+              registerTable={
+                <StudentRegister
+                  schoolId={activeId}
+                  canEdit={canEdit}
+                  hue={moduleHue('enrollment')}
+                  onChanged={load}
+                />
+              }
+            />
+          }
+        />
     )
   }
 
@@ -282,6 +333,8 @@ function EnrollmentWorkspace() {
       {header}
 
       <div className="space-y-6">
+        <EnrollmentKpiRow schoolId={activeId} rosterMode={status?.rosterMode} summary={summary} />
+
         <VsPlanKpi summary={summary} />
 
         {summary?.latest?.byGrade && <ByGradeChart byGrade={summary.latest.byGrade} />}

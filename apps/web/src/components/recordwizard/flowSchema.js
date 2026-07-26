@@ -45,6 +45,10 @@ export function makeItemId() {
  *   forbidNonWhitelisted ValidationPipe 400s any stray key).
  * @property {(ctx: Object, body: Object, values: Object) => Promise} submit
  *   The real api.js create call.
+ * @property {(ctx: Object, bodies: Object[], items: Object[]) => Promise} [submitAll]
+ *   Optional all-or-nothing batch create (e.g. POST /students/batch). When set,
+ *   the Review save sends the WHOLE pending basket in ONE request instead of the
+ *   sequential per-item queue; a failure marks every attempted item for retry.
  * @property {(values: Object) => string} itemLabel
  *   Chip/row headline; the framework falls back to `Untitled ${noun}` when ''.
  * @property {(values: Object, data: Object) => string} [itemSub]

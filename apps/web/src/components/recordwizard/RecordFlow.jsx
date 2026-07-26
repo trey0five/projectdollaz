@@ -397,6 +397,57 @@ export default function RecordFlow({
     setPhase('submitting')
     setGuardOpen(false)
 
+    // ── All-or-nothing batch path (flow.submitAll): ONE request — one audit row,
+    // one server-side roster-snapshot sync — instead of N sequential creates.
+    // Items already saved by an earlier attempt are never resent; a failure marks
+    // every attempted item error so the normal retry re-runs the whole batch.
+    if (flow.submitAll) {
+      const pending = itemsToRun.filter((it) => it.status !== 'done')
+      if (!pending.length) {
+        setPhase('editing')
+        return
+      }
+      const pendingIds = new Set(pending.map((it) => it.id))
+      const statuses = new Map(all.map((it) => [it.id, it.status]))
+      setBasket((b) =>
+        b.map((it) => (pendingIds.has(it.id) ? { ...it, status: 'saving', error: undefined } : it)),
+      )
+      setPoliteMsg(`Saving ${flowCount(pending.length, flow.noun, flow.nounPlural)}…`)
+      let batchError = null
+      try {
+        await flow.submitAll(ctx, pending.map((it) => flow.toBody(it.values, data)), pending)
+      } catch (e) {
+        batchError = e
+      }
+      pending.forEach((it) => statuses.set(it.id, batchError ? 'error' : 'done'))
+      const errMsg = batchError ? apiErrorMessage(batchError) : undefined
+      setBasket((b) =>
+        b.map((it) =>
+          pendingIds.has(it.id)
+            ? { ...it, status: batchError ? 'error' : 'done', error: errMsg }
+            : it,
+        ),
+      )
+      const okTotal = [...statuses.values()].filter((s) => s === 'done').length
+      const errTotal = [...statuses.values()].filter((s) => s === 'error').length
+      if (!batchError) {
+        ctx.onSaved?.()
+        setAssertiveMsg(`All ${okTotal} saved.`)
+        resultRef.current = { ok: okTotal, failed: 0, noun: flow.noun, nounPlural: flow.nounPlural }
+        setCelebrateN(okTotal)
+        setPhase('celebrating')
+      } else {
+        setAssertiveMsg(
+          okTotal > 0
+            ? `${okTotal} saved, ${errTotal} failed — ${errMsg}`
+            : `None saved — ${errMsg}. Check the errors and retry.`,
+        )
+        setPhase('editing')
+        requestAnimationFrame(() => retryBtnRef.current?.focus())
+      }
+      return
+    }
+
     // Local mirrors — setState is async, the outcome math can't wait for it.
     const statuses = new Map(all.map((it) => [it.id, it.status]))
     const runErrors = new Map()

@@ -22,6 +22,8 @@ export type EnrollmentProviderKey =
   // Granular diocesan enrollment — one org file routed to many schools by name.
   | 'diocesan_csv'
   | 'diocesan_api'
+  // Phase 5 — derived from the school's own Student roster (no source row).
+  | 'roster'
 
 /**
  * A normalized, provider-agnostic roster observation as of a single date. This is
@@ -37,8 +39,9 @@ export interface NormalizedEnrollmentSnapshot {
   totalEnrolled: number
   /** Active count per grade; keys are a subset of the driver's GradeKey union. */
   byGrade: Partial<Record<GradeKey, number>>
-  /** Funnel/status breakdown when the source exposes it (SIS APIs); CSV fills enrolled+withdrawn. */
-  byStatus?: { enrolled: number; withdrawn?: number; applied?: number; accepted?: number; new?: number; returning?: number }
+  /** Funnel/status breakdown when the source exposes it (SIS APIs); CSV fills
+   *  enrolled+withdrawn; the Phase 5 roster path fills waitlist+graduated too. */
+  byStatus?: { enrolled: number; withdrawn?: number; applied?: number; accepted?: number; new?: number; returning?: number; waitlist?: number; graduated?: number }
   /**
    * Aggregate demographic breakdown (gender / ethnicity / race) as COUNTS — no
    * student-level PII, aggregate by design. Canonical shape frozen in

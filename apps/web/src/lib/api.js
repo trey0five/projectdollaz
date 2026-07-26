@@ -828,6 +828,44 @@ export const enrollmentApi = {
   // (Decision C — reversible). Owner/accountant only (server-enforced).
   revertManual: (schoolId, body) =>
     api.post(`/schools/${schoolId}/enrollment/revert-manual`, body),
+
+  // ── Phase 5 Student roster (schools/:schoolId/enrollment/students) ──────────
+  // The school's OWN student register (system of record when no SIS). FERPA:
+  // list/get/import-preview return names over the role-gated register routes ONLY;
+  // `aggregate` NEVER returns a name (counts + KPIs, same filter params as list).
+  // Reads owner/accountant/viewer; writes owner/accountant (server-enforced).
+  students: {
+    // params: { q, grade, status, race, gender, ethnicity, flags, ageBand, sort,
+    // dir, page, pageSize } — multi-value params are comma-joined strings; omit
+    // empties (global forbidNonWhitelisted pipe + @IsIn on every value).
+    list: (schoolId, params) =>
+      api.get(`/schools/${schoolId}/enrollment/students`, { params: params ?? {} }),
+    get: (schoolId, studentId) =>
+      api.get(`/schools/${schoolId}/enrollment/students/${studentId}`),
+    create: (schoolId, body) => api.post(`/schools/${schoolId}/enrollment/students`, body),
+    update: (schoolId, studentId, body) =>
+      api.patch(`/schools/${schoolId}/enrollment/students/${studentId}`, body),
+    remove: (schoolId, studentId) =>
+      api.delete(`/schools/${schoolId}/enrollment/students/${studentId}`),
+    // All-or-nothing transactional batch create ({ students: CreateStudentDto[] }, max 200).
+    batch: (schoolId, students) =>
+      api.post(`/schools/${schoolId}/enrollment/students/batch`, { students }),
+    // Stateless CSV import: preview parses (NO DB write) and returns candidate
+    // rows; commit posts the (possibly user-edited) rows back as JSON.
+    // formData: file (required CSV) + demographics (optional second CSV).
+    importPreview: (schoolId, formData) =>
+      api.post(`/schools/${schoolId}/enrollment/students/import/preview`, formData, {
+        headers: { 'Content-Type': undefined },
+      }),
+    importCommit: (schoolId, body) =>
+      api.post(`/schools/${schoolId}/enrollment/students/import/commit`, body),
+    // FERPA-safe aggregation — same filter params as list (no sort/page); never a name.
+    aggregate: (schoolId, params) =>
+      api.get(`/schools/${schoolId}/enrollment/students/aggregate`, { params: params ?? {} }),
+    // Explicit dated roster→snapshot backfill ({ observedOn? 'YYYY-MM-DD' }).
+    promoteSnapshot: (schoolId, body = {}) =>
+      api.post(`/schools/${schoolId}/enrollment/students/promote-snapshot`, body),
+  },
 }
 
 // ── Granular diocesan enrollment: ONE file / API-connect for ALL schools ─────
