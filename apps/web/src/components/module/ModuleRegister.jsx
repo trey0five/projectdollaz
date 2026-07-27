@@ -12,6 +12,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion, useReducedMotion } from 'framer-motion'
 import { Plus } from 'lucide-react'
+import ModuleOverviewLink from './ModuleOverviewLink.jsx'
 
 export default function ModuleRegister({
   moduleKey,
@@ -27,6 +28,9 @@ export default function ModuleRegister({
 
   return (
     <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
+      {/* Escape hatch home — the sidebar has an Overview row, but a register
+          reached from the on-page Records button needs its own way back. */}
+      <ModuleOverviewLink module={moduleKey} className="mb-3" />
       <div className="card-soft flex min-w-0 flex-col p-4 sm:p-5">
         {(multi || onNew) && (
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">

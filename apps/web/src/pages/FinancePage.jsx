@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 import { BACK_PILL, BackPillBody } from '../components/ui/BackLink.jsx'
 import { AddDataCta, RecordsCta } from '../components/module/ModuleCtas.jsx'
+import ModuleOverviewLink from '../components/module/ModuleOverviewLink.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useBilling } from '../context/BillingContext.jsx'
 import { usePersistence } from '../context/PersistenceContext.jsx'
@@ -130,6 +131,7 @@ function SectionCard(props) {
 function FinanceRecords() {
   return (
     <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
+      <ModuleOverviewLink module="finance" className="mb-3" />
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         <SectionCard to="/statements" Icon={FileStack} title="Statements" viewLabel="Open statements">
           <p className="text-[14.5px] text-muted">
@@ -154,6 +156,7 @@ function FinanceRecords() {
 function FinanceReports({ periodId }) {
   return (
     <div className="mx-auto max-w-page space-y-4 px-4 py-6 sm:px-10 sm:py-8">
+      <ModuleOverviewLink module="finance" />
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <SectionCard to="/reports" Icon={FileBarChart2} title="Reports workspace" viewLabel="Open Reports">
           <p className="mb-3 text-[14.5px] text-muted">
