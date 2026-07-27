@@ -195,6 +195,37 @@ resource "aws_cloudfront_function" "strip_api" {
   EOT
 }
 
+# SPA client-side routing, done at the EDGE instead of via custom_error_response.
+# custom_error_response is DISTRIBUTION-WIDE: mapping 403/404 -> /index.html(200)
+# also swallowed every API 403/404, so the app (and any client) received the HTML
+# shell with a 200 instead of the real JSON error — e.g. the "verify your email"
+# 403 and every not-found. This function rewrites only EXTENSION-LESS paths (the
+# client-side routes) to the shell, so S3 serves index.html for deep links while
+# /api/* keeps its true status + JSON body. A missing real asset now returns an
+# honest 403/404 instead of HTML pretending to be a .js file.
+resource "aws_cloudfront_function" "spa_rewrite" {
+  name    = "${var.prefix}-spa-rewrite"
+  runtime = "cloudfront-js-2.0"
+  comment = "Serve the SPA shell for client-side routes (extension-less paths)"
+  publish = true
+  code    = <<-EOT
+    function handler(event) {
+      var request = event.request;
+      var uri = request.uri;
+      // A real file: the last path segment carries an extension
+      // (/assets/index-abc.js, /favicon-32.png) -> fetch it from S3 as-is.
+      var last = uri.substring(uri.lastIndexOf('/') + 1);
+      if (last.indexOf('.') !== -1) {
+        return request;
+      }
+      // Anything else is a client-side route (/governance,
+      // /advancement/campaigns/<id>, /) -> serve the SPA shell.
+      request.uri = '/index.html';
+      return request;
+    }
+  EOT
+}
+
 resource "aws_cloudfront_origin_access_control" "spa" {
   name                              = "${var.prefix}-spa-oac"
   origin_access_control_origin_type = "s3"
@@ -239,6 +270,11 @@ resource "aws_cloudfront_distribution" "this" {
     cached_methods         = ["GET", "HEAD"]
     cache_policy_id        = data.aws_cloudfront_cache_policy.optimized.id
     compress               = true
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.spa_rewrite.arn
+    }
   }
 
   ordered_cache_behavior {
@@ -257,17 +293,9 @@ resource "aws_cloudfront_distribution" "this" {
     }
   }
 
-  # SPA client-side routing: serve index.html on 403/404 from S3.
-  custom_error_response {
-    error_code         = 403
-    response_code      = 200
-    response_page_path = "/index.html"
-  }
-  custom_error_response {
-    error_code         = 404
-    response_code      = 200
-    response_page_path = "/index.html"
-  }
+  # NO custom_error_response: it is distribution-wide and would mask real API
+  # 403/404s as a 200 HTML shell. SPA deep links are handled by the
+  # spa_rewrite viewer-request function on the default behavior instead.
 
   restrictions {
     geo_restriction { restriction_type = "none" }
