@@ -64,8 +64,16 @@ const DEFAULT_KEYS = [
   'pct_students_on_aid',
   // Enrollment domain (thin wedge) — appended last, mirrors METRIC_KEYS order.
   'enrollment_change_yoy',
-  // HR domain (page-less module) — appended last, mirrors METRIC_KEYS order.
+  // HR domain — appended last, mirrors METRIC_KEYS order.
   'student_teacher_ratio',
+  // Phase 6 — HR & Planning module metrics, appended LAST in §0 order (v1/v2
+  // default parity with the v2 Scorecard's DEFAULT_KEYS).
+  'total_staff_fte',
+  'fte_change_yoy',
+  'teaching_staff_share',
+  'forecast_vs_budget_net',
+  'forecast_operating_margin',
+  'plan_readiness',
 ]
 
 // Compact cards are grouped BY DOMAIN into these ordered sections. Enrollment leads
@@ -79,6 +87,9 @@ const DOMAIN_SECTIONS = [
   // metric survives the layout filter. An unlicensed school's gated key is stripped
   // from the response, so the render loop's metricsByKey intersection drops it.
   { domain: 'hr', title: 'People & Staffing' },
+  // Planning & Forecasting (Phase 6) — same gated-presence rule as hr: the section
+  // renders only when the school licenses planning (gated keys stripped otherwise).
+  { domain: 'planning', title: 'Planning & Forecasting' },
   { domain: 'aid', title: 'Tuition & Aid' },
   { domain: 'operations', title: 'Operations' },
   { domain: 'finance', title: 'Financial (Other)' },

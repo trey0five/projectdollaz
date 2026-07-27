@@ -14,6 +14,19 @@ export interface ResolvedEnrollmentPlan {
   netRate: number | null
 }
 
+/**
+ * Error-distinguishing resolve result: `plan === null && failed` means a DB read
+ * ERRORED while no plan was found — absence is UNKNOWN, not definitive. Consumers
+ * that treat "no plan" as a fact (the briefing's planning:plan-missing item, the
+ * plan_readiness artifact count) must skip when `failed` — mirroring the
+ * PlanningSignalsService contract (a query error resolves to null → skip, never
+ * a false completeness alarm).
+ */
+export interface EnrollmentPlanResolution {
+  plan: ResolvedEnrollmentPlan | null
+  failed: boolean
+}
+
 /** Sum a JSON grade→count map over the known GRADE_KEYS, keeping only finite
  *  positive counts. Returns null when nothing usable remains (so a blank/empty
  *  plan is "no plan", never a fabricated 0-total). */
@@ -51,10 +64,23 @@ export class EnrollmentPlanService {
   constructor(private readonly prisma: PrismaService) {}
 
   async resolve(schoolId: string, fiscalPeriodId: string): Promise<ResolvedEnrollmentPlan | null> {
+    return (await this.resolveDetailed(schoolId, fiscalPeriodId)).plan
+  }
+
+  /**
+   * Like resolve(), but distinguishes a DB read ERROR from a genuinely absent
+   * plan: when no plan is found AND a read errored, `failed` is true (the
+   * absence is unknown, not a fact). A found plan is always `failed: false`.
+   */
+  async resolveDetailed(schoolId: string, fiscalPeriodId: string): Promise<EnrollmentPlanResolution> {
+    let failed = false
     // (1) driver budget — the applied enrollment grid is the authoritative plan.
     const budget = await this.prisma.periodBudget
       .findUnique({ where: { schoolId_fiscalPeriodId: { schoolId, fiscalPeriodId } } })
-      .catch(() => null)
+      .catch(() => {
+        failed = true
+        return null
+      })
     const lines = (budget?.lines as Record<string, unknown> | null) ?? null
     const driverModel = lines?.driverModel as Record<string, unknown> | undefined
     const assumptions = driverModel?.assumptions as Record<string, unknown> | undefined
@@ -63,23 +89,29 @@ export class EnrollmentPlanService {
       const kpis = driverModel?.kpis as Record<string, unknown> | undefined
       const netRate =
         typeof kpis?.netTuitionPerStudent === 'number' ? kpis.netTuitionPerStudent : null
-      return { planTotal: driverGrade.total, planByGrade: driverGrade.map, netRate }
+      return {
+        plan: { planTotal: driverGrade.total, planByGrade: driverGrade.map, netRate },
+        failed: false,
+      }
     }
 
     // (2) free plannedEnrollmentByGrade on the operational row (no driver budget).
     const op = await this.prisma.periodOperationalData
       .findUnique({ where: { schoolId_fiscalPeriodId: { schoolId, fiscalPeriodId } } })
-      .catch(() => null)
+      .catch(() => {
+        failed = true
+        return null
+      })
     // Cast: plannedEnrollmentByGrade is an additive Phase-2 column; read defensively
     // so this compiles even before the prisma client is regenerated for it.
     const planned = sumByGrade(
       (op as { plannedEnrollmentByGrade?: unknown } | null)?.plannedEnrollmentByGrade,
     )
     if (planned) {
-      return { planTotal: planned.total, planByGrade: planned.map, netRate: null }
+      return { plan: { planTotal: planned.total, planByGrade: planned.map, netRate: null }, failed: false }
     }
 
-    // (3) no plan anywhere.
-    return null
+    // (3) no plan anywhere — `failed` records whether that's a fact or a read error.
+    return { plan: null, failed }
   }
 }

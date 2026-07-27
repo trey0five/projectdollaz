@@ -44,6 +44,19 @@ function bundle(): unknown {
 const CUR_OP = { enrollment: 90, enrollmentFte: null, studentsOnAid: 40, financialAidTotal: 100, teachingFte: 5, totalStaffFte: 8 }
 const PRIOR_OP = { enrollment: 100, enrollmentFte: null, studentsOnAid: 40, financialAidTotal: 100, teachingFte: 5, totalStaffFte: 8 }
 
+// Phase 6 — a PlanningSignals fixture that makes ALL THREE planning metrics
+// available and OFF-BAND when licensed: budget net 100 of rev 1000, forecast net
+// 10 → forecast_vs_budget_net = −0.09 (risk); forecast margin 10/900 ≈ 1.1%
+// (watch); plan_readiness = 2/3 (watch — no enrollment plan in this fixture).
+const PLANNING_SIGNALS = {
+  budgetTotalRevenue: 1000,
+  budgetTotalExpense: 900,
+  forecastTotalRevenue: 900,
+  forecastTotalExpense: 890,
+  hasBudget: true,
+  hasForecast: true,
+}
+
 function buildAnalytics(billing: BillingService): AnalyticsService {
   const prisma = {
     statementSnapshot: {
@@ -61,8 +74,14 @@ function buildAnalytics(billing: BillingService): AnalyticsService {
   } as unknown as OperationalService
   // Phase 2 — the EnrollmentPlanService dep. No plan in this fixture (resolve→null),
   // so enrollment_vs_plan stays unavailable and this spec's gating math is unchanged.
-  const enrollmentPlan = { resolve: async () => null } as unknown as import('./enrollment-plan.js').EnrollmentPlanService
-  return new AnalyticsService(prisma, periods, operational, billing, enrollmentPlan)
+  const enrollmentPlan = {
+    resolve: async () => null,
+    resolveDetailed: async () => ({ plan: null, failed: false }),
+  } as unknown as import('./enrollment-plan.js').EnrollmentPlanService
+  // Phase 6 — the PlanningSignalsService dep, threading the planning fixture so
+  // the planning metrics have something for the gate to hide/show.
+  const planningSignals = { resolve: async () => PLANNING_SIGNALS } as unknown as import('./planning-signals.js').PlanningSignalsService
+  return new AnalyticsService(prisma, periods, operational, billing, enrollmentPlan, planningSignals)
 }
 
 function billingMock(entitled: string[], trial = false): BillingService {
@@ -120,6 +139,25 @@ describe('module-scoped gating — /metrics surface', () => {
     expect(keys).toContain('enrollment_change_yoy')
     expect(keys).not.toContain('student_teacher_ratio')
   })
+
+  it('PLANNING-licensed shows all 3 planning metrics (available off the threaded signals); unlicensed strips them', async () => {
+    const svc = buildAnalytics(billingMock(['planning']))
+    const res = await svc.computeMetricsResponse('s1', PERIOD.id)
+    const byKey = Object.fromEntries(res.metrics.map((m) => [m.key, m]))
+    expect(byKey.forecast_vs_budget_net?.available).toBe(true)
+    expect(byKey.forecast_vs_budget_net?.value).toBeCloseTo(-0.09, 12)
+    expect(byKey.forecast_operating_margin?.available).toBe(true)
+    // plan_readiness = 2/3 (budget + forecast saved, no enrollment plan).
+    expect(byKey.plan_readiness?.value).toBeCloseTo(2 / 3, 12)
+    // hr not licensed → its metrics absent even though the FTE data exists.
+    expect(byKey.student_teacher_ratio).toBeUndefined()
+
+    const financeOnly = await buildAnalytics(billingMock([])).computeMetricsResponse('s1', PERIOD.id)
+    const financeKeys = financeOnly.metrics.map((m) => m.key)
+    for (const k of ['forecast_vs_budget_net', 'forecast_operating_margin', 'plan_readiness']) {
+      expect(financeKeys).not.toContain(k)
+    }
+  })
 })
 
 describe('module-scoped gating — 3 surfaces AGREE (metrics ⇒ briefing)', () => {
@@ -145,10 +183,26 @@ describe('module-scoped gating — 3 surfaces AGREE (metrics ⇒ briefing)', () 
     const briefing = buildBriefing(analytics, billing)
     const res = await briefing.getBriefing('s1', PERIOD.id, 'owner')
 
-    for (const gated of ['enrollment_change_yoy', 'student_teacher_ratio']) {
+    for (const gated of [
+      'enrollment_change_yoy', 'student_teacher_ratio',
+      'forecast_vs_budget_net', 'forecast_operating_margin', 'plan_readiness',
+    ]) {
       expect(metricKeys).not.toContain(gated)
       expect(res.items.some((i) => i.metricKey === gated)).toBe(false)
     }
+    // …and no Phase-6 completeness items either (fail-closed module gates).
+    expect(res.items.some((i) => i.source === 'hr' || i.source === 'planning')).toBe(false)
+  })
+
+  it('PLANNING-licensed: off-band planning metrics surface as briefing STEP-1 items', async () => {
+    const billing = billingMock(['planning'])
+    const analytics = buildAnalytics(billing)
+    const briefing = buildBriefing(analytics, billing)
+    const res = await briefing.getBriefing('s1', PERIOD.id, 'owner')
+    // forecast_vs_budget_net −0.09 → risk; forecast margin ~1.1% → watch.
+    expect(res.items.some((i) => i.metricKey === 'forecast_vs_budget_net')).toBe(true)
+    expect(res.items.some((i) => i.metricKey === 'forecast_operating_margin')).toBe(true)
+    expect(res.items.some((i) => i.metricKey === 'plan_readiness')).toBe(true)
   })
 })
 

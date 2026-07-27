@@ -63,6 +63,10 @@ interface Fixture {
   organizations: { id: string }[]
   snapshots: { schoolId: string; fiscalPeriodId: string; createdAt: Date; payload: unknown; fiscalPeriod: { periodEndDate: Date } }[]
   operational: Record<string, { enrollment: number | null; enrollmentFte: number | null; studentsOnAid: number | null; financialAidTotal: number | null; teachingFte?: number | null; totalStaffFte?: number | null }>
+  /** Phase 6 — per-school enrollment-plan resolves, keyed `${schoolId}:${periodId}`. */
+  plans?: Record<string, { planTotal: number; planByGrade: Record<string, number>; netRate: number | null }>
+  /** Phase 6 — per-school planning signals, keyed `${schoolId}:${periodId}`. */
+  planningSignals?: Record<string, import('./planning-signals.js').ResolvedPlanningSignals>
 }
 
 function buildService(fx: Fixture) {
@@ -129,7 +133,24 @@ function buildService(fx: Fixture) {
     isEntitledForModule: async () => true,
   } as unknown as import('../billing/billing.service.js').BillingService
 
-  return new OrgMetricsService(prisma, operational, billing)
+  // Phase 6 — optional per-school planning fixtures keyed `${schoolId}:${periodId}`.
+  // Omitted (the default) → the positional deps are undefined, matching the shipped
+  // 3-arg construction (planning fields stay null → planning metrics unavailable).
+  const enrollmentPlan = fx.plans
+    ? ({
+        resolve: async (schoolId: string, periodId: string) =>
+          fx.plans?.[`${schoolId}:${periodId}`] ?? null,
+        resolveDetailed: async (schoolId: string, periodId: string) => ({
+          plan: fx.plans?.[`${schoolId}:${periodId}`] ?? null,
+          failed: false,
+        }),
+      } as unknown as import('./enrollment-plan.js').EnrollmentPlanService)
+    : undefined
+  const planningSignals = fx.planningSignals
+    ? ({ resolve: async (schoolId: string, periodId: string) => fx.planningSignals?.[`${schoolId}:${periodId}`] ?? null } as unknown as import('./planning-signals.js').PlanningSignalsService)
+    : undefined
+
+  return new OrgMetricsService(prisma, operational, billing, enrollmentPlan, planningSignals)
 }
 
 const baseSchool = (id: string, org: string) => ({ id, name: `School ${id}`, organizationId: org })
@@ -242,6 +263,41 @@ describe('OrgMetricsService rollup', () => {
     // prior: s1 only → 200/1000. delta = 180/1200 − 200/1000.
     expect(om.value).toBeCloseTo(180 / 1200, 12)
     expect(om.periodOverPeriodDelta).toBeCloseTo(180 / 1200 - 200 / 1000, 12)
+  })
+
+  it('Phase 6: per-school planning signals thread BEFORE the fold → org planning metrics = formula(Σ$)', async () => {
+    const svc = buildService({
+      ...fx,
+      planningSignals: {
+        // s1: budget net 50 of rev 1000, forecast net 20 — 2 of 3 artifacts.
+        's1:p1-26': { budgetTotalRevenue: 1000, budgetTotalExpense: 950, forecastTotalRevenue: 980, forecastTotalExpense: 960, hasBudget: true, hasForecast: true },
+        // s2: budget net 100 of rev 500, forecast net 110 — plus a plan → 3 of 3.
+        's2:p2-26': { budgetTotalRevenue: 500, budgetTotalExpense: 400, forecastTotalRevenue: 520, forecastTotalExpense: 410, hasBudget: true, hasForecast: true },
+      },
+      plans: { 's2:p2-26': { planTotal: 25, planByGrade: { g1: 25 }, netRate: null } },
+    })
+    const res = await svc.getMetrics(USER, 'org1', '2025-07')
+    const byKey = Object.fromEntries(res.metrics.map((m) => [m.key, m]))
+    // Org forecast_vs_budget_net = (Σforecast net − Σbudget net) / Σbudget rev.
+    expect(byKey.forecast_vs_budget_net.available).toBe(true)
+    expect(byKey.forecast_vs_budget_net.value).toBeCloseTo((130 - 150) / 1500, 12)
+    // Org forecast margin = ΣfRev−ΣfExp / ΣfRev = (1500−1370)/1500.
+    expect(byKey.forecast_operating_margin.value).toBeCloseTo(130 / 1500, 12)
+    // Org plan_readiness = Σpresent/Σtotal = (2+3)/6 (artifact-count-weighted).
+    expect(byKey.plan_readiness.value).toBeCloseTo(5 / 6, 12)
+    // Bonus: Σplan over the plan-bearing schools also lights org enrollment_vs_plan.
+    // s1+s2 enrollment = 120 vs plan 25 → available.
+    expect(byKey.enrollment_vs_plan.available).toBe(true)
+  })
+
+  it('Phase 6: absent planning deps (shipped 3-arg construction) → org planning metrics honestly unavailable', async () => {
+    const svc = buildService(fx) // no plans/planningSignals in the fixture
+    const res = await svc.getMetrics(USER, 'org1', '2025-07')
+    for (const key of ['forecast_vs_budget_net', 'forecast_operating_margin', 'plan_readiness']) {
+      const m = res.metrics.find((x) => x.key === key)!
+      expect(m.available).toBe(false)
+      expect(m.value).toBeNull()
+    }
   })
 
   it('no school has a prior snapshot → deltas stay null (back-compat)', async () => {

@@ -30,10 +30,10 @@ export const DEFAULT_MODULE = 'finance'
 export const MODULE_META = {
   core: { key: 'core', label: 'Core', description: 'Sign-in, schools, users, settings, billing — always included.', core: true },
   finance: { key: 'finance', label: 'Finance', description: 'Statements, imports, analytics, budget, board report, compliance, QBO.', core: false },
-  planning: { key: 'planning', label: 'Planning & Forecasting', description: 'Multi-year forecast, enrollment/tuition drivers, scenarios.', core: false },
+  planning: { key: 'planning', label: 'Planning & Forecasting', description: 'Forecast workspace, enrollment plan, multi-year outlook.', core: false },
   governance: { key: 'governance', label: 'Governance', description: 'Board packets, policies, committee reporting, minutes.', core: false },
   enrollment: { key: 'enrollment', label: 'Enrollment', description: 'Admissions & enrollment funnel, retention, feeder grades.', core: false },
-  hr: { key: 'hr', label: 'HR & Staffing', description: 'FTE planning, compensation, staffing plans.', core: false },
+  hr: { key: 'hr', label: 'HR & Staffing', description: 'Staffing command center: FTEs, ratio, trends.', core: false },
   facilities: { key: 'facilities', label: 'Facilities', description: 'Capital projects & deferred maintenance.', core: false },
   advancement: { key: 'advancement', label: 'Advancement', description: 'Development, campaigns, giving, gift schedules.', core: false },
   accreditation: { key: 'accreditation', label: 'Accreditation', description: 'Compliance & accreditation readiness, self-study, evidence.', core: false },

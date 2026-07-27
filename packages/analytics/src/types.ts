@@ -12,10 +12,13 @@ export type MetricUnit = 'percent' | 'days' | 'months' | 'ratio' | 'currency' | 
 /**
  * Coarse business domain a metric belongs to — for catalog grouping/filtering.
  * Additive metadata (distinct from the finer-grained `category` used by the
- * dashboard layout). Today every metric is finance/operations/aid; declared so
- * the catalog (GET /metrics/meta) and the org rollup can group metrics honestly.
+ * dashboard layout). Declared so the catalog (GET /metrics/meta) and the org
+ * rollup can group metrics honestly. 'planning' (Phase 6) owns the forecast/
+ * budget-plan metrics and maps to the 'planning' sellable module in the API's
+ * DOMAIN_TO_MODULE gate (a Record<MetricDomain,…>, so adding a member here
+ * deliberately FORCES an explicit gate entry there).
  */
-export type MetricDomain = 'finance' | 'operations' | 'aid' | 'enrollment' | 'hr'
+export type MetricDomain = 'finance' | 'operations' | 'aid' | 'enrollment' | 'hr' | 'planning'
 
 /**
  * How a metric rolls up from a single school to the whole organization. This is
@@ -110,6 +113,17 @@ export type MetricKey =
   | 'enrollment_vs_plan'
   // Tier-2 hr domain — banded staffing-load metric (reuses staff-FTE data).
   | 'student_teacher_ratio'
+  // Phase 6 — HR & Staffing as a real module: staffing headcount + composition
+  // metrics on the SAME already-captured staff-FTE fields (appended LAST so the
+  // prior 15-key order stays byte-identical).
+  | 'total_staff_fte'
+  | 'fte_change_yoy'
+  | 'teaching_staff_share'
+  // Phase 6 — the NEW 'planning' domain: forecast-vs-budget health + planning
+  // artifact coverage, computed from API-threaded budget/forecast figures.
+  | 'forecast_vs_budget_net'
+  | 'forecast_operating_margin'
+  | 'plan_readiness'
 
 /**
  * Operational reference data for a period — enrollment + financial aid figures
@@ -155,6 +169,39 @@ export interface PeriodOperational {
    * a complete struct / future admin-ratio metric; unused by v1's single HR metric.
    */
   totalStaffFte: number | null
+  /**
+   * Phase 6 Planning — the period's BUDGETED total revenue ($, PeriodBudget row
+   * `totalRevenue`). Threaded in by the API exactly like enrollmentPlan, so the
+   * metric layer stays PURE (never reads the DB). OPTIONAL + additive:
+   * absent/null means no budget saved → the planning metrics resolve
+   * available:false, never a fabricated 0. Extensive ($), so the org rollup sums
+   * it like every other component.
+   */
+  budgetTotalRevenue?: number | null
+  /** Phase 6 Planning — budgeted total expenses ($, PeriodBudget row
+   *  `totalExpenses`; singular in this contract). Same threading/null contract as
+   *  budgetTotalRevenue. Extensive. */
+  budgetTotalExpense?: number | null
+  /**
+   * Phase 6 Planning — the saved FY-end FORECAST's projected total revenue ($,
+   * `lines.forecast.projected.kpis.totalRevenue`). API-threaded; absent/null
+   * means no forecast saved. Extensive.
+   */
+  forecastTotalRevenue?: number | null
+  /** Phase 6 Planning — the saved FY-end forecast's projected total expenses ($,
+   *  `lines.forecast.projected.kpis.totalExpense`). Same contract. Extensive. */
+  forecastTotalExpense?: number | null
+  /**
+   * Phase 6 Planning — how many of the period's planning artifacts are in place:
+   * count of {budget saved, FY-end forecast saved, enrollment-plan source
+   * present}, 0–3 per school-period. API-threaded (never stored). Extensive (a
+   * count), so the org fold sums it → org plan_readiness = Σpresent / Σtotal, an
+   * artifact-count-weighted coverage by construction.
+   */
+  planArtifactsPresent?: number | null
+  /** Phase 6 Planning — the artifact denominator (constant 3 per school-period;
+   *  Σ3·n at org scope). Extensive. */
+  planArtifactsTotal?: number | null
 }
 
 /**

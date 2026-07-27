@@ -56,8 +56,14 @@ export const SOURCE_RANK: Record<AttentionSource, number> = {
   // metric down by one WITHOUT reordering them, so pre-strategy accountant snapshots
   // stay byte-identical for the existing ids.
   strategy: 8,
-  workflow: 9,
-  metric: 10,
+  // Phase 6 — hr (staffing data-completeness) + planning (planning-artifact
+  // completeness) sit after the board-oversight block, before workflow. ADDITIVE —
+  // inserting them only shifts workflow/metric down WITHOUT reordering the
+  // existing sources, so pre-Phase-6 accountant snapshots stay byte-identical.
+  hr: 9,
+  planning: 10,
+  workflow: 11,
+  metric: 12,
 }
 
 /** Fixed sub-order for the non-metric items so the list is deterministic. */
@@ -113,6 +119,14 @@ export const COMPLIANCE_ORDER = [
   'strategy:goals-behind-pace',
   'strategy:initiative-stale',
   'strategy:plan-review-due',
+  // Phase 6 — staffing data-completeness (hr; leadership/finance lenses only) and
+  // the planning-artifact trio (budget before forecast before enrollment plan —
+  // the order you'd fix them in), so same-severity ties are curated, not
+  // id-arbitrary.
+  'hr:fte-missing',
+  'planning:no-budget',
+  'planning:no-forecast',
+  'planning:plan-missing',
   // Workflow task items (Phase 3). Placed after the governance items; overdue
   // leads (actionable now), then MY personal sign-off queue, then the school-scoped
   // sign-off backlog, then upcoming, so a same-severity tie is curated, not id-
@@ -173,10 +187,19 @@ export const COMPLIANCE_ORDER = [
 // the accountant it keeps == SOURCE_RANK. ADDITIVE — strategy is a new source, and
 // inserting it only shifts the existing sources down by one WITHOUT reordering them,
 // so every pre-strategy lens output stays byte-identical for the existing ids.
+// Phase 6 — planning (a board-oversight/plan-health domain) sits WITH the
+// board-oversight block right after strategy for owner/viewer; hr (staffing
+// data-completeness, operator work like data hygiene) sits at the tail just
+// above workflow. For the accountant BOTH keep == SOURCE_RANK. ADDITIVE — the
+// new sources only shift the existing tail down WITHOUT reordering the existing
+// sources relative to each other, so every pre-Phase-6 lens output stays
+// byte-identical for the existing ids. (Viewer drops hr items entirely via
+// keepForViewer, so hr's viewer weight is never actually consulted — same
+// pattern as workflow.)
 const SOURCE_WEIGHT: Record<Lens, Record<AttentionSource, number>> = {
-  owner: { metric: 0, enrollment: 1, cash: 2, governance: 3, accreditation: 4, facilities: 5, advancement: 6, strategy: 7, compliance: 8, data: 9, workflow: 10 },
-  viewer: { metric: 0, enrollment: 1, cash: 2, governance: 3, accreditation: 4, facilities: 5, advancement: 6, strategy: 7, compliance: 8, data: 9, workflow: 10 },
-  accountant: { data: 0, compliance: 1, enrollment: 2, cash: 3, governance: 4, accreditation: 5, facilities: 6, advancement: 7, strategy: 8, workflow: 9, metric: 10 }, // == SOURCE_RANK
+  owner: { metric: 0, enrollment: 1, cash: 2, governance: 3, accreditation: 4, facilities: 5, advancement: 6, strategy: 7, planning: 8, compliance: 9, data: 10, hr: 11, workflow: 12 },
+  viewer: { metric: 0, enrollment: 1, cash: 2, governance: 3, accreditation: 4, facilities: 5, advancement: 6, strategy: 7, planning: 8, compliance: 9, data: 10, hr: 11, workflow: 12 },
+  accountant: { data: 0, compliance: 1, enrollment: 2, cash: 3, governance: 4, accreditation: 5, facilities: 6, advancement: 7, strategy: 8, hr: 9, planning: 10, workflow: 11, metric: 12 }, // == SOURCE_RANK
 }
 
 // ── VOICE: per-lens reframing tone (additive metadata, never a value rewrite) ──
@@ -263,6 +286,14 @@ function keepForViewer(item: AttentionItem): boolean {
   // ($ + counts, NO party names) + outcome-legible, so it passes through with no
   // VIEWER_REFRAME entry (no "go fix" operator CTA to rewrite).
   if (item.source === 'cash') return true
+  // Phase 6 — planning-artifact completeness (no budget / no forecast / no
+  // enrollment plan) is a fiduciary plan-health matter the board OWNS (it adopts
+  // the budget and monitors the forecast) — KEPT for the viewer/board lens like
+  // strategy. The whys are aggregate + outcome-voiced, so they pass through with
+  // no VIEWER_REFRAME entry. hr (staffing FTE data-entry) is an OPERATOR chore a
+  // read-only board cannot action — DROPPED like workflow (falls through to the
+  // final `return false`): hr items surface on the leadership + finance lenses only.
+  if (item.source === 'planning') return true
   if (item.source === 'compliance') return VIEWER_COMPLIANCE.has(item.id)
   // Workflow (operational tasks) are DROPPED for the board EXCEPT the caller-scoped
   // "awaiting YOUR sign-off" item: open tasks / the school-scoped pending COUNT are

@@ -19,8 +19,9 @@ import { PeriodsService } from '../periods/periods.service.js'
 import { BillingService } from '../billing/billing.service.js'
 import { OperationalService } from './operational.service.js'
 import { EnrollmentPlanService, type ResolvedEnrollmentPlan } from './enrollment-plan.js'
+import { PlanningSignalsService } from './planning-signals.js'
 import { categoryActualsFromBundle } from './category-actuals.js'
-import { entitledModulesForSchool, filterMetricsByEntitlement } from './metric-gating.js'
+import { entitledModulesForSchool, filterMetricsByEntitlement, moduleForMetricKey } from './metric-gating.js'
 import { fyElapsed } from '../monthly/fy-elapsed.js'
 
 /** Prisma Decimal -> plain number (null-safe), for the pure analytics layer. */
@@ -126,6 +127,12 @@ export class AnalyticsService {
     // layer for enrollment_vs_plan (keeps the metric pure). PrismaService-only, so no
     // DI cycle with BudgetService.
     private readonly enrollmentPlan: EnrollmentPlanService,
+    // Phase 6 Planning — resolves the budget/forecast $ signals threaded onto the
+    // pure compute layer for the planning-domain metrics. PrismaService-only
+    // sibling of EnrollmentPlanService (no DI cycle). OPTIONAL-injected in
+    // practice: every use is `this.planningSignals?.`-guarded so lean unit-test
+    // constructions (5-arg) resolve to "no signals" rather than throwing.
+    private readonly planningSignals?: PlanningSignalsService,
   ) {}
 
   /**
@@ -226,12 +233,41 @@ export class AnalyticsService {
     // null → the metric is available:false (inputsMissing:['enrollmentPlan']), it
     // never 500s the metrics/briefing surface.
     if (currentOperational) {
-      // Optional-chain the dep so a lean unit-test construction (that omits the
-      // EnrollmentPlanService) resolves to no plan rather than throwing.
-      const plan = await Promise.resolve()
-        .then(() => this.enrollmentPlan?.resolve(schoolId, period.id) ?? null)
-        .catch(() => null)
+      // Optional-chain the deps so a lean unit-test construction (that omits the
+      // EnrollmentPlanService / PlanningSignalsService) resolves to no plan / no
+      // signals rather than throwing. Both reads fail-soft in parallel; the plan
+      // read is the error-DISTINGUISHING resolveDetailed so a read hiccup is not
+      // mistaken for a definitive "no plan" downstream.
+      const [planRes, signals] = await Promise.all([
+        Promise.resolve()
+          .then(() => this.enrollmentPlan?.resolveDetailed?.(schoolId, period.id) ?? null)
+          .catch(() => ({ plan: null, failed: true })),
+        // Phase 6 Planning — the budget/forecast $ signals for the planning-domain
+        // metrics. A null service result (error) leaves every field null → the
+        // planning metrics resolve available:false; this can never 500 the surface.
+        Promise.resolve()
+          .then(() => this.planningSignals?.resolve(schoolId, period.id) ?? null)
+          .catch(() => null),
+      ])
+      const plan = planRes?.plan ?? null
       currentOperational.enrollmentPlan = plan?.planTotal ?? null
+      currentOperational.budgetTotalRevenue = signals?.budgetTotalRevenue ?? null
+      currentOperational.budgetTotalExpense = signals?.budgetTotalExpense ?? null
+      currentOperational.forecastTotalRevenue = signals?.forecastTotalRevenue ?? null
+      currentOperational.forecastTotalExpense = signals?.forecastTotalExpense ?? null
+      // plan_readiness counts — REUSES the already-resolved enrollment plan (zero
+      // extra reads): {budget saved, FY-end forecast saved, enrollment-plan source
+      // present} out of a constant 3. Only stamped when the signals read SUCCEEDED
+      // (signals !== null) AND the plan read didn't ERROR (planRes.failed) — a
+      // read error yields "unavailable", never a fabricated N-of-3. An ABSENT
+      // EnrollmentPlanService (lean test construction, planRes === null) counts
+      // as definitively no plan, matching the metric threading above. Priors are
+      // deliberately NOT threaded (no planning YoY metric).
+      if (signals && !planRes?.failed) {
+        currentOperational.planArtifactsPresent =
+          (signals.hasBudget ? 1 : 0) + (signals.hasForecast ? 1 : 0) + (plan !== null ? 1 : 0)
+        currentOperational.planArtifactsTotal = 3
+      }
     }
 
     const allMetrics = computeMetricsForPeriod({
@@ -525,6 +561,16 @@ export class AnalyticsService {
       throw new BadRequestException(`Unknown metric '${metric}'.`)
     }
     const metricKey = metric as MetricKey
+
+    // MODULE-SCOPED METRIC GATING (trend surface). The same fail-closed
+    // entitledModulesForSchool the other three surfaces share: an unlicensed
+    // (or billing-hiccup) enrollment/hr/planning key resolves to the EMPTY
+    // trend — the metric's time-series must be as provably absent here as the
+    // metric itself is from /metrics, briefing STEP 1 and org-metrics.
+    const entitled = await entitledModulesForSchool(schoolId, this.billing)
+    if (!entitled.has(moduleForMetricKey(metricKey))) {
+      return computeTrend(metricKey, [])
+    }
 
     const periods = await this.prisma.fiscalPeriod.findMany({
       where: { schoolId },

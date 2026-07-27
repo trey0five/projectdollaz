@@ -15,10 +15,6 @@ import { FormError, FormSuccess } from '../auth/fields.jsx'
 import SettingsCard from './SettingsCard.jsx'
 import UnlockCelebration from './UnlockCelebration.jsx'
 
-// Page-less modules — no page of their own; their value surfaces inside
-// Analytics and the briefing (mirrors tileRegistry's route:null contract).
-const PAGE_LESS = new Set(['hr', 'planning'])
-
 const STATUS_META = {
   trialing: { label: 'Trial', cls: 'bg-gold/15 text-navy' },
   active: { label: 'Active', cls: 'bg-emerald-50 text-emerald-700' },
@@ -124,11 +120,6 @@ function ModulesManager({ onUnlocked }) {
                     {label}
                   </h4>
                   <p className="mt-0.5 text-[13px] leading-snug text-muted">{tagline}</p>
-                  {PAGE_LESS.has(key) && (
-                    <p className="mt-1 text-[12px] italic text-muted/80">
-                      Lives inside Analytics and your briefing.
-                    </p>
-                  )}
                 </div>
               </div>
               <div className="mt-auto">

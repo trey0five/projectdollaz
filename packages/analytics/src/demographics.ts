@@ -157,24 +157,47 @@ export const AGE_BAND_LABELS: Record<AgeBandKey, string> = {
 }
 
 /**
- * Whole-year age at `asOf` (default now), UTC-calendar arithmetic. Pure, never
- * throws: null/invalid/future birth dates return null.
+ * UTC calendar parts of a date value WITHOUT constructing a Date — the package
+ * is clock- and Date-construction-free by the purity guard. Accepts a Date
+ * instance (parts read straight off it) or an ISO-leading string
+ * ('YYYY-MM-DD…', the Prisma/JSON serialization). Anything else → null.
+ */
+function utcParts(v: string | Date): { y: number; m: number; d: number } | null {
+  if (v instanceof Date) {
+    if (Number.isNaN(v.getTime())) return null
+    return { y: v.getUTCFullYear(), m: v.getUTCMonth(), d: v.getUTCDate() }
+  }
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v).trim())
+  if (!match) return null
+  const y = Number(match[1])
+  const mo = Number(match[2])
+  const d = Number(match[3])
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null
+  return { y, m: mo - 1, d }
+}
+
+/**
+ * Whole-year age at `asOf`, UTC-calendar arithmetic. Pure, never throws:
+ * null/invalid/future birth dates return null. `asOf` is REQUIRED for a real
+ * age — this package cannot read the clock (purity guard), so an impure caller
+ * (api/web) passes its own current-clock Date; omitted/invalid `asOf` → null.
  */
 export function ageFromBirthDate(
   birthDate: string | Date | null | undefined,
   asOf?: Date,
 ): number | null {
   if (birthDate == null) return null
-  const d = birthDate instanceof Date ? birthDate : new Date(birthDate)
-  if (Number.isNaN(d.getTime())) return null
-  const ref = asOf ?? new Date()
-  let age = ref.getUTCFullYear() - d.getUTCFullYear()
-  const m = ref.getUTCMonth() - d.getUTCMonth()
-  if (m < 0 || (m === 0 && ref.getUTCDate() < d.getUTCDate())) age--
+  const b = utcParts(birthDate)
+  if (!b) return null
+  const ref = asOf ? utcParts(asOf) : null
+  if (!ref) return null
+  let age = ref.y - b.y
+  if (ref.m < b.m || (ref.m === b.m && ref.d < b.d)) age--
   return age < 0 ? null : age
 }
 
-/** Pure, never throws. null/invalid birthDate → 'unknown'. Age at `asOf` (default now). */
+/** Pure, never throws. null/invalid birthDate (or missing `asOf` — the caller
+ *  owns the clock) → 'unknown'. Age at `asOf`. */
 export function ageBandFromBirthDate(
   birthDate: string | Date | null | undefined,
   asOf?: Date,

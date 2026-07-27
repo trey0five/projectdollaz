@@ -35,6 +35,8 @@ import {
 import { PrismaService } from '../prisma/prisma.service.js'
 import { BillingService } from '../billing/billing.service.js'
 import { OperationalService } from './operational.service.js'
+import { EnrollmentPlanService } from './enrollment-plan.js'
+import { PlanningSignalsService } from './planning-signals.js'
 import {
   entitledModulesForOrg,
   entitledModulesForSchool,
@@ -382,10 +384,19 @@ export class OrgMetricsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly operational: OperationalService,
-    // MODULE-SCOPED METRIC GATING (org surface). Gates enrollment/hr org metrics by
-    // the WIDEST licensed set across contributing schools (any-school-licenses),
-    // mirroring the shipped org-lens-ceiling precedent. finance-family always kept.
+    // MODULE-SCOPED METRIC GATING (org surface). Gates enrollment/hr/planning org
+    // metrics by the WIDEST licensed set across contributing schools
+    // (any-school-licenses), mirroring the shipped org-lens-ceiling precedent.
+    // finance-family always kept.
     private readonly billing: BillingService,
+    // Phase 6 Planning — per-contributing-school budget/forecast $ + enrollment-plan
+    // resolves, threaded onto each school's operational struct BEFORE the
+    // sumOperational fold so the org planning metrics roll up correctly (zero
+    // engine work). Appended positional-LAST + `?.`-guarded so existing 3-arg unit
+    // specs still construct (absent deps → planning fields stay null → the org
+    // planning metrics resolve available:false, honestly).
+    private readonly enrollmentPlan?: EnrollmentPlanService,
+    private readonly planningSignals?: PlanningSignalsService,
   ) {}
 
   /**
@@ -513,6 +524,43 @@ export class OrgMetricsService {
         const priorOperational = prior
           ? await this.operational.operationalFor(r.schoolId, prior.periodId)
           : null
+        // Phase 6 Planning — thread each school's budget/forecast $ signals (+ the
+        // enrollment-plan resolve, reused for the plan_readiness artifact count)
+        // onto its operational struct BEFORE the sumOperational fold, so the org
+        // planning metrics = formula(Σ$) by construction. FAIL-SOFT PER SCHOOL:
+        // either read erroring leaves that school's fields null (it contributes
+        // nothing) and can never 500 the org surface. Priors are NOT threaded (no
+        // planning YoY metric). Mirrors AnalyticsService.computeMetricsResponse.
+        if (operational) {
+          const [planRes, signals] = await Promise.all([
+            Promise.resolve()
+              .then(() => this.enrollmentPlan?.resolveDetailed?.(r.schoolId, r.periodId) ?? null)
+              .catch(() => ({ plan: null, failed: true })),
+            Promise.resolve()
+              .then(() => this.planningSignals?.resolve(r.schoolId, r.periodId) ?? null)
+              .catch(() => null),
+          ])
+          const plan = planRes?.plan ?? null
+          // Σplan over the plan-bearing schools → org enrollment_vs_plan rolls up
+          // exactly as sumOperational's enrollmentPlan fold documents.
+          operational.enrollmentPlan = plan?.planTotal ?? null
+          operational.budgetTotalRevenue = signals?.budgetTotalRevenue ?? null
+          operational.budgetTotalExpense = signals?.budgetTotalExpense ?? null
+          operational.forecastTotalRevenue = signals?.forecastTotalRevenue ?? null
+          operational.forecastTotalExpense = signals?.forecastTotalExpense ?? null
+          // Artifact counts only when the signals read SUCCEEDED AND the plan read
+          // didn't ERROR (resolveDetailed's failed flag) — a read error must yield
+          // "unavailable", never a fabricated N-of-3 for the school. An absent
+          // EnrollmentPlanService (lean test construction) counts as no plan,
+          // matching the metric threading above.
+          if (signals && !planRes?.failed) {
+            operational.planArtifactsPresent =
+              (signals.hasBudget ? 1 : 0) +
+              (signals.hasForecast ? 1 : 0) +
+              (plan !== null ? 1 : 0)
+            operational.planArtifactsTotal = 3
+          }
+        }
         return { schoolId: r.schoolId, financials, operational, priorFinancials, priorOperational }
       }),
     )
@@ -520,12 +568,12 @@ export class OrgMetricsService {
     // ── PURE ORG COMPUTE (all the math lives in @finrep/analytics) ───────────
     const allMetrics = computeOrgMetrics(inputs)
 
-    // MODULE-SCOPED METRIC GATING (surface 3 of 3). Gate enrollment/hr org metrics
-    // by the WIDEST licensed set across the contributing schools: keep the org
-    // metric if ANY reported school is entitled to the module (mirrors the org
-    // ceiling = widest-in-org precedent). finance-family metrics are always kept.
-    // A fully finance-only org sees neither org enrollment_change_yoy nor
-    // student_teacher_ratio; trials resolve like active subs (NULL → finance-only).
+    // MODULE-SCOPED METRIC GATING (surface 3 of 3). Gate enrollment/hr/planning
+    // org metrics by the WIDEST licensed set across the contributing schools: keep
+    // the org metric if ANY reported school is entitled to the module (mirrors the
+    // org ceiling = widest-in-org precedent). finance-family metrics are always
+    // kept. A fully finance-only org sees no org enrollment/hr/planning metrics;
+    // trials resolve like active subs (NULL → finance-only).
     const entitled = await entitledModulesForOrg(
       reported.map((r) => r.schoolId),
       this.billing,

@@ -27,6 +27,12 @@ import { pctStudentsOnAid } from './metrics/pctStudentsOnAid.js'
 import { enrollmentChangeYoy } from './metrics/enrollmentChangeYoy.js'
 import { enrollmentVsPlan } from './metrics/enrollmentVsPlan.js'
 import { studentTeacherRatio } from './metrics/studentTeacherRatio.js'
+import { totalStaffFte } from './metrics/totalStaffFte.js'
+import { fteChangeYoy } from './metrics/fteChangeYoy.js'
+import { teachingStaffShare } from './metrics/teachingStaffShare.js'
+import { forecastVsBudgetNet } from './metrics/forecastVsBudgetNet.js'
+import { forecastOperatingMargin } from './metrics/forecastOperatingMargin.js'
+import { planReadiness } from './metrics/planReadiness.js'
 
 export const METRIC_REGISTRY: Record<MetricKey, MetricDef> = {
   operating_margin: operatingMargin,
@@ -48,6 +54,14 @@ export const METRIC_REGISTRY: Record<MetricKey, MetricDef> = {
   enrollment_vs_plan: enrollmentVsPlan,
   // Tier-2 hr domain (banded staffing-load metric; reuses staff-FTE data).
   student_teacher_ratio: studentTeacherRatio,
+  // Phase 6 — HR & Staffing as a real module (same 'hr' gate; same FTE fields).
+  total_staff_fte: totalStaffFte,
+  fte_change_yoy: fteChangeYoy,
+  teaching_staff_share: teachingStaffShare,
+  // Phase 6 — the NEW 'planning' domain (API-threaded budget/forecast figures).
+  forecast_vs_budget_net: forecastVsBudgetNet,
+  forecast_operating_margin: forecastOperatingMargin,
+  plan_readiness: planReadiness,
 }
 
 /** Stable ordering for the dashboard's default layout (Tier-1 first, then Tier-2). */
@@ -69,6 +83,15 @@ export const METRIC_KEYS: MetricKey[] = [
   'student_teacher_ratio',
   // Phase 2 Enrollment Intelligence — appended LAST (keeps the prior 14-key order).
   'enrollment_vs_plan',
+  // Phase 6 — HR & Staffing + Planning modules, appended LAST in exactly this
+  // order (keeps the prior 15-key order/layout byte-identical; the frozen §0
+  // contract order — never reorder).
+  'total_staff_fte',
+  'fte_change_yoy',
+  'teaching_staff_share',
+  'forecast_vs_budget_net',
+  'forecast_operating_margin',
+  'plan_readiness',
 ]
 
 /** All metric defs in default-layout order. */

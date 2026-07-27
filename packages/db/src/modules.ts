@@ -73,7 +73,7 @@ export const MODULE_META: Record<ModuleKey, ModuleDef> = {
   planning: {
     key: 'planning',
     label: 'Planning & Forecasting',
-    description: 'Multi-year forecast, enrollment/tuition drivers, scenarios.',
+    description: 'Forecast workspace, enrollment plan, multi-year outlook.',
     core: false,
   },
   governance: {
@@ -91,7 +91,7 @@ export const MODULE_META: Record<ModuleKey, ModuleDef> = {
   hr: {
     key: 'hr',
     label: 'HR & Staffing',
-    description: 'FTE planning, compensation, staffing plans.',
+    description: 'Staffing command center: FTEs, ratio, trends.',
     core: false,
   },
   facilities: {

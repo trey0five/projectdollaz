@@ -82,6 +82,9 @@ const NAV_BADGE_SOURCE = {
   '/accreditation': 'accreditation',
   '/advancement': 'advancement',
   '/strategy': 'strategy',
+  // Phase 6 — the new module pages' briefing sources.
+  '/hr': 'hr',
+  '/planning': 'planning',
 }
 // The Finance domain rolls up its finance-family attention sources.
 const FINANCE_BADGE_SOURCES = ['metric', 'compliance', 'data']

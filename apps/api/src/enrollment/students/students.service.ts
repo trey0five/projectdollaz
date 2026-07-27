@@ -623,8 +623,10 @@ export class StudentsService {
       race: row.race,
       ethnicity: row.ethnicity,
       birthDate: isoDate(row.birthDate),
-      age: ageFromBirthDate(row.birthDate),
-      ageBand: ageBandFromBirthDate(row.birthDate),
+      // The clock is INJECTED — @finrep/analytics is purity-guarded (no new Date
+      // inside the package), so age at "now" is the impure caller's to supply.
+      age: ageFromBirthDate(row.birthDate, new Date()),
+      ageBand: ageBandFromBirthDate(row.birthDate, new Date()),
       status: row.status,
       enrolledOn: isoDate(row.enrolledOn),
       withdrawnOn: isoDate(row.withdrawnOn),

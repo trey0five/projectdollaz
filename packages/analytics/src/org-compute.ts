@@ -166,6 +166,20 @@ export function sumOperational(
     // Σenrollment / Σ(present teachingFte) — an FTE-weighted org ratio.
     teachingFte: foldNullable(present.map((r) => r.teachingFte)),
     totalStaffFte: foldNullable(present.map((r) => r.totalStaffFte)),
+    // Phase 6 Planning — the API-threaded budget/forecast $ figures are extensive,
+    // so they fold absent-as-null like everything else: org forecast_vs_budget_net
+    // / forecast_operating_margin run the metric's own formula on these sums.
+    // MANDATORY paired edit with the PeriodOperational fields (optional fields
+    // compile clean when omitted here and would silently null org planning
+    // metrics forever — pinned by the org-compute test).
+    budgetTotalRevenue: foldNullable(present.map((r) => r.budgetTotalRevenue)),
+    budgetTotalExpense: foldNullable(present.map((r) => r.budgetTotalExpense)),
+    forecastTotalRevenue: foldNullable(present.map((r) => r.forecastTotalRevenue)),
+    forecastTotalExpense: foldNullable(present.map((r) => r.forecastTotalExpense)),
+    // Artifact counts are extensive too → org plan_readiness = Σpresent / Σ(3·n),
+    // the artifact-count-weighted coverage ('weighted-by-components' label).
+    planArtifactsPresent: foldNullable(present.map((r) => r.planArtifactsPresent)),
+    planArtifactsTotal: foldNullable(present.map((r) => r.planArtifactsTotal)),
   }
 }
 

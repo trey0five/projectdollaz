@@ -41,6 +41,9 @@ import BackLink from '../../ui/BackLink.jsx'
 
 const SCHOOL_TREND_KEYS = [
   'operating_margin', 'days_cash_on_hand', 'months_operating_reserve', 'tuition_dependency', 'enrollment_change_yoy',
+  // Phase 6 — the staffing chart card sparkles when history exists (HR fields are
+  // real per-period columns, so /trends resolves them; gated keys just 404-soft).
+  'student_teacher_ratio',
 ]
 const DEFAULT_COLS = [
   'operating_margin', 'days_cash_on_hand', 'months_operating_reserve', 'tuition_dependency',

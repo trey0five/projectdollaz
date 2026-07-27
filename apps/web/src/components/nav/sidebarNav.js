@@ -13,12 +13,10 @@
 // useLocation — never stored in state / written from an effect.
 //
 // To extend declaratively: add a group row (with its `module` key) or an item —
-// no branching logic. ONLY include a group whose items have REAL routes; a
-// licensed-but-page-less module (planning/hr) contributes NO group (its value
-// surfaces inside Analytics/briefing) and is upsold via the Add-ons list
-// (SELLABLE_MODULE_KEYS) only while UNLICENSED. (Facilities, Advancement AND now
-// Enrollment have a page/group — the maintenance / fundraising registers + the
-// SIS-roster connector — so they appear here when licensed.)
+// no branching logic. Every sellable module now has a REAL route (Phase 6 gave
+// hr → /hr and planning → /planning their own pages, retiring the old
+// page-less rule), so every licensed module contributes a group here; an
+// UNLICENSED module is upsold via the Add-ons list (SELLABLE_MODULE_KEYS).
 // ─────────────────────────────────────────────────────────────────────────────
 import {
   Sparkles,
@@ -39,6 +37,8 @@ import {
   Target,
   CircleDollarSign,
   GraduationCap,
+  LineChart,
+  Users2,
   Settings,
 } from 'lucide-react'
 
@@ -83,6 +83,16 @@ export const NAV_GROUPS = [
     ],
   },
   {
+    // Phase 6 Planning & Forecasting — the FY-end forecast workspace + enrollment
+    // plan. Directly AFTER Finance (planning is the finance family's forward look).
+    id: 'planning',
+    label: 'Planning & Forecasting',
+    module: 'planning',
+    items: [
+      { to: '/planning', navId: 'nav-planning', label: 'Planning & Forecasting', Icon: LineChart, match: (p) => p.startsWith('/planning') },
+    ],
+  },
+  {
     // Phase 2 Enrollment Intelligence — the SIS/roster connector + vs-plan page.
     // Its own gated group (module:'enrollment'), placed right after Finance since
     // enrollment drives tuition/cash. Shown only when the module is licensed.
@@ -91,6 +101,16 @@ export const NAV_GROUPS = [
     module: 'enrollment',
     items: [
       { to: '/enrollment', navId: 'nav-enrollment', label: 'Enrollment', Icon: GraduationCap, match: (p) => p.startsWith('/enrollment') },
+    ],
+  },
+  {
+    // Phase 6 HR & Staffing — the staffing command center (/hr). Directly AFTER
+    // Enrollment (people follow the students).
+    id: 'hr',
+    label: 'HR & Staffing',
+    module: 'hr',
+    items: [
+      { to: '/hr', navId: 'nav-hr', label: 'HR & Staffing', Icon: Users2, match: (p) => p.startsWith('/hr') },
     ],
   },
   {

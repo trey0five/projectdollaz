@@ -17,15 +17,17 @@
 //     metrics are STRUCTURALLY never gated: 'finance' is seeded true and its
 //     membership is NOT resolved through a fragile billing call. A billing throw
 //     can therefore NEVER drop a finance metric.
-//   • ONLY enrollment (→'enrollment') and hr (→'hr') are conditionally gated, each
-//     resolved with .catch(()=>false) → FAIL-CLOSED (a billing hiccup hides ONLY an
-//     enrollment/hr metric).
+//   • ONLY enrollment (→'enrollment'), hr (→'hr') and planning (→'planning') are
+//     conditionally gated, each resolved with .catch(()=>false) → FAIL-CLOSED (a
+//     billing hiccup hides ONLY an enrollment/hr/planning metric).
 //   • TRIALING RESOLVES LIKE ACTIVE (NULL/legacy → finance-only): a trial school
-//     WITHOUT the enrollment/hr modules has those metrics gated exactly like an
-//     active finance-only school — unlocking the module in Membership restores them.
+//     WITHOUT the enrollment/hr/planning modules has those metrics gated exactly
+//     like an active finance-only school — unlocking the module in Membership
+//     restores them.
 //   • DOCUMENTED BEHAVIOR: a finance-only school (trial or active) doesn't see
-//     enrollment_change_yoy and never sees student_teacher_ratio — correct per the
-//     module model (you licensed finance, not enrollment/hr).
+//     enrollment_change_yoy, never sees the hr metrics (student_teacher_ratio &
+//     co.) and never sees the planning metrics — correct per the module model
+//     (you licensed finance, not enrollment/hr/planning).
 //
 // The SAME helper is reused at all 3 surfaces (per-school /metrics, briefing STEP 1,
 // org-metrics) so a metric hidden from one is provably absent from the others.
@@ -38,9 +40,10 @@ const FINANCE_MODULE: ModuleKey = 'finance'
 
 /**
  * DOMAIN → MODULE. Exhaustive over MetricDomain (a `Record<MetricDomain, ...>` so a
- * future domain forces an explicit entry rather than silently defaulting). The three
- * finance-family domains all map to 'finance' (never gated); enrollment/hr are the
- * only conditionally-gated modules.
+ * future domain forces an explicit entry rather than silently defaulting — exactly
+ * how Phase 6's 'planning' domain landed here). The three finance-family domains
+ * all map to 'finance' (never gated); enrollment/hr/planning are the only
+ * conditionally-gated modules.
  */
 export const DOMAIN_TO_MODULE: Record<MetricDomain, ModuleKey> = {
   finance: 'finance',
@@ -48,6 +51,7 @@ export const DOMAIN_TO_MODULE: Record<MetricDomain, ModuleKey> = {
   aid: 'finance',
   enrollment: 'enrollment',
   hr: 'hr',
+  planning: 'planning',
 }
 
 /**
@@ -81,29 +85,31 @@ export interface EntitlementResolver {
  * The set of modules a school is entitled to that are REACHABLE by metric gating.
  * 'finance' is seeded true UNCONDITIONALLY (never behind a fragile billing call —
  * these surfaces already run behind the entitlement guard / getOwnedPeriod, so the
- * school is entitled and licenses finance). Only 'enrollment' and 'hr' are resolved
- * via isEntitledForModule, each FAIL-CLOSED (.catch(()=>false)).
+ * school is entitled and licenses finance). Only 'enrollment', 'hr' and 'planning'
+ * are resolved via isEntitledForModule, each FAIL-CLOSED (.catch(()=>false)).
  */
 export async function entitledModulesForSchool(
   schoolId: string,
   billing: EntitlementResolver,
 ): Promise<Set<ModuleKey>> {
   const set = new Set<ModuleKey>([FINANCE_MODULE])
-  const [enrollment, hr] = await Promise.all([
+  const [enrollment, hr, planning] = await Promise.all([
     billing.isEntitledForModule(schoolId, 'enrollment').catch(() => false),
     billing.isEntitledForModule(schoolId, 'hr').catch(() => false),
+    billing.isEntitledForModule(schoolId, 'planning').catch(() => false),
   ])
   if (enrollment) set.add('enrollment')
   if (hr) set.add('hr')
+  if (planning) set.add('planning')
   return set
 }
 
 /**
  * The org-level reachable-module set = the WIDEST licensed set across the
  * contributing schools (mirrors the shipped "org ceiling = widest in-org role"
- * briefing precedent): keep an enrollment/hr org metric if ANY contributing school
- * is entitled for that module. 'finance' is always present; enrollment/hr are
- * OR-ed over the schools, each lookup FAIL-CLOSED.
+ * briefing precedent): keep an enrollment/hr/planning org metric if ANY
+ * contributing school is entitled for that module. 'finance' is always present;
+ * enrollment/hr/planning are OR-ed over the schools, each lookup FAIL-CLOSED.
  */
 export async function entitledModulesForOrg(
   schoolIds: string[],
@@ -114,6 +120,7 @@ export async function entitledModulesForOrg(
     schoolIds.flatMap((id) => [
       billing.isEntitledForModule(id, 'enrollment').catch(() => false).then((v) => ['enrollment', v] as const),
       billing.isEntitledForModule(id, 'hr').catch(() => false).then((v) => ['hr', v] as const),
+      billing.isEntitledForModule(id, 'planning').catch(() => false).then((v) => ['planning', v] as const),
     ]),
   )
   for (const [mod, ok] of results) if (ok) set.add(mod as ModuleKey)

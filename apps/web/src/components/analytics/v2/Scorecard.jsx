@@ -20,7 +20,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { ArrowDownRight, ArrowRight, ArrowUpRight, SlidersHorizontal, Zap } from 'lucide-react'
 import { useDashboardLayout } from '../../../hooks/useAnalytics.js'
 import { apiErrorMessage } from '../../../lib/api.js'
-import { deltaTone } from '../../../lib/metricMeta.js'
+import { deltaTone, metricSection, SECTION_ORDER, SECTION_HUES } from '../../../lib/metricMeta.js'
 import CustomizeBar from '../CustomizeBar.jsx'
 import CustomizePanel from '../CustomizePanel.jsx'
 import { formatMetric, formatMetricDeltaOf, formatMetricValue, metricFormat } from './helpers.js'
@@ -34,6 +34,10 @@ const DEFAULT_KEYS = [
   'revenue_mix', 'expense_mix', 'cost_per_pupil', 'net_tuition_per_student',
   'financial_aid_per_student', 'aid_per_aided_student', 'tuition_discount_rate',
   'pct_students_on_aid', 'enrollment_change_yoy', 'student_teacher_ratio',
+  // Phase 6 — HR & Planning module metrics, appended LAST (mirrors METRIC_KEYS
+  // order; the server's default-layout append keeps saved layouts in sync).
+  'total_staff_fte', 'fte_change_yoy', 'teaching_staff_share',
+  'forecast_vs_budget_net', 'forecast_operating_margin', 'plan_readiness',
 ]
 
 // Where the value sits between the risk→good band bounds, as a 4–100 fill %
@@ -233,6 +237,24 @@ function SectionRule({ title, hint }) {
   )
 }
 
+// Domain-section header (Phase 6) — a muted uppercase eyebrow with the module's
+// hue dot (hr emerald / planning teal; other sections wear the default accent).
+// Rendered ONLY when ≥2 sections are non-empty, so a finance-only school's board
+// stays visually flat (zero regression).
+function DomainHeader({ title }) {
+  const hue = SECTION_HUES[title] ?? '#b89650'
+  return (
+    <div className="flex items-center gap-2.5 pt-2">
+      <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: hue, boxShadow: `0 0 6px ${hue}66` }} />
+      <h4 className="shrink-0 text-[12px] font-bold uppercase tracking-[0.14em] text-muted">{title}</h4>
+      <span aria-hidden className="h-px flex-1 self-center bg-gradient-to-r from-rule/70 to-transparent" />
+    </div>
+  )
+}
+
+// Banded (has a target) vs contextual — the row-vs-tile split rule.
+const isHealthRow = (m) => (m.status && m.status !== 'neutral') || bandContext(m) != null
+
 export default function Scorecard({
   scope = 'school',
   schoolId,
@@ -329,16 +351,33 @@ export default function Scorecard({
     () => orderedKeys.map((k) => metricsByKey[k]).filter(Boolean),
     [orderedKeys, metricsByKey],
   )
-  const healthRows = useMemo(() => {
-    const base = rows.filter((m) => (m.status && m.status !== 'neutral') || bandContext(m) != null)
-    if (!attentionFirst) return base
+  const sortAttention = (list) => {
+    if (!attentionFirst) return list
     const rank = { risk: 0, watch: 1, good: 2 }
-    return [...base].sort((a, b) => (rank[a.status] ?? 3) - (rank[b.status] ?? 3))
-  }, [rows, attentionFirst])
-  const contextRows = useMemo(
-    () => rows.filter((m) => !((m.status && m.status !== 'neutral') || bandContext(m) != null)),
-    [rows],
+    return [...list].sort((a, b) => (rank[a.status] ?? 3) - (rank[b.status] ?? 3))
+  }
+  const healthRows = useMemo(
+    () => sortAttention(rows.filter(isHealthRow)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, attentionFirst],
   )
+  const contextRows = useMemo(() => rows.filter((m) => !isHealthRow(m)), [rows])
+
+  // Phase 6 — domain sections: a pure render-time partition of the SAME ordered
+  // rows into the §0 sections (finance+operations+aid merge). Within-section
+  // customize order is preserved; useDashboardLayout persistence is untouched.
+  const sections = useMemo(() => {
+    const by = new Map()
+    for (const m of rows) {
+      const title = metricSection(m.key)
+      if (!by.has(title)) by.set(title, [])
+      by.get(title).push(m)
+    }
+    return SECTION_ORDER.filter((t) => by.get(t)?.length).map((t) => ({ title: t, rows: by.get(t) }))
+  }, [rows])
+  // Headers render ONLY when ≥2 sections are non-empty — a finance-only school
+  // (one merged section) keeps today's flat board byte-for-byte.
+  const sectioned = sections.length >= 2
 
   // Cross-link IN: scroll+flash the highlighted row once its data is present.
   useEffect(() => {
@@ -407,22 +446,48 @@ export default function Scorecard({
             Every number, one board — hover a row and click &ldquo;chart&nbsp;&rarr;&rdquo; to fly to its graph.
           </p>
         </div>
-        {healthRows.length > 0 && (
-          <div className="space-y-2">
-            <SectionRule title="Financial health" hint="measured against your targets" />
-            {healthRows.map((m, i) => (
-              <MetricRow key={m.key} m={m} scope={scope} onCrossToChart={onCrossToChart} index={i} reduce={reduce} />
-            ))}
-          </div>
-        )}
-        {contextRows.length > 0 && (
-          <div className="mt-5 space-y-2">
-            <SectionRule title="By the numbers" hint="context figures — no target, just the facts" />
-            <div className="grid grid-cols-2 gap-2 lg:grid-cols-3 xl:grid-cols-4">
-              {contextRows.map((m, i) => (
-                <ContextTile key={m.key} m={m} scope={scope} onCrossToChart={onCrossToChart} index={i} reduce={reduce} />
-              ))}
-            </div>
+        {!sectioned ? (
+          <>
+            {healthRows.length > 0 && (
+              <div className="space-y-2">
+                <SectionRule title="Financial health" hint="measured against your targets" />
+                {healthRows.map((m, i) => (
+                  <MetricRow key={m.key} m={m} scope={scope} onCrossToChart={onCrossToChart} index={i} reduce={reduce} />
+                ))}
+              </div>
+            )}
+            {contextRows.length > 0 && (
+              <div className="mt-5 space-y-2">
+                <SectionRule title="By the numbers" hint="context figures — no target, just the facts" />
+                <div className="grid grid-cols-2 gap-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {contextRows.map((m, i) => (
+                    <ContextTile key={m.key} m={m} scope={scope} onCrossToChart={onCrossToChart} index={i} reduce={reduce} />
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="space-y-6">
+            {sections.map((sec) => {
+              const secHealth = sortAttention(sec.rows.filter(isHealthRow))
+              const secContext = sec.rows.filter((m) => !isHealthRow(m))
+              return (
+                <div key={sec.title} className="space-y-2">
+                  <DomainHeader title={sec.title} />
+                  {secHealth.map((m, i) => (
+                    <MetricRow key={m.key} m={m} scope={scope} onCrossToChart={onCrossToChart} index={i} reduce={reduce} />
+                  ))}
+                  {secContext.length > 0 && (
+                    <div className="grid grid-cols-2 gap-2 lg:grid-cols-3 xl:grid-cols-4">
+                      {secContext.map((m, i) => (
+                        <ContextTile key={m.key} m={m} scope={scope} onCrossToChart={onCrossToChart} index={i} reduce={reduce} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         )}
         {rows.length === 0 && (

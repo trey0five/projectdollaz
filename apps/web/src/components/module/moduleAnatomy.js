@@ -21,6 +21,8 @@ import {
   Wrench,
   HeartHandshake,
   Compass,
+  LineChart,
+  Users2,
 } from 'lucide-react'
 import { MODULE_META } from '../../lib/modules.js'
 import { HOME_TILES } from '../home/tileRegistry.jsx'
@@ -73,6 +75,19 @@ export const MODULE_ANATOMY = {
     tabs: ['overview', 'add', 'records'],
     Icon: Compass,
     eyebrow: 'Strategic Planning',
+  },
+  // Phase 6 — HR is two per-period FTE fields, not a register: NO records tab
+  // (never force a tab a module has no content for). Same for planning (the
+  // enrollment plan lives in the Add tab; the forecast workspace on Overview).
+  hr: {
+    tabs: ['overview', 'add'],
+    Icon: Users2,
+    eyebrow: 'HR & Staffing',
+  },
+  planning: {
+    tabs: ['overview', 'add'],
+    Icon: LineChart,
+    eyebrow: 'Planning & Forecasting',
   },
 }
 

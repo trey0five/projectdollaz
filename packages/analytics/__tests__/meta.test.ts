@@ -53,7 +53,7 @@ describe('metric metadata', () => {
   it('every metric declares a domain + a valid scopeAggregation', () => {
     for (const def of ALL_METRICS) {
       expect(def.domain).toBeDefined()
-      expect(['finance', 'operations', 'aid', 'enrollment', 'hr']).toContain(def.domain)
+      expect(['finance', 'operations', 'aid', 'enrollment', 'hr', 'planning']).toContain(def.domain)
       expect(def.scopeAggregation).toBeDefined()
       expect(SCOPE_RULES).toContain(def.scopeAggregation)
     }
@@ -72,7 +72,14 @@ describe('metric metadata', () => {
       'cost_per_pupil',
       // Phase 2 — enrollment_vs_plan carries a board alias (== its label).
       'enrollment_vs_plan',
+      // Phase 6 — the hr/planning metrics all declare a board alias (== label).
+      'forecast_operating_margin',
+      'forecast_vs_budget_net',
+      'fte_change_yoy',
       'net_tuition_per_student',
+      'plan_readiness',
+      'teaching_staff_share',
+      'total_staff_fte',
     ])
     const byKey = Object.fromEntries(METRIC_META.map((m) => [m.key, m]))
     expect(byKey.net_tuition_per_student.boardLabel).toBe('Avg Net Tuition / Student')

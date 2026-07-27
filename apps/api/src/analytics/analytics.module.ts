@@ -19,6 +19,7 @@ import { BriefingService } from './briefing.service.js'
 import { OperationalController } from './operational.controller.js'
 import { OperationalService } from './operational.service.js'
 import { EnrollmentPlanService } from './enrollment-plan.js'
+import { PlanningSignalsService } from './planning-signals.js'
 import { BudgetController } from './budget.controller.js'
 import { BudgetService } from './budget.service.js'
 import { BudgetRollupController } from './budget-rollup.controller.js'
@@ -88,6 +89,9 @@ import { AssistantClient } from '../assistant/assistant.client.js'
     // Phase 2 — resolves the enrollment plan (driver grid / plannedEnrollmentByGrade)
     // for enrollment_vs_plan + the cross-domain briefing item. PrismaService-only.
     EnrollmentPlanService,
+    // Phase 6 — resolves the budget/forecast $ signals for the planning metrics +
+    // the planning briefing step. PrismaService-only sibling of EnrollmentPlanService.
+    PlanningSignalsService,
     BudgetService,
     BudgetRollupService,
     StatementsRollupService,

@@ -14,10 +14,10 @@
 // (Cash & Collections is a Finance child page) — the sidebar's finance rollup
 // currently omits it; that gap is a noted follow-up, not copied here.
 //
-// PAGE-LESS RULE (locked contract §6, mirrors sidebarNav's): a module with no
-// route (hr, planning) gets NO tile while licensed — a tile that navigates
-// nowhere would strand the user — and renders as the Add-ons-style UPSELL tile
-// only while unlicensed (hasModule(key) === false).
+// Every sellable module now has a REAL route (Phase 6 gave hr → /hr and
+// planning → /planning their own command centers) — the old page-less rule
+// (route:null + a `surface` deep-link) is retired. A licensed module's tile
+// navigates to its page; an unlicensed one renders as the upsell tile.
 // ─────────────────────────────────────────────────────────────────────────────
 import { MODULE_META } from '../../lib/modules.js'
 import {
@@ -97,28 +97,26 @@ export const HOME_TILES = [
     badgeSources: ['strategy'],
   },
   {
-    // Page-less (no route until HR gets a page in Phase C): locked → upsell tile;
-    // UNLOCKED → the tile stays on the map (a purchase must never vanish) and
-    // deep-links to `surface` — where the module's value actually lives.
+    // Phase 6 — HR & Staffing command center at /hr (ratio, FTEs, trends + the
+    // staffing-FTE add flow).
     key: 'hr',
     hue: '#059669',
-    route: null,
-    surface: { to: '/analytics?metric=student_teacher_ratio', label: 'Live in Analytics' },
+    route: '/hr',
     navId: 'tile-hr',
-    tagline: 'Staffing and pay planning.',
+    tagline: 'Staffing ratios, FTEs and trends — on one page.',
     Art: HrArt,
-    badgeSources: [],
+    badgeSources: ['hr'],
   },
   {
-    // Page-less (value surfaces inside Analytics/briefing): same rule as hr.
+    // Phase 6 — Planning & Forecasting command center at /planning (the FY-end
+    // forecast workspace + the grade-by-grade enrollment plan).
     key: 'planning',
     hue: '#0891B2',
-    route: null,
-    surface: { to: '/analytics', label: 'Live in Analytics' },
+    route: '/planning',
     navId: 'tile-planning',
-    tagline: 'Multi-year forecasts and what-if scenarios.',
+    tagline: 'The year-end forecast and your enrollment plan.',
     Art: PlanningArt,
-    badgeSources: [],
+    badgeSources: ['planning'],
   },
 ]
 
@@ -195,21 +193,24 @@ export const MODULE_PITCH = {
       'Ask Penny how the plan is going — she answers with real figures',
     ],
   },
-  // Page-less modules — their value surfaces inside Analytics and the briefing.
   hr: {
-    pitch: 'Staffing numbers that sharpen the ratios your board actually watches.',
+    pitch: 'A staffing command center: ratio, FTEs and trends on one page.',
     bullets: [
-      'Student–teacher ratio, computed live',
-      'Staffing inputs that feed your benchmarks',
-      'Shows up inside Analytics and your briefing — no separate page to learn',
+      'Student–teacher ratio, computed live and banded against targets',
+      'Teaching share of total staff — the composition your board asks about',
+      'Enter staffing FTEs right in the module',
+      'Staffing trends across your saved periods',
+      'Staffing flags in your morning briefing',
     ],
   },
   planning: {
-    pitch: 'Multi-year forecasts and what-if scenarios, built on your real numbers.',
+    pitch: 'The FY-end forecast workspace, front and center.',
     bullets: [
-      'Multi-year forecast foundations',
-      'Enrollment and tuition driver scenarios',
-      'Shows up inside Analytics and your briefing — no separate page to learn',
+      'Revise assumptions and project where the year lands',
+      'A grade-by-grade enrollment plan that powers actual-vs-plan',
+      'Forecast-vs-budget variance in your briefing',
+      'Plan readiness at a glance: budget · forecast · enrollment plan',
+      'A multi-year outlook built on your saved forecast',
     ],
   },
 }

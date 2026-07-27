@@ -80,8 +80,15 @@ const METRIC_ICONS = {
   pct_students_on_aid: Users,
   // Enrollment domain (thin wedge).
   enrollment_change_yoy: TrendingUp,
-  // HR domain (page-less module; value shows here + in the briefing).
+  // HR domain (real /hr module page since Phase 6).
   student_teacher_ratio: UserCog,
+  total_staff_fte: Users,
+  fte_change_yoy: TrendingUp,
+  teaching_staff_share: UserCog,
+  // Planning domain (real /planning module page since Phase 6).
+  forecast_vs_budget_net: BarChart3,
+  forecast_operating_margin: Percent,
+  plan_readiness: PieChart,
 }
 
 export function metricIcon(key) {
@@ -101,10 +108,45 @@ export function metricLabel(key) {
 }
 
 // Coarse business domain for a metric key — the registry `domain` (the per-period
-// MetricResult doesn't carry it), used ONLY to group the compact dashboard cards
-// into domain sections. Unknown keys fall back to 'finance'.
+// MetricResult doesn't carry it), used ONLY to group the dashboard/scorecard rows
+// into domain sections. The Phase-6 keys carry an explicit local fallback so the
+// web grouping stays correct even if the aliased registry build lags a beat;
+// the registry (the single source) always wins when it knows the key.
+const DOMAIN_FALLBACK = {
+  total_staff_fte: 'hr',
+  fte_change_yoy: 'hr',
+  teaching_staff_share: 'hr',
+  forecast_vs_budget_net: 'planning',
+  forecast_operating_margin: 'planning',
+  plan_readiness: 'planning',
+}
 export function metricDomain(key) {
-  return META_BY_KEY[key]?.domain ?? 'finance'
+  return META_BY_KEY[key]?.domain ?? DOMAIN_FALLBACK[key] ?? 'finance'
+}
+
+// ── Phase 6: Scorecard domain-section titles (§0 frozen contract) ─────────────
+// finance/operations/aid merge into ONE section so a finance-only school renders
+// a single section (→ no headers, zero visual regression). Order = SECTION_ORDER.
+export const DOMAIN_SECTION_TITLES = {
+  finance: 'Finance & Operations',
+  operations: 'Finance & Operations',
+  aid: 'Finance & Operations',
+  enrollment: 'Enrollment',
+  hr: 'People & Staffing',
+  planning: 'Planning & Forecasting',
+}
+export const SECTION_ORDER = ['Finance & Operations', 'Enrollment', 'People & Staffing', 'Planning & Forecasting']
+
+/** The section title a metric key groups under (unknown → the merged finance section). */
+export function metricSection(key) {
+  return DOMAIN_SECTION_TITLES[metricDomain(key)] ?? 'Finance & Operations'
+}
+
+// Section header hue dot — the module hues for the module-owned sections (hr
+// emerald / planning teal, locked brand hues); others use the default accent.
+export const SECTION_HUES = {
+  'People & Staffing': '#059669',
+  'Planning & Forecasting': '#0891B2',
 }
 
 // ── Phase 4D: health status visual tokens (strictly navy/gold) ───────────────

@@ -71,6 +71,11 @@ const LandingPage = lazy(() => import('./pages/landing/LandingPage.jsx'))
 // bundle only load for schools that actually open /strategy.
 const StrategyPage = lazy(() => import('./pages/StrategyPage.jsx'))
 
+// Phase 6 — HR & Staffing + Planning & Forecasting module pages. Lazy: /planning
+// pulls the heavy ForecastWorkspace chunk, /hr the analytics trend primitives.
+const HrPage = lazy(() => import('./pages/HrPage.jsx'))
+const PlanningPage = lazy(() => import('./pages/PlanningPage.jsx'))
+
 // Platform admin console (super-admin only) — lazy so its cross-tenant tables +
 // SVG choropleth never ship to a normal tenant's bundle. Mounted OUTSIDE
 // AuthedLayout so OnboardingGate can't trap a school-less founder.
@@ -226,6 +231,22 @@ export default function App() {
           element={
             <Suspense fallback={<div className="min-h-screen bg-cream" />}>
               <StrategyPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/hr"
+          element={
+            <Suspense fallback={<div className="min-h-screen bg-cream" />}>
+              <HrPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/planning"
+          element={
+            <Suspense fallback={<div className="min-h-screen bg-cream" />}>
+              <PlanningPage />
             </Suspense>
           }
         />

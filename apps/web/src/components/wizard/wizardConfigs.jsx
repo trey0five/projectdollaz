@@ -2,7 +2,7 @@
 // wizardConfigs.js — the config that DRIVES the per-module "Add data" wizard.
 //
 // ONE reusable Choose → Enter/Upload → Confirm shell (AddDataWizard) is fed by
-// these 8 module configs. The wizard is CHROME: it never reimplements an importer
+// these 9 module configs. The wizard is CHROME: it never reimplements an importer
 // or a form. Each option is one of four kinds:
 //   • 'embed'   — mount an existing importer/panel UNCHANGED (its own applied UI
 //                 IS the Confirm). renderEmbed(ctx, nav) returns the element.
@@ -54,7 +54,6 @@ import { HOME_TILES, tileLabel } from '../home/tileRegistry.jsx'
 import TrialBalanceModalBody from '../datahub/TrialBalanceModalBody.jsx'
 import MonthlyActualsPanel from '../monthly/MonthlyActualsPanel.jsx'
 import BudgetSetup from '../budget/BudgetSetup.jsx'
-import OperationalDataPanel from '../analytics/OperationalDataPanel.jsx'
 import RosterUpload from '../enrollment/RosterUpload.jsx'
 import StudentImport from '../enrollment/StudentImport.jsx'
 import { EnrollmentConnectEmbed } from './wizardEmbeds.jsx'
@@ -90,7 +89,7 @@ export function handoffDraftPlan() {
   )
 }
 
-// ── The 8 module configs ─────────────────────────────────────────────────────
+// ── The 9 module configs ─────────────────────────────────────────────────────
 export const wizardConfigs = {
   finance: {
     module: 'finance',
@@ -343,29 +342,45 @@ export const wizardConfigs = {
     ],
   },
 
-  // Page-less today (no /hr route) — SHIPPED but inert; nothing mounts it until HR
-  // gets a page. staff-counts reuses the operational panel (per-student ratios).
+  // Phase 6 — HR & Staffing (/hr). The staffing RecordFlow is the module's ONE
+  // add path (partial PUT onto the operational row — teaching/total FTE + notes
+  // only, never enrollment/aid); the Data hub's OperationalDataPanel keeps
+  // owning the full operational intake, untouched.
   hr: {
     module: 'hr',
     hue: HUE.hr,
     options: [
       {
-        key: 'staff-counts',
-        kind: 'embed',
+        key: 'staffing',
+        kind: 'flow',
         needsPeriod: true,
         Icon: Users,
-        label: 'Staffing & enrollment',
-        blurb: 'Enter enrollment, aid and staffing so we can compute per-student costs and key ratios.',
-        cta: 'Enter the numbers',
-        renderEmbed: (ctx) => (
-          <OperationalDataPanel
-            schoolId={ctx.schoolId}
-            periodId={ctx.periodId}
-            periodLabel={ctx.periodLabel}
-            canEdit={ctx.canEdit}
-            onSaved={ctx.onSaved}
-          />
-        ),
+        label: 'Staffing FTEs',
+        blurb:
+          'Enter this period’s teaching and total staff FTEs — they power the student-teacher ratio and your staffing mix.',
+        cta: 'Enter staffing',
+        flow: recordFlows['hr.staffing'],
+      },
+    ],
+  },
+
+  // Phase 6 — Planning & Forecasting (/planning). The grade-by-grade enrollment
+  // plan writer (plan source (2) for enrollment_vs_plan); the forecast workspace
+  // itself lives on the module page's Overview.
+  planning: {
+    module: 'planning',
+    hue: HUE.planning,
+    options: [
+      {
+        key: 'enrollment-plan',
+        kind: 'flow',
+        needsPeriod: true,
+        Icon: GraduationCap,
+        label: 'Enrollment plan',
+        blurb:
+          'Plan next year grade by grade — the total powers actual-vs-plan even without a driver budget.',
+        cta: 'Set the plan',
+        flow: recordFlows['planning.enrollment_plan'],
       },
     ],
   },

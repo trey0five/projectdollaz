@@ -36,7 +36,11 @@ import {
   facilitiesApi,
   advancementApi,
   enrollmentApi,
+  analyticsApi,
 } from '../../lib/api.js'
+// Grade vocab for the planning enrollment-plan grid — the DRIVER grade row
+// (PK3…12), which is exactly the EnrollmentByGradeDto whitelist.
+import { GRADE_ROW, GRADE_LABELS as DRIVER_GRADE_LABELS } from '../budget/driverModel.js'
 import {
   GRADE_KEYS,
   STUDENT_STATUS_KEYS,
@@ -1193,6 +1197,226 @@ export const recordFlows = {
         ['Source', orDash(v.source)],
         ['Note', orDash(v.note)],
       )
+      return pairs
+    },
+  },
+
+  // ══════════════════════ HR · STAFFING FTEs (Phase 6) ═══════════════════════
+  // NOT a register record — a partial PUT onto the period's operational row
+  // (UpsertOperationalDto): ONLY the keys the user actually touched are sent
+  // (omit ≠ null — an explicit null CLEARS a stored field, so untouched fields
+  // are OMITTED and the Data-hub enrollment/aid entries can never be clobbered).
+  // The service enforces teachingFte <= totalStaffFte AFTER merging with the
+  // stored row; the client mirrors the in-form case inline for UX.
+  'hr.staffing': {
+    key: 'hr.staffing',
+    noun: 'staffing entry',
+    nounPlural: 'staffing entries',
+    Icon: Users,
+    defaults: {
+      teachingFte: '',
+      totalStaffFte: '',
+      notes: '',
+    },
+    // The save is a per-PERIOD partial PUT — without a period there is nothing
+    // to write onto (needsPeriod only guards 'embed' options, so flows gate).
+    gate: (data, ctx) =>
+      ctx.periodId
+        ? null
+        : {
+            title: 'No fiscal period yet',
+            body: 'Staffing FTEs attach to a period — add one first (upload a trial balance in the Data hub).',
+          },
+    steps: [
+      {
+        key: 'fte',
+        label: 'Staffing',
+        title: 'This period’s staffing FTEs',
+        blurb:
+          'Full-time-equivalents, not headcount — 2 half-time teachers = 1 FTE. Teaching is the instructional subset of total staff. Leave a field blank to keep what’s stored.',
+        fields: [
+          {
+            key: 'teachingFte',
+            label: 'Teaching FTE',
+            type: 'number',
+            min: 0,
+            max: 1000000,
+            placeholder: 'e.g. 42.5',
+            hint: 'Instructional staff only — drives the student-teacher ratio.',
+            // ≤2dp (UpsertOperationalDto @IsNumber maxDecimalPlaces 2) + the
+            // in-form teaching ≤ total mirror of the server rule.
+            validate: (raw, v) => {
+              const t = String(raw ?? '').trim()
+              if (t !== '' && !/^\d+(\.\d{1,2})?$/.test(t)) return 'Use at most 2 decimal places'
+              const total = String(v.totalStaffFte ?? '').trim()
+              if (t !== '' && total !== '' && Number(t) > Number(total))
+                return `Can’t exceed total staff (${Number(total)})`
+              return null
+            },
+          },
+          {
+            key: 'totalStaffFte',
+            label: 'Total staff FTE',
+            type: 'number',
+            min: 0,
+            max: 1000000,
+            placeholder: 'e.g. 61',
+            hint: 'All staff — teachers, admin, facilities.',
+            validate: (raw) => {
+              const t = String(raw ?? '').trim()
+              return t !== '' && !/^\d+(\.\d{1,2})?$/.test(t) ? 'Use at most 2 decimal places' : null
+            },
+          },
+          {
+            key: 'notes',
+            label: 'Notes',
+            type: 'textarea',
+            rows: 3,
+            maxLength: 2000,
+            span: 2,
+            fold: true,
+            hint: 'Optional context — shared with the operational-data panel.',
+          },
+        ],
+      },
+    ],
+    // UpsertOperationalDto ✓ — partial PUT: ONLY touched keys, OMIT untouched
+    // (never null — explicit null clears). No enrollment/aid passthrough.
+    toBody: (v) => {
+      const body = {}
+      if (String(v.teachingFte ?? '').trim() !== '') body.teachingFte = Number(v.teachingFte)
+      if (String(v.totalStaffFte ?? '').trim() !== '') body.totalStaffFte = Number(v.totalStaffFte)
+      if (v.notes.trim()) body.notes = v.notes.trim()
+      return body
+    },
+    submit: (ctx, body) => analyticsApi.saveOperational(ctx.schoolId, ctx.periodId, body),
+    itemLabel: (v) => {
+      const parts = []
+      if (String(v.teachingFte ?? '').trim() !== '') parts.push(`${Number(v.teachingFte)} teaching`)
+      if (String(v.totalStaffFte ?? '').trim() !== '') parts.push(`${Number(v.totalStaffFte)} total`)
+      return parts.length ? `Staffing · ${parts.join(' / ')}` : ''
+    },
+    itemSub: () => 'staffing FTEs',
+    reviewPairs: (v) => [
+      ['Teaching FTE', String(v.teachingFte ?? '').trim() === '' ? 'kept as stored' : String(Number(v.teachingFte))],
+      ['Total staff FTE', String(v.totalStaffFte ?? '').trim() === '' ? 'kept as stored' : String(Number(v.totalStaffFte))],
+      ['Notes', orDash(v.notes)],
+    ],
+  },
+
+  // ═══════════════ PLANNING · ENROLLMENT PLAN BY GRADE (Phase 6) ═════════════
+  // The missing WRITER for PeriodOperationalData.plannedEnrollmentByGrade — a
+  // sparse grade grid saved via the SAME operational partial PUT (the DTO field
+  // is whitelisted; ZERO api change). Its total is plan source (2) for the
+  // enrollment_vs_plan metric — the fallback when no driver budget exists.
+  'planning.enrollment_plan': {
+    key: 'planning.enrollment_plan',
+    noun: 'enrollment plan',
+    nounPlural: 'enrollment plans',
+    Icon: GraduationCap,
+    defaults: Object.fromEntries(GRADE_ROW.map((g) => [g, ''])),
+    // The STORED plan grid, so a sparse edit MERGES instead of replacing (a
+    // 10-grade plan re-opened to bump one grade must not collapse to 1 grade).
+    // Never rejects: `ok:false` marks a failed read so the gate blocks the
+    // editor rather than letting a save clobber a plan we couldn't see.
+    loaders: {
+      stored: (ctx) =>
+        ctx.schoolId && ctx.periodId
+          ? analyticsApi
+              .operational(ctx.schoolId, ctx.periodId)
+              .then((r) => ({ ok: true, grid: r.data?.plannedEnrollmentByGrade ?? null }))
+              .catch(() => ({ ok: false, grid: null }))
+          : Promise.resolve({ ok: true, grid: null }),
+    },
+    // Per-period write — same gate rationale as hr.staffing; PLUS fail-safe on a
+    // stored-plan read error (merging against an unreadable grid = replace).
+    gate: (data, ctx) => {
+      if (!ctx.periodId) {
+        return {
+          title: 'No fiscal period yet',
+          body: 'The enrollment plan attaches to a period — add one first (upload a trial balance in the Data hub).',
+        }
+      }
+      if (data?.stored && !data.stored.ok) {
+        return {
+          title: 'Couldn’t load the stored plan',
+          body: 'Editing without it could overwrite grades you already planned. Check your connection and reopen this flow.',
+        }
+      }
+      return null
+    },
+    steps: [
+      {
+        key: 'plan',
+        label: 'Plan by grade',
+        title: 'Planned enrollment, grade by grade',
+        blurb:
+          'The headcount you’re planning for this period, per grade — leave a grade blank to keep what’s stored, enter 0 to clear one. If you’ve built a driver budget, its enrollment grid is the active plan — this grid is the fallback.',
+        fields: GRADE_ROW.map((g) => ({
+          key: g,
+          label: DRIVER_GRADE_LABELS[g] ?? g,
+          type: 'number',
+          integer: true,
+          min: 0,
+          max: 100000,
+          placeholder: '0',
+        })),
+      },
+    ],
+    // UpsertOperationalDto.plannedEnrollmentByGrade ✓ (EnrollmentByGradeDto keys
+    // = GRADE_ROW). SPARSE EDIT: entered grades are MERGED onto the stored grid
+    // (blank = keep stored, 0 = clear — the hr.staffing contract) because the
+    // PUT replaces the whole object. The ONE key sent — the partial PUT can
+    // never touch enrollment/aid/FTE fields.
+    toBody: (v, data) => {
+      const stored = data?.stored?.grid ?? null
+      const grid = {}
+      for (const g of GRADE_ROW) {
+        const kept = Number(stored?.[g])
+        if (Number.isFinite(kept)) grid[g] = kept
+        const t = String(v[g] ?? '').trim()
+        if (t !== '') grid[g] = Number(t)
+      }
+      return { plannedEnrollmentByGrade: grid }
+    },
+    submit: (ctx, body) => analyticsApi.saveOperational(ctx.schoolId, ctx.periodId, body),
+    itemLabel: (v) => {
+      let total = 0
+      let grades = 0
+      for (const g of GRADE_ROW) {
+        const t = String(v[g] ?? '').trim()
+        if (t !== '') {
+          grades += 1
+          total += Number(t)
+        }
+      }
+      // "entered", not "planned" — untouched stored grades also count toward the
+      // saved plan but aren't visible to this label (see reviewPairs for totals).
+      return grades ? `Enrollment plan · ${total.toLocaleString()} students entered` : ''
+    },
+    itemSub: () => 'planned enrollment',
+    reviewPairs: (v, data) => {
+      const stored = data?.stored?.grid ?? null
+      const pairs = GRADE_ROW.filter((g) => String(v[g] ?? '').trim() !== '').map((g) => [
+        DRIVER_GRADE_LABELS[g] ?? g,
+        String(Number(v[g])),
+      ])
+      // Merged saved-plan total (what the server will actually store): stored
+      // grades survive unless overridden; only positive counts join the plan.
+      let total = 0
+      let kept = 0
+      for (const g of GRADE_ROW) {
+        const t = String(v[g] ?? '').trim()
+        const storedN = Number(stored?.[g])
+        if (t !== '') {
+          total += Number(t)
+        } else if (Number.isFinite(storedN)) {
+          total += storedN
+          kept += 1
+        }
+      }
+      if (kept > 0) pairs.push(['Kept as stored', `${kept} grade${kept === 1 ? '' : 's'}`])
+      pairs.push(['Total planned', total.toLocaleString()])
       return pairs
     },
   },

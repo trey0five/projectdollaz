@@ -23,6 +23,8 @@ import { AccreditationService } from '../accreditation/accreditation.service.js'
 import { FacilitiesService } from '../facilities/facilities.service.js'
 import { AdvancementService } from '../advancement/advancement.service.js'
 import { StrategyService } from '../strategy/strategy.service.js'
+import { PlanningSignalsService } from './planning-signals.js'
+import { EnrollmentPlanService } from './enrollment-plan.js'
 import {
   ACCREDITATION_REVIEW_SOON_DAYS,
   ADVANCEMENT_CLOSING_SOON_DAYS,
@@ -71,6 +73,11 @@ export type AttentionSource =
   // AR/AP aging — the Cash & Collections briefing STEP (reads the persisted snapshot
   // directly via Prisma; value-safe aggregate $ + counts only).
   | 'cash'
+  // Phase 6 HR & Staffing — the staffing data-completeness signal (STEP 2.14).
+  | 'hr'
+  // Phase 6 Planning & Forecasting — the planning-artifact completeness signals
+  // (STEP 2.15). Variance SEVERITY stays STEP 1's job (the banded metrics).
+  | 'planning'
 
 /**
  * A task at least this many days past due escalates the workflow overdue item from
@@ -200,6 +207,15 @@ export class BriefingService {
     // still construct; readAgingRow() guards `if (!this.prisma)` so an absent Prisma
     // simply yields no cash item (fail-soft) rather than throwing.
     private readonly prisma: PrismaService,
+    // Phase 6 — STEP 2.15's planning-artifact reads: the budget/forecast signals +
+    // the enrollment-plan resolve (REUSED, not re-implemented). Appended AFTER
+    // prisma (positional-last) + `?.`-guarded so every existing positional-arg
+    // briefing spec still constructs; absent deps simply yield no planning items
+    // (fail-soft) rather than throwing. (STEP 2.14 needs NO new dep — it reads the
+    // hr-gated teaching_staff_share result off the ALREADY-computed metrics
+    // response, so a licensed school with missing FTEs is detected value-safely.)
+    private readonly planningSignals?: PlanningSignalsService,
+    private readonly enrollmentPlanSvc?: EnrollmentPlanService,
   ) {}
 
   /**
@@ -338,6 +354,8 @@ export class BriefingService {
       advancementLicensed,
       strategyLicensed,
       enrollmentLicensed,
+      hrLicensed,
+      planningLicensed,
       agingRow,
       cashFlowRow,
     ] = await Promise.all([
@@ -360,6 +378,12 @@ export class BriefingService {
       // Phase 2 Enrollment gate — same fan-out, fail CLOSED (hides the cross-domain
       // enrollment item for a finance-only school).
       this.billing.isEntitledForModule(schoolId, 'enrollment').catch(() => false),
+      // Phase 6 HR gate — same fan-out, fail CLOSED (hides the staffing
+      // data-completeness item for a school without the 'hr' module).
+      this.billing.isEntitledForModule(schoolId, 'hr').catch(() => false),
+      // Phase 6 Planning gate — same fan-out, fail CLOSED (hides the planning-
+      // artifact completeness items for a school without the 'planning' module).
+      this.billing.isEntitledForModule(schoolId, 'planning').catch(() => false),
       // AR/AP aging — reads the persisted snapshot DIRECTLY via Prisma (NOT via
       // QboAgingService), inside this SAME parallel fan-out so latency stays slowest-
       // not-sum. CORE (no entitlement gate); fail-soft to null (readAgingRow catches).
@@ -956,6 +980,118 @@ export class BriefingService {
             link: '/strategy',
             dueDate: s.nextReviewDate,
           })
+        }
+      }
+    }
+
+    // ── STEP 2.14: staffing data-completeness (source 'hr') ──────────────────
+    // Phase 6 — HR & Staffing's briefing signal: DATA-COMPLETENESS ONLY. When the
+    // period's operational row is missing teachingFte OR totalStaffFte, nudge the
+    // user to the /hr Add tab. Ratio/share RISK is STEP 1's job (the banded hr
+    // metrics) — no duplicates here.
+    //
+    // GATED by the per-module entitlement (hrLicensed, resolved in the STEP-2
+    // fan-out, fail CLOSED). ZERO new reads: the missing-FTE fact is read off the
+    // ALREADY-computed (and hr-gated) teaching_staff_share metric result, whose
+    // inputsMissing names exactly the absent field(s) — value-safe by
+    // construction, and an absent metric (billing hiccup at the metrics gate)
+    // simply yields no item. Can never 500.
+    if (hrLicensed) {
+      const share = metricsResponse.metrics.find((m) => m.key === 'teaching_staff_share')
+      // "Not entered" must mean NULL, not merely "the metric can't compute":
+      // totalStaffFte entered as 0 (a legitimate value) also lands in the share
+      // metric's inputsMissing via its >0 divide guard, but its inputs[] carries
+      // the raw value — 0 there is ENTERED, so no false "not entered" item (and
+      // no disagreement with /hr's own null-checking attention rail). An absent
+      // inputs[] (older shape) degrades to the inputsMissing read.
+      const fteMissing =
+        share &&
+        !share.available &&
+        ['teachingFte', 'totalStaffFte'].some((k) => {
+          if (!share.inputsMissing.includes(k)) return false
+          const input = share.inputs?.find((i) => i.key === k)
+          return !input || input.value === null
+        })
+      if (fteMissing) {
+        items.push({
+          id: 'hr:fte-missing',
+          severity: 'warn',
+          source: 'hr',
+          title: `Staffing FTEs not entered for ${period.label}`,
+          why: `Teaching and total staff FTEs have not been fully entered for ${period.label} — your staffing ratio, composition and trends can't compute without them. Add them in HR & Staffing.`,
+          metricKey: null,
+          value: null,
+          link: '/hr?tab=add',
+          dueDate: null,
+        })
+      }
+    }
+
+    // ── STEP 2.15: planning-artifact completeness (source 'planning') ─────────
+    // Phase 6 — Planning & Forecasting's briefing signals: COMPLETENESS ONLY (no
+    // budget saved / no FY-end forecast saved / no enrollment plan). Variance
+    // SEVERITY is STEP 1's job (the banded planning metrics) — no duplicates.
+    //
+    // GATED by the per-module entitlement (planningLicensed, resolved in the
+    // STEP-2 fan-out, fail CLOSED). Strategy STEP-2.13 template: licensed-gate
+    // outside, `.catch(() => null)` reads inside, `this.x?.`-guarded deps — can
+    // never 500. ONE fail-soft PlanningSignals read (hasBudget/hasForecast are
+    // DEFINITIVE row facts; a null result means the READ failed → skip, never a
+    // false "missing" alarm) + the REUSED enrollment-plan resolve.
+    if (planningLicensed) {
+      const signals = await Promise.resolve()
+        .then(() => this.planningSignals?.resolve?.(schoolId, period.id) ?? null)
+        .catch(() => null)
+      if (signals) {
+        if (!signals.hasBudget) {
+          items.push({
+            id: 'planning:no-budget',
+            severity: 'warn',
+            source: 'planning',
+            title: `No budget saved for ${period.label}`,
+            why: `No budget has been saved for ${period.label} — without one there is nothing to forecast against, and budget-vs-actual stays dark. Set one up in Planning & Forecasting.`,
+            metricKey: null,
+            value: null,
+            link: '/planning',
+            dueDate: null,
+          })
+        }
+        if (!signals.hasForecast) {
+          items.push({
+            id: 'planning:no-forecast',
+            severity: 'warn',
+            source: 'planning',
+            title: `No FY-end forecast saved for ${period.label}`,
+            why: `No FY-end forecast has been saved for ${period.label} — the projected margin and forecast-vs-budget variance can't compute. Save one in Planning & Forecasting.`,
+            metricKey: null,
+            value: null,
+            link: '/planning',
+            dueDate: null,
+          })
+        }
+        // Enrollment-plan presence — the SAME resolve the enrollment_vs_plan
+        // metric reads (driver grid first, then plannedEnrollmentByGrade), via
+        // the error-distinguishing resolveDetailed: `failed` (a DB read errored
+        // while no plan surfaced) means absence is UNKNOWN → emit NOTHING, the
+        // same never-a-false-alarm rule the PlanningSignals reads above follow.
+        // A null result (older mock / resolve throw) is equally indistinct → skip.
+        if (this.enrollmentPlanSvc) {
+          const planRes = await Promise.resolve()
+            .then(() => this.enrollmentPlanSvc?.resolveDetailed?.(schoolId, period.id) ?? null)
+            .catch(() => null)
+          if (planRes && planRes.plan === null && !planRes.failed) {
+            items.push({
+              id: 'planning:plan-missing',
+              severity: 'warn',
+              source: 'planning',
+              title: `No enrollment plan for ${period.label}`,
+              why: `No planned enrollment has been entered for ${period.label} (neither a driver-budget grid nor a grade-by-grade plan) — actual-vs-plan tracking can't run. Enter one in Planning & Forecasting.`,
+              metricKey: null,
+              value: null,
+              link: '/planning?tab=add',
+              dueDate: null,
+            })
+          }
         }
       }
     }

@@ -23,6 +23,10 @@ import type { HealthStatus, MetricKey, TargetBands } from './types.js'
  *   tuition_discount_rate (lower):    good <= 0.20,  risk > 0.35
  *   enrollment_change_yoy (higher):   good >= 0,     risk < -0.05
  *   student_teacher_ratio (lower):    good <= 12,    risk > 16
+ *   teaching_staff_share (higher):    good >= 0.60,  risk < 0.45
+ *   forecast_vs_budget_net (higher):  good >= -0.01, risk < -0.05
+ *   forecast_operating_margin (higher): good >= 0.03, risk < 0
+ *   plan_readiness (higher):          good >= 1,     risk < 0.33
  *
  * Boundary semantics (see TargetBands): `good` inclusive of good, `risk` is the
  * watch/risk frontier and is inclusive of WATCH (exactly == risk lands in watch).
@@ -48,6 +52,24 @@ export const DEFAULT_BANDS: Partial<Record<MetricKey, TargetBands>> = {
   // vary widely by model (Montessori/special-ed run low, large schools higher);
   // per-school override deferred. Not a hard truth.
   student_teacher_ratio: { goodDirection: 'lower', good: 12, risk: 16 },
+  // HR (staffing composition): ≥60% of all staff FTEs teaching = good; under 45%
+  // flags an instructional-vs-overhead composition concern. TUNABLE SECTOR
+  // DEFAULT (like student_teacher_ratio) — composition varies widely by model
+  // (boarding/large-campus schools run lower); per-school override deferred. Not
+  // a hard truth. (total_staff_fte / fte_change_yoy stay NEUTRAL by absence —
+  // staffing size/growth has no universal good/bad.)
+  teaching_staff_share: { goodDirection: 'higher', good: 0.6, risk: 0.45 },
+  // Planning: forecast net within 1% of budgeted revenue of the budgeted net (or
+  // better) = good; slipping more than 5% of budgeted revenue below the budgeted
+  // net = risk. TUNABLE SECTOR DEFAULT, mirroring the enrollment_vs_plan scale.
+  forecast_vs_budget_net: { goodDirection: 'higher', good: -0.01, risk: -0.05 },
+  // Planning: the PROJECTED FY-end margin carries operating_margin's exact band —
+  // a projected deficit is as actionable as an actual one. (Its own entry, not a
+  // shared reference, so the two can be tuned independently later.)
+  forecast_operating_margin: { goodDirection: 'higher', good: 0.03, risk: 0 },
+  // Planning coverage: ALL three artifacts (budget · forecast · enrollment plan)
+  // in place = good; one of three (≤ 1/3) = risk. TUNABLE default.
+  plan_readiness: { goodDirection: 'higher', good: 1, risk: 0.33 },
 }
 
 /** The target band for a metric, or undefined when the metric is contextual. */

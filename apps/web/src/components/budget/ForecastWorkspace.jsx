@@ -256,7 +256,7 @@ function serializeDraft({ method, assumptions, feeder, rollForward, explanations
     : JSON.stringify({ projectionMethod: 'manual', assumptions, feeder, explanations })
 }
 
-export default function ForecastWorkspace({ schoolId, periodId, canEdit, budget, budgetContext }) {
+export default function ForecastWorkspace({ schoolId, periodId, canEdit, budget, budgetContext, onSaved }) {
   const {
     forecast: savedForecast,
     feederEnrollmentByGrade: savedFeeder,
@@ -485,7 +485,10 @@ export default function ForecastWorkspace({ schoolId, periodId, canEdit, budget,
     // IDENTICAL serializer so the post-save state is clean).
     await refetch()
     setBaseline(serializeDraft({ method, assumptions, feeder, rollForward, explanations }))
-  }, [schoolId, periodId, projectionMethod, assumptions, feeder, rollForward, explanations, refetch])
+    // Let an embedding page (PlanningPage) relight ITS OWN hook copies (KPI row,
+    // attention rail, outlook) — this component's refetch only refreshes itself.
+    onSaved?.()
+  }, [schoolId, periodId, projectionMethod, assumptions, feeder, rollForward, explanations, refetch, onSaved])
 
   const { saving, error: saveError, saveNow } = useAutosave({
     enabled: canEdit,

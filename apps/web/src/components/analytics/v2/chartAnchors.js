@@ -25,6 +25,15 @@ export const CHART_ANCHORS = {
   tuition_discount_rate: 'chart-aidrate',
   cost_per_pupil: 'chart-ppc',
   net_tuition_per_student: 'chart-ppc',
+  // Phase 6 — HR & Staffing (chart-staffing stays the ratio's historic anchor;
+  // the FTE composition trio anchors the new chart-fte card).
+  total_staff_fte: 'chart-fte',
+  fte_change_yoy: 'chart-fte',
+  teaching_staff_share: 'chart-fte',
+  // Phase 6 — Planning & Forecasting.
+  forecast_vs_budget_net: 'chart-planvariance',
+  forecast_operating_margin: 'chart-planvariance',
+  plan_readiness: 'chart-planreadiness',
 }
 
 /** The nav patch that jumps a scorecard row to its chart, or null if none exists. */
@@ -38,7 +47,7 @@ export function chartAnchorFor(metricKey) {
 // — e.g. cost_per_pupil → chart-ppc exists ONLY under Compare, so the School
 // Scorecard must not show a dead link for it.
 export const SCOPE_CHART_ANCHORS = {
-  school: new Set(['chart-revmix', 'chart-expmix', 'chart-margin', 'chart-cash', 'chart-enrollment', 'chart-aidrate', 'chart-staffing']),
+  school: new Set(['chart-revmix', 'chart-expmix', 'chart-margin', 'chart-cash', 'chart-enrollment', 'chart-aidrate', 'chart-staffing', 'chart-fte', 'chart-planvariance', 'chart-planreadiness']),
   compare: new Set(['chart-ppc', 'chart-fingerprint']),
   org: new Set(['chart-cash', 'chart-smalls', 'chart-race']),
 }

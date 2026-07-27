@@ -14,6 +14,7 @@ import { useRef, useState } from 'react'
 import { formatMetricValue } from '../../../lib/metricMeta.js'
 import { schoolColor, CHROME } from './chartPalette.js'
 import LineChart from '../charts/LineChart.jsx'
+import TrendSpark from './TrendSpark.jsx'
 import FancyDonut from '../charts/FancyDonut.jsx'
 import GroupedBars from '../charts/GroupedBars.jsx'
 import DimensionRows from '../charts/DimensionRows.jsx'
@@ -57,17 +58,10 @@ function BarsFromMix(metric) {
 }
 
 
-function TrendCard(trend, color, formatter) {
-  if (!(trend?.points?.length >= 2)) return <p className="py-8 text-center text-[13px] italic text-muted">Not enough history yet.</p>
-  return (
-    <LineChart
-      series={[{ id: 't', label: '', color, vals: trend.points.map((p) => p.value ?? 0) }]}
-      labels={trend.points.map((p) => p.label)}
-      area
-      formatter={formatter}
-    />
-  )
-}
+// TrendCard now lives in v2/TrendSpark.jsx (shared with /hr) — render-identical.
+const TrendCard = (trend, color, formatter) => (
+  <TrendSpark trend={trend} color={color} formatter={formatter} />
+)
 
 // One same-scale small-multiple cell. Hand-rolled (LineChart autoscales per cell;
 // the card promises ONE shared scale, so yMin/yMax are passed in explicitly).
@@ -151,12 +145,57 @@ const fitTitle = (label) => (el) => {
   else el.removeAttribute('title')
 }
 
+// Pull a $ operand off a metric's runtime inputs[] by fuzzy label/key match —
+// resilient to the exact input key naming (the §0 contract freezes only that the
+// raw currency operands ride along, not their key spellings).
+const currencyInput = (m, re) =>
+  m?.inputs?.find((i) => i.unit === 'currency' && re.test(String(i.label ?? i.key)))?.value ?? null
+
+// Same fuzzy match without the unit filter (FTE operands carry a count unit).
+const inputByKey = (m, re) =>
+  m?.inputs?.find((i) => re.test(String(i.label ?? i.key)))?.value ?? null
+
+// Signed percent for a value that IS a change (e.g. fte_change_yoy).
+const signedPct = (v) =>
+  v == null || !Number.isFinite(v) ? '—' : `${v > 0 ? '+' : ''}${(v * 100).toFixed(1)}%`
+
+// Band-target sub line for a current-value (no-trend) card.
+function bandTargetSub(m) {
+  const b = m?.bands
+  if (!b || !Number.isFinite(b.good)) return null
+  const dir = b.goodDirection ?? m.goodDirection
+  return `Target ${dir === 'lower' ? '≤' : '≥'} ${formatMetricValue(b.good, m.unit ?? 'ratio')}`
+}
+
 function SchoolCharts({ school, onCrossToTable }) {
   const m = school.metricsByKey
   const t = school.sparkTrends || {}
   const asOf = school.asOf
   const aid = m.pct_students_on_aid
   const ratio = m.student_teacher_ratio
+  const share = m.teaching_staff_share
+  const totalFte = m.total_staff_fte
+  const fteYoy = m.fte_change_yoy
+  const fvb = m.forecast_vs_budget_net
+  const fom = m.forecast_operating_margin
+  const readiness = m.plan_readiness
+  // Gate-driven: an unlicensed school's gated metrics are stripped server-side, so
+  // these groups simply don't render — the unlicensed page stays byte-identical.
+  const hasHr = Boolean(ratio || share || totalFte || fteYoy)
+  const hasPlanning = Boolean(fvb || fom || readiness)
+
+  // Staff composition numbers: prefer the share metric's declared inputs, then
+  // derive from share × total (never invent — null renders an em-dash).
+  const totalFteVal = totalFte?.value ?? inputByKey(share, /total/i)
+  const teachingFteVal =
+    inputByKey(share, /teaching/i) ??
+    (Number.isFinite(share?.value) && Number.isFinite(totalFteVal) ? share.value * totalFteVal : null)
+
+  // Plan-variance $ operands off forecast_vs_budget_net's inputs[] (no new fetch).
+  const budgetNet = currencyInput(fvb, /budget/i)
+  const forecastNet = currencyInput(fvb, /forecast/i)
+  const readyCount = Number.isFinite(readiness?.value) ? Math.round(readiness.value * 3) : null
+
   return (
     <div>
       <QuestionGroup title="How's the money?">
@@ -184,11 +223,6 @@ function SchoolCharts({ school, onCrossToTable }) {
             {aid?.value != null ? (
               <div className="flex flex-col items-center">
                 <ArcGauge pct={(aid.value ?? 0) * 100} label="on aid" />
-                {ratio?.value != null && (
-                  <p id="chart-staffing" className="mt-2 text-[13px] text-muted">
-                    Students per teacher: <b className="text-navy">{formatMetric(ratio)}</b>
-                  </p>
-                )}
               </div>
             ) : (
               <p className="py-8 text-center text-[13px] italic text-muted">Aid data not available.</p>
@@ -196,6 +230,141 @@ function SchoolCharts({ school, onCrossToTable }) {
           </ChartCard>
         </div>
       </QuestionGroup>
+      {hasHr && (
+        <QuestionGroup title="How's staffing?">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {/* chart-staffing keeps its historic anchor id — old
+                /analytics?metric=student_teacher_ratio deep links + the Scorecard
+                "chart →" keep landing here. Renders whenever the ratio exists,
+                aid data or not (the vanishing-footnote bug is dead). */}
+            <ChartCard id="chart-staffing" metricKey="student_teacher_ratio" title="Students per teacher" sub="Staffing ratio" asOf={asOf} onViewAsTable={onCrossToTable}>
+              {t.student_teacher_ratio?.points?.length >= 2 ? (
+                <TrendSpark trend={t.student_teacher_ratio} color={schoolColor(3)} formatter={(v) => v.toFixed(1)} />
+              ) : ratio?.value != null ? (
+                <div className="flex flex-col items-center py-6">
+                  <p className="text-[34px] font-bold leading-none text-navy tabular-nums">{formatMetric(ratio)}</p>
+                  <p className="mt-2 text-[13px] text-muted">{bandTargetSub(ratio) ?? 'students per teacher'}</p>
+                </div>
+              ) : (
+                <p className="py-8 text-center text-[13px] italic text-muted">Not available.</p>
+              )}
+            </ChartCard>
+            <ChartCard id="chart-fte" metricKey="teaching_staff_share" title="Staff composition" sub="Teaching share of total staff" asOf={asOf} onViewAsTable={onCrossToTable}>
+              {share?.value != null ? (
+                <div className="flex flex-col items-center">
+                  <ArcGauge
+                    pct={(share.value ?? 0) * 100}
+                    label="teaching"
+                    subRows={[
+                      { label: 'Teaching FTE', value: Number.isFinite(teachingFteVal) ? teachingFteVal.toLocaleString('en-US', { maximumFractionDigits: 1 }) : '—' },
+                      { label: 'Total staff FTE', value: Number.isFinite(totalFteVal) ? totalFteVal.toLocaleString('en-US', { maximumFractionDigits: 1 }) : '—' },
+                    ]}
+                  />
+                  {fteYoy?.value != null && (
+                    <p className="mt-2 text-[13px] text-muted">
+                      Teaching FTE vs. last year: <b className="text-navy">{signedPct(fteYoy.value)}</b>
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="py-8 text-center text-[13px] italic text-muted">
+                  Enter Teaching &amp; Total staff FTEs to light this up.
+                </p>
+              )}
+            </ChartCard>
+          </div>
+        </QuestionGroup>
+      )}
+      {hasPlanning && (
+        <QuestionGroup title="What's the plan?">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <ChartCard id="chart-planvariance" metricKey="forecast_vs_budget_net" title="Forecast vs. budget" sub="Projected FY-end net vs. the plan" asOf={asOf} onViewAsTable={onCrossToTable}>
+              {fvb?.value != null ? (
+                <div>
+                  <p className="mb-2 text-[13px] text-muted">
+                    Forecast net lands <b className="text-navy">{formatMetric(fvb)}</b> of budgeted revenue{' '}
+                    {fvb.value >= 0 ? 'above' : 'below'} the budgeted net.
+                  </p>
+                  {budgetNet != null && forecastNet != null ? (
+                    budgetNet >= 0 && forecastNet >= 0 ? (
+                      <>
+                        <Legend
+                          items={[
+                            { id: 'budget', label: 'Budget net', color: schoolColor(1) },
+                            { id: 'forecast', label: 'Forecast net', color: schoolColor(0) },
+                          ]}
+                        />
+                        <GroupedBars
+                          rows={[{ label: 'Net result', dot: schoolColor(0), vals: [budgetNet, forecastNet] }]}
+                          colors={[schoolColor(1), schoolColor(0)]}
+                          names={['Budget net', 'Forecast net']}
+                          formatter={money}
+                        />
+                      </>
+                    ) : (
+                      /* A deficit net would draw as a ~1% "positive" sliver on the
+                         positive-only bars (and TWO deficits as identical slivers,
+                         hiding a much-worse forecast) — so negative nets render as
+                         honest labeled $ stats instead of lying marks. */
+                      <div className="grid grid-cols-2 gap-3">
+                        {[
+                          { label: 'Budget net', value: budgetNet, color: schoolColor(1) },
+                          { label: 'Forecast net', value: forecastNet, color: schoolColor(0) },
+                        ].map((s) => (
+                          <div key={s.label} className="rounded-xl border border-rule/50 bg-cream/40 px-3 py-2.5">
+                            <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+                              <i aria-hidden="true" className="h-2 w-2 rounded-full" style={{ background: s.color }} />
+                              {s.label}
+                            </p>
+                            <p className={`mt-1 text-[20px] font-bold leading-none tabular-nums ${s.value < 0 ? 'text-rose-600' : 'text-navy'}`}>
+                              {money(s.value)}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  ) : null}
+                  {fom?.value != null && (
+                    <p className="mt-3 text-[13px] text-muted">
+                      Forecast operating margin: <b className="text-navy">{formatMetric(fom)}</b>
+                      {m.operating_margin?.value != null && (
+                        <> · actual so far: <b className="text-navy">{formatMetric(m.operating_margin)}</b></>
+                      )}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="py-8 text-center text-[13px] italic text-muted">
+                  Save a budget and an FY-end forecast to compare them here.
+                </p>
+              )}
+            </ChartCard>
+            <ChartCard id="chart-planreadiness" metricKey="plan_readiness" title="Plan readiness" sub="Budget · forecast · enrollment plan" asOf={asOf} onViewAsTable={onCrossToTable}>
+              {readiness?.value != null ? (
+                <div className="flex flex-col items-center py-4">
+                  <p className="text-[34px] font-bold leading-none text-navy tabular-nums">
+                    {readyCount != null ? `${readyCount} of 3` : formatMetric(readiness)}
+                  </p>
+                  <p className="mt-1.5 text-[13px] text-muted">planning artifacts in place this period</p>
+                  {/* 3-segment band rail — no sparkline: planning carries no trend
+                      threading in v1, and a dead trend card would be dishonest. */}
+                  <div className="mt-4 flex w-full max-w-[220px] gap-1.5" role="img" aria-label={`${readyCount ?? 0} of 3 planning artifacts in place`}>
+                    {[0, 1, 2].map((i) => (
+                      <span
+                        key={i}
+                        className="h-2 flex-1 rounded-full"
+                        style={{ background: i < (readyCount ?? 0) ? schoolColor(0) : CHROME.grid }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="py-8 text-center text-[13px] italic text-muted">Not available.</p>
+              )}
+            </ChartCard>
+          </div>
+        </QuestionGroup>
+      )}
     </div>
   )
 }
