@@ -38,7 +38,7 @@ import { Plus } from 'lucide-react'
 import DomainKpiCard from './DomainKpiCard.jsx'
 import NeedsAttentionPanel from './NeedsAttentionPanel.jsx'
 import BackLink from '../ui/BackLink.jsx'
-import AddDataCta from '../module/AddDataCta.jsx'
+import { AddDataCta, RecordsCta } from '../module/ModuleCtas.jsx'
 
 function AttentionPill({ count }) {
   const clear = !count
@@ -74,10 +74,12 @@ export default function DomainCommandCenter({
   aboveKpis = null,
   showBack = false,
   registerTitle = null,
-  // Module pages set this to surface the Add-data wizard entry ON the page
-  // (mirrors the sidebar tab via a relative ?tab=add link). Standalone domains
-  // (Cash/Tasks/Knowledge) have no Add-data tab and leave it off.
+  // Module pages set this to surface the Add-data + Records entries ON the page
+  // (mirroring the sidebar tabs via relative ?tab= links). Standalone domains
+  // (Cash/Tasks/Knowledge) have no such tabs and leave it off. `moduleKey` lets
+  // RecordsCta self-hide for modules with no records tab (hr, planning).
   showAddData = false,
+  moduleKey = null,
 }) {
   const reduce = useReducedMotion()
 
@@ -107,7 +109,12 @@ export default function DomainCommandCenter({
         <div className="flex flex-wrap items-center gap-3">
           {headerAside}
           <AttentionPill count={attentionCount} />
-          {showAddData ? <AddDataCta /> : null}
+          {showAddData ? (
+            <>
+              <RecordsCta module={moduleKey} />
+              <AddDataCta />
+            </>
+          ) : null}
         </div>
       </div>
 

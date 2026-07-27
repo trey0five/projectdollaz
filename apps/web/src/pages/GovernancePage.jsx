@@ -1577,6 +1577,7 @@ function GovernanceWorkspace() {
   const commandCenter = (
     <DomainCommandCenter
       showAddData
+      moduleKey="governance"
       eyebrow="Domain · Govern engine · system of record"
       title="Governance"
       Icon={Landmark}

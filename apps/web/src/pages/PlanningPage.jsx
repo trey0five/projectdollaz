@@ -365,6 +365,7 @@ function PlanningWorkspace() {
     <>
       <DomainCommandCenter
         showAddData={canEdit}
+        moduleKey="planning"
         eyebrow="Domain · Planning & Forecasting · where the year is heading"
         title="Planning & Forecasting"
         Icon={LineChart}

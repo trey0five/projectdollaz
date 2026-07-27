@@ -247,6 +247,7 @@ function HrWorkspace() {
   const commandCenter = (
     <DomainCommandCenter
       showAddData={canEdit}
+      moduleKey="hr"
       eyebrow="Domain · HR & Staffing · the people behind the ratios"
       title="HR & Staffing"
       Icon={Users2}

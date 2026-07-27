@@ -13,7 +13,7 @@ import { motion } from 'framer-motion'
 import { GraduationCap, RotateCcw, Building2, ArrowRight } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
 import ModuleTabs from '../components/module/ModuleTabs.jsx'
-import AddDataCta from '../components/module/AddDataCta.jsx'
+import { AddDataCta, RecordsCta } from '../components/module/ModuleCtas.jsx'
 import ModuleRegister from '../components/module/ModuleRegister.jsx'
 import { moduleHue } from '../components/module/moduleAnatomy.js'
 import BackLink from '../components/ui/BackLink.jsx'
@@ -197,8 +197,11 @@ function EnrollmentWorkspace() {
         </p>
         <h1 className="font-serif text-2xl font-bold text-navy sm:text-3xl">Enrollment</h1>
       </div>
-      {/* On-page Add-data entry (mirrors the sidebar tab). */}
-      <AddDataCta className="ml-auto" />
+      {/* On-page Add-data + Records entries (mirror the sidebar tabs). */}
+      <span className="ml-auto flex flex-wrap items-center gap-2">
+        <RecordsCta module="enrollment" />
+        <AddDataCta />
+      </span>
     </motion.header>
   )
 

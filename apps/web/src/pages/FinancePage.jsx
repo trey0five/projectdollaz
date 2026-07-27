@@ -25,7 +25,7 @@ import {
   Scale,
 } from 'lucide-react'
 import { BACK_PILL, BackPillBody } from '../components/ui/BackLink.jsx'
-import AddDataCta from '../components/module/AddDataCta.jsx'
+import { AddDataCta, RecordsCta } from '../components/module/ModuleCtas.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useBilling } from '../context/BillingContext.jsx'
 import { usePersistence } from '../context/PersistenceContext.jsx'
@@ -74,8 +74,13 @@ function FinanceHeader() {
           <h1 className="font-serif text-2xl font-semibold text-navy sm:text-[28px]">Finance</h1>
           <p className="text-[15px] text-muted">Your finance command center</p>
         </div>
-        {/* On-page Add-data entry (mirrors the sidebar tab) — v2 module shell only. */}
-        {uiV2 && <AddDataCta className="ml-auto" />}
+        {/* On-page Add-data + Records entries (mirror the sidebar tabs) — v2 only. */}
+        {uiV2 && (
+          <span className="ml-auto flex flex-wrap items-center gap-2">
+            <RecordsCta module="finance" />
+            <AddDataCta />
+          </span>
+        )}
       </div>
     </div>
   )
