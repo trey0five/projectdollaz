@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// WizardStepper — the 3-step progress rail, exposed as an ARIA tablist so screen
+// WizardStepper — the progress rail, exposed as an ARIA tablist so screen
 // readers can perceive and (for already-visited steps) move between the steps. The
 // active step carries aria-current="step"; each tab controls the single wizard
 // panel (aria-controls -> panelId). Completed steps are focusable/clickable to go
@@ -14,12 +14,16 @@ const STEPS = [
   { key: 'confirm', label: 'Done' },
 ]
 
-export default function WizardStepper({ current, hue, panelId, onGoTo }) {
-  const currentIdx = STEPS.findIndex((s) => s.key === current)
+// `skipChoose` drops the Choose step entirely for single-option modules: they
+// auto-advance past it on entry, so showing (and offering to go back to) a
+// one-card picker is dead chrome — Back goes to the module overview instead.
+export default function WizardStepper({ current, hue, panelId, onGoTo, skipChoose = false }) {
+  const steps = skipChoose ? STEPS.filter((s) => s.key !== 'choose') : STEPS
+  const currentIdx = steps.findIndex((s) => s.key === current)
 
   return (
     <div role="tablist" aria-label="Add data steps" className="flex items-center gap-2">
-      {STEPS.map((s, i) => {
+      {steps.map((s, i) => {
         const state = i < currentIdx ? 'done' : i === currentIdx ? 'active' : 'todo'
         const reachable = i < currentIdx // only go BACKWARD to a completed step
         return (
@@ -54,7 +58,7 @@ export default function WizardStepper({ current, hue, panelId, onGoTo }) {
                 <span className={state === 'todo' ? 'text-muted' : ''}>{s.label}</span>
               </span>
             </button>
-            {i < STEPS.length - 1 && (
+            {i < steps.length - 1 && (
               <span
                 className="h-0.5 flex-1 rounded-full"
                 style={{ backgroundColor: i < currentIdx ? hue : hueRgba(hue, 0.2) }}

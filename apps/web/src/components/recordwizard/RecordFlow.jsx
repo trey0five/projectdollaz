@@ -52,6 +52,10 @@ export default function RecordFlow({
   onCancel,
   goToOption,
   registerGuard,
+  // What leaving the flow at step 0 actually lands on — the parent decides
+  // ('options' picker, or the module overview when this is the sole option),
+  // so the prominent back control never promises the wrong destination.
+  exitLabel = 'options',
 }) {
   const reduce = !!ctx.reduce
   const S = flow.steps.length // the framework-appended Review step's index
@@ -588,7 +592,7 @@ export default function RecordFlow({
   const Icon = flow.Icon
   // Contextual name for the prominent back control: the previous step's label,
   // or "options" on the first step (where Back leaves the flow to the picker).
-  const backLabel = stepIdx === 0 ? 'options' : railLabels[stepIdx - 1]
+  const backLabel = stepIdx === 0 ? exitLabel : railLabels[stepIdx - 1]
 
   return (
     <div className="relative">

@@ -15,6 +15,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { ChevronLeft, CalendarClock, CheckCircle2 } from 'lucide-react'
 import WizardStepper from './WizardStepper.jsx'
 import WizardChoose from './WizardChoose.jsx'
@@ -99,6 +100,20 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
     setStep('choose')
   }
 
+  // ── Overview escape hatch ─────────────────────────────────────────────────
+  // A single-option module auto-skips Choose on the way IN, so its back button
+  // must not land on a pointless one-card Choose on the way OUT — it goes to
+  // the module Overview instead (clearing ?tab= via the pathname, the exact URL
+  // model ModuleTabs reads). Multi-option modules keep Choose as the back stop
+  // and get an explicit "Back to overview" link ON the Choose screen. This is
+  // user-clicked navigation, not the post-save auto-navigation the AddDataTab
+  // contract forbids.
+  const navigate = useNavigate()
+  const { pathname } = useLocation()
+  const soleOption = options.length === 1
+  const backToOverview = () => navigate(pathname)
+  const leaveWork = soleOption ? backToOverview : backToChoose
+
   // kind:'flow' leave guard — a mounted RecordFlow with queued/dirty work opens
   // its own discard dialog (guard fn returns false) instead of us navigating.
   const guardedLeave = (leave) => {
@@ -113,7 +128,7 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
       savedRef.current = false
       setStep('confirm')
     } else {
-      backToChoose()
+      leaveWork()
     }
   }
   const markSaved = () => {
@@ -190,6 +205,7 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
           current={step}
           hue={hue}
           panelId={PANEL_ID}
+          skipChoose={soleOption}
           onGoTo={(s) => guardedLeave(() => setStep(s))}
         />
       </div>
@@ -219,6 +235,17 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
                 <h3 ref={headingRef} tabIndex={-1} className="sr-only">
                   Choose what to add for {moduleLabel}
                 </h3>
+                {/* Escape hatch: Choose is the back stop for multi-option modules,
+                    so it needs its own way home (single-option modules skip this
+                    screen entirely and go straight to Overview). */}
+                <button
+                  type="button"
+                  onClick={backToOverview}
+                  className="mb-3 inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[13.5px] font-semibold text-muted outline-none transition-colors hover:text-navy focus-visible:ring-2"
+                  style={{ '--tw-ring-color': hueRgba(hue, 0.5) }}
+                >
+                  <ChevronLeft size={16} /> Back to {moduleLabel} overview
+                </button>
                 <WizardChoose options={options} hue={hue} onChoose={chooseOption} />
               </>
             )}
@@ -236,11 +263,12 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
                   subtitle={option.blurb}
                   ctx={fullCtx}
                   hue={hue}
+                  exitLabel={soleOption ? `${moduleLabel} overview` : 'options'}
                   onDone={(result) => {
                     setFlowResult(result)
                     setStep('confirm')
                   }}
-                  onCancel={backToChoose}
+                  onCancel={leaveWork}
                   goToOption={goToOption}
                   registerGuard={(fn) => {
                     flowGuardRef.current = fn
@@ -256,10 +284,10 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
                   <div className="flex items-center gap-2.5">
                     <button
                       type="button"
-                      onClick={() => guardedLeave(backToChoose)}
+                      onClick={() => guardedLeave(leaveWork)}
                       className="flex h-8 w-8 items-center justify-center rounded-lg text-muted outline-none transition-colors hover:bg-section hover:text-navy focus-visible:ring-2"
                       style={{ '--tw-ring-color': hueRgba(hue, 0.5) }}
-                      aria-label="Back to options"
+                      aria-label={soleOption ? `Back to ${moduleLabel} overview` : 'Back to options'}
                     >
                       <ChevronLeft size={18} />
                     </button>
@@ -301,10 +329,10 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
                     <div className="flex items-center justify-between gap-3 border-t border-rule/60 bg-white px-5 py-3.5">
                       <button
                         type="button"
-                        onClick={backToChoose}
+                        onClick={leaveWork}
                         className="text-[14px] font-semibold text-muted transition-colors hover:text-navy"
                       >
-                        Back
+                        {soleOption ? 'Back to overview' : 'Back'}
                       </button>
                       <button
                         type="button"
