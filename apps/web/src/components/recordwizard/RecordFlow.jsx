@@ -20,6 +20,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Check, ChevronDown, ChevronRight, ChevronLeft, Loader2, Plus, RefreshCw, AlertCircle } from 'lucide-react'
 import { hueRgba } from '../wizard/wizardConfigs.jsx'
+import { BACK_PILL, BackPillBody } from '../ui/BackLink.jsx'
 import { apiErrorMessage } from '../../lib/api.js'
 import { makeItemId } from './flowSchema.js'
 import { validateStep, validateItem, isDirty, flowCount, submitQueue } from './flowRuntime.js'
@@ -679,20 +680,16 @@ export default function RecordFlow({
             />
             <div className="relative">
               <div className="mb-3.5 flex items-center justify-between gap-3">
+                {/* Same pill as "Back to dashboard"/"Back to overview" — one
+                    back-control family. Stays a BUTTON (not a Link) so the
+                    unsaved-work discard guard in back() still runs. */}
                 <button
                   type="button"
                   onClick={back}
                   disabled={submitting}
-                  className="group inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] font-bold outline-none transition-all hover:-translate-x-0.5 focus-visible:ring-2 disabled:opacity-50"
-                  style={{
-                    borderColor: hueRgba(hue, 0.35),
-                    color: hue,
-                    backgroundColor: hueRgba(hue, 0.05),
-                    '--tw-ring-color': hueRgba(hue, 0.5),
-                  }}
+                  className={`${BACK_PILL} disabled:opacity-50`}
                 >
-                  <ChevronLeft size={16} className="transition-transform group-hover:-translate-x-0.5" />
-                  Back to {backLabel}
+                  <BackPillBody label={`Back to ${backLabel}`} />
                 </button>
                 {basket.length > 0 && (
                   <motion.span

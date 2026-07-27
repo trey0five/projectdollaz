@@ -23,6 +23,8 @@ import WizardConfirm from './WizardConfirm.jsx'
 import RecordFlow from '../recordwizard/RecordFlow.jsx'
 import FlowConfirm from '../recordwizard/FlowConfirm.jsx'
 import { hueRgba, wizardModuleLabel } from './wizardConfigs.jsx'
+import ModuleOverviewLink from '../module/ModuleOverviewLink.jsx'
+import { BACK_PILL, BackPillBody } from '../ui/BackLink.jsx'
 
 const PANEL_ID = 'wiz-panel'
 const STEP_INDEX = { choose: 0, work: 1, confirm: 2 }
@@ -238,14 +240,7 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
                 {/* Escape hatch: Choose is the back stop for multi-option modules,
                     so it needs its own way home (single-option modules skip this
                     screen entirely and go straight to Overview). */}
-                <button
-                  type="button"
-                  onClick={backToOverview}
-                  className="mb-3 inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[13.5px] font-semibold text-muted outline-none transition-colors hover:text-navy focus-visible:ring-2"
-                  style={{ '--tw-ring-color': hueRgba(hue, 0.5) }}
-                >
-                  <ChevronLeft size={16} /> Back to {moduleLabel} overview
-                </button>
+                <ModuleOverviewLink module={config.module} className="mb-3" />
                 <WizardChoose options={options} hue={hue} onChoose={chooseOption} />
               </>
             )}
@@ -285,11 +280,11 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
                     <button
                       type="button"
                       onClick={() => guardedLeave(leaveWork)}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg text-muted outline-none transition-colors hover:bg-section hover:text-navy focus-visible:ring-2"
-                      style={{ '--tw-ring-color': hueRgba(hue, 0.5) }}
-                      aria-label={soleOption ? `Back to ${moduleLabel} overview` : 'Back to options'}
+                      className={BACK_PILL}
                     >
-                      <ChevronLeft size={18} />
+                      <BackPillBody
+                        label={soleOption ? `Back to ${moduleLabel} overview` : 'Back to options'}
+                      />
                     </button>
                     <h3
                       ref={headingRef}
