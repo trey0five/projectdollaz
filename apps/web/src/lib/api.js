@@ -570,6 +570,19 @@ export const accreditationApi = {
   // Deterministic evidence suggestions for one standard (catalog evidence-tag match).
   getSuggestions: (schoolId, standardId) =>
     api.get(`/schools/${schoolId}/accreditation/standards/${standardId}/suggestions`),
+  // ── Phase A: the readiness HISTORY (append-only nightly series) ──────────────
+  // One series per adopted framework (seriesKey = the framework's code, or 'none'
+  // for standards linked to no framework) — a school that adopted two frameworks
+  // has two independent series and must pick one. /series lists them (with the
+  // defaultSeriesKey); /trend returns the points + the OBSERVED CHANGE (never a
+  // trend statistic) + its exact four-way decomposition; /diff is the standard-level
+  // "what actually moved" between two dates. All three are gated by the same
+  // 'accreditation' module 402 as the block above.
+  getReadinessSeries: (schoolId) => api.get(`/schools/${schoolId}/accreditation/readiness/series`),
+  getReadinessTrend: (schoolId, params) =>
+    api.get(`/schools/${schoolId}/accreditation/readiness/trend`, { params }),
+  getReadinessDiff: (schoolId, params) =>
+    api.get(`/schools/${schoolId}/accreditation/readiness/diff`, { params }),
 }
 
 // ── Phase 4 Knowledge document store: CORE (always included, NOT a licensed module).

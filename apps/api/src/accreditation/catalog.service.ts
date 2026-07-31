@@ -1,8 +1,9 @@
-import { Injectable, Logger, NotFoundException, type OnModuleInit } from '@nestjs/common'
+import { Injectable, Logger, NotFoundException, Optional, type OnModuleInit } from '@nestjs/common'
 import type { AccreditationCatalogStandard } from '@finrep/db'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { AuditService } from '../common/audit/audit.service.js'
 import { FRAMEWORK_SEEDS, type FrameworkSeed } from './catalog-seed.js'
+import { AccreditationSnapshotService } from './readiness-snapshot.service.js'
 
 /** One framework row as returned to the client (with per-school adoption facts). */
 export interface FrameworkPublic {
@@ -66,6 +67,9 @@ export class AccreditationCatalogService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    // Phase A: adopting a framework STARTS a readiness series. @Optional so the
+    // existing unit specs can still construct this service with two arguments.
+    @Optional() private readonly snapshot?: AccreditationSnapshotService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -259,6 +263,13 @@ export class AccreditationCatalogService implements OnModuleInit {
       targetType: 'accreditation_frameworks',
       targetId: result.frameworkId,
     })
+
+    // Adopting a framework is the moment a series can first exist. Without this
+    // the head of school who adopts at 10am stares at "Tracking starts today —
+    // earlier readiness was not recorded" over an empty strip until the 3AM
+    // cron. Fire-and-forget and debounced, exactly like the rubric/evidence
+    // write paths — an adopt must never be slowed or failed by snapshotting.
+    this.snapshot?.captureOnEvent(schoolId)
     return result
   }
 

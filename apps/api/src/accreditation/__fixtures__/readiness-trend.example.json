@@ -1,0 +1,618 @@
+{
+  "$contract": "Accreditation Intelligence Phase A — the FROZEN wire contract for the three readiness-history endpoints. Backend-first shared fixture (spec D.10): the web engineer codes against THIS file and does not wait for the API. Every payload below is a literal, complete example. HONESTY RULE: the word 'trend' is a route segment only — it never appears in any human-readable string. Phase A reports OBSERVED CHANGE. domainScores is a Phase-B column and is absent from every Phase-A payload.",
+  "$endpoints": {
+    "series": "GET /schools/:schoolId/accreditation/readiness/series",
+    "trend": "GET /schools/:schoolId/accreditation/readiness/trend?seriesKey&from&to&granularity",
+    "diff": "GET /schools/:schoolId/accreditation/readiness/diff?seriesKey&from&to"
+  },
+  "$rules": [
+    "seriesKey is the adopted framework CODE, or the literal string 'none' for standards linked to no framework. It is NEVER the read-time dominant-framework heuristic.",
+    "requiresSelection === (series.length > 1). defaultSeriesKey = the series with the most leaves; tie → seriesKey ascending.",
+    "Documented (selfScoredPct, the rubric term) and Defensible (verifiedPct, the evidence term) are ALWAYS rendered as a pair. readinessPct alone is never a headline.",
+    "change.available === false → change.from / change.to / change.deltaPct are all null and change.reason is a non-null sentence rendered VERBATIM. No arrow, no direction word.",
+    "decomposition is non-null only when points.length >= 3 (MIN_POINTS_FOR_DIRECTION); otherwise null.",
+    "A break inside [from,to] forces change.direction = 'insufficient_history' and the chart renders a GAP at breaks[].date — not a continuous line. The decomposition is still returned because it EXPLAINS the break (fromScopeChange).",
+    "boardMarker is fail-soft: it never returns 402 and never blocks the payload.",
+    "demoData is a property of the SERIES, not of one row: it is true when this school's record contains ANY reading written by the env-gated demo seeder. A genuine capture appended on top INHERITS isDemo, so a real night can never launder fabricated history into an unlabelled record. The UI must render a hard DEMO DATA chip.",
+    "points: [] has TWO distinct causes and the UI must not conflate them. seriesStartsAt === null (and the /series entry has no pointCount) means nothing was ever recorded — 'tracking starts today'. A non-null seriesStartsAt with an empty points array means readings exist OUTSIDE the requested window (the common multi-framework case: a series the school stopped using more than 365 days ago); saying 'earlier readiness was not recorded' there would be false. See trendWindowEmpty."
+  ],
+  "series": {
+    "seriesStartsAt": "2026-08-14",
+    "requiresSelection": true,
+    "defaultSeriesKey": "cognia_2022",
+    "series": [
+      {
+        "seriesKey": "cognia_2022",
+        "frameworkId": "0f3a1c7e-4b62-4f0a-9c2d-8e5b1a7d3f10",
+        "code": "cognia_2022",
+        "name": "Cognia Performance Standards (2022, incl. 2025 update)",
+        "accreditor": "Cognia",
+        "leafCount": 31,
+        "pointCount": 42,
+        "firstPointAt": "2026-08-14",
+        "lastPointAt": "2026-09-24",
+        "indexComparable": true
+      },
+      {
+        "seriesKey": "none",
+        "frameworkId": null,
+        "code": null,
+        "name": "Standards not linked to a framework",
+        "accreditor": null,
+        "leafCount": 6,
+        "pointCount": 42,
+        "firstPointAt": "2026-08-14",
+        "lastPointAt": "2026-09-24",
+        "indexComparable": false
+      }
+    ],
+    "demoData": false
+  },
+  "seriesEmpty": {
+    "seriesStartsAt": null,
+    "requiresSelection": false,
+    "defaultSeriesKey": null,
+    "series": [],
+    "demoData": false
+  },
+  "trend": {
+    "seriesKey": "cognia_2022",
+    "requiresSelection": true,
+    "framework": {
+      "id": "0f3a1c7e-4b62-4f0a-9c2d-8e5b1a7d3f10",
+      "code": "cognia_2022",
+      "name": "Cognia Performance Standards (2022, incl. 2025 update)",
+      "indexMin": 100,
+      "indexMax": 400,
+      "defaultTarget": 280
+    },
+    "seriesStartsAt": "2026-08-14",
+    "granularity": "day",
+    "points": [
+      {
+        "date": "2026-08-14",
+        "readinessPct": 50,
+        "selfScoredPct": 46,
+        "verifiedPct": 61,
+        "projectedIndex": 238,
+        "band": "Below accreditation threshold",
+        "leafCount": 31,
+        "scoredCount": 19,
+        "coveredCount": 19
+      },
+      {
+        "date": "2026-08-21",
+        "readinessPct": 52,
+        "selfScoredPct": 48,
+        "verifiedPct": 61,
+        "projectedIndex": 244,
+        "band": "Accredited Needing Improvement",
+        "leafCount": 31,
+        "scoredCount": 20,
+        "coveredCount": 19
+      },
+      {
+        "date": "2026-08-28",
+        "readinessPct": 53,
+        "selfScoredPct": 50,
+        "verifiedPct": 61,
+        "projectedIndex": 250,
+        "band": "Accredited Needing Improvement",
+        "leafCount": 31,
+        "scoredCount": 21,
+        "coveredCount": 19
+      },
+      {
+        "date": "2026-09-04",
+        "readinessPct": 55,
+        "selfScoredPct": 52,
+        "verifiedPct": 61,
+        "projectedIndex": 256,
+        "band": "Accredited Needing Improvement",
+        "leafCount": 31,
+        "scoredCount": 22,
+        "coveredCount": 19
+      },
+      {
+        "date": "2026-09-11",
+        "readinessPct": 57,
+        "selfScoredPct": 55,
+        "verifiedPct": 61,
+        "projectedIndex": 265,
+        "band": "Accredited Needing Improvement",
+        "leafCount": 31,
+        "scoredCount": 23,
+        "coveredCount": 19
+      },
+      {
+        "date": "2026-09-17",
+        "readinessPct": 58,
+        "selfScoredPct": 57,
+        "verifiedPct": 61,
+        "projectedIndex": 271,
+        "band": "Accredited Needing Improvement",
+        "leafCount": 31,
+        "scoredCount": 24,
+        "coveredCount": 19
+      },
+      {
+        "date": "2026-09-21",
+        "readinessPct": 59,
+        "selfScoredPct": 58,
+        "verifiedPct": 61,
+        "projectedIndex": 274,
+        "band": "Accredited Needing Improvement",
+        "leafCount": 31,
+        "scoredCount": 24,
+        "coveredCount": 19
+      },
+      {
+        "date": "2026-09-24",
+        "readinessPct": 61,
+        "selfScoredPct": 61,
+        "verifiedPct": 61,
+        "projectedIndex": 283,
+        "band": "Accredited",
+        "leafCount": 31,
+        "scoredCount": 24,
+        "coveredCount": 19
+      }
+    ],
+    "change": {
+      "available": true,
+      "from": "2026-08-14",
+      "to": "2026-09-24",
+      "deltaPct": 11,
+      "direction": "improving",
+      "confidence": "observed_change",
+      "reason": null
+    },
+    "decomposition": {
+      "total": 11,
+      "fromScopeChange": 0,
+      "fromScoring": 8,
+      "fromImprovement": 3,
+      "fromEvidence": 0,
+      "residual": 0,
+      "narrative": "+11 points: +8 from newly scored standards, +3 from actual improvement."
+    },
+    "breaks": [],
+    "boardMarker": {
+      "available": true,
+      "since": "2026-09-10",
+      "label": "your last board meeting",
+      "deltaPct": 4,
+      "reason": null
+    },
+    "indexComparable": true,
+    "engineVersion": "1.0.0",
+    "demoData": false,
+    "disclaimer": "Self-assessment produced by KYRO from school-entered and integrated data. Not an accreditation product; not affiliated with, endorsed by, or a submission to Cognia, MSA-CESS or WCEA. The accreditor's portal remains the authoritative repository."
+  },
+  "trendInsufficientHistory": {
+    "seriesKey": "cognia_2022",
+    "requiresSelection": false,
+    "framework": {
+      "id": "0f3a1c7e-4b62-4f0a-9c2d-8e5b1a7d3f10",
+      "code": "cognia_2022",
+      "name": "Cognia Performance Standards (2022, incl. 2025 update)",
+      "indexMin": 100,
+      "indexMax": 400,
+      "defaultTarget": 280
+    },
+    "seriesStartsAt": "2026-09-22",
+    "granularity": "day",
+    "points": [
+      {
+        "date": "2026-09-22",
+        "readinessPct": 44,
+        "selfScoredPct": 40,
+        "verifiedPct": 55,
+        "projectedIndex": 220,
+        "band": "Below accreditation threshold",
+        "leafCount": 31,
+        "scoredCount": 14,
+        "coveredCount": 17
+      },
+      {
+        "date": "2026-09-24",
+        "readinessPct": 46,
+        "selfScoredPct": 42,
+        "verifiedPct": 55,
+        "projectedIndex": 226,
+        "band": "Below accreditation threshold",
+        "leafCount": 31,
+        "scoredCount": 15,
+        "coveredCount": 17
+      }
+    ],
+    "change": {
+      "available": false,
+      "from": null,
+      "to": null,
+      "deltaPct": null,
+      "direction": "insufficient_history",
+      "confidence": "insufficient_history",
+      "reason": "Tracking started on 22 Sep 2026 — we need at least 3 readings over 30 days before reporting a direction."
+    },
+    "decomposition": null,
+    "breaks": [],
+    "boardMarker": {
+      "available": false,
+      "since": null,
+      "label": null,
+      "deltaPct": null,
+      "reason": "no_approved_minutes"
+    },
+    "indexComparable": true,
+    "engineVersion": "1.0.0",
+    "demoData": false,
+    "disclaimer": "Self-assessment produced by KYRO from school-entered and integrated data. Not an accreditation product; not affiliated with, endorsed by, or a submission to Cognia, MSA-CESS or WCEA. The accreditor's portal remains the authoritative repository."
+  },
+  "trendNoHistory": {
+    "seriesKey": "none",
+    "requiresSelection": false,
+    "framework": null,
+    "seriesStartsAt": null,
+    "granularity": "day",
+    "points": [],
+    "change": {
+      "available": false,
+      "from": null,
+      "to": null,
+      "deltaPct": null,
+      "direction": "insufficient_history",
+      "confidence": "insufficient_history",
+      "reason": "Readiness has not been recorded yet — tracking starts with the first reading."
+    },
+    "decomposition": null,
+    "breaks": [],
+    "boardMarker": {
+      "available": false,
+      "since": null,
+      "label": null,
+      "deltaPct": null,
+      "reason": "no_approved_minutes"
+    },
+    "indexComparable": false,
+    "engineVersion": "1.0.0",
+    "demoData": false,
+    "disclaimer": "Self-assessment produced by KYRO from school-entered and integrated data. Not an accreditation product; not affiliated with, endorsed by, or a submission to Cognia, MSA-CESS or WCEA. The accreditor's portal remains the authoritative repository."
+  },
+  "trendWindowEmpty": {
+    "seriesKey": "nsbecs",
+    "requiresSelection": true,
+    "framework": null,
+    "seriesStartsAt": "2024-02-01",
+    "granularity": "day",
+    "points": [],
+    "change": {
+      "available": false,
+      "from": null,
+      "to": null,
+      "deltaPct": null,
+      "direction": "insufficient_history",
+      "confidence": "insufficient_history",
+      "reason": "No readings were recorded in this window — this series was last recorded on 24 Nov 2024."
+    },
+    "decomposition": null,
+    "breaks": [],
+    "boardMarker": {
+      "available": false,
+      "since": null,
+      "label": null,
+      "deltaPct": null,
+      "reason": "no_approved_minutes"
+    },
+    "indexComparable": false,
+    "engineVersion": "1.0.0",
+    "demoData": false,
+    "disclaimer": "Self-assessment produced by KYRO from school-entered and integrated data. Not an accreditation product; not affiliated with, endorsed by, or a submission to Cognia, MSA-CESS or WCEA. The accreditor's portal remains the authoritative repository."
+  },
+  "trendWithBreak": {
+    "seriesKey": "cognia_2022",
+    "requiresSelection": true,
+    "framework": {
+      "id": "0f3a1c7e-4b62-4f0a-9c2d-8e5b1a7d3f10",
+      "code": "cognia_2022",
+      "name": "Cognia Performance Standards (2022, incl. 2025 update)",
+      "indexMin": 100,
+      "indexMax": 400,
+      "defaultTarget": 280
+    },
+    "seriesStartsAt": "2026-08-14",
+    "granularity": "day",
+    "points": [
+      {
+        "date": "2026-08-14",
+        "readinessPct": 63,
+        "selfScoredPct": 62,
+        "verifiedPct": 68,
+        "projectedIndex": 286,
+        "band": "Accredited",
+        "leafCount": 19,
+        "scoredCount": 15,
+        "coveredCount": 13
+      },
+      {
+        "date": "2026-08-24",
+        "readinessPct": 64,
+        "selfScoredPct": 63,
+        "verifiedPct": 68,
+        "projectedIndex": 289,
+        "band": "Accredited",
+        "leafCount": 19,
+        "scoredCount": 15,
+        "coveredCount": 13
+      },
+      {
+        "date": "2026-09-02",
+        "readinessPct": 41,
+        "selfScoredPct": 39,
+        "verifiedPct": 42,
+        "projectedIndex": 217,
+        "band": "Below accreditation threshold",
+        "leafCount": 31,
+        "scoredCount": 15,
+        "coveredCount": 13
+      },
+      {
+        "date": "2026-09-14",
+        "readinessPct": 44,
+        "selfScoredPct": 42,
+        "verifiedPct": 45,
+        "projectedIndex": 226,
+        "band": "Below accreditation threshold",
+        "leafCount": 31,
+        "scoredCount": 17,
+        "coveredCount": 14
+      },
+      {
+        "date": "2026-09-24",
+        "readinessPct": 47,
+        "selfScoredPct": 46,
+        "verifiedPct": 48,
+        "projectedIndex": 238,
+        "band": "Below accreditation threshold",
+        "leafCount": 31,
+        "scoredCount": 19,
+        "coveredCount": 15
+      }
+    ],
+    "change": {
+      "available": false,
+      "from": null,
+      "to": null,
+      "deltaPct": null,
+      "direction": "insufficient_history",
+      "confidence": "insufficient_history",
+      "reason": "Standards in scope changed from 19 to 31 on 2 Sep 2026 — readings before and after that date are not comparable."
+    },
+    "decomposition": {
+      "total": -16,
+      "fromScopeChange": -19,
+      "fromScoring": 2,
+      "fromImprovement": 0,
+      "fromEvidence": 1,
+      "residual": 0,
+      "narrative": "-16 points: -19 from a change in which standards are in scope, +2 from newly scored standards, +1 from new evidence."
+    },
+    "breaks": [
+      {
+        "date": "2026-09-02",
+        "kind": "leaf_count_changed",
+        "detail": "Standards in scope changed from 19 to 31."
+      }
+    ],
+    "boardMarker": {
+      "available": false,
+      "since": null,
+      "label": null,
+      "deltaPct": null,
+      "reason": "governance_not_licensed"
+    },
+    "indexComparable": true,
+    "engineVersion": "1.0.0",
+    "demoData": false,
+    "disclaimer": "Self-assessment produced by KYRO from school-entered and integrated data. Not an accreditation product; not affiliated with, endorsed by, or a submission to Cognia, MSA-CESS or WCEA. The accreditor's portal remains the authoritative repository."
+  },
+  "trendDemo": {
+    "seriesKey": "nsbecs",
+    "requiresSelection": false,
+    "framework": {
+      "id": "b71d4e02-9a35-4c18-8f6b-2d90c4e77a51",
+      "code": "nsbecs",
+      "name": "National Standards & Benchmarks for Effective Catholic Schools",
+      "indexMin": null,
+      "indexMax": null,
+      "defaultTarget": null
+    },
+    "seriesStartsAt": "2023-10-31",
+    "granularity": "month",
+    "points": [
+      {
+        "date": "2026-05-31",
+        "readinessPct": 64,
+        "selfScoredPct": 63,
+        "verifiedPct": 69,
+        "projectedIndex": null,
+        "band": null,
+        "leafCount": 13,
+        "scoredCount": 11,
+        "coveredCount": 9
+      },
+      {
+        "date": "2026-06-30",
+        "readinessPct": 66,
+        "selfScoredPct": 65,
+        "verifiedPct": 69,
+        "projectedIndex": null,
+        "band": null,
+        "leafCount": 13,
+        "scoredCount": 12,
+        "coveredCount": 9
+      },
+      {
+        "date": "2026-07-31",
+        "readinessPct": 69,
+        "selfScoredPct": 67,
+        "verifiedPct": 77,
+        "projectedIndex": null,
+        "band": null,
+        "leafCount": 13,
+        "scoredCount": 12,
+        "coveredCount": 10
+      }
+    ],
+    "change": {
+      "available": true,
+      "from": "2026-05-31",
+      "to": "2026-07-31",
+      "deltaPct": 5,
+      "direction": "improving",
+      "confidence": "observed_change",
+      "reason": null
+    },
+    "decomposition": {
+      "total": 5,
+      "fromScopeChange": 0,
+      "fromScoring": 2,
+      "fromImprovement": 1,
+      "fromEvidence": 2,
+      "residual": 0,
+      "narrative": "+5 points: +2 from newly scored standards, +1 from actual improvement, +2 from new evidence."
+    },
+    "breaks": [],
+    "boardMarker": {
+      "available": true,
+      "since": "2026-06-18",
+      "label": "your last board meeting",
+      "deltaPct": 3,
+      "reason": null
+    },
+    "indexComparable": false,
+    "engineVersion": "1.0.0",
+    "demoData": true,
+    "disclaimer": "Self-assessment produced by KYRO from school-entered and integrated data. Not an accreditation product; not affiliated with, endorsed by, or a submission to Cognia, MSA-CESS or WCEA. The accreditor's portal remains the authoritative repository."
+  },
+  "diff": {
+    "seriesKey": "cognia_2022",
+    "from": "2026-08-14",
+    "to": "2026-09-24",
+    "fromDate": "2026-08-14",
+    "toDate": "2026-09-24",
+    "improved": [
+      {
+        "standardId": "1c0a6f21-5d43-4a97-9b02-3f7e8c15d904",
+        "code": "COG-3",
+        "fromScore": 2,
+        "toScore": 3
+      },
+      {
+        "standardId": "2d1b7f32-6e54-4ba8-8c13-4a8f9d26e015",
+        "code": "COG-8",
+        "fromScore": 2,
+        "toScore": 3
+      },
+      {
+        "standardId": "3e2c8043-7f65-4cb9-9d24-5b90ae37f126",
+        "code": "COG-15",
+        "fromScore": 3,
+        "toScore": 4
+      },
+      {
+        "standardId": "4f3d9154-8076-4dca-8e35-6ca1bf48a237",
+        "code": "COG-22",
+        "fromScore": 2,
+        "toScore": 3
+      },
+      {
+        "standardId": "5a4ea265-9187-4edb-9f46-7db2c059b348",
+        "code": "COG-24",
+        "fromScore": 3,
+        "toScore": 4
+      }
+    ],
+    "declined": [
+      {
+        "standardId": "6b5fb376-a298-4fec-8057-8ec3d16ac459",
+        "code": "COG-27",
+        "fromScore": 3,
+        "toScore": 2
+      }
+    ],
+    "newlyScored": [
+      {
+        "standardId": "7c60c487-b3a9-40fd-9168-9fd4e27bd56a",
+        "code": "COG-16",
+        "toScore": 3
+      },
+      {
+        "standardId": "8d71d598-c4ba-410e-8279-a0e5f38ce67b",
+        "code": "COG-18",
+        "toScore": 3
+      },
+      {
+        "standardId": "9e82e6a9-d5cb-421f-938a-b1f6a49df78c",
+        "code": "COG-20",
+        "toScore": 3
+      },
+      {
+        "standardId": "af93f7ba-e6dc-4320-a49b-c207b5ae089d",
+        "code": "COG-25",
+        "toScore": 4
+      },
+      {
+        "standardId": "b0a408cb-f7ed-4431-b5ac-d318c6bf19ae",
+        "code": "COG-28",
+        "toScore": 3
+      }
+    ],
+    "unscored": [],
+    "evidenceGained": [],
+    "evidenceLost": [],
+    "scopeAdded": [],
+    "scopeRemoved": [],
+    "counts": {
+      "improved": 5,
+      "declined": 1,
+      "newlyScored": 5,
+      "unscored": 0,
+      "evidenceGained": 0,
+      "evidenceLost": 0,
+      "scopeAdded": 0,
+      "scopeRemoved": 0
+    },
+    "decomposition": {
+      "total": 11,
+      "fromScopeChange": 0,
+      "fromScoring": 8,
+      "fromImprovement": 3,
+      "fromEvidence": 0,
+      "residual": 0,
+      "narrative": "+11 points: +8 from newly scored standards, +3 from actual improvement."
+    },
+    "demoData": false
+  },
+  "errors": {
+    "notLicensed": {
+      "$appliesTo": "all three endpoints — the existing EntitlementGuard, unchanged",
+      "status": 402,
+      "body": {
+        "statusCode": 402,
+        "code": "MODULE_NOT_LICENSED",
+        "module": "accreditation",
+        "message": "This feature requires the Accreditation module."
+      }
+    },
+    "noSnapshotBefore": {
+      "$appliesTo": "GET /diff only",
+      "status": 404,
+      "body": {
+        "statusCode": 404,
+        "code": "NO_SNAPSHOT_BEFORE",
+        "message": "No readiness reading was recorded on or before 14 Aug 2026 for this series."
+      }
+    }
+  }
+}

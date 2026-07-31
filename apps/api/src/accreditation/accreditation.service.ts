@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
+import { BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common'
 import type { AccreditationStandard, AccreditationEvidence } from '@finrep/db'
 import {
   computeStandardCoverage,
@@ -14,6 +14,7 @@ import {
 } from '@finrep/compliance'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { AuditService } from '../common/audit/audit.service.js'
+import { AccreditationSnapshotService } from './readiness-snapshot.service.js'
 import type { CreateStandardDto } from './dto/create-standard.dto.js'
 import type { UpdateStandardDto } from './dto/update-standard.dto.js'
 import {
@@ -223,6 +224,11 @@ export class AccreditationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    // Phase A: fire-and-forget readiness capture after a write that can MOVE
+    // readiness. @Optional because the write paths must work with or without it —
+    // snapshotting is observability, and observability must never be able to
+    // fail a user's save (it is also why every call below is unawaited).
+    @Optional() private readonly snapshot?: AccreditationSnapshotService,
   ) {}
 
   /** Extra computed tree fields; when omitted (single-row create/update response), the
@@ -671,6 +677,14 @@ export class AccreditationService {
       },
     )
 
+    // ── Phase A score PROVENANCE ────────────────────────────────────────────
+    // A rubric self-score is an ASSERTION, so we record who asserted it and
+    // when. Stamped ONLY when the score actually CHANGES: renaming a standard,
+    // re-parenting it or editing its notes must not restart its provenance
+    // clock, or "scored 3 days ago" becomes a number nobody can trust.
+    const nextRubricScore = pick(dto.rubricScore, existing.rubricScore ?? null)
+    const rubricChanged = (existing.rubricScore ?? null) !== nextRubricScore
+
     const row = await this.prisma.accreditationStandard.update({
       where: { id: existing.id },
       data: {
@@ -683,7 +697,17 @@ export class AccreditationService {
         owner: pick(dto.owner, existing.owner),
         notes: pick(dto.notes, existing.notes),
         // Explicit null clears the self-score; omitted keeps it.
-        rubricScore: pick(dto.rubricScore, existing.rubricScore ?? null),
+        rubricScore: nextRubricScore,
+        ...(rubricChanged
+          ? {
+              // 'self' is the only provenance the product writes in v1 — the
+              // school scoring itself. Peer-reviewed / externally-validated are
+              // reserved for a real external input, never inferred.
+              scoreProvenance: 'self',
+              rubricScoredAt: new Date(),
+              rubricScoredByUserId: userId,
+            }
+          : {}),
         strategySourceType: strategy ? strategy.type : (existing.strategySourceType ?? null),
         strategySourceRef: strategy ? strategy.ref : (existing.strategySourceRef ?? null),
         updatedByUserId: userId,
@@ -696,6 +720,8 @@ export class AccreditationService {
       targetType: 'accreditation_standards',
       targetId: row.id,
     })
+    // Readiness moved → record it today rather than waiting for the nightly run.
+    if (rubricChanged) this.snapshot?.captureOnEvent(schoolId)
     const tree = await this.computeStandardsTree(schoolId, new Date())
     const count = await this.prisma.accreditationEvidence.count({ where: { schoolId, standardId: row.id } })
     return tree.byId.get(row.id) ?? this.toStandardPublic(row, count, new Date())
@@ -846,6 +872,8 @@ export class AccreditationService {
       targetType: 'accreditation_evidence',
       targetId: row.id,
     })
+    // Evidence coverage moved → the DEFENSIBLE half of readiness moved with it.
+    this.snapshot?.captureOnEvent(schoolId)
     return this.toEvidencePublic(row)
   }
 
@@ -1284,6 +1312,8 @@ export class AccreditationService {
       targetType: 'accreditation_evidence',
       targetId: existing.id,
     })
+    // Evidence coverage moved → the DEFENSIBLE half of readiness moved with it.
+    this.snapshot?.captureOnEvent(schoolId)
     return { id: existing.id }
   }
 }

@@ -1,0 +1,507 @@
+import { Injectable, Logger } from '@nestjs/common'
+import { Cron, CronExpression } from '@nestjs/schedule'
+import { createHash } from 'node:crypto'
+import type { AccreditationStandard } from '@finrep/db'
+import {
+  READINESS_HISTORY_VERSION,
+  schoolReadiness,
+  selfScoredPct,
+  verifiedPct,
+  type LeafScore,
+} from '@finrep/compliance'
+import { PrismaService } from '../prisma/prisma.service.js'
+import { BillingService } from '../billing/billing.service.js'
+import { isAssuranceLeaf, leavesOf } from './leaf-scope.js'
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Accreditation Intelligence Phase A — the nightly READINESS CAPTURE.
+//
+// Readiness is computed live on every page load; nothing was ever RECORDED. That
+// means the product could show "where you are" but could never answer "what
+// changed since the board last met" without inventing history. This service is
+// the fix: an append-only row per (school, series, day).
+//
+// THE SERIES KEY IS THE FRAMEWORK CODE — never the read-time "dominant
+// framework" heuristic that AccreditationReadinessService uses. That heuristic
+// re-resolves on every read and FLIPS the moment a school adopts a second
+// framework; keying a time series on it would silently swap what the chart
+// measures and present the swap as a change in performance. A school on two
+// frameworks simply writes two independent series, plus a 'none' series for any
+// standards linked to no framework at all.
+//
+// HONESTY: a snapshot records ONLY what the frozen engine computed from data
+// that existed at capture time. Nothing is interpolated, back-filled or
+// smoothed. A day with no capture stays a hole in the record, and the read side
+// says so rather than drawing through it.
+//
+// Runs per instance. Under horizontal scaling it may run on >1 replica; the
+// upsert + payload-hash dedupe make double-runs harmless (the same discipline as
+// RetentionService, whose @Cron precedent this follows).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** The 'none' series: standards a school tracks that belong to no framework. */
+export const NO_FRAMEWORK_SERIES_KEY = 'none'
+
+/** Keep every daily row this long; older rows are thinned to one per month. */
+export const DAILY_RETENTION_DAYS = 400
+
+/** Rows read per prune page — the scan is cursor-paged, never loaded whole. */
+const PRUNE_PAGE_SIZE = 1000
+
+/** Max schools captured in parallel — a nightly job must not stampede the pool. */
+const CAPTURE_CONCURRENCY = 4
+
+/** One series' worth of composed, ready-to-write numbers. */
+interface ComposedSeries {
+  seriesKey: string
+  frameworkId: string | null
+  catalogVersion: string | null
+  readinessPct: number
+  selfScoredPct: number
+  verifiedPct: number
+  projectedIndex: number | null
+  band: string | null
+  leafCount: number
+  scoredCount: number
+  coveredCount: number
+  leafScores: LeafScore[]
+  payloadHash: string
+}
+
+/** Deterministic JSON: object keys sorted, so an unrelated key-order change can
+ *  never look like a data change to the dedupe hash. */
+function stableStringify(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null'
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([, v]) => v !== undefined)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+  return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${stableStringify(v)}`).join(',')}}`
+}
+
+/** UTC-midnight Date for the calendar day of `at` (the @db.Date discipline). */
+function toUtcDay(at: Date): Date {
+  return new Date(
+    Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), at.getUTCDate(), 0, 0, 0, 0),
+  )
+}
+
+function isoDay(d: Date): string {
+  return d.toISOString().slice(0, 10)
+}
+
+@Injectable()
+export class AccreditationSnapshotService {
+  private readonly logger = new Logger(AccreditationSnapshotService.name)
+
+  /**
+   * Event-capture debounce: `${schoolId}:${yyyy-mm-dd}`. A burst of rubric edits
+   * must not fire a burst of captures — the first one that day wins and the
+   * nightly run is authoritative. Cleared at the top of every nightly run.
+   */
+  private readonly eventDebounce = new Set<string>()
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly billing: BillingService,
+  ) {}
+
+  @Cron(CronExpression.EVERY_DAY_AT_3AM)
+  async captureAll(): Promise<void> {
+    this.eventDebounce.clear()
+    const startedAt = Date.now()
+    try {
+      // Eligible = has a standards register at all. Entitlement is re-checked per
+      // school below (a school that stopped paying stops accruing history).
+      const withStandards = await this.prisma.accreditationStandard.groupBy({
+        by: ['schoolId'],
+        _count: { _all: true },
+      })
+      const schoolIds = withStandards.map((r) => r.schoolId)
+
+      let written = 0
+      let skipped = 0
+      await this.mapWithConcurrency(schoolIds, CAPTURE_CONCURRENCY, async (schoolId) => {
+        // READ-ONLY entitlement probe FIRST. BillingService.isEntitledForModule
+        // goes through getOrCreateSubscription, which CREATES a fresh 14-day
+        // trial row for any school that lacks one. A 3AM housekeeping job must
+        // never grant a subscription as a side effect of looking, so a school
+        // with no billing row is skipped outright rather than provisioned.
+        const hasBilling = await this.prisma.subscription.findUnique({
+          where: { schoolId },
+          select: { id: true },
+        })
+        if (!hasBilling) {
+          skipped += 1
+          return
+        }
+        const licensed = await this.billing
+          .isEntitledForModule(schoolId, 'accreditation')
+          .catch(() => false)
+        if (!licensed) {
+          skipped += 1
+          return
+        }
+        written += await this.captureForSchool(schoolId, 'nightly')
+      })
+
+      await this.prune()
+      this.logger.log(
+        `readiness capture: ${written} row(s) across ${schoolIds.length - skipped} school(s), ${skipped} unlicensed, ${Date.now() - startedAt}ms`,
+      )
+    } catch (err) {
+      // A housekeeping job must never take the process down.
+      this.logger.error(`readiness capture failed: ${(err as Error).message}`)
+    }
+  }
+
+  /**
+   * Capture every series for one school. Returns the number of rows written
+   * (0 when nothing changed — see the hash dedupe below).
+   *
+   * NOTE ON COMPOSITION: this does the SAME two queries as
+   * AccreditationReadinessService (one standards findMany + one evidence
+   * groupBy) and feeds the SAME frozen pure engine (`schoolReadiness`). It does
+   * not call getReadiness() per series because (a) getReadiness cannot return
+   * the per-leaf detail a snapshot must store, and (b) one query set guarantees
+   * every series in a night describes the same instant — N separate calls could
+   * straddle a concurrent edit and record a school state that never existed.
+   */
+  async captureForSchool(
+    schoolId: string,
+    reason: 'nightly' | 'event' | 'demo_seed',
+    at: Date = new Date(),
+  ): Promise<number> {
+    const snapshotDate = toUtcDay(at)
+    const composed = await this.composeSeries(schoolId)
+    if (composed.length === 0) return 0
+
+    let written = 0
+    for (const series of composed) {
+      const newest = await this.prisma.accreditationReadinessSnapshot.findFirst({
+        where: { schoolId, seriesKey: series.seriesKey },
+        orderBy: { snapshotDate: 'desc' },
+        select: { payloadHash: true, snapshotDate: true, isDemo: true },
+      })
+
+      // DEMO IS A PROPERTY OF THE SERIES, NOT OF ONE ROW. `demoData` is read off
+      // the newest reading, so a real capture appended to a fabricated series
+      // would flip the payload to demoData:false and launder 36 invented months
+      // into "the school's record". Once a series contains demo history, every
+      // later row in it inherits the flag and the DEMO DATA chip stays up.
+      const isDemo = reason === 'demo_seed' || newest?.isDemo === true
+
+      // DEDUPE: nothing about this series changed since the last recorded
+      // reading, so there is nothing new to record. Writing an identical row
+      // every night would inflate the record and make "42 readings" a lie about
+      // how much we actually know. A same-day re-run still upserts (below), so
+      // today's row is never left stale.
+      const sameDay =
+        newest !== null && isoDay(newest.snapshotDate) === isoDay(snapshotDate)
+      if (newest !== null && newest.payloadHash === series.payloadHash && !sameDay) continue
+
+      await this.prisma.accreditationReadinessSnapshot.upsert({
+        where: {
+          schoolId_seriesKey_snapshotDate: {
+            schoolId,
+            seriesKey: series.seriesKey,
+            snapshotDate,
+          },
+        },
+        create: {
+          schoolId,
+          frameworkId: series.frameworkId,
+          seriesKey: series.seriesKey,
+          snapshotDate,
+          reason,
+          readinessPct: series.readinessPct,
+          selfScoredPct: series.selfScoredPct,
+          verifiedPct: series.verifiedPct,
+          projectedIndex: series.projectedIndex,
+          band: series.band,
+          leafCount: series.leafCount,
+          scoredCount: series.scoredCount,
+          coveredCount: series.coveredCount,
+          // Phase A writes domainScores NULL, always. Phase B fills it.
+          domainScores: undefined,
+          leafScores: series.leafScores as unknown as object,
+          engineVersion: READINESS_HISTORY_VERSION,
+          catalogVersion: series.catalogVersion,
+          payloadHash: series.payloadHash,
+          isDemo,
+        },
+        update: {
+          frameworkId: series.frameworkId,
+          reason,
+          readinessPct: series.readinessPct,
+          selfScoredPct: series.selfScoredPct,
+          verifiedPct: series.verifiedPct,
+          projectedIndex: series.projectedIndex,
+          band: series.band,
+          leafCount: series.leafCount,
+          scoredCount: series.scoredCount,
+          coveredCount: series.coveredCount,
+          leafScores: series.leafScores as unknown as object,
+          engineVersion: READINESS_HISTORY_VERSION,
+          catalogVersion: series.catalogVersion,
+          payloadHash: series.payloadHash,
+          // Re-asserted on every same-day overwrite: without it the flag would
+          // be write-once and a re-run could leave a demo row unlabelled.
+          isDemo,
+        },
+      })
+      written += 1
+    }
+    return written
+  }
+
+  /**
+   * Fire-and-forget capture after a write that can move readiness (rubric score,
+   * evidence added/removed). Debounced to once per school per day: a write path
+   * must NEVER be blocked or slowed by snapshotting, and the nightly run is the
+   * authoritative record either way.
+   */
+  captureOnEvent(schoolId: string): void {
+    const key = `${schoolId}:${isoDay(new Date())}`
+    if (this.eventDebounce.has(key)) return
+    this.eventDebounce.add(key)
+    void this.captureForSchool(schoolId, 'event').catch((err: Error) => {
+      this.eventDebounce.delete(key)
+      this.logger.warn(`event readiness capture failed for ${schoolId}: ${err.message}`)
+    })
+  }
+
+  /**
+   * Retention: every daily row is kept for DAILY_RETENTION_DAYS; beyond that we
+   * keep the LAST row of each calendar month per series. Thinning old detail is
+   * honest (the kept row is a real reading, never an average); deleting the
+   * series would not be.
+   */
+  async prune(at: Date = new Date()): Promise<number> {
+    const cutoff = toUtcDay(at)
+    cutoff.setUTCDate(cutoff.getUTCDate() - DAILY_RETENTION_DAYS)
+
+    // CURSOR-PAGED, never a whole-table load. The aged-out set is cross-tenant
+    // and grows monotonically with the platform's age — reading it all into the
+    // API container's heap at 3AM, every night, for a delete set that is almost
+    // always empty, is work that scales with history rather than with the month
+    // that just aged out. Streaming keeps peak memory at one page plus the
+    // keeper map (one entry per school × series × calendar month).
+    //
+    // Rows arrive oldest-first, so within any (school, series, month) bucket the
+    // LAST row seen is that month's latest reading: the previous holder of the
+    // bucket is retired as soon as a later one appears, and whatever holds each
+    // bucket when the scan ends survives.
+    const keeper = new Map<string, string>()
+    let doomed: string[] = []
+    let deleted = 0
+    let cursorId: string | null = null
+
+    const flush = async (force: boolean): Promise<void> => {
+      while (doomed.length >= 500 || (force && doomed.length > 0)) {
+        const chunk = doomed.slice(0, 500)
+        doomed = doomed.slice(500)
+        const res = await this.prisma.accreditationReadinessSnapshot.deleteMany({
+          where: { id: { in: chunk } },
+        })
+        deleted += res.count
+      }
+    }
+
+    for (;;) {
+      const page: { id: string; schoolId: string; seriesKey: string; snapshotDate: Date }[] =
+        await this.prisma.accreditationReadinessSnapshot.findMany({
+          where: { snapshotDate: { lt: cutoff } },
+          select: { id: true, schoolId: true, seriesKey: true, snapshotDate: true },
+          orderBy: [{ snapshotDate: 'asc' }, { id: 'asc' }],
+          take: PRUNE_PAGE_SIZE,
+          ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
+        })
+      if (page.length === 0) break
+
+      for (const row of page) {
+        const bucket = `${row.schoolId}:${row.seriesKey}:${isoDay(row.snapshotDate).slice(0, 7)}`
+        const previous = keeper.get(bucket)
+        if (previous) doomed.push(previous)
+        keeper.set(bucket, row.id)
+      }
+
+      // The cursor row is always this page's LAST row, and a row is only ever
+      // retired once a LATER one displaces it — so the cursor can never be in
+      // the batch we are about to delete.
+      cursorId = page[page.length - 1].id
+      await flush(false)
+      if (page.length < PRUNE_PAGE_SIZE) break
+    }
+
+    await flush(true)
+    return deleted
+  }
+
+  // ── Composition ────────────────────────────────────────────────────────────
+
+  /**
+   * One series per adopted framework, plus 'none' when the school tracks any
+   * standard linked to no framework. Mirrors AccreditationReadinessService's
+   * scoping exactly: LEAF = a standard no other school standard parents, and
+   * catalog assurance gates are excluded from the rubric/index math.
+   */
+  private async composeSeries(schoolId: string): Promise<ComposedSeries[]> {
+    const rows = await this.prisma.accreditationStandard.findMany({ where: { schoolId } })
+    if (rows.length === 0) return []
+
+    const counts = await this.prisma.accreditationEvidence.groupBy({
+      by: ['standardId'],
+      where: { schoolId },
+      _count: { _all: true },
+    })
+    const countBy = new Map<string, number>()
+    for (const c of counts) countBy.set(c.standardId, c._count._all)
+
+    // Leaf scoping is the SHARED definition (leaf-scope.ts) that
+    // AccreditationReadinessService uses for the live number, so the recorded
+    // series and the hero can never drift apart on "which standards count".
+    const leaves = leavesOf(rows, rows)
+
+    const frameworkIds = [
+      ...new Set(leaves.map((r) => r.frameworkId).filter((id): id is string => id !== null)),
+    ]
+    const frameworks =
+      frameworkIds.length === 0
+        ? []
+        : await this.prisma.accreditationFramework.findMany({ where: { id: { in: frameworkIds } } })
+
+    const assuranceCatalogIds = await this.assuranceCatalogIds(leaves)
+
+    const out: ComposedSeries[] = []
+    for (const fw of frameworks) {
+      const scoped = leaves.filter((r) => r.frameworkId === fw.id)
+      out.push(
+        this.compose(
+          fw.code,
+          fw.id,
+          fw.version,
+          scoped,
+          countBy,
+          assuranceCatalogIds,
+          { indexMin: fw.indexMin, indexMax: fw.indexMax, statusBands: this.bandsOf(fw.statusBands) },
+        ),
+      )
+    }
+
+    const unlinked = leaves.filter((r) => r.frameworkId === null)
+    if (unlinked.length > 0) {
+      out.push(
+        this.compose(
+          NO_FRAMEWORK_SERIES_KEY,
+          null,
+          null,
+          unlinked,
+          countBy,
+          // Framework-LESS mode applies no assurance split — the live read
+          // (AccreditationReadinessService.assuranceCatalogIds short-circuits to
+          // an empty set when framework is null) does exactly this, and the
+          // 'none' series must record the same number the hero shows.
+          new Set<string>(),
+          null,
+        ),
+      )
+    }
+
+    // Deterministic order so a capture log reads the same every night.
+    out.sort((a, b) => a.seriesKey.localeCompare(b.seriesKey))
+    return out
+  }
+
+  private compose(
+    seriesKey: string,
+    frameworkId: string | null,
+    catalogVersion: string | null,
+    scopedLeaves: AccreditationStandard[],
+    countBy: Map<string, number>,
+    assuranceCatalogIds: Set<string>,
+    framework: { indexMin: number | null; indexMax: number | null; statusBands: { min: number; label: string }[] } | null,
+  ): ComposedSeries {
+    // Assurance gates are binary checklist items, not rubric-scored standards —
+    // the frozen engine excludes them and so must the recorded series.
+    const scored = scopedLeaves.filter((r) => !isAssuranceLeaf(r, assuranceCatalogIds))
+    const leafScores: LeafScore[] = scored
+      .map((r) => ({
+        standardId: r.id,
+        code: r.code,
+        rubricScore: r.rubricScore ?? null,
+        evidenceCount: countBy.get(r.id) ?? 0,
+      }))
+      .sort((a, b) => a.code.localeCompare(b.code) || a.standardId.localeCompare(b.standardId))
+
+    const summary = schoolReadiness(
+      leafScores.map((l) => ({ ...l, title: '' })),
+      framework,
+    )
+
+    const payloadHash = createHash('sha256')
+      .update(
+        stableStringify({
+          engineVersion: READINESS_HISTORY_VERSION,
+          catalogVersion,
+          seriesKey,
+          leafScores,
+        }),
+      )
+      .digest('hex')
+
+    return {
+      seriesKey,
+      frameworkId,
+      catalogVersion,
+      readinessPct: summary.readinessPct,
+      selfScoredPct: selfScoredPct(leafScores),
+      verifiedPct: verifiedPct(leafScores),
+      projectedIndex: summary.projectedIndex,
+      band: summary.band,
+      leafCount: summary.leafCount,
+      scoredCount: summary.scoredCount,
+      coveredCount: summary.coveredCount,
+      leafScores,
+      payloadHash,
+    }
+  }
+
+  private bandsOf(raw: unknown): { min: number; label: string }[] {
+    return Array.isArray(raw) ? (raw as { min: number; label: string }[]) : []
+  }
+
+  /** Catalog ids (within these leaves' links) flagged isAssurance. Skips the
+   *  query entirely for a fully hand-made register. */
+  private async assuranceCatalogIds(leaves: AccreditationStandard[]): Promise<Set<string>> {
+    const catalogIds = leaves.map((r) => r.catalogStandardId).filter((id): id is string => !!id)
+    if (catalogIds.length === 0) return new Set()
+    const rows = await this.prisma.accreditationCatalogStandard.findMany({
+      where: { id: { in: catalogIds }, isAssurance: true },
+      select: { id: true },
+    })
+    return new Set(rows.map((r) => r.id))
+  }
+
+  /** Bounded-parallelism map. Deliberately NOT Promise.all over every school. */
+  private async mapWithConcurrency<T>(
+    items: readonly T[],
+    limit: number,
+    worker: (item: T) => Promise<void>,
+  ): Promise<void> {
+    let cursor = 0
+    const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+      for (;;) {
+        const i = cursor
+        cursor += 1
+        if (i >= items.length) return
+        try {
+          await worker(items[i])
+        } catch (err) {
+          this.logger.warn(`readiness capture failed for item ${i}: ${(err as Error).message}`)
+        }
+      }
+    })
+    await Promise.all(runners)
+  }
+}

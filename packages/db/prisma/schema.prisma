@@ -138,6 +138,7 @@ model School {
   tasks                    Task[]
   accreditationStandards   AccreditationStandard[]
   accreditationEvidence    AccreditationEvidence[]
+  readinessSnapshots       AccreditationReadinessSnapshot[]
   maintenanceItems         MaintenanceItem[]
   vendors                  Vendor[]
   maintenanceBids          MaintenanceBid[]
@@ -271,6 +272,7 @@ model User {
   tasksToApprove               Task[]                   @relation("TaskApprover")
   tasksDecided                 Task[]                   @relation("TaskDecidedBy")
   accreditationStandardUpdates AccreditationStandard[]  @relation("AccreditationStandardUpdatedBy")
+  accreditationRubricScored    AccreditationStandard[]  @relation("AccreditationRubricScoredBy")
   accreditationEvidenceCreated AccreditationEvidence[]  @relation("AccreditationEvidenceCreatedBy")
   maintenanceItemsCreated      MaintenanceItem[]        @relation("MaintenanceItemCreatedBy")
   maintenanceItemsDecided      MaintenanceItem[]        @relation("MaintenanceDecidedBy")
@@ -1391,8 +1393,9 @@ model AccreditationFramework {
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
-  standards       AccreditationCatalogStandard[]
-  schoolStandards AccreditationStandard[]
+  standards          AccreditationCatalogStandard[]
+  schoolStandards    AccreditationStandard[]
+  readinessSnapshots AccreditationReadinessSnapshot[]
 
   @@map("accreditation_frameworks")
 }
@@ -1466,6 +1469,16 @@ model AccreditationStandard {
   sortOrder          Int?    @map("sort_order")
   strategySourceType String? @map("strategy_source_type") // 'strategic_plan' | 'strategy_goal'
   strategySourceRef  String? @map("strategy_source_ref") @db.Uuid
+  // ── Accreditation Intelligence Phase A — SCORE PROVENANCE (defaulted/nullable;
+  // ZERO backfill). A rubric self-score is an ASSERTION, and the product must
+  // never let it read as an external finding. 'self' is the only value v1 writes;
+  // the column exists so peer-reviewed / externally-validated scores are free
+  // later. rubricScoredAt / rubricScoredByUserId are stamped by the existing
+  // PATCH standards route ONLY when rubricScore actually CHANGES — renaming a
+  // standard must not restart its provenance clock.
+  scoreProvenance      String    @default("self") @map("score_provenance") // 'self'|'peer_reviewed'|'externally_validated'
+  rubricScoredAt       DateTime? @map("rubric_scored_at")
+  rubricScoredByUserId String?   @map("rubric_scored_by_user_id") @db.Uuid
   updatedByUserId String?   @map("updated_by_user_id") @db.Uuid
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
@@ -1478,6 +1491,9 @@ model AccreditationStandard {
   parent        AccreditationStandard?  @relation("AccreditationStandardHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
   children      AccreditationStandard[] @relation("AccreditationStandardHierarchy")
   updatedByUser User?                   @relation("AccreditationStandardUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  // Phase A provenance: WHO asserted the current rubric score. SetNull so deleting
+  // a user never erases the score itself — only its attribution.
+  rubricScoredByUser User?              @relation("AccreditationRubricScoredBy", fields: [rubricScoredByUserId], references: [id], onDelete: SetNull)
   evidence      AccreditationEvidence[]
 
   // Adopt idempotency backstop: a school holds each catalog node at most once.
@@ -1523,6 +1539,57 @@ model AccreditationEvidence {
   @@index([schoolId])
   @@index([standardId])
   @@map("accreditation_evidence")
+}
+
+// ── Accreditation Intelligence Phase A — the readiness SERIES ─────────────────
+// Append-only, one row per (school, seriesKey, day). seriesKey = the adopted
+// framework's CODE, or 'none' for standards linked to no framework. A school
+// that has adopted two frameworks writes TWO rows a night — the "dominant
+// framework" heuristic in AccreditationReadinessService.resolveFramework is a
+// READ-time convenience and must never key a time series (it can flip when a
+// second framework is adopted, silently swapping what the chart is measuring).
+// NOTE the plain @@unique: Postgres treats NULLs as distinct, which is why
+// seriesKey is a NOT NULL string rather than a nullable frameworkId. There is
+// no functional index anywhere in this repo and there will not be one here.
+//
+// readinessPct is the FROZEN engine's blended figure, kept for continuity, but
+// the product renders selfScoredPct (DOCUMENTED — the rubric term the school
+// asserts) and verifiedPct (DEFENSIBLE — the evidence term) as a PAIR. Storing
+// all three is what makes the four-way delta decomposition reconstructable
+// without re-reading history that may since have changed.
+model AccreditationReadinessSnapshot {
+  id           String   @id @default(uuid()) @db.Uuid
+  schoolId     String   @map("school_id") @db.Uuid
+  frameworkId  String?  @map("framework_id") @db.Uuid
+  seriesKey    String   @map("series_key") // framework.code | 'none'
+  snapshotDate DateTime @map("snapshot_date") @db.Date
+  capturedAt   DateTime @default(now()) @map("captured_at")
+  reason       String   @default("nightly") // 'nightly'|'event'|'demo_seed'
+
+  readinessPct   Int     @map("readiness_pct") // frozen engine, unchanged
+  selfScoredPct  Int     @map("self_scored_pct") // DOCUMENTED (rubric term only)
+  verifiedPct    Int     @map("verified_pct") // DEFENSIBLE (evidence term only)
+  projectedIndex Int?    @map("projected_index")
+  band           String?
+  leafCount      Int     @map("leaf_count")
+  scoredCount    Int     @map("scored_count")
+  coveredCount   Int     @map("covered_count")
+
+  domainScores Json? @map("domain_scores") // Phase B fills; ALWAYS NULL in Phase A
+  leafScores   Json  @map("leaf_scores") // LeafScore[] (@finrep/compliance)
+
+  engineVersion  String  @map("engine_version")
+  catalogVersion String? @map("catalog_version")
+  payloadHash    String  @map("payload_hash")
+  isDemo         Boolean @default(false) @map("is_demo")
+
+  school    School                  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  framework AccreditationFramework? @relation(fields: [frameworkId], references: [id], onDelete: SetNull)
+
+  @@unique([schoolId, seriesKey, snapshotDate])
+  @@index([schoolId, snapshotDate])
+  @@index([schoolId, seriesKey, snapshotDate(sort: Desc)])
+  @@map("accreditation_readiness_snapshots")
 }
 
 // ── Phase 4 Facilities v1 — the deferred-maintenance register ─────────────────

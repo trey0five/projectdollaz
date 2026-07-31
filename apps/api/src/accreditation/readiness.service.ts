@@ -6,12 +6,15 @@ import {
   computeGaps,
   computeTargetGap,
   schoolReadiness,
+  selfScoredPct,
+  verifiedPct,
   type AssuranceStatus,
   type ReadinessGap,
   type ReadinessLeafInput,
   type StatusBand,
 } from '@finrep/compliance'
 import { PrismaService } from '../prisma/prisma.service.js'
+import { isAssuranceLeaf, leavesOf } from './leaf-scope.js'
 
 /** The framework facts echoed on the readiness payload (null = framework-less mode). */
 export interface ReadinessFrameworkPublic {
@@ -35,6 +38,16 @@ export interface ReadinessTargetPublic {
 export interface ReadinessResponse {
   framework: ReadinessFrameworkPublic | null
   readinessPct: number
+  /**
+   * Phase A — readiness is never ONE number. `selfScoredPct` is DOCUMENTED (the
+   * rubric term alone) and `verifiedPct` is DEFENSIBLE (the evidence term
+   * alone); the hero renders them as a pair. Both are computed live from the
+   * SAME leaf set as `readinessPct`/`scoredCount`/`coveredCount` below, so the
+   * pair and its caption always describe one instant — the recorded series is
+   * for the history strip, never for the headline figures.
+   */
+  selfScoredPct: number
+  verifiedPct: number
   leafCount: number
   scoredCount: number
   coveredCount: number
@@ -78,16 +91,17 @@ export class AccreditationReadinessService {
 
     const framework = await this.resolveFramework(rows, opts.frameworkId)
 
-    // LEAF = a standard no other school standard points at as parent.
-    const parentIds = new Set(rows.map((r) => r.parentId).filter(Boolean))
+    // LEAF = a standard no other school standard points at as parent. The
+    // definition lives in leaf-scope.ts so the RECORDED series (snapshot
+    // service) scopes leaves identically — see the note there.
     const scoped = framework ? rows.filter((r) => r.frameworkId === framework.id) : rows
-    const leaves = scoped.filter((r) => !parentIds.has(r.id))
+    const leaves = leavesOf(rows, scoped)
 
     // Assurance split via the catalog rows (framework mode only; an uncataloged
     // row is never an assurance).
     const assuranceCatalogIds = await this.assuranceCatalogIds(framework, leaves)
     const isAssurance = (r: AccreditationStandard): boolean =>
-      r.catalogStandardId != null && assuranceCatalogIds.has(r.catalogStandardId)
+      isAssuranceLeaf(r, assuranceCatalogIds)
 
     const toLeafInput = (r: AccreditationStandard): ReadinessLeafInput => ({
       standardId: r.id,
@@ -139,6 +153,8 @@ export class AccreditationReadinessService {
           }
         : null,
       readinessPct: summary.readinessPct,
+      selfScoredPct: selfScoredPct(scoredLeaves),
+      verifiedPct: verifiedPct(scoredLeaves),
       leafCount: summary.leafCount,
       scoredCount: summary.scoredCount,
       coveredCount: summary.coveredCount,

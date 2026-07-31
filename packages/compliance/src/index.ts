@@ -163,6 +163,32 @@ export {
   computeAssurances,
 } from './accreditation-readiness.js'
 
+// Accreditation Intelligence Phase A — pure readiness HISTORY (observed change +
+// the exact four-way delta decomposition). Never a forecast, never a projection.
+export type {
+  LeafScore,
+  ReadinessPoint,
+  SeriesBreakKind,
+  SeriesBreak,
+  ChangeConfidence,
+  ChangeDirection,
+  ObservedChange,
+  ReadinessDecomposition,
+  ReadinessDiff,
+} from './readiness-history.js'
+export {
+  READINESS_HISTORY_VERSION,
+  MIN_MATERIAL_DELTA_PCT,
+  MIN_POINTS_FOR_DIRECTION,
+  MIN_SPAN_DAYS_FOR_DIRECTION,
+  selfScoredPct,
+  verifiedPct,
+  decomposeReadinessDelta,
+  diffLeafScores,
+  summarizeObservedChange,
+  downsampleMonthly,
+} from './readiness-history.js'
+
 // Phase 4 Facilities v1 — pure deferred-maintenance backlog (injectable now)
 export type {
   MaintenancePriority,

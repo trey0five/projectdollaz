@@ -3,8 +3,9 @@
 // framework is adopted. A wide navy-glass panel with a 240° AMBER gauge (reuses
 // the /strategy Horizon-arc math): a faint track over the framework's index scale
 // (Cognia 100–400), band tick-marks at every status boundary, the projected index
-// as a giant amber serif CountUp with its status-band chip, plus a readiness bar
-// (rubric×evidence blend), clickable TARGET pills built from the framework's
+// as a giant amber serif CountUp with its status-band chip, plus the Documented /
+// Defensible PAIR (Phase A — readiness is never one blended number) over the
+// recorded-readiness strip, clickable TARGET pills built from the framework's
 // statusBands (choice persisted per school upstream), the "fastest path" gap list
 // (each row deep-scrolls to its standard), and the assurances checklist strip.
 // Frameworks with no index scale (MSA/NSBECS) hide the dial/bands and lead with
@@ -15,6 +16,9 @@
 import { motion } from 'framer-motion'
 import { Award, BadgeCheck, Check, ChevronRight, Compass, ShieldAlert, Sparkles } from 'lucide-react'
 import { CountUp } from '../ui/briefingFx.jsx'
+// ── Phase A (Accreditation Intelligence): readiness is a PAIR, and it has a past ─
+import ProvenancePair from './ProvenancePair.jsx'
+import ReadinessTrendStrip from './ReadinessTrendStrip.jsx'
 
 const AMBER = '#F59E0B'
 
@@ -87,42 +91,6 @@ function AdoptPrompt({ canEdit, onAdopt }) {
   )
 }
 
-// ── The readiness bar (rubric×evidence blend, 0–100) ─────────────────────────
-function ReadinessBar({ pct, scoredCount, coveredCount, leafCount, reduce }) {
-  return (
-    <div>
-      <div className="flex items-baseline justify-between gap-3">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/50">
-          Readiness
-        </p>
-        <p className="text-[13px] font-semibold text-white/80">
-          <span className="text-[#fbbf24]">{pct}%</span>
-          <span className="text-white/45">
-            {' '}
-            · {scoredCount}/{leafCount} scored · {coveredCount} evidenced
-          </span>
-        </p>
-      </div>
-      <div
-        className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-white/10"
-        role="progressbar"
-        aria-valuenow={pct}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-label={`Readiness ${pct}%`}
-      >
-        <motion.div
-          className="h-full rounded-full"
-          style={{ background: 'linear-gradient(90deg, #fde68a 0%, #fbbf24 55%, #f59e0b 100%)' }}
-          initial={reduce ? false : { width: 0 }}
-          animate={{ width: `${pct}%` }}
-          transition={reduce ? { duration: 0 } : { type: 'spring', stiffness: 60, damping: 18 }}
-        />
-      </div>
-    </div>
-  )
-}
-
 export default function ReadinessHero({
   readiness,
   adopted = false,
@@ -131,6 +99,9 @@ export default function ReadinessHero({
   onSelectTarget,
   onGapClick,
   reduce = false,
+  // Phase A: the readiness HISTORY (useReadinessTrend's value) — optional, so the
+  // hero still renders exactly as before if it is not wired.
+  history = null,
 }) {
   if (!adopted) return <AdoptPrompt canEdit={canEdit} onAdopt={onAdopt} />
   if (!readiness) {
@@ -156,6 +127,17 @@ export default function ReadinessHero({
   const gaps = (readiness.gaps ?? []).slice(0, 5)
   const assurances = readiness.assurances ?? []
   const pointGap = readiness.target?.pointGap ?? null
+
+  // ── Phase A: the pair + the recorded past ──────────────────────────────────
+  // Documented / Defensible come from the LIVE readiness payload — the same
+  // instant, the same leaf set and the same engine as scoredCount / coveredCount
+  // / leafCount in the caption beside them. They are deliberately NOT read off
+  // the newest snapshot: a snapshot is last night, the counts are now, and
+  // pairing the two produces sentences that contradict themselves ("Defensible
+  // 55% … 31 evidenced") the moment anyone attaches evidence during the day.
+  // The recorded series is for the strip below, which is where a past tense is
+  // truthful. Both figures are computed server-side by the pure
+  // selfScoredPct/verifiedPct functions — nothing here is estimated.
 
   return (
     <div className="relative overflow-hidden rounded-3xl border-2 border-[#F59E0B]/25 bg-navy-gradient shadow-navy-glow">
@@ -310,8 +292,13 @@ export default function ReadinessHero({
           </h2>
 
           <div className="mt-4">
-            <ReadinessBar
-              pct={readiness.readinessPct ?? 0}
+            <ProvenancePair
+              documentedPct={
+                typeof readiness.selfScoredPct === 'number' ? readiness.selfScoredPct : null
+              }
+              defensiblePct={
+                typeof readiness.verifiedPct === 'number' ? readiness.verifiedPct : null
+              }
               scoredCount={readiness.scoredCount ?? 0}
               coveredCount={readiness.coveredCount ?? 0}
               leafCount={readiness.leafCount ?? 0}
@@ -402,6 +389,23 @@ export default function ReadinessHero({
           ) : null}
         </div>
       </div>
+
+      {/* ── Recorded readiness (Phase A) — beneath the gauge, full width so it ──
+          survives frameworks with no index scale (where the gauge is hidden). */}
+      {history ? (
+        <div className="relative px-5 pb-5 sm:px-7 sm:pb-7">
+          <ReadinessTrendStrip
+            series={history.series}
+            seriesKey={history.seriesKey}
+            onSeriesKeyChange={history.setSeriesKey}
+            trend={history.trend}
+            loading={history.loading}
+            error={history.error}
+            notLicensed={history.notLicensed}
+            reduce={reduce}
+          />
+        </div>
+      ) : null}
 
       {/* ── Assurances strip (Cognia binary gates) ─────────────────────────── */}
       {assurances.length ? (

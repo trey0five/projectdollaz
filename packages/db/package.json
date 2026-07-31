@@ -34,6 +34,7 @@
     "migrate:dev": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
+    "seed:demo:accreditation": "node --experimental-strip-types prisma/seed-demo-accreditation.ts",
     "studio": "prisma studio",
     "build": "prisma generate && tsup",
     "typecheck": "tsc --noEmit",

@@ -49,6 +49,7 @@ import DatePicker from '../components/ui/DatePicker.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useUiV2 } from '../context/UiFlagContext.jsx'
 import { useAccreditation } from '../hooks/useAccreditation.js'
+import { useReadinessTrend } from '../hooks/useReadinessTrend.js'
 // ── Phase 3: framework catalog + rubric readiness + evidence warehouse ────────
 import ReadinessHero from '../components/accreditation/ReadinessHero.jsx'
 import AdoptFrameworkModal from '../components/accreditation/AdoptFrameworkModal.jsx'
@@ -1222,6 +1223,15 @@ function AccreditationWorkspace() {
     linkStrategy,
   } = useAccreditation(schoolId)
 
+  // Phase A: the recorded readiness history, passed straight through to the hero
+  // (fail-soft on its own — a history hiccup never blanks the register). Gated on
+  // the module check the page has ALREADY made: hooks run before this component's
+  // entitlement early-return, so without the gate a finance-only tenant would
+  // fire two extra requests that both 402.
+  const history = useReadinessTrend(schoolId, {
+    enabled: !loading && !notLicensed && !notEntitled,
+  })
+
   const [tab, setTab] = useState('standards')
   const navigate = useNavigate()
   const [modalOpen, setModalOpen] = useState(false)
@@ -1372,25 +1382,50 @@ function AccreditationWorkspace() {
           : { icon: Check, text: 'all current', tone: 'good' },
     }
 
-    // 5) Readiness (Phase 3) — the rubric×evidence blend, once a framework is
-    //    adopted. The grid flexes to 5-up (DomainCommandCenter handles cols).
+    // 5) Documented / Defensible (Phase A) — once a framework is adopted. This
+    //    slot deliberately does NOT carry the blended readiness percentage: a
+    //    single number that averages "what you claim" with "what you can prove"
+    //    reads as a grade and hides the only figure an accreditor will press on,
+    //    which is the DIFFERENCE between the two. Same source and same instant as
+    //    the hero's ProvenancePair directly below it. The grid flexes to 5-up
+    //    (DomainCommandCenter handles cols).
     if (adopted && readiness) {
-      const rPct = readiness.readinessPct ?? 0
+      const documented = typeof readiness.selfScoredPct === 'number' ? readiness.selfScoredPct : null
+      const defensible = typeof readiness.verifiedPct === 'number' ? readiness.verifiedPct : null
       const scored = readiness.scoredCount ?? 0
+      const covered = readiness.coveredCount ?? 0
       const rLeaves = readiness.leafCount ?? 0
+      const hasPair = documented != null && defensible != null
+      const spread = hasPair ? documented - defensible : null
       return [
         coverageKpi,
         ratingKpi,
         gapsKpi,
         reviewKpi,
         {
-          label: 'Readiness',
-          value: `${rPct}%`,
-          status: rLeaves === 0 ? 'neutral' : rPct >= 80 ? 'good' : rPct >= 50 ? 'watch' : 'risk',
-          sub:
-            scored < rLeaves
-              ? { icon: TrendingDown, text: `${scored}/${rLeaves} scored`, tone: rPct >= 50 ? 'neutral' : 'bad' }
-              : { icon: Check, text: `all ${rLeaves} scored`, tone: 'good' },
+          label: 'Documented / Defensible',
+          value: hasPair ? `${documented} / ${defensible}` : '—',
+          status:
+            !hasPair || rLeaves === 0
+              ? 'neutral'
+              : defensible >= 80
+                ? 'good'
+                : defensible >= 50
+                  ? 'watch'
+                  : 'risk',
+          sub: !hasPair
+            ? { icon: BadgeCheck, text: 'not available yet', tone: 'neutral' }
+            : spread > 0
+              ? {
+                  icon: TrendingDown,
+                  text: `${scored} scored · ${covered} evidenced of ${rLeaves}`,
+                  tone: spread >= 20 ? 'bad' : 'neutral',
+                }
+              : {
+                  icon: Check,
+                  text: `${scored} scored · ${covered} evidenced of ${rLeaves}`,
+                  tone: 'good',
+                },
         },
       ]
     }
@@ -1493,6 +1528,7 @@ function AccreditationWorkspace() {
       onSelectTarget={setReadinessTarget}
       onGapClick={scrollToStandard}
       reduce={reduce}
+      history={history}
     />
   )
 
