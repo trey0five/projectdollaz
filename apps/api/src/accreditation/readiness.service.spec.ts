@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { DOMAIN_KEYS } from '@finrep/compliance'
 import { AccreditationReadinessService } from './readiness.service.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -94,7 +95,10 @@ describe('AccreditationReadinessService — Cognia (index) mode', () => {
     { standardId: 'b', _count: { _all: 1 } },
     { standardId: 'c', _count: { _all: 1 } },
   ]
-  const assuranceCatalog = [{ id: 'cA2' }]
+  // Phase B widened the ONE catalog read (assurance flag + domain map + signal
+  // binding in a single findMany), so the catalog fixture now carries the flag
+  // the service derives in memory. Every assertion below is unchanged.
+  const assuranceCatalog = [{ id: 'cA2', isAssurance: true }]
 
   it('splits assurances out of the index math; dominant framework auto-resolves', async () => {
     const { svc } = makeService({ standards: rows, groupBy, assuranceCatalog })
@@ -219,6 +223,141 @@ describe('AccreditationReadinessService — degraded modes', () => {
         gaps: [],
         assurances: [],
       }),
+    )
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AIC Phase B — the domain grid rides on the SAME payload, computed from the
+// SAME leaf array. Everything above this line is untouched Phase-A behaviour.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('AccreditationReadinessService — the domain grid', () => {
+  const catalogRows = [
+    { id: 'c1', isAssurance: false, domainKey: 'finance', domainWeights: null, signalKeys: ['operating_margin'] },
+    { id: 'c2', isAssurance: false, domainKey: 'finance', domainWeights: null, signalKeys: ['days_cash_on_hand'] },
+    { id: 'c3', isAssurance: false, domainKey: 'finance', domainWeights: null, signalKeys: [] },
+    { id: 'cA2', isAssurance: true, domainKey: 'finance', domainWeights: null, signalKeys: [] },
+  ]
+  const rows = [
+    stdRow({ id: 'a', code: 'COG-1', frameworkId: 'fw-cognia', catalogStandardId: 'c1', rubricScore: 3 }),
+    stdRow({ id: 'b', code: 'COG-2', frameworkId: 'fw-cognia', catalogStandardId: 'c2', rubricScore: 3 }),
+    stdRow({ id: 'c', code: 'COG-3', frameworkId: 'fw-cognia', catalogStandardId: 'c3', rubricScore: 3 }),
+    stdRow({ id: 'asr', code: 'COG-A2', frameworkId: 'fw-cognia', catalogStandardId: 'cA2', title: 'Audit' }),
+  ]
+  const groupBy = [
+    { standardId: 'a', _count: { _all: 1 } },
+    { standardId: 'b', _count: { _all: 1 } },
+    { standardId: 'c', _count: { _all: 1 } },
+  ]
+
+  it('returns exactly ten domains in DOMAIN_KEYS order plus a confidence block', async () => {
+    const { svc } = makeService({ standards: rows, groupBy, assuranceCatalog: catalogRows })
+    const res = await svc.getReadiness('school-A')
+    expect(res.domains).toHaveLength(10)
+    expect(res.domains.map((d) => d.domainKey)).toEqual([...DOMAIN_KEYS])
+    expect(res.confidence).toEqual(
+      expect.objectContaining({
+        coveragePct: expect.any(Number),
+        measuredDomains: expect.any(Number),
+        unmeasuredDomains: expect.any(Array),
+        caveat: expect.any(String),
+      }),
+    )
+  })
+
+  it('a single-domain register returns the SAME number as the hero (no drift possible)', async () => {
+    const { svc } = makeService({ standards: rows, groupBy, assuranceCatalog: catalogRows })
+    const res = await svc.getReadiness('school-A')
+    const finance = res.domains.find((d) => d.domainKey === 'finance')!
+    expect(finance.measured).toBe(true)
+    expect(finance.readinessPct).toBe(res.readinessPct)
+    expect(finance.selfScoredPct).toBe(res.selfScoredPct)
+    expect(finance.verifiedPct).toBe(res.verifiedPct)
+    // Σ effectiveLeafWeight over all ten domains === the scored-leaf count.
+    const total = res.domains.reduce((s, d) => s + d.effectiveLeafWeight, 0)
+    expect(total).toBe(res.leafCount)
+    expect(res.confidence.measuredDomains).toBe(1)
+    expect(res.confidence.coveragePct).toBe(10)
+  })
+
+  it('the ASSURANCE leaf never lands in any domain count', async () => {
+    const { svc } = makeService({ standards: rows, groupBy, assuranceCatalog: catalogRows })
+    const res = await svc.getReadiness('school-A')
+    const contributing = res.domains.reduce((s, d) => s + d.contributingLeafCount, 0)
+    // 3 scored leaves, each in exactly one domain. The assurance gate is a
+    // binary checklist item and must not inflate a domain.
+    expect(contributing).toBe(3)
+    expect(res.assurances).toHaveLength(1)
+  })
+
+  it('signals are attributed to the domain, unmeasured domains included', async () => {
+    const oneLeaf = [
+      stdRow({ id: 'a', code: 'COG-15', frameworkId: 'fw-cognia', catalogStandardId: 'c1' }),
+    ]
+    const { svc } = makeService({
+      standards: oneLeaf,
+      assuranceCatalog: [
+        {
+          id: 'c1',
+          isAssurance: false,
+          domainKey: 'finance',
+          domainWeights: null,
+          signalKeys: ['operating_margin', 'days_cash_on_hand'],
+        },
+      ],
+    })
+    const res = await svc.getReadiness('school-A')
+    const finance = res.domains.find((d) => d.domainKey === 'finance')!
+    // ONE leaf: no number, a reason — and still two real signals bound.
+    expect(finance.measured).toBe(false)
+    expect(finance.readinessPct).toBeNull()
+    expect(finance.reason).toBeTruthy()
+    expect(finance.signalCount).toBe(2)
+  })
+
+  it('a leaf whose catalog row has NO domain counts as unmapped, not as a domain', async () => {
+    const unmapped = [
+      stdRow({ id: 'a', code: 'X-1', frameworkId: 'fw-cognia', catalogStandardId: 'c1' }),
+    ]
+    const { svc } = makeService({
+      standards: unmapped,
+      assuranceCatalog: [
+        { id: 'c1', isAssurance: false, domainKey: null, domainWeights: null, signalKeys: [] },
+      ],
+    })
+    const res = await svc.getReadiness('school-A')
+    expect(res.domains.every((d) => d.contributingLeafCount === 0)).toBe(true)
+    // Nothing could be grouped at all — but this register IS framework-linked
+    // (the hero above it is titled with that framework), so the caveat must say
+    // the MAP is missing and must NOT tell the school to adopt a framework they
+    // have already adopted. It never silently reports ten empty domains either.
+    expect(res.confidence.caveat).toContain("aren't mapped to domains")
+    expect(res.confidence.caveat).not.toContain('Adopt')
+    expect(res.confidence.caveat).not.toContain("isn't linked to an accreditor framework")
+  })
+
+  it('framework-LESS mode: ten uncovered domains, 0% coverage, no error', async () => {
+    const { svc, prisma } = makeService({
+      standards: [stdRow({ id: 'a', code: 'H-1', rubricScore: 2 })],
+    })
+    const res = await svc.getReadiness('school-A')
+    expect(res.domains).toHaveLength(10)
+    expect(res.domains.every((d) => !d.covered && d.readinessPct === null)).toBe(true)
+    expect(res.confidence.coveragePct).toBe(0)
+    expect(res.confidence.caveat).toBe(
+      "Your standards register isn't linked to an accreditor framework, so it can't be grouped into domains. Adopt a framework to see the domain grid.",
+    )
+    // Still zero catalog queries for a hand-made register.
+    expect(prisma.accreditationCatalogStandard.findMany).not.toHaveBeenCalled()
+  })
+
+  it('an EMPTY school still gets ten domains and the adopt-a-framework caveat', async () => {
+    const { svc } = makeService({})
+    const res = await svc.getReadiness('school-A')
+    expect(res.domains).toHaveLength(10)
+    expect(res.confidence.caveat).toBe(
+      "No standards yet. Adopt your accreditor's framework to see the domain grid.",
     )
   })
 })

@@ -19,6 +19,8 @@ import { CountUp } from '../ui/briefingFx.jsx'
 // ── Phase A (Accreditation Intelligence): readiness is a PAIR, and it has a past ─
 import ProvenancePair from './ProvenancePair.jsx'
 import ReadinessTrendStrip from './ReadinessTrendStrip.jsx'
+// ── Phase B: and it publishes the size of its own hole ───────────────────────
+import { ConfidenceChip } from './ConfidenceChip.jsx'
 
 const AMBER = '#F59E0B'
 
@@ -305,6 +307,15 @@ export default function ReadinessHero({
               reduce={reduce}
             />
           </div>
+
+          {/* Phase B — how much of the ten-domain grid these figures rest on. It
+              sits directly under the pair because the pair is the first thing
+              read, and "5 of 10 domains" belongs beside it, not a scroll away. */}
+          {readiness.confidence ? (
+            <div className="mt-3">
+              <ConfidenceChip confidence={readiness.confidence} reduce={reduce} />
+            </div>
+          ) : null}
 
           {/* Target pills */}
           {pills.length ? (

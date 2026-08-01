@@ -25,6 +25,7 @@ import { DataHubModule } from './data-hub/data-hub.module.js'
 import { GovernanceModule } from './governance/governance.module.js'
 import { WorkflowModule } from './workflow/workflow.module.js'
 import { AccreditationModule } from './accreditation/accreditation.module.js'
+import { AccreditationSignalsModule } from './accreditation-signals/accreditation-signals.module.js'
 import { FacilitiesModule } from './facilities/facilities.module.js'
 import { AdvancementModule } from './advancement/advancement.module.js'
 import { KnowledgeModule } from './knowledge/knowledge.module.js'
@@ -70,6 +71,10 @@ import { InboxModule } from './inbox/inbox.module.js'
     GovernanceModule,
     WorkflowModule,
     AccreditationModule,
+    // AIC Phase B — the accreditation signal panel. A SEPARATE module on purpose:
+    // it needs AnalyticsService, and AnalyticsModule already imports
+    // AccreditationModule, so hosting it there would be a real DI cycle.
+    AccreditationSignalsModule,
     FacilitiesModule,
     AdvancementModule,
     KnowledgeModule,

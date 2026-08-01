@@ -38,6 +38,11 @@ function standard(over: Partial<StandardPublic>): StandardPublic {
     catalogStandardId: over.catalogStandardId ?? null,
     sortOrder: over.sortOrder ?? null,
     isAssurance: over.isAssurance ?? false,
+    // Phase B additive catalog fields (typecheck-only here — the briefing is
+    // untouched this phase and never reads the domain map).
+    domainKey: over.domainKey ?? null,
+    domainWeights: over.domainWeights ?? null,
+    signalKeys: over.signalKeys ?? [],
     strategySourceType: over.strategySourceType ?? null,
     strategySourceRef: over.strategySourceRef ?? null,
     strategyLabel: over.strategyLabel ?? null,

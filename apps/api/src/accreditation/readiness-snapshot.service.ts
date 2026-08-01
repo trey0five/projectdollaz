@@ -4,14 +4,22 @@ import { createHash } from 'node:crypto'
 import type { AccreditationStandard } from '@finrep/db'
 import {
   READINESS_HISTORY_VERSION,
+  computeDomainReadiness,
   schoolReadiness,
   selfScoredPct,
   verifiedPct,
+  type DomainKey,
   type LeafScore,
 } from '@finrep/compliance'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { BillingService } from '../billing/billing.service.js'
 import { isAssuranceLeaf, leavesOf } from './leaf-scope.js'
+import {
+  assuranceIdsFrom,
+  buildDomainMap,
+  readCatalogDomainRows,
+  type CatalogDomainRow,
+} from './domain-map.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Accreditation Intelligence Phase A — the nightly READINESS CAPTURE.
@@ -51,6 +59,25 @@ const PRUNE_PAGE_SIZE = 1000
 /** Max schools captured in parallel — a nightly job must not stampede the pool. */
 const CAPTURE_CONCURRENCY = 4
 
+/**
+ * ONE domain's reading as the record stores it. `label` and `reason` are
+ * deliberately NOT stored: they are presentation text, fully regenerable from
+ * the key, and freezing a sentence into the historical record would mean a copy
+ * edit rewrote history. `readinessPct` is NULL for an unmeasured domain — never
+ * 0, in the record exactly as on the screen.
+ */
+export interface DomainScoreRecord {
+  domainKey: DomainKey
+  readinessPct: number | null
+  selfScoredPct: number | null
+  verifiedPct: number | null
+  covered: boolean
+  measured: boolean
+  contributingLeafCount: number
+  effectiveLeafWeight: number
+  signalCount: number
+}
+
 /** One series' worth of composed, ready-to-write numbers. */
 interface ComposedSeries {
   seriesKey: string
@@ -65,6 +92,7 @@ interface ComposedSeries {
   scoredCount: number
   coveredCount: number
   leafScores: LeafScore[]
+  domainScores: DomainScoreRecord[]
   payloadHash: string
 }
 
@@ -222,8 +250,9 @@ export class AccreditationSnapshotService {
           leafCount: series.leafCount,
           scoredCount: series.scoredCount,
           coveredCount: series.coveredCount,
-          // Phase A writes domainScores NULL, always. Phase B fills it.
-          domainScores: undefined,
+          // Phase B: the ten domain readings as of this capture — always ten
+          // records, unmeasured domains storing null (never 0).
+          domainScores: series.domainScores as unknown as object,
           leafScores: series.leafScores as unknown as object,
           engineVersion: READINESS_HISTORY_VERSION,
           catalogVersion: series.catalogVersion,
@@ -241,6 +270,7 @@ export class AccreditationSnapshotService {
           leafCount: series.leafCount,
           scoredCount: series.scoredCount,
           coveredCount: series.coveredCount,
+          domainScores: series.domainScores as unknown as object,
           leafScores: series.leafScores as unknown as object,
           engineVersion: READINESS_HISTORY_VERSION,
           catalogVersion: series.catalogVersion,
@@ -371,7 +401,11 @@ export class AccreditationSnapshotService {
         ? []
         : await this.prisma.accreditationFramework.findMany({ where: { id: { in: frameworkIds } } })
 
-    const assuranceCatalogIds = await this.assuranceCatalogIds(leaves)
+    // ONE catalog read for the assurance split AND the Phase-B domain map (same
+    // findMany, wider select) — the recorded grid is built from exactly the
+    // catalog state the recorded readiness figure was built from.
+    const catalogRows = await this.catalogRowsFor(leaves)
+    const assuranceCatalogIds = assuranceIdsFrom(catalogRows)
 
     const out: ComposedSeries[] = []
     for (const fw of frameworks) {
@@ -384,6 +418,7 @@ export class AccreditationSnapshotService {
           scoped,
           countBy,
           assuranceCatalogIds,
+          catalogRows,
           { indexMin: fw.indexMin, indexMax: fw.indexMax, statusBands: this.bandsOf(fw.statusBands) },
         ),
       )
@@ -399,10 +434,14 @@ export class AccreditationSnapshotService {
           unlinked,
           countBy,
           // Framework-LESS mode applies no assurance split — the live read
-          // (AccreditationReadinessService.assuranceCatalogIds short-circuits to
-          // an empty set when framework is null) does exactly this, and the
+          // (AccreditationReadinessService.catalogRowsFor short-circuits to an
+          // empty set when framework is null) does exactly this, and the
           // 'none' series must record the same number the hero shows.
           new Set<string>(),
+          // No catalog rows either: a standard linked to no framework belongs to
+          // no accreditor domain. The 'none' series records ten UNCOVERED
+          // domains rather than guessing where the school's own codes belong.
+          [],
           null,
         ),
       )
@@ -420,6 +459,7 @@ export class AccreditationSnapshotService {
     scopedLeaves: AccreditationStandard[],
     countBy: Map<string, number>,
     assuranceCatalogIds: Set<string>,
+    catalogRows: readonly CatalogDomainRow[],
     framework: { indexMin: number | null; indexMax: number | null; statusBands: { min: number; label: string }[] } | null,
   ): ComposedSeries {
     // Assurance gates are binary checklist items, not rubric-scored standards —
@@ -439,6 +479,34 @@ export class AccreditationSnapshotService {
       framework,
     )
 
+    // Phase B — the ten domain readings over the SAME non-assurance leaves this
+    // series' headline figures were computed from.
+    const { map, signalKeys } = buildDomainMap(scored, catalogRows)
+    const domainScores: DomainScoreRecord[] = computeDomainReadiness(
+      leafScores.map((l) => ({ ...l, title: '' })),
+      map,
+      { signalKeys },
+    ).map((d) => ({
+      domainKey: d.domainKey,
+      readinessPct: d.readinessPct,
+      selfScoredPct: d.selfScoredPct,
+      verifiedPct: d.verifiedPct,
+      covered: d.covered,
+      measured: d.measured,
+      contributingLeafCount: d.contributingLeafCount,
+      effectiveLeafWeight: d.effectiveLeafWeight,
+      signalCount: d.signalCount,
+    }))
+
+    // domainScores JOINS THE DEDUPE HASH, alongside engineVersion/catalogVersion/
+    // seriesKey/leafScores. A catalog map correction that leaves every rubric
+    // score untouched IS new recorded information: without it the dedupe would
+    // pin a stale grid in the record forever while the live page showed the
+    // corrected one. The cost is honest and bounded — on the first nightly run
+    // after a map change each series writes ONE row whose readiness figures are
+    // identical to the previous row and whose domainScores are new. The trend
+    // strip renders that as a flat point and readiness-history emits no break
+    // (leaf count, framework and engine version are all unchanged).
     const payloadHash = createHash('sha256')
       .update(
         stableStringify({
@@ -446,6 +514,7 @@ export class AccreditationSnapshotService {
           catalogVersion,
           seriesKey,
           leafScores,
+          domainScores,
         }),
       )
       .digest('hex')
@@ -463,6 +532,7 @@ export class AccreditationSnapshotService {
       scoredCount: summary.scoredCount,
       coveredCount: summary.coveredCount,
       leafScores,
+      domainScores,
       payloadHash,
     }
   }
@@ -471,16 +541,31 @@ export class AccreditationSnapshotService {
     return Array.isArray(raw) ? (raw as { min: number; label: string }[]) : []
   }
 
-  /** Catalog ids (within these leaves' links) flagged isAssurance. Skips the
-   *  query entirely for a fully hand-made register. */
-  private async assuranceCatalogIds(leaves: AccreditationStandard[]): Promise<Set<string>> {
+  /** The catalog rows behind these leaves — assurance flag + domain map + signal
+   *  binding in ONE read. Skipped entirely for a fully hand-made register. */
+  private async catalogRowsFor(leaves: AccreditationStandard[]): Promise<CatalogDomainRow[]> {
     const catalogIds = leaves.map((r) => r.catalogStandardId).filter((id): id is string => !!id)
-    if (catalogIds.length === 0) return new Set()
-    const rows = await this.prisma.accreditationCatalogStandard.findMany({
-      where: { id: { in: catalogIds }, isAssurance: true },
-      select: { id: true },
-    })
-    return new Set(rows.map((r) => r.id))
+    if (catalogIds.length === 0) return []
+    // Deploy-order safe: a pre-migration image still captures the Phase-A
+    // figures, recording ten uncovered domains rather than failing the job.
+    return readCatalogDomainRows(
+      () =>
+        this.prisma.accreditationCatalogStandard.findMany({
+          where: { id: { in: catalogIds } },
+          select: {
+            id: true,
+            isAssurance: true,
+            domainKey: true,
+            domainWeights: true,
+            signalKeys: true,
+          },
+        }),
+      () =>
+        this.prisma.accreditationCatalogStandard.findMany({
+          where: { id: { in: catalogIds } },
+          select: { id: true, isAssurance: true },
+        }),
+    )
   }
 
   /** Bounded-parallelism map. Deliberately NOT Promise.all over every school. */

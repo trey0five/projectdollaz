@@ -176,6 +176,42 @@ describe('AccreditationCatalogService — seed (idempotent)', () => {
     for (const c of catalog.values()) expect(ids.has(c.id)).toBe(true)
   })
 
+  it('the domain map + signal binding ride on BOTH the create and the update path', async () => {
+    // THE SELF-HEAL ASSERTION (F17). Production catalog rows already exist; the
+    // Phase-B columns reach them ONLY because the update path carries the same
+    // nodeData the create path does. If domainKey ever appears on `create`
+    // alone, every existing production row keeps a NULL domain forever, the
+    // domain grid is silently empty in prod and green in dev, and no migration
+    // exists to notice.
+    const { svc, prisma, catalog } = makeStore()
+    await svc.seedCatalog()
+    const calls = prisma.accreditationCatalogStandard.upsert.mock.calls as unknown as [
+      { create: Record<string, unknown>; update: Record<string, unknown> },
+    ][]
+    for (const [args] of calls) {
+      for (const shape of [args.create, args.update]) {
+        expect(shape.domainKey).toBeTruthy()
+        expect(shape).toHaveProperty('domainWeights')
+        expect(Array.isArray(shape.signalKeys)).toBe(true)
+      }
+    }
+    // Landed on the rows themselves, split and signals included.
+    const byCode = new Map([...catalog.values()].map((c) => [c.code, c]))
+    expect(byCode.get('COG-15')!.domainKey).toBe('finance')
+    expect(byCode.get('COG-15')!.signalKeys).toHaveLength(7)
+    expect(byCode.get('MSA-4')!.domainWeights).toEqual({ finance: 0.5, facilities: 0.25, hr: 0.25 })
+    expect(byCode.get('NSBECS-12')!.domainKey).toBe('facilities')
+
+    // A SECOND run still creates nothing — the self-heal is an update, not an
+    // insert (the existing idempotency guarantee, re-asserted with the new
+    // columns in play).
+    const catCount = catalog.size
+    const ids = new Set([...catalog.values()].map((c) => c.id))
+    await svc.seedCatalog()
+    expect(catalog.size).toBe(catCount)
+    for (const c of catalog.values()) expect(ids.has(c.id)).toBe(true)
+  })
+
   it('onModuleInit is FAIL-SOFT: a seed crash logs a warning, never throws', async () => {
     const { svc, prisma } = makeStore()
     prisma.accreditationFramework.upsert.mockRejectedValue(new Error('db down'))

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { DOMAIN_KEYS } from '@finrep/compliance'
 import { AccreditationSnapshotService, NO_FRAMEWORK_SERIES_KEY } from './readiness-snapshot.service.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -76,7 +77,16 @@ function makeService(opts: {
   standards?: unknown[]
   evidence?: { standardId: string; _count: { _all: number } }[]
   frameworks?: unknown[]
-  assuranceCatalog?: { id: string }[]
+  // Phase B widened the ONE catalog read (assurance flag + domain map + signal
+  // binding in a single findMany), so the fixture carries the columns the
+  // service now derives in memory.
+  assuranceCatalog?: {
+    id: string
+    isAssurance?: boolean
+    domainKey?: string | null
+    domainWeights?: unknown
+    signalKeys?: string[]
+  }[]
   licensed?: boolean
   schoolsWithStandards?: string[]
   schoolsWithBilling?: string[]
@@ -362,7 +372,7 @@ describe('AccreditationSnapshotService — one series per framework', () => {
         stdRow({ id: 'a', code: 'C-1', frameworkId: 'fw-cognia', catalogStandardId: 'c1', rubricScore: 4 }),
         stdRow({ id: 'asr', code: 'C-A1', frameworkId: 'fw-cognia', catalogStandardId: 'cA1' }),
       ],
-      assuranceCatalog: [{ id: 'cA1' }],
+      assuranceCatalog: [{ id: 'cA1', isAssurance: true }],
     })
     await svc.captureForSchool('school-A', 'nightly', day('2026-08-14'))
     expect(store[0].leafCount).toBe(1)
@@ -375,17 +385,73 @@ describe('AccreditationSnapshotService — one series per framework', () => {
     expect(store).toHaveLength(0)
   })
 
-  it('domainScores is never written in Phase A', async () => {
+  it('Phase B RECORDS the ten domain readings (never 0 for an unmeasured domain)', async () => {
     const { svc, prisma } = makeService({
-      standards: [stdRow({ id: 'a', code: 'C-1', frameworkId: 'fw-cognia', rubricScore: 3 })],
+      standards: [
+        stdRow({ id: 'a', code: 'C-1', frameworkId: 'fw-cognia', catalogStandardId: 'c1', rubricScore: 3 }),
+      ],
+      assuranceCatalog: [
+        {
+          id: 'c1',
+          isAssurance: false,
+          domainKey: 'finance',
+          signalKeys: ['operating_margin', 'days_cash_on_hand'],
+        },
+      ],
     })
     await svc.captureForSchool('school-A', 'nightly', day('2026-08-14'))
     const create = prisma.accreditationReadinessSnapshot.upsert.mock.calls[0][0].create as Record<
       string,
       unknown
     >
-    expect(create.domainScores).toBeUndefined()
+    const scores = create.domainScores as {
+      domainKey: string
+      readinessPct: number | null
+      measured: boolean
+      signalCount: number
+    }[]
+    expect(scores).toHaveLength(DOMAIN_KEYS.length)
+    expect(scores.map((s) => s.domainKey)).toEqual([...DOMAIN_KEYS])
+    // ONE finance leaf: below the scoring threshold, so the RECORD stores null.
+    // A 0 here would enter the school's permanent history as "scored badly".
+    const finance = scores.find((s) => s.domainKey === 'finance')!
+    expect(finance.measured).toBe(false)
+    expect(finance.readinessPct).toBeNull()
+    expect(finance.signalCount).toBe(2)
+    for (const s of scores) if (!s.measured) expect(s.readinessPct).toBeNull()
     expect(create.isDemo).toBe(false)
+  })
+
+  it('a DOMAIN-MAP correction alone changes the payload hash (the grid can go stale otherwise)', async () => {
+    const standards = [
+      stdRow({ id: 'a', code: 'C-1', frameworkId: 'fw-cognia', catalogStandardId: 'c1', rubricScore: 3 }),
+    ]
+    const before = makeService({
+      standards,
+      assuranceCatalog: [{ id: 'c1', isAssurance: false, domainKey: 'finance' }],
+    })
+    await before.svc.captureForSchool('school-A', 'nightly', day('2026-08-14'))
+    const after = makeService({
+      standards,
+      // Same rubric score, same evidence — ONLY the catalog map moved.
+      assuranceCatalog: [{ id: 'c1', isAssurance: false, domainKey: 'facilities' }],
+    })
+    await after.svc.captureForSchool('school-A', 'nightly', day('2026-08-14'))
+    expect(before.store[0].readinessPct).toBe(after.store[0].readinessPct)
+    expect(before.store[0].payloadHash).not.toBe(after.store[0].payloadHash)
+  })
+
+  it('identical inputs still dedupe (Phase-A hash behaviour otherwise unchanged)', async () => {
+    const s = makeService({
+      standards: [
+        stdRow({ id: 'a', code: 'C-1', frameworkId: 'fw-cognia', catalogStandardId: 'c1', rubricScore: 3 }),
+      ],
+      assuranceCatalog: [{ id: 'c1', isAssurance: false, domainKey: 'finance' }],
+    })
+    await s.svc.captureForSchool('school-A', 'nightly', day('2026-08-14'))
+    await s.svc.captureForSchool('school-A', 'nightly', day('2026-08-15'))
+    await s.svc.captureForSchool('school-A', 'nightly', day('2026-08-16'))
+    expect(s.store).toHaveLength(1)
   })
 })
 

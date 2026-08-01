@@ -1,5 +1,5 @@
 import { Injectable, Logger, NotFoundException, Optional, type OnModuleInit } from '@nestjs/common'
-import type { AccreditationCatalogStandard } from '@finrep/db'
+import { Prisma, type AccreditationCatalogStandard } from '@finrep/db'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { AuditService } from '../common/audit/audit.service.js'
 import { FRAMEWORK_SEEDS, type FrameworkSeed } from './catalog-seed.js'
@@ -116,6 +116,19 @@ export class AccreditationCatalogService implements OnModuleInit {
         orderIndex: i,
         evidenceTags: s.evidenceTags ?? [],
         isAssurance: s.isAssurance ?? false,
+        // Phase B — seed-only domain map + signal binding. Present on BOTH the
+        // create AND the update path, so the first boot of this image rewrites
+        // every existing production catalog row (the same self-heal that already
+        // fixes title/tag drift) and no backfill migration is needed. A map
+        // correction likewise reaches every school on the next boot: schools
+        // never store a domain, they resolve it through catalogStandardId.
+        domainKey: s.domainKey,
+        // Prisma.DbNull (SQL NULL), never a bare null: on a nullable Json column
+        // that is the only way to CLEAR a value, so a standard whose split is
+        // removed in a later seed self-heals back to "no split" instead of
+        // keeping a stale one forever.
+        domainWeights: (s.domainWeights ?? Prisma.DbNull) as Prisma.InputJsonValue,
+        signalKeys: s.signalKeys ?? [],
       }
       await this.prisma.accreditationCatalogStandard.upsert({
         where: { frameworkId_code: { frameworkId: row.id, code: s.code } },

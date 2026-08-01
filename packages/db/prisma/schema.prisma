@@ -1416,6 +1416,16 @@ model AccreditationCatalogStandard {
   evidenceTags String[] @default([]) @map("evidence_tags")
   isAssurance  Boolean  @default(false) @map("is_assurance")
 
+  // ── AIC Phase B — the seed-only DOMAIN MAP + operational SIGNAL BINDING ──
+  // Platform reference data, never client-writable. domainKey is the LEAD domain
+  // (one of @finrep/compliance DOMAIN_KEYS); domainWeights, when present, is the
+  // authoritative fractional split for a standard that genuinely straddles
+  // domains; signalKeys are @finrep/analytics metric keys (never a mix metric).
+  // No index — nothing queries by domain; the map is loaded per school by id.
+  domainKey     String?  @map("domain_key")
+  domainWeights Json?    @map("domain_weights")
+  signalKeys    String[] @default([]) @map("signal_keys")
+
   framework       AccreditationFramework         @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
   parent          AccreditationCatalogStandard?  @relation("CatalogTree", fields: [parentId], references: [id], onDelete: SetNull)
   children        AccreditationCatalogStandard[] @relation("CatalogTree")

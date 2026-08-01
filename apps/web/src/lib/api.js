@@ -583,6 +583,15 @@ export const accreditationApi = {
     api.get(`/schools/${schoolId}/accreditation/readiness/trend`, { params }),
   getReadinessDiff: (schoolId, params) =>
     api.get(`/schools/${schoolId}/accreditation/readiness/diff`, { params }),
+  // ── Phase B: the OPERATIONAL SIGNAL binding ─────────────────────────────────
+  // The metric keys the platform catalog binds to each standard, valued against
+  // the school's latest snapshot-bearing period. ONE request per school — the
+  // page slices it per standard and per domain; no per-standard fetching. The
+  // endpoint answers 200 in every degraded state (no period, no snapshot,
+  // unlicensed metric module) with an explicit reason rather than an error, so
+  // the only 402 it can raise is the 'accreditation' module gate itself.
+  getSignals: (schoolId, params = {}) =>
+    api.get(`/schools/${schoolId}/accreditation/signals`, { params }),
 }
 
 // ── Phase 4 Knowledge document store: CORE (always included, NOT a licensed module).

@@ -50,6 +50,7 @@ import { useSchools } from '../context/SchoolContext.jsx'
 import { useUiV2 } from '../context/UiFlagContext.jsx'
 import { useAccreditation } from '../hooks/useAccreditation.js'
 import { useReadinessTrend } from '../hooks/useReadinessTrend.js'
+import { useAccreditationSignals } from '../hooks/useAccreditationSignals.js'
 // ── Phase 3: framework catalog + rubric readiness + evidence warehouse ────────
 import ReadinessHero from '../components/accreditation/ReadinessHero.jsx'
 import AdoptFrameworkModal from '../components/accreditation/AdoptFrameworkModal.jsx'
@@ -57,6 +58,9 @@ import RubricPicker from '../components/accreditation/RubricPicker.jsx'
 import SuggestionsStrip from '../components/accreditation/SuggestionsStrip.jsx'
 import StandardDocuments from '../components/accreditation/StandardDocuments.jsx'
 import StrategyLinkChip from '../components/accreditation/StrategyLinkChip.jsx'
+// ── Phase B: the ten-domain grid + the operational signal binding ─────────────
+import DomainGrid from '../components/accreditation/DomainGrid.jsx'
+import SignalPanel from '../components/accreditation/SignalPanel.jsx'
 
 // ── Light-theme coverage badge (restyled from the old dark pills) ────────────
 const COVERAGE_BADGE = {
@@ -431,6 +435,12 @@ export function EvidencePanel({
   fetchSuggestions = null,
   linkStrategy = null,
   clearStrategy = null,
+  // ── Phase B (optional) ─────────────────────────────────────────────────────
+  // The operational-signal panel for THIS standard, composed by the page from the
+  // one per-school /signals payload (no per-standard fetching, no extra request
+  // when a row is expanded). Rendered between the rubric header strip and the
+  // evidence list; absent → the panel simply isn't there and nothing else moves.
+  signalPanel = null,
 }) {
   const [items, setItems] = useState(null) // null = not yet loaded
   const [loading, setLoading] = useState(true)
@@ -645,6 +655,9 @@ export function EvidencePanel({
           ) : null}
         </div>
       ) : null}
+
+      {/* ── Phase B: the operating numbers this standard is judged against ──── */}
+      {signalPanel}
 
       {loading || items === null ? (
         <p className="text-[13px] text-white/50">Loading evidence…</p>
@@ -1187,7 +1200,20 @@ function StandardsTable({
 
 // ═══════════════════════════ PAGE ═══════════════════════════════════════════
 
-const TABS = [{ key: 'standards', label: 'Standards' }]
+// ── Phase B: the tab list SPLITS in two (the one gotcha of this phase) ───────
+// One shared TABS array used to feed both the command center and the Records
+// register. Adding 'domains' to it would have put the ten-domain grid inside the
+// Records register, which is a standards TABLE and nothing else. So:
+//   REGISTER_TABS — what the Records tab offers (unchanged: one register)
+//   CENTER_TABS   — what the overview offers (the register + the domain grid)
+// DomainCommandCenter renders an underlined tab bar as soon as tabs.length > 1,
+// so the bar appears with no component change; ModuleRegister keeps its single
+// register and falls back to 'standards' if the shared tab state says 'domains'.
+const REGISTER_TABS = [{ key: 'standards', label: 'Standards' }]
+const CENTER_TABS = [
+  { key: 'standards', label: 'Standards' },
+  { key: 'domains', label: 'Domains' },
+]
 
 function AccreditationWorkspace() {
   const { activeSchool } = useSchools()
@@ -1229,6 +1255,14 @@ function AccreditationWorkspace() {
   // entitlement early-return, so without the gate a finance-only tenant would
   // fire two extra requests that both 402.
   const history = useReadinessTrend(schoolId, {
+    enabled: !loading && !notLicensed && !notEntitled,
+  })
+
+  // Phase B: the OPERATIONAL SIGNALS bound to this school's standards — one
+  // request for the whole page, sliced below into the domain cards and the open
+  // standard's drawer. Gated on the same already-made module check as the history
+  // hook, for the same reason (hooks run above the page's entitlement return).
+  const signals = useAccreditationSignals(schoolId, {
     enabled: !loading && !notLicensed && !notEntitled,
   })
 
@@ -1518,6 +1552,35 @@ function AccreditationWorkspace() {
 
   const expandedStandard = expanded ? standards.find((s) => s.id === expanded) : null
 
+  // ── Phase B: the Domains tab ───────────────────────────────────────────────
+  // Rendered in the command center's register slot when the Domains tab is
+  // active. It reads the SAME readiness payload the hero reads, so a card can
+  // never describe a different population than the number above it.
+  const domainGrid = (
+    <DomainGrid
+      readiness={readiness}
+      signals={signals.signals}
+      byDomain={signals.byDomain}
+      signalsLoading={signals.loading}
+      signalsUnavailable={Boolean(signals.notLicensed || signals.error)}
+      onOpenStandards={() => setTab('standards')}
+      reduce={reduce}
+    />
+  )
+
+  // ── Phase B: the open standard's signal slice ──────────────────────────────
+  // byStandard is the server's catalog-derived index; the row's own signalKeys
+  // (StandardPublic) carry the same catalog truth and are the fallback when the
+  // /signals call is degraded — so the panel can still say "3 signals bound"
+  // rather than falsely reporting that nothing is bound to this standard.
+  const expandedBoundKeys = expandedStandard
+    ? (signals.byStandard?.[expandedStandard.id] ?? expandedStandard.signalKeys ?? [])
+    : []
+  const expandedBoundSet = new Set(expandedBoundKeys)
+  // Registry order, exactly as the server sorted it — the same order every other
+  // metric surface uses.
+  const expandedSignalRows = signals.signals.filter((s) => expandedBoundSet.has(s.key))
+
   // ── Phase 3 hero — readiness dial once adopted, adopt prompt otherwise ─────
   const readinessHero = (
     <ReadinessHero
@@ -1541,11 +1604,11 @@ function AccreditationWorkspace() {
       Icon={BadgeCheck}
       attentionCount={attentionItems.length}
       kpis={kpis}
-      tabs={TABS}
+      tabs={CENTER_TABS}
       activeTab={tab}
       onTabChange={setTab}
       onNew={canEdit ? openAdd : null}
-      registerTable={registerTable}
+      registerTable={tab === 'domains' ? domainGrid : registerTable}
       attentionItems={attentionItems}
       aboveKpis={readinessHero}
       headerAside={
@@ -1610,6 +1673,16 @@ function AccreditationWorkspace() {
               fetchSuggestions={fetchSuggestions}
               linkStrategy={linkStrategy}
               clearStrategy={clearStrategy}
+              signalPanel={
+                <SignalPanel
+                  rows={expandedSignalRows}
+                  boundKeys={expandedBoundKeys}
+                  period={signals.period}
+                  loading={signals.loading}
+                  error={signals.error}
+                  notLicensed={signals.notLicensed}
+                />
+              }
             />
           </motion.div>
         </div>
@@ -1647,8 +1720,11 @@ function AccreditationWorkspace() {
             <ModuleRegister
               moduleKey="accreditation"
               hue={moduleHue('accreditation')}
-              tabs={TABS}
-              activeTab={tab}
+              tabs={REGISTER_TABS}
+              // The Records tab hosts the standards register and nothing else, so
+              // a shared 'domains' selection falls back rather than rendering an
+              // active tab that isn't in its list.
+              activeTab={tab === 'domains' ? 'standards' : tab}
               onTabChange={setTab}
               onNew={canEdit ? openAdd : null}
               registerTable={registerTable}

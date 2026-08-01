@@ -8,6 +8,16 @@ import { OrgQboTokenService } from './qbo-org-token.service.js'
 
 const AS_OF_ROW = () => new Date()
 
+/**
+ * A due date that is ALWAYS in the future. QboAgingService ages as of
+ * `new Date().toISOString().slice(0, 10)` (UTC today), so a hard-coded "current"
+ * invoice date is a time bomb: it buckets as `current` until that date passes,
+ * then silently moves to d1_30. The literal this replaced ('2026-07-31') went red
+ * the moment the host clock crossed into August UTC — which, in any behind-UTC
+ * timezone, happens on the evening of the last day of every month.
+ */
+const NOT_YET_DUE = new Date(Date.now() + 45 * 86_400_000).toISOString().slice(0, 10)
+
 function arDetail(rows: Array<[string, string, string]>) {
   // rows: [party, dueDate, openBal]
   return {
@@ -108,7 +118,7 @@ describe('QboAgingService.getAging', () => {
   it('bucketizes a live pull, computes DSO, caps top parties, and write-through-persists', async () => {
     const { svc, calls } = makeService({
       arReport: arDetail([
-        ['Acme', '2026-07-31', '1000.00'], // current
+        ['Acme', NOT_YET_DUE, '1000.00'], // current (never due yet, on any clock)
         ['Beta', '2026-06-20', '2000.00'], // overdue
         ['Beta', '2026-03-01', '3000.00'], // 90+
       ]),

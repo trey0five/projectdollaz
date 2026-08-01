@@ -189,6 +189,31 @@ export {
   downsampleMonthly,
 } from './readiness-history.js'
 
+// Accreditation Intelligence Phase B — the domain map. The CLOSED ten-domain
+// vocabulary + the fractional-weight math that re-expresses one framework's
+// leaves as ten honest readings — or as an explicit refusal with a reason.
+export type {
+  DomainKey,
+  DomainWeights,
+  DomainMap,
+  DomainReadinessOptions,
+  DomainReadiness,
+  DomainConfidence,
+} from './accreditation-domains.js'
+export {
+  ACCREDITATION_DOMAINS_VERSION,
+  DOMAIN_KEYS,
+  DOMAIN_LABELS,
+  DOMAIN_REASON_NOUN,
+  MIN_DOMAIN_LEAVES,
+  DOMAIN_WEIGHT_EPSILON,
+  SIGNAL_ATTRIBUTION_MIN_WEIGHT,
+  isDomainKey,
+  normalizeDomainWeights,
+  computeDomainReadiness,
+  computeDomainConfidence,
+} from './accreditation-domains.js'
+
 // Phase 4 Facilities v1 — pure deferred-maintenance backlog (injectable now)
 export type {
   MaintenancePriority,

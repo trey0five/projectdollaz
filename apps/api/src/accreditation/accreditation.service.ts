@@ -15,6 +15,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service.js'
 import { AuditService } from '../common/audit/audit.service.js'
 import { AccreditationSnapshotService } from './readiness-snapshot.service.js'
+import { readCatalogDomainRows } from './domain-map.js'
 import type { CreateStandardDto } from './dto/create-standard.dto.js'
 import type { UpdateStandardDto } from './dto/update-standard.dto.js'
 import {
@@ -60,6 +61,19 @@ export interface StandardPublic {
   sortOrder: number | null
   /** Cognia binary assurance gate (from the catalog row; false when uncataloged). */
   isAssurance: boolean
+  // ── Phase B catalog domain map (ADDITIVE; catalog-derived, never stored on the
+  // school row, so a map correction reaches every school with no migration) ──
+  /** Lead accreditation domain from the catalog (null on hand-made rows). */
+  domainKey: string | null
+  /** Fractional split when the standard straddles domains (null otherwise). */
+  domainWeights: Record<string, number> | null
+  /**
+   * Bound @finrep/analytics metric keys ([] when none). Lets the drawer say
+   * "3 signals bound" even if the /signals call is degraded — it costs zero
+   * extra queries, because the catalog read that resolves isAssurance is the
+   * same read.
+   */
+  signalKeys: string[]
   /** Soft link to a StrategicPlan/StrategyGoal ('strategic_plan' | 'strategy_goal'). */
   strategySourceType: string | null
   strategySourceRef: string | null
@@ -164,12 +178,21 @@ const SOURCE_META: Record<Exclude<EvidenceSourceType, 'manual'>, { label: string
   knowledge_document: { label: 'Document', link: '/knowledge' },
 }
 
+/** Phase B — the catalog facts a standard inherits from its catalog row. */
+interface CatalogDomainFacts {
+  domainKey: string | null
+  domainWeights: Record<string, number> | null
+  signalKeys: string[]
+}
+
 /** Batched Phase-3 lookups threaded through toStandardPublic (see buildEnrichmentCtx). */
 interface StandardEnrichmentCtx {
   /** frameworkId → rubricLabels array[4] (index i = label for score i+1). */
   rubricLabelsByFramework: Map<string, string[]>
   /** Catalog ids flagged isAssurance (Cognia binary gates). */
   assuranceCatalogIds: Set<string>
+  /** Phase B — catalogStandardId → its domain map + signal binding. */
+  catalogDomains: Map<string, CatalogDomainFacts>
   /** `${strategySourceType}:${strategySourceRef}` → plan name / goal title. */
   strategyLabels: Map<string, string>
 }
@@ -276,6 +299,17 @@ export class AccreditationService {
       sortOrder: row.sortOrder ?? null,
       isAssurance:
         catalogStandardId != null && (ctx?.assuranceCatalogIds.has(catalogStandardId) ?? false),
+      domainKey:
+        (catalogStandardId != null ? ctx?.catalogDomains.get(catalogStandardId)?.domainKey : null) ??
+        null,
+      domainWeights:
+        (catalogStandardId != null
+          ? ctx?.catalogDomains.get(catalogStandardId)?.domainWeights
+          : null) ?? null,
+      signalKeys:
+        (catalogStandardId != null
+          ? ctx?.catalogDomains.get(catalogStandardId)?.signalKeys
+          : undefined) ?? [],
       strategySourceType,
       strategySourceRef,
       strategyLabel:
@@ -325,13 +359,45 @@ export class AccreditationService {
       })
       for (const fw of fws) rubricLabelsByFramework.set(fw.id, (fw.rubricLabels as string[]) ?? [])
     }
+    // ONE catalog read now carries the assurance flag AND the Phase-B domain map
+    // + signal binding (same findMany, wider select, assurance derived in
+    // memory) — the drawer can report "3 signals bound" with zero extra queries.
     const assuranceCatalogIds = new Set<string>()
+    const catalogDomains = new Map<string, CatalogDomainFacts>()
     if (catalogIds.length > 0) {
-      const cats = await this.prisma.accreditationCatalogStandard.findMany({
-        where: { id: { in: catalogIds }, isAssurance: true },
-        select: { id: true },
-      })
-      for (const c of cats) assuranceCatalogIds.add(c.id)
+      // DEPLOY-ORDER SAFE. This is the CORE standards register — it predates
+      // Phase B and must survive an image that starts before the migration
+      // lands. A missing-column error degrades the domain facts to nulls; the
+      // register itself never 500s. See readCatalogDomainRows.
+      const cats = await readCatalogDomainRows(
+        () =>
+          this.prisma.accreditationCatalogStandard.findMany({
+            where: { id: { in: catalogIds } },
+            select: {
+              id: true,
+              isAssurance: true,
+              domainKey: true,
+              domainWeights: true,
+              signalKeys: true,
+            },
+          }),
+        () =>
+          this.prisma.accreditationCatalogStandard.findMany({
+            where: { id: { in: catalogIds } },
+            select: { id: true, isAssurance: true },
+          }),
+      )
+      for (const c of cats) {
+        if (c.isAssurance) assuranceCatalogIds.add(c.id)
+        catalogDomains.set(c.id, {
+          domainKey: c.domainKey ?? null,
+          domainWeights:
+            c.domainWeights && typeof c.domainWeights === 'object' && !Array.isArray(c.domainWeights)
+              ? (c.domainWeights as Record<string, number>)
+              : null,
+          signalKeys: c.signalKeys ?? [],
+        })
+      }
     }
     const strategyLabels = new Map<string, string>()
     if (planRefs.length > 0) {
@@ -348,7 +414,7 @@ export class AccreditationService {
       })
       for (const g of goals) strategyLabels.set(`strategy_goal:${g.id}`, g.title)
     }
-    return { rubricLabelsByFramework, assuranceCatalogIds, strategyLabels }
+    return { rubricLabelsByFramework, assuranceCatalogIds, catalogDomains, strategyLabels }
   }
 
   /**

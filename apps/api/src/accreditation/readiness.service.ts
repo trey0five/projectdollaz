@@ -1,20 +1,31 @@
-import { Injectable } from '@nestjs/common'
+import { Injectable, Logger } from '@nestjs/common'
 import type { AccreditationFramework, AccreditationStandard } from '@finrep/db'
 import {
   bandForIndex,
   computeAssurances,
+  computeDomainConfidence,
+  computeDomainReadiness,
   computeGaps,
   computeTargetGap,
   schoolReadiness,
   selfScoredPct,
   verifiedPct,
   type AssuranceStatus,
+  type DomainConfidence,
+  type DomainReadiness,
   type ReadinessGap,
   type ReadinessLeafInput,
   type StatusBand,
 } from '@finrep/compliance'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { isAssuranceLeaf, leavesOf } from './leaf-scope.js'
+import {
+  assuranceIdsFrom,
+  buildDomainMap,
+  readCatalogDomainRows,
+  type CatalogDomainRow,
+} from './domain-map.js'
+import { frameworkIdsIn, pickDominantFramework } from './framework-scope.js'
 
 /** The framework facts echoed on the readiness payload (null = framework-less mode). */
 export interface ReadinessFrameworkPublic {
@@ -56,6 +67,17 @@ export interface ReadinessResponse {
   target: ReadinessTargetPublic | null
   gaps: ReadinessGap[]
   assurances: AssuranceStatus[]
+  /**
+   * Phase B — the SAME leaves, re-expressed as ten domain readings. Always
+   * exactly ten entries in DOMAIN_KEYS order, including the domains this
+   * school's framework does not cover: "your accreditor asks nothing here" is a
+   * finding, not an omission. A domain that cannot be scored carries NULL
+   * percentages and a `reason` sentence — never 0, which would read as "you
+   * scored badly here".
+   */
+  domains: DomainReadiness[]
+  /** Phase B — the published size of the hole in the domain grid. */
+  confidence: DomainConfidence
 }
 
 /**
@@ -74,6 +96,8 @@ export interface ReadinessResponse {
  */
 @Injectable()
 export class AccreditationReadinessService {
+  private readonly logger = new Logger(AccreditationReadinessService.name)
+
   constructor(private readonly prisma: PrismaService) {}
 
   async getReadiness(
@@ -97,9 +121,12 @@ export class AccreditationReadinessService {
     const scoped = framework ? rows.filter((r) => r.frameworkId === framework.id) : rows
     const leaves = leavesOf(rows, scoped)
 
-    // Assurance split via the catalog rows (framework mode only; an uncataloged
-    // row is never an assurance).
-    const assuranceCatalogIds = await this.assuranceCatalogIds(framework, leaves)
+    // ONE catalog read now serves BOTH the assurance split and the Phase-B
+    // domain map: same single findMany, wider select, assurance set derived in
+    // memory. A second query would let the hero and the domain grid describe
+    // catalog states read a millisecond apart.
+    const catalogRows = await this.catalogRowsFor(framework, leaves)
+    const assuranceCatalogIds = assuranceIdsFrom(catalogRows)
     const isAssurance = (r: AccreditationStandard): boolean =>
       isAssuranceLeaf(r, assuranceCatalogIds)
 
@@ -110,8 +137,31 @@ export class AccreditationReadinessService {
       rubricScore: r.rubricScore ?? null,
       evidenceCount: countBy.get(r.id) ?? 0,
     })
-    const scoredLeaves = leaves.filter((r) => !isAssurance(r)).map(toLeafInput)
+    const scoredRows = leaves.filter((r) => !isAssurance(r))
+    const scoredLeaves = scoredRows.map(toLeafInput)
     const assuranceLeaves = leaves.filter((r) => isAssurance(r)).map(toLeafInput)
+
+    // THE DOMAIN GRID USES THE EXACT ARRAY THE HERO USES. Not a re-query, not a
+    // re-filter — the same `scoredLeaves`, so a card can never describe a
+    // different population than the headline figure above it.
+    const { map, signalKeys, unmappedLeafCount } = buildDomainMap(scoredRows, catalogRows)
+    const domains = computeDomainReadiness(scoredLeaves, map, { signalKeys })
+    // `frameworkLinked` is the fact ONLY the API has. Without it the engine
+    // cannot tell "no framework adopted" from "adopted, but this build has not
+    // mapped its standards", and would tell a school sitting under a hero titled
+    // with their framework to go and adopt one.
+    const confidence = computeDomainConfidence(domains, {
+      unmappedLeafCount,
+      frameworkLinked: framework != null,
+    })
+    // A framework whose leaves are ALL unmapped means the catalog seed did not
+    // complete (onModuleInit fail-softs per framework), so say so in the logs —
+    // the school sees an honest sentence, we need the operational signal.
+    if (framework && scoredRows.length > 0 && unmappedLeafCount === scoredRows.length) {
+      this.logger.warn(
+        `Framework ${framework.code} has no domain-mapped standards (${unmappedLeafCount} leaves) — catalog seed may not have completed.`,
+      )
+    }
 
     const fwInput = framework
       ? {
@@ -163,6 +213,8 @@ export class AccreditationReadinessService {
       target,
       gaps,
       assurances: framework ? computeAssurances(assuranceLeaves) : [],
+      domains,
+      confidence,
     }
   }
 
@@ -178,34 +230,49 @@ export class AccreditationReadinessService {
     if (explicitId) {
       return this.prisma.accreditationFramework.findFirst({ where: { id: explicitId } })
     }
-    const countByFw = new Map<string, number>()
-    for (const r of rows) {
-      if (r.frameworkId) countByFw.set(r.frameworkId, (countByFw.get(r.frameworkId) ?? 0) + 1)
-    }
-    if (countByFw.size === 0) return null
+    const ids = frameworkIdsIn(rows)
+    if (ids.length === 0) return null
     const candidates = await this.prisma.accreditationFramework.findMany({
-      where: { id: { in: [...countByFw.keys()] } },
+      where: { id: { in: ids } },
     })
-    candidates.sort((a, b) => {
-      const c = (countByFw.get(b.id) ?? 0) - (countByFw.get(a.id) ?? 0)
-      return c !== 0 ? c : a.code.localeCompare(b.code)
-    })
-    return candidates[0] ?? null
+    // The dominance rule lives in framework-scope.ts so the SIGNAL panel resolves
+    // the same framework this read grades — see the note there.
+    return pickDominantFramework(rows, candidates)
   }
 
-  /** Catalog ids (within the leaves' links) flagged isAssurance. Skips the query
-   *  entirely when nothing is cataloged (hand-made registers, mocks). */
-  private async assuranceCatalogIds(
+  /**
+   * The catalog rows behind these leaves — assurance flag AND domain map AND
+   * signal binding in ONE read. Skips the query entirely when nothing is
+   * cataloged (hand-made registers, mocks) or in framework-LESS mode, which is
+   * why a framework-less school reports ten uncovered domains rather than an
+   * error: no catalog, no map, and the confidence caveat says exactly that.
+   */
+  private async catalogRowsFor(
     framework: AccreditationFramework | null,
     leaves: AccreditationStandard[],
-  ): Promise<Set<string>> {
-    if (!framework) return new Set()
+  ): Promise<CatalogDomainRow[]> {
+    if (!framework) return []
     const catalogIds = leaves.map((r) => r.catalogStandardId).filter((id): id is string => !!id)
-    if (catalogIds.length === 0) return new Set()
-    const rows = await this.prisma.accreditationCatalogStandard.findMany({
-      where: { id: { in: catalogIds }, isAssurance: true },
-      select: { id: true },
-    })
-    return new Set(rows.map((r) => r.id))
+    if (catalogIds.length === 0) return []
+    // Deploy-order safe: a pre-migration image degrades the DOMAIN GRID, never
+    // the hero (see readCatalogDomainRows).
+    return readCatalogDomainRows(
+      () =>
+        this.prisma.accreditationCatalogStandard.findMany({
+          where: { id: { in: catalogIds } },
+          select: {
+            id: true,
+            isAssurance: true,
+            domainKey: true,
+            domainWeights: true,
+            signalKeys: true,
+          },
+        }),
+      () =>
+        this.prisma.accreditationCatalogStandard.findMany({
+          where: { id: { in: catalogIds } },
+          select: { id: true, isAssurance: true },
+        }),
+    )
   }
 }
