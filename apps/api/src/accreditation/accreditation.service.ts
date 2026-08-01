@@ -25,6 +25,11 @@ import {
   type EvidenceSourceType,
 } from './dto/create-evidence.dto.js'
 import type { UpdateEvidenceDto } from './dto/update-evidence.dto.js'
+// ONE knowledge-document matcher, shared with the Phase-C auto-satisfaction
+// resolver. Two copies of these literals would drift the day someone adds a
+// pattern to one of them, and the drawer would then suggest a document the
+// Evidence Index refuses to auto-link — the same file, two answers.
+import { KNOWLEDGE_TAG_PATTERNS } from './evidence-tag-match.js'
 
 /** One standard as returned to the client, with COMPUTED coverage + review urgency. */
 export interface StandardPublic {
@@ -91,6 +96,16 @@ export interface EvidencePublic {
   reference: string | null
   notes: string | null
   capturedAt: string | null
+  // ── AIC Phase C — evidence CURRENCY (all additive; existing fields unmoved) ─
+  /** Requirement tag this artifact answers; null when unclassified. */
+  tag: string | null
+  /** "Which period does this cover?" — yyyy-mm-dd. NEVER inferred from a
+   *  createdAt or a capturedAt; null means we genuinely do not know. */
+  effectiveDate: string | null
+  /** Explicit school-set expiry; wins over every computed horizon. */
+  expiresAt: string | null
+  /** School-asserted. NULL = NOT ASSERTED, and renders as "—", never as "No". */
+  alsoInPortal: boolean | null
   createdByUserId: string | null
   /** 'manual' (free-text) or a linked operational artifact. */
   sourceType: EvidenceSourceType
@@ -556,6 +571,13 @@ export class AccreditationService {
       reference: row.reference,
       notes: row.notes,
       capturedAt: toIsoDate(row.capturedAt),
+      // Phase C: projection only. listEvidence does NOT compute currency — it
+      // keeps its exact query count, and the panel gets currency from the
+      // /evidence-readiness payload the page already holds.
+      tag: row.tag ?? null,
+      effectiveDate: toIsoDate(row.effectiveDate),
+      expiresAt: toIsoDate(row.expiresAt),
+      alsoInPortal: row.alsoInPortal ?? null,
       createdByUserId: row.createdByUserId,
       sourceType: st,
       sourceRef: row.sourceRef ?? null,
@@ -837,6 +859,11 @@ export class AccreditationService {
     // resolveStandard FIRST — a foreign/unknown standard 404s BEFORE any artifact query.
     const std = await this.resolveStandard(schoolId, standardId)
     const capturedAt = parseIsoDate(dto.capturedAt, 'capturedAt') ?? null
+    // Phase C. capturedAt is UNTOUCHED and is NEVER read as an anchor — it means
+    // "when we captured this row", and reading it as a document date is the
+    // exact guess this phase exists to ban.
+    const effectiveDate = parseIsoDate(dto.effectiveDate, 'effectiveDate') ?? null
+    const expiresAt = parseIsoDate(dto.expiresAt, 'expiresAt') ?? null
 
     const sourceType: EvidenceSourceType = dto.sourceType ?? 'manual'
     let sourceRef: string | null = null
@@ -916,6 +943,8 @@ export class AccreditationService {
       }
     }
 
+    const tag = await this.resolveEvidenceTag(dto.tag, sourceType, std.catalogStandardId ?? null)
+
     const row = await this.prisma.accreditationEvidence.create({
       data: {
         // schoolId is COPIED from the resolved standard — never trusted from the client.
@@ -928,6 +957,10 @@ export class AccreditationService {
         capturedAt,
         sourceType,
         sourceRef, // null for manual
+        tag,
+        effectiveDate,
+        expiresAt,
+        alsoInPortal: dto.alsoInPortal ?? null,
         createdByUserId: userId,
       },
     })
@@ -941,6 +974,35 @@ export class AccreditationService {
     // Evidence coverage moved → the DEFENSIBLE half of readiness moved with it.
     this.snapshot?.captureOnEvent(schoolId)
     return this.toEvidencePublic(row)
+  }
+
+  /**
+   * The requirement TAG an artifact answers.
+   *
+   * Taken from the DTO when the client supplies one — listSuggestions already
+   * computes a tag per suggestion and threw it away on attach, and persisting
+   * what we already knew is the free win of this phase.
+   *
+   * SERVER BACKSTOP, deliberately bounded: when the caller sends no tag, the
+   * evidence is LINKED (not free-text), and the parent standard's catalog row
+   * carries EXACTLY ONE evidenceTag, we adopt that one. Ambiguity (0 or ≥2 tags)
+   * leaves the tag null rather than picking. This is a CATEGORISATION, never a
+   * date — it can move a row onto the Evidence Index, and it can never make a
+   * stale artifact look current.
+   */
+  private async resolveEvidenceTag(
+    dtoTag: string | null | undefined,
+    sourceType: EvidenceSourceType,
+    catalogStandardId: string | null,
+  ): Promise<string | null> {
+    if (dtoTag !== undefined) return dtoTag ?? null
+    if (sourceType === 'manual' || !catalogStandardId) return null
+    const catalog = await this.prisma.accreditationCatalogStandard.findFirst({
+      where: { id: catalogStandardId },
+      select: { evidenceTags: true },
+    })
+    const tags = (catalog?.evidenceTags ?? []) as string[]
+    return tags.length === 1 ? tags[0] : null
   }
 
   /**
@@ -1127,7 +1189,9 @@ export class AccreditationService {
           })
         }
       }
-      await pushDocs(tag, ['budget'])
+      // Both 'budget' and 'fiscal_resources' look for BUDGET documents — the tag
+      // labels the suggestion, the pattern set is the budget one either way.
+      await pushDocs(tag, KNOWLEDGE_TAG_PATTERNS.budget as string[])
     }
 
     for (const tag of tags) {
@@ -1194,7 +1258,7 @@ export class AccreditationService {
           break
         }
         case 'financial_audit':
-          await pushDocs(tag, ['audit'])
+          await pushDocs(tag, KNOWLEDGE_TAG_PATTERNS.financial_audit as string[])
           break
         case 'budget':
         case 'fiscal_resources':
@@ -1226,19 +1290,19 @@ export class AccreditationService {
           break
         }
         case 'enrollment_data':
-          await pushDocs(tag, ['enrollment'])
+          await pushDocs(tag, KNOWLEDGE_TAG_PATTERNS.enrollment_data as string[])
           break
         case 'staff_credentials':
-          await pushDocs(tag, ['credential', 'certif'])
+          await pushDocs(tag, KNOWLEDGE_TAG_PATTERNS.staff_credentials as string[])
           break
         case 'safety_plan':
-          await pushDocs(tag, ['safety', 'crisis'])
+          await pushDocs(tag, KNOWLEDGE_TAG_PATTERNS.safety_plan as string[])
           break
         case 'survey':
-          await pushDocs(tag, ['survey'])
+          await pushDocs(tag, KNOWLEDGE_TAG_PATTERNS.survey as string[])
           break
         case 'marketing':
-          await pushDocs(tag, ['marketing'])
+          await pushDocs(tag, KNOWLEDGE_TAG_PATTERNS.marketing as string[])
           break
         default:
           break
@@ -1270,6 +1334,9 @@ export class AccreditationService {
 
     const pick = <T>(v: T | undefined, current: T): T => (v === undefined ? current : v)
     const capturedAt = parseIsoDate(dto.capturedAt, 'capturedAt')
+    // Phase C. capturedAt stays exactly what it was and is never copied here.
+    const effectiveDate = parseIsoDate(dto.effectiveDate, 'effectiveDate')
+    const expiresAt = parseIsoDate(dto.expiresAt, 'expiresAt')
 
     let sourceType: EvidenceSourceType = (existing.sourceType ?? 'manual') as EvidenceSourceType
     let sourceRef: string | null = existing.sourceRef ?? null
@@ -1345,6 +1412,13 @@ export class AccreditationService {
         capturedAt: pick(capturedAt, existing.capturedAt),
         sourceType,
         sourceRef,
+        tag: pick(dto.tag === undefined ? undefined : (dto.tag ?? null), existing.tag ?? null),
+        effectiveDate: pick(effectiveDate, existing.effectiveDate),
+        expiresAt: pick(expiresAt, existing.expiresAt),
+        alsoInPortal: pick(
+          dto.alsoInPortal === undefined ? undefined : (dto.alsoInPortal ?? null),
+          existing.alsoInPortal ?? null,
+        ),
       },
     })
     await this.audit.write({

@@ -9,7 +9,7 @@ import {
   computeTargetGap,
   schoolReadiness,
   selfScoredPct,
-  verifiedPct,
+  verifiedPctCurrent,
   type AssuranceStatus,
   type DomainConfidence,
   type DomainReadiness,
@@ -26,6 +26,12 @@ import {
   type CatalogDomainRow,
 } from './domain-map.js'
 import { frameworkIdsIn, pickDominantFramework } from './framework-scope.js'
+import {
+  computeEvidenceCounts,
+  fixedWindowsFrom,
+  type CurrencyCountsPrisma,
+  type CurrencyEvidenceRow,
+} from './evidence-anchors.js'
 
 /** The framework facts echoed on the readiness payload (null = framework-less mode). */
 export interface ReadinessFrameworkPublic {
@@ -103,15 +109,15 @@ export class AccreditationReadinessService {
   async getReadiness(
     schoolId: string,
     opts: { target?: number; frameworkId?: string } = {},
+    now: Date = new Date(),
   ): Promise<ReadinessResponse> {
     const rows = await this.prisma.accreditationStandard.findMany({ where: { schoolId } })
-    const counts = await this.prisma.accreditationEvidence.groupBy({
-      by: ['standardId'],
-      where: { schoolId },
-      _count: { _all: true },
-    })
+    // Phase C: the evidence groupBy becomes a findMany over the SAME single
+    // query — counts are derived in memory, so this costs NET ZERO extra reads
+    // while carrying the four currency columns the DEFENSIBLE half now needs.
+    const evidenceRows = await this.readEvidenceRows(schoolId)
     const countBy = new Map<string, number>()
-    for (const c of counts) countBy.set(c.standardId, c._count._all)
+    for (const e of evidenceRows) countBy.set(e.standardId, (countBy.get(e.standardId) ?? 0) + 1)
 
     const framework = await this.resolveFramework(rows, opts.frameworkId)
 
@@ -125,7 +131,12 @@ export class AccreditationReadinessService {
     // domain map: same single findMany, wider select, assurance set derived in
     // memory. A second query would let the hero and the domain grid describe
     // catalog states read a millisecond apart.
-    const catalogRows = await this.catalogRowsFor(framework, leaves)
+    // The catalog read and the Phase-C requirement read ride together: the hero
+    // and the currency rules must describe catalog state read at one instant.
+    const [catalogRows, requirementRows] = await Promise.all([
+      this.catalogRowsFor(framework, leaves),
+      this.requirementRowsFor(leaves),
+    ])
     const assuranceCatalogIds = assuranceIdsFrom(catalogRows)
     const isAssurance = (r: AccreditationStandard): boolean =>
       isAssuranceLeaf(r, assuranceCatalogIds)
@@ -140,6 +151,26 @@ export class AccreditationReadinessService {
     const scoredRows = leaves.filter((r) => !isAssurance(r))
     const scoredLeaves = scoredRows.map(toLeafInput)
     const assuranceLeaves = leaves.filter((r) => isAssurance(r)).map(toLeafInput)
+
+    // ── Phase C: DEFENSIBLE now means "evidence we cannot PROVE is out of date"
+    // The +0..2 reads for linked Policy / StrategicPlan rows are skipped
+    // entirely when no evidence row links one.
+    const catalogOf = new Map<string, string | null>(
+      leaves.map((r) => [r.id, r.catalogStandardId ?? null]),
+    )
+    const { currentEvidenceCount } = await computeEvidenceCounts(
+      this.prisma as unknown as CurrencyCountsPrisma,
+      schoolId,
+      evidenceRows,
+      catalogOf,
+      fixedWindowsFrom(requirementRows),
+      now,
+    )
+    const currencyLeaves = scoredRows.map((r) => ({
+      standardId: r.id,
+      evidenceCount: countBy.get(r.id) ?? 0,
+      currentEvidenceCount: currentEvidenceCount.get(r.id) ?? 0,
+    }))
 
     // THE DOMAIN GRID USES THE EXACT ARRAY THE HERO USES. Not a re-query, not a
     // re-filter — the same `scoredLeaves`, so a card can never describe a
@@ -204,7 +235,10 @@ export class AccreditationReadinessService {
         : null,
       readinessPct: summary.readinessPct,
       selfScoredPct: selfScoredPct(scoredLeaves),
-      verifiedPct: verifiedPct(scoredLeaves),
+      // THE ONE FIELD PHASE C REDEFINES. The change is marked in the recorded
+      // series as a `verified_definition_changed` break, so the chart shows a
+      // discontinuity rather than a decline.
+      verifiedPct: verifiedPctCurrent(currencyLeaves),
       leafCount: summary.leafCount,
       scoredCount: summary.scoredCount,
       coveredCount: summary.coveredCount,
@@ -215,6 +249,83 @@ export class AccreditationReadinessService {
       assurances: framework ? computeAssurances(assuranceLeaves) : [],
       domains,
       confidence,
+    }
+  }
+
+  /**
+   * The evidence rows behind BOTH counts. Deliberately a findMany rather than
+   * the Phase-A groupBy: the same single query now also carries the four
+   * currency columns, so the DEFENSIBLE half costs no extra round trip.
+   * DEPLOY-ORDER SAFE — a pre-migration image degrades to the Phase-A counts.
+   */
+  private async readEvidenceRows(schoolId: string): Promise<CurrencyEvidenceRow[]> {
+    try {
+      return (await this.prisma.accreditationEvidence.findMany({
+        where: { schoolId },
+        select: {
+          standardId: true,
+          sourceType: true,
+          sourceRef: true,
+          tag: true,
+          effectiveDate: true,
+          expiresAt: true,
+        },
+      })) as unknown as CurrencyEvidenceRow[]
+    } catch {
+      const counts = await this.prisma.accreditationEvidence.groupBy({
+        by: ['standardId'],
+        where: { schoolId },
+        _count: { _all: true },
+      })
+      return counts.flatMap((c) =>
+        Array.from({ length: c._count._all }, () => ({
+          standardId: c.standardId,
+          sourceType: null,
+          sourceRef: null,
+          tag: null,
+          effectiveDate: null,
+          expiresAt: null,
+        })),
+      )
+    }
+  }
+
+  /** The Phase-C requirement rows behind these leaves. Skipped when nothing is
+   *  cataloged; fail-soft to [] so a pre-migration image keeps Phase-A meaning. */
+  private async requirementRowsFor(
+    leaves: AccreditationStandard[],
+  ): Promise<
+    {
+      catalogStandardId: string
+      tag: string
+      windowKind: string
+      windowMonths: number | null
+      dataAvailability: string
+    }[]
+  > {
+    const catalogIds = leaves.map((r) => r.catalogStandardId).filter((id): id is string => !!id)
+    if (catalogIds.length === 0) return []
+    try {
+      // `dataAvailability` is selected because fixedWindowsFrom must SKIP every
+      // non-platform row: a not-tracked ask can never deduct from verifiedPct.
+      return (await this.prisma.accreditationCatalogRequirement.findMany({
+        where: { catalogStandardId: { in: catalogIds } },
+        select: {
+          catalogStandardId: true,
+          tag: true,
+          windowKind: true,
+          windowMonths: true,
+          dataAvailability: true,
+        },
+      })) as unknown as {
+        catalogStandardId: string
+        tag: string
+        windowKind: string
+        windowMonths: number | null
+        dataAvailability: string
+      }[]
+    } catch {
+      return []
     }
   }
 

@@ -1430,10 +1430,60 @@ model AccreditationCatalogStandard {
   parent          AccreditationCatalogStandard?  @relation("CatalogTree", fields: [parentId], references: [id], onDelete: SetNull)
   children        AccreditationCatalogStandard[] @relation("CatalogTree")
   schoolStandards AccreditationStandard[]
+  // AIC Phase C — the sparse, seed-only requirement rows hanging off this node.
+  requirements    AccreditationCatalogRequirement[]
 
   @@unique([frameworkId, code])
   @@index([frameworkId, parentId])
   @@map("accreditation_catalog_standards")
+}
+
+// ── AIC Phase C — the seed-only REQUIREMENT rows ─────────────────────────────
+// "What would a visiting team ask for against this standard, and how long does
+// that artifact stay current?" PLATFORM reference data (no schoolId), never
+// client-writable, upserted on boot exactly like the catalog tree.
+//
+// DELIBERATELY SPARSE. Most catalog standards carry ZERO requirement rows and
+// keep today's binary evidence behaviour byte-for-byte. A requirement we cannot
+// honestly evaluate is either seeded with dataAvailability != 'platform' (so it
+// renders as an explicit hole and is excluded from every denominator) or is not
+// seeded at all. Inventing a requirement to fill a row would manufacture a gap.
+//
+// dataAvailability IS THE MOST IMPORTANT FIELD IN THIS PROGRAM.
+model AccreditationCatalogRequirement {
+  id                String   @id @default(uuid()) @db.Uuid
+  catalogStandardId String   @map("catalog_standard_id") @db.Uuid
+  /// @finrep/compliance REQUIREMENT_TAGS. The JOIN KEY across standards: one
+  /// audit serving nine standards is one tag, and that is how "enter data once"
+  /// becomes visible on the Evidence Index.
+  tag               String
+  /// Client-facing artifact name, rendered VERBATIM ("Annual external financial audit").
+  label             String
+  /// Months an artifact stays current from its own effective date.
+  /// REQUIRED when windowKind = 'fixed'; MUST be null when 'source_interval'.
+  windowMonths      Int?     @map("window_months")
+  /// 'fixed'            — the currency horizon lives here.
+  /// 'source_interval'  — it lives in the OWNING REGISTER and is read live on
+  ///                      every request. We never copy a date.
+  windowKind        String   @default("fixed") @map("window_kind")
+  /// 'platform' | 'intake' | 'integration' | 'external'.
+  dataAvailability  String   @default("platform") @map("data_availability")
+  /// SOURCE_REGISTERS. Names the resolver for 'platform'; for the other three it
+  /// FORWARD-DECLARES the register that would light this row (a later phase flips
+  /// dataAvailability to 'platform' and NOTHING ELSE CHANGES).
+  sourceRegister    String?  @map("source_register")
+  /// Optional override of the frozen not-tracked sentence. Null = default.
+  notTrackedReason  String?  @map("not_tracked_reason")
+  /// Render order inside a standard. Ties broken by tag asc.
+  orderIndex        Int      @default(0) @map("order_index")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  catalogStandard AccreditationCatalogStandard @relation(fields: [catalogStandardId], references: [id], onDelete: Cascade)
+
+  @@unique([catalogStandardId, tag])
+  @@index([catalogStandardId])
+  @@map("accreditation_catalog_requirements")
 }
 
 // Tenant scoping + @db.Date UTC-midnight discipline + audit-lite all mirror Policy.
@@ -1537,6 +1587,21 @@ model AccreditationEvidence {
   reference       String? // url / doc path / citation, free text, nullable
   notes           String?
   capturedAt      DateTime? @map("captured_at") @db.Date
+  // ── AIC Phase C — evidence CURRENCY (all nullable; ZERO backfill) ───────────
+  // tag           the requirement this artifact answers. listSuggestions ALREADY
+  //               computes it per suggestion and throws it away on attach — this
+  //               is the free win: persist what we already knew.
+  // effectiveDate THE ONE FIELD WE ASK FOR: "which period does this cover?".
+  //               NEVER inferred from created_at/captured_at. Null → 'unknown'.
+  // expiresAt     explicit school-set expiry; wins over every computed horizon.
+  // alsoInPortal  school-asserted: this artifact also lives in the accreditor's
+  //               portal. NULL means NOT ASSERTED — never rendered as "No".
+  // No index: evidence is always read schoolId-/standardId-scoped and these four
+  // columns are projection-only.
+  tag             String?
+  effectiveDate   DateTime? @map("effective_date") @db.Date
+  expiresAt       DateTime? @map("expires_at") @db.Date
+  alsoInPortal    Boolean?  @map("also_in_portal")
   createdByUserId String?   @map("created_by_user_id") @db.Uuid
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
@@ -1592,6 +1657,13 @@ model AccreditationReadinessSnapshot {
   catalogVersion String? @map("catalog_version")
   payloadHash    String  @map("payload_hash")
   isDemo         Boolean @default(false) @map("is_demo")
+
+  /// AIC Phase C. 'exists' = the Phase-A definition (any evidence row);
+  /// 'current' = evidence that is not known to be out of date. DEFAULT 'exists'
+  /// so every already-recorded row self-describes with ZERO backfill, and the
+  /// first Phase-C capture flips it — producing EXACTLY ONE break, permanently
+  /// anchored to the real deploy date, deterministic forever, no clock needed.
+  verifiedBasis String @default("exists") @map("verified_basis")
 
   school    School                  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   framework AccreditationFramework? @relation(fields: [frameworkId], references: [id], onDelete: SetNull)

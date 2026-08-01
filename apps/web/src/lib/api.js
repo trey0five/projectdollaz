@@ -592,6 +592,28 @@ export const accreditationApi = {
   // the only 402 it can raise is the 'accreditation' module gate itself.
   getSignals: (schoolId, params = {}) =>
     api.get(`/schools/${schoolId}/accreditation/signals`, { params }),
+  // ── Phase C: EVIDENCE READINESS (currency + auto-satisfaction) ──────────────
+  // "What would a visiting team ask for, does it exist, is it dated, and is it
+  // still current" — grouped BY TAG across standards, so one audit serving nine
+  // standards is one row. Everything is computed server-side against the register
+  // that already owns each artifact (Governance policies, approved minutes, the
+  // current strategic plan, the latest annual budget, the latest enrollment
+  // snapshot, the document store) — NOTHING is written by a read, and no date is
+  // ever inferred. Every sentence on screen (`message`, `cta.label`, the
+  // not-tracked wording, `health.basis`) arrives composed; the web renders it
+  // verbatim and composes no honesty copy of its own.
+  // 200 in every degraded state — the only 402 is the 'accreditation' gate.
+  getEvidenceReadiness: (schoolId, { frameworkId } = {}) =>
+    api.get(`/schools/${schoolId}/accreditation/evidence-readiness`, {
+      params: { ...(frameworkId ? { frameworkId } : {}) },
+    }),
+  // ── Phase C: COMMENDATIONS — the strengths surface ──────────────────────────
+  // A standard qualifies only on all three: a strong self-score, CURRENT evidence,
+  // and a favorable bound operating figure. Zero commendations is a legitimate and
+  // common answer, returned with the exclusion counts that explain it — never a
+  // padded, rubric-only list.
+  getCommendations: (schoolId) =>
+    api.get(`/schools/${schoolId}/accreditation/commendations`),
 }
 
 // ── Phase 4 Knowledge document store: CORE (always included, NOT a licensed module).

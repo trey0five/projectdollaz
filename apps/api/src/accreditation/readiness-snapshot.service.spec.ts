@@ -57,6 +57,16 @@ interface SnapRow {
   leafScores: unknown
 }
 
+/** One attached evidence row as the Phase-C findMany projects it. */
+interface EvidenceFixture {
+  standardId: string
+  sourceType?: string | null
+  sourceRef?: string | null
+  tag?: string | null
+  effectiveDate?: Date | null
+  expiresAt?: Date | null
+}
+
 function stdRow(over: Record<string, unknown> = {}) {
   return {
     id: 's1',
@@ -90,6 +100,11 @@ function makeService(opts: {
   licensed?: boolean
   schoolsWithStandards?: string[]
   schoolsWithBilling?: string[]
+  // ── AIC Phase C ──
+  evidenceRows?: EvidenceFixture[]
+  requirements?: unknown[]
+  policies?: unknown[]
+  plans?: unknown[]
 }) {
   const store: SnapRow[] = []
   let seq = 0
@@ -110,8 +125,31 @@ function makeService(opts: {
       ),
     },
     accreditationEvidence: {
+      // Phase C: the capture reads evidence ROWS (the same single query, four
+      // currency columns wider). Legacy fixtures still express counts, so we
+      // synthesise N bare rows — which is exactly what a school with undated,
+      // unlinked legacy evidence has.
+      findMany: vi.fn(async () =>
+        (opts.evidenceRows ??
+          (opts.evidence ?? []).flatMap<EvidenceFixture>((g) =>
+            Array.from({ length: g._count._all }, () => ({ standardId: g.standardId })),
+          )
+        ).map((e) => ({
+          standardId: e.standardId,
+          sourceType: e.sourceType ?? 'manual',
+          sourceRef: e.sourceRef ?? null,
+          tag: e.tag ?? null,
+          effectiveDate: e.effectiveDate ?? null,
+          expiresAt: e.expiresAt ?? null,
+        })),
+      ),
       groupBy: vi.fn(async () => opts.evidence ?? []),
     },
+    accreditationCatalogRequirement: {
+      findMany: vi.fn(async () => opts.requirements ?? []),
+    },
+    policy: { findMany: vi.fn(async () => opts.policies ?? []) },
+    strategicPlan: { findMany: vi.fn(async () => opts.plans ?? []) },
     accreditationFramework: {
       findMany: vi.fn(async ({ where }: { where: { id: { in: string[] } } }) =>
         (frameworks as { id: string }[]).filter((f) => where.id.in.includes(f.id)),
@@ -598,5 +636,107 @@ describe('AccreditationSnapshotService — event capture', () => {
     await new Promise((r) => setTimeout(r, 0))
     expect(spy).toHaveBeenCalledTimes(1)
     expect(spy).toHaveBeenCalledWith('school-A', 'event')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AIC Phase C — what the record now stores, and the ONE extra row that stores it.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('AccreditationSnapshotService — the Phase-C basis', () => {
+  const rows = [
+    stdRow({ id: 'a', code: 'C-1', frameworkId: 'fw-cognia', catalogStandardId: 'c1', rubricScore: 3 }),
+    stdRow({ id: 'b', code: 'C-2', frameworkId: 'fw-cognia', catalogStandardId: 'c2', rubricScore: 3 }),
+  ]
+
+  it("every row is written with verifiedBasis 'current' and per-leaf currentEvidenceCount", async () => {
+    const { svc, store } = makeService({
+      standards: rows,
+      evidence: [
+        { standardId: 'a', _count: { _all: 1 } },
+        { standardId: 'b', _count: { _all: 1 } },
+      ],
+    })
+    await svc.captureForSchool('school-A', 'nightly', day('2026-08-01'))
+    expect(store).toHaveLength(1)
+    expect((store[0] as unknown as { verifiedBasis: string }).verifiedBasis).toBe('current')
+    const leaves = store[0].leafScores as { code: string; evidenceCount: number; currentEvidenceCount: number }[]
+    expect(leaves.map((l) => l.code)).toEqual(['C-1', 'C-2'])
+    // Undated, unlinked legacy evidence is not PROVABLY stale, so it counts.
+    for (const l of leaves) expect(l.currentEvidenceCount).toBe(l.evidenceCount)
+    expect((store[0] as unknown as { verifiedPct: number }).verifiedPct).toBe(100)
+  })
+
+  it('an overdue linked policy lowers the RECORDED verifiedPct, and nothing else', async () => {
+    const { svc, store } = makeService({
+      standards: rows,
+      evidenceRows: [
+        { standardId: 'a', sourceType: 'policy', sourceRef: 'p1' },
+        { standardId: 'b', sourceType: 'manual' },
+      ],
+      policies: [
+        {
+          id: 'p1',
+          title: 'Manual',
+          category: 'Governance',
+          status: 'active',
+          adoptedDate: day('2020-01-01'),
+          lastReviewedDate: day('2020-01-01'),
+          reviewIntervalMonths: 12,
+        },
+      ],
+    })
+    await svc.captureForSchool('school-A', 'nightly', day('2026-08-01'))
+    const row = store[0] as unknown as { verifiedPct: number; readinessPct: number; coveredCount: number }
+    expect(row.verifiedPct).toBe(50)
+    // The Phase-A figures are untouched: they have always meant "exists".
+    expect(row.coveredCount).toBe(2)
+    expect(row.readinessPct).toBe(77)
+  })
+
+  it('the DEFENSIBLE figure is judged at the capture instant, not at the wall clock', async () => {
+    // A backfill or a demo_seed carries a historic `at`. If staleness were read
+    // off the wall clock, every backfilled row would record TODAY's staleness on
+    // a past date — and a fully backfilled series would show no movement at all.
+    const opts = {
+      standards: rows,
+      evidenceRows: [
+        { standardId: 'a', sourceType: 'manual', expiresAt: day('2026-09-01') },
+        { standardId: 'b', sourceType: 'manual' },
+      ],
+    }
+    const before = makeService(opts)
+    await before.svc.captureForSchool('school-A', 'demo_seed', day('2026-08-01'))
+    expect((before.store[0] as unknown as { verifiedPct: number }).verifiedPct).toBe(100)
+
+    const after = makeService(opts)
+    await after.svc.captureForSchool('school-A', 'demo_seed', day('2027-01-01'))
+    expect((after.store[0] as unknown as { verifiedPct: number }).verifiedPct).toBe(50)
+  })
+
+  it('the dedupe hash covers verifiedBasis + the widened leafScores; identical inputs still dedupe', async () => {
+    const opts = {
+      standards: rows,
+      evidence: [
+        { standardId: 'a', _count: { _all: 1 } },
+        { standardId: 'b', _count: { _all: 1 } },
+      ],
+    }
+    const first = makeService(opts)
+    await first.svc.captureForSchool('school-A', 'nightly', day('2026-08-01'))
+    // A second night with nothing changed writes NO new row.
+    await first.svc.captureForSchool('school-A', 'nightly', day('2026-08-02'))
+    expect(first.store).toHaveLength(1)
+
+    // A school whose evidence became provably stale hashes differently.
+    const moved = makeService({
+      standards: rows,
+      evidenceRows: [
+        { standardId: 'a', sourceType: 'manual', expiresAt: day('2020-01-01') },
+        { standardId: 'b', sourceType: 'manual' },
+      ],
+    })
+    await moved.svc.captureForSchool('school-A', 'nightly', day('2026-08-01'))
+    expect(moved.store[0].payloadHash).not.toBe(first.store[0].payloadHash)
   })
 })

@@ -51,19 +51,59 @@ function stdRow(over: Record<string, unknown> = {}) {
   }
 }
 
+/** One attached evidence row as the Phase-C findMany projects it. */
+interface EvidenceFixture {
+  standardId: string
+  sourceType?: string | null
+  sourceRef?: string | null
+  tag?: string | null
+  effectiveDate?: Date | null
+  expiresAt?: Date | null
+}
+
 function makeService(over: {
   standards?: unknown[]
   groupBy?: unknown[]
+  /** Phase C: explicit rows. When omitted they are synthesised from `groupBy`,
+   *  so every pre-Phase-C fixture keeps its exact meaning (N bare rows). */
+  evidence?: EvidenceFixture[]
   frameworks?: unknown[]
   assuranceCatalog?: unknown[]
+  requirements?: unknown[]
+  policies?: unknown[]
+  plans?: unknown[]
 }) {
   const frameworks = over.frameworks ?? [COGNIA, MSA]
+  const evidenceRows: EvidenceFixture[] =
+    over.evidence ??
+    ((over.groupBy ?? []) as { standardId: string; _count: { _all: number } }[]).flatMap((g) =>
+      Array.from({ length: g._count._all }, () => ({ standardId: g.standardId })),
+    )
   const prisma = {
     accreditationStandard: {
       findMany: vi.fn(async () => over.standards ?? []),
     },
     accreditationEvidence: {
+      findMany: vi.fn(async () =>
+        evidenceRows.map((e) => ({
+          standardId: e.standardId,
+          sourceType: e.sourceType ?? 'manual',
+          sourceRef: e.sourceRef ?? null,
+          tag: e.tag ?? null,
+          effectiveDate: e.effectiveDate ?? null,
+          expiresAt: e.expiresAt ?? null,
+        })),
+      ),
       groupBy: vi.fn(async () => over.groupBy ?? []),
+    },
+    accreditationCatalogRequirement: {
+      findMany: vi.fn(async () => over.requirements ?? []),
+    },
+    policy: {
+      findMany: vi.fn(async () => over.policies ?? []),
+    },
+    strategicPlan: {
+      findMany: vi.fn(async () => over.plans ?? []),
     },
     accreditationFramework: {
       findFirst: vi.fn(async ({ where }: { where: { id: string } }) =>
@@ -359,5 +399,158 @@ describe('AccreditationReadinessService — the domain grid', () => {
     expect(res.confidence.caveat).toBe(
       "No standards yet. Adopt your accreditor's framework to see the domain grid.",
     )
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AIC Phase C — verifiedPct moves from "evidence EXISTS" to "evidence exists and
+// is NOT KNOWN TO BE OUT OF DATE".
+//
+// Two guarantees have to hold at once and they meet at exactly one edge:
+//   • SPARSENESS — zero requirement rows, no policy/plan-linked evidence and no
+//     expiresAt ⇒ the whole payload, verifiedPct included, is byte-identical to
+//     pre-Phase-C;
+//   • NO SILENT COLLAPSE — undated legacy evidence still counts, so deploy day
+//     is not a sixty-point drop nobody can explain.
+// The one edge where verifiedPct legitimately moves — an OVERDUE policy attached
+// as evidence — is the acceptance criterion, not a defect.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const NOW = new Date('2026-08-01T00:00:00.000Z')
+
+describe('AccreditationReadinessService — the Phase-C verifiedPct', () => {
+  const rows = [
+    stdRow({ id: 'a', code: 'COG-1', frameworkId: 'fw-cognia', catalogStandardId: 'c1', rubricScore: 3 }),
+    stdRow({ id: 'b', code: 'COG-2', frameworkId: 'fw-cognia', catalogStandardId: 'c2', rubricScore: 3 }),
+  ]
+
+  it('ACCEPTANCE 2 — zero requirement rows, no linked evidence, no expiry ⇒ byte-identical payload', async () => {
+    const legacy = makeService({
+      standards: rows,
+      groupBy: [
+        { standardId: 'a', _count: { _all: 1 } },
+        { standardId: 'b', _count: { _all: 2 } },
+      ],
+      assuranceCatalog: [
+        { id: 'c1', isAssurance: false, domainKey: 'finance', domainWeights: null, signalKeys: [] },
+        { id: 'c2', isAssurance: false, domainKey: 'finance', domainWeights: null, signalKeys: [] },
+      ],
+    })
+    const res = await legacy.svc.getReadiness('school-A', {}, NOW)
+    // 2 of 2 leaves evidenced, under BOTH definitions.
+    expect(res.verifiedPct).toBe(100)
+    expect(res.coveredCount).toBe(2)
+    expect(res.readinessPct).toBe(77)
+    // The Policy / StrategicPlan reads never fire when nothing links one.
+    expect(legacy.prisma.policy.findMany).not.toHaveBeenCalled()
+    expect(legacy.prisma.strategicPlan.findMany).not.toHaveBeenCalled()
+  })
+
+  it('ACCEPTANCE 3 — an OVERDUE policy attached as evidence drops verifiedPct, with no second write', async () => {
+    // The evidence row is untouched: only Policy.reviewIntervalMonths changed,
+    // in Governance. The cycle lives in one place and is read live.
+    const policy = (reviewIntervalMonths: number) => ({
+      id: 'p1',
+      title: 'Board Policy Manual',
+      category: 'Governance',
+      status: 'active',
+      adoptedDate: new Date('2025-08-01T00:00:00.000Z'),
+      lastReviewedDate: new Date('2025-08-01T00:00:00.000Z'),
+      reviewIntervalMonths,
+    })
+    const evidence = [
+      { standardId: 'a', sourceType: 'policy', sourceRef: 'p1' },
+      { standardId: 'b', sourceType: 'manual' },
+    ]
+    const relaxed = makeService({ standards: rows, evidence, policies: [policy(24)] })
+    expect((await relaxed.svc.getReadiness('school-A', {}, NOW)).verifiedPct).toBe(100)
+
+    const tightened = makeService({ standards: rows, evidence, policies: [policy(6)] })
+    const after = await tightened.svc.getReadiness('school-A', {}, NOW)
+    expect(after.verifiedPct).toBe(50)
+    // …and NOTHING ELSE moved. readinessPct and coveredCount still describe
+    // "evidence exists", which is exactly what they have always meant.
+    expect(after.coveredCount).toBe(2)
+    expect(after.readinessPct).toBe(77)
+  })
+
+  it('UNDATED evidence still counts — deploy day is not a silent collapse', async () => {
+    const { svc } = makeService({
+      standards: rows,
+      evidence: [
+        { standardId: 'a', sourceType: 'knowledge_document', sourceRef: 'd1', tag: 'financial_audit' },
+        { standardId: 'b', sourceType: 'manual' },
+      ],
+      requirements: [
+        { catalogStandardId: 'c1', tag: 'financial_audit', windowKind: 'fixed', windowMonths: 18, dataAvailability: 'platform' },
+      ],
+    })
+    // No effectiveDate ⇒ nothing to prove staleness with ⇒ it counts.
+    expect((await svc.getReadiness('school-A', {}, NOW)).verifiedPct).toBe(100)
+  })
+
+  it('a DATED artifact past a FIXED requirement window is provably stale and drops out', async () => {
+    const requirements = [
+      { catalogStandardId: 'c1', tag: 'financial_audit', windowKind: 'fixed', windowMonths: 18, dataAvailability: 'platform' },
+    ]
+    const fresh = makeService({
+      standards: rows,
+      evidence: [
+        { standardId: 'a', sourceType: 'knowledge_document', sourceRef: 'd1', tag: 'financial_audit', effectiveDate: new Date('2026-06-30T00:00:00.000Z') },
+        { standardId: 'b', sourceType: 'manual' },
+      ],
+      requirements,
+    })
+    expect((await fresh.svc.getReadiness('school-A', {}, NOW)).verifiedPct).toBe(100)
+
+    const stale = makeService({
+      standards: rows,
+      evidence: [
+        { standardId: 'a', sourceType: 'knowledge_document', sourceRef: 'd1', tag: 'financial_audit', effectiveDate: new Date('2019-06-30T00:00:00.000Z') },
+        { standardId: 'b', sourceType: 'manual' },
+      ],
+      requirements,
+    })
+    expect((await stale.svc.getReadiness('school-A', {}, NOW)).verifiedPct).toBe(50)
+  })
+
+  it('a NON-platform requirement never deducts — we do not score a school down for a hole we chose not to dig', async () => {
+    // The same row, the same seven-year-old date, the same 60-month window: as an
+    // `external` ask (the accreditor's portal owns it) it must leave verifiedPct
+    // byte-identical, because non-platform rows are out of EVERY denominator.
+    const evidence = [
+      { standardId: 'a', sourceType: 'knowledge_document', sourceRef: 'd1', tag: 'self_study', effectiveDate: new Date('2019-06-30T00:00:00.000Z') },
+      { standardId: 'b', sourceType: 'manual' },
+    ]
+    for (const availability of ['external', 'intake', 'integration']) {
+      const { svc } = makeService({
+        standards: rows,
+        evidence,
+        requirements: [
+          { catalogStandardId: 'c1', tag: 'self_study', windowKind: 'fixed', windowMonths: 60, dataAvailability: availability },
+        ],
+      })
+      expect((await svc.getReadiness('school-A', {}, NOW)).verifiedPct).toBe(100)
+    }
+
+    const platform = makeService({
+      standards: rows,
+      evidence,
+      requirements: [
+        { catalogStandardId: 'c1', tag: 'self_study', windowKind: 'fixed', windowMonths: 60, dataAvailability: 'platform' },
+      ],
+    })
+    expect((await platform.svc.getReadiness('school-A', {}, NOW)).verifiedPct).toBe(50)
+  })
+
+  it('an explicit school-set expiry in the past drops the artifact, with no requirement row at all', async () => {
+    const { svc } = makeService({
+      standards: rows,
+      evidence: [
+        { standardId: 'a', sourceType: 'manual', expiresAt: new Date('2025-01-01T00:00:00.000Z') },
+        { standardId: 'b', sourceType: 'manual' },
+      ],
+    })
+    expect((await svc.getReadiness('school-A', {}, NOW)).verifiedPct).toBe(50)
   })
 })

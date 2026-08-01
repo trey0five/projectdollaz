@@ -7,7 +7,7 @@ import {
   computeDomainReadiness,
   schoolReadiness,
   selfScoredPct,
-  verifiedPct,
+  verifiedPctCurrent,
   type DomainKey,
   type LeafScore,
 } from '@finrep/compliance'
@@ -20,6 +20,12 @@ import {
   readCatalogDomainRows,
   type CatalogDomainRow,
 } from './domain-map.js'
+import {
+  computeEvidenceCounts,
+  fixedWindowsFrom,
+  type CurrencyCountsPrisma,
+  type CurrencyEvidenceRow,
+} from './evidence-anchors.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Accreditation Intelligence Phase A — the nightly READINESS CAPTURE.
@@ -78,6 +84,16 @@ export interface DomainScoreRecord {
   signalCount: number
 }
 
+/**
+ * AIC Phase C — the stored per-leaf detail gains `currentEvidenceCount`
+ * alongside the Phase-A `evidenceCount`. ADDITIVE: diffLeafScores still reads
+ * only `evidenceCount`, so a pre/post-deploy diff can never report a phantom
+ * `evidenceLost`, and historical rows are never rewritten.
+ */
+export interface LeafScoreRecord extends LeafScore {
+  currentEvidenceCount: number
+}
+
 /** One series' worth of composed, ready-to-write numbers. */
 interface ComposedSeries {
   seriesKey: string
@@ -91,10 +107,20 @@ interface ComposedSeries {
   leafCount: number
   scoredCount: number
   coveredCount: number
-  leafScores: LeafScore[]
+  leafScores: LeafScoreRecord[]
   domainScores: DomainScoreRecord[]
+  /** 'exists' (Phase A) | 'current' (Phase C). Phase C always writes 'current'. */
+  verifiedBasis: string
   payloadHash: string
 }
+
+/**
+ * The definition `verifiedPct` was recorded under. Phase C writes 'current'
+ * forever; every already-recorded row carries the column default 'exists'. That
+ * is what produces EXACTLY ONE `verified_definition_changed` break, permanently
+ * anchored to the real deploy date — deterministic forever, and needing no clock.
+ */
+export const VERIFIED_BASIS_CURRENT = 'current'
 
 /** Deterministic JSON: object keys sorted, so an unrelated key-order change can
  *  never look like a data change to the dedupe hash. */
@@ -201,7 +227,10 @@ export class AccreditationSnapshotService {
     at: Date = new Date(),
   ): Promise<number> {
     const snapshotDate = toUtcDay(at)
-    const composed = await this.composeSeries(schoolId)
+    // The capture's OWN instant, not the wall clock: a backfill or a demo_seed
+    // run must record the Defensible figure as it stood on `snapshotDate`, or a
+    // fully backfilled series would carry today's staleness at every point.
+    const composed = await this.composeSeries(schoolId, at)
     if (composed.length === 0) return 0
 
     let written = 0
@@ -256,6 +285,7 @@ export class AccreditationSnapshotService {
           leafScores: series.leafScores as unknown as object,
           engineVersion: READINESS_HISTORY_VERSION,
           catalogVersion: series.catalogVersion,
+          verifiedBasis: series.verifiedBasis,
           payloadHash: series.payloadHash,
           isDemo,
         },
@@ -274,6 +304,7 @@ export class AccreditationSnapshotService {
           leafScores: series.leafScores as unknown as object,
           engineVersion: READINESS_HISTORY_VERSION,
           catalogVersion: series.catalogVersion,
+          verifiedBasis: series.verifiedBasis,
           payloadHash: series.payloadHash,
           // Re-asserted on every same-day overwrite: without it the flag would
           // be write-once and a re-run could leave a demo row unlabelled.
@@ -376,17 +407,16 @@ export class AccreditationSnapshotService {
    * scoping exactly: LEAF = a standard no other school standard parents, and
    * catalog assurance gates are excluded from the rubric/index math.
    */
-  private async composeSeries(schoolId: string): Promise<ComposedSeries[]> {
+  private async composeSeries(schoolId: string, at: Date = new Date()): Promise<ComposedSeries[]> {
     const rows = await this.prisma.accreditationStandard.findMany({ where: { schoolId } })
     if (rows.length === 0) return []
 
-    const counts = await this.prisma.accreditationEvidence.groupBy({
-      by: ['standardId'],
-      where: { schoolId },
-      _count: { _all: true },
-    })
+    // Phase C: the same SINGLE evidence read now also carries the four currency
+    // columns, so the DEFENSIBLE half of every recorded series is computed from
+    // exactly the data its readiness figure was computed from.
+    const evidenceRows = await this.readEvidenceRows(schoolId)
     const countBy = new Map<string, number>()
-    for (const c of counts) countBy.set(c.standardId, c._count._all)
+    for (const e of evidenceRows) countBy.set(e.standardId, (countBy.get(e.standardId) ?? 0) + 1)
 
     // Leaf scoping is the SHARED definition (leaf-scope.ts) that
     // AccreditationReadinessService uses for the live number, so the recorded
@@ -407,6 +437,18 @@ export class AccreditationSnapshotService {
     const catalogRows = await this.catalogRowsFor(leaves)
     const assuranceCatalogIds = assuranceIdsFrom(catalogRows)
 
+    // Phase C: the DEFENSIBLE count, computed ONCE for the whole school so every
+    // series in a night describes the same instant.
+    const requirementRows = await this.requirementRowsFor(leaves)
+    const { currentEvidenceCount } = await computeEvidenceCounts(
+      this.prisma as unknown as CurrencyCountsPrisma,
+      schoolId,
+      evidenceRows,
+      new Map(leaves.map((r) => [r.id, r.catalogStandardId ?? null])),
+      fixedWindowsFrom(requirementRows),
+      at,
+    )
+
     const out: ComposedSeries[] = []
     for (const fw of frameworks) {
       const scoped = leaves.filter((r) => r.frameworkId === fw.id)
@@ -417,6 +459,7 @@ export class AccreditationSnapshotService {
           fw.version,
           scoped,
           countBy,
+          currentEvidenceCount,
           assuranceCatalogIds,
           catalogRows,
           { indexMin: fw.indexMin, indexMax: fw.indexMax, statusBands: this.bandsOf(fw.statusBands) },
@@ -433,6 +476,7 @@ export class AccreditationSnapshotService {
           null,
           unlinked,
           countBy,
+          currentEvidenceCount,
           // Framework-LESS mode applies no assurance split — the live read
           // (AccreditationReadinessService.catalogRowsFor short-circuits to an
           // empty set when framework is null) does exactly this, and the
@@ -458,6 +502,7 @@ export class AccreditationSnapshotService {
     catalogVersion: string | null,
     scopedLeaves: AccreditationStandard[],
     countBy: Map<string, number>,
+    currentBy: Map<string, number>,
     assuranceCatalogIds: Set<string>,
     catalogRows: readonly CatalogDomainRow[],
     framework: { indexMin: number | null; indexMax: number | null; statusBands: { min: number; label: string }[] } | null,
@@ -465,12 +510,14 @@ export class AccreditationSnapshotService {
     // Assurance gates are binary checklist items, not rubric-scored standards —
     // the frozen engine excludes them and so must the recorded series.
     const scored = scopedLeaves.filter((r) => !isAssuranceLeaf(r, assuranceCatalogIds))
-    const leafScores: LeafScore[] = scored
+    const leafScores: LeafScoreRecord[] = scored
       .map((r) => ({
         standardId: r.id,
         code: r.code,
         rubricScore: r.rubricScore ?? null,
         evidenceCount: countBy.get(r.id) ?? 0,
+        // Phase C, additive: what the DEFENSIBLE figure was actually built from.
+        currentEvidenceCount: currentBy.get(r.id) ?? 0,
       }))
       .sort((a, b) => a.code.localeCompare(b.code) || a.standardId.localeCompare(b.standardId))
 
@@ -515,6 +562,15 @@ export class AccreditationSnapshotService {
           seriesKey,
           leafScores,
           domainScores,
+          // Phase C: verifiedBasis and the widened leafScores BOTH join the hash.
+          // Consequence, stated plainly: on the first capture after deploy every
+          // series' hash differs, so each series writes EXACTLY ONE row whose
+          // readinessPct/selfScoredPct/leafCount/scoredCount/coveredCount are
+          // identical to the previous row — only verifiedPct may move, only
+          // downward, and only where an artifact is provably stale. The
+          // verified_definition_changed break sits on the same date and explains
+          // it. From the second night on, dedupe behaves exactly as in Phase A/B.
+          verifiedBasis: VERIFIED_BASIS_CURRENT,
         }),
       )
       .digest('hex')
@@ -525,7 +581,7 @@ export class AccreditationSnapshotService {
       catalogVersion,
       readinessPct: summary.readinessPct,
       selfScoredPct: selfScoredPct(leafScores),
-      verifiedPct: verifiedPct(leafScores),
+      verifiedPct: verifiedPctCurrent(leafScores),
       projectedIndex: summary.projectedIndex,
       band: summary.band,
       leafCount: summary.leafCount,
@@ -533,12 +589,89 @@ export class AccreditationSnapshotService {
       coveredCount: summary.coveredCount,
       leafScores,
       domainScores,
+      verifiedBasis: VERIFIED_BASIS_CURRENT,
       payloadHash,
     }
   }
 
   private bandsOf(raw: unknown): { min: number; label: string }[] {
     return Array.isArray(raw) ? (raw as { min: number; label: string }[]) : []
+  }
+
+  /**
+   * The evidence rows behind BOTH counts (Phase C). Still ONE read — the Phase-A
+   * groupBy became a findMany carrying the four currency columns.
+   * DEPLOY-ORDER SAFE: a pre-migration image falls back to the count-only query
+   * and records the Phase-A meaning rather than failing the nightly job.
+   */
+  private async readEvidenceRows(schoolId: string): Promise<CurrencyEvidenceRow[]> {
+    try {
+      return (await this.prisma.accreditationEvidence.findMany({
+        where: { schoolId },
+        select: {
+          standardId: true,
+          sourceType: true,
+          sourceRef: true,
+          tag: true,
+          effectiveDate: true,
+          expiresAt: true,
+        },
+      })) as unknown as CurrencyEvidenceRow[]
+    } catch {
+      const counts = await this.prisma.accreditationEvidence.groupBy({
+        by: ['standardId'],
+        where: { schoolId },
+        _count: { _all: true },
+      })
+      return counts.flatMap((c) =>
+        Array.from({ length: c._count._all }, () => ({
+          standardId: c.standardId,
+          sourceType: null,
+          sourceRef: null,
+          tag: null,
+          effectiveDate: null,
+          expiresAt: null,
+        })),
+      )
+    }
+  }
+
+  /** The Phase-C requirement rows behind these leaves; [] when nothing is cataloged. */
+  private async requirementRowsFor(
+    leaves: AccreditationStandard[],
+  ): Promise<
+    {
+      catalogStandardId: string
+      tag: string
+      windowKind: string
+      windowMonths: number | null
+      dataAvailability: string
+    }[]
+  > {
+    const catalogIds = leaves.map((r) => r.catalogStandardId).filter((id): id is string => !!id)
+    if (catalogIds.length === 0) return []
+    try {
+      // `dataAvailability` is selected because fixedWindowsFrom must SKIP every
+      // non-platform row: a not-tracked ask can never deduct from verifiedPct.
+      return (await this.prisma.accreditationCatalogRequirement.findMany({
+        where: { catalogStandardId: { in: catalogIds } },
+        select: {
+          catalogStandardId: true,
+          tag: true,
+          windowKind: true,
+          windowMonths: true,
+          dataAvailability: true,
+        },
+      })) as unknown as {
+        catalogStandardId: string
+        tag: string
+        windowKind: string
+        windowMonths: number | null
+        dataAvailability: string
+      }[]
+    } catch {
+      return []
+    }
   }
 
   /** The catalog rows behind these leaves — assurance flag + domain map + signal

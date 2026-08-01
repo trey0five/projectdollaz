@@ -8,11 +8,13 @@ import { EvidenceSourcesController } from './evidence-sources.controller.js'
 import { AccreditationCatalogController } from './catalog.controller.js'
 import { AccreditationReadinessController } from './readiness.controller.js'
 import { AccreditationReadinessHistoryController } from './readiness-history.controller.js'
+import { AccreditationEvidenceReadinessController } from './evidence-readiness.controller.js'
 import { AccreditationService } from './accreditation.service.js'
 import { AccreditationCatalogService } from './catalog.service.js'
 import { AccreditationReadinessService } from './readiness.service.js'
 import { AccreditationReadinessHistoryService } from './readiness-history.service.js'
 import { AccreditationSnapshotService } from './readiness-snapshot.service.js'
+import { AccreditationEvidenceReadinessService } from './evidence-readiness.service.js'
 
 /**
  * Phase 4 Accreditation v1 — the Standards + Evidence register module. The first
@@ -40,6 +42,7 @@ import { AccreditationSnapshotService } from './readiness-snapshot.service.js'
     AccreditationCatalogController,
     AccreditationReadinessController,
     AccreditationReadinessHistoryController,
+    AccreditationEvidenceReadinessController,
   ],
   providers: [
     AccreditationService,
@@ -47,7 +50,12 @@ import { AccreditationSnapshotService } from './readiness-snapshot.service.js'
     AccreditationReadinessService,
     AccreditationReadinessHistoryService,
     AccreditationSnapshotService,
+    AccreditationEvidenceReadinessService,
   ],
-  exports: [AccreditationService],
+  // AIC Phase C: the commendations endpoint (in AccreditationSignalsModule)
+  // needs BOTH the signal panel and the currency service. The edge stays
+  // accreditation-signals → accreditation, and accreditation imports neither —
+  // still acyclic.
+  exports: [AccreditationService, AccreditationEvidenceReadinessService],
 })
 export class AccreditationModule {}

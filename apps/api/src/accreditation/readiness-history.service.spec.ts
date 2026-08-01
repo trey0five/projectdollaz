@@ -50,6 +50,8 @@ interface SeedRow {
   frameworkId?: string | null
   isDemo?: boolean
   leafScores?: unknown[]
+  /** AIC Phase C — 'exists' (Phase A default) | 'current'. */
+  verifiedBasis?: string
 }
 
 function row(r: SeedRow) {
@@ -66,6 +68,9 @@ function row(r: SeedRow) {
     scoredCount: 5,
     coveredCount: 5,
     engineVersion: r.engineVersion ?? '1.0.0',
+    // Already-recorded rows carry the column DEFAULT, which is the whole
+    // mechanism: no backfill, no clock, exactly one break.
+    verifiedBasis: r.verifiedBasis ?? 'exists',
     frameworkId: r.frameworkId === undefined ? 'fw-cognia' : r.frameworkId,
     isDemo: r.isDemo ?? false,
     leafScores: r.leafScores ?? [],
@@ -546,5 +551,84 @@ describe('readiness history routes — accreditation entitlement', () => {
     const body = err!.getResponse() as { code: string; module: string }
     expect(body.code).toBe('MODULE_NOT_LICENSED')
     expect(body.module).toBe('accreditation')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AIC Phase C — the fourth break kind. `verifiedPct` changed meaning on deploy
+// day, and the chart must show that as a DISCONTINUITY rather than as a decline.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('AccreditationReadinessHistoryService — verified_definition_changed', () => {
+  const acrossTheBoundary = [
+    row({ date: '2026-08-14', readinessPct: 60, verifiedBasis: 'exists' }),
+    row({ date: '2026-09-02', readinessPct: 60, verifiedBasis: 'exists' }),
+    row({ date: '2026-09-24', readinessPct: 48, verifiedBasis: 'current' }),
+    row({ date: '2026-09-25', readinessPct: 48, verifiedBasis: 'current' }),
+  ]
+
+  it('emits EXACTLY ONE break, dated on the first current row, with the frozen detail', async () => {
+    const { svc } = makeService({ rows: acrossTheBoundary })
+    const res = await svc.getTrend('school-A', WINDOW)
+    expect(res.breaks).toEqual([
+      {
+        date: '2026-09-24',
+        kind: 'verified_definition_changed',
+        detail:
+          'Defensible readiness now counts only evidence that is not known to be out of date. ' +
+          'Readings before this date counted any evidence that existed.',
+      },
+    ])
+  })
+
+  it('does NOT also fire engine_version_changed — one event, reported once', async () => {
+    const { svc } = makeService({ rows: acrossTheBoundary })
+    const res = await svc.getTrend('school-A', WINDOW)
+    expect(res.breaks.map((b) => b.kind)).not.toContain('engine_version_changed')
+    expect(res.engineVersion).toBe('1.0.0')
+  })
+
+  it('the observed change across that boundary reads insufficient_history, never "declining"', async () => {
+    const { svc } = makeService({ rows: acrossTheBoundary })
+    const res = await svc.getTrend('school-A', WINDOW)
+    expect(res.change.available).toBe(false)
+    expect(res.change.direction).toBe('insufficient_history')
+    expect(res.change.reason).toContain('not comparable')
+    expect(res.change.deltaPct).toBeNull()
+  })
+
+  it('a diff across the boundary reports NO phantom evidenceLost', async () => {
+    // diffLeafScores reads only `evidenceCount`, which never changed meaning.
+    // The widened leafScores are additive, so the pre/post rows still diff clean.
+    const leaves = (over: Record<string, unknown> = {}) => [
+      { standardId: 's1', code: 'C-1', rubricScore: 3, evidenceCount: 2, ...over },
+    ]
+    const { svc } = makeService({
+      rows: [
+        row({ date: '2026-08-14', readinessPct: 60, verifiedBasis: 'exists', leafScores: leaves() }),
+        row({
+          date: '2026-09-24',
+          readinessPct: 48,
+          verifiedBasis: 'current',
+          leafScores: leaves({ currentEvidenceCount: 0 }),
+        }),
+      ],
+    })
+    const diff = await svc.getDiff('school-A', { from: '2026-08-14', to: '2026-09-24' })
+    expect(diff.evidenceLost).toEqual([])
+    expect(diff.evidenceGained).toEqual([])
+  })
+
+  it('a series that never crosses the boundary emits no break at all', async () => {
+    const { svc } = makeService({
+      rows: [
+        row({ date: '2026-08-14', readinessPct: 60, verifiedBasis: 'current' }),
+        row({ date: '2026-09-02', readinessPct: 62, verifiedBasis: 'current' }),
+        row({ date: '2026-09-24', readinessPct: 64, verifiedBasis: 'current' }),
+      ],
+    })
+    const res = await svc.getTrend('school-A', WINDOW)
+    expect(res.breaks).toEqual([])
+    expect(res.change.available).toBe(true)
   })
 })

@@ -85,6 +85,10 @@ export {
   addMonths,
   civilFromDays,
   civilToIso,
+  // AIC Phase C — the API's currency translation layer does the same
+  // month-end-safe date math as the pure engine, through the SAME helpers.
+  toCivil,
+  daysFromCivil,
 } from './review-status.js'
 
 // Phase 3 Governance depth — meetings/committees board signal (pure, injectable now)
@@ -213,6 +217,61 @@ export {
   computeDomainReadiness,
   computeDomainConfidence,
 } from './accreditation-domains.js'
+
+// Accreditation Intelligence Phase C — evidence currency. "Does the required
+// evidence exist, is it dated, and is it still current" — or an explicit,
+// named refusal. `not_tracked` and `unknown` are first-class answers that sit in
+// NEITHER side of every denominator; a date is never inferred.
+export type {
+  RequirementTag,
+  SourceRegister,
+  CurrencyState,
+  DataAvailability,
+  WindowKind,
+  CurrencyBasis,
+  EvidenceCycle,
+  RequirementInput,
+  ArtifactInput,
+  CurrencyResult,
+  RequirementCurrency,
+  EvidenceHealth,
+  CurrencyLeafInput,
+} from './evidence-currency.js'
+export {
+  EVIDENCE_CURRENCY_VERSION,
+  REQUIREMENT_EXTRA_TAGS,
+  REQUIREMENT_TAGS,
+  SOURCE_REGISTERS,
+  EXPIRING_LEAD_CAP_DAYS,
+  CURRENCY_RANK,
+  CURRENCY_LABEL,
+  NOT_TRACKED_LEAD,
+  isRequirementTag,
+  isSourceRegister,
+  expiringLeadDaysFor,
+  computeArtifactCurrency,
+  computeRequirementCurrency,
+  computeEvidenceHealth,
+  verifiedPctCurrent,
+} from './evidence-currency.js'
+
+// Accreditation Intelligence Phase C — commendations. The one surface that says
+// what a school can DEFEND: a strong self-score AND current evidence AND a
+// favorable bound operating figure. All three, or it is not on the list.
+export type {
+  CommendationLeafInput,
+  CommendationSignalInput,
+  Commendation,
+  CommendationExclusions,
+  CommendationOptions,
+} from './accreditation-commendations.js'
+export {
+  COMMENDATIONS_VERSION,
+  COMMENDATION_MIN_RUBRIC,
+  COMMENDATION_LIMIT,
+  computeCommendations,
+  computeCommendationExclusions,
+} from './accreditation-commendations.js'
 
 // Phase 4 Facilities v1 — pure deferred-maintenance backlog (injectable now)
 export type {

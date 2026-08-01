@@ -3,8 +3,11 @@ import { AuthModule } from '../auth/auth.module.js'
 import { BillingModule } from '../billing/billing.module.js'
 import { PeriodsModule } from '../periods/periods.module.js'
 import { AnalyticsModule } from '../analytics/analytics.module.js'
+import { AccreditationModule } from '../accreditation/accreditation.module.js'
 import { AccreditationSignalsController } from './signals.controller.js'
 import { AccreditationSignalsService } from './signals.service.js'
+import { AccreditationCommendationsController } from './commendations.controller.js'
+import { AccreditationCommendationsService } from './commendations.service.js'
 
 /**
  * AIC Phase B — the accreditation SIGNAL PANEL.
@@ -24,8 +27,13 @@ import { AccreditationSignalsService } from './signals.service.js'
  * tenant-checked period lookup. PrismaService is global.
  */
 @Module({
-  imports: [AuthModule, BillingModule, PeriodsModule, AnalyticsModule],
-  controllers: [AccreditationSignalsController],
-  providers: [AccreditationSignalsService],
+  // AIC Phase C adds a DIRECT AccreditationModule import for the currency
+  // service the commendations engine needs. The graph stays acyclic:
+  // accreditation-signals → accreditation, and accreditation imports neither
+  // this module nor analytics. (AnalyticsModule already imports
+  // AccreditationModule; Nest resolves the shared provider once.)
+  imports: [AuthModule, BillingModule, PeriodsModule, AnalyticsModule, AccreditationModule],
+  controllers: [AccreditationSignalsController, AccreditationCommendationsController],
+  providers: [AccreditationSignalsService, AccreditationCommendationsService],
 })
 export class AccreditationSignalsModule {}

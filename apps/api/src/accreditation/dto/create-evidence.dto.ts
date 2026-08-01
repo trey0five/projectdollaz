@@ -1,4 +1,14 @@
-import { IsDateString, IsIn, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator'
+import {
+  IsBoolean,
+  IsDateString,
+  IsIn,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  MinLength,
+} from 'class-validator'
+import { REQUIREMENT_TAGS } from '@finrep/compliance'
 
 /** Evidence kind — a small closed enum (re-validated / defaulted in the service). */
 export const EVIDENCE_KINDS = ['document', 'link', 'note'] as const
@@ -73,4 +83,35 @@ export class CreateEvidenceDto {
   @IsOptional()
   @IsDateString()
   capturedAt?: string | null
+
+  // ── AIC Phase C — evidence CURRENCY ────────────────────────────────────────
+  // @IsOptional() in class-validator skips both `undefined` AND `null`, so an
+  // explicit null CLEARS each field — the same semantics as reference/notes/
+  // capturedAt. Every one of these MUST stay whitelisted here or the global
+  // forbidNonWhitelisted pipe 400s the whole request.
+
+  /** Requirement tag this artifact answers (@finrep/compliance REQUIREMENT_TAGS). */
+  @IsOptional()
+  @IsIn(REQUIREMENT_TAGS)
+  tag?: string | null
+
+  /**
+   * "Which period does this cover?" — yyyy-mm-dd. THE ONE FIELD WE ASK FOR, and
+   * the one we will never infer: capturedAt is when WE captured the row and
+   * createdAt is when a file was uploaded. Absent → "date unknown", excluded
+   * from the health denominator. Never a guess.
+   */
+  @IsOptional()
+  @IsDateString()
+  effectiveDate?: string | null
+
+  /** Explicit school-set expiry; wins over every computed horizon. */
+  @IsOptional()
+  @IsDateString()
+  expiresAt?: string | null
+
+  /** School-asserted: this also lives in your accreditor's portal. */
+  @IsOptional()
+  @IsBoolean()
+  alsoInPortal?: boolean | null
 }

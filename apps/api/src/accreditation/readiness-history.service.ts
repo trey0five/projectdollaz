@@ -120,6 +120,9 @@ const POINT_SELECT = {
   engineVersion: true,
   frameworkId: true,
   isDemo: true,
+  // AIC Phase C — the definition `verifiedPct` was recorded under. Already-
+  // recorded rows carry the column default 'exists'; Phase C writes 'current'.
+  verifiedBasis: true,
 } as const
 
 type PointRow = Pick<AccreditationReadinessSnapshot, keyof typeof POINT_SELECT>
@@ -384,11 +387,12 @@ export class AccreditationReadinessHistoryService {
   }
 
   /**
-   * Comparability breaks between consecutive recorded readings. Phase A emits
-   * three of the four kinds; 'verified_definition_changed' is reserved for Phase
-   * C, when `verifiedPct` stops meaning "an artifact exists" and starts meaning
-   * "a CURRENT artifact exists" — that redefinition will be a break too, and the
-   * chart must show it as one rather than as a sudden decline.
+   * Comparability breaks between consecutive recorded readings. All FOUR kinds
+   * now fire: Phase C landed the fourth, `verified_definition_changed`, on the
+   * day `verifiedPct` stopped meaning "an artifact exists" and started meaning
+   * "an artifact we cannot prove is out of date exists". The chart shows that as
+   * a discontinuity rather than as a sudden decline, and `summarizeObservedChange`
+   * refuses to report a direction across it.
    */
   private detectBreaks(rows: readonly PointRow[]): SeriesBreak[] {
     const out: SeriesBreak[] = []
@@ -415,6 +419,20 @@ export class AccreditationReadinessHistoryService {
           date,
           kind: 'engine_version_changed',
           detail: `The readiness engine changed from ${prev.engineVersion} to ${cur.engineVersion}.`,
+        })
+      }
+      // AIC Phase C. A COLUMN, not a clock and not a version bump: the first
+      // Phase-C capture flips 'exists' → 'current' exactly once, permanently
+      // anchored to the real deploy date. READINESS_HISTORY_VERSION deliberately
+      // stays '1.0.0' — bumping it would fire engine_version_changed on the same
+      // day and double-report one event.
+      if (cur.verifiedBasis !== prev.verifiedBasis) {
+        out.push({
+          date,
+          kind: 'verified_definition_changed',
+          detail:
+            'Defensible readiness now counts only evidence that is not known to be out of date. ' +
+            'Readings before this date counted any evidence that existed.',
         })
       }
     }

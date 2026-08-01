@@ -46,11 +46,14 @@ import ModuleRegister from '../components/module/ModuleRegister.jsx'
 import { moduleHue } from '../components/module/moduleAnatomy.js'
 import AddDataTab from '../components/wizard/AddDataTab.jsx'
 import DatePicker from '../components/ui/DatePicker.jsx'
+import { formatShortDate } from '../lib/format.js'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useUiV2 } from '../context/UiFlagContext.jsx'
 import { useAccreditation } from '../hooks/useAccreditation.js'
 import { useReadinessTrend } from '../hooks/useReadinessTrend.js'
 import { useAccreditationSignals } from '../hooks/useAccreditationSignals.js'
+import { useEvidenceReadiness } from '../hooks/useEvidenceReadiness.js'
+import { useCommendations } from '../hooks/useCommendations.js'
 // ── Phase 3: framework catalog + rubric readiness + evidence warehouse ────────
 import ReadinessHero from '../components/accreditation/ReadinessHero.jsx'
 import AdoptFrameworkModal from '../components/accreditation/AdoptFrameworkModal.jsx'
@@ -61,6 +64,11 @@ import StrategyLinkChip from '../components/accreditation/StrategyLinkChip.jsx'
 // ── Phase B: the ten-domain grid + the operational signal binding ─────────────
 import DomainGrid from '../components/accreditation/DomainGrid.jsx'
 import SignalPanel from '../components/accreditation/SignalPanel.jsx'
+// ── Phase C: evidence currency, auto-satisfaction, the index + commendations ──
+import EvidenceReadinessTable from '../components/accreditation/EvidenceReadinessTable.jsx'
+import CommendationsPanel from '../components/accreditation/CommendationsPanel.jsx'
+import EvidenceDateField from '../components/accreditation/EvidenceDateField.jsx'
+import CurrencyChip from '../components/accreditation/CurrencyChip.jsx'
 
 // ── Light-theme coverage badge (restyled from the old dark pills) ────────────
 const COVERAGE_BADGE = {
@@ -413,6 +421,34 @@ function AssuranceGateChip({ satisfied, dark = false }) {
   )
 }
 
+/**
+ * Phase C — "is this also in your accreditor's portal?", asked ONCE per artifact.
+ *
+ * TWO STATES, NOT THREE: checked asserts `true`, unchecked sends `null` — NOT
+ * ASSERTED. We never record a "No" on the school's behalf, because the Evidence
+ * Index prints this column for a visiting team and a fabricated "No" is a claim
+ * the school never made, in front of the one audience that would act on it.
+ */
+function PortalAssertionField({ checked, onChange }) {
+  return (
+    <label className="col-span-2 flex items-start gap-2 text-[12.5px] leading-snug text-white/70">
+      <input
+        type="checkbox"
+        checked={!!checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="mt-[3px] h-3.5 w-3.5 shrink-0 accent-[#F59E0B]"
+      />
+      <span>
+        This also lives in our accreditor&apos;s portal
+        <span className="ml-1 text-white/40">
+          — leave it unchecked if you haven&apos;t checked; we&apos;ll print &ldquo;—&rdquo;, never
+          &ldquo;No&rdquo;.
+        </span>
+      </span>
+    </label>
+  )
+}
+
 /** The lazy-loaded evidence sub-list for one expanded standard row (dark overlay
  *  panel — deliberately kept dark against the light table). Phase 3 adds the
  *  rubric pips + strategy link header, the deterministic suggestions strip, and
@@ -445,9 +481,26 @@ export function EvidencePanel({
   const [items, setItems] = useState(null) // null = not yet loaded
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
-  const [form, setForm] = useState({ title: '', kind: 'document', reference: '', capturedAt: '' })
+  // Phase C: `effectiveDate` is THE ONE FIELD we ask for — "which period does this
+  // cover?". It sits BESIDE capturedAt and never replaces it: capturedAt is when we
+  // captured the artifact, which is not a document date and is never read as one.
+  const [form, setForm] = useState({
+    title: '',
+    kind: 'document',
+    reference: '',
+    capturedAt: '',
+    effectiveDate: '',
+    alsoInPortal: false,
+  })
   const [editingId, setEditingId] = useState(null)
-  const [editForm, setEditForm] = useState({ title: '', kind: 'document', reference: '', capturedAt: '' })
+  const [editForm, setEditForm] = useState({
+    title: '',
+    kind: 'document',
+    reference: '',
+    capturedAt: '',
+    effectiveDate: '',
+    alsoInPortal: false,
+  })
   const [err, setErr] = useState('')
   // "Attach from operations" picker: null = closed, undefined = loading, object = loaded sources.
   const [sources, setSources] = useState(null)
@@ -562,8 +615,22 @@ export function EvidencePanel({
         kind: form.kind,
         reference: form.reference.trim() ? form.reference.trim() : null,
         capturedAt: form.capturedAt ? form.capturedAt : null,
+        // Blank stays blank. An explicit null is "we don't know", which reads as
+        // "date unknown" downstream and is excluded from every denominator — the
+        // one thing we must never do here is substitute today's date.
+        effectiveDate: form.effectiveDate ? form.effectiveDate : null,
+        // TRUE or NOT ASSERTED. Unchecked sends null, never false: a school that
+        // has not told us has not told us, and the Evidence Index prints "—".
+        alsoInPortal: form.alsoInPortal ? true : null,
       })
-      setForm({ title: '', kind: 'document', reference: '', capturedAt: '' })
+      setForm({
+        title: '',
+        kind: 'document',
+        reference: '',
+        capturedAt: '',
+        effectiveDate: '',
+        alsoInPortal: false,
+      })
       setAdding(false)
       await reload()
     } catch {
@@ -578,6 +645,8 @@ export function EvidencePanel({
       kind: ev.kind ?? 'document',
       reference: ev.reference ?? '',
       capturedAt: ev.capturedAt ?? '',
+      effectiveDate: ev.effectiveDate ?? '',
+      alsoInPortal: ev.alsoInPortal === true,
     })
     setErr('')
   }
@@ -595,6 +664,12 @@ export function EvidencePanel({
         kind: editForm.kind,
         reference: editForm.reference.trim() ? editForm.reference.trim() : null,
         capturedAt: editForm.capturedAt ? editForm.capturedAt : null,
+        // Editable afterward, and clearable: an explicit null puts the artifact
+        // back to "date unknown" rather than stranding a date the school retracted.
+        effectiveDate: editForm.effectiveDate ? editForm.effectiveDate : null,
+        // Retractable the same way: unchecking clears the assertion back to
+        // "not asserted" rather than recording a "No" the school never made.
+        alsoInPortal: editForm.alsoInPortal ? true : null,
       })
       setEditingId(null)
       await reload()
@@ -611,9 +686,14 @@ export function EvidencePanel({
   }
 
   // One-click suggestion attach (leaves the "Attach from operations" picker alone).
+  // Phase C FREE WIN: the matcher already computed which requirement this artifact
+  // answers and used to throw it away at attach time. Persisting `tag` costs one
+  // line and is what lets the Evidence Index group this artifact with the eight
+  // other standards that ask for the same thing.
   const attachSuggestion = async (sug) => {
     const body = { sourceType: sug.sourceType }
     if (sug.sourceRef) body.sourceRef = sug.sourceRef
+    if (sug.tag) body.tag = sug.tag
     await createEvidence(standardId, body)
     await reload()
   }
@@ -701,6 +781,17 @@ export function EvidencePanel({
                       placeholder="Reference (URL / doc path / citation)"
                       className="col-span-2 rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-1.5 text-[13px] text-white outline-none focus:border-gold/60"
                     />
+                    {/* Phase C — editable afterward, and clearable back to blank. */}
+                    <EvidenceDateField
+                      className="col-span-2"
+                      showHelp={false}
+                      value={editForm.effectiveDate}
+                      onChange={(v) => setEditForm((f) => ({ ...f, effectiveDate: v }))}
+                    />
+                    <PortalAssertionField
+                      checked={editForm.alsoInPortal}
+                      onChange={(v) => setEditForm((f) => ({ ...f, alsoInPortal: v }))}
+                    />
                     <div className="col-span-2 flex justify-end gap-2">
                       <button
                         type="button"
@@ -748,6 +839,17 @@ export function EvidencePanel({
                     </a>
                   ) : ev.reference ? (
                     <span className="truncate text-[12px] text-white/45">{ev.reference}</span>
+                  ) : null}
+                  {/* Phase C: the period this artifact covers, when the school told
+                      us. Absent → nothing is shown; we never print an upload date
+                      here to fill the space. */}
+                  {ev.effectiveDate ? (
+                    <span
+                      title="Which period this covers"
+                      className="shrink-0 rounded-md border border-white/15 bg-white/[0.06] px-1.5 py-0.5 text-[11px] text-white/60"
+                    >
+                      covers {formatShortDate(String(ev.effectiveDate).slice(0, 10))}
+                    </span>
                   ) : null}
                 </div>
                 {canEdit ? (
@@ -808,6 +910,19 @@ export function EvidencePanel({
               maxLength={2000}
               placeholder="Reference (URL / doc path / citation)"
               className="col-span-2 rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-1.5 text-[13px] text-white outline-none focus:border-gold/60"
+            />
+            {/* Phase C — THE ONE FIELD, asked at attach time. Optional by design:
+                blank is an explicitly safe answer that reads "date unknown", and a
+                guessed date is worse than none because it produces a confident
+                "Current" nobody can defend. */}
+            <EvidenceDateField
+              className="col-span-2"
+              value={form.effectiveDate}
+              onChange={(v) => setForm((f) => ({ ...f, effectiveDate: v }))}
+            />
+            <PortalAssertionField
+              checked={form.alsoInPortal}
+              onChange={(v) => setForm((f) => ({ ...f, alsoInPortal: v }))}
             />
             {err ? <p className="col-span-2 text-[12px] text-red-300">{err}</p> : null}
             <div className="col-span-2 flex justify-end gap-2">
@@ -1062,6 +1177,11 @@ function StandardsTable({
   onDelete,
   labelsFor = null, // (standard) => rubricLabels[4] | null — per-row framework labels
   onRubric = null,
+  // Phase C: standardId → the WORST currency state among the required artifacts
+  // this standard is served by, straight off the evidence-readiness payload. A
+  // standard with no requirement rows is simply absent from the map and renders no
+  // chip at all — sparseness holds, and the row looks exactly as it did before.
+  currencyByStandard = null,
 }) {
   if (loading)
     return (
@@ -1160,7 +1280,20 @@ function StandardsTable({
                 )}
               </td>
               <td className="px-4 py-3">
-                <CoverageBadge coverage={s.coverage} evidenceCount={s.evidenceCount} />
+                <div className="flex flex-col items-start gap-1.5">
+                  <CoverageBadge coverage={s.coverage} evidenceCount={s.evidenceCount} />
+                  {/* COVERAGE AND CURRENCY ARE TWO QUESTIONS AND ARE NEVER BLENDED:
+                      "Evidenced" says something is attached, this chip says whether
+                      what a visiting team would ask for is still in date. */}
+                  {currencyByStandard?.[s.id] ? (
+                    <CurrencyChip
+                      size="sm"
+                      state={currencyByStandard[s.id].state}
+                      expiresOn={currencyByStandard[s.id].expiresOn}
+                      showDate
+                    />
+                  ) : null}
+                </div>
               </td>
               <td className="px-4 py-3">
                 <ReviewBadge
@@ -1209,10 +1342,15 @@ function StandardsTable({
 // DomainCommandCenter renders an underlined tab bar as soon as tabs.length > 1,
 // so the bar appears with no component change; ModuleRegister keeps its single
 // register and falls back to 'standards' if the shared tab state says 'domains'.
+// Phase C adds a THIRD overview tab — Evidence — for the same reason Domains got
+// its own: the evidence index is grouped BY ARTIFACT ACROSS STANDARDS, which is
+// the opposite axis to the standards table and cannot be a column on it. Records
+// still hosts exactly one register.
 const REGISTER_TABS = [{ key: 'standards', label: 'Standards' }]
 const CENTER_TABS = [
   { key: 'standards', label: 'Standards' },
   { key: 'domains', label: 'Domains' },
+  { key: 'evidence', label: 'Evidence' },
 ]
 
 function AccreditationWorkspace() {
@@ -1263,6 +1401,21 @@ function AccreditationWorkspace() {
   // standard's drawer. Gated on the same already-made module check as the history
   // hook, for the same reason (hooks run above the page's entitlement return).
   const signals = useAccreditationSignals(schoolId, {
+    enabled: !loading && !notLicensed && !notEntitled,
+  })
+
+  // Phase C: the EVIDENCE READINESS payload — one request for the whole page, used
+  // by the Evidence tab AND by the per-row currency chip on the standards register
+  // (which is why it is not deferred until the tab is opened). Gated on the same
+  // already-made module check as the two hooks above, for the same reason.
+  const evidence = useEvidenceReadiness(schoolId, {
+    enabled: !loading && !notLicensed && !notEntitled,
+  })
+
+  // Phase C: the strengths surface. Separate endpoint because it needs the signals
+  // service AND the currency service; separate hook because a commendations hiccup
+  // must never take the evidence index down with it.
+  const commendations = useCommendations(schoolId, {
     enabled: !loading && !notLicensed && !notEntitled,
   })
 
@@ -1318,6 +1471,51 @@ function AccreditationWorkspace() {
   )
 
   const clearStrategy = (standardId) => linkStrategy(standardId, null)
+
+  // ── Phase C: keep the currency surfaces honest after an evidence write ──────
+  // useAccreditation's evidence mutators refresh the register's coverage counts
+  // but know nothing about the Phase-C endpoints, and a stale Evidence tab after
+  // dating an artifact is exactly the kind of quiet lie this phase exists to
+  // remove. Wrapping here (rather than editing the shared hook) keeps the change
+  // inside this page and leaves every other consumer byte-identical. Fail-soft:
+  // both refreshes swallow their own errors, so a currency hiccup can never make
+  // an evidence write appear to have failed.
+  // Depend on the two REFRESH functions, not on the hook objects: the hooks return
+  // a fresh object literal every render, so closing over them would rebuild this
+  // callback (and both wrappers below) on every keystroke in the evidence form.
+  const refreshEvidenceReadiness = evidence.refresh
+  const refreshCommendations = commendations.refresh
+  const afterEvidenceWrite = useCallback(() => {
+    refreshEvidenceReadiness()
+    refreshCommendations()
+  }, [refreshEvidenceReadiness, refreshCommendations])
+
+  const createEvidenceAndRefresh = useCallback(
+    async (standardId, body) => {
+      const res = await createEvidence(standardId, body)
+      afterEvidenceWrite()
+      return res
+    },
+    [createEvidence, afterEvidenceWrite],
+  )
+
+  const updateEvidenceAndRefresh = useCallback(
+    async (standardId, evidenceId, body) => {
+      const res = await updateEvidence(standardId, evidenceId, body)
+      afterEvidenceWrite()
+      return res
+    },
+    [updateEvidence, afterEvidenceWrite],
+  )
+
+  const removeEvidenceAndRefresh = useCallback(
+    async (standardId, evidenceId) => {
+      const res = await removeEvidence(standardId, evidenceId)
+      afterEvidenceWrite()
+      return res
+    },
+    [removeEvidence, afterEvidenceWrite],
+  )
 
   const initialForm = useMemo(() => {
     if (!editing) return null
@@ -1547,6 +1745,7 @@ function AccreditationWorkspace() {
       onDelete={onDelete}
       labelsFor={labelsFor}
       onRubric={canEdit ? setRubric : null}
+      currencyByStandard={evidence.byStandard}
     />
   )
 
@@ -1565,6 +1764,38 @@ function AccreditationWorkspace() {
       signalsUnavailable={Boolean(signals.notLicensed || signals.error)}
       onOpenStandards={() => setTab('standards')}
       reduce={reduce}
+    />
+  )
+
+  // ── Phase C: the Evidence tab ──────────────────────────────────────────────
+  // Requirement-driven and grouped BY TAG ACROSS STANDARDS — the axis the
+  // standards table cannot express. COMMENDATIONS LEAD: a visiting team writes
+  // commendations before recommendations, and every other panel on this page is
+  // about what is missing, so the strengths surface sits above the ask list rather
+  // than buried under it.
+  const evidenceTab = (
+    <EvidenceReadinessTable
+      health={evidence.health}
+      counts={evidence.counts}
+      groups={evidence.groups}
+      nudges={evidence.nudges}
+      framework={evidence.framework}
+      loading={evidence.loading}
+      error={evidence.error}
+      notLicensed={evidence.notLicensed}
+      printHref="/accreditation/evidence/print"
+      onOpenStandard={scrollToStandard}
+      strengths={
+        <CommendationsPanel
+          commendations={commendations.commendations}
+          exclusions={commendations.exclusions}
+          caveat={commendations.caveat}
+          signalsUnavailable={commendations.signalsUnavailable}
+          loading={commendations.loading}
+          error={commendations.error}
+          notLicensed={commendations.notLicensed}
+        />
+      }
     />
   )
 
@@ -1608,7 +1839,9 @@ function AccreditationWorkspace() {
       activeTab={tab}
       onTabChange={setTab}
       onNew={canEdit ? openAdd : null}
-      registerTable={tab === 'domains' ? domainGrid : registerTable}
+      registerTable={
+        tab === 'domains' ? domainGrid : tab === 'evidence' ? evidenceTab : registerTable
+      }
       attentionItems={attentionItems}
       aboveKpis={readinessHero}
       headerAside={
@@ -1663,9 +1896,9 @@ function AccreditationWorkspace() {
               reduce={reduce}
               listEvidenceSources={listEvidenceSources}
               listEvidence={listEvidence}
-              createEvidence={createEvidence}
-              updateEvidence={updateEvidence}
-              removeEvidence={removeEvidence}
+              createEvidence={createEvidenceAndRefresh}
+              updateEvidence={updateEvidenceAndRefresh}
+              removeEvidence={removeEvidenceAndRefresh}
               schoolId={schoolId}
               standard={expandedStandard}
               rubricLabels={labelsFor(expandedStandard)}
@@ -1722,9 +1955,9 @@ function AccreditationWorkspace() {
               hue={moduleHue('accreditation')}
               tabs={REGISTER_TABS}
               // The Records tab hosts the standards register and nothing else, so
-              // a shared 'domains' selection falls back rather than rendering an
-              // active tab that isn't in its list.
-              activeTab={tab === 'domains' ? 'standards' : tab}
+              // a shared 'domains' / 'evidence' selection falls back rather than
+              // rendering an active tab that isn't in its list.
+              activeTab={tab === 'domains' || tab === 'evidence' ? 'standards' : tab}
               onTabChange={setTab}
               onNew={canEdit ? openAdd : null}
               registerTable={registerTable}

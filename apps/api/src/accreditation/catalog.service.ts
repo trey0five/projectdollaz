@@ -3,6 +3,7 @@ import { Prisma, type AccreditationCatalogStandard } from '@finrep/db'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { AuditService } from '../common/audit/audit.service.js'
 import { FRAMEWORK_SEEDS, type FrameworkSeed } from './catalog-seed.js'
+import { FRAMEWORK_REQUIREMENT_SEEDS } from './catalog-requirements-seed.js'
 import { AccreditationSnapshotService } from './readiness-snapshot.service.js'
 
 /** One framework row as returned to the client (with per-school adoption facts). */
@@ -153,6 +154,46 @@ export class AccreditationCatalogService implements OnModuleInit {
         })
       }
     }
+
+    // ── AIC Phase C, pass 3: the REQUIREMENT rows ───────────────────────────
+    // Same self-heal discipline as the catalog nodes: upsert by the natural key
+    // (catalogStandardId, tag) on BOTH create and update, then DELETE the
+    // orphans — a requirement removed from the seed must disappear, or a retired
+    // ask would haunt every school's Evidence Index forever with no way to clear
+    // it. `nodes` and `byCode` are reused from pass 2; this adds no query.
+    const reqs = FRAMEWORK_REQUIREMENT_SEEDS[fw.code] ?? []
+    const seededIds = new Set<string>()
+    for (const [j, r] of reqs.entries()) {
+      const node = byCode.get(r.standardCode)
+      if (!node) continue // fail-soft: seed drift never crashes boot
+      const reqData = {
+        label: r.label,
+        windowMonths: r.windowMonths ?? null,
+        windowKind: r.windowKind,
+        dataAvailability: r.dataAvailability,
+        sourceRegister: r.sourceRegister,
+        notTrackedReason: r.notTrackedReason ?? null,
+        orderIndex: j,
+      }
+      const reqRow = await this.prisma.accreditationCatalogRequirement.upsert({
+        where: { catalogStandardId_tag: { catalogStandardId: node.id, tag: r.tag } },
+        create: { catalogStandardId: node.id, tag: r.tag, ...reqData },
+        update: reqData,
+      })
+      seededIds.add(reqRow.id)
+    }
+    // Orphan sweep, scoped to THIS framework's catalog nodes only. When the seed
+    // is EMPTY this deletes every requirement row under those nodes, and that is
+    // intended: an ask removed upstream must disappear rather than haunt every
+    // school's Evidence Index forever. The conditional spread only avoids relying
+    // on Prisma's always-TRUE treatment of `notIn: []` (identical behaviour,
+    // stated explicitly instead of inherited).
+    await this.prisma.accreditationCatalogRequirement.deleteMany({
+      where: {
+        catalogStandardId: { in: nodes.map((n) => n.id) },
+        ...(seededIds.size > 0 ? { id: { notIn: [...seededIds] } } : {}),
+      },
+    })
   }
 
   /**

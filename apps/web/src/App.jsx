@@ -47,6 +47,7 @@ import KnowledgePage from './pages/KnowledgePage.jsx'
 import SchedulesPage from './pages/SchedulesPage.jsx'
 import BoardReportPrintPage from './pages/BoardReportPrintPage.jsx'
 import GovernanceReportPrintPage from './pages/GovernanceReportPrintPage.jsx'
+import EvidenceIndexPrintPage from './pages/EvidenceIndexPrintPage.jsx'
 import SettingsPage from './pages/SettingsPage.jsx'
 import AccountSection from './components/settings/AccountSection.jsx'
 import MembersSection from './components/settings/MembersSection.jsx'
@@ -264,6 +265,10 @@ export default function App() {
             routes (the AppShell chrome is .no-print and the sidebar offset is
             neutralized in the global print reset). */}
         <Route path="/governance/report/print" element={<GovernanceReportPrintPage />} />
+        {/* AIC Phase C — the Evidence Index a school hands a visiting team. Same
+            print-route treatment as the governance report (inside AuthedLayout,
+            `.ui-v1` wrapper, auto window.print()). */}
+        <Route path="/accreditation/evidence/print" element={<EvidenceIndexPrintPage />} />
         <Route path="/integrations/qb/callback" element={<QbCallbackPage />} />
         <Route path="/enrollment/blackbaud/callback" element={<EnrollmentBlackbaudCallbackPage />} />
         {/* History folded into Statements & Periods — keep old links working. */}

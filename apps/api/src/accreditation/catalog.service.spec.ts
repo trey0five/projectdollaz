@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { NotFoundException } from '@nestjs/common'
 import { AccreditationCatalogService } from './catalog.service.js'
 import { FRAMEWORK_SEEDS } from './catalog-seed.js'
+import { FRAMEWORK_REQUIREMENT_SEEDS } from './catalog-requirements-seed.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AccreditationCatalogService — SEED IDEMPOTENCY + ADOPTION. Prisma is an
@@ -31,6 +32,19 @@ interface StdRow {
   schoolId: string
   catalogStandardId: string | null
   parentId: string | null
+  [k: string]: unknown
+}
+interface ReqRow {
+  id: string
+  catalogStandardId: string
+  tag: string
+  label: string
+  windowKind: string
+  windowMonths: number | null
+  dataAvailability: string
+  sourceRegister: string | null
+  notTrackedReason: string | null
+  orderIndex: number
   [k: string]: unknown
 }
 
@@ -100,6 +114,40 @@ function makeStore() {
     }),
   }
 
+  // ── AIC Phase C — the requirement rows (pass 3). Same in-memory upsert
+  // semantics as the catalog nodes, plus a deleteMany that honours the orphan
+  // sweep's `notIn`, so the self-heal AND the retirement path are both provable.
+  const requirements = new Map<string, ReqRow>() // by `${catalogStandardId}:${tag}`
+  const accreditationCatalogRequirement = {
+    upsert: vi.fn(async ({ where, create, update }: never) => {
+      const w = (where as { catalogStandardId_tag: { catalogStandardId: string; tag: string } })
+        .catalogStandardId_tag
+      const key = `${w.catalogStandardId}:${w.tag}`
+      const existing = requirements.get(key)
+      if (existing) {
+        Object.assign(existing, update)
+        return existing
+      }
+      const row: ReqRow = { id: uid('req'), ...(create as object) } as ReqRow
+      requirements.set(key, row)
+      return row
+    }),
+    deleteMany: vi.fn(async ({ where }: never) => {
+      const w = where as { catalogStandardId: { in: string[] }; id?: { notIn: string[] } }
+      const scope = new Set(w.catalogStandardId.in)
+      const keep = w.id ? new Set(w.id.notIn) : null
+      let count = 0
+      for (const [k, r] of [...requirements.entries()]) {
+        if (!scope.has(r.catalogStandardId)) continue
+        if (keep && keep.has(r.id)) continue
+        requirements.delete(k)
+        count += 1
+      }
+      return { count }
+    }),
+    findMany: vi.fn(async () => [...requirements.values()]),
+  }
+
   const accreditationStandard = {
     findMany: vi.fn(async ({ where }: never) => {
       const w = where as { schoolId: string; catalogStandardId?: { in: string[] } }
@@ -120,6 +168,7 @@ function makeStore() {
   const prisma = {
     accreditationFramework,
     accreditationCatalogStandard,
+    accreditationCatalogRequirement,
     accreditationStandard,
     $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) =>
       // $executeRaw stubs the pg_advisory_xact_lock adopt serialization no-op.
@@ -128,7 +177,7 @@ function makeStore() {
   }
   const audit = { write: vi.fn(async () => undefined) }
   const svc = new AccreditationCatalogService(prisma as never, audit as never)
-  return { svc, prisma, audit, frameworks, catalog, schoolStandards }
+  return { svc, prisma, audit, frameworks, catalog, schoolStandards, requirements }
 }
 
 const COGNIA = FRAMEWORK_SEEDS.find((f) => f.code === 'cognia_2022')!
@@ -210,6 +259,103 @@ describe('AccreditationCatalogService — seed (idempotent)', () => {
     await svc.seedCatalog()
     expect(catalog.size).toBe(catCount)
     for (const c of catalog.values()) expect(ids.has(c.id)).toBe(true)
+  })
+
+  // ── AIC Phase C — pass 3 ────────────────────────────────────────────────────
+
+  it('pass 3 seeds all 45 requirement rows, on BOTH the create and the update path', async () => {
+    // THE SELF-HEAL ASSERTION, repeated for Phase C. Production catalog rows
+    // already exist; requirement rows reach them ONLY because the update path
+    // carries the same reqData the create path does. If a field ever appears on
+    // `create` alone, an existing production node keeps a stale requirement
+    // forever and no migration exists to notice.
+    const { svc, prisma, requirements } = makeStore()
+    await svc.seedCatalog()
+    expect(requirements.size).toBe(45)
+
+    const calls = prisma.accreditationCatalogRequirement.upsert.mock.calls as unknown as [
+      { create: Record<string, unknown>; update: Record<string, unknown> },
+    ][]
+    expect(calls).toHaveLength(45)
+    for (const [args] of calls) {
+      for (const shape of [args.create, args.update]) {
+        expect(typeof shape.label).toBe('string')
+        expect(shape).toHaveProperty('windowMonths')
+        expect(shape).toHaveProperty('windowKind')
+        expect(shape).toHaveProperty('dataAvailability')
+        expect(shape).toHaveProperty('sourceRegister')
+        expect(shape).toHaveProperty('notTrackedReason')
+        expect(typeof shape.orderIndex).toBe('number')
+      }
+    }
+
+    const rows = [...requirements.values()]
+    const audit = rows.find((r) => r.tag === 'financial_audit' && r.windowMonths === 18)!
+    expect(audit.dataAvailability).toBe('platform')
+    expect(audit.windowKind).toBe('fixed')
+    const evaluations = rows.find((r) => r.tag === 'staff_evaluation')!
+    expect(evaluations.dataAvailability).toBe('intake')
+    expect(evaluations.notTrackedReason).toContain('staff-evaluation register')
+  })
+
+  it('a second seed run is zero creates and zero deletes', async () => {
+    const { svc, prisma, requirements } = makeStore()
+    await svc.seedCatalog()
+    const ids = new Set([...requirements.values()].map((r) => r.id))
+    prisma.accreditationCatalogRequirement.deleteMany.mockClear()
+
+    await svc.seedCatalog()
+    expect(requirements.size).toBe(45)
+    // Same physical rows — an upsert hit, never a duplicate insert.
+    for (const r of requirements.values()) expect(ids.has(r.id)).toBe(true)
+    for (const res of prisma.accreditationCatalogRequirement.deleteMany.mock.results) {
+      expect((res.value as unknown as Promise<{ count: number }>) instanceof Promise).toBe(true)
+    }
+    const deleted = await Promise.all(
+      prisma.accreditationCatalogRequirement.deleteMany.mock.results.map((r) => r.value),
+    )
+    expect((deleted as { count: number }[]).reduce((a, b) => a + b.count, 0)).toBe(0)
+  })
+
+  it('a requirement removed from the seed is SWEPT — and only from its own framework', async () => {
+    // A retired ask must disappear, or it would haunt every school's Evidence
+    // Index forever with no way to clear it. The sweep is framework-scoped, so
+    // retiring a Cognia row must not touch MSA's or NSBECS's.
+    const { svc, requirements } = makeStore()
+    await svc.seedCatalog()
+    const before = requirements.size
+    const others = [...requirements.values()].filter((r) => r.tag !== 'accreditor_training').length
+
+    const seeds = FRAMEWORK_REQUIREMENT_SEEDS.cognia_2022
+    const removed = seeds.pop()!
+    try {
+      await svc.seedCatalog()
+      expect(requirements.size).toBe(before - 1)
+      expect([...requirements.values()].some((r) => r.tag === 'accreditor_training')).toBe(false)
+      expect(requirements.size).toBe(others)
+    } finally {
+      seeds.push(removed)
+    }
+  })
+
+  it('a standardCode with no catalog node is skipped fail-soft; boot still completes', async () => {
+    const { svc, requirements } = makeStore()
+    const seeds = FRAMEWORK_REQUIREMENT_SEEDS.cognia_2022
+    seeds.push({
+      standardCode: 'COG-DOES-NOT-EXIST',
+      tag: 'survey',
+      label: 'Ghost',
+      windowKind: 'fixed',
+      windowMonths: 12,
+      dataAvailability: 'platform',
+      sourceRegister: 'knowledge_document',
+    })
+    try {
+      await expect(svc.seedCatalog()).resolves.toBeUndefined()
+      expect(requirements.size).toBe(45) // the ghost row is simply not written
+    } finally {
+      seeds.pop()
+    }
   })
 
   it('onModuleInit is FAIL-SOFT: a seed crash logs a warning, never throws', async () => {

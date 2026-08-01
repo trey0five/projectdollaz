@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
+import { plainToInstance } from 'class-transformer'
+import { validateSync } from 'class-validator'
 import { BadRequestException, NotFoundException } from '@nestjs/common'
 import { AccreditationService } from './accreditation.service.js'
+import { CreateEvidenceDto } from './dto/create-evidence.dto.js'
+import { UpdateEvidenceDto } from './dto/update-evidence.dto.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AccreditationService — TENANT ISOLATION + evidence linkage + computed coverage.
@@ -48,6 +52,9 @@ function makeService(over: {
   evidence?: Record<string, unknown>
   policy?: Record<string, unknown>
   boardReport?: Record<string, unknown>
+  // ── AIC Phase C ──
+  catalogStandard?: Record<string, unknown> | null
+  knowledgeDocuments?: Record<string, unknown>[]
 }) {
   const standard = {
     findMany: vi.fn(async () => []),
@@ -87,12 +94,21 @@ function makeService(over: {
     meeting: { findMany: vi.fn(async () => []), findFirst: vi.fn(async () => null) },
     strategicPlan: { findMany: vi.fn(async () => []), findFirst: vi.fn(async () => null) },
     strategyGoal: { findMany: vi.fn(async () => []), findFirst: vi.fn(async () => null) },
-    knowledgeDocument: { findMany: vi.fn(async () => []), findFirst: vi.fn(async () => null) },
+    knowledgeDocument: {
+      findMany: vi.fn(async () => over.knowledgeDocuments ?? []),
+      findFirst: vi.fn(async () => null),
+    },
     governancePerson: { count: vi.fn(async () => 0) },
+    periodBudget: { findFirst: vi.fn(async () => null), findMany: vi.fn(async () => []) },
+    // Phase C: the single-tag server backstop reads the parent standard's
+    // catalog row. Empty by default → the backstop never fires.
+    accreditationCatalogStandard: {
+      findFirst: vi.fn(async () => over.catalogStandard ?? null),
+    },
   }
   const audit = { write: vi.fn(async () => undefined) }
   const svc = new AccreditationService(prisma as never, audit as never)
-  return { svc, standard, evidence, policy, boardReport, audit }
+  return { svc, standard, evidence, policy, boardReport, audit, prisma }
 }
 
 describe('AccreditationService — standards', () => {
@@ -599,5 +615,236 @@ describe('AccreditationService — evidence PATCH (editable)', () => {
       svc.updateEvidence('school-A', 's1', 'ev-of-other', { title: 'x' }, 'user-1'),
     ).rejects.toBeInstanceOf(NotFoundException)
     expect(evidence.update).not.toHaveBeenCalled()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AIC Phase C — the four currency columns, the tag backstop, and the promise
+// that `capturedAt` is never repurposed as a document date.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('AccreditationService — evidence currency columns', () => {
+  it('the DTO whitelists all four (the forbidNonWhitelisted trap) and each clears with null', () => {
+    const create = plainToInstance(CreateEvidenceDto, {
+      title: 'FY27 Audit',
+      tag: 'financial_audit',
+      effectiveDate: '2026-06-30',
+      expiresAt: '2027-12-31',
+      alsoInPortal: true,
+    })
+    expect(validateSync(create, { whitelist: true, forbidNonWhitelisted: true })).toEqual([])
+
+    const patch = plainToInstance(UpdateEvidenceDto, {
+      tag: null,
+      effectiveDate: null,
+      expiresAt: null,
+      alsoInPortal: null,
+    })
+    expect(validateSync(patch, { whitelist: true, forbidNonWhitelisted: true })).toEqual([])
+
+    // A stray fifth key still 400s — the pipe is not being loosened.
+    const stray = plainToInstance(UpdateEvidenceDto, { tag: 'budget', capturedOn: '2026-06-30' })
+    expect(
+      validateSync(stray, { whitelist: true, forbidNonWhitelisted: true }).length,
+    ).toBeGreaterThan(0)
+
+    // A tag outside REQUIREMENT_TAGS is rejected.
+    const badTag = plainToInstance(UpdateEvidenceDto, { tag: 'not_a_real_tag' })
+    expect(validateSync(badTag, { whitelist: true, forbidNonWhitelisted: true }).length).toBe(1)
+  })
+
+  it('createEvidence persists the four columns and NEVER copies capturedAt into effectiveDate', async () => {
+    const { svc, evidence } = makeService({
+      standard: { findFirst: vi.fn(async () => stdRow({ id: 's1', schoolId: 'school-A' })) },
+    })
+    await svc.createEvidence(
+      'school-A',
+      's1',
+      {
+        title: 'FY27 Audit',
+        capturedAt: '2026-08-01',
+        tag: 'financial_audit',
+        effectiveDate: '2026-06-30',
+        expiresAt: '2028-01-01',
+        alsoInPortal: true,
+      },
+      'user-1',
+    )
+    const data = evidence.create.mock.calls[0][0].data
+    expect(data.tag).toBe('financial_audit')
+    expect((data.effectiveDate as Date).toISOString().slice(0, 10)).toBe('2026-06-30')
+    expect((data.expiresAt as Date).toISOString().slice(0, 10)).toBe('2028-01-01')
+    expect(data.alsoInPortal).toBe(true)
+    // The two are INDEPENDENT. capturedAt means "when we captured this row" and
+    // is never read as an anchor.
+    expect((data.capturedAt as Date).toISOString().slice(0, 10)).toBe('2026-08-01')
+  })
+
+  it('an artifact with a capturedAt and NO effectiveDate stays undated — no inference', async () => {
+    const { svc, evidence } = makeService({
+      standard: { findFirst: vi.fn(async () => stdRow({ id: 's1', schoolId: 'school-A' })) },
+    })
+    await svc.createEvidence('school-A', 's1', { title: 'Handbook', capturedAt: '2026-08-01' }, 'user-1')
+    const data = evidence.create.mock.calls[0][0].data
+    expect(data.effectiveDate).toBeNull()
+    expect(data.expiresAt).toBeNull()
+    expect(data.alsoInPortal).toBeNull()
+  })
+
+  it('the single-tag server BACKSTOP fires; 0 or ≥2 catalog tags leave the tag null', async () => {
+    const linked = { sourceType: 'policy' as const, sourceRef: 'p1' }
+    const std = stdRow({ id: 's1', schoolId: 'school-A', catalogStandardId: 'cat-1' })
+    const policyHit = { findFirst: vi.fn(async () => ({ id: 'p1', title: 'CoI', category: 'Governance' })) }
+
+    const one = makeService({
+      standard: { findFirst: vi.fn(async () => std) },
+      policy: policyHit,
+      catalogStandard: { evidenceTags: ['policy_manual'] },
+    })
+    await one.svc.createEvidence('school-A', 's1', linked, 'user-1')
+    expect(one.evidence.create.mock.calls[0][0].data.tag).toBe('policy_manual')
+
+    const two = makeService({
+      standard: { findFirst: vi.fn(async () => std) },
+      policy: policyHit,
+      catalogStandard: { evidenceTags: ['policy_manual', 'governance'] },
+    })
+    await two.svc.createEvidence('school-A', 's1', linked, 'user-1')
+    expect(two.evidence.create.mock.calls[0][0].data.tag).toBeNull()
+
+    const none = makeService({
+      standard: { findFirst: vi.fn(async () => std) },
+      policy: policyHit,
+      catalogStandard: { evidenceTags: [] },
+    })
+    await none.svc.createEvidence('school-A', 's1', linked, 'user-1')
+    expect(none.evidence.create.mock.calls[0][0].data.tag).toBeNull()
+
+    // MANUAL evidence is never auto-tagged: a free-text note is not an artifact
+    // the accreditor asked for, and guessing would put it on the Evidence Index.
+    const manual = makeService({
+      standard: { findFirst: vi.fn(async () => std) },
+      catalogStandard: { evidenceTags: ['policy_manual'] },
+    })
+    await manual.svc.createEvidence('school-A', 's1', { title: 'Note' }, 'user-1')
+    expect(manual.evidence.create.mock.calls[0][0].data.tag).toBeNull()
+    expect(manual.prisma.accreditationCatalogStandard.findFirst).not.toHaveBeenCalled()
+  })
+
+  it('updateEvidence: omitted keeps, explicit null clears, and capturedAt is untouched', async () => {
+    const existing = evRow({
+      id: 'e1',
+      tag: 'financial_audit',
+      effectiveDate: new Date('2026-06-30T00:00:00.000Z'),
+      expiresAt: new Date('2028-01-01T00:00:00.000Z'),
+      alsoInPortal: true,
+      capturedAt: new Date('2026-08-01T00:00:00.000Z'),
+    })
+    const keep = makeService({
+      standard: { findFirst: vi.fn(async () => stdRow({ id: 's1', schoolId: 'school-A' })) },
+      evidence: { findFirst: vi.fn(async () => existing) },
+    })
+    await keep.svc.updateEvidence('school-A', 's1', 'e1', { notes: 'x' }, 'user-1')
+    const kept = keep.evidence.update.mock.calls[0][0].data
+    expect(kept.tag).toBe('financial_audit')
+    expect(kept.alsoInPortal).toBe(true)
+    expect(kept.capturedAt).toEqual(existing.capturedAt)
+
+    const clear = makeService({
+      standard: { findFirst: vi.fn(async () => stdRow({ id: 's1', schoolId: 'school-A' })) },
+      evidence: { findFirst: vi.fn(async () => existing) },
+    })
+    await clear.svc.updateEvidence(
+      'school-A',
+      's1',
+      'e1',
+      { tag: null, effectiveDate: null, expiresAt: null, alsoInPortal: null },
+      'user-1',
+    )
+    const cleared = clear.evidence.update.mock.calls[0][0].data
+    expect(cleared.tag).toBeNull()
+    expect(cleared.effectiveDate).toBeNull()
+    expect(cleared.expiresAt).toBeNull()
+    expect(cleared.alsoInPortal).toBeNull()
+    // Still untouched.
+    expect(cleared.capturedAt).toEqual(existing.capturedAt)
+  })
+
+  it('EvidencePublic projects the four columns; alsoInPortal null stays NULL (never false)', async () => {
+    const { svc } = makeService({
+      standard: { findFirst: vi.fn(async () => stdRow({ id: 's1', schoolId: 'school-A' })) },
+      evidence: {
+        findMany: vi.fn(async () => [
+          evRow({
+            id: 'e1',
+            tag: 'financial_audit',
+            effectiveDate: new Date('2026-06-30T00:00:00.000Z'),
+            expiresAt: null,
+            alsoInPortal: null,
+          }),
+        ]),
+      },
+    })
+    const { evidence } = await svc.listEvidence('school-A', 's1')
+    expect(evidence[0].tag).toBe('financial_audit')
+    expect(evidence[0].effectiveDate).toBe('2026-06-30')
+    expect(evidence[0].expiresAt).toBeNull()
+    expect(evidence[0].alsoInPortal).toBeNull()
+  })
+})
+
+describe('AccreditationService — listSuggestions after the KNOWLEDGE_TAG_PATTERNS refactor', () => {
+  it('issues byte-identical document queries for every document-backed tag', async () => {
+    // The refactor moved seven inlined literal arrays into ONE table shared with
+    // the Phase-C resolver. If a value drifts, the drawer and the Evidence Index
+    // stop agreeing about which file answers which ask.
+    const { svc, prisma } = makeService({
+      standard: {
+        findFirst: vi.fn(async () => stdRow({ id: 's1', schoolId: 'school-A', catalogStandardId: 'cat-1' })),
+      },
+      catalogStandard: {
+        evidenceTags: [
+          'financial_audit',
+          'enrollment_data',
+          'staff_credentials',
+          'safety_plan',
+          'survey',
+          'marketing',
+          'budget',
+        ],
+      },
+      evidence: { findMany: vi.fn(async () => []) },
+    })
+    await svc.listSuggestions('school-A', 's1')
+    const docCalls = prisma.knowledgeDocument.findMany.mock.calls as unknown as [
+      { where: { schoolId: string; OR: { title: { contains: string } }[] } },
+    ][]
+    const ors = docCalls.map(([args]) => args.where.OR.map((o) => o.title.contains))
+    expect(ors).toEqual([
+      ['audit'],
+      ['enrollment'],
+      ['credential', 'certif'],
+      ['safety', 'crisis'],
+      ['survey'],
+      ['marketing'],
+      ['budget'],
+    ])
+    // Every query is schoolId-scoped.
+    for (const [args] of docCalls) expect(args.where.schoolId).toBe('school-A')
+  })
+
+  it("'fiscal_resources' still looks for BUDGET documents (the tag labels, the patterns match)", async () => {
+    const { svc, prisma } = makeService({
+      standard: {
+        findFirst: vi.fn(async () => stdRow({ id: 's1', schoolId: 'school-A', catalogStandardId: 'cat-1' })),
+      },
+      catalogStandard: { evidenceTags: ['fiscal_resources'] },
+      evidence: { findMany: vi.fn(async () => []) },
+    })
+    await svc.listSuggestions('school-A', 's1')
+    const call = prisma.knowledgeDocument.findMany.mock.calls[0] as unknown as [
+      { where: { OR: { title: { contains: string } }[] } },
+    ]
+    expect(call[0].where.OR.map((o) => o.title.contains)).toEqual(['budget'])
   })
 })

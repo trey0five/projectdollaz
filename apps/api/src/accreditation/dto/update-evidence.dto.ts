@@ -1,4 +1,14 @@
-import { IsDateString, IsIn, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator'
+import {
+  IsBoolean,
+  IsDateString,
+  IsIn,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  MinLength,
+} from 'class-validator'
+import { REQUIREMENT_TAGS } from '@finrep/compliance'
 import {
   EVIDENCE_KINDS,
   EVIDENCE_SOURCE_TYPES,
@@ -46,4 +56,27 @@ export class UpdateEvidenceDto {
   @IsOptional()
   @IsDateString()
   capturedAt?: string | null
+
+  // ── AIC Phase C — evidence CURRENCY. All four are PATCH-able and clearable
+  // with an explicit null; all four MUST be whitelisted here or the global
+  // forbidNonWhitelisted pipe 400s the request (the live-caught gotcha).
+
+  /** Requirement tag this artifact answers (@finrep/compliance REQUIREMENT_TAGS). */
+  @IsOptional()
+  @IsIn(REQUIREMENT_TAGS)
+  tag?: string | null
+
+  /** "Which period does this cover?" — yyyy-mm-dd. Never inferred. */
+  @IsOptional()
+  @IsDateString()
+  effectiveDate?: string | null
+
+  @IsOptional()
+  @IsDateString()
+  expiresAt?: string | null
+
+  /** School-asserted: this also lives in your accreditor's portal. */
+  @IsOptional()
+  @IsBoolean()
+  alsoInPortal?: boolean | null
 }
