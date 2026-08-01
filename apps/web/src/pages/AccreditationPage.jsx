@@ -37,7 +37,7 @@ import {
   X,
 } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import EntityFormModal, { Field, Select, fieldInput, fieldTextarea } from '../components/ui/EntityFormModal.jsx'
 import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
 import ModuleTabs, { ModuleAccent } from '../components/module/ModuleTabs.jsx'
@@ -69,6 +69,27 @@ import EvidenceReadinessTable from '../components/accreditation/EvidenceReadines
 import CommendationsPanel from '../components/accreditation/CommendationsPanel.jsx'
 import EvidenceDateField from '../components/accreditation/EvidenceDateField.jsx'
 import CurrencyChip from '../components/accreditation/CurrencyChip.jsx'
+// ── Phase E: the EARLY WARNING ENGINE (the digital twin) ─────────────────────
+// The attention rail on this page IS the early-warning UI. Everything below reads
+// ONE payload (useAccreditationTwin) and renders it verbatim: rationales,
+// consequences, unlock copy, driver details and not-evaluated messages are all
+// server-composed. Nothing here turns an ordinal likelihood into a percentage,
+// invents a horizon, or renders a rule we could not evaluate as a passing check.
+import { useAccreditationTwin } from '../hooks/useAccreditationTwin.js'
+import { DemoChip } from '../components/accreditation/ReadinessTrendStrip.jsx'
+import DomainBandStrip from '../components/accreditation/DomainBandStrip.jsx'
+import RiskChip from '../components/accreditation/RiskChip.jsx'
+import SignalCoverageTable from '../components/accreditation/SignalCoverageTable.jsx'
+import HorizonTimeline from '../components/accreditation/HorizonTimeline.jsx'
+import CoverageCta from '../components/accreditation/CoverageCta.jsx'
+import NamedHolesPanel from '../components/accreditation/NamedHolesPanel.jsx'
+import ImprovementPlaceholder from '../components/accreditation/ImprovementPlaceholder.jsx'
+import {
+  actionsForFinding,
+  NOT_YET_RECORDED_TOOLTIP,
+  SEVERITY_RANK,
+  SEVERITY_TONE,
+} from '../components/accreditation/ruleActions.js'
 
 // ── Light-theme coverage badge (restyled from the old dark pills) ────────────
 const COVERAGE_BADGE = {
@@ -1182,6 +1203,11 @@ function StandardsTable({
   // standard with no requirement rows is simply absent from the map and renders no
   // chip at all — sparseness holds, and the row looks exactly as it did before.
   currencyByStandard = null,
+  // Phase E: standardId → the TwinStandardRisk row for this standard, straight off
+  // the twin payload. A standard the engine did not score is simply absent from the
+  // map and renders no chip at all — sparseness holds and the row is unchanged.
+  // THE CHIP IS A BAND WORD, NEVER THE NUMBER: see RiskChip's header for why.
+  riskByStandard = null,
 }) {
   if (loading)
     return (
@@ -1213,6 +1239,7 @@ function StandardsTable({
           <Th>Standard</Th>
           <Th>Rating</Th>
           <Th>Coverage</Th>
+          <Th>Risk</Th>
           <Th>Review</Th>
           <Th right>{canEdit ? 'Actions' : ''}</Th>
         </>
@@ -1296,6 +1323,11 @@ function StandardsTable({
                 </div>
               </td>
               <td className="px-4 py-3">
+                {/* Phase E — the early-warning band for this standard. Absent from
+                    the map → nothing renders. Never a zero, never a percentage. */}
+                <RiskChip entry={riskByStandard?.[s.id] ?? null} size="sm" />
+              </td>
+              <td className="px-4 py-3">
                 <ReviewBadge
                   status={s.reviewStatus}
                   reviewDate={s.reviewDate}
@@ -1346,11 +1378,30 @@ function StandardsTable({
 // its own: the evidence index is grouped BY ARTIFACT ACROSS STANDARDS, which is
 // the opposite axis to the standards table and cannot be a column on it. Records
 // still hosts exactly one register.
+//
+// PHASE E completes the restructure into FIVE tabs of ONE command center, and
+// changes the default landing tab from Standards to Domains. That reordering is
+// the product argument of the phase, made in the navigation: a head of school
+// opening this page should first see WHERE they are exposed across the ten
+// domains, not an alphabetical list of standard codes. The register is one click
+// away and unchanged; nothing was deleted to make room.
+//
+//   Domains     — early-warning bands (Phase E) above the rubric grid (Phase B)
+//   Standards   — the register, plus one new column: the per-standard risk band
+//   Evidence    — the artifact-axis index + commendations (Phase C), untouched
+//   Signals     — what the engine could read, what it could not, the 24-month
+//                 horizon, the coverage CTAs, and the named holes
+//   Improvement — the honest Phase-G placeholder plus a real candidate list
+//
+// Records still hosts exactly ONE register, so it falls back to 'standards' for
+// any center-only tab.
 const REGISTER_TABS = [{ key: 'standards', label: 'Standards' }]
 const CENTER_TABS = [
-  { key: 'standards', label: 'Standards' },
   { key: 'domains', label: 'Domains' },
+  { key: 'standards', label: 'Standards' },
   { key: 'evidence', label: 'Evidence' },
+  { key: 'signals', label: 'Signals' },
+  { key: 'improvement', label: 'Improvement' },
 ]
 
 function AccreditationWorkspace() {
@@ -1419,7 +1470,89 @@ function AccreditationWorkspace() {
     enabled: !loading && !notLicensed && !notEntitled,
   })
 
-  const [tab, setTab] = useState('standards')
+  // Phase E: the EARLY WARNING ENGINE. One request for the whole page — the rail,
+  // the domain bands, the per-standard risk column, the horizon timeline, the
+  // coverage CTAs, the named holes and the improvement candidates all slice this
+  // single payload. Gated on the same already-made module check as its siblings
+  // (hooks run above the page's entitlement return), and fail-soft on its own: a
+  // twin hiccup degrades these surfaces and never blanks the register.
+  const twin = useAccreditationTwin(schoolId, {
+    enabled: !loading && !notLicensed && !notEntitled,
+  })
+
+  // Phase E: Domains leads. See the CENTER_TABS header for why the default moved.
+  //
+  // DEEP LINK from the morning briefing. STEP 2.16 emits
+  // `/accreditation?center=signals&rule=<RULE-ID>`, and the whole navigation story
+  // of the phase rests on it: the head of school clicks the one early-warning line
+  // on the brief and must arrive where that rule's blocking signal and horizon
+  // live. The page previously read no search params at all and always opened on
+  // Domains, so the flagship path silently did nothing.
+  //
+  // The param is `?center=`, NOT `?tab=`: under ui.v2 this page is wrapped in
+  // ModuleTabs, which owns `?tab=` for its own panels (overview | add | records) —
+  // see `openAdd` below, which uses exactly that. Two readers of one param is how
+  // a deep link resolves differently depending on which shell rendered it.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [tab, setTab] = useState(() => {
+    try {
+      const t = new URLSearchParams(window.location.search).get('center')
+      return CENTER_TABS.some((x) => x.key === t) ? t : 'domains'
+    } catch {
+      return 'domains'
+    }
+  })
+  // The rule the reader was SENT to look at — it leads the rail and says so, so
+  // "which of these did the brief mean?" has an answer on screen.
+  const [focusRule, setFocusRule] = useState(() => {
+    try {
+      return new URLSearchParams(window.location.search).get('rule')
+    } catch {
+      return null
+    }
+  })
+  // The one finding the brief actually NAMED. The briefing caps at one item per
+  // ruleId, but three briefable rules are per-standard/per-artifact, so a school
+  // with six unmet assurances gets a single line naming COG-A1. Chipping every
+  // finding that shares the ruleId told the reader the brief mentioned five
+  // standards it never mentioned — so the chip keys on the finding, while
+  // `focusRule` still decides what leads the rail.
+  const [focusFinding, setFocusFinding] = useState(() => {
+    try {
+      return new URLSearchParams(window.location.search).get('finding')
+    } catch {
+      return null
+    }
+  })
+  useEffect(() => {
+    let cancelled = false
+    Promise.resolve().then(() => {
+      if (cancelled) return
+      if (
+        !searchParams.get('center') &&
+        !searchParams.get('rule') &&
+        !searchParams.get('finding')
+      )
+        return
+      const next = new URLSearchParams(searchParams)
+      next.delete('center')
+      next.delete('rule')
+      next.delete('finding')
+      setSearchParams(next, { replace: true })
+    })
+    return () => {
+      cancelled = true
+    }
+    // Mount-only: consumed once, so refresh and back behave.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  // The focus marker is a one-visit hint, not a sticky filter: once the reader
+  // changes tab they are navigating on their own and the rail goes back to pure
+  // severity order.
+  const chooseTab = useCallback((key) => {
+    setFocusRule(null)
+    setTab(key)
+  }, [])
   const navigate = useNavigate()
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -1665,12 +1798,179 @@ function AccreditationWorkspace() {
     return [coverageKpi, ratingKpi, gapsKpi, reviewKpi]
   }, [summary, ratingSummary, standards, adopted, readiness])
 
+  // ── Phase E derived state ──────────────────────────────────────────────────
+  // standardId → its TwinStandardRisk row, for the register's Risk column. Built
+  // here (not in the table) so the table stays presentational and the map is
+  // computed once per payload rather than once per row.
+  const twinPerStandardRisk = twin.perStandardRisk
+  const riskByStandard = useMemo(() => {
+    const out = {}
+    for (const r of twinPerStandardRisk) out[r.standardId] = r
+    return out
+  }, [twinPerStandardRisk])
+
+  // domainKey → label, taken from the READINESS payload's own `domains[].label`
+  // (the server's DOMAIN_LABELS). The twin's bands carry keys only, and inventing
+  // a second set of English domain names on the client is exactly how two panels
+  // on one page end up disagreeing about what a domain is called.
+  const readinessDomains = readiness?.domains
+  const domainLabels = useMemo(() => {
+    const out = {}
+    for (const d of readinessDomains ?? []) if (d?.domainKey) out[d.domainKey] = d.label
+    return out
+  }, [readinessDomains])
+
+  // The read-only façade handed to ruleActions. It can navigate and it can move
+  // the tab; it cannot mutate anything, which is why the acknowledge control is
+  // composed below rather than inside the rule map.
+  const ruleApi = useMemo(
+    () => ({ goTab: chooseTab, navigate, scrollToStandard }),
+    [chooseTab, navigate, scrollToStandard],
+  )
+
+  // ── THE EARLY-WARNING RAIL ENTRIES ─────────────────────────────────────────
+  // F7, verbatim: the shared server AttentionItem contract is NOT touched. These
+  // are composed CLIENT-SIDE from `ruleId` + `scopeKey`, exactly as every other
+  // domain page in this app composes its own rail.
+  //
+  // EVERY SENTENCE ON A ROW IS A SERVER STRING. `title` is the standard code the
+  // finding would be cited under (G3, visible in the rail) plus the rule's own
+  // headline; `why` is the rationale followed by the accreditation consequence.
+  // Not one number is interpolated here — the engine already rendered them, and
+  // every numeral in a rationale is backed by that finding's evidence chain.
+  const twinFindings = twin.findings
+  const twinAck = twin.ack
+  const twinNow = twin.now
+  const twinDemo = twin.demoData
+  const earlyWarningItems = useMemo(() => {
+    // `info` IS NOT AN INBOX ITEM. An info finding (SCHOOL-NOT-REPORTING) is a
+    // statement about OUR OWN VISIBILITY, and briefing.service.ts excludes the
+    // severity from STEP 2.16 for exactly that reason. The rail was letting it
+    // outrank an unmet-assurance or no-evidence readiness prompt in six slots,
+    // so the two surfaces disagreed about what an inbox is. It stays fully
+    // visible on the Signals tab and in the horizon timeline.
+    const rows = twinFindings.filter((f) => !f.findingCleared && f.severity !== 'info')
+    // The rule the briefing sent the reader to look at LEADS, whatever its
+    // severity — otherwise "we sent you here" and "here is what we sent you to"
+    // are two different rows and the reader has to guess which.
+    // Then: critical → warn, then the OLDEST problem leads within a severity.
+    const sorted = [...rows].sort((a, b) => {
+      const fa = focusRule && a.ruleId === focusRule ? 0 : 1
+      const fb = focusRule && b.ruleId === focusRule ? 0 : 1
+      if (fa !== fb) return fa - fb
+      const sev = (SEVERITY_RANK[a.severity] ?? 9) - (SEVERITY_RANK[b.severity] ?? 9)
+      if (sev !== 0) return sev
+      const at = a.firstSeenAt ?? ''
+      const bt = b.firstSeenAt ?? ''
+      if (at === bt) return (a.findingKey ?? '').localeCompare(b.findingKey ?? '')
+      // A row-less finding (firstSeenAt null) is brand new — it sorts last within
+      // its severity rather than pretending to be the oldest.
+      if (!at) return 1
+      if (!bt) return -1
+      return at < bt ? -1 : 1
+    })
+
+    return sorted.map((f) => {
+      const code = (f.standardTags ?? [])[0] ?? null
+      const actions = actionsForFinding(f, ruleApi)
+      // Acknowledge is offered only when the ledger row exists AND the reader can
+      // edit. A row-less finding gets the disabled control in `meta` with the
+      // tooltip, because a live-firing finding must still be visible immediately.
+      const canAck = canEdit && Boolean(f.id)
+      const allActions = canAck
+        ? [...actions, { label: 'Mute 45 days', onClick: () => twinAck(f.id) }]
+        : actions
+      // MUTED, OR MERELY ONCE-MUTED? `mutedUntil` is deliberately NOT cleared by
+      // the server when the window lapses — notify-policy detects the lapse by
+      // comparing it to `now` and re-notifies exactly once. Testing for PRESENCE
+      // therefore kept the navy "Acknowledged" chip on a finding that had already
+      // re-armed and already emailed: the one surface a head of school reads every
+      // morning saying "handled" at the moment the system decided it is not. The
+      // comparison is against the PAYLOAD's clock (`twin.now`), never the
+      // browser's — the same discipline the horizon timeline uses.
+      const mutedDay = f.mutedUntil ? String(f.mutedUntil).slice(0, 10) : null
+      const muted = Boolean(mutedDay && twinNow && mutedDay > twinNow)
+      const reArmed = Boolean(mutedDay && twinNow && mutedDay <= twinNow)
+      // `focused` orders the rail (the rule you followed leads it). `fromBriefing`
+      // is a CLAIM ABOUT THE BRIEF and is therefore stricter: it needs the exact
+      // finding the brief named. When no `finding` param is present — an older
+      // link, or any entry point that is not the brief — nothing is chipped rather
+      // than everything sharing the ruleId being chipped.
+      const focused = Boolean(focusRule && f.ruleId === focusRule)
+      const fromBriefing = Boolean(focusFinding && f.findingKey === focusFinding)
+
+      return {
+        id: `ew-${f.findingKey ?? f.factKey}`,
+        tone: SEVERITY_TONE[f.severity] ?? 'neutral',
+        title: code ? `${code} — ${f.title}` : f.title,
+        why: `${f.rationale} ${f.consequence}`,
+        meta: (
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            {/* THE WORD, never a percentage. */}
+            <span className="rounded-md border border-rule/60 bg-section px-1.5 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted">
+              {f.likelihood}
+            </span>
+            {(f.standardTags ?? []).slice(1, 3).map((t) => (
+              <span
+                key={t}
+                className="rounded-md border border-[#F59E0B]/35 bg-amber-50 px-1.5 py-0.5 text-[10.5px] font-semibold text-amber-700"
+              >
+                {t}
+              </span>
+            ))}
+            {/* PROVENANCE, on the row. The readiness strip a few hundred pixels
+                above stamps DEMO DATA on the same series these findings are
+                derived from; leaving the rail unmarked told the reader two
+                different things about one dataset. Same chip, one vocabulary. */}
+            {twinDemo || f.isDemo ? <DemoChip /> : null}
+            {fromBriefing ? (
+              <span className="rounded-md border border-[#F59E0B]/50 bg-amber-50 px-1.5 py-0.5 text-[10.5px] font-semibold text-amber-700">
+                From your briefing
+              </span>
+            ) : null}
+            {muted ? (
+              // Acknowledged findings STAY in the rail. Hiding one would make an
+              // acknowledgement look like a fix; it is labelled instead.
+              <span className="rounded-md border border-navy/20 bg-navy/5 px-1.5 py-0.5 text-[10.5px] font-semibold text-navy">
+                Acknowledged
+              </span>
+            ) : null}
+            {reArmed ? (
+              // The ack window LAPSED. Dropping the chip silently would leave no
+              // trace of a state the system has already acted on (it re-notified).
+              <span className="rounded-md border border-[#F59E0B]/50 bg-amber-50 px-1.5 py-0.5 text-[10.5px] font-semibold text-amber-700">
+                Re-armed
+              </span>
+            ) : null}
+            {canEdit && !f.id ? (
+              <button
+                type="button"
+                disabled
+                title={NOT_YET_RECORDED_TOOLTIP}
+                className="cursor-not-allowed rounded-full border border-rule/60 bg-section px-2 py-0.5 text-[10.5px] font-semibold text-muted opacity-70"
+              >
+                Mute 45 days
+              </button>
+            ) : null}
+          </div>
+        ),
+        actions: allActions,
+      }
+    })
+  }, [twinFindings, ruleApi, canEdit, twinAck, twinNow, twinDemo, focusRule])
+
   // ── Needs-attention items (most-urgent first, capped at 6) ─────────────────
   // Phase 3: readiness entries are composed CLIENT-SIDE from the readiness
   // endpoint (the frozen decision — briefing.service.ts is untouched this phase):
   // unmet assurances upgrade their no-evidence row, unscored top gaps append.
+  //
+  // Phase E: the EARLY WARNINGS LEAD. They are the answer to "what would a
+  // visiting team find?", which outranks "which of your standards has no evidence
+  // attached" — and every one of them already names the standard it would be
+  // cited under, so nothing is lost by putting them first. A viewer sees them too
+  // (they can read /twin), with navigation actions and no acknowledge control.
   const attentionItems = useMemo(() => {
-    if (!canEdit) return []
+    if (!canEdit) return earlyWarningItems.slice(0, 6)
     const items = []
     const assuranceUnmet = new Map(
       (readiness?.assurances ?? []).filter((a) => !a.satisfied).map((a) => [a.standardId, a]),
@@ -1726,8 +2026,15 @@ function AccreditationWorkspace() {
       })
     }
 
-    return items.sort((a, b) => a.sortKey - b.sortKey).slice(0, 6)
-  }, [standards, canEdit, readiness, scrollToStandard])
+    // THE EARLY WARNINGS LEAD, BUT THEY DO NOT EVICT. Once six findings are open,
+    // an unqualified concat left zero slots for the Phase-A–C readiness prompts —
+    // the no-evidence and unscored rows became unreachable from the rail
+    // altogether. Four slots to the engine, the remainder to readiness; if either
+    // side is short the other simply fills the rail.
+    const ranked = items.sort((a, b) => a.sortKey - b.sortKey)
+    const leadCount = Math.max(6 - ranked.length, Math.min(earlyWarningItems.length, 4))
+    return [...earlyWarningItems.slice(0, leadCount), ...ranked].slice(0, 6)
+  }, [standards, canEdit, readiness, scrollToStandard, earlyWarningItems])
 
   // ── Gate ───────────────────────────────────────────────────────────────────
   if (notLicensed || notEntitled) return <GatePanel notLicensed={notLicensed} />
@@ -1746,6 +2053,7 @@ function AccreditationWorkspace() {
       labelsFor={labelsFor}
       onRubric={canEdit ? setRubric : null}
       currencyByStandard={evidence.byStandard}
+      riskByStandard={riskByStandard}
     />
   )
 
@@ -1755,16 +2063,29 @@ function AccreditationWorkspace() {
   // Rendered in the command center's register slot when the Domains tab is
   // active. It reads the SAME readiness payload the hero reads, so a card can
   // never describe a different population than the number above it.
+  // Phase E stacks the ordinal early-warning bands ABOVE it. Two grids, two
+  // questions ("what are the numbers warning about?" vs "what do your standards
+  // say?"), never blended into one figure — see DomainBandStrip's header.
   const domainGrid = (
-    <DomainGrid
-      readiness={readiness}
-      signals={signals.signals}
-      byDomain={signals.byDomain}
-      signalsLoading={signals.loading}
-      signalsUnavailable={Boolean(signals.notLicensed || signals.error)}
-      onOpenStandards={() => setTab('standards')}
-      reduce={reduce}
-    />
+    <>
+      <DomainBandStrip
+        domainBands={twin.domainBands}
+        labels={domainLabels}
+        loading={twin.loading}
+        error={twin.error}
+        notLicensed={twin.notLicensed}
+        demoData={twin.demoData}
+      />
+      <DomainGrid
+        readiness={readiness}
+        signals={signals.signals}
+        byDomain={signals.byDomain}
+        signalsLoading={signals.loading}
+        signalsUnavailable={Boolean(signals.notLicensed || signals.error)}
+        onOpenStandards={() => chooseTab('standards')}
+        reduce={reduce}
+      />
+    </>
   )
 
   // ── Phase C: the Evidence tab ──────────────────────────────────────────────
@@ -1797,6 +2118,61 @@ function AccreditationWorkspace() {
         />
       }
     />
+  )
+
+  // ── Phase E: the Signals tab ───────────────────────────────────────────────
+  // The whole engine, made legible in one screen, in this deliberate order:
+  //   1. what we could read and what we could not, with the reason verbatim;
+  //   2. the operating numbers themselves (the SAME SignalPanel the standard
+  //      drawer renders — one component, one vocabulary, sliced differently);
+  //   3. the twenty-four-month horizon, WITH its equally prominent column of
+  //      findings we refuse to date;
+  //   4. the two honest CTAs — more years, and modules not licensed;
+  //   5. the rules that can never fire today, each naming what would unlock it.
+  // Ordering matters: coverage before consequence, and the holes last so they are
+  // the note a reader leaves on rather than a disclaimer they scrolled past.
+  const signalsTab = (
+    <div className="space-y-5">
+      <SignalCoverageTable
+        rows={twin.signals}
+        counts={twin.coverage?.signals ?? null}
+        notEvaluated={twin.notEvaluated}
+        loading={twin.loading}
+      />
+
+      {/* The Phase-B panel, hoisted to the whole-school view. It is a dark surface
+          by design (it also lives inside the navy standard drawer), so it is given
+          a navy card here rather than being restyled into a second variant. */}
+      <div className="overflow-hidden rounded-2xl border-2 border-gold/20 bg-navy-gradient p-3 shadow-navy-glow">
+        <SignalPanel
+          rows={signals.signals}
+          boundKeys={signals.signals.map((s) => s.key)}
+          period={signals.period}
+          loading={signals.loading}
+          error={signals.error}
+          notLicensed={signals.notLicensed}
+          // Whole-school view: the empty-state sentence must not say "this standard".
+          scope="school"
+        />
+      </div>
+
+      <HorizonTimeline findings={twin.findings} now={twin.now} loading={twin.loading} />
+
+      <CoverageCta coverage={twin.coverage} />
+
+      <NamedHolesPanel
+        namedHoles={twin.coverage?.namedHoles ?? []}
+        notEvaluated={twin.notEvaluated}
+        loading={twin.loading}
+      />
+    </div>
+  )
+
+  // ── Phase E: the Improvement tab ───────────────────────────────────────────
+  // A placeholder that says it is one. See the component header for the list of
+  // fake controls it deliberately does not ship.
+  const improvementTab = (
+    <ImprovementPlaceholder findings={twin.findings} loading={twin.loading} />
   )
 
   // ── Phase B: the open standard's signal slice ──────────────────────────────
@@ -1837,10 +2213,18 @@ function AccreditationWorkspace() {
       kpis={kpis}
       tabs={CENTER_TABS}
       activeTab={tab}
-      onTabChange={setTab}
+      onTabChange={chooseTab}
       onNew={canEdit ? openAdd : null}
       registerTable={
-        tab === 'domains' ? domainGrid : tab === 'evidence' ? evidenceTab : registerTable
+        tab === 'domains'
+          ? domainGrid
+          : tab === 'evidence'
+            ? evidenceTab
+            : tab === 'signals'
+              ? signalsTab
+              : tab === 'improvement'
+                ? improvementTab
+                : registerTable
       }
       attentionItems={attentionItems}
       aboveKpis={readinessHero}
@@ -1955,10 +2339,12 @@ function AccreditationWorkspace() {
               hue={moduleHue('accreditation')}
               tabs={REGISTER_TABS}
               // The Records tab hosts the standards register and nothing else, so
-              // a shared 'domains' / 'evidence' selection falls back rather than
-              // rendering an active tab that isn't in its list.
-              activeTab={tab === 'domains' || tab === 'evidence' ? 'standards' : tab}
-              onTabChange={setTab}
+              // any center-only selection (domains / evidence / signals /
+              // improvement) falls back rather than rendering an active tab that
+              // isn't in its list. Expressed against REGISTER_TABS so a sixth
+              // center tab can never reintroduce the bug.
+              activeTab={REGISTER_TABS.some((t) => t.key === tab) ? tab : 'standards'}
+              onTabChange={chooseTab}
               onNew={canEdit ? openAdd : null}
               registerTable={registerTable}
             />

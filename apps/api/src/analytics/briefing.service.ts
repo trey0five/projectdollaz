@@ -78,6 +78,11 @@ export type AttentionSource =
   // Phase 6 Planning & Forecasting — the planning-artifact completeness signals
   // (STEP 2.15). Variance SEVERITY stays STEP 1's job (the banded metrics).
   | 'planning'
+  // AIC Phase E — the accreditation CONSEQUENCE of a fact another step may already
+  // state operationally; never the operational restatement (STEP 2.16). The
+  // suppression table below is what enforces that distinction, and it is a Set in
+  // code rather than a convention in a comment.
+  | 'earlywarning'
 
 /**
  * A task at least this many days past due escalates the workflow overdue item from
@@ -87,6 +92,142 @@ export type AttentionSource =
  * and the briefing owns the severity decision.
  */
 const WORKFLOW_BADLY_OVERDUE_DAYS = 14
+
+// ── AIC Phase E — STEP 2.16's cap and its suppression table ──────────────────
+//
+// THE ONE IDEA: the warning engine contributes THE ACCREDITATION CONSEQUENCE,
+// never the operational restatement. Eleven of the twenty-two firing rules
+// describe a fact some earlier step ALREADY states operationally — an overdue
+// policy is `governance:policies-overdue` at STEP 2.5, a thin reserve is a banded
+// metric at STEP 1, a rising AR is `cash:ar-overdue` at STEP 2.11. Letting the
+// engine restate them would double every one of those lines and teach a reader
+// that the briefing repeats itself.
+//
+// So each of the twenty-two is CONSCIOUSLY on one side of this table. A spec
+// asserts SUPPRESSED ∪ BRIEFABLE covers every firing ruleId in TWIN_RULE_IDS —
+// a new rule that is on neither FAILS THE BUILD rather than silently appearing.
+//
+// The lists are plain string arrays and NOT derived from `@finrep/compliance` at
+// runtime, deliberately: this file is on the hot path of every briefing request
+// for every school, and a briefing must not acquire a hard dependency on the twin
+// engine loading. The spec does the cross-check against the real ids.
+
+/**
+ * THE HARD CAP, and it is enforced by a `.slice()` in code — not by a lens, not
+ * by a UI, not by a comment. A school with forty open findings gets two items,
+ * under every lens, because the briefing is a prioritised page and the
+ * Accreditation centre is where forty findings belong.
+ */
+const EARLY_WARNING_MAX_ITEMS = 2
+
+/** Suppressed: an earlier step already states this fact operationally. */
+const EARLY_WARNING_SUPPRESSED: ReadonlySet<string> = new Set([
+  'GOV-POLICY-OVERDUE', // STEP 2.5  governance:policies-overdue
+  'GOV-MINUTES-LAG', // STEP 2.5  governance:minutes-approval-pending
+  'FIN-RESERVE-THIN', // STEP 1    metric:months_operating_reserve (banded)
+  'FIN-BUDGET-DETERIORATING', // STEP 1    metric:operating_margin (banded)
+  'FIN-AR-AGING-WORSENING', // STEP 2.11 cash:ar-overdue
+  'STRAT-PLAN-EXPIRING', // STEP 2.13c strategy:plan-review-due
+  'ENR-DECLINE', // STEP 2.10 enrollment:below-plan
+  'EVI-MISSING-REQUIRED', // STEP 2.7  accreditation:coverage-gap
+  'FAC-BACKLOG', // STEP 2.8  facilities:maintenance-backlog
+  'HR-RATIO-DRIFT', // STEP 1    metric:student_teacher_ratio (banded)
+  'SCHOOL-NOT-REPORTING', // STEP 1    data:no-snapshot (and `info`, already excluded)
+])
+
+/**
+ * Briefable: nothing else in the briefing says this, and the accreditation
+ * consequence is the whole point of saying it.
+ *
+ * Note what is NOT here and why. `EVI-MISSING-REQUIRED` is suppressed because 2.7
+ * already counts standards with no evidence; `EVI-STALE` is briefable because 2.7
+ * is EXISTENCE-only and has never once mentioned currency. `ACC-ASSURANCE-GAP` is
+ * briefable because 2.7 counts gaps generically and NEVER distinguishes a binary
+ * assurance gate — with a copy constraint a spec enforces: its `why` must name the
+ * assurance and its standard code and must not restate a coverage count.
+ */
+const EARLY_WARNING_BRIEFABLE_RULE_IDS: readonly string[] = [
+  'GOV-MINUTES-NEVER-RECORDED',
+  'GOV-CADENCE-GAP',
+  'GOV-TERM-EXPIRY',
+  'GOV-COMMITTEE-NO-CHAIR',
+  'FIN-AUDIT-STALE',
+  'STRAT-PLAN-EXPIRED',
+  'ENR-FEEDER-EROSION',
+  'ACC-UNSCORED',
+  'ACC-UNSUPPORTED-SCORE',
+  'ACC-ASSURANCE-GAP',
+  'EVI-STALE',
+]
+
+export {
+  EARLY_WARNING_MAX_ITEMS,
+  EARLY_WARNING_SUPPRESSED,
+  EARLY_WARNING_BRIEFABLE_RULE_IDS,
+}
+
+/** The ledger columns STEP 2.16 reads. Nothing else is selected. */
+interface EarlyWarningRow {
+  ruleId: string
+  findingKey: string
+  severity: string
+  standardTags: string[]
+  horizonKind: string
+  horizonDate: Date | null
+  evidencePayload: unknown
+}
+
+/**
+ * One early-warning item.
+ *
+ * `title`, `rationale` and `consequence` are read VERBATIM from the stored
+ * `evidencePayload` — server-composed by the pure engine and numerically
+ * validated at composition. NOTHING is re-worded here, and no number is composed
+ * here, so value-safety holds by construction rather than by review.
+ */
+function buildEarlyWarningItem(f: EarlyWarningRow): AttentionItem | null {
+  const payload = (f.evidencePayload ?? {}) as Record<string, unknown>
+  const title = typeof payload.title === 'string' ? payload.title : null
+  const rationale = typeof payload.rationale === 'string' ? payload.rationale : null
+  const consequence = typeof payload.consequence === 'string' ? payload.consequence : ''
+  const code = f.standardTags[0]
+  // G3 AT THE BRIEFING TOO: no standard code, no item. A finding that cannot name
+  // the standard it would be cited under has nothing to tell a head of school.
+  if (!code || !title || !rationale) return null
+  return {
+    id: `earlywarning:${f.ruleId.toLowerCase()}`,
+    severity: f.severity === 'critical' ? 'critical' : 'warn',
+    source: 'earlywarning',
+    title: `${code} — ${title}`,
+    why: `${rationale} ${consequence}`.trim(),
+    metricKey: null,
+    value: null,
+    // `?center=`, NOT `?tab=`: under ui.v2 /accreditation is wrapped in ModuleTabs,
+    // which owns `?tab=` for its own panels (overview | add | records). The page
+    // reads `center` for its five inner tabs and `rule` to lead the rail with the
+    // finding this line is about, then strips them.
+    //
+    // `finding` CARRIES THE SCOPE, and it is not redundant with `rule`. Three of
+    // the eleven briefable rules are per-scope (ACC-ASSURANCE-GAP and
+    // ACC-UNSUPPORTED-SCORE per standard, EVI-STALE per artifact), and the cap
+    // above emits ONE item per ruleId — so a school with six unmet assurances gets
+    // one line naming COG-A1. On a ruleId-only link the page marked all six
+    // findings "From your briefing", which says the brief mentioned five standards
+    // it never mentioned. The rule still leads the rail (that is what `rule` is
+    // for); only the finding this line actually named is chipped.
+    link: `/accreditation?center=signals&rule=${f.ruleId}&finding=${encodeURIComponent(
+      f.findingKey,
+    )}`,
+    // A stated register date is a FACT, so it becomes a due date. A projected
+    // horizon is not a date and never becomes one.
+    dueDate: f.horizonKind === 'by_date' && f.horizonDate ? isoDay(f.horizonDate) : null,
+  }
+}
+
+/** UTC calendar day of a @db.Date column. */
+function isoDay(d: Date): string {
+  return d.toISOString().slice(0, 10)
+}
 
 /** One ranked, explainable thing that needs the user's attention this period. */
 export interface AttentionItem {
@@ -244,6 +385,55 @@ export class BriefingService {
   }
 
   /**
+   * AIC Phase E — the open, un-muted, BRIEFABLE early warnings for one school.
+   *
+   * Every constraint is in the QUERY, not in a filter afterwards, so the read is
+   * bounded before it reaches this process:
+   *   • `clearedAt: null`                  the rule is still firing
+   *   • status not resolved/dismissed      a human has not closed it
+   *   • severity critical|warn             `info` is a statement about our own
+   *                                        visibility, never an inbox item
+   *   • ruleId in the BRIEFABLE list       the suppression table, enforced in SQL
+   *   • mutedUntil null or in the past     a live mute is a human saying "not now"
+   *
+   * `severity: 'asc'` sorts 'critical' before 'warn' ALPHABETICALLY — verified, and
+   * pinned by a spec so a future severity value cannot silently reorder it.
+   * `take: 20` bounds the read; the cap in STEP 2.16 bounds the output.
+   *
+   * Fail-soft in BOTH directions (absent PrismaService in older positional-arg unit
+   * mocks / a query error) -> null, so STEP 2.16 can never 500 the briefing.
+   */
+  private async readEarlyWarnings(
+    schoolId: string,
+    generatedAt: string,
+  ): Promise<EarlyWarningRow[] | null> {
+    if (!this.prisma?.accreditationFinding) return null
+    return this.prisma.accreditationFinding
+      .findMany({
+        where: {
+          schoolId,
+          clearedAt: null,
+          status: { notIn: ['resolved', 'dismissed'] },
+          severity: { in: ['critical', 'warn'] },
+          ruleId: { in: [...EARLY_WARNING_BRIEFABLE_RULE_IDS] },
+          OR: [{ mutedUntil: null }, { mutedUntil: { lte: new Date(generatedAt) } }],
+        },
+        orderBy: [{ severity: 'asc' }, { lastSeenAt: 'desc' }, { findingKey: 'asc' }],
+        take: 20,
+        select: {
+          ruleId: true,
+          findingKey: true,
+          severity: true,
+          standardTags: true,
+          horizonKind: true,
+          horizonDate: true,
+          evidencePayload: true,
+        },
+      })
+      .catch(() => null) as Promise<EarlyWarningRow[] | null>
+  }
+
+  /**
    * Build the prioritised briefing for one period. Reuses the existing services
    * (no recompute) and returns a RANKED AttentionItem[] + a summary. Tenant-safe:
    * getOwnedPeriod runs FIRST, so a wrong-tenant/unknown period throws a real 404
@@ -358,6 +548,7 @@ export class BriefingService {
       planningLicensed,
       agingRow,
       cashFlowRow,
+      earlyWarnings,
     ] = await Promise.all([
       this.compliance.evaluateForPeriod(schoolId, period.id).catch(() => null),
       this.reconciliation.reconcileForPeriod(schoolId, period.id).catch(() => null),
@@ -391,6 +582,19 @@ export class BriefingService {
       // Cash-flow + reconciliation — reads the persisted snapshot DIRECTLY via Prisma
       // (same module rule as aging), inside this SAME fan-out. CORE; fail-soft to null.
       this.readCashFlowRow(schoolId),
+      // AIC Phase E — the open early-warning findings for STEP 2.16, read DIRECTLY
+      // via Prisma inside this SAME fan-out (latency stays slowest-not-sum).
+      //
+      // THE MODULE RULE, for the third time in this file: TwinModule imports
+      // AnalyticsModule, and BriefingService lives in AnalyticsModule — so
+      // injecting EarlyWarningService would create analytics -> twin -> analytics,
+      // a genuine cycle. STEP 2.11 and STEP 2.12 set the precedent (they read
+      // ArApAgingSnapshot and CashFlowSnapshot the same way, for the same reason).
+      // PrismaService is global: no new import, no new module edge, no forwardRef.
+      //
+      // Fail-soft to null: a missing table (deploy order) or a query error yields
+      // NO items and a 200, never a partial briefing and never a 500.
+      this.readEarlyWarnings(schoolId, generatedAt),
     ])
 
     // 2a — open 2A findings (material -> critical, reportable -> warn).
@@ -1223,6 +1427,52 @@ export class BriefingService {
     // QuickBooks (reconStatus 'differs' AND a STRONG check material) — an honest signal;
     // a tie / immaterial gap / no-snapshot emits nothing. Fail-soft: null row → nothing.
     for (const it of buildReconciliationItems(cashFlowRow, generatedAt)) items.push(it)
+
+    // ── STEP 2.16: accreditation EARLY WARNINGS (source 'earlywarning') ───────
+    //
+    // What a visiting team would likely find, derived from live operating data by
+    // deterministic rules, expressed as THE ACCREDITATION CONSEQUENCE — never as
+    // an operational restatement of a fact an earlier step already made. The
+    // suppression table above is what makes that sentence true in code.
+    //
+    // GATED FAIL-CLOSED on `accreditationLicensed` (resolved in the STEP-2 fan-out
+    // with its own `.catch(() => false)`): a finance-only school gets ZERO
+    // early-warning items and loses nothing else. FAIL-SOFT on the read: a null
+    // `earlyWarnings` is no items, never a 500.
+    //
+    // THE CAP IS APPLIED HERE, BEFORE ANY LENS RUNS, so forty open findings
+    // produce exactly two items under every lens.
+    //
+    // ONE ITEM PER RULE, and the cap is applied to the COMPOSED items rather than
+    // to the raw rows. Both halves of that sentence fix a real defect:
+    //
+    //   · `AttentionItem.id` is derived from `ruleId` alone, but the ledger is
+    //     keyed `ruleId:scopeKey` and three briefable rules are per-scope
+    //     (ACC-UNSUPPORTED-SCORE and ACC-ASSURANCE-GAP per standard, EVI-STALE per
+    //     evidence tag). Two standards with unmet assurance gates — the common
+    //     case, not an edge — emitted TWO items with an identical id: duplicate
+    //     React keys on the home briefing, a non-total `id.localeCompare` tiebreak
+    //     in applyLens, and a colliding `${schoolId}:${item.id}` in the org
+    //     roll-up. Deduping on the id keeps the eleven `COMPLIANCE_ORDER` entries
+    //     matching EXACTLY, which prefix-matching or a scoped id would not.
+    //   · Slicing the ROWS first meant one malformed `evidencePayload` in the top
+    //     two silently suppressed a valid warning — the row consumed a slot and
+    //     then composed to null. Mixed engine versions in the ledger (1.0.0 rows
+    //     alongside 1.1.0) make that a live possibility, not a hypothetical.
+    if (accreditationLicensed && earlyWarnings) {
+      const composed: AttentionItem[] = []
+      const seenIds = new Set<string>()
+      for (const f of earlyWarnings) {
+        if (EARLY_WARNING_SUPPRESSED.has(f.ruleId)) continue
+        if ((f.standardTags?.length ?? 0) === 0) continue
+        const item = buildEarlyWarningItem(f)
+        if (!item || seenIds.has(item.id)) continue
+        seenIds.add(item.id)
+        composed.push(item)
+      }
+      // THE HARD CAP, in code, over the items a reader would actually see.
+      for (const it of composed.slice(0, EARLY_WARNING_MAX_ITEMS)) items.push(it)
+    }
 
     // ── STEP 3: lens-shape (rank + filter + reframe) + summarise ─────────────
     // applyLens is the SINGLE source of ranking truth (shared with the org fan-

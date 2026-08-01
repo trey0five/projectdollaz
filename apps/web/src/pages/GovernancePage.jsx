@@ -13,8 +13,8 @@
 // light "module not on your plan" panel (the API 402 → notLicensed). The create /
 // edit form modals are kept as dark navy/gold overlays over the light page.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import {
   Landmark,
@@ -1064,7 +1064,41 @@ function GovernanceWorkspace() {
   const { meetings, summary, approveMinutes } = meetingsHook
   const { people } = peopleHook
 
-  const [tab, setTab] = useState('people')
+  // DEEP LINK into one register (AIC Phase E). Eight of the twenty-two early-
+  // warning rules answer "what do I do about this?" with "open the governance
+  // register that holds it" — and the page ignored the URL entirely, so all eight
+  // dropped the reader on People with no indication of where to look.
+  //
+  // The param is `?register=`, NOT `?tab=`: under ui.v2 this page is wrapped in
+  // ModuleTabs, which owns `?tab=` for its own four panels (overview | add |
+  // records | reports). Two readers of one param is how a deep link starts
+  // resolving differently depending on which shell rendered it. A rule action
+  // therefore sends `?tab=records&register=meetings`: ModuleTabs opens Records and
+  // this seeds the register inside it, while the v1 shell ignores `tab` and still
+  // lands on the right register.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [tab, setTab] = useState(() => {
+    try {
+      const t = new URLSearchParams(window.location.search).get('register')
+      return TABS.some((x) => x.key === t) ? t : 'people'
+    } catch {
+      return 'people'
+    }
+  })
+  useEffect(() => {
+    let cancelled = false
+    Promise.resolve().then(() => {
+      if (cancelled || !searchParams.get('register')) return
+      const next = new URLSearchParams(searchParams)
+      next.delete('register')
+      setSearchParams(next, { replace: true })
+    })
+    return () => {
+      cancelled = true
+    }
+    // Mount-only: the hint is consumed once, so refresh and back behave.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const [modal, setModal] = useState(null) // { type, entity } | null
   const [groupFilter, setGroupFilter] = useState('all')
   const [panelPerson, setPanelPerson] = useState(null) // roster row | null (slide-over)

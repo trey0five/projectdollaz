@@ -1,0 +1,845 @@
+{
+  "__comment": [
+    "WEB'S OWN COPY of a realistic GET /schools/:id/accreditation/twin response.",
+    "THE CONTRACT LIVES AT apps/api/src/twin/__fixtures__/twin.example.json — that file is",
+    "owned by ENGINEER-API and is the authority. This copy exists so the accreditation",
+    "components can be read, reviewed and (later) specced without a running API. If the two",
+    "ever disagree, the API file wins and this one is wrong.",
+    "",
+    "SHAPE NOTES the components depend on:",
+    "  · findings[] is FindingPublic: TwinFinding + the ledger lifecycle. `id === null` means",
+    "    the rule is firing right now but tonight's reconciliation has not written the row yet",
+    "    — the UI shows the finding and DISABLES ack with 'This will be recorded tonight.'",
+    "  · likelihood is the WORD 'possible' | 'likely'. Never a number, never a percentage.",
+    "  · horizon.kind 'none' is a legitimate, common answer; horizon.reason is then non-null",
+    "    and is rendered verbatim in the timeline's 'No date we can honestly give' column.",
+    "  · notEvaluated[] always names blockingSignalKey/Label (null only for 'no_standards')",
+    "    and carries the signal's own message plus the unlock that would close it.",
+    "  · domainBands is ALWAYS all ten domains in the frozen order; band === null means NOT",
+    "    MEASURED and reason is then non-null (grey with a reason, never grey with a number).",
+    "  · perStandardRisk[].risk === null is NOT a risk of zero — reason says why.",
+    "  · signals[] is the collected roster, one row per catalog signal, and /twin now",
+    "    ALWAYS carries it (EarlyWarningService adds it from the set it just prepared).",
+    "    SignalCoverageTable keeps its degraded fallback for an older payload: counts plus",
+    "    the blocked signals named in notEvaluated[] — it never invents a row."
+  ],
+  "version": "1.0.0",
+  "now": "2026-08-01",
+  "frameworkCode": "cognia_2022",
+  "demoData": false,
+  "snapshotAsOf": "2026-07-31",
+  "findings": [
+    {
+      "id": "8f2a1c44-1f0e-4a1a-9f77-2b6c9a0d3311",
+      "findingKey": "ACC-ASSURANCE-GAP:standard:std-a2",
+      "ruleId": "ACC-ASSURANCE-GAP",
+      "scopeKey": "standard:std-a2",
+      "factKey": "standard:std-a2:assurance_gap",
+      "title": "An assurance gate has no evidence attached",
+      "rationale": "COG-A2 is an assurance gate with 0 artifacts attached.",
+      "evidence": [
+        {
+          "key": "code",
+          "label": "Standard",
+          "value": "COG-A2",
+          "display": "COG-A2",
+          "asOf": "2026-07-31",
+          "lineage": {
+            "table": "AccreditationStandard",
+            "field": "code"
+          }
+        },
+        {
+          "key": "title",
+          "label": "Standard title",
+          "value": "The system engages in a documented financial audit",
+          "display": "The system engages in a documented financial audit",
+          "asOf": "2026-07-31",
+          "lineage": {
+            "table": "AccreditationStandard",
+            "field": "title"
+          }
+        },
+        {
+          "key": "evidenceCount",
+          "label": "Artifacts attached",
+          "value": 0,
+          "display": "0",
+          "asOf": "2026-07-31",
+          "lineage": {
+            "table": "AccreditationEvidence"
+          }
+        }
+      ],
+      "standardTags": [
+        "COG-A2"
+      ],
+      "domainKeys": [
+        "finance",
+        "governance"
+      ],
+      "severity": "critical",
+      "likelihood": "likely",
+      "confidence": "observation",
+      "horizon": {
+        "kind": "none",
+        "value": null,
+        "confidence": null,
+        "reason": "This is a condition today, not a projection."
+      },
+      "consequence": "Assurances are pass or fail. An unmet one is not a low score — it is the accreditation blocked until it is met.",
+      "status": "open",
+      "firstSeenAt": "2026-05-12T04:00:11.000Z",
+      "lastSeenAt": "2026-07-31T04:00:09.000Z",
+      "clearedAt": null,
+      "resolutionKind": null,
+      "mutedUntil": null,
+      "ackedUntil": null,
+      "mutedReason": null,
+      "reopenCount": 0,
+      "initiativeId": null,
+      "isDemo": false,
+      "findingCleared": false,
+      "clearedCopy": null
+    },
+    {
+      "id": "3b7d5e10-7d21-4b6e-8a41-58fbc9a2e001",
+      "findingKey": "FIN-AUDIT-STALE:evidence:financial_audit",
+      "ruleId": "FIN-AUDIT-STALE",
+      "scopeKey": "evidence:financial_audit",
+      "factKey": "evidence:financial_audit@2026-06-30",
+      "title": "The financial audit on file is no longer current",
+      "rationale": "The most recent financial audit on file stopped being current on 30 June 2026 — 32 days ago — and 2 standards cite it.",
+      "evidence": [
+        {
+          "key": "state",
+          "label": "Currency",
+          "value": "stale",
+          "display": "stale",
+          "asOf": "2026-08-01",
+          "lineage": {
+            "table": "AccreditationEvidence",
+            "field": "effectiveDate"
+          }
+        },
+        {
+          "key": "expiresOn",
+          "label": "Stopped being current",
+          "value": "2026-06-30",
+          "display": "30 June 2026",
+          "asOf": "2026-08-01",
+          "lineage": {
+            "table": "AccreditationEvidence",
+            "field": "effectiveDate"
+          }
+        },
+        {
+          "key": "daysOverdue",
+          "label": "Days overdue",
+          "value": 32,
+          "display": "32",
+          "asOf": "2026-08-01",
+          "lineage": null
+        },
+        {
+          "key": "standardCount",
+          "label": "Standards citing it",
+          "value": 2,
+          "display": "2",
+          "asOf": "2026-08-01",
+          "lineage": {
+            "table": "AccreditationCatalogRequirement"
+          }
+        }
+      ],
+      "standardTags": [
+        "COG-15",
+        "COG-A2"
+      ],
+      "domainKeys": [
+        "finance"
+      ],
+      "severity": "critical",
+      "likelihood": "likely",
+      "confidence": "observation",
+      "horizon": {
+        "kind": "by_date",
+        "value": "2026-06-30",
+        "confidence": null,
+        "reason": null
+      },
+      "consequence": "The external audit is a binary assurance in Cognia and a named artifact in MSA and NSBECS; a lapsed one is the single fastest finding a visiting team can write.",
+      "status": "open",
+      "firstSeenAt": "2026-07-02T04:00:07.000Z",
+      "lastSeenAt": "2026-07-31T04:00:09.000Z",
+      "clearedAt": null,
+      "resolutionKind": null,
+      "mutedUntil": null,
+      "ackedUntil": null,
+      "mutedReason": null,
+      "reopenCount": 0,
+      "initiativeId": null,
+      "isDemo": false,
+      "findingCleared": false,
+      "clearedCopy": null
+    },
+    {
+      "id": null,
+      "findingKey": "FIN-BUDGET-DETERIORATING:school",
+      "ruleId": "FIN-BUDGET-DETERIORATING",
+      "scopeKey": "school",
+      "factKey": "metric:operating_margin@FY2026",
+      "title": "Operating margin is falling across the recorded years",
+      "rationale": "Operating margin has fallen across 5 readings, FY2022 to FY2026 — from 6.0% to 1.5%, about 1.5 percentage points a year (Mann-Kendall p = 0.0167).",
+      "evidence": [
+        {
+          "key": "readings",
+          "label": "Readings",
+          "value": 5,
+          "display": "5",
+          "asOf": "2026-06-30",
+          "lineage": {
+            "table": "MetricSnapshot",
+            "metricKey": "operating_margin"
+          }
+        },
+        {
+          "key": "fyFirst",
+          "label": "First year",
+          "value": "FY2022",
+          "display": "FY2022",
+          "asOf": "2022-06-30",
+          "lineage": null
+        },
+        {
+          "key": "fyLast",
+          "label": "Last year",
+          "value": "FY2026",
+          "display": "FY2026",
+          "asOf": "2026-06-30",
+          "lineage": null
+        },
+        {
+          "key": "firstValue",
+          "label": "First value",
+          "value": 0.06,
+          "display": "6.0%",
+          "asOf": "2022-06-30",
+          "lineage": null
+        },
+        {
+          "key": "lastValue",
+          "label": "Last value",
+          "value": 0.015,
+          "display": "1.5%",
+          "asOf": "2026-06-30",
+          "lineage": null
+        },
+        {
+          "key": "slopePerYear",
+          "label": "Slope",
+          "value": -0.015,
+          "display": "1.5 percentage points",
+          "asOf": "2026-06-30",
+          "lineage": null
+        },
+        {
+          "key": "pValue",
+          "label": "Mann-Kendall p",
+          "value": 0.0167,
+          "display": "0.0167",
+          "asOf": "2026-06-30",
+          "lineage": null
+        },
+        {
+          "key": "periodsToBreach",
+          "label": "Years to the risk line",
+          "value": 1,
+          "display": "1",
+          "asOf": "2026-06-30",
+          "lineage": null
+        }
+      ],
+      "standardTags": [
+        "COG-15"
+      ],
+      "domainKeys": [
+        "finance"
+      ],
+      "severity": "warn",
+      "likelihood": "likely",
+      "confidence": "trend",
+      "horizon": {
+        "kind": "periods_to_breach",
+        "value": 1,
+        "confidence": "trend",
+        "reason": null
+      },
+      "consequence": "Financial sustainability is a resource-allocation finding, and a multi-year direction is the form of it a visiting team writes up rather than notes.",
+      "status": "open",
+      "firstSeenAt": null,
+      "lastSeenAt": null,
+      "clearedAt": null,
+      "resolutionKind": null,
+      "mutedUntil": null,
+      "ackedUntil": null,
+      "mutedReason": null,
+      "reopenCount": 0,
+      "initiativeId": null,
+      "isDemo": false,
+      "findingCleared": false,
+      "clearedCopy": null
+    },
+    {
+      "id": "c1d0e9f8-4444-4c1a-b111-9a0b7c6d5e4f",
+      "findingKey": "STRAT-PLAN-EXPIRING:school",
+      "ruleId": "STRAT-PLAN-EXPIRING",
+      "scopeKey": "school",
+      "factKey": "register:strategic_plan_end@2027-06-30",
+      "title": "The adopted strategic plan is inside its final year",
+      "rationale": "The adopted strategic plan ends on 30 June 2027, 333 days from now.",
+      "evidence": [
+        {
+          "key": "planEndDate",
+          "label": "Plan end date",
+          "value": "2027-06-30",
+          "display": "30 June 2027",
+          "asOf": "2026-08-01",
+          "lineage": {
+            "table": "StrategicPlan",
+            "field": "endDate"
+          }
+        },
+        {
+          "key": "daysRemaining",
+          "label": "Days remaining",
+          "value": 333,
+          "display": "333",
+          "asOf": "2026-08-01",
+          "lineage": null
+        }
+      ],
+      "standardTags": [
+        "COG-7",
+        "COG-26"
+      ],
+      "domainKeys": [
+        "continuous_improvement",
+        "leadership"
+      ],
+      "severity": "info",
+      "likelihood": "possible",
+      "confidence": "observation",
+      "horizon": {
+        "kind": "by_date",
+        "value": "2027-06-30",
+        "confidence": null,
+        "reason": null
+      },
+      "consequence": "Every framework asks for a current plan and its evidence of implementation; a plan takes about a year to write, which is why this warns at twelve months and not at ninety days.",
+      "status": "acknowledged",
+      "firstSeenAt": "2026-07-05T04:00:12.000Z",
+      "lastSeenAt": "2026-07-31T04:00:09.000Z",
+      "clearedAt": null,
+      "resolutionKind": null,
+      "mutedUntil": "2026-09-14T00:00:00.000Z",
+      "ackedUntil": "2026-09-14T00:00:00.000Z",
+      "mutedReason": "Board reviews the successor plan in September",
+      "reopenCount": 0,
+      "initiativeId": null,
+      "isDemo": false,
+      "findingCleared": false,
+      "clearedCopy": null
+    }
+  ],
+  "cleared": [],
+  "notEvaluated": [
+    {
+      "ruleId": "FAC-BACKLOG",
+      "title": "The maintenance backlog is not being worked",
+      "reason": "signal_not_licensed",
+      "blockingSignalKey": "fac.maintenance_backlog",
+      "blockingSignalLabel": "Open maintenance items",
+      "message": "The Facilities module is not licensed for this school, so we cannot read your maintenance register.",
+      "moduleKey": "facilities",
+      "unlock": null
+    },
+    {
+      "ruleId": "ENR-DECLINE",
+      "title": "Enrollment has fallen since the previous observation",
+      "reason": "no_prior_observation",
+      "blockingSignalKey": "enr.headcount",
+      "blockingSignalLabel": "Enrollment headcount",
+      "message": "Only one enrollment snapshot is on file, so there is nothing to compare it against.",
+      "moduleKey": "enrollment",
+      "unlock": null
+    },
+    {
+      "ruleId": "HR-PD-LOW",
+      "title": "Professional development participation is low",
+      "reason": "signal_not_tracked",
+      "blockingSignalKey": "hr.pd_participation",
+      "blockingSignalLabel": "Professional development participation",
+      "message": "KYRO holds no professional-development records.",
+      "moduleKey": "hr",
+      "unlock": {
+        "moduleKey": "hr",
+        "intake": "ProfessionalDevelopment register (Phase K)",
+        "copy": "We cannot tell you whether your staff are getting professional development, because KYRO holds no PD records. We will not use PD spend as a proxy — one expensive conference for one person would score as healthy. A four-field register unlocks this rule."
+      }
+    },
+    {
+      "ruleId": "SAFE-ENV-GAP",
+      "title": "Safe-environment clearances are incomplete",
+      "reason": "signal_not_tracked",
+      "blockingSignalKey": "safe.clearances",
+      "blockingSignalLabel": "Safe-environment clearances",
+      "message": "Clearances are not tracked in KYRO.",
+      "moduleKey": null,
+      "unlock": {
+        "moduleKey": null,
+        "intake": "Clearance register + per-diocese CSV import (Phase K)",
+        "copy": "Background-check and safe-environment compliance is not tracked in KYRO. It lives in your diocesan system. A register plus a CSV import unlocks this rule; a live connector is a later conversation — the market reality is CSV."
+      }
+    },
+    {
+      "ruleId": "CURR-DOC-AGING",
+      "title": "Curriculum documentation is past its review date",
+      "reason": "signal_no_data",
+      "blockingSignalKey": "curr.doc_review",
+      "blockingSignalLabel": "Curriculum document review",
+      "message": "No policy row is filed under the Curriculum category, so there is nothing whose review date we can read.",
+      "moduleKey": "governance",
+      "unlock": {
+        "moduleKey": "governance",
+        "intake": "One Policy row per curriculum document, category 'Curriculum', with a review interval",
+        "copy": "We cannot see your curriculum. We can track when you last reviewed its documentation the moment you record it — one policy row per document, and the review engine you already have does the rest."
+      }
+    },
+    {
+      "ruleId": "ACAD-GROWTH-FLAT",
+      "title": "Measured growth in student learning is flat",
+      "reason": "signal_not_tracked",
+      "blockingSignalKey": "acad.assessment_growth",
+      "blockingSignalLabel": "Assessment growth",
+      "message": "No LMS or assessment integration exists, so learning growth is not measured.",
+      "moduleKey": null,
+      "unlock": {
+        "moduleKey": null,
+        "intake": "LMS / assessment integration (deferred)",
+        "copy": "Measured growth in student learning renders as not measured, with the reason. We will not proxy it with anything — not attendance, not enrollment, not staffing."
+      }
+    }
+  ],
+  "coverage": {
+    "rulesTotal": 26,
+    "rulesEvaluated": 20,
+    "rulesFired": 4,
+    "rulesNotEvaluated": 6,
+    "evaluablePct": 0.769,
+    "signals": {
+      "available": 21,
+      "not_licensed": 4,
+      "no_data": 6,
+      "not_tracked": 4
+    },
+    "blockedByModule": {
+      "facilities": [
+        "FAC-BACKLOG"
+      ]
+    },
+    "unlockableByYears": {
+      "signalKey": "hr.student_teacher_ratio",
+      "ruleIds": [
+        "HR-RATIO-DRIFT"
+      ],
+      "yearsNeeded": 2,
+      "fyLabels": [
+        "FY2023–24",
+        "FY2022–23"
+      ]
+    },
+    "namedHoles": [
+      {
+        "ruleId": "HR-PD-LOW",
+        "intake": "ProfessionalDevelopment register (Phase K)",
+        "copy": "We cannot tell you whether your staff are getting professional development, because KYRO holds no PD records. We will not use PD spend as a proxy — one expensive conference for one person would score as healthy. A four-field register unlocks this rule."
+      },
+      {
+        "ruleId": "SAFE-ENV-GAP",
+        "intake": "Clearance register + per-diocese CSV import (Phase K)",
+        "copy": "Background-check and safe-environment compliance is not tracked in KYRO. It lives in your diocesan system. A register plus a CSV import unlocks this rule; a live connector is a later conversation — the market reality is CSV."
+      },
+      {
+        "ruleId": "CURR-DOC-AGING",
+        "intake": "One Policy row per curriculum document, category 'Curriculum', with a review interval",
+        "copy": "We cannot see your curriculum. We can track when you last reviewed its documentation the moment you record it — one policy row per document, and the review engine you already have does the rest."
+      },
+      {
+        "ruleId": "ACAD-GROWTH-FLAT",
+        "intake": "LMS / assessment integration (deferred)",
+        "copy": "Measured growth in student learning renders as not measured, with the reason. We will not proxy it with anything — not attendance, not enrollment, not staffing."
+      }
+    ]
+  },
+  "perStandardRisk": [
+    {
+      "standardId": "std-a2",
+      "code": "COG-A2",
+      "risk": null,
+      "band": "critical",
+      "drivers": [
+        {
+          "component": "C",
+          "weight": 40,
+          "raw": 1,
+          "contribution": 40,
+          "detail": "This is an unmet assurance gate. Assurances are pass or fail, so the risk formula is bypassed."
+        }
+      ],
+      "bypass": "unmet_assurance",
+      "reason": "Assurance gates are pass or fail; a risk percentage would soften a binary.",
+      "findingCount": 1,
+      "findingKeys": [
+        "ACC-ASSURANCE-GAP:standard:std-a2"
+      ]
+    },
+    {
+      "standardId": "std-15",
+      "code": "COG-15",
+      "risk": 62.5,
+      "band": "elevated",
+      "drivers": [
+        {
+          "component": "C",
+          "weight": 40,
+          "raw": 0.6,
+          "contribution": 24,
+          "detail": "2 open findings across 2 distinct facts cited under this standard."
+        },
+        {
+          "component": "T",
+          "weight": 40,
+          "raw": 0.75,
+          "contribution": 30,
+          "detail": "3 of 4 bound signals are moving unfavourably (operating margin, months of operating reserve, student-teacher ratio)."
+        },
+        {
+          "component": "E",
+          "weight": 20,
+          "raw": 0.42,
+          "contribution": 8.5,
+          "detail": "4 of 7 tracked artifacts are current."
+        }
+      ],
+      "bypass": null,
+      "reason": null,
+      "findingCount": 2,
+      "findingKeys": [
+        "FIN-AUDIT-STALE:evidence:financial_audit",
+        "FIN-BUDGET-DETERIORATING:school"
+      ]
+    },
+    {
+      "standardId": "std-7",
+      "code": "COG-7",
+      "risk": 18,
+      "band": "clear",
+      "drivers": [
+        {
+          "component": "C",
+          "weight": 40,
+          "raw": 0.25,
+          "contribution": 10,
+          "detail": "1 open finding across 1 distinct fact cited under this standard."
+        },
+        {
+          "component": "T",
+          "weight": 40,
+          "raw": 0,
+          "contribution": 0,
+          "detail": "No operating signal bound to this standard could be read, so trajectory contributes nothing to this score."
+        },
+        {
+          "component": "E",
+          "weight": 20,
+          "raw": 0.4,
+          "contribution": 8,
+          "detail": "3 of 5 tracked artifacts are current."
+        }
+      ],
+      "bypass": null,
+      "reason": null,
+      "findingCount": 1,
+      "findingKeys": [
+        "STRAT-PLAN-EXPIRING:school"
+      ]
+    },
+    {
+      "standardId": "std-8",
+      "code": "COG-8",
+      "risk": null,
+      "band": null,
+      "drivers": [
+        {
+          "component": "C",
+          "weight": 40,
+          "raw": 0,
+          "contribution": 0,
+          "detail": "No open finding cites this standard."
+        },
+        {
+          "component": "T",
+          "weight": 40,
+          "raw": 0,
+          "contribution": 0,
+          "detail": "No operating signal bound to this standard could be read, so trajectory contributes nothing to this score."
+        },
+        {
+          "component": "E",
+          "weight": 20,
+          "raw": 0,
+          "contribution": 0,
+          "detail": "This standard has no tracked evidence requirement, so evidence contributes nothing to this score."
+        }
+      ],
+      "bypass": null,
+      "reason": "No evidence is attached to this standard, so there is nothing to score against. This is not a risk of zero.",
+      "findingCount": 0,
+      "findingKeys": []
+    },
+    {
+      "standardId": "std-13",
+      "code": "COG-13",
+      "risk": 41.5,
+      "band": "watch",
+      "drivers": [
+        {
+          "component": "C",
+          "weight": 40,
+          "raw": 0,
+          "contribution": 0,
+          "detail": "No open finding cites this standard."
+        },
+        {
+          "component": "T",
+          "weight": 40,
+          "raw": 0.6,
+          "contribution": 24,
+          "detail": "1 of 1 bound signals are moving unfavourably (student-teacher ratio)."
+        },
+        {
+          "component": "E",
+          "weight": 20,
+          "raw": 0.875,
+          "contribution": 17.5,
+          "detail": "1 of 8 tracked artifacts are current."
+        }
+      ],
+      "bypass": null,
+      "reason": null,
+      "findingCount": 0,
+      "findingKeys": []
+    }
+  ],
+  "domainBands": [
+    {
+      "domainKey": "mission_identity",
+      "band": null,
+      "reason": "No standard in your framework and no KYRO signal reaches mission and Catholic identity. Not measured.",
+      "facts": {
+        "critical": 0,
+        "warn": 0,
+        "info": 0,
+        "total": 0
+      },
+      "standardCount": 0,
+      "availableSignalCount": 0
+    },
+    {
+      "domainKey": "governance",
+      "band": "high",
+      "reason": null,
+      "facts": {
+        "critical": 1,
+        "warn": 0,
+        "info": 0,
+        "total": 1
+      },
+      "standardCount": 4,
+      "availableSignalCount": 5
+    },
+    {
+      "domainKey": "leadership",
+      "band": "clear",
+      "reason": null,
+      "facts": {
+        "critical": 0,
+        "warn": 0,
+        "info": 0,
+        "total": 0
+      },
+      "standardCount": 3,
+      "availableSignalCount": 1
+    },
+    {
+      "domainKey": "academic_excellence",
+      "band": null,
+      "reason": "No standard in your framework and no KYRO signal reaches academic excellence. Not measured.",
+      "facts": {
+        "critical": 0,
+        "warn": 0,
+        "info": 0,
+        "total": 0
+      },
+      "standardCount": 0,
+      "availableSignalCount": 0
+    },
+    {
+      "domainKey": "student_services",
+      "band": "clear",
+      "reason": null,
+      "facts": {
+        "critical": 0,
+        "warn": 0,
+        "info": 0,
+        "total": 0
+      },
+      "standardCount": 2,
+      "availableSignalCount": 1
+    },
+    {
+      "domainKey": "hr",
+      "band": "clear",
+      "reason": null,
+      "facts": {
+        "critical": 0,
+        "warn": 0,
+        "info": 0,
+        "total": 0
+      },
+      "standardCount": 2,
+      "availableSignalCount": 3
+    },
+    {
+      "domainKey": "finance",
+      "band": "high",
+      "reason": null,
+      "facts": {
+        "critical": 1,
+        "warn": 1,
+        "info": 0,
+        "total": 2
+      },
+      "standardCount": 5,
+      "availableSignalCount": 8
+    },
+    {
+      "domainKey": "facilities",
+      "band": null,
+      "reason": "No KYRO signal reaches your buildings and grounds, so there is nothing to band the 1 standard here against. Not measured.",
+      "facts": {
+        "critical": 0,
+        "warn": 0,
+        "info": 0,
+        "total": 0
+      },
+      "standardCount": 1,
+      "availableSignalCount": 0
+    },
+    {
+      "domainKey": "technology",
+      "band": null,
+      "reason": "No standard in your framework and no KYRO signal reaches technology. Not measured.",
+      "facts": {
+        "critical": 0,
+        "warn": 0,
+        "info": 0,
+        "total": 0
+      },
+      "standardCount": 0,
+      "availableSignalCount": 0
+    },
+    {
+      "domainKey": "continuous_improvement",
+      "band": "watch",
+      "reason": null,
+      "facts": {
+        "critical": 0,
+        "warn": 0,
+        "info": 1,
+        "total": 1
+      },
+      "standardCount": 3,
+      "availableSignalCount": 4
+    }
+  ],
+  "signals": [
+    {
+      "key": "fin.operating_margin",
+      "label": "Operating margin",
+      "availability": "available",
+      "unavailableReason": null,
+      "moduleKey": "finance",
+      "observedOn": "2026-06-30",
+      "ageDays": 32,
+      "changeState": "moved",
+      "domainKeys": [
+        "finance"
+      ]
+    },
+    {
+      "key": "gov.minutes_lag",
+      "label": "Board minutes approval lag",
+      "availability": "available",
+      "unavailableReason": null,
+      "moduleKey": "governance",
+      "observedOn": "2026-06-11",
+      "ageDays": 51,
+      "changeState": "moved",
+      "domainKeys": [
+        "governance"
+      ]
+    },
+    {
+      "key": "fac.maintenance_backlog",
+      "label": "Open maintenance items",
+      "availability": "not_licensed",
+      "unavailableReason": "The Facilities module is not licensed for this school, so we cannot read your maintenance register.",
+      "moduleKey": "facilities",
+      "observedOn": null,
+      "ageDays": null,
+      "changeState": "never_observed",
+      "domainKeys": [
+        "facilities"
+      ]
+    },
+    {
+      "key": "hr.pd_participation",
+      "label": "Professional development participation",
+      "availability": "not_tracked",
+      "unavailableReason": "KYRO holds no professional-development records.",
+      "moduleKey": "hr",
+      "observedOn": null,
+      "ageDays": null,
+      "changeState": "never_observed",
+      "domainKeys": [
+        "hr"
+      ]
+    },
+    {
+      "key": "enr.headcount",
+      "label": "Enrollment headcount",
+      "availability": "available",
+      "unavailableReason": null,
+      "moduleKey": "enrollment",
+      "observedOn": "2025-09-15",
+      "ageDays": 320,
+      "changeState": "stale_data",
+      "domainKeys": [
+        "finance",
+        "leadership"
+      ]
+    }
+  ]
+}

@@ -16,7 +16,8 @@
 //   • notConfigured — S3 storage isn't set up on the server (API 503). The list
 //     still renders; only uploads/downloads are unavailable.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import {
   Library,
@@ -564,7 +565,28 @@ function KnowledgeWorkspace() {
   } = useDocuments(schoolId)
 
   const [tab, setTab] = useState('documents')
-  const [uploadOpen, setUploadOpen] = useState(false)
+  // `?upload=1` (AIC Phase E). Two early-warning rules — EVI-MISSING-REQUIRED and
+  // FIN-AUDIT-STALE — answer "what do I do?" with "upload it", and the link was
+  // inert: the page read no search params, so the reader arrived at the document
+  // library with no upload modal and no next step.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [uploadOpen, setUploadOpen] = useState(
+    () => new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search).get('upload') === '1',
+  )
+  useEffect(() => {
+    let cancelled = false
+    Promise.resolve().then(() => {
+      if (cancelled || !searchParams.get('upload')) return
+      const next = new URLSearchParams(searchParams)
+      next.delete('upload')
+      setSearchParams(next, { replace: true })
+    })
+    return () => {
+      cancelled = true
+    }
+    // Mount-only: consumed once, so refresh and back do not re-open the modal.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const [editingDoc, setEditingDoc] = useState(null)
   const [actionErr, setActionErr] = useState('')
 

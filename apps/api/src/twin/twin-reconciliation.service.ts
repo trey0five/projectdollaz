@@ -11,6 +11,8 @@ import {
   type CatalogDomainRow,
 } from '../accreditation/domain-map.js'
 import { TwinSignalsService } from './twin-signals.service.js'
+import { EarlyWarningService } from './early-warning.service.js'
+import { buildTwinRules } from './twin-rules.js'
 import { resolvePrimaryDomains, type DomainWeightIndex } from './fact-domains.js'
 import type {
   FiredFinding,
@@ -24,13 +26,27 @@ import type {
 import type { FindingResolutionKind } from './finding-vocab.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AIC Phase D — THE NIGHTLY RECONCILIATION.
+// AIC Phase D — THE NIGHTLY RECONCILIATION. AIC Phase E — now with rules.
 //
 // It runs, it resolves entitlement, it collects the full signal catalog per
-// school, it counts, it logs — and in Phase D it writes NOTHING, because Phase D
-// has no rules. `TWIN_RULES` ships EMPTY on purpose. That is the honest reading of
-// "build the machinery, with nothing user-visible to argue about yet": no finding
-// reaches a human until Phase E has defined and reviewed the rules that produce it.
+// school, it counts, it logs, and it writes the ledger. Phase D shipped
+// `TWIN_RULES` EMPTY on purpose — no finding reaches a human until the rules that
+// produce it have been defined and reviewed — and Phase E fills it from
+// `buildTwinRules()`. FIVE THINGS IN THIS FILE CHANGED FOR THAT, and a reviewer
+// should see exactly five: the import, the engine version, `TWIN_RULES` itself,
+// one `prepare` call (with its injected service) that resolves the register view
+// the SYNCHRONOUS rules need before they run, and the `registerAvailable` guard
+// on the stopped-firing sweep that the arrival of rules made necessary — with no
+// rules there was no register to fail to read, and with rules a failed register
+// read makes every rule refuse and would otherwise clear the whole ledger as
+// "improved". The ledger phase's INVARIANTS are untouched, which is the entire
+// point of having decided them first; the guard defends one of them.
+//
+// The `prepare` edge (this writer depending on the reader service) is a
+// deliberate, documented amendment to the Phase D ownership boundary: the rules
+// are synchronous by contract and their register view and prior facts are I/O,
+// so something has to resolve them first. The edge is one-way and
+// EarlyWarningService never injects this service.
 //
 // The ledger phase below is nevertheless COMPLETE and SPECCED, because a ledger
 // written in a hurry alongside its first rules is a ledger whose invariants are
@@ -70,18 +86,35 @@ import type { FindingResolutionKind } from './finding-vocab.js'
 // and it never cites a reading that does not exist.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Bumped whenever the reconciliation's write semantics change. Stored per row. */
-export const TWIN_ENGINE_VERSION = '1.0.0'
+/**
+ * Bumped whenever the reconciliation's write semantics change. Stored per row.
+ *
+ * 1.0.0 → 1.1.0 at AIC Phase E: the write semantics now INCLUDE RULES. Every row
+ * this job writes from here on is the product of the twenty-two firing rules, and
+ * the row stamp has to say so — an operator reading `engine_version` on a finding
+ * needs to know which engine composed its basis chain.
+ */
+export const TWIN_ENGINE_VERSION = '1.1.0'
 
 /** Max schools reconciled in parallel — a nightly job must not stampede the pool. */
 const RECONCILE_CONCURRENCY = 4
 
 /**
- * Phase E populates this. Phase D ships it EMPTY, on purpose — see the header.
- * With zero rules the run short-circuits before the ledger phase and does not
- * touch `accreditation_findings` at all.
+ * AIC PHASE E — POPULATED. Phase D shipped this EMPTY on purpose (no finding
+ * reaches a human until the rules that produce it have been defined and
+ * reviewed); Phase E defines them, and `buildTwinRules` adapts the twenty-six
+ * pure `TwinRuleDef`s in `@finrep/compliance` to this file's `TwinRule` shape.
+ *
+ * NOTHING ELSE IN THIS FILE'S LEDGER PHASE CHANGED. The create/update/touch
+ * branches, the `payloadHash` dedupe, `firstSeenAt` immutability, the
+ * cleared-never-closed branch, `resolutionFor`, the concurrency limiter and the
+ * per-school/per-rule isolation are all Phase D's and are untouched — they were
+ * decided first precisely so that the arrival of rules could not bend them.
+ *
+ * The nightly log line now reports a non-zero rule count and a non-zero written
+ * count. That change in the log is the live proof the wiring landed.
  */
-export const TWIN_RULES: readonly TwinRule[] = []
+export const TWIN_RULES: readonly TwinRule[] = buildTwinRules()
 
 /**
  * Deterministic JSON: object keys sorted, so a key-order change is not a data change.
@@ -147,6 +180,13 @@ export class TwinReconciliationService {
     private readonly prisma: PrismaService,
     private readonly billing: BillingService,
     private readonly twinSignals: TwinSignalsService,
+    // AIC Phase E. The rules are SYNCHRONOUS by Phase D's contract, but they need
+    // a register view and a prior observation — both of which are I/O. This
+    // service resolves them and registers them against the signal set BEFORE
+    // evaluation, so `TwinRule.evaluate` stays synchronous and Phase D's contract
+    // is honoured rather than widened. The edge is one-way: EarlyWarningService
+    // never injects this service.
+    private readonly earlyWarning: EarlyWarningService,
   ) {}
 
   /**
@@ -258,6 +298,27 @@ export class TwinReconciliationService {
     if (rules.length === 0) return result
 
     // ── everything below is Phase E's ledger phase, shipped and specced now ──
+
+    // AIC Phase E — resolve the register view + the prior observations and
+    // register them AGAINST THE SET WE JUST COLLECTED, so the synchronous rules
+    // below can read them. Passing `signals` in is what keeps this ONE line
+    // rather than a second collection of all 35 signals. Never throws.
+    await this.earlyWarning.prepare(schoolId, at, signals)
+
+    // A RUN THAT COULD NOT READ THE REGISTER MAY NOT CLEAR ANYTHING.
+    //
+    // `TwinRegisterService.build` never throws: a transient `listStandards`
+    // failure returns an EMPTY register, and because every rule needs a school
+    // standard code (G3) every rule then refuses with `no_standards`. `fired` is
+    // empty, so the stopped-firing sweep below would run over every open row —
+    // and `resolutionFor` inspects only the LIVE SIGNALS, which are perfectly
+    // healthy because the failure was in the register, so it stamps 'improved'.
+    // One pool timeout would therefore mark a school's entire ledger resolved,
+    // and the following night reopen all of it and mail a digest for the lot.
+    // "Findings never auto-close" has to survive our own outages, so the sweep is
+    // skipped outright — the rows simply keep their state until a run that can
+    // actually see the register has an opinion.
+    const registerAvailable = this.earlyWarning.registerAvailableFor(signals)
 
     const fired = this.evaluate(rules, signals, at)
     const weights = await this.domainWeightIndex(schoolId)
@@ -379,6 +440,12 @@ export class TwinReconciliationService {
     }
 
     // ── The stopped-firing branch: CLEARED, never closed ──────────────────────
+    if (!registerAvailable) {
+      this.logger.warn(
+        `twin reconciliation: register unreadable for ${schoolId}; stopped-firing sweep skipped`,
+      )
+      return result
+    }
     for (const existing of open) {
       if (firedByKey.has(existing.findingKey)) continue
       // Idempotent: a cleared finding does not re-clear every night.

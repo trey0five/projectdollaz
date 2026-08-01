@@ -1,0 +1,167 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// DomainBandStrip — Phase E: ten ORDINAL early-warning bands, above the Phase-B
+// rubric grid it must never be confused with.
+//
+// TWO GRIDS, TWO QUESTIONS, DELIBERATELY STACKED AND NEVER BLENDED:
+//   · this strip — what the OPERATING DATA is warning about in each domain, as an
+//     ordinal band counted over DISTINCT FACTS (not findings: one plan end date
+//     that fires two rules darkens one domain once);
+//   · DomainGrid below — what your accreditor's standards say, from your own
+//     rubric scoring and evidence.
+// A single merged score would erase exactly the distinction a head of school
+// needs: "we are well scored here and the numbers underneath are moving against
+// us" is a real, common and important state.
+//
+// THE HONESTY RULE, ENFORCED HERE:
+//   · `band === null` means NOT MEASURED. The card renders NO band word, NO
+//     colour, NO zero and NO empty meter — it renders the server's `reason`
+//     verbatim. Grey with a reason, never grey with a number.
+//   · No percentage appears anywhere in this component. There is no external band
+//     for a domain risk percentage, and inventing one would be the same error the
+//     Phase-B grid refuses to make.
+//   · Fact counts ARE rendered, because they are counted facts rather than a
+//     derived score, and they are the only way a reader can tell an 'elevated'
+//     built from four warnings from one built from a single critical.
+//
+// LABELS COME FROM THE SERVER. `labels` is built by the page from the readiness
+// payload's `domains[].label` — the same vocabulary DomainGrid prints — so this
+// strip can never drift into a second set of domain names. An unknown key falls
+// back to the key itself rather than a guessed English word.
+// ─────────────────────────────────────────────────────────────────────────────
+import { motion, useReducedMotion } from 'framer-motion'
+import { ShieldQuestion } from 'lucide-react'
+import { domainIcon } from './domainMeta.js'
+import { riskBandMeta } from './RiskChip.jsx'
+import { DemoChip } from './ReadinessTrendStrip.jsx'
+
+const AMBER = '#F59E0B'
+
+/** The glyph, read off props (the house workaround for the render-resolved-component lint). */
+function DomainGlyph(props) {
+  const Icon = props.icon
+  return <Icon size={14} className={props.className} aria-hidden />
+}
+
+/** "1 critical · 2 warnings" — counted facts, never a score. */
+function factSummary(facts) {
+  if (!facts) return null
+  const parts = []
+  if (facts.critical > 0) parts.push(`${facts.critical} critical`)
+  if (facts.warn > 0) parts.push(`${facts.warn} warning${facts.warn === 1 ? '' : 's'}`)
+  if (facts.info > 0) parts.push(`${facts.info} note${facts.info === 1 ? '' : 's'}`)
+  return parts.length ? parts.join(' · ') : null
+}
+
+function BandCard({ band, label, index, reduce }) {
+  const measured = band.band !== null && band.band !== undefined
+  const meta = riskBandMeta(band.band)
+  const Icon = domainIcon(band.domainKey)
+  const summary = measured ? factSummary(band.facts) : null
+
+  return (
+    <motion.li
+      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: reduce ? 0 : Math.min(index, 9) * 0.025 }}
+      className={`rounded-xl border p-3 ${
+        measured ? 'border-rule/60 bg-white' : 'border-dashed border-rule/60 bg-cream/50'
+      }`}
+    >
+      <p className="flex items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-muted">
+        <DomainGlyph icon={Icon} className="shrink-0" />
+        <span className="truncate">{label}</span>
+      </p>
+
+      {measured ? (
+        <>
+          <span
+            className={`mt-1.5 inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[12px] font-semibold ${meta.chip}`}
+          >
+            <span
+              aria-hidden
+              className="inline-block h-[6px] w-[6px] rounded-full"
+              style={{ backgroundColor: meta.dot }}
+            />
+            {meta.label}
+          </span>
+          {/* Counted facts, so a reader can see what the band is made of — and
+              how many signals the engine actually read to get there. A green
+              'Clear' resting on two readable signals and one resting on nine are
+              different claims, and the reader is entitled to tell them apart. */}
+          <p className="mt-1 text-[11.5px] leading-snug text-muted">
+            {summary ?? 'No open fact in this domain.'}
+            {typeof band.availableSignalCount === 'number'
+              ? ` · ${band.availableSignalCount} signal${band.availableSignalCount === 1 ? '' : 's'} read`
+              : ''}
+          </p>
+        </>
+      ) : (
+        // NOT MEASURED. No band word, no colour, no number — the server's reason
+        // and nothing else. This is the whole point of the null case.
+        <p className="mt-1.5 text-[12px] leading-relaxed text-muted">{band.reason}</p>
+      )}
+    </motion.li>
+  )
+}
+
+export default function DomainBandStrip({
+  domainBands = [],
+  labels = null,
+  loading = false,
+  error = '',
+  notLicensed = false,
+  /** The twin payload's own provenance flag — same chip the readiness strip uses. */
+  demoData = false,
+}) {
+  const reduce = useReducedMotion()
+
+  // Degraded states never blank the rubric grid below — one honest line and move on.
+  if (loading && domainBands.length === 0) {
+    return (
+      <div className="mb-5 rounded-2xl border border-rule/50 bg-cream/40 p-4">
+        <div className="h-[76px] rounded-xl bg-white/70 motion-safe:animate-pulse" aria-hidden />
+      </div>
+    )
+  }
+
+  if (notLicensed || (domainBands.length === 0 && (error || !loading))) {
+    return (
+      <div className="mb-5 rounded-2xl border border-dashed border-rule/60 bg-cream/40 px-4 py-3">
+        <p className="flex items-center gap-2 text-[12.5px] text-muted">
+          <ShieldQuestion size={14} style={{ color: AMBER }} aria-hidden />
+          {error || 'No early-warning bands have been computed for this school yet.'}
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <section className="mb-5 rounded-2xl border border-rule/50 bg-cream/40 p-4">
+      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="flex flex-wrap items-center gap-2 font-serif text-[16px] font-semibold text-navy">
+          Early-warning bands by domain
+          {demoData ? <DemoChip /> : null}
+        </h3>
+        <p className="text-[12px] text-muted">
+          Ordinal, counted over distinct facts — never a score, never a percentage.
+        </p>
+      </div>
+      <ul className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
+        {domainBands.map((b, i) => (
+          <BandCard
+            key={b.domainKey}
+            band={b}
+            index={i}
+            reduce={reduce}
+            label={labels?.[b.domainKey] ?? b.domainKey}
+          />
+        ))}
+      </ul>
+      <p className="mt-3 text-[12px] leading-relaxed text-muted">
+        These bands answer &ldquo;what are the operating numbers warning about here?&rdquo;. The
+        rubric grid below answers &ldquo;what do your accreditor&apos;s standards say?&rdquo;. They
+        are different questions and are never blended into one figure.
+      </p>
+    </section>
+  )
+}

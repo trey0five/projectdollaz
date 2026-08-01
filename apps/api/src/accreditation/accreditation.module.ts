@@ -56,6 +56,14 @@ import { AccreditationEvidenceReadinessService } from './evidence-readiness.serv
   // needs BOTH the signal panel and the currency service. The edge stays
   // accreditation-signals → accreditation, and accreditation imports neither —
   // still acyclic.
-  exports: [AccreditationService, AccreditationEvidenceReadinessService],
+  // AIC Phase E: TwinRegisterService reads the readiness roll-up to build the
+  // register view, so AccreditationReadinessService joins the exported set. It
+  // is an EXPORT, not an import — AccreditationModule still imports neither
+  // twin nor analytics, so the graph stays acyclic in the same direction.
+  exports: [
+    AccreditationService,
+    AccreditationEvidenceReadinessService,
+    AccreditationReadinessService,
+  ],
 })
 export class AccreditationModule {}

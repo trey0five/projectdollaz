@@ -614,6 +614,32 @@ export const accreditationApi = {
   // padded, rubric-only list.
   getCommendations: (schoolId) =>
     api.get(`/schools/${schoolId}/accreditation/commendations`),
+  // ── Phase E: THE EARLY WARNING ENGINE (the digital twin) ────────────────────
+  // "What would a visiting team likely find, and what can we NOT answer?" — the
+  // whole payload is server-derived by deterministic rules over live operating
+  // signals. THE CLIENT COMPOSES NOTHING: every rationale, consequence, unlock
+  // sentence, driver detail and not-evaluated message arrives rendered, and the
+  // web prints it verbatim. In particular the client never turns an ordinal
+  // `likelihood` ('possible' | 'likely') into a percentage, and never invents a
+  // horizon for a finding whose horizon is `{kind:'none'}` — that finding's
+  // `horizon.reason` is the answer and it is shown as such.
+  //
+  // A rule that could not be evaluated is NOT a passing check and NOT a failing
+  // one: it arrives in `notEvaluated[]` naming the blocking signal and the module
+  // or intake that would unlock it, and the UI renders it that way.
+  //
+  // The only 402 is the 'accreditation' module gate itself.
+  getTwin: (schoolId, params = {}) =>
+    api.get(`/schools/${schoolId}/accreditation/twin`, { params }),
+  // Human lifecycle actions on ONE finding. Ack is the 45-day acknowledgement
+  // (the server owns the window — the client sends no date); mute takes an
+  // explicit day count (0 unmutes); status is open/resolved/dismissed.
+  ackFinding: (schoolId, findingId, body = {}) =>
+    api.post(`/schools/${schoolId}/accreditation/findings/${findingId}/ack`, body),
+  muteFinding: (schoolId, findingId, body) =>
+    api.post(`/schools/${schoolId}/accreditation/findings/${findingId}/mute`, body),
+  setFindingStatus: (schoolId, findingId, body) =>
+    api.post(`/schools/${schoolId}/accreditation/findings/${findingId}/status`, body),
 }
 
 // ── Phase 4 Knowledge document store: CORE (always included, NOT a licensed module).

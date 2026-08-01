@@ -59,13 +59,23 @@ export default function AddDataTab({
   const periodLabel = (periods || []).find((p) => p.id === periodId)?.label || ''
 
   // Deep-link initial option (?add=…). Read once — AddDataTab never mutates the URL.
-  const [initialOption] = useState(() => {
+  //
+  // `?intake=` (AIC Phase E) is the SECOND half of the same deep link: which tab
+  // INSIDE the chosen option's embed to land on. It exists because /data is a
+  // redirect to /finance?tab=add under ui.v2 — the redirect is static and drops
+  // the query string entirely — so an accreditation CTA pointing at the data hub
+  // reached a generic add-data screen and the bulk-year uploader never opened.
+  // Advisory: an option that ignores it, or a value its embed doesn't know, is a
+  // no-op rather than an error.
+  const [deepLink] = useState(() => {
     try {
-      return new URLSearchParams(window.location.search).get('add')
+      const q = new URLSearchParams(window.location.search)
+      return { option: q.get('add'), intake: q.get('intake') }
     } catch {
-      return null
+      return { option: null, intake: null }
     }
   })
+  const initialOption = deepLink.option
 
   const config = wizardConfigFor(module)
 
@@ -89,6 +99,8 @@ export default function AddDataTab({
       activePeriod,
       hydrationToken,
       onSaved: handleSaved,
+      // Advisory tab hint for whichever embed the deep link opened.
+      intake: deepLink.intake,
     }),
     [
       schoolId,
@@ -100,6 +112,7 @@ export default function AddDataTab({
       activePeriod,
       hydrationToken,
       handleSaved,
+      deepLink,
     ],
   )
 

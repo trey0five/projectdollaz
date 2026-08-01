@@ -20,6 +20,7 @@ import { SchoolsModule } from '../schools/schools.module.js'
 import { IntegrationsModule } from '../integrations/integrations.module.js'
 import { EnrollmentModule } from '../enrollment/enrollment.module.js'
 import { AuditModule } from '../common/audit/audit.module.js'
+import { TwinModule } from '../twin/twin.module.js'
 import { AssistantController } from './assistant.controller.js'
 import { OrgNarrationController } from './org-narration.controller.js'
 import { AssistantService } from './assistant.service.js'
@@ -76,6 +77,9 @@ import { BriefingNarrationService } from './briefing-narration.service.js'
     // Shared best-effort audit writer — Penny stamps every applied action into the
     // AuditLog (source:'assistant') so the action log + inline Undo can read it back.
     AuditModule,
+    // AIC Phase E — exports EarlyWarningService for Penny's READ-ONLY
+    // get_early_warnings tool. ACYCLIC: TwinModule imports nothing from assistant.
+    TwinModule,
     // Granular diocesan enrollment — exports DiocesanEnrollmentService so Penny's
     // import_diocesan_enrollment confirm-tool reuses the SAME org import the REST
     // route uses. No cycle: EnrollmentModule imports no AssistantModule.

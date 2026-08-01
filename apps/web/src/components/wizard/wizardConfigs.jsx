@@ -111,6 +111,11 @@ export const wizardConfigs = {
             hydrationToken={ctx.hydrationToken}
             canEdit={ctx.canEdit}
             onOpenMonthly={() => nav.goToOption('monthly')}
+            // AIC Phase E — `/finance?tab=add&add=tb&intake=bulk` lands on the
+            // multi-year uploader. This is the v2 path the accreditation "Add
+            // years" CTA actually reaches; without it the CTA opened the
+            // single-period intake and the ask silently did nothing.
+            initialTab={ctx.intake}
           />
         ),
       },

@@ -242,16 +242,29 @@ export default function DataHubPage() {
   // Facilities budget card's empty-state CTA lands here — Facilities inherits the
   // Finance budget, it never duplicates the importer). Read ONCE on mount, then
   // strip the param so refresh/back doesn't re-open the modal.
+  //
+  // AIC Phase E adds ONE MORE accepted value and no new UI: `?open=trialBalances`
+  // (with an optional `&intake=bulk`) opens the trial-balance modal on the "Add
+  // years" tab. That is the CTA behind "3 more rules unlock when you add FY2023–24"
+  // on /accreditation — rules needing five annual readings can only say
+  // "directional" with two. NO NEW UPLOADER WAS BUILT: the bulk-year uploader has
+  // shipped for months, and this is a deep link to it.
   const [searchParams, setSearchParams] = useSearchParams()
+  const [tbInitialTab, setTbInitialTab] = useState(null)
   useEffect(() => {
     let cancelled = false
     // Microtask defer (the codebase's set-state-in-effect-safe idiom).
     Promise.resolve().then(() => {
       if (cancelled) return
-      if (searchParams.get('open') === 'budget') {
-        setModalKey('budget')
+      const open = searchParams.get('open')
+      if (open === 'budget' || open === 'trialBalances') {
+        setModalKey(open)
+        // The intake hint is advisory: an unknown value simply leaves the modal on
+        // its own default tab rather than rendering a tab that doesn't exist.
+        if (open === 'trialBalances') setTbInitialTab(searchParams.get('intake'))
         const next = new URLSearchParams(searchParams)
         next.delete('open')
+        next.delete('intake')
         setSearchParams(next, { replace: true })
       }
     })
@@ -481,6 +494,13 @@ export default function DataHubPage() {
         onClose={() => {
           if (modalKey === 'schedules') refetch()
           setModalKey(null)
+          // THE HINT IS CONSUMED, ONCE. `TrialBalanceModalBody` is unmounted with
+          // the modal and recomputes its tab lazily on every mount, so leaving
+          // 'bulk' in state made every LATER manual "Add trial balance" open the
+          // multi-year uploader instead of the single-period intake the user
+          // asked for — a deep link silently changing a pre-existing flow for the
+          // rest of the session.
+          setTbInitialTab(null)
         }}
         schoolId={schoolId}
         periodId={periodId}
@@ -498,6 +518,7 @@ export default function DataHubPage() {
         hydrationToken={hydrationToken}
         onOpenMonthly={() => setModalKey('monthly')}
         onOpenTb={() => setModalKey('trialBalances')}
+        tbInitialTab={tbInitialTab}
       />
     </div>
   )
@@ -525,6 +546,9 @@ function DataEmbedModal({
   hydrationToken,
   onOpenMonthly,
   onOpenTb,
+  // Phase E deep link (/data?open=trialBalances&intake=bulk). Advisory: an
+  // unrecognised value leaves the modal on its own default tab.
+  tbInitialTab = null,
 }) {
   const isTb = openKey === 'trialBalances'
   const isBudget = openKey === 'budget'
@@ -611,6 +635,7 @@ function DataEmbedModal({
                   hydrationToken={hydrationToken}
                   canEdit={canEdit}
                   onOpenMonthly={onOpenMonthly}
+                  initialTab={tbInitialTab}
                 />
               )}
               {openKey === 'monthly' && periodId && (

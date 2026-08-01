@@ -1,6 +1,11 @@
 // ─────────────────────────────────────────────────────────────
 // @finrep/compliance — pure, deterministic Florida scholarship AUP readiness
-// pre-flag engine. ZERO UI, ZERO I/O. Consumes engine + analytics for TYPES ONLY.
+// pre-flag engine. ZERO UI, ZERO I/O. Consumes @finrep/engine for TYPES ONLY, and
+// @finrep/analytics for types plus ONE runtime value: `bandsFor`, the frozen band
+// table (AIC Phase E). A metric's risk line has exactly one owner, and re-typing
+// `3` for the reserve threshold here would create a second source of truth for a
+// number analytics already publishes. The dependency stays one-directional —
+// compliance depends on analytics, never the reverse.
 //
 // READINESS PRE-FLAG, NOT the official AUP and NOT legal/audit advice. Mirrors the
 // Step Up For Students AUP template + the governing Florida statutes.
@@ -373,3 +378,70 @@ export {
   suppressSmallCellSet,
   isSuppressed,
 } from './small-cells.js'
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AIC Phase E — the accreditation TWIN / early-warning rule engine (pure).
+//
+// The twenty-two rules that fire, the four that ship VISIBLE and cannot evaluate
+// (with the intake that would close each), the 40·C + 40·T + 20·E per-standard
+// risk with its mandatory drivers, and the ordinal domain bands counted over
+// DISTINCT factKeys.
+//
+// The contract in one line: a rule fires only when every signal it declared is
+// `available` and its predicate is true — otherwise it refuses, by name, into
+// `notEvaluated[]`. Every numeral in a rationale comes from that finding's
+// `evidence[]`; every finding carries a real school standard code; likelihood is
+// two ordinal words and never a percentage.
+// ─────────────────────────────────────────────────────────────────────────────
+export type {
+  TwinSignalAvailability,
+  TwinSignalChangeState,
+  TwinSignalLineage,
+  TwinSignalView,
+  TwinRequirementView,
+  TwinStandardView,
+  TwinEvidenceGroupView,
+  TwinRegisterView,
+  PriorFact,
+  TwinSeverity,
+  TwinLikelihood,
+  TwinRiskBand,
+  TwinEvidenceEntry,
+  TwinFinding,
+  NotEvaluatedReason,
+  TwinNotEvaluated,
+  TwinRiskDriver,
+  TwinStandardRisk,
+  TwinDomainBand,
+  TwinCoverage,
+  TwinResult,
+  TwinRuleKind,
+  TwinFrameworkCode,
+  TwinRuleUnlock,
+  TwinFindingDraft,
+  RuleContext,
+  TwinRuleDef,
+  TwinRuleId,
+} from './accreditation-twin.js'
+export {
+  ACCREDITATION_TWIN_VERSION,
+  TWIN_RULE_IDS,
+  TWIN_RULE_DEFS,
+  TWIN_RULES_BY_ID,
+  TWIN_THRESHOLDS,
+  TWIN_SEVERITIES,
+  TWIN_LIKELIHOODS,
+  TWIN_FRAMEWORK_CODES,
+  VISIBLE_HOLE_RULE_IDS,
+  ENTRY_GRADE_KEYS,
+  TWIN_NO_REASON_FALLBACK,
+  FAC_BACKLOG_HONESTY_NOTE,
+  TwinTemplateError,
+  TwinUndeclaredSignalError,
+  TwinCannotEvaluate,
+  daysBetweenCivil,
+  formatCivilDate,
+  bandForRisk,
+  bandForFacts,
+  deriveTwin,
+} from './accreditation-twin.js'

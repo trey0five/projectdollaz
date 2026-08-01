@@ -175,6 +175,14 @@ export default function SignalPanel({
   loading = false,
   error = '',
   notLicensed = false,
+  /**
+   * WHOSE signals are these? Phase E hoists this panel onto the whole-school
+   * Signals tab, where `boundKeys` is every signal the school has rather than one
+   * standard's binding — and the empty-state sentence still said "this standard",
+   * with no standard anywhere on the screen. One prop, one sentence; the drawer's
+   * copy is byte-identical.
+   */
+  scope = 'standard',
 }) {
   const bound = boundKeys.length
 
@@ -184,8 +192,9 @@ export default function SignalPanel({
     return (
       <Shell>
         <p className="mt-2 text-[12.5px] leading-relaxed text-white/45">
-          No operating signal is bound to this standard — it&apos;s judged on your rubric score and
-          your evidence.
+          {scope === 'school'
+            ? 'No operating signal is bound to any of your standards yet — they are judged on your rubric scores and your evidence.'
+            : "No operating signal is bound to this standard — it's judged on your rubric score and your evidence."}
         </p>
       </Shell>
     )

@@ -15,6 +15,8 @@ import { AnalyticsService } from '../analytics/analytics.service.js'
 import { InsightService } from '../analytics/insight.service.js'
 import { MailerService } from '../auth/mailer.service.js'
 import { AuditService } from '../common/audit/audit.service.js'
+import { BillingService } from '../billing/billing.service.js'
+import { shouldNotify, notifySendData } from '../twin/notify-policy.js'
 import type { CreateAlertDto } from './dto/create-alert.dto.js'
 import type { UpdateAlertDto } from './dto/update-alert.dto.js'
 
@@ -95,6 +97,12 @@ export class AlertService implements OnModuleInit, OnModuleDestroy {
     private readonly mailer: MailerService,
     private readonly audit: AuditService,
     private readonly config: ConfigService,
+    // AIC Phase E — the accreditation gate for `warning_digest`, FAIL-CLOSED.
+    // Appended LAST-optional so every existing positional-arg alert spec still
+    // constructs; an absent BillingService means the licence cannot be proven,
+    // and an unproven licence sends nothing. AlertModule already imports
+    // BillingModule, so production always has it.
+    private readonly billing?: BillingService,
   ) {}
 
   onModuleInit(): void {
@@ -140,8 +148,19 @@ export class AlertService implements OnModuleInit, OnModuleDestroy {
    * Returns the created row so Penny's dispatchApply can capture its id for Undo.
    */
   async create(schoolId: string, dto: CreateAlertDto, userId: string): Promise<AlertPublic> {
-    const type = dto.type === 'threshold' ? 'threshold' : dto.type === 'digest' ? 'digest' : ''
-    if (!type) throw new BadRequestException('Alert type must be "digest" or "threshold".')
+    const type =
+      dto.type === 'threshold'
+        ? 'threshold'
+        : dto.type === 'digest'
+          ? 'digest'
+          : dto.type === 'warning_digest'
+            ? 'warning_digest'
+            : ''
+    if (!type) {
+      throw new BadRequestException(
+        'Alert type must be "digest", "threshold" or "warning_digest".',
+      )
+    }
 
     // Resolve the default recipient (the creator) once.
     const rawEmail = typeof dto.recipientEmail === 'string' ? dto.recipientEmail.trim() : ''
@@ -163,10 +182,18 @@ export class AlertService implements OnModuleInit, OnModuleDestroy {
     let operator: string | null = null
     let threshold: number | null = null
 
-    if (type === 'digest') {
+    if (type === 'digest' || type === 'warning_digest') {
       cadence = (CADENCES as readonly string[]).includes(dto.cadence ?? '')
         ? (dto.cadence as Cadence)
         : 'weekly'
+      // AIC Phase E — a warning digest watches THE FINDINGS LEDGER, not a metric.
+      // Accepting a metricKey here would create an alert whose configuration
+      // promises something it will never evaluate, which is worse than a 400.
+      if (type === 'warning_digest' && (dto.metricKey || dto.operator || dto.threshold != null)) {
+        throw new BadRequestException(
+          'A warning digest watches your accreditation findings, not a metric — remove metricKey/operator/threshold.',
+        )
+      }
     } else {
       metricKey = typeof dto.metricKey === 'string' ? dto.metricKey.trim() : ''
       if (!metricKey || !ALERT_METRIC_KEYS.has(metricKey)) {
@@ -213,6 +240,16 @@ export class AlertService implements OnModuleInit, OnModuleDestroy {
   ): Promise<AlertPublic> {
     const existing = await this.prisma.alert.findFirst({ where: { id: alertId, schoolId } })
     if (!existing) throw new NotFoundException('Alert not found.')
+
+    // AIC Phase E — same rule on the patch path: a warning digest has no metric.
+    if (
+      existing.type === 'warning_digest' &&
+      (dto.metricKey !== undefined || dto.operator !== undefined || dto.threshold !== undefined)
+    ) {
+      throw new BadRequestException(
+        'A warning digest watches your accreditation findings, not a metric — remove metricKey/operator/threshold.',
+      )
+    }
 
     const data: Record<string, unknown> = {}
     if (dto.cadence !== undefined) {
@@ -333,6 +370,22 @@ export class AlertService implements OnModuleInit, OnModuleDestroy {
     } catch {
       /* no periods */
     }
+    // AIC Phase E — one more branch on the SAME line, on the SAME scheduler, with
+    // the SAME mailer method and the SAME audit action. There is no second
+    // notification path in this product and this phase did not add one.
+    //
+    // IT IS DISPATCHED ABOVE THE FINANCE-PERIOD GATE, and deliberately. The two
+    // metric types genuinely need a snapshot period — they report a metric AT one
+    // and deep-link to it. The warning digest needs neither: it takes no
+    // `periodId`, composes its own `/accreditation` link, and reads the findings
+    // ledger. Below the gate, a school that has licensed accreditation, adopted a
+    // framework, uploaded evidence and accumulated open findings but has not yet
+    // uploaded a trial balance would silently never receive a digest — with a
+    // detail line about periods that has nothing to do with accreditation.
+    if (alert.type === 'warning_digest') {
+      return this.evaluateWarningDigest(alert, school.name, opts)
+    }
+
     if (!periodId) return { sent: false, detail: 'No period with a snapshot yet.' }
 
     const webOrigin = this.config.get<string>('webOrigin') ?? 'http://localhost:5173'
@@ -459,5 +512,131 @@ export class AlertService implements OnModuleInit, OnModuleDestroy {
       metadata: { type: 'digest', cadence, test: opts.force },
     })
     return { sent: true, detail: `Sent the ${cadence} digest to ${alert.recipientEmail}.` }
+  }
+
+  /**
+   * AIC Phase E — the ACCREDITATION EARLY-WARNING digest.
+   *
+   * FOUR THINGS IT WILL NOT DO, each of which is the reason a line exists:
+   *
+   *   1. IT WILL NOT EMAIL A SCHOOL THAT HAS NOT LICENSED ACCREDITATION. The gate
+   *      is fail-closed: a billing hiccup sends nothing rather than leaking the
+   *      shape of a module the school has not bought.
+   *
+   *   2. IT WILL NOT SEND "NOTHING TO REPORT". A digest that arrives when there is
+   *      nothing new trains people to ignore digests, and then the one that
+   *      matters is ignored too. Zero candidates -> no email.
+   *
+   *   3. IT WILL NOT COMPOSE A SENTENCE ABOUT A NUMBER. Every line of the body is
+   *      the pure engine's stored `title` / `rationale` / `consequence`, copied
+   *      verbatim — server-composed and numerically validated where the numbers
+   *      were checked.
+   *
+   *   4. IT WILL NOT RE-SEND. `shouldNotify` is the SINGLE definition (imported
+   *      from the twin, shared with its own spec), and every send writes the three
+   *      watermarks that close the clause that opened it. A de-escalation opens no
+   *      clause at all.
+   *
+   * `force` (the test path) sends whenever there is anything to send and mutates
+   * NO state — exactly like the other two types.
+   */
+  private async evaluateWarningDigest(
+    alert: Alert,
+    schoolName: string,
+    opts: { force: boolean; actorId?: string },
+  ): Promise<{ sent: boolean; detail: string }> {
+    const licensed = await (this.billing?.isEntitledForModule(alert.schoolId, 'accreditation') ??
+      Promise.resolve(false)
+    ).catch(() => false)
+    if (!licensed) {
+      return { sent: false, detail: 'Accreditation is not licensed for this school.' }
+    }
+
+    const cadence: Cadence = (CADENCES as readonly string[]).includes(alert.cadence ?? '')
+      ? (alert.cadence as Cadence)
+      : 'weekly'
+    if (!opts.force) {
+      const due = !alert.lastSentAt || Date.now() - alert.lastSentAt.getTime() >= DUE_MS[cadence]
+      if (!due) return { sent: false, detail: `Not due yet (${cadence}).` }
+    }
+
+    const now = new Date()
+    const rows = await this.prisma.accreditationFinding
+      .findMany({
+        where: {
+          schoolId: alert.schoolId,
+          clearedAt: null,
+          status: { notIn: ['resolved', 'dismissed'] },
+          severity: { in: ['critical', 'warn'] },
+        },
+        orderBy: [{ severity: 'asc' }, { lastSeenAt: 'desc' }],
+        take: 50,
+      })
+      .catch(() => [])
+
+    // THE single predicate. Filtered in JS rather than in SQL because "exactly
+    // once" is a comparison BETWEEN columns, and one function that both the
+    // service and its spec call is worth more than a clever WHERE clause.
+    const candidates = rows.filter((f) => shouldNotify(f, now))
+    if (candidates.length === 0) {
+      return { sent: false, detail: 'No new early warnings since the last digest.' }
+    }
+
+    const shown = candidates.slice(0, 10)
+    const lines = shown.map((f) => {
+      const payload = (f.evidencePayload ?? {}) as Record<string, unknown>
+      const title = typeof payload.title === 'string' ? payload.title : f.ruleId
+      const rationale = typeof payload.rationale === 'string' ? payload.rationale : ''
+      const consequence = typeof payload.consequence === 'string' ? payload.consequence : ''
+      const codes = f.standardTags.length > 0 ? ` [${f.standardTags.join(', ')}]` : ''
+      return `• ${title}${codes}\n  ${rationale}\n  ${consequence}`.trimEnd()
+    })
+    const more =
+      candidates.length > shown.length
+        ? `\n…and ${candidates.length - shown.length} more in the Accreditation center.`
+        : ''
+
+    const n = candidates.length
+    const subject = `${schoolName} — ${n} accreditation early warning${n === 1 ? '' : 's'}`
+    const webOrigin = this.config.get<string>('webOrigin') ?? 'http://localhost:5173'
+    const text =
+      `${schoolName}\n\n` +
+      `${lines.join('\n\n')}${more}\n\n` +
+      `Open the Accreditation center: ${webOrigin}/accreditation\n`
+
+    await this.mailer.sendAlert(alert.recipientEmail, subject, text)
+
+    if (!opts.force) {
+      await this.prisma.alert.update({ where: { id: alert.id }, data: { lastSentAt: now } })
+      // Group by the watermark PAIR so one updateMany covers every finding that
+      // shares it. Bounded at ten rows, so at most a handful of statements.
+      const groups = new Map<string, string[]>()
+      for (const f of shown) groups.set(`${f.reopenCount}|${f.severity}`, [
+        ...(groups.get(`${f.reopenCount}|${f.severity}`) ?? []),
+        f.id,
+      ])
+      for (const [key, ids] of groups) {
+        const [reopenCount, severity] = key.split('|')
+        await this.prisma.accreditationFinding.updateMany({
+          // TENANCY rides on the WRITE, not only on the read that produced the ids.
+          where: { schoolId: alert.schoolId, id: { in: ids } },
+          data: notifySendData({ severity, reopenCount: Number(reopenCount) }, now),
+        })
+      }
+    }
+
+    await this.audit.write({
+      schoolId: alert.schoolId,
+      userId: opts.actorId ?? alert.createdByUserId ?? null,
+      // The EXISTING action name, so the alert history renders with no UI change.
+      action: 'alert.fired',
+      targetType: 'alerts',
+      targetId: alert.id,
+      metadata: { type: 'warning_digest', cadence, findingCount: n, test: opts.force },
+    })
+    return {
+      sent: true,
+      detail: `Sent ${n} early warning${n === 1 ? '' : 's'} to ${alert.recipientEmail}.`,
+    }
   }
 }

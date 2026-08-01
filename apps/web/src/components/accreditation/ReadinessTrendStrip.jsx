@@ -78,7 +78,14 @@ function Shell({ children, aside = null }) {
   )
 }
 
-function DemoChip() {
+/**
+ * EXPORTED so the whole accreditation page speaks ONE provenance vocabulary.
+ * Phase E's surfaces (the early-warning rail, the domain bands, the signal
+ * roster) render findings derived from the same series this strip marks — a page
+ * that stamps DEMO DATA on the readiness trend and leaves a demo-seeded finding
+ * beside it unmarked is telling a reader two different things about one dataset.
+ */
+export function DemoChip() {
   return (
     <span className="inline-flex items-center rounded-full bg-[#F59E0B] px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-navy">
       Demo data

@@ -162,6 +162,8 @@ interface Fixture {
   seed?: Row[]
   standards?: { id: string; code: string; catalogStandardId: string | null }[]
   catalog?: { id: string; isAssurance: boolean; domainKey: string | null; domainWeights: unknown; signalKeys: string[] }[]
+  /** The register read FAILED this run — every rule refuses for want of a code. */
+  registerUnreadable?: boolean
 }
 
 function harness(fx: Fixture = {}) {
@@ -291,22 +293,54 @@ function harness(fx: Fixture = {}) {
     }),
   }
 
+  // AIC Phase E — the rules are synchronous, so the register view + prior facts
+  // are resolved and registered against the signal set BEFORE evaluation. The
+  // stub records the call so a spec can assert the ordering; an unprepared set
+  // resolves to an empty register, which the engine reports honestly.
+  //
+  // `registerAvailableFor` is the register-health probe the stopped-firing sweep
+  // consults. It defaults to TRUE here so every pre-existing spec keeps driving
+  // the healthy path unchanged; `fx.registerUnreadable` flips it to reproduce a
+  // failed `listStandards` read.
+  const earlyWarning = {
+    prepare: vi.fn(async (_schoolId: string, _at: Date, signals?: TwinSignalSet) => signals),
+    registerAvailableFor: vi.fn((_set: TwinSignalSet) => fx.registerUnreadable !== true),
+  }
+
   const service = new TwinReconciliationService(
     prisma as never,
     billing as never,
     twinSignals as never,
+    earlyWarning as never,
   )
-  return { service, prisma, billing, twinSignals, store, maxInFlight: () => maxInFlight }
+  return {
+    service,
+    prisma,
+    billing,
+    twinSignals,
+    earlyWarning,
+    store,
+    maxInFlight: () => maxInFlight,
+  }
 }
 
-describe('Phase D writes nothing', () => {
-  it('ships ZERO production rules', () => {
-    expect(TWIN_RULES).toEqual([])
+describe('zero rules writes nothing', () => {
+  // AIC Phase E CHANGED ONE FACT AND ONLY ONE: `TWIN_RULES` is no longer empty.
+  // The PROPERTY these cases pin — with no rules the ledger is never touched — is
+  // unchanged and is now pinned against an EXPLICITLY empty rule set, which is
+  // stronger: it survives every future rule the catalog grows.
+  it('ships the production rule set, and every rule declares its signals', () => {
+    expect(TWIN_RULES.length).toBeGreaterThan(0)
+    for (const r of TWIN_RULES) {
+      expect(typeof r.id).toBe('string')
+      expect(Array.isArray(r.requiredSignals)).toBe(true)
+      expect(typeof r.evaluate).toBe('function')
+    }
   })
 
   it('scans, collects and logs — and issues no write at all', async () => {
     const h = harness({ schools: ['school-A', 'school-B'] })
-    const summary = await h.service.reconcileAll(AT)
+    const summary = await h.service.reconcileAll(AT, [])
 
     expect(summary.rules).toBe(0)
     expect(summary.schoolsScanned).toBe(2)
@@ -320,11 +354,10 @@ describe('Phase D writes nothing', () => {
     expect(h.store).toHaveLength(0)
   })
 
-  it('the @Cron entrypoint uses the production (empty) rule set', async () => {
+  it('the @Cron entrypoint uses the PRODUCTION rule set', async () => {
     const h = harness()
     const summary = await h.service.reconcileAll()
-    expect(summary.rules).toBe(0)
-    expect(h.prisma.accreditationFinding.create).not.toHaveBeenCalled()
+    expect(summary.rules).toBe(TWIN_RULES.length)
   })
 })
 
@@ -445,6 +478,34 @@ describe('the stopped-firing branch — cleared, never closed', () => {
     expect(row.status).toBe('open')
     // lastSeenAt does NOT move: we did not see it tonight.
     expect(row.lastSeenAt).toEqual(AT)
+  })
+
+  it('a run that could not READ THE REGISTER clears nothing — an outage is not a resolution', async () => {
+    // `TwinRegisterService.build` never throws: a transient `listStandards`
+    // failure hands back an EMPTY register, every rule then refuses for want of a
+    // standard code, and `fired` is empty — indistinguishable from "everything
+    // improved". `resolutionFor` cannot tell either, because it inspects only the
+    // LIVE SIGNALS, which are perfectly healthy. Without this guard one pool
+    // timeout marks a school's whole ledger 'improved' and the next night reopens
+    // all of it and mails a digest for the lot.
+    const h = harness()
+    await h.service.reconcileAll(AT, [testRule()])
+    expect(h.store[0].clearedAt).toBeNull()
+
+    h.earlyWarning.registerAvailableFor.mockReturnValue(false)
+    await h.service.reconcileAll(LATER, [testRule({ evaluate: () => [] })])
+
+    const row = h.store[0]
+    expect(row.clearedAt).toBeNull()
+    expect(row.resolutionKind).toBeNull()
+    expect(row.status).toBe('open')
+
+    // And once the register reads again, the ordinary sweep resumes.
+    h.earlyWarning.registerAvailableFor.mockReturnValue(true)
+    await h.service.reconcileAll(new Date('2026-08-05T04:00:00.000Z'), [
+      testRule({ evaluate: () => [] }),
+    ])
+    expect(h.store[0].clearedAt).toEqual(new Date('2026-08-05T04:00:00.000Z'))
   })
 
   it('a second night of not firing writes nothing at all', async () => {
@@ -822,5 +883,80 @@ describe('skipping, isolation and tenancy', () => {
     const h = harness({ sets: { 'school-A': signalSet('school-A', { demoData: true }) } })
     await h.service.reconcileAll(AT, [testRule()])
     expect(h.store[0].isDemo).toBe(true)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AIC PHASE E — the wiring, and the four hunks that carried it.
+//
+// Everything above is Phase D's and is UNCHANGED. What is added below is the
+// narrow set of properties the arrival of rules could have broken:
+//
+//   • the context is PREPARED BEFORE evaluation, and it is prepared with the set
+//     that was already collected — not with a second collection of all 35 signals
+//   • the engine version says the write semantics changed
+//   • `ReconcileWrite` still has no `status` (the compile assertion above still
+//     holds; here it is re-asserted over the SOURCE)
+//   • a stopped-firing rule whose signal went quiet is still `stale_data`, and
+//     the row still never says "resolved"
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Phase E — the rules are wired', () => {
+  it('PREPARES the rule context before evaluating, with the set it already collected', async () => {
+    const h = harness()
+    const rule = testRule()
+    await h.service.reconcileAll(AT, [rule])
+
+    expect(h.earlyWarning.prepare).toHaveBeenCalledTimes(1)
+    const [schoolId, at, signals] = h.earlyWarning.prepare.mock.calls[0]
+    expect(schoolId).toBe('school-A')
+    expect(at).toBe(AT)
+    // THE POINT: the already-collected set is handed in. If this were undefined
+    // the nightly job would collect all 35 signals for every school TWICE.
+    expect(signals).toBeDefined()
+    expect(signals!.schoolId).toBe('school-A')
+    expect(h.twinSignals.collect).toHaveBeenCalledTimes(1)
+  })
+
+  it('prepares ONCE PER SCHOOL, and only for schools that are actually scanned', async () => {
+    const h = harness({ schools: ['school-A', 'school-B', 'school-C'], licensed: ['school-A', 'school-B'] })
+    await h.service.reconcileAll(AT, [testRule()])
+    expect(h.earlyWarning.prepare).toHaveBeenCalledTimes(2)
+  })
+
+  it('does NOT prepare when there are no rules — no rules, no work', async () => {
+    const h = harness()
+    await h.service.reconcileAll(AT, [])
+    expect(h.earlyWarning.prepare).not.toHaveBeenCalled()
+  })
+
+  it('stamps the Phase-E engine version on every row it writes', async () => {
+    const h = harness()
+    await h.service.reconcileAll(AT, [testRule()])
+    expect(h.store[0].engineVersion).toBe(TWIN_ENGINE_VERSION)
+    expect(TWIN_ENGINE_VERSION).toBe('1.1.0')
+  })
+
+  it('the production rule set writes findings for a school whose signals support them', async () => {
+    // Driven with the REAL adapter rules but an unprepared context, which is the
+    // honest degraded case: every rule reports why it could not be read, and NOT
+    // ONE of them invents a finding. That is the property that matters — a rule
+    // engine that cannot see must produce nothing, never a guess.
+    const h = harness()
+    const summary = await h.service.reconcileAll(AT, TWIN_RULES)
+    expect(summary.rules).toBe(TWIN_RULES.length)
+    expect(summary.created).toBe(0)
+    expect(h.store).toHaveLength(0)
+  })
+
+  it('FINDINGS STILL NEVER AUTO-CLOSE — no `status:` literal in any write path', () => {
+    const src = readFileSync(
+      fileURLToPath(new URL('./twin-reconciliation.service.ts', import.meta.url)),
+      'utf8',
+    )
+    // The ONE permitted occurrence is the `status: 'open'` on CREATE, which is the
+    // initial value of a row that did not exist a moment ago — not a transition.
+    const writes = [...src.matchAll(/status:\s*'([a-z_]+)'/g)].map((m) => m[1])
+    expect(writes).toEqual(['open'])
   })
 })

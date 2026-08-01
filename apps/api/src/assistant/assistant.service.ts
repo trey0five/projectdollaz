@@ -67,6 +67,8 @@ import { PoliciesService } from '../governance/policies.service.js'
 import { CommitteesService } from '../governance/committees.service.js'
 import { MeetingsService } from '../governance/meetings.service.js'
 import { GovernanceReportService } from '../governance/governance-report.service.js'
+import { BillingService } from '../billing/billing.service.js'
+import { EarlyWarningService } from '../twin/early-warning.service.js'
 import { AccreditationService } from '../accreditation/accreditation.service.js'
 import { FacilitiesService } from '../facilities/facilities.service.js'
 import { AdvancementService } from '../advancement/advancement.service.js'
@@ -669,6 +671,13 @@ export class AssistantService {
     // specs still construct; only that build/apply path touches it. DI is by type
     // (AssistantModule imports EnrollmentModule, which exports the service).
     @Optional() private readonly diocesan?: DiocesanEnrollmentService,
+    // AIC Phase E — the read-only get_early_warnings tool. Optional + LAST so every
+    // positional-arg unit spec still constructs; only that one execute() case
+    // touches either, and an absent pair reports the module as unavailable rather
+    // than guessing. AssistantModule imports TwinModule (acyclic: TwinModule
+    // imports nothing from assistant) and BillingModule was already imported.
+    @Optional() private readonly earlyWarning?: EarlyWarningService,
+    @Optional() private readonly billing?: BillingService,
   ) {}
 
   isConfigured(): boolean {
@@ -4053,6 +4062,98 @@ export class AssistantService {
             lastApprovedAt: gr.minutesDiscipline.lastApprovedAt,
           },
           gaps,
+        }
+      }
+      case 'get_early_warnings': {
+        // AIC Phase E — READ-ONLY. NOT in WRITE_TOOLS, NOT in CONFIRM_TOOLS, no
+        // ApplyActionDto member, no ProposedAction member — so it is exposed to all
+        // three roles including `viewer`, exactly like get_governance_status.
+        //
+        // The projection is COMPACT and FROZEN. Penny gets the engine's own
+        // server-composed sentences (title / rationale / consequence), the evidence
+        // chain behind every numeral, the ORDINAL likelihood word, and the holes
+        // WITH the module or intake that would close each one. She gets no
+        // probability, no percentage, and nothing she could turn into a prediction
+        // of an accreditation decision.
+        const licensed = await (this.billing?.isEntitledForModule(
+          ctx.schoolId,
+          'accreditation',
+        ) ?? Promise.resolve(false)).catch(() => false)
+        if (!licensed || !this.earlyWarning) {
+          return {
+            notLicensed: true,
+            message:
+              'The accreditation module is not licensed for this school, so there are no early warnings to read.',
+          }
+        }
+        const twin = await this.earlyWarning.getTwin(ctx.schoolId)
+        const compactHole = (h: {
+          ruleId: string
+          title: string
+          blockingSignalLabel: string | null
+          message: string
+          moduleKey: string | null
+          unlock: unknown
+        }) => ({
+          ruleId: h.ruleId,
+          title: h.title,
+          blockingSignalLabel: h.blockingSignalLabel,
+          message: h.message,
+          moduleKey: h.moduleKey,
+          unlock: h.unlock,
+        })
+        const compactCoverage = (c: typeof twin.coverage) => ({
+          rulesTotal: c.rulesTotal,
+          rulesEvaluated: c.rulesEvaluated,
+          rulesFired: c.rulesFired,
+          rulesNotEvaluated: c.rulesNotEvaluated,
+          blockedByModule: c.blockedByModule,
+          unlockableByYears: c.unlockableByYears,
+          namedHoles: c.namedHoles,
+        })
+        if (twin.coverage.rulesEvaluated === 0) {
+          // REFUSAL, not speculation. The projection carries NO `findings` key at
+          // all on this branch, so there is nothing to speculate from.
+          return {
+            thin: true,
+            message:
+              'There is not enough recorded data to evaluate a single early-warning rule for this school yet.',
+            notEvaluated: twin.notEvaluated.slice(0, 8).map(compactHole),
+            coverage: compactCoverage(twin.coverage),
+          }
+        }
+        const wantSeverity = typeof args.severity === 'string' ? args.severity : null
+        const rawLimit = typeof args.limit === 'number' ? Math.trunc(args.limit) : 6
+        const limit = Math.max(1, Math.min(10, Number.isFinite(rawLimit) ? rawLimit : 6))
+        return {
+          coverage: compactCoverage(twin.coverage),
+          findings: twin.findings
+            .filter((f) => !wantSeverity || f.severity === wantSeverity)
+            .slice(0, limit)
+            .map((f) => ({
+              ruleId: f.ruleId,
+              title: f.title,
+              rationale: f.rationale,
+              consequence: f.consequence,
+              standardCodes: f.standardTags,
+              severity: f.severity,
+              // ORDINAL. A percentage here would be invented, and there is no
+              // outcome data anywhere in this program to calibrate one against.
+              likelihood: f.likelihood,
+              confidence: f.confidence,
+              horizon: { kind: f.horizon.kind, value: f.horizon.value },
+              evidence: f.evidence.map((e) => ({
+                label: e.label,
+                display: e.display,
+                asOf: e.asOf,
+              })),
+              status: f.status,
+              firstSeenAt: f.firstSeenAt,
+              mutedUntil: f.mutedUntil,
+            })),
+          notEvaluated: twin.notEvaluated.slice(0, 8).map(compactHole),
+          domainBands: twin.domainBands.filter((d) => d.band !== null && d.band !== 'clear'),
+          demoData: twin.demoData,
         }
       }
       case 'get_budget_vs_actual': {

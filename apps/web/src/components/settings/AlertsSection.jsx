@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Bell, Send, Trash2, Plus } from 'lucide-react'
 import { useSchools } from '../../context/SchoolContext.jsx'
+import { useEntitlement } from '../../hooks/useEntitlement.js'
 import { alertsApi, apiErrorMessage } from '../../lib/api.js'
 import { FormError, FormSuccess } from '../auth/fields.jsx'
 import SettingsCard from './SettingsCard.jsx'
@@ -34,14 +35,29 @@ const CADENCES = [
 
 const metricLabel = (k) => METRICS.find((m) => m.key === k)?.label || k
 
+const cadenceLabel = (c) => CADENCES.find((x) => x.key === c)?.label || c || 'Weekly'
+
 /** Plain-language phrasing of one alert's rule. */
 function ruleText(a) {
   if (a.type === 'digest') {
-    const cad = CADENCES.find((c) => c.key === a.cadence)?.label || a.cadence || 'Weekly'
-    return `Email me a ${cad.toLowerCase()} financial summary`
+    return `Email me a ${cadenceLabel(a.cadence).toLowerCase()} financial summary`
+  }
+  // AIC Phase E. This branch is not optional decoration: the accreditation digest
+  // carries NO metric, operator or threshold — the create path forces all three to
+  // null — so without it the row fell through to the threshold sentence and
+  // rendered the literal string "Alert me if null > null".
+  if (a.type === 'warning_digest') {
+    return `Email me ${cadenceLabel(a.cadence).toLowerCase()} accreditation early warnings`
   }
   const word = a.operator === 'lt' ? '<' : '>'
   return `Alert me if ${metricLabel(a.metricKey)} ${word} ${a.threshold}`
+}
+
+/** The badge word + tint per type. Three types, three styles. */
+const TYPE_META = {
+  digest: { label: 'digest', chip: 'bg-navy/10 text-navy' },
+  threshold: { label: 'threshold', chip: 'bg-gold/15 text-gold' },
+  warning_digest: { label: 'accreditation', chip: 'bg-amber-100 text-amber-700' },
 }
 
 const labelCls = 'mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-muted'
@@ -51,6 +67,7 @@ const inputCls =
 export default function AlertsSection() {
   const { activeId, activeSchool } = useSchools()
   const canEdit = activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'
+  const { licensed: accreditationLicensed } = useEntitlement('accreditation')
 
   const [alerts, setAlerts] = useState([])
   const [err, setErr] = useState('')
@@ -90,8 +107,8 @@ export default function AlertsSection() {
     setBusy(true)
     try {
       const body =
-        type === 'digest'
-          ? { type: 'digest', cadence }
+        type === 'digest' || type === 'warning_digest'
+          ? { type, cadence }
           : { type: 'threshold', metricKey, operator, threshold: Number(threshold) }
       if (type === 'threshold' && !Number.isFinite(Number(threshold))) {
         throw new Error('Enter a numeric threshold.')
@@ -174,10 +191,10 @@ export default function AlertsSection() {
           >
             <span
               className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-bold uppercase tracking-wide ${
-                a.type === 'digest' ? 'bg-navy/10 text-navy' : 'bg-gold/15 text-gold'
+                (TYPE_META[a.type] ?? TYPE_META.threshold).chip
               }`}
             >
-              <Bell size={12} /> {a.type}
+              <Bell size={12} /> {(TYPE_META[a.type] ?? { label: a.type }).label}
             </span>
             <span className="flex-1 text-[15px] font-semibold text-navy">{ruleText(a)}</span>
             {a.lastSentAt && (
@@ -218,23 +235,33 @@ export default function AlertsSection() {
       {/* Create form */}
       {canEdit && (
         <div className="rounded-xl border-2 border-dashed border-border p-4">
-          <div className="mb-4 flex gap-2">
-            {['digest', 'threshold'].map((t) => (
-              <button
-                key={t}
-                onClick={() => setType(t)}
-                className={`rounded-lg px-4 py-2 text-[14px] font-semibold capitalize transition-all ${
-                  type === t
-                    ? 'bg-navy text-white'
-                    : 'border-2 border-border bg-white text-navy hover:border-gold/50'
-                }`}
-              >
-                {t === 'digest' ? 'Scheduled digest' : 'Threshold alert'}
-              </button>
-            ))}
+          {/* AIC Phase E — the accreditation digest is offered ONLY to a school
+              that has licensed the module, because that is the same gate the
+              server evaluates the alert behind. Shipping the notification path
+              without a door was the defect: it was reachable by raw API only. */}
+          <div className="mb-4 flex flex-wrap gap-2">
+            {['digest', 'threshold', ...(accreditationLicensed ? ['warning_digest'] : [])].map(
+              (t) => (
+                <button
+                  key={t}
+                  onClick={() => setType(t)}
+                  className={`rounded-lg px-4 py-2 text-[14px] font-semibold transition-all ${
+                    type === t
+                      ? 'bg-navy text-white'
+                      : 'border-2 border-border bg-white text-navy hover:border-gold/50'
+                  }`}
+                >
+                  {t === 'digest'
+                    ? 'Scheduled digest'
+                    : t === 'threshold'
+                      ? 'Threshold alert'
+                      : 'Accreditation early warnings'}
+                </button>
+              ),
+            )}
           </div>
 
-          {type === 'digest' ? (
+          {type === 'digest' || type === 'warning_digest' ? (
             <div className="mb-4">
               <label className={labelCls}>Cadence</label>
               <select className={inputCls} value={cadence} onChange={(e) => setCadence(e.target.value)}>
@@ -245,7 +272,9 @@ export default function AlertsSection() {
                 ))}
               </select>
               <p className="mt-1.5 text-[14px] text-muted">
-                A financial summary emailed to you on this cadence.
+                {type === 'digest'
+                  ? 'A financial summary emailed to you on this cadence.'
+                  : 'New accreditation early warnings, emailed on this cadence. Nothing new means no email.'}
               </p>
             </div>
           ) : (

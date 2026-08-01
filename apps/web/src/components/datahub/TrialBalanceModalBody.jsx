@@ -20,6 +20,12 @@ const TABS = [
  * The two subtrees are MUTUALLY EXCLUSIVE: bulk mode never mounts AppProvider, so
  * the single-mode autosave debounce can never fire mid-bulk. Viewers (!canEdit)
  * see only the read-only single intake — the bulk tab is hidden entirely.
+ *
+ * `initialTab` (AIC Phase E) lets a deep link land on a specific tab — today only
+ * /data?open=trialBalances&intake=bulk, the CTA behind "N more rules unlock when
+ * you add FY…" on /accreditation. It is ADVISORY and defaults to today's value:
+ * an unknown key, or a viewer who may not use the bulk uploader at all, falls
+ * straight back to 'single', so no caller can land this modal on a dead tab.
  */
 export default function TrialBalanceModalBody({
   school,
@@ -28,8 +34,11 @@ export default function TrialBalanceModalBody({
   hydrationToken,
   canEdit,
   onOpenMonthly,
+  initialTab = null,
 }) {
-  const [mode, setMode] = useState('single')
+  const [mode, setMode] = useState(() =>
+    TABS.some((t) => t.key === initialTab) ? initialTab : 'single',
+  )
   const active = canEdit ? mode : 'single'
 
   return (

@@ -1137,6 +1137,26 @@ export const TOOL_SCHEMAS = [
   {
     type: 'function',
     function: {
+      name: 'get_early_warnings',
+      description:
+        "The school's ACCREDITATION EARLY WARNINGS \u2014 what a visiting team would likely find, derived from live operating data by deterministic rules. Returns findings (each with the standard codes it would be cited under, an ordinal likelihood, the evidence chain behind it, and a horizon when one can honestly be given), notEvaluated (rules that could NOT be evaluated, each naming the blocking signal and the module or intake that would unlock it), coverage, and ordinal domain bands. Use for \"what would they find?\", \"what are we at risk on?\", \"what can't you tell me?\", \"which standards are exposed?\". Read-only. STATE ONLY WHAT THIS TOOL RETURNS. Never invent a finding, a standard, a date, or a number. `likelihood` is the word 'possible' or 'likely' \u2014 NEVER convert it to a percentage. Never predict an accreditation decision or whether the school will pass. Never use the word \"trend\" unless a finding's `confidence` is exactly 'trend'. Never describe a staffing change as turnover. If `thin` is true, say exactly what `message` says and stop.",
+      parameters: {
+        type: 'object',
+        properties: {
+          severity: {
+            type: 'string',
+            enum: ['critical', 'warn', 'info'],
+            description: 'Optional filter.',
+          },
+          limit: { type: 'integer', description: 'Max findings to return (1\u201310, default 6).' },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'draft_strategy_plan',
       description:
         'GENERATE a full draft strategic plan (pillars + metric-bound goals with targets computed from THIS school’s live metrics) for the user to CONFIRM before anything is created. This does NOT create it; the user must confirm, then the whole tree is created at once. Use when the user asks Penny to "draft us a strategic plan", "build a plan", "start a strategic plan", etc. Every goal target is DERIVED from the school’s live numbers (the healthy sector threshold for each off-track metric) — never invented. Optional args only steer the framing; Penny can draft from live metrics with no args. FY runs Jul–Jun.',
@@ -1303,6 +1323,7 @@ export const TOOL_LABELS: Record<string, string> = {
   get_value_history: 'Tracing how that number changed…',
   get_plan_status: 'Reading the strategic plan…',
   get_governance_status: 'Reviewing governance…',
+  get_early_warnings: 'Reading the early warnings…',
   draft_strategy_plan: 'Drafting a strategic plan…',
   create_strategy_plan: 'Creating the strategic plan…',
   create_strategy_pillar: 'Adding a pillar to the plan…',

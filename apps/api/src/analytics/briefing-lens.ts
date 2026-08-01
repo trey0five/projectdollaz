@@ -64,6 +64,12 @@ export const SOURCE_RANK: Record<AttentionSource, number> = {
   planning: 10,
   workflow: 11,
   metric: 12,
+  // AIC Phase E — the accreditation CONSEQUENCE of a fact (STEP 2.16). APPENDED at
+  // the end, which changes no existing value: SOURCE_RANK is documentation plus the
+  // accountant's reference order, and the accountant's own weighting below places
+  // earlywarning where it belongs for that lens (between accreditation and
+  // facilities) rather than at the tail.
+  earlywarning: 13,
 }
 
 /** Fixed sub-order for the non-metric items so the list is deterministic. */
@@ -103,6 +109,35 @@ export const COMPLIANCE_ORDER = [
   // KEPT for the viewer lens (board-relevant) — see keepForViewer.
   'accreditation:coverage-gap',
   'accreditation:review-approaching',
+  // AIC Phase E — the ELEVEN briefable early-warning ids (STEP 2.16). Inserted as
+  // one block right after the accreditation items, before facilities: an early
+  // warning IS an accreditation matter, and it belongs beside the two items that
+  // already speak for that domain.
+  //
+  // WHY INSERTING HERE CANNOT REORDER ANYTHING. The comparator uses
+  // COMPLIANCE_ORDER.indexOf(a.id) - COMPLIANCE_ORDER.indexOf(b.id). Inserting k
+  // entries at position p maps every pre-existing index i to i (for i < p) or
+  // i + k (for i >= p). For a pair both before p, or both at/after p, the
+  // difference is IDENTICAL. For a straddling pair the difference grows in
+  // magnitude by k but CANNOT CHANGE SIGN — it was already negative for the
+  // earlier element. Sign-preserving => ordering-preserving. The new ids' indices
+  // were previously -1, and no pre-existing pair involved them.
+  //
+  // The order WITHIN the block is curated, not alphabetical: an unmet assurance
+  // gate blocks the accreditation outright, a lapsed audit is the fastest finding
+  // a visiting team can write, and the governance-cadence items are the ones a
+  // school can act on this month.
+  'earlywarning:acc-assurance-gap',
+  'earlywarning:fin-audit-stale',
+  'earlywarning:evi-stale',
+  'earlywarning:acc-unsupported-score',
+  'earlywarning:acc-unscored',
+  'earlywarning:strat-plan-expired',
+  'earlywarning:gov-minutes-never-recorded',
+  'earlywarning:gov-cadence-gap',
+  'earlywarning:gov-term-expiry',
+  'earlywarning:gov-committee-no-chair',
+  'earlywarning:enr-feeder-erosion',
   // Facilities deferred-maintenance item (Phase 4). Placed after accreditation,
   // before workflow (grouped with the board-oversight domains). KEPT for the
   // viewer lens (board/capital-relevant) — see keepForViewer.
@@ -196,10 +231,27 @@ export const COMPLIANCE_ORDER = [
 // byte-identical for the existing ids. (Viewer drops hr items entirely via
 // keepForViewer, so hr's viewer weight is never actually consulted — same
 // pattern as workflow.)
+// AIC Phase E — `earlywarning` is an accreditation matter, so it sits WITH
+// accreditation: immediately after it, immediately before facilities, on every
+// lens. It is inserted FRACTIONALLY (x.5) rather than by renumbering, and that is
+// the entire byte-identity argument:
+//
+//   applyLens's comparator consults weight[source] ONLY as a DIFFERENCE between
+//   two items' weights. Every pre-existing source keeps its EXACT numeric value,
+//   so for any pair of pre-existing items the sign of
+//   weight[a.source] - weight[b.source] is unchanged; severity and the secondary
+//   tiebreaks are untouched. The relative order of every pre-existing pair is
+//   therefore identical, and since the sort is total (the final id.localeCompare),
+//   the output array over a pre-existing input is BYTE-IDENTICAL.
+//
+// The accountant column additionally remains equal to SOURCE_RANK on every
+// pre-existing key, so the shipped accountant snapshot spec is unchanged.
+// `Record<AttentionSource, number>` already admits non-integers. A golden fixture
+// generated BEFORE this edit pins all of the above for all three lenses.
 const SOURCE_WEIGHT: Record<Lens, Record<AttentionSource, number>> = {
-  owner: { metric: 0, enrollment: 1, cash: 2, governance: 3, accreditation: 4, facilities: 5, advancement: 6, strategy: 7, planning: 8, compliance: 9, data: 10, hr: 11, workflow: 12 },
-  viewer: { metric: 0, enrollment: 1, cash: 2, governance: 3, accreditation: 4, facilities: 5, advancement: 6, strategy: 7, planning: 8, compliance: 9, data: 10, hr: 11, workflow: 12 },
-  accountant: { data: 0, compliance: 1, enrollment: 2, cash: 3, governance: 4, accreditation: 5, facilities: 6, advancement: 7, strategy: 8, hr: 9, planning: 10, workflow: 11, metric: 12 }, // == SOURCE_RANK
+  owner: { metric: 0, enrollment: 1, cash: 2, governance: 3, accreditation: 4, earlywarning: 4.5, facilities: 5, advancement: 6, strategy: 7, planning: 8, compliance: 9, data: 10, hr: 11, workflow: 12 },
+  viewer: { metric: 0, enrollment: 1, cash: 2, governance: 3, accreditation: 4, earlywarning: 4.5, facilities: 5, advancement: 6, strategy: 7, planning: 8, compliance: 9, data: 10, hr: 11, workflow: 12 },
+  accountant: { data: 0, compliance: 1, enrollment: 2, cash: 3, governance: 4, accreditation: 5, earlywarning: 5.5, facilities: 6, advancement: 7, strategy: 8, hr: 9, planning: 10, workflow: 11, metric: 12 }, // == SOURCE_RANK on every pre-existing key
 }
 
 // ── VOICE: per-lens reframing tone (additive metadata, never a value rewrite) ──
@@ -253,6 +305,17 @@ function keepForViewer(item: AttentionItem): boolean {
   // workflow. The whys are outcome/governance-voiced (no operator "go do" CTA), so
   // they pass through with no VIEWER_REFRAME entry.
   if (item.source === 'accreditation') return true
+  // AIC Phase E — an accreditation CONSEQUENCE ("what a visiting team would find,
+  // and under which standard") is a fiduciary matter the board OWNS, exactly like
+  // source==='accreditation'. KEPT for the viewer/board lens.
+  //
+  // NO VIEWER_REFRAME ENTRY IS NEEDED, and that is a property rather than an
+  // oversight: a 2.16 `why` is the pure engine's server-composed rationale plus its
+  // consequence sentence — outcome-voiced by construction, with no operator "go fix"
+  // CTA anywhere in it. A spec asserts no 2.16 `why` starts with an operator verb or
+  // contains "go fix", which is what keeps the VIEWER_COMPLIANCE/VIEWER_WORKFLOW
+  // lockstep rule satisfied without an entry.
+  if (item.source === 'earlywarning') return true
   // Deferred maintenance / capital backlog is a fiduciary/board/finance matter the
   // board OWNS (it drives capital planning and the reserve) — KEPT for the viewer/
   // board lens exactly like governance + accreditation, UNLIKE operational workflow

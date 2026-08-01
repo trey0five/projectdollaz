@@ -1760,6 +1760,23 @@ model AccreditationFinding {
   ackedUntil        DateTime? @map("acked_until")
   lastNotifiedAt    DateTime? @map("last_notified_at")
 
+  /// AIC Phase E — the NOTIFICATION WATERMARKS. "Re-notifies exactly once" is
+  /// three distinct edges (a re-arm, an escalation, a mute lapsing) and each
+  /// needs its own watermark; folding them into lastNotifiedAt alone makes
+  /// de-escalation indistinguishable from escalation, which is precisely the
+  /// noise this design refuses to ship. Read ONLY by notify-policy.ts.
+  ///
+  /// STILL ABSENT FROM `ReconcileWrite`, deliberately: the nightly job cannot
+  /// name these columns any more than it can name `status`.
+  notifiedReopenCount Int    @default(0) @map("notified_reopen_count")
+  /// The severity at the last send. Escalation is strictly `>`, so a critical
+  /// that softens to warn satisfies no clause and sends nothing.
+  notifiedSeverity  String?   @map("notified_severity")
+  /// Bookkeeping only — NO FK, for the same reason `initiative_id` has none:
+  /// the audit log is the record of record, and a relation here would make a
+  /// user deletion a two-phase coordination.
+  ackedByUserId     String?   @map("acked_by_user_id") @db.Uuid
+
   /// Inherited from the school's newest readiness snapshot, exactly like Phase A:
   /// demo is a property of the SERIES, so a finding derived from fabricated
   /// history can never launder itself into a real tenant's record.
@@ -1774,6 +1791,11 @@ model AccreditationFinding {
   @@index([schoolId, status])
   @@index([schoolId, factKey])
   @@index([schoolId, lastSeenAt])
+  /// AIC Phase E — every read model (briefing STEP 2.16, the warning digest, the
+  /// /twin merge) filters on `clearedAt: null` first. Ordinary btree, no partial
+  /// index and no functional index, so `prisma migrate deploy` and a hand-written
+  /// migration agree byte-for-byte.
+  @@index([schoolId, clearedAt])
   @@map("accreditation_findings")
 }
 
