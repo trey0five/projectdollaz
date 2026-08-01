@@ -139,6 +139,7 @@ model School {
   accreditationStandards   AccreditationStandard[]
   accreditationEvidence    AccreditationEvidence[]
   readinessSnapshots       AccreditationReadinessSnapshot[]
+  accreditationFindings    AccreditationFinding[]
   maintenanceItems         MaintenanceItem[]
   vendors                  Vendor[]
   maintenanceBids          MaintenanceBid[]
@@ -1672,6 +1673,108 @@ model AccreditationReadinessSnapshot {
   @@index([schoolId, snapshotDate])
   @@index([schoolId, seriesKey, snapshotDate(sort: Desc)])
   @@map("accreditation_readiness_snapshots")
+}
+
+// ── AIC Phase D — the FINDINGS LEDGER ────────────────────────────────────────
+// ONE table for every rule-derived observation about a school, whatever a later
+// screen calls it. A finding is identified by findingKey = ruleId + ':' + scopeKey,
+// which is what UNIQUE(school_id, rule_id, scope_key) enforces at the database.
+//
+// THE INVARIANT THIS TABLE EXISTS TO PROTECT: findings NEVER auto-close. The
+// nightly reconciliation may set clearedAt/resolutionKind — a COMPUTED statement
+// that the rule stopped firing — and may never touch `status`. A human moves
+// status. That is enforced in TypeScript by ReconcileWrite (see the service),
+// and it is why clearedAt and status are two columns rather than one.
+//
+// LIKELIHOOD IS AN ORDINAL WORD, NEVER A NUMBER. There is no outcome data in this
+// program to calibrate a probability against (honesty ledger row 36), so the
+// column is TEXT holding 'possible' | 'likely' and no numeric probability is
+// stored, derived or emitted anywhere. A percentage here would be invented.
+//
+// HORIZON is three columns, not a JSON blob: kind + ONE of (date | periods) +
+// its own confidence. 'none' is a legitimate and common value (G9) — requiring a
+// date on every finding would manufacture horizons.
+//
+// House conventions: TEXT + @IsIn at the DTO/service boundary (never a PG enum),
+// @db.Date UTC-midnight discipline, school_id ON DELETE CASCADE, snake_case @map.
+model AccreditationFinding {
+  id                String   @id @default(uuid()) @db.Uuid
+  schoolId          String   @map("school_id") @db.Uuid
+
+  /// Rule vocabulary lives in Phase E's TWIN_RULE_IDS. Phase D only stores it.
+  ruleId            String   @map("rule_id")
+  /// The entity the rule fired ABOUT: 'school' | 'standard:<uuid>' | 'policy:<uuid>' | …
+  scopeKey          String   @map("scope_key")
+  /// Denormalised ruleId + ':' + scopeKey. Stored so Phase G's initiative can
+  /// join on ONE value; asserted equal to the pair by a service invariant + spec.
+  findingKey        String   @map("finding_key")
+  /// F3 — the underlying FACT, e.g. 'metric:operating_margin@FY2026'. Domain
+  /// counting is over DISTINCT factKeys, never over affected leaves.
+  factKey           String   @map("fact_key")
+
+  /// School standard CODES this would be cited under. >= 1 required by Phase E (G3).
+  standardTags      String[] @default([]) @map("standard_tags")
+  /// Every accreditation domain the finding TOUCHES — for rendering.
+  domainKeys        String[] @default([]) @map("domain_keys")
+  /// EXACTLY ONE domain — for COUNTING. See the anti-double-count invariant.
+  primaryDomainKey  String   @map("primary_domain_key")
+
+  severity          String // 'info' | 'warn' | 'critical'
+  /// 'open' | 'acknowledged' | 'muted' | 'resolved' | 'dismissed'.
+  /// WRITTEN ONLY BY A HUMAN ACTION. Never by reconciliation.
+  status            String   @default("open")
+  /// ORDINAL ONLY: 'possible' | 'likely' | null. Never a percentage.
+  likelihood        String?
+  /// The trend-signal ladder, reused verbatim: 'insufficient'|'observation'|'directional'|'trend'.
+  confidence        String   @default("insufficient")
+
+  horizonKind       String    @default("none") @map("horizon_kind") // 'by_date'|'periods_to_breach'|'none'
+  horizonDate       DateTime? @map("horizon_date") @db.Date
+  horizonPeriods    Int?      @map("horizon_periods")
+  horizonConfidence String?   @map("horizon_confidence")
+
+  firstSeenAt       DateTime  @map("first_seen_at")
+  lastSeenAt        DateTime  @map("last_seen_at")
+  /// The rule STOPPED firing on this date. A computed observation, NOT a close.
+  clearedAt         DateTime? @map("cleared_at")
+  /// 'improved' | 'stale_data' | 'dismissed'. Reconciliation writes only the first two.
+  resolutionKind    String?   @map("resolution_kind")
+  /// Times this finding re-armed after having been cleared. Phase E's
+  /// "re-arms and re-notifies exactly once" reads this.
+  reopenCount       Int       @default(0) @map("reopen_count")
+
+  /// The BASIS CHAIN: every fact, its observed value, its as-of date, its lineage.
+  /// A finding with an empty basis is a bug, not a prediction (Phase H).
+  evidencePayload   Json     @map("evidence_payload") @db.JsonB
+  /// sha256 of the stable-stringified basis. Unchanged hash => no rewrite.
+  payloadHash       String   @map("payload_hash")
+
+  /// Phase G links an improvement initiative here. DELIBERATELY NOT AN FK: the
+  /// improvement model is RENAMED in Phase G and Phase D must not plant a
+  /// relation name inside a model Phase G rewrites. Phase G's adopt path
+  /// validates existence itself.
+  initiativeId      String?   @map("initiative_id") @db.Uuid
+
+  mutedReason       String?   @map("muted_reason")
+  mutedUntil        DateTime? @map("muted_until")
+  ackedUntil        DateTime? @map("acked_until")
+  lastNotifiedAt    DateTime? @map("last_notified_at")
+
+  /// Inherited from the school's newest readiness snapshot, exactly like Phase A:
+  /// demo is a property of the SERIES, so a finding derived from fabricated
+  /// history can never launder itself into a real tenant's record.
+  isDemo            Boolean  @default(false) @map("is_demo")
+  engineVersion     String   @map("engine_version")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, ruleId, scopeKey])
+  @@index([schoolId, status])
+  @@index([schoolId, factKey])
+  @@index([schoolId, lastSeenAt])
+  @@map("accreditation_findings")
 }
 
 // ── Phase 4 Facilities v1 — the deferred-maintenance register ─────────────────

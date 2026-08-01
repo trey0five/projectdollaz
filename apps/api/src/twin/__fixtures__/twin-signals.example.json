@@ -1,0 +1,1244 @@
+{
+  "schoolId": "11111111-2222-3333-4444-555555555555",
+  "generatedAt": "2026-06-30T00:00:00.000Z",
+  "signals": [
+    {
+      "key": "fin.operating_margin",
+      "label": "Operating margin",
+      "kind": "trend",
+      "availability": "available",
+      "unavailableReason": null,
+      "moduleKey": "finance",
+      "value": 0.015,
+      "trend": {
+        "metric": "operating_margin",
+        "label": "operating_margin",
+        "unit": "days",
+        "goodDirection": "higher",
+        "eligible": true,
+        "refusal": null,
+        "reason": "Declining in each of 4 readings, FY2023 to FY2026. With 4 readings the arithmetic cannot confirm a direction — the smallest result 4 readings can produce is p = 0.0833. A fifth reading can settle it.",
+        "n": 4,
+        "droppedPoints": 0,
+        "firstDate": "2023-06-30",
+        "lastDate": "2026-06-30",
+        "spanYears": 3.0007460796594043,
+        "spacing": "regular",
+        "monthsAligned": true,
+        "fiscalYears": [
+          2023,
+          2024,
+          2025,
+          2026
+        ],
+        "slopePerYear": -0.015003118141310867,
+        "interceptAtFirst": 0.06002396947805219,
+        "firstValue": 0.06,
+        "lastValue": 0.015,
+        "direction": "declining",
+        "favourability": "unfavourable",
+        "materiality": {
+          "floorKind": "absolute",
+          "floor": 0.005,
+          "observed": 0.015003118141310867,
+          "met": true,
+          "basis": "0.5 percentage points a year. The band spans risk 0 to good 0.03 — 3 points, crossed in six years, which is one accreditation cycle. Sector default."
+        },
+        "mannKendall": {
+          "n": 4,
+          "s": -6,
+          "concordant": 0,
+          "discordant": 6,
+          "tiedPairs": 0,
+          "varS": null,
+          "method": "exact",
+          "p": 0.08333333333333333,
+          "significant": false
+        },
+        "confidence": "directional",
+        "vocabulary": "directional",
+        "caps": [],
+        "asOfAgeDays": 0,
+        "version": "1.0.0"
+      },
+      "observedOn": "2026-06-30",
+      "ageDays": 0,
+      "expectedCadenceDays": 400,
+      "staleAfterDays": 600,
+      "changeState": "unchanged",
+      "ferpaSensitive": false,
+      "cells": null,
+      "domainKeys": [
+        "finance"
+      ],
+      "lineage": {
+        "table": "StatementSnapshot",
+        "metricKey": "operating_margin"
+      }
+    },
+    {
+      "key": "fin.days_cash_on_hand",
+      "label": "Days cash on hand",
+      "kind": "trend",
+      "availability": "available",
+      "unavailableReason": null,
+      "moduleKey": "finance",
+      "value": 60,
+      "trend": {
+        "metric": "days_cash_on_hand",
+        "label": "days_cash_on_hand",
+        "unit": "days",
+        "goodDirection": "higher",
+        "eligible": true,
+        "refusal": null,
+        "reason": "Declining across 5 readings, FY2022 to FY2026 — about 8.6 days lower a year (Mann-Kendall p = 0.0167). This is a trend.",
+        "n": 5,
+        "droppedPoints": 0,
+        "firstDate": "2022-06-30",
+        "lastDate": "2026-06-30",
+        "spanYears": 4.000082137210209,
+        "spacing": "regular",
+        "monthsAligned": true,
+        "fiscalYears": [
+          2022,
+          2023,
+          2024,
+          2025,
+          2026
+        ],
+        "slopePerYear": -8.621915978224536,
+        "interceptAtFirst": 96.6161915222132,
+        "firstValue": 95,
+        "lastValue": 60,
+        "direction": "declining",
+        "favourability": "unfavourable",
+        "materiality": {
+          "floorKind": "absolute",
+          "floor": 3,
+          "observed": 8.621915978224536,
+          "met": true,
+          "basis": "3 days a year. The band spans 30 to 60 days, or ten years. Below about 3 days is one payroll run’s timing inside a trial balance. Sector default."
+        },
+        "mannKendall": {
+          "n": 5,
+          "s": -10,
+          "concordant": 0,
+          "discordant": 10,
+          "tiedPairs": 0,
+          "varS": null,
+          "method": "exact",
+          "p": 0.016666666666666666,
+          "significant": true
+        },
+        "confidence": "trend",
+        "vocabulary": "trend",
+        "caps": [],
+        "asOfAgeDays": 0,
+        "version": "1.0.0"
+      },
+      "observedOn": "2026-06-30",
+      "ageDays": 0,
+      "expectedCadenceDays": 400,
+      "staleAfterDays": 600,
+      "changeState": "unchanged",
+      "ferpaSensitive": false,
+      "cells": null,
+      "domainKeys": [
+        "finance"
+      ],
+      "lineage": {
+        "table": "StatementSnapshot",
+        "metricKey": "days_cash_on_hand"
+      }
+    },
+    {
+      "key": "fin.months_operating_reserve",
+      "label": "Months of operating reserve",
+      "kind": "trend",
+      "availability": "no_data",
+      "unavailableReason": "No readings are available for months_operating_reserve yet.",
+      "moduleKey": "finance",
+      "value": null,
+      "trend": {
+        "metric": "months_operating_reserve",
+        "label": "months_operating_reserve",
+        "unit": "days",
+        "goodDirection": "higher",
+        "eligible": false,
+        "refusal": "no_usable_points",
+        "reason": "No readings are available for months_operating_reserve yet.",
+        "n": 0,
+        "droppedPoints": 0,
+        "firstDate": null,
+        "lastDate": null,
+        "spanYears": null,
+        "spacing": "unknown",
+        "monthsAligned": true,
+        "fiscalYears": [],
+        "slopePerYear": null,
+        "interceptAtFirst": null,
+        "firstValue": null,
+        "lastValue": null,
+        "direction": "unknown",
+        "favourability": null,
+        "materiality": {
+          "floorKind": "absolute",
+          "floor": null,
+          "observed": null,
+          "met": false,
+          "basis": "One week of operating expense a year. The band spans 3 to 6 months, or twelve years. Sector default."
+        },
+        "mannKendall": null,
+        "confidence": "insufficient",
+        "vocabulary": "insufficient",
+        "caps": [],
+        "asOfAgeDays": null,
+        "version": "1.0.0"
+      },
+      "observedOn": null,
+      "ageDays": null,
+      "expectedCadenceDays": 400,
+      "staleAfterDays": 600,
+      "changeState": "never_observed",
+      "ferpaSensitive": false,
+      "cells": null,
+      "domainKeys": [
+        "finance"
+      ],
+      "lineage": null
+    },
+    {
+      "key": "fin.tuition_dependency",
+      "label": "Tuition dependency",
+      "kind": "trend",
+      "availability": "no_data",
+      "unavailableReason": "No readings are available for tuition_dependency yet.",
+      "moduleKey": "finance",
+      "value": null,
+      "trend": {
+        "metric": "tuition_dependency",
+        "label": "tuition_dependency",
+        "unit": "days",
+        "goodDirection": "higher",
+        "eligible": false,
+        "refusal": "no_usable_points",
+        "reason": "No readings are available for tuition_dependency yet.",
+        "n": 0,
+        "droppedPoints": 0,
+        "firstDate": null,
+        "lastDate": null,
+        "spanYears": null,
+        "spacing": "unknown",
+        "monthsAligned": true,
+        "fiscalYears": [],
+        "slopePerYear": null,
+        "interceptAtFirst": null,
+        "firstValue": null,
+        "lastValue": null,
+        "direction": "unknown",
+        "favourability": null,
+        "materiality": {
+          "floorKind": "absolute",
+          "floor": null,
+          "observed": null,
+          "met": false,
+          "basis": "1 percentage point a year. The band spans 0.70 to 0.85 — 15 points. Sector default."
+        },
+        "mannKendall": null,
+        "confidence": "insufficient",
+        "vocabulary": "insufficient",
+        "caps": [],
+        "asOfAgeDays": null,
+        "version": "1.0.0"
+      },
+      "observedOn": null,
+      "ageDays": null,
+      "expectedCadenceDays": 400,
+      "staleAfterDays": 600,
+      "changeState": "never_observed",
+      "ferpaSensitive": false,
+      "cells": null,
+      "domainKeys": [
+        "finance"
+      ],
+      "lineage": null
+    },
+    {
+      "key": "fin.tuition_discount_rate",
+      "label": "Tuition discount rate",
+      "kind": "trend",
+      "availability": "no_data",
+      "unavailableReason": "No readings are available for tuition_discount_rate yet.",
+      "moduleKey": "finance",
+      "value": null,
+      "trend": {
+        "metric": "tuition_discount_rate",
+        "label": "tuition_discount_rate",
+        "unit": "days",
+        "goodDirection": "higher",
+        "eligible": false,
+        "refusal": "no_usable_points",
+        "reason": "No readings are available for tuition_discount_rate yet.",
+        "n": 0,
+        "droppedPoints": 0,
+        "firstDate": null,
+        "lastDate": null,
+        "spanYears": null,
+        "spacing": "unknown",
+        "monthsAligned": true,
+        "fiscalYears": [],
+        "slopePerYear": null,
+        "interceptAtFirst": null,
+        "firstValue": null,
+        "lastValue": null,
+        "direction": "unknown",
+        "favourability": null,
+        "materiality": {
+          "floorKind": "absolute",
+          "floor": null,
+          "observed": null,
+          "met": false,
+          "basis": "1 percentage point a year. The band spans 0.20 to 0.35 — 15 points. Sector default."
+        },
+        "mannKendall": null,
+        "confidence": "insufficient",
+        "vocabulary": "insufficient",
+        "caps": [],
+        "asOfAgeDays": null,
+        "version": "1.0.0"
+      },
+      "observedOn": null,
+      "ageDays": null,
+      "expectedCadenceDays": 400,
+      "staleAfterDays": 600,
+      "changeState": "never_observed",
+      "ferpaSensitive": false,
+      "cells": null,
+      "domainKeys": [
+        "finance"
+      ],
+      "lineage": null
+    },
+    {
+      "key": "fin.cost_per_pupil",
+      "label": "Cost per pupil",
+      "kind": "trend",
+      "availability": "no_data",
+      "unavailableReason": "No readings are available for cost_per_pupil yet.",
+      "moduleKey": "finance",
+      "value": null,
+      "trend": {
+        "metric": "cost_per_pupil",
+        "label": "cost_per_pupil",
+        "unit": "days",
+        "goodDirection": "higher",
+        "eligible": false,
+        "refusal": "no_usable_points",
+        "reason": "No readings are available for cost_per_pupil yet.",
+        "n": 0,
+        "droppedPoints": 0,
+        "firstDate": null,
+        "lastDate": null,
+        "spanYears": null,
+        "spacing": "unknown",
+        "monthsAligned": true,
+        "fiscalYears": [],
+        "slopePerYear": null,
+        "interceptAtFirst": null,
+        "firstValue": null,
+        "lastValue": null,
+        "direction": "unknown",
+        "favourability": null,
+        "materiality": {
+          "floorKind": "relative",
+          "floor": null,
+          "observed": null,
+          "met": false,
+          "basis": "2% a year. Below general cost inflation a smaller slope is not distinguishable from the price level, and a fixed dollar floor is wrong across an $8k–$30k sector. Sector default."
+        },
+        "mannKendall": null,
+        "confidence": "insufficient",
+        "vocabulary": "insufficient",
+        "caps": [],
+        "asOfAgeDays": null,
+        "version": "1.0.0"
+      },
+      "observedOn": null,
+      "ageDays": null,
+      "expectedCadenceDays": 400,
+      "staleAfterDays": 600,
+      "changeState": "never_observed",
+      "ferpaSensitive": false,
+      "cells": null,
+      "domainKeys": [
+        "finance"
+      ],
+      "lineage": null
+    },
+    {
+      "key": "fin.net_tuition_per_student",
+      "label": "Net tuition per student",
+      "kind": "trend",
+      "availability": "no_data",
+      "unavailableReason": "No readings are available for net_tuition_per_student yet.",
+      "moduleKey": "finance",
+      "value": null,
+      "trend": {
+        "metric": "net_tuition_per_student",
+        "label": "net_tuition_per_student",
+        "unit": "days",
+        "goodDirection": "higher",
+        "eligible": false,
+        "refusal": "no_usable_points",
+        "reason": "No readings are available for net_tuition_per_student yet.",
+        "n": 0,
+        "droppedPoints": 0,
+        "firstDate": null,
+        "lastDate": null,
+        "spanYears": null,
+        "spacing": "unknown",
+        "monthsAligned": true,
+        "fiscalYears": [],
+        "slopePerYear": null,
+        "interceptAtFirst": null,
+        "firstValue": null,
+        "lastValue": null,
+        "direction": "unknown",
+        "favourability": null,
+        "materiality": {
+          "floorKind": "relative",
+          "floor": null,
+          "observed": null,
+          "met": false,
+          "basis": "2% a year — the same inflation argument as cost per pupil. Sector default."
+        },
+        "mannKendall": null,
+        "confidence": "insufficient",
+        "vocabulary": "insufficient",
+        "caps": [],
+        "asOfAgeDays": null,
+        "version": "1.0.0"
+      },
+      "observedOn": null,
+      "ageDays": null,
+      "expectedCadenceDays": 400,
+      "staleAfterDays": 600,
+      "changeState": "never_observed",
+      "ferpaSensitive": false,
+      "cells": null,
+      "domainKeys": [
+        "finance"
+      ],
+      "lineage": null
+    },
+    {
+      "key": "aid.pct_students_on_aid",
+      "label": "Students receiving aid",
+      "kind": "trend",
+      "availability": "no_data",
+      "unavailableReason": "No readings are available for pct_students_on_aid yet.",
+      "moduleKey": "finance",
+      "value": null,
+      "trend": {
+        "metric": "pct_students_on_aid",
+        "label": "pct_students_on_aid",
+        "unit": "days",
+        "goodDirection": "higher",
+        "eligible": false,
+        "refusal": "no_usable_points",
+        "reason": "No readings are available for pct_students_on_aid yet.",
+        "n": 0,
+        "droppedPoints": 0,
+        "firstDate": null,
+        "lastDate": null,
+        "spanYears": null,
+        "spacing": "unknown",
+        "monthsAligned": true,
+        "fiscalYears": [],
+        "slopePerYear": null,
+        "interceptAtFirst": null,
+        "firstValue": null,
+        "lastValue": null,
+        "direction": "unknown",
+        "favourability": null,
+        "materiality": {
+          "floorKind": "absolute",
+          "floor": null,
+          "observed": null,
+          "met": false,
+          "basis": "2 percentage points a year. In a 200-student school that is about four students — the smallest count-driven move that is not one family. Sector default."
+        },
+        "mannKendall": null,
+        "confidence": "insufficient",
+        "vocabulary": "insufficient",
+        "caps": [],
+        "asOfAgeDays": null,
+        "version": "1.0.0"
+      },
+      "observedOn": null,
+      "ageDays": null,
+      "expectedCadenceDays": 400,
+      "staleAfterDays": 600,
+      "changeState": "never_observed",
+      "ferpaSensitive": false,
+      "cells": null,
+      "domainKeys": [
+        "finance",
+        "student_services"
+      ],
+      "lineage": null
+    },
+    {
+      "key": "hr.student_teacher_ratio",
+      "label": "Student-teacher ratio",
+      "kind": "trend",
+      "availability": "not_licensed",
+      "unavailableReason": "Unlock the HR & Staffing module to see Student-teacher ratio.",
+      "moduleKey": "hr",
+      "value": null,
+      "trend": null,
+      "observedOn": null,
+      "ageDays": null,
+      "expectedCadenceDays": 400,
+      "staleAfterDays": 600,
+      "changeState": "never_observed",
+      "ferpaSensitive": false,
+      "cells": null,
+      "domainKeys": [
+        "hr"
+      ],
+      "lineage": null
+    },
+    {
+      "key": "hr.teaching_staff_share",
+      "label": "Teaching share of staff",
+      "kind": "trend",
+      "availability": "not_licensed",
+      "unavailableReason": "Unlock the HR & Staffing module to see Teaching share of staff.",
+      "moduleKey": "hr",
+      "value": null,
+      "trend": null,
+      "observedOn": null,
+      "ageDays": null,
+      "expectedCadenceDays": 400,
+      "staleAfterDays": 600,
+      "changeState": "never_observed",
+      "ferpaSensitive": false,
+      "cells": null,
+      "domainKeys": [
+        "hr"
+      ],
+      "lineage": null
+    },
+    {
+      "key": "hr.total_staff_fte",
+      "label": "Total staff FTE",
+      "kind": "trend",
+      "availability": "not_licensed",
+      "unavailableReason": "Unlock the HR & Staffing module to see Total staff FTE.",
+      "moduleKey": "hr",
+      "value": null,
+      "trend": null,
+      "observedOn": null,
+      "ageDays": null,
+      "expectedCadenceDays": 400,
+      "staleAfterDays": 600,
+      "changeState": "never_observed",
+      "ferpaSensitive": false,
+      "cells": null,
+      "domainKeys": [
+        "hr"
+      ],
+      "lineage": null
+    },
+    {
+      "key": "enr.enrollment_vs_plan",
+      "label": "Enrollment against plan",
+      "kind": "trend",
+      "availability": "no_data",
+      "unavailableReason": "No readings are available for enrollment_vs_plan yet.",
+      "moduleKey": "enrollment",
+      "value": null,
+      "trend": {
+        "metric": "enrollment_vs_plan",
+        "label": "enrollment_vs_plan",
+        "unit": "days",
+        "goodDirection": "higher",
+        "eligible": false,
+        "refusal": "no_usable_points",
+        "reason": "No readings are available for enrollment_vs_plan yet.",
+        "n": 0,
+        "droppedPoints": 0,
+        "firstDate": null,
+        "lastDate": null,
+        "spanYears": null,
+        "spacing": "unknown",
+        "monthsAligned": true,
+        "fiscalYears": [],
+        "slopePerYear": null,
+        "interceptAtFirst": null,
+        "firstValue": null,
+        "lastValue": null,
+        "direction": "unknown",
+        "favourability": null,
+        "materiality": {
+          "floorKind": "absolute",
+          "floor": null,
+          "observed": null,
+          "met": false,
+          "basis": "2 percentage points of plan a year, mirroring its own band scale (good -0.02, risk -0.05). Sector default."
+        },
+        "mannKendall": null,
+        "confidence": "insufficient",
+        "vocabulary": "insufficient",
+        "caps": [],
+        "asOfAgeDays": null,
+        "version": "1.0.0"
+      },
+      "observedOn": null,
+      "ageDays": null,
+      "expectedCadenceDays": 400,
+      "staleAfterDays": 600,
+      "changeState": "never_observed",
+      "ferpaSensitive": false,
+      "cells": null,
+      "domainKeys": [
+        "finance",
+        "leadership"
+      ],
+      "lineage": null
+    },
+    {
+      "key": "plan.plan_readiness",
+      "label": "Planning readiness",
+      "kind": "metric",
+      "availability": "no_data",
+      "unavailableReason": "No reading is available for this signal yet.",
+      "moduleKey": "planning",
+      "value": null,
+      "trend": null,
+      "observedOn": null,
+      "ageDays": null,
+      "expectedCadenceDays": 400,
+      "staleAfterDays": 600,
+      "changeState": "never_observed",
+      "ferpaSensitive": false,
+      "cells": null,
+      "domainKeys": [
+        "continuous_improvement"
+      ],
+      "lineage": null
+    },
+    {
+      "key": "fin.ar_aging",
+      "label": "Receivables over 90 days",
+      "kind": "register",
+      "availability": "available",
+      "unavailableReason": null,
+      "moduleKey": "finance",
+      "value": 18200,
+      "trend": null,
+      "observedOn": "2026-06-10",
+      "ageDays": 20,
+      "expectedCadenceDays": 45,
+      "staleAfterDays": 68,
+      "changeState": "unchanged",
+      "ferpaSensitive": false,
+      "cells": null,
+      "domainKeys": [
+        "finance"
+      ],
+      "lineage": {
+        "table": "ArApAgingSnapshot",
+        "field": "ar90Plus"
+      }
+    },
+    {
+      "key": "fin.budget_present",
+      "label": "Budget on file for the current year",
+      "kind": "register",
+      "availability": "available",
+      "unavailableReason": null,
+      "moduleKey": "finance",
+      "value": true,
+      "trend": null,
+      "observedOn": "2026-06-30",
+      "ageDays": 0,
+      "expectedCadenceDays": 400,
+      "staleAfterDays": 600,
+      "changeState": "unchanged",
+      "ferpaSensitive": false,
+      "cells": null,
+      "domainKeys": [
+        "finance"
+      ],
+      "lineage": {
+        "table": "PeriodBudget",
+        "field": "id"
+      }
+    },
+    {
+      "key": "gov.minutes_lag",
+      "label": "Days from meeting to approved minutes",
+      "kind": "register",
+      "availability": "available",
+      "unavailableReason": null,
+      "moduleKey": "governance",
+      "value": 21,
+      "trend": null,
+      "observedOn": "2026-06-11",
+      "ageDays": 19,
+      "expectedCadenceDays": 120,
+      "staleAfterDays": 180,
+      "changeState": "unchanged",
+      "ferpaSensitive": false,
+      "cells": null,
+      "domainKeys": [
+        "governance"
+      ],
+      "lineage": {
+        "table": "Meeting",
+        "field": "minutesApprovedAt"
+      }
+    },
+    {
+      "key": "gov.meeting_cadence",
+      "label": "Board meetings held in the last year",
+      "kind": "register",
+      "availability": "available",
+      "unavailableReason": null,
+      "moduleKey": "governance",
+      "value": 3,
+      "trend": null,
+      "observedOn": "2026-05-21",
+      "ageDays": 40,
+      "expectedCadenceDays": 120,
+      "staleAfterDays": 180,
+      "changeState": "unchanged",
+      "ferpaSensitive": false,
+      "cells": null,
+      "domainKeys": [
+        "governance"
+      ],
+      "lineage": {
+        "table": "Meeting",
+        "field": "scheduledAt"
+      }
+    },
+    {
+      "key": "gov.policy_review",
+      "label": "Policies overdue for review",
+      "kind": "register",
+      "availability": "available",
+      "unavailableReason": null,
+      "moduleKey": "governance",
+      "value": 2,
+      "trend": null,
+      "observedOn": "2025-12-12",
+      "ageDays": 200,
+      "expectedCadenceDays": 400,
+      "staleAfterDays": 600,
+      "changeState": "unchanged",
+      "ferpaSensitive": false,
+      "cells": null,
+      "domainKeys": [
+        "governance"
+      ],
+      "lineage": {
+        "table": "Policy",
+        "field": "lastReviewedDate"
+      }
+    },
+    {
+      "key": "gov.board_terms",
+      "label": "Board terms already expired",
+      "kind": "register",
+      "availability": "available",
+      "unavailableReason": null,
+      "moduleKey": "governance",
+      "value": 1,
+      "trend": null,
+      "observedOn": "2025-05-26",
+      "ageDays": 400,
+      "expectedCadenceDays": 400,
+      "staleAfterDays": 600,
+      "changeState": "unchanged",
+      "ferpaSensitive": false,
+      "cells": null,
+      "domainKeys": [
+        "governance"
+      ],
+      "lineage": {
+        "table": "GovernancePerson",
+        "field": "termEnd"
+      }
+    },
+    {
+      "key": "gov.committee_chairs",
+      "label": "Active committees without a chair",
+      "kind": "register",
+      "availability": "available",
+      "unavailableReason": null,
+      "moduleKey": "governance",
+      "value": 1,
+      "trend": null,
+      "observedOn": null,
+      "ageDays": null,
+      "expectedCadenceDays": 400,
+      "staleAfterDays": 600,
+      "changeState": "never_observed",
+      "ferpaSensitive": false,
+      "cells": null,
+      "domainKeys": [
+        "governance"
+      ],
+      "lineage": {
+        "table": "Committee",
+        "field": "chair"
+      }
+    },
+    {
+      "key": "strat.plan_horizon",
+      "label": "Strategic plan horizon",
+      "kind": "register",
+      "availability": "available",
+      "unavailableReason": null,
+      "moduleKey": "strategy",
+      "value": "2029-06-30",
+      "trend": null,
+      "observedOn": "2024-07-01",
+      "ageDays": 729,
+      "expectedCadenceDays": 400,
+      "staleAfterDays": 600,
+      "changeState": "stale_data",
+      "ferpaSensitive": false,
+      "cells": null,
+      "domainKeys": [
+        "continuous_improvement",
+        "leadership"
+      ],
+      "lineage": {
+        "table": "StrategicPlan",
+        "field": "endDate"
+      }
+    },
+    {
+      "key": "fac.maintenance_backlog",
+      "label": "Open maintenance items",
+      "kind": "register",
+      "availability": "available",
+      "unavailableReason": null,
+      "moduleKey": "facilities",
+      "value": 2,
+      "trend": null,
+      "observedOn": "2026-05-06",
+      "ageDays": 55,
+      "expectedCadenceDays": 90,
+      "staleAfterDays": 135,
+      "changeState": "unchanged",
+      "ferpaSensitive": false,
+      "cells": null,
+      "domainKeys": [
+        "facilities"
+      ],
+      "lineage": {
+        "table": "MaintenanceItem",
+        "field": "status"
+      }
+    },
+    {
+      "key": "enr.headcount",
+      "label": "Total enrollment",
+      "kind": "register",
+      "availability": "available",
+      "unavailableReason": null,
+      "moduleKey": "enrollment",
+      "value": 214,
+      "trend": null,
+      "observedOn": "2026-06-05",
+      "ageDays": 25,
+      "expectedCadenceDays": 120,
+      "staleAfterDays": 180,
+      "changeState": "unchanged",
+      "ferpaSensitive": false,
+      "cells": null,
+      "domainKeys": [
+        "finance",
+        "leadership"
+      ],
+      "lineage": {
+        "table": "EnrollmentSnapshot",
+        "field": "totalEnrolled"
+      }
+    },
+    {
+      "key": "enr.feeder_grades",
+      "label": "Enrollment by grade",
+      "kind": "register",
+      "availability": "available",
+      "unavailableReason": null,
+      "moduleKey": "enrollment",
+      "value": null,
+      "trend": null,
+      "observedOn": "2026-06-05",
+      "ageDays": 25,
+      "expectedCadenceDays": 120,
+      "staleAfterDays": 180,
+      "changeState": "unchanged",
+      "ferpaSensitive": true,
+      "cells": [
+        {
+          "key": "1",
+          "value": null,
+          "suppressed": true,
+          "band": "fewer than 10",
+          "reason": "complementary"
+        },
+        {
+          "key": "2",
+          "value": 24,
+          "suppressed": false,
+          "band": null,
+          "reason": null
+        },
+        {
+          "key": "3",
+          "value": 31,
+          "suppressed": false,
+          "band": null,
+          "reason": null
+        },
+        {
+          "key": "4",
+          "value": 27,
+          "suppressed": false,
+          "band": null,
+          "reason": null
+        },
+        {
+          "key": "5",
+          "value": 26,
+          "suppressed": false,
+          "band": null,
+          "reason": null
+        },
+        {
+          "key": "6",
+          "value": 26,
+          "suppressed": false,
+          "band": null,
+          "reason": null
+        },
+        {
+          "key": "7",
+          "value": 26,
+          "suppressed": false,
+          "band": null,
+          "reason": null
+        },
+        {
+          "key": "8",
+          "value": 26,
+          "suppressed": false,
+          "band": null,
+          "reason": null
+        },
+        {
+          "key": "K",
+          "value": null,
+          "suppressed": true,
+          "band": "fewer than 10",
+          "reason": "below_min_cell"
+        }
+      ],
+      "domainKeys": [
+        "finance",
+        "leadership"
+      ],
+      "lineage": {
+        "table": "EnrollmentSnapshot",
+        "field": "byGrade"
+      }
+    },
+    {
+      "key": "svc.support_needs",
+      "label": "Students with a recorded support need",
+      "kind": "roster",
+      "availability": "available",
+      "unavailableReason": null,
+      "moduleKey": "enrollment",
+      "value": 34,
+      "trend": null,
+      "observedOn": null,
+      "ageDays": null,
+      "expectedCadenceDays": 120,
+      "staleAfterDays": 180,
+      "changeState": "never_observed",
+      "ferpaSensitive": true,
+      "cells": [
+        {
+          "key": "iep",
+          "value": null,
+          "suppressed": true,
+          "band": "fewer than 10",
+          "reason": "below_min_cell"
+        },
+        {
+          "key": "plan504",
+          "value": 14,
+          "suppressed": false,
+          "band": null,
+          "reason": null
+        },
+        {
+          "key": "ell",
+          "value": 21,
+          "suppressed": false,
+          "band": null,
+          "reason": null
+        }
+      ],
+      "domainKeys": [
+        "student_services"
+      ],
+      "lineage": {
+        "table": "StudentsService.aggregate",
+        "field": "counts.flags"
+      }
+    },
+    {
+      "key": "acc.evidence_currency",
+      "label": "Standards with out-of-date evidence",
+      "kind": "evidence",
+      "availability": "available",
+      "unavailableReason": null,
+      "moduleKey": "accreditation",
+      "value": 2,
+      "trend": null,
+      "observedOn": null,
+      "ageDays": null,
+      "expectedCadenceDays": 400,
+      "staleAfterDays": 600,
+      "changeState": "never_observed",
+      "ferpaSensitive": false,
+      "cells": null,
+      "domainKeys": [
+        "continuous_improvement"
+      ],
+      "lineage": {
+        "table": "AccreditationCatalogRequirement",
+        "field": "tag"
+      }
+    },
+    {
+      "key": "acc.readiness_series",
+      "label": "Recorded readiness",
+      "kind": "readiness",
+      "availability": "available",
+      "unavailableReason": null,
+      "moduleKey": "accreditation",
+      "value": 46,
+      "trend": null,
+      "observedOn": "2026-06-29",
+      "ageDays": 1,
+      "expectedCadenceDays": 7,
+      "staleAfterDays": 11,
+      "changeState": "unchanged",
+      "ferpaSensitive": false,
+      "cells": null,
+      "domainKeys": [
+        "continuous_improvement"
+      ],
+      "lineage": {
+        "table": "AccreditationReadinessSnapshot",
+        "field": "readinessPct"
+      }
+    },
+    {
+      "key": "acc.unscored_standards",
+      "label": "Standards with no rubric score",
+      "kind": "readiness",
+      "availability": "available",
+      "unavailableReason": null,
+      "moduleKey": "accreditation",
+      "value": 1,
+      "trend": null,
+      "observedOn": null,
+      "ageDays": null,
+      "expectedCadenceDays": 400,
+      "staleAfterDays": 600,
+      "changeState": "never_observed",
+      "ferpaSensitive": false,
+      "cells": null,
+      "domainKeys": [
+        "continuous_improvement"
+      ],
+      "lineage": {
+        "table": "AccreditationStandard",
+        "field": "rubricScore"
+      }
+    },
+    {
+      "key": "acc.unsupported_score",
+      "label": "High scores with no evidence attached",
+      "kind": "readiness",
+      "availability": "available",
+      "unavailableReason": null,
+      "moduleKey": "accreditation",
+      "value": 1,
+      "trend": null,
+      "observedOn": null,
+      "ageDays": null,
+      "expectedCadenceDays": 400,
+      "staleAfterDays": 600,
+      "changeState": "never_observed",
+      "ferpaSensitive": false,
+      "cells": null,
+      "domainKeys": [
+        "continuous_improvement"
+      ],
+      "lineage": {
+        "table": "AccreditationStandard",
+        "field": "rubricScore"
+      }
+    },
+    {
+      "key": "hr.staff_evaluations",
+      "label": "Staff evaluation cycle",
+      "kind": "register",
+      "availability": "not_tracked",
+      "unavailableReason": "A four-field staff-evaluation register unlocks this, and it is the highest-value item on the list.",
+      "moduleKey": "hr",
+      "value": null,
+      "trend": null,
+      "observedOn": null,
+      "ageDays": null,
+      "expectedCadenceDays": 400,
+      "staleAfterDays": 600,
+      "changeState": "never_observed",
+      "ferpaSensitive": false,
+      "cells": null,
+      "domainKeys": [
+        "hr"
+      ],
+      "lineage": null
+    },
+    {
+      "key": "fac.inspections",
+      "label": "Life-safety inspections",
+      "kind": "register",
+      "availability": "not_tracked",
+      "unavailableReason": "One field on a facilities item — what kind of inspection it is — unlocks this. We will not guess it from free text.",
+      "moduleKey": "facilities",
+      "value": null,
+      "trend": null,
+      "observedOn": null,
+      "ageDays": null,
+      "expectedCadenceDays": 400,
+      "staleAfterDays": 600,
+      "changeState": "never_observed",
+      "ferpaSensitive": false,
+      "cells": null,
+      "domainKeys": [
+        "facilities"
+      ],
+      "lineage": null
+    },
+    {
+      "key": "hr.pd_participation",
+      "label": "Professional-development participation",
+      "kind": "register",
+      "availability": "not_tracked",
+      "unavailableReason": "A professional-development register unlocks this. We will not use PD spend as participation.",
+      "moduleKey": "hr",
+      "value": null,
+      "trend": null,
+      "observedOn": null,
+      "ageDays": null,
+      "expectedCadenceDays": 400,
+      "staleAfterDays": 600,
+      "changeState": "never_observed",
+      "ferpaSensitive": false,
+      "cells": null,
+      "domainKeys": [
+        "hr"
+      ],
+      "lineage": null
+    },
+    {
+      "key": "safe.clearances",
+      "label": "Safe-environment clearances",
+      "kind": "register",
+      "availability": "not_tracked",
+      "unavailableReason": "This lives in VIRTUS / CMG Connect. A per-diocese CSV import comes first; a live connector later.",
+      "moduleKey": "hr",
+      "value": null,
+      "trend": null,
+      "observedOn": null,
+      "ageDays": null,
+      "expectedCadenceDays": 400,
+      "staleAfterDays": 600,
+      "changeState": "never_observed",
+      "ferpaSensitive": false,
+      "cells": null,
+      "domainKeys": [
+        "governance",
+        "student_services"
+      ],
+      "lineage": null
+    },
+    {
+      "key": "acad.assessment_growth",
+      "label": "Measured growth in student learning",
+      "kind": "register",
+      "availability": "not_tracked",
+      "unavailableReason": "This needs an LMS or assessment integration KYRO does not have. We will not proxy learning growth with anything else.",
+      "moduleKey": null,
+      "value": null,
+      "trend": null,
+      "observedOn": null,
+      "ageDays": null,
+      "expectedCadenceDays": 400,
+      "staleAfterDays": 600,
+      "changeState": "never_observed",
+      "ferpaSensitive": false,
+      "cells": null,
+      "domainKeys": [
+        "academic_excellence"
+      ],
+      "lineage": null
+    },
+    {
+      "key": "curr.doc_review",
+      "label": "Curriculum documents overdue for review",
+      "kind": "register",
+      "availability": "available",
+      "unavailableReason": null,
+      "moduleKey": "governance",
+      "value": 1,
+      "trend": null,
+      "observedOn": "2024-04-21",
+      "ageDays": 800,
+      "expectedCadenceDays": 400,
+      "staleAfterDays": 600,
+      "changeState": "stale_data",
+      "ferpaSensitive": false,
+      "cells": null,
+      "domainKeys": [
+        "academic_excellence"
+      ],
+      "lineage": {
+        "table": "Policy",
+        "field": "category"
+      }
+    }
+  ],
+  "counts": {
+    "available": 19,
+    "not_licensed": 3,
+    "no_data": 8,
+    "not_tracked": 5
+  },
+  "demoData": false,
+  "snapshotAsOf": "2026-06-29"
+}

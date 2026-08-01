@@ -26,6 +26,7 @@ import { GovernanceModule } from './governance/governance.module.js'
 import { WorkflowModule } from './workflow/workflow.module.js'
 import { AccreditationModule } from './accreditation/accreditation.module.js'
 import { AccreditationSignalsModule } from './accreditation-signals/accreditation-signals.module.js'
+import { TwinModule } from './twin/twin.module.js'
 import { FacilitiesModule } from './facilities/facilities.module.js'
 import { AdvancementModule } from './advancement/advancement.module.js'
 import { KnowledgeModule } from './knowledge/knowledge.module.js'
@@ -75,6 +76,11 @@ import { InboxModule } from './inbox/inbox.module.js'
     // it needs AnalyticsService, and AnalyticsModule already imports
     // AccreditationModule, so hosting it there would be a real DI cycle.
     AccreditationSignalsModule,
+    // AIC Phase D — the accreditation twin: the signal catalog, the findings
+    // ledger and the 4AM reconciliation. NO CONTROLLER (nothing is user-visible
+    // in this phase). Registered AFTER AccreditationSignalsModule so the module
+    // graph reads in dependency order: twin -> analytics -> accreditation.
+    TwinModule,
     FacilitiesModule,
     AdvancementModule,
     KnowledgeModule,

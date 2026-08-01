@@ -311,3 +311,65 @@ export {
   ADVANCEMENT_CLOSING_SOON_DAYS,
   BEHIND_GOAL_THRESHOLD,
 } from './advancement-giving.js'
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AIC Phase D — trend statistics (pure)
+//
+// The arithmetic that decides whether a number is allowed to be called a trend,
+// and refuses in four named ways when it is not: the confidence ladder
+// (insufficient -> observation -> directional -> trend), exact Mann-Kendall below
+// n=9, the Theil-Sen slope, the per-metric materiality floor, the two
+// independent granularity gates that refuse cumulative within-year rows, and
+// small-cell suppression for every per-cohort count.
+// ─────────────────────────────────────────────────────────────────────────────
+export type {
+  MoveFloor,
+  MetricIneligibility,
+  XY,
+  TheilSenResult,
+  MannKendallMethod,
+  MannKendallResult,
+  TrendConfidence,
+  TrendDirection,
+  TrendFavourability,
+  TrendRefusal,
+  TrendCapReason,
+  TrendCap,
+  TrendSignalOptions,
+  TrendMateriality,
+  TrendSignal,
+  HorizonKind,
+  Horizon,
+} from './trend-signal.js'
+export {
+  TREND_SIGNAL_VERSION,
+  DAYS_PER_YEAR,
+  MK_ALPHA,
+  MIN_N_FOR_TREND,
+  MIN_N_FOR_NORMAL_APPROX,
+  IRREGULAR_GAP_MULTIPLE,
+  MONTH_ALIGNMENT_TOLERANCE_MONTHS,
+  MAX_HORIZON_YEARS,
+  TREND_EPSILON,
+  MAX_INVERSIONS_AT_05,
+  TREND_WORD,
+  MIN_ANNUAL_MOVE,
+  TrendGranularityError,
+  medianOf,
+  theilSen,
+  mannKendallExact,
+  fiscalYearOf,
+  computeTrendSignal,
+  estimateHorizon,
+} from './trend-signal.js'
+
+export type { SmallCell, SmallCellReason } from './small-cells.js'
+export {
+  SMALL_CELLS_VERSION,
+  MIN_CELL,
+  SMALL_CELL_BAND,
+  ZERO_IS_PUBLISHABLE,
+  suppressSmallCells,
+  suppressSmallCellSet,
+  isSuppressed,
+} from './small-cells.js'

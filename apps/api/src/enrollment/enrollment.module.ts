@@ -39,6 +39,9 @@ import { StudentsService } from './students/students.service.js'
     DiocesanEnrollmentService,
     NameMatchService,
   ],
-  exports: [EnrollmentService, DiocesanEnrollmentService],
+  // AIC Phase D: StudentsService is exported so the accreditation twin can read
+  // FERPA-safe AGGREGATE roster counts through the service that owns them, rather
+  // than issuing its own prisma.student query. Additive; no behaviour change.
+  exports: [EnrollmentService, DiocesanEnrollmentService, StudentsService],
 })
 export class EnrollmentModule {}

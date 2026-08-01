@@ -572,13 +572,62 @@ export class AnalyticsService {
       return computeTrend(metricKey, [])
     }
 
+    const series = await this.trendSeries(schoolId)
+    if (series === null) return computeTrend(metricKey, [])
+    return this.trendFromSeries(schoolId, metricKey, series)
+  }
+
+  /**
+   * MANY metrics, ONE set of reads.
+   *
+   * `trends()` re-resolves entitlement and re-reads FiscalPeriod +
+   * StatementSnapshot (full `payload` JSON, every period) + PeriodOperationalData
+   * on every call. A caller that wants twelve metrics for one school — the nightly
+   * twin reconciliation does exactly that — was issuing twelve entitlement
+   * resolutions and thirty-six register reads where one and three would do, per
+   * school, against the pool the app serves from.
+   *
+   * Byte-identical results to calling `trends()` per key: same gate, same series,
+   * same monthly fallback. An unentitled key still costs NO read.
+   */
+  async trendsMany(schoolId: string, metrics: readonly string[]): Promise<Map<MetricKey, MetricTrend>> {
+    const out = new Map<MetricKey, MetricTrend>()
+    const keys: MetricKey[] = []
+    for (const m of metrics) {
+      if (!isMetricKey(m)) throw new BadRequestException(`Unknown metric '${m}'.`)
+      if (!keys.includes(m as MetricKey)) keys.push(m as MetricKey)
+    }
+    if (keys.length === 0) return out
+
+    const entitled = await entitledModulesForSchool(schoolId, this.billing)
+    const wanted = keys.filter((k) => entitled.has(moduleForMetricKey(k)))
+    for (const k of keys) {
+      if (!wanted.includes(k)) out.set(k, computeTrend(k, []))
+    }
+    // The reads happen ONLY if at least one key survived the gate.
+    if (wanted.length === 0) return out
+
+    const series = await this.trendSeries(schoolId)
+    for (const k of wanted) {
+      out.set(k, series === null ? computeTrend(k, []) : await this.trendFromSeries(schoolId, k, series))
+    }
+    return out
+  }
+
+  /**
+   * The shared read behind every annual trend: newest-per-period statement
+   * snapshot plus that period's operational row, oldest period first.
+   *
+   * `null` means the school has NO fiscal period at all, which short-circuits the
+   * monthly fallback exactly as the inline version did — an empty array means it
+   * has periods but no snapshots, and that case DOES reach the fallback.
+   */
+  private async trendSeries(schoolId: string): Promise<TrendSeriesEntry[] | null> {
     const periods = await this.prisma.fiscalPeriod.findMany({
       where: { schoolId },
       orderBy: { periodEndDate: 'asc' },
     })
-    if (periods.length === 0) {
-      return computeTrend(metricKey, [])
-    }
+    if (periods.length === 0) return null
 
     const snapshots = await this.prisma.statementSnapshot.findMany({
       where: { schoolId, fiscalPeriodId: { in: periods.map((p) => p.id) } },
@@ -613,7 +662,7 @@ export class AnalyticsService {
       })
     }
 
-    const series: TrendSeriesEntry[] = periods
+    return periods
       .filter((p) => latestByPeriod.has(p.id))
       .map((p) => ({
         periodId: p.id,
@@ -622,7 +671,13 @@ export class AnalyticsService {
         bundle: latestByPeriod.get(p.id) as ReportBundle,
         operational: opByPeriod.get(p.id) ?? null,
       }))
+  }
 
+  private async trendFromSeries(
+    schoolId: string,
+    metricKey: MetricKey,
+    series: TrendSeriesEntry[],
+  ): Promise<MetricTrend> {
     const annual = computeTrend(metricKey, series)
 
     // Annual path is authoritative whenever ≥2 fiscal periods have a snapshot —
