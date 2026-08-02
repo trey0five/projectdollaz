@@ -1825,19 +1825,36 @@ export class AssistantService {
    * (AlertService.create resolves it from userId). See buildPolicyProposal.
    */
   private buildAlertProposal(args: Record<string, unknown>, ctx: Ctx): ProposedAction {
-    const type = args.type === 'threshold' ? 'threshold' : args.type === 'digest' ? 'digest' : ''
-    if (!type) throw new Error('create_alert needs a type of "digest" or "threshold".')
+    const type =
+      args.type === 'threshold'
+        ? 'threshold'
+        : args.type === 'digest'
+          ? 'digest'
+          : args.type === 'warning_digest'
+            ? 'warning_digest'
+            : ''
+    if (!type)
+      throw new Error('create_alert needs a type of "digest", "threshold" or "warning_digest".')
     const label =
       typeof args.label === 'string' && args.label.trim() ? args.label.trim().slice(0, 200) : undefined
 
-    if (type === 'digest') {
+    if (type === 'digest' || type === 'warning_digest') {
       const cadence = ['daily', 'weekly', 'monthly'].includes(String(args.cadence))
         ? (args.cadence as string)
         : 'weekly'
+      // A warning digest carries NO metric — it summarises the accreditation
+      // early-warning ledger. AlertService.create rejects a metricKey/operator/
+      // threshold on this type, and gates it fail-closed on the accreditation
+      // module, so an unlicensed school gets a clear refusal at apply time rather
+      // than a standing alert that could never fire.
+      const summary =
+        type === 'warning_digest'
+          ? `Email you a ${cadence} summary of your open accreditation early warnings.`
+          : `Set up a ${cadence} financial digest emailed to you.`
       return {
         kind: 'create_alert',
         periodId: ctx.periodId ?? '',
-        summary: `Set up a ${cadence} financial digest emailed to you.`,
+        summary,
         payload: { type, cadence, ...(label ? { label } : {}) },
       }
     }
@@ -3047,7 +3064,8 @@ export class AssistantService {
       // UNTRUSTED payload — AlertService.create re-validates every field by type and
       // defaults the recipient to the creator's email. Returns the created row id so
       // an Undo can be offered.
-      const type = p.type === 'threshold' ? 'threshold' : 'digest'
+      const type =
+        p.type === 'threshold' ? 'threshold' : p.type === 'warning_digest' ? 'warning_digest' : 'digest'
       const dto = {
         type,
         ...(typeof p.cadence === 'string' ? { cadence: p.cadence } : {}),

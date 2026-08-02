@@ -15,14 +15,36 @@ auditConfig:
     - GHSA-p6gq-j5cr-w38f # nodemailer — addressparser DoS (fix: >=9.0.1, major)
     - GHSA-fx2h-pf6j-xcff # vite — fs.deny bypass (dev; fix: >=6.4.3)
     - GHSA-5xrq-8626-4rwp # vitest — UI server file read (dev; fix: >=3.2.6)
+    # react-router — the SECOND advisory on the same package wants >=8.3.0, a MAJOR
+    # upgrade of the app's entire routing layer (we are on ^7.1.1, overridden to
+    # 7.18.0 above for GHSA-chx6-hx7r-mcp5). Same call as multer/nodemailer: a major
+    # bump gets its own change with a real regression pass, not a drive-by in a
+    # security sweep. Tracked, not forgotten.
+    - GHSA-qwww-vcr4-c8h2 # react-router — fix is >=8.3.0, a major bump
 # Force-patch transitive deps that have published fixes (a real patch beats an
 # ignoreGhsas allowlist entry). brace-expansion: GHSA-3jxr-9vmj-r5cp DoS — all
 # three affected major lines have in-range patches; pulled deep via exceljs /
 # @nestjs/cli / typescript-eslint glob chains.
 overrides:
-  'brace-expansion@<1.1.16': '1.1.16'
-  'brace-expansion@>=2.0.0 <2.1.2': '2.1.2'
-  'brace-expansion@>=3.0.0 <5.0.7': '5.0.7'
+  # brace-expansion: GHSA-3jxr-9vmj-r5cp AND the later GHSA-mh99-v99m-4gvg. The
+  # first advisory's caps (1.1.16 / 2.1.2 / 5.0.7) were themselves vulnerable to
+  # the second, so this gate went red again — an override pinned to an exact patch
+  # is a snapshot, not a floor, and has to be re-raised when the next one lands.
+  'brace-expansion@<1.1.17': '1.1.17'
+  'brace-expansion@>=2.0.0 <2.1.3': '2.1.3'
+  'brace-expansion@>=3.0.0 <5.0.8': '5.0.8'
+  # GHSA-4c8g-83qw-93j6 + GHSA-v2hh-gcrm-f6hx — host confusion. Transitive via ajv.
+  'fast-uri@<3.1.4': '3.1.4'
+  # GHSA-52cp-r559-cp3m — quadratic blow-up on merge-key chains. Transitive.
+  'js-yaml@>=4.0.0 <4.3.0': '4.3.0'
+  # GHSA-r28c-9q8g-f849 — path traversal in the source-map reader. Patch-level.
+  'postcss@<=8.5.17': '8.5.18'
+  # GHSA-gcfj-64vw-6mp9 — the Node adapter can inherit a proxy from the
+  # environment. In-range for apps/web's own ^1.7.9, so this is a real patch.
+  'axios@>=1.15.2 <1.18.0': '1.18.0'
+  # GHSA-chx6-hx7r-mcp5 — unauthenticated DoS. 7.18.0 is in range for our ^7.1.1.
+  # NOTE the SECOND react-router advisory below is NOT fixable this way.
+  'react-router@>=7.0.0 <7.18.0': '7.18.0'
 allowBuilds:
   '@nestjs/core': true
   '@prisma/client': true

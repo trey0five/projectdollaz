@@ -3,9 +3,26 @@
 useDefault = true
 
 [allowlist]
-description = "Template env files hold placeholder / empty values, not real secrets."
+description = "Template env files and TOTP test vectors — placeholders and published constants, not credentials."
 paths = [
   '''\.env\.example$''',
   '''\.env\.sample$''',
   '''\.env\..*\.sample$''',
+  # ── TOTP TEST VECTORS, not credentials ────────────────────────────────────
+  # Both files hold a base32 string that gitleaks scores as a generic-api-key:
+  #
+  #   apps/api/src/auth/totp.spec.ts   — the RFC 6238 Appendix B REFERENCE SECRET,
+  #     ASCII "12345678901234567890". It is published in the RFC itself and is the
+  #     only way to assert our implementation against the standard's truth table.
+  #   apps/api/src/auth/mfa.service.spec.ts — a fabricated enrolment secret sitting
+  #     beside `Buffer.alloc(32, 9)`, used to drive the enrol/verify path.
+  #
+  # Neither authenticates anything: real TOTP secrets are generated per user and
+  # encrypted with MFA_TOTP_KEY, which lives in Secrets Manager and is never in git.
+  # SCOPED TO THESE TWO FILES ON PURPOSE — a wildcard over '*.spec.ts' would hide a
+  # genuine key pasted into any future test, which is the failure mode this scan
+  # exists to catch. Real leaks in these two files would still be missed, so keep
+  # the exception this narrow and re-check it if either file grows.
+  '''apps/api/src/auth/totp\.spec\.ts$''',
+  '''apps/api/src/auth/mfa\.service\.spec\.ts$''',
 ]

@@ -117,6 +117,23 @@ describe('create_alert — buildProposal (confirmable, no mutation)', () => {
     const { svc } = makeService()
     await expect(build(svc, { type: 'nonsense' }, CTX)).rejects.toThrow(/type/i)
   })
+
+  // AIC Phase E shipped `warning_digest` on AlertService and in the Settings UI but
+  // NOT in Penny's enum, so the accreditation digest was unreachable from the one
+  // surface a head of school actually asks in. AlertService already gates it
+  // fail-closed on the accreditation module, so nothing is re-checked here.
+  it('warning_digest: proposes an ACCREDITATION digest and carries no metric', async () => {
+    const { svc, alertsCreate } = makeService()
+    const action = await build(svc, { type: 'warning_digest', cadence: 'monthly' }, CTX)
+    expect(action.payload.type).toBe('warning_digest')
+    expect(action.payload.cadence).toBe('monthly')
+    // A metric on this type is rejected downstream; the proposer must not invent one.
+    expect(action.payload.metricKey).toBeUndefined()
+    expect(action.payload.operator).toBeUndefined()
+    expect(action.payload.threshold).toBeUndefined()
+    expect(action.summary).toMatch(/accreditation early warning/i)
+    expect(alertsCreate).not.toHaveBeenCalled()
+  })
 })
 
 describe('create_alert — applyAction (real write via AlertService)', () => {
@@ -135,6 +152,24 @@ describe('create_alert — applyAction (real write via AlertService)', () => {
     expect(userId).toBe(USER.id)
     expect((dto as { type?: string }).type).toBe('digest')
     expect(res).toMatchObject({ applied: true, targetType: 'create_alert', targetId: 'al1', reversible: true })
+  })
+
+  // THE COERCION BUG THIS PINS: applyAction read `p.type === 'threshold' ? … : 'digest'`,
+  // so a confirmed warning_digest was written to AlertService as a plain FINANCIAL
+  // digest. The user asks for accreditation warnings, confirms a card that says
+  // accreditation warnings, and is subscribed to a cash summary instead.
+  it('warning_digest survives apply — it is NOT collapsed into a financial digest', async () => {
+    const { svc, alertsCreate } = makeService()
+    const action: ProposedAction = {
+      kind: 'create_alert',
+      periodId: '',
+      summary: 'Email you a monthly summary of your open accreditation early warnings.',
+      payload: { type: 'warning_digest', cadence: 'monthly' },
+    }
+    await apply(svc, action)
+    const [, dto] = alertsCreate.mock.calls[0]
+    expect((dto as { type?: string }).type).toBe('warning_digest')
+    expect((dto as { cadence?: string }).cadence).toBe('monthly')
   })
 })
 

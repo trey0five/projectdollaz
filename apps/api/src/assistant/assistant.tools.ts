@@ -747,14 +747,15 @@ export const TOOL_SCHEMAS = [
     function: {
       name: 'create_alert',
       description:
-        'PROPOSE a standing alert / proactive request for the user to CONFIRM before it is created (like create_task — this does NOT create it; the user must confirm). Use when the user asks to be notified/emailed on a schedule or when a metric crosses a line, e.g. "email me a cash summary every Monday" or "alert me if days-cash drops below 30". Set type="digest" for a recurring email summary (also set cadence: daily/weekly/monthly), OR type="threshold" for a metric watch (also set metricKey, operator lt/gt, and a numeric threshold). Valid metricKey values: operating_margin, days_cash_on_hand, months_operating_reserve, tuition_dependency, cost_per_pupil, net_tuition_per_student, financial_aid_per_student, aid_per_aided_student, tuition_discount_rate, pct_students_on_aid, enrollment_change_yoy, student_teacher_ratio. Threshold is the raw metric value (a percent like operating_margin is a whole number, e.g. 5 for 5%; days/months/currency are their own units). The email goes to the current user by default. Alert, not period-scoped.',
+        'PROPOSE a standing alert / proactive request for the user to CONFIRM before it is created (like create_task — this does NOT create it; the user must confirm). Use when the user asks to be notified/emailed on a schedule or when a metric crosses a line, e.g. "email me a cash summary every Monday" or "alert me if days-cash drops below 30". Set type="digest" for a recurring email summary (also set cadence: daily/weekly/monthly), OR type="threshold" for a metric watch (also set metricKey, operator lt/gt, and a numeric threshold), OR type="warning_digest" for a recurring summary of OPEN ACCREDITATION EARLY WARNINGS at this school (also set cadence; pass NO metricKey/operator/threshold - it needs the accreditation module). Valid metricKey values: operating_margin, days_cash_on_hand, months_operating_reserve, tuition_dependency, cost_per_pupil, net_tuition_per_student, financial_aid_per_student, aid_per_aided_student, tuition_discount_rate, pct_students_on_aid, enrollment_change_yoy, student_teacher_ratio. Threshold is the raw metric value (a percent like operating_margin is a whole number, e.g. 5 for 5%; days/months/currency are their own units). The email goes to the current user by default. Alert, not period-scoped.',
       parameters: {
         type: 'object',
         properties: {
           type: {
             type: 'string',
-            enum: ['digest', 'threshold'],
-            description: 'digest = scheduled email summary; threshold = metric-crossing watch.',
+            enum: ['digest', 'threshold', 'warning_digest'],
+            description:
+              'digest = scheduled email summary; threshold = metric-crossing watch; warning_digest = a recurring summary of OPEN ACCREDITATION EARLY WARNINGS (accreditation module only, no metric).',
           },
           cadence: {
             type: 'string',

@@ -2855,3 +2855,65 @@ describe('a threshold sentence may not contradict the comparison behind it', () 
     }
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// "1 days" — A VARIABLE DAY COUNT MUST CARRY ITS OWN NOUN.
+//
+// Phase F introduced fmtDays for its two new rules and left eight shipped A–E
+// templates rendering "{{n}} days". Five of those are reachable at n = 1 — an
+// audit that lapsed yesterday, a plan that ends tomorrow, a plan that ended
+// yesterday (reachable at 0 too), an artifact one day out of date — so production
+// copy read "1 days ago". The numeral is right and the sentence is not, which is
+// the same class of defect as every other one this file guards.
+//
+// The three that still hardcode " days" are each provably unreachable at 1 and are
+// listed with the reason, so this stays a real assertion rather than a list of
+// whatever happens to be true today.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('a variable day count never renders "1 days"', () => {
+  /** Placeholders whose value is a CONSTANT or provably > 1 when the rule fires. */
+  const EXEMPT: Record<string, string> = {
+    // GOV-MINUTES-LAG gates on `lag <= 60 -> silent`, so the smallest value it can
+    // render is 61. `{{threshold}}` is the constant 60 itself.
+    lagDays: 'fires only above MINUTES_LAG_WARN_DAYS (60)',
+    threshold: 'a constant from TWIN_THRESHOLDS, never 1 for a day-valued rule',
+    // The AR bucket is the 90-day bucket label, not an elapsed count.
+    agingBucketDays: 'a fixed bucket width (90), not an elapsed duration',
+    // A signal is stale only past 1.5x its cadence; the smallest cadence in the
+    // catalog is monthly (45), so the oldest stale age is at least 68.
+    oldestAgeDays: 'a signal is stale only past 1.5x cadence; min is 68 days',
+  }
+
+  it('no template pairs a variable day placeholder with a hardcoded " days"', () => {
+    const offenders: string[] = []
+    for (const d of TWIN_RULE_DEFS) {
+      const templates = [
+        d.rationaleTemplate,
+        (d as { rationaleTemplateLow?: string }).rationaleTemplateLow,
+      ].filter((t): t is string => typeof t === 'string')
+      for (const t of templates) {
+        for (const m of t.matchAll(/\{\{(\w+)\}\}\s+days?\b/g)) {
+          const key = m[1]
+          if (!(key in EXEMPT)) offenders.push(`${d.id}: {{${key}}} days`)
+        }
+      }
+    }
+    expect(
+      offenders,
+      `these render "1 days" when the count is 1 — pass the figure through fmtDays and drop the noun: ${offenders.join(', ')}`,
+    ).toEqual([])
+  })
+
+  it('the exemptions are real placeholders, not stale entries', () => {
+    const used = new Set<string>()
+    for (const d of TWIN_RULE_DEFS) {
+      for (const t of [d.rationaleTemplate, (d as { rationaleTemplateLow?: string }).rationaleTemplateLow]) {
+        if (typeof t !== 'string') continue
+        for (const m of t.matchAll(/\{\{(\w+)\}\}/g)) used.add(m[1])
+      }
+    }
+    for (const key of Object.keys(EXEMPT)) {
+      expect(used.has(key), `${key} is exempted but appears in no template`).toBe(true)
+    }
+  })
+})

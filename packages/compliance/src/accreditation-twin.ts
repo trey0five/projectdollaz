@@ -1273,9 +1273,9 @@ const FIN_AUDIT_STALE: TwinRuleDef = {
   // findings onto standards that do not ask for the artifact.
   standardCodes: NO_CODES,
   rationaleTemplate:
-    'The most recent financial audit on file stopped being current on {{expiresOn}} — {{daysOverdue}} days ago — and {{standardCount}} standards cite it.',
+    'The most recent financial audit on file stopped being current on {{expiresOn}} — {{daysOverdue}} ago — and {{standardCount}} standards cite it.',
   rationaleTemplateLow:
-    'The financial audit on file stops being current on {{expiresOn}}, in {{daysUntilExpiry}} days, and {{standardCount}} standards cite it.',
+    'The financial audit on file stops being current on {{expiresOn}}, in {{daysUntilExpiry}}, and {{standardCount}} standards cite it.',
   unlock: null,
   evaluate(c) {
     const g = c.register.evidenceGroups.find((x) => x.tag === 'financial_audit')
@@ -1295,11 +1295,11 @@ const FIN_AUDIT_STALE: TwinRuleDef = {
     if (stale) {
       const overdue = g.daysUntilExpiry === null ? null : Math.abs(g.daysUntilExpiry)
       if (g.expiresOn === null || overdue === null) return []
-      evidence.push(ev('daysOverdue', 'Days out of date', overdue, fmtCount(overdue)))
+      evidence.push(ev('daysOverdue', 'Days out of date', overdue, fmtDays(overdue)))
     } else {
       if (g.expiresOn === null || g.daysUntilExpiry === null) return []
       evidence.push(
-        ev('daysUntilExpiry', 'Days until it lapses', g.daysUntilExpiry, fmtCount(g.daysUntilExpiry)),
+        ev('daysUntilExpiry', 'Days until it lapses', g.daysUntilExpiry, fmtDays(g.daysUntilExpiry)),
       )
     }
     return [
@@ -1559,7 +1559,7 @@ const STRAT_PLAN_EXPIRING: TwinRuleDef = {
   defaultDomainKey: 'continuous_improvement',
   standardCodes: STRAT_CODES,
   rationaleTemplate:
-    'The adopted strategic plan ends on {{planEndDate}}, {{daysRemaining}} days from now.',
+    'The adopted strategic plan ends on {{planEndDate}}, {{daysRemaining}} from now.',
   unlock: null,
   evaluate(c) {
     const { endDate, days } = planEndDate(c)
@@ -1579,7 +1579,7 @@ const STRAT_PLAN_EXPIRING: TwinRuleDef = {
         factKey: `register:strategic_plan_end@${endDate}`,
         evidence: [
           ev('planEndDate', 'Plan end date', endDate, formatCivilDate(endDate), endDate),
-          ev('daysRemaining', 'Days remaining', days, fmtCount(days)),
+          ev('daysRemaining', 'Days remaining', days, fmtDays(days)),
         ],
         severity,
         likelihood: days <= TH.PLAN_EXPIRY_WARN_DAYS.value ? 'likely' : 'possible',
@@ -1604,7 +1604,7 @@ const STRAT_PLAN_EXPIRED: TwinRuleDef = {
   defaultDomainKey: 'continuous_improvement',
   standardCodes: STRAT_CODES,
   rationaleTemplate:
-    'The adopted strategic plan ended on {{planEndDate}}, {{daysOverdue}} days ago, and no later plan is adopted.',
+    'The adopted strategic plan ended on {{planEndDate}}, {{daysOverdue}} ago, and no later plan is adopted.',
   unlock: null,
   evaluate(c) {
     const { endDate, days } = planEndDate(c)
@@ -1617,7 +1617,7 @@ const STRAT_PLAN_EXPIRED: TwinRuleDef = {
         factKey: `register:strategic_plan_end@${endDate}`,
         evidence: [
           ev('planEndDate', 'Plan end date', endDate, formatCivilDate(endDate), endDate),
-          ev('daysOverdue', 'Days since it ended', Math.abs(days), fmtCount(Math.abs(days))),
+          ev('daysOverdue', 'Days since it ended', Math.abs(days), fmtDays(Math.abs(days))),
         ],
         severity: 'critical',
         likelihood: 'likely',
@@ -1932,7 +1932,7 @@ const EVI_STALE: TwinRuleDef = {
   defaultDomainKey: 'continuous_improvement',
   standardCodes: NO_CODES,
   rationaleTemplate:
-    'The {{label}} on file stopped being current on {{expiresOn}}, {{daysOverdue}} days ago, and {{standardCount}} standards cite it.',
+    'The {{label}} on file stopped being current on {{expiresOn}}, {{daysOverdue}} ago, and {{standardCount}} standards cite it.',
   unlock: null,
   evaluate(c) {
     const out: TwinFindingDraft[] = []
@@ -1953,7 +1953,7 @@ const EVI_STALE: TwinRuleDef = {
         evidence: [
           ev('label', 'Artifact', g.label, g.label),
           ev('expiresOn', 'Current through', g.expiresOn, formatCivilDate(g.expiresOn)),
-          ev('daysOverdue', 'Days out of date', overdue, fmtCount(overdue)),
+          ev('daysOverdue', 'Days out of date', overdue, fmtDays(overdue)),
           ev('standardCount', 'Standards citing this artifact', codes.length, fmtCount(codes.length)),
         ],
         severity: g.servesAssurance ? 'critical' : 'warn',
