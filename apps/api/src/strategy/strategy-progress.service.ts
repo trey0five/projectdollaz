@@ -13,14 +13,15 @@ import {
   type PeriodOperational,
 } from '@finrep/analytics'
 import { PrismaService } from '../prisma/prisma.service.js'
+import { ownerName, rollUpInitiatives } from './initiative-rollup.js'
 import { computePace, meanFraction, worstPace, type PaceStatus } from './strategy-progress.js'
-import { STALE_INITIATIVE_DAYS } from './strategy.constants.js'
 import type {
   GoalComputed,
   GoalCounts,
   InitiativeStatusCounts,
   MilestoneView,
   PillarComputed,
+  StaleInitiativeView,
   StrategyComputed,
   TrendPoint,
 } from './strategy.types.js'
@@ -36,20 +37,10 @@ function isoDate(d: Date | null | undefined): string | null {
   return d ? d.toISOString().slice(0, 10) : null
 }
 
-/** Human display name for an owner row (firstName lastName, else email). */
-function ownerName(u: { firstName: string | null; lastName: string | null; email: string } | null): string {
-  if (!u) return ''
-  const full = `${u.firstName ?? ''} ${u.lastName ?? ''}`.trim()
-  return full || u.email
-}
-
-const EMPTY_INITIATIVE_COUNTS = (): InitiativeStatusCounts => ({
-  planned: 0,
-  in_progress: 0,
-  blocked: 0,
-  done: 0,
-  cancelled: 0,
-})
+// `ownerName` and `EMPTY_INITIATIVE_COUNTS` now live in initiative-rollup.ts
+// alongside the counter that uses them, and are RE-EXPORTED here so nothing that
+// already reads them from this module has to move.
+export { EMPTY_INITIATIVE_COUNTS, ownerName } from './initiative-rollup.js'
 
 const EMPTY_GOAL_COUNTS = (): GoalCounts => ({
   total: 0,
@@ -300,7 +291,7 @@ export class StrategyProgressService {
     const allGoalStatuses: PaceStatus[] = []
     const planGoalCounts = EMPTY_GOAL_COUNTS()
     const behindPaceGoals: StrategyComputedBehind[] = []
-    const staleInitiatives: StaleAcc[] = []
+    const staleInitiatives: StaleInitiativeView[] = []
     // Backfills to persist AFTER the loop (one updateMany-per-goal, fire-and-forget-safe).
     const baselineBackfills: { goalId: string; value: number; date: Date; periodId: string }[] = []
 
@@ -311,28 +302,16 @@ export class StrategyProgressService {
       const pillarFractions: (number | null)[] = []
 
       for (const g of pil.goals) {
-        // Initiative status rollup for this goal + stale detection.
-        const initiativeStatusCounts = EMPTY_INITIATIVE_COUNTS()
-        let linkedTotal = 0
-        let linkedDone = 0
-        for (const ini of g.initiatives) {
-          const st = ini.status as keyof InitiativeStatusCounts
-          if (st in initiativeStatusCounts) initiativeStatusCounts[st] += 1
-          const t = tasksByInitiative.get(ini.id)
-          if (t) {
-            linkedTotal += t.total
-            linkedDone += t.done
-          }
-          const staleDays = Math.floor((asOf.getTime() - ini.updatedAt.getTime()) / 86_400_000)
-          if ((ini.status === 'planned' || ini.status === 'in_progress') && staleDays > STALE_INITIATIVE_DAYS) {
-            staleInitiatives.push({
-              title: ini.title,
-              ownerName: ini.owner ? ownerName(ini.owner) : null,
-              status: ini.status,
-              staleDays,
-            })
-          }
-        }
+        // Initiative status rollup for this goal + stale detection. ONE shared
+        // helper, so /improvement's flat school-scoped read cannot fork from the
+        // plan traversal's counters. The stale rows are CONCATENATED in goal order
+        // and the single post-loop sort below still owns the ordering.
+        const { initiativeStatusCounts, linkedTaskCounts, stale } = rollUpInitiatives(
+          g.initiatives,
+          tasksByInitiative,
+          asOf,
+        )
+        staleInitiatives.push(...stale)
 
         const built = this.buildGoal(g, pil.name, {
           metricsByKey,
@@ -343,7 +322,7 @@ export class StrategyProgressService {
           asOfIso,
           asOf,
           initiativeStatusCounts,
-          linkedTaskCounts: g.goalType === 'task_rollup' ? { total: linkedTotal, done: linkedDone } : null,
+          linkedTaskCounts: g.goalType === 'task_rollup' ? linkedTaskCounts : null,
           baselineBackfills,
           behindPaceGoals,
         })
@@ -612,13 +591,6 @@ interface StrategyComputedBehind {
   formattedTarget: string | null
   targetDate: string | null
   pctToTarget: number | null
-}
-
-interface StaleAcc {
-  title: string
-  ownerName: string | null
-  status: string
-  staleDays: number
 }
 
 /** Coerce the stored milestones JSON into a clean [{id,label,done}] list. */

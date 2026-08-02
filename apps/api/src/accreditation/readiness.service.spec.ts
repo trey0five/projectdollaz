@@ -72,6 +72,10 @@ function makeService(over: {
   requirements?: unknown[]
   policies?: unknown[]
   plans?: unknown[]
+  /** AIC Phase G — the still-open improvement initiatives the gaps' `work` block
+   *  and the ADVISORY `inFlight` projection read. Absent = a school with none,
+   *  which is every school in every pre-Phase-G fixture below. */
+  initiatives?: unknown[]
 }) {
   const frameworks = over.frameworks ?? [COGNIA, MSA]
   const evidenceRows: EvidenceFixture[] =
@@ -115,6 +119,9 @@ function makeService(over: {
     },
     accreditationCatalogStandard: {
       findMany: vi.fn(async () => over.assuranceCatalog ?? []),
+    },
+    improvementInitiative: {
+      findMany: vi.fn(async () => over.initiatives ?? []),
     },
   }
   const svc = new AccreditationReadinessService(prisma as never)

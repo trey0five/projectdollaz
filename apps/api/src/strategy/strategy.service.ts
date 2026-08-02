@@ -105,7 +105,11 @@ export class StrategyService {
   // ── Raw serializers (the editor tree; the hero/cards read the COMPUTED payload) ──
   private rawInitiative(
     i: {
-      id: string; goalId: string; title: string; description: string | null; status: string
+      // `goalId` is NULLABLE from AIC Phase G on — an improvement initiative can
+      // exist without a strategic goal. Nothing reaching THIS serializer can have
+      // a null one (the plan tree only yields goal-bound rows), so the emitted
+      // JSON is unchanged; the type merely stops lying about the column.
+      id: string; goalId: string | null; title: string; description: string | null; status: string
       ownerUserId: string | null; orderIndex: number; createdAt: Date; updatedAt: Date
       owner?: { firstName: string | null; lastName: string | null; email: string } | null
     },
@@ -216,7 +220,7 @@ export class StrategyService {
     return goal
   }
   private async resolveInitiative(schoolId: string, initiativeId: string) {
-    const ini = await this.prisma.strategyInitiative.findFirst({ where: { id: initiativeId, schoolId } })
+    const ini = await this.prisma.improvementInitiative.findFirst({ where: { id: initiativeId, schoolId } })
     if (!ini) throw new NotFoundException('Initiative not found.')
     return ini
   }
@@ -594,7 +598,7 @@ export class StrategyService {
   async createInitiative(schoolId: string, goalId: string, dto: CreateInitiativeDto, userId: string) {
     await this.resolveGoal(schoolId, goalId)
     if (dto.ownerUserId != null) await this.assertOwnerIsMember(schoolId, dto.ownerUserId)
-    const row = await this.prisma.strategyInitiative.create({
+    const row = await this.prisma.improvementInitiative.create({
       data: {
         schoolId,
         goalId,
@@ -615,7 +619,7 @@ export class StrategyService {
     const existing = await this.resolveInitiative(schoolId, initiativeId)
     const pick = <T>(v: T | undefined, current: T): T => (v === undefined ? current : v)
     if (dto.ownerUserId != null) await this.assertOwnerIsMember(schoolId, dto.ownerUserId)
-    const data: Prisma.StrategyInitiativeUpdateInput = {
+    const data: Prisma.ImprovementInitiativeUpdateInput = {
       title: pick(dto.title, existing.title),
       description: pick(dto.description, existing.description),
       status: pick(dto.status, existing.status),
@@ -625,7 +629,7 @@ export class StrategyService {
     if (dto.ownerUserId !== undefined) {
       data.owner = dto.ownerUserId === null ? { disconnect: true } : { connect: { id: dto.ownerUserId } }
     }
-    const row = await this.prisma.strategyInitiative.update({
+    const row = await this.prisma.improvementInitiative.update({
       where: { id: existing.id },
       data,
       include: { owner: OWNER_SELECT },
@@ -636,7 +640,7 @@ export class StrategyService {
 
   async removeInitiative(schoolId: string, initiativeId: string, userId: string) {
     const existing = await this.resolveInitiative(schoolId, initiativeId)
-    await this.prisma.strategyInitiative.delete({ where: { id: existing.id } })
+    await this.prisma.improvementInitiative.delete({ where: { id: existing.id } })
     await this.audit.write({ schoolId, userId, action: 'strategy.initiative.deleted', targetType: 'strategy_initiatives', targetId: existing.id })
     return { id: existing.id }
   }

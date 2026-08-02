@@ -45,7 +45,10 @@ describe('TwinController — the guard chain', () => {
     const keys = Reflect.getMetadataKeys(TwinController)
     const moduleKey = keys.find((k) => String(k).toLowerCase().includes('module'))
     expect(moduleKey, 'no @RequiresModule metadata on TwinController').toBeDefined()
-    expect(Reflect.getMetadata(moduleKey as string, TwinController)).toBe('accreditation')
+    // AIC Phase G made @RequiresModule VARIADIC (OR semantics for /improvement),
+    // so a single-key route stores a ONE-ELEMENT LIST. The decorator call site on
+    // TwinController is unchanged.
+    expect(Reflect.getMetadata(moduleKey as string, TwinController)).toEqual(['accreditation'])
   })
 
   it('READ is open to all three roles; every WRITE excludes viewer', () => {

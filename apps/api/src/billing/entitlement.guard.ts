@@ -19,6 +19,11 @@ import { REQUIRES_MODULE } from './requires-module.decorator.js'
  *     at all → SUBSCRIPTION_REQUIRED, so "not paying" always beats "not licensed"),
  *     then isEntitledForModule → a DISTINCT 402 { code:'MODULE_NOT_LICENSED',
  *     module } for an entitled-but-unlicensed school.
+ *   • WITH @RequiresModule('a', 'b') → **OR**: licensing EITHER admits the route.
+ *     The 402 names `module: keys[0]` (the primary, so the web's existing
+ *     single-key parser keeps working) and ADDITIONALLY carries `modules` — a
+ *     field that appears only on multi-key routes, so a single-key body is
+ *     byte-identical to what shipped before.
  *
  * RESOLUTION: trialing and active subscriptions BOTH resolve their licensed set
  * the same way (legacy/NULL → {finance} + always-on core), so a tagged sellable
@@ -53,13 +58,19 @@ export class EntitlementGuard implements CanActivate {
       )
     }
 
-    const moduleKey = this.reflector.getAllAndOverride<ModuleKey | undefined>(REQUIRES_MODULE, [
-      context.getHandler(),
-      context.getClass(),
-    ])
+    const raw = this.reflector.getAllAndOverride<ModuleKey[] | ModuleKey | undefined>(
+      REQUIRES_MODULE,
+      [context.getHandler(), context.getClass()],
+    )
+    // NORMALISE. The decorator is variadic and always stores an array, but a
+    // SCALAR can still arrive — from a stale compiled artifact mid-deploy, or
+    // from a mocked Reflector in a spec written before this change. Treating it
+    // as a one-element list is why every existing entitlement spec stays green
+    // byte-for-byte, so this is load-bearing rather than defensive.
+    const keys: ModuleKey[] = Array.isArray(raw) ? raw : raw ? [raw] : []
 
     // ── Legacy path: NO @RequiresModule → byte-for-byte the original behavior. ──
-    if (!moduleKey) {
+    if (keys.length === 0) {
       const entitled = await this.billing.isEntitled(schoolId)
       if (!entitled) {
         throw new HttpException(
@@ -87,18 +98,29 @@ export class EntitlementGuard implements CanActivate {
       )
     }
 
-    const licensed = await this.billing.isEntitledForModule(schoolId, moduleKey)
-    if (!licensed) {
-      const label = MODULE_META[moduleKey]?.label ?? moduleKey
-      throw new HttpException(
-        {
-          code: 'MODULE_NOT_LICENSED',
-          module: moduleKey,
-          message: `The ${label} module isn't included on your plan — add it to continue.`,
-        },
-        402,
-      )
+    // OR semantics. The SHORT-CIRCUIT is deliberate: a school that licenses the
+    // first key must not pay a second round-trip to discover it also licenses
+    // the second.
+    for (const k of keys) {
+      if (await this.billing.isEntitledForModule(schoolId, k)) return true
     }
-    return true
+
+    const labels = keys.map((k) => MODULE_META[k]?.label ?? k)
+    throw new HttpException(
+      {
+        code: 'MODULE_NOT_LICENSED',
+        // The PRIMARY key. apps/web's moduleKeyFromError reads this field and is
+        // unchanged; a single-key route's 402 body is byte-identical to today's.
+        module: keys[0],
+        // ADDITIVE, and present ONLY on a multi-key route — so no existing
+        // parser ever sees a field it was not written against.
+        ...(keys.length > 1 ? { modules: keys } : {}),
+        message:
+          keys.length > 1
+            ? `This needs the ${labels.slice(0, -1).join(', ')} or ${labels[labels.length - 1]} module — add either one to continue.`
+            : `The ${labels[0]} module isn't included on your plan — add it to continue.`,
+      },
+      402,
+    )
   }
 }

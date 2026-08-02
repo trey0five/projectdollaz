@@ -52,6 +52,55 @@ export interface ReadinessTargetPublic {
   stepsToTarget: number
 }
 
+/**
+ * AIC Phase G — WHO IS ALREADY WORKING THIS GAP. Present on EVERY gap, with
+ * `initiativeCount: 0` when nobody is. A gap that has an owner and a date reads
+ * completely differently from one that does not, and that difference is the whole
+ * point of the Continuous Improvement Manager.
+ */
+export interface ReadinessGapWork {
+  initiativeCount: number
+  initiativeIds: string[]
+  /** Earliest due date among the linked, still-open initiatives. */
+  nearestDueDate: string | null
+  /** The HIGHEST rubric level any linked initiative is aiming at. */
+  targetRubricScore: number | null
+}
+
+/** A gap, plus the work in flight against it. The gap's own fields are untouched. */
+export type ReadinessGapPublic = ReadinessGap & { work: ReadinessGapWork }
+
+/**
+ * AIC Phase G — THE PROJECTION, AND IT IS ADVISORY ONLY.
+ *
+ * `expectedIndexIfDelivered` is what the index WOULD be if every in-flight
+ * initiative that carries both a target rubric level and a due date lands. It is
+ * assigned to this object and to nothing else. `readinessPct`, `projectedIndex`,
+ * `band`, `target`, `domains` and every field of every `gap` are computed from the
+ * ACTUAL leaves, before this object exists.
+ *
+ * A projection that quietly becomes the headline number is the single worst thing
+ * this phase could ship — a school would walk into a visit believing a number that
+ * described its intentions. `readiness-inflight.spec.ts` runs `getReadiness` twice
+ * over the same data, once with no initiatives and once with enough to move the
+ * index by 40 points, and asserts everything except `inFlight` and `gaps[].work`
+ * is byte-identical.
+ */
+export interface ReadinessInFlight {
+  expectedIndexIfDelivered: number | null
+  expectedBandIfDelivered: string | null
+  /** The LAST due date among the counted initiatives — when the whole set lands. */
+  expectedByDate: string | null
+  /** A literal sentence naming `counted`. */
+  basis: string
+  counted: number
+  /**
+   * Why the rest were left out. Rendered, not swallowed: "12 initiatives, 9
+   * projected" invites the question this answers.
+   */
+  excluded: { noTargetScore: number; noDueDate: number }
+}
+
 export interface ReadinessResponse {
   framework: ReadinessFrameworkPublic | null
   readinessPct: number
@@ -71,8 +120,13 @@ export interface ReadinessResponse {
   projectedIndex: number | null
   band: string | null
   target: ReadinessTargetPublic | null
-  gaps: ReadinessGap[]
+  gaps: ReadinessGapPublic[]
   assurances: AssuranceStatus[]
+  /**
+   * AIC Phase G — the ADVISORY projection. Null in framework-less / no-index
+   * mode, where there is no index to project.
+   */
+  inFlight: ReadinessInFlight | null
   /**
    * Phase B — the SAME leaves, re-expressed as ten domain readings. Always
    * exactly ten entries in DOMAIN_KEYS order, including the domains this
@@ -84,6 +138,48 @@ export interface ReadinessResponse {
   domains: DomainReadiness[]
   /** Phase B — the published size of the hole in the domain grid. */
   confidence: DomainConfidence
+}
+
+/** Work that is finished or abandoned is not "in flight". */
+const CLOSED_INITIATIVE_STATUSES: string[] = ['done', 'cancelled']
+
+/** The projected-down initiative row the back-propagation reads. */
+interface InFlightRow {
+  id: string
+  /** The standardId (gap/assurance origin) or a findingKey — only the former matches a leaf. */
+  originRef: string | null
+  /** yyyy-mm-dd. */
+  dueDate: string | null
+  targetRubricScore: number | null
+}
+
+const EMPTY_GAP_WORK = (): ReadinessGapWork => ({
+  initiativeCount: 0,
+  initiativeIds: [],
+  nearestDueDate: null,
+  targetRubricScore: null,
+})
+
+/** Group the in-flight rows by the standard they were adopted against. */
+function groupWorkByStandard(rows: readonly InFlightRow[]): Map<string, ReadinessGapWork> {
+  const out = new Map<string, ReadinessGapWork>()
+  for (const r of rows) {
+    if (r.originRef === null) continue
+    const w = out.get(r.originRef) ?? EMPTY_GAP_WORK()
+    w.initiativeCount += 1
+    w.initiativeIds.push(r.id)
+    if (r.dueDate !== null && (w.nearestDueDate === null || r.dueDate < w.nearestDueDate)) {
+      w.nearestDueDate = r.dueDate
+    }
+    if (
+      r.targetRubricScore !== null &&
+      (w.targetRubricScore === null || r.targetRubricScore > w.targetRubricScore)
+    ) {
+      w.targetRubricScore = r.targetRubricScore
+    }
+    out.set(r.originRef, w)
+  }
+  return out
 }
 
 /**
@@ -201,11 +297,71 @@ export class AccreditationReadinessService {
           statusBands: this.bandsOf(framework),
         }
       : null
+    // ── THE HEADLINE, COMPUTED FIRST AND FROM THE ACTUAL LEAVES ────────────────
+    // Everything below this line that a school reads as a fact is derived from
+    // `scoredLeaves`. The projection array does not exist yet, and that ordering
+    // is deliberate rather than incidental.
     const summary = schoolReadiness(scoredLeaves, fwInput)
     const hasIndex = summary.projectedIndex != null
-    const gaps = computeGaps(scoredLeaves, hasIndex)
+    const baseGaps = computeGaps(scoredLeaves, hasIndex)
 
-    // Target math only exists on an index scale.
+    // ── AIC Phase G: the in-flight work, and the ADVISORY projection ──────────
+    const inFlightRows = await this.inFlightInitiativesFor(schoolId)
+    const workByStandard = groupWorkByStandard(inFlightRows)
+    const gaps: ReadinessGapPublic[] = baseGaps.map((g) => ({
+      ...g,
+      work: workByStandard.get(g.standardId) ?? EMPTY_GAP_WORK(),
+    }))
+
+    // The lift map: an initiative only moves a leaf when it names BOTH the level
+    // it is aiming at and the date it is aiming for. Anything else is an
+    // intention, and an intention is not a projection.
+    const lift = new Map<string, number>()
+    let counted = 0
+    let noTargetScore = 0
+    let noDueDate = 0
+    const countedDueDates: string[] = []
+    const scoredIds = new Set(scoredLeaves.map((l) => l.standardId))
+    for (const row of inFlightRows) {
+      if (row.originRef === null || !scoredIds.has(row.originRef)) continue
+      if (row.targetRubricScore === null) noTargetScore += 1
+      if (row.dueDate === null) noDueDate += 1
+      if (row.targetRubricScore === null || row.dueDate === null) continue
+      counted += 1
+      countedDueDates.push(row.dueDate)
+      const prev = lift.get(row.originRef)
+      lift.set(row.originRef, prev == null ? row.targetRubricScore : Math.max(prev, row.targetRubricScore))
+    }
+
+    let inFlight: ReadinessInFlight | null = null
+    if (hasIndex) {
+      // The projection array. It exists ONLY to be handed to schoolReadiness a
+      // second time; its result is assigned to `inFlight` and to nothing else.
+      // `Math.max` keeps the projection MONOTONE — landing work can never be
+      // shown as lowering a school's index.
+      const projectedLeaves = scoredLeaves.map((l) => {
+        const lifted = lift.get(l.standardId)
+        return lifted == null
+          ? l
+          : { ...l, rubricScore: l.rubricScore == null ? lifted : Math.max(l.rubricScore, lifted) }
+      })
+      const projected = schoolReadiness(projectedLeaves, fwInput)
+      countedDueDates.sort()
+      inFlight = {
+        expectedIndexIfDelivered: counted > 0 ? projected.projectedIndex : null,
+        expectedBandIfDelivered: counted > 0 ? projected.band : null,
+        expectedByDate: countedDueDates.length > 0 ? countedDueDates[countedDueDates.length - 1] : null,
+        basis:
+          counted > 0
+            ? `Projected from ${counted} in-flight initiative${counted === 1 ? '' : 's'} that names both a target rubric level and a due date. It is not your index.`
+            : 'No in-flight initiative names both a target rubric level and a due date, so nothing is projected.',
+        counted,
+        excluded: { noTargetScore, noDueDate },
+      }
+    }
+
+    // Target math only exists on an index scale. It reads `scoredLeaves` — NEVER
+    // the projected array.
     let target: ReadinessTargetPublic | null = null
     if (framework && hasIndex && summary.projectedIndex != null) {
       const targetIndex = opts.target ?? framework.defaultTarget
@@ -249,7 +405,37 @@ export class AccreditationReadinessService {
       assurances: framework ? computeAssurances(assuranceLeaves) : [],
       domains,
       confidence,
+      inFlight,
     }
+  }
+
+  /**
+   * The still-open improvement initiatives that were adopted against a standard.
+   *
+   * FAIL-SOFT ON PURPOSE: these columns and this read arrive with AIC Phase G, and
+   * an image that boots before the migration has run must degrade to "nobody is
+   * working anything" rather than 500 the accreditation hero — the one page whose
+   * entire job is to be the honest picture.
+   */
+  private async inFlightInitiativesFor(schoolId: string): Promise<InFlightRow[]> {
+    const rows = await this.prisma.improvementInitiative
+      .findMany({
+        where: { schoolId, status: { notIn: CLOSED_INITIATIVE_STATUSES } },
+        select: { id: true, originRef: true, dueDate: true, targetRubricScore: true },
+        orderBy: [{ dueDate: 'asc' }, { id: 'asc' }],
+      })
+      .catch((err: unknown) => {
+        this.logger.warn(
+          `improvement initiatives unreadable for ${schoolId}: ${(err as Error).message}`,
+        )
+        return [] as { id: string; originRef: string | null; dueDate: Date | null; targetRubricScore: number | null }[]
+      })
+    return rows.map((r) => ({
+      id: r.id,
+      originRef: r.originRef,
+      dueDate: r.dueDate ? r.dueDate.toISOString().slice(0, 10) : null,
+      targetRubricScore: r.targetRubricScore,
+    }))
   }
 
   /**

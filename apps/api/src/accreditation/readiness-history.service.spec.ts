@@ -530,9 +530,12 @@ function guardFor(licensedForAccreditation: boolean) {
 
 describe('readiness history routes — accreditation entitlement', () => {
   it('the controller carries @RequiresModule(\'accreditation\')', () => {
-    expect(Reflect.getMetadata(REQUIRES_MODULE, AccreditationReadinessHistoryController)).toBe(
+    // AIC Phase G made @RequiresModule VARIADIC (OR semantics for /improvement),
+    // so a single-key route now stores a ONE-ELEMENT LIST. The call site above is
+    // byte-identical; only what it stores changed.
+    expect(Reflect.getMetadata(REQUIRES_MODULE, AccreditationReadinessHistoryController)).toEqual([
       'accreditation',
-    )
+    ])
   })
 
   it('licensed → the guard lets the request through', async () => {

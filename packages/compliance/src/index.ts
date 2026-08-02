@@ -452,3 +452,41 @@ export {
   bandForFacts,
   deriveTwin,
 } from './accreditation-twin.js'
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AIC Phase G — the CONTINUOUS IMPROVEMENT MANAGER's recommendation templates
+// (pure). Four deterministic templates that turn a readiness gap, an unmet
+// assurance or an early warning into a piece of work with an owner role, a
+// metric to bind and a target rubric level — and an `estimatedLift` that is
+// either REAL index points copied from `computeGaps`, or null plus a literal
+// reason. Evidence work and assurance gates NEVER quote an index gain, because
+// neither moves the index.
+//
+// `composeFindingKey` is THE finding-key formula, shared with the API's
+// early-warning persistence so the two can never fork.
+// ─────────────────────────────────────────────────────────────────────────────
+export type {
+  ImprovementGapInput,
+  ImprovementAssuranceInput,
+  ImprovementFindingInput,
+  RecommendationInput,
+  RecommendationTemplateId,
+  RecommendationOriginType,
+  SuggestedOwnerRole,
+  EstimatedLift,
+  Recommendation,
+} from './improvement-findings.js'
+export {
+  IMPROVEMENT_FINDINGS_VERSION,
+  RECOMMENDATION_LIMIT,
+  RECOMMENDATION_TEMPLATE_IDS,
+  OWNER_ROLE_BY_DOMAIN,
+  NO_INDEX_SCALE_REASON,
+  EVIDENCE_NOT_INDEXED_REASON,
+  ASSURANCE_NOT_INDEXED_REASON,
+  FINDING_NOT_STANDARD_SCOPED_REASON,
+  FINDING_STANDARD_NOT_A_GAP_REASON,
+  ZERO_LIFT_REASON,
+  composeFindingKey,
+  computeRecommendations,
+} from './improvement-findings.js'

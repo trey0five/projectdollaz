@@ -45,6 +45,7 @@ import {
   LayoutGrid,
   ListChecks,
   Library,
+  TrendingUp,
   Settings as SettingsIcon,
   User as UserIcon,
   LayoutDashboard,
@@ -94,10 +95,28 @@ const FINANCE_BADGE_SOURCES = ['metric', 'compliance', 'data']
 // are reached from the Finance home / tiles instead of the global bar. Settings
 // lives in the avatar menu (right end), not here. Home shows a label from sm+;
 // the rest are icon+tooltip, labels only at 2xl.
-const V2_NAV = [
+// EXPORTED so the Phase-G honesty spec can assert the OR gate on the row below
+// without mounting the whole shell (which needs six context providers). Export
+// only — nothing about the rail's rendering changes.
+export const V2_NAV = [
   { to: '/app', label: 'Home', Icon: LayoutGrid, home: true },
   { to: '/tasks', label: 'Tasks', Icon: ListChecks },
   { to: '/knowledge', label: 'Knowledge', Icon: Library },
+  // AIC Phase G — /improvement. `modules` (plural) = OR semantics, the SAME
+  // predicate the sidebar group and the one API entitlement guard use: the page
+  // rides on EITHER accreditation or strategy and there is deliberately no
+  // `improvement` module key (no third SKU).
+  //
+  // WHY IT IS HERE AND NOT ONLY IN sidebarNav.js: NAV_GROUPS renders only in the
+  // v1 branch of this file, and ui.v2 is the DEFAULT shipped experience
+  // (UiFlagContext: only an explicit 'v1' opts out). Under v2 modules are reached
+  // from the HOME TILES, and a tile is keyed by ModuleKey with its label resolved
+  // through MODULE_META — so /improvement, which deliberately has no module key,
+  // can never be a tile. Without this row a strategy-only school on the default UI
+  // has no path to the page at all, and an accreditation school reaches it only
+  // via the Accreditation → Improvement tab. Carries NO V2_NAV_ID entry, so it
+  // mints no id and cannot collide with the frozen Penny anchors.
+  { to: '/improvement', label: 'Improvement', Icon: TrendingUp, modules: ['accreditation', 'strategy'] },
 ]
 
 // The frozen Penny target-registry ids for the ui.v2 rail's primary links. Put on
@@ -314,7 +333,15 @@ export default function AppShell({ children }) {
   const lockedModules = SELLABLE_MODULE_KEYS.filter((k) => hasModule(k) === false)
   const showAddons = entitled && lockedModules.length > 0
 
-  const visibleGroups = NAV_GROUPS.filter((g) => g.module === null || hasModule(g.module))
+  // A group renders when it is Core (`module === null`), when its single `module`
+  // is licensed, or — AIC Phase G — when ANY key in its `modules` list is (OR
+  // semantics, mirroring the one API entitlement guard). A `modules` group carries
+  // NO `module` key, so it is `!== null` and still lands in domainGroups below,
+  // and lockedModules (SELLABLE_MODULE_KEYS) is untouched: a school licensing
+  // neither key sees the group vanish and is upsold by the real modules' rows.
+  const visibleGroups = NAV_GROUPS.filter((g) =>
+    g.module === null || (g.modules ? g.modules.some(hasModule) : hasModule(g.module)),
+  )
 
   // Layer-cake split: the always-on Core group, its elevated Briefing hero, and the
   // licensed domain groups. The briefing is pulled OUT of the Core list and rendered
@@ -585,10 +612,14 @@ export default function AppShell({ children }) {
     )
   }
 
-  // The rail's <nav> with the three global destinations.
+  // The rail's <nav> with the global destinations. A row gates on its single
+  // `module` as before, or — Phase G — on ANY key in `modules` (OR semantics,
+  // mirroring the one API entitlement guard). An ungated row has neither.
   const v2PrimaryNav = (withIds) => (
     <nav aria-label="Primary" className="flex flex-col gap-1 px-3 py-3">
-      {V2_NAV.filter((i) => !i.module || hasModule(i.module)).map((item) =>
+      {V2_NAV.filter((i) =>
+        i.modules ? i.modules.some(hasModule) : !i.module || hasModule(i.module),
+      ).map((item) =>
         renderV2NavItem(item, withIds),
       )}
     </nav>

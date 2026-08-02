@@ -155,7 +155,7 @@ model School {
   strategicPlans           StrategicPlan[]
   strategyPillars          StrategyPillar[]
   strategyGoals            StrategyGoal[]
-  strategyInitiatives      StrategyInitiative[]
+  strategyInitiatives      ImprovementInitiative[]
   nameAliases              SchoolNameAlias[]
   governancePeople         GovernancePerson[]
   committeeMemberships     CommitteeMembership[]
@@ -163,6 +163,8 @@ model School {
   // ── AIC Phase F (additive) — the two new intake registers.
   staffEvaluations         StaffEvaluation[]
   priorVisitFindings       PriorVisitFinding[]
+  // ── AIC Phase G (additive) — the improvement observation series.
+  improvementProgressEvents ImprovementProgressEvent[]
 
   @@index([organizationId])
   @@map("schools")
@@ -292,8 +294,8 @@ model User {
   strategyPillarUpdates        StrategyPillar[]         @relation("StrategyPillarUpdatedBy")
   strategyGoalUpdates          StrategyGoal[]           @relation("StrategyGoalUpdatedBy")
   strategyGoalsOwned           StrategyGoal[]           @relation("StrategyGoalOwner")
-  strategyInitiativeUpdates    StrategyInitiative[]     @relation("StrategyInitiativeUpdatedBy")
-  strategyInitiativesOwned     StrategyInitiative[]     @relation("StrategyInitiativeOwner")
+  strategyInitiativeUpdates    ImprovementInitiative[]  @relation("StrategyInitiativeUpdatedBy")
+  strategyInitiativesOwned     ImprovementInitiative[]  @relation("StrategyInitiativeOwner")
   messages                     Message[]
   governancePersons            GovernancePerson[]       @relation("GovernancePersonUser")
   governancePersonsUpdated     GovernancePerson[]       @relation("GovernancePersonUpdatedBy")
@@ -302,6 +304,8 @@ model User {
   staffEvaluationsCreated      StaffEvaluation[]        @relation("StaffEvaluationCreatedBy")
   staffEvaluationsUpdated      StaffEvaluation[]        @relation("StaffEvaluationUpdatedBy")
   priorVisitFindingsCreated    PriorVisitFinding[]      @relation("PriorVisitFindingCreatedBy")
+  // ── AIC Phase G (additive) — who recorded an improvement observation.
+  improvementProgressEventsCreated ImprovementProgressEvent[] @relation("ImprovementProgressEventCreatedBy")
 
   @@index([email])
   @@index([lastLoginRegion])
@@ -2478,19 +2482,35 @@ model StrategyGoal {
   pillar        StrategyPillar       @relation(fields: [pillarId], references: [id], onDelete: Cascade)
   owner         User?                @relation("StrategyGoalOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
   updatedByUser User?                @relation("StrategyGoalUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
-  initiatives   StrategyInitiative[]
+  initiatives   ImprovementInitiative[]
 
   @@index([schoolId])
   @@index([pillarId])
   @@map("strategy_goals")
 }
 
-/// An execution INITIATIVE under a goal — the "how". Workflow Tasks soft-link to an
-/// initiative (Task.sourceType='strategy', sourceRef=initiative.id) to roll up.
-model StrategyInitiative {
+/// An execution INITIATIVE — the "how". Workflow Tasks soft-link to an initiative
+/// (Task.sourceType='strategy', sourceRef=initiative.id) to roll up.
+///
+/// AIC Phase G renamed this model from StrategyInitiative to ImprovementInitiative.
+/// @@map("strategy_initiatives") is UNCHANGED, so the rename is ZERO DDL: every
+/// index, FK and audit row (targetType: 'strategy_initiatives') still resolves, and
+/// the @relation("StrategyInitiative…") strings are kept byte-identical because they
+/// are Prisma-level identifiers with no database presence.
+///
+/// goalId is OPTIONAL as of Phase G: an initiative adopted from an accreditation gap
+/// or an early-warning finding has no strategic goal. /strategy walks
+/// plan.pillars[].goals[].initiatives[] and is therefore structurally blind to
+/// goal-less rows — deliberate, and the reason a strategy-only school reads exactly
+/// as it did before.
+///
+/// progressSource NULL is the BACK-COMPAT CONTRACT and means "status only": every
+/// pre-Phase-G row has NULL here and must render exactly as it did before
+/// (progressPct null, basis 'Status only', never counted toward a rollup).
+model ImprovementInitiative {
   id              String   @id @default(uuid()) @db.Uuid
   schoolId        String   @map("school_id") @db.Uuid
-  goalId          String   @map("goal_id") @db.Uuid
+  goalId          String?  @map("goal_id") @db.Uuid
   title           String
   description     String?
   // 'planned' | 'in_progress' | 'blocked' | 'done' | 'cancelled'
@@ -2501,14 +2521,96 @@ model StrategyInitiative {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
-  school        School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  goal          StrategyGoal @relation(fields: [goalId], references: [id], onDelete: Cascade)
-  owner         User?        @relation("StrategyInitiativeOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
-  updatedByUser User?        @relation("StrategyInitiativeUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  // ── AIC Phase G (additive) — the continuous-improvement manager ────────────
+  /// 'manual' | 'gap' | 'assurance' | 'finding' | 'draft'. The ONLY NOT NULL
+  /// addition, and 'manual' is the literal truth about every pre-Phase-G row:
+  /// a person typed it in.
+  originType             String    @default("manual") @map("origin_type")
+  /// The standardId (gap/assurance) or the findingKey (finding) this was adopted
+  /// from. NULL for a hand-typed initiative.
+  originRef              String?   @map("origin_ref")
+  /// `${ruleId}:${scopeKey}` — composeFindingKey() in @finrep/compliance is the ONE
+  /// formula. Unique per school (NULLs are all distinct in Postgres), so adopting
+  /// the same recommendation twice returns the SAME initiative.
+  findingKey             String?   @map("finding_key")
+  startDate              DateTime? @map("start_date") @db.Date
+  dueDate                DateTime? @map("due_date") @db.Date
+  completedAt            DateTime? @map("completed_at")
+  /// NULL = "status only" (every legacy row). Otherwise
+  /// 'metric' | 'milestone' | 'task_rollup' | 'manual'.
+  progressSource         String?   @map("progress_source")
+  /// progressSource='milestone' — [{ id, label, done }] JSON, mirroring
+  /// StrategyGoal.milestones.
+  milestones             Json?
+  /// progressSource='manual' — hand-set progress fraction 0..1. NEVER projects a
+  /// completion date and never feeds an org score.
+  manualProgressPct      Decimal?  @map("manual_progress_pct") @db.Decimal(6, 4)
+  /// progressSource='metric' — a canonical MetricKey; progress is COMPUTED live.
+  metricKey              String?   @map("metric_key")
+  targetValue            Decimal?  @map("target_value") @db.Decimal(18, 6)
+  /// Baseline FROZEN at bind (never recomputed on read), exactly as StrategyGoal
+  /// does it.
+  baselineValue          Decimal?  @map("baseline_value") @db.Decimal(18, 6)
+  baselineDate           DateTime? @map("baseline_date") @db.Date
+  baselineMetricPeriodId String?   @map("baseline_metric_period_id") @db.Uuid
+  lastProgressAt         DateTime? @map("last_progress_at")
+  /// HUMAN judgement: 'low' | 'medium' | 'high'. This is NOT the computed
+  /// riskSignal, is never derived from it and is never defaulted — a legacy row is
+  /// NULL and stays NULL. The two are always shown as two separate fields.
+  riskLevel              String?   @map("risk_level")
+  riskNote               String?   @map("risk_note")
+  /// The rubric level this initiative is meant to reach (1..4). Only an initiative
+  /// carrying BOTH this and a dueDate is counted by readiness `inFlight`.
+  targetRubricScore      Int?      @map("target_rubric_score")
 
+  school         School                     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  goal           StrategyGoal?              @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  owner          User?                      @relation("StrategyInitiativeOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  updatedByUser  User?                      @relation("StrategyInitiativeUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  progressEvents ImprovementProgressEvent[]
+
+  @@unique([schoolId, findingKey])
   @@index([schoolId])
   @@index([goalId])
+  @@index([schoolId, dueDate])
+  @@index([schoolId, originType])
   @@map("strategy_initiatives")
+}
+
+/// AIC Phase G — the improvement OBSERVATION SERIES.
+///
+/// APPEND-ONLY: there is no updatedAt and no @updatedAt, and nothing rewrites a row.
+/// A projected completion date is only honest if the readings it interpolates were
+/// RECORDED when they were true, not recomputed on read — so this table is the
+/// record. One reading per (initiative, day, source), so re-running the nightly
+/// recorder is a no-op rather than a second point that fakes a denser series.
+model ImprovementProgressEvent {
+  id              String   @id @default(uuid()) @db.Uuid
+  schoolId        String   @map("school_id") @db.Uuid
+  initiativeId    String   @map("initiative_id") @db.Uuid
+  /// The civil day the reading describes. UTC-midnight DATE, house convention.
+  observedOn      DateTime @map("observed_on") @db.Date
+  /// 'metric' | 'milestone' | 'task_rollup' | 'manual'. TEXT + DTO @IsIn.
+  source          String
+  /// The RAW metric number at observedOn (source='metric'), else NULL.
+  value           Decimal? @db.Decimal(18, 6)
+  /// The 0..1 fraction toward target at observedOn. NULL when unmeasurable.
+  pct             Decimal? @db.Decimal(6, 4)
+  note            String?
+  /// The fiscal period the metric reading came from (source='metric'), else NULL.
+  /// Deliberately NOT an FK, mirroring StrategyGoal.baselineMetricPeriodId.
+  metricPeriodId  String?  @map("metric_period_id") @db.Uuid
+  createdByUserId String?  @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  school     School                @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  initiative ImprovementInitiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  createdBy  User?                 @relation("ImprovementProgressEventCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([initiativeId, observedOn, source])
+  @@index([schoolId])
+  @@index([initiativeId, observedOn])
+  @@map("improvement_progress_events")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

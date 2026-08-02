@@ -62,9 +62,20 @@ describe('spec 36 — a likelihood is a WORD, never a percentage', () => {
 })
 
 describe('spec 38 — the Improvement tab ships NO control it cannot honour', () => {
+  // AIC PHASE G UPDATE. Through Phase F this block asserted the opposite of two
+  // of the cases below: that no create-initiative control was enabled, and that
+  // the tab said the manager "is not here yet". Phase G ships the manager, which
+  // makes that sentence FALSE — so the assertions defending it die in the same
+  // commit as the sentence. A green spec asserting a claim the product has
+  // outgrown is the test suite defending a lie.
+  //
+  // What SURVIVES unchanged is everything that is still true: this rail still
+  // shows no progress bar, no owner field, no date input and no percentage. The
+  // manager lives at /improvement; half of it duplicated here would be two
+  // half-truths instead of one whole one.
   const findings = [
     {
-      findingKey: 'k1',
+      findingKey: 'ACC-UNSCORED:school',
       ruleId: 'ACC-UNSCORED',
       title: 'Standards carry no rubric score',
       rationale: '42 of 42 standards carry no rubric score at all.',
@@ -84,17 +95,40 @@ describe('spec 38 — the Improvement tab ships NO control it cannot honour', ()
     expect(container.textContent).not.toMatch(/\bOwner\b/)
   })
 
-  it('offers no enabled "create initiative" control — the manager is not built yet', () => {
-    wrap(<ImprovementPlaceholder findings={findings} />)
-    const creators = screen
-      .queryAllByRole('button')
-      .filter((b) => /create|adopt|start .*initiative/i.test(b.textContent ?? ''))
-    for (const b of creators) expect(b).toBeDisabled()
+  it('no longer claims the Continuous Improvement Manager is unbuilt', () => {
+    const { container } = wrap(<ImprovementPlaceholder findings={findings} />)
+    expect(container.textContent).not.toMatch(/not here yet/i)
+    expect(container.textContent).not.toMatch(/Coming in the Continuous Improvement/i)
   })
 
-  it('says plainly that the feature is not here yet', () => {
-    const { container } = wrap(<ImprovementPlaceholder findings={findings} />)
-    expect(container.textContent).toMatch(/not here yet|Coming in the Continuous Improvement/i)
+  it('every candidate offers a REAL, enabled route into the manager, carrying its key AND its title', () => {
+    // The action is a link, not a button, and it is never disabled: the page it
+    // points at exists now. The finding key rides along so /improvement can open
+    // that exact gap's flow — and so does the TITLE, because /improvement's rail
+    // is capped at eight and ranked by index lift, and a school-scoped warning
+    // (no lift) is the first thing truncated. Without the title the page could
+    // only resolve the key against a rail that may not contain it, and the click
+    // did nothing at all.
+    wrap(<ImprovementPlaceholder findings={findings} />)
+    const work = screen.getByRole('link', { name: /work this gap/i })
+    const href = work.getAttribute('href')
+    const [path, query] = href.split('?')
+    expect(path).toBe('/improvement')
+    const params = new URLSearchParams(query)
+    expect(params.get('rec')).toBe('ACC-UNSCORED:school')
+    expect(params.get('recTitle')).toBe(findings[0].title)
+    expect(work.hasAttribute('disabled')).toBe(false)
+  })
+
+  it('a finding with no key still links somewhere real rather than nowhere', () => {
+    const { container } = wrap(
+      <ImprovementPlaceholder
+        findings={[{ ...findings[0], findingKey: undefined, factKey: undefined }]}
+      />,
+    )
+    const links = [...container.querySelectorAll('a')].map((a) => a.getAttribute('href'))
+    expect(links).toContain('/improvement')
+    for (const href of links) expect(href).not.toContain('undefined')
   })
 })
 

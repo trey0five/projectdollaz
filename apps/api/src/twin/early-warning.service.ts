@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common'
 import type { AccreditationFinding, ModuleKey } from '@finrep/db'
+import { composeFindingKey } from '@finrep/compliance'
 import type {
   DomainKey,
   TwinEvidenceEntry,
@@ -295,7 +296,10 @@ export class EarlyWarningService {
     const findings: FindingPublic[] = []
 
     for (const f of result.findings) {
-      const findingKey = `${f.ruleId}:${f.scopeKey}`
+      // THE one formula, shared with packages/compliance so the reader (here),
+      // the nightly ledger writer and the improvement recommender can never
+      // fork on what a findingKey is.
+      const findingKey = composeFindingKey(f.ruleId, f.scopeKey)
       firedKeys.add(findingKey)
       const row = byKey.get(findingKey) ?? null
       // A human CLOSED it and the rule still fires. That is a real state and it

@@ -78,6 +78,13 @@ import {
   type DraftPlanTree,
 } from '../strategy/strategy-plan-drafter.service.js'
 import { INITIATIVE_STATUSES, MIX_METRIC_KEYS } from '../strategy/strategy.constants.js'
+import { ImprovementService } from '../improvement/improvement.service.js'
+import {
+  IMPROVEMENT_ORIGIN_TYPES,
+  type ImprovementOriginType,
+} from '../improvement/improvement.constants.js'
+import type { InitiativeStatus } from '../strategy/strategy.constants.js'
+import type { CreateImprovementInitiativeDto } from '../improvement/dto/create-improvement-initiative.dto.js'
 import type { CreatePlanDto } from '../strategy/dto/create-plan.dto.js'
 import type { CreatePillarDto } from '../strategy/dto/create-pillar.dto.js'
 import type { CreateGoalDto } from '../strategy/dto/create-goal.dto.js'
@@ -181,6 +188,11 @@ const REFRESH: Record<ProposedAction['kind'], RefreshKey[]> = {
   create_strategy_pillar: ['strategy'],
   create_strategy_goal: ['strategy'],
   create_strategy_initiative: ['strategy'],
+  // AIC Phase G — an improvement initiative may be adopted against an
+  // accreditation gap and may carry NO goal at all, so both surfaces refetch. The
+  // Record is TOTAL over ProposedAction['kind'], which is the forcing function
+  // that makes this entry impossible to forget.
+  create_initiative: ['strategy', 'accreditation'],
   draft_strategy_plan: ['strategy'],
 }
 
@@ -217,6 +229,11 @@ const REVERSIBLE_KINDS = new Set<ProposedAction['kind']>([
   'create_strategy_pillar',
   'create_strategy_goal',
   'create_strategy_initiative',
+  // AIC Phase G. Undo = ImprovementService.removeInitiative — the same single-row
+  // delete against the same table (the model was renamed; @@map is unchanged), so
+  // a goal-LESS improvement initiative is exactly as reversible as a goal-bound
+  // strategic one.
+  'create_initiative',
   'draft_strategy_plan',
 ])
 
@@ -263,6 +280,10 @@ const CONFIRM_TOOLS = new Set([
   'create_strategy_pillar',
   'create_strategy_goal',
   'create_strategy_initiative',
+  // AIC Phase G — confirm-then-create, exactly like every other register write.
+  // Committing a school to a piece of improvement work with an owner and a date
+  // is not something Penny does without being asked twice.
+  'create_initiative',
   'draft_strategy_plan',
 ])
 
@@ -288,6 +309,12 @@ function toolsForRole(role: 'owner' | 'accountant' | 'viewer' | null | undefined
 // open/scheduled/in_progress/resolved (no 'completed'/'closed'), priorities include
 // 'critical', and campaign statuses are planned/active/closed (no 'paused').
 const POLICY_STATUSES = new Set(['active', 'draft', 'retired'])
+// AIC Phase G — DERIVED from the DTO's own @IsIn array rather than retyped, so the
+// vocabulary Penny clamps to and the vocabulary the DTO accepts cannot drift. A
+// value outside it is DROPPED from the proposal (defaulting to 'manual'
+// server-side) instead of riding through and 400ing /apply under the global
+// forbidNonWhitelisted pipe.
+const IMPROVEMENT_ORIGIN_TYPE_SET = new Set<string>(IMPROVEMENT_ORIGIN_TYPES)
 const MAINTENANCE_PRIORITIES = new Set(['low', 'medium', 'high', 'critical'])
 // invite_member role vocab — kept BYTE-IDENTICAL to CreateInvitationDto's @IsIn and
 // the Settings Members UI ROLES list (all three roles are offerable, exactly as the UI).
@@ -329,6 +356,12 @@ export interface ProposedAction {
     | 'create_strategy_pillar'
     | 'create_strategy_goal'
     | 'create_strategy_initiative'
+    // AIC Phase G — the Continuous Improvement Manager's initiative. Its goalId is
+    // OPTIONAL, which is the whole difference from the deprecated alias above.
+    // KEEP IN SYNC, IN THE SAME CHANGE, with APPLY_KINDS (dto/apply-action.dto.ts),
+    // REFRESH, REVERSIBLE_KINDS, CONFIRM_TOOLS and TOOL_LABELS — a kind that
+    // exists here and nowhere else 400s /apply, which has shipped twice.
+    | 'create_initiative'
     | 'draft_strategy_plan'
   periodId: string
   summary: string
@@ -676,6 +709,20 @@ export class AssistantService {
     // touches either, and an absent pair reports the module as unavailable rather
     // than guessing. AssistantModule imports TwinModule (acyclic: TwinModule
     // imports nothing from assistant) and BillingModule was already imported.
+    // AIC Phase G — the Continuous Improvement Manager, for the create_initiative
+    // confirm tool and its undo. Optional; only the create_initiative
+    // apply/reverse paths touch it, and both check for it rather than assuming it.
+    // AssistantModule imports ImprovementModule (acyclic — nothing under
+    // src/improvement/ imports the assistant, and a spec reads the source to keep
+    // it that way).
+    //
+    // INSERTED BEFORE the two Phase-E deps, NOT appended after them, which is the
+    // one place this file departs from the usual "append LAST" convention.
+    // `get-early-warnings.spec.ts` derives their positions as `arity - 2` /
+    // `arity - 1` precisely so that a new dependency cannot silently shift them;
+    // appending here would have shifted them anyway and broken eight specs. Adding
+    // ahead of the pair keeps that derivation correct and that spec byte-identical.
+    @Optional() private readonly improvement?: ImprovementService,
     @Optional() private readonly earlyWarning?: EarlyWarningService,
     @Optional() private readonly billing?: BillingService,
   ) {}
@@ -1120,6 +1167,9 @@ export class AssistantService {
     }
     if (name === 'create_strategy_initiative') {
       return this.buildStrategyInitiativeProposal(args, ctx)
+    }
+    if (name === 'create_initiative') {
+      return this.buildImprovementInitiativeProposal(args, ctx)
     }
     if (name === 'draft_strategy_plan') {
       return this.buildDraftStrategyPlanProposal(args, ctx)
@@ -2075,6 +2125,83 @@ export class AssistantService {
   }
 
   /**
+   * AIC Phase G — build a confirmable `create_initiative` proposal.
+   *
+   * DELIBERATELY NOT A WIDENED `buildStrategyInitiativeProposal`. That one calls
+   * `resolveGoalRef` unconditionally and throws when it cannot find a goal, which
+   * is correct for a strategic-plan tool and wrong for this one: an
+   * accreditation-only school has no plan, no pillars and no goals, and its
+   * improvement work is real anyway. Here a goal reference is resolved ONLY when
+   * the model supplied one, and a bad reference still fails loudly rather than
+   * silently dropping the link the user asked for.
+   */
+  private async buildImprovementInitiativeProposal(
+    args: Record<string, unknown>,
+    ctx: Ctx,
+  ): Promise<ProposedAction> {
+    const title = typeof args.title === 'string' ? args.title.trim().slice(0, 200) : ''
+    if (!title) throw new Error('create_initiative needs a title.')
+
+    const goalId = typeof args.goalId === 'string' ? args.goalId.trim() : ''
+    const goalName = typeof args.goalName === 'string' ? args.goalName.trim() : ''
+    const goal =
+      goalId || goalName
+        ? await this.resolveGoalRef(ctx.schoolId, {
+            goalId: goalId || undefined,
+            goalName: goalName || undefined,
+          })
+        : null
+
+    const description =
+      typeof args.description === 'string' && args.description.trim()
+        ? args.description.trim().slice(0, 2000)
+        : undefined
+    const status =
+      typeof args.status === 'string' &&
+      (INITIATIVE_STATUSES as readonly string[]).includes(args.status)
+        ? args.status
+        : undefined
+    const originType =
+      typeof args.originType === 'string' && IMPROVEMENT_ORIGIN_TYPE_SET.has(args.originType)
+        ? (args.originType as ImprovementOriginType)
+        : undefined
+    const findingKey =
+      typeof args.findingKey === 'string' && args.findingKey.trim()
+        ? args.findingKey.trim().slice(0, 200)
+        : undefined
+    // yyyy-mm-dd only. A date the DTO's @IsDateString would reject is DROPPED at
+    // build time rather than carried into a proposal that 400s on confirm.
+    const dueDate =
+      typeof args.dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(args.dueDate.trim())
+        ? args.dueDate.trim()
+        : undefined
+    const orderIndex =
+      typeof args.orderIndex === 'number' && Number.isFinite(args.orderIndex)
+        ? Math.max(0, Math.min(10000, Math.trunc(args.orderIndex)))
+        : undefined
+
+    return {
+      kind: 'create_initiative',
+      periodId: ctx.periodId ?? '',
+      summary: goal
+        ? `Add initiative “${title}” to the goal “${goal.title}”.`
+        : `Add improvement initiative “${title}”.`,
+      payload: {
+        // Explicitly null rather than absent: the apply branch must be able to tell
+        // "no goal" from "the field never made it through".
+        goalId: goal?.id ?? null,
+        title,
+        ...(description ? { description } : {}),
+        ...(status ? { status } : {}),
+        ...(originType ? { originType } : {}),
+        ...(findingKey ? { findingKey } : {}),
+        ...(dueDate ? { dueDate } : {}),
+        ...(orderIndex !== undefined ? { orderIndex } : {}),
+      },
+    }
+  }
+
+  /**
    * Build the confirmable draft_strategy_plan proposal — the centerpiece. Calls the
    * READ-ONLY deterministic drafter (no writes), RE-VALIDATES the returned tree with
    * the same guards the per-node builders use (so a malformed draft is rejected BEFORE
@@ -2573,6 +2700,16 @@ export class AssistantService {
         return
       case 'create_strategy_initiative':
         await this.strategy.removeInitiative(schoolId, targetId, user.id)
+        return
+      // AIC Phase G. Reversed through ITS OWN service, not the strategy one: both
+      // delete the same row on the same table, but only this resolver is written
+      // goal-agnostically, and undoing a goal-less initiative must not depend on
+      // a resolver that could later grow a goal join.
+      case 'create_initiative':
+        if (!this.improvement) {
+          throw new UnprocessableEntityException('That action can’t be undone here.')
+        }
+        await this.improvement.removeInitiative(schoolId, targetId, user.id)
         return
       case 'file_document':
         await this.documents.deleteDocument(schoolId, targetId, user.id)
@@ -3153,6 +3290,21 @@ export class AssistantService {
       )
       return { summary: action.summary, createdId: created?.id ?? null }
     }
+    if (action.kind === 'create_initiative') {
+      // NOTE THE ABSENT GUARD. The branch above throws when goalId is missing and
+      // must keep doing so; here a missing goal is the ordinary case, because an
+      // accreditation-only school has no plan to hang the work on. This is the
+      // whole reason the two kinds exist.
+      if (!this.improvement) {
+        throw new Error('The improvement manager is not available on this server.')
+      }
+      const created = await this.improvement.createInitiative(
+        schoolId,
+        this.improvementInitiativeDtoFromPayload(p),
+        userId,
+      )
+      return { summary: action.summary, createdId: created?.id ?? null }
+    }
     if (action.kind === 'draft_strategy_plan') {
       return this.applyDraftStrategyPlan(schoolId, user, action)
     }
@@ -3264,6 +3416,60 @@ export class AssistantService {
         .filter((m): m is { label: string; done?: boolean } => m !== null)
     }
     return dto
+  }
+
+  /**
+   * AIC Phase G — the `create_initiative` payload, RE-CLAMPED at apply time.
+   *
+   * `ApplyActionDto` validates `kind`, `periodId`, `summary` and that `payload` is
+   * an object; it does NOT validate the payload's contents, so a confirmed
+   * proposal arrives back over the wire as untrusted data. Every enum is therefore
+   * re-checked here against the same vocabularies the build path used — the
+   * house's "enforced at BUILD and re-checked at APPLY" rule.
+   *
+   * `goalId` is passed through as `null` when absent, not omitted: the service
+   * distinguishes "no goal" from "field missing", and this is the one kind for
+   * which "no goal" is the ordinary case.
+   */
+  private improvementInitiativeDtoFromPayload(
+    p: Record<string, unknown>,
+  ): CreateImprovementInitiativeDto {
+    const title = typeof p.title === 'string' ? p.title.trim().slice(0, 200) : ''
+    if (!title) throw new Error('An initiative needs a title.')
+    const description =
+      typeof p.description === 'string' && p.description.trim()
+        ? p.description.trim().slice(0, 2000)
+        : undefined
+    const status =
+      typeof p.status === 'string' && (INITIATIVE_STATUSES as readonly string[]).includes(p.status)
+        ? (p.status as InitiativeStatus)
+        : undefined
+    const originType =
+      typeof p.originType === 'string' && IMPROVEMENT_ORIGIN_TYPE_SET.has(p.originType)
+        ? (p.originType as ImprovementOriginType)
+        : undefined
+    const findingKey =
+      typeof p.findingKey === 'string' && p.findingKey.trim()
+        ? p.findingKey.trim().slice(0, 200)
+        : undefined
+    const dueDate =
+      typeof p.dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(p.dueDate.trim())
+        ? p.dueDate.trim()
+        : undefined
+    const orderIndex =
+      typeof p.orderIndex === 'number' && Number.isFinite(p.orderIndex)
+        ? Math.max(0, Math.min(10000, Math.trunc(p.orderIndex)))
+        : undefined
+    return {
+      title,
+      goalId: typeof p.goalId === 'string' && p.goalId ? p.goalId : null,
+      ...(description ? { description } : {}),
+      ...(status ? { status } : {}),
+      ...(originType ? { originType } : {}),
+      ...(findingKey ? { findingKey } : {}),
+      ...(dueDate ? { dueDate } : {}),
+      ...(orderIndex !== undefined ? { orderIndex } : {}),
+    }
   }
 
   private initiativeDtoFromPayload(p: Record<string, unknown>): CreateInitiativeDto {

@@ -15,6 +15,7 @@ import { AccreditationModule } from '../accreditation/accreditation.module.js'
 import { FacilitiesModule } from '../facilities/facilities.module.js'
 import { AdvancementModule } from '../advancement/advancement.module.js'
 import { StrategyModule } from '../strategy/strategy.module.js'
+import { ImprovementModule } from '../improvement/improvement.module.js'
 import { AlertModule } from '../alerts/alert.module.js'
 import { SchoolsModule } from '../schools/schools.module.js'
 import { IntegrationsModule } from '../integrations/integrations.module.js'
@@ -62,6 +63,12 @@ import { BriefingNarrationService } from './briefing-narration.service.js'
     // reads the ACTIVE plan's computed progress. No cycle: StrategyModule imports no
     // AssistantModule (BriefingService already injects it, proving it's safe).
     StrategyModule,
+    // AIC Phase G — the Continuous Improvement Manager, for Penny's
+    // create_initiative tool and its undo. The edge is ONE-WAY: nothing under
+    // src/improvement/ imports the assistant (improvement.module.spec.ts reads the
+    // source to keep it that way), so no cycle. ImprovementModule imports neither
+    // AnalyticsModule nor anything that reaches it.
+    ImprovementModule,
     // Phase 4E — proactive alerts. Exports AlertService so Penny's create_alert
     // confirm-tool can create standing requests. No cycle: AlertModule imports no
     // AssistantModule.

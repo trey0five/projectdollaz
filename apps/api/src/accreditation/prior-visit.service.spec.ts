@@ -513,7 +513,11 @@ describe('PriorVisitController — the guard chain and the role split', () => {
     const keys = Reflect.getMetadataKeys(PriorVisitController)
     const moduleKey = keys.find((k) => String(k).toLowerCase().includes('module'))
     expect(moduleKey, 'no @RequiresModule metadata on PriorVisitController').toBeDefined()
-    expect(Reflect.getMetadata(moduleKey as string, PriorVisitController)).toBe('accreditation')
+    // AIC Phase G made @RequiresModule VARIADIC (OR semantics for /improvement),
+    // so a single-key route stores a ONE-ELEMENT LIST. The call site is unchanged.
+    expect(Reflect.getMetadata(moduleKey as string, PriorVisitController)).toEqual([
+      'accreditation',
+    ])
   })
 
   it('VIEWER MAY READ — a citation names a standard, not a person — and may not write', () => {

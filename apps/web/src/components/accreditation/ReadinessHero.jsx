@@ -51,6 +51,16 @@ const ARC_D = arcPath()
 
 const fmtLift = (v) => (v == null ? null : `+${Math.round(v * 10) / 10} pts`)
 
+// 'yyyy-mm-dd' → 'Aug 12, 2026'. Local to this file: the hero shows no other
+// date, and an ISO string in a sentence is not how this product speaks.
+const fmtDate = (iso) => {
+  if (!iso) return null
+  const d = new Date(`${String(iso).slice(0, 10)}T00:00:00.000Z`)
+  return Number.isNaN(d.getTime())
+    ? null
+    : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+}
+
 // ── The adopt prompt (no framework yet) ──────────────────────────────────────
 function AdoptPrompt({ canEdit, onAdopt }) {
   return (
@@ -122,6 +132,23 @@ export default function ReadinessHero({
   const frac = hasIndex
     ? Math.min(Math.max((readiness.projectedIndex - fw.indexMin) / span, 0), 1)
     : 0
+  // ── AIC Phase G: the ghosted in-flight PROJECTION ──────────────────────────
+  // `inFlight` is ADVISORY and structurally separate from the headline: the
+  // server computes it from a SECOND schoolReadiness() pass over lifted leaves and
+  // assigns it to nothing but this key. Nothing below may leak it into
+  // projectedIndex, band or the arc's own `frac` — the arc keeps sweeping to the
+  // real index, and the projection is a dashed ghost beyond it with the literal
+  // word PROJECTION on it. A projection that quietly becomes the headline number
+  // is the single worst thing this phase could ship, so it is drawn thinner,
+  // dashed, half-opaque, and never inside the centre overlay.
+  const inFlight = readiness.inFlight ?? null
+  const expectedIndex = inFlight?.expectedIndexIfDelivered ?? null
+  const hasProjection = hasIndex && expectedIndex != null
+  const projFrac = hasProjection
+    ? Math.min(Math.max((expectedIndex - fw.indexMin) / span, 0), 1)
+    : null
+  const excluded = inFlight?.excluded ?? null
+
   // Target pills — the ambition ladder. Skip the lowest band (it's the floor, not
   // a target); Cognia → Accredited 280 / Merit 320 / Distinction 360.
   const pills = hasIndex ? (bands.length > 1 ? bands.slice(1) : bands) : []
@@ -204,6 +231,47 @@ export default function ReadinessHero({
                 transition={reduce ? { duration: 0 } : { type: 'spring', stiffness: 55, damping: 18 }}
               />
 
+              {/* ── The ghosted in-flight projection (AIC Phase G) ──────────
+                  Dashed, thin and half-opaque so it can never be mistaken for
+                  the solid amber index stroke, and drawn BEFORE the ticks so it
+                  sits visually behind the real scale. */}
+              {hasProjection ? (
+                <g data-testid="projection-marker">
+                  <title>
+                    PROJECTION — {expectedIndex} if the in-flight work is delivered. Not your
+                    current index.
+                  </title>
+                  <motion.path
+                    d={ARC_D}
+                    fill="none"
+                    stroke="#ffffff"
+                    strokeOpacity={0.45}
+                    strokeWidth={4}
+                    strokeLinecap="round"
+                    strokeDasharray="5 7"
+                    initial={reduce ? false : { pathLength: 0 }}
+                    animate={{ pathLength: projFrac }}
+                    transition={reduce ? { duration: 0 } : { type: 'spring', stiffness: 40, damping: 20 }}
+                  />
+                  {(() => {
+                    const [mx1, my1] = polar(projFrac, R - 18)
+                    const [mx2, my2] = polar(projFrac, R + 18)
+                    return (
+                      <line
+                        x1={mx1}
+                        y1={my1}
+                        x2={mx2}
+                        y2={my2}
+                        stroke="#ffffff"
+                        strokeOpacity={0.75}
+                        strokeWidth={2}
+                        strokeDasharray="3 3"
+                      />
+                    )
+                  })()}
+                </g>
+              ) : null}
+
               {/* band boundary ticks + threshold labels */}
               {bands.map((b) => {
                 const f = Math.min(Math.max((b.min - fw.indexMin) / span, 0), 1)
@@ -260,7 +328,13 @@ export default function ReadinessHero({
 
             {/* centered overlay — projected index + band chip in the dome */}
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center pb-8">
-              <div className="font-serif font-semibold leading-none text-[#fbbf24] drop-shadow-[0_0_18px_rgba(245,158,11,0.45)]">
+              {/* THE HEADLINE. It renders `projectedIndex` and nothing else —
+                  never inFlight.expectedIndexIfDelivered, which is advisory and
+                  lives in its own dashed panel. Pinned by a spec. */}
+              <div
+                data-testid="projected-index"
+                className="font-serif font-semibold leading-none text-[#fbbf24] drop-shadow-[0_0_18px_rgba(245,158,11,0.45)]"
+              >
                 <CountUp
                   value={readiness.projectedIndex}
                   duration={1200}
@@ -270,7 +344,10 @@ export default function ReadinessHero({
               <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/50">
                 Projected index
               </p>
-              <p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-[#F59E0B]/50 bg-[#F59E0B]/15 px-3 py-1 text-[12.5px] font-semibold text-[#fde68a]">
+              <p
+                data-testid="band-label"
+                className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-[#F59E0B]/50 bg-[#F59E0B]/15 px-3 py-1 text-[12.5px] font-semibold text-[#fde68a]"
+              >
                 <Award size={13} aria-hidden />
                 {readiness.band ?? 'Below accreditation threshold'}
               </p>
@@ -314,6 +391,50 @@ export default function ReadinessHero({
           {readiness.confidence ? (
             <div className="mt-3">
               <ConfidenceChip confidence={readiness.confidence} reduce={reduce} />
+            </div>
+          ) : null}
+
+          {/* ── In-flight work: the ADVISORY projection, and what it left out ──
+              Rendered whenever there is either a projection to state or work that
+              had to be excluded from one. The exclusion counts are not a footnote:
+              a school whose initiatives carry no target score would otherwise see
+              "no projection" and have no idea why. */}
+          {inFlight && (hasProjection || (excluded?.noTargetScore ?? 0) > 0 || (excluded?.noDueDate ?? 0) > 0) ? (
+            <div
+              className="mt-4 rounded-xl border border-dashed border-white/25 bg-white/[0.04] px-3 py-2.5"
+              data-testid="inflight-panel"
+            >
+              {hasProjection ? (
+                <div className="flex flex-wrap items-baseline gap-2">
+                  <span className="rounded-full border border-white/30 bg-white/10 px-2 py-0.5 text-[10.5px] font-bold tracking-[0.12em] text-white/85">
+                    PROJECTION
+                  </span>
+                  <p className="text-[13px] text-white/80" data-testid="inflight-sentence">
+                    → {expectedIndex}
+                    {inFlight.expectedBandIfDelivered ? ` · ${inFlight.expectedBandIfDelivered}` : ''}
+                    {inFlight.expectedByDate
+                      ? ` if delivered by ${fmtDate(inFlight.expectedByDate) ?? inFlight.expectedByDate}`
+                      : ' if delivered'}
+                  </p>
+                </div>
+              ) : null}
+              {inFlight.basis ? (
+                <p className="mt-1 text-[12px] leading-relaxed text-white/50">{inFlight.basis}</p>
+              ) : null}
+              {(excluded?.noTargetScore ?? 0) > 0 || (excluded?.noDueDate ?? 0) > 0 ? (
+                <p className="mt-1 text-[12px] leading-relaxed text-white/50" data-testid="inflight-excluded">
+                  {[
+                    (excluded?.noTargetScore ?? 0) > 0
+                      ? `${excluded.noTargetScore} left out — no target rubric score`
+                      : null,
+                    (excluded?.noDueDate ?? 0) > 0
+                      ? `${excluded.noDueDate} left out — no due date`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </p>
+              ) : null}
             </div>
           ) : null}
 
@@ -373,6 +494,20 @@ export default function ReadinessHero({
                       {g.evidenceGap ? (
                         <span className="shrink-0 rounded-md border border-[#F59E0B]/40 bg-[#F59E0B]/10 px-1.5 py-0.5 text-[11px] font-semibold text-[#fde68a]">
                           no evidence
+                        </span>
+                      ) : null}
+                      {/* Phase G: work already pointed at this gap. A COUNT, not a
+                          projection — the gap's own numbers are untouched by it. */}
+                      {(g.work?.initiativeCount ?? 0) > 0 ? (
+                        <span
+                          className="shrink-0 rounded-md border border-white/25 bg-white/10 px-1.5 py-0.5 text-[11px] font-semibold text-white/75"
+                          title={
+                            g.work.nearestDueDate
+                              ? `Next due ${fmtDate(g.work.nearestDueDate) ?? g.work.nearestDueDate}`
+                              : 'No due date set'
+                          }
+                        >
+                          {g.work.initiativeCount} in flight
                         </span>
                       ) : null}
                       {fmtLift(g.fullLift) ? (

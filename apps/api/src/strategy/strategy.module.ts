@@ -32,7 +32,14 @@ import { StrategyPlanDrafterService } from './strategy-plan-drafter.service.js'
   // AssistantModule (which already imports StrategyModule one-directionally) can inject
   // it — no new module edge. It injects Prisma + StrategyProgressService + pure
   // @finrep/analytics only (same boot-safe posture as StrategyProgressService).
+  //
+  // StrategyProgressService is EXPORTED as of AIC Phase G. ImprovementService
+  // injects it for resolveCurrentMetric/resolveCurrentMetrics, so a metric-bound
+  // improvement initiative shows the SAME number as the dashboard and the plan.
+  // It was a provider-only before, and injecting a provider that no imported
+  // module exports is the exact bug that killed the API on BOOT in Phase E while
+  // every unit test passed — improvement.module.spec.ts now asserts this line.
   providers: [StrategyService, StrategyProgressService, StrategyPlanDrafterService],
-  exports: [StrategyService, StrategyPlanDrafterService],
+  exports: [StrategyService, StrategyPlanDrafterService, StrategyProgressService],
 })
 export class StrategyModule {}

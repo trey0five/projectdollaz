@@ -27,7 +27,15 @@ const APPLY_KINDS = [
   'create_strategy_plan',
   'create_strategy_pillar',
   'create_strategy_goal',
+  // DEPRECATED ALIAS. Kept BYTE-IDENTICAL: goal-bound, goalId required. Removing
+  // it would 400 any proposal a client is still holding.
   'create_strategy_initiative',
+  // AIC Phase G — the Continuous Improvement Manager's initiative, whose goalId is
+  // OPTIONAL. Added here in the SAME change as the ProposedAction['kind'] union,
+  // REFRESH, REVERSIBLE_KINDS and TOOL_LABELS: a kind present in the union but
+  // missing from this list 400s at the validation boundary before applyAction ever
+  // runs, and that exact desync has shipped twice.
+  'create_initiative',
   'draft_strategy_plan',
 ] as const
 

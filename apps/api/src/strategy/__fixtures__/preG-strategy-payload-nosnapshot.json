@@ -1,0 +1,370 @@
+{
+  "hasPlan": true,
+  "plan": {
+    "id": "bbbbbbbb-0000-4000-8000-000000000001",
+    "name": "Toward 2030",
+    "mission": "A school that is financially durable and academically distinctive.",
+    "status": "adopted",
+    "fyStartYear": 2026,
+    "fyEndYear": 2030,
+    "startDate": "2026-07-01",
+    "endDate": "2030-06-30",
+    "adoptedAt": "2026-06-15T14:30:00.000Z",
+    "nextReviewDate": "2026-07-20",
+    "overallProgressPct": 0.3,
+    "overallPaceStatus": "behind",
+    "goalCounts": {
+      "total": 6,
+      "onTrack": 1,
+      "atRisk": 1,
+      "behind": 1,
+      "achieved": 0,
+      "noData": 3
+    },
+    "dataAsOf": null
+  },
+  "summary": {
+    "overallProgressPct": 0.3,
+    "overallPaceStatus": "behind",
+    "behindPaceGoalCount": 1,
+    "atRiskGoalCount": 1,
+    "staleInitiativeCount": 3,
+    "reviewDueThisMonth": true,
+    "nextReviewDate": "2026-07-20",
+    "behindPaceGoals": [
+      {
+        "title": "Publish the curriculum review",
+        "pillar": "Academic distinctiveness",
+        "metricKey": null,
+        "metricLabel": null,
+        "formattedCurrent": null,
+        "formattedTarget": null,
+        "targetDate": "2026-06-30"
+      }
+    ],
+    "staleInitiatives": [
+      {
+        "title": "Renegotiate the food-service contract",
+        "ownerName": "ops@fixture.test",
+        "status": "in_progress",
+        "staleDays": 120
+      },
+      {
+        "title": "Rebid the insurance program",
+        "ownerName": "Jo Ruiz",
+        "status": "planned",
+        "staleDays": 90
+      },
+      {
+        "title": "Move to a single ERP",
+        "ownerName": "Jo Ruiz",
+        "status": "in_progress",
+        "staleDays": 75
+      }
+    ]
+  },
+  "pillars": [
+    {
+      "id": "eeeeeeee-0000-4000-8000-00000000000a",
+      "name": "Financial durability",
+      "description": "Margin, reserves, and the discipline behind them.",
+      "orderIndex": 0,
+      "progressPct": null,
+      "paceStatus": "on_track",
+      "goalCounts": {
+        "total": 3,
+        "onTrack": 0,
+        "atRisk": 0,
+        "behind": 0,
+        "achieved": 0,
+        "noData": 3
+      },
+      "goals": [
+        {
+          "id": "ffffffff-0000-4000-8000-000000000001",
+          "title": "Hold a 4% operating margin",
+          "description": "A durable surplus, not a one-year rebound.",
+          "goalType": "metric",
+          "orderIndex": 0,
+          "owner": {
+            "userId": "cccccccc-0000-4000-8000-000000000001",
+            "name": "Jo Ruiz"
+          },
+          "metricKey": "operating_margin",
+          "metricLabel": "Operating Margin",
+          "unit": "percent",
+          "baseline": 0.01,
+          "current": null,
+          "target": 0.04,
+          "formattedBaseline": "1.0%",
+          "formattedCurrent": null,
+          "formattedTarget": "4.0%",
+          "pctToTarget": null,
+          "expectedPct": 0.5780821917808219,
+          "paceStatus": "no_data",
+          "bandStatus": null,
+          "overshoot": false,
+          "startDate": "2026-01-01",
+          "targetDate": "2027-01-01",
+          "trend": [
+            {
+              "date": "2026-01-01",
+              "value": 0.01,
+              "expected": 0.01
+            },
+            {
+              "date": "2026-07-31",
+              "value": null,
+              "expected": 0.027342465753424652
+            }
+          ],
+          "dataAsOf": null,
+          "initiativeCount": 6,
+          "initiativeStatusCounts": {
+            "planned": 1,
+            "in_progress": 2,
+            "blocked": 1,
+            "done": 1,
+            "cancelled": 1
+          },
+          "linkedTaskCounts": null,
+          "milestones": null,
+          "manualProgressPct": null
+        },
+        {
+          "id": "ffffffff-0000-4000-8000-000000000002",
+          "title": "Reach twelve months of operating reserve",
+          "description": null,
+          "goalType": "metric",
+          "orderIndex": 1,
+          "owner": null,
+          "metricKey": "months_operating_reserve",
+          "metricLabel": "Months of Operating Reserve",
+          "unit": "months",
+          "baseline": null,
+          "current": null,
+          "target": 12,
+          "formattedBaseline": null,
+          "formattedCurrent": null,
+          "formattedTarget": "12.0",
+          "pctToTarget": null,
+          "expectedPct": 1,
+          "paceStatus": "no_data",
+          "bandStatus": null,
+          "overshoot": false,
+          "startDate": "2025-07-01",
+          "targetDate": "2026-06-30",
+          "trend": [],
+          "dataAsOf": null,
+          "initiativeCount": 0,
+          "initiativeStatusCounts": {
+            "planned": 0,
+            "in_progress": 0,
+            "blocked": 0,
+            "done": 0,
+            "cancelled": 0
+          },
+          "linkedTaskCounts": null,
+          "milestones": null,
+          "manualProgressPct": null
+        },
+        {
+          "id": "ffffffff-0000-4000-8000-000000000003",
+          "title": "Land within 2% of the enrollment plan",
+          "description": null,
+          "goalType": "metric",
+          "orderIndex": 2,
+          "owner": {
+            "userId": "cccccccc-0000-4000-8000-000000000002",
+            "name": "ops@fixture.test"
+          },
+          "metricKey": "enrollment_vs_plan",
+          "metricLabel": "Enrollment vs Plan",
+          "unit": "percent",
+          "baseline": null,
+          "current": null,
+          "target": 0.02,
+          "formattedBaseline": null,
+          "formattedCurrent": null,
+          "formattedTarget": "2.0%",
+          "pctToTarget": null,
+          "expectedPct": 0.08241758241758242,
+          "paceStatus": "no_data",
+          "bandStatus": null,
+          "overshoot": false,
+          "startDate": "2026-07-01",
+          "targetDate": "2027-06-30",
+          "trend": [],
+          "dataAsOf": null,
+          "initiativeCount": 0,
+          "initiativeStatusCounts": {
+            "planned": 0,
+            "in_progress": 0,
+            "blocked": 0,
+            "done": 0,
+            "cancelled": 0
+          },
+          "linkedTaskCounts": null,
+          "milestones": null,
+          "manualProgressPct": null
+        }
+      ]
+    },
+    {
+      "id": "eeeeeeee-0000-4000-8000-00000000000b",
+      "name": "Academic distinctiveness",
+      "description": null,
+      "orderIndex": 1,
+      "progressPct": 0.3,
+      "paceStatus": "behind",
+      "goalCounts": {
+        "total": 3,
+        "onTrack": 1,
+        "atRisk": 1,
+        "behind": 1,
+        "achieved": 0,
+        "noData": 0
+      },
+      "goals": [
+        {
+          "id": "ffffffff-0000-4000-8000-000000000004",
+          "title": "Launch the signature capstone",
+          "description": null,
+          "goalType": "milestone",
+          "orderIndex": 0,
+          "owner": {
+            "userId": "cccccccc-0000-4000-8000-000000000001",
+            "name": "Jo Ruiz"
+          },
+          "metricKey": null,
+          "metricLabel": null,
+          "unit": null,
+          "baseline": null,
+          "current": null,
+          "target": null,
+          "formattedBaseline": null,
+          "formattedCurrent": null,
+          "formattedTarget": null,
+          "pctToTarget": 0.25,
+          "expectedPct": 0.08241758241758242,
+          "paceStatus": "on_track",
+          "bandStatus": null,
+          "overshoot": false,
+          "startDate": "2026-07-01",
+          "targetDate": "2027-06-30",
+          "trend": [],
+          "dataAsOf": null,
+          "initiativeCount": 0,
+          "initiativeStatusCounts": {
+            "planned": 0,
+            "in_progress": 0,
+            "blocked": 0,
+            "done": 0,
+            "cancelled": 0
+          },
+          "linkedTaskCounts": null,
+          "milestones": [
+            {
+              "id": "m1",
+              "label": "Charter signed",
+              "done": true
+            },
+            {
+              "id": "m2",
+              "label": "Faculty lead named",
+              "done": false
+            },
+            {
+              "id": "Board briefed",
+              "label": "Board briefed",
+              "done": false
+            },
+            {
+              "id": "m6",
+              "label": "Pilot cohort enrolled",
+              "done": false
+            }
+          ],
+          "manualProgressPct": null
+        },
+        {
+          "id": "ffffffff-0000-4000-8000-000000000005",
+          "title": "Rebuild the advising programme",
+          "description": null,
+          "goalType": "task_rollup",
+          "orderIndex": 1,
+          "owner": null,
+          "metricKey": null,
+          "metricLabel": null,
+          "unit": null,
+          "baseline": null,
+          "current": null,
+          "target": null,
+          "formattedBaseline": null,
+          "formattedCurrent": null,
+          "formattedTarget": null,
+          "pctToTarget": 0.4,
+          "expectedPct": 0.5341772151898734,
+          "paceStatus": "at_risk",
+          "bandStatus": null,
+          "overshoot": false,
+          "startDate": "2026-01-01",
+          "targetDate": "2027-01-31",
+          "trend": [],
+          "dataAsOf": null,
+          "initiativeCount": 2,
+          "initiativeStatusCounts": {
+            "planned": 1,
+            "in_progress": 1,
+            "blocked": 0,
+            "done": 0,
+            "cancelled": 0
+          },
+          "linkedTaskCounts": {
+            "total": 5,
+            "done": 2
+          },
+          "milestones": null,
+          "manualProgressPct": null
+        },
+        {
+          "id": "ffffffff-0000-4000-8000-000000000006",
+          "title": "Publish the curriculum review",
+          "description": null,
+          "goalType": "manual",
+          "orderIndex": 2,
+          "owner": null,
+          "metricKey": null,
+          "metricLabel": null,
+          "unit": null,
+          "baseline": null,
+          "current": null,
+          "target": null,
+          "formattedBaseline": null,
+          "formattedCurrent": null,
+          "formattedTarget": null,
+          "pctToTarget": 0.25,
+          "expectedPct": 1,
+          "paceStatus": "behind",
+          "bandStatus": null,
+          "overshoot": false,
+          "startDate": "2025-08-01",
+          "targetDate": "2026-06-30",
+          "trend": [],
+          "dataAsOf": null,
+          "initiativeCount": 0,
+          "initiativeStatusCounts": {
+            "planned": 0,
+            "in_progress": 0,
+            "blocked": 0,
+            "done": 0,
+            "cancelled": 0
+          },
+          "linkedTaskCounts": null,
+          "milestones": null,
+          "manualProgressPct": 0.25
+        }
+      ]
+    }
+  ]
+}

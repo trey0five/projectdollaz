@@ -1251,7 +1251,7 @@ export const TOOL_SCHEMAS = [
     function: {
       name: 'create_strategy_initiative',
       description:
-        'PROPOSE a new initiative (an action item) under a goal for the user to CONFIRM before it is created (this does NOT create it; the user must confirm). Identify the goal by goalId, or by goalName (its title). status is one of planned/in_progress/blocked/done/cancelled. Initiative, not period-scoped.',
+        '(deprecated — prefer create_initiative) PROPOSE a new initiative (an action item) under a goal for the user to CONFIRM before it is created (this does NOT create it; the user must confirm). Identify the goal by goalId, or by goalName (its title). status is one of planned/in_progress/blocked/done/cancelled. Initiative, not period-scoped.',
       parameters: {
         type: 'object',
         properties: {
@@ -1264,6 +1264,55 @@ export const TOOL_SCHEMAS = [
             enum: ['planned', 'in_progress', 'blocked', 'done', 'cancelled'],
             description: 'Execution status. Defaults to planned.',
           },
+          orderIndex: { type: 'integer', description: 'Optional display order.' },
+        },
+        required: ['title'],
+      },
+    },
+  },
+  // ───────────────────────────────────────────────────────────────────────────
+  // AIC Phase G — the Continuous Improvement Manager.
+  //
+  // THE ONE DIFFERENCE FROM THE TOOL ABOVE, and the reason both exist: `goalId`
+  // is OPTIONAL here. An accreditation-only school has no strategic plan and no
+  // goals at all, and until this tool existed it could not record a single piece
+  // of improvement work — an early warning was a sentence with nowhere to put it.
+  // `create_strategy_initiative` is kept, unchanged, as a deprecated alias so any
+  // proposal a client is still holding keeps applying.
+  // ───────────────────────────────────────────────────────────────────────────
+  {
+    type: 'function',
+    function: {
+      name: 'create_initiative',
+      description:
+        'PROPOSE a new improvement initiative — a piece of work with a title, and optionally an owner and a due date — for the user to CONFIRM before it is created (this does NOT create it; the user must confirm). Use this for work that answers an accreditation gap or an early warning as well as for strategic-plan work. goalId/goalName are OPTIONAL: omit them and the initiative simply belongs to the school. status is one of planned/in_progress/blocked/done/cancelled. Not period-scoped.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Initiative title.' },
+          description: { type: 'string', description: 'Optional description.' },
+          goalId: { type: 'string', description: 'OPTIONAL strategic-goal id to file this under.' },
+          goalName: {
+            type: 'string',
+            description: 'OPTIONAL goal title; used when goalId is unknown. Omit both for school-level work.',
+          },
+          originType: {
+            type: 'string',
+            enum: ['manual', 'gap', 'assurance', 'finding'],
+            description:
+              'Where the work came from. Defaults to manual. Use gap/assurance for an accreditation standard and finding for an early warning.',
+          },
+          findingKey: {
+            type: 'string',
+            description:
+              'OPTIONAL early-warning key (ruleId:scopeKey) this initiative answers. Adopting the same key twice returns the same initiative.',
+          },
+          status: {
+            type: 'string',
+            enum: ['planned', 'in_progress', 'blocked', 'done', 'cancelled'],
+            description: 'Execution status. Defaults to planned.',
+          },
+          dueDate: { type: 'string', description: 'OPTIONAL due date, yyyy-mm-dd.' },
           orderIndex: { type: 'integer', description: 'Optional display order.' },
         },
         required: ['title'],
@@ -1330,4 +1379,5 @@ export const TOOL_LABELS: Record<string, string> = {
   create_strategy_pillar: 'Adding a pillar to the plan…',
   create_strategy_goal: 'Adding a goal to the plan…',
   create_strategy_initiative: 'Adding an initiative…',
+  create_initiative: 'Adding an initiative…',
 }

@@ -35,6 +35,7 @@ import {
   Wrench,
   HeartHandshake,
   Target,
+  TrendingUp,
   CircleDollarSign,
   GraduationCap,
   LineChart,
@@ -127,6 +128,25 @@ export const NAV_GROUPS = [
     module: 'accreditation',
     items: [
       { to: '/accreditation', navId: 'nav-accreditation', label: 'Accreditation', Icon: BadgeCheck, match: (p) => p.startsWith('/accreditation') },
+    ],
+  },
+  {
+    // AIC Phase G — the CONTINUOUS IMPROVEMENT MANAGER. Sits directly after
+    // Accreditation because that is where its recommendations come from.
+    //
+    // `modules` (plural) instead of `module`: OR semantics, mirroring the API
+    // guard — the page rides on EITHER accreditation or strategy, and there is
+    // deliberately NO `improvement` module key (no third SKU). `module` stays
+    // ABSENT so nothing that reads it single-key can misfire: AppShell's
+    // lockedModules list is built from SELLABLE_MODULE_KEYS, so a school with
+    // neither module sees this group disappear and is upsold by the existing
+    // Accreditation / Strategic Planning Add-ons rows — the honest upsell, since
+    // those are the two things actually for sale.
+    id: 'improvement',
+    label: 'Improvement',
+    modules: ['accreditation', 'strategy'],
+    items: [
+      { to: '/improvement', navId: 'nav-improvement', label: 'Improvement', Icon: TrendingUp, match: (p) => p.startsWith('/improvement') },
     ],
   },
   {

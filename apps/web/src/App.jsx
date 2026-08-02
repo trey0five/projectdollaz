@@ -72,6 +72,11 @@ const LandingPage = lazy(() => import('./pages/landing/LandingPage.jsx'))
 // bundle only load for schools that actually open /strategy.
 const StrategyPage = lazy(() => import('./pages/StrategyPage.jsx'))
 
+// AIC Phase G — the Continuous Improvement Manager. Lazy for the same reason:
+// it pulls the record-wizard chunk (the seeded "Work this gap" flow) and the
+// drawer, neither of which a school that never opens /improvement should download.
+const ImprovementPage = lazy(() => import('./pages/ImprovementPage.jsx'))
+
 // Phase 6 — HR & Staffing + Planning & Forecasting module pages. Lazy: /planning
 // pulls the heavy ForecastWorkspace chunk, /hr the analytics trend primitives.
 const HrPage = lazy(() => import('./pages/HrPage.jsx'))
@@ -224,6 +229,14 @@ export default function App() {
         <Route path="/readiness" element={<ReadinessPage />} />
         <Route path="/governance" element={<GovernancePage />} />
         <Route path="/accreditation" element={<AccreditationPage />} />
+        <Route
+          path="/improvement"
+          element={
+            <Suspense fallback={<div className="min-h-screen bg-cream" />}>
+              <ImprovementPage />
+            </Suspense>
+          }
+        />
         <Route path="/facilities" element={<FacilitiesPage />} />
         <Route path="/advancement" element={<AdvancementPage />} />
         <Route path="/advancement/campaigns/:campaignId" element={<CampaignDetailPage />} />

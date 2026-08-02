@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common'
 import { Cron, CronExpression } from '@nestjs/schedule'
 import { createHash, randomUUID } from 'node:crypto'
 import type { Prisma } from '@finrep/db'
+import { composeFindingKey } from '@finrep/compliance'
 import type { DomainKey } from '@finrep/compliance'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { BillingService } from '../billing/billing.service.js'
@@ -355,7 +356,7 @@ export class TwinReconciliationService {
 
     const firedByKey = new Map<string, FiredFinding>()
     for (const f of fired) {
-      const key = `${f.ruleId}:${f.scopeKey}`
+      const key = composeFindingKey(f.ruleId, f.scopeKey)
       // First emission wins: two rules cannot both own one (ruleId, scopeKey),
       // and silently overwriting would make the run order-dependent.
       if (!firedByKey.has(key)) firedByKey.set(key, f)

@@ -49,7 +49,9 @@ describe('StaffEvaluationsController — the guard chain', () => {
     const keys = Reflect.getMetadataKeys(StaffEvaluationsController)
     const moduleKey = keys.find((k) => String(k).toLowerCase().includes('module'))
     expect(moduleKey, 'no @RequiresModule metadata on StaffEvaluationsController').toBeDefined()
-    expect(Reflect.getMetadata(moduleKey as string, StaffEvaluationsController)).toBe('hr')
+    // AIC Phase G made @RequiresModule VARIADIC (OR semantics for /improvement),
+    // so a single-key route stores a ONE-ELEMENT LIST. The call site is unchanged.
+    expect(Reflect.getMetadata(moduleKey as string, StaffEvaluationsController)).toEqual(['hr'])
   })
 })
 

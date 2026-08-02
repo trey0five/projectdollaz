@@ -830,6 +830,35 @@ export const strategyApi = {
     api.delete(`/schools/${schoolId}/strategy/initiatives/${initiativeId}`),
 }
 
+// ── AIC Phase G — the CONTINUOUS IMPROVEMENT MANAGER. The flat, school-scoped,
+// GOAL-AGNOSTIC initiative register (a Phase-G initiative may have no strategic
+// goal at all) plus the server-composed recommendations rail.
+//
+// GATING: the routes carry @RequiresModule('accreditation', 'strategy') — OR
+// semantics in the ONE entitlement guard. There is deliberately NO `improvement`
+// module key (no third SKU), so a finance-only school gets
+// 402 { code:'MODULE_NOT_LICENSED', module:'accreditation',
+//       modules:['accreditation','strategy'] }
+// and isModuleNotLicensed / moduleFromError below keep working unchanged — the
+// extra `modules` array is additive and only present on a multi-key route.
+//
+// `adopt` is IDEMPOTENT by (schoolId, findingKey): adopting the same
+// recommendation twice returns the SAME initiative, so a double-click cannot mint
+// two plans for one gap.
+export const improvementApi = {
+  get: (schoolId) => api.get(`/schools/${schoolId}/improvement`),
+  recommendations: (schoolId) => api.get(`/schools/${schoolId}/improvement/recommendations`),
+  createInitiative: (schoolId, body) =>
+    api.post(`/schools/${schoolId}/improvement/initiatives`, body),
+  updateInitiative: (schoolId, initiativeId, body) =>
+    api.patch(`/schools/${schoolId}/improvement/initiatives/${initiativeId}`, body),
+  deleteInitiative: (schoolId, initiativeId) =>
+    api.delete(`/schools/${schoolId}/improvement/initiatives/${initiativeId}`),
+  adopt: (schoolId, body) => api.post(`/schools/${schoolId}/improvement/adopt`, body),
+  recordProgress: (schoolId, initiativeId, body) =>
+    api.post(`/schools/${schoolId}/improvement/initiatives/${initiativeId}/progress`, body),
+}
+
 // ── Phase 3 Workflow v1 — the generic TASK engine. School-scoped. CORE (always
 // included, NOT a licensed module), so there is NO MODULE_NOT_LICENSED path — only
 // the base entitlement 402 (isPaymentRequired) applies, like any other core read.

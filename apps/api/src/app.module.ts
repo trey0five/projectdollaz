@@ -33,6 +33,7 @@ import { AdvancementModule } from './advancement/advancement.module.js'
 import { KnowledgeModule } from './knowledge/knowledge.module.js'
 import { EnrollmentModule } from './enrollment/enrollment.module.js'
 import { StrategyModule } from './strategy/strategy.module.js'
+import { ImprovementModule } from './improvement/improvement.module.js'
 import { RetentionModule } from './retention/retention.module.js'
 import { AdminModule } from './admin/admin.module.js'
 import { SupportModule } from './support/support.module.js'
@@ -90,6 +91,13 @@ import { InboxModule } from './inbox/inbox.module.js'
     KnowledgeModule,
     EnrollmentModule,
     StrategyModule,
+    // AIC Phase G — the Continuous Improvement Manager. Registered AFTER
+    // StrategyModule and AccreditationModule because it imports both (for the
+    // shared metric resolver and the readiness gaps), and it imports
+    // AnalyticsModule neither directly nor transitively — the boot-safety rule
+    // that has crash-looped this container twice. There is deliberately no
+    // `improvement` module key: /improvement rides on accreditation OR strategy.
+    ImprovementModule,
     RetentionModule,
     AdminModule,
     SupportModule,
