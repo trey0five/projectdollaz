@@ -189,8 +189,28 @@ describe('STEP 2.16 — the suppression table is TOTAL over the firing rules', (
     }
   })
 
-  it('ships eleven briefable rules', () => {
-    expect(EARLY_WARNING_BRIEFABLE_RULE_IDS).toHaveLength(11)
+  // The count is DERIVED from the two tables and the rule vocabulary, never
+  // retyped. A hardcoded "eleven" is a number that goes stale the moment a rule is
+  // appended — which is exactly what happened when AIC Phase F added three — and a
+  // stale literal fails the suite without telling anyone anything they did not
+  // already know from the totality assertion above.
+  it('the two tables PARTITION the firing rules exactly — no gap, no overlap', () => {
+    expect(EARLY_WARNING_BRIEFABLE_RULE_IDS.length + EARLY_WARNING_SUPPRESSED.size).toBe(
+      firing.length,
+    )
+    expect(new Set(EARLY_WARNING_BRIEFABLE_RULE_IDS).size).toBe(
+      EARLY_WARNING_BRIEFABLE_RULE_IDS.length,
+    )
+    // …and the firing set is the vocabulary minus the four visible holes.
+    expect(firing.length).toBe(TWIN_RULE_IDS.length - VISIBLE_HOLE_RULE_IDS.length)
+  })
+
+  it('every AIC Phase-F rule landed on exactly one side of the table', () => {
+    // A rule on neither side FAILS THE BUILD by design (§3.7); this names the
+    // three so a reader can see which side each was consciously put on.
+    expect(EARLY_WARNING_BRIEFABLE_RULE_IDS).toContain('HR-EVAL-OVERDUE')
+    expect(EARLY_WARNING_BRIEFABLE_RULE_IDS).toContain('FAC-INSPECTION-DUE')
+    expect(EARLY_WARNING_BRIEFABLE_RULE_IDS).toContain('ACC-PRIOR-FINDING-OPEN')
   })
 })
 
@@ -408,6 +428,58 @@ describe('STEP 2.16 — the copy constraints', () => {
     })
     const res = await h.svc.getBriefing('school-1', PERIOD.id, 'owner')
     expect(ew(res.items)[0].why).not.toMatch(/\d+ of \d+ standard/)
+  })
+
+  // FAC-INSPECTION-DUE is briefable ALONGSIDE a suppressed FAC-BACKLOG, and the
+  // justification in briefing.service.ts is that the two say different things:
+  // STEP 2.8 already states the backlog SIZE, so this item earns its slot only by
+  // naming the INSPECTION KIND and the STANDARD it is cited under. That is a
+  // promise about copy, so it is asserted about copy — over the sentences the pure
+  // engine actually freezes, not over a hand-written fixture.
+  it("FAC-INSPECTION-DUE's why names the kind and the standard, and restates no backlog count", async () => {
+    const h = makeService({
+      seeds: [
+        {
+          ruleId: 'FAC-INSPECTION-DUE',
+          severity: 'critical',
+          standardTags: ['COG-A3'],
+          title: 'A recorded compliance inspection is past its own target date',
+          rationale:
+            'A recorded fire and life-safety inspection is past its own target date, by 12 days.',
+          consequence:
+            "Cognia's safety assurance is a binary gate and MSA and NSBECS both name facilities adequacy. An inspection your own register says is past due is the first document a visiting team asks to see.",
+        },
+      ],
+    })
+    const item = ew((await h.svc.getBriefing('school-1', PERIOD.id, 'owner')).items)[0]
+    // The KIND is in the sentence, and the STANDARD leads the title.
+    expect(item.why).toContain('fire and life-safety')
+    expect(item.title).toBe(
+      'COG-A3 — A recorded compliance inspection is past its own target date',
+    )
+    // NOT the backlog. STEP 2.8 owns "N open maintenance items"; repeating it here
+    // would spend one of two briefing slots restating a number the head of school
+    // has already read on the same page.
+    expect(item.why).not.toMatch(/open maintenance item/i)
+    expect(item.why).not.toMatch(/\d+ (?:open |)maintenance/i)
+    expect(item.why).not.toMatch(/backlog/i)
+  })
+
+  it('the ENGINE freezes FAC-INSPECTION-DUE to name a kind in BOTH of its sentences', () => {
+    // The copy constraint above can only hold if the engine's own templates carry
+    // the kind — a `why` is `rationale + consequence`, read verbatim.
+    const require_ = createRequire(import.meta.url)
+    const src = readFileSync(
+      require_.resolve('@finrep/compliance').replace(/dist[/\\]index\.js$/, 'src/accreditation-twin.ts'),
+      'utf8',
+    )
+    const block = src.slice(src.indexOf("id: 'FAC-INSPECTION-DUE'"), src.indexOf("id: 'ACC-PRIOR-FINDING-OPEN'"))
+    const templates = [...block.matchAll(/rationaleTemplate(?:Low)?:\s*\n?\s*'([^']*)'/g)].map((m) => m[1])
+    expect(templates).toHaveLength(2)
+    for (const t of templates) {
+      expect(t, t).toContain('{{kinds}}')
+      expect(t.toLowerCase(), t).not.toContain('backlog')
+    }
   })
 
   it('no 2.16 why starts with an operator CTA verb or contains "go fix"', async () => {

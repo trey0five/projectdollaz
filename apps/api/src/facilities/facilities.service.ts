@@ -44,6 +44,12 @@ export interface MaintenanceItemPublic {
   /** Links occurrences of one recurring series (null on a non-recurring item). */
   seriesId: string | null
   notes: string | null
+  /**
+   * AIC Phase F — WHAT KIND of regulatory inspection this item is, or null for an
+   * ordinary maintenance item. Closed vocabulary (MAINTENANCE_COMPLIANCE_KINDS),
+   * declared by the school and NEVER inferred from title/category/location.
+   */
+  complianceKind: string | null
   createdByUserId: string | null
   /** COMPUTED (never stored) — from @finrep/compliance. */
   urgency: MaintenanceUrgency
@@ -204,6 +210,8 @@ export class FacilitiesService {
       recurrenceUntil: toIsoDate(row.recurrenceUntil),
       seriesId: row.seriesId,
       notes: row.notes,
+      // AIC Phase F — emitted verbatim. Never derived, never defaulted to a kind.
+      complianceKind: row.complianceKind,
       createdByUserId: row.createdByUserId,
       urgency: u.urgency,
       daysUntilTarget: u.daysUntilTarget,
@@ -346,6 +354,15 @@ export class FacilitiesService {
         notes: existing.notes,
         recurrence: rec, // inherit the cadence
         recurrenceUntil: existing.recurrenceUntil,
+        // AIC Phase F — the KIND is part of the durable definition, exactly like
+        // title/category/recurrence, so it carries over. An annual fire-life-safety
+        // inspection that lost its kind the moment it was first resolved would drop
+        // silently out of fac.inspections and FAC-INSPECTION-DUE would stop seeing the
+        // very series the register exists to track. NOT a behaviour change for any
+        // existing school: every pre-Phase-F row has complianceKind = null and cloning
+        // null is a no-op. (Deviation from spec §8.3's "recurrence … untouched" —
+        // recorded in the phase report.)
+        complianceKind: existing.complianceKind,
         seriesId: existing.seriesId ?? existing.id, // first resolve seeds the series id
         createdByUserId: existing.createdByUserId,
       },
@@ -445,6 +462,10 @@ export class FacilitiesService {
         recurrence: normalizeRecurrence(dto.recurrence),
         recurrenceUntil,
         notes: dto.notes ?? null,
+        // AIC Phase F — stored EXACTLY as declared. Omitted ⇒ null ⇒ an ordinary
+        // maintenance item. The DTO's @IsIn is the only vocabulary check; nothing
+        // here reads title/category to guess a kind.
+        complianceKind: dto.complianceKind ?? null,
         createdByUserId: userId,
       },
       include: ITEM_INCLUDE,
@@ -497,6 +518,10 @@ export class FacilitiesService {
         recurrence: pick(dto.recurrence, existing.recurrence),
         recurrenceUntil: pick(recurrenceUntil, existing.recurrenceUntil),
         notes: pick(dto.notes, existing.notes),
+        // AIC Phase F — merge-pick like every other nullable column: an omitted key
+        // keeps the current kind, an explicit `null` CLEARS it (the item becomes an
+        // ordinary maintenance item again and drops straight out of fac.inspections).
+        complianceKind: pick(dto.complianceKind, existing.complianceKind),
         // Stamp resolvedAt ONCE on the transition INTO 'resolved'; a re-save of an
         // already-resolved item keeps the original stamp (never re-stamped).
         resolvedAt: transitionsToResolved ? now : existing.resolvedAt,

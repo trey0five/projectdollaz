@@ -2,16 +2,26 @@ import { Injectable, Logger } from '@nestjs/common'
 import {
   DOMAIN_KEYS,
   SIGNAL_ATTRIBUTION_MIN_WEIGHT,
+  daysFromCivil,
+  toCivil,
   type CurrencyState,
   type DataAvailability,
   type DomainKey,
   type RequirementCurrency,
+  type TwinComplianceInspectionSummaryView,
   type TwinEvidenceGroupView,
+  type TwinPriorVisitCitationView,
   type TwinRegisterView,
   type TwinRequirementView,
+  type TwinStaffEvaluationSummaryView,
   type TwinStandardView,
 } from '@finrep/compliance'
 import { PrismaService } from '../prisma/prisma.service.js'
+import {
+  LIFE_SAFETY_COMPLIANCE_KINDS,
+  MAINTENANCE_COMPLIANCE_KINDS,
+} from '../facilities/dto/create-maintenance.dto.js'
+import { isEvaluationOverdue, isInspectionOverdue } from './twin-contract.js'
 import { AccreditationService, type StandardPublic } from '../accreditation/accreditation.service.js'
 import { AccreditationReadinessService } from '../accreditation/readiness.service.js'
 import { AccreditationEvidenceReadinessService } from '../accreditation/evidence-readiness.service.js'
@@ -69,12 +79,42 @@ function isoDate(d: Date | null | undefined): string | null {
   return d.toISOString().slice(0, 10)
 }
 
+/**
+ * AIC Phase F — the ONE normalisation applied to a cited standard code, on BOTH
+ * sides of the comparison: `trim()` + `toUpperCase()` and NOTHING ELSE.
+ *
+ * No prefix match, no substring match, no Levenshtein, no "COG-A3 ≈ COG-3", no
+ * separator normalising, no framework-prefix stripping. `citedStandardCode` is free
+ * text lifted from a PDF, and a citation matched to the WRONG standard is worse
+ * than an unmatched one — so an unmatched code never reaches this view at all. It
+ * is shown AS UNMATCHED on the register endpoint instead, never dropped.
+ */
+function normaliseCode(code: string): string {
+  return code.trim().toUpperCase()
+}
+
+/** Whole UTC days between two yyyy-mm-dd dates (b - a); 0 on an unparseable input. */
+function daysBetweenIso(a: string, b: string): number {
+  const ca = toCivil(a)
+  const cb = toCivil(b)
+  if (!ca || !cb) return 0
+  return daysFromCivil(cb.y, cb.m, cb.d) - daysFromCivil(ca.y, ca.m, ca.d)
+}
+
 /** An empty-but-COMPLETE view. A degraded read is a SHAPE, never a null. */
 export function emptyTwinRegister(): TwinRegisterView {
   return {
     frameworkCode: null,
     standards: [],
     evidenceGroups: [],
+    // AIC Phase F. `[]` and `null` are the DEGRADED shapes, and they are not the
+    // same statement: an empty citation array with an `available` signal is a
+    // legitimate PASS ("you have a visit history and nothing is open"), while a
+    // null summary makes the rule refuse `value_not_usable` rather than invent a
+    // zero. The signal is what gates each rule; these carry the structure.
+    priorVisitCitations: [],
+    staffEvaluations: null,
+    complianceInspections: null,
     demoData: false,
     snapshotAsOf: null,
   }
@@ -125,24 +165,50 @@ export class TwinRegisterService {
 
   /** One school's register, on both axes, plus its domain weights. NEVER throws. */
   async build(schoolId: string, now: Date = new Date()): Promise<TwinRegisterBuild> {
-    const [standardsRes, readinessRes, byStandardRes, evidenceRes, snapshotAsOf] =
-      await Promise.all([
-        this.accreditation.listStandards(schoolId, now).catch((err) => {
-          this.logger.warn(`twin register: standards read failed: ${(err as Error).message}`)
-          return null
-        }),
-        this.readiness.getReadiness(schoolId, {}, now).catch(() => null),
-        this.evidenceReadiness.getCurrencyByStandard(schoolId, {}, now).catch(() => null),
-        this.evidenceReadiness.getEvidenceReadiness(schoolId, {}, now).catch(() => null),
-        this.snapshotAsOf(schoolId),
-      ])
+    const [
+      standardsRes,
+      readinessRes,
+      byStandardRes,
+      evidenceRes,
+      snapshotAsOf,
+      staffEvaluations,
+      complianceInspections,
+      citationRows,
+    ] = await Promise.all([
+      this.accreditation.listStandards(schoolId, now).catch((err) => {
+        this.logger.warn(`twin register: standards read failed: ${(err as Error).message}`)
+        return null
+      }),
+      this.readiness.getReadiness(schoolId, {}, now).catch(() => null),
+      this.evidenceReadiness.getCurrencyByStandard(schoolId, {}, now).catch(() => null),
+      this.evidenceReadiness.getEvidenceReadiness(schoolId, {}, now).catch(() => null),
+      this.snapshotAsOf(schoolId),
+      // AIC Phase F — three more fail-soft-per-source reads. Each degrades to the
+      // shape that makes its rule REFUSE, never to one that makes it pass.
+      this.staffEvaluationSummary(schoolId, now),
+      this.complianceInspectionSummary(schoolId, now),
+      this.priorVisitRows(schoolId),
+    ])
 
     // The read FAILED (null) vs the school genuinely has no standards ([]) — one
     // boolean, carried out so callers with authority over the ledger can tell.
     const registerAvailable = standardsRes !== null
     const rows: StandardPublic[] = standardsRes?.standards ?? []
     if (rows.length === 0) {
-      return { register: { ...emptyTwinRegister(), snapshotAsOf }, weights: {}, registerAvailable }
+      return {
+        register: {
+          ...emptyTwinRegister(),
+          snapshotAsOf,
+          // The summaries survive an empty STANDARDS register: they describe HR and
+          // facilities, not accreditation. Every rule that reads them still needs a
+          // school standard code (G3), so nothing can fire off them here — but a
+          // truthful summary is never thrown away on the way past.
+          staffEvaluations,
+          complianceInspections,
+        },
+        weights: {},
+        registerAvailable,
+      }
     }
 
     // ── Assurance SATISFACTION. `computeAssurances` (reached through the
@@ -195,6 +261,11 @@ export class TwinRegisterService {
         ),
         standards,
         evidenceGroups,
+        // AIC Phase F — matched HERE, against the standards this same build already
+        // read, so the codes the engine is handed are the school's own verbatim.
+        priorVisitCitations: this.matchCitations(citationRows, rows),
+        staffEvaluations,
+        complianceInspections,
         // Demo provenance is a property of the SERIES and is INHERITED, never set.
         demoData: evidenceRes?.demoData ?? byStandardRes?.demoData ?? false,
         snapshotAsOf,
@@ -294,6 +365,162 @@ export class TwinRegisterService {
   private frameworkCodeFrom(code: string | null): string | null {
     if (!code) return null
     return KNOWN_FRAMEWORK_CODES.has(code) ? code : null
+  }
+
+  // ── AIC Phase F — the three registers the new rules read ───────────────────
+  //
+  // WHY THEY ARE READ HERE AND NOT CARRIED OFF THE SIGNAL SET: a `TwinSignal`
+  // carries ONE SCALAR, and these rules need a basis chain (a register size, the
+  // age of the oldest overdue row, the distinct kinds overdue) and, for the
+  // citations, per-STANDARD structure. The REGISTER axis is where per-standard
+  // structure belongs — it is the axis `deriveTwin` already takes for exactly this
+  // reason. The arithmetic itself is NOT duplicated: both overdue predicates are
+  // imported from twin-contract.ts, the one place they are defined, so the count a
+  // rationale renders and the count that gated the rule can never disagree.
+  //
+  // ADULT-STAFF PII: `staffEvaluationSummary` selects three date/status columns and
+  // publishes THREE INTEGERS. No person, no evaluator, no cycle label, no id.
+
+  /** THREE INTEGERS, or null when the register is unreadable or empty. */
+  private async staffEvaluationSummary(
+    schoolId: string,
+    now: Date,
+  ): Promise<TwinStaffEvaluationSummaryView | null> {
+    try {
+      const rows = await this.prisma.staffEvaluation.findMany({
+        where: { schoolId },
+        select: { dueDate: true, completedDate: true, status: true },
+      })
+      if (rows.length === 0) return null
+      const today = isoDate(now) as string
+      const overdue = rows.filter((r) => isEvaluationOverdue(r, today))
+      // The OLDEST still-overdue row, in days past ITS OWN recorded due date. 0 when
+      // none is overdue — a real reading, not a missing one.
+      let oldest = 0
+      for (const r of overdue) {
+        const days = daysBetweenIso(isoDate(r.dueDate) as string, today)
+        if (days > oldest) oldest = days
+      }
+      return { registerSize: rows.length, overdueCount: overdue.length, oldestOverdueDays: oldest }
+    } catch {
+      // Unreadable is NOT "zero overdue". Null makes the rule refuse.
+      return null
+    }
+  }
+
+  /** The compliance-inspection subset of the facilities register, as counts. */
+  private async complianceInspectionSummary(
+    schoolId: string,
+    now: Date,
+  ): Promise<TwinComplianceInspectionSummaryView | null> {
+    try {
+      const rows = await this.prisma.maintenanceItem.findMany({
+        // `complianceKind IS NOT NULL` is the whole filter. The kind is DECLARED by
+        // the school; it is never guessed from `title`, `category` or `location`.
+        where: { schoolId, complianceKind: { not: null } },
+        select: { status: true, targetDate: true, complianceKind: true },
+      })
+      if (rows.length === 0) return null
+      const today = isoDate(now) as string
+      const overdue = rows.filter((r) => isInspectionOverdue(r, today))
+      let oldest = 0
+      for (const r of overdue) {
+        const days = daysBetweenIso(isoDate(r.targetDate) as string, today)
+        if (days > oldest) oldest = days
+      }
+      // DISTINCT kinds among the OVERDUE items, in the frozen vocabulary order —
+      // never in row order, which would make the rendered sentence depend on
+      // insertion sequence. A kind outside the vocabulary cannot occur (the DTO's
+      // @IsIn is the only writer) and is dropped rather than printed raw.
+      const seen = new Set(overdue.map((r) => r.complianceKind))
+      const overdueKinds = MAINTENANCE_COMPLIANCE_KINDS.filter((k) => seen.has(k))
+      const lifeSafety = new Set<string>(LIFE_SAFETY_COMPLIANCE_KINDS)
+      return {
+        trackedCount: rows.length,
+        overdueCount: overdue.length,
+        oldestOverdueDays: oldest,
+        overdueKinds,
+        anyLifeSafety: overdueKinds.some((k) => lifeSafety.has(k)),
+      }
+    } catch {
+      return null
+    }
+  }
+
+  /** The raw prior-visit rows. `[]` on any read failure — fail-soft per source. */
+  private async priorVisitRows(
+    schoolId: string,
+  ): Promise<{ visitDate: Date; status: string; citedStandardCode: string }[]> {
+    try {
+      return await this.prisma.priorVisitFinding.findMany({
+        where: { schoolId },
+        // The free-text `text` of a citation is NOT read here and never enters the
+        // twin payload (which feeds the briefing, Penny and every export). The
+        // register endpoint is where a school reads what the team actually wrote.
+        select: { visitDate: true, status: true, citedStandardCode: true },
+      })
+    } catch {
+      return []
+    }
+  }
+
+  /**
+   * OPEN citations, matched to the school's OWN standards by EXACT EQUALITY after
+   * trim + uppercase, grouped by (CODE, VISIT DATE), sorted by code then date.
+   *
+   * THE VISIT IS PART OF THE KEY, and that is the whole point. Grouping by code
+   * alone and quoting the newest date would render "2 citations against COG-A4
+   * from the visit of 12 March 2021" for a school whose 2015 team wrote one of
+   * them — a sentence out-running its own arithmetic, which is exactly the class
+   * of claim Phase E had rewritten in review. One group = one code + one visit, so
+   * `openCount` and `visitDate` are true about the same set of rows.
+   *
+   * A row with an unreadable `visitDate` is DROPPED rather than grouped under an
+   * empty date: the rule's only sentence names the visit, and "the visit of " is
+   * not a sentence. The register endpoint still shows the row.
+   *
+   * An UNMATCHED citation never reaches this array: G3 forbids a finding that
+   * cannot name a real standard code, and fuzzy-matching one into a standard the
+   * visiting team did not cite would be worse than saying nothing. It is not
+   * dropped from the product — the register endpoint returns every row with
+   * `unmatched: true` and its own frozen sentence.
+   *
+   * The emitted `code` is the SCHOOL STANDARD's code VERBATIM, not the normalised
+   * form: the engine renders it into a sentence a head of school reads.
+   */
+  private matchCitations(
+    rows: readonly { visitDate: Date; status: string; citedStandardCode: string }[],
+    standards: readonly StandardPublic[],
+  ): TwinPriorVisitCitationView[] {
+    if (rows.length === 0 || standards.length === 0) return []
+    const codeByNormalised = new Map<string, string>()
+    for (const s of standards) {
+      const n = normaliseCode(s.code)
+      // A duplicate code keeps the FIRST binding — deterministic rather than
+      // last-write-wins, the same rule `weightIndex` applies.
+      if (!codeByNormalised.has(n)) codeByNormalised.set(n, s.code)
+    }
+
+    const grouped = new Map<string, TwinPriorVisitCitationView>()
+    for (const r of rows) {
+      if (r.status !== 'open') continue
+      const code = codeByNormalised.get(normaliseCode(r.citedStandardCode))
+      if (code === undefined) continue
+      const visitDate = isoDate(r.visitDate)
+      if (visitDate === null) continue
+      const key = `${code}@${visitDate}`
+      const hit = grouped.get(key)
+      if (!hit) {
+        grouped.set(key, { code, visitDate, openCount: 1 })
+        continue
+      }
+      hit.openCount += 1
+    }
+    // Determinism: the reconciliation hashes this payload. Code first, then the
+    // visit — so a standard cited twice reads oldest-visit-first, in date order.
+    return [...grouped.values()].sort(
+      (a, b) => a.code.localeCompare(b.code) || a.visitDate.localeCompare(b.visitDate),
+    )
   }
 
   /**

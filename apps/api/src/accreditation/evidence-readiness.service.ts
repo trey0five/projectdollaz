@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common'
 import type { AccreditationFramework, AccreditationStandard } from '@finrep/db'
 import {
   CURRENCY_RANK,
+  UNEARNED_REGISTER_LEAD,
   computeEvidenceHealth,
   computeRequirementCurrency,
   type ArtifactInput,
@@ -19,6 +20,7 @@ import { leavesOf } from './leaf-scope.js'
 import { frameworkIdsIn, pickDominantFramework } from './framework-scope.js'
 import {
   CURRICULUM_CONVENTION_NOTE,
+  MODULE_GATED_REGISTERS,
   POLICY_AGGREGATE_NOTE,
   REGISTER_DOMAIN_LABEL,
   REGISTER_ROUTE,
@@ -176,7 +178,7 @@ export class AccreditationEvidenceReadinessService {
     now: Date = new Date(),
   ): Promise<EvidenceReadinessResponse> {
     const built = await this.build(schoolId, opts, now)
-    const { framework, groups, scopedLeaves, requirements, demoData } = built
+    const { framework, groups, scopedLeaves, requirements, demoData, downgradedTags } = built
 
     const standardsWithRequirements = new Set(
       requirements.map((r) => r.catalogStandardId),
@@ -193,7 +195,14 @@ export class AccreditationEvidenceReadinessService {
         artifacts: groups.length,
         artifactsTracked: groups.filter((g) => g.group.dataAvailability === 'platform').length,
         requirements: requirements.length,
-        requiredTracked: requirements.filter((r) => r.dataAvailability === 'platform').length,
+        // AIC Phase F — a row DOWNGRADED by the module gate is not a duty either.
+        // Counting a `platform` row as tracked while the group it belongs to renders
+        // `not_tracked` would print two different answers for one row, and would
+        // move this number for every school on the platform. `downgradedTags` is
+        // empty for every pre-Phase-F tag, so this is byte-identical to today.
+        requiredTracked: requirements.filter(
+          (r) => r.dataAvailability === 'platform' && !downgradedTags.has(r.tag),
+        ).length,
         standardsWithRequirements: scopedCatalogIds.filter((id) => standardsWithRequirements.has(id))
           .length,
         standardsLegacy: scopedLeaves.filter(
@@ -250,6 +259,8 @@ export class AccreditationEvidenceReadinessService {
       perStandard: { standardId: string; currency: RequirementCurrency }[]
     }[]
     demoData: boolean
+    /** AIC Phase F — tags read back as `intake` by the module gate. Empty pre-F. */
+    downgradedTags: ReadonlySet<string>
   }> {
     const rows = await this.prisma.accreditationStandard.findMany({ where: { schoolId } })
     const framework = await this.resolveFramework(rows, opts.frameworkId)
@@ -270,7 +281,7 @@ export class AccreditationEvidenceReadinessService {
     ])
 
     if (requirements.length === 0) {
-      return { framework, scopedLeaves, requirements, groups: [], demoData }
+      return { framework, scopedLeaves, requirements, groups: [], demoData, downgradedTags: new Set() }
     }
 
     // catalogStandardId → the school standards that adopted it (a school can
@@ -308,6 +319,7 @@ export class AccreditationEvidenceReadinessService {
       currency: RequirementCurrency
       perStandard: { standardId: string; currency: RequirementCurrency }[]
     }[] = []
+    const downgradedTags = new Set<string>()
 
     for (const [tag, rowsForTag] of byTag) {
       // The representative row: lowest orderIndex wins, tie → label asc. Its
@@ -318,6 +330,18 @@ export class AccreditationEvidenceReadinessService {
       const repReq = this.toRequirementInput(rep)
 
       const auto = await resolver.resolve(repReq)
+      // AIC PHASE F — THE MODULE-GATED DOWNGRADE, applied in exactly one place per
+      // judged row and nowhere else. A `platform` row whose owning register belongs
+      // to a licensable module and produced NO ARTIFACT for this school is judged as
+      // `intake`, so it renders `not_tracked` with its own frozen sentence — the
+      // behaviour it had before the flip. The condition is EXACTLY `auto === null`:
+      // no billing call, no extra query, no new constructor parameter (this service
+      // injects only PrismaService and must keep it that way — injecting
+      // BillingService here risks a module cycle). A school that hand-attached
+      // evidence but has no register rows is therefore also downgraded, deliberately:
+      // that is precisely what it did before this phase.
+      const gated = this.gateIfUnearned(repReq, auto)
+      if (gated.dataAvailability !== repReq.dataAvailability) downgradedTags.add(tag)
       // A LINKED row hands back the live anchor of the register it points at
       // (policy review cycle / plan term), so attaching a copy of something the
       // school already maintains never turns a judged row into an undated one.
@@ -326,7 +350,7 @@ export class AccreditationEvidenceReadinessService {
       )
       const pool = this.poolFor(attached, auto)
 
-      const currency = computeRequirementCurrency(repReq, pool, now)
+      const currency = computeRequirementCurrency(gated, pool, now)
 
       // Per-standard: the SAME artifact pool, judged against each standard's own
       // requirement row (a framework may ask for a shorter window than another).
@@ -334,7 +358,15 @@ export class AccreditationEvidenceReadinessService {
       const serves: EvidenceGroupStandard[] = []
       for (const row of rowsForTag) {
         for (const std of standardsByCatalog.get(row.catalogStandardId) ?? []) {
-          const c = computeRequirementCurrency(this.toRequirementInput(row), pool, now)
+          // The SAME downgrade, because the per-standard projection and the group
+          // must never describe two different states of one row: the group is what
+          // the Evidence Index renders, the projection is what the twin's
+          // `acc.evidence_currency` signal counts.
+          const c = computeRequirementCurrency(
+            this.gateIfUnearned(this.toRequirementInput(row), auto),
+            pool,
+            now,
+          )
           perStandard.push({ standardId: std.id, currency: c })
           serves.push({
             standardId: std.id,
@@ -348,7 +380,7 @@ export class AccreditationEvidenceReadinessService {
       serves.sort((a, b) => a.code.localeCompare(b.code) || a.standardId.localeCompare(b.standardId))
 
       built.push({
-        group: this.toGroup(currency, serves, auto),
+        group: this.toGroup(currency, serves, auto, downgradedTags.has(tag)),
         currency,
         perStandard,
       })
@@ -365,7 +397,7 @@ export class AccreditationEvidenceReadinessService {
       return a.group.tag.localeCompare(b.group.tag)
     })
 
-    return { framework, scopedLeaves, requirements, groups: built, demoData }
+    return { framework, scopedLeaves, requirements, groups: built, demoData, downgradedTags }
   }
 
   // ── Reads (each fail-soft; every one schoolId- or catalog-scoped) ──────────
@@ -460,6 +492,33 @@ export class AccreditationEvidenceReadinessService {
   }
 
   /**
+   * AIC Phase F — read a MODULE-GATED `platform` row back as `intake` when its
+   * owning register produced no artifact for this school. See
+   * MODULE_GATED_REGISTERS. Every other row is returned UNCHANGED (identity), so
+   * this can only ever affect the two registers named there.
+   *
+   * THE LEAD IS OVERRIDDEN AT THE SAME TIME, and that is not cosmetic. The
+   * `intake` lead is "<label> isn't tracked yet." — true of a register KYRO does
+   * not have, and FALSE here: this register is in KYRO and the school may already
+   * be looking at rows in it. A school that has recorded three staff evaluations
+   * with no completed date, or three inspection items not yet resolved, was told
+   * its register "isn't tracked yet" while the same school's /hr page showed a
+   * live overdue count. `UNEARNED_REGISTER_LEAD` says what is actually true —
+   * nothing in the register answers this row YET — and the seed's
+   * `notTrackedReason` (which now names the completion condition) follows it.
+   */
+  private gateIfUnearned(req: RequirementInput, auto: ResolvedArtifact | null): RequirementInput {
+    if (auto !== null) return req
+    if (req.dataAvailability !== 'platform') return req
+    if (!(req.sourceRegister !== null && req.sourceRegister in MODULE_GATED_REGISTERS)) return req
+    return {
+      ...req,
+      dataAvailability: 'intake',
+      notTrackedLead: UNEARNED_REGISTER_LEAD(req.label),
+    }
+  }
+
+  /**
    * THE ARTIFACT POOL for one requirement — and the one rule that keeps
    * "attached wins" from meaning "attached erases".
    *
@@ -528,6 +587,8 @@ export class AccreditationEvidenceReadinessService {
     c: RequirementCurrency,
     serves: EvidenceGroupStandard[],
     auto: ResolvedArtifact | null,
+    /** True when `gateIfUnearned` read this row back as `intake` (AIC Phase F). */
+    downgraded = false,
   ): EvidenceGroup {
     return {
       tag: c.tag,
@@ -548,7 +609,7 @@ export class AccreditationEvidenceReadinessService {
       sourceCount: auto?.sourceCount ?? null,
       undatedSourceCount: auto?.undatedSourceCount ?? null,
       note: this.noteFor(c, auto),
-      cta: this.ctaFor(c),
+      cta: this.ctaFor(c, downgraded),
     }
   }
 
@@ -565,9 +626,30 @@ export class AccreditationEvidenceReadinessService {
     return null
   }
 
-  private ctaFor(c: RequirementCurrency): EvidenceCta | null {
+  private ctaFor(c: RequirementCurrency, downgraded = false): EvidenceCta | null {
     const register = c.sourceRegister as SourceRegister | null
     if (c.state === 'not_tracked') {
+      // AIC Phase F — THE ONE `not_tracked` ROW THAT HAS SOMEWHERE TO GO.
+      //
+      // A MODULE-GATED row is a `platform` row that `gateIfUnearned` read back as
+      // `intake` because its register has not answered it yet. The register EXISTS
+      // (that is what this phase shipped), so a link to it is not a fake link — it
+      // is the only navigating CTA on the screen that sent the user looking for it.
+      // Without this the flow dead-ends: "Start tracking" renders as a
+      // non-navigating span, `nudgesFor` propagates a null link, and /hr and
+      // /facilities are reachable only from the `stale`/`expiring` branch below,
+      // which requires an already-resolved artifact aged past its window — i.e.
+      // never, for the school that has just been told to start tracking.
+      if (downgraded && register !== null && register in MODULE_GATED_REGISTERS) {
+        const link = REGISTER_ROUTE[register] ?? null
+        if (link !== null) {
+          return {
+            kind: 'start_tracking',
+            label: `Start tracking in ${REGISTER_DOMAIN_LABEL[register] ?? register}`,
+            link,
+          }
+        }
+      }
       // NO FAKE LINKS. There is no register to open yet; the web renders a
       // disabled pill whose title is the reason.
       if (c.dataAvailability === 'intake') return { kind: 'start_tracking', label: 'Start tracking', link: null }

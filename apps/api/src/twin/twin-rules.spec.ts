@@ -16,10 +16,11 @@ import type { TwinSignal, TwinSignalSet } from './twin-contract.js'
 //
 // Three properties, and each one is a defect this file exists to prevent:
 //
-//   1. TWENTY-SIX EVALUATIONS, ONE DERIVATION. The naive adapter runs the whole
-//      engine once per rule — 26x the risk math, 26x the band math, and a
+//   1. TWENTY-NINE EVALUATIONS, ONE DERIVATION. The naive adapter runs the whole
+//      engine once per rule — 29x the risk math, 29x the band math, and a
 //      `notEvaluated` list that can never be assembled because each run only
-//      knows about its own rule.
+//      knows about its own rule. (AIC Phase F appended three rules; the count is
+//      read from TWIN_RULE_IDS below, never retyped.)
 //
 //   2. `requiredSignals` CARRIES BOTH GATES. Phase D reads it for the basis chain
 //      and for `resolutionFor`. An absence-gated rule whose absent signal is
@@ -76,6 +77,12 @@ const EMPTY_REGISTER: TwinRegisterView = {
   frameworkCode: 'cognia_2022',
   standards: [],
   evidenceGroups: [],
+  // AIC Phase F — the three register axes the new rules read. An empty school
+  // holds no citations and no summary, which is exactly what makes all three new
+  // rules refuse rather than fire.
+  priorVisitCitations: [],
+  staffEvaluations: null,
+  complianceInspections: null,
   demoData: false,
   snapshotAsOf: null,
 }
@@ -107,7 +114,7 @@ describe('buildTwinRules — the shape', () => {
   })
 })
 
-describe('buildTwinRules — ONE derivation across all 26 evaluations', () => {
+describe('buildTwinRules — ONE derivation across all 29 evaluations', () => {
   it('derives exactly once per TwinSignalSet, however many rules run', () => {
     const cache = new TwinContextRegistry()
     const spy = vi.spyOn(cache, 'derive')
@@ -117,8 +124,10 @@ describe('buildTwinRules — ONE derivation across all 26 evaluations', () => {
 
     for (const r of rules) r.evaluate(set, AT)
 
-    // 26 evaluations. The memo is consulted 26 times; the ENGINE runs once, which
-    // the second assertion proves by checking the memo returns the SAME object.
+    // 29 evaluations today. The memo is consulted once per rule; the ENGINE runs
+    // once, which the second assertion proves by checking the memo returns the
+    // SAME object. The count is DERIVED, so appending a rule never edits this.
+    expect(rules).toHaveLength(TWIN_RULE_IDS.length)
     expect(spy).toHaveBeenCalledTimes(rules.length)
     const a = cache.derive(set, AT)
     const b = cache.derive(set, AT)
@@ -278,7 +287,13 @@ describe('toFiredFinding — the horizon invariant survives the re-shape', () =>
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('acceptance 1 — an unlicensed module lowers COVERAGE, never the score', () => {
+  // Spread EMPTY_REGISTER rather than restate it: `TwinRegisterView` is a
+  // NON-OPTIONAL contract that has now grown twice, and every field it gains has
+  // to be answered by every fixture in this file or `nest build` — which compiles
+  // .spec.ts by design — fails and the API image cannot be produced. ONE literal
+  // owns the defaults; a fixture only names what it is actually varying.
   const REGISTER: TwinRegisterView = {
+    ...EMPTY_REGISTER,
     frameworkCode: 'cognia_2022',
     standards: [
       {
@@ -309,6 +324,9 @@ describe('acceptance 1 — an unlicensed module lowers COVERAGE, never the score
       },
     ],
     evidenceGroups: [],
+    // The Phase-F axes stay at EMPTY_REGISTER's empty/null defaults: this
+    // acceptance is about a module LICENCE, and the three new rules must refuse
+    // for a school with no rows so they cannot perturb the payloads compared here.
     demoData: false,
     snapshotAsOf: '2026-07-31',
   }

@@ -640,6 +640,29 @@ export const accreditationApi = {
     api.post(`/schools/${schoolId}/accreditation/findings/${findingId}/mute`, body),
   setFindingStatus: (schoolId, findingId, body) =>
     api.post(`/schools/${schoolId}/accreditation/findings/${findingId}/status`, body),
+  // ── AIC Phase F: PRIOR VISITING-TEAM FINDINGS ───────────────────────────────
+  // The only ground truth in the program: what a real visiting team actually
+  // wrote, and whether the school has closed it. Gated by the same 'accreditation'
+  // module 402 { code:'MODULE_NOT_LICENSED', module:'accreditation' } as every
+  // route above (surface via isModuleNotLicensed). VIEWER MAY READ — there is no
+  // personal PII on this register and "the 2021 team cited you here" is exactly
+  // what a board viewer should see; only the writes are owner/accountant.
+  //
+  // `citedStandardCode` is FREE TEXT LIFTED FROM A PDF and may name no standard in
+  // this school's register. The SERVER decides: every row carries
+  // `matchedStandardId` / `matchedStandardCode` / `unmatched`, and when any row is
+  // unmatched the payload carries a composed top-level `unmatchedNote`. The web
+  // renders that sentence VERBATIM and NEVER fuzzy-matches, corrects or drops an
+  // unmatched citation — a citation matched to the wrong standard is worse than an
+  // unmatched one.
+  listPriorVisitFindings: (schoolId, params) =>
+    api.get(`/schools/${schoolId}/accreditation/prior-visit-findings`, { params }),
+  createPriorVisitFinding: (schoolId, body) =>
+    api.post(`/schools/${schoolId}/accreditation/prior-visit-findings`, body),
+  updatePriorVisitFinding: (schoolId, findingId, body) =>
+    api.patch(`/schools/${schoolId}/accreditation/prior-visit-findings/${findingId}`, body),
+  removePriorVisitFinding: (schoolId, findingId) =>
+    api.delete(`/schools/${schoolId}/accreditation/prior-visit-findings/${findingId}`),
 }
 
 // ── Phase 4 Knowledge document store: CORE (always included, NOT a licensed module).
@@ -709,6 +732,42 @@ export const facilitiesApi = {
     }),
   putBudgetConfig: (schoolId, keys) =>
     api.put(`/schools/${schoolId}/facilities/budget/config`, { keys }),
+}
+
+// ── AIC Phase F: the STAFF EVALUATION register (HR & Staffing) ────────────────
+// School-scoped (NOT period-scoped). Gated by the 'hr' module: an entitled-but-
+// unlicensed school gets a 402 { code:'MODULE_NOT_LICENSED', module:'hr' }
+// (surface via isModuleNotLicensed).
+//
+// THIS REGISTER IS ADULT-STAFF EMPLOYMENT PII, and it carries a role gate that is
+// STRICTER than every other register in the app (governance / facilities /
+// advancement all allow a viewer to read):
+//
+//   • list / get / create / update / delete → owner + accountant ONLY.
+//     A VIEWER GETS 403 — deliberately. A board viewer has no business reading
+//     which named employee is overdue for an evaluation.
+//   • /summary → owner + accountant + viewer. COUNTS ONLY: no id, no personId,
+//     no name. It is what the KPI card binds to FOR EVERY ROLE so there is one
+//     code path, and it is the only staff-evaluation figure any other surface
+//     (the briefing, Penny, every export, the twin payload) is ever given.
+//
+// Callers must treat a 403 on the list as a legitimate, expected answer for a
+// viewer and render the restriction sentence — never an error, never a crash.
+export const hrApi = {
+  listStaffEvaluations: (schoolId, params) =>
+    api.get(`/schools/${schoolId}/hr/staff-evaluations`, { params }),
+  // Counts only — safe for every role, including viewer.
+  getStaffEvaluationSummary: (schoolId) =>
+    api.get(`/schools/${schoolId}/hr/staff-evaluations/summary`),
+  createStaffEvaluation: (schoolId, body) =>
+    api.post(`/schools/${schoolId}/hr/staff-evaluations`, body),
+  // NOTE: `personId` is DELIBERATELY not accepted on update server-side —
+  // re-pointing an evaluation at a different person is a delete plus a create, and
+  // the global forbidNonWhitelisted pipe 400s a stray personId. Never send one.
+  updateStaffEvaluation: (schoolId, evaluationId, body) =>
+    api.patch(`/schools/${schoolId}/hr/staff-evaluations/${evaluationId}`, body),
+  removeStaffEvaluation: (schoolId, evaluationId) =>
+    api.delete(`/schools/${schoolId}/hr/staff-evaluations/${evaluationId}`),
 }
 
 // ── Phase 4 Advancement v1: the fundraising campaign/appeal register ──────────

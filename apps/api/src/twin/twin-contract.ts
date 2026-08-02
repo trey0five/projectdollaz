@@ -68,9 +68,67 @@ export const TWIN_SIGNAL_KEYS = [
   'safe.clearances',
   'acad.assessment_growth',
   'curr.doc_review',
+  // AIC Phase F — APPENDED, never inserted. This list is the render order, the
+  // collection order and the order of `TwinSignalSet.signals`; appending moves no
+  // existing row, so the boot-time catalog/key assertion and every ordinal
+  // expectation downstream are untouched.
+  'acc.prior_visit_findings',
 ] as const
 
 export type TwinSignalKey = (typeof TWIN_SIGNAL_KEYS)[number]
+
+// ── AIC Phase F — the TWO OVERDUE PREDICATES, defined ONCE ───────────────────
+//
+// They live in the contract for the same reason everything else here does: two
+// services read these registers for one school in one request (TwinSignalsService
+// produces the SCALAR the rule gates on, TwinRegisterService produces the COUNT
+// SUMMARY the rule's rationale renders), and a second copy of the arithmetic is
+// exactly how a rationale ends up disagreeing with the number that fired it.
+//
+// Both are pure, both take `today` as a yyyy-mm-dd PARAMETER, and neither reads a
+// clock. They name no person and no free text.
+
+/** UTC calendar day of a Date as yyyy-mm-dd. */
+function utcDay(d: Date): string {
+  return d.toISOString().slice(0, 10)
+}
+
+/**
+ * An evaluation is OVERDUE when it is past the date the school's own register set
+ * for it and nothing says it happened.
+ *
+ * `completedDate !== null` WINS OVER ANY STATUS VALUE: an evaluation that has a
+ * completion date happened, whatever the status column says. Reading the status
+ * first would let a stale workflow field manufacture an overdue evaluation that the
+ * school can see, in its own register, did not happen — a sentence out-running the
+ * data.
+ */
+export function isEvaluationOverdue(
+  row: { dueDate: Date; completedDate: Date | null; status: string },
+  todayIso: string,
+): boolean {
+  if (row.completedDate !== null) return false
+  if (row.status === 'completed' || row.status === 'waived') return false
+  return utcDay(row.dueDate) < todayIso
+}
+
+/**
+ * A compliance inspection is OVERDUE when the item DECLARES what kind of inspection
+ * it is, is not resolved, and carries a target date now in the past.
+ *
+ * `complianceKind !== null` is the whole gate and it is never inferred from `title`
+ * or `category`. An item with no target date is not overdue: we will not invent a
+ * deadline the school never set.
+ */
+export function isInspectionOverdue(
+  item: { status: string; targetDate: Date | null; complianceKind: string | null },
+  todayIso: string,
+): boolean {
+  if (item.complianceKind === null) return false
+  if (item.status === 'resolved') return false
+  if (item.targetDate === null) return false
+  return utcDay(item.targetDate) < todayIso
+}
 
 /**
  * The four ways a signal resolves. Resolution order is frozen and first-match-wins

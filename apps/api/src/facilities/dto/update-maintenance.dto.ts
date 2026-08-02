@@ -11,6 +11,7 @@ import {
   MinLength,
 } from 'class-validator'
 import {
+  MAINTENANCE_COMPLIANCE_KINDS,
   MAINTENANCE_PRIORITIES,
   MAINTENANCE_RECURRENCES,
   MAINTENANCE_STATUSES,
@@ -87,4 +88,12 @@ export class UpdateMaintenanceDto {
   @IsString()
   @MaxLength(4000)
   notes?: string | null
+
+  // ── AIC Phase F — WHAT KIND of regulatory inspection this item is. Closed
+  // vocabulary, never inferred from title/category. An explicit `null` CLEARS it
+  // (the item becomes an ordinary maintenance item again); an omitted key keeps the
+  // current value, per this DTO's merge-pick semantics.
+  @IsOptional()
+  @IsIn(MAINTENANCE_COMPLIANCE_KINDS as unknown as string[])
+  complianceKind?: string | null
 }

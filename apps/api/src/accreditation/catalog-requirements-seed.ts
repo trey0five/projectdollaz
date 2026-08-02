@@ -24,10 +24,18 @@ import type {
 //
 // dataAvailability is the most important field here:
 //   platform    — KYRO owns the register today; a real currency state.
-//   intake      — a register we have not built yet (staff evaluations,
-//                 inspections, PD). Renders not_tracked; a later phase flips the
-//                 value to 'platform', adds a resolver, and NOTHING ELSE in the
-//                 engine changes. That forward-declaration is the payoff.
+//   intake      — a register we have not built yet (PD). Renders not_tracked; a
+//                 later phase flips the value to 'platform', adds a resolver, and
+//                 NOTHING ELSE in the engine changes. That forward-declaration is
+//                 the payoff, and AIC Phase F is where it was collected: COG-10 /
+//                 staff_evaluation and COG-A3 + NSBECS-12 / inspection flipped to
+//                 'platform' with one seed edit and no migration.
+//                 THE FLIP IS EARNED BY DATA: both flipped registers are
+//                 MODULE-GATED (see MODULE_GATED_REGISTERS in evidence-anchors.ts),
+//                 so a school whose register holds nothing reads the row back as
+//                 'intake' and renders `not_tracked` with its own frozen sentence —
+//                 exactly as it did before the flip. That is why every flipped row
+//                 below KEEPS its notTrackedReason.
 //   integration — a third-party system we are not connected to (LMS, VIRTUS).
 //   external    — the accreditor's portal is the authoritative record.
 //
@@ -59,10 +67,26 @@ export interface CatalogRequirementSeed {
  * Safe-Environment status.
  */
 const WHY = {
+  // AIC Phase F REWROTE these two. The Phase-C sentences described registers that
+  // DID NOT EXIST ("a four-field staff-evaluation register unlocks this"); both now
+  // ship, so those sentences would be lies. They are still needed — a `platform` row
+  // in MODULE_GATED_REGISTERS renders `not_tracked` until the school records its
+  // first row (see MODULE_GATED_REGISTERS in evidence-anchors.ts) — so the row keeps
+  // its reason and the reason now names the register the school can actually open.
+  //
+  // EACH NAMES THE COMPLETION CONDITION, and that is load-bearing rather than
+  // stylistic. The resolvers do not satisfy these rows from the mere existence of a
+  // row: `resolveStaffEvaluation` filters `completedDate: { not: null }` and the
+  // inspection resolver wants a RESOLVED item. A school that adds three evaluations
+  // with due dates and no completed date sees a live "3 overdue" on /hr and a row
+  // here that still asks it to start — and, until these sentences said so, nothing
+  // anywhere told it that only a COMPLETED evaluation answers the requirement. The
+  // lead sentence in front of these is UNEARNED_REGISTER_LEAD, set by
+  // `gateIfUnearned`, which no longer claims the register isn't tracked.
   evaluations:
-    'A four-field staff-evaluation register unlocks this, and it is the highest-value item on the list.',
+    'Your staff-evaluation register lives in the HR module. A cycle answers this once the evaluation carries the date it was COMPLETED — record that there and this answers itself, because we never ask you to enter it twice.',
   inspections:
-    'One field on a facilities item — what kind of inspection it is — unlocks this. We will not guess it from free text.',
+    'Your inspection records live on facilities items, tagged with the kind of inspection they are. An inspection answers this once the item is marked RESOLVED with the date it was done — record that in Facilities and this answers itself. We will not guess the kind from free text.',
   pd: 'A professional-development register unlocks this. We will not use PD spend as participation.',
   assessment:
     'This needs an LMS or assessment integration KYRO does not have. We will not proxy learning growth with anything else.',
@@ -79,8 +103,13 @@ const COGNIA_REQUIREMENTS: CatalogRequirementSeed[] = [
   // COG-8 governing authority
   { standardCode: 'COG-8', tag: 'board_minutes', label: 'Approved board minutes', windowKind: 'fixed', windowMonths: 6, dataAvailability: 'platform', sourceRegister: 'meeting' },
   { standardCode: 'COG-8', tag: 'policy_manual', label: 'Board policy manual', windowKind: 'source_interval', dataAvailability: 'platform', sourceRegister: 'policy' },
-  // COG-10 recruiting / supervising / EVALUATING staff
-  { standardCode: 'COG-10', tag: 'staff_evaluation', label: 'Staff evaluation cycle records', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'intake', sourceRegister: 'staff_evaluation_register', notTrackedReason: WHY.evaluations },
+  // COG-10 recruiting / supervising / EVALUATING staff.
+  // AIC PHASE F FLIP: 'intake' → 'platform'. The register exists now and resolves
+  // live from the most recently COMPLETED evaluation. `notTrackedReason` is KEPT on
+  // purpose: staff_evaluation_register is MODULE-GATED, so a school with no rows
+  // reads back as `intake` and renders this sentence, byte-identically to Phase C's
+  // behaviour. The flip is EARNED BY DATA.
+  { standardCode: 'COG-10', tag: 'staff_evaluation', label: 'Staff evaluation cycle records', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'staff_evaluation_register', notTrackedReason: WHY.evaluations },
   // COG-12 curriculum & instruction aligned — THE DOCUMENTED CONVENTION: no
   // curriculum model and no curriculum code ship in this phase. A Policy row
   // whose category contains "curric" carries the review cycle, and
@@ -91,7 +120,9 @@ const COGNIA_REQUIREMENTS: CatalogRequirementSeed[] = [
   { standardCode: 'COG-15', tag: 'financial_audit', label: 'Annual external financial audit', windowKind: 'fixed', windowMonths: 18, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
   // COG-24 leaders use data
   { standardCode: 'COG-24', tag: 'enrollment_data', label: 'Current enrollment record', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'enrollment_snapshot' },
-  // COG-29 professional learning
+  // COG-29 professional learning. STAYS 'intake' — Phase F does NOT flip it and
+  // 'professional_development' must never gain a resolver here. The PD register is
+  // Phase K, and PD SPEND is not participation. Pinned by spec.
   { standardCode: 'COG-29', tag: 'pd_records', label: 'Professional-development participation records', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'intake', sourceRegister: 'professional_development', notTrackedReason: WHY.pd },
   // COG-30 / COG-31 learning growth
   { standardCode: 'COG-30', tag: 'assessment_results', label: 'Balanced assessment results', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'integration', sourceRegister: 'lms', notTrackedReason: WHY.assessment },
@@ -101,7 +132,10 @@ const COGNIA_REQUIREMENTS: CatalogRequirementSeed[] = [
   { standardCode: 'COG-A1', tag: 'board_minutes', label: 'Approved board minutes', windowKind: 'fixed', windowMonths: 6, dataAvailability: 'platform', sourceRegister: 'meeting' },
   { standardCode: 'COG-A2', tag: 'financial_audit', label: 'Annual external financial audit', windowKind: 'fixed', windowMonths: 18, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
   { standardCode: 'COG-A3', tag: 'safety_plan', label: 'Safety and crisis plan', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
-  { standardCode: 'COG-A3', tag: 'inspection', label: 'Fire / life-safety inspection record', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'intake', sourceRegister: 'maintenance_item', notTrackedReason: WHY.inspections },
+  // AIC PHASE F FLIP: 'intake' → 'platform'. MaintenanceItem.complianceKind is the
+  // one field that unlocks it, and it is never inferred from free text. MODULE-GATED
+  // (facilities), so a school with no kinded item still renders WHY.inspections.
+  { standardCode: 'COG-A3', tag: 'inspection', label: 'Fire / life-safety inspection record', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'maintenance_item', notTrackedReason: WHY.inspections },
   { standardCode: 'COG-A4', tag: 'compliance_attestation', label: 'Legal-compliance attestation', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'external', sourceRegister: 'portal', notTrackedReason: WHY.portal },
   { standardCode: 'COG-A5', tag: 'marketing', label: 'Current marketing and admissions materials', windowKind: 'fixed', windowMonths: 24, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
   { standardCode: 'COG-A6', tag: 'accreditor_training', label: 'Required Cognia training completion', windowKind: 'fixed', windowMonths: 36, dataAvailability: 'external', sourceRegister: 'portal', notTrackedReason: WHY.portal },
@@ -139,7 +173,8 @@ const NSBECS_REQUIREMENTS: CatalogRequirementSeed[] = [
   { standardCode: 'NSBECS-10', tag: 'strategic_plan', label: '3–5 year financial / strategic plan', windowKind: 'source_interval', dataAvailability: 'platform', sourceRegister: 'strategic_plan' },
   { standardCode: 'NSBECS-11', tag: 'policy_manual', label: 'Published HR / personnel policies', windowKind: 'source_interval', dataAvailability: 'platform', sourceRegister: 'policy' },
   { standardCode: 'NSBECS-12', tag: 'safety_plan', label: 'Facilities, equipment and technology plan', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
-  { standardCode: 'NSBECS-12', tag: 'inspection', label: 'Fire / life-safety inspection record', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'intake', sourceRegister: 'maintenance_item', notTrackedReason: WHY.inspections },
+  // AIC PHASE F FLIP — the second `inspection` row (see COG-A3 above).
+  { standardCode: 'NSBECS-12', tag: 'inspection', label: 'Fire / life-safety inspection record', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'maintenance_item', notTrackedReason: WHY.inspections },
   { standardCode: 'NSBECS-13', tag: 'enrollment_data', label: 'Current enrollment record', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'enrollment_snapshot' },
   { standardCode: 'NSBECS-13', tag: 'marketing', label: 'Advancement / communications materials', windowKind: 'fixed', windowMonths: 24, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
 ]
@@ -151,7 +186,16 @@ export const FRAMEWORK_REQUIREMENT_SEEDS: Record<string, CatalogRequirementSeed[
   nsbecs: NSBECS_REQUIREMENTS,
 }
 
-/** The seven source registers that have a LIVE resolver in Phase C. */
+/**
+ * The source registers that have a LIVE resolver — seven from Phase C, plus the
+ * two AIC Phase F adds (`maintenance_item`, `staff_evaluation_register`). A
+ * `platform` row may only ever name a register on this list; the boot assertion in
+ * catalog-requirements-seed.spec.ts is what enforces it.
+ *
+ * `professional_development`, `clearance_register`, `lms` and `portal` stay OFF it
+ * — they are forward-declared, they issue no query, and adding one here without a
+ * resolver would make a row claim a currency state nothing can compute.
+ */
 export const RESOLVED_SOURCE_REGISTERS: readonly SourceRegister[] = [
   'policy',
   'meeting',
@@ -160,4 +204,7 @@ export const RESOLVED_SOURCE_REGISTERS: readonly SourceRegister[] = [
   'enrollment_snapshot',
   'knowledge_document',
   'board_report',
+  // ── AIC Phase F ──
+  'maintenance_item',
+  'staff_evaluation_register',
 ]

@@ -11,10 +11,31 @@
 // School-scoped. Gated CLIENT-SIDE by the 'hr' module (StrategyPage pattern) —
 // the server already strips hr metrics for an unlicensed school; this page adds
 // the friendly upsell panel instead of an empty shell.
+//
+// AIC PHASE F adds the module's FIRST REGISTER OF RECORDS — staff evaluations —
+// as a second register tab beside the staffing trends, plus one KPI card bound to
+// the counts-only /summary route.
+//
+// THE PII SPLIT IS THE WHOLE DESIGN, so it is stated here as well as in the panel:
+//   • the KPI card reads /summary — INTEGERS ONLY, and every role reads it, so
+//     there is exactly one code path behind the number;
+//   • the register itself names people and is owner/accountant only. A viewer is
+//     403'd by the server and never sees a row; the panel prints one frozen
+//     sentence in its place.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Users2, UserCog, TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { useReducedMotion } from 'framer-motion'
+import {
+  Users2,
+  UserCog,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  ClipboardCheck,
+  Check,
+  AlertTriangle,
+} from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
 import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
 import ModuleTabs, { ModuleAccent } from '../components/module/ModuleTabs.jsx'
@@ -26,6 +47,16 @@ import { usePersistence } from '../context/PersistenceContext.jsx'
 import { useBilling } from '../context/BillingContext.jsx'
 import { useUiV2 } from '../context/UiFlagContext.jsx'
 import { useAnalytics, useOperational } from '../hooks/useAnalytics.js'
+import { useStaffEvaluations } from '../hooks/useStaffEvaluations.js'
+import StaffEvaluationsPanel, {
+  StaffEvaluationFormModal,
+  evaluationToForm,
+} from '../components/hr/StaffEvaluationsPanel.jsx'
+import {
+  EVAL_OVERDUE_RISK_COUNT,
+  EVAL_OVERDUE_RISK_DAYS,
+  canReadStaffEvaluations,
+} from '../components/hr/staffEvaluationMeta.js'
 import { useSparkTrends } from '../components/analytics/v2/data.js'
 import { formatMetric } from '../components/analytics/v2/helpers.js'
 import { formatMetricValue } from '../lib/metricMeta.js'
@@ -34,6 +65,13 @@ import { formatMetricValue } from '../lib/metricMeta.js'
 const HR_HUE = '#059669'
 
 const TREND_KEYS = ['student_teacher_ratio', 'teaching_staff_share', 'total_staff_fte']
+
+// The register tabs. 'trends' keeps the pre-Phase-F register slot byte-for-byte;
+// 'evaluations' is the new register of records.
+const TABS = [
+  { key: 'trends', label: 'Staffing trends' },
+  { key: 'evaluations', label: 'Evaluations' },
+]
 
 const fteText = (v) =>
   v == null || !Number.isFinite(Number(v))
@@ -88,6 +126,11 @@ function HrWorkspace() {
   const { entitled, hasModule } = useBilling()
   const schoolId = activeSchool?.id ?? null
   const canEdit = activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'
+  const reduce = useReducedMotion()
+  // The register's role gate is the SERVER's, restated: @Roles('owner','accountant')
+  // on every route except /summary. Asking here means we never fire a request we
+  // already know 403s — and a 403 is still handled as a first-class answer.
+  const canReadEvaluations = canReadStaffEvaluations(activeSchool?.role)
 
   // Period derivation — the AddDataTab/DataHub idiom incl. the school-swap race
   // guard (adopt on VALIDITY, never a stale cross-tenant id).
@@ -111,6 +154,43 @@ function HrWorkspace() {
   const { metrics, loading: metricsLoading } = useAnalytics(schoolId, periodId)
   const { operational } = useOperational(schoolId, periodId)
   const trends = useSparkTrends(schoolId, TREND_KEYS)
+
+  // AIC Phase F — the staff-evaluation register (school-scoped, not period-scoped).
+  const {
+    evaluations,
+    summary: evalSummary,
+    loading: evalLoading,
+    error: evalError,
+    restricted: evalRestricted,
+    createEvaluation,
+    updateEvaluation,
+    removeEvaluation,
+  } = useStaffEvaluations(schoolId, { canRead: canReadEvaluations })
+
+  const [tab, setTab] = useState('trends')
+  const [evalModalOpen, setEvalModalOpen] = useState(false)
+  const [editingEval, setEditingEval] = useState(null)
+
+  const openAddEvaluation = () => {
+    setEditingEval(null)
+    setEvalModalOpen(true)
+  }
+  const openEditEvaluation = (ev) => {
+    setEditingEval(ev)
+    setEvalModalOpen(true)
+  }
+  const onSaveEvaluation = async (body) => {
+    if (editingEval) await updateEvaluation(editingEval.id, body)
+    else await createEvaluation(body)
+  }
+  const onDeleteEvaluation = async (ev) => {
+    if (window.confirm(`Delete the ${ev.cycleLabel ?? 'evaluation'} record for ${ev.personName ?? 'this person'}?`))
+      await removeEvaluation(ev.id)
+  }
+  const editingEvalForm = useMemo(
+    () => (editingEval ? evaluationToForm(editingEval) : null),
+    [editingEval],
+  )
 
   const m = useMemo(() => {
     const map = {}
@@ -169,8 +249,47 @@ function HrWorkspace() {
           tone: 'neutral',
         },
       },
+      // AIC Phase F — bound to /summary, which is COUNTS ONLY and readable by
+      // every role including viewer. There is no percentage here and there will
+      // not be one: a "% of staff evaluated" needs a staff denominator, and the
+      // people register is a partial, opt-in roster we cannot vouch for.
+      //
+      // "WE COULD NOT LOOK" IS NOT "WE LOOKED AND IT IS FINE". `evalSummary` is
+      // null when the /summary read failed (or has not returned), and a green 0
+      // reading "no cycle recorded yet" would be the same card a school with a
+      // spotless register sees. The register panel's error text is below the fold
+      // and a viewer never gets the panel at all, so the card has to say it.
+      evalSummary == null
+        ? {
+            label: 'Evaluations overdue',
+            value: '—',
+            status: 'neutral',
+            sub: {
+              icon: ClipboardCheck,
+              text: evalLoading ? 'reading your register…' : 'we could not read the register',
+              tone: 'neutral',
+            },
+          }
+        : {
+            label: 'Evaluations overdue',
+            value: String(evalSummary.overdue ?? 0),
+            status: (evalSummary.overdue ?? 0) > 0 ? 'risk' : 'good',
+            sub:
+              (evalSummary.overdue ?? 0) > 0
+                ? {
+                    icon: AlertTriangle,
+                    text:
+                      (evalSummary.oldestOverdueDays ?? 0) > 0
+                        ? `oldest ${evalSummary.oldestOverdueDays}d past due`
+                        : 'past their own due date',
+                    tone: 'bad',
+                  }
+                : (evalSummary.total ?? 0) > 0
+                  ? { icon: Check, text: `${evalSummary.total} on file`, tone: 'good' }
+                  : { icon: ClipboardCheck, text: 'no cycle recorded yet', tone: 'neutral' },
+          },
     ],
-    [ratio, share, fteYoy, teachingFte, totalStaffFte],
+    [ratio, share, fteYoy, teachingFte, totalStaffFte, evalSummary, evalLoading],
   )
 
   // ── Needs attention (navigational) ─────────────────────────────────────────
@@ -202,6 +321,25 @@ function HrWorkspace() {
         ],
       })
     }
+    // AIC Phase F — the new register feeds the rail, like every sibling domain.
+    // Without this the header pill reads "all clear" beside a red KPI card saying
+    // twelve evaluations are overdue, and the one thing on the page that is
+    // actually wrong has no action affordance. Guarded by the register's own role
+    // gate so a viewer is not offered a register the server will 403.
+    if (canReadEvaluations && (evalSummary?.overdue ?? 0) > 0) {
+      const overdue = evalSummary.overdue
+      const oldest = evalSummary.oldestOverdueDays ?? 0
+      items.push({
+        id: 'evaluations-overdue',
+        tone: overdue >= EVAL_OVERDUE_RISK_COUNT || oldest > EVAL_OVERDUE_RISK_DAYS ? 'risk' : 'watch',
+        title: `${overdue} staff evaluation${overdue === 1 ? '' : 's'} past their own due date`,
+        why:
+          oldest > 0
+            ? `The oldest has been outstanding ${oldest} day${oldest === 1 ? '' : 's'}.`
+            : 'Recorded in your evaluation register, past the date it set for itself.',
+        actions: [{ label: 'Open the register', primary: true, onClick: () => setTab('evaluations') }],
+      })
+    }
     if (operational && (teachingFte == null || totalStaffFte == null)) {
       items.push({
         id: 'fte-missing',
@@ -214,10 +352,21 @@ function HrWorkspace() {
       })
     }
     return items
-  }, [ratio, share, operational, teachingFte, totalStaffFte, periodLabel, canEdit, navigate])
+  }, [
+    ratio,
+    share,
+    operational,
+    teachingFte,
+    totalStaffFte,
+    periodLabel,
+    canEdit,
+    navigate,
+    canReadEvaluations,
+    evalSummary,
+  ])
 
-  // ── Staffing trends (the register slot — HR has no register of records) ────
-  const registerTable = (
+  // ── Staffing trends (the register slot HR shipped with) ────────────────────
+  const trendsTable = (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
       <div className="rounded-xl border border-rule/50 p-3">
         <p className="mb-1.5 text-[12px] font-bold uppercase tracking-[0.1em] text-muted">Students per teacher</p>
@@ -235,6 +384,8 @@ function HrWorkspace() {
   )
 
   // ── Gate / loading ─────────────────────────────────────────────────────────
+  // The module gate runs FIRST and unconditionally, so an unlicensed school gets
+  // the upsell panel and never a 402-shaped crash from the new register.
   if (!hasModule('hr')) return <GatePanel notLicensed={entitled} />
   if (metricsLoading && !metrics.length) {
     return (
@@ -243,6 +394,29 @@ function HrWorkspace() {
       </div>
     )
   }
+
+  const registerTable =
+    tab === 'evaluations' ? (
+      <StaffEvaluationsPanel
+        evaluations={evaluations}
+        loading={evalLoading}
+        error={evalError}
+        restricted={evalRestricted}
+        canEdit={canEdit}
+        reduce={reduce}
+        onAdd={openAddEvaluation}
+        onEdit={openEditEvaluation}
+        onDelete={onDeleteEvaluation}
+      />
+    ) : (
+      trendsTable
+    )
+
+  // "+ New" belongs to the evaluations register only — staffing trends is a chart
+  // slot with nothing to create. It is also hidden while the register is
+  // restricted: offering an action a role cannot take is its own small dishonesty.
+  const onNew =
+    tab === 'evaluations' && canEdit && !evalRestricted ? openAddEvaluation : null
 
   const commandCenter = (
     <DomainCommandCenter
@@ -253,10 +427,25 @@ function HrWorkspace() {
       Icon={Users2}
       attentionCount={attentionItems.length}
       kpis={kpis}
-      tabs={[]}
-      registerTitle="Staffing trends"
+      tabs={TABS}
+      activeTab={tab}
+      onTabChange={setTab}
+      onNew={onNew}
       registerTable={registerTable}
       attentionItems={attentionItems}
+    />
+  )
+
+  const modal = (
+    <StaffEvaluationFormModal
+      key={editingEval ? editingEval.id : 'new'}
+      open={evalModalOpen}
+      schoolId={schoolId}
+      initial={editingEvalForm}
+      editingPersonName={editingEval?.personName ?? null}
+      onClose={() => setEvalModalOpen(false)}
+      onSave={onSaveEvaluation}
+      reduce={reduce}
     />
   )
 
@@ -268,10 +457,16 @@ function HrWorkspace() {
           overview={commandCenter}
           addData={<AddDataTab module="hr" schoolId={schoolId} periodId={periodId} canEdit={canEdit} />}
         />
+        {modal}
       </ModuleAccent>
     )
   }
-  return commandCenter
+  return (
+    <>
+      {commandCenter}
+      {modal}
+    </>
+  )
 }
 
 export default function HrPage() {

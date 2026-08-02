@@ -293,8 +293,15 @@ describe('AccreditationCatalogService — seed (idempotent)', () => {
     const audit = rows.find((r) => r.tag === 'financial_audit' && r.windowMonths === 18)!
     expect(audit.dataAvailability).toBe('platform')
     expect(audit.windowKind).toBe('fixed')
+    // AIC Phase F flipped this row to 'platform' (the register exists now) and it
+    // KEEPS its notTrackedReason, because staff_evaluation_register is module-gated:
+    // a school with no rows still renders `not_tracked` with this sentence, so the
+    // seeded reason is still load-bearing. Changing the seed IS the migration for
+    // platform reference data — pass 3 upserts every row on every boot — so this
+    // assertion is what proves the flip actually reaches a database.
     const evaluations = rows.find((r) => r.tag === 'staff_evaluation')!
-    expect(evaluations.dataAvailability).toBe('intake')
+    expect(evaluations.dataAvailability).toBe('platform')
+    expect(evaluations.sourceRegister).toBe('staff_evaluation_register')
     expect(evaluations.notTrackedReason).toContain('staff-evaluation register')
   })
 

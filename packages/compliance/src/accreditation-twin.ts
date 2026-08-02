@@ -169,10 +169,81 @@ export interface TwinEvidenceGroupView {
   servesAssurance: boolean
 }
 
+/**
+ * AIC Phase F — ONE OPEN CITATION GROUP, pre-aggregated by the caller.
+ *
+ * THE GROUPING KEY IS (code, visitDate) — a PAIR, never the code alone. A school
+ * cited on the same standard at two different visits produces TWO groups, because
+ * the sentence this feeds names a visit date: collapsing 2015 and 2021 into one
+ * group and quoting the later date would tell a school that both citations came
+ * from the 2021 team, which is a sentence out-running its own arithmetic. One
+ * group = one code + one visit, so `openCount` and `visitDate` are true together.
+ *
+ * `code` is the NORMALISED cited code (trim + uppercase). The engine matches it
+ * against `TwinStandardView.code` by EXACT EQUALITY after the same normalisation
+ * and by nothing else: no prefix match, no substring match, no edit distance, no
+ * stripping of a framework prefix. A group whose code matches no standard NEVER
+ * reaches this array — the API keeps unmatched citations on its own register
+ * endpoint, because a finding that cannot name a real standard code cannot fire
+ * (G3), and a citation matched to the WRONG standard is worse than an unmatched
+ * one.
+ *
+ * NOTHING HERE MAY CALIBRATE A PROBABILITY OR A LIKELIHOOD (plan G10, D4 frozen).
+ * One visiting team per six years per school is not calibratable.
+ * `ACC-PRIOR-FINDING-OPEN` sets severity, likelihood, confidence and horizon as
+ * LITERALS for exactly that reason, and no `TWIN_THRESHOLDS` entry reads this.
+ */
+export interface TwinPriorVisitCitationView {
+  code: string
+  /** The ONE visit every citation in this group came from. yyyy-mm-dd. */
+  visitDate: string
+  /** Citations against `code` from THAT visit that are still recorded open. */
+  openCount: number
+}
+
+/**
+ * AIC Phase F — the staff-evaluation register, as THREE INTEGERS.
+ *
+ * ADULT-STAFF EMPLOYMENT PII never crosses this boundary. There is no id, no
+ * personId, no evaluator name and no cycle label here, and `HR-EVAL-OVERDUE`'s
+ * `evidence[]` is counts and days only. Null when the register was unreadable or
+ * empty — the rule refuses rather than inventing a zero.
+ */
+export interface TwinStaffEvaluationSummaryView {
+  registerSize: number
+  overdueCount: number
+  /** Days past due for the OLDEST still-overdue row. 0 when none is overdue. */
+  oldestOverdueDays: number
+}
+
+/**
+ * AIC Phase F — the compliance-inspection subset of the facilities register.
+ *
+ * `overdueKinds` arrives ALREADY ORDERED by the caller's frozen vocabulary and
+ * `anyLifeSafety` arrives as a boolean: this pure package owns the humanising
+ * table below and nothing else about the kind vocabulary, so widening the
+ * vocabulary is one edit in the API and one line here.
+ */
+export interface TwinComplianceInspectionSummaryView {
+  trackedCount: number
+  overdueCount: number
+  oldestOverdueDays: number
+  /** DISTINCT kinds among the OVERDUE items, in the caller's frozen kind order. */
+  overdueKinds: readonly string[]
+  /** True when any overdue kind is in the caller's life-safety subset. */
+  anyLifeSafety: boolean
+}
+
 export interface TwinRegisterView {
   frameworkCode: string | null
   standards: readonly TwinStandardView[]
   evidenceGroups: readonly TwinEvidenceGroupView[]
+  /** AIC Phase F. ALWAYS present; `[]` when the register is empty or unreadable. */
+  priorVisitCitations: readonly TwinPriorVisitCitationView[]
+  /** AIC Phase F. Null when the register was unreadable or empty. COUNTS ONLY. */
+  staffEvaluations: TwinStaffEvaluationSummaryView | null
+  /** AIC Phase F. Null when the register was unreadable or holds no flagged item. */
+  complianceInspections: TwinComplianceInspectionSummaryView | null
   demoData: boolean
   snapshotAsOf: string | null
 }
@@ -475,7 +546,18 @@ export interface TwinRuleDef {
 }
 
 /**
- * The frozen ordered vocabulary: 22 firing rules + 4 visible holes.
+ * The frozen ordered vocabulary: 25 firing rules + 4 visible holes.
+ *
+ * AIC PHASE F took this 26 → 29. `AIC-final-plan.md` §PHASE F promised that the
+ * StaffEvaluation and MaintenanceItem.complianceKind intakes would "flip
+ * HR-EVAL-OVERDUE / FAC-INSPECTION-DUE live" — but Phase E never wrote either
+ * rule, and neither id existed anywhere in the tree. Under a literal reading the
+ * phase would light two signals no rule reads. So Phase F WRITES the two rules the
+ * plan assumed, plus `ACC-PRIOR-FINDING-OPEN` for the prior-visit register the plan
+ * gave no rule id at all. `VISIBLE_HOLE_RULE_IDS` is UNCHANGED at four: none of the
+ * three new rules is a named hole, and none of the four named holes is closed here
+ * (HR-PD-LOW and SAFE-ENV-GAP are Phase K, CURR-DOC-AGING is one Policy row away,
+ * ACAD-GROWTH-FLAT is deferred).
  *
  * The Phase-E scope's prose list counts 23 only if `STRAT-PLAN-EXPIRING
  * (365/180/90)` is read as three rules. It is ONE ruleId with three severity
@@ -511,6 +593,10 @@ export const TWIN_RULE_IDS = [
   'SAFE-ENV-GAP',
   'CURR-DOC-AGING',
   'ACAD-GROWTH-FLAT',
+  // ── AIC Phase F. Appended, never interleaved: this order is the render order.
+  'HR-EVAL-OVERDUE',
+  'FAC-INSPECTION-DUE',
+  'ACC-PRIOR-FINDING-OPEN',
 ] as const
 
 export type TwinRuleId = (typeof TWIN_RULE_IDS)[number]
@@ -601,6 +687,23 @@ export const TWIN_THRESHOLDS = Object.freeze({
     0.34,
     'A third of the register unscored is not a gap list, it is an unstarted self-study.',
   ),
+  // ── AIC Phase F. Three COUNT/DAY thresholds and deliberately NO FRACTION.
+  // A "% of staff evaluated" needs a staff denominator, and GovernancePerson with
+  // `groups ∋ 'staff'` is a partial, opt-in roster. Dividing by a denominator we
+  // cannot vouch for is exactly the class of claim that out-runs the arithmetic.
+  // Nothing below reads prior-visit data: that register may not calibrate anything.
+  STAFF_EVAL_OVERDUE_WARN_COUNT: t(
+    3,
+    'One late evaluation is a calendar. Three is a cycle that has slipped, and three is what a visiting team will find in the sample it pulls.',
+  ),
+  STAFF_EVAL_OVERDUE_CRITICAL_COUNT: t(
+    10,
+    'Ten outstanding evaluations is an evaluation process that has stopped, not a queue.',
+  ),
+  STAFF_EVAL_OVERDUE_CRITICAL_DAYS: t(
+    365,
+    'A full year past its own due date is a missed cycle, not a late one — and it is one whole review period a team can point at.',
+  ),
 } as const)
 
 /** Entry-grade keys, frozen ORDER. The two lowest matched keys are the entry cohort. */
@@ -626,6 +729,31 @@ const HORIZON_TERMS_LAPSED = 'We can see which terms have lapsed, not when the n
  */
 export const FAC_BACKLOG_HONESTY_NOTE =
   'We can say a recurring facilities item is overdue. We will not say your fire inspection is overdue by guessing at free text — see fac.inspections.'
+
+/**
+ * AIC Phase F — how a compliance-inspection KIND is said out loud.
+ *
+ * The sentence FAC_BACKLOG_HONESTY_NOTE makes is STILL TRUE after Phase F: we
+ * still refuse to guess a kind out of a free-text title. What changed is that a
+ * school can now DECLARE the kind on the item, and this table is the only place
+ * that declaration is turned into English. It is not the vocabulary's authority —
+ * the closed list lives in the API's DTO and arrives here already ordered — so an
+ * unmapped kind is rendered from its own key rather than dropped or guessed at.
+ */
+const COMPLIANCE_KIND_LABEL: Readonly<Record<string, string>> = Object.freeze({
+  fire_life_safety: 'fire and life-safety',
+  boiler: 'boiler',
+  elevator: 'elevator',
+  asbestos: 'asbestos',
+  health: 'health',
+  water_quality: 'water quality',
+  playground: 'playground',
+})
+
+/** An unmapped kind is said as itself, never inferred into a kind we do know. */
+function complianceKindLabel(kind: string): string {
+  return COMPLIANCE_KIND_LABEL[kind] ?? kind.replace(/_/g, ' ')
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ERRORS
@@ -735,6 +863,22 @@ function withThousands(intPart: string): string {
 
 function fmtCount(n: number): string {
   return withThousands(String(Math.round(n)))
+}
+
+/**
+ * A DAY COUNT WITH ITS OWN NOUN, correctly inflected — "1 day", "40 days".
+ *
+ * A frozen sentence that reads "past its own target date, by 1 days" is a
+ * sentence that out-runs its own arithmetic in the smallest possible way, and it
+ * is reachable on the FIRST day a target date passes (both Phase-F rules refuse
+ * below one day, so 1 is their minimum firing value). Carrying the noun inside
+ * the evidence `display` rather than in the template keeps the numeral traceable
+ * — §5's extraction spec reads `display`, and "1 day" still contains "1" — while
+ * letting one helper own the inflection for every template that quotes a day.
+ */
+function fmtDays(n: number): string {
+  const d = Math.round(n)
+  return `${fmtCount(d)} ${d === 1 ? 'day' : 'days'}`
 }
 
 function fmtMoney(n: number): string {
@@ -1886,7 +2030,11 @@ const FAC_BACKLOG: TwinRuleDef = {
     nsbecs: ['NSBECS-12'],
   },
   rationaleTemplate:
-    '{{openItems}} maintenance items are open, against a working expectation of no more than {{threshold}}.',
+    // "FEWER THAN" for the same reason as HR-EVAL-OVERDUE below: the gate is
+    // `open < WARN_COUNT` -> silent, so this fires AT the threshold. Shipped in
+    // Phase E reading "no more than {{threshold}}", which tells a school the exact
+    // number it is being flagged for is the number that is acceptable.
+    '{{openItems}} maintenance items are open, against a working expectation of fewer than {{threshold}}.',
   unlock: null,
   evaluate(c) {
     const s = c.signal('fac.maintenance_backlog')
@@ -2155,6 +2303,265 @@ const ACAD_GROWTH_FLAT: TwinRuleDef = {
   },
 }
 
+// ── 2.10 AIC PHASE F — THE THREE RULES THE NEW INTAKE REGISTERS MAKE EVALUABLE ─
+//
+// None of these closes one of the four named holes above; they are new capability.
+// Each is gated on a signal that only resolves `available` once the school has
+// entered a row, so a school with an empty register gets a NAMED REFUSAL and no
+// finding — "we could not look" and "we looked and it is fine" stay different
+// facts. Each also reads a PRE-AGGREGATED summary off the register axis rather
+// than a scalar signal value, because a count alone cannot carry the oldest-days
+// figure its own sentence quotes; when that summary is absent the rule refuses
+// with `value_not_usable` instead of inventing a zero.
+
+const STAFF_EVAL_SUMMARY_MISSING =
+  'Your staff-evaluation register reported a reading, but the counts behind it did not come through on this run, so there is no basis to quote.'
+
+const HR_EVAL_OVERDUE: TwinRuleDef = {
+  id: 'HR-EVAL-OVERDUE',
+  kind: 'register',
+  title: 'Staff evaluations are past their own due date',
+  requiredAvailable: ['hr.staff_evaluations'],
+  requiredAbsent: [],
+  requiredPriors: [],
+  needsRegister: true,
+  domainKeys: ['hr'],
+  defaultDomainKey: 'hr',
+  standardCodes: {
+    // COG-10 names "recruiting, supervising, and EVALUATING professional staff"
+    // verbatim; COG-13 is the qualified-personnel standard the same files evidence.
+    cognia_2022: ['COG-10', 'COG-13'],
+    msa_cess_2022: ['MSA-4'],
+    nsbecs: ['NSBECS-11'],
+  },
+  // ONE template. There is no `rationaleTemplateLow`: the rule does not fire below
+  // STAFF_EVAL_OVERDUE_WARN_COUNT (3), so the plural is always correct and no
+  // singular variant is reachable.
+  // The day figure carries its OWN noun (`fmtDays`), so the oldest row being
+  // exactly one day past its date reads "outstanding 1 day" and not "1 days".
+  // "FEWER THAN", not "no more than". The gate is `overdue < WARN_COUNT` -> silent,
+  // so the rule fires AT the threshold: at exactly 3 overdue, "an expectation of no
+  // more than 3" states that 3 is acceptable while flagging 3, and the first thing a
+  // head of school does with a sentence like that is stop trusting the next one.
+  rationaleTemplate:
+    '{{overdueCount}} staff evaluations are past their own recorded due date; the oldest has been outstanding {{oldestOverdueDays}}, against a working expectation of fewer than {{threshold}} overdue.',
+  unlock: null,
+  // ADULT-STAFF EMPLOYMENT PII STOPS AT THE REGISTER. Nothing this rule emits —
+  // rationale, evidence, consequence, factKey — carries a name, a personId, a
+  // cycle label or an evaluator. Four integers is the whole payload.
+  evaluate(c) {
+    const s = c.signal('hr.staff_evaluations')
+    const sum = c.register.staffEvaluations
+    if (sum === null) {
+      throw new TwinCannotEvaluate('value_not_usable', 'hr.staff_evaluations', STAFF_EVAL_SUMMARY_MISSING)
+    }
+    const overdue = sum.overdueCount
+    const oldest = sum.oldestOverdueDays
+    // A summary that contradicts itself cannot be narrated honestly: more overdue
+    // rows than rows, or an overdue row that is nought days past its own date.
+    // Refuse by name rather than render a sentence the arithmetic does not support.
+    if (overdue < 0 || sum.registerSize < overdue || (overdue >= 1 && oldest < 1)) {
+      throw new TwinCannotEvaluate('value_not_usable', 'hr.staff_evaluations', STAFF_EVAL_SUMMARY_MISSING)
+    }
+    if (overdue < TH.STAFF_EVAL_OVERDUE_WARN_COUNT.value) return []
+    return [
+      {
+        scopeKey: 'school',
+        factKey: `register:staff_evaluations_overdue@${s.observedOn ?? 'undated'}`,
+        evidence: [
+          ev('overdueCount', 'Evaluations past their due date', overdue, fmtCount(overdue), s.observedOn, s.lineage),
+          ev('oldestOverdueDays', 'How long the oldest has been outstanding', oldest, fmtDays(oldest)),
+          ev(
+            'threshold',
+            'Working expectation',
+            TH.STAFF_EVAL_OVERDUE_WARN_COUNT.value,
+            fmtCount(TH.STAFF_EVAL_OVERDUE_WARN_COUNT.value),
+          ),
+          ev('registerSize', 'Evaluation records on file', sum.registerSize, fmtCount(sum.registerSize)),
+        ],
+        // BOTH numerals that decide this appear in the rationale AND in evidence[].
+        severity:
+          overdue >= TH.STAFF_EVAL_OVERDUE_CRITICAL_COUNT.value ||
+          oldest > TH.STAFF_EVAL_OVERDUE_CRITICAL_DAYS.value
+            ? 'critical'
+            : 'warn',
+        // ORDINAL, CONSTANT. A team samples personnel files; an evaluation past its
+        // own recorded date is a documentary fact, not a forecast.
+        likelihood: 'likely',
+        // A single-observation register fact — the GOV-POLICY-OVERDUE / FAC-BACKLOG
+        // precedent. No series is computed and the five-reading word is forbidden here.
+        confidence: 'observation',
+        horizon: NO_HORIZON(HORIZON_DATE_PASSED),
+        consequence:
+          'Cognia COG-10 names evaluating professional staff explicitly, and a visiting team samples personnel files. An evaluation past the date your own register set for it is the documentary gap they write up.',
+      },
+    ]
+  },
+}
+
+const INSPECTION_SUMMARY_MISSING =
+  'Your facilities register reported a compliance-inspection reading, but the counts behind it did not come through on this run, so there is no basis to quote.'
+
+const FAC_INSPECTION_DUE: TwinRuleDef = {
+  id: 'FAC-INSPECTION-DUE',
+  kind: 'register',
+  title: 'A recorded compliance inspection is past its own target date',
+  requiredAvailable: ['fac.inspections'],
+  requiredAbsent: [],
+  requiredPriors: [],
+  needsRegister: true,
+  domainKeys: ['facilities'],
+  defaultDomainKey: 'facilities',
+  standardCodes: {
+    cognia_2022: ['COG-A3'],
+    msa_cess_2022: ['MSA-3'],
+    nsbecs: ['NSBECS-12'],
+  },
+  // Both templates take the day figure WITH its noun (`fmtDays`): an inspection
+  // one day past its target date is the most common way this rule first fires,
+  // and "by 1 days" is a sentence this product will not say.
+  rationaleTemplate:
+    '{{overdueCount}} recorded compliance inspections are past their own target date ({{kinds}}); the oldest is {{oldestOverdueDays}} past.',
+  rationaleTemplateLow:
+    'A recorded {{kinds}} inspection is past its own target date, by {{oldestOverdueDays}}.',
+  unlock: null,
+  // WE STILL DO NOT GUESS. FAC_BACKLOG_HONESTY_NOTE stays true word for word: this
+  // rule reads a kind the SCHOOL declared on the item, never one inferred from a
+  // free-text title, category or location.
+  //
+  // The overlap with FAC-BACKLOG is DECIDED, not accidental: an overdue compliance
+  // item is also an open maintenance item, so it sits inside FAC-BACKLOG's count.
+  // The two carry DIFFERENT factKeys and the domain band counts DISTINCT factKeys,
+  // so facilities can be darkened by both — correctly, because a backlog SIZE and a
+  // named regulatory inspection past its own date are two different facts. Netting
+  // compliance items out of the backlog would silently move FAC-BACKLOG's value for
+  // every school that adopts the new field.
+  evaluate(c) {
+    const s = c.signal('fac.inspections')
+    const sum = c.register.complianceInspections
+    if (sum === null) {
+      throw new TwinCannotEvaluate('value_not_usable', 'fac.inspections', INSPECTION_SUMMARY_MISSING)
+    }
+    const overdue = sum.overdueCount
+    const oldest = sum.oldestOverdueDays
+    if (overdue < 0 || sum.trackedCount < overdue) {
+      throw new TwinCannotEvaluate('value_not_usable', 'fac.inspections', INSPECTION_SUMMARY_MISSING)
+    }
+    if (overdue < 1) return []
+    // The sentence NAMES the kind, and the severity is decided BY the kind, so the
+    // two cannot disagree. Without a kind to name there is no sentence to say —
+    // "an inspection of an unnamed kind is overdue" is a sentence this product will
+    // not say — and an overdue item nought days past its own date is not overdue.
+    if (sum.overdueKinds.length === 0 || oldest < 1) {
+      throw new TwinCannotEvaluate('value_not_usable', 'fac.inspections', INSPECTION_SUMMARY_MISSING)
+    }
+    const kinds = sum.overdueKinds.map(complianceKindLabel).join(', ')
+    return [
+      {
+        scopeKey: 'school',
+        factKey: `register:compliance_inspection_overdue@${s.observedOn ?? 'undated'}`,
+        evidence: [
+          ev('overdueCount', 'Compliance inspections past their target date', overdue, fmtCount(overdue), s.observedOn, s.lineage),
+          ev('oldestOverdueDays', 'How far past due the oldest is', oldest, fmtDays(oldest)),
+          ev('kinds', 'Kinds of inspection overdue', kinds, kinds),
+          ev(
+            'trackedCount',
+            'Items on your facilities register flagged as a compliance inspection',
+            sum.trackedCount,
+            fmtCount(sum.trackedCount),
+          ),
+        ],
+        severity: sum.anyLifeSafety ? 'critical' : 'warn',
+        likelihood: 'likely',
+        confidence: 'observation',
+        horizon: NO_HORIZON(HORIZON_DATE_PASSED),
+        templateVariant: overdue === 1 ? 'low' : 'primary',
+        consequence:
+          "Cognia's safety assurance is a binary gate and MSA and NSBECS both name facilities adequacy. An inspection your own register says is past due is the first document a visiting team asks to see.",
+      },
+    ]
+  },
+}
+
+const ACC_PRIOR_FINDING_OPEN: TwinRuleDef = {
+  id: 'ACC-PRIOR-FINDING-OPEN',
+  kind: 'standard',
+  // "a PREVIOUS visit", never "your LAST visit". The group's date is the date of
+  // the visit THAT CITATION came from, which is not necessarily the school's most
+  // recent visit — a 2021 team can leave nothing open while a 2015 citation still
+  // stands. The briefing composes `${code} — ${title}`, so a title that claimed
+  // "your last visit" would put a false clause in front of a true rationale.
+  title: 'A citation from a previous accreditation visit is still open',
+  requiredAvailable: ['acc.prior_visit_findings'],
+  requiredAbsent: [],
+  requiredPriors: [],
+  needsRegister: true,
+  domainKeys: ['continuous_improvement'],
+  defaultDomainKey: 'continuous_improvement',
+  standardCodes: NO_CODES,
+  rationaleTemplate:
+    '{{openCount}} citations against {{code}} from the visit of {{visitDate}} are still recorded as open in your own register.',
+  // 'One' is a WORD, so `/\d/` never matches outside a {{…}} in either template.
+  rationaleTemplateLow:
+    'One citation against {{code}}, from the visit of {{visitDate}}, is still recorded as open in your own register.',
+  unlock: null,
+  // THE PROHIBITION, MECHANISED (plan G10; D4 stays frozen). severity, likelihood,
+  // confidence and horizon below are LITERALS, not functions of anything on the
+  // prior-visit register: one visiting team per six years per school is not
+  // calibratable, so nothing here may tune the risk arithmetic. What a matched open
+  // citation DOES get is exactly what any other `warn` finding gets — one distinct
+  // fact under one named standard — and no multiplier, weight or calibration term.
+  //
+  // The rejected alternative is recorded: keeping prior-visit findings out of the
+  // fact count entirely. It was rejected because "raise a standard's visibility" is
+  // precisely what a fact-count band does, and excluding one rule's facts from the
+  // count would make the band no longer a count of facts.
+  evaluate(c) {
+    const out: TwinFindingDraft[] = []
+    // Matching already happened in the caller, by EXACT equality after trim +
+    // uppercase. Nothing here fuzzy-matches, and a citation the caller could not
+    // place never arrives — it stays on the register endpoint, shown as unmatched.
+    const byCode = new Map(sortedStandards(c.register).map((st) => [st.code, st]))
+    for (const cite of c.register.priorVisitCitations) {
+      const st = byCode.get(cite.code)
+      if (!st) continue
+      if (cite.openCount < 1) continue
+      out.push({
+        scopeKey: `standard:${st.standardId}`,
+        // THE VISIT IS PART OF THE FACT. A school cited on one standard at two
+        // visits holds two distinct, separately-closable facts; one factKey per
+        // (standard, visit) is what makes "{{openCount}} … from the visit of
+        // {{visitDate}}" true rather than an average of two visits.
+        factKey: `standard:${st.standardId}:prior_visit_open@${cite.visitDate}`,
+        standardCodes: [st.code],
+        domainKeys: st.domainKeys,
+        defaultDomainKey: st.primaryDomainKey,
+        // The citation TEXT is deliberately absent: it is free text lifted from a
+        // PDF, of unbounded length and unknown provenance. The register endpoint
+        // shows it; the twin payload — which feeds the briefing, Penny and every
+        // export — does not.
+        evidence: [
+          ev('code', 'Standard', st.code, st.code),
+          ev('title', 'Standard title', st.title, st.title),
+          ev('visitDate', 'Visit date', cite.visitDate, formatCivilDate(cite.visitDate)),
+          ev('openCount', 'Citations still open', cite.openCount, fmtCount(cite.openCount)),
+        ],
+        // ALWAYS 'warn'. CONSTANT. Escalating on a prior citation would need an
+        // outcome model this program does not have and will not fake, and
+        // ACC-ASSURANCE-GAP already owns standing 'critical' for an unmet gate.
+        severity: 'warn',
+        likelihood: 'likely',
+        confidence: 'observation',
+        horizon: NO_HORIZON(HORIZON_CONDITION_TODAY),
+        templateVariant: cite.openCount === 1 ? 'low' : 'primary',
+        consequence:
+          "A visiting team reads its predecessor's report before it reads yours. A citation from the last visit that your own register still shows as open is the first thing they will ask you to walk them through.",
+      })
+    }
+    return out
+  },
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // THE FROZEN CATALOG
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2186,6 +2593,10 @@ export const TWIN_RULE_DEFS: readonly TwinRuleDef[] = Object.freeze([
   SAFE_ENV_GAP,
   CURR_DOC_AGING,
   ACAD_GROWTH_FLAT,
+  // ── AIC Phase F, in TWIN_RULE_IDS order.
+  HR_EVAL_OVERDUE,
+  FAC_INSPECTION_DUE,
+  ACC_PRIOR_FINDING_OPEN,
 ])
 
 export const TWIN_RULES_BY_ID: ReadonlyMap<TwinRuleId, TwinRuleDef> = new Map(

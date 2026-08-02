@@ -108,7 +108,7 @@ export interface FindingPublic {
  *
  * `TwinResult` is the PURE engine's shape and carries no signal roster: the pure
  * function receives the signals, it does not republish them. The Signals tab's
- * headline claim ("all thirty-five of them") therefore had nothing to render and
+ * headline claim ("all thirty-six of them") therefore had nothing to render and
  * sat permanently in its degraded fallback, showing only the four count pills and
  * the handful of signals that happened to block a rule. The roster is added HERE,
  * by the service that already holds the collected set.

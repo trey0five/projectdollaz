@@ -176,12 +176,27 @@ export const REGISTER_ROUTE = {
   enrollment_snapshot: '/enrollment',
   knowledge_document: '/knowledge',
   board_report: '/reports',
-  maintenance_item: null,
-  staff_evaluation_register: null,
+  // AIC Phase F — both registers EXIST now, so these are no longer fake links.
+  maintenance_item: '/facilities',
+  staff_evaluation_register: '/hr',
   professional_development: null,
   clearance_register: null,
   lms: null,
   portal: null,
+}
+
+/**
+ * The registers that live in KYRO behind a LICENSABLE MODULE. Mirrors the API's
+ * MODULE_GATED_REGISTERS (apps/api/src/accreditation/evidence-anchors.ts).
+ *
+ * A row on one of these is seeded `platform` and read back as `intake` by
+ * `gateIfUnearned` until the register answers it — so `dataAvailability` alone
+ * can no longer distinguish "KYRO does not hold this" from "KYRO holds this and
+ * you have not filled it in yet".
+ */
+export const MODULE_GATED_REGISTERS = {
+  staff_evaluation_register: 'hr',
+  maintenance_item: 'facilities',
 }
 
 /**
@@ -191,8 +206,15 @@ export const REGISTER_ROUTE = {
  * declared register has a friendly name: KYRO does not hold it, and printing
  * "HR" beside a row we cannot see would tell a visiting team we have something we
  * do not. `dataAvailability` is checked first, always.
+ *
+ * AIC PHASE F CARVE-OUT: a MODULE-GATED register is the exception, because it is
+ * genuinely in KYRO. Printing "Not tracked in KYRO" beside a staff-evaluation row
+ * for a school whose /hr page is showing it three overdue evaluations is the
+ * quiet lie this phase exists to remove — the register is tracked, the school
+ * simply has not yet recorded an evaluation with a COMPLETED date.
  */
 export function whereItLives(sourceRegister, dataAvailability) {
+  if (sourceRegister in MODULE_GATED_REGISTERS) return REGISTER_DOMAIN_LABEL[sourceRegister]
   if (dataAvailability && dataAvailability !== 'platform') return 'Not tracked in KYRO'
   return REGISTER_DOMAIN_LABEL[sourceRegister] ?? '—'
 }
@@ -202,7 +224,9 @@ export function whereItLives(sourceRegister, dataAvailability) {
 // carries only the glyph and whether the pill navigates. A CTA with `link: null`
 // is NOT a broken button — it is the honest state of a register that does not
 // exist yet, so it renders as a non-navigating pill whose title is the group's own
-// message. Phase F flips those rows to `platform` and the CTA disappears entirely.
+// message. AIC Phase F added the one exception: a MODULE-GATED row downgraded to
+// `intake` gets a REAL link (the server sends "Start tracking in HR" + '/hr'),
+// because that register now exists and is the place the row is sending the user.
 export const CTA_ICON = {
   start_tracking: ExternalLink,
   add_date: CalendarPlus,

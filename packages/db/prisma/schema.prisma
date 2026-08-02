@@ -160,6 +160,9 @@ model School {
   governancePeople         GovernancePerson[]
   committeeMemberships     CommitteeMembership[]
   students                 Student[]
+  // ── AIC Phase F (additive) — the two new intake registers.
+  staffEvaluations         StaffEvaluation[]
+  priorVisitFindings       PriorVisitFinding[]
 
   @@index([organizationId])
   @@map("schools")
@@ -295,6 +298,10 @@ model User {
   governancePersons            GovernancePerson[]       @relation("GovernancePersonUser")
   governancePersonsUpdated     GovernancePerson[]       @relation("GovernancePersonUpdatedBy")
   createdStudents              Student[]                @relation("StudentCreatedBy")
+  // ── AIC Phase F (additive) — audit stamps on the two new registers.
+  staffEvaluationsCreated      StaffEvaluation[]        @relation("StaffEvaluationCreatedBy")
+  staffEvaluationsUpdated      StaffEvaluation[]        @relation("StaffEvaluationUpdatedBy")
+  priorVisitFindingsCreated    PriorVisitFinding[]      @relation("PriorVisitFindingCreatedBy")
 
   @@index([email])
   @@index([lastLoginRegion])
@@ -1296,6 +1303,9 @@ model GovernancePerson {
   user          User?   @relation("GovernancePersonUser", fields: [userId], references: [id], onDelete: SetNull)
   updatedByUser User?   @relation("GovernancePersonUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
   memberships   CommitteeMembership[]
+  // ── AIC Phase F (additive) — staff evaluations point HERE. `groups ∋ 'staff'`
+  // already models a staff member, so no second person table is introduced.
+  staffEvaluations StaffEvaluation[] @relation("StaffEvaluationPerson")
 
   @@index([schoolId])
   @@map("governance_people")
@@ -1397,6 +1407,9 @@ model AccreditationFramework {
   standards          AccreditationCatalogStandard[]
   schoolStandards    AccreditationStandard[]
   readinessSnapshots AccreditationReadinessSnapshot[]
+  // ── AIC Phase F (additive) — prior-visit findings, SetNull on delete: visit
+  // history outlives a catalog row.
+  priorVisitFindings PriorVisitFinding[]
 
   @@map("accreditation_frameworks")
 }
@@ -1820,6 +1833,22 @@ model MaintenanceItem {
   location        String?
   // Free text v1 (e.g. 'HVAC','Roofing','Electrical'), nullable.
   category        String?
+  // ── AIC Phase F (additive) — WHAT KIND OF REGULATORY INSPECTION THIS ITEM IS.
+  // NULLABLE and NEVER INFERRED. `title`, `category` and `location` above are free
+  // text and this column is not guessed from any of them — the Phase-C requirement
+  // seed already published that promise ("We will not guess it from free text") and
+  // the honesty note beside FAC-BACKLOG repeats it. NULL means "an ordinary
+  // maintenance item", and such an item behaves EXACTLY as it does today.
+  // Closed vocabulary, DTO-bounded (@IsIn MAINTENANCE_COMPLIANCE_KINDS). TEXT
+  // column, no Postgres enum — house convention.
+  //
+  // NOTE FOR THE NEXT MIGRATION AUTHOR: the shipped index behind this column is
+  // PARTIAL (`WHERE compliance_kind IS NOT NULL`) because almost every row on this
+  // register is an ordinary item. Prisma cannot express a partial index, so it is
+  // deliberately NOT declared as an `@@index` here. Do not "restore" it: a plain
+  // `@@index([schoolId, complianceKind])` would claim an index the database does
+  // not have.
+  complianceKind  String?   @map("compliance_kind")
   priority        String    @default("medium") // 'low' | 'medium' | 'high' | 'critical'
   status          String    @default("open") // 'open' | 'scheduled' | 'in_progress' | 'resolved'
   // Estimated repair/replacement cost. Decimal(14,2) — money, nullable. Coerced to
@@ -2480,4 +2509,97 @@ model StrategyInitiative {
   @@index([schoolId])
   @@index([goalId])
   @@map("strategy_initiatives")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AIC PHASE F — INTAKE REGISTERS I
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// AIC Phase F — the STAFF EVALUATION register. ADULT-STAFF EMPLOYMENT PII.
+///
+/// The register may name a person to owner/accountant. The briefing, Penny, every
+/// export and every twin payload get COUNTS ONLY — an overdue evaluation naming a
+/// person is materially more sensitive than a maintenance ticket, and the mechanical
+/// guard lives at apps/api/src/twin/no-staff-pii.spec.ts.
+///
+/// `personId` points at GovernancePerson, which already carries `groups String[]`
+/// with 'staff' among the DTO-validated values. NO SECOND PERSON TABLE IS
+/// INTRODUCED; the service refuses a person whose `groups` does not contain 'staff'.
+///
+/// `dueDate` is NOT NULL on purpose: an evaluation record with no due date can be
+/// neither overdue nor current, so it is not a cycle record, and admitting one would
+/// put an unanswerable row in the register the rule counts. ("Every NOT NULL column
+/// needs a DEFAULT" binds ALTER TABLE ADD COLUMN; a CREATE TABLE with zero rows has
+/// nothing to default.)
+model StaffEvaluation {
+  id              String    @id @default(uuid()) @db.Uuid
+  schoolId        String    @map("school_id") @db.Uuid
+  personId        String    @map("person_id") @db.Uuid
+  /// Free text bounded by the DTO (@MaxLength(80)) — e.g. '2025-26 annual cycle'.
+  cycleLabel      String    @map("cycle_label")
+  /// REQUIRED. The clock the overdue arithmetic reads.
+  dueDate         DateTime  @map("due_date") @db.Date
+  /// Non-null ⇒ the evaluation happened, WHATEVER the status column says. The
+  /// overdue predicate reads this FIRST so no sentence can out-run the data.
+  completedDate   DateTime? @map("completed_date") @db.Date
+  /// PII. NEVER selected by anything under apps/api/src/twin/.
+  evaluatorName   String?   @map("evaluator_name")
+  /// TEXT + DTO @IsIn (house convention; no Postgres enums).
+  status          String    @default("scheduled") // scheduled|in_progress|completed|waived
+  notes           String?
+  createdByUserId String?   @map("created_by_user_id") @db.Uuid
+  updatedByUserId String?   @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  school        School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  person        GovernancePerson @relation("StaffEvaluationPerson", fields: [personId], references: [id], onDelete: Cascade)
+  createdByUser User?            @relation("StaffEvaluationCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  updatedByUser User?            @relation("StaffEvaluationUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([schoolId])
+  @@index([schoolId, dueDate])
+  @@index([personId])
+  @@map("staff_evaluations")
+}
+
+/// AIC Phase F — THE ONLY GROUND TRUTH IN THE PROGRAM: what a real visiting team
+/// actually wrote, and whether the school has closed it.
+///
+/// HARD PROHIBITION (plan G10, D4 frozen): NOTHING on this model may calibrate a
+/// probability or a likelihood. One visit per six years per school is never
+/// calibratable. It may be DISPLAYED and it may raise a standard's visibility; it
+/// may not tune the risk arithmetic. ACC-PRIOR-FINDING-OPEN's severity, likelihood,
+/// confidence and horizon are literals in packages/compliance for that reason.
+///
+/// `citedStandardCode` is FREE TEXT LIFTED FROM A PDF. It may not match any standard
+/// in this school's register. An unmatched code is shown AS UNMATCHED — never
+/// fuzzy-matched, never dropped, never auto-corrected. Matching is exact equality
+/// after trim + uppercase and nothing else, and normalisation is never written back.
+model PriorVisitFinding {
+  id                String    @id @default(uuid()) @db.Uuid
+  schoolId          String    @map("school_id") @db.Uuid
+  /// Which accreditor's visit. NULLABLE — a school may hold a report from a
+  /// framework it has not adopted here. SetNull, never cascade.
+  frameworkId       String?   @map("framework_id") @db.Uuid
+  visitDate         DateTime  @map("visit_date") @db.Date
+  /// FREE TEXT, stored verbatim as entered.
+  citedStandardCode String    @map("cited_standard_code")
+  text              String
+  status            String    @default("open") // open|closed
+  closedDate        DateTime? @map("closed_date") @db.Date
+  /// Free-text pointer to how it was closed (a document title, a URL, a board date).
+  /// NOT a foreign key and NOT resolved by anything: we will not imply we verified it.
+  evidenceRef       String?   @map("evidence_ref")
+  createdByUserId   String?   @map("created_by_user_id") @db.Uuid
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  school        School                  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  framework     AccreditationFramework? @relation(fields: [frameworkId], references: [id], onDelete: SetNull)
+  createdByUser User?                   @relation("PriorVisitFindingCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([schoolId])
+  @@index([schoolId, status])
+  @@map("accreditation_prior_visit_findings")
 }

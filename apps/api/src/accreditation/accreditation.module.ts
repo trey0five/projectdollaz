@@ -15,6 +15,8 @@ import { AccreditationReadinessService } from './readiness.service.js'
 import { AccreditationReadinessHistoryService } from './readiness-history.service.js'
 import { AccreditationSnapshotService } from './readiness-snapshot.service.js'
 import { AccreditationEvidenceReadinessService } from './evidence-readiness.service.js'
+import { PriorVisitController } from './prior-visit.controller.js'
+import { PriorVisitService } from './prior-visit.service.js'
 
 /**
  * Phase 4 Accreditation v1 — the Standards + Evidence register module. The first
@@ -32,6 +34,13 @@ import { AccreditationEvidenceReadinessService } from './evidence-readiness.serv
  * RetentionModule already calls it once and the scheduler explorer discovers
  * @Cron on any provider app-wide. A second forRoot() would double-register every
  * job in the app.
+ *
+ * AIC PHASE F adds the PRIOR VISIT FINDINGS register (controller + service). It
+ * lives here rather than in a module of its own because it is accreditation data
+ * under the accreditation gate, and it needs exactly the three modules this one
+ * already imports. It is NOT exported: TwinRegisterService reads the table
+ * directly with its own narrow projection (phase spec §2.5), so exporting the
+ * service would create a second, wider read path to the same rows for no gain.
  */
 @Module({
   imports: [AuthModule, BillingModule, AuditModule],
@@ -43,6 +52,7 @@ import { AccreditationEvidenceReadinessService } from './evidence-readiness.serv
     AccreditationReadinessController,
     AccreditationReadinessHistoryController,
     AccreditationEvidenceReadinessController,
+    PriorVisitController,
   ],
   providers: [
     AccreditationService,
@@ -51,6 +61,7 @@ import { AccreditationEvidenceReadinessService } from './evidence-readiness.serv
     AccreditationReadinessHistoryService,
     AccreditationSnapshotService,
     AccreditationEvidenceReadinessService,
+    PriorVisitService,
   ],
   // AIC Phase C: the commendations endpoint (in AccreditationSignalsModule)
   // needs BOTH the signal panel and the currency service. The edge stays

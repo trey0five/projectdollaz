@@ -9,7 +9,7 @@ import { TWIN_SIGNAL_KEYS, type TwinSignal, type TwinSignalKey } from './twin-co
 //
 // The defects this file exists to PIN:
 //
-//   • a signal that cannot be read must still COME BACK, with a reason. All 35,
+//   • a signal that cannot be read must still COME BACK, with a reason. All 36,
 //     every time, or the holes become invisible and the catalog stops being a
 //     catalog;
 //   • "no update in N days is stale" is the wrong rule. F14's misfire is an
@@ -31,6 +31,11 @@ const NOW = new Date('2026-06-30T00:00:00.000Z')
 /** A UTC-midnight Date n days before NOW. */
 function daysAgo(n: number): Date {
   return new Date(NOW.getTime() - n * 86_400_000)
+}
+
+/** yyyy-mm-dd, the way every collector reports `observedOn`. */
+function isoDay(d: Date): string {
+  return d.toISOString().slice(0, 10)
 }
 
 function point(periodEndDate: string, value: number | null): TrendPoint {
@@ -63,6 +68,9 @@ interface Fixture {
   committees?: unknown[]
   strategicPlan?: unknown
   maintenance?: unknown[]
+  /** AIC Phase F — the three registers Phase F lit. */
+  staffEvaluations?: unknown[]
+  priorVisitFindings?: unknown[]
   enrollmentSnapshot?: unknown
   readiness?: unknown
   standards?: unknown[]
@@ -87,6 +95,8 @@ function harness(fx: Fixture = {}) {
     committee: { findMany: vi.fn().mockResolvedValue(fx.committees ?? []) },
     strategicPlan: { findFirst: vi.fn().mockResolvedValue(fx.strategicPlan ?? null) },
     maintenanceItem: { findMany: vi.fn().mockResolvedValue(fx.maintenance ?? []) },
+    staffEvaluation: { findMany: vi.fn().mockResolvedValue(fx.staffEvaluations ?? []) },
+    priorVisitFinding: { findMany: vi.fn().mockResolvedValue(fx.priorVisitFindings ?? []) },
     enrollmentSnapshot: { findFirst: vi.fn().mockResolvedValue(fx.enrollmentSnapshot ?? null) },
     accreditationReadinessSnapshot: { findFirst: vi.fn().mockResolvedValue(fx.readiness ?? null) },
     accreditationStandard: { findMany: vi.fn().mockResolvedValue(fx.standards ?? []) },
@@ -143,15 +153,15 @@ function byKey(signals: TwinSignal[]): Map<TwinSignalKey, TwinSignal> {
 }
 
 describe('TwinSignalsService — the whole catalog, always', () => {
-  it('returns all 35 signals for a school with no data at all, none omitted', async () => {
+  it('returns all 36 signals for a school with no data at all, none omitted', async () => {
     const { service } = harness()
     const set = await service.collect('school-A', { now: NOW })
 
-    expect(set.signals).toHaveLength(35)
+    expect(set.signals).toHaveLength(36)
     expect(set.signals.map((s) => s.key)).toEqual([...TWIN_SIGNAL_KEYS])
     const total =
       set.counts.available + set.counts.not_licensed + set.counts.no_data + set.counts.not_tracked
-    expect(total).toBe(35)
+    expect(total).toBe(36)
     // Every unavailable signal carries a sentence. No exceptions, ever.
     for (const s of set.signals) {
       if (s.availability === 'available') expect(s.unavailableReason).toBeNull()
@@ -165,13 +175,15 @@ describe('TwinSignalsService — the whole catalog, always', () => {
   })
 
   it('declaredNotTracked signals are not_tracked and issue NO query', async () => {
-    const { service, prisma, analytics } = harness()
+    const { service, analytics } = harness()
     const set = await service.collect('school-A', { now: NOW })
     const map = byKey(set.signals)
 
+    // THREE, not five. AIC Phase F LIT `hr.staff_evaluations` and `fac.inspections`
+    // — the registers behind them exist, so they are collected rather than declared
+    // blind. These three remain: PD and clearances are Phase K, and measured
+    // learning growth needs an LMS integration KYRO does not have.
     for (const key of [
-      'hr.staff_evaluations',
-      'fac.inspections',
       'hr.pd_participation',
       'safe.clearances',
       'acad.assessment_growth',
@@ -182,13 +194,170 @@ describe('TwinSignalsService — the whole catalog, always', () => {
       // The sentence is the Phase-C seed's own — imported, never retyped.
       expect(s.unavailableReason && s.unavailableReason.length).toBeGreaterThan(20)
     }
-    expect(set.counts.not_tracked).toBe(5)
-    // Nothing in the catalog would have queried a StaffEvaluation or an LMS, so
-    // this only proves the collectors are not invoked — which is the claim.
-    expect(analytics.trends).not.toHaveBeenCalledWith('school-A', 'staff_evaluation')
-    expect(prisma.maintenanceItem.findMany).not.toHaveBeenCalledWith(
-      expect.objectContaining({ where: expect.objectContaining({ complianceKind: expect.anything() }) }),
-    )
+    expect(set.counts.not_tracked).toBe(3)
+    // Nothing in the catalog would have queried an LMS, so this only proves the
+    // collectors are not invoked — which is the claim.
+    expect(analytics.trends).not.toHaveBeenCalledWith('school-A', 'assessment_results')
+  })
+
+  // ── AIC Phase F — THE FLIP, and the distinction it must not blur ─────────────
+  describe('AIC Phase F — the three register signals', () => {
+    const NOT_LICENSED = /^Unlock the /
+
+    it('a school with an EMPTY register reads no_data, never not_tracked', async () => {
+      const { service } = harness()
+      const map = byKey((await service.collect('school-A', { now: NOW })).signals)
+      for (const key of [
+        'hr.staff_evaluations',
+        'fac.inspections',
+        'acc.prior_visit_findings',
+      ] as TwinSignalKey[]) {
+        const s = map.get(key) as TwinSignal
+        expect(s.availability, key).toBe('no_data')
+        expect(s.value, key).toBeNull()
+      }
+    })
+
+    it('"we looked and it is fine" is available with value 0 — NOT no_data', async () => {
+      // The distinction the whole catalog turns on. A register that HAS rows and
+      // none overdue is a PASS with a number; a register with no rows is a refusal.
+      // Conflating them would let a school with nothing recorded look identical to
+      // a school that is genuinely current.
+      const { service } = harness({
+        staffEvaluations: [
+          { dueDate: daysAgo(400), completedDate: daysAgo(390), status: 'completed' },
+          { dueDate: daysAgo(10), completedDate: null, status: 'scheduled' }, // due later
+        ],
+        maintenance: [
+          { status: 'open', resolvedAt: null, complianceKind: null, targetDate: daysAgo(500) },
+          { status: 'resolved', resolvedAt: daysAgo(30), complianceKind: 'boiler', targetDate: daysAgo(40) },
+        ],
+        priorVisitFindings: [
+          { visitDate: daysAgo(1200), status: 'closed', citedStandardCode: 'COG-A3' },
+        ],
+      })
+      const map = byKey((await service.collect('school-A', { now: NOW })).signals)
+
+      const evals = map.get('hr.staff_evaluations') as TwinSignal
+      expect(evals.availability).toBe('available')
+      // The second row is due 10 days ago and NOT completed — that IS overdue.
+      expect(evals.value).toBe(1)
+      // observedOn is the last COMPLETION: a dueDate is a plan, not an observation.
+      expect(evals.observedOn).toBe(isoDay(daysAgo(390)))
+
+      const insp = map.get('fac.inspections') as TwinSignal
+      expect(insp.availability).toBe('available')
+      expect(insp.value).toBe(0) // one kinded item, resolved → nothing overdue
+      // The UNKINDED open item is 500 days past target and must NOT be counted:
+      // an inspection of an unnamed kind is a sentence this product will not say.
+
+      const prior = map.get('acc.prior_visit_findings') as TwinSignal
+      expect(prior.availability).toBe('available')
+      expect(prior.value).toBe(0)
+      expect(prior.observedOn).toBe(isoDay(daysAgo(1200)))
+    })
+
+    it('a completedDate beats any status value, and waived is not overdue', async () => {
+      const { service } = harness({
+        staffEvaluations: [
+          // Past due, but it HAPPENED — whatever the workflow column still says.
+          { dueDate: daysAgo(500), completedDate: daysAgo(480), status: 'in_progress' },
+          { dueDate: daysAgo(500), completedDate: null, status: 'waived' },
+          { dueDate: daysAgo(500), completedDate: null, status: 'completed' },
+          { dueDate: daysAgo(500), completedDate: null, status: 'scheduled' },
+        ],
+      })
+      const s = byKey((await service.collect('s', { now: NOW })).signals).get(
+        'hr.staff_evaluations',
+      ) as TwinSignal
+      expect(s.value).toBe(1)
+    })
+
+    it('an item with a compliance kind but NO target date is never overdue', async () => {
+      const { service } = harness({
+        maintenance: [
+          { status: 'open', resolvedAt: null, complianceKind: 'fire_life_safety', targetDate: null },
+        ],
+      })
+      const s = byKey((await service.collect('s', { now: NOW })).signals).get(
+        'fac.inspections',
+      ) as TwinSignal
+      expect(s.availability).toBe('available')
+      expect(s.value).toBe(0) // we will not invent a deadline the school never set
+    })
+
+    it('an unlicensed module reads not_licensed and ISSUES NO QUERY', async () => {
+      const h = harness({
+        unlicensed: ['hr', 'facilities', 'accreditation'],
+        staffEvaluations: [{ dueDate: daysAgo(500), completedDate: null, status: 'scheduled' }],
+        maintenance: [
+          { status: 'open', resolvedAt: null, complianceKind: 'boiler', targetDate: daysAgo(9) },
+        ],
+        priorVisitFindings: [
+          { visitDate: daysAgo(900), status: 'open', citedStandardCode: 'COG-A3' },
+        ],
+      })
+      const map = byKey((await h.service.collect('school-A', { now: NOW })).signals)
+      for (const key of [
+        'hr.staff_evaluations',
+        'fac.inspections',
+        'acc.prior_visit_findings',
+      ] as TwinSignalKey[]) {
+        const s = map.get(key) as TwinSignal
+        expect(s.availability, key).toBe('not_licensed')
+        expect(s.value, key).toBeNull()
+        expect(s.unavailableReason ?? '', key).toMatch(NOT_LICENSED)
+      }
+      // The promise is not "we hid the number" — it is that the query never ran.
+      expect(h.prisma.staffEvaluation.findMany).not.toHaveBeenCalled()
+      expect(h.prisma.priorVisitFinding.findMany).not.toHaveBeenCalled()
+      expect(h.prisma.maintenanceItem.findMany).not.toHaveBeenCalled()
+    })
+
+    it('ONE maintenance read still serves BOTH facilities signals', async () => {
+      const h = harness({
+        maintenance: [
+          { status: 'open', resolvedAt: null, complianceKind: 'elevator', targetDate: daysAgo(30) },
+          { status: 'open', resolvedAt: null, complianceKind: null, targetDate: null },
+        ],
+      })
+      const map = byKey((await h.service.collect('s', { now: NOW })).signals)
+      expect(h.prisma.maintenanceItem.findMany).toHaveBeenCalledTimes(1)
+      // FAC-BACKLOG's collector is byte-identical to Phase D: it still counts EVERY
+      // open item, compliance-kinded or not.
+      expect((map.get('fac.maintenance_backlog') as TwinSignal).value).toBe(2)
+      expect((map.get('fac.inspections') as TwinSignal).value).toBe(1)
+    })
+
+    it('the prior-visit register is on a VISIT-CYCLE clock, not an annual one', async () => {
+      // A four-year-old visit is the normal case, and flagging it `stale_data` would
+      // be a lie that also feeds SCHOOL-NOT-REPORTING a false stale signal.
+      const { service } = harness({
+        priorVisitFindings: [
+          { visitDate: daysAgo(1400), status: 'open', citedStandardCode: 'COG-A3' },
+        ],
+      })
+      const s = byKey((await service.collect('s', { now: NOW })).signals).get(
+        'acc.prior_visit_findings',
+      ) as TwinSignal
+      expect(s.expectedCadenceDays).toBe(2200)
+      expect(s.staleAfterDays).toBe(3300)
+      expect(s.ageDays).toBe(1400)
+      expect(s.changeState).toBe('unchanged')
+    })
+
+    it('a staff-evaluation read failure costs THAT signal only, and names no person', async () => {
+      const h = harness()
+      h.prisma.staffEvaluation.findMany.mockRejectedValue(new Error('nope'))
+      const set = await h.service.collect('s', { now: NOW })
+      expect(set.signals).toHaveLength(36)
+      const s = byKey(set.signals).get('hr.staff_evaluations') as TwinSignal
+      expect(s.availability).toBe('no_data')
+      expect(s.value).toBeNull()
+      // Assembled from fragments: no-staff-pii.spec.ts forbids the literal
+      // identifier anywhere in this directory, including in a spec.
+      expect(JSON.stringify(set)).not.toContain(`evalua${'torName'}`)
+    })
   })
 })
 
@@ -415,7 +584,7 @@ describe('TwinSignalsService — failure isolation', () => {
     const set = await h.service.collect('school-A', { now: NOW })
     const map = byKey(set.signals)
 
-    expect(set.signals).toHaveLength(35)
+    expect(set.signals).toHaveLength(36)
     expect(map.get('gov.policy_review')?.availability).toBe('no_data')
     expect(map.get('gov.policy_review')?.unavailableReason).toBe(
       'We could not read this signal on this run.',
@@ -430,7 +599,7 @@ describe('TwinSignalsService — failure isolation', () => {
     const h = harness({ arAging: { asOfDate: daysAgo(1), arTotal: 5, ar90Plus: 1 } })
     h.prisma.accreditationFinding.findMany.mockRejectedValue(new Error('relation does not exist'))
     const set = await h.service.collect('school-A', { now: NOW })
-    expect(set.signals).toHaveLength(35)
+    expect(set.signals).toHaveLength(36)
     expect(byKey(set.signals).get('fin.ar_aging')?.changeState).toBe('unchanged')
   })
 })

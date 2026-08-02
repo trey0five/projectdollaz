@@ -109,7 +109,8 @@ export const COMPLIANCE_ORDER = [
   // KEPT for the viewer lens (board-relevant) — see keepForViewer.
   'accreditation:coverage-gap',
   'accreditation:review-approaching',
-  // AIC Phase E — the ELEVEN briefable early-warning ids (STEP 2.16). Inserted as
+  // AIC Phase E — the briefable early-warning ids (STEP 2.16), eleven at Phase E
+  // and FOURTEEN after Phase F. Inserted as
   // one block right after the accreditation items, before facilities: an early
   // warning IS an accreditation matter, and it belongs beside the two items that
   // already speak for that domain.
@@ -138,6 +139,21 @@ export const COMPLIANCE_ORDER = [
   'earlywarning:gov-term-expiry',
   'earlywarning:gov-committee-no-chair',
   'earlywarning:enr-feeder-erosion',
+  // AIC Phase F — THREE more briefable rules, APPENDED to the SAME block by the
+  // same argument as above (appending inside the block cannot change the sign of
+  // any pre-existing pair's index difference, and these three had index -1 before).
+  //
+  // They are appended rather than interleaved deliberately: an unmet assurance gate
+  // and a lapsed audit still lead. An open prior-visit citation ranks below them
+  // because it is a fact about the LAST cycle, and the overdue-inspection and
+  // overdue-evaluation items are register hygiene a school can close this month.
+  //
+  // A briefable rule with NO entry here is not a crash — the comparator would give
+  // it index -1 and sort it ahead of the whole curated block, which is exactly the
+  // arbitrary ordering the block exists to prevent.
+  'earlywarning:acc-prior-finding-open',
+  'earlywarning:fac-inspection-due',
+  'earlywarning:hr-eval-overdue',
   // Facilities deferred-maintenance item (Phase 4). Placed after accreditation,
   // before workflow (grouped with the board-oversight domains). KEPT for the
   // viewer lens (board/capital-relevant) — see keepForViewer.

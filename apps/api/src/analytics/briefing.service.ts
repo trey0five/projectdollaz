@@ -96,16 +96,18 @@ const WORKFLOW_BADLY_OVERDUE_DAYS = 14
 // ── AIC Phase E — STEP 2.16's cap and its suppression table ──────────────────
 //
 // THE ONE IDEA: the warning engine contributes THE ACCREDITATION CONSEQUENCE,
-// never the operational restatement. Eleven of the twenty-two firing rules
+// never the operational restatement. Eleven of the (Phase-E) twenty-two firing rules
 // describe a fact some earlier step ALREADY states operationally — an overdue
 // policy is `governance:policies-overdue` at STEP 2.5, a thin reserve is a banded
 // metric at STEP 1, a rising AR is `cash:ar-overdue` at STEP 2.11. Letting the
 // engine restate them would double every one of those lines and teach a reader
 // that the briefing repeats itself.
 //
-// So each of the twenty-two is CONSCIOUSLY on one side of this table. A spec
-// asserts SUPPRESSED ∪ BRIEFABLE covers every firing ruleId in TWIN_RULE_IDS —
-// a new rule that is on neither FAILS THE BUILD rather than silently appearing.
+// So each firing rule is CONSCIOUSLY on one side of this table. A spec asserts
+// SUPPRESSED ∪ BRIEFABLE covers every firing ruleId in TWIN_RULE_IDS — a new rule
+// that is on neither FAILS THE BUILD rather than silently appearing. AIC Phase F
+// took the firing set from twenty-two to twenty-five and all three new rules were
+// classified BRIEFABLE, each with its reason recorded beside the entry.
 //
 // The lists are plain string arrays and NOT derived from `@finrep/compliance` at
 // runtime, deliberately: this file is on the hot path of every briefing request
@@ -158,6 +160,25 @@ const EARLY_WARNING_BRIEFABLE_RULE_IDS: readonly string[] = [
   'ACC-UNSUPPORTED-SCORE',
   'ACC-ASSURANCE-GAP',
   'EVI-STALE',
+  // ── AIC Phase F — three rules, three CONSCIOUS briefable decisions ──────────
+  //
+  // No step in the briefing states anything about staff evaluations. STEP 1's HR
+  // metrics are the student-teacher ratio and staff FTEs — a different fact
+  // entirely. Nothing is restated, and the item is COUNTS ONLY: the finding this
+  // renders carries four count/day keys and names no employee, which is what makes
+  // an adult-staff-PII register briefable at all.
+  'HR-EVAL-OVERDUE',
+  // STEP 2.8 (`facilities:maintenance-backlog`) states a backlog SIZE. This states
+  // a NAMED REGULATORY INSPECTION past its own target date, and its accreditation
+  // consequence — a binary assurance gate under COG-A3 — is stated nowhere else.
+  // COPY CONSTRAINT, spec-enforced exactly like ACC-ASSURANCE-GAP's: its `why` must
+  // name the inspection kind and the standard code, and must NOT restate the
+  // backlog count. (FAC-BACKLOG itself stays SUPPRESSED, above.)
+  'FAC-INSPECTION-DUE',
+  // Nothing in the briefing has ever mentioned a prior visit. "The 2021 team cited
+  // you here, and it is still open" is the single most credible sentence this
+  // product can say, and the briefing is where it belongs.
+  'ACC-PRIOR-FINDING-OPEN',
 ]
 
 export {

@@ -37,7 +37,20 @@ import {
   advancementApi,
   enrollmentApi,
   analyticsApi,
+  hrApi,
 } from '../../lib/api.js'
+// AIC Phase F — the WEB-side display authority for MaintenanceItem.complianceKind
+// and for StaffEvaluation's status vocabulary. Imported rather than re-declared:
+// each is already a documented hard-copy of its DTO array, and a third copy would
+// be a third thing to keep in step.
+import {
+  COMPLIANCE_KIND_OPTIONS,
+  complianceKindLabel,
+} from '../facilities/complianceKindMeta.js'
+import {
+  STAFF_EVALUATION_STATUSES,
+  statusLabel as staffEvaluationStatusLabel,
+} from '../hr/staffEvaluationMeta.js'
 // Grade vocab for the planning enrollment-plan grid — the DRIVER grade row
 // (PK3…12), which is exactly the EnrollmentByGradeDto whitelist.
 import { GRADE_ROW, GRADE_LABELS as DRIVER_GRADE_LABELS } from '../budget/driverModel.js'
@@ -844,6 +857,7 @@ export const recordFlows = {
       actualCost: '',
       targetDate: '',
       recurrence: 'none',
+      complianceKind: '',
       notes: '',
     },
     steps: [
@@ -899,6 +913,17 @@ export const recordFlows = {
             options: opt(MAINTENANCE_RECURRENCES),
             hint: 'Preventive maintenance — resolving one spawns the next.',
           },
+          // AIC Phase F — WHAT KIND of regulatory inspection this item is. Blank
+          // (the default) means an ordinary maintenance item, which is what almost
+          // every item is. NEVER inferred from title/category/location.
+          {
+            key: 'complianceKind',
+            label: 'Compliance inspection',
+            type: 'select',
+            emptyOptionLabel: '— not a compliance inspection —',
+            options: COMPLIANCE_KIND_OPTIONS,
+            hint: 'We only call something an inspection when you tell us it is one.',
+          },
           { key: 'notes', label: 'Notes', type: 'textarea', rows: 3, maxLength: 4000, span: 2, fold: true },
         ],
       },
@@ -921,6 +946,9 @@ export const recordFlows = {
         actualCost: actual === '' ? null : Number(actual),
         targetDate: v.targetDate ? v.targetDate : null,
         recurrence: v.recurrence,
+        // AIC Phase F — blank → null CLEARS the kind (an ordinary maintenance
+        // item). The vocabulary is closed with no catch-all on purpose.
+        complianceKind: v.complianceKind ? v.complianceKind : null,
         notes: v.notes.trim() ? v.notes.trim() : null,
       }
     },
@@ -943,6 +971,10 @@ export const recordFlows = {
       ['Actual cost', moneyDash(v.actualCost)],
       ['Target date', orDash(v.targetDate)],
       ['Repeats', human(v.recurrence)],
+      [
+        'Compliance inspection',
+        v.complianceKind ? complianceKindLabel(v.complianceKind) : 'Not an inspection',
+      ],
       ['Notes', orDash(v.notes)],
     ],
   },
@@ -1300,6 +1332,165 @@ export const recordFlows = {
     reviewPairs: (v) => [
       ['Teaching FTE', String(v.teachingFte ?? '').trim() === '' ? 'kept as stored' : String(Number(v.teachingFte))],
       ['Total staff FTE', String(v.totalStaffFte ?? '').trim() === '' ? 'kept as stored' : String(Number(v.totalStaffFte))],
+      ['Notes', orDash(v.notes)],
+    ],
+  },
+
+  // ══════════════════ HR · STAFF EVALUATION (AIC Phase F) ════════════════════
+  // The staff-evaluation CYCLE record: who, when it was due, when it was done.
+  //
+  // ADULT-STAFF EMPLOYMENT PII. This flow WRITES a name-bearing record and is
+  // therefore reachable only where the server already allows it: the create route
+  // is @Roles('owner','accountant') behind @RequiresModule('hr'), so a viewer
+  // never reaches a successful submit here either.
+  //
+  // The person comes from the EXISTING governance people register — there is no
+  // second person table, and there never will be. That register lives behind the
+  // GOVERNANCE module, so the loader can legitimately fail with a 402 for an
+  // HR-only school; the gate says so plainly instead of showing an empty select.
+  //
+  // MOUNTED at `hr` → "Staff evaluations" in ../wizard/wizardConfigs.jsx, so /hr's
+  // "Add data" CTA offers it. The second ADD path is the "+ New" button on the HR
+  // command center's Evaluations register, which opens StaffEvaluationFormModal
+  // against the same create DTO.
+  'hr.staffEvaluation': {
+    key: 'hr.staffEvaluation',
+    noun: 'staff evaluation',
+    nounPlural: 'staff evaluations',
+    Icon: ClipboardCheck,
+    loaders: {
+      // Filtered to the staff group on BOTH sides: the server accepts only a
+      // GovernancePerson of this school whose `groups` contains 'staff'.
+      people: (ctx) =>
+        governancePeopleApi.list(ctx.schoolId, { group: 'staff' }).then((r) => {
+          const list = Array.isArray(r.data) ? r.data : (r.data?.people ?? [])
+          return list.filter((p) => (p.groups ?? []).includes('staff'))
+        }),
+    },
+    gate: (data) =>
+      data.people == null
+        ? {
+            title: 'We couldn’t load your people',
+            body: 'Evaluations attach to someone on your people register, which lives in the Governance module. Refresh and try again — and if Governance isn’t on your plan yet, that’s why.',
+          }
+        : data.people.length === 0
+          ? {
+              title: 'No one is in your Staff group yet',
+              body: 'Evaluations attach to a person on your people register. Add your staff in Governance first — we never keep a second copy of a person.',
+            }
+          : null,
+    defaults: {
+      personId: '',
+      cycleLabel: '',
+      dueDate: '',
+      completedDate: '',
+      evaluatorName: '',
+      status: 'scheduled',
+      notes: '',
+    },
+    steps: [
+      {
+        key: 'person',
+        label: 'Person',
+        title: 'First, who it’s for',
+        blurb: 'From your existing people register — the same person, one record.',
+        fields: [
+          {
+            key: 'personId',
+            label: 'Member of staff',
+            type: 'select',
+            required: true,
+            requiredMsg: 'Pick the member of staff',
+            emptyOptionLabel: '— pick a person —',
+            lookupKey: 'people',
+            span: 2,
+            options: (data) =>
+              (data.people ?? []).map((p) => ({
+                value: p.id,
+                label: p.title ? `${p.name} — ${p.title}` : p.name,
+              })),
+          },
+        ],
+      },
+      {
+        key: 'cycle',
+        label: 'Cycle',
+        title: 'Which cycle, and when was it due',
+        blurb:
+          'The due date is the clock the overdue count reads — a record without one can be neither overdue nor current, so it is required.',
+        fields: [
+          {
+            key: 'cycleLabel',
+            label: 'Cycle',
+            type: 'text',
+            required: true,
+            requiredMsg: 'Name the cycle',
+            maxLength: 80,
+            span: 2,
+            placeholder: 'e.g. 2025-26 annual cycle',
+          },
+          {
+            key: 'dueDate',
+            label: 'Due date',
+            type: 'date',
+            required: true,
+            requiredMsg: 'Pick the date it was due',
+          },
+          { key: 'completedDate', label: 'Completed date', type: 'date' },
+        ],
+      },
+      {
+        key: 'status',
+        label: 'Status',
+        title: 'Where it stands',
+        optional: true,
+        blurb: 'A completed date counts as done whatever the status says.',
+        fields: [
+          {
+            key: 'status',
+            label: 'Status',
+            type: 'select',
+            options: STAFF_EVALUATION_STATUSES.map((s) => ({
+              value: s,
+              label: staffEvaluationStatusLabel(s),
+            })),
+          },
+          {
+            key: 'evaluatorName',
+            label: 'Evaluator',
+            type: 'text',
+            maxLength: 200,
+            placeholder: 'e.g. Head of School',
+          },
+          { key: 'notes', label: 'Notes', type: 'textarea', rows: 3, maxLength: 4000, span: 2, fold: true },
+        ],
+      },
+    ],
+    // CreateStaffEvaluationDto ✓ — key by key, no spread. `personId` is CREATE-only
+    // (PATCH does not whitelist it: re-pointing an evaluation is a delete plus a
+    // create, and a stray key 400s).
+    toBody: (v) => ({
+      personId: v.personId,
+      cycleLabel: v.cycleLabel.trim(),
+      dueDate: v.dueDate,
+      completedDate: v.completedDate ? v.completedDate : null,
+      evaluatorName: v.evaluatorName.trim() ? v.evaluatorName.trim() : null,
+      status: v.status,
+      notes: v.notes.trim() ? v.notes.trim() : null,
+    }),
+    submit: (ctx, body) => hrApi.createStaffEvaluation(ctx.schoolId, body),
+    itemLabel: (v) => v.cycleLabel.trim(),
+    itemSub: (v) => `evaluation · ${staffEvaluationStatusLabel(v.status).toLowerCase()}`,
+    reviewPairs: (v, data) => [
+      [
+        'Member of staff',
+        (data?.people ?? []).find((p) => p.id === v.personId)?.name ?? '—',
+      ],
+      ['Cycle', orDash(v.cycleLabel)],
+      ['Due date', orDash(v.dueDate)],
+      ['Completed date', orDash(v.completedDate)],
+      ['Status', staffEvaluationStatusLabel(v.status)],
+      ['Evaluator', orDash(v.evaluatorName)],
       ['Notes', orDash(v.notes)],
     ],
   },

@@ -62,6 +62,9 @@ function makeService(over: {
   enrollment?: unknown[]
   reports?: unknown[]
   demo?: boolean
+  // ── AIC Phase F ──
+  maintenance?: unknown[]
+  evaluations?: unknown[]
 } = {}) {
   const frameworks = over.frameworks ?? [COGNIA]
   const prisma = {
@@ -98,6 +101,9 @@ function makeService(over: {
       }),
     },
     boardReport: { findFirst: vi.fn(async () => (over.reports ?? [])[0] ?? null) },
+    // ── AIC Phase F ──
+    maintenanceItem: { findFirst: vi.fn(async () => (over.maintenance ?? [])[0] ?? null) },
+    staffEvaluation: { findFirst: vi.fn(async () => (over.evaluations ?? [])[0] ?? null) },
   }
   const svc = new AccreditationEvidenceReadinessService(prisma as never)
   const callCount = () =>
@@ -640,5 +646,203 @@ describe('getCurrencyByStandard', () => {
     expect(byStandard.s1.map((c) => c.state)).toEqual(['current'])
     // The same pooled artifact answers BOTH standards — enter data once.
     expect(byStandard.s2.map((c) => c.state)).toEqual(['current'])
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AIC Phase F — THE FLIP IS EARNED BY DATA.
+//
+// COG-10/staff_evaluation and COG-A3 + NSBECS-12/inspection are `platform` in the
+// seed from this phase on. Read naively, that would turn zero rows into
+// `state:'missing'` for EVERY school on the platform — newly firing
+// EVI-MISSING-REQUIRED on three standards everywhere, moving
+// acc.evidence_currency's value everywhere, and enforcing a 12-month window
+// against evidence nobody was warned about. That is the opposite of "nothing else
+// changes", so a module-gated row whose register produced NO ARTIFACT is read back
+// as `intake` and behaves exactly as it did before the flip.
+//
+// The row becomes a real currency state the moment the school records its first
+// row — with NOTHING written to AccreditationEvidence to make it happen.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('AIC Phase F — the module-gated downgrade', () => {
+  const gatedSetup = (over: Record<string, unknown> = {}) =>
+    makeService({
+      standards: [stdRow({ id: 's-eval', code: 'COG-10', catalogStandardId: 'c10' })],
+      requirements: [
+        reqRow({
+          catalogStandardId: 'c10',
+          tag: 'staff_evaluation',
+          label: 'Staff evaluation cycle records',
+          windowMonths: 12,
+          dataAvailability: 'platform',
+          sourceRegister: 'staff_evaluation_register',
+          notTrackedReason: 'Your staff-evaluation register lives in the HR module.',
+        }),
+      ],
+      ...over,
+    })
+
+  it('ZERO rows → not_tracked with the frozen sentence, NOT missing', async () => {
+    const { svc } = gatedSetup()
+    const res = await svc.getEvidenceReadiness('school-A', {}, NOW)
+    const group = res.groups.find((g) => g.tag === 'staff_evaluation')!
+    expect(group.state).toBe('not_tracked')
+    expect(group.dataAvailability).toBe('intake')
+    expect(group.message).toContain('Your staff-evaluation register lives in the HR module.')
+    // …and it is excluded from the duty count and from the rated denominator,
+    // exactly as an honest hole always has been.
+    expect(res.counts.requiredTracked).toBe(0)
+    expect(res.counts.artifactsTracked).toBe(0)
+    // …and the CTA NAVIGATES. This is the one `not_tracked` row that has somewhere
+    // to go: the register exists (that is what AIC Phase F shipped), so the link is
+    // not a fake link — it is the only way off this screen to the place the row is
+    // telling the user to go. Without it "Start tracking" renders as a
+    // non-navigating span and the nudge rail carries no link either, so the school
+    // is told to start tracking and given no door.
+    expect(group.cta).toEqual({
+      kind: 'start_tracking',
+      label: 'Start tracking in HR',
+      link: '/hr',
+    })
+    // The nudge rail carries the SAME link, or the rail is a dead end of its own.
+    const nudge = res.nudges.find((n) => n.tag === 'staff_evaluation')!
+    expect(nudge.link).toBe('/hr')
+  })
+
+  it('the LEAD no longer claims the register isn’t tracked, and names what answers it', async () => {
+    // A school with three evaluations and no completed date sees a live "3
+    // overdue" on /hr. Telling it here that its staff-evaluation register "isn't
+    // tracked yet" is a quiet lie, and saying nothing about the COMPLETED date
+    // leaves it with no way to find out why the row will not clear.
+    const { svc } = gatedSetup()
+    const res = await svc.getEvidenceReadiness('school-A', {}, NOW)
+    const group = res.groups.find((g) => g.tag === 'staff_evaluation')!
+    expect(group.message).not.toContain("isn't tracked yet")
+    expect(group.message.startsWith('Staff evaluation cycle records: nothing in your register answers this yet.')).toBe(true)
+  })
+
+  it('a genuinely INTAKE row — one whose register KYRO does not have — keeps its dead pill', async () => {
+    // The navigating CTA is earned by the DOWNGRADE, not by the register name: a
+    // seeded `intake` row has no register to open and must not gain a link.
+    const { svc } = makeService({
+      standards: [stdRow({ id: 's-pd', code: 'COG-29', catalogStandardId: 'c29' })],
+      requirements: [
+        reqRow({
+          catalogStandardId: 'c29',
+          tag: 'pd_records',
+          label: 'Professional-development participation records',
+          windowMonths: 12,
+          dataAvailability: 'intake',
+          sourceRegister: 'professional_development',
+          notTrackedReason: 'A professional-development register unlocks this.',
+        }),
+      ],
+    })
+    const res = await svc.getEvidenceReadiness('school-A', {}, NOW)
+    const group = res.groups.find((g) => g.tag === 'pd_records')!
+    expect(group.cta).toEqual({ kind: 'start_tracking', label: 'Start tracking', link: null })
+    expect(group.message).toContain("isn't tracked yet")
+  })
+
+  it('the PER-STANDARD projection agrees with the group — one row, one state', async () => {
+    // The group is what the Evidence Index renders; the projection is what the
+    // twin's acc.evidence_currency signal counts. Two answers for one row would
+    // move that signal for every school on the platform.
+    const { svc } = gatedSetup()
+    const { byStandard } = await svc.getCurrencyByStandard('school-A', {}, NOW)
+    expect(byStandard['s-eval'][0].state).toBe('not_tracked')
+    expect(byStandard['s-eval'][0].dataAvailability).toBe('intake')
+  })
+
+  it('the FIRST recorded row flips it to a real currency state, with NO write', async () => {
+    const { svc, prisma } = gatedSetup({
+      evaluations: [
+        { id: 'e1', cycleLabel: '2025-26 annual cycle', completedDate: day('2026-05-04') },
+      ],
+    })
+    const res = await svc.getEvidenceReadiness('school-A', {}, NOW)
+    const group = res.groups.find((g) => g.tag === 'staff_evaluation')!
+    expect(group.state).toBe('current')
+    expect(group.dataAvailability).toBe('platform')
+    expect(group.autoSatisfied).toBe(true)
+    expect(res.counts.requiredTracked).toBe(1)
+    // AUTO-SATISFACTION IS A LIVE READ. Nothing is ever written.
+    expect(prisma.accreditationEvidence.create).not.toHaveBeenCalled()
+    expect(prisma.accreditationEvidence.update).not.toHaveBeenCalled()
+  })
+
+  it('a school that hand-attached evidence but has NO register rows is downgraded too', async () => {
+    // Deliberate: that is precisely what it did before this phase, and letting an
+    // attached copy earn the flip would judge the row against a 12-month window the
+    // school was never warned about.
+    const { svc } = gatedSetup({
+      evidence: [
+        {
+          id: 'ev1',
+          standardId: 's-eval',
+          title: 'Evaluation packet 2019',
+          sourceType: 'manual',
+          sourceRef: null,
+          reference: null,
+          tag: 'staff_evaluation',
+          effectiveDate: day('2019-01-01'),
+          expiresAt: null,
+          alsoInPortal: null,
+        },
+      ],
+    })
+    const res = await svc.getEvidenceReadiness('school-A', {}, NOW)
+    const group = res.groups.find((g) => g.tag === 'staff_evaluation')!
+    expect(group.state).toBe('not_tracked')
+  })
+
+  it('a NON-gated platform row is untouched by any of this', async () => {
+    // The guard on the guard: the downgrade must be reachable ONLY through
+    // MODULE_GATED_REGISTERS. A knowledge-document ask with no document is still
+    // `missing`, exactly as it was.
+    const { svc } = makeService({
+      standards: [stdRow()],
+      requirements: [reqRow()],
+    })
+    const res = await svc.getEvidenceReadiness('school-A', {}, NOW)
+    const group = res.groups.find((g) => g.tag === 'financial_audit')!
+    expect(group.state).toBe('missing')
+    expect(group.dataAvailability).toBe('platform')
+    expect(res.counts.requiredTracked).toBe(1)
+  })
+
+  it('the inspection row behaves identically, on both standards that ask for it', async () => {
+    const { svc } = makeService({
+      standards: [
+        stdRow({ id: 's-a3', code: 'COG-A3', catalogStandardId: 'cA3' }),
+        stdRow({ id: 's-n12', code: 'NSBECS-12', catalogStandardId: 'cN12' }),
+      ],
+      requirements: [
+        reqRow({
+          catalogStandardId: 'cA3',
+          tag: 'inspection',
+          label: 'Fire / life-safety inspection record',
+          windowMonths: 12,
+          sourceRegister: 'maintenance_item',
+          notTrackedReason: 'Your inspection records live on facilities items.',
+        }),
+        reqRow({
+          catalogStandardId: 'cN12',
+          tag: 'inspection',
+          label: 'Fire / life-safety inspection record',
+          windowMonths: 12,
+          sourceRegister: 'maintenance_item',
+          notTrackedReason: 'Your inspection records live on facilities items.',
+          orderIndex: 1,
+        }),
+      ],
+    })
+    const res = await svc.getEvidenceReadiness('school-A', {}, NOW)
+    const group = res.groups.find((g) => g.tag === 'inspection')!
+    expect(group.state).toBe('not_tracked')
+    expect(group.servesStandards.map((s) => s.code)).toEqual(['COG-A3', 'NSBECS-12'])
+    for (const s of group.servesStandards) expect(s.state).toBe('not_tracked')
+    expect(res.counts.requiredTracked).toBe(0)
   })
 })

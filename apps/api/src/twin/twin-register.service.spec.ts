@@ -45,6 +45,12 @@ function harness(over: {
   evidenceThrows?: boolean
   groups?: Record<string, unknown>[]
   byStandard?: Record<string, unknown[]>
+  // ── AIC Phase F ──
+  staffEvaluations?: Record<string, unknown>[]
+  staffThrows?: boolean
+  maintenance?: Record<string, unknown>[]
+  priorVisit?: Record<string, unknown>[]
+  priorVisitThrows?: boolean
 } = {}) {
   const accreditation = {
     listStandards: vi.fn(async () => {
@@ -76,6 +82,19 @@ function harness(over: {
   const prisma = {
     accreditationReadinessSnapshot: {
       findFirst: vi.fn(async () => ({ snapshotDate: new Date('2026-07-31T00:00:00Z') })),
+    },
+    staffEvaluation: {
+      findMany: vi.fn(async () => {
+        if (over.staffThrows) throw new Error('staff register down')
+        return over.staffEvaluations ?? []
+      }),
+    },
+    maintenanceItem: { findMany: vi.fn(async () => over.maintenance ?? []) },
+    priorVisitFinding: {
+      findMany: vi.fn(async () => {
+        if (over.priorVisitThrows) throw new Error('prior-visit register down')
+        return over.priorVisit ?? []
+      }),
     },
   }
   return {
@@ -223,6 +242,18 @@ describe('TwinRegisterService — fail-soft', () => {
     expect(register.standards).toHaveLength(1)
   })
 
+  it('a Phase-F register failure is a REFUSAL shape, never a zero', async () => {
+    // The distinction the rules turn on: `null` makes HR-EVAL-OVERDUE refuse
+    // `value_not_usable`, while `{overdueCount: 0}` would be a silent PASS composed
+    // out of a database that did not answer.
+    const h = harness({ staffThrows: true, priorVisitThrows: true })
+    const { register } = await h.svc.build('school-A', NOW)
+    expect(register.staffEvaluations).toBeNull()
+    expect(register.priorVisitCitations).toEqual([])
+    // …and the rest of the view is untouched.
+    expect(register.standards).toHaveLength(1)
+  })
+
   it('a framework the rule catalog carries no codes for resolves to null, never to a guess', async () => {
     const h = harness()
     const { register } = await h.svc.build('school-A', NOW)
@@ -239,5 +270,210 @@ describe('TwinRegisterService — fail-soft', () => {
       } as never,
     )
     expect((await other.svc.build('school-A', NOW)).register.frameworkCode).toBeNull()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AIC Phase F — the three fields the new rules read.
+//
+// The one that carries the most risk is the CITATION MATCH. `citedStandardCode` is
+// free text lifted from a PDF, and the only defensible rule is exact equality after
+// trim + uppercase: a citation matched to the WRONG standard is worse than an
+// unmatched one, and G3 forbids a finding that cannot name a real code. So an
+// unmatched citation never reaches the engine at all — it is returned, marked
+// unmatched, by the register endpoint instead (never dropped from the product).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const CITED = (over: Record<string, unknown> = {}) => ({
+  visitDate: new Date('2021-03-04T00:00:00Z'),
+  status: 'open',
+  citedStandardCode: 'COG-15',
+  ...over,
+})
+
+describe('TwinRegisterService — AIC Phase F citation matching', () => {
+  it('matches ONLY on exact equality after trim + uppercase', async () => {
+    const h = harness({
+      priorVisit: [
+        CITED({ citedStandardCode: 'COG-15' }),
+        CITED({ citedStandardCode: '  cog-15  ' }),
+        CITED({ citedStandardCode: 'COG-1' }), // prefix — NOT a match
+        CITED({ citedStandardCode: 'COG-155' }), // extension — NOT a match
+        CITED({ citedStandardCode: '15' }), // suffix — NOT a match
+        CITED({ citedStandardCode: 'COG 15' }), // separator — NOT a match
+      ],
+    })
+    const { register } = await h.svc.build('school-A', NOW)
+    expect(register.priorVisitCitations).toHaveLength(1)
+    expect(register.priorVisitCitations[0]).toEqual({
+      // The SCHOOL STANDARD's code, verbatim — not the normalised form.
+      code: 'COG-15',
+      visitDate: '2021-03-04',
+      openCount: 2,
+    })
+  })
+
+  // ── THE GROUPING KEY IS (code, visit), and the count must never span visits ──
+  //
+  // The rule this feeds renders "{{openCount}} citations against {{code}} from the
+  // visit of {{visitDate}}". Grouping by code alone and keeping the NEWEST date
+  // made that sentence false the moment a school was cited on one standard at two
+  // visits: the older team's citation was attributed to the newer visit. That is
+  // the Phase-E "fell in each of N readings" class, said about the one register
+  // that is meant to be ground truth, and it propagates verbatim into the briefing.
+  it('a standard cited at TWO visits produces TWO groups — a count never spans visits', async () => {
+    const h = harness({
+      priorVisit: [
+        CITED({ visitDate: new Date('2015-01-01T00:00:00Z') }),
+        CITED({ visitDate: new Date('2021-03-04T00:00:00Z') }),
+        CITED({ visitDate: new Date('2024-09-09T00:00:00Z'), status: 'closed' }),
+      ],
+    })
+    const { register } = await h.svc.build('school-A', NOW)
+    expect(register.priorVisitCitations).toEqual([
+      { code: 'COG-15', visitDate: '2015-01-01', openCount: 1 },
+      { code: 'COG-15', visitDate: '2021-03-04', openCount: 1 },
+    ])
+    // Every group's count belongs to the ONE visit it names.
+    for (const g of register.priorVisitCitations) expect(g.openCount).toBe(1)
+  })
+
+  it('CLOSED citations are not open ones, and citations of ONE visit still merge', async () => {
+    const h = harness({
+      priorVisit: [
+        CITED({ visitDate: new Date('2021-03-04T00:00:00Z') }),
+        CITED({ visitDate: new Date('2021-03-04T00:00:00Z') }),
+        CITED({ visitDate: new Date('2024-09-09T00:00:00Z'), status: 'closed' }),
+      ],
+    })
+    const { register } = await h.svc.build('school-A', NOW)
+    expect(register.priorVisitCitations).toEqual([
+      { code: 'COG-15', visitDate: '2021-03-04', openCount: 2 },
+    ])
+  })
+
+  it('a school with a visit history and nothing open is a PASS, not a refusal', async () => {
+    const h = harness({ priorVisit: [CITED({ status: 'closed' })] })
+    const { register } = await h.svc.build('school-A', NOW)
+    // Empty, not null: the SIGNAL is what gates the rule, and it will read
+    // `available`. An empty array here is "you have a history and nothing is open".
+    expect(register.priorVisitCitations).toEqual([])
+  })
+
+  it('is sorted by code, because the reconciliation hashes this payload', async () => {
+    const h = harness({
+      standards: [
+        standard({ id: 's1', code: 'COG-15' }),
+        standard({ id: 's2', code: 'COG-A3', catalogStandardId: 'cA3' }),
+        standard({ id: 's3', code: 'COG-10', catalogStandardId: 'c10' }),
+      ],
+      priorVisit: [
+        CITED({ citedStandardCode: 'COG-A3' }),
+        CITED({ citedStandardCode: 'COG-15' }),
+        CITED({ citedStandardCode: 'COG-10' }),
+      ],
+    })
+    const { register } = await h.svc.build('school-A', NOW)
+    expect(register.priorVisitCitations.map((c) => c.code)).toEqual(['COG-10', 'COG-15', 'COG-A3'])
+  })
+
+  it('…then by visit date within a code, oldest first', async () => {
+    const h = harness({
+      priorVisit: [
+        CITED({ visitDate: new Date('2021-03-04T00:00:00Z') }),
+        CITED({ visitDate: new Date('2015-01-01T00:00:00Z') }),
+      ],
+    })
+    const { register } = await h.svc.build('school-A', NOW)
+    expect(register.priorVisitCitations.map((c) => c.visitDate)).toEqual(['2015-01-01', '2021-03-04'])
+  })
+})
+
+describe('TwinRegisterService — AIC Phase F register summaries', () => {
+  const evaluation = (over: Record<string, unknown> = {}) => ({
+    dueDate: new Date('2026-01-01T00:00:00Z'),
+    completedDate: null,
+    status: 'scheduled',
+    ...over,
+  })
+
+  it('the staff summary is THREE INTEGERS, and the oldest is measured from its own due date', async () => {
+    const h = harness({
+      staffEvaluations: [
+        evaluation({ dueDate: new Date('2026-06-01T00:00:00Z') }), // 61 days past
+        evaluation({ dueDate: new Date('2026-07-25T00:00:00Z') }), // 7 days past
+        evaluation({ dueDate: new Date('2026-12-01T00:00:00Z') }), // not yet due
+        evaluation({ completedDate: new Date('2026-05-01T00:00:00Z'), status: 'in_progress' }),
+      ],
+    })
+    const { register } = await h.svc.build('school-A', NOW)
+    expect(register.staffEvaluations).toEqual({
+      registerSize: 4,
+      overdueCount: 2,
+      oldestOverdueDays: 61,
+    })
+  })
+
+  it('an EMPTY staff register is null — the rule refuses rather than reading zero', async () => {
+    const h = harness({ staffEvaluations: [] })
+    const { register } = await h.svc.build('school-A', NOW)
+    expect(register.staffEvaluations).toBeNull()
+  })
+
+  it('overdue KINDS come back in the frozen vocabulary order, never in row order', async () => {
+    const item = (over: Record<string, unknown> = {}) => ({
+      status: 'open',
+      targetDate: new Date('2026-06-01T00:00:00Z'),
+      complianceKind: 'health',
+      ...over,
+    })
+    const h = harness({
+      maintenance: [
+        item({ complianceKind: 'playground' }),
+        item({ complianceKind: 'boiler', targetDate: new Date('2026-01-15T00:00:00Z') }),
+        item({ complianceKind: 'health' }),
+        // Resolved → not overdue, but still TRACKED.
+        item({ complianceKind: 'elevator', status: 'resolved' }),
+      ],
+    })
+    const { register } = await h.svc.build('school-A', NOW)
+    expect(register.complianceInspections).toEqual({
+      trackedCount: 4,
+      overdueCount: 3,
+      oldestOverdueDays: 198,
+      // MAINTENANCE_COMPLIANCE_KINDS order: boiler, health, playground.
+      overdueKinds: ['boiler', 'health', 'playground'],
+      // …and `boiler` is in the life-safety subset, which is the ONLY thing this
+      // flag drives (the finding's severity).
+      anyLifeSafety: true,
+    })
+  })
+
+  it('anyLifeSafety is false when nothing overdue is in the subset', async () => {
+    const h = harness({
+      maintenance: [
+        {
+          status: 'open',
+          targetDate: new Date('2026-06-01T00:00:00Z'),
+          complianceKind: 'water_quality',
+        },
+      ],
+    })
+    const { register } = await h.svc.build('school-A', NOW)
+    expect(register.complianceInspections?.anyLifeSafety).toBe(false)
+    expect(register.complianceInspections?.overdueKinds).toEqual(['water_quality'])
+  })
+
+  it('the summaries SURVIVE an empty standards register, and citations do not', async () => {
+    // They describe HR and facilities, not accreditation. Nothing can fire off them
+    // without a standard code (G3), but a truthful summary is not thrown away.
+    const h = harness({
+      standards: [],
+      staffEvaluations: [{ dueDate: new Date('2020-01-01T00:00:00Z'), completedDate: null, status: 'scheduled' }],
+      priorVisit: [CITED()],
+    })
+    const { register } = await h.svc.build('school-A', NOW)
+    expect(register.staffEvaluations?.overdueCount).toBe(1)
+    expect(register.priorVisitCitations).toEqual([])
   })
 })

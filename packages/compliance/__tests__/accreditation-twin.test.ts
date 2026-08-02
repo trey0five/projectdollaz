@@ -32,6 +32,7 @@ import { bandsFor } from '@finrep/analytics'
 import {
   ACCREDITATION_TWIN_VERSION,
   ENTRY_GRADE_KEYS,
+  FAC_BACKLOG_HONESTY_NOTE,
   TWIN_LIKELIHOODS,
   TWIN_NO_REASON_FALLBACK,
   TWIN_RULE_DEFS,
@@ -223,6 +224,30 @@ const SIGNAL_SEEDS: Record<string, SignalSeed> = {
     table: 'Policy',
     field: 'category',
   },
+  // ── AIC Phase F. Appended in catalog order. The first two are the FLIP: they
+  // shipped `declaredNotTracked` in Phase E and now resolve through the licence
+  // check like any other register signal.
+  'hr.staff_evaluations': {
+    label: 'Staff evaluation cycle',
+    moduleKey: 'hr',
+    domainKeys: ['hr'],
+    table: 'StaffEvaluation',
+    field: 'dueDate',
+  },
+  'fac.inspections': {
+    label: 'Life-safety inspections',
+    moduleKey: 'facilities',
+    domainKeys: ['facilities'],
+    table: 'MaintenanceItem',
+    field: 'complianceKind',
+  },
+  'acc.prior_visit_findings': {
+    label: 'Findings from your last accreditation visit',
+    moduleKey: 'accreditation',
+    domainKeys: ['continuous_improvement'],
+    table: 'PriorVisitFinding',
+    field: 'status',
+  },
 }
 
 const ALL_SIGNAL_KEYS = Object.keys(SIGNAL_SEEDS)
@@ -330,6 +355,11 @@ function mkRegister(over: Partial<TwinRegisterView> = {}): TwinRegisterView {
     frameworkCode: 'cognia_2022',
     standards: REGISTER_CODES.map((c) => mkStandard(c)),
     evidenceGroups: [],
+    // AIC Phase F. The EMPTY-REGISTER default: no citations, no summaries. A school
+    // that has entered nothing must look exactly as it did before Phase F.
+    priorVisitCitations: [],
+    staffEvaluations: null,
+    complianceInspections: null,
     demoData: false,
     snapshotAsOf: '2026-06-30',
     ...over,
@@ -413,12 +443,24 @@ interface ScenarioOpts {
   minutesLagReadable?: boolean
   /** true ⇒ the strategic plan has already ended. */
   planExpired?: boolean
+  /**
+   * AIC Phase F. The three new registers hold FIRING data.
+   *
+   * The default is deliberately the other way round: the base scenario lights the
+   * three new signals but with PASSING data (nothing overdue, nothing open), so
+   * every pre-existing §9/§10/§13 assertion sees exactly the findings it saw before
+   * Phase F. "We looked and it is fine" is a state this suite has to be able to
+   * express, and it is also the state that proves the new rules add no finding to a
+   * school that is up to date.
+   */
+  phaseF?: boolean
   seed?: number
 }
 
 function scenario(opts: ScenarioOpts = {}) {
   const i = opts.seed ?? 0
   const minutesLagReadable = opts.minutesLagReadable ?? true
+  const phaseF = opts.phaseF ?? false
   const planEnd = opts.planExpired ? `2026-0${(i % 6) + 1}-15` : `2026-12-1${i % 10}`
 
   const over: Record<string, Partial<TwinSignalView>> = {
@@ -453,6 +495,12 @@ function scenario(opts: ScenarioOpts = {}) {
     // curr.doc_review is DELIBERATELY left unlit: it is one of the four named
     // holes, `no_data` for every school today, and the scenario must reproduce
     // that rather than paper over it.
+    // ── AIC Phase F. Lit, because the flip is that these signals now resolve
+    // through the licence check instead of shipping `declaredNotTracked`. The
+    // VALUE is the overdue/open count, and zero is a PASS, never a refusal.
+    'hr.staff_evaluations': available(phaseF ? 4 + (i % 3) : 0, '2026-05-31'),
+    'fac.inspections': available(phaseF ? 1 + (i % 3) : 0, '2026-04-15'),
+    'acc.prior_visit_findings': available(phaseF ? 2 : 0, '2021-03-12'),
   }
   if (minutesLagReadable) over['gov.minutes_lag'] = available(74 + i, '2026-05-20')
 
@@ -558,9 +606,51 @@ function scenario(opts: ScenarioOpts = {}) {
     mkGroup('staff_credentials', { state: 'missing', dataAvailability: 'external' }),
   ]
 
+  // ── AIC Phase F register axis. `phaseF: false` is a school that HAS the three
+  // registers and is up to date on all three: real summaries, nothing overdue,
+  // nothing open. That is a PASS, and it must produce exactly zero findings.
+  const staffEvaluations = phaseF
+    ? { registerSize: 18 + i, overdueCount: 4 + (i % 3), oldestOverdueDays: 120 + i * 40 }
+    : { registerSize: 18, overdueCount: 0, oldestOverdueDays: 0 }
+  const complianceInspections = phaseF
+    ? {
+        trackedCount: 6 + i,
+        overdueCount: 1 + (i % 3),
+        oldestOverdueDays: 45 + i,
+        // Seeds that leave (i % 3) === 0 give exactly one overdue item, which is
+        // the singular template; the kind rotates so the life-safety severity
+        // discriminator is exercised in both directions across the sweep.
+        overdueKinds: i % 2 === 0 ? ['fire_life_safety'] : ['health'],
+        anyLifeSafety: i % 2 === 0,
+      }
+    : {
+        trackedCount: 6,
+        overdueCount: 0,
+        oldestOverdueDays: 0,
+        overdueKinds: [] as string[],
+        anyLifeSafety: false,
+      }
+  const priorVisitCitations = phaseF
+    ? [
+        // Sorted by code, as the caller's contract requires.
+        { code: 'COG-26', visitDate: '2021-03-12', openCount: 1 },
+        // Never reaches a finding: the engine matches by exact code and this one is
+        // not in the register. A citation we cannot place is shown as unmatched by
+        // the API, never fuzzy-matched into a standard the team did not cite.
+        { code: 'COG-99', visitDate: '2021-03-12', openCount: 3 },
+        { code: 'COG-A4', visitDate: '2021-03-12', openCount: 2 },
+      ]
+    : []
+
   return {
     signals: signalSet(over),
-    register: mkRegister({ standards, evidenceGroups }),
+    register: mkRegister({
+      standards,
+      evidenceGroups,
+      staffEvaluations,
+      complianceInspections,
+      priorVisitCitations,
+    }),
     priors,
   }
 }
@@ -580,7 +670,7 @@ function oneFor(ruleId: TwinRuleId, opts: ScenarioOpts = {}): TwinFinding {
   return f[0]
 }
 
-/** Every finding this suite can generate, across both mutually exclusive worlds. */
+/** Every finding this suite can generate, across all three mutually exclusive worlds. */
 function generatedFindings(iterations = 25): TwinFinding[] {
   const out: TwinFinding[] = []
   for (let i = 0; i < iterations; i++) {
@@ -588,6 +678,10 @@ function generatedFindings(iterations = 25): TwinFinding[] {
     out.push(
       ...runScenario({ seed: i, minutesLagReadable: false, planExpired: true }).findings,
     )
+    // AIC Phase F. The three new registers hold firing data here and nowhere else,
+    // so the numeral, standard-code and vocabulary specs below run over the new
+    // rules while every count-shaped assertion keeps reading the base scenario.
+    out.push(...runScenario({ seed: i, phaseF: true }).findings)
   }
   return out
 }
@@ -597,12 +691,51 @@ function generatedFindings(iterations = 25): TwinFinding[] {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('the frozen catalog', () => {
-  it('ships 22 firing rules + 4 visible holes = 26, with no duplicate id', () => {
-    expect(TWIN_RULE_IDS).toHaveLength(26)
-    expect(new Set(TWIN_RULE_IDS).size).toBe(26)
-    expect(TWIN_RULE_DEFS).toHaveLength(26)
+  it('ships 25 firing rules + 4 visible holes = 29, with no duplicate id', () => {
+    expect(TWIN_RULE_IDS).toHaveLength(29)
+    expect(new Set(TWIN_RULE_IDS).size).toBe(29)
+    expect(TWIN_RULE_DEFS).toHaveLength(29)
     expect(TWIN_RULE_DEFS.map((d) => d.id)).toEqual([...TWIN_RULE_IDS])
+    // AIC Phase F took the catalog 26 → 29 and the HOLE COUNT DID NOT MOVE. None of
+    // the three new rules is a named hole, and Phase F closes none of the four.
     expect(VISIBLE_HOLE_RULE_IDS).toHaveLength(4)
+  })
+
+  it('AIC Phase F appended its three rules and interleaved nothing', () => {
+    // The order is the render order; appending moves no existing row.
+    expect(TWIN_RULE_IDS.slice(-3)).toEqual([
+      'HR-EVAL-OVERDUE',
+      'FAC-INSPECTION-DUE',
+      'ACC-PRIOR-FINDING-OPEN',
+    ])
+    expect(TWIN_RULE_IDS.slice(0, 26)).toEqual([
+      'GOV-MINUTES-LAG',
+      'GOV-MINUTES-NEVER-RECORDED',
+      'GOV-CADENCE-GAP',
+      'GOV-POLICY-OVERDUE',
+      'GOV-TERM-EXPIRY',
+      'GOV-COMMITTEE-NO-CHAIR',
+      'FIN-AUDIT-STALE',
+      'FIN-RESERVE-THIN',
+      'FIN-BUDGET-DETERIORATING',
+      'FIN-AR-AGING-WORSENING',
+      'STRAT-PLAN-EXPIRING',
+      'STRAT-PLAN-EXPIRED',
+      'ENR-DECLINE',
+      'ENR-FEEDER-EROSION',
+      'ACC-UNSCORED',
+      'ACC-UNSUPPORTED-SCORE',
+      'ACC-ASSURANCE-GAP',
+      'EVI-STALE',
+      'EVI-MISSING-REQUIRED',
+      'FAC-BACKLOG',
+      'HR-RATIO-DRIFT',
+      'SCHOOL-NOT-REPORTING',
+      'HR-PD-LOW',
+      'SAFE-ENV-GAP',
+      'CURR-DOC-AGING',
+      'ACAD-GROWTH-FLAT',
+    ])
   })
 
   it('every def is complete, and every rule declares at least one required signal', () => {
@@ -1386,7 +1519,7 @@ describe('§4 FAC-BACKLOG', () => {
     expect(f.likelihood).toBe('possible')
     expect(f.factKey).toBe('register:maintenance_backlog@2026-06-30')
     expect(f.rationale).toBe(
-      '31 maintenance items are open, against a working expectation of no more than 10.',
+      '31 maintenance items are open, against a working expectation of fewer than 10.',
     )
     const note = f.evidence.find((e) => e.key === 'honestyNote')
     expect(note?.display).toContain('We will not say your fire inspection is overdue by guessing at free text')
@@ -1486,6 +1619,435 @@ describe('§4 the four visible holes', () => {
   })
 })
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// §4F AIC PHASE F — the three rules the new intake registers make evaluable
+//
+// The plan said Phase F would "flip HR-EVAL-OVERDUE and FAC-INSPECTION-DUE live".
+// Neither rule existed: Phase E shipped 26 ids and neither was among them. These
+// sections are the rules the plan assumed, built to the same bar as every rule
+// above them — a real standard code, every numeral bound to evidence, an ordinal
+// likelihood, and a refusal by name whenever the register cannot be read.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** A school that HAS all three new registers, with something wrong in each. */
+function phaseFRegister(over: Partial<TwinRegisterView> = {}): TwinRegisterView {
+  return mkRegister({
+    staffEvaluations: { registerSize: 20, overdueCount: 5, oldestOverdueDays: 90 },
+    complianceInspections: {
+      trackedCount: 8,
+      overdueCount: 2,
+      oldestOverdueDays: 40,
+      overdueKinds: ['fire_life_safety', 'health'],
+      anyLifeSafety: true,
+    },
+    priorVisitCitations: [{ code: 'COG-A4', visitDate: '2021-03-12', openCount: 2 }],
+    ...over,
+  })
+}
+
+const STAFF_EVAL_LIT = { 'hr.staff_evaluations': available(5, '2026-05-31') }
+const INSPECTION_LIT = { 'fac.inspections': available(2, '2026-04-15') }
+const PRIOR_VISIT_LIT = { 'acc.prior_visit_findings': available(2, '2021-03-12') }
+
+describe('§4F HR-EVAL-OVERDUE', () => {
+  const fire = (
+    staffEvaluations: TwinRegisterView['staffEvaluations'],
+    register: Partial<TwinRegisterView> = {},
+  ) => singleRule('HR-EVAL-OVERDUE', STAFF_EVAL_LIT, phaseFRegister({ staffEvaluations, ...register }))
+
+  it('fires at the working expectation and not below it', () => {
+    const at = fire({ registerSize: 20, overdueCount: 3, oldestOverdueDays: 30 })
+    const below = fire({ registerSize: 20, overdueCount: 2, oldestOverdueDays: 30 })
+    expect(at.findings).toHaveLength(1)
+    // Below the threshold is a PASS — zero findings AND zero refusals.
+    expect(below.findings).toHaveLength(0)
+    expect(below.notEvaluated).toHaveLength(0)
+  })
+
+  it('renders one frozen sentence whose every numeral is in its own evidence', () => {
+    const f = fire({ registerSize: 20, overdueCount: 5, oldestOverdueDays: 90 }).findings[0]
+    expect(f.rationale).toBe(
+      '5 staff evaluations are past their own recorded due date; the oldest has been outstanding 90 days, against a working expectation of fewer than 3 overdue.',
+    )
+    expect(f.evidence.map((e) => e.key)).toEqual([
+      'overdueCount',
+      'oldestOverdueDays',
+      'threshold',
+      'registerSize',
+    ])
+    expect(f.severity).toBe('warn')
+    expect(f.likelihood).toBe('likely')
+    expect(f.confidence).toBe('observation')
+    expect(f.horizon.kind).toBe('none')
+    assertWellFormed(f)
+  })
+
+  it('says "1 day", never "1 days", on the first day a due date passes', () => {
+    // The rule refuses below one day, so ONE is its minimum firing value and this
+    // sentence is reachable the morning after a due date passes. It is read
+    // verbatim in the briefing, so the inflection is not cosmetic.
+    const f = fire({ registerSize: 10, overdueCount: 3, oldestOverdueDays: 1 }).findings[0]
+    expect(f.rationale).toBe(
+      '3 staff evaluations are past their own recorded due date; the oldest has been outstanding 1 day, against a working expectation of fewer than 3 overdue.',
+    )
+    expect(f.rationale).not.toContain('1 days')
+    assertWellFormed(f)
+  })
+
+  it('escalates on EITHER numeral it quotes, and on neither by surprise', () => {
+    expect(fire({ registerSize: 40, overdueCount: 10, oldestOverdueDays: 30 }).findings[0].severity).toBe(
+      'critical',
+    )
+    expect(fire({ registerSize: 40, overdueCount: 9, oldestOverdueDays: 30 }).findings[0].severity).toBe(
+      'warn',
+    )
+    expect(fire({ registerSize: 40, overdueCount: 4, oldestOverdueDays: 366 }).findings[0].severity).toBe(
+      'critical',
+    )
+    expect(fire({ registerSize: 40, overdueCount: 4, oldestOverdueDays: 365 }).findings[0].severity).toBe(
+      'warn',
+    )
+  })
+
+  it('NAMES NOBODY — the payload is four integers and no identity of any kind', () => {
+    const f = fire({ registerSize: 20, overdueCount: 5, oldestOverdueDays: 90 }).findings[0]
+    const copy = `${f.title} ${f.rationale} ${f.consequence} ${JSON.stringify(f.evidence)}`
+    for (const forbidden of ['evaluator', 'personId', 'person_id', 'cycleLabel', 'cycle_label']) {
+      expect(copy, forbidden).not.toContain(forbidden)
+    }
+    for (const e of f.evidence) expect(typeof e.value).toBe('number')
+  })
+
+  it('an available signal with no register summary REFUSES rather than invent a zero', () => {
+    const r = singleRule('HR-EVAL-OVERDUE', STAFF_EVAL_LIT, phaseFRegister({ staffEvaluations: null }))
+    expect(r.findings).toHaveLength(0)
+    expect(r.notEvaluated[0].reason).toBe('value_not_usable')
+    expect(r.notEvaluated[0].blockingSignalKey).toBe('hr.staff_evaluations')
+  })
+
+  it('a summary that contradicts itself refuses instead of narrating it', () => {
+    // More overdue rows than rows, and an overdue row nought days past its own date.
+    for (const bad of [
+      { registerSize: 2, overdueCount: 5, oldestOverdueDays: 90 },
+      { registerSize: 20, overdueCount: 5, oldestOverdueDays: 0 },
+    ]) {
+      const r = fire(bad)
+      expect(r.findings, JSON.stringify(bad)).toHaveLength(0)
+      expect(r.notEvaluated[0].reason).toBe('value_not_usable')
+    }
+  })
+
+  it('lands on the codes this school actually holds, and refuses when it holds none', () => {
+    // The shipped Cognia catalog carries COG-10 AND COG-13; this fixture register
+    // carries only COG-13, so the finding renders under COG-13 alone.
+    expect(fire({ registerSize: 20, overdueCount: 5, oldestOverdueDays: 90 }).findings[0].standardTags).toEqual(
+      ['COG-13'],
+    )
+    const withCog10 = singleRule(
+      'HR-EVAL-OVERDUE',
+      STAFF_EVAL_LIT,
+      phaseFRegister({ standards: [...REGISTER_CODES, 'COG-10'].map((c) => mkStandard(c)) }),
+    )
+    expect(withCog10.findings[0].standardTags).toEqual(['COG-10', 'COG-13'])
+
+    const foreign = singleRule(
+      'HR-EVAL-OVERDUE',
+      STAFF_EVAL_LIT,
+      phaseFRegister({ standards: [mkStandard('NSBECS-99')] }),
+    )
+    expect(foreign.findings).toHaveLength(0)
+    expect(foreign.notEvaluated[0].reason).toBe('no_standards')
+  })
+
+  it('is no longer reachable through the not-tracked refusal — that is the flip', () => {
+    const def = TWIN_RULES_BY_ID.get('HR-EVAL-OVERDUE') as TwinRuleDef
+    expect(def.requiredAvailable).toEqual(['hr.staff_evaluations'])
+    expect(def.unlock).toBeNull()
+    expect((VISIBLE_HOLE_RULE_IDS as readonly string[])).not.toContain('HR-EVAL-OVERDUE')
+  })
+})
+
+describe('§4F FAC-INSPECTION-DUE', () => {
+  const fire = (complianceInspections: TwinRegisterView['complianceInspections']) =>
+    singleRule('FAC-INSPECTION-DUE', INSPECTION_LIT, phaseFRegister({ complianceInspections }))
+
+  const inspections = (over: Partial<NonNullable<TwinRegisterView['complianceInspections']>> = {}) => ({
+    trackedCount: 8,
+    overdueCount: 2,
+    oldestOverdueDays: 40,
+    overdueKinds: ['fire_life_safety', 'health'] as readonly string[],
+    anyLifeSafety: true,
+    ...over,
+  })
+
+  it('fires on the first overdue item and passes on none', () => {
+    expect(fire(inspections({ overdueCount: 1, overdueKinds: ['boiler'], anyLifeSafety: true })).findings)
+      .toHaveLength(1)
+    const clean = fire(
+      inspections({ overdueCount: 0, oldestOverdueDays: 0, overdueKinds: [], anyLifeSafety: false }),
+    )
+    expect(clean.findings).toHaveLength(0)
+    expect(clean.notEvaluated).toHaveLength(0)
+  })
+
+  it('names the kinds it is talking about, in both frozen sentences', () => {
+    const many = fire(inspections()).findings[0]
+    expect(many.rationale).toBe(
+      '2 recorded compliance inspections are past their own target date (fire and life-safety, health); the oldest is 40 days past.',
+    )
+    const one = fire(
+      inspections({ overdueCount: 1, oldestOverdueDays: 12, overdueKinds: ['health'], anyLifeSafety: false }),
+    ).findings[0]
+    expect(one.rationale).toBe(
+      'A recorded health inspection is past its own target date, by 12 days.',
+    )
+    assertWellFormed(many)
+    assertWellFormed(one)
+  })
+
+  it('says "1 day", never "1 days", in BOTH templates', () => {
+    // `oldest < 1` refuses, so one day past target is the minimum firing value —
+    // the single most likely day for this rule to fire for the first time.
+    const one = fire(
+      inspections({ overdueCount: 1, oldestOverdueDays: 1, overdueKinds: ['boiler'], anyLifeSafety: true }),
+    ).findings[0]
+    expect(one.rationale).toBe('A recorded boiler inspection is past its own target date, by 1 day.')
+    const many = fire(
+      inspections({ overdueCount: 3, oldestOverdueDays: 1, overdueKinds: ['boiler'], anyLifeSafety: true }),
+    ).findings[0]
+    expect(many.rationale).toBe(
+      '3 recorded compliance inspections are past their own target date (boiler); the oldest is 1 day past.',
+    )
+    for (const f of [one, many]) {
+      expect(f.rationale).not.toContain('1 days')
+      assertWellFormed(f)
+    }
+  })
+
+  it('severity is decided by the KIND, and the sentence names that same kind', () => {
+    const life = fire(inspections({ overdueKinds: ['elevator'], overdueCount: 1, anyLifeSafety: true }))
+      .findings[0]
+    expect(life.severity).toBe('critical')
+    expect(life.rationale).toContain('elevator')
+
+    const ordinary = fire(
+      inspections({ overdueKinds: ['playground'], overdueCount: 1, anyLifeSafety: false }),
+    ).findings[0]
+    expect(ordinary.severity).toBe('warn')
+    expect(ordinary.rationale).toContain('playground')
+  })
+
+  it('will not say "an inspection of an unnamed kind is overdue"', () => {
+    const r = fire(inspections({ overdueKinds: [] }))
+    expect(r.findings).toHaveLength(0)
+    expect(r.notEvaluated[0].reason).toBe('value_not_usable')
+    expect(r.notEvaluated[0].blockingSignalKey).toBe('fac.inspections')
+  })
+
+  it('an available signal with no register summary refuses, never invents a zero', () => {
+    const r = singleRule('FAC-INSPECTION-DUE', INSPECTION_LIT, phaseFRegister({ complianceInspections: null }))
+    expect(r.findings).toHaveLength(0)
+    expect(r.notEvaluated[0].reason).toBe('value_not_usable')
+  })
+
+  it('the refusal to guess from free text is UNCHANGED, word for word', () => {
+    expect(FAC_BACKLOG_HONESTY_NOTE).toBe(
+      'We can say a recurring facilities item is overdue. We will not say your fire inspection is overdue by guessing at free text — see fac.inspections.',
+    )
+    const backlog = oneFor('FAC-BACKLOG')
+    expect(backlog.evidence.find((e) => e.key === 'honestyNote')?.value).toBe(FAC_BACKLOG_HONESTY_NOTE)
+  })
+
+  it('overlaps FAC-BACKLOG on purpose, and the two facts stay distinct', () => {
+    const r = runScenario({ phaseF: true })
+    const backlog = findingsFor(r, 'FAC-BACKLOG')
+    const inspection = findingsFor(r, 'FAC-INSPECTION-DUE')
+    expect(backlog).toHaveLength(1)
+    expect(inspection).toHaveLength(1)
+    // A backlog SIZE and a named regulatory inspection past its own date are two
+    // different facts about one school; the domain band counts DISTINCT factKeys.
+    expect(backlog[0].factKey).not.toBe(inspection[0].factKey)
+    expect(backlog[0].factKey).toMatch(/^register:maintenance_backlog@/)
+    expect(inspection[0].factKey).toMatch(/^register:compliance_inspection_overdue@/)
+  })
+})
+
+describe('§4F ACC-PRIOR-FINDING-OPEN', () => {
+  const fire = (priorVisitCitations: TwinRegisterView['priorVisitCitations']) =>
+    singleRule('ACC-PRIOR-FINDING-OPEN', PRIOR_VISIT_LIT, phaseFRegister({ priorVisitCitations }))
+
+  it('emits one finding per MATCHED standard and silently places no other', () => {
+    const r = fire([
+      { code: 'COG-26', visitDate: '2021-03-12', openCount: 1 },
+      { code: 'COG-99', visitDate: '2021-03-12', openCount: 9 },
+      { code: 'COG-A4', visitDate: '2020-11-02', openCount: 2 },
+    ])
+    expect(r.findings.map((f) => f.scopeKey).sort()).toEqual(['standard:std-COG-26', 'standard:std-COG-A4'])
+    // The unmatched code is NEVER fuzzy-matched into a standard the team did not
+    // cite; it stays on the register endpoint, shown as unmatched.
+    for (const f of r.findings) expect(f.standardTags).not.toContain('COG-99')
+  })
+
+  it('says the most credible sentence the product can say, in both variants', () => {
+    const many = fire([{ code: 'COG-A4', visitDate: '2021-03-12', openCount: 2 }]).findings[0]
+    expect(many.rationale).toBe(
+      '2 citations against COG-A4 from the visit of 12 March 2021 are still recorded as open in your own register.',
+    )
+    const one = fire([{ code: 'COG-A4', visitDate: '2021-03-12', openCount: 1 }]).findings[0]
+    expect(one.rationale).toBe(
+      'One citation against COG-A4, from the visit of 12 March 2021, is still recorded as open in your own register.',
+    )
+    // 'One' is a WORD: the singular sentence carries no digit of its own.
+    expect(one.evidence.map((e) => e.key)).toEqual(['code', 'title', 'visitDate', 'openCount'])
+    assertWellFormed(many)
+    assertWellFormed(one)
+  })
+
+  // ── The sentence may not out-run its arithmetic (§3.5 / Phase-E class) ──────
+  //
+  // A school cited on ONE standard at TWO visits is the ordinary case for a school
+  // in its second or third cycle. The caller groups by (code, visit), so each
+  // visit gets its OWN finding, its OWN factKey and its OWN count — never one
+  // merged sentence attributing an older team's citation to the newer visit.
+  it('a standard cited at TWO visits emits TWO findings, each true about its own visit', () => {
+    const r = fire([
+      { code: 'COG-A4', visitDate: '2015-01-01', openCount: 1 },
+      { code: 'COG-A4', visitDate: '2021-03-12', openCount: 1 },
+    ])
+    expect(r.findings).toHaveLength(2)
+    const rationales = r.findings.map((f) => f.rationale).sort()
+    expect(rationales).toEqual([
+      'One citation against COG-A4, from the visit of 1 January 2015, is still recorded as open in your own register.',
+      'One citation against COG-A4, from the visit of 12 March 2021, is still recorded as open in your own register.',
+    ])
+    // Two distinct, separately-closable facts — the domain band counts factKeys,
+    // so a shared key would silently net two visits down to one.
+    expect(new Set(r.findings.map((f) => f.factKey)).size).toBe(2)
+    for (const f of r.findings) expect(f.factKey).toMatch(/:prior_visit_open@\d{4}-\d{2}-\d{2}$/)
+  })
+
+  it('never says "N citations … from the visit of X" about a set spanning two visits', () => {
+    // The exact shape the register collector used to produce: one open citation
+    // from 2015 and one from 2021, merged into `{ openCount: 2, visitDate: 2021 }`.
+    // If any caller ever hands that back, the plural sentence would be false — so
+    // the count a finding quotes must equal the citations of the visit it names.
+    const r = fire([
+      { code: 'COG-A4', visitDate: '2015-01-01', openCount: 1 },
+      { code: 'COG-A4', visitDate: '2021-03-12', openCount: 1 },
+    ])
+    for (const f of r.findings) {
+      const open = Number(f.evidence.find((e) => e.key === 'openCount')?.value)
+      const date = String(f.evidence.find((e) => e.key === 'visitDate')?.value)
+      expect(f.rationale).toContain(open === 1 ? 'One citation' : `${open} citations`)
+      expect(f.factKey.endsWith(`@${date}`), f.factKey).toBe(true)
+    }
+  })
+
+  it('the TITLE says "a previous visit", because the date may not be the last one', () => {
+    // `visitDate` is the date of the visit THAT citation came from, not the
+    // school's most recent visit: a 2021 team can leave nothing open while a 2015
+    // citation still stands. The briefing renders `${code} — ${title}`, so a title
+    // claiming "your last accreditation visit" would put a false clause in front
+    // of a rationale that correctly names 2015.
+    const f = fire([{ code: 'COG-A4', visitDate: '2015-01-01', openCount: 1 }]).findings[0]
+    expect(f.title).toBe('A citation from a previous accreditation visit is still open')
+    expect(f.title.toLowerCase()).not.toContain('last accreditation visit')
+  })
+
+  it('never carries the citation TEXT into the payload', () => {
+    const f = fire([{ code: 'COG-A4', visitDate: '2021-03-12', openCount: 2 }]).findings[0]
+    const copy = `${f.rationale} ${f.consequence} ${JSON.stringify(f.evidence)}`
+    expect(copy).not.toMatch(/lorem|the team wrote/i)
+    expect(f.evidence.map((e) => e.key)).not.toContain('text')
+  })
+
+  it('a school with a visit history and nothing open is a PASS, not a refusal', () => {
+    const r = singleRule('ACC-PRIOR-FINDING-OPEN', PRIOR_VISIT_LIT, phaseFRegister({ priorVisitCitations: [] }))
+    expect(r.findings).toHaveLength(0)
+    expect(r.notEvaluated).toHaveLength(0)
+  })
+
+  it('refuses by name when the register was never populated', () => {
+    const r = singleRule('ACC-PRIOR-FINDING-OPEN', {}, phaseFRegister())
+    expect(r.findings).toHaveLength(0)
+    expect(r.notEvaluated[0].reason).toBe('signal_no_data')
+    expect(r.notEvaluated[0].blockingSignalKey).toBe('acc.prior_visit_findings')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// §7F THE G10 PROHIBITION — a prior visit may not calibrate ANYTHING
+//
+// One visiting team per six years per school is not calibratable, and D4 stays
+// frozen. A matched open citation may be DISPLAYED and it may raise a standard's
+// visibility exactly as any other `warn` fact does. It may not tune the risk
+// arithmetic, and no threshold reads it.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('§7F prior-visit findings calibrate nothing', () => {
+  const base = scenario({ phaseF: true })
+  /** The same school, with twenty times the citations from twenty years earlier. */
+  const exaggerated = {
+    ...base,
+    register: {
+      ...base.register,
+      priorVisitCitations: base.register.priorVisitCitations.map((c) => ({
+        ...c,
+        openCount: c.openCount * 20,
+        visitDate: `${Number(c.visitDate.slice(0, 4)) - 20}${c.visitDate.slice(4)}`,
+      })),
+    },
+  }
+  const a = deriveTwin(base.signals, base.register, TWIN_RULE_DEFS, NOW, { priorFacts: base.priors })
+  const b = deriveTwin(exaggerated.signals, exaggerated.register, TWIN_RULE_DEFS, NOW, {
+    priorFacts: exaggerated.priors,
+  })
+
+  it('the exaggerated run is genuinely different data, or this spec proves nothing', () => {
+    expect(findingsFor(a, 'ACC-PRIOR-FINDING-OPEN').length).toBeGreaterThan(0)
+    expect(a.findings.map((f) => f.rationale)).not.toEqual(b.findings.map((f) => f.rationale))
+  })
+
+  it('moves no severity, likelihood, confidence or horizon on the prior-visit rule', () => {
+    const ordinal = (r: typeof a) =>
+      findingsFor(r, 'ACC-PRIOR-FINDING-OPEN').map((f) => ({
+        scopeKey: f.scopeKey,
+        severity: f.severity,
+        likelihood: f.likelihood,
+        confidence: f.confidence,
+        horizon: f.horizon,
+      }))
+    expect(ordinal(a)).toEqual(ordinal(b))
+    for (const f of findingsFor(a, 'ACC-PRIOR-FINDING-OPEN')) {
+      expect(f.severity).toBe('warn')
+      expect(f.likelihood).toBe('likely')
+      expect(f.confidence).toBe('observation')
+    }
+  })
+
+  it('moves no OTHER rule at all', () => {
+    const others = (r: typeof a) => r.findings.filter((f) => f.ruleId !== 'ACC-PRIOR-FINDING-OPEN')
+    expect(others(a)).toEqual(others(b))
+    expect(a.notEvaluated).toEqual(b.notEvaluated)
+    expect(a.coverage).toEqual(b.coverage)
+  })
+
+  it('moves no risk driver — the 40·C + 40·T + 20·E inputs are byte-identical', () => {
+    const drivers = (r: typeof a) =>
+      r.perStandardRisk.map((s) => ({ code: s.code, raw: s.drivers.map((d) => d.raw), risk: s.risk, band: s.band }))
+    expect(drivers(a)).toEqual(drivers(b))
+    expect(a.domainBands).toEqual(b.domainBands)
+  })
+
+  it('no threshold in the whole engine reads prior-visit data', () => {
+    for (const key of Object.keys(TH)) expect(key.toLowerCase()).not.toContain('visit')
+    for (const key of Object.keys(TH)) expect(key.toLowerCase()).not.toContain('prior')
+    // And the rule's four judgement fields are literals in the source, not functions.
+    expect(SRC).toContain("id: 'ACC-PRIOR-FINDING-OPEN'")
+  })
+})
+
 // ─────────────────────────────────────────────────────────────────────────────
 // §5 THE NUMERAL SPEC — acceptance criterion 5, in both required forms
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1529,11 +2091,11 @@ describe('§5 every numeral in a rationale traces to that finding’s evidence',
     expect(orphans).toEqual([])
   })
 
-  it('(b) covers every one of the 22 firing rules', () => {
+  it('(b) covers every one of the 25 firing rules', () => {
     const fired = new Set(generatedFindings().map((f) => f.ruleId))
     const holes = new Set<string>(VISIBLE_HOLE_RULE_IDS)
     const expected = TWIN_RULE_IDS.filter((id) => !holes.has(id))
-    expect(expected).toHaveLength(22)
+    expect(expected).toHaveLength(25)
     expect([...fired].sort()).toEqual([...expected].sort())
   })
 
@@ -2120,11 +2682,11 @@ describe('§12 purity', () => {
 describe('§13 coverage', () => {
   it('every rule is either evaluated or refused, and never both', () => {
     const r = runScenario()
-    expect(r.coverage.rulesTotal).toBe(26)
-    expect(r.coverage.rulesEvaluated + r.coverage.rulesNotEvaluated).toBe(26)
+    expect(r.coverage.rulesTotal).toBe(29)
+    expect(r.coverage.rulesEvaluated + r.coverage.rulesNotEvaluated).toBe(29)
     expect(r.coverage.rulesNotEvaluated).toBe(r.notEvaluated.length)
     expect(r.coverage.rulesFired).toBe(new Set(r.findings.map((f) => f.ruleId)).size)
-    expect(r.coverage.evaluablePct).toBeCloseTo(r.coverage.rulesEvaluated / 26, 3)
+    expect(r.coverage.evaluablePct).toBeCloseTo(r.coverage.rulesEvaluated / 29, 3)
   })
 
   it('counts every signal by availability, omitting none', () => {
@@ -2247,5 +2809,49 @@ describe('§13 coverage', () => {
     expect(r.snapshotAsOf).toBe('2026-06-30')
     expect(r.demoData).toBe(false)
     expect(r.version).toBe(ACCREDITATION_TWIN_VERSION)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE THRESHOLD SENTENCE MUST AGREE WITH THE THRESHOLD COMPARISON.
+//
+// Found live, not by a test: HR-EVAL-OVERDUE fired on exactly three overdue
+// evaluations and said "against a working expectation of NO MORE THAN 3 overdue".
+// Both halves are individually true and together they are nonsense — the sentence
+// tells the school the number it is being flagged for is the number that is
+// allowed. FAC-BACKLOG shipped in Phase E with the identical shape.
+//
+// Every rule of this form gates on `value < THRESHOLD -> silent`, so it fires AT
+// the threshold and the honest phrase is "FEWER THAN". This asserts over the rule
+// table rather than over two known ids, so a rule added later cannot reintroduce it.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('a threshold sentence may not contradict the comparison behind it', () => {
+  it('no template says "no more than {{threshold}}" — these rules fire AT the threshold', () => {
+    const offenders = TWIN_RULE_DEFS.flatMap((d) =>
+      [d.rationaleTemplate, (d as { rationaleTemplateLow?: string }).rationaleTemplateLow]
+        .filter((t): t is string => typeof t === 'string')
+        .filter((t) => /no more than \{\{threshold\}\}/.test(t))
+        .map(() => d.id),
+    )
+    expect(
+      offenders,
+      `"no more than {{threshold}}" is false for a rule that fires at the threshold: ${offenders.join(', ')}`,
+    ).toEqual([])
+  })
+
+  // The assertion above is a prohibition, and a prohibition passes trivially once
+  // the string it bans is gone. This proves the COUNT rules actually carry the
+  // replacement, so deleting the phrase entirely cannot masquerade as a fix.
+  //
+  // Scoped to count comparisons on purpose: GOV-MINUTES-LAG says "an expectation of
+  // {{threshold}} days", which is a DURATION and reads correctly as written — the
+  // defect is specific to a count that fires at its own threshold.
+  it('the COUNT rules that fire at their threshold say "fewer than" it', () => {
+    const COUNT_RULES = ['FAC-BACKLOG', 'HR-EVAL-OVERDUE']
+    for (const id of COUNT_RULES) {
+      const d = TWIN_RULE_DEFS.find((x) => x.id === id)
+      expect(d, `${id} is missing from the rule table`).toBeDefined()
+      expect(d!.rationaleTemplate, id).toMatch(/fewer than \{\{threshold\}\}/)
+    }
   })
 })

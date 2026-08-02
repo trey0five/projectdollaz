@@ -347,10 +347,10 @@ export const wizardConfigs = {
     ],
   },
 
-  // Phase 6 — HR & Staffing (/hr). The staffing RecordFlow is the module's ONE
-  // add path (partial PUT onto the operational row — teaching/total FTE + notes
-  // only, never enrollment/aid); the Data hub's OperationalDataPanel keeps
-  // owning the full operational intake, untouched.
+  // Phase 6 — HR & Staffing (/hr). The staffing RecordFlow writes the operational
+  // row (partial PUT — teaching/total FTE + notes only, never enrollment/aid); the
+  // Data hub's OperationalDataPanel keeps owning the full operational intake,
+  // untouched. AIC Phase F added the second option, the staff-evaluation register.
   hr: {
     module: 'hr',
     hue: HUE.hr,
@@ -365,6 +365,22 @@ export const wizardConfigs = {
           'Enter this period’s teaching and total staff FTEs — they power the student-teacher ratio and your staffing mix.',
         cta: 'Enter staffing',
         flow: recordFlows['hr.staffing'],
+      },
+      // AIC Phase F. Without this the flow was written, gated, DTO-correct — and
+      // unreachable: /hr's prominent "Add data" CTA listed only "Staffing FTEs",
+      // so a user arriving from the Evidence Index's "Where this lives: HR" prompt
+      // landed on a ratio chart with no visible way to record what they were sent
+      // to record. (The "+ New" button only appears after switching the register
+      // tab away from its default.) School-scoped, so NO `needsPeriod`.
+      {
+        key: 'staff-evaluation',
+        kind: 'flow',
+        Icon: ClipboardCheck,
+        label: 'Staff evaluations',
+        blurb:
+          'Record an evaluation cycle against someone on your people register — and the accreditation evidence for it answers itself once you date the completion.',
+        cta: 'Add evaluations',
+        flow: recordFlows['hr.staffEvaluation'],
       },
     ],
   },

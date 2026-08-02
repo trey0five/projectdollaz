@@ -1,6 +1,15 @@
+import 'reflect-metadata'
 import { describe, expect, it, vi } from 'vitest'
 import { NotFoundException } from '@nestjs/common'
+import { validate } from 'class-validator'
+import { plainToInstance } from 'class-transformer'
 import { FacilitiesService } from './facilities.service.js'
+import {
+  CreateMaintenanceDto,
+  LIFE_SAFETY_COMPLIANCE_KINDS,
+  MAINTENANCE_COMPLIANCE_KINDS,
+} from './dto/create-maintenance.dto.js'
+import { UpdateMaintenanceDto } from './dto/update-maintenance.dto.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FacilitiesService — TENANT ISOLATION + computed urgency + Decimal→number +
@@ -30,6 +39,9 @@ function itemRow(over: Record<string, unknown> = {}) {
     recurrenceUntil: null,
     seriesId: null,
     notes: null,
+    // AIC Phase F — nullable and NEVER inferred. Every legacy-shaped row is an
+    // ordinary maintenance item and reads null here.
+    complianceKind: null,
     createdByUserId: null,
     // Vendors/bids additive columns (all null on a legacy-shaped row).
     vendorId: null,
@@ -431,5 +443,166 @@ describe('FacilitiesService — pendingBidCount enrichment + needsDecisionCount'
     const res = await svc.listMaintenance('school-A', NOW)
     expect(res.items.find((i) => i.id === 'linked')!.vendorName).toBe('Structured Co')
     expect(res.items.find((i) => i.id === 'legacy')!.vendorName).toBe('Legacy Plumber')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AIC Phase F — MaintenanceItem.complianceKind.
+//
+// One nullable column that says WHAT KIND of regulatory inspection an item is. It
+// is NEVER inferred: `title`, `category` and `location` are free text and nothing
+// here reads them to guess a kind. NULL means "an ordinary maintenance item", and
+// such an item behaves EXACTLY as it did before this phase.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('FacilitiesService — complianceKind (AIC Phase F)', () => {
+  it('createMaintenance stores the declared kind verbatim and emits it in toPublic', async () => {
+    const { svc, maintenanceItem } = makeService({})
+    const res = await svc.createMaintenance(
+      'school-A',
+      { title: 'Annual fire inspection', complianceKind: 'fire_life_safety' },
+      'u',
+    )
+    expect(maintenanceItem.create.mock.calls[0][0].data.complianceKind).toBe('fire_life_safety')
+    expect(res.complianceKind).toBe('fire_life_safety')
+  })
+
+  it('an omitted kind stores NULL — we never guess one from the title', async () => {
+    const { svc, maintenanceItem } = makeService({})
+    // The title screams "fire inspection". The column stays null anyway: the
+    // Phase-C seed published the promise "We will not guess it from free text".
+    const res = await svc.createMaintenance(
+      'school-A',
+      { title: 'Fire extinguisher inspection', category: 'Fire safety' },
+      'u',
+    )
+    expect(maintenanceItem.create.mock.calls[0][0].data.complianceKind).toBeNull()
+    expect(res.complianceKind).toBeNull()
+  })
+
+  it('a legacy row (no kind on the record) reads back as null, not undefined', async () => {
+    const { svc } = makeService({
+      item: { findMany: vi.fn(async () => [itemRow({ id: 'legacy' })]) },
+    })
+    const res = await svc.listMaintenance('school-A', NOW)
+    expect(res.items[0].complianceKind).toBeNull()
+  })
+
+  it('updateMaintenance merge-pick: omitted keeps the kind, explicit null CLEARS it', async () => {
+    const { svc, maintenanceItem } = makeService({
+      item: {
+        findFirst: vi.fn(async () => itemRow({ id: 'm1', complianceKind: 'boiler' })),
+      },
+    })
+    await svc.updateMaintenance('school-A', 'm1', { title: 'Renamed' }, 'u')
+    expect(maintenanceItem.update.mock.calls[0][0].data.complianceKind).toBe('boiler')
+
+    const cleared = makeService({
+      item: {
+        findFirst: vi.fn(async () => itemRow({ id: 'm1', complianceKind: 'boiler' })),
+      },
+    })
+    await cleared.svc.updateMaintenance('school-A', 'm1', { complianceKind: null }, 'u')
+    // Cleared ⇒ the item drops straight back out of fac.inspections.
+    expect(cleared.maintenanceItem.update.mock.calls[0][0].data.complianceKind).toBeNull()
+  })
+
+  it('the recurrence successor INHERITS the kind — an annual inspection stays an inspection', async () => {
+    // DEVIATION FROM SPEC §8.3 (recorded in the phase report): the spec says
+    // "recurrence … untouched". The KIND is part of the durable definition, exactly
+    // like title/category/recurrence. Without this, an annual fire-life-safety
+    // inspection would lose its kind the instant it was first resolved, drop out of
+    // fac.inspections, and FAC-INSPECTION-DUE would stop seeing the very series the
+    // register exists to track. It is not a behaviour change for any existing
+    // school: every pre-Phase-F row has complianceKind = null, and cloning null is
+    // a no-op.
+    const existing = itemRow({
+      id: 'rec-f',
+      status: 'scheduled',
+      recurrence: 'annual',
+      targetDate: new Date('2026-06-15T00:00:00.000Z'),
+      complianceKind: 'fire_life_safety',
+    })
+    const { svc, maintenanceItem } = makeService({
+      item: { findFirst: vi.fn(async () => existing) },
+    })
+    await svc.updateMaintenance('school-A', 'rec-f', { status: 'resolved' }, 'u')
+    expect(maintenanceItem.create).toHaveBeenCalledTimes(1)
+    expect(maintenanceItem.create.mock.calls[0][0].data.complianceKind).toBe('fire_life_safety')
+  })
+
+  it('an ORDINARY item still spawns a successor with a null kind (no behaviour change)', async () => {
+    const existing = itemRow({
+      id: 'rec-plain',
+      status: 'scheduled',
+      recurrence: 'monthly',
+      targetDate: new Date('2026-06-15T00:00:00.000Z'),
+    })
+    const { svc, maintenanceItem } = makeService({
+      item: { findFirst: vi.fn(async () => existing) },
+    })
+    await svc.updateMaintenance('school-A', 'rec-plain', { status: 'resolved' }, 'u')
+    expect(maintenanceItem.create.mock.calls[0][0].data.complianceKind).toBeNull()
+  })
+})
+
+describe('the maintenance DTOs — the closed inspection vocabulary', () => {
+  it('MAINTENANCE_COMPLIANCE_KINDS is frozen, in order, and has NO catch-all', () => {
+    expect([...MAINTENANCE_COMPLIANCE_KINDS]).toEqual([
+      'fire_life_safety',
+      'boiler',
+      'elevator',
+      'asbestos',
+      'health',
+      'water_quality',
+      'playground',
+    ])
+    // "An inspection of an unnamed kind is overdue" is a sentence this product
+    // will not say — so there is deliberately no 'other'.
+    expect(MAINTENANCE_COMPLIANCE_KINDS as readonly string[]).not.toContain('other')
+  })
+
+  it('LIFE_SAFETY_COMPLIANCE_KINDS is a strict SUBSET of the vocabulary', () => {
+    expect([...LIFE_SAFETY_COMPLIANCE_KINDS]).toEqual([
+      'fire_life_safety',
+      'boiler',
+      'elevator',
+      'asbestos',
+    ])
+    for (const k of LIFE_SAFETY_COMPLIANCE_KINDS) {
+      expect(MAINTENANCE_COMPLIANCE_KINDS as readonly string[]).toContain(k)
+    }
+    expect(LIFE_SAFETY_COMPLIANCE_KINDS.length).toBeLessThan(MAINTENANCE_COMPLIANCE_KINDS.length)
+  })
+
+  it('CreateMaintenanceDto accepts every listed kind, accepts null, and REJECTS an invented one', async () => {
+    for (const kind of MAINTENANCE_COMPLIANCE_KINDS) {
+      const ok = plainToInstance(CreateMaintenanceDto, { title: 'T', complianceKind: kind })
+      expect(await validate(ok), kind).toHaveLength(0)
+    }
+    // null passes the whitelist (@IsOptional skips both undefined AND null).
+    expect(
+      await validate(plainToInstance(CreateMaintenanceDto, { title: 'T', complianceKind: null })),
+    ).toHaveLength(0)
+    // A kind we did not model 400s rather than being stored as free text.
+    expect(
+      await validate(
+        plainToInstance(CreateMaintenanceDto, { title: 'T', complianceKind: 'roof_anchor' }),
+      ),
+    ).not.toHaveLength(0)
+    expect(
+      await validate(plainToInstance(CreateMaintenanceDto, { title: 'T', complianceKind: 'other' })),
+    ).not.toHaveLength(0)
+  })
+
+  it('UpdateMaintenanceDto bounds the kind the same way', async () => {
+    expect(
+      await validate(plainToInstance(UpdateMaintenanceDto, { complianceKind: 'elevator' })),
+    ).toHaveLength(0)
+    expect(
+      await validate(plainToInstance(UpdateMaintenanceDto, { complianceKind: null })),
+    ).toHaveLength(0)
+    expect(
+      await validate(plainToInstance(UpdateMaintenanceDto, { complianceKind: 'FIRE' })),
+    ).not.toHaveLength(0)
   })
 })

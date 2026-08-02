@@ -33,6 +33,10 @@ function mItem(over: Partial<MaintenanceItemPublic>): MaintenanceItemPublic {
     recurrenceUntil: over.recurrenceUntil ?? null,
     seriesId: over.seriesId ?? null,
     notes: over.notes ?? null,
+    // AIC Phase F — an ordinary maintenance item has NO compliance kind, and every
+    // fixture in this file is one. The briefing's facilities STEP does not read this
+    // field: FAC-BACKLOG still counts every open item, kind or no kind.
+    complianceKind: over.complianceKind ?? null,
     createdByUserId: over.createdByUserId ?? null,
     urgency: over.urgency ?? 'none',
     daysUntilTarget: over.daysUntilTarget ?? null,

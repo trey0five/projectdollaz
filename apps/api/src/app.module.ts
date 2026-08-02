@@ -28,6 +28,7 @@ import { AccreditationModule } from './accreditation/accreditation.module.js'
 import { AccreditationSignalsModule } from './accreditation-signals/accreditation-signals.module.js'
 import { TwinModule } from './twin/twin.module.js'
 import { FacilitiesModule } from './facilities/facilities.module.js'
+import { HrModule } from './hr/hr.module.js'
 import { AdvancementModule } from './advancement/advancement.module.js'
 import { KnowledgeModule } from './knowledge/knowledge.module.js'
 import { EnrollmentModule } from './enrollment/enrollment.module.js'
@@ -82,6 +83,9 @@ import { InboxModule } from './inbox/inbox.module.js'
     // graph reads in dependency order: twin -> analytics -> accreditation.
     TwinModule,
     FacilitiesModule,
+    // AIC Phase F — the staff-evaluation register, gated on the 'hr' module. The
+    // first surface under src/hr/; nothing else in the app imports it.
+    HrModule,
     AdvancementModule,
     KnowledgeModule,
     EnrollmentModule,

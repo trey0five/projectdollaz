@@ -22,6 +22,7 @@ import {
   TWIN_SIGNAL_CATALOG,
   staleAfterDaysFor,
 } from './twin-signal-catalog.js'
+import { isEvaluationOverdue, isInspectionOverdue } from './twin-contract.js'
 import type {
   SignalAvailability,
   SignalChangeState,
@@ -37,12 +38,12 @@ import type {
 // I/O only. Every number here is read by something that already owns it — the
 // analytics trend endpoint, the Phase-C currency service, the roster's own
 // FERPA-safe aggregate — and every statistic is computed by the pure package.
-// This file's whole job is to say, for all 35 catalog rows, either "here is the
+// This file's whole job is to say, for all 36 catalog rows, either "here is the
 // value and the date it describes" or "here is why not".
 //
-// FOUR THINGS THIS FILE WILL NOT DO:
+// FIVE THINGS THIS FILE WILL NOT DO:
 //
-//   1. IT WILL NOT OMIT A SIGNAL. All 35 come back for every school, in catalog
+//   1. IT WILL NOT OMIT A SIGNAL. All 36 come back for every school, in catalog
 //      order, whatever happened. An omitted signal is an invisible hole.
 //
 //   2. IT WILL NOT ISSUE A QUERY FOR SOMETHING THE SCHOOL HAS NOT LICENSED. The
@@ -59,8 +60,15 @@ import type {
 //      can reach a payload. F11's leak vector is not a name; it is a per-grade
 //      count of 3.
 //
-//   4. IT WILL NOT THROW. A collector that fails degrades to `no_data` for that
-//      one signal, is logged at warn, and the other 34 are unaffected. This
+//   4. IT WILL NOT NAME A MEMBER OF STAFF. AIC Phase F added an ADULT-STAFF
+//      EMPLOYMENT PII register, and the only thing that crosses into this
+//      directory from it is three date/status columns and the COUNTS derived from
+//      them. The evaluator's name and the person relation are never selected here, by
+//      anything, ever — no-staff-pii.spec.ts greps this whole directory and fails
+//      the BUILD, exactly as no-student-access.spec.ts does for students.
+//
+//   5. IT WILL NOT THROW. A collector that fails degrades to `no_data` for that
+//      one signal, is logged at warn, and the other 35 are unaffected. This
 //      service has no endpoint and must never take a nightly job down; when
 //      Phase E routes it, it must never 500 a page. Same discipline as
 //      signals.service.ts.
@@ -112,6 +120,32 @@ function batchMetricKeys(entitled: ReadonlySet<ModuleKey>): MetricKey[] {
 // ── Frozen copy. Rendered VERBATIM; never composed by a caller. ──────────────
 
 const NO_READING = 'No reading is available for this signal yet.'
+
+/**
+ * AIC Phase F — THE EMPTY-REGISTER SENTENCES.
+ *
+ * Before Phase F these three signals were `declaredNotTracked`, and the catalog's
+ * `unavailableReason` told the school exactly what would close the hole ("A
+ * four-field staff-evaluation register unlocks this, and it is the highest-value
+ * item on the list."). Phase F makes them readable — and a school with zero rows
+ * therefore moved from that sentence to the GENERIC `NO_READING`, which names no
+ * action at all. That is a regression in the program's own idiom: this product
+ * names the intake that closes every hole it shows you.
+ *
+ * These restore the ask on the exact signals Phase F exists to make actionable.
+ * They are `no_data`, not `not_tracked` — we CAN look now, and there is nothing
+ * there — so the sentence describes an empty register rather than a missing
+ * capability. "We looked and it's fine" (`available`, value 0) remains a third,
+ * separate state and is never rendered with this copy.
+ */
+const EMPTY_REGISTER_READING: Readonly<Record<string, string>> = {
+  'hr.staff_evaluations':
+    'Your staff-evaluation register is empty. Record a cycle in HR — person, cycle, due date — and this reads from it.',
+  'fac.inspections':
+    'No facilities item declares what kind of compliance inspection it is. Set that field on an item in Facilities and this reads from it. We will not guess it from the title.',
+  'acc.prior_visit_findings':
+    'No findings from a previous accreditation visit are on file. Add them once, from your last visit report, and KYRO can tell you which are still open.',
+}
 const COLLECTOR_FAILED = 'We could not read this signal on this run.'
 const NOT_LICENSED_PREFIX = 'Unlock the '
 
@@ -459,6 +493,12 @@ export class TwinSignalsService {
         return this.collectPlanHorizon(ctx)
       case 'fac.maintenance_backlog':
         return this.collectMaintenanceBacklog(ctx)
+      case 'fac.inspections':
+        return this.collectComplianceInspections(ctx)
+      case 'hr.staff_evaluations':
+        return this.collectStaffEvaluations(ctx)
+      case 'acc.prior_visit_findings':
+        return this.collectPriorVisitFindings(ctx)
 
       case 'enr.headcount':
         return this.collectHeadcount(ctx)
@@ -689,6 +729,63 @@ export class TwinSignalsService {
     return { value: open, observedOn: isoOrNull(maxDate(items.map((i) => i.resolvedAt))) }
   }
 
+  /**
+   * AIC Phase F — the STAFF EVALUATION register. COUNTS ONLY.
+   *
+   * The value is the number of evaluations past THEIR OWN RECORDED DUE DATE, which
+   * is a documentary fact rather than a judgement about a person. Nothing about who
+   * is overdue leaves this method: `ctx.staffEvaluations()` selects three columns
+   * and neither the person relation nor the evaluator's name is among them.
+   *
+   * ZERO ROWS IS `no_data` ("we could not look"). A register that HAS rows and none
+   * overdue is `available` with value 0 ("we looked and it is fine"). Those are
+   * different facts and this catalog never conflates them.
+   */
+  private async collectStaffEvaluations(ctx: CollectContext): Promise<Collected | null> {
+    const rows = await ctx.staffEvaluations()
+    if (rows.length === 0)
+      return { value: null, observedOn: null, noData: true, noDataReason: EMPTY_REGISTER_READING['hr.staff_evaluations'] }
+    const overdue = rows.filter((r) => isEvaluationOverdue(r, ctx.today)).length
+    // The last dated thing this register actually RECORDED. A dueDate is a plan,
+    // not an observation — the gov.board_terms precedent.
+    return {
+      value: overdue,
+      observedOn: isoOrNull(maxDate(rows.map((r) => r.completedDate))),
+    }
+  }
+
+  /**
+   * AIC Phase F — COMPLIANCE INSPECTIONS, read from the DECLARED `complianceKind`
+   * on a facilities item. Never inferred from `title` or `category`, which are free
+   * text: "an inspection of an unnamed kind is overdue" is a sentence this product
+   * will not say.
+   *
+   * Shares the ONE memoised `ctx.maintenanceItems()` read with
+   * `fac.maintenance_backlog`, whose collector is byte-identical to Phase D.
+   */
+  private async collectComplianceInspections(ctx: CollectContext): Promise<Collected | null> {
+    const tracked = (await ctx.maintenanceItems()).filter((i) => i.complianceKind !== null)
+    if (tracked.length === 0)
+      return { value: null, observedOn: null, noData: true, noDataReason: EMPTY_REGISTER_READING['fac.inspections'] }
+    const overdue = tracked.filter((i) => isInspectionOverdue(i, ctx.today)).length
+    return { value: overdue, observedOn: isoOrNull(maxDate(tracked.map((i) => i.resolvedAt))) }
+  }
+
+  /**
+   * AIC Phase F — PRIOR VISIT FINDINGS. The value is the count still recorded OPEN.
+   *
+   * `observedOn` is the most recent VISIT date: that is the day the world was
+   * observed, and it is genuinely years old for most schools — which is why this
+   * signal's expected cadence is a full accreditation term and not a year.
+   */
+  private async collectPriorVisitFindings(ctx: CollectContext): Promise<Collected | null> {
+    const rows = await ctx.priorVisitFindings()
+    if (rows.length === 0)
+      return { value: null, observedOn: null, noData: true, noDataReason: EMPTY_REGISTER_READING['acc.prior_visit_findings'] }
+    const open = rows.filter((r) => r.status === 'open').length
+    return { value: open, observedOn: isoOrNull(maxDate(rows.map((r) => r.visitDate))) }
+  }
+
   private async collectHeadcount(ctx: CollectContext): Promise<Collected | null> {
     const snap = await ctx.enrollmentSnapshot()
     if (!snap) return null
@@ -910,10 +1007,43 @@ export class TwinSignalsService {
         }),
       ),
 
+      // ONE read serves BOTH fac.maintenance_backlog and (AIC Phase F)
+      // fac.inspections. The select is widened by two columns; the backlog
+      // collector and its predicate are byte-identical to Phase D and still count
+      // EVERY open item, compliance-kinded or not.
       maintenanceItems: once(() =>
         prisma.maintenanceItem.findMany({
           where: { schoolId },
-          select: { status: true, resolvedAt: true },
+          select: { status: true, resolvedAt: true, complianceKind: true, targetDate: true },
+        }),
+      ),
+
+      /**
+       * AIC Phase F — ADULT-STAFF EMPLOYMENT PII. THREE COLUMNS AND NO MORE.
+       *
+       * This is the ONLY place under apps/api/src/twin/ that reads the register's
+       * rows. No person, no evaluator, no cycle label, no notes — there
+       * is no identity here to leak into a finding, a briefing, Penny or an export.
+       * no-staff-pii.spec.ts parses this select and fails the BUILD on a fourth
+       * column.
+       */
+      staffEvaluations: once(() =>
+        prisma.staffEvaluation.findMany({
+          where: { schoolId },
+          select: { dueDate: true, completedDate: true, status: true },
+        }),
+      ),
+
+      /**
+       * AIC Phase F — the prior-visit register. `citedStandardCode` is selected
+       * because the register view matches it against the school's own standards;
+       * the free-text `text` of a citation is NEVER read on this path, and no
+       * payload the twin produces carries it.
+       */
+      priorVisitFindings: once(() =>
+        prisma.priorVisitFinding.findMany({
+          where: { schoolId },
+          select: { visitDate: true, status: true, citedStandardCode: true },
         }),
       ),
 
@@ -1039,7 +1169,22 @@ interface CollectContext {
     fyEndYear: number
     status: string
   } | null>
-  maintenanceItems(): Promise<{ status: string; resolvedAt: Date | null }[]>
+  maintenanceItems(): Promise<
+    {
+      status: string
+      resolvedAt: Date | null
+      complianceKind: string | null
+      targetDate: Date | null
+    }[]
+  >
+  /** AIC Phase F. COUNTS ONLY — three columns, no identity of any kind. */
+  staffEvaluations(): Promise<
+    { dueDate: Date; completedDate: Date | null; status: string }[]
+  >
+  /** AIC Phase F. */
+  priorVisitFindings(): Promise<
+    { visitDate: Date; status: string; citedStandardCode: string }[]
+  >
   enrollmentSnapshot(): Promise<{
     observedOn: Date
     totalEnrolled: number

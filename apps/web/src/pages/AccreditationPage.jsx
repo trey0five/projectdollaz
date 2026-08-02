@@ -66,6 +66,8 @@ import DomainGrid from '../components/accreditation/DomainGrid.jsx'
 import SignalPanel from '../components/accreditation/SignalPanel.jsx'
 // ── Phase C: evidence currency, auto-satisfaction, the index + commendations ──
 import EvidenceReadinessTable from '../components/accreditation/EvidenceReadinessTable.jsx'
+// AIC Phase F — the prior visiting-team findings register (Evidence tab).
+import PriorVisitPanel from '../components/accreditation/PriorVisitPanel.jsx'
 import CommendationsPanel from '../components/accreditation/CommendationsPanel.jsx'
 import EvidenceDateField from '../components/accreditation/EvidenceDateField.jsx'
 import CurrencyChip from '../components/accreditation/CurrencyChip.jsx'
@@ -1623,6 +1625,19 @@ function AccreditationWorkspace() {
     refreshCommendations()
   }, [refreshEvidenceReadiness, refreshCommendations])
 
+  // AIC Phase F — the SAME idea for the prior-visit register, and it matters more
+  // there. Writing an open citation against a code the school holds moves
+  // `acc.prior_visit_findings` from no_data to available AND raises
+  // ACC-PRIOR-FINDING-OPEN on that standard — so the attention rail, the Signals
+  // tab and the horizon are all stale the instant the modal closes. The twin is a
+  // separate read that only re-pulls on mount or on `penny:data-changed`, and the
+  // panel dispatches neither, so without this the phase's headline finding never
+  // appeared after the write that created it.
+  const refreshTwin = twin.refresh
+  const afterPriorVisitWrite = useCallback(async () => {
+    await Promise.allSettled([refreshTwin(), refreshEvidenceReadiness()])
+  }, [refreshTwin, refreshEvidenceReadiness])
+
   const createEvidenceAndRefresh = useCallback(
     async (standardId, body) => {
       const res = await createEvidence(standardId, body)
@@ -2094,8 +2109,16 @@ function AccreditationWorkspace() {
   // commendations before recommendations, and every other panel on this page is
   // about what is missing, so the strengths surface sits above the ask list rather
   // than buried under it.
+  //
+  // AIC PHASE F adds the PRIOR-VISIT register beneath it, on this tab and no
+  // other. It belongs on the artifact axis: it is a document request answered by a
+  // document, and "what the last team wrote" is the same kind of fact as "what
+  // they will ask to see". It sits BELOW the requirement index deliberately — the
+  // index is what the school must produce next; the prior visit is the record of
+  // what it was already told, and it is the note a reader should leave on.
   const evidenceTab = (
-    <EvidenceReadinessTable
+    <div className="space-y-5">
+      <EvidenceReadinessTable
       health={evidence.health}
       counts={evidence.counts}
       groups={evidence.groups}
@@ -2117,7 +2140,15 @@ function AccreditationWorkspace() {
           notLicensed={commendations.notLicensed}
         />
       }
-    />
+      />
+      <PriorVisitPanel
+        schoolId={schoolId}
+        canEdit={canEdit}
+        reduce={reduce}
+        onOpenStandard={scrollToStandard}
+        onSaved={afterPriorVisitWrite}
+      />
+    </div>
   )
 
   // ── Phase E: the Signals tab ───────────────────────────────────────────────

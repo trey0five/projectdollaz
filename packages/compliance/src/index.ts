@@ -251,6 +251,7 @@ export {
   CURRENCY_RANK,
   CURRENCY_LABEL,
   NOT_TRACKED_LEAD,
+  UNEARNED_REGISTER_LEAD,
   isRequirementTag,
   isSourceRegister,
   expiringLeadDaysFor,
@@ -382,7 +383,9 @@ export {
 // ─────────────────────────────────────────────────────────────────────────────
 // AIC Phase E — the accreditation TWIN / early-warning rule engine (pure).
 //
-// The twenty-two rules that fire, the four that ship VISIBLE and cannot evaluate
+// The twenty-five rules that fire (AIC Phase F took it from twenty-two by adding
+// HR-EVAL-OVERDUE, FAC-INSPECTION-DUE and ACC-PRIOR-FINDING-OPEN), the four that
+// ship VISIBLE and cannot evaluate
 // (with the intake that would close each), the 40·C + 40·T + 20·E per-standard
 // risk with its mandatory drivers, and the ordinal domain bands counted over
 // DISTINCT factKeys.
@@ -402,6 +405,10 @@ export type {
   TwinStandardView,
   TwinEvidenceGroupView,
   TwinRegisterView,
+  // AIC Phase F — the three register-axis views the new rules read.
+  TwinPriorVisitCitationView,
+  TwinStaffEvaluationSummaryView,
+  TwinComplianceInspectionSummaryView,
   PriorFact,
   TwinSeverity,
   TwinLikelihood,

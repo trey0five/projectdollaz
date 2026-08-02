@@ -16,7 +16,8 @@ import {
 //   • the knowledge-document resolver NEVER returns a date (createdAt is an
 //     UPLOAD date; reading it as a document date is the guess this phase bans),
 //   • the policy aggregate is only as current as its most OVERDUE member,
-//   • the five forward-declared registers issue NO QUERY AT ALL, and
+//   • the FORWARD-DECLARED registers issue NO QUERY AT ALL (AIC Phase F took two
+//     off that list by giving them resolvers; the other four must stay on it), and
 //   • every read is schoolId-scoped.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -63,6 +64,9 @@ function makePrisma(over: Record<string, unknown[]> = {}) {
     enrollmentSnapshot: { findFirst: spy('enrollmentSnapshot', over.enrollment ?? [], true) },
     knowledgeDocument: { findMany: spy('knowledgeDocument', over.documents ?? [], false) },
     boardReport: { findFirst: spy('boardReport', over.reports ?? [], true) },
+    // ── AIC Phase F ──
+    maintenanceItem: { findFirst: spy('maintenanceItem', over.maintenance ?? [], true) },
+    staffEvaluation: { findFirst: spy('staffEvaluation', over.evaluations ?? [], true) },
   }
   return { prisma: prisma as unknown as AnchorPrisma, raw: prisma, seen }
 }
@@ -183,12 +187,15 @@ describe('the seven resolvers', () => {
 })
 
 describe('what does NOT run', () => {
-  it('the five FORWARD-DECLARED registers issue no query at all', async () => {
+  it('the FORWARD-DECLARED registers issue no query at all', async () => {
+    // AIC Phase F removed `maintenance_item` and `staff_evaluation_register` from
+    // this list — they have resolvers now. The rest MUST stay: PD and clearances
+    // are Phase K, `lms` needs an integration KYRO does not have, and `portal` is
+    // the accreditor's own repository. Adding one here without a resolver would let
+    // a row claim a currency state nothing can compute.
     const { prisma, raw } = makePrisma({})
     const r = createAnchorResolver(prisma, 'school-A', NOW)
     for (const register of [
-      'maintenance_item',
-      'staff_evaluation_register',
       'professional_development',
       'clearance_register',
       'lms',
@@ -496,5 +503,145 @@ describe('computeEvidenceCounts', () => {
     )
     expect(out.evidenceCount.get('s1')).toBe(2)
     expect(out.currentEvidenceCount.get('s1')).toBe(1)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AIC Phase F — the two registers that stopped being forward declarations.
+//
+// Both are AUTO-SATISFACTION in the Phase-C sense: a live read of the register
+// that already owns the artifact, and NOTHING is ever written to
+// AccreditationEvidence. What is new is that both anchors are REAL DATES (a
+// completion, a resolution), so unlike the knowledge-document resolver these rows
+// can honestly go stale.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('AIC Phase F — the staff-evaluation resolver', () => {
+  const evalReq = () =>
+    req({
+      tag: 'staff_evaluation',
+      label: 'Staff evaluation cycle records',
+      windowKind: 'fixed',
+      windowMonths: 12,
+      sourceRegister: 'staff_evaluation_register',
+    })
+
+  it('the most recently COMPLETED evaluation is the artifact, dated and labelled by CYCLE', async () => {
+    const { prisma, raw } = makePrisma({
+      evaluations: [{ id: 'e1', cycleLabel: '2025-26 annual cycle', completedDate: day('2026-05-04') }],
+    })
+    const r = createAnchorResolver(prisma, 'school-A', NOW)
+    const art = (await r.resolve(evalReq()))!
+    expect(art.sourceRef).toBe('e1')
+    expect(art.label).toBe('Evaluation cycle — 2025-26 annual cycle')
+    expect(art.effectiveDate).toBe('2026-05-04')
+    expect(art.link).toBe('/hr')
+    expect(art.autoLinkedNote).toBe('Auto-linked from HR — you never entered this.')
+    // NO PERSON. The Evidence Index is visible to viewers; the register is not.
+    const call = raw.staffEvaluation.findFirst.mock.calls[0][0] as {
+      where: Record<string, unknown>
+      select: Record<string, unknown>
+      orderBy: unknown
+    }
+    expect(call.where.schoolId).toBe('school-A')
+    expect(call.where.completedDate).toEqual({ not: null })
+    expect(Object.keys(call.select).sort()).toEqual(['completedDate', 'cycleLabel', 'id'])
+    expect(call.orderBy).toEqual({ completedDate: 'desc' })
+  })
+
+  it('an empty register resolves to null — never to an undated placeholder', async () => {
+    const { prisma } = makePrisma({})
+    const r = createAnchorResolver(prisma, 'school-A', NOW)
+    expect(await r.resolve(evalReq())).toBeNull()
+  })
+})
+
+describe('AIC Phase F — the compliance-inspection resolver', () => {
+  const inspectionReq = () =>
+    req({
+      tag: 'inspection',
+      label: 'Fire / life-safety inspection record',
+      windowKind: 'fixed',
+      windowMonths: 12,
+      sourceRegister: 'maintenance_item',
+    })
+
+  it('the newest RESOLVED kinded item is the artifact, labelled by its kind', async () => {
+    const { prisma, raw } = makePrisma({
+      maintenance: [
+        { id: 'm1', title: 'Annual fire marshal visit', complianceKind: 'fire_life_safety', resolvedAt: day('2026-02-10') },
+      ],
+    })
+    const r = createAnchorResolver(prisma, 'school-A', NOW)
+    const art = (await r.resolve(inspectionReq()))!
+    expect(art.sourceRef).toBe('m1')
+    expect(art.label).toBe('Fire / life-safety inspection — Annual fire marshal visit')
+    expect(art.effectiveDate).toBe('2026-02-10')
+    expect(art.link).toBe('/facilities')
+    // The FILTER is the declared kind — never a match against free text.
+    const call = raw.maintenanceItem.findFirst.mock.calls[0][0] as {
+      where: Record<string, unknown>
+    }
+    expect(call.where.schoolId).toBe('school-A')
+    expect(call.where.complianceKind).toEqual({ not: null })
+    expect(call.where.status).toBe('resolved')
+    expect(JSON.stringify(call.where)).not.toContain('title')
+    expect(JSON.stringify(call.where)).not.toContain('category')
+  })
+
+  it('no kinded item resolves to null — an ordinary maintenance register is not an inspection record', async () => {
+    const { prisma } = makePrisma({})
+    const r = createAnchorResolver(prisma, 'school-A', NOW)
+    expect(await r.resolve(inspectionReq())).toBeNull()
+  })
+})
+
+describe('AIC Phase F — fixedWindowsFrom skips the MODULE-GATED rows', () => {
+  const row = (over: Record<string, unknown> = {}) => ({
+    catalogStandardId: 'c1',
+    tag: 'financial_audit',
+    windowKind: 'fixed',
+    windowMonths: 18,
+    dataAvailability: 'platform',
+    ...over,
+  })
+
+  it('a staff_evaluation / inspection window never enters the verifiedPct arithmetic', () => {
+    // If it did, an attached DATED artifact older than twelve months would become
+    // provably stale for the first time and verifiedPct would DROP for schools that
+    // changed nothing and were warned of nothing. Conservative on purpose.
+    const out = fixedWindowsFrom([
+      row(),
+      row({ tag: 'staff_evaluation', windowMonths: 12 }),
+      row({ tag: 'inspection', windowMonths: 12 }),
+    ])
+    expect([...(out.get('c1') ?? new Map()).keys()]).toEqual(['financial_audit'])
+  })
+
+  it('recognises the gated rows by sourceRegister when the caller selects it', () => {
+    const out = fixedWindowsFrom([
+      row({ tag: 'safety_plan', windowMonths: 12, sourceRegister: 'knowledge_document' }),
+      row({ tag: 'safety_plan', windowMonths: 12, sourceRegister: 'maintenance_item' }),
+    ])
+    // The knowledge-document row survives; the module-gated one does not, even
+    // though they share a tag.
+    expect((out.get('c1') as Map<string, number>).get('safety_plan')).toBe(12)
+    const gatedOnly = fixedWindowsFrom([
+      row({ tag: 'safety_plan', windowMonths: 12, sourceRegister: 'staff_evaluation_register' }),
+    ])
+    expect(gatedOnly.size).toBe(0)
+  })
+
+  it('every OTHER platform fixed row is unchanged', () => {
+    const out = fixedWindowsFrom([
+      row({ tag: 'budget', windowMonths: 12 }),
+      row({ tag: 'enrollment_data', windowMonths: 12 }),
+      row({ tag: 'marketing', windowMonths: 24 }),
+    ])
+    expect([...(out.get('c1') as Map<string, number>).entries()].sort()).toEqual([
+      ['budget', 12],
+      ['enrollment_data', 12],
+      ['marketing', 24],
+    ])
   })
 })

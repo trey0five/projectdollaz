@@ -4,13 +4,19 @@ import { TWIN_SIGNAL_KEYS, type TwinSignalDef, type TwinSignalKey } from './twin
 // ─────────────────────────────────────────────────────────────────────────────
 // AIC Phase D — THE SIGNAL CATALOG.
 //
-// Every operational fact the twin can see about a school, and — for the five it
-// cannot see — the sentence that says what it would take. Thirty-five rows, one
-// of which is a hole with a name.
+// Every operational fact the twin can see about a school, and — for the three it
+// cannot see — the sentence that says what it would take. Thirty-six rows, three
+// of which are holes with names.
+//
+// AIC PHASE F changed exactly three things here and nothing else: two rows lost
+// their `declaredNotTracked` (the registers behind them now exist, so they are
+// COLLECTED rather than declared blind), and one row was APPENDED. A `not_tracked`
+// row that becomes a collected row is the payoff of the whole catalog design —
+// nothing downstream had to learn a new shape.
 //
 // TWO RULES GOVERN THIS TABLE:
 //
-//   1. A signal is NEVER dropped. `TwinSignalsService.collect` returns all 35 for
+//   1. A signal is NEVER dropped. `TwinSignalsService.collect` returns all 36 for
 //      every school, always, in this order. `not_licensed` and `not_tracked` are
 //      answers; an absent row is not.
 //
@@ -27,11 +33,15 @@ import { TWIN_SIGNAL_KEYS, type TwinSignalDef, type TwinSignalKey } from './twin
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * The frozen not-tracked sentence the Phase-C seed already publishes for a tag.
- * `WHY` itself is module-private in catalog-requirements-seed.ts (and that file is
- * Phase-C territory this phase may not edit), so we reach the identical string
- * through the exported seed rows. Throwing on a miss is deliberate: a silent
- * fallback sentence would be a second copy of the copy we came here to avoid.
+ * The frozen not-tracked sentence the requirement seed publishes for a tag.
+ * `WHY` itself is module-private in catalog-requirements-seed.ts, so we reach the
+ * identical string through the exported seed rows. Throwing on a miss is
+ * deliberate: a silent fallback sentence would be a second copy of the copy we came
+ * here to avoid.
+ *
+ * AIC Phase F: the `staff_evaluation` and `inspection` call sites are GONE (those
+ * two rows are collected now). This still serves `pd_records`, `safe_environment`
+ * and `assessment_results`, and it stays.
  */
 function notTrackedReasonForTag(tag: string): string {
   for (const seeds of Object.values(FRAMEWORK_REQUIREMENT_SEEDS)) {
@@ -65,6 +75,12 @@ const CADENCE_MONTHLY = 45
  */
 const CADENCE_NIGHTLY = 7
 void CADENCE_NIGHTLY
+/**
+ * AIC Phase F. A full accreditation term: one visiting team per six years, plus
+ * slack. This register is NOT expected to move annually, and a `stale_data` flag on
+ * it would be a lie that would also feed SCHOOL-NOT-REPORTING a false stale signal.
+ */
+const CADENCE_VISIT_CYCLE = 2200
 
 export const TWIN_SIGNAL_CATALOG: readonly TwinSignalDef[] = Object.freeze([
   // ── 1–12: metric TRENDS. One AnalyticsService.trends call each, and only when
@@ -221,7 +237,7 @@ export const TWIN_SIGNAL_CATALOG: readonly TwinSignalDef[] = Object.freeze([
     domainKeys: ['continuous_improvement'],
   },
 
-  // ── 14–23, 35: REGISTER facts. Each group is ONE schoolId-scoped query.
+  // ── 14–23, 30–31, 35–36: REGISTER facts. Each group is ONE schoolId-scoped query.
   {
     key: 'fin.ar_aging',
     label: 'Receivables over 90 days',
@@ -406,31 +422,54 @@ export const TWIN_SIGNAL_CATALOG: readonly TwinSignalDef[] = Object.freeze([
     domainKeys: ['continuous_improvement'],
   },
 
-  // ── 30–34: DECLARED NOT TRACKED. The collector is never invoked and no query is
-  //          issued. These are the visible holes Phase E renders as
-  //          `cannot_evaluate` and Phases F/K close by changing ONE field.
+  // ── 30–31: AIC PHASE F LIT THESE TWO. They shipped in Phase D as
+  //          `declaredNotTracked` holes with a phase marker; the registers behind
+  //          them now exist, so the marker and the declaration are GONE and the
+  //          collector runs. Nothing else about either row changed — same key, same
+  //          position, same cadence, same domains. That is the payoff the
+  //          forward-declaration was for.
   {
     key: 'hr.staff_evaluations',
-    label: 'Staff evaluation cycle',
+    // THE LABEL DESCRIBES THE VALUE, because the Signals tab renders the two
+    // together as "<label>  <value>" with no unit and no qualifier. This row's
+    // value is the OVERDUE COUNT, so "Staff evaluation cycle  3" would be read as
+    // three evaluations on file — the inverse of what it means, and exactly the
+    // `no_data` vs `available: 0` conflation the catalog exists to prevent. The
+    // Phase-D label was written while this row was `declaredNotTracked` and
+    // carried no value at all; lighting the row is what made it wrong.
+    label: 'Staff evaluations past their due date',
     kind: 'register',
     moduleKey: 'hr',
-    source: { table: 'StaffEvaluation', phase: 'F' },
+    source: { table: 'StaffEvaluation', field: 'dueDate' },
     expectedCadenceDays: CADENCE_ANNUAL,
+    // FALSE, and deliberately: `ferpaSensitive` is the STUDENT small-cell switch
+    // (suppressSmallCellSet). This signal is ADULT-STAFF PII and is protected by a
+    // different, stronger mechanism — it publishes COUNTS ONLY and no identity ever
+    // enters apps/api/src/twin/ (no-staff-pii.spec.ts is the guard). Setting this
+    // true would run student-cell suppression over a staff count, which protects
+    // nobody and would silently suppress a legitimate count of 4 overdue evaluations.
     ferpaSensitive: false,
     domainKeys: ['hr'],
-    declaredNotTracked: { reason: notTrackedReasonForTag('staff_evaluation') },
   },
   {
     key: 'fac.inspections',
-    label: 'Life-safety inspections',
+    // Same correction, same reason: the value is the count PAST TARGET DATE, so a
+    // school with five kinded items all in date must not read "Life-safety
+    // inspections  0" — which says it has none on file.
+    label: 'Compliance inspections past their target date',
     kind: 'register',
     moduleKey: 'facilities',
-    source: { table: 'MaintenanceItem', field: 'complianceKind', phase: 'F' },
+    // The DECLARED kind on a facilities item, never a guess at `title`/`category`.
+    source: { table: 'MaintenanceItem', field: 'complianceKind' },
     expectedCadenceDays: CADENCE_ANNUAL,
     ferpaSensitive: false,
     domainKeys: ['facilities'],
-    declaredNotTracked: { reason: notTrackedReasonForTag('inspection') },
   },
+
+  // ── 32–34: STILL DECLARED NOT TRACKED. The collector is never invoked and no
+  //          query is issued. These are the visible holes Phase E renders as
+  //          `cannot_evaluate` and Phase K (or an integration) closes by changing
+  //          ONE field. Phase F closes NONE of them.
   {
     key: 'hr.pd_participation',
     label: 'Professional-development participation',
@@ -478,6 +517,29 @@ export const TWIN_SIGNAL_CATALOG: readonly TwinSignalDef[] = Object.freeze([
     expectedCadenceDays: CADENCE_ANNUAL,
     ferpaSensitive: false,
     domainKeys: ['academic_excellence'],
+  },
+
+  // ── 36: AIC Phase F — THE ONLY GROUND TRUTH IN THE PROGRAM: what a real visiting
+  //       team actually wrote, and whether the school has closed it. Appended at the
+  //       end so no existing row moves.
+  //
+  //       It carries a COUNT of open citations and nothing else. The per-standard
+  //       citations travel on the REGISTER axis (TwinRegisterView), because a signal
+  //       carries one scalar and this rule is per-standard. Nothing here calibrates
+  //       any probability — see the G10 prohibition on the rule itself.
+  {
+    key: 'acc.prior_visit_findings',
+    // The value is the count still OPEN, not the count recorded: a school with
+    // twelve citations and one open reads "1". Every other count-bearing register
+    // row in this table is value-descriptive ("Policies overdue for review",
+    // "Board terms already expired"), and this one now is too.
+    label: 'Open citations from your last accreditation visit',
+    kind: 'register',
+    moduleKey: 'accreditation',
+    source: { table: 'PriorVisitFinding', field: 'status' },
+    expectedCadenceDays: CADENCE_VISIT_CYCLE,
+    ferpaSensitive: false,
+    domainKeys: ['continuous_improvement'],
   },
 ] satisfies TwinSignalDef[])
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { applyLens, COMPLIANCE_ORDER, SOURCE_RANK, type Lens } from './briefing-lens.js'
-import type { AttentionItem } from './briefing.service.js'
+import { EARLY_WARNING_BRIEFABLE_RULE_IDS, type AttentionItem } from './briefing.service.js'
 import golden from './__fixtures__/lens-preexisting.golden.json' with { type: 'json' }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -92,14 +92,30 @@ describe('briefing-lens — the Phase-E additions are ADDITIVE', () => {
     expect(SOURCE_RANK.earlywarning).toBe(13)
   })
 
-  it('the eleven new COMPLIANCE_ORDER ids sit as ONE contiguous block after accreditation', () => {
+  it('the early-warning COMPLIANCE_ORDER ids sit as ONE contiguous block after accreditation', () => {
+    // Eleven at Phase E; AIC Phase F appended three to the SAME block (it did not
+    // open a second one). The count is derived, not retyped, so the assertion that
+    // matters — CONTIGUITY, and the block's two neighbours — is what is pinned.
+    const EARLY_WARNING_BLOCK = 14
     const start = COMPLIANCE_ORDER.indexOf('earlywarning:acc-assurance-gap')
     expect(COMPLIANCE_ORDER[start - 1]).toBe('accreditation:review-approaching')
-    const block = COMPLIANCE_ORDER.slice(start, start + 11)
+    const block = COMPLIANCE_ORDER.slice(start, start + EARLY_WARNING_BLOCK)
     expect(block.every((id) => id.startsWith('earlywarning:'))).toBe(true)
-    expect(COMPLIANCE_ORDER[start + 11]).toBe('facilities:maintenance-backlog')
+    expect(COMPLIANCE_ORDER[start + EARLY_WARNING_BLOCK]).toBe('facilities:maintenance-backlog')
     // No stragglers elsewhere in the array.
-    expect(COMPLIANCE_ORDER.filter((id) => id.startsWith('earlywarning:'))).toHaveLength(11)
+    expect(COMPLIANCE_ORDER.filter((id) => id.startsWith('earlywarning:'))).toHaveLength(
+      EARLY_WARNING_BLOCK,
+    )
+  })
+
+  it('every BRIEFABLE rule id has a COMPLIANCE_ORDER entry', () => {
+    // The defect this pins: a briefable rule with no entry gets index -1 from the
+    // comparator and sorts AHEAD of the whole curated block — the arbitrary ordering
+    // the block exists to prevent. Derived from the briefable list, so a Phase-G
+    // rule that forgets its entry fails HERE rather than reordering a briefing.
+    for (const ruleId of EARLY_WARNING_BRIEFABLE_RULE_IDS) {
+      expect(COMPLIANCE_ORDER, ruleId).toContain(`earlywarning:${ruleId.toLowerCase()}`)
+    }
   })
 
   it('the RELATIVE order of every pre-existing COMPLIANCE_ORDER pair is preserved', () => {

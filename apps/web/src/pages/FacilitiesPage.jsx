@@ -29,6 +29,7 @@ import {
   Gavel,
   Wallet,
   Trophy,
+  ShieldCheck,
 } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
 import { useNavigate } from 'react-router-dom'
@@ -51,6 +52,11 @@ import { useFacilities, useFacilitiesBudget } from '../hooks/useFacilities.js'
 import FacilitiesBudgetCard from '../components/facilities/FacilitiesBudgetCard.jsx'
 import MaintenanceBidsPanel from '../components/facilities/MaintenanceBidsPanel.jsx'
 import VendorsPanel, { VendorFormModal, vendorToForm } from '../components/facilities/VendorsPanel.jsx'
+import {
+  COMPLIANCE_KIND_NOTE,
+  COMPLIANCE_KIND_OPTIONS,
+  complianceKindBadge,
+} from '../components/facilities/complianceKindMeta.js'
 import { shortDate } from '../lib/dates.js'
 
 const PRIORITIES = ['low', 'medium', 'high', 'critical']
@@ -294,6 +300,9 @@ const EMPTY_FORM = {
   actualCost: '',
   targetDate: '',
   recurrence: 'none',
+  // AIC Phase F — blank means "not a compliance inspection", which is what almost
+  // every maintenance item is. It is NEVER inferred from title/category/location.
+  complianceKind: '',
   notes: '',
 }
 
@@ -312,6 +321,10 @@ function toItemBody(form) {
     actualCost: actual === '' ? null : Number(actual),
     targetDate: form.targetDate ? form.targetDate : null,
     recurrence: form.recurrence,
+    // Blank → null, which CLEARS the kind and returns the item to an ordinary
+    // maintenance item. The closed vocabulary has no catch-all on purpose: a kind
+    // we did not model is recorded as null, never as "other".
+    complianceKind: form.complianceKind ? form.complianceKind : null,
     notes: form.notes.trim() ? form.notes.trim() : null,
   }
 }
@@ -466,7 +479,21 @@ export function MaintenanceFormModal({ open, initial, vendors = [], onClose, onS
           ))}
         </Select>
       </Field>
-      <Field label="Notes" span={2} index={10} reduce={reduce}>
+      {/* AIC Phase F — WHAT KIND of regulatory inspection this item is. Blank is
+          the default and the honest answer for almost every item; the copy under
+          the select is frozen and rendered verbatim. */}
+      <Field label="Compliance inspection" span={2} index={10} reduce={reduce}>
+        <Select value={form.complianceKind} onChange={set('complianceKind')}>
+          <option value="">— not a compliance inspection —</option>
+          {COMPLIANCE_KIND_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </Select>
+        <span className="mt-1 block text-[11.5px] text-white/60">{COMPLIANCE_KIND_NOTE}</span>
+      </Field>
+      <Field label="Notes" span={2} index={11} reduce={reduce}>
         <textarea
           value={form.notes}
           onChange={set('notes')}
@@ -481,7 +508,20 @@ export function MaintenanceFormModal({ open, initial, vendors = [], onClose, onS
 
 // ═══════════════════════════ LIGHT REGISTER TABLE ═══════════════════════════
 
-function MaintenanceTable({ items, loading, error, canEdit, reduce, onEdit, onDelete, onOpenBids }) {
+function MaintenanceTable({
+  items,
+  loading,
+  error,
+  canEdit,
+  reduce,
+  onEdit,
+  onDelete,
+  onOpenBids,
+  // Optional replacement empty state — the compliance filter needs to say why the
+  // list is empty ("you have flagged none") rather than "you have no items", which
+  // would be false.
+  emptyState = null,
+}) {
   if (loading)
     return (
       <StateRow>
@@ -496,12 +536,14 @@ function MaintenanceTable({ items, loading, error, canEdit, reduce, onEdit, onDe
     )
   if (items.length === 0)
     return (
-      <StateRow>
-        <p className="font-serif text-[16px] italic text-muted">No maintenance items yet.</p>
-        <p className="mt-1 text-[13px] text-muted">
-          Add your first item to start tracking the deferred-maintenance backlog.
-        </p>
-      </StateRow>
+      emptyState ?? (
+        <StateRow>
+          <p className="font-serif text-[16px] italic text-muted">No maintenance items yet.</p>
+          <p className="mt-1 text-[13px] text-muted">
+            Add your first item to start tracking the deferred-maintenance backlog.
+          </p>
+        </StateRow>
+      )
     )
 
   return (
@@ -534,6 +576,20 @@ function MaintenanceTable({ items, loading, error, canEdit, reduce, onEdit, onDe
                 {it.category ? (
                   <span className="inline-flex items-center rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[11px] font-semibold text-muted">
                     {it.category}
+                  </span>
+                ) : null}
+                {/* AIC Phase F — the kind chip appears only when the SCHOOL said
+                    what kind of inspection this is. It is never derived from the
+                    category chip beside it, however suggestive that free text is. */}
+                {complianceKindBadge(it.complianceKind) ? (
+                  <span
+                    className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-semibold ${
+                      complianceKindBadge(it.complianceKind).cls
+                    }`}
+                    title="Recorded as a compliance inspection"
+                  >
+                    <ShieldCheck size={11} />
+                    {complianceKindBadge(it.complianceKind).label}
                   </span>
                 ) : null}
                 {it.recurrence && it.recurrence !== 'none' ? (
@@ -707,6 +763,9 @@ function FacilitiesWorkspace() {
   } = useFacilitiesBudget(schoolId, budgetToken)
 
   const [tab, setTab] = useState('maintenance')
+  // AIC Phase F — the register filter. A view, not a fact: it hides rows, it does
+  // not change a count, a KPI or anything the server computed.
+  const [inspectionsOnly, setInspectionsOnly] = useState(false)
   const navigate = useNavigate()
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -740,6 +799,7 @@ function FacilitiesWorkspace() {
           : String(editing.actualCost),
       targetDate: editing.targetDate ?? '',
       recurrence: editing.recurrence ?? 'none',
+      complianceKind: editing.complianceKind ?? '',
       notes: editing.notes ?? '',
       vendorId: editing.vendorId ?? '',
     }
@@ -930,6 +990,19 @@ function FacilitiesWorkspace() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, canEdit, budget])
 
+  // ── AIC Phase F: the compliance-inspection slice of the register ───────────
+  // A row counts as a compliance inspection ONLY because the school said so —
+  // `complianceKind` is a closed vocabulary the school picks, never inferred from
+  // `title`, `category` or `location`, all of which are free text.
+  const complianceCount = useMemo(
+    () => items.filter((it) => !!it.complianceKind).length,
+    [items],
+  )
+  const visibleItems = useMemo(
+    () => (inspectionsOnly ? items.filter((it) => !!it.complianceKind) : items),
+    [items, inspectionsOnly],
+  )
+
   // ── Gate ───────────────────────────────────────────────────────────────────
   if (notLicensed || notEntitled) return <GatePanel notLicensed={notLicensed} />
 
@@ -945,16 +1018,58 @@ function FacilitiesWorkspace() {
         onToggleActive={(v) => updateVendor(v.id, { active: !v.active })}
       />
     ) : (
-      <MaintenanceTable
-        items={items}
-        loading={loading}
-        error={error}
-        canEdit={canEdit}
-        reduce={reduce}
-        onEdit={openEdit}
-        onDelete={onDelete}
-        onOpenBids={(it) => setBidsItem(it)}
-      />
+      <div className="space-y-3">
+        {/* The compliance-inspection filter. `complianceCount` is a count of the
+            rows the SCHOOL flagged — nothing is inferred from a title or a
+            category, so a school that has flagged nothing sees a plain zero. */}
+        <div className="flex flex-wrap items-center gap-2">
+          {[
+            { key: false, label: `All items (${items.length})` },
+            { key: true, label: `Compliance inspections (${complianceCount})` },
+          ].map((f) => {
+            const active = inspectionsOnly === f.key
+            return (
+              <button
+                key={String(f.key)}
+                type="button"
+                onClick={() => setInspectionsOnly(f.key)}
+                aria-pressed={active}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[12.5px] font-semibold transition ${
+                  active
+                    ? 'border-[#EA580C]/50 bg-[#EA580C]/10 text-[#9A3412]'
+                    : 'border-rule/60 bg-section text-muted hover:text-navy'
+                }`}
+              >
+                {f.key ? <ShieldCheck size={12} /> : null}
+                {f.label}
+              </button>
+            )
+          })}
+        </div>
+        <MaintenanceTable
+          items={visibleItems}
+          loading={loading}
+          error={error}
+          canEdit={canEdit}
+          reduce={reduce}
+          onEdit={openEdit}
+          onDelete={onDelete}
+          onOpenBids={(it) => setBidsItem(it)}
+          emptyState={
+            inspectionsOnly && items.length > 0 ? (
+              <div className="rounded-xl border border-dashed border-rule/60 bg-cream/50 px-6 py-12 text-center">
+                <p className="font-serif text-[16px] italic text-muted">
+                  No item is flagged as a compliance inspection.
+                </p>
+                <p className="mx-auto mt-1 max-w-lg text-[13px] text-muted">
+                  {COMPLIANCE_KIND_NOTE} Open an item and set its kind — we will not read it off a
+                  title or a category.
+                </p>
+              </div>
+            ) : null
+          }
+        />
+      </div>
     )
 
   const onNew = canEdit ? (tab === 'vendors' ? () => setVendorModal({ editing: null }) : openAdd) : null

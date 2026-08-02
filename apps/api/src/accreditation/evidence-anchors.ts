@@ -8,6 +8,7 @@ import {
   type SourceRegister,
 } from '@finrep/compliance'
 import { KNOWLEDGE_TAG_PATTERNS } from './evidence-tag-match.js'
+import { FRAMEWORK_REQUIREMENT_SEEDS } from './catalog-requirements-seed.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AIC Phase C — AUTO-SATISFACTION, as a LIVE QUERY that writes nothing.
@@ -74,8 +75,10 @@ export const REGISTER_ROUTE: Record<SourceRegister, string | null> = {
   enrollment_snapshot: '/enrollment',
   knowledge_document: '/knowledge',
   board_report: '/reports',
-  maintenance_item: null,
-  staff_evaluation_register: null,
+  // AIC Phase F — both registers now EXIST, so the "Renew in Facilities" / "Renew
+  // in HR" CTA that pointed nowhere points somewhere. An ENUMERATED, INTENDED delta.
+  maintenance_item: '/facilities',
+  staff_evaluation_register: '/hr',
   professional_development: null,
   clearance_register: null,
   lms: null,
@@ -103,7 +106,16 @@ const POLICY_STATUS_RANK: Record<string, number> = {
   unknown: 3,
 }
 
-/** The five FORWARD-DECLARED registers have no resolver — and issue no query. */
+/**
+ * The FORWARD-DECLARED registers have no resolver — and issue no query.
+ *
+ * AIC Phase F adds exactly two: `maintenance_item` and `staff_evaluation_register`.
+ * `professional_development`, `clearance_register`, `lms` and `portal` MUST STAY
+ * OFF this set (Phase K / an integration / the accreditor's own portal);
+ * evidence-anchors.spec.ts asserts each of them resolves to null AND issues no
+ * query, and that assertion is the guard against a row quietly claiming a state
+ * nothing can compute.
+ */
 const RESOLVERS = new Set<SourceRegister>([
   'policy',
   'meeting',
@@ -112,7 +124,83 @@ const RESOLVERS = new Set<SourceRegister>([
   'enrollment_snapshot',
   'knowledge_document',
   'board_report',
+  // ── AIC Phase F ──
+  'maintenance_item',
+  'staff_evaluation_register',
 ])
+
+/**
+ * AIC Phase F. Requirement rows whose owning register belongs to a LICENSABLE
+ * MODULE and which may therefore legitimately hold nothing for a given school.
+ *
+ * A 'platform' row means "KYRO owns this register, so judge it". For these two that
+ * is only true once the school has entered something. Flipping them unconditionally
+ * would turn zero rows into `state:'missing'` for EVERY school on the platform,
+ * which would (a) newly fire EVI-MISSING-REQUIRED on COG-10 / COG-A3 / NSBECS-12
+ * everywhere, (b) move `acc.evidence_currency`'s value everywhere, and (c) start
+ * enforcing a 12-month window against attached evidence nobody was warned about.
+ * That is the opposite of "nothing else changes".
+ *
+ * So: when the auto-resolver produces NO ARTIFACT for one of these rows, the row is
+ * read back as `intake` and renders `not_tracked` with its own frozen sentence —
+ * byte-identical to its pre-Phase-F behaviour. It becomes a real currency state the
+ * moment the school records its first row. THE FLIP IS EARNED BY DATA.
+ *
+ * Value = the module key that owns the register (documentation only: the downgrade
+ * deliberately does NOT call billing — see AccreditationEvidenceReadinessService).
+ */
+export const MODULE_GATED_REGISTERS: Readonly<Record<string, string>> = Object.freeze({
+  staff_evaluation_register: 'hr',
+  maintenance_item: 'facilities',
+})
+
+/**
+ * Requirement TAGS owned exclusively by a module-gated register, DERIVED from the
+ * seed rather than retyped — one edit in the seed reaches this with no second edit.
+ *
+ * It exists because `fixedWindowsFrom`'s callers select `tag` + `dataAvailability`
+ * and NOT `sourceRegister`; a tag that any non-gated register also serves is
+ * excluded from the set, so this can only ever be narrower than the register test.
+ */
+const MODULE_GATED_TAGS: ReadonlySet<string> = (() => {
+  const gated = new Set<string>()
+  const other = new Set<string>()
+  for (const rows of Object.values(FRAMEWORK_REQUIREMENT_SEEDS)) {
+    for (const r of rows) {
+      const reg = r.sourceRegister ?? ''
+      ;(reg in MODULE_GATED_REGISTERS ? gated : other).add(r.tag)
+    }
+  }
+  for (const t of other) gated.delete(t)
+  return gated
+})()
+
+/** True when a requirement row belongs to a module-gated register (§6.3). */
+export function isModuleGatedRequirement(r: {
+  tag: string
+  sourceRegister?: string | null
+}): boolean {
+  const reg = r.sourceRegister
+  if (typeof reg === 'string') return reg in MODULE_GATED_REGISTERS
+  // The caller did not select `sourceRegister`; fall back to the seed-derived tag
+  // set, which names the same rows by construction.
+  return MODULE_GATED_TAGS.has(r.tag)
+}
+
+/**
+ * The API-side label authority for a compliance-inspection kind. The web has its
+ * own table for the form; the two may differ in casing only. There is no
+ * catch-all: an unmodelled kind is recorded as NULL and is not an inspection.
+ */
+export const INSPECTION_KIND_LABEL: Readonly<Record<string, string>> = Object.freeze({
+  fire_life_safety: 'Fire / life-safety',
+  boiler: 'Boiler',
+  elevator: 'Elevator',
+  asbestos: 'Asbestos',
+  health: 'Health',
+  water_quality: 'Water quality',
+  playground: 'Playground',
+})
 
 // ── The narrow Prisma surface this file needs (keeps it unit-testable) ───────
 
@@ -125,6 +213,9 @@ export interface AnchorPrisma {
   enrollmentSnapshot: { findFirst: Find }
   knowledgeDocument: { findMany: Find }
   boardReport: { findFirst: Find }
+  // ── AIC Phase F ──
+  maintenanceItem: { findFirst: Find }
+  staffEvaluation: { findFirst: Find }
 }
 
 interface PolicyRow {
@@ -414,6 +505,61 @@ export function createAnchorResolver(prisma: AnchorPrisma, schoolId: string, now
   }
 
   /**
+   * AIC Phase F — the STAFF EVALUATION register.
+   *
+   * The most recently COMPLETED evaluation is the artifact, and `completedDate` is
+   * a real event date, so this row is DATED (unlike the knowledge-document
+   * resolver): it can go stale against the catalog's 12-month window honestly.
+   *
+   * ADULT-STAFF PII: the select carries NO person and NO evaluatorName. The
+   * Evidence Index is visible to viewers, so the artifact is labelled by its cycle
+   * — never by an employee.
+   */
+  const resolveStaffEvaluation = async (): Promise<ResolvedArtifact | null> => {
+    const row = (await read('staff_evaluation_register', () =>
+      prisma.staffEvaluation.findFirst({
+        where: { schoolId, completedDate: { not: null } },
+        orderBy: { completedDate: 'desc' },
+        select: { id: true, cycleLabel: true, completedDate: true },
+      }),
+    )) as { id: string; cycleLabel: string; completedDate: Date | null } | null
+    if (!row) return null
+    return {
+      ...base('staff_evaluation_register', row.id, `Evaluation cycle — ${row.cycleLabel}`),
+      effectiveDate: isoDate(row.completedDate),
+    }
+  }
+
+  /**
+   * AIC Phase F — a RESOLVED compliance inspection on the facilities register.
+   *
+   * `complianceKind` is DECLARED by the school and never inferred: the filter is
+   * `complianceKind IS NOT NULL`, never a match against `title` or `category`. An
+   * item that is not resolved is work in progress, not an inspection record, so the
+   * anchor is the newest `resolvedAt`.
+   */
+  const resolveInspection = async (): Promise<ResolvedArtifact | null> => {
+    const row = (await read('maintenance_item', () =>
+      prisma.maintenanceItem.findFirst({
+        where: {
+          schoolId,
+          complianceKind: { not: null },
+          status: 'resolved',
+          resolvedAt: { not: null },
+        },
+        orderBy: { resolvedAt: 'desc' },
+        select: { id: true, title: true, complianceKind: true, resolvedAt: true },
+      }),
+    )) as { id: string; title: string; complianceKind: string | null; resolvedAt: Date | null } | null
+    if (!row) return null
+    const kind = INSPECTION_KIND_LABEL[row.complianceKind ?? ''] ?? 'Compliance'
+    return {
+      ...base('maintenance_item', row.id, `${kind} inspection — ${row.title}`),
+      effectiveDate: isoDate(row.resolvedAt),
+    }
+  }
+
+  /**
    * Resolve the ONE artifact the owning register offers for this requirement, or
    * null. A NON-PLATFORM requirement is `not_tracked` before any resolver runs,
    * and a forward-declared register issues NO QUERY AT ALL.
@@ -435,6 +581,10 @@ export function createAnchorResolver(prisma: AnchorPrisma, schoolId: string, now
         return resolveEnrollment()
       case 'knowledge_document':
         return resolveDocument(req.tag)
+      case 'maintenance_item':
+        return resolveInspection()
+      case 'staff_evaluation_register':
+        return resolveStaffEvaluation()
       default:
         return resolveBoardReport()
     }
@@ -605,6 +755,14 @@ export async function computeEvidenceCounts(
  * one. Letting a self-study or a Safe-Environment ask contribute a window would
  * let a hole we deliberately chose not to dig deduct from the hero's Defensible
  * figure, which is the one thing the honesty rule forbids in both directions.
+ *
+ * AIC PHASE F — MODULE-GATED ROWS ARE SKIPPED TOO, UNCONDITIONALLY. `staff_evaluation`
+ * and `inspection` became `platform` this phase, and a fixed 12-month window on them
+ * would make an attached, dated artifact older than twelve months PROVABLY STALE for
+ * the first time — `verifiedPct` would drop for schools that changed nothing and were
+ * warned of nothing. Skipping keeps verifiedPct byte-identical to pre-Phase-F for
+ * every school. Deliberately conservative; revisiting it is a Phase-K follow-up and
+ * must not be "fixed" here.
  */
 export function fixedWindowsFrom(
   rows: readonly {
@@ -613,11 +771,14 @@ export function fixedWindowsFrom(
     windowKind: string
     windowMonths: number | null
     dataAvailability: string
+    /** Optional: the two shipped callers do not select it — see isModuleGatedRequirement. */
+    sourceRegister?: string | null
   }[],
 ): FixedWindowsByCatalog {
   const out: FixedWindowsByCatalog = new Map()
   for (const r of rows) {
     if (r.dataAvailability !== 'platform') continue
+    if (isModuleGatedRequirement(r)) continue
     if (r.windowKind !== 'fixed' || r.windowMonths == null) continue
     const byTag = out.get(r.catalogStandardId) ?? new Map<string, number>()
     byTag.set(r.tag, r.windowMonths)

@@ -153,6 +153,21 @@ export interface RequirementInput {
   dataAvailability: DataAvailability
   sourceRegister: string | null
   notTrackedReason?: string | null
+  /**
+   * AIC Phase F — an override for the FIRST sentence of a `not_tracked` message.
+   *
+   * `NOT_TRACKED_LEAD` is keyed on `dataAvailability`, and `intake` says "<label>
+   * isn't tracked yet." That is true for a register KYRO does not have. It became
+   * FALSE for a module-gated `platform` row read back as `intake` because its
+   * register — which exists, in KYRO, and may already hold rows — has not yet
+   * produced a qualifying artifact. Telling a school with three staff-evaluation
+   * records that its evaluation register "isn't tracked yet" is the class of quiet
+   * lie the whole `dataAvailability` design exists to remove.
+   *
+   * Set it and it is rendered VERBATIM in place of the computed lead; the
+   * `notTrackedReason` still follows. Left unset, nothing changes for any row.
+   */
+  notTrackedLead?: string | null
 }
 
 export interface ArtifactInput {
@@ -270,6 +285,20 @@ export const NOT_TRACKED_LEAD: Record<Exclude<DataAvailability, 'platform'>, (la
     integration: (l) => `${l} isn't tracked yet — it needs a system KYRO isn't connected to.`,
   }
 
+/**
+ * AIC Phase F — the lead for a MODULE-GATED `platform` row whose register EXISTS
+ * but has not yet produced an artifact that answers this requirement.
+ *
+ * It says two things the `intake` lead cannot: that the register is in KYRO, and
+ * WHAT would satisfy the row. Without the second half a school that has recorded
+ * three evaluations with no completed date, or three inspection items with no
+ * resolution, is left with a row that says "isn't tracked yet" and no way to find
+ * out why — the dead end that made the Phase-C sentence unkeepable once the
+ * registers shipped.
+ */
+export const UNEARNED_REGISTER_LEAD = (label: string): string =>
+  `${label}: nothing in your register answers this yet.`
+
 // ── Internals ────────────────────────────────────────────────────────────────
 
 function plural(n: number, noun: string): string {
@@ -291,7 +320,8 @@ function dayNumber(iso: string): number | null {
 function notTrackedResult(req: RequirementInput): CurrencyResult {
   const availability = req.dataAvailability as Exclude<DataAvailability, 'platform'>
   const lead = NOT_TRACKED_LEAD[availability]
-  const head = lead ? lead(req.label) : `${req.label} isn't tracked yet.`
+  const override = (req.notTrackedLead ?? '').trim()
+  const head = override || (lead ? lead(req.label) : `${req.label} isn't tracked yet.`)
   const why = (req.notTrackedReason ?? '').trim()
   return {
     state: 'not_tracked',
