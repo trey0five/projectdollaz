@@ -33,6 +33,38 @@ export type AttentionVoice = 'decision' | 'action' | 'governance'
 /** Severity tiebreak — THE single source of truth, shared by both briefing services. */
 export const SEV_RANK: Record<AttentionSeverity, number> = { critical: 0, warn: 1, info: 2 }
 
+// ── ORG LENS CEILING — one source of truth, moved here in AIC Phase I ─────────
+// A caller has per-SCHOOL roles, never an org role. Every org-scoped surface
+// derives the same ceiling: the WIDEST in-org membership. An owner at ANY school
+// in the org acts as leadership for the consolidated view; a viewer-everywhere
+// caller gets the board lens org-wide.
+//
+// This lived as a private const in org-briefing.service.ts until the superintendent
+// portfolio needed the identical rule. A second copy is how two org surfaces end
+// up disagreeing about what a caller may see, so the rule moved into the module
+// that already IS the one source of lens truth. Behaviour is unchanged, and
+// briefing-lens.spec.ts / briefing-lens-golden.spec.ts staying green with NO edits
+// is the guard on that claim.
+
+/** Org role precedence — owner is the WIDEST. */
+export const ORG_ROLE_RANK: Record<MembershipRole, number> = { owner: 2, accountant: 1, viewer: 0 }
+
+/**
+ * The org ceiling for a caller: the widest of their in-org memberships.
+ *
+ * An empty list returns the NARROWEST lens ('viewer'), fail-closed. Callers today
+ * always pass a non-empty in-org membership list (they 403 before this point), so
+ * the branch is defensive only — but a widening default on an empty list would be
+ * exactly the wrong way to be wrong.
+ */
+export function widestOrgRole(roles: readonly MembershipRole[]): Lens {
+  if (roles.length === 0) return 'viewer'
+  return roles.reduce<MembershipRole>(
+    (widest, r) => (ORG_ROLE_RANK[r] > ORG_ROLE_RANK[widest] ? r : widest),
+    roles[0],
+  )
+}
+
 /** The legacy/default source tiebreak (data-blocking first, then compliance gaps,
  *  then metric watch-outs). Kept here so the accountant lens === today's shipped
  *  ranking byte-for-byte and existing consumers are unaffected. */

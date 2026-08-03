@@ -1,10 +1,16 @@
 import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common'
 import type { User } from '@finrep/db'
 import { PrismaService } from '../prisma/prisma.service.js'
-import type { MembershipRole } from '@finrep/db'
 import { BriefingService } from './briefing.service.js'
 import type { AttentionItem, BriefingSummary } from './briefing.service.js'
-import { availableLensesFor, clampLens, SEV_RANK, type Lens } from './briefing-lens.js'
+import {
+  availableLensesFor,
+  clampLens,
+  SEV_RANK,
+  widestOrgRole,
+  type Lens,
+} from './briefing-lens.js'
+import { mapWithConcurrency, ORG_FANOUT_CONCURRENCY } from '../common/concurrency.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Phase 1 (slice 2) — the ORG-LEVEL, multi-school attention briefing. A third
@@ -82,7 +88,12 @@ export interface OrgBriefingResponse {
 // Org role precedence — owner is the WIDEST. An org consumer who is owner at ANY
 // school in the org acts as leadership for the consolidated view (the natural
 // ceiling); a viewer-everywhere caller gets the board lens org-wide.
-const ORG_ROLE_RANK: Record<MembershipRole, number> = { owner: 2, accountant: 1, viewer: 0 }
+//
+// AIC Phase I: the rank table and the reduce that consumed it MOVED to
+// briefing-lens.ts as ORG_ROLE_RANK + widestOrgRole, so this service and the new
+// superintendent portfolio derive the org ceiling from ONE definition. Pure
+// relocation — the arithmetic is identical and briefing-lens.spec.ts /
+// briefing-lens-golden.spec.ts stay green with no edits.
 
 // Sane cap on the flat cross-school list. The CONSOLIDATED counts always reflect
 // the FULL totals (summed from per-school summaries, not from items), and the
@@ -134,10 +145,7 @@ export class OrgBriefingService {
     // membership as the org ceiling (reuses the memberships already fetched — no
     // extra query). Clamp the requested lens to it, then apply that SAME lens to
     // every school so the consolidated view is value-consistent by construction.
-    const orgRole: Lens = inOrg.reduce<MembershipRole>(
-      (widest, m) => (ORG_ROLE_RANK[m.role] > ORG_ROLE_RANK[widest] ? m.role : widest),
-      inOrg[0].role,
-    )
+    const orgRole: Lens = widestOrgRole(inOrg.map((m) => m.role))
     const effectiveLens = clampLens(orgRole, lensOverride)
 
     const org = await this.prisma.organization.findUnique({ where: { id: orgId } })
@@ -183,19 +191,30 @@ export class OrgBriefingService {
       reported.push({ schoolId: s.id, name: s.name, periodId: chosen.fiscalPeriodId })
     }
 
-    // ── PARALLEL + RESILIENT FAN-OUT ─────────────────────────────────────────
-    // allSettled (NOT all) so one school's 500 can never abort the org roll-up.
-    // wall-clock is bounded by the SLOWEST school, not the sum. NOTE (honest):
-    // each getBriefing does ~1 metrics compute + a 4-way compliance Promise.all,
-    // so an organization of N schools fans out ~5N service reads — this is the heaviest
-    // endpoint in the app. It is gated client-side to fire only when the tab is
-    // open; a short-TTL cache / batch path is a Phase-2 follow-up if N grows large.
+    // ── BOUNDED + RESILIENT FAN-OUT ──────────────────────────────────────────
+    // SETTLED (never all-or-nothing) so one school's 500 can never abort the org
+    // roll-up, and BOUNDED AT FOUR since AIC Phase I.
+    //
+    // THE HONEST NOTE THIS COMMENT USED TO CARRY, AND WHAT CHANGED. Each
+    // getBriefing does ~1 metrics compute + a 4-way compliance Promise.all, so an
+    // organization of N schools fans out ~5N service reads — this is the heaviest
+    // endpoint in the app, and the previous version of this line was a bare
+    // `Promise.allSettled` over EVERY school at once with no limit whatsoever.
+    // Against Prisma's default pool (num_cpus * 2 + 1 = 5 on a 2-vCPU task) a
+    // forty-school diocese did not return slowly, it returned P2024. This IS the
+    // "Phase-2 follow-up if N grows large" the original author predicted, arriving:
+    // mapWithConcurrency caps in-flight briefings at ORG_FANOUT_CONCURRENCY.
+    //
+    // NOTHING ELSE IN THIS METHOD CHANGES. mapWithConcurrency returns
+    // PromiseSettledResult<R>[] in INPUT ORDER, so `settled[i]` still pairs with
+    // `reported[i]` and the response is byte-identical.
+    //
     // Pass effectiveLens as the per-school callerRole (no override) so getBriefing
     // uses it verbatim as the default lens — every school is shaped by the ONE org
     // lens, never each school's own per-school role. (effectiveLens is already
     // clamped to the org ceiling, so getBriefing's internal clamp is a no-op.)
-    const settled = await Promise.allSettled(
-      reported.map((r) => this.briefing.getBriefing(r.schoolId, r.periodId, effectiveLens)),
+    const settled = await mapWithConcurrency(reported, ORG_FANOUT_CONCURRENCY, (r) =>
+      this.briefing.getBriefing(r.schoolId, r.periodId, effectiveLens),
     )
 
     // ── AGGREGATE ────────────────────────────────────────────────────────────

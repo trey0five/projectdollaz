@@ -35,6 +35,7 @@ import { EnrollmentModule } from './enrollment/enrollment.module.js'
 import { StrategyModule } from './strategy/strategy.module.js'
 import { ImprovementModule } from './improvement/improvement.module.js'
 import { VisitModule } from './visit/visit.module.js'
+import { PortfolioModule } from './portfolio/portfolio.module.js'
 import { RetentionModule } from './retention/retention.module.js'
 import { AdminModule } from './admin/admin.module.js'
 import { SupportModule } from './support/support.module.js'
@@ -104,6 +105,14 @@ import { InboxModule } from './inbox/inbox.module.js'
     // three (plus AccreditationModule). It owns exactly one GET route and no
     // write route; adoption rides on Phase G's existing idempotent adopt path.
     VisitModule,
+    // AIC Phase I — the SUPERINTENDENT PORTFOLIO. Registered AFTER ImprovementModule
+    // because it imports it (bulk-adopt rides Phase G's already-idempotent adopt,
+    // and Nest resolves an imported module's providers before this one's). It
+    // deliberately imports NEITHER AnalyticsModule nor TwinModule/AccreditationModule
+    // /VisitModule: the whole phase is "read persisted snapshots, never compute a
+    // live twin per school", and a module edge to any of those is the first step
+    // back toward the fan-out this phase exists to remove.
+    PortfolioModule,
     RetentionModule,
     AdminModule,
     SupportModule,

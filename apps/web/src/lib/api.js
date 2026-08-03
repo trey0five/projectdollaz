@@ -888,6 +888,52 @@ export const improvementApi = {
     api.post(`/schools/${schoolId}/improvement/initiatives/${initiativeId}/progress`, body),
 }
 
+// ── AIC Phase I — the SUPERINTENDENT PORTFOLIO. ORGANIZATION-scoped, on the same
+// JwtAuth-only org route family as orgBriefing (`RolesGuard` cannot resolve a
+// schoolId on an org route and `EntitlementGuard` would 402 with no school
+// context) — so there is NO MODULE_NOT_LICENSED path on these calls. Per-school
+// entitlement is enforced INSIDE the service: an unlicensed school comes back in
+// `notLicensed[]` carrying its name and nothing else, and the page still renders.
+//
+// EVERY ABSENT PARAM IS OMITTED ENTIRELY (never ''), exactly as orgBriefing does
+// above: the global forbidNonWhitelisted ValidationPipe 400s an empty-string
+// param that the DTO types as a number, and a 400 here blanks the whole
+// superintendent view.
+//
+// THERE IS DELIBERATELY NO `sort` / `orderBy` / `rankBy` / `asOf` PARAMETER. The
+// portfolio comparator is frozen server-side and `now` is server-supplied — that
+// is how "no cross-framework index ranking is reachable in the API" stays true
+// and how two refreshes stay byte-identical. Do not add one here either.
+export const portfolioApi = {
+  get: (orgId, { frameworkCode, lens } = {}) =>
+    api.get(`/organizations/${orgId}/accreditation/portfolio`, {
+      params: {
+        ...(frameworkCode ? { frameworkCode } : {}),
+        ...(lens ? { lens } : {}),
+      },
+    }),
+  standards: (orgId, { frameworkCode, limit, lens } = {}) =>
+    api.get(`/organizations/${orgId}/accreditation/portfolio/standards`, {
+      params: {
+        ...(frameworkCode ? { frameworkCode } : {}),
+        ...(limit != null ? { limit } : {}),
+        ...(lens ? { lens } : {}),
+      },
+    }),
+  velocity: (orgId, { windowDays, lens } = {}) =>
+    api.get(`/organizations/${orgId}/improvement/velocity`, {
+      params: {
+        ...(windowDays != null ? { windowDays } : {}),
+        ...(lens ? { lens } : {}),
+      },
+    }),
+  // propose → confirm. The BODY is a BulkAdoptDto; `mode` is required and
+  // `proposalHash` is REQUIRED on confirm and FORBIDDEN on propose (@IsEmpty), so
+  // the caller must not spread a stale hash into a propose call — the pipe would
+  // 400 it, which is the point of the guard.
+  bulkAdopt: (orgId, body) => api.post(`/organizations/${orgId}/improvement/bulk-adopt`, body),
+}
+
 // ── Phase 3 Workflow v1 — the generic TASK engine. School-scoped. CORE (always
 // included, NOT a licensed module), so there is NO MODULE_NOT_LICENSED path — only
 // the base entitlement 402 (isPaymentRequired) applies, like any other core read.

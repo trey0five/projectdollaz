@@ -89,6 +89,12 @@ const ImprovementPage = lazy(() => import('./pages/ImprovementPage.jsx'))
 // they auto-`window.print()` on load and a Suspense frame would race that.
 const VisitPage = lazy(() => import('./pages/VisitPage.jsx'))
 
+// AIC Phase I — the superintendent portfolio. Lazy for the same reason as the
+// pages above: it is an ORG-SCOPE-ONLY view (a single school never opens it), and
+// it pulls the ranked table, the intervention-priority panel and the bulk-adopt
+// flow with its date picker.
+const PortfolioPage = lazy(() => import('./pages/PortfolioPage.jsx'))
+
 // Phase 6 — HR & Staffing + Planning & Forecasting module pages. Lazy: /planning
 // pulls the heavy ForecastWorkspace chunk, /hr the analytics trend primitives.
 const HrPage = lazy(() => import('./pages/HrPage.jsx'))
@@ -256,6 +262,14 @@ export default function App() {
           element={
             <Suspense fallback={<div className="min-h-screen bg-cream" />}>
               <ImprovementPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/portfolio"
+          element={
+            <Suspense fallback={<div className="min-h-screen bg-cream" />}>
+              <PortfolioPage />
             </Suspense>
           }
         />

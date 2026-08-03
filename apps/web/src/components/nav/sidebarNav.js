@@ -21,6 +21,7 @@
 import {
   Sparkles,
   Bot,
+  Building2,
   ListChecks,
   Database,
   Library,
@@ -150,6 +151,35 @@ export const NAV_GROUPS = [
     ],
   },
   {
+    // AIC Phase I — the SUPERINTENDENT PORTFOLIO (/portfolio). Directly after
+    // Improvement: the portfolio is what a diocese does with the improvement
+    // work once there is more than one school doing it.
+    //
+    // ── WHY THIS GROUP IS `orgOnly` AND NOT `module: 'accreditation'` ─────────
+    // `hasModule` reads the ACTIVE SCHOOL'S billing and nothing else
+    // (BillingContext is bound to `activeSchool`), and a group whose module is
+    // unlicensed VANISHES — it is not even rendered as an upsell row. So a
+    // superintendent of a 14-school diocese who happened to have the ONE school
+    // without an accreditation licence selected lost the org-wide portfolio from
+    // the sidebar entirely, and `/portfolio` is linked from nowhere else in the
+    // app: the page became unreachable except by typing the URL. The offered
+    // workaround was worse than the bug — upsell accreditation at ONE school in
+    // order to see an ORG view.
+    //
+    // A per-active-school licence is simply the wrong predicate for an org
+    // route. The API agrees: `/organizations/:orgId/accreditation/portfolio` is
+    // JwtAuth-only, resolves entitlement PER SCHOOL inside the service, and
+    // reports an unlicensed school in `notLicensed[]` by name with no readiness
+    // disclosed. Belonging to an organization is the real precondition, so that
+    // is what gates the row; the page's own org-scope panel does the rest.
+    id: 'portfolio',
+    label: 'Portfolio',
+    orgOnly: true,
+    items: [
+      { to: '/portfolio', navId: 'nav-portfolio', label: 'Portfolio', Icon: Building2, match: (p) => p.startsWith('/portfolio') },
+    ],
+  },
+  {
     id: 'facilities',
     label: 'Facilities',
     module: 'facilities',
@@ -177,6 +207,26 @@ export const NAV_GROUPS = [
     ],
   },
 ]
+
+/**
+ * THE ONE VISIBILITY RULE, so AppShell and its spec cannot hold two copies of it.
+ *
+ * In order:
+ *   · `orgOnly` — an ORGANIZATION route. Gated on belonging to an organization
+ *     and NOT on the active school's licence, because `hasModule` only ever knows
+ *     about the active school and an org rollup has no per-active-school licence
+ *     semantics. Entitlement for an org route is resolved per school by the API.
+ *   · `module === null` — Core, always on.
+ *   · `modules` — OR over several keys (Phase G), mirroring the API guard.
+ *   · `module` — the single-key licensed-group rule.
+ */
+export function navGroupVisible(group, { hasModule, hasOrg }) {
+  if (!group) return false
+  if (group.orgOnly) return hasOrg === true
+  if (group.module === null) return true
+  if (group.modules) return group.modules.some(hasModule)
+  return hasModule(group.module)
+}
 
 // Settings is pinned to the sidebar FOOT, always, module-independent (no group).
 export const SETTINGS_ITEM = {

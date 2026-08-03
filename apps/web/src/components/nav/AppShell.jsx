@@ -66,7 +66,7 @@ import SchoolSwitcher from '../SchoolSwitcher.jsx'
 import ScopeToggle from './ScopeToggle.jsx'
 import ContextSwitcher from './ContextSwitcher.jsx'
 import SearchBox from '../search/SearchBox.jsx'
-import { NAV_GROUPS, SETTINGS_ITEM } from './sidebarNav.js'
+import { NAV_GROUPS, SETTINGS_ITEM, navGroupVisible } from './sidebarNav.js'
 import { MODULE_ANATOMY, moduleTabs, moduleLabel, moduleHue, TAB_LABEL } from '../module/moduleAnatomy.js'
 import SupportButton from '../support/SupportButton.jsx'
 import InboxBell from '../inbox/InboxBell.jsx'
@@ -251,7 +251,7 @@ function AvatarMenu() {
 export default function AppShell({ children }) {
   const { user, logout } = useAuth()
   const { hasModule, entitled } = useBilling()
-  const { isMultiSchool } = useScope()
+  const { isMultiSchool, hasOrg } = useScope()
   const { activeSchool } = useSchools()
   const { periods } = usePersistence()
   const uiV2 = useUiV2()
@@ -339,9 +339,13 @@ export default function AppShell({ children }) {
   // NO `module` key, so it is `!== null` and still lands in domainGroups below,
   // and lockedModules (SELLABLE_MODULE_KEYS) is untouched: a school licensing
   // neither key sees the group vanish and is upsold by the real modules' rows.
-  const visibleGroups = NAV_GROUPS.filter((g) =>
-    g.module === null || (g.modules ? g.modules.some(hasModule) : hasModule(g.module)),
-  )
+  //
+  // AIC Phase I adds `orgOnly` for ORGANIZATION routes. `hasModule` is bound to
+  // the ACTIVE SCHOOL, so gating an org rollup on it hid the whole surface the
+  // moment the active school was the one unlicensed school in the diocese — with
+  // no other link to the route anywhere in the app. The rule itself lives in
+  // sidebarNav.js so this filter and its spec cannot drift apart.
+  const visibleGroups = NAV_GROUPS.filter((g) => navGroupVisible(g, { hasModule, hasOrg }))
 
   // Layer-cake split: the always-on Core group, its elevated Briefing hero, and the
   // licensed domain groups. The briefing is pulled OUT of the Core list and rendered

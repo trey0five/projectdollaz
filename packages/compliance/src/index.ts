@@ -548,3 +548,75 @@ export {
   VISIT_PLAN_ALL_ADOPTED,
   composeMockVisit,
 } from './accreditation-visit.js'
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AIC Phase I — the SUPERINTENDENT PORTFOLIO priority engine (pure). Six
+// weighted components in INTEGER basis points, renormalized over the KNOWN
+// components only, with two live floors below which a school is NOT RANKED AT
+// ALL — it goes to `insufficientData[]` with its missing components NAMED, and
+// carries no `attentionScore` and no `attentionBand` that a UI could render as
+// "steady". Urgency ORDERS the list and never multiplies a score. The tiebreak
+// is `verifiedPct`, never `readinessPct`: ranking on self-scores rewards
+// optimistic self-assessment, ranking on evidence rewards evidence.
+//
+// The six SCORERS are exported alongside `computePortfolio` on purpose. Every
+// component is 0..100 where HIGHER MEANS MORE ATTENTION NEEDED, and re-typing
+// `100 - verifiedPct` in a service is exactly how one of the six ends up
+// inverted with nothing to catch it.
+//
+// `canonicalBulkAdoptPayload` is the propose→confirm canonical STRING. The hash
+// is taken in the API (crypto is I/O-adjacent); the string lives here so the two
+// sides can never disagree about what was proposed.
+// ─────────────────────────────────────────────────────────────────────────────
+export type {
+  PortfolioComponentKey,
+  PortfolioComponentInput,
+  PortfolioOpenFindings,
+  PortfolioInitiativeCounts,
+  PortfolioWeakestDomain,
+  PortfolioSchoolInput,
+  PortfolioDriver,
+  PortfolioRow,
+  PortfolioMissingComponent,
+  PortfolioInsufficientRow,
+  PortfolioBandDistribution,
+  PortfolioResult,
+  PortfolioUrgencyReason,
+  Urgency,
+  DomainExposure,
+  TrajectoryReading,
+  TrajectoryUnknownReason,
+  TrajectoryComparability,
+  BulkAdoptPayloadInput,
+} from './portfolio-priority.js'
+export {
+  PORTFOLIO_PRIORITY_VERSION,
+  PORTFOLIO_COMPONENT_KEYS,
+  COMPONENT_WEIGHT_BP,
+  COMPONENT_LABELS,
+  TOTAL_WEIGHT_BP,
+  MIN_CONFIDENCE,
+  MIN_KNOWN_COMPONENTS,
+  TRAJECTORY_BASELINE_DAYS,
+  URGENCY_TIER_DAYS,
+  ATTENTION_BAND_RANK,
+  PORTFOLIO_BAND_KEYS,
+  INVALID_INPUT_REASON,
+  ALL_CLEAR_DRIVER_DETAIL,
+  UNKNOWN_FRAMEWORK_NOTE,
+  NO_INDEX_SCALE_NOTE,
+  multiFrameworkNote,
+  computePortfolio,
+  comparePortfolioRows,
+  canonicalBulkAdoptPayload,
+  // The six scorers + the trajectory comparability gate. One source of scale
+  // direction, and one source of the "90 days back" cutoff the API queries on.
+  scoreReadinessLevel,
+  scoreEarlyWarning,
+  scoreEvidenceCurrency,
+  scoreDomainExposure,
+  scoreImprovement,
+  scoreTrajectory,
+  trajectoryBaselineCutoff,
+  assessTrajectoryComparability,
+} from './portfolio-priority.js'
