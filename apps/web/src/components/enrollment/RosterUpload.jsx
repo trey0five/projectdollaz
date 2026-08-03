@@ -7,8 +7,9 @@
 // React 19 idioms: no sync setState in effects, loading/error/empty on the call.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { UploadCloud, FileText, CheckCircle2, AlertTriangle, X } from 'lucide-react'
+import { UploadCloud, FileText, CheckCircle2, AlertTriangle, X, Users } from 'lucide-react'
 import { enrollmentApi, apiErrorMessage } from '../../lib/api.js'
 import { FormError, FormSuccess } from '../auth/fields.jsx'
 import ByGradeChart from './ByGradeChart.jsx'
@@ -159,14 +160,44 @@ export default function RosterUpload({ schoolId, canEdit, onApplied }) {
           animate={{ opacity: 1, y: 0 }}
           className="mt-4 space-y-3"
         >
+          {/* WHAT THIS UPLOAD ACTUALLY DID, and why the sentence changed.
+              This pipeline is COUNTS-ONLY: parseOneRosterCsv aggregates into
+              byGrade as it reads and never keeps a student row, and the service
+              only ever calls prisma.student.count — it creates none. The old
+              copy said "Imported N students", which reads as "N student records
+              now exist". A head of school then opened Records, found it empty,
+              and reasonably concluded the upload had silently lost their data.
+              Counting students is not importing them, and the sentence now says
+              which of the two happened. */}
           <FormSuccess>
             <span className="inline-flex items-center gap-1.5">
               <CheckCircle2 size={15} />
-              Imported {snapshot.totalEnrolled?.toLocaleString('en-US')} students
+              Enrollment counted — {snapshot.totalEnrolled?.toLocaleString('en-US')} students
               {snapshot.observedOn ? ` as of ${snapshot.observedOn}` : ''}
               {result?.promoted ? ' · this period’s enrollment updated' : ''}.
             </span>
           </FormSuccess>
+          {/* The follow-on the old copy left the reader to discover by failing.
+              Named here rather than in a tooltip: the reader has just formed the
+              belief that their roster is saved, and this is the only moment they
+              are looking at the thing that would correct it. */}
+          <div className="rounded-lg border border-rule/60 bg-section px-4 py-3">
+            <p className="text-[13.5px] font-semibold text-navy">
+              This did not create student records.
+            </p>
+            <p className="mt-1 text-[13px] leading-relaxed text-muted">
+              Your enrollment totals and grade breakdown are saved and now feed the
+              dashboard, analytics and the accreditation signals. Individual student
+              rows — the roster you can open, filter and report on — come from the
+              student import, which is a separate step.
+            </p>
+            <Link
+              to="/enrollment?tab=records"
+              className="mt-2.5 inline-flex items-center gap-1.5 rounded-full btn-cta px-3.5 py-1.5 text-[13px] font-semibold transition"
+            >
+              <Users size={14} aria-hidden /> Import the student roster
+            </Link>
+          </div>
           {warnings.length > 0 && (
             <div className="rounded-lg border border-gold/40 bg-gold/10 px-4 py-3">
               <p className="flex items-center gap-1.5 text-[13.5px] font-semibold text-[#7a5e00]">

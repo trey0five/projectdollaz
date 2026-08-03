@@ -24,6 +24,7 @@ import RecordFlow from '../recordwizard/RecordFlow.jsx'
 import FlowConfirm from '../recordwizard/FlowConfirm.jsx'
 import { hueRgba, wizardModuleLabel } from './wizardConfigs.jsx'
 import ModuleOverviewLink from '../module/ModuleOverviewLink.jsx'
+import { moduleTabs } from '../module/moduleAnatomy.js'
 import { BACK_PILL, BackPillBody } from '../ui/BackLink.jsx'
 
 const PANEL_ID = 'wiz-panel'
@@ -151,14 +152,40 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
     setStep('choose')
   }
 
-  // Confirm "Done" — we must NOT navigate (ENG-C1 owns tab routing), so reset the
-  // frame to a fresh Choose, ready for the next add.
+  // "I'm done" — the END of the task, not a reset of the form.
+  //
+  // This used to drop the user back on the Choose screen, i.e. the Add-data
+  // chooser they had just finished with. Reported from production after a roster
+  // upload: "it takes me back to add data instead of the records screen to see
+  // the newly added roster." That reading is correct — the one thing a person
+  // wants after saving is to SEE the thing they saved, and the wizard instead
+  // offered to start again.
+  //
+  // So it lands on the module's Records register when the module has one, and on
+  // the module Overview when it does not (HR and Planning have no register — the
+  // same predicate ModuleCtas uses to decide whether to render a Records button
+  // at all, so the two cannot disagree). "Add another" is unchanged and remains
+  // the way back to Choose.
+  //
+  // ON THE OLD "we must NOT navigate (ENG-C1 owns tab routing)" NOTE THAT USED TO
+  // SIT HERE: that contract belongs to AddDataTab, and it forbids navigating ON
+  // SAVE — an importer must not yank the page out from under a save it just
+  // completed. This is a user CLICKING "I'm done" on a Confirm screen a step
+  // later, which is the same class of action as the Records pill in ModuleCtas,
+  // and it uses the identical `?tab=records` URL model so the two cannot
+  // disagree about where Records lives.
   const finish = () => {
     setFlowResult(null)
     flowGuardRef.current = null
     savedRef.current = false
     setOptionKey(null)
     setStep('choose')
+    // `config.module`, NOT a bare `module`: there is no `module` binding in this
+    // component, and in the browser it resolves to undefined rather than throwing
+    // — so the guard would have been silently false and this would have sent
+    // every module to its Overview, quietly failing the exact bug it fixes.
+    const key = config.module
+    navigate(key && moduleTabs(key).includes('records') ? `${pathname}?tab=records` : pathname)
   }
 
   // ── Deep-link handoff: if we auto-landed on a handoff option's Confirm (e.g.

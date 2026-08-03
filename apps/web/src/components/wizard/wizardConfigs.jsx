@@ -174,9 +174,15 @@ export const wizardConfigs = {
         key: 'import-students',
         kind: 'embed',
         Icon: FileSpreadsheet,
-        label: 'Import roster CSV',
+        label: 'Import student records',
+        // THE TWO CARDS BELOW ARE THE ONE REAL FIX FOR A PRODUCTION REPORT.
+        // Both accept "a OneRoster CSV", and their old labels ("Import roster
+        // CSV" / "Upload a roster") did not say which one KEEPS the students.
+        // A head of school picked the second, saw "Imported 436 students", found
+        // Records empty, and concluded the upload had lost their data. Each card
+        // now leads with what SURVIVES it — records, or a headcount.
         blurb:
-          'Bring your whole roster in from a CSV — OneRoster users.csv or a simple student list. Preview every row, then merge or replace.',
+          'Creates a student record for every row — the roster you can open, filter and report on. OneRoster users.csv or a simple student list. Preview every row, then merge or replace.',
         cta: 'Import students',
         renderEmbed: (ctx) => (
           <StudentImport schoolId={ctx.schoolId} canEdit={ctx.canEdit} onApplied={ctx.onSaved} />
@@ -186,9 +192,9 @@ export const wizardConfigs = {
         key: 'roster',
         kind: 'embed',
         Icon: Upload,
-        label: 'Upload a roster',
+        label: 'Count enrollment from a roster file',
         blurb:
-          'Upload a roster file (OneRoster ZIP/CSV) to track headcount by grade and compare against plan.',
+          'Reads a roster file (OneRoster ZIP/CSV) for headcount by grade — totals only, no student records are created. Feeds the dashboard, analytics and accreditation signals.',
         cta: 'Upload roster file',
         renderEmbed: (ctx) => (
           <RosterUpload schoolId={ctx.schoolId} canEdit={ctx.canEdit} onApplied={ctx.onSaved} />
