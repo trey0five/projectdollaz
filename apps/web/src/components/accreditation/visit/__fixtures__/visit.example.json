@@ -1,0 +1,566 @@
+{
+  "version": "1.0.0",
+  "generatedAt": "2026-07-31T12:00:00.000Z",
+  "framework": {
+    "code": "cognia_2022",
+    "name": "the Cognia Performance Standards"
+  },
+  "demoData": false,
+  "snapshotAsOf": "2026-06-30",
+  "disclaimer": "FIXTURE DISCLAIMER — the server constant is passed in at runtime.",
+  "acts": {
+    "arrival": {
+      "frameworkLabel": "the Cognia Performance Standards",
+      "documented": 62,
+      "defensible": 41,
+      "readinessPct": 54,
+      "projectedIndex": 310,
+      "band": "watch",
+      "confidence": {
+        "coveragePct": 60,
+        "measuredDomains": 6,
+        "unmeasuredDomains": [
+          "student_services",
+          "hr",
+          "facilities",
+          "technology"
+        ],
+        "caveat": "Six of ten domains carry a measured reading."
+      },
+      "asOfLine": "Figures are as of 30 June 2026.",
+      "evaluableLine": "11 of 29 rules could be evaluated on today's data.",
+      "demoData": false,
+      "unavailableReason": null
+    },
+    "commendations": {
+      "commendations": [
+        {
+          "standardId": "s-mis-1",
+          "code": "MIS-1",
+          "title": "Mission and purpose",
+          "rubricScore": 4,
+          "rubricLabel": "Impacting",
+          "evidence": [
+            {
+              "tag": "mission_statement",
+              "label": "Mission statement",
+              "expiresOn": null
+            }
+          ],
+          "signals": [
+            {
+              "key": "fin.days_cash",
+              "label": "Days cash on hand",
+              "formattedValue": "41 days",
+              "asOf": "2026-06-30"
+            }
+          ],
+          "strength": 0.91,
+          "narrative": "Scored Impacting, with a current mission statement and a favorable operating figure."
+        }
+      ],
+      "exclusions": {
+        "eligible": 1,
+        "noScore": 3,
+        "lowScore": 5,
+        "noRequirements": 7,
+        "noCurrentEvidence": 2,
+        "noFavorableSignal": 1
+      },
+      "caveat": "Strengths we can defend: a strong self-score, current evidence, and a favorable operating figure — all three. 1 of 19 standards qualify.",
+      "signalsUnavailable": null,
+      "unavailableReason": null
+    },
+    "findings": {
+      "groups": [
+        {
+          "code": "FIN-1",
+          "worstSeverity": "critical",
+          "findings": [
+            {
+              "ruleId": "FIN-RESERVE-THIN",
+              "scopeKey": "standard:s-fin-1",
+              "title": "Operating reserve is thin",
+              "rationale": "Days cash on hand is 41 days.",
+              "evidence": [
+                {
+                  "key": "fin.days_cash",
+                  "label": "Days cash on hand",
+                  "value": 41,
+                  "display": "41 days",
+                  "asOf": "2026-06-30",
+                  "lineage": null
+                }
+              ],
+              "standardTags": [
+                "FIN-1"
+              ],
+              "domainKeys": [
+                "finance"
+              ],
+              "severity": "critical",
+              "likelihood": "possible",
+              "confidence": "observation",
+              "horizon": {
+                "kind": "none",
+                "value": null,
+                "confidence": null,
+                "reason": "No trend."
+              },
+              "consequence": "A visiting team would question financial sustainability.",
+              "initiativeId": null,
+              "findingCleared": false,
+              "findingKey": "FIN-RESERVE-THIN:standard:s-fin-1",
+              "basis": [
+                {
+                  "key": "fin.days_cash",
+                  "label": "Days cash on hand",
+                  "value": 41,
+                  "display": "41 days",
+                  "asOf": "2026-06-30",
+                  "lineage": null
+                }
+              ],
+              "worked": false,
+              "alsoServes": []
+            }
+          ]
+        },
+        {
+          "code": "GOV-2",
+          "worstSeverity": "warn",
+          "findings": [
+            {
+              "ruleId": "GOV-CADENCE-GAP",
+              "scopeKey": "standard:s-gov-2",
+              "title": "Board meeting cadence",
+              "rationale": "2 board meetings were held in the last twelve months.",
+              "evidence": [
+                {
+                  "key": "gov.meetings",
+                  "label": "Board meetings",
+                  "value": 2,
+                  "display": "2 meetings",
+                  "asOf": "2026-06-30",
+                  "lineage": null
+                }
+              ],
+              "standardTags": [
+                "GOV-2",
+                "GOV-4"
+              ],
+              "domainKeys": [
+                "governance"
+              ],
+              "severity": "warn",
+              "likelihood": "possible",
+              "confidence": "observation",
+              "horizon": {
+                "kind": "none",
+                "value": null,
+                "confidence": null,
+                "reason": "No trend."
+              },
+              "consequence": "A visiting team would ask how the board exercises oversight.",
+              "initiativeId": null,
+              "findingCleared": false,
+              "findingKey": "GOV-CADENCE-GAP:standard:s-gov-2",
+              "basis": [
+                {
+                  "key": "gov.meetings",
+                  "label": "Board meetings",
+                  "value": 2,
+                  "display": "2 meetings",
+                  "asOf": "2026-06-30",
+                  "lineage": null
+                }
+              ],
+              "worked": false,
+              "alsoServes": [
+                "GOV-4"
+              ]
+            },
+            {
+              "ruleId": "GOV-POLICY-OVERDUE",
+              "scopeKey": "standard:s-gov-2",
+              "title": "Policy review overdue",
+              "rationale": "3 policies are past their review date.",
+              "evidence": [
+                {
+                  "key": "gov.policies",
+                  "label": "Overdue policies",
+                  "value": 3,
+                  "display": "3 policies",
+                  "asOf": "2026-06-30",
+                  "lineage": null
+                }
+              ],
+              "standardTags": [
+                "GOV-2"
+              ],
+              "domainKeys": [
+                "governance"
+              ],
+              "severity": "info",
+              "likelihood": "possible",
+              "confidence": "observation",
+              "horizon": {
+                "kind": "none",
+                "value": null,
+                "confidence": null,
+                "reason": "No trend."
+              },
+              "consequence": "A visiting team would read the policy register as unmaintained.",
+              "initiativeId": "init-1",
+              "findingCleared": false,
+              "findingKey": "GOV-POLICY-OVERDUE:standard:s-gov-2",
+              "basis": [
+                {
+                  "key": "gov.policies",
+                  "label": "Overdue policies",
+                  "value": 3,
+                  "display": "3 policies",
+                  "asOf": "2026-06-30",
+                  "lineage": null
+                }
+              ],
+              "worked": true,
+              "alsoServes": []
+            }
+          ]
+        }
+      ],
+      "schoolLevel": [
+        {
+          "ruleId": "SCHOOL-NOT-REPORTING",
+          "scopeKey": "school",
+          "title": "No statements filed this year",
+          "rationale": "No fiscal period carries saved statements.",
+          "evidence": [
+            {
+              "key": "fin.periods",
+              "label": "Periods with statements",
+              "value": 0,
+              "display": "none",
+              "asOf": null,
+              "lineage": null
+            }
+          ],
+          "standardTags": [],
+          "domainKeys": [
+            "finance"
+          ],
+          "severity": "critical",
+          "likelihood": "possible",
+          "confidence": "observation",
+          "horizon": {
+            "kind": "none",
+            "value": null,
+            "confidence": null,
+            "reason": "No trend."
+          },
+          "consequence": "A visiting team would have nothing current to read.",
+          "initiativeId": null,
+          "findingCleared": false,
+          "findingKey": "SCHOOL-NOT-REPORTING:school",
+          "basis": [
+            {
+              "key": "fin.periods",
+              "label": "Periods with statements",
+              "value": 0,
+              "display": "none",
+              "asOf": null,
+              "lineage": null
+            }
+          ],
+          "worked": false,
+          "alsoServes": []
+        }
+      ],
+      "schoolLevelNote": "This finding is not scoped to a single standard. A visiting team would raise it with the head of school rather than under a standard code.",
+      "severityCounts": {
+        "critical": 2,
+        "warn": 1,
+        "info": 1,
+        "total": 4
+      },
+      "standardCount": 2
+    },
+    "requests": {
+      "indexRoute": "/accreditation/evidence/print",
+      "groups": [
+        {
+          "tag": "mission_statement"
+        },
+        {
+          "tag": "board_minutes"
+        }
+      ],
+      "health": {
+        "evidenceHealthPct": 50,
+        "rated": 8,
+        "current": 4,
+        "expiring": 1,
+        "stale": 2,
+        "missing": 1,
+        "unknown": 0,
+        "notTracked": 3,
+        "basis": "4 of 8 rated artifacts are current."
+      },
+      "counts": {
+        "artifacts": 11,
+        "artifactsTracked": 8,
+        "requirements": 24,
+        "requiredTracked": 17,
+        "standardsWithRequirements": 9,
+        "standardsLegacy": 10
+      },
+      "unavailableReason": null
+    },
+    "unanswered": {
+      "namedHoles": [
+        {
+          "ruleId": "HR-PD-LOW",
+          "intake": "hr.pd",
+          "copy": "We cannot tell you whether staff development is keeping pace."
+        },
+        {
+          "ruleId": "SAFE-ENV-GAP",
+          "intake": "safety.clearances",
+          "copy": "We cannot tell you whether every adult on campus is cleared."
+        }
+      ],
+      "signalRows": {
+        "available": [
+          {
+            "key": "fin.days_cash",
+            "label": "Days cash on hand",
+            "availability": "available",
+            "unavailableReason": null,
+            "moduleKey": null,
+            "observedOn": "2026-06-30",
+            "ageDays": 31,
+            "changeState": "unchanged",
+            "domainKeys": [
+              "finance"
+            ],
+            "reasonText": null
+          },
+          {
+            "key": "gov.meetings",
+            "label": "Board meetings",
+            "availability": "available",
+            "unavailableReason": null,
+            "moduleKey": "governance",
+            "observedOn": "2026-06-30",
+            "ageDays": 31,
+            "changeState": "moved",
+            "domainKeys": [
+              "governance"
+            ],
+            "reasonText": null
+          }
+        ],
+        "notLicensed": [
+          {
+            "key": "fac.inspections",
+            "label": "Compliance inspections",
+            "availability": "not_licensed",
+            "unavailableReason": "Facilities is not licensed for this school.",
+            "moduleKey": "facilities",
+            "observedOn": null,
+            "ageDays": null,
+            "changeState": "never_observed",
+            "domainKeys": [
+              "facilities"
+            ],
+            "reasonText": "Facilities is not licensed for this school."
+          }
+        ],
+        "noData": [
+          {
+            "key": "acad.growth",
+            "label": "Academic growth",
+            "availability": "no_data",
+            "unavailableReason": "No academic growth readings have been recorded.",
+            "moduleKey": null,
+            "observedOn": null,
+            "ageDays": null,
+            "changeState": "never_observed",
+            "domainKeys": [
+              "academic_excellence"
+            ],
+            "reasonText": "No academic growth readings have been recorded."
+          }
+        ],
+        "notTracked": [
+          {
+            "key": "hr.pd_participation",
+            "label": "Professional development participation",
+            "availability": "not_tracked",
+            "unavailableReason": null,
+            "moduleKey": "hr",
+            "observedOn": null,
+            "ageDays": null,
+            "changeState": "never_observed",
+            "domainKeys": [
+              "hr"
+            ],
+            "reasonText": "This signal could not be read, and the collector recorded no reason."
+          }
+        ]
+      },
+      "rosterCounts": {
+        "available": 2,
+        "notLicensed": 1,
+        "noData": 1,
+        "notTracked": 1,
+        "total": 5
+      },
+      "rules": [
+        {
+          "ruleId": "HR-PD-LOW",
+          "title": "Professional development participation is low",
+          "reason": "signal_not_tracked",
+          "blockingSignalKey": "hr.pd_participation",
+          "blockingSignalLabel": "Professional development participation",
+          "message": "Nothing records professional development participation for this school yet.",
+          "moduleKey": "hr",
+          "unlock": {
+            "moduleKey": "hr",
+            "intake": "hr.pd",
+            "copy": "Record professional development participation to evaluate this rule."
+          }
+        },
+        {
+          "ruleId": "FAC-BACKLOG",
+          "title": "Deferred maintenance backlog",
+          "reason": "signal_not_licensed",
+          "blockingSignalKey": "fac.backlog",
+          "blockingSignalLabel": "Maintenance backlog",
+          "message": "Facilities is not licensed for this school.",
+          "moduleKey": "facilities",
+          "unlock": {
+            "moduleKey": "facilities",
+            "intake": "facilities.workorders",
+            "copy": "License Facilities to evaluate this rule."
+          }
+        }
+      ],
+      "signalsUnavailable": null,
+      "upsell": [
+        {
+          "moduleKey": "facilities",
+          "ruleIds": [
+            "FAC-BACKLOG",
+            "FAC-INSPECTION-DUE"
+          ]
+        },
+        {
+          "moduleKey": "hr",
+          "ruleIds": [
+            "HR-PD-LOW"
+          ]
+        }
+      ],
+      "unlockableByYears": {
+        "signalKey": "fin.days_cash",
+        "ruleIds": [
+          "FIN-BUDGET-DETERIORATING"
+        ],
+        "yearsNeeded": 2,
+        "fyLabels": [
+          "FY2023–24",
+          "FY2022–23"
+        ]
+      }
+    },
+    "plan": {
+      "items": [
+        {
+          "templateId": "REC-RUBRIC-STEP",
+          "originType": "gap",
+          "originRef": "s-aca-3",
+          "findingKey": null,
+          "title": "Move ACA-3 from Initiating to Improving",
+          "rationale": "ACA-3 is scored 2 of 4 and carries current evidence.",
+          "suggestedOwnerRole": "principal",
+          "suggestedMetricKey": null,
+          "suggestedTargetRubricScore": 3,
+          "estimatedLift": {
+            "points": 4.2,
+            "basis": "nextStepLift"
+          },
+          "estimatedLiftReason": null,
+          "standardTags": [
+            "ACA-3"
+          ]
+        },
+        {
+          "templateId": "REC-FINDING-WORK",
+          "originType": "finding",
+          "originRef": "FIN-RESERVE-THIN:standard:s-fin-1",
+          "findingKey": "FIN-RESERVE-THIN:standard:s-fin-1",
+          "title": "Work the thin operating reserve",
+          "rationale": "Days cash on hand is 41 days.",
+          "suggestedOwnerRole": "business_manager",
+          "suggestedMetricKey": "days_cash_on_hand",
+          "suggestedTargetRubricScore": null,
+          "estimatedLift": null,
+          "estimatedLiftReason": "That standard is not among the ranked readiness gaps, so no index movement can be attributed to this finding.",
+          "standardTags": [
+            "FIN-1"
+          ]
+        }
+      ],
+      "moreAvailable": 0,
+      "limit": 5,
+      "basis": {
+        "accreditationLicensed": true,
+        "frameworkAdopted": true
+      },
+      "emptyReason": null,
+      "unavailableReason": null
+    }
+  },
+  "executiveSummary": {
+    "segments": [
+      {
+        "key": "opening",
+        "text": "A visiting team would arrive to the Cognia Performance Standards. Documented readiness is 62%, defensible readiness is 41%. The projected index is 310, which bands as watch."
+      },
+      {
+        "key": "strengths",
+        "text": "A visiting team would commend 1 standard we can defend with a score, current evidence and a favorable operating figure."
+      },
+      {
+        "key": "findings",
+        "text": "They would likely raise 4 findings — 2 critical, 1 to watch, 1 informational — across 2 named standards, with 1 raised with the head of school rather than under a code."
+      },
+      {
+        "key": "evidence",
+        "text": "They would ask for 11 artifacts; of the 8 we rate for currency, 4 are current today."
+      },
+      {
+        "key": "unanswered",
+        "text": "We could not answer 2 named questions. Of the 5 signals we track we could read 2, and 2 rules could not be evaluated at all."
+      },
+      {
+        "key": "plan",
+        "text": "The draft plan commits to 2 pieces of work."
+      }
+    ],
+    "allowedNumerals": [
+      "0",
+      "1",
+      "11",
+      "2",
+      "310",
+      "4",
+      "41",
+      "5",
+      "62",
+      "8"
+    ]
+  }
+}

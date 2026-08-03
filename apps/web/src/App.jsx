@@ -48,6 +48,11 @@ import SchedulesPage from './pages/SchedulesPage.jsx'
 import BoardReportPrintPage from './pages/BoardReportPrintPage.jsx'
 import GovernanceReportPrintPage from './pages/GovernanceReportPrintPage.jsx'
 import EvidenceIndexPrintPage from './pages/EvidenceIndexPrintPage.jsx'
+// AIC Phase H — the Mock Visit and its two print artifacts. All three routes are
+// added in ONE edit, by one owner, so the two engineers who built the screen and
+// the print pages never touch the router at the same time.
+import BoardReadinessOnePagerPrintPage from './pages/BoardReadinessOnePagerPrintPage.jsx'
+import VisitPreviewPrintPage from './pages/VisitPreviewPrintPage.jsx'
 import SettingsPage from './pages/SettingsPage.jsx'
 import AccountSection from './components/settings/AccountSection.jsx'
 import MembersSection from './components/settings/MembersSection.jsx'
@@ -76,6 +81,13 @@ const StrategyPage = lazy(() => import('./pages/StrategyPage.jsx'))
 // it pulls the record-wizard chunk (the seeded "Work this gap" flow) and the
 // drawer, neither of which a school that never opens /improvement should download.
 const ImprovementPage = lazy(() => import('./pages/ImprovementPage.jsx'))
+
+// AIC Phase H — the six-act Mock Visit. Lazy for the same reason: it pulls the
+// commendations panel, the evidence-readiness table, the date picker and the
+// narration/TTS stack, none of which a school that never rehearses a visit should
+// download. The two PRINT routes below are eager, like every other print page —
+// they auto-`window.print()` on load and a Suspense frame would race that.
+const VisitPage = lazy(() => import('./pages/VisitPage.jsx'))
 
 // Phase 6 — HR & Staffing + Planning & Forecasting module pages. Lazy: /planning
 // pulls the heavy ForecastWorkspace chunk, /hr the analytics trend primitives.
@@ -229,6 +241,16 @@ export default function App() {
         <Route path="/readiness" element={<ReadinessPage />} />
         <Route path="/governance" element={<GovernancePage />} />
         <Route path="/accreditation" element={<AccreditationPage />} />
+        {/* AIC Phase H — the Mock Visit. Declared BEFORE nothing in particular:
+            these are literal sibling paths, not params, so order is irrelevant. */}
+        <Route
+          path="/accreditation/visit"
+          element={
+            <Suspense fallback={<div className="min-h-screen bg-cream" />}>
+              <VisitPage />
+            </Suspense>
+          }
+        />
         <Route
           path="/improvement"
           element={
@@ -282,6 +304,11 @@ export default function App() {
             print-route treatment as the governance report (inside AuthedLayout,
             `.ui-v1` wrapper, auto window.print()). */}
         <Route path="/accreditation/evidence/print" element={<EvidenceIndexPrintPage />} />
+        {/* AIC Phase H — the Board Readiness One-Pager and the Visiting-Team
+            Preview. Same print-route treatment as the Evidence Index: inside
+            AuthedLayout, `.ui-v1` wrapper, one-shot auto window.print(). */}
+        <Route path="/accreditation/board/print" element={<BoardReadinessOnePagerPrintPage />} />
+        <Route path="/accreditation/visit/print" element={<VisitPreviewPrintPage />} />
         <Route path="/integrations/qb/callback" element={<QbCallbackPage />} />
         <Route path="/enrollment/blackbaud/callback" element={<EnrollmentBlackbaudCallbackPage />} />
         {/* History folded into Statements & Periods — keep old links working. */}

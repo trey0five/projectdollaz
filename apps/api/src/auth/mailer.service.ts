@@ -5,6 +5,13 @@ import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2'
 import { renderBrandedEmail } from './email-template.js'
 
 /**
+ * AIC Phase H — the label on the SECOND link line of the board-summary email.
+ * Frozen and exported so the spec asserts the shipped wording rather than a copy
+ * of it.
+ */
+export const READINESS_ONE_PAGER_LABEL = 'View the accreditation readiness one-pager'
+
+/**
  * Pluggable mailer. Delivery path is chosen by `mail.provider`:
  *   - 'ses'  → Amazon SES via the AWS SDK. On ECS the ECS task role supplies
  *              credentials (no static SMTP secret); the From address uses the
@@ -67,17 +74,66 @@ export class MailerService {
     )
   }
 
+  /**
+   * AIC Phase H adds THREE OPTIONAL fields, and nothing else. `readinessParagraphs`
+   * are the executive-summary segments the printed Board Readiness One-Pager
+   * renders — passed through VERBATIM, one paragraph per segment. THIS METHOD
+   * COMPOSES NONE OF THEM: it is the fourth surface of one composer, which is why
+   * the email can never drift from the page.
+   *
+   * THE DISCLAIMER IS NOT OPTIONAL WHEN THE CLAIMS ARE PRESENT. This email is the
+   * only one of the five surfaces that reaches a reader who never signs in and
+   * never sees a footer: the four print surfaces render `READINESS_DISCLAIMER`
+   * through `VisitPrintFooter`, which THROWS rather than publish a readiness
+   * document that disclaims nothing. An inbox has no footer, so the sentence rides
+   * as the last paragraph — appended here whenever readiness paragraphs are, and
+   * absent whenever they are not.
+   *
+   * All three properties are optional on an existing options object, so no caller
+   * changes and the byte-for-byte email a school gets today is unchanged when
+   * they are absent.
+   */
   async sendBoardSummary(
     email: string,
-    opts: { schoolName: string; periodLabel: string | null; body: string; link: string },
+    opts: {
+      schoolName: string
+      periodLabel: string | null
+      body: string
+      link: string
+      /** `visit.executiveSummary.segments.map(s => s.text)`. Verbatim, in order. */
+      readinessParagraphs?: string[]
+      /** Absolute URL of the Board Readiness One-Pager, qualified by school. */
+      readinessLink?: string
+      /** `visit.disclaimer` — the ONE server-side sentence, verbatim. */
+      readinessDisclaimer?: string
+    },
   ): Promise<void> {
-    const { schoolName, periodLabel, body, link } = opts
+    const {
+      schoolName,
+      periodLabel,
+      body,
+      link,
+      readinessParagraphs,
+      readinessLink,
+      readinessDisclaimer,
+    } = opts
+    const readiness = (readinessParagraphs ?? []).filter((p) => p.trim().length > 0)
+    // Emitted ONLY beside the claims it disclaims: on an email with no readiness
+    // section it would be a non-sequitur, and on one with a readiness section its
+    // absence is the defect this field exists to close.
+    const disclaimer =
+      readiness.length > 0 && (readinessDisclaimer ?? '').trim().length > 0
+        ? (readinessDisclaimer as string)
+        : ''
     const subject = `${schoolName} — board financial summary${
       periodLabel ? ` (${periodLabel})` : ''
     }`
     const text =
       `${schoolName}${periodLabel ? ` · ${periodLabel}` : ''}\n\n${body}\n\n` +
-      `View the full board packet: ${link}\n`
+      (readiness.length > 0 ? `${readiness.join('\n\n')}\n\n` : '') +
+      `View the full board packet: ${link}\n` +
+      (readinessLink ? `${READINESS_ONE_PAGER_LABEL}: ${readinessLink}\n` : '') +
+      (disclaimer ? `\n${disclaimer}\n` : '')
     await this.deliver(
       email,
       subject,
@@ -86,7 +142,17 @@ export class MailerService {
         webOrigin: this.webOrigin,
         preheader: `${schoolName} board financial summary${periodLabel ? ` · ${periodLabel}` : ''}`,
         heading: `${schoolName} — board financial summary`,
-        paragraphs: [periodLabel ? `Reporting period: ${periodLabel}` : '', body],
+        paragraphs: [
+          periodLabel ? `Reporting period: ${periodLabel}` : '',
+          body,
+          // VERBATIM, one paragraph per executive-summary segment.
+          ...readiness,
+          // A LINK LINE, not a sentence about the school. There is only one CTA
+          // slot on the branded template and the board packet owns it.
+          readinessLink ? `${READINESS_ONE_PAGER_LABEL}: ${readinessLink}` : '',
+          // LAST, where a footer would be. Verbatim; this method composes nothing.
+          disclaimer,
+        ],
         cta: { label: 'View the board packet', url: link },
         linkFallback: link,
       }),

@@ -35,5 +35,12 @@ import { AccreditationCommendationsService } from './commendations.service.js'
   imports: [AuthModule, BillingModule, PeriodsModule, AnalyticsModule, AccreditationModule],
   controllers: [AccreditationSignalsController, AccreditationCommendationsController],
   providers: [AccreditationSignalsService, AccreditationCommendationsService],
+  // AIC Phase H. This module shipped with NO `exports` array at all, so Act 2 of
+  // the Mock Visit — the commendations engine, already built in Phase C — could
+  // not be injected anywhere else. VisitModule needs it. A provider injected but
+  // not EXPORTED killed the API on BOOT in Phase E while every unit test passed,
+  // so `visit.module.spec.ts` asserts this line by reading the module metadata
+  // rather than trusting a comment.
+  exports: [AccreditationCommendationsService],
 })
 export class AccreditationSignalsModule {}

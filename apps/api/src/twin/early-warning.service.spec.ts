@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { TwinFinding, TwinResult } from '@finrep/compliance'
 import { ACK_WINDOW_DAYS, EarlyWarningService } from './early-warning.service.js'
+import { READINESS_DISCLAIMER } from '../accreditation/readiness-history.service.js'
 import type { TwinContextRegistry } from './twin-rules.js'
 import type { TwinSignalSet } from './twin-contract.js'
 
@@ -191,6 +192,25 @@ function harness(over: { fired?: TwinFinding[]; rows?: RowSeed[] } = {}) {
   svc.useCache(cache)
   return { svc, prisma, audit, store, updateMany, cache, twinSignals, twinRegister, priorFacts }
 }
+
+// AIC Phase H — SPEC-API-2. The disclaimer is a FIRST-CLASS PAYLOAD FIELD, and it
+// is THE server constant — asserted by IDENTITY, not `toContain`. The repo shipped
+// two forked spellings of this sentence and one print page rendered both, so a
+// substring assertion would have passed against either fork and caught neither.
+describe('EarlyWarningService — the disclaimer is a payload field, not UI chrome', () => {
+  it('/twin carries READINESS_DISCLAIMER, the ONE server constant, verbatim', async () => {
+    const h = harness({ fired: [finding()] })
+    const res = await h.svc.getTwin('school-A', {}, AT)
+    expect(res.disclaimer).toBe(READINESS_DISCLAIMER)
+  })
+
+  it('carries it even when the engine fires nothing — a clean school is still not accredited by us', async () => {
+    const h = harness()
+    const res = await h.svc.getTwin('school-A', {}, AT)
+    expect(res.findings).toHaveLength(0)
+    expect(res.disclaimer).toBe(READINESS_DISCLAIMER)
+  })
+})
 
 describe('EarlyWarningService — the live/ledger merge', () => {
   it('fires WITH a row: content from the engine, lifecycle from the ledger', async () => {

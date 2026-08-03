@@ -266,15 +266,20 @@ export function nudgeTone(severity) {
 }
 
 // ── The mandatory print footer ───────────────────────────────────────────────
-/**
- * Printed on the Evidence Index, always, regardless of payload state. This is the
- * line that keeps a KYRO self-assessment from being mistaken for an accreditation
- * product — it is not decoration and it is not `no-print`.
- */
-export const EVIDENCE_INDEX_DISCLAIMER =
-  'Self-assessment produced by KYRO from school-entered and integrated data. ' +
-  'Not an accreditation product; not affiliated with, endorsed by, or a submission to ' +
-  "Cognia / MSA / WCEA. The accreditor's portal remains the authoritative repository."
+// AIC PHASE H §0.4 — `EVIDENCE_INDEX_DISCLAIMER` LIVED HERE AND IS DELETED.
+//
+// It was a SECOND disclaimer sentence. The server has carried its own
+// (`READINESS_DISCLAIMER`, apps/api/src/accreditation/readiness-history.service.ts)
+// on `/readiness/trend`, `/readiness/diff` and `/evidence-readiness` since Phase
+// A, and the two had already drifted: the server said "Cognia, MSA-CESS or WCEA"
+// while this constant said "Cognia / MSA / WCEA". The Evidence Index print page
+// printed BOTH, back to back.
+//
+// There is now exactly one disclaimer string in the product and it lives on the
+// server. The web declares it NOWHERE — `visit-print.spec.jsx` asserts the
+// sentence appears in no `apps/web/src` source file, so re-adding a constant here
+// turns that spec red. Every print surface renders the payload's `disclaimer`
+// field through `components/accreditation/print/VisitPrintFooter.jsx`.
 
 /** The one field we ask for, worded once and reused by every surface that asks. */
 export const EFFECTIVE_DATE_LABEL = 'Which period does this cover?'

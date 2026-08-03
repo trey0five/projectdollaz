@@ -19,6 +19,8 @@ import {
   isPaymentRequired,
 } from '../lib/api.js'
 import EntitlementPausedPanel from '../components/analytics/EntitlementPausedPanel.jsx'
+import { accreditationApi } from '../lib/api.js'
+import VisitPrintFooter from '../components/accreditation/print/VisitPrintFooter.jsx'
 import { roleLabel, credentialTagLabel, isoDay } from '../components/governance/peopleMeta.js'
 
 const ACCENT = '#7C3AED'
@@ -111,6 +113,22 @@ export default function GovernanceReportPrintPage() {
   const [notLicensed, setNotLicensed] = useState(false)
   const [notEntitled, setNotEntitled] = useState(false)
   const [error, setError] = useState('')
+  // AIC PHASE H §4.5 — THE MOST DANGEROUS FOOTER IN THE REPO, FIXED.
+  //
+  // This page's footer said "Prepared for accreditation and board records" and
+  // disclaimed NOTHING. It is the only print surface in the repo that claimed
+  // accreditation purpose without the non-affiliation sentence, which is the
+  // exact misreading the sentence exists to prevent.
+  //
+  // The sentence lives on the server and the web declares it nowhere, so it has
+  // to be fetched. `null` = the fetch has not settled; `''` = it settled and the
+  // sentence is not readable (a governance-only school does not license
+  // Accreditation, and every endpoint carrying the sentence is behind that
+  // module gate). Both states are handled at the footer, and the document does
+  // not auto-print until this has settled — printing at 400ms while the
+  // disclaimer was still in flight would produce exactly the undisclaimed page
+  // this block exists to stop.
+  const [disclaimer, setDisclaimer] = useState(null)
 
   // Microtask defer + cancelled flag (the useCommittees idiom) so it is
   // react-hooks/set-state-in-effect safe.
@@ -123,6 +141,20 @@ export default function GovernanceReportPrintPage() {
       setError('')
       setNotLicensed(false)
       setNotEntitled(false)
+      setDisclaimer(null)
+      // FAIL-SOFT AND ON ITS OWN. `/evidence-readiness` has carried the server's
+      // one disclaimer since Phase C, answers 200 in every degraded state, and is
+      // the cheapest already-shipped carrier of it. A 402 (no Accreditation
+      // module) or any other failure resolves to '' and the footer drops the
+      // accreditation CLAIM instead — it never blocks the governance report.
+      accreditationApi
+        .getEvidenceReadiness(schoolId)
+        .then((res) => {
+          if (!cancelled) setDisclaimer(res.data?.disclaimer ?? '')
+        })
+        .catch(() => {
+          if (!cancelled) setDisclaimer('')
+        })
       governanceReportApi
         .get(schoolId)
         .then((res) => {
@@ -143,7 +175,7 @@ export default function GovernanceReportPrintPage() {
     }
   }, [schoolId])
 
-  const ready = !loading && !!data
+  const ready = !loading && !!data && disclaimer !== null
 
   // Auto-print once data is ready (one-shot) — the BoardReportPrintPage idiom.
   const printed = useRef(false)
@@ -413,10 +445,33 @@ export default function GovernanceReportPrintPage() {
             </div>
           </Section>
 
-          <footer className="mt-8 border-t border-rule pt-3 text-[10.5px] text-muted">
-            Prepared for accreditation and board records · generated {fmtDay(data.generatedAt)} ·
-            KYRO Governance
-          </footer>
+          {/* ── The footer (AIC Phase H §4.5) ──────────────────────────────── */}
+          {disclaimer ? (
+            <>
+              <p className="mt-8 text-[10.5px] text-muted">
+                Prepared for accreditation and board records · KYRO Governance
+              </p>
+              <VisitPrintFooter
+                disclaimer={disclaimer}
+                generatedAt={data.generatedAt}
+                className="!mt-2"
+              />
+            </>
+          ) : (
+            // THE CLAIM IS DROPPED, NOT THE DOCUMENT. The contract's fallback was
+            // to render the page's "could not load" state, but every endpoint
+            // that carries the disclaimer is behind `@RequiresModule('accreditation')`
+            // — so for a governance-only school the sentence is unreachable BY
+            // DESIGN, and refusing to render would delete a shipped, working
+            // report from every such school. The hazard §4.5 names is a document
+            // that "claims accreditation purpose and disclaims nothing"; with no
+            // disclaimer available we remove the accreditation claim, which for a
+            // school that does not license Accreditation is also the more
+            // accurate line.
+            <footer className="mt-8 border-t border-rule pt-3 text-[10.5px] text-muted">
+              Prepared for board records · generated {fmtDay(data.generatedAt)} · KYRO Governance
+            </footer>
+          )}
         </div>
       )}
     </div>

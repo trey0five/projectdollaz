@@ -663,6 +663,35 @@ export const accreditationApi = {
     api.patch(`/schools/${schoolId}/accreditation/prior-visit-findings/${findingId}`, body),
   removePriorVisitFinding: (schoolId, findingId) =>
     api.delete(`/schools/${schoolId}/accreditation/prior-visit-findings/${findingId}`),
+  // ── AIC Phase H: THE MOCK VISIT ─────────────────────────────────────────────
+  // ONE request, one payload, six acts — the team is here → what they'd commend →
+  // what they'd likely find (under NAMED STANDARD CODES) → what they'd ask for →
+  // WHAT WE COULD NOT ANSWER → so here's the plan. Composed server-side by the
+  // single pure `composeMockVisit`, which SELECTS AND ORDERS and writes no
+  // sentence about any finding.
+  //
+  // THE CLIENT COMPOSES NOTHING. Every rationale, consequence, basis `display`,
+  // unlock sentence, commendation caveat, evidence-health line, empty-plan reason
+  // and executive-summary segment arrives rendered and is printed verbatim. In
+  // particular the client never turns the ordinal `likelihood` into a percentage,
+  // and it never re-derives WHY a draft plan is empty — the composer already put
+  // that on `emptyReason`, and a second derivation is how two surfaces end up
+  // telling one school two different things.
+  //
+  // `disclaimer` is a FIRST-CLASS PAYLOAD FIELD, not UI chrome. There is exactly
+  // one disclaimer string in this product and it lives on the server; nothing in
+  // apps/web declares it.
+  //
+  // Three surfaces read this ONE payload — the Mock Visit screen, the Board
+  // Readiness One-Pager and the Visiting-Team Preview — so the screen, the paper
+  // and the scheduled board email cannot drift apart.
+  //
+  // No write route: Act 6 adopts through Phase G's EXISTING, already-idempotent
+  // `improvementApi.adopt` (200, not 201, on a repeat). VIEWER MAY READ — a board
+  // member is exactly the audience for "what would a visiting team find?". The
+  // only 402 is the 'accreditation' module gate itself.
+  getVisit: (schoolId, params = {}) =>
+    api.get(`/schools/${schoolId}/accreditation/visit`, { params }),
 }
 
 // ── Phase 4 Knowledge document store: CORE (always included, NOT a licensed module).

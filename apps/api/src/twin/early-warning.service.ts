@@ -9,6 +9,7 @@ import type {
 } from '@finrep/compliance'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { BillingService } from '../billing/billing.service.js'
+import { READINESS_DISCLAIMER } from '../accreditation/readiness-history.service.js'
 import { AuditService } from '../common/audit/audit.service.js'
 import { TwinSignalsService } from './twin-signals.service.js'
 import { TwinRegisterService } from './twin-register.service.js'
@@ -136,6 +137,21 @@ export interface TwinResponse extends Omit<TwinResult, 'findings'> {
   cleared: FindingPublic[]
   /** The full catalog roster, in catalog order. */
   signals: TwinSignalRow[]
+  /**
+   * AIC Phase H — THE DISCLAIMER, as a FIRST-CLASS PAYLOAD FIELD rather than UI
+   * chrome.
+   *
+   * It is `READINESS_DISCLAIMER` — the ONE server constant, already carried on
+   * /readiness/trend, /readiness/diff and /evidence-readiness. It is IMPORTED,
+   * never retyped: the repo shipped two forked spellings of this sentence
+   * (server "Cognia, MSA-CESS or WCEA" vs a client copy reading "Cognia / MSA /
+   * WCEA"), and a print page rendered BOTH, one after the other. A disclaimer
+   * that exists twice is a disclaimer nobody owns.
+   *
+   * The import direction is twin → accreditation, which twin.module.ts already
+   * establishes as acyclic; importing a `const` needs no DI and no module change.
+   */
+  disclaimer: string
 }
 
 function isoDay(d: Date): string {
@@ -337,6 +353,8 @@ export class EarlyWarningService {
         changeState: s.changeState,
         domainKeys: [...s.domainKeys],
       })),
+      // AIC Phase H — the ONE disclaimer, imported. Never re-worded here.
+      disclaimer: READINESS_DISCLAIMER,
     }
   }
 

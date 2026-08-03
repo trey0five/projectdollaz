@@ -34,6 +34,7 @@ import { KnowledgeModule } from './knowledge/knowledge.module.js'
 import { EnrollmentModule } from './enrollment/enrollment.module.js'
 import { StrategyModule } from './strategy/strategy.module.js'
 import { ImprovementModule } from './improvement/improvement.module.js'
+import { VisitModule } from './visit/visit.module.js'
 import { RetentionModule } from './retention/retention.module.js'
 import { AdminModule } from './admin/admin.module.js'
 import { SupportModule } from './support/support.module.js'
@@ -98,6 +99,11 @@ import { InboxModule } from './inbox/inbox.module.js'
     // that has crash-looped this container twice. There is deliberately no
     // `improvement` module key: /improvement rides on accreditation OR strategy.
     ImprovementModule,
+    // AIC Phase H — the MOCK VISIT. Registered AFTER TwinModule,
+    // AccreditationSignalsModule and ImprovementModule because it imports all
+    // three (plus AccreditationModule). It owns exactly one GET route and no
+    // write route; adoption rides on Phase G's existing idempotent adopt path.
+    VisitModule,
     RetentionModule,
     AdminModule,
     SupportModule,

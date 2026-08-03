@@ -367,15 +367,33 @@ function GroupCard({ group, onOpenStandard, reduce }) {
               <ul className="flex flex-wrap gap-1.5">
                 {serves.map((s) => (
                   <li key={s.standardId}>
-                    <button
-                      type="button"
-                      onClick={() => onOpenStandard?.(s.standardId)}
-                      title={s.title}
-                      className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-rule/60 bg-white px-2 py-1 text-[11.5px] font-semibold text-navy transition hover:border-[#F59E0B]/60"
-                    >
-                      <span className="shrink-0">{s.code}</span>
-                      <CurrencyChip state={s.state} size="sm" />
-                    </button>
+                    {/* THE SAME RULE CtaPill APPLIES TWENTY LINES ABOVE: an
+                        unhandled control is not a control. Without an
+                        `onOpenStandard` this rendered a hover-highlighted <button>
+                        whose click did nothing at all — live on the Accreditation
+                        page (wired to `scrollToStandard`) and dead on the Mock
+                        Visit, which passed no handler. A dead affordance in an
+                        evidence table is worse than none: it invites verification
+                        and verifies nothing. */}
+                    {onOpenStandard ? (
+                      <button
+                        type="button"
+                        onClick={() => onOpenStandard(s.standardId)}
+                        title={s.title}
+                        className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-rule/60 bg-white px-2 py-1 text-[11.5px] font-semibold text-navy transition hover:border-[#F59E0B]/60"
+                      >
+                        <span className="shrink-0">{s.code}</span>
+                        <CurrencyChip state={s.state} size="sm" />
+                      </button>
+                    ) : (
+                      <span
+                        title={s.title}
+                        className="inline-flex max-w-full cursor-default items-center gap-1.5 rounded-lg border border-rule/60 bg-white px-2 py-1 text-[11.5px] font-semibold text-navy"
+                      >
+                        <span className="shrink-0">{s.code}</span>
+                        <CurrencyChip state={s.state} size="sm" />
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>

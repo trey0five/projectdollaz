@@ -1526,6 +1526,15 @@ function AccreditationWorkspace() {
       return null
     }
   })
+  // The ONE standard the reader was sent to open — from the Mock Visit's Act 4
+  // "Serves" chips. Read once, consumed once, exactly like `rule` and `finding`.
+  const [focusStandard] = useState(() => {
+    try {
+      return new URLSearchParams(window.location.search).get('standard')
+    } catch {
+      return null
+    }
+  })
   useEffect(() => {
     let cancelled = false
     Promise.resolve().then(() => {
@@ -1533,13 +1542,15 @@ function AccreditationWorkspace() {
       if (
         !searchParams.get('center') &&
         !searchParams.get('rule') &&
-        !searchParams.get('finding')
+        !searchParams.get('finding') &&
+        !searchParams.get('standard')
       )
         return
       const next = new URLSearchParams(searchParams)
       next.delete('center')
       next.delete('rule')
       next.delete('finding')
+      next.delete('standard')
       setSearchParams(next, { replace: true })
     })
     return () => {
@@ -1604,6 +1615,24 @@ function AccreditationWorkspace() {
     },
     [reduce],
   )
+
+  // `/accreditation?center=standards&standard=<id>` — the deep link the Mock
+  // Visit's Act 4 chips use. Without it those chips were rendered as buttons and
+  // did nothing, because the visit surface had no handler to give them; the
+  // vocabulary is `?center=`'s, and the param is consumed once by the effect above
+  // so refresh and back behave like every other deep link on this page.
+  useEffect(() => {
+    let cancelled = false
+    Promise.resolve().then(() => {
+      if (cancelled || !focusStandard) return
+      scrollToStandard(focusStandard)
+    })
+    return () => {
+      cancelled = true
+    }
+    // Mount-only: consumed once, exactly like `rule` and `finding`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const clearStrategy = (standardId) => linkStrategy(standardId, null)
 
@@ -2260,15 +2289,29 @@ function AccreditationWorkspace() {
       attentionItems={attentionItems}
       aboveKpis={readinessHero}
       headerAside={
-        canEdit && adopted ? (
-          <button
-            type="button"
-            onClick={openAdoptModal}
+        <>
+          {/* AIC PHASE H — the one entry control into the Mock Visit. A LINK, not a
+              button, and never role-gated: a viewer is exactly the audience for
+              "what would a visiting team find?", and the visit route reads for
+              owner, accountant and viewer alike. Same hued pill vocabulary as the
+              Frameworks control beside it, so this page grows no new affordance
+              language. */}
+          <Link
+            to="/accreditation/visit"
             className="inline-flex items-center gap-1.5 rounded-full border border-rule/70 bg-white px-3.5 py-1.5 text-[13px] font-semibold text-navy transition hover:border-[#F59E0B]/60"
           >
-            <Award size={14} className="text-[#F59E0B]" /> Frameworks
-          </button>
-        ) : null
+            <ShieldAlert size={14} className="text-[#F59E0B]" /> Mock visit
+          </Link>
+          {canEdit && adopted ? (
+            <button
+              type="button"
+              onClick={openAdoptModal}
+              className="inline-flex items-center gap-1.5 rounded-full border border-rule/70 bg-white px-3.5 py-1.5 text-[13px] font-semibold text-navy transition hover:border-[#F59E0B]/60"
+            >
+              <Award size={14} className="text-[#F59E0B]" /> Frameworks
+            </button>
+          ) : null}
+        </>
       }
     />
   )

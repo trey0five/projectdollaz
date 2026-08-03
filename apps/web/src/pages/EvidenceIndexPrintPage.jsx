@@ -37,12 +37,17 @@ import { ArrowLeft, BadgeCheck, Printer } from 'lucide-react'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { accreditationApi, isModuleNotLicensed, isPaymentRequired } from '../lib/api.js'
 import EntitlementPausedPanel from '../components/analytics/EntitlementPausedPanel.jsx'
-import { ConfidenceCaveat } from '../components/accreditation/ConfidenceChip.jsx'
-import {
-  EVIDENCE_INDEX_DISCLAIMER,
-  currencyLabel,
-  whereItLives,
-} from '../components/accreditation/evidenceMeta.js'
+// AIC PHASE H §0.4/§4.3 — THE DISCLAIMER WAS FORKED, AND THIS PAGE PRINTED BOTH.
+// Until Phase H this footer rendered `data.disclaimer` (the server's
+// READINESS_DISCLAIMER, "… Cognia, MSA-CESS or WCEA …") AND a second, separately
+// worded client constant EVIDENCE_INDEX_DISCLAIMER ("… Cognia / MSA / WCEA …"),
+// one immediately after the other — two sentences making the same promise in two
+// different words, on the one document a school hands a visiting team. The
+// server constant is now the only disclaimer in the product; the client one is
+// deleted, and the footer (with its confidence caveat) is the shared
+// `VisitPrintFooter` used by all four accreditation print surfaces.
+import VisitPrintFooter from '../components/accreditation/print/VisitPrintFooter.jsx'
+import { currencyLabel, whereItLives } from '../components/accreditation/evidenceMeta.js'
 import { formatShortDate } from '../lib/format.js'
 
 const ACCENT = '#F59E0B'
@@ -307,8 +312,8 @@ export default function EvidenceIndexPrintPage() {
             )}
           </Section>
 
-          {/* ── Footer — always printed, never `no-print` ───────────────────── */}
-          <footer className="mt-7 space-y-2 border-t border-rule pt-3">
+          {/* ── The closing counts — document CONTENT, above the footer rule ── */}
+          <div className="mt-7 space-y-2">
             {/* ARTIFACT counts, the same population health.basis counts below —
                 the footer and the figure never disagree about the total. */}
             {counts ? (
@@ -328,14 +333,26 @@ export default function EvidenceIndexPrintPage() {
                 — {health.basis}
               </p>
             ) : null}
-            <ConfidenceCaveat confidence={readiness?.confidence ?? null} className="!text-[10.5px]" />
-            {data.disclaimer ? (
-              <p className="text-[10.5px] leading-relaxed text-muted">{data.disclaimer}</p>
-            ) : null}
-            <p className="text-[10.5px] italic leading-relaxed text-muted">
-              {EVIDENCE_INDEX_DISCLAIMER}
+          </div>
+          {/* The shared footer carries the disclaimer, the generated date and the
+              Phase-B confidence caveat. It THROWS on a missing disclaimer rather
+              than printing an undisclaimed document, so the page states the
+              failure instead of mounting it — `/evidence-readiness` has carried
+              the field since Phase C, so this branch is a tripwire, not a path. */}
+          {data.disclaimer ? (
+            <VisitPrintFooter
+              disclaimer={data.disclaimer}
+              generatedAt={data.generatedAt}
+              demoData={data.demoData}
+              confidence={readiness?.confidence ?? null}
+              className="!mt-3"
+            />
+          ) : (
+            <p className="mt-7 border-t border-rule pt-3 text-[10.5px] font-semibold text-danger">
+              This index could not be published: the readiness disclaimer was missing from the
+              payload.
             </p>
-          </footer>
+          )}
         </div>
       )}
     </div>

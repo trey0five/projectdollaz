@@ -490,3 +490,61 @@ export {
   composeFindingKey,
   computeRecommendations,
 } from './improvement-findings.js'
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AIC Phase H — the MOCK VISIT composer (pure). ONE composer, six acts, composed
+// from the twin's OWN findings: `basis` is the same array reference as
+// `evidence`, and no sentence about any finding is written here. There is
+// deliberately no `PredictedFinding` — a second finding type would be a second
+// populator for one fact, which is how two surfaces start disagreeing.
+//
+// `composeVisitExecutiveSummary` is NOT exported. It is called from exactly one
+// place, so the spoken summary and the printed one-pager cannot be different
+// arrays of sentences.
+// ─────────────────────────────────────────────────────────────────────────────
+export type {
+  VisitFindingInput,
+  VisitSignalInput,
+  VisitReadinessInput,
+  VisitCommendationsInput,
+  VisitEvidenceCounts,
+  VisitEvidenceInput,
+  VisitPlanBasis,
+  VisitInput,
+  VisitArrivalAct,
+  VisitCommendationsAct,
+  VisitFinding,
+  VisitFindingGroup,
+  VisitFindingsAct,
+  VisitRequestsAct,
+  VisitSignalRow,
+  VisitSignalRoster,
+  VisitUnansweredAct,
+  VisitPlanItem,
+  VisitPlanAct,
+  VisitSummaryKey,
+  VisitSummarySegment,
+  VisitExecutiveSummary,
+  VisitResult,
+} from './accreditation-visit.js'
+export {
+  VISIT_VERSION,
+  VISIT_PLAN_LIMIT,
+  VISIT_EVIDENCE_INDEX_ROUTE,
+  VISIT_SUMMARY_KEYS,
+  SCHOOL_LEVEL_FINDING_NOTE,
+  NO_REASON_GIVEN,
+  VISIT_READINESS_UNREADABLE,
+  VISIT_NO_FRAMEWORK_READINESS,
+  VISIT_COMMENDATIONS_UNREADABLE,
+  VISIT_EVIDENCE_UNREADABLE,
+  VISIT_PLAN_UNREADABLE,
+  VISIT_NO_COMMENDATION,
+  VISIT_NO_FINDING,
+  VISIT_NO_FRAMEWORK_LABEL,
+  VISIT_NO_SNAPSHOT_LINE,
+  VISIT_PLAN_NO_FRAMEWORK,
+  VISIT_PLAN_NOT_LICENSED,
+  VISIT_PLAN_ALL_ADOPTED,
+  composeMockVisit,
+} from './accreditation-visit.js'
