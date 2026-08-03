@@ -72,7 +72,7 @@ resource "aws_lb_target_group" "api" {
   name_prefix = "oky-tg"
   port        = var.api_container_port
   protocol    = "HTTPS" # end-to-end TLS: the ALB reaches the task over HTTPS
-  target_type = "ip"     # Fargate awsvpc
+  target_type = "ip"    # Fargate awsvpc
   vpc_id      = var.vpc_id
 
   health_check {
@@ -119,6 +119,30 @@ resource "aws_wafv2_web_acl" "this" {
       managed_rule_group_statement {
         vendor_name = "AWS"
         name        = "AWSManagedRulesCommonRuleSet"
+
+        # SizeRestrictions_BODY BLOCKS ANY REQUEST BODY OVER 8 KB, and it broke
+        # EVERY upload in the product from the day this WAF shipped. The app
+        # accepts 25 MB files (MAX_UPLOAD_BYTES, four controllers) and 8 MB JSON
+        # (main.ts), so the edge was ~3000x stricter than the thing behind it.
+        #
+        # The failure was invisible in every way that matters: CloudFront answers
+        # before the request reaches the API, so nothing appears in the task logs,
+        # no KYRO error is rendered, and the user is shown raw CloudFront HTML
+        # saying "there might be too much traffic or a configuration error".
+        # Confirmed from WAF's own sampled requests:
+        #   BLOCK POST AWS#AWSManagedRulesCommonRuleSet#SizeRestrictions_BODY
+        #     /api/schools/<id>/enrollment/upload
+        #
+        # Set to COUNT, not excluded: the metric and sampled requests stay, so the
+        # rule keeps telling us what it WOULD have blocked. The real size ceiling
+        # is enforced by the "oversized-body" rule below at a limit that matches
+        # the application, and by multer's own per-route fileSize.
+        rule_action_override {
+          name = "SizeRestrictions_BODY"
+          action_to_use {
+            count {}
+          }
+        }
       }
     }
     visibility_config {
@@ -127,6 +151,34 @@ resource "aws_wafv2_web_acl" "this" {
       sampled_requests_enabled   = true
     }
   }
+
+  # WHY THERE IS NO EDGE-ENFORCED BODY-SIZE RULE HERE.
+  #
+  # I wrote one (block when Content-Length > 30 MiB), applied it, and then tested
+  # it with a 31.5 MB upload. IT DID NOT BLOCK. Two independent reasons, both
+  # fatal, and both worth recording so nobody rebuilds it:
+  #
+  #   1. A WAF size_constraint_statement measures the SIZE OF THE FIELD, not the
+  #      number inside it. On single_header "content-length" it compares the byte
+  #      length of the string "33000000" (8) against 31457280 — a condition that
+  #      can never be true. The rule was a placebo: it produced a metric, a
+  #      CloudWatch dimension and a sense of coverage, and blocked nothing.
+  #
+  #   2. Matching the BODY instead cannot work either. WAF inspects only the first
+  #      16 KB of a CloudFront request body (64 KB at most via
+  #      association_config), so `oversize_handling = MATCH` would fire on every
+  #      request over the INSPECTION limit — reintroducing exactly the 8 KB-class
+  #      breakage this change exists to remove.
+  #
+  # WAF cannot express "reject bodies over 25 MB". The ceiling is therefore
+  # enforced where it can actually be measured, and already is:
+  #   • multer  `limits: { fileSize: 25 MB }` on all four upload controllers
+  #   • express `useBodyParser('json' | 'urlencoded', { limit: '8mb' })` in main.ts
+  # Both reject with a real, rendered API error instead of opaque CloudFront HTML.
+  #
+  # SizeRestrictions_BODY above stays as COUNT rather than being excluded, so the
+  # oversized-request signal is still recorded and sampled — we keep the telemetry
+  # without keeping the block.
 
   rule {
     name     = "bad-inputs"
