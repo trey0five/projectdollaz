@@ -30,15 +30,17 @@ overrides:
   # first advisory's caps (1.1.16 / 2.1.2 / 5.0.7) were themselves vulnerable to
   # the second, so this gate went red again — an override pinned to an exact patch
   # is a snapshot, not a floor, and has to be re-raised when the next one lands.
-  'brace-expansion@<1.1.17': '1.1.17'
-  'brace-expansion@>=2.0.0 <2.1.3': '2.1.3'
-  'brace-expansion@>=3.0.0 <5.0.8': '5.0.8'
+  'brace-expansion@<1.1.18': '1.1.18'
+  'brace-expansion@>=2.0.0 <2.1.4': '2.1.4'
+  'brace-expansion@>=3.0.0 <5.0.9': '5.0.9'
   # GHSA-4c8g-83qw-93j6 + GHSA-v2hh-gcrm-f6hx — host confusion. Transitive via ajv.
-  'fast-uri@<3.1.4': '3.1.4'
+  'fast-uri@<3.1.5': '3.1.5'
   # GHSA-52cp-r559-cp3m — quadratic blow-up on merge-key chains. Transitive.
   'js-yaml@>=4.0.0 <4.3.0': '4.3.0'
   # GHSA-r28c-9q8g-f849 — path traversal in the source-map reader. Patch-level.
   'postcss@<=8.5.17': '8.5.18'
+  # GHSA-mwp4-54f8-5fhr — transitive via the SSH/socks chain.
+  'ip-address@<10.3.1': '10.3.1'
   # GHSA-gcfj-64vw-6mp9 — the Node adapter can inherit a proxy from the
   # environment. In-range for apps/web's own ^1.7.9, so this is a real patch.
   'axios@>=1.15.2 <1.18.0': '1.18.0'
