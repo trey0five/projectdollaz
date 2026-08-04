@@ -76,8 +76,17 @@ export function PersistenceProvider({ children }) {
 
   // Hydrate everything for a school. Awaits FIRST, then a single batch of
   // setState — never synchronous-in-effect.
+  //
+  // `preferPeriodId` KEEPS FOCUS where the user already is. On a first mount there
+  // is no preference and we land on the newest period, as always. But a MID-SESSION
+  // re-hydrate (refresh(), e.g. after deleting one uploaded file) must not silently
+  // move the user to a different period — periods are ordered by period-end DESC, so
+  // a school carrying an empty future period (FY 2027 created ahead of time) has that
+  // period at list[0]. Re-seeding from it emptied AppProvider entirely, so removing
+  // ONE of three trial balances made all three disappear even though the server had
+  // deleted only the one role. Falls back to newest when the preferred period is gone.
   const loadForSchool = useCallback(
-    async (sid) => {
+    async (sid, preferPeriodId = null) => {
       setError('')
       try {
         const pres = await periodsApi.list(sid)
@@ -91,7 +100,26 @@ export function PersistenceProvider({ children }) {
           setHydrationToken((t) => t + 1)
           return
         }
-        const newest = list[0]
+        // Which period to hydrate INTO the intake:
+        //   1. the caller's preference (a mid-session refresh — stay put), else
+        //   2. the newest period that actually HOLDS something, else
+        //   3. the newest period, whatever it is.
+        //
+        // Rule 2 exists because periods are ordered by period-end DESC and a
+        // school may carry an EMPTY FUTURE period (Sample High School has an
+        // FY 2027 row created ahead of FY 2026's books). Focusing that on every
+        // cold load seeded the trial-balance intake with nothing, so a school
+        // with three saved files opened Finance to an empty uploader — the same
+        // "I don't see anything I saved" symptom as the delete bug, from the same
+        // list[0] assumption. An empty period has nothing to hydrate anyway, so
+        // preferring one that does is strictly better; the fallback keeps a
+        // brand-new school (no data anywhere) landing exactly where it used to.
+        const hasContent = (p) =>
+          p.hasSnapshot || !!(p.roles && (p.roles.cy || p.roles.py || p.roles.audit))
+        const newest =
+          (preferPeriodId && list.find((p) => p.id === preferPeriodId)) ||
+          list.find(hasContent) ||
+          list[0]
         const imports = await fetchActiveImports(sid, newest.id)
         let snapshot = null
         if (newest.hasSnapshot) {
@@ -395,7 +423,10 @@ export function PersistenceProvider({ children }) {
     savePeriod,
     savePeriods,
     reopenPeriod,
-    refresh: () => (schoolId ? loadForSchool(schoolId) : Promise.resolve()),
+    // A mid-session re-hydrate STAYS on the period the user is working in (see
+    // loadForSchool). The mount effect deliberately passes no preference.
+    refresh: () =>
+      schoolId ? loadForSchool(schoolId, activePeriod?.id ?? null) : Promise.resolve(),
   }
 
   return <PersistenceContext.Provider value={value}>{children}</PersistenceContext.Provider>

@@ -116,6 +116,10 @@ export const wizardConfigs = {
             // years" CTA actually reaches; without it the CTA opened the
             // single-period intake and the ask silently did nothing.
             initialTab={ctx.intake}
+            // Same confirm-then-celebrate gate the first-run Finance screen uses,
+            // so adding a SECOND year through the wizard is rewarded too — not
+            // only a school's very first upload.
+            onConfirmed={ctx.onLitUp}
           />
         ),
       },

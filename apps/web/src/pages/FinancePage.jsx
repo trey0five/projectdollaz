@@ -23,6 +23,7 @@ import {
   ShieldCheck,
   ArrowRight,
   Scale,
+  Sparkles,
 } from 'lucide-react'
 import { BACK_PILL, BackPillBody } from '../components/ui/BackLink.jsx'
 import { AddDataCta, RecordsCta } from '../components/module/ModuleCtas.jsx'
@@ -35,6 +36,7 @@ import ModuleTabs from '../components/module/ModuleTabs.jsx'
 import { moduleHue } from '../components/module/moduleAnatomy.js'
 import AddDataTab from '../components/wizard/AddDataTab.jsx'
 import TrialBalanceModalBody from '../components/datahub/TrialBalanceModalBody.jsx'
+import LightUpReveal from '../components/finance/LightUpReveal.jsx'
 import { useAnalytics, useInsights, useBudget } from '../hooks/useAnalytics.js'
 import { useCompliance } from '../hooks/useCompliance.js'
 import { metricFormat, formatMetricValue } from '../lib/metricMeta.js'
@@ -303,7 +305,7 @@ export default function FinancePage() {
   // and the Budget org roll-up tabs, so we never null the schoolId for org mode.
   const schoolId = activeSchool?.id ?? null
   const canEdit = activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'
-  const { billing, loading: billingLoading, entitled, isOwner } = useBilling()
+  const { billing, loading: billingLoading, entitled, isOwner, hasModule } = useBilling()
   const { periods, hydrating, hydratedFiles, activePeriod, hydrationToken } = usePersistence()
 
   const savedPeriods = useMemo(() => (periods || []).filter((p) => p.hasSnapshot), [periods])
@@ -347,6 +349,15 @@ export default function FinancePage() {
   }, [overviewLoading, savedPeriods.length, schoolId])
   const firstRunLatched = firstRunSchoolId != null && firstRunSchoolId === schoolId
 
+  // ── Confirm → reveal ────────────────────────────────────────────────────────
+  // Both are latched BY SCHOOL for the same reason first run is: a swap to another
+  // school must not inherit the previous school's "already confirmed", and must
+  // never leave a celebration for School A open over School B's data.
+  const [confirmedSchoolId, setConfirmedSchoolId] = useState(null)
+  const [revealSchoolId, setRevealSchoolId] = useState(null)
+  const intakeConfirmed = confirmedSchoolId != null && confirmedSchoolId === schoolId
+  const revealOpen = revealSchoolId != null && revealSchoolId === schoolId
+
   const { data, metrics, loading: metricsLoading, notEntitled } = useAnalytics(
     schoolId,
     selectedPeriodId,
@@ -360,6 +371,55 @@ export default function FinancePage() {
     for (const r of metrics) m[r.key] = r
     return m
   }, [metrics])
+
+  // ── Reveal inputs. Every one is READ from data already on this page — the
+  // celebration invents nothing. `hasBudget` insists on at least one budgeted
+  // line, not merely a budget row, so an empty budget shell doesn't make the
+  // reveal promise variance it cannot show. ──────────────────────────────────
+  const revealAccounts = useMemo(() => {
+    const cy = (hydratedFiles || []).find((f) => f.role === 'cy')
+    return cy?.rows?.length ?? 0
+  }, [hydratedFiles])
+
+  const revealPriorLabel = useMemo(() => {
+    if (!activePeriod) return null
+    // savedPeriods is newest-first, so the first strictly-earlier one is the prior.
+    const earlier = savedPeriods.find((p) => p.periodEndDate < activePeriod.periodEndDate)
+    return earlier?.label ?? null
+  }, [savedPeriods, activePeriod])
+
+  const revealVitals = useMemo(
+    () =>
+      metrics.map((m) => ({
+        key: m.key,
+        label: m.label,
+        status: m.status,
+        available: m.available,
+        display: m.available
+          ? formatMetricValue(m.value, metricFormat(m.key, m.unit))
+          : '—',
+      })),
+    [metrics],
+  )
+
+  // The vitals + budget on this page are keyed to `selectedPeriodId` (the newest
+  // SAVED period), while the reveal names `activePeriod` (the period the intake
+  // wrote to). They are normally the same row, but a user who saves an EARLIER
+  // year makes them diverge — and then the celebration would headline FY 2025
+  // while counting FY 2026's vitals. Only claim these when the two agree.
+  const revealPeriodMatches =
+    activePeriod?.id != null && activePeriod.id === selectedPeriodId
+
+  const revealHasBudget = useMemo(() => {
+    const lines = budget?.lines
+    if (!lines) return false
+    return Object.values(lines).some(
+      (kind) =>
+        kind &&
+        typeof kind === 'object' &&
+        Object.values(kind).some((v) => Number.isFinite(Number(v)) && Number(v) !== 0),
+    )
+  }, [budget])
 
   // Hero status line: prefer the AI insight, else a compliance-derived line (same
   // composition HomeDashboard uses). null → HomeHero simply hides the InsightBand.
@@ -493,8 +553,16 @@ export default function FinancePage() {
           {/* THE REVEAL — appears only once a snapshot actually exists, and is the
               ONLY thing that ends first run. Honest: it is not shown before there
               is an overview to show, and it never interrupts the upload in
-              progress above it. */}
-          {ready ? (
+              progress above it.
+
+              Two beats. FIRST the confirm band asks the user to look at what was
+              actually stored and agree with it — the intake autosaves, so until
+              now nothing had ever shown them the result and waited. THEN the
+              celebration, which is the only place the reward is claimed. A user
+              who says "not quite" is dropped back to the calm bar and their files,
+              never trapped. Once either beat is answered, `intakeConfirmed` keeps
+              the band from re-appearing every time they add a fourth file. */}
+          {ready && intakeConfirmed ? (
             <motion.div
               initial={reduce ? { opacity: 0 } : { opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
@@ -509,14 +577,23 @@ export default function FinancePage() {
                   Keep adding files here, or open the Finance overview whenever you like.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setFirstRunSchoolId(null)}
-                className="btn-cta inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-xl px-5 py-2.5 text-[12px] font-semibold uppercase tracking-[0.1em] outline-none transition-transform focus-visible:ring-2 focus-visible:ring-gold/50"
-              >
-                See my Finance overview
-                <ArrowRight size={14} />
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRevealSchoolId(schoolId)}
+                  className="inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-xl border-2 border-border px-4 py-2.5 text-[12px] font-semibold uppercase tracking-[0.1em] text-muted transition-colors hover:border-navy hover:text-navy"
+                >
+                  <Sparkles size={14} /> What lit up
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFirstRunSchoolId(null)}
+                  className="btn-cta inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-xl px-5 py-2.5 text-[12px] font-semibold uppercase tracking-[0.1em] outline-none transition-transform focus-visible:ring-2 focus-visible:ring-gold/50"
+                >
+                  See my Finance overview
+                  <ArrowRight size={14} />
+                </button>
+              </div>
             </motion.div>
           ) : null}
 
@@ -548,6 +625,11 @@ export default function FinancePage() {
                 // addDataHref returns the bare '/data' (the real hub) under v1
                 // and the direct deep link under v2.
                 onOpenMonthly={() => navigate(addDataHref(uiV2, { add: 'monthly' }))}
+                // The confirm gate lives INSIDE the embed so both doors into the
+                // trial-balance intake — this first-run screen and the Add-data
+                // wizard — get the identical checkpoint from one implementation.
+                onConfirmed={() => setRevealSchoolId(schoolId)}
+                onAnswered={() => setConfirmedSchoolId(schoolId)}
               />
             </div>
           ) : (
@@ -732,8 +814,28 @@ export default function FinancePage() {
     )
   }
 
+  // The celebration is mounted OUTSIDE the branch that opens it: it portals to
+  // document.body, and keeping it here means a user who clicks a destination and
+  // comes back, or who reopens it from "What lit up", gets the same one instance
+  // in both the v1 and v2 shells.
+  const reveal = (
+    <LightUpReveal
+      open={revealOpen}
+      onClose={() => setRevealSchoolId(null)}
+      schoolName={activeSchool?.name ?? null}
+      period={activePeriod}
+      priorPeriodLabel={revealPriorLabel}
+      hasBudget={revealPeriodMatches && revealHasBudget}
+      accreditationLicensed={hasModule('accreditation')}
+      vitals={revealPeriodMatches ? revealVitals : []}
+      accounts={revealAccounts}
+    />
+  )
+
   if (uiV2) {
     return (
+      <>
+      {reveal}
       <ModuleTabs
         moduleKey="finance"
         overview={overview}
@@ -743,13 +845,20 @@ export default function FinancePage() {
             schoolId={schoolId}
             periodId={selectedPeriodId}
             canEdit={canEdit}
+            onLitUp={() => setRevealSchoolId(schoolId)}
           />
         }
         records={<FinanceRecords />}
         reports={<FinanceReports periodId={selectedPeriodId} />}
       />
+      </>
     )
   }
 
-  return overview
+  return (
+    <>
+      {reveal}
+      {overview}
+    </>
+  )
 }

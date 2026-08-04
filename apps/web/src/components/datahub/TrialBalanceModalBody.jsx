@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { FileSpreadsheet, Layers, Plug } from 'lucide-react'
 import { AppProvider } from '../../context/AppContext.jsx'
 import IntakeBar from '../IntakeBar.jsx'
+import IntakeConfirmBand from '../finance/IntakeConfirmBand.jsx'
 import BulkYearsUploader from '../BulkYearsUploader.jsx'
 import IntegrationsSection from '../settings/IntegrationsSection.jsx'
 
@@ -35,11 +36,34 @@ export default function TrialBalanceModalBody({
   canEdit,
   onOpenMonthly,
   initialTab = null,
+  // OPTIONAL confirm gate. Provided ⇒ once this school has stored trial balances,
+  // a band appears under the intake asking the user to look at what was saved and
+  // agree with it, and confirming calls this. Absent ⇒ nothing renders, which is
+  // how the ui.v1 Data hub keeps its exact previous behaviour: a confirm button
+  // whose celebration lives on another page would be a dead control there.
+  onConfirmed = null,
+  // Fires on EITHER answer. The host needs this because "not quite" still ends
+  // the checkpoint: on the first-run Finance screen the calm "your statements are
+  // ready / see my overview" bar only appears once the band is answered, so
+  // signalling nothing on dismiss left that user with the band gone and no way
+  // out of first run.
+  onAnswered = null,
 }) {
   const [mode, setMode] = useState(() =>
     TABS.some((t) => t.key === initialTab) ? initialTab : 'single',
   )
   const active = canEdit ? mode : 'single'
+  // Which period the user has already answered for. Keyed by period id so saving
+  // a SECOND year asks again — that upload lights up different things (year-over-
+  // year columns) and deserves its own reward.
+  const [answeredPeriodId, setAnsweredPeriodId] = useState(null)
+  const showConfirm =
+    typeof onConfirmed === 'function' &&
+    canEdit &&
+    active === 'single' &&
+    !!activePeriod &&
+    answeredPeriodId !== activePeriod.id &&
+    (hydratedFiles || []).length > 0
 
   return (
     <div>
@@ -98,6 +122,27 @@ export default function TrialBalanceModalBody({
         >
           <IntakeBar />
         </AppProvider>
+      )}
+
+      {/* The checkpoint. Deliberately OUTSIDE AppProvider: it reports what is
+          PERSISTED for the period, not what is sitting in the uploader, so it
+          can never congratulate a user for a file that failed to save. */}
+      {showConfirm && (
+        <div className="px-5 pb-5">
+          <IntakeConfirmBand
+            period={activePeriod}
+            files={hydratedFiles}
+            onConfirm={() => {
+              setAnsweredPeriodId(activePeriod.id)
+              onConfirmed()
+              onAnswered?.()
+            }}
+            onFix={() => {
+              setAnsweredPeriodId(activePeriod.id)
+              onAnswered?.()
+            }}
+          />
+        </div>
       )}
 
       {/* Bulk uploader stays ALWAYS mounted (visibility-toggled) so dropped/

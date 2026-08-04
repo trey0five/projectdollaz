@@ -25,6 +25,8 @@ export default function AddDataTab({
   periodId: periodIdProp,
   canEdit: canEditProp,
   onDone,
+  // Optional celebrate-hook, forwarded to whichever embed wants it (see ctx).
+  onLitUp = null,
 }) {
   const { activeSchool } = useSchools()
   const { periods, hydratedFiles, activePeriod, hydrationToken } = usePersistence()
@@ -102,6 +104,9 @@ export default function AddDataTab({
       activePeriod,
       hydrationToken,
       onSaved: handleSaved,
+      // Optional: the host page's "celebrate what this upload lit up" hook. Only
+      // Finance passes one today; an embed without it simply renders no gate.
+      onLitUp,
       // Advisory tab hint for whichever embed the deep link opened.
       intake: deepLink.intake,
     }),
@@ -118,6 +123,7 @@ export default function AddDataTab({
       activePeriod,
       hydrationToken,
       handleSaved,
+      onLitUp,
       deepLink,
     ],
   )
