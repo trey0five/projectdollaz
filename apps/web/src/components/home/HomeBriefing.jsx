@@ -129,7 +129,7 @@ const SOURCE_META = {
 const CTA_LABEL = {
   metric: 'Open analytics',
   compliance: 'Open readiness',
-  data: 'Go to Data hub',
+  data: 'Add data',
   enrollment: 'Open enrollment',
   cash: 'Open Cash & Collections',
 }

@@ -1,9 +1,11 @@
 // Budget vs. actual — a READ-ONLY comparison. Budget figures come straight from
-// the period's SAVED budget (set up in the Data hub — Budget card); actuals come
-// from the generated statements (revenue_mix / expense_mix metrics). Per-line and
-// total variance with RAG chips, inline mini dual-bars, a Budget→Actual bridge,
-// and auto-commentary on the biggest misses. No editing here — budget INPUT lives
-// on /data, so this tab always reflects the budget automatically.
+// the period's SAVED budget (BudgetSetup — the Budget tab and the Finance
+// Add-data wizard); actuals come from the generated statements (revenue_mix /
+// expense_mix metrics). Per-line and total variance with RAG chips, inline mini
+// dual-bars, a Budget→Actual bridge, and auto-commentary on the biggest misses.
+// No editing here — the optional `onSetUp` prop lets the host flip to its own
+// setup surface (BudgetPage passes its Budget tab); without it, the no-budget
+// CTA falls back to a Link to /budget.
 import { motion, useReducedMotion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { Scale, Wallet } from 'lucide-react'
@@ -24,7 +26,7 @@ const budOf = (lines, kind, key) => {
   return Number.isFinite(Number(v)) ? Number(v) : null
 }
 
-export default function BudgetVsActual({ metrics, ...props }) {
+export default function BudgetVsActual({ metrics, onSetUp = null, ...props }) {
   const reduce = useReducedMotion()
   const { budget } = useBudget(props.schoolId, props.periodId)
   const lines = budget?.lines || {}
@@ -157,12 +159,22 @@ export default function BudgetVsActual({ metrics, ...props }) {
             <Wallet size={20} />
           </span>
           <p className="text-[15px] text-navy">No budget set up for this period yet.</p>
-          <Link
-            to="/data"
-            className="mt-3 inline-flex items-center gap-1.5 rounded-lg btn-cta px-4 py-2 text-[13px] font-bold uppercase tracking-[0.08em] transition-transform"
-          >
-            Set up your budget in the Data hub
-          </Link>
+          {onSetUp ? (
+            <button
+              type="button"
+              onClick={onSetUp}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-lg btn-cta px-4 py-2 text-[13px] font-bold uppercase tracking-[0.08em] transition-transform"
+            >
+              Set up your budget
+            </button>
+          ) : (
+            <Link
+              to="/budget"
+              className="mt-3 inline-flex items-center gap-1.5 rounded-lg btn-cta px-4 py-2 text-[13px] font-bold uppercase tracking-[0.08em] transition-transform"
+            >
+              Set up your budget
+            </Link>
+          )}
         </div>
       ) : (
         <>

@@ -33,8 +33,13 @@ const REPORTS = [
   {
     id: 'forecast',
     title: 'FYE Forecast',
+    // Deliberately does NOT name a destination: the FY-end forecast is entered
+    // in Planning & Forecasting, which is a separately-licensed module, and a
+    // default school (finance-only) would read this as an instruction it cannot
+    // follow. ForecastView's own CTA is entitlement-aware and says the right
+    // thing either way — that is the ONE place the destination is decided.
     blurb:
-      'Project where the year lands — driver assumptions, cohort roll-forward, and feeder enrollment. Enter it in the Data hub; it also flows into your board packet.',
+      'Project where the year lands — driver assumptions, cohort roll-forward, and feeder enrollment. The saved forecast flows into your board packet.',
     live: true,
     Icon: TrendingUp,
     action: 'inline',

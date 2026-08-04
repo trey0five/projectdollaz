@@ -72,11 +72,17 @@ export default function HomeVitalsStrip({ schoolId, periodId }) {
             aria-label={`${m.label} details`}
             className="rounded-xl border border-navy/5 bg-section/60 px-3.5 py-3 text-left outline-none transition-colors hover:border-gold/40 focus-visible:ring-2 focus-visible:ring-gold/60"
           >
-            <div className="flex items-center justify-between gap-2">
-              <span className="truncate text-[11px] font-semibold uppercase tracking-[0.09em] text-muted">
+            {/* /app is the first screen after login, and these labels were
+                clipped to "MONTHS OF OPERATING…" / "NET TUITION PER STUD…" at
+                1280. The label wraps instead of truncating (card contract §5.3:
+                prefer wrapping over shrinking, never cut a metric name). */}
+            <div className="flex min-w-0 items-start justify-between gap-2">
+              <span className="min-w-0 break-words text-[11px] font-semibold uppercase leading-snug tracking-[0.09em] text-muted">
                 {m.label}
               </span>
-              <StatusDot status={m.status} size={8} />
+              <span className="mt-0.5 shrink-0">
+                <StatusDot status={m.status} size={8} />
+              </span>
             </div>
             <div className="mt-1.5 font-serif text-[24px] font-semibold leading-none text-navy sm:text-[26px]">
               <AnimatedMetricValue key={periodId} value={m.value} format={metricFormat(m.key, m.unit)} />

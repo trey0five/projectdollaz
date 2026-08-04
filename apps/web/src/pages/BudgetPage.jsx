@@ -1,24 +1,24 @@
-// Budget workspace (v2) — a clean, TABBED page. The "Budget" tab is now a
-// READ-ONLY view: a friendly summary of this period's budget (when one exists)
-// plus a clear call-to-action to set up / edit the budget in the Data hub
-// (/data), which is now the single place to INPUT data. The guided wizard, the
-// advanced monthly spread, import, and clear/replace all live in the Data hub's
-// Budget card (components/budget/BudgetSetup.jsx).
+// Budget workspace — a clean, TABBED page. The "Budget" tab mounts the REAL
+// setup surface (components/budget/BudgetSetup.jsx — the same component the
+// Finance Add-data wizard embeds: one setup surface, two doors, zero forks).
+// BudgetSetup derives summary-vs-wizard itself, owns guided/advanced/import/
+// clear/replace, and respects canEdit — so you set up or edit the budget right
+// where you are, never on another page.
 //
 // LAYOUT: the school switcher (reused from SchoolContext) + the period selector
 // (reused PeriodSelector, persists to localStorage 'finrep_active_period') are
 // PINNED in the page header ABOVE the tab bar, so context survives tab switches.
 //
-// TABS: Budget · Budget vs. Actual · Organizational Roll-up. The Budget tab is
-// view-only (setup lives in the Data hub); BvA + Roll-up are analysis/views. The
-// FY-End Forecast moved out: input is on /data, the read-only result is on /reports.
+// TABS: Budget · Budget vs. Actual · Organizational Roll-up · Consolidated
+// Statements. BvA + the org tabs are analysis/views. The FY-End Forecast lives
+// in Planning & Forecasting; the read-only result is on /reports.
 //
 // React-Compiler safety: tab panels are produced by render-HELPER functions
 // returning JSX with a key on the root — NOT nested component definitions. The
 // only setState-in-effect is the established microtask-deferred sync-on-key
 // (selected period) and the org-id fetch.
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Wallet, Scale, Building2, Landmark } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
@@ -29,7 +29,7 @@ import OrgRollup from '../components/budget/OrgRollup.jsx'
 import OrgStatements from '../components/budget/OrgStatements.jsx'
 import OrgKpiStrip from '../components/budget/OrgKpiStrip.jsx'
 import BudgetVsActual from '../components/analytics/BudgetVsActual.jsx'
-import BudgetSummary from '../components/budget/BudgetSummary.jsx'
+import BudgetSetup from '../components/budget/BudgetSetup.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { usePersistence } from '../context/PersistenceContext.jsx'
 import {
@@ -60,7 +60,6 @@ function deriveFiscalYearStart(periodEndDate) {
 }
 
 export default function BudgetPage() {
-  const navigate = useNavigate()
   const { activeSchool } = useSchools()
   const schoolId = activeSchool?.id ?? null
   const canEdit = activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'
@@ -92,8 +91,8 @@ export default function BudgetPage() {
 
   const [activeTab, setActiveTab] = useState('budget')
 
-  // Saved budget for the active school+period (the read-only summary, Forecast
-  // seed, and BvA all derive from this). Setup/editing now lives in /data.
+  // Saved budget for the active school+period (the Budget tab's loading gate and
+  // BvA both derive from this; BudgetSetup owns its own copy via useBudget too).
   const { budget, loading: budgetLoading, reload: reloadBudget } = useBudget(
     schoolId,
     selectedPeriodId,
@@ -172,23 +171,23 @@ export default function BudgetPage() {
     error: orgMetricsError,
   } = useOrgMetrics(stmtOrgId, fiscalYearStart)
 
-  // Does a budget exist for this period? (drives the summary-vs-empty state).
-  // A budget "exists" if it has a spread or rev/exp lines.
-  const hasBudget = !!(
-    budget?.lines &&
-    (budget.lines.spread || budget.lines.revenue || budget.lines.expense)
-  )
-
   // ── Render helpers (NOT components) ─────────────────────────────────────────
 
-  // The Budget tab is now READ-ONLY: a friendly summary of this period's budget
-  // (when one exists) plus a clear pointer to the Data hub, which is the single
-  // place to set up or edit a budget (guided wizard / advanced spread / import).
+  // The Budget tab IS the setup surface: BudgetSetup derives summary-vs-wizard
+  // itself (guidedView 'auto'), owns guided/advanced/import/clear/replace, and
+  // respects canEdit — set up or edit the budget right here, no link-out.
   const renderBudget = () => {
     if (!selectedPeriodId) {
       return (
         <div key="budget" className="card-soft border-dashed px-6 py-14 text-center">
           <p className="font-serif text-lg italic text-muted">Select a period to view its budget.</p>
+          <p className="mx-auto mt-1.5 max-w-md text-[13px] text-muted">
+            No periods yet? Add your first trial balance from the{' '}
+            <Link to="/finance" className="font-semibold text-navy underline decoration-gold/60 underline-offset-2 hover:decoration-gold">
+              Finance page
+            </Link>
+            . A budget attaches to a period.
+          </p>
         </div>
       )
     }
@@ -199,47 +198,17 @@ export default function BudgetPage() {
         </div>
       )
     }
-    if (hasBudget) {
-      return (
-        <div key="budget" className="space-y-4">
-          {/* Setup now lives in the Data hub — gold callout that routes there. */}
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gold/30 bg-gold/5 px-5 py-4">
-            <div className="min-w-0">
-              <p className="font-serif text-[15px] font-semibold text-navy">
-                Set up or edit your budget in the Data hub
-              </p>
-              <p className="mt-0.5 text-[12px] text-muted">
-                The guided wizard, the advanced monthly spread, and imports now live in one place.
-              </p>
-            </div>
-            <Link
-              to="/data"
-              className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl btn-cta px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.1em] outline-none ring-gold/50 transition-transform focus-visible:ring-2"
-            >
-              Go to Data hub →
-            </Link>
-          </div>
-          <BudgetSummary
-            budget={budget}
-            canEdit={canEdit}
-            onEdit={() => navigate('/data')}
-            onViewAdvanced={() => navigate('/data')}
-          />
-        </div>
-      )
-    }
     return (
-      <div key="budget" className="card-soft border-dashed px-6 py-14 text-center">
-        <p className="font-serif text-lg italic text-muted">No budget yet for this period.</p>
-        <p className="mx-auto mt-1.5 max-w-md text-[13px] text-muted">
-          Budget setup now lives in the Data hub — set up a budget the guided way, the advanced way, or by importing a spreadsheet.
-        </p>
-        <Link
-          to="/data"
-          className="mt-5 inline-flex min-h-[40px] items-center gap-1.5 rounded-xl btn-cta px-5 py-2.5 text-[12px] font-semibold uppercase tracking-[0.1em] outline-none ring-gold/50 transition-transform focus-visible:ring-2"
-        >
-          Set up your budget in the Data hub →
-        </Link>
+      <div key="budget">
+        <BudgetSetup
+          schoolId={schoolId}
+          periodId={selectedPeriodId}
+          canEdit={canEdit}
+          onSaved={() => {
+            reloadBudget()
+            reloadMetrics()
+          }}
+        />
       </div>
     )
   }
@@ -259,6 +228,7 @@ export default function BudgetPage() {
           periodId={selectedPeriodId}
           canEdit={canEdit}
           metrics={metrics}
+          onSetUp={() => setActiveTab('budget')}
         />
       </div>
     )

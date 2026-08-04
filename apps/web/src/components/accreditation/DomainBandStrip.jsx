@@ -67,9 +67,13 @@ function BandCard({ band, label, index, reduce }) {
         measured ? 'border-rule/60 bg-white' : 'border-dashed border-rule/60 bg-cream/50'
       }`}
     >
-      <p className="flex items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-muted">
-        <DomainGlyph icon={Icon} className="shrink-0" />
-        <span className="truncate">{label}</span>
+      {/* The band strip is a 5-up grid: at 1280 each cell gave the label ~53px,
+          so every domain rendered as a stub ("MISSI…", "GOVE…", "ACAD…") and the
+          strip named nothing. The label WRAPS instead (card contract §5.3 — a
+          card title is never truncated; prefer wrapping over shrinking). */}
+      <p className="flex items-start gap-1.5 text-[11.5px] font-semibold uppercase leading-snug tracking-[0.08em] text-muted">
+        <DomainGlyph icon={Icon} className="mt-px shrink-0" />
+        <span className="min-w-0 hyphens-auto break-words">{label}</span>
       </p>
 
       {measured ? (
@@ -146,7 +150,14 @@ export default function DomainBandStrip({
           Ordinal, counted over distinct facts — never a score, never a percentage.
         </p>
       </div>
-      <ul className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
+      {/* 5-up only once there is room for it — at 1280 a 5-up cell left the
+          domain name ~53px and the whole strip read as stubs. */}
+      {/* THIS STRIP SITS IN THE PAGE'S NARROW COLUMN, not the full width — at
+          1280 the section is ~571px, so lg:4 gave each cell ~127px and
+          `break-words` shattered "GOVERNANCE" into "GOVERNA/NCE". Stepping the
+          density down keeps whole words: 3-up until 2xl, where there is room
+          for 4. Fewer, readable cards beat more, broken ones. */}
+      <ul className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-3 2xl:grid-cols-4">
         {domainBands.map((b, i) => (
           <BandCard
             key={b.domainKey}

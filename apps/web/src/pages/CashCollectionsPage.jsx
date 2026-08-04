@@ -37,6 +37,8 @@ import CashFlowSection from '../components/cash/CashFlowSection.jsx'
 import ReconcileBadge from '../components/cash/ReconcileBadge.jsx'
 import PennyAvatar from '../components/penny/PennyAvatar.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
+import { useUiV2 } from '../context/UiFlagContext.jsx'
+import { addDataHref } from '../lib/dataDestinations.js'
 import { useCashCollections } from '../hooks/useCashCollections.js'
 import { useCashFlow } from '../hooks/useCashFlow.js'
 import { formatShortDate } from '../lib/format.js'
@@ -138,7 +140,7 @@ function ConnectNudge({ onGoToData }) {
         onClick={onGoToData}
         className="mt-1 inline-flex items-center gap-1.5 rounded-full btn-cta px-4 py-2 text-[14px] font-semibold transition"
       >
-        <Database size={16} /> Connect in the Data hub
+        <Database size={16} /> Connect QuickBooks
         <ArrowRight size={15} />
       </button>
     </PagePanel>
@@ -156,6 +158,7 @@ function CashCollectionsWorkspace() {
   const { activeSchool } = useSchools()
   const schoolId = activeSchool?.id ?? null
   const navigate = useNavigate()
+  const uiV2 = useUiV2()
 
   const { data, loading, refreshing, error, connected, orgFed, refresh } =
     useCashCollections(schoolId)
@@ -286,7 +289,9 @@ function CashCollectionsWorkspace() {
   // Only an org-fed school that is NOT connected (no attributed slice) gets the panel.
   if (!connected) {
     if (orgFed) return <OrgFedPanel />
-    return <ConnectNudge onGoToData={() => navigate('/data')} />
+    // Deep-link the QuickBooks tab of the trial-balance flow directly (the
+    // /data redirect strips query strings — never route the intent through it).
+    return <ConnectNudge onGoToData={() => navigate(addDataHref(uiV2, { add: 'tb', intake: 'qbo' }))} />
   }
 
   // ── Header aside: as-of chip + stale note + Refresh ──────────────────────────

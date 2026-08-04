@@ -13,7 +13,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { animate, motion, useReducedMotion } from 'framer-motion'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import {
   CircleDollarSign,
   FileStack,
@@ -34,9 +34,11 @@ import { useUiV2 } from '../context/UiFlagContext.jsx'
 import ModuleTabs from '../components/module/ModuleTabs.jsx'
 import { moduleHue } from '../components/module/moduleAnatomy.js'
 import AddDataTab from '../components/wizard/AddDataTab.jsx'
+import TrialBalanceModalBody from '../components/datahub/TrialBalanceModalBody.jsx'
 import { useAnalytics, useInsights, useBudget } from '../hooks/useAnalytics.js'
 import { useCompliance } from '../hooks/useCompliance.js'
 import { metricFormat, formatMetricValue } from '../lib/metricMeta.js'
+import { addDataHref } from '../lib/dataDestinations.js'
 import { fmtDollar } from '../lib/format.js'
 import StatusDot from '../components/analytics/StatusDot.jsx'
 import DeltaChip from '../components/analytics/DeltaChip.jsx'
@@ -46,6 +48,18 @@ import HomeHero from '../components/home/HomeHero.jsx'
 import BoardPacketExportButton from '../components/reports/BoardPacketExportButton.jsx'
 
 const VITAL_KEYS = ['operating_margin', 'days_cash_on_hand', 'months_operating_reserve']
+
+// ── First-run "what lights up" preview tiles ─────────────────────────────────
+// HONESTY RULE: future-tense labels of what WILL appear once the first trial
+// balance lands — never numbers, dashes-pretending-to-be-values, or fake
+// sparklines. Module scope so the React Compiler treats the list as stable.
+const FIRST_RUN_LIGHTS = [
+  { Icon: FileStack, title: 'Statements', blurb: 'Your four statements, generated' },
+  { Icon: BarChart3, title: 'Analytics', blurb: 'Tier-1 vitals with status' },
+  { Icon: Wallet, title: 'Budget', blurb: 'Budget vs. actual' },
+  { Icon: FileBarChart2, title: 'Reports', blurb: 'A board-ready packet' },
+  { Icon: ShieldCheck, title: 'Readiness', blurb: 'Review readiness' },
+]
 
 // A budgeted line amount, read straight from the saved budget JSON (null if unset).
 // Mirrors BudgetVsActual.budOf so the variance summary here matches that tab.
@@ -132,6 +146,9 @@ function FinanceRecords() {
   return (
     <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
       <ModuleOverviewLink module="finance" className="mb-3" />
+      <p className="mb-4 text-[14.5px] text-muted">
+        Your finance workspaces — statements, cash and budget, each one click away.
+      </p>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         <SectionCard to="/statements" Icon={FileStack} title="Statements" viewLabel="Open statements">
           <p className="text-[14.5px] text-muted">
@@ -258,7 +275,7 @@ function VitalRow({ metric }) {
   return (
     <div className="flex items-center gap-2.5 border-b border-rule/40 py-2 last:border-0">
       <StatusDot status={available ? metric.status : 'neutral'} />
-      <span className="min-w-0 flex-1 truncate text-[14.5px] text-ink">
+      <span className="min-w-0 flex-1 break-words text-[14.5px] text-ink">
         {metric?.label ?? 'Metric'}
       </span>
       <CountUpValue
@@ -280,12 +297,14 @@ function VitalRow({ metric }) {
 export default function FinancePage() {
   const reduce = useReducedMotion()
   const uiV2 = useUiV2()
+  const navigate = useNavigate()
   const { activeSchool } = useSchools()
   // v1 is ALWAYS school-scoped — org finance already lives on the consolidated Home
   // and the Budget org roll-up tabs, so we never null the schoolId for org mode.
   const schoolId = activeSchool?.id ?? null
+  const canEdit = activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'
   const { billing, loading: billingLoading, entitled, isOwner } = useBilling()
-  const { periods, hydrating } = usePersistence()
+  const { periods, hydrating, hydratedFiles, activePeriod, hydrationToken } = usePersistence()
 
   const savedPeriods = useMemo(() => (periods || []).filter((p) => p.hasSnapshot), [periods])
 
@@ -308,6 +327,25 @@ export default function FinancePage() {
       cancelled = true
     }
   }, [savedPeriods])
+
+  // ── First-run LATCH ─────────────────────────────────────────────────────────
+  // The zero-period branch mounts the real 3-slot trial-balance intake, whose own
+  // copy invites "last year" and "audited" AFTER the first file lands. Deriving
+  // the branch live off savedPeriods made it DELETE ITSELF ~2s into the task: the
+  // first snapshot flips savedPeriods > 0, the branch unmounts, and slots 2 and 3
+  // vanish while the user is still reading the instructions that offered them.
+  // So first-run is latched once it renders, and the user leaves it DELIBERATELY
+  // via an explicit reveal CTA that only appears once there is something to
+  // reveal. Keyed by school id: a swap to a school that already has data must
+  // never inherit the previous school's latch.
+  const [firstRunSchoolId, setFirstRunSchoolId] = useState(null)
+  const overviewLoading = billingLoading || hydrating
+  useEffect(() => {
+    if (overviewLoading) return
+    if (savedPeriods.length === 0) setFirstRunSchoolId(schoolId)
+    else setFirstRunSchoolId((cur) => (cur === schoolId ? cur : null))
+  }, [overviewLoading, savedPeriods.length, schoolId])
+  const firstRunLatched = firstRunSchoolId != null && firstRunSchoolId === schoolId
 
   const { data, metrics, loading: metricsLoading, notEntitled } = useAnalytics(
     schoolId,
@@ -406,8 +444,20 @@ export default function FinancePage() {
         </div>
       </div>
     )
-  } else if (savedPeriods.length === 0) {
-    // ── Empty / onboarding (never blank/500) ─────────────────────────────────────
+  } else if (savedPeriods.length === 0 || firstRunLatched) {
+    // ── First run: the empty state IS the setup ──────────────────────────────────
+    // The REAL trial-balance embed (the same TrialBalanceModalBody the Add-data
+    // wizard mounts) lives right here, so a brand-new school drops a file on the
+    // first screen it sees — no link-out, no chooser. The embed autosaves through
+    // PersistenceContext (savePeriods → refreshAfterSave → setPeriods).
+    //
+    // The branch is held by `firstRunLatched`, NOT by savedPeriods alone: the
+    // embed's 3-slot intake keeps offering "last year" and "audited" after the
+    // first file, and yanking it away the instant a snapshot lands destroys an
+    // in-flight task. The reward is still immediate and visible — the reveal CTA
+    // below appears the moment there is a real overview to go to — but the user
+    // decides when to leave.
+    const ready = savedPeriods.length > 0
     overview = (
       <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
         <FinanceHeader />
@@ -415,22 +465,131 @@ export default function FinancePage() {
           initial={reduce ? { opacity: 0 } : { opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45 }}
-          className="card-soft flex flex-col items-center gap-5 px-6 py-14 text-center"
+          className="space-y-5"
         >
-          <span className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gold-gradient text-white shadow-glow">
-            <CircleDollarSign size={34} />
-          </span>
-          <div>
-            <h2 className="font-serif text-2xl font-semibold text-navy">Light up Finance</h2>
-            <p className="mx-auto mt-2 max-w-md text-[16px] leading-relaxed text-muted">
-              Add your trial balance in the Data hub — we&apos;ll turn it into your financial
-              statements and light up every finance surface here: statements, analytics, budget,
-              reports and review readiness.
-            </p>
+          {/* Hero band — .card-flashy now takes its ring/glow from --c-module, so
+              under v2 this wears the finance blue instead of framing a blue badge
+              in a gold ring (index.css; v1 and print resolve to gold unchanged). */}
+          <div className="card-flashy flex flex-col items-center gap-4 px-6 py-10 text-center">
+            <motion.span
+              className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gold-gradient text-white shadow-glow"
+              animate={reduce ? undefined : { y: [0, -10, 0] }}
+              transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
+            >
+              <CircleDollarSign size={34} />
+            </motion.span>
+            <div>
+              <h2 className="font-serif text-2xl font-semibold text-navy">
+                {ready ? 'Finance is lit up' : 'Light up Finance'}
+              </h2>
+              <p className="mx-auto mt-2 max-w-xl text-[16px] leading-relaxed text-muted">
+                {ready
+                  ? 'Your first snapshot is saved. Add last year and your audited numbers below to unlock comparatives — or go straight to your overview.'
+                  : 'Drop in your trial balance — statements, analytics, budget and board reports all light up from this one upload.'}
+              </p>
+            </div>
           </div>
-          <Link to="/data" className="btn-primary inline-flex items-center gap-2">
-            Go to the Data hub <ArrowRight size={16} />
-          </Link>
+
+          {/* THE REVEAL — appears only once a snapshot actually exists, and is the
+              ONLY thing that ends first run. Honest: it is not shown before there
+              is an overview to show, and it never interrupts the upload in
+              progress above it. */}
+          {ready ? (
+            <motion.div
+              initial={reduce ? { opacity: 0 } : { opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ type: 'spring', stiffness: 240, damping: 22 }}
+              className="card-soft flex flex-wrap items-center justify-between gap-4 p-5 sm:p-6"
+            >
+              <div className="min-w-0">
+                <p className="font-serif text-[17px] font-semibold text-navy">
+                  Your statements are ready
+                </p>
+                <p className="mt-0.5 min-w-0 break-words text-[13.5px] leading-snug text-muted">
+                  Keep adding files here, or open the Finance overview whenever you like.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFirstRunSchoolId(null)}
+                className="btn-cta inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-xl px-5 py-2.5 text-[12px] font-semibold uppercase tracking-[0.1em] outline-none transition-transform focus-visible:ring-2 focus-visible:ring-gold/50"
+              >
+                See my Finance overview
+                <ArrowRight size={14} />
+              </button>
+            </motion.div>
+          ) : null}
+
+          {canEdit ? (
+            /* The uploader, right there — the EXISTING embed, chrome only. It owns
+               its own intake/progress/applied UI, so the card around it never
+               navigates or changes state mid-upload. No padding on the card: the
+               embed carries its own internal chrome (same as the wizard's wrap). */
+            <div className="card-soft overflow-hidden">
+              {/* Heading ONLY. The embed renders its own bordered tab band
+                  (This year / Add years / QuickBooks) with its own hint line
+                  directly underneath, so a second rule + a second subtitle
+                  restating the same three options stacked two near-identical
+                  headers ~90px apart. One rule, from the embed. */}
+              <div className="px-5 pt-5 pb-3 sm:px-6">
+                <h3 className="font-serif text-[17px] font-semibold text-navy">
+                  Add your trial balance
+                </h3>
+              </div>
+              <TrialBalanceModalBody
+                school={activeSchool}
+                hydratedFiles={hydratedFiles}
+                activePeriod={activePeriod}
+                hydrationToken={hydrationToken}
+                canEdit={canEdit}
+                // Flag-aware, ALWAYS present. Passing undefined under v1 hid
+                // BulkYearsUploader's only route out of the "this is a monthly
+                // workbook" banner — a v1 user got the diagnosis and no door.
+                // addDataHref returns the bare '/data' (the real hub) under v1
+                // and the direct deep link under v2.
+                onOpenMonthly={() => navigate(addDataHref(uiV2, { add: 'monthly' }))}
+              />
+            </div>
+          ) : (
+            /* Viewer/board lens: no upload chrome a viewer can't use. */
+            <div className="card-soft px-6 py-10 text-center">
+              <p className="mx-auto max-w-md text-[15px] leading-relaxed text-muted">
+                A school owner or accountant adds the first trial balance — everything here
+                lights up the moment they do.
+              </p>
+            </div>
+          )}
+
+          {/* What lights up — future-tense labels only; no numbers we don't have. */}
+          <div>
+            <p className="mb-3 text-[12px] font-bold uppercase tracking-[0.12em] text-muted">
+              What lights up
+            </p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+              {FIRST_RUN_LIGHTS.map((tile, index) => (
+                <motion.div
+                  key={tile.title}
+                  initial={reduce ? { opacity: 0 } : { opacity: 0, y: 14 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{
+                    delay: index * 0.05,
+                    type: 'spring',
+                    stiffness: 260,
+                    damping: 24,
+                  }}
+                  className="kpi-3d flex min-w-0 flex-col gap-2 p-4 sm:p-5"
+                >
+                  <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gold/15 text-gold">
+                    <tile.Icon size={18} />
+                  </span>
+                  <span className="text-[14.5px] font-semibold text-navy">{tile.title}</span>
+                  <span className="min-w-0 break-words text-[13px] leading-snug text-muted">
+                    {tile.blurb}
+                  </span>
+                </motion.div>
+              ))}
+            </div>
+          </div>
         </motion.div>
       </div>
     )
@@ -523,8 +682,8 @@ export default function FinancePage() {
             </div>
           ) : (
             <p className="rounded-lg border border-dashed border-gold/40 bg-gold/[0.04] px-3 py-4 text-[14.5px] text-navy">
-              No budget vs. actual yet for this period. Set up your budget in the Data hub to track
-              variance.
+              No budget vs. actual yet for this period. Open Budget to set one up — guided,
+              advanced, or import.
             </p>
           )}
         </SectionCard>
@@ -583,7 +742,7 @@ export default function FinancePage() {
             module="finance"
             schoolId={schoolId}
             periodId={selectedPeriodId}
-            canEdit={activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'}
+            canEdit={canEdit}
           />
         }
         records={<FinanceRecords />}

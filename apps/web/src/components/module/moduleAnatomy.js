@@ -45,6 +45,11 @@ export const MODULE_ANATOMY = {
     tabs: ['overview', 'add', 'records', 'reports'],
     Icon: CircleDollarSign,
     eyebrow: 'Finance command center',
+    // Finance's third tab is three sub-page doors (Statements / Cash / Budget),
+    // not a register — labeling it "Records" made the word mean two different
+    // things across modules. The KEY stays `records` (wizard finish(), navIds
+    // and deep links are frozen on it); only the human label differs.
+    tabLabels: { records: 'Workspaces' },
   },
   enrollment: {
     tabs: ['overview', 'add', 'records'],
@@ -99,6 +104,14 @@ export function moduleAnatomy(key) {
 /** The present tab keys for a module (defaults to Overview-only). */
 export function moduleTabs(key) {
   return MODULE_ANATOMY[key]?.tabs ?? ['overview']
+}
+
+/** The human label for a module's tab: per-module override (tabLabels) first,
+ *  then the canonical TAB_LABEL, then the raw key. The ONE read path for tab
+ *  labels — render sites must not index TAB_LABEL directly, or per-module
+ *  renames (finance's "Workspaces") silently miss them. */
+export function moduleTabLabel(key, tab) {
+  return MODULE_ANATOMY[key]?.tabLabels?.[tab] ?? TAB_LABEL[tab] ?? tab
 }
 
 /** The locked brand hue for a module (falls back to the v2 action blue). */

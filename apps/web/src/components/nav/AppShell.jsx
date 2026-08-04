@@ -67,7 +67,7 @@ import ScopeToggle from './ScopeToggle.jsx'
 import ContextSwitcher from './ContextSwitcher.jsx'
 import SearchBox from '../search/SearchBox.jsx'
 import { NAV_GROUPS, SETTINGS_ITEM, navGroupVisible } from './sidebarNav.js'
-import { MODULE_ANATOMY, moduleTabs, moduleLabel, moduleHue, TAB_LABEL } from '../module/moduleAnatomy.js'
+import { MODULE_ANATOMY, moduleTabs, moduleLabel, moduleHue, moduleTabLabel } from '../module/moduleAnatomy.js'
 import SupportButton from '../support/SupportButton.jsx'
 import InboxBell from '../inbox/InboxBell.jsx'
 import { InboxProvider } from '../../context/InboxContext.jsx'
@@ -666,13 +666,13 @@ export default function AppShell({ children }) {
             <Link
               key={t}
               to={to}
-              aria-label={`${moduleLabel(activeModuleKey)} — ${TAB_LABEL[t]}`}
+              aria-label={`${moduleLabel(activeModuleKey)} — ${moduleTabLabel(activeModuleKey, t)}`}
               aria-current={active ? 'page' : undefined}
               className={itemClass(active)}
             >
               <ActiveRail active={active} />
               <TabIcon size={17} className={`shrink-0 ${active ? 'text-gold-light' : 'text-white/70'}`} />
-              <span>{TAB_LABEL[t]}</span>
+              <span>{moduleTabLabel(activeModuleKey, t)}</span>
             </Link>
           )
         })}

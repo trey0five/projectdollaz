@@ -12,9 +12,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Link, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, FileStack, Database } from 'lucide-react'
+import { ArrowLeft, ArrowRight, FileStack, Database, CloudUpload } from 'lucide-react'
 import { useSchools } from '../../context/SchoolContext.jsx'
 import { usePersistence } from '../../context/PersistenceContext.jsx'
+import { useUiV2 } from '../../context/UiFlagContext.jsx'
+import { addDataHref } from '../../lib/dataDestinations.js'
 import { formatShortDate, PERIOD_LABELS } from '../../lib/format.js'
 import CreateSchoolForm from '../CreateSchoolForm.jsx'
 import ReportTabs from '../reports/ReportTabs.jsx'
@@ -51,8 +53,9 @@ function StatementsView({ bundle, label, periodId, periodEndDate, periodType, sc
   )
 }
 
-// Empty state — no snapshot for the active period yet; send them to the Data hub.
-function NoStatementsCard() {
+// Empty state — no snapshot for the active period yet; deep-link the add flow
+// directly (flag-aware — never through the /data redirect, which strips params).
+function NoStatementsCard({ addHref }) {
   return (
     <div className="card-soft flex flex-col items-center gap-4 px-6 py-14 text-center">
       <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gold-gradient text-white shadow-glow">
@@ -61,12 +64,12 @@ function NoStatementsCard() {
       <div>
         <h2 className="font-serif text-xl font-semibold text-navy">No statements yet</h2>
         <p className="mx-auto mt-1.5 max-w-sm text-[15px] leading-relaxed text-muted">
-          Add your trial balance in the Data hub and we’ll generate your four financial statements
-          right here.
+          Add your trial balance and we&rsquo;ll generate your four financial statements right
+          here.
         </p>
       </div>
-      <Link to="/data" className="btn-primary inline-flex items-center gap-2">
-        Go to the Data hub <ArrowRight size={16} />
+      <Link to={addHref} className="btn-primary inline-flex items-center gap-2">
+        Add trial balance <ArrowRight size={16} />
       </Link>
     </div>
   )
@@ -87,6 +90,8 @@ function Splash() {
 export default function StatementsWorkspace() {
   const { schools, activeSchool, loading } = useSchools()
   const { periods, hydrating, activePeriod, latestSnapshot, reopenPeriod } = usePersistence()
+  const uiV2 = useUiV2()
+  const addHref = addDataHref(uiV2, { add: 'tb' })
   const [searchParams, setSearchParams] = useSearchParams()
 
   // Read-only reopen state for non-active saved periods.
@@ -168,22 +173,22 @@ export default function StatementsWorkspace() {
           </span>
           <div>
             <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-gold">
-              Finance · Records
+              Finance · Workspaces
             </p>
             <h1 className="font-serif text-xl font-semibold text-navy sm:text-2xl">
               Statements &amp; Periods
             </h1>
             <p className="text-[15px] text-muted">
-              Your generated financial statements — view any period here. Add or update data in the
-              Data hub.
+              Your generated financial statements — view any period here. Add or update numbers
+              from Add data.
             </p>
           </div>
         </div>
         <Link
-          to="/data"
+          to={addHref}
           className="btn-primary inline-flex shrink-0 items-center gap-1.5 self-start sm:self-auto"
         >
-          <Database size={15} /> Go to Data hub
+          <CloudUpload size={15} /> Add data
         </Link>
       </div>
 
@@ -212,7 +217,7 @@ export default function StatementsWorkspace() {
         </aside>
 
         {/* Read-only statements: a reopened older period, the active period's saved
-            snapshot, or an empty state pointing to the Data hub. */}
+            snapshot, or an empty state deep-linking the add flow. */}
         <section ref={workspaceRef} className="min-w-0 flex-1">
           {openId && openBundle ? (
             <StatementsView
@@ -234,7 +239,7 @@ export default function StatementsWorkspace() {
               school={activeSchool}
             />
           ) : (
-            <NoStatementsCard />
+            <NoStatementsCard addHref={addHref} />
           )}
         </section>
       </div>

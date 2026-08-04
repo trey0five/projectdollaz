@@ -107,11 +107,17 @@ export default function BriefingPerformers({ schoolId, periodId }) {
             aria-label={`${m.label} — open in analytics`}
             className="group flex min-w-[72%] snap-start flex-col gap-2 overflow-hidden rounded-2xl border border-white/12 bg-white/[0.07] p-3.5 text-left outline-none backdrop-blur-sm ring-gold/50 transition-colors hover:border-white/25 hover:bg-white/[0.11] focus-visible:ring-2 sm:min-w-0"
           >
-            <div className="flex items-center gap-2">
+            {/* The hero pills clipped their metric names at BOTH 1280 and 1500
+                ("Months …", "Tuition …"). The pill is a flex COLUMN, so the
+                label can take a second line without pushing the value — wrap it
+                rather than cut it (card contract §5.3). */}
+            <div className="flex min-w-0 items-start gap-2">
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/10 text-white/90">
                 <MetricIcon metricKey={m.key} size={16} />
               </span>
-              <span className="truncate text-[13px] font-semibold text-white/90">{m.label}</span>
+              <span className="min-w-0 break-words text-[13px] font-semibold leading-snug text-white/90">
+                {m.label}
+              </span>
             </div>
 
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">

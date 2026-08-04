@@ -110,17 +110,24 @@ function SignalChip({ signal }) {
     .filter(Boolean)
     .join(' · ')
 
+  // `items-start` + a wrapping label: these chips sit in a narrow card column and
+  // used to clip the metric name to "Student-Te…" / "% of Stude…", which names
+  // nothing. The chip grows a line instead (card contract §5.3).
   return (
     <span
       title={title || undefined}
-      className={`inline-flex max-w-full items-center gap-1.5 rounded-lg border px-2 py-1 text-[11.5px] ${
+      className={`inline-flex max-w-full items-start gap-1.5 rounded-lg border px-2 py-1 text-[11.5px] ${
         live
           ? 'border-[#F59E0B]/35 bg-[#F59E0B]/[0.07] text-navy'
           : 'border-rule/60 bg-section text-muted'
       }`}
     >
-      {live ? <StatusDot status={signal.status} size={7} /> : null}
-      <span className="truncate font-semibold">{signal.label}</span>
+      {live ? (
+        <span className="mt-[3px] shrink-0">
+          <StatusDot status={signal.status} size={7} />
+        </span>
+      ) : null}
+      <span className="min-w-0 break-words font-semibold">{signal.label}</span>
       {live ? (
         <span className="shrink-0 font-bold" style={{ color: AMBER_INK }}>
           {formatMetricValue(signal.value, fmt)}
@@ -273,9 +280,20 @@ function DomainCard({
       className={`relative flex flex-col overflow-hidden rounded-2xl ${shell}`}
     >
       <div className="flex flex-1 flex-col gap-3 p-4">
-        {/* ── header ─────────────────────────────────────────────────────── */}
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2">
+        {/* ── header ───────────────────────────────────────────────────────
+            The row WRAPS (flex-wrap) and the title WRAPS: with a "Not scored"
+            pill on a 5-up grid the title was truncated to nothing at 1280 —
+            cards read icon + "!" + NOT SCORED with no domain name at all. The
+            pill now drops below the title instead of eating it. Card contract
+            §5.3: a card's own title is never `truncate`d. ── */}
+        <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1.5">
+          {/* basis-[9rem] IS THE THING THAT MAKES flex-wrap WORK. With only
+              `flex-1 min-w-0`, a flex child SHRINKS before the row wraps — so
+              the pill kept its width and the title collapsed to ~4px, rendering
+              "Mission & Catholic Identity" as one letter per line down the card.
+              A basis tells flex "below 9rem, wrap instead of shrink", which is
+              what puts the pill on its own line and gives the title real room. */}
+          <div className="flex min-w-0 flex-1 basis-[9rem] items-start gap-2">
             <span
               className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
               style={{
@@ -289,7 +307,7 @@ function DomainCard({
                 className={measured ? '' : 'text-muted'}
               />
             </span>
-            <h3 className="truncate font-serif text-[15px] font-semibold text-navy">
+            <h3 className="min-w-0 break-words font-serif text-[15px] font-semibold leading-snug text-navy">
               {domain.label}
             </h3>
           </div>

@@ -33,7 +33,17 @@
      Replaces the heavy border-2 boxes: a hairline rule + soft shadow, larger
      radius. .card-soft-hover adds a restrained gold ring + lift on hover. */
   .card-soft {
-    @apply rounded-2xl border border-rule/50 bg-white shadow-card;
+    @apply rounded-2xl border border-rule/50 bg-white;
+    /* Card contract §5: real cushion depth — a glass top light + a tight contact
+       shadow + a soft ambient drop, replacing the flat shadow-card at this ONE
+       definition so every card-soft page inherits it. Plain CSS declarations on
+       purpose: comma'd Tailwind arbitrary values drop out of the dev JIT.
+       .card-soft-hover's hover:shadow-paper still outranks this on hover
+       (class + :hover specificity), so the existing lift is preserved. */
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.9),
+      0 1px 2px rgb(16 28 61 / 0.05),
+      0 10px 24px -12px rgb(16 28 61 / 0.16);
   }
   .card-soft-hover {
     @apply transition-all duration-300 hover:-translate-y-0.5 hover:border-gold/40 hover:shadow-paper;
@@ -43,12 +53,33 @@
      gold highlight that slowly rotates around it, brightening into a gold glow on
      hover. Used for the home Explore tiles + Recent-periods chips. Rotation is
      disabled under prefers-reduced-motion (the static gradient ring remains). */
+  /* HUE COMES FROM THE TOKEN, NOT A LITERAL. Every accent below was hard-coded
+     rgba(184,150,80,…) — v1 gold — so under ui.v2 this class framed blue content
+     in a gold conic ring on a cream field (most visibly the finance first-run
+     hero, the one off-hue surface on an otherwise all-blue page). They now read
+     `var(--c-module, var(--c-gold))`:
+       · inside ModuleAccent → the module's own hue (finance blue, facilities
+         orange, …), which is what the wrapper was already applying to the badge,
+         the pills and the rail;
+       · outside a module → --c-gold, which tokens.css defines as 184 150 80 in
+         v1 and in @media print (so v1 and every PDF are UNCHANGED) and as the
+         v2 action blue under html[data-ui='v2'].
+     The field stops use color-mix over white; in the gold case they resolve to
+     ~#fbf9f4 / ~#f6f2ea against the previous #fcfaf4 / #f7f2e6 — a ≤4/255
+     per-channel difference on a soft gradient, i.e. not perceptible. Likewise
+     the 84% ring stop now uses --c-gold-light (212 180 122) in place of the
+     near-identical hand-written 214 178 110. */
   .card-flashy {
     @apply relative rounded-2xl transition-shadow duration-300;
-    /* Same premium surface as .card-vital: warm gradient + glass highlight + depth. */
+    /* Same premium surface as .card-vital: tinted gradient + glass highlight + depth. */
     background:
       radial-gradient(120% 82% at 12% -12%, rgba(255, 255, 255, 0.95), transparent 55%),
-      linear-gradient(158deg, #ffffff 0%, #fcfaf4 58%, #f7f2e6 100%);
+      linear-gradient(
+        158deg,
+        #ffffff 0%,
+        color-mix(in srgb, rgb(var(--c-module, var(--c-gold))) 6%, #ffffff) 58%,
+        color-mix(in srgb, rgb(var(--c-module, var(--c-gold))) 12%, #ffffff) 100%
+      );
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.9),
       0 10px 26px -14px rgba(26, 39, 68, 0.30),
@@ -60,14 +91,17 @@
     inset: 0;
     border-radius: inherit;
     padding: 1.5px;
+    /* --c-module → --c-gold → (v1/print) 184 150 80: identical output off-module
+       in v1, the module's hue inside ModuleAccent. --c-gold-light and --c-shade
+       are the existing token twins of the old 214/178/110 and 26/39/68 literals. */
     background: conic-gradient(
       from var(--cf-angle),
-      rgba(184, 150, 80, 0.18),
-      rgba(184, 150, 80, 0.95) 12%,
-      rgba(26, 39, 68, 0.35) 36%,
-      rgba(184, 150, 80, 0.18) 58%,
-      rgba(214, 178, 110, 0.75) 84%,
-      rgba(184, 150, 80, 0.18)
+      rgb(var(--c-module, var(--c-gold)) / 0.18),
+      rgb(var(--c-module, var(--c-gold)) / 0.95) 12%,
+      rgb(var(--c-shade) / 0.35) 36%,
+      rgb(var(--c-module, var(--c-gold)) / 0.18) 58%,
+      rgb(var(--c-gold-light) / 0.75) 84%,
+      rgb(var(--c-module, var(--c-gold)) / 0.18)
     );
     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
     -webkit-mask-composite: xor;
@@ -78,12 +112,12 @@
   }
   .card-flashy:hover {
     box-shadow:
-      0 14px 34px -10px rgba(184, 150, 80, 0.45),
-      0 4px 14px rgba(26, 39, 68, 0.08);
+      0 14px 34px -10px rgb(var(--c-module, var(--c-gold)) / 0.45),
+      0 4px 14px rgb(var(--c-shade) / 0.08);
   }
   .card-flashy:hover::before {
     padding: 2.25px;
-    filter: brightness(1.18) drop-shadow(0 0 7px rgba(184, 150, 80, 0.55));
+    filter: brightness(1.18) drop-shadow(0 0 7px rgb(var(--c-module, var(--c-gold)) / 0.55));
   }
 
   /* Flashy border for the home vital tiles — distinct from .card-flashy: a

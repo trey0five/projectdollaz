@@ -143,7 +143,7 @@ export const RULE_ACTIONS = Object.freeze({
 
   // ── Meta ──────────────────────────────────────────────────────────────────
   'SCHOOL-NOT-REPORTING': (f, api) => [
-    { label: 'Open the data hub', primary: true, onClick: () => api.navigate('/finance?tab=add') },
+    { label: 'Add school data', primary: true, onClick: () => api.navigate('/finance?tab=add') },
   ],
 })
 

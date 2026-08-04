@@ -8,8 +8,11 @@
 // and what remains. The burn bar makes the story visual: solid orange = actual,
 // hatched orange = committed, red pulse = overflow past the budget.
 //
-// Empty states CTA to Finance (/data?open=budget opens the existing BudgetImport
-// embed; /budget is the read view) — NO facilities-side budget entry exists.
+// Empty states CTA to Finance's REAL budget setup — NO facilities-side budget
+// entry exists. The href is flag-aware via addDataHref(): under ui.v2 that is the
+// direct deep link /finance?tab=add&add=budget, because the old '/data?open=budget'
+// went through a redirect that DROPS the query string and dumped the user on the
+// trial-balance chooser — copy said budget, destination said something else.
 // The gear (owner/accountant only) edits WHICH of the 10 canonical expense lines
 // (EXPENSE_LINE_KEYS from @finrep/analytics) count as facilities money.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -19,6 +22,8 @@ import { Link } from 'react-router-dom'
 import { Wallet, Settings2, ArrowRight, AlertTriangle, Check } from 'lucide-react'
 import { EXPENSE_LINE_KEYS, EXPENSE_LINE_LABELS } from '@finrep/analytics'
 import EntityFormModal from '../ui/EntityFormModal.jsx'
+import { useUiV2 } from '../../context/UiFlagContext.jsx'
+import { addDataHref } from '../../lib/dataDestinations.js'
 
 const FAC_HUE = '#EA580C'
 
@@ -203,6 +208,7 @@ function Figure({ label, value, tone = 'navy' }) {
 
 // ── The empty-state CTA card (no budget yet / no category lines yet) ──────────
 function EmptyBudgetCard({ reason }) {
+  const uiV2 = useUiV2()
   return (
     <div className="card-soft relative overflow-hidden p-5 sm:p-6">
       <div
@@ -227,11 +233,11 @@ function EmptyBudgetCard({ reason }) {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Link
-            to="/data?open=budget"
+            to={addDataHref(uiV2, { add: 'budget' })}
             className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-semibold text-white shadow-glow transition hover:brightness-110"
             style={{ backgroundColor: FAC_HUE }}
           >
-            Set up in Finance
+            Set up the budget
             <ArrowRight size={14} />
           </Link>
           <Link

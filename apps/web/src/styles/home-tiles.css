@@ -41,7 +41,11 @@
     #fff;
   text-align: left;
   outline: none;
+  /* Card contract §5: the shared inset glass highlight (same top-light layer as
+     .card-soft / .kpi-3d) so the tile reads as a lifted pane, not a flat print.
+     No hue/behavior change — the flood/shine motion layer is untouched. */
   box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.9),
     0 1px 2px rgb(16 28 61 / 0.05),
     0 8px 22px -12px rgb(16 28 61 / 0.12);
   transition:
@@ -51,7 +55,9 @@
 .module-tile:hover,
 .module-tile:focus-visible {
   border-color: color-mix(in srgb, var(--tile-hue) 55%, transparent);
-  box-shadow: 0 16px 36px -10px color-mix(in srgb, var(--tile-hue) 40%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.9),
+    0 16px 36px -10px color-mix(in srgb, var(--tile-hue) 40%, transparent);
 }
 /* Keyboard ring — the tile hue, offset off the card so it reads on any ground. */
 .module-tile:focus-visible {

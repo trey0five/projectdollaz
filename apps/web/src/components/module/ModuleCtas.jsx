@@ -9,7 +9,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { Link } from 'react-router-dom'
 import { CloudUpload, Table2 } from 'lucide-react'
-import { moduleTabs } from './moduleAnatomy.js'
+import { moduleTabs, moduleTabLabel } from './moduleAnatomy.js'
 
 const BASE =
   'inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13.5px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy/40'
@@ -23,13 +23,15 @@ export function AddDataCta({ label = 'Add data', className = '' }) {
   )
 }
 
-/** Secondary sibling: a hue-tinted outline pill (module accent via --c-module). */
-export function RecordsCta({ module, label = 'Records', className = '' }) {
+/** Secondary sibling: a hue-tinted outline pill (module accent via --c-module).
+ *  The default label resolves through moduleTabLabel so per-module renames
+ *  (finance's records tab reads "Workspaces") stay in lockstep with the sidebar. */
+export function RecordsCta({ module, label = null, className = '' }) {
   if (module && !moduleTabs(module).includes('records')) return null
   return (
     <Link to="?tab=records" className={`${BASE} module-cta-ghost ${className}`}>
       <Table2 size={16} />
-      {label}
+      {label ?? moduleTabLabel(module, 'records')}
     </Link>
   )
 }

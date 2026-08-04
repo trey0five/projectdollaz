@@ -37,11 +37,19 @@ export default function DomainKpiCard({ label, value, sub, status = 'neutral', i
       initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12 }}
       animate={reduce ? { opacity: 1 } : { opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05, type: 'spring', stiffness: 260, damping: 22 }}
-      className="kpi-3d relative flex flex-col overflow-hidden rounded-2xl"
+      className="kpi-3d relative flex min-w-0 flex-col overflow-hidden rounded-2xl"
     >
-      <div className="flex flex-col gap-3 p-4 pb-6 sm:p-5 sm:pb-7">
+      {/* Cushion: the p-5/sm:p-6 content scale so no text sits against a border;
+          the extra pb clears the decorative wash. Long labels/values/subs WRAP
+          (min-w-0 + break-words) — never truncate, never shrink the font.
+          `hyphens-auto` pairs with break-words on purpose: break-words is the
+          LAST RESORT for content that cannot fit a line at all (a 20-character
+          figure), but on its own it shatters ordinary English mid-word. With
+          hyphenation the browser prefers a syllable boundary, and the grid
+          step-down in DomainCommandCenter means the case should not arise. */}
+      <div className="flex flex-col gap-3 p-5 pb-6 sm:p-6 sm:pb-8">
         <div className="flex items-start justify-between gap-2">
-          <h3 className="font-sans text-[12px] font-semibold uppercase leading-snug tracking-[0.1em] text-muted">
+          <h3 className="min-w-0 font-sans text-[12px] font-semibold uppercase leading-snug tracking-[0.1em] text-muted">
             {label}
           </h3>
           <span className="mt-0.5 shrink-0">
@@ -49,14 +57,14 @@ export default function DomainKpiCard({ label, value, sub, status = 'neutral', i
           </span>
         </div>
 
-        <div className="font-serif text-[26px] font-semibold leading-none text-navy sm:text-[30px]">
+        <div className="min-w-0 hyphens-auto break-words font-serif text-[26px] font-semibold leading-[1.05] text-navy sm:text-[30px]">
           {value}
         </div>
 
         {sub ? (
-          <div className={`flex items-center gap-1.5 text-[13px] font-semibold ${toneCls}`}>
-            {SubIcon ? <SubIcon size={14} className="shrink-0" /> : null}
-            <span className="truncate">{sub.text}</span>
+          <div className={`flex items-start gap-1.5 text-[13px] font-semibold ${toneCls}`}>
+            {SubIcon ? <SubIcon size={14} className="mt-0.5 shrink-0" /> : null}
+            <span className="min-w-0 hyphens-auto break-words">{sub.text}</span>
           </div>
         ) : null}
       </div>

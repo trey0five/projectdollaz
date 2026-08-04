@@ -52,7 +52,7 @@ export const ACTS = [
     bg: 'bg-section',
     kicker: '8:40 AM — Someone hands you a file',
     h2: 'Trial balances, contracts, minutes — drop them and they land where they belong.',
-    body: 'The Data hub takes whatever your day produces: a trial balance export, a QuickBooks sync, monthly actuals, five years of history at once. Drop a document on Penny and she reads it, tells you where it should be filed — with her confidence — and waits for your yes.',
+    body: 'KYRO takes whatever your day produces: a trial balance export, a QuickBooks sync, monthly actuals, five years of history at once. Drop a document on Penny and she reads it, tells you where it should be filed — with her confidence — and waits for your yes.',
     chips: ['Trial balance import', 'QuickBooks sync', 'Bulk multi-year upload'],
     visual: 'destinations',
     flip: true,

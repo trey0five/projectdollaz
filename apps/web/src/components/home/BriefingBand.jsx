@@ -7,7 +7,8 @@
 //          + fail-soft — renders nothing when there's no genuine win to show).
 // The "alive" feature is AuroraFlow: slow flowing gradient ribbons (no dots /
 // orbs / shimmer). On the frosted-glass path the band tints to the school hue.
-// Empty school (no saved period): the onboarding line + "Go to the Data hub →".
+// Empty school (no saved period): the onboarding line + "Add your trial balance →"
+// deep-linking the finance Add-data tab directly (never via the /data redirect).
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion, useReducedMotion } from 'framer-motion'
 import { Link } from 'react-router-dom'
@@ -178,18 +179,18 @@ export default function BriefingBand({
               )}
             </h1>
             <p className="mt-1.5 max-w-xl text-[16px] leading-relaxed text-white/80">
-              Let&rsquo;s get your first numbers on the board. Add a trial balance in the Data
-              hub and we&rsquo;ll turn it into your four financial statements — then every tile
-              below lights up with live status.
+              Let&rsquo;s get your first numbers on the board. Add a trial balance and
+              we&rsquo;ll turn it into your four financial statements — then every tile below
+              lights up with live status.
             </p>
           </div>
           <div>
             <Link
-              to="/data"
+              to="/finance?tab=add&add=tb"
               style={{ backgroundImage: CTA_GRADIENT }}
               className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-[14px] font-semibold text-white shadow-lg shadow-black/20 transition-transform hover:-translate-y-px motion-reduce:hover:translate-y-0"
             >
-              <Database size={15} /> Go to the Data hub <ArrowRight size={15} />
+              <Database size={15} /> Add your trial balance <ArrowRight size={15} />
             </Link>
           </div>
         </div>

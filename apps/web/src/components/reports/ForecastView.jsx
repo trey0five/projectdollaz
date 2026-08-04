@@ -3,8 +3,9 @@
 //
 // This renders the SAVED fiscal-year-end forecast result for a period — purely a
 // presentation of the precomputed server object (useForecast → forecast). There
-// are NO inputs and NO save here: the forecast is ENTERED in the Data hub (/data,
-// the single input surface) and only VIEWED here. The variance figures are read
+// are NO inputs and NO save here: the forecast is ENTERED in Planning &
+// Forecasting (/planning, the input surface) and only VIEWED here. The variance
+// figures are read
 // STRAIGHT off forecast.variance (server-stored, never recomputed); we only
 // format. KPIs come from forecast.projected.kpis.
 //
@@ -23,6 +24,26 @@ import {
   EXPENSE_LINE_LABELS,
 } from '@finrep/analytics'
 import { useForecast } from '../../hooks/useAnalytics.js'
+import { useBilling } from '../../context/BillingContext.jsx'
+
+// ── Where "enter the forecast" actually goes ─────────────────────────────────
+// GATE THE DESTINATION ON ENTITLEMENT, DON'T ASSUME IT. /planning is client-side
+// gated on the 'planning' module, and a NEW SCHOOL IS LICENSED TO 'finance' ONLY
+// (POST /schools → licensedModules: [{key:'finance'}]). So the unconditional
+// "Enter the forecast in Planning →" pill sent every default school to a module
+// paywall — verified end-to-end — with no other forecast input anywhere
+// (wizardConfigs.finance offers tb / monthly / budget, no forecast).
+//
+// Licensed → the real input surface. Not licensed → say plainly that the FY-end
+// forecast is part of the add-on and link the place that sells it
+// (/settings/billing#modules, the house upsell destination used by
+// CoverageCta / SignalPanel / ModuleInfoPopup). Never a pill whose only outcome
+// is a wall.
+function forecastEntry(hasPlanning) {
+  return hasPlanning
+    ? { to: '/planning', label: 'Enter the forecast in Planning →' }
+    : { to: '/settings/billing#modules', label: 'Add Planning & Forecasting →' }
+}
 
 // ── Formatting helpers — copied VERBATIM from ForecastWorkspace (module-scope
 // pure fns). They are not exported there, so we duplicate to keep this view a
@@ -126,6 +147,8 @@ function TotalRow({ kind, label, forecast, budget, variance, net }) {
 
 export default function ForecastView({ schoolId, periodId }) {
   const { forecast, hasBudget, loading } = useForecast(schoolId, periodId)
+  const { hasModule } = useBilling()
+  const entry = forecastEntry(hasModule('planning'))
 
   // (a) Loading skeleton (mirrors ForecastWorkspace).
   if (loading) {
@@ -136,8 +159,8 @@ export default function ForecastView({ schoolId, periodId }) {
     )
   }
 
-  // (b) Empty state — no forecast saved yet. Point to the Data hub (single input
-  // surface) via a gold CTA pill styled like the BudgetPage CTA.
+  // (b) Empty state — no forecast saved yet. Point to Planning & Forecasting
+  // (the input surface) via a gold CTA pill styled like the BudgetPage CTA.
   if (!forecast) {
     return (
       <motion.div
@@ -151,14 +174,15 @@ export default function ForecastView({ schoolId, periodId }) {
         </span>
         <p className="font-serif text-lg italic text-muted">No forecast saved yet for this period.</p>
         <p className="mx-auto mt-1.5 max-w-md text-[13px] text-muted">
-          Project where the year lands — revise your driver assumptions and add anticipated feeder
-          enrollment in the Data hub. The saved forecast then appears here and flows into your board packet.
+          {hasModule('planning')
+            ? 'Project where the year lands — revise your driver assumptions and add anticipated feeder enrollment in Planning & Forecasting. The saved forecast appears here and flows into your board packet.'
+            : 'Projecting where the year lands — driver assumptions and anticipated feeder enrollment — is part of the Planning & Forecasting add-on. Once it is on your plan, the saved forecast appears here and flows into your board packet.'}
         </p>
         <Link
-          to="/data"
+          to={entry.to}
           className="mt-5 inline-flex min-h-[40px] items-center gap-1.5 rounded-xl btn-cta px-5 py-2.5 text-[12px] font-semibold uppercase tracking-[0.1em] outline-none ring-gold/50 transition-transform focus-visible:ring-2"
         >
-          Enter the forecast in the Data hub →
+          {entry.label}
         </Link>
       </motion.div>
     )
@@ -331,9 +355,11 @@ export default function ForecastView({ schoolId, periodId }) {
       </div>
 
       <p className="text-[12px] text-muted">
-        Saved in the Data hub. To revise the forecast,{' '}
-        <Link to="/data" className="font-semibold text-gold underline-offset-2 hover:underline">
-          enter it in the Data hub →
+        To revise the forecast,{' '}
+        <Link to={entry.to} className="font-semibold text-gold underline-offset-2 hover:underline">
+          {hasModule('planning')
+            ? 'open Planning & Forecasting →'
+            : 'add Planning & Forecasting to your plan →'}
         </Link>
       </p>
     </motion.div>

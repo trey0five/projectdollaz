@@ -72,13 +72,12 @@ function EmptyOnboarding({ schoolName, billing, isOwner }) {
         <div>
           <h2 className="font-serif text-2xl font-semibold text-navy">Get started</h2>
           <p className="mx-auto mt-2 max-w-md text-[16px] leading-relaxed text-muted">
-            Head to the Data hub to add your trial balance — we’ll turn it into your four
-            financial statements — then it walks you through everything else (monthly numbers,
-            budget, enrollment and more), all in one place.
+            Add your trial balance — we’ll turn it into your four financial statements, then we
+            walk you through everything else (monthly numbers, budget, enrollment and more).
           </p>
         </div>
         <Link to="/data" className="btn-primary inline-flex items-center gap-2">
-          Go to the Data hub <ArrowRight size={16} />
+          Add your trial balance <ArrowRight size={16} />
         </Link>
       </motion.div>
     </div>
@@ -87,8 +86,8 @@ function EmptyOnboarding({ schoolName, billing, isOwner }) {
 
 // Fancy on-theme divider that visually separates the Explore and Recent-periods
 // sections — a gold gradient hairline fading into a small diamond at center.
-// Prominent pointer to the unified Data hub — the one place to import/enter every
-// kind of data. Shown on the home page so users always know where to add data.
+// Prominent pointer to the one place to import/enter every kind of data (v1's
+// /data page). Shown on the home page so users always know where to add data.
 function DataHubBanner() {
   return (
     <Link
@@ -103,12 +102,12 @@ function DataHubBanner() {
           Get all your numbers in one place
         </p>
         <p className="mt-0.5 text-[15px] leading-relaxed text-muted">
-          Trial balances, monthly actuals, budget, enrollment and more — the Data hub walks you
-          through exactly what to add, with a friendly guide to help.
+          Trial balances, monthly actuals, budget, enrollment and more — a guided checklist walks
+          you through exactly what to add.
         </p>
       </div>
       <span className="hidden shrink-0 items-center gap-1.5 whitespace-nowrap text-[14px] font-bold uppercase tracking-[0.08em] text-gold sm:inline-flex">
-        Go to Data hub
+        Add your data
         <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" />
       </span>
     </Link>

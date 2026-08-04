@@ -1257,7 +1257,7 @@ export const recordFlows = {
         ? null
         : {
             title: 'No fiscal period yet',
-            body: 'Staffing FTEs attach to a period — add one first (upload a trial balance in the Data hub).',
+            body: 'Staffing FTEs attach to a period — add one first: upload a trial balance from Finance → Add data.',
           },
     steps: [
       {
@@ -1525,7 +1525,7 @@ export const recordFlows = {
       if (!ctx.periodId) {
         return {
           title: 'No fiscal period yet',
-          body: 'The enrollment plan attaches to a period — add one first (upload a trial balance in the Data hub).',
+          body: 'The enrollment plan attaches to a period — add one first: upload a trial balance from Finance → Add data.',
         }
       }
       if (data?.stored && !data.stored.ok) {

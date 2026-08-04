@@ -91,13 +91,13 @@ export default function DomainCommandCenter({
       {showBack ? <BackLink className="-mb-1" /> : null}
       {/* ── Header row ─────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           {Icon ? (
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gold-gradient text-navy shadow-glow">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold-gradient text-navy shadow-glow">
               <Icon size={22} />
             </span>
           ) : null}
-          <div>
+          <div className="min-w-0">
             {eyebrow ? (
               <p className="text-[11.5px] font-semibold uppercase tracking-[0.14em] text-muted">
                 {eyebrow}
@@ -121,14 +121,23 @@ export default function DomainCommandCenter({
       {/* ── Optional full-width hero between the header and the KPI row ─────── */}
       {aboveKpis}
 
-      {/* ── KPI card row (5-up when a domain carries a fifth KPI) ───────────── */}
+      {/* ── KPI card row ──────────────────────────────────────────────────────
+          COLUMN WIDTH IS THE NO-CLIP CONTRACT. A dense row is what actually cut
+          text off: with the sidebar (256px), the page gutters (2×40px) and the
+          card cushion (2×24px), a 6-up grid leaves ~96px of content at 1280 and
+          ~133px at 1500 — narrower than the 30px serif value needs, so
+          `overflow-wrap` broke ordinary words mid-word ("None sched|uled" on
+          /governance, "instructio|nal staff" on /hr, "manageab|le" on
+          /facilities). Six columns are therefore never offered below xl: the
+          dense sets step 3 → 4, which keeps ≥170px of content at every width
+          from 1024 up. Fix the column, not the font (card contract §5.3). ── */}
       {kpis.length ? (
         <div
           className={`grid grid-cols-2 gap-4 ${
             kpis.length >= 6
-              ? 'sm:grid-cols-3 lg:grid-cols-6'
+              ? 'sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4'
               : kpis.length >= 5
-                ? 'sm:grid-cols-3 lg:grid-cols-5'
+                ? 'sm:grid-cols-3 lg:grid-cols-3 2xl:grid-cols-5'
                 : 'lg:grid-cols-4'
           }`}
         >
@@ -152,8 +161,9 @@ export default function DomainCommandCenter({
       <div className="grid gap-6 lg:grid-cols-3">
         {/* LEFT — the register (tabs + active table). min-w-0 lets a wide register
             (e.g. Cash & Collections' aging table) scroll inside its own
-            overflow-x-auto instead of pushing the page body horizontally. */}
-        <div className="card-soft flex min-w-0 flex-col p-4 sm:p-5 lg:col-span-2">
+            overflow-x-auto instead of pushing the page body horizontally.
+            p-5/sm:p-6 is the content-card cushion scale (card contract §5). */}
+        <div className="card-soft flex min-w-0 flex-col p-5 sm:p-6 lg:col-span-2">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             {tabs.length <= 1 ? (
               /* A single-entry tab bar is dead chrome — render a static register

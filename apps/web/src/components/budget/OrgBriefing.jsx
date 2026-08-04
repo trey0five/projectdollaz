@@ -35,6 +35,8 @@ import {
 } from 'lucide-react'
 import { LensIndicator, LensSwitcher } from '../home/LensControls.jsx'
 import { CountUp, WhyText, titleProgress } from '../ui/briefingFx.jsx'
+import { useUiV2 } from '../../context/UiFlagContext.jsx'
+import { resolveBriefingLink } from '../../lib/dataDestinations.js'
 
 // Per-severity theming — folder-tab language shared with HomeBriefing: the tab
 // colour, a faint corner wash, the tab label, and a chip tint for the per-school
@@ -76,7 +78,7 @@ const SOURCE_META = {
 const CTA_LABEL = {
   metric: 'Open analytics',
   compliance: 'Open readiness',
-  data: 'Go to Data hub',
+  data: 'Add data',
   cash: 'Open Cash & Collections',
 }
 
@@ -101,6 +103,7 @@ function fmtDue(iso) {
 // Cross-school decision card — the same flashy folder-tab idiom as HomeBriefing,
 // with a school-attribution chip in the eyebrow. The whole card links to item.link.
 function OrgBriefingItemCard({ item, index, reduce, active = false }) {
+  const uiV2 = useUiV2()
   const sev = SEVERITY[item.severity] ?? SEVERITY.info
   const domain = SOURCE_META[item.source] ?? { label: item.source ?? 'Signal', Icon: Sparkles }
   const DomainIcon = domain.Icon
@@ -116,7 +119,7 @@ function OrgBriefingItemCard({ item, index, reduce, active = false }) {
       whileHover={reduce ? undefined : { y: -3 }}
     >
       <Link
-        to={item.link}
+        to={resolveBriefingLink(item.link, uiV2)}
         className={`group relative block overflow-hidden rounded-2xl ${CARD_ATTN[item.severity] ?? CARD_ATTN.info} ${active ? 'ring-2 ring-gold shadow-glow' : ''}`}
       >
         <span
