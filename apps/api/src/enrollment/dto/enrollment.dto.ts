@@ -59,11 +59,22 @@ export class EnrollmentConnectKeyDto {
 }
 
 /** Multipart upload: the ZIP/CSV file is @UploadedFile (NOT in the DTO); observedOn
- *  is the only text field, overriding the parser's derived as-of date. */
+ *  overrides the parser's derived as-of date and `mode` picks how the per-student
+ *  rows the file carries are reconciled with the register. Multipart text fields
+ *  arrive as strings, so no @Transform is needed. */
 export class EnrollmentUploadDto {
   @IsDateString()
   @IsOptional()
   observedOn?: string
+
+  /**
+   * How the file's per-student rows meet the existing roster: 'merge' (default —
+   * match on sourcedId, then name+birthDate, create the rest) or 'replace' (swap
+   * the whole roster). Same two words, same semantics, as the reviewed importer.
+   */
+  @IsOptional()
+  @IsIn(['merge', 'replace'])
+  mode?: 'merge' | 'replace'
 }
 
 /** Live sync of the connected provider as of an optional date. */

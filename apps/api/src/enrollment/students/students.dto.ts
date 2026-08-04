@@ -40,6 +40,13 @@ import {
   type StudentStatusKey,
 } from '@finrep/analytics'
 
+/**
+ * The per-request import-row ceiling. ONE constant so the reviewed-import DTO and
+ * the one-step roster upload cannot drift into two different limits — a school
+ * that is too large for one path must be too large for both, and say so.
+ */
+export const STUDENT_IMPORT_MAX_ROWS = 2000
+
 /** Sortable register columns (grade sorts in JS by GRADE_KEYS index — see service). */
 export const STUDENT_SORT_KEYS = [
   'lastName',
@@ -296,7 +303,7 @@ export class ImportCommitDto {
 
   @IsArray()
   @ArrayMinSize(1)
-  @ArrayMaxSize(2000)
+  @ArrayMaxSize(STUDENT_IMPORT_MAX_ROWS)
   @ValidateNested({ each: true })
   @Type(() => CreateStudentDto)
   rows!: CreateStudentDto[]

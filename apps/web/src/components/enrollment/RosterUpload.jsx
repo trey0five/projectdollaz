@@ -1,35 +1,75 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// RosterUpload — the universal roster file path (always available, no live SIS
-// needed). Drop a OneRoster ZIP or a CSV, optionally stamp an as-of date, then
-// CONFIRM to send it. The server parses + promotes in one call and returns the
-// parsed snapshot ({ snapshot:{observedOn,totalEnrolled,byGrade}, promoted, warnings });
-// we render that as the applied preview so the user sees exactly what landed.
+// RosterUpload — the ONE-STEP roster path (always available, no live SIS
+// needed). Drop a OneRoster ZIP or a CSV, pick merge/replace, optionally stamp
+// an as-of date, then CONFIRM to send it. The server now does the WHOLE job in
+// one call: a student record for every row that carries per-student detail, plus
+// the enrollment count for the period the FILE is dated to. It returns
+//   { snapshot, promoted, superseded?, supersededManual?, warnings, reason?,
+//     records: {created,updated,deleted,total} | null, recordsNote: string|null,
+//     enrollment: {value, source, fiscalPeriodId, periodLabel} | null }
+// and we render that as the applied panel, so the user sees exactly what landed.
+//
+// EVERY EXPLANATION ON THIS PANEL IS THE SERVER'S. `recordsNote` says why nothing
+// reached Records, `reason` says why the number did not move, and `periodLabel`
+// names the year that was written — this panel used to infer all three, and got
+// each of them wrong in a way that read like success.
+//
+// WHY THE PANEL IS TWO SENTENCES. Production report: a head of school uploaded a
+// 436-student roster, was told "Imported 436 students", and found Records empty.
+// The count had landed; not one student row had. One upload now has two
+// independent outcomes, so the panel states them separately — what was CREATED,
+// and what happened to this period's ENROLLMENT (replaced a number you typed /
+// set / left alone). The branch decision is derived from the response in
+// rosterUploadSummary.js so it can be tested; a field the server did not send
+// produces no claim at all.
+//
 // React 19 idioms: no sync setState in effects, loading/error/empty on the call.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { UploadCloud, FileText, CheckCircle2, AlertTriangle, X, Users } from 'lucide-react'
+import {
+  UploadCloud,
+  FileText,
+  CheckCircle2,
+  AlertTriangle,
+  X,
+  Users,
+  Undo2,
+  GraduationCap,
+} from 'lucide-react'
 import { enrollmentApi, apiErrorMessage } from '../../lib/api.js'
 import { FormError, FormSuccess } from '../auth/fields.jsx'
 import ByGradeChart from './ByGradeChart.jsx'
 import DatePicker from '../ui/DatePicker.jsx'
+import { summarizeRosterUpload } from './rosterUploadSummary.js'
 
 const inputCls =
   'w-full rounded-lg border-2 border-border bg-white px-4 py-3 text-base text-ink outline-none transition-colors focus:border-gold disabled:cursor-not-allowed disabled:bg-navy/[0.04] disabled:text-muted'
 
-export default function RosterUpload({ schoolId, canEdit, onApplied }) {
+const MODES = [
+  ['merge', 'Merge', 'Update students already on file, add the rest'],
+  ['replace', 'Replace', 'Swap the whole roster for this file'],
+]
+
+export default function RosterUpload({ schoolId, canEdit, onApplied, activePeriodLabel = '' }) {
   const inputRef = useRef(null)
   const [file, setFile] = useState(null)
   const [observedOn, setObservedOn] = useState('')
+  const [mode, setMode] = useState('merge')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [result, setResult] = useState(null)
   const [dragOver, setDragOver] = useState(false)
+  const [restoring, setRestoring] = useState(false)
+  const [restored, setRestored] = useState(false)
+  const [restoreErr, setRestoreErr] = useState('')
 
   const pickFile = (f) => {
     setErr('')
     setResult(null)
+    setRestored(false)
+    setRestoreErr('')
     setFile(f ?? null)
   }
 
@@ -45,9 +85,12 @@ export default function RosterUpload({ schoolId, canEdit, onApplied }) {
     if (!file || !schoolId) return
     setBusy(true)
     setErr('')
+    setRestored(false)
+    setRestoreErr('')
     try {
       const form = new FormData()
       form.append('file', file)
+      form.append('mode', mode)
       if (observedOn) form.append('observedOn', observedOn)
       const res = await enrollmentApi.upload(schoolId, form)
       setResult(res.data ?? res)
@@ -63,13 +106,33 @@ export default function RosterUpload({ schoolId, canEdit, onApplied }) {
 
   const snapshot = result?.snapshot ?? null
   const warnings = result?.warnings ?? []
+  const summary = useMemo(() => (result ? summarizeRosterUpload(result) : null), [result])
+
+  // Decision 2's other half: an explicit upload supersedes a hand-entered
+  // figure, and the panel that overwrote it is where the undo lives.
+  const restore = async () => {
+    const periodId = summary?.enrollment.restorePeriodId
+    if (!schoolId || !periodId || restoring) return
+    setRestoring(true)
+    setRestoreErr('')
+    try {
+      await enrollmentApi.revertManual(schoolId, { periodId })
+      setRestored(true)
+      onApplied?.()
+    } catch (e) {
+      setRestoreErr(apiErrorMessage(e, 'Could not restore your number. Try again from the Enrollment overview.'))
+    } finally {
+      setRestoring(false)
+    }
+  }
 
   return (
     <div>
       <p className="mb-3 text-[14.5px] leading-relaxed text-muted">
         Upload a <span className="font-semibold text-navy">OneRoster export</span> (a ZIP of the
-        standard CSVs) or a single roster CSV. We count active students by grade — never a per-class
-        over-count — and update this period&apos;s enrollment.
+        standard CSVs) or a single roster CSV. We save a student record for every row it names, and
+        count active students by grade — never a per-class over-count — to set this period&apos;s
+        enrollment. One step, both outcomes.
       </p>
 
       {/* Dropzone — ALWAYS available, connection or not. */}
@@ -129,6 +192,45 @@ export default function RosterUpload({ schoolId, canEdit, onApplied }) {
               <X size={15} />
             </button>
           </p>
+
+          {/* Merge / replace — the same two words, and the same meaning, as the
+              reviewed importer. This upload writes student rows now, so the
+              question it has always answered there has to be asked here too. */}
+          <div className="mt-3 flex flex-wrap items-start gap-4">
+            {MODES.map(([value, label, blurb]) => (
+              <label key={value} className="flex cursor-pointer select-none items-start gap-2">
+                <input
+                  type="radio"
+                  name="roster-upload-mode"
+                  value={value}
+                  checked={mode === value}
+                  onChange={() => setMode(value)}
+                  className="mt-0.5 h-4 w-4 accent-gold"
+                />
+                <span>
+                  <span className="block text-[13.5px] font-semibold text-navy">{label}</span>
+                  <span className="block text-[11.5px] text-muted">{blurb}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+          {/* The old wording — "only the students in this file survive" — was not
+              true: rows we cannot read (an unmapped grade code, a missing name, a
+              repeated id) are dropped from the import, and replace deleted the
+              register anyway, so students the file NAMES disappeared. There is no
+              preview on this path to catch it, so the server now refuses a replace
+              that would drop any row, and this says both halves. */}
+          {mode === 'replace' && (
+            <p className="mt-2 flex items-start gap-1.5 text-[12.5px] font-semibold text-amber-700">
+              <AlertTriangle size={13} className="mt-[2px] shrink-0" />
+              <span>
+                Replace deletes every current student first — only the rows we can read from this
+                file survive. If any row cannot be read, nothing is deleted and we tell you which:
+                merge, or use the import with a review step, to fix them first.
+              </span>
+            </p>
+          )}
+
           <div className="mt-3 flex flex-wrap items-end gap-3">
             <label className="text-[13px] font-semibold text-muted">
               As-of date (optional)
@@ -153,51 +255,116 @@ export default function RosterUpload({ schoolId, canEdit, onApplied }) {
 
       {err && <div className="mt-3"><FormError>{err}</FormError></div>}
 
-      {/* Applied preview — the parsed snapshot the server returned. */}
-      {snapshot && (
+      {/* Applied panel — WHAT WAS SAVED, and WHAT HAPPENED TO THE NUMBER.
+          Two facts, two sentences, both read off the response. The bug this
+          layout exists to prevent is a single reassuring sentence covering an
+          outcome that did not occur. */}
+      {summary && (
         <motion.div
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
           className="mt-4 space-y-3"
         >
-          {/* WHAT THIS UPLOAD ACTUALLY DID, and why the sentence changed.
-              This pipeline is COUNTS-ONLY: parseOneRosterCsv aggregates into
-              byGrade as it reads and never keeps a student row, and the service
-              only ever calls prisma.student.count — it creates none. The old
-              copy said "Imported N students", which reads as "N student records
-              now exist". A head of school then opened Records, found it empty,
-              and reasonably concluded the upload had silently lost their data.
-              Counting students is not importing them, and the sentence now says
-              which of the two happened. */}
           <FormSuccess>
             <span className="inline-flex items-center gap-1.5">
               <CheckCircle2 size={15} />
-              Enrollment counted — {snapshot.totalEnrolled?.toLocaleString('en-US')} students
-              {snapshot.observedOn ? ` as of ${snapshot.observedOn}` : ''}
-              {result?.promoted ? ' · this period’s enrollment updated' : ''}.
+              {summary.file.line ?? 'Roster file read.'}
             </span>
           </FormSuccess>
-          {/* The follow-on the old copy left the reader to discover by failing.
-              Named here rather than in a tooltip: the reader has just formed the
-              belief that their roster is saved, and this is the only moment they
-              are looking at the thing that would correct it. */}
+
+          {/* 1 — records */}
+          <div className="rounded-lg border border-rule/60 bg-section px-4 py-3">
+            <p className="flex items-start gap-2 text-[13.5px] font-semibold text-navy">
+              <GraduationCap size={15} className="mt-[1px] shrink-0 text-gold" />
+              {summary.recordsLine}
+            </p>
+            {summary.records ? (
+              <Link
+                to="/enrollment?tab=records"
+                className="mt-2.5 inline-flex items-center gap-1.5 rounded-full btn-cta px-3.5 py-1.5 text-[13px] font-semibold transition"
+              >
+                <Users size={14} aria-hidden /> Open Records
+              </Link>
+            ) : (
+              // The cause comes from the SERVER. This used to key on whether any
+              // warning existed at all, so a counts-only file that also had an odd
+              // grade code was told "the notes below say why" while the notes said
+              // nothing about it — and the one true sentence was unreachable.
+              <p className="mt-1 text-[13px] leading-relaxed text-muted">
+                {summary.recordsNote ?? 'The notes below say why.'}
+              </p>
+            )}
+          </div>
+
+          {/* 2 — the enrollment for the period THAT WAS WRITTEN (named, when the
+              server sent a label: a June file uploaded in August lands in the year
+              it describes, which is not the year on screen). Once the undo runs,
+              the lead line is REPLACED — appending "Restored" under "Replaced your
+              entered enrollment of 430 with 436" leaves the false sentence on top. */}
           <div className="rounded-lg border border-rule/60 bg-section px-4 py-3">
             <p className="text-[13.5px] font-semibold text-navy">
-              This did not create student records.
+              {(restored && summary.enrollment.restoredLine) || summary.enrollment.line}
             </p>
-            <p className="mt-1 text-[13px] leading-relaxed text-muted">
-              Your enrollment totals and grade breakdown are saved and now feed the
-              dashboard, analytics and the accreditation signals. Individual student
-              rows — the roster you can open, filter and report on — come from the
-              student import, which is a separate step.
-            </p>
-            <Link
-              to="/enrollment?tab=records"
-              className="mt-2.5 inline-flex items-center gap-1.5 rounded-full btn-cta px-3.5 py-1.5 text-[13px] font-semibold transition"
-            >
-              <Users size={14} aria-hidden /> Import the student roster
-            </Link>
+            {summary.enrollment.reason && !restored && (
+              <p className="mt-1 text-[13px] leading-relaxed text-muted">
+                {summary.enrollment.reason}
+              </p>
+            )}
+            {/* DID THIS CHANGE MY NUMBERS? — the question behind the report.
+                The as-of date defaults to TODAY and the fiscal year runs Jul-Jun,
+                so an August upload is filed under the NEXT year, which routinely
+                has no ledger yet. Verified on the reporter's own data: 436 students
+                landed in FY 2027 while every finance metric sat in FY 2026 and kept
+                computing from a hand-entered 1200 — cost per pupil $8,683 against
+                1200 versus $23,899 against 436.
+
+                The flag is SERVER-AUTHORED. My first attempt compared against the
+                period label in the wizard's context and was INERT: that screen
+                resolves no period, so the warning never rendered in the one place
+                it was needed. The server knows from every entry point.
+
+                We do NOT retarget the period: a roster dated today genuinely is
+                next year's roster, and quietly filing it elsewhere would be the
+                same guess this product refuses to make. We say so, and name the fix. */}
+            {summary.enrollment.periodHasFinancials === false ? (
+              <div className="mt-2.5 rounded-lg border border-gold/50 bg-gold/10 px-3 py-2.5">
+                <p className="text-[13px] font-semibold text-[#7a5e00]">
+                  No finance metric changed
+                  {summary.enrollment.periodLabel ? ` — ${summary.enrollment.periodLabel} has no financials yet` : ''}.
+                </p>
+                <p className="mt-1 text-[12.5px] leading-relaxed text-[#7a5e00]/90">
+                  Your roster is saved and this year&apos;s enrollment is recorded. But cost
+                  per pupil, net tuition per student, aid per student and the
+                  student-teacher ratio all divide by the enrollment of the year their
+                  ledger is in — and this year has no trial balance yet. The as-of date
+                  decides the year, and it defaults to today. To count this roster against
+                  a year you already have financials for, upload it again with an as-of
+                  date inside that year.
+                </p>
+              </div>
+            ) : null}
+            {summary.enrollment.branch === 'superseded' && summary.enrollment.restorePeriodId && (
+              <div className="mt-2.5">
+                {restored ? (
+                  <p className="text-[13px] font-semibold text-emerald-700">
+                    Restored — your number is the one in force.
+                  </p>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={restore}
+                    disabled={restoring}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-rule/70 bg-white px-3.5 py-1.5 text-[13px] font-semibold text-navy transition hover:border-navy/40 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Undo2 size={14} aria-hidden />
+                    {restoring ? 'Restoring…' : 'Restore my number'}
+                  </button>
+                )}
+                {restoreErr && <p className="mt-1 text-[13px] text-danger">{restoreErr}</p>}
+              </div>
+            )}
           </div>
+
           {warnings.length > 0 && (
             <div className="rounded-lg border border-gold/40 bg-gold/10 px-4 py-3">
               <p className="flex items-center gap-1.5 text-[13.5px] font-semibold text-[#7a5e00]">
@@ -211,7 +378,7 @@ export default function RosterUpload({ schoolId, canEdit, onApplied }) {
               </ul>
             </div>
           )}
-          <ByGradeChart byGrade={snapshot.byGrade} />
+          {snapshot && <ByGradeChart byGrade={snapshot.byGrade} />}
         </motion.div>
       )}
     </div>

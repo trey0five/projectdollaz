@@ -5,6 +5,7 @@ import { BillingModule } from '../billing/billing.module.js'
 import { AuditModule } from '../common/audit/audit.module.js'
 import { EnrollmentController } from './enrollment.controller.js'
 import { EnrollmentService } from './enrollment.service.js'
+import { RosterUploadService } from './roster-upload.service.js'
 import { EnrollmentClient } from './enrollment.client.js'
 import { OneRosterCsvAdapter } from './adapters/oneroster-csv.adapter.js'
 import { BlackbaudAdapter } from './adapters/blackbaud.adapter.js'
@@ -30,6 +31,10 @@ import { StudentsService } from './students/students.service.js'
   providers: [
     EnrollmentService,
     StudentsService,
+    // Orchestrates one upload into records + exactly one promote. NOT exported —
+    // it injects both neighbours, and nothing outside this module should be able
+    // to reach a second writer for periodOperationalData.enrollment.
+    RosterUploadService,
     EnrollmentClient,
     OneRosterCsvAdapter,
     BlackbaudAdapter,

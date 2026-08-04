@@ -1,17 +1,35 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// StudentImport — the roster CSV import flow (STATELESS preview → commit; the
-// Phase 5 student-level path). A NEW card beside RosterUpload (which stays the
-// aggregate counts-snapshot path, untouched): drop a OneRoster users.csv (plus
-// an optional demographics.csv) or a simple flat CSV → POST import/preview (NO
-// DB write) → review the candidate rows (new/update/unchanged/skipped badges,
-// warnings, per-row include checkboxes) → pick merge/replace → POST
-// import/commit with the included rows → toast with counts.
+// StudentImport — the REVIEWED roster import (STATELESS preview → commit; the
+// Phase 5 student-level path): drop a OneRoster users.csv (plus an optional
+// demographics.csv) or a simple flat CSV → POST import/preview (NO DB write) →
+// review the candidate rows (new/update/unchanged/skipped badges, warnings,
+// per-row include checkboxes) → pick merge/replace → POST import/commit with the
+// included rows → toast with counts.
+//
+// Its sibling RosterUpload is no longer "the counts-only one" — it creates the
+// same student records in a single step. The only difference left, and the only
+// difference either card's copy may claim, is THIS preview step. Both paths land
+// records and both promote the period's enrollment.
+//
+// AND THIS PANEL HAS TO SAY SO. The claim above shipped once as copy alone: the
+// commit route passed no supersedeManual, so a hand-entered figure survived
+// untouched, and this panel printed "Roster imported — 436 added" and nothing
+// about the number — records landed, the count did not, and no sentence said so.
+// That is the reported bug wearing the other card's clothes. The commit response
+// carries `promote`, so the outcome is rendered through the SAME
+// summarizeRosterUpload the one-step panel uses (one place to change, two cards),
+// down to the Restore-my-number undo.
+//
+// The one asymmetry left, stated on the card rather than papered over: this path
+// has no file date to honour, so it promotes into TODAY's fiscal period, while
+// the one-step upload promotes into the period the file is dated to.
 //
 // FERPA note: preview rows carry names — this surface is write-role gated by
 // the server and lives only on the role-gated add-data path.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
+import { Link } from 'react-router-dom'
 import {
   UploadCloud,
   FileText,
@@ -20,11 +38,14 @@ import {
   X,
   Users,
   RefreshCcw,
+  Undo2,
+  GraduationCap,
 } from 'lucide-react'
 import { enrollmentApi, apiErrorMessage } from '../../lib/api.js'
 import { FormError, FormSuccess } from '../auth/fields.jsx'
 import { GRADE_LABELS } from './studentFilters.jsx'
 import { STUDENT_STATUS_LABELS } from '../../lib/demographicVocab.js'
+import { summarizeRosterUpload } from './rosterUploadSummary.js'
 
 const ENROLL_HUE = '#0EA5E9'
 
@@ -54,7 +75,10 @@ export default function StudentImport({ schoolId, canEdit, onApplied }) {
   const [preview, setPreview] = useState(null) // { shape, summary, warnings, rows }
   const [included, setIncluded] = useState(() => new Set())
   const [mode, setMode] = useState('merge')
-  const [result, setResult] = useState(null) // { created, updated, deleted, total }
+  const [result, setResult] = useState(null) // { created, updated, deleted, total, promote? }
+  const [restoring, setRestoring] = useState(false)
+  const [restored, setRestored] = useState(false)
+  const [restoreErr, setRestoreErr] = useState('')
 
   const reset = () => {
     setFile(null)
@@ -62,6 +86,8 @@ export default function StudentImport({ schoolId, canEdit, onApplied }) {
     setPreview(null)
     setResult(null)
     setErr('')
+    setRestored(false)
+    setRestoreErr('')
     setMode('merge')
     if (fileRef.current) fileRef.current.value = ''
     if (demRef.current) demRef.current.value = ''
@@ -149,6 +175,44 @@ export default function StudentImport({ schoolId, canEdit, onApplied }) {
   const warnings = preview?.warnings ?? []
   const includedCount = rows.filter((r, i) => included.has(i) && r.action !== 'skipped').length
 
+  // The commit response, reshaped into the ONE summary the other card renders —
+  // `promote` is what syncRosterSnapshot actually did, so every sentence below is
+  // a fact the server sent rather than an inference from what we asked for.
+  const applied = useMemo(() => {
+    if (!result) return null
+    const p = result.promote ?? null
+    return summarizeRosterUpload({
+      promoted: p?.promoted === true,
+      superseded: p?.superseded === true,
+      supersededManual: p?.supersededManual ?? null,
+      records: {
+        created: result.created ?? 0,
+        updated: result.updated ?? 0,
+        deleted: result.deleted ?? 0,
+        total: result.total ?? 0,
+      },
+      enrollment: p?.promoted
+        ? { value: p.totalEnrolled, source: 'roster', fiscalPeriodId: p.fiscalPeriodId ?? null }
+        : null,
+    })
+  }, [result])
+
+  const restore = async () => {
+    const periodId = applied?.enrollment.restorePeriodId
+    if (!schoolId || !periodId || restoring) return
+    setRestoring(true)
+    setRestoreErr('')
+    try {
+      await enrollmentApi.revertManual(schoolId, { periodId })
+      setRestored(true)
+      onApplied?.()
+    } catch (e) {
+      setRestoreErr(apiErrorMessage(e, 'Could not restore your number. Try again from the Enrollment overview.'))
+    } finally {
+      setRestoring(false)
+    }
+  }
+
   return (
     <div>
       <p className="mb-3 text-[14.5px] leading-relaxed text-muted">
@@ -156,7 +220,9 @@ export default function StudentImport({ schoolId, canEdit, onApplied }) {
         a OneRoster <code className="text-[13px]">users.csv</code> (add{' '}
         <code className="text-[13px]">demographics.csv</code> alongside for birth dates and
         demographics) or a simple list with <code className="text-[13px]">firstName, lastName, grade…</code>{' '}
-        columns. You review every row before anything is saved.
+        columns. You review every row before anything is saved. Importing also sets the enrollment
+        figure for the <span className="font-semibold text-navy">current period</span> from your
+        roster — the one-step upload does the same, but dates it from the file instead.
       </p>
 
       {/* Step 1 — pick files */}
@@ -403,20 +469,62 @@ export default function StudentImport({ schoolId, canEdit, onApplied }) {
         </motion.div>
       )}
 
-      {/* Step 3 — applied */}
-      {result && (
+      {/* Step 3 — applied. TWO facts, two sentences, both read off the response:
+          what was SAVED, and what happened to this period's ENROLLMENT. One
+          reassuring sentence covering an outcome that did not occur is the bug
+          both of these cards exist to stop repeating. */}
+      {applied && (
         <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="mt-4 space-y-3">
           <FormSuccess>
             <span className="inline-flex items-center gap-1.5">
-              <CheckCircle2 size={15} />
-              Roster imported — {Number(result.created ?? 0).toLocaleString('en-US')} added,{' '}
-              {Number(result.updated ?? 0).toLocaleString('en-US')} updated
-              {Number(result.deleted ?? 0) > 0
-                ? `, ${Number(result.deleted).toLocaleString('en-US')} removed`
-                : ''}
-              . {Number(result.total ?? 0).toLocaleString('en-US')} students on the roster.
+              <CheckCircle2 size={15} /> Import complete.
             </span>
           </FormSuccess>
+
+          {/* 1 — records */}
+          <div className="rounded-lg border border-rule/60 bg-section px-4 py-3">
+            <p className="flex items-start gap-2 text-[13.5px] font-semibold text-navy">
+              <GraduationCap size={15} className="mt-[1px] shrink-0" style={{ color: ENROLL_HUE }} />
+              {applied.recordsLine}
+            </p>
+            <Link
+              to="/enrollment?tab=records"
+              className="mt-2.5 inline-flex items-center gap-1.5 rounded-full btn-cta px-3.5 py-1.5 text-[13px] font-semibold transition"
+            >
+              <Users size={14} aria-hidden /> Open Records
+            </Link>
+          </div>
+
+          {/* 2 — this period's enrollment */}
+          <div className="rounded-lg border border-rule/60 bg-section px-4 py-3">
+            <p className="text-[13.5px] font-semibold text-navy">
+              {(restored && applied.enrollment.restoredLine) || applied.enrollment.line}
+            </p>
+            {applied.enrollment.reason && !restored && (
+              <p className="mt-1 text-[13px] leading-relaxed text-muted">{applied.enrollment.reason}</p>
+            )}
+            {applied.enrollment.branch === 'superseded' && applied.enrollment.restorePeriodId && (
+              <div className="mt-2.5">
+                {restored ? (
+                  <p className="text-[13px] font-semibold text-emerald-700">
+                    Restored — your number is the one in force.
+                  </p>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={restore}
+                    disabled={restoring}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-rule/70 bg-white px-3.5 py-1.5 text-[13px] font-semibold text-navy transition hover:border-navy/40 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Undo2 size={14} aria-hidden />
+                    {restoring ? 'Restoring…' : 'Restore my number'}
+                  </button>
+                )}
+                {restoreErr && <p className="mt-1 text-[13px] text-danger">{restoreErr}</p>}
+              </div>
+            )}
+          </div>
+
           <button
             type="button"
             onClick={reset}

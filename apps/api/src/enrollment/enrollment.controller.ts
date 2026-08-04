@@ -21,6 +21,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator.js'
 import { EntitlementGuard } from '../billing/entitlement.guard.js'
 import { RequiresModule } from '../billing/requires-module.decorator.js'
 import { EnrollmentService, type UploadedRosterFile } from './enrollment.service.js'
+import { RosterUploadService } from './roster-upload.service.js'
 import {
   EnrollmentCallbackDto,
   EnrollmentConnectKeyDto,
@@ -43,7 +44,10 @@ const MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 @UseGuards(JwtAuthGuard, RolesGuard, EntitlementGuard)
 @RequiresModule('enrollment')
 export class EnrollmentController {
-  constructor(private readonly enrollment: EnrollmentService) {}
+  constructor(
+    private readonly enrollment: EnrollmentService,
+    private readonly rosterUpload: RosterUploadService,
+  ) {}
 
   @Get('status')
   @Roles('owner', 'accountant', 'viewer')
@@ -80,7 +84,12 @@ export class EnrollmentController {
     return this.enrollment.connectKey(schoolId, dto, user.id)
   }
 
-  /** Upload a OneRoster export (ZIP or bare users.csv) → parse → intake → promote. */
+  /**
+   * Upload a OneRoster export (ZIP or bare users.csv) → parse → student records
+   * (when the file carries per-student detail) → snapshot → promote, in ONE call.
+   * The decorator stack is deliberately unchanged: a viewer cannot reach this
+   * route, and that is what keeps student creation off the viewer role.
+   */
   @Post('upload')
   @Roles('owner', 'accountant')
   @UseInterceptors(
@@ -92,7 +101,10 @@ export class EnrollmentController {
     @Body() dto: EnrollmentUploadDto,
     @CurrentUser() user: User,
   ) {
-    return this.enrollment.upload(user, schoolId, file, dto.observedOn)
+    return this.rosterUpload.upload(user, schoolId, file, {
+      observedOn: dto.observedOn,
+      mode: dto.mode,
+    })
   }
 
   /** Live-sync the connected provider as of an optional date. */

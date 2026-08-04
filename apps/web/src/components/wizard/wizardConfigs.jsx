@@ -174,16 +174,28 @@ export const wizardConfigs = {
         key: 'import-students',
         kind: 'embed',
         Icon: FileSpreadsheet,
-        label: 'Import student records',
-        // THE TWO CARDS BELOW ARE THE ONE REAL FIX FOR A PRODUCTION REPORT.
-        // Both accept "a OneRoster CSV", and their old labels ("Import roster
-        // CSV" / "Upload a roster") did not say which one KEEPS the students.
-        // A head of school picked the second, saw "Imported 436 students", found
-        // Records empty, and concluded the upload had lost their data. Each card
-        // now leads with what SURVIVES it — records, or a headcount.
+        label: 'Import students with a review step',
+        // THESE TWO CARDS ANSWER A PRODUCTION REPORT, TWICE OVER.
+        //
+        // First round: both accepted "a OneRoster CSV" and neither said which
+        // one KEPT the students. A head of school picked the upload, saw
+        // "Imported 436 students", found Records empty, and concluded the app
+        // had lost their data. The cards were relabelled records-vs-headcount.
+        //
+        // That was honest and still wrong: the file they uploaded IS the roster,
+        // and the split it described was between OUR TWO PARSERS, not between
+        // two things a school wants. The upload now creates records too, so the
+        // only real remaining difference is one-step vs reviewed — which is what
+        // each card leads with. Anything here that still promises records are
+        // NOT created is false; roster-upload-copy.spec.jsx fails on it.
+        // SELF-CONTAINED ON PURPOSE. This card renders ABOVE the one-step upload,
+        // so a blurb opening "same … as the other one" defined itself by a card
+        // the reader had not reached yet — reintroducing, at the moment of
+        // choosing, the very ambiguity between the two cards that caused the
+        // report. It now names the thing itself: the same roster file.
         blurb:
-          'Creates a student record for every row — the roster you can open, filter and report on. OneRoster users.csv or a simple student list. Preview every row, then merge or replace.',
-        cta: 'Import students',
+          'Same roster file, one extra step: preview every row — new, updated, unchanged, skipped — fix what you need, then choose merge or replace. Saves the students and sets the current period’s enrollment. Up to 2,000 students per file. Best when you are not sure the file is clean.',
+        cta: 'Preview and import',
         renderEmbed: (ctx) => (
           <StudentImport schoolId={ctx.schoolId} canEdit={ctx.canEdit} onApplied={ctx.onSaved} />
         ),
@@ -192,12 +204,20 @@ export const wizardConfigs = {
         key: 'roster',
         kind: 'embed',
         Icon: Upload,
-        label: 'Count enrollment from a roster file',
+        label: 'Upload a roster file',
         blurb:
-          'Reads a roster file (OneRoster ZIP/CSV) for headcount by grade — totals only, no student records are created. Feeds the dashboard, analytics and accreditation signals.',
+          'Drop a OneRoster ZIP or CSV and we do the whole job in one step — a student record for every row, plus the enrollment count by grade for the period the file is dated to. Records are created for up to 2,000 students per file; above that the count still lands, so split the file. Best when the file is already correct.',
         cta: 'Upload roster file',
         renderEmbed: (ctx) => (
-          <RosterUpload schoolId={ctx.schoolId} canEdit={ctx.canEdit} onApplied={ctx.onSaved} />
+          <RosterUpload
+            schoolId={ctx.schoolId}
+            canEdit={ctx.canEdit}
+            onApplied={ctx.onSaved}
+            /* The period the user is LOOKING AT, so the panel can say when the
+               file landed in a different fiscal year. AddDataTab already resolves
+               it into ctx; without it the mismatch is invisible. */
+            activePeriodLabel={ctx.periodLabel}
+          />
         ),
       },
       {

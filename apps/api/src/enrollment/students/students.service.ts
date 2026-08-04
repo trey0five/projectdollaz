@@ -90,6 +90,38 @@ export interface ImportPreviewRow {
   issues: string[]
 }
 
+/**
+ * What the roster→snapshot sync actually DID. Returned (rather than assumed) so a
+ * caller can report "this period's enrollment is now N" / "we replaced your entered
+ * figure" truthfully instead of guessing from its own inputs.
+ */
+export interface RosterPromoteResult {
+  /** The roster headcount that was promoted (recomputed over EVERY student row). */
+  totalEnrolled: number
+  promoted: boolean
+  superseded: boolean
+  supersededManual: number | null
+  fiscalPeriodId: string
+}
+
+/** Options threaded through the roster→snapshot sync. */
+export interface RosterSyncOptions {
+  /**
+   * Opt this sync into the reversible Decision-C supersede of a hand-entered
+   * enrollment. DEFAULT FALSE — the auto-sync after a single student edit must
+   * never overwrite a head of school's own number.
+   */
+  supersedeManual?: boolean
+  /**
+   * The as-of date for the roster snapshot AND the FY period the headcount
+   * promotes into. Defaults to today (every existing caller). A roster FILE
+   * import passes the file's observedOn so the records, the file snapshot and
+   * the promoted headcount all land in the SAME fiscal period — a June file
+   * uploaded in August must not count toward next year.
+   */
+  observedOn?: string
+}
+
 export interface ImportPreviewResult {
   shape: 'oneroster' | 'simple'
   summary: { new: number; update: number; unchanged: number; skipped: number }
@@ -336,7 +368,15 @@ export class StudentsService {
     schoolId: string,
     mode: 'merge' | 'replace',
     rows: CreateStudentDto[],
-  ): Promise<{ created: number; updated: number; deleted: number; total: number }> {
+    opts: RosterSyncOptions = {},
+  ): Promise<{
+    created: number
+    updated: number
+    deleted: number
+    total: number
+    /** What the trailing roster sync promoted (absent when it did not run). */
+    promote?: RosterPromoteResult
+  }> {
     rows.forEach((dto, i) => {
       this.assertStatusRule(dto.status ?? 'enrolled', dto.withdrawnOn ?? null, i)
       this.assertBirthDate(dto.birthDate, i)
@@ -404,8 +444,8 @@ export class StudentsService {
       targetType: 'students',
       metadata: { mode, created, updated, deleted, total },
     })
-    await this.syncRosterSnapshot(actor, schoolId)
-    return { created, updated, deleted, total }
+    const promote = await this.syncRosterSnapshot(actor, schoolId, opts)
+    return { created, updated, deleted, total, ...(promote ? { promote } : {}) }
   }
 
   // ── FERPA-safe aggregation ───────────────────────────────────────────────────
@@ -491,20 +531,29 @@ export class StudentsService {
    * don't report a phantom student; prior days' history stays, and a school that
    * never had a roster snapshot today is left untouched.
    * No audit here — the mutation itself was already audited.
+   *
+   * Returns WHAT IT DID (null when it deliberately did nothing: SIS mode, or an
+   * empty roster with no same-day snapshot to zero) so callers report the stored
+   * headcount rather than re-deriving one.
    */
-  async syncRosterSnapshot(actor: User, schoolId: string): Promise<void> {
+  async syncRosterSnapshot(
+    actor: User,
+    schoolId: string,
+    opts: RosterSyncOptions = {},
+  ): Promise<RosterPromoteResult | null> {
     const source = await this.prisma.enrollmentSource.findUnique({ where: { schoolId } })
-    if (source) return // 'sis' mode — the SIS always wins
+    if (source) return null // 'sis' mode — the SIS always wins
+    const when = opts.observedOn ?? todayIso()
     const students = await this.prisma.student.findMany({ where: { schoolId } })
     if (students.length === 0) {
-      const staleToday = await this.prisma.enrollmentSnapshot.findFirst({
-        where: { schoolId, provider: 'roster', observedOn: new Date(todayIso()) },
+      const stale = await this.prisma.enrollmentSnapshot.findFirst({
+        where: { schoolId, provider: 'roster', observedOn: new Date(when) },
         select: { id: true },
       })
-      if (staleToday) await this.upsertRosterSnapshot(actor, schoolId, todayIso(), [])
-      return
+      if (stale) return this.upsertRosterSnapshot(actor, schoolId, when, [], opts)
+      return null
     }
-    await this.upsertRosterSnapshot(actor, schoolId, todayIso(), students)
+    return this.upsertRosterSnapshot(actor, schoolId, when, students, opts)
   }
 
   /** Explicit dated backfill: POST /promote-snapshot { observedOn? }. */
@@ -544,7 +593,8 @@ export class StudentsService {
     schoolId: string,
     observedOn: string,
     students: Student[],
-  ): Promise<{ totalEnrolled: number }> {
+    opts: RosterSyncOptions = {},
+  ): Promise<RosterPromoteResult> {
     const { totalEnrolled, byGrade, byStatus, byDemographics } = rosterRollup(students)
 
     const normalized: NormalizedEnrollmentSnapshot = {
@@ -561,7 +611,10 @@ export class StudentsService {
 
     // Existing promote path (public wrapper): stamps 'roster'; fill-when-null or
     // overwrite-own-stamp only, so a hand-entered manual value is never clobbered.
-    const { fiscalPeriodId } = await this.enrollment.promoteRoster(actor, schoolId, normalized)
+    const promo = await this.enrollment.promoteRoster(actor, schoolId, normalized, {
+      supersedeManual: opts.supersedeManual ?? false,
+    })
+    const { fiscalPeriodId } = promo
 
     const observed = new Date(observedOn)
     const data = {
@@ -584,7 +637,15 @@ export class StudentsService {
         data: { schoolId, sourceId: null, observedOn: observed, createdByUserId: actor.id, ...data },
       })
     }
-    return { totalEnrolled }
+    return {
+      totalEnrolled,
+      promoted: promo.promoted,
+      // `?? ` so a caller that stubs the older two-field promoteRoster shape still
+      // reads a definite boolean rather than leaking undefined into the response.
+      superseded: promo.superseded ?? false,
+      supersededManual: promo.supersededManual ?? null,
+      fiscalPeriodId,
+    }
   }
 
   // ── Internals ────────────────────────────────────────────────────────────────

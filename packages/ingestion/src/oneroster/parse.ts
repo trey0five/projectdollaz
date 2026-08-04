@@ -137,15 +137,26 @@ export interface ParseOneRosterOptions {
 }
 
 /**
- * Parse a OneRoster bulk-CSV ZIP into a normalized enrollment snapshot.
+ * The one users.csv read every OneRoster parse starts from: ZIP entry lookup, CSV
+ * parse, BOM strip, header index and the required-header check.
  *
- * @throws if users.csv is absent or is missing a required header — the only two
- *         states we cannot recover from (everything else degrades to warnings).
+ * Extracted so the aggregate headcount parser and the per-student row parser share
+ * a SINGLE reader. Byte-identity between them is then structural — there is one
+ * reader, not two that were carefully kept in sync — and the three throw sites
+ * (not a ZIP / no users.csv / missing required header) raise ONE set of messages.
  */
-export function parseOneRosterCsv(
-  zip: Buffer,
-  opts: ParseOneRosterOptions = {},
-): NormalizedEnrollmentSnapshot {
+interface UsersTable {
+  /** Every archive entry, so a caller can reach academicSessions.csv without re-reading the ZIP. */
+  entries: Map<string, Buffer>
+  /** Raw CSV cells, row 0 being the header. */
+  rows: string[][]
+  /** Trimmed, BOM-stripped header cells. */
+  header: string[]
+  /** Column index by EXACT header name, or -1. */
+  colOf: (name: string) => number
+}
+
+function readUsersTable(zip: Buffer): UsersTable {
   const entries = readZipEntries(zip)
 
   const usersBuf = findEntry(entries, 'users.csv')
@@ -165,6 +176,44 @@ export function parseOneRosterCsv(
         `Expected OneRoster headers ${REQUIRED_USER_HEADERS.join(', ')}.`,
     )
   }
+  return { entries, rows, header, colOf }
+}
+
+/**
+ * Walk the data rows (everything after the header), skipping the blank filler line
+ * a trailing newline produces. Shared so neither parser can drift on what counts
+ * as a row — a blank line is NOT a dropped row in either.
+ */
+function* dataRows(rows: string[][]): Generator<string[]> {
+  for (let r = 1; r < rows.length; r++) {
+    const cells = rows[r]!
+    // A blank trailing line parses to [''] — ignore it, don't count as dropped.
+    if (cells.length === 1 && cells[0]!.trim() === '') continue
+    yield cells
+  }
+}
+
+/** The `grades` cell can be multi-value ("09,10"); the FIRST token is the student's grade. */
+function firstGradeToken(cells: string[], iGrades: number): string {
+  return (cells[iGrades] ?? '').trim().split(',')[0]!.trim()
+}
+
+/**
+ * Parse a OneRoster bulk-CSV ZIP into a normalized enrollment snapshot.
+ *
+ * OUTPUT IS FROZEN. This runs in production behind the enrollment upload; its
+ * byGrade/totalEnrolled feed the dashboard, the accreditation signals and every
+ * enrollment-dependent metric. Retaining per-student rows for the roster importer
+ * is a SEPARATE export (parseOneRosterStudents) precisely so this cannot move.
+ *
+ * @throws if users.csv is absent or is missing a required header — the only two
+ *         states we cannot recover from (everything else degrades to warnings).
+ */
+export function parseOneRosterCsv(
+  zip: Buffer,
+  opts: ParseOneRosterOptions = {},
+): NormalizedEnrollmentSnapshot {
+  const { entries, rows, header, colOf } = readUsersTable(zip)
   const iRole = colOf('role')
   const iStatus = colOf('status')
   const iGrades = colOf('grades')
@@ -177,11 +226,7 @@ export function parseOneRosterCsv(
   let withdrawn = 0
   let droppedRows = 0
 
-  for (let r = 1; r < rows.length; r++) {
-    const cells = rows[r]!
-    // A blank trailing line parses to [''] — ignore it, don't count as dropped.
-    if (cells.length === 1 && cells[0]!.trim() === '') continue
-
+  for (const cells of dataRows(rows)) {
     const role = (cells[iRole] ?? '').trim().toLowerCase()
     if (role !== 'student') {
       droppedRows++
@@ -195,9 +240,7 @@ export function parseOneRosterCsv(
       continue
     }
 
-    // grades can be a multi-value field ("09,10"); the first token is the student's grade.
-    const gradesRaw = (cells[iGrades] ?? '').trim()
-    const firstToken = gradesRaw.split(',')[0]!.trim()
+    const firstToken = firstGradeToken(cells, iGrades)
     rawGradeCounts[firstToken || '(blank)'] = (rawGradeCounts[firstToken || '(blank)'] ?? 0) + 1
 
     const mapped = ONEROSTER_GRADE_MAP[firstToken]
@@ -230,6 +273,98 @@ export function parseOneRosterCsv(
     // Persisted to EnrollmentSnapshot.raw for auditability (not part of the API response).
     raw: { rawGradeCounts, droppedRows, header },
   }
+}
+
+/**
+ * One retained student row from users.csv — the raw material the roster IMPORTER
+ * turns into Student records. Deliberately NOT part of NormalizedEnrollmentSnapshot:
+ * that shape flows into `intakeNormalized` and lands in `enrollment_snapshots`, and
+ * a name-bearing field on it would be one careless spread away from persisting PII
+ * into an aggregate table FERPA-safe consumers read.
+ */
+export interface OneRosterStudentRow {
+  /** OneRoster sourcedId — the idempotency key. null when the cell is blank. */
+  sourcedId: string | null
+  givenName: string
+  familyName: string
+  /** The FIRST grades token exactly as it appeared in the file (unmapped). */
+  gradeRaw: string
+  /** Canonical GradeKey via ONEROSTER_GRADE_MAP, or null when unmapped. */
+  grade: GradeKey | null
+  /**
+   * status=tobedeleted — and NOTHING ELSE. This is the frozen aggregate parser's
+   * definition of "not in the headcount", verbatim (`parseOneRosterCsv` skips a
+   * row only on `status === 'tobedeleted'`), and the two readers must agree.
+   *
+   * `enabledUser` was considered and is DELIBERATELY IGNORED: in OneRoster it
+   * means "can this account sign in", not "is this pupil enrolled", and lower-
+   * school pupils with no portal login are routinely exported `enabledUser=false`.
+   * Honouring it here made a roster-owned promote count only the login-enabled
+   * subset while the very same response reported the file's full total — one
+   * upload, two headcounts. It cannot be honoured on the other side either: that
+   * output is frozen (it feeds the dashboard, the accreditation signals and every
+   * enrollment-dependent metric), so this side is the one that yields.
+   */
+  withdrawn: boolean
+}
+
+/**
+ * Retain the per-student rows of the SAME users.csv `parseOneRosterCsv` counts.
+ *
+ * Pure (Buffer in, data out) and additive: it reads through the shared users.csv
+ * reader and does not touch the aggregate snapshot in any way. The two are called
+ * back-to-back on one upload so a head of school gets records AND a headcount from
+ * a single act.
+ *
+ * REPORTS, DOES NOT FILTER. Rows with a blank name or an unmapped grade come back
+ * with the blank/`null` preserved — deciding they are unimportable, and warning
+ * about it in aggregate (never by name), is the API layer's job.
+ *
+ * @returns `[]` when users.csv carries NEITHER `givenName` NOR `familyName` — a
+ *          counts-only export stays a counts-only export: no records, and no error.
+ * @throws  ONLY where `parseOneRosterCsv` already throws, with the same messages
+ *          (not a ZIP / no users.csv / missing required header).
+ */
+export function parseOneRosterStudents(
+  zip: Buffer,
+  // Accepted so both parsers take one options object at the shared call site.
+  // observedOn dates the SNAPSHOT, not a student, so it has no effect on rows.
+  _opts: ParseOneRosterOptions = {},
+): OneRosterStudentRow[] {
+  const { rows, colOf } = readUsersTable(zip)
+
+  const iGiven = colOf('givenName')
+  const iFamily = colOf('familyName')
+  // No per-student detail at all → nothing to import. Not an error: this is the
+  // shape of a legitimate counts-only SIS export.
+  if (iGiven < 0 && iFamily < 0) return []
+
+  const iSourcedId = colOf('sourcedId')
+  const iRole = colOf('role')
+  const iStatus = colOf('status')
+  const iGrades = colOf('grades')
+
+  const out: OneRosterStudentRow[] = []
+  for (const cells of dataRows(rows)) {
+    // Non-students are dropped here exactly as the aggregate parser drops them.
+    if ((cells[iRole] ?? '').trim().toLowerCase() !== 'student') continue
+
+    const status = (cells[iStatus] ?? '').trim().toLowerCase()
+    const sourcedId = (cells[iSourcedId] ?? '').trim()
+    const gradeRaw = firstGradeToken(cells, iGrades)
+    const mapped: GradeKey | undefined = ONEROSTER_GRADE_MAP[gradeRaw]
+
+    out.push({
+      sourcedId: sourcedId === '' ? null : sourcedId,
+      givenName: iGiven < 0 ? '' : (cells[iGiven] ?? '').trim(),
+      familyName: iFamily < 0 ? '' : (cells[iFamily] ?? '').trim(),
+      gradeRaw,
+      grade: mapped ?? null,
+      // The frozen aggregate's rule, verbatim — see OneRosterStudentRow.withdrawn.
+      withdrawn: status === 'tobedeleted',
+    })
+  }
+  return out
 }
 
 /**

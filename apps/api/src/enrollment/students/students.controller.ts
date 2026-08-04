@@ -98,7 +98,24 @@ export class StudentsController {
     return this.students.importPreview(schoolId, files?.file?.[0], files?.demographics?.[0])
   }
 
-  /** Commit the previewed/user-edited rows (JSON — the file is never re-sent). */
+  /**
+   * Commit the previewed/user-edited rows (JSON — the file is never re-sent).
+   *
+   * DECISION 2, SAME AS THE ONE-STEP UPLOAD. This is the other explicit roster
+   * import: an owner/accountant has looked at every row and pressed Import, so it
+   * supersedes a hand-entered enrollment for the period — reversibly (revertManual
+   * restores it) and out loud (the response carries `promote`, and the panel says
+   * which branch happened). Without it the reviewed path landed the records and
+   * silently left the finance number stale — the reported bug, on the other card.
+   *
+   * `supersedeManual` is set HERE, not accepted from the client: it is a property
+   * of the route (a reviewed, deliberate import), not a client preference, and the
+   * global forbidNonWhitelisted pipe would reject it as a body field anyway.
+   *
+   * NOT passed: `observedOn`. This path commits rows the user is looking at NOW —
+   * there is no file date to honour — so it promotes into today's fiscal period.
+   * The one-step upload passes the file's date. The copy on each card says so.
+   */
   @Post('import/commit')
   @Roles('owner', 'accountant')
   importCommit(
@@ -106,7 +123,13 @@ export class StudentsController {
     @Body() dto: ImportCommitDto,
     @CurrentUser() user: User,
   ) {
-    return this.students.importCommit(user, schoolId, dto.mode, dto.rows)
+    // …and only when the committed rows actually enroll somebody. An import of
+    // nothing but withdrawn rows recomputes a roster total of 0, and a 0 nobody
+    // typed must not replace a hand-entered headcount.
+    const enrollsSomebody = dto.rows.some((r) => (r.status ?? 'enrolled') === 'enrolled')
+    return this.students.importCommit(user, schoolId, dto.mode, dto.rows, {
+      supersedeManual: enrollsSomebody,
+    })
   }
 
   /** Explicit dated roster→snapshot backfill (default today). */

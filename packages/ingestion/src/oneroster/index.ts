@@ -4,6 +4,6 @@
 // imports @finrep/ingestion for the browser-safe xlsx/budget parsers, never
 // pulls a node: builtin into rollup. The api imports the roster parser here.
 // ─────────────────────────────────────────────────────────────
-export { parseOneRosterCsv } from './parse.js'
-export type { ParseOneRosterOptions } from './parse.js'
+export { parseOneRosterCsv, parseOneRosterStudents } from './parse.js'
+export type { ParseOneRosterOptions, OneRosterStudentRow } from './parse.js'
 export { ONEROSTER_GRADE_MAP } from './grades.js'

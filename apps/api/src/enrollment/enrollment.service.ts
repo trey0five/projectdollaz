@@ -63,6 +63,13 @@ export interface EnrollmentIntakeResult {
   superseded?: boolean
   /** The manual value that was backed up when superseding (null otherwise). */
   supersededManual?: number | null
+  /**
+   * The FY period the snapshot landed in (resolved from observedOn). ADDITIVE:
+   * callers that report "this period's enrollment is now N" need the period id to
+   * offer a revert, and re-deriving it in the caller would be a second, drifting
+   * resolution of the same date.
+   */
+  fiscalPeriodId: string
   warnings: string[]
 }
 
@@ -75,6 +82,18 @@ export interface IntakeOptions {
    * SUPERSEDED (backed up + overwritten) rather than left untouched. Reversible.
    */
   supersedeManual?: boolean
+  /**
+   * When FALSE, the snapshot + `enrollment.imported` audit are written exactly as
+   * usual but the PROMOTE is skipped entirely (returns `promoted:false`).
+   *
+   * The roster upload uses this: when that upload also created Student rows, the
+   * headcount is promoted from the ROSTER (recomputed over every student row the
+   * register now holds) and this snapshot is kept for file history only. Two
+   * writers racing over one periodOperationalData.enrollment is the failure this
+   * flag exists to make impossible. Defaults to true — every existing call site
+   * promotes exactly as before.
+   */
+  promote?: boolean
 }
 
 /** Latest-snapshot demographic + grade mix read surface. */
@@ -530,8 +549,20 @@ export class EnrollmentService {
     }
     // Idempotent by (school, source, observedOn). Prisma's ON CONFLICT can't match a
     // NULL sourceId, so we find-then-update/create explicitly to keep re-imports clean.
+    //
+    // …and with a NULL sourceId the PROVIDER is part of the key. NULLs are distinct
+    // in Postgres, so the (schoolId, sourceId, observedOn) unique does not apply to
+    // sourceId-NULL rows at all: that slot is shared by every source-less writer —
+    // 'manual', 'roster', 'oneroster_csv', 'diocesan'. Without the provider filter a
+    // roster upload's file snapshot silently OVERWROTE the provider:'roster'
+    // snapshot the register had written seconds earlier in the same request (flipping
+    // its provider while keeping its demographics), and the next roster sync, finding
+    // no 'roster' row for that day, inserted a second one — two same-day snapshots
+    // with different totals and no tiebreaker for readers that take "the latest".
+    // With a REAL sourceId the unique constraint is the key, and the provider is
+    // fixed by the source row, so the lookup there is left exactly as it was.
     const existing = await this.prisma.enrollmentSnapshot.findFirst({
-      where: { schoolId, sourceId, observedOn },
+      where: { schoolId, sourceId, observedOn, ...(sourceId === null ? { provider } : {}) },
     })
     const snapshot = existing
       ? await this.prisma.enrollmentSnapshot.update({ where: { id: existing.id }, data: snapshotData })
@@ -548,9 +579,13 @@ export class EnrollmentService {
       metadata: { provider, observedOn: normalized.observedOn, totalEnrolled: normalized.totalEnrolled, fiscalPeriodId },
     })
 
-    const promo = await this.promote(actor, schoolId, fiscalPeriodId, normalized, {
-      supersedeManual: opts.supersedeManual ?? false,
-    })
+    // opts.promote === false ⇒ file history only; another writer owns the headcount.
+    const promo =
+      opts.promote === false
+        ? { promoted: false, superseded: false, supersededManual: null }
+        : await this.promote(actor, schoolId, fiscalPeriodId, normalized, {
+            supersedeManual: opts.supersedeManual ?? false,
+          })
     return {
       snapshot: {
         observedOn: normalized.observedOn,
@@ -560,6 +595,7 @@ export class EnrollmentService {
       promoted: promo.promoted,
       superseded: promo.superseded,
       supersededManual: promo.supersededManual,
+      fiscalPeriodId,
       warnings: normalized.warnings ?? [],
     }
   }
@@ -814,15 +850,33 @@ export class EnrollmentService {
    * with the 'roster' stamp (fill-when-null / overwrite-own-stamp only, so a
    * hand-entered manual value is never clobbered), and stays QUIET (no
    * enrollment.promoted audit row — the roster mutation was already audited).
+   *
+   * `opts.supersedeManual` (default FALSE — the background auto-sync after a
+   * single student edit must never touch a head of school's own number) opts a
+   * DELIBERATE, explicit roster upload into the reversible Decision-C supersede.
    */
   async promoteRoster(
     actor: User,
     schoolId: string,
     normalized: NormalizedEnrollmentSnapshot,
-  ): Promise<{ fiscalPeriodId: string; promoted: boolean }> {
+    opts: { supersedeManual?: boolean } = {},
+  ): Promise<{
+    fiscalPeriodId: string
+    promoted: boolean
+    superseded: boolean
+    supersededManual: number | null
+  }> {
     const fiscalPeriodId = await this.resolveFiscalPeriodId(schoolId, normalized.observedOn)
-    const res = await this.promote(actor, schoolId, fiscalPeriodId, normalized, { skipAudit: true })
-    return { fiscalPeriodId, promoted: res.promoted }
+    const res = await this.promote(actor, schoolId, fiscalPeriodId, normalized, {
+      skipAudit: true,
+      supersedeManual: opts.supersedeManual ?? false,
+    })
+    return {
+      fiscalPeriodId,
+      promoted: res.promoted,
+      superseded: res.superseded,
+      supersededManual: res.supersededManual,
+    }
   }
 
   /** Resolve (find-or-create) the FY period for an observed date via the periods helper. */
@@ -880,8 +934,10 @@ function sumGradeMap(raw: unknown): number | null {
   return sum
 }
 
-/** True when the buffer starts with the ZIP local-file-header magic ('PK'). */
-function looksLikeZip(buf: Buffer): boolean {
+/** True when the buffer starts with the ZIP local-file-header magic ('PK').
+ *  EXPORTED (unchanged behaviour) so the roster-upload orchestrator normalizes an
+ *  upload with the SAME two helpers this service uses — one reader, not two. */
+export function looksLikeZip(buf: Buffer): boolean {
   return buf.length >= 2 && buf[0] === ZIP_SIGNATURE[0] && buf[1] === ZIP_SIGNATURE[1]
 }
 
@@ -890,7 +946,7 @@ function looksLikeZip(buf: Buffer): boolean {
  * OneRoster ZIP parser can consume a single-CSV upload too. Correct CRC32 so the
  * archive is spec-valid.
  */
-function wrapCsvAsZip(csv: Buffer): Buffer {
+export function wrapCsvAsZip(csv: Buffer): Buffer {
   const name = Buffer.from('users.csv', 'utf8')
   const crc = crc32(csv)
   const lh = Buffer.alloc(30)
