@@ -16,6 +16,7 @@ import { FacilitiesModule } from '../facilities/facilities.module.js'
 import { AdvancementModule } from '../advancement/advancement.module.js'
 import { StrategyModule } from '../strategy/strategy.module.js'
 import { ImprovementModule } from '../improvement/improvement.module.js'
+import { PortfolioModule } from '../portfolio/portfolio.module.js'
 import { AlertModule } from '../alerts/alert.module.js'
 import { SchoolsModule } from '../schools/schools.module.js'
 import { IntegrationsModule } from '../integrations/integrations.module.js'
@@ -30,6 +31,8 @@ import { BedrockModule } from './bedrock.module.js'
 import { AssistantTtsService } from './assistant-tts.service.js'
 import { AssistantFilesService } from './assistant-files.service.js'
 import { BriefingNarrationService } from './briefing-narration.service.js'
+import { AdvisoryService } from './advisory.service.js'
+import { CoverageService } from './coverage.service.js'
 
 /**
  * Phase 4D+ — agentic AI assistant. Reuses AnalyticsService/BudgetService (analytics)
@@ -69,6 +72,13 @@ import { BriefingNarrationService } from './briefing-narration.service.js'
     // source to keep it that way), so no cycle. ImprovementModule imports neither
     // AnalyticsModule nor anything that reaches it.
     ImprovementModule,
+    // AIC Phase J — exports PortfolioService for Penny's read-only
+    // `get_org_readiness_portfolio` and `compare_accreditation_peers`. ACYCLIC:
+    // PortfolioModule imports only AuthModule, BillingModule, AuditModule and
+    // ImprovementModule — none of which reaches the assistant — and it
+    // deliberately imports neither AnalyticsModule nor TwinModule. Its module
+    // docblock names this tool as the reason its `exports` array exists.
+    PortfolioModule,
     // Phase 4E — proactive alerts. Exports AlertService so Penny's create_alert
     // confirm-tool can create standing requests. No cycle: AlertModule imports no
     // AssistantModule.
@@ -105,6 +115,17 @@ import { BriefingNarrationService } from './briefing-narration.service.js'
     // Reuses BriefingService/OrgBriefingService (AnalyticsModule, already imported)
     // + AssistantClient; the chat get_briefing tool path is unchanged.
     BriefingNarrationService,
+    // AIC Phase J — the SHARED ADVISORY COMPOSER (Modes B and C). Injects
+    // AssistantClient + ConfigService only; when no LLM is configured, when the
+    // client throws, and when the reply is unparseable it returns the full
+    // deterministic composition rather than a 500 or an empty answer.
+    AdvisoryService,
+    // AIC Phase J — COUNTS ONLY. The only reader of the staff-evaluation register
+    // in this directory, with a three-column select that cannot load an identity.
+    // NOTE WHAT IS ABSENT: HrModule. It exports nothing, deliberately, and
+    // importing it would hand this module a service whose public shape names a
+    // person. `no-penny-pii.spec.ts` pins both halves.
+    CoverageService,
   ],
 })
 export class AssistantModule {}

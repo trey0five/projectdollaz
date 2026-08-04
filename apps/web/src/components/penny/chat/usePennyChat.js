@@ -10,7 +10,12 @@
 //   • new-chat / recent-chats (useAiChatSessions, localStorage only)
 //   • attachments on the latest user turn (wire shape per the frozen contract)
 //
-// The SSE vocabulary is UNCHANGED: delta | status | chart | proposal | error | done.
+// The SSE vocabulary gains ONE member in AIC Phase J: `advisory`, modelled exactly
+// on `chart` (accumulated onto the live assistant turn, rendered by a component,
+// rehydrated statically from the persisted transcript). A Mode-B/Mode-C answer is
+// server-composed and per-segment guarded; it rides its own event rather than the
+// delta stream precisely so the outer chat model never gets a chance to paraphrase
+// guarded text on its way to the screen.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSchools } from '../../../context/SchoolContext.jsx'
 import { usePenny } from '../../../context/PennyContext.jsx'
@@ -19,9 +24,10 @@ import { useTextToSpeech } from '../hooks/useTextToSpeech.js'
 import { useSmoothStream } from '../hooks/useSmoothStream.js'
 import { useAiChatSessions } from '../hooks/useAiChatSessions.js'
 
-// A confirmed module-create proposal → the domain refresh key to broadcast so an
+// A confirmed module-create proposal → the domain refresh key(s) to broadcast so an
 // open register page refetches. Mirrors the API's REFRESH map for these kinds; any
-// kind not listed here falls through the confirmProposal branches to a no-op.
+// kind not listed here falls through the confirmProposal branches to a no-op. A
+// value may be a single key or an array (Phase J's draft plan touches two).
 const CONFIRM_REFRESH_KEYS = {
   create_policy: 'governance',
   create_committee: 'governance',
@@ -37,6 +43,12 @@ const CONFIRM_REFRESH_KEYS = {
   create_strategy_goal: 'strategy',
   create_strategy_initiative: 'strategy',
   draft_strategy_plan: 'strategy',
+  // AIC Phase J — the two accreditation advisory writes. Both mirror the API's
+  // REFRESH map entries exactly (draft_improvement_plan: ['strategy',
+  // 'accreditation'], attach_evidence: ['accreditation']); an improvement
+  // initiative may be goal-bound or accreditation-only, so both surfaces refetch.
+  draft_improvement_plan: ['strategy', 'accreditation'],
+  attach_evidence: ['accreditation'],
 }
 
 // tool → the domain refresh keys to broadcast after an UNDO reverses that action, so
@@ -56,6 +68,10 @@ const UNDO_REFRESH_KEYS = {
   create_strategy_goal: ['strategy'],
   create_strategy_initiative: ['strategy'],
   draft_strategy_plan: ['strategy'],
+  // Phase J: undoing the plan root deletes the whole plan (one initiative row);
+  // undoing an evidence link removes that one evidence row.
+  draft_improvement_plan: ['strategy', 'accreditation'],
+  attach_evidence: ['accreditation'],
   create_task: ['tasks'],
   file_document: ['knowledge', 'facilities'],
   import_trial_balance: ['dataStatus', 'metrics'],
@@ -239,12 +255,14 @@ export default function usePennyChat() {
             chosen === 'facilities' ? ['knowledge', 'facilities'] : ['knowledge'],
           )
         } else if (CONFIRM_REFRESH_KEYS[action?.kind]) {
+          // (value may be one key or several — see the map's note)
           // A confirmed module-create (policy/committee/meeting/standard/maintenance/
           // campaign) now exists — broadcast its domain key so an open register page
           // (usePolicies/useCommittees/… listeners) refetches. agentRefresh dispatches
           // a per-key 'penny:data-changed' window event; an unknown/off-page key is a
           // harmless no-op, so this never breaks the existing refresh handling.
-          pennyRef.current?.agentRefresh?.([CONFIRM_REFRESH_KEYS[action.kind]])
+          const keys = CONFIRM_REFRESH_KEYS[action.kind]
+          pennyRef.current?.agentRefresh?.(Array.isArray(keys) ? keys : [keys])
         }
       } catch {
         setProposalStatus(mi, pi, 'error')
@@ -283,7 +301,7 @@ export default function usePennyChat() {
       setMessages((m) => [
         ...m,
         { role: 'user', content: q, attachments: userChips },
-        { role: 'assistant', content: '', charts: [], proposals: [], status: '' },
+        { role: 'assistant', content: '', charts: [], proposals: [], advisories: [], status: '' },
       ])
       setBusy(true)
       setError(null)
@@ -294,11 +312,20 @@ export default function usePennyChat() {
       let content = ''
       let charts = []
       let proposals = []
+      // Phase J advisory cards, accumulated exactly like `charts`.
+      let advisories = []
       let st = ''
       const update = () =>
         setMessages((m) => {
           const copy = [...m]
-          copy[copy.length - 1] = { role: 'assistant', content, charts, proposals, status: st }
+          copy[copy.length - 1] = {
+            role: 'assistant',
+            content,
+            charts,
+            proposals,
+            advisories,
+            status: st,
+          }
           return copy
         })
 
@@ -366,6 +393,14 @@ export default function usePennyChat() {
               update()
             } else if (ev.type === 'chart') {
               charts = [...charts, ev.spec]
+              update()
+            } else if (ev.type === 'advisory') {
+              // A server-composed, per-segment-guarded advisory answer (Mode B or
+              // Mode C). Stored VERBATIM — the card renders `card.segments[].text`
+              // as-is. Nothing here reshapes, merges, re-orders or re-words it:
+              // the whole value of the server's guard is that what it approved is
+              // what the reader sees.
+              advisories = [...advisories, ev.card]
               update()
             } else if (ev.type === 'proposal') {
               // Legacy proposal/confirm path — kept for back-compat (no tool emits

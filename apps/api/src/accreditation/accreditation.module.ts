@@ -71,10 +71,17 @@ import { PriorVisitService } from './prior-visit.service.js'
   // register view, so AccreditationReadinessService joins the exported set. It
   // is an EXPORT, not an import — AccreditationModule still imports neither
   // twin nor analytics, so the graph stays acyclic in the same direction.
+  // AIC Phase J: Penny's read-only `explain_readiness_change` reads the SAME
+  // computed diff/decomposition the readiness-history controller serves. The
+  // alternative was a second copy of that arithmetic inside the assistant, which
+  // is how a spoken explanation and the chart it explains come to disagree. It is
+  // an EXPORT, not an import — this module still imports neither assistant nor
+  // analytics, so the graph stays acyclic in the same direction.
   exports: [
     AccreditationService,
     AccreditationEvidenceReadinessService,
     AccreditationReadinessService,
+    AccreditationReadinessHistoryService,
   ],
 })
 export class AccreditationModule {}

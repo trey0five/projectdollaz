@@ -6,6 +6,7 @@ import { StrategyModule } from '../strategy/strategy.module.js'
 import { AccreditationModule } from '../accreditation/accreditation.module.js'
 import { ImprovementController } from './improvement.controller.js'
 import { ImprovementService } from './improvement.service.js'
+import { ImprovementPlanDrafterService } from './improvement-plan-drafter.service.js'
 
 /**
  * AIC Phase G — the Continuous Improvement Manager.
@@ -43,10 +44,15 @@ import { ImprovementService } from './improvement.service.js'
 @Module({
   imports: [AuthModule, BillingModule, AuditModule, StrategyModule, AccreditationModule],
   controllers: [ImprovementController],
-  providers: [ImprovementService],
+  // AIC Phase J — ImprovementPlanDrafterService is Penny's MODE-A drafter. It
+  // injects PrismaService + ImprovementService only (no LLM client, by spec MA-3),
+  // so it adds no module edge at all: everything it needs is already in this
+  // module's graph.
+  providers: [ImprovementService, ImprovementPlanDrafterService],
   // EXPORTED for exactly one consumer: AssistantModule, for Penny's
   // create_initiative tool and its reverser. A provider injected but not exported
-  // killed the API on boot in Phase E while every unit test passed.
-  exports: [ImprovementService],
+  // killed the API on boot in Phase E while every unit test passed. The drafter
+  // joins the exported set for exactly the same reason and the same consumer.
+  exports: [ImprovementService, ImprovementPlanDrafterService],
 })
 export class ImprovementModule {}

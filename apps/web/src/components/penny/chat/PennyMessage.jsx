@@ -5,10 +5,16 @@
 // renderMarkdown(...) — THIS is what kills the literal "**asterisks**" the old
 // plain-text panel printed. Charts render via the lazy ChartRenderer (unchanged),
 // and each proposal renders a ProposalCard.
+//
+// AIC PHASE J: an assistant turn may also carry `advisories` — server-composed,
+// per-segment-guarded Mode-B/Mode-C answers. They render as CARDS, verbatim, and
+// deliberately NOT through renderMarkdown: the server guarded those exact strings,
+// and a markdown pass is a transformation of guarded text.
 import { Suspense, lazy } from 'react'
 import { renderMarkdown } from '../../../lib/markdown.jsx'
 import PennyAttachmentChip from './PennyAttachmentChip.jsx'
 import ProposalCard from './ProposalCard.jsx'
+import AdvisoryCard from './AdvisoryCard.jsx'
 
 const ChartRenderer = lazy(() => import('../../assistant/ChartRenderer.jsx'))
 
@@ -58,6 +64,7 @@ export default function PennyMessage({
   const text = isStreaming ? streamingContent : message.content
   const charts = message.charts || []
   const proposals = message.proposals || []
+  const advisories = message.advisories || []
 
   return (
     <div className="flex justify-start motion-safe:animate-[penny-pop_260ms_ease-out]">
@@ -77,6 +84,10 @@ export default function PennyMessage({
           >
             <ChartRenderer spec={c} />
           </Suspense>
+        ))}
+
+        {advisories.map((card, ai) => (
+          <AdvisoryCard key={`a${ai}`} card={card} />
         ))}
 
         {proposals.map((p, pi) => (

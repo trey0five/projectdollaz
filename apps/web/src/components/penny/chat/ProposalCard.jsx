@@ -22,6 +22,7 @@ import {
   FileSpreadsheet,
   Landmark,
   Library,
+  Link2,
   RotateCcw,
   Sparkles,
   Undo2,
@@ -29,6 +30,15 @@ import {
 } from 'lucide-react'
 import AppliedCard from './AppliedCard.jsx'
 import DraftPlanProposalCard from './DraftPlanProposalCard.jsx'
+import DraftImprovementPlanCard from './DraftImprovementPlanCard.jsx'
+
+// AIC Phase J — `attach_evidence` links an artifact that ALREADY EXISTS in the
+// platform. It never uploads and never mints a reference, and its whole argument
+// surface is (standard, sourceType, sourceRef) precisely so no model-authored
+// string can land in a permanent record. The card says that out loud, and offers
+// no field in which a person could add one either.
+export const ATTACH_EVIDENCE_PROVENANCE =
+  'KYRO links an artifact that already exists in your platform. Nothing is uploaded, and no file name, title or citation is written by Penny.'
 
 // The four auto-file destinations (label + icon), mirroring the API's closed set.
 // 'knowledge' is labelled "Knowledge only" to signal it does NOT create a module
@@ -50,10 +60,19 @@ export default function ProposalCard({ proposal, index, messageIndex, onConfirm,
   // live numbers. We swap the plain eyebrow/summary for the rich preview body but
   // REUSE every confirm/cancel/applying/applied/error state below (no duplication).
   const isDraftPlan = action?.kind === 'draft_strategy_plan'
+  // AIC Phase J's two write kinds. The improvement draft is MODE A (no LLM at all)
+  // and gets the rich body; the evidence link is a two-field write whose card's job
+  // is to make clear that nothing is being invented or uploaded.
+  const isDraftImprovement = action?.kind === 'draft_improvement_plan'
+  const isAttachEvidence = action?.kind === 'attach_evidence'
   const payload = action?.payload ?? {}
   // Only offer the picker when the backend actually classified a destination.
   const hasDestination = isFileDoc && typeof payload.destination === 'string'
-  const heading = isImport ? 'Import this trial balance?' : 'Proposed change'
+  const heading = isImport
+    ? 'Import this trial balance?'
+    : isAttachEvidence
+      ? 'Link this existing evidence?'
+      : 'Proposed change'
 
   // Local pick — initialised from the detected destination. Overrides the payload
   // value on confirm (backend re-validates + clamps it). Declared BEFORE the
@@ -78,9 +97,11 @@ export default function ProposalCard({ proposal, index, messageIndex, onConfirm,
   const rationale = typeof payload.rationale === 'string' ? payload.rationale : ''
   const confirmLabel = hasDestination
     ? `Confirm & file to ${DESTINATION_LABEL[chosen] ?? 'Knowledge'}`
-    : isDraftPlan
+    : isDraftPlan || isDraftImprovement
       ? 'Create this plan'
-      : 'Confirm'
+      : isAttachEvidence
+        ? 'Link this evidence'
+        : 'Confirm'
 
   // Draft-plan receipt figures (read from the frozen §SEAM payload so the receipt
   // is truthful without a round-trip). Used only in the applied branch below.
@@ -96,6 +117,14 @@ export default function ProposalCard({ proposal, index, messageIndex, onConfirm,
       ? `FY${payload.fyStartYear}–FY${payload.fyEndYear}`
       : null
 
+  // The improvement draft's receipt figure. ONE initiative row is the plan root
+  // (§5.1), so the whole plan is one delete — which is what the receipt promises.
+  const draftSteps = Number.isFinite(payload?.counts?.steps)
+    ? payload.counts.steps
+    : Array.isArray(payload?.steps)
+      ? payload.steps.length
+      : 0
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 6 }}
@@ -105,13 +134,29 @@ export default function ProposalCard({ proposal, index, messageIndex, onConfirm,
     >
       {isDraftPlan ? (
         <DraftPlanProposalCard payload={payload} />
+      ) : isDraftImprovement ? (
+        <DraftImprovementPlanCard payload={payload} />
       ) : (
         <>
           <p className="flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-[0.1em] text-penny">
-            {isImport ? <FileSpreadsheet size={13} aria-hidden /> : <Sparkles size={13} aria-hidden />}
+            {isImport ? (
+              <FileSpreadsheet size={13} aria-hidden />
+            ) : isAttachEvidence ? (
+              <Link2 size={13} aria-hidden />
+            ) : (
+              <Sparkles size={13} aria-hidden />
+            )}
             {heading}
           </p>
           <p className="mt-0.5 text-[14.5px] text-ink">{action?.summary}</p>
+          {isAttachEvidence ? (
+            <p
+              data-testid="attach-evidence-provenance"
+              className="mt-1.5 rounded-lg border border-navy/10 bg-white/70 px-2 py-1.5 text-[11.5px] leading-snug text-navy/70"
+            >
+              {ATTACH_EVIDENCE_PROVENANCE}
+            </p>
+          ) : null}
         </>
       )}
 
@@ -207,6 +252,49 @@ export default function ProposalCard({ proposal, index, messageIndex, onConfirm,
           primaryAction={
             <Link
               to="/strategy"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-penny-gradient px-3 py-1 text-[14px] font-semibold text-navy shadow-sm transition-transform hover:-translate-y-px active:translate-y-0 motion-reduce:hover:translate-y-0"
+            >
+              Open the plan <ArrowRight size={14} aria-hidden />
+            </Link>
+          }
+          onUndo={
+            proposal?.reversible && proposal?.auditId && onUndo
+              ? () => onUndo(messageIndex, index, proposal)
+              : undefined
+          }
+        />
+      ) : isDraftImprovement &&
+        (status === 'applied' ||
+          status === 'undoing' ||
+          status === 'undone' ||
+          status === 'undo-error') ? (
+        // Same rich-receipt treatment as the strategy draft: one created row, one
+        // Undo that removes the whole plan, and a deep link to the register it
+        // landed in. AppliedCard owns the undoing/undone/undo-error sub-states.
+        <AppliedCard
+          // AN IDEMPOTENT NO-OP DOES NOT SAY IT CREATED SOMETHING. `reversible` is
+          // computed on the server from `createdId != null`, so it is false exactly
+          // when this confirm opened the plan that already existed rather than
+          // making one — and in that case there is no drafted step count to report
+          // (the steps on screen were the DRAFT's, not the open plan's) and no Undo,
+          // because an Undo here would delete weeks of somebody's work.
+          header={
+            proposal?.reversible
+              ? 'Created your improvement plan'
+              : 'Opened your existing improvement plan'
+          }
+          proposal={{
+            summary: proposal?.reversible
+              ? 'Every step came from your own recommendations — nothing here was written by a language model.'
+              : 'You already had a draft plan open, so nothing new was created and nothing was changed.',
+            details: proposal?.reversible ? [{ label: 'Steps', value: draftSteps }] : [],
+            reversible: !!proposal?.reversible,
+            auditId: proposal?.auditId ?? null,
+            status,
+          }}
+          primaryAction={
+            <Link
+              to="/improvement"
               className="inline-flex items-center gap-1.5 rounded-lg bg-penny-gradient px-3 py-1 text-[14px] font-semibold text-navy shadow-sm transition-transform hover:-translate-y-px active:translate-y-0 motion-reduce:hover:translate-y-0"
             >
               Open the plan <ArrowRight size={14} aria-hidden />

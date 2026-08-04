@@ -2,7 +2,7 @@ import { IsIn, IsObject, IsString } from 'class-validator'
 
 // Keep this list in SYNC with the ProposedAction['kind'] union in assistant.service.ts
 // — a missing kind makes /apply 400 at the validation boundary before applyAction runs.
-const APPLY_KINDS = [
+export const APPLY_KINDS = [
   'set_budget',
   'draft_cap_entry',
   'apply_driver_budget',
@@ -37,6 +37,16 @@ const APPLY_KINDS = [
   // runs, and that exact desync has shipped twice.
   'create_initiative',
   'draft_strategy_plan',
+  // AIC Phase J — Penny Advisory's TWO writes. Added here in the SAME change as
+  // the ProposedAction['kind'] union, REFRESH, REVERSIBLE_KINDS, CONFIRM_TOOLS and
+  // TOOL_LABELS. `draft_improvement_plan` creates ONE ImprovementInitiative row
+  // that IS the plan (its steps ride as milestones on that row, so one delete
+  // cascades); `attach_evidence` links an EXISTING artifact and never uploads.
+  // advisory-apply-chain.spec.ts (AC-1) asserts all six touchpoints name the same set,
+  // using Object.keys(REFRESH) — a Record TOTAL over the union — as the runtime
+  // enumeration of the type.
+  'draft_improvement_plan',
+  'attach_evidence',
 ] as const
 
 /** A user-confirmed assistant proposal to apply. Mirrors ProposedAction. */

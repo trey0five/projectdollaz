@@ -1,11 +1,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // "Penny narrates the briefing" — PURE composition helpers.
 //
-// Framework-free (no Nest, no I/O, no imports): the value-safety guardrails and
-// the deterministic template narration live here so they are trivially unit-
-// testable (mirrors the briefing-lens.ts purity discipline). The service
-// (briefing-narration.service.ts) does the I/O (fetch briefing, call the LLM,
-// cache) and delegates ALL composition + validation to these functions.
+// Framework-free (no Nest, no I/O): the BRIEFING-SHAPED composition lives here and
+// is trivially unit-testable (mirrors the briefing-lens.ts purity discipline). The
+// service (briefing-narration.service.ts) does the I/O (fetch briefing, call the
+// LLM, cache) and delegates ALL composition + validation to these functions.
 //
 // VALUE-SAFETY INVARIANT: the LLM contributes PHRASING ONLY. The item set, order,
 // severity, link, title, dueDate, voice, schoolName and every COUNT always come
@@ -14,7 +13,27 @@
 // guard swaps any segment whose figures don't all appear in that item's own server
 // strings back to the deterministic `templateSegment`. No figure a user sees or
 // hears can originate in the model.
+//
+// AIC PHASE J: the guard itself now lives in ./value-safety.ts, unchanged and
+// shared with the accreditation advisory. Only the BRIEFING product rules stayed
+// here — org attribution, the viewer closing, the not-reported aside. The symbols
+// below are RE-EXPORTED (not re-implemented) so every existing importer, including
+// the untouched briefing-narration.spec.ts, keeps the SAME function objects.
 // ─────────────────────────────────────────────────────────────────────────────
+import {
+  allowedItemTokens,
+  allowedSummaryTokens,
+  guardSegment,
+  renderDueDateHuman,
+} from './value-safety.js'
+
+export {
+  allowedItemTokens,
+  allowedSummaryTokens,
+  renderDueDateHuman,
+  validateSegmentNumbers,
+  violatesGovernanceVoice,
+} from './value-safety.js'
 
 export type DayPart = 'morning' | 'afternoon' | 'evening'
 export type NarrationSeverity = 'critical' | 'warn' | 'info'
@@ -104,123 +123,6 @@ export interface BriefingNarrationResponse {
 /** How many item segments a spoken brief narrates before the tail folds into the closing. */
 export const NARRATE_CAP = 7
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-
-// Governance advisory guard — a board (viewer/governance-voice) segment must never
-// open with an operator imperative. Kept in lockstep with the prompt rule.
-const GOVERNANCE_IMPERATIVE_RE = /^(Fix|Go|Reconcile|Import|Update|Create|Assign|Upload|Map)\b/i
-
-// Numeric grammar — the figure shapes the board UI glows ($1,234.56 / 86.6% /
-// bare 1,234), now SIGN- and UNIT-aware so the guard can't be fooled by a
-// sentiment flip (-2.0% → +2.0%) or a unit swap (5 days → $5k / 5 million).
-// Captures an optional leading minus, an optional $, the digits, an optional %,
-// and an optional scale word. Global so we can sweep a whole segment.
-const FIGURE_RE = /[-−]?\$?\d[\d,]*(?:\.\d+)?%?(?:(?:k|m|bn)\b|\s(?:thousand|million|billion)\b)?/gi
-
-// Spelled 0…12 → digit (belt-and-braces: the prompt asks for digits, but if the
-// model spells a small count we still catch/allow it).
-const SPELLED: Record<string, string> = {
-  zero: '0',
-  one: '1',
-  two: '2',
-  three: '3',
-  four: '4',
-  five: '5',
-  six: '6',
-  seven: '7',
-  eight: '8',
-  nine: '9',
-  ten: '10',
-  eleven: '11',
-  twelve: '12',
-}
-
-/** Canonicalize a numeric token into a SIGN + MAGNITUDE + UNIT + SCALE key, so two
- *  figures are "equal" only when all four agree: "-2.0%"→"-2%", "2%"→"2%", "$5k"→
- *  "5$k", bare "5"→"5", "1,234"→"1234", "5 million"→"5m". This is the crux of
- *  value-safety: a figure the model invents — or whose sign or unit it flips —
- *  yields a key absent from the item's allowlist and is rejected. A bare count
- *  ("3") canonicalizes to just its number, so the summary allowlist (String(n))
- *  still matches. Non-numeric residue passes through unchanged. */
-function canon(raw: string): string {
-  const r = raw.trim().toLowerCase()
-  const neg = /^[-−]/.test(r)
-  const unit = r.includes('$') ? '$' : r.includes('%') ? '%' : ''
-  const scaleM = /(k|m|bn|thousand|million|billion)$/.exec(r)
-  const scale = scaleM
-    ? scaleM[1] === 'k' || scaleM[1] === 'thousand'
-      ? 'k'
-      : scaleM[1] === 'bn' || scaleM[1] === 'billion'
-        ? 'b'
-        : 'm'
-    : ''
-  const core = r.replace(/[-−$,%\s]/g, '').replace(/(k|m|bn|thousand|million|billion)$/, '')
-  if (core === '') return raw
-  const n = Number(core)
-  if (!Number.isFinite(n)) return core
-  return `${neg ? '-' : ''}${n}${unit}${scale}`
-}
-
-/** Every numeric token in a string: canonical figures ∪ spelled-number digits. */
-function tokensOf(s: string): Set<string> {
-  const set = new Set<string>()
-  for (const m of s.matchAll(FIGURE_RE)) set.add(canon(m[0]))
-  const low = s.toLowerCase()
-  for (const [w, d] of Object.entries(SPELLED)) {
-    if (new RegExp(`\\b${w}\\b`).test(low)) set.add(d)
-  }
-  return set
-}
-
-/** Render an ISO yyyy-mm-dd as a spoken date ("Jul 3, 2026"); pass through if not ISO. */
-export function renderDueDateHuman(iso: string): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
-  if (!m) return iso
-  const y = Number(m[1])
-  const mo = Number(m[2])
-  const d = Number(m[3])
-  if (mo < 1 || mo > 12) return iso
-  return `${MONTHS[mo - 1]} ${d}, ${y}`
-}
-
-/** The numeric tokens permitted in an ITEM segment = tokens of its own server
- *  strings (title ∪ why ∪ dueDate ISO ∪ human-rendered dueDate). */
-export function allowedItemTokens(item: NarrationSourceItem): Set<string> {
-  const strs = [item.title, item.why]
-  // Only the HUMAN-rendered dueDate ("Jul 15, 2026") — the raw ISO would leak a
-  // stray "07"→"7" token the segment never legitimately needs (N4). Segments are
-  // instructed to speak dates in the human form, and templateSegment uses it too.
-  if (item.dueDate) strs.push(renderDueDateHuman(item.dueDate))
-  // Org attribution: the schoolName is a trusted server string the LLM is REQUIRED
-  // to include, so its digits (e.g. "PS 121", "St. John's #2") are allowed — else a
-  // digit-bearing name would force every org item to the template.
-  if (item.schoolName) strs.push(item.schoolName)
-  const set = new Set<string>()
-  for (const s of strs) for (const t of tokensOf(s)) set.add(t)
-  return set
-}
-
-/** The numeric tokens permitted in opening/closing = the summary counts + extras
- *  (omittedItemCount, and for org: schoolsReporting, schoolCount, notReported.length). */
-export function allowedSummaryTokens(summary: NarrationSummary, extras: number[]): Set<string> {
-  const set = new Set<string>()
-  for (const n of [summary.total, summary.critical, summary.warn, summary.info, ...extras]) {
-    set.add(String(n))
-  }
-  return set
-}
-
-/** True when every numeric token in `text` is in `allow` (i.e. no invented figure). */
-export function validateSegmentNumbers(text: string, allow: Set<string>): boolean {
-  for (const t of tokensOf(text)) if (!allow.has(t)) return false
-  return true
-}
-
-/** True when a governance-voice segment opens with an operator imperative (rejected). */
-export function violatesGovernanceVoice(text: string): boolean {
-  return GOVERNANCE_IMPERATIVE_RE.test(text.trim())
-}
-
 /** The value-safe-by-construction deterministic segment text for one item. */
 export function templateSegment(item: NarrationSourceItem, scope: 'school' | 'org'): string {
   let base = `${item.title}. ${item.why}`
@@ -302,8 +204,11 @@ export function assembleSegments(
   const openTpl = templateOpening(payload, dayPart)
   let openText = openTpl
   if (parsed && parsed.opening.trim()) {
-    const allow = allowedSummaryTokens(payload.summary, summaryExtras(payload))
-    openText = validateSegmentNumbers(parsed.opening.trim(), allow) ? parsed.opening.trim() : openTpl
+    openText = guardSegment({
+      templateText: openTpl,
+      candidateText: parsed.opening,
+      allow: allowedSummaryTokens(payload.summary, summaryExtras(payload)),
+    }).text
   }
   segments.push({ kind: 'opening', text: openText })
 
@@ -312,19 +217,25 @@ export function assembleSegments(
   if (parsed) for (const e of parsed.items) byId.set(e.id, e.text)
   for (const item of payload.items) {
     const tpl = templateSegment(item, payload.scope)
-    let text = tpl
-    const cand = byId.get(item.id)
-    if (parsed && typeof cand === 'string' && cand.trim()) {
-      const c = cand.trim()
-      const numOk = validateSegmentNumbers(c, allowedItemTokens(item))
-      const voiceOk = item.voice !== 'governance' || !violatesGovernanceVoice(c)
-      if (numOk && voiceOk) {
-        // Org attribution: guarantee the school name is spoken in the segment.
-        text =
-          payload.scope === 'org' && item.schoolName && !c.includes(item.schoolName)
-            ? `At ${item.schoolName}: ${c}`
-            : c
-      }
+    // The numeric + governance-voice guard is the shared value rule (value-safety.ts).
+    // The org-attribution prefix below is a BRIEFING rule and is applied AFTER it, and
+    // only to text the guard actually kept — a template segment already carries the
+    // school name from templateSegment().
+    const g = guardSegment({
+      templateText: tpl,
+      candidateText: parsed ? (byId.get(item.id) ?? null) : null,
+      allow: allowedItemTokens(item),
+      voice: item.voice,
+    })
+    let text = g.text
+    if (
+      g.source === 'llm' &&
+      payload.scope === 'org' &&
+      item.schoolName &&
+      !g.text.includes(item.schoolName)
+    ) {
+      // Org attribution: guarantee the school name is spoken in the segment.
+      text = `At ${item.schoolName}: ${g.text}`
     }
     segments.push({
       kind: 'item',
@@ -353,8 +264,11 @@ export function assembleSegments(
   const closeTpl = templateClosing(payload)
   let closeText = closeTpl
   if (parsed && parsed.closing.trim() && payload.lens !== 'viewer') {
-    const allow = allowedSummaryTokens(payload.summary, summaryExtras(payload))
-    closeText = validateSegmentNumbers(parsed.closing.trim(), allow) ? parsed.closing.trim() : closeTpl
+    closeText = guardSegment({
+      templateText: closeTpl,
+      candidateText: parsed.closing,
+      allow: allowedSummaryTokens(payload.summary, summaryExtras(payload)),
+    }).text
   }
   segments.push({ kind: 'closing', text: closeText + closingSuffix(payload) })
 

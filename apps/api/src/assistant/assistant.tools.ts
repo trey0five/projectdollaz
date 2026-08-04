@@ -1319,6 +1319,209 @@ export const TOOL_SCHEMAS = [
       },
     },
   },
+  // ═══════════════════════════════════════════════════════════════════════════
+  // AIC PHASE J — PENNY ADVISORY. EIGHT TOOLS.
+  //
+  // THE ONE RULE, restated where the model can see it: the LLM never originates a
+  // finding, a number, a document name or a cause. Every earlier phase earned the
+  // right to say things by COMPUTING them; these tools put a language model in
+  // front of that work and give none of it back.
+  //
+  // The descriptions below carry the prohibitions VERBATIM because a description
+  // is the only part of a tool the model reads before deciding to call it. But a
+  // description is ADVICE — the guarantees live in the payloads: a refusing tool
+  // returns `{available:false, reason, wouldRequire}` and NO findings, segments,
+  // attributions, suggestions, rows or counts key, so there is nothing to
+  // improvise from. Six of the eight are READ-ONLY (not in WRITE_TOOLS, not in
+  // CONFIRM_TOOLS, no ProposedAction member) and are therefore offered to a
+  // `viewer`/board caller too. Two are confirm-then-apply writes.
+  // ═══════════════════════════════════════════════════════════════════════════
+  {
+    type: 'function',
+    function: {
+      name: 'check_kyro_collects',
+      description:
+        'READ-ONLY. Ask whether KYRO holds data on a topic at all, and what it says. CALL THIS FIRST whenever the user asks about something you are not certain this product records — professional development, safe-environment or background clearances, test scores, LMS or assessment data, student achievement, teacher evaluations, facility inspections — and whenever they ask whether the school will PASS its accreditation. It answers from the product\'s own capability registry, never from your memory. When it returns available:false you must relay its message and its wouldRequire as-is and MUST NOT supply the missing capability from memory, invent a figure, or say what the answer probably is. When it returns available:true, report the COUNTS it gives you and never name a person — the register holds people, this tool does not return them. Never state or imply a probability, percentage, likelihood or "on track" judgement about an accreditation outcome.',
+      parameters: {
+        type: 'object',
+        properties: {
+          topic: {
+            type: 'string',
+            enum: [
+              'teacher_evaluations',
+              'facility_inspections',
+              'professional_development',
+              'safe_environment_clearances',
+              'lms_assessment',
+              'student_achievement',
+              'test_scores',
+              'accreditation_outcome',
+            ],
+            description:
+              'What the user asked about. Use accreditation_outcome for "will we pass / are we going to be accredited". An unrecognised value is answered truthfully as not collected rather than as an error.',
+          },
+        },
+        required: ['topic'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'explain_readiness_change',
+      description:
+        'READ-ONLY. Explain WHY accreditation readiness moved between two dates, from the recorded snapshot series. Returns the server\'s own computed decomposition and a deterministic ATTRIBUTION LIST — one entry per standard that changed score, gained or lost evidence, or entered or left scope. When cannotAttribute is true the change cannot be attributed to anything in the register: say exactly that and STOP. Do not offer a plausible cause, do not guess at staff turnover, a busy term, or a data-entry lag, and do not restate any figure the tool did not give you. The explanation.segments are already written and already checked — introduce the card in ONE sentence containing no digits and let it speak.',
+      parameters: {
+        type: 'object',
+        properties: {
+          seriesKey: {
+            type: 'string',
+            description: 'Framework CODE, or the literal "none". Omit for the default series.',
+          },
+          from: { type: 'string', description: 'Start day, yyyy-mm-dd.' },
+          to: { type: 'string', description: 'End day, yyyy-mm-dd.' },
+          window: {
+            type: 'string',
+            enum: ['30d', '90d', '365d', 'since_board_meeting'],
+            description:
+              'A relative window instead of from/to. since_board_meeting uses the school\'s own recorded board marker; it refuses when no marker exists rather than picking a date.',
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'generate_readiness_narrative',
+      description:
+        'READ-ONLY. Compose the executive readiness narrative — where readiness stands, what moved since the last board marker, the top firing findings, evidence currency, and WHAT COULD NOT BE EVALUATED. The segments are server-composed and value-checked, and THEY RENDER THEMSELVES as a card the user reads directly — you do not reproduce them. Introduce the card in ONE sentence containing no digits, do not restate any figure from it, and let it speak. The server composes every segment in a fixed order and never drops the "could not evaluate" one. Likelihood is ORDINAL: never convert it to a percentage and never predict an accreditation decision. For audience "board", the findings segment is composed as a review prompt rather than an operator imperative.',
+      parameters: {
+        type: 'object',
+        properties: {
+          audience: {
+            type: 'string',
+            enum: ['leadership', 'board'],
+            description: 'Who it is for. Defaults to leadership.',
+          },
+          length: {
+            type: 'string',
+            enum: ['short', 'standard'],
+            description: 'Defaults to standard. "short" keeps the same segments, tighter.',
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'suggest_evidence',
+      description:
+        'READ-ONLY. Suggest artifacts ALREADY IN THIS PLATFORM that could be attached to one accreditation standard. Pass exactly one of standardId or standardCode. Every suggestion is a real row with a real id — NEVER invent, guess at, or describe a filename, a document title, a URL or a citation, and never suggest attaching something the school has not given us. When nothing matches, the tool names the KIND of artifact required and offers a task; relay that kind and do not turn it into a specific file the school might have.',
+      parameters: {
+        type: 'object',
+        properties: {
+          standardId: { type: 'string', description: 'The standard\'s id in THIS school.' },
+          standardCode: {
+            type: 'string',
+            description: 'The standard\'s code, e.g. "COG-2.3". Matched exactly after trim + uppercase.',
+          },
+          limit: { type: 'integer', description: '1..10, default 6.' },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'attach_evidence',
+      description:
+        'PROPOSE linking an EXISTING artifact to an accreditation standard, for the user to CONFIRM (this does NOT attach it; the user must confirm). It never uploads and never creates a document. The (sourceType, sourceRef) pair MUST come from a suggest_evidence result for this same standard — call that first and pass a pair back verbatim; a pair you compose yourself is rejected at both propose and apply time and nothing is created. There is no title argument: the stored title is the matched suggestion\'s own label.',
+      parameters: {
+        type: 'object',
+        properties: {
+          standardId: { type: 'string', description: 'The standard\'s id in THIS school.' },
+          standardCode: { type: 'string', description: 'The standard\'s code, e.g. "COG-2.3".' },
+          sourceType: {
+            type: 'string',
+            description: 'From a suggest_evidence row, verbatim (e.g. policy, board_report, meeting).',
+          },
+          sourceRef: {
+            type: 'string',
+            description:
+              'From the SAME suggest_evidence row, verbatim. Null only for the virtual governance_report.',
+          },
+        },
+        required: ['sourceType'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'compare_accreditation_peers',
+      description:
+        'READ-ONLY. Compare ONE school\'s accreditation readiness against its comparable peers in the same organization. Needs at least 3 peers: below that it refuses and returns NO ranks, medians or percentiles, and you must not describe the school as ahead, behind or typical anyway. Below 4 peers the percentile is null on purpose — report peerRank and the reason given, and never compute or estimate a percentile yourself. TWO DIFFERENT RANKS ARE RETURNED AND THEY RUN IN OPPOSITE DIRECTIONS: peerRank is the focus school\'s READINESS rank inside its peer group where 1 is BEST, while each row in peers[] carries orgAttentionRank, the organization-wide ATTENTION rank where 1 means NEEDS THE MOST ATTENTION. Never compare one against the other and never call either of them simply "rank". The peers[] rows are exactly the peer group peerCount describes — no other school in the organization is in it, and you must not name one.',
+      parameters: {
+        type: 'object',
+        properties: {
+          schoolName: {
+            type: 'string',
+            description: 'The school to focus on. Defaults to the active school.',
+          },
+          dimensions: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Optional peer-matching dimensions to prefer.',
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_org_readiness_portfolio',
+      description:
+        'READ-ONLY. The superintendent view: every school in the organization ranked by how much accreditation attention it needs, with the drivers behind each rank. Schools with too little data are listed separately WITH the missing components named — they are not low-risk, they are unmeasured, and you must say so. Schools that do not license the accreditation module are listed BY NAME ONLY and you must not infer anything about their readiness. Report the drivers the tool gives you; never rank, score or explain a school it did not rank.',
+      parameters: {
+        type: 'object',
+        properties: {
+          frameworkCode: {
+            type: 'string',
+            description: 'Optional: restrict to one accreditation framework by code.',
+          },
+          limit: { type: 'integer', description: '1..20, default 10.' },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'draft_improvement_plan',
+      description:
+        'PROPOSE a deterministic improvement plan built from the school\'s OWN recommendation rail, for the user to CONFIRM (this does NOT create it; the user must confirm). Every step is a recommendation the rule layer already computed — you are not asked to write one, and you must not add, re-word, re-order or invent a step, a rationale or a target. If the school already has a live draft the tool returns that one instead: say so rather than proposing a second.',
+      parameters: {
+        type: 'object',
+        properties: {
+          limit: { type: 'integer', description: '1..5 steps, default 5.' },
+          focus: {
+            type: 'string',
+            description:
+              'Optional narrowing by standard code or origin (gap/assurance/finding). It narrows the existing rail; it never becomes text in the plan.',
+          },
+        },
+        required: [],
+      },
+    },
+  },
 ]
 
 /** Status-line labels shown while a tool runs (present tense; agentic). */
@@ -1380,4 +1583,16 @@ export const TOOL_LABELS: Record<string, string> = {
   create_strategy_goal: 'Adding a goal to the plan…',
   create_strategy_initiative: 'Adding an initiative…',
   create_initiative: 'Adding an initiative…',
+  // AIC Phase J — Penny Advisory. The two WRITE labels are added in the SAME
+  // change as ProposedAction['kind'], APPLY_KINDS, REFRESH, REVERSIBLE_KINDS and
+  // CONFIRM_TOOLS; a kind missing from any one of the six 400s /apply, and that
+  // desync has shipped twice in this repository.
+  check_kyro_collects: 'Checking what KYRO actually records…',
+  explain_readiness_change: 'Working out what moved readiness…',
+  generate_readiness_narrative: 'Composing the readiness narrative…',
+  suggest_evidence: 'Looking for evidence you already have…',
+  compare_accreditation_peers: 'Comparing against peer schools…',
+  get_org_readiness_portfolio: 'Ranking the schools by attention needed…',
+  draft_improvement_plan: 'Drafting an improvement plan…',
+  attach_evidence: 'Linking that evidence…',
 }

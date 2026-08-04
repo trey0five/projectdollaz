@@ -186,9 +186,22 @@ function fromScore(
 
 export interface PortfolioPeerPanel {
   peerCount: number
+  /**
+   * The schools this panel's `peerCount`, `rank` and `percentile` were computed
+   * over — `resolvePeerGroup`'s own members, which is a SUBSET of the ranked org.
+   *
+   * Exposed because a consumer that wants to list the peers has otherwise no way to
+   * reconstruct the group, and the one that tried listed every ranked school in the
+   * organization beside a `peerCount` that described three of them. `peerIds.length`
+   * is `peerCount` by construction.
+   */
+  peerIds: string[]
   matchTier: MatchTier
   activeDims: PeerDim[]
   relaxedDims: PeerDim[]
+  /** READINESS rank inside the peer group: 1 = highest verifiedPct = BEST. Note this
+   *  is the OPPOSITE polarity to `PortfolioRow.rank`, which is the org-wide ATTENTION
+   *  rank where 1 = needs the most attention. */
   rank: number
   /** NULL whenever peerCount < MIN_PEERS_FOR_PERCENTILE. Never computed downstream. */
   percentile: number | null
@@ -821,6 +834,7 @@ export class PortfolioService {
         ...row,
         peers: {
           peerCount,
+          peerIds: [...grp.peerIds],
           matchTier: grp.matchTier,
           activeDims: grp.activeDims,
           relaxedDims: grp.relaxedDims,

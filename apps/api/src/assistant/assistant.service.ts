@@ -70,6 +70,18 @@ import { GovernanceReportService } from '../governance/governance-report.service
 import { BillingService } from '../billing/billing.service.js'
 import { EarlyWarningService } from '../twin/early-warning.service.js'
 import { AccreditationService } from '../accreditation/accreditation.service.js'
+// AIC Phase J — the computed readiness history + the live readiness pair + the
+// Phase-C evidence index. All THREE are read, never recomputed: a spoken
+// explanation that re-derived any of them would be free to disagree with the
+// chart it is explaining, invisibly and permanently.
+import {
+  AccreditationReadinessHistoryService,
+  READINESS_DISCLAIMER,
+} from '../accreditation/readiness-history.service.js'
+import { AccreditationReadinessService } from '../accreditation/readiness.service.js'
+import { AccreditationEvidenceReadinessService } from '../accreditation/evidence-readiness.service.js'
+import { PortfolioService, MIN_PEERS_FOR_PERCENTILE } from '../portfolio/portfolio.service.js'
+import type { CreateEvidenceDto, EvidenceSourceType } from '../accreditation/dto/create-evidence.dto.js'
 import { FacilitiesService } from '../facilities/facilities.service.js'
 import { AdvancementService } from '../advancement/advancement.service.js'
 import { StrategyService } from '../strategy/strategy.service.js'
@@ -79,6 +91,11 @@ import {
 } from '../strategy/strategy-plan-drafter.service.js'
 import { INITIATIVE_STATUSES, MIX_METRIC_KEYS } from '../strategy/strategy.constants.js'
 import { ImprovementService } from '../improvement/improvement.service.js'
+import {
+  ImprovementPlanDrafterService,
+  emptyDraftReason,
+  type DraftImprovementPlan,
+} from '../improvement/improvement-plan-drafter.service.js'
 import {
   IMPROVEMENT_ORIGIN_TYPES,
   type ImprovementOriginType,
@@ -111,6 +128,15 @@ import {
   type PreparedAttachments,
 } from './assistant-files.service.js'
 import { TOOL_SCHEMAS, TOOL_LABELS, WALKTHROUGH_TARGET_KEYS } from './assistant.tools.js'
+// AIC Phase J — the SHARED ADVISORY COMPOSER (§3 seam). This file consumes the
+// interface and never reaches past it: the per-segment numeric guard, the
+// governance-voice guard and the template fallback all live behind `compose`.
+import { AdvisoryService } from './advisory.service.js'
+import { CANNOT_ATTRIBUTE } from './advisory-compose.js'
+import type { AdvisorySegment, AdvisorySegmentSpec } from './advisory-compose.js'
+import { CoverageService } from './coverage.service.js'
+import { resolveCoverageTopic, type CoverageTopicEntry } from './coverage-topics.js'
+import { evidenceKindLabel } from './evidence-kind-labels.js'
 
 const MAX_TURNS = 6
 
@@ -151,7 +177,11 @@ const MODAL_KEYS = new Set<string>([
 const TARGET_KEYS = new Set<string>(WALKTHROUGH_TARGET_KEYS)
 
 // tool kind -> which client data domains to refresh after an autonomous write.
-const REFRESH: Record<ProposedAction['kind'], RefreshKey[]> = {
+// EXPORTED so advisory-apply-chain.spec.ts (AC-1) can use it as the RUNTIME
+// enumeration of ProposedAction['kind']: the Record is TOTAL over that union, so the
+// compiler guarantees Object.keys(REFRESH) is exactly the union's members. That is
+// what lets one spec assert the other five touchpoints agree with the type.
+export const REFRESH: Record<ProposedAction['kind'], RefreshKey[]> = {
   set_budget: ['budget', 'dataStatus', 'metrics'],
   apply_driver_budget: ['budget', 'dataStatus', 'metrics'],
   apply_forecast: ['forecast', 'budget'],
@@ -194,6 +224,14 @@ const REFRESH: Record<ProposedAction['kind'], RefreshKey[]> = {
   // that makes this entry impossible to forget.
   create_initiative: ['strategy', 'accreditation'],
   draft_strategy_plan: ['strategy'],
+  // AIC Phase J. A drafted improvement plan is ONE ImprovementInitiative row, which
+  // both /strategy and /accreditation render (the same reasoning as create_initiative
+  // above); attached evidence moves the DEFENSIBLE half of readiness, so the
+  // accreditation surface refetches. This Record is TOTAL over ProposedAction['kind'],
+  // which is the ONE touchpoint of the six the compiler enforces — the other five are
+  // covered by advisory-apply-chain.spec.ts (AC-1).
+  draft_improvement_plan: ['strategy', 'accreditation'],
+  attach_evidence: ['accreditation'],
 }
 
 // Penny action-log stamps. Every applied action is written to the AuditLog under
@@ -208,7 +246,7 @@ const AUDIT_UNDONE = 'assistant.action.undone'
 // single reversible id — is deliberately excluded). import_monthly_actuals is left
 // out for v1: its reversal (MonthlySnapshotsService.remove) is keyed by periodId +
 // monthKey, not a single created id, so it has no captured targetId to undo from.
-const REVERSIBLE_KINDS = new Set<ProposedAction['kind']>([
+export const REVERSIBLE_KINDS = new Set<ProposedAction['kind']>([
   'create_policy',
   'create_committee',
   'create_meeting',
@@ -235,6 +273,13 @@ const REVERSIBLE_KINDS = new Set<ProposedAction['kind']>([
   // strategic one.
   'create_initiative',
   'draft_strategy_plan',
+  // AIC Phase J. draft_improvement_plan's createdId is the SINGLE
+  // ImprovementInitiative row that IS the plan — its steps ride as milestones on
+  // that same row, so one removeInitiative erases the whole plan and no orphan is
+  // representable. attach_evidence's createdId is the evidence row; undo is
+  // AccreditationService.removeEvidence.
+  'draft_improvement_plan',
+  'attach_evidence',
 ])
 
 // Tools that perform a write. Membership UNCHANGED — but the meaning flips from
@@ -255,7 +300,7 @@ const WRITE_TOOLS = new Set([
 // deliberately diverges from the autonomous WRITE_TOOLS above: the slice forbids
 // silently creating a task the user didn't explicitly confirm. Same owner/accountant
 // gate as WRITE_TOOLS applies before a proposal is even offered.
-const CONFIRM_TOOLS = new Set([
+export const CONFIRM_TOOLS = new Set([
   'create_task',
   'submit_for_approval',
   'decide_approval',
@@ -285,6 +330,14 @@ const CONFIRM_TOOLS = new Set([
   // is not something Penny does without being asked twice.
   'create_initiative',
   'draft_strategy_plan',
+  // AIC Phase J — the TWO advisory writes. The other six Phase-J tools appear in
+  // NEITHER this set nor WRITE_TOOLS, which is what makes them offerable to a
+  // `viewer` (board) caller, on the same structural argument the Phase-E
+  // early-warning read makes. (That tool is deliberately not NAMED here:
+  // get-early-warnings.spec.ts asserts its name is absent from the first 2000
+  // characters of this literal, and a comment is text like any other.)
+  'draft_improvement_plan',
+  'attach_evidence',
 ])
 
 // Role-gate the tools OFFERED to the model. A viewer (Board) is read-only: every
@@ -363,6 +416,9 @@ export interface ProposedAction {
     // exists here and nowhere else 400s /apply, which has shipped twice.
     | 'create_initiative'
     | 'draft_strategy_plan'
+    // AIC Phase J — Penny Advisory's two writes. Same five-way sync rule as above.
+    | 'draft_improvement_plan'
+    | 'attach_evidence'
   periodId: string
   summary: string
   payload: Record<string, unknown>
@@ -528,10 +584,155 @@ export interface GuideStep {
   cta?: { label: string }
 }
 
+/**
+ * AIC Phase J — the ADVISORY CARD. The guarded text is what the user must READ.
+ *
+ * WHY A CARD AND NOT PROSE. Relaying these segments through the outer chat model
+ * would put an unguarded paraphrase between the guard and the user — the model
+ * would be free to round a figure, merge two segments, or drop the "what we could
+ * not evaluate" paragraph, and every one of those would be invisible. The card
+ * renders the server segments VERBATIM and the chat model's job shrinks to one
+ * digit-free sentence of introduction. `render_chart` set this precedent.
+ *
+ * `mode` and per-segment `source` are PAYLOAD FIELDS, not UI chrome, for the same
+ * reason Phase H made coverage/disclaimer/demoData payload fields: an export, a
+ * print page or a screenshot must not be able to drop the declaration of how the
+ * text was produced.
+ */
+/**
+ * Resolve the school a peer comparison is ABOUT — EXACT NAME MATCH ONLY.
+ *
+ * The same rule `resolveStandardRef` applies to a standard code, and for the same
+ * reason: a near miss produces a confident answer about the wrong row. A substring
+ * fallback lived here, so in a diocese holding "St. Mary Academy" and "St. Mary of
+ * the Angels", "compare St. Mary to its peers" silently resolved to whichever sorted
+ * first in the ATTENTION ranking and returned that school's verifiedPct, band and
+ * rank as the answer to a question about the other one.
+ *
+ * The refusal lists what it DID match on substring, so the user can name one — the
+ * shape `refuseUnknownStandard` uses, down to saying "I won't guess" out loud.
+ */
+export function resolveFocusSchool<T extends { schoolId: string; name: string }>(
+  ranked: readonly T[],
+  askedName: string,
+  activeSchoolId: string,
+): { focus: T | null; refusal: Record<string, unknown> | null } {
+  const wanted = askedName.trim().toLowerCase()
+  if (!wanted) {
+    return { focus: ranked.find((r) => r.schoolId === activeSchoolId) ?? null, refusal: null }
+  }
+  const exact = ranked.find((r) => r.name.toLowerCase() === wanted)
+  if (exact) return { focus: exact, refusal: null }
+  const near = ranked
+    .filter((r) => r.name.toLowerCase().includes(wanted))
+    .map((r) => r.name)
+    .slice(0, 5)
+  return {
+    focus: null,
+    refusal: {
+      available: false,
+      reason: 'unknown_school',
+      wouldRequire: null,
+      asked: askedName.trim(),
+      candidates: near,
+      message:
+        near.length > 0
+          ? `More than one school in this organization could be “${askedName.trim()}” ` +
+            `(${near.join(', ')}). I won’t guess at which one you meant — name it exactly.`
+          : `No school in this organization is named “${askedName.trim()}”. I won’t guess ` +
+            'at which one you meant.',
+    },
+  }
+}
+
+/** One row of `compare_accreditation_peers`' peers[]. */
+export interface AdvisoryPeerRow {
+  name: string
+  attentionBand: string
+  verifiedPct: number | null
+  /**
+   * NOT `rank`. `PortfolioRow.rank` is the ORG-WIDE ATTENTION rank where 1 = needs
+   * the MOST attention; the payload's top-level `peerRank` is the PEER READINESS rank
+   * where 1 = BEST. Both were called `rank` in one payload, so a model reading "you
+   * are rank 2, St. Agnes is rank 1" stated the exact inverse of the truth. Two
+   * opposite scales never share a key name.
+   */
+  orgAttentionRank: number
+}
+
+/**
+ * The peers a comparison may name: the PANEL'S OWN MEMBERS, and no one else.
+ *
+ * Extracted and exported so advisory-peers.spec.ts can prove the population, which
+ * is the whole defect this replaced: the rows were built from the entire org ranking
+ * while `peerCount`, `rank` and `percentile` described a matched subset, so the tool
+ * announced three comparable peers and handed the model eleven named schools to
+ * describe — every one of them carrying a verifiedPct, which is one division away
+ * from the percentile the same payload refuses to state.
+ *
+ * `peers.length === peerCount` by construction. The `covered` filter behind it is
+ * belt-and-braces: `getPortfolio` is already bounded by `resolveOrgScope`, so every
+ * ranked school is covered today. It is an EXCLUSION rather than an anonymisation
+ * because if that boundary ever widens, dropping a school we cannot name is
+ * fail-closed and minting a "Peer A" label for it is not.
+ */
+export function peerRowsFor(
+  ranked: readonly {
+    schoolId: string
+    name: string
+    attentionBand: string
+    verifiedPct: number | null
+    rank: number
+  }[],
+  peerIds: readonly string[],
+  covered: ReadonlyMap<string, unknown> | ReadonlySet<string>,
+): AdvisoryPeerRow[] {
+  const wanted = new Set(peerIds)
+  const isCovered = (id: string): boolean =>
+    covered instanceof Set ? covered.has(id) : (covered as ReadonlyMap<string, unknown>).has(id)
+  return ranked
+    .filter((r) => wanted.has(r.schoolId) && isCovered(r.schoolId))
+    .map((r) => ({
+      name: r.name,
+      attentionBand: r.attentionBand,
+      verifiedPct: r.verifiedPct,
+      orgAttentionRank: r.rank,
+    }))
+}
+
+export interface AdvisoryCard {
+  tool: 'explain_readiness_change' | 'generate_readiness_narrative'
+  mode: 'B' | 'C'
+  /** Server-composed. Never model text. */
+  title: string
+  segments: { id: string; text: string; source: 'llm' | 'template' }[]
+  /** How many segments fell back. 0 ⇒ every candidate passed the guard. */
+  templateFallbackCount: number
+  /**
+   * How many segments were SUBMITTED to the composer — the denominator the fallback
+   * tally must use. It is NOT `segments.length`: a segment appended after the
+   * composer (or a branch that composed nothing) would otherwise make the card claim
+   * a model was consulted about a sentence it never saw.
+   */
+  checkedSegmentCount: number
+  /**
+   * FALSE when no language model was called on this turn at all — the cannot-attribute
+   * branch, and any deployment with no LLM configured. The card must then say so
+   * rather than print a pass rate for an interaction that did not happen.
+   */
+  modelCalled: boolean
+  /** READINESS_DISCLAIMER, imported — never retyped here. */
+  disclaimer: string
+  demoData: boolean
+  /** Mode B only: the change could not be attributed to anything in the register. */
+  cannotAttribute?: boolean
+}
+
 export type StreamEvent =
   | { type: 'delta'; text: string }
   | { type: 'status'; text: string }
   | { type: 'chart'; spec: ChartSpec }
+  | { type: 'advisory'; card: AdvisoryCard }
   | { type: 'proposal'; action: ProposedAction }
   | { type: 'navigate'; page: PageKey; section?: SettingsSection; openModal?: ModalKey }
   | {
@@ -568,6 +769,8 @@ interface Ctx {
 /** Sinks the tool loop calls to surface streamed side-effects (no-ops on the non-stream path). */
 interface ToolSinks {
   onChart: (c: ChartSpec) => void
+  /** AIC Phase J — the guarded advisory card, modelled exactly on `onChart`. */
+  onAdvisory: (c: AdvisoryCard) => void
   onProposal: (a: ProposedAction) => void
   onNavigate: (ev: Extract<StreamEvent, { type: 'navigate' }>) => void
   onApplied: (ev: Extract<StreamEvent, { type: 'applied' }>) => void
@@ -704,6 +907,27 @@ export class AssistantService {
     // specs still construct; only that build/apply path touches it. DI is by type
     // (AssistantModule imports EnrollmentModule, which exports the service).
     @Optional() private readonly diocesan?: DiocesanEnrollmentService,
+    // ── AIC Phase J — PENNY ADVISORY ───────────────────────────────────────────
+    // Seven optional deps, INSERTED HERE rather than appended, for the same reason
+    // Phase G inserted `improvement` ahead of the Phase-E pair: get-early-warnings.
+    // spec.ts derives `earlyWarning`/`billing` as `arity - 2`/`arity - 1` and
+    // create-initiative.spec.ts derives `improvement` as `arity - 3`, precisely so
+    // that a new dependency cannot silently shift them. Appending would have shifted
+    // all three and broken nine specs; adding AHEAD of them keeps every derivation
+    // correct and leaves those spec files byte-identical.
+    //
+    // Every one is `@Optional()` and every use site checks for it, so the eight
+    // positional-arg unit specs that construct this service with stubs still work.
+    //
+    // NOTE WHAT IS NOT HERE: no HrModule service. Penny gets COUNTS ONLY, and the
+    // counts come from CoverageService's three-column read (§4).
+    @Optional() private readonly advisory?: AdvisoryService,
+    @Optional() private readonly coverage?: CoverageService,
+    @Optional() private readonly readinessHistory?: AccreditationReadinessHistoryService,
+    @Optional() private readonly readiness?: AccreditationReadinessService,
+    @Optional() private readonly evidenceReadiness?: AccreditationEvidenceReadinessService,
+    @Optional() private readonly portfolio?: PortfolioService,
+    @Optional() private readonly planDrafterImprovement?: ImprovementPlanDrafterService,
     // AIC Phase E — the read-only get_early_warnings tool. Optional + LAST so every
     // positional-arg unit spec still constructs; only that one execute() case
     // touches either, and an absent pair reports the module as unavailable rather
@@ -777,6 +1001,9 @@ export class AssistantService {
     // Only the streaming path renders navigate/applied/guide; ignore them here.
     const sinks: ToolSinks = {
       onChart: (c: ChartSpec) => charts.push(c),
+      // The non-streaming path has no card surface; the tool RESULT still carries
+      // the same segments, so nothing is lost, and nothing is invented to fill it.
+      onAdvisory: () => {},
       onProposal: (a: ProposedAction) => proposals.push(a),
       onNavigate: () => {},
       onApplied: () => {},
@@ -884,6 +1111,7 @@ export class AssistantService {
           emit({ type: 'status', text: TOOL_LABELS[tc.function.name] ?? 'Working…' })
           const result = await this.runToolCall(tc, ctx, {
             onChart: (c) => emit({ type: 'chart', spec: c }),
+            onAdvisory: (card) => emit({ type: 'advisory', card }),
             onProposal: (a) => emit({ type: 'proposal', action: a }),
             onNavigate: (ev) => emit(ev),
             onApplied: (ev) => emit(ev),
@@ -1078,6 +1306,14 @@ export class AssistantService {
       if (name === 'render_chart' && result && !(result as { error?: unknown }).error) {
         sinks.onChart(result as ChartSpec)
       }
+      // AIC Phase J — surface the guarded segments as a CARD. Built from the tool
+      // result and nothing else, and only on the success branch: a REFUSAL carries
+      // no `segments` key at all, so `advisoryCardFrom` returns null and no card is
+      // emitted rather than an empty one for the UI to decorate.
+      if (name === 'explain_readiness_change' || name === 'generate_readiness_narrative') {
+        const card = this.advisoryCardFrom(name, result)
+        if (card) sinks.onAdvisory(card)
+      }
       return result
     } catch (e) {
       return { error: e instanceof Error ? e.message : String(e) }
@@ -1103,6 +1339,1023 @@ export class AssistantService {
     }
     out.push({ label: 'Slot', value: role })
     return out
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // AIC PHASE J — PENNY ADVISORY.
+  //
+  // THE ONE RULE: the LLM never originates a finding, a number, a document name or
+  // a cause. Every helper below exists to make that structural rather than
+  // instructed. Three habits recur and each is deliberate:
+  //
+  //   • A REFUSAL CARRIES NOTHING TO IMPROVISE FROM. `{available:false, reason,
+  //     wouldRequire, message}` and no `findings`/`segments`/`attributions`/
+  //     `suggestions`/`rows`/`counts` key — not even empty. The precedent is
+  //     get_early_warnings' `thin` branch; spec TL-1 pins it over every new tool.
+  //   • EVERY NUMBER IS COPIED, NEVER RE-DERIVED. The decomposition, the diff, the
+  //     readiness pair, the peer stats and the portfolio ranks are all read from
+  //     the services that already compute them for the screens.
+  //   • THE MODEL PHRASES; IT DOES NOT SOURCE. Segments go out through
+  //     AdvisoryService, whose per-segment guard rejects any figure absent from
+  //     that segment's OWN server strings and falls back to the template.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /** UTC calendar day — the house civil-day convention, used by every window below. */
+  private todayIso(): string {
+    return new Date().toISOString().slice(0, 10)
+  }
+
+  /** `days` before `iso`, as yyyy-mm-dd. */
+  private isoMinusDays(iso: string, days: number): string {
+    return new Date(Date.parse(`${iso}T00:00:00.000Z`) - days * 86_400_000)
+      .toISOString()
+      .slice(0, 10)
+  }
+
+  /**
+   * The accreditation entitlement gate every Phase-J accreditation tool runs FIRST.
+   * FAIL-CLOSED on an unreadable billing row — the same shape and the same
+   * `.catch(() => false)` as get_early_warnings.
+   */
+  private async accreditationLicensed(schoolId: string): Promise<boolean> {
+    return (
+      this.billing?.isEntitledForModule(schoolId, 'accreditation') ?? Promise.resolve(false)
+    ).catch(() => false)
+  }
+
+  /** The frozen not-licensed refusal. Carries no speculative key (TL-1). */
+  private refuseNotLicensed(moduleKey: string): Record<string, unknown> {
+    return {
+      available: false,
+      reason: 'not_licensed',
+      wouldRequire: 'module',
+      moduleKey,
+      message: `The ${moduleKey} module is not licensed for this school, so I have nothing to read here.`,
+    }
+  }
+
+  /**
+   * Resolve `standardId` / `standardCode` to ONE standard in THIS school.
+   *
+   * EXACT MATCH ONLY, after trim + uppercase — the Phase-F no-fuzzy-matching rule.
+   * A near miss returns null and the caller refuses by name. Guessing which
+   * standard the user meant is the same class of error as guessing a figure: it
+   * produces a confident answer about the wrong row.
+   */
+  private async resolveStandardRef(
+    schoolId: string,
+    args: Record<string, unknown>,
+  ): Promise<{ id: string; code: string; title: string; catalogStandardId: string | null } | null> {
+    const id = typeof args.standardId === 'string' ? args.standardId.trim() : ''
+    if (id) {
+      const byId = await this.prisma.accreditationStandard.findFirst({
+        where: { id, schoolId },
+        select: { id: true, code: true, title: true, catalogStandardId: true },
+      })
+      if (byId) return byId
+    }
+    const code = typeof args.standardCode === 'string' ? args.standardCode.trim().toUpperCase() : ''
+    if (code) {
+      const byCode = await this.prisma.accreditationStandard.findFirst({
+        where: { schoolId, code },
+        select: { id: true, code: true, title: true, catalogStandardId: true },
+      })
+      if (byCode) return byCode
+    }
+    return null
+  }
+
+  /** The frozen unknown-standard refusal. */
+  private refuseUnknownStandard(args: Record<string, unknown>): Record<string, unknown> {
+    const asked =
+      typeof args.standardCode === 'string' && args.standardCode.trim()
+        ? args.standardCode.trim()
+        : typeof args.standardId === 'string'
+          ? args.standardId.trim()
+          : ''
+    return {
+      available: false,
+      reason: 'unknown_standard',
+      wouldRequire: null,
+      askedFor: asked,
+      message: asked
+        ? `I couldn’t find a standard matching “${asked}” in this school’s register, and I won’t guess at which one you meant.`
+        : 'Tell me which standard — pass its code (e.g. COG-2.3) or its id.',
+    }
+  }
+
+  // ── MODE B — explain_readiness_change ─────────────────────────────────────
+
+  /**
+   * The DETERMINISTIC attribution list. One entry per standard that actually
+   * changed, in the frozen bucket order, each `detail` a server-composed sentence
+   * carrying its own numbers.
+   *
+   * THIS LIST IS THE WHOLE MECHANISM. The model is handed these sentences and may
+   * only re-phrase them; an EMPTY list means the tool does not call the model at
+   * all. A cause that is not in this list is not a cause we can defend, and a
+   * plausible one is exactly what a language model would supply.
+   */
+  private buildAttributions(diff: {
+    improved: { code: string; fromScore: number; toScore: number }[]
+    declined: { code: string; fromScore: number; toScore: number }[]
+    newlyScored: { code: string; toScore: number }[]
+    unscored: { code: string; fromScore: number }[]
+    evidenceGained: { code: string; fromCount: number; toCount: number }[]
+    evidenceLost: { code: string; fromCount: number; toCount: number }[]
+    scopeAdded: { code: string }[]
+    scopeRemoved: { code: string }[]
+  }): { kind: string; code: string; detail: string }[] {
+    const out: { kind: string; code: string; detail: string }[] = []
+    for (const r of diff.improved) {
+      out.push({
+        kind: 'improved',
+        code: r.code,
+        detail: `${r.code} moved from ${r.fromScore} to ${r.toScore} on the rubric.`,
+      })
+    }
+    for (const r of diff.declined) {
+      out.push({
+        kind: 'declined',
+        code: r.code,
+        detail: `${r.code} fell from ${r.fromScore} to ${r.toScore} on the rubric.`,
+      })
+    }
+    for (const r of diff.newlyScored) {
+      out.push({
+        kind: 'newly_scored',
+        code: r.code,
+        detail: `${r.code} was scored for the first time, at ${r.toScore}.`,
+      })
+    }
+    for (const r of diff.unscored) {
+      out.push({
+        kind: 'unscored',
+        code: r.code,
+        detail: `${r.code} lost its score; it had been ${r.fromScore}.`,
+      })
+    }
+    for (const r of diff.evidenceGained) {
+      out.push({
+        kind: 'evidence_gained',
+        code: r.code,
+        detail: `${r.code} went from ${r.fromCount} to ${r.toCount} attached artifacts.`,
+      })
+    }
+    for (const r of diff.evidenceLost) {
+      out.push({
+        kind: 'evidence_lost',
+        code: r.code,
+        detail: `${r.code} went from ${r.fromCount} to ${r.toCount} attached artifacts.`,
+      })
+    }
+    for (const r of diff.scopeAdded) {
+      out.push({ kind: 'scope_added', code: r.code, detail: `${r.code} entered scope.` })
+    }
+    for (const r of diff.scopeRemoved) {
+      out.push({ kind: 'scope_removed', code: r.code, detail: `${r.code} left scope.` })
+    }
+    return out
+  }
+
+  /** How many attribution details one segment may quote. The rest stay in the list. */
+  private static readonly ATTRIBUTION_SEGMENT_CAP = 5
+  /** Ceiling on the attribution list carried to the model. `attributionCount` is the TRUE total. */
+  private static readonly ATTRIBUTION_PAYLOAD_CAP = 20
+
+  private async explainReadinessChange(
+    args: Record<string, unknown>,
+    ctx: Ctx,
+  ): Promise<Record<string, unknown>> {
+    if (!(await this.accreditationLicensed(ctx.schoolId)) || !this.readinessHistory) {
+      return this.refuseNotLicensed('accreditation')
+    }
+    const seriesKey = typeof args.seriesKey === 'string' && args.seriesKey.trim()
+      ? args.seriesKey.trim()
+      : undefined
+    const today = this.todayIso()
+    const isoDayRe = /^\d{4}-\d{2}-\d{2}$/
+    const window = typeof args.window === 'string' ? args.window : ''
+
+    let from: string
+    let to = today
+    if (window === 'since_board_meeting') {
+      // The school's OWN recorded marker. When there isn't one we refuse rather
+      // than picking a date that would look like a board's — an invented baseline
+      // makes every figure downstream of it wrong in a way nobody can see.
+      const marker = await this.readinessHistory
+        .getTrend(ctx.schoolId, { ...(seriesKey ? { seriesKey } : {}) })
+        .then((t) => t.boardMarker)
+        .catch(() => null)
+      if (!marker?.available || !marker.since) {
+        return {
+          available: false,
+          reason: 'insufficient_history',
+          wouldRequire: 'time',
+          serverReason: marker?.reason ?? 'no_board_marker',
+          message:
+            'I can’t anchor that to your last board meeting — this school has no approved minutes ' +
+            'with a readiness reading before them, and I won’t pick a date that only looks like one.',
+        }
+      }
+      from = marker.since
+    } else if (window === '30d' || window === '90d' || window === '365d') {
+      from = this.isoMinusDays(today, Number(window.replace('d', '')))
+    } else {
+      from =
+        typeof args.from === 'string' && isoDayRe.test(args.from.trim())
+          ? args.from.trim()
+          : this.isoMinusDays(today, 365)
+      if (typeof args.to === 'string' && isoDayRe.test(args.to.trim())) to = args.to.trim()
+    }
+
+    // getDiff throws NO_SNAPSHOT_BEFORE when the series has no reading on or
+    // before an endpoint. That is `insufficient_history`, not an error page.
+    let diff: Awaited<ReturnType<AccreditationReadinessHistoryService['getDiff']>>
+    try {
+      diff = await this.readinessHistory.getDiff(ctx.schoolId, {
+        from,
+        to,
+        ...(seriesKey ? { seriesKey } : {}),
+      })
+    } catch {
+      return {
+        available: false,
+        reason: 'insufficient_history',
+        wouldRequire: 'time',
+        from,
+        to,
+        message:
+          `There is no recorded readiness reading on or before ${from} for this series, so there ` +
+          'is no earlier point to compare against yet.',
+      }
+    }
+
+    const trend = await this.readinessHistory
+      .getTrend(ctx.schoolId, { from, to, ...(seriesKey ? { seriesKey } : {}) })
+      .catch(() => null)
+    // The server's OWN refusal, echoed. `change.reason` is a computed sentence and
+    // is never re-worded here.
+    if (trend && trend.change.available === false) {
+      return {
+        available: false,
+        reason: 'insufficient_history',
+        wouldRequire: 'time',
+        from,
+        to,
+        serverReason: trend.change.reason,
+        message:
+          trend.change.reason ??
+          'There are not two comparable readings in that window, so I can’t say what changed.',
+      }
+    }
+
+    const attributions = this.buildAttributions(diff)
+    const attributionCount = attributions.length
+    const cannotAttribute = attributionCount === 0
+
+    let segments: AdvisorySegment[]
+    let templateFallbackCount = 0
+    let source: 'llm' | 'template' = 'template'
+    // FALSE until a composer actually runs. The card renders a different provenance
+    // line when no model was asked: "N of these M sentences were not accepted from
+    // the model" on a branch where the model was never called is a claim about an
+    // interaction that did not happen, on the one surface whose job is telling a
+    // reader computed fact from phrasing.
+    let modelCalled = false
+
+    if (cannotAttribute) {
+      // THE LLM IS NOT CALLED. Not guarded — not called.
+      segments = [{ id: 'cannot-attribute', text: CANNOT_ATTRIBUTE, source: 'template' }]
+      if (diff.decomposition.narrative) {
+        segments.push({
+          id: 'decomposition',
+          text: diff.decomposition.narrative,
+          source: 'template',
+        })
+      }
+      // EVERY sentence here is KYRO's. Leaving this at 0 made the card announce that
+      // the model's sentences all passed the figure check on the one branch that
+      // deliberately never asks a model anything.
+      templateFallbackCount = segments.length
+    } else {
+      const quoted = attributions.slice(0, AssistantService.ATTRIBUTION_SEGMENT_CAP)
+      const details = quoted.map((a) => a.detail)
+      const specs: AdvisorySegmentSpec[] = [
+        {
+          id: 'decomposition',
+          templateText: diff.decomposition.narrative,
+          sourceStrings: [diff.decomposition.narrative],
+        },
+        {
+          id: 'attribution',
+          templateText: details.join(' '),
+          sourceStrings: details,
+        },
+      ]
+      const composed = this.advisory
+        ? await this.advisory.compose('B', 'leadership', specs)
+        : null
+      segments =
+        composed?.segments ??
+        specs.map((s) => ({ id: s.id, text: s.templateText, source: 'template' as const }))
+      templateFallbackCount = composed?.templateFallbackCount ?? specs.length
+      source = composed?.source ?? 'template'
+      modelCalled = composed?.modelCalled === true
+    }
+
+    return {
+      available: true,
+      mode: 'B',
+      seriesKey: diff.seriesKey,
+      from: diff.from,
+      to: diff.to,
+      fromDate: diff.fromDate,
+      toDate: diff.toDate,
+      // VERBATIM, every field. Phase-A computed it; nothing here re-derives it.
+      decomposition: diff.decomposition,
+      attributions: attributions.slice(0, AssistantService.ATTRIBUTION_PAYLOAD_CAP),
+      attributionCount,
+      cannotAttribute,
+      explanation: {
+        segments,
+        source,
+        templateFallbackCount,
+        // On the cannot-attribute branch nothing was submitted to a composer, so the
+        // denominator is the segments KYRO wrote — and `modelCalled` is false.
+        checkedSegmentCount: segments.length,
+        modelCalled,
+      },
+      indexComparable: trend?.indexComparable ?? false,
+      demoData: diff.demoData,
+      // IMPORTED, never retyped.
+      disclaimer: READINESS_DISCLAIMER,
+    }
+  }
+
+  // ── MODE C — generate_readiness_narrative ─────────────────────────────────
+
+  private async generateReadinessNarrative(
+    args: Record<string, unknown>,
+    ctx: Ctx,
+  ): Promise<Record<string, unknown>> {
+    if (!(await this.accreditationLicensed(ctx.schoolId))) {
+      return this.refuseNotLicensed('accreditation')
+    }
+    const audience = args.audience === 'board' ? 'board' : 'leadership'
+    const twin = this.earlyWarning ? await this.earlyWarning.getTwin(ctx.schoolId) : null
+
+    if (!twin || twin.coverage.rulesEvaluated === 0) {
+      // REFUSAL. NO `segments` key at all on this branch — the same reasoning as
+      // get_early_warnings' thin branch: an empty narrative is something to fill.
+      return {
+        available: false,
+        reason: 'no_data',
+        wouldRequire: 'intake',
+        notEvaluated: (twin?.notEvaluated ?? []).slice(0, 8).map((h) => ({
+          ruleId: h.ruleId,
+          title: h.title,
+          message: h.message,
+          moduleKey: h.moduleKey,
+        })),
+        coverage: twin?.coverage ?? null,
+        message:
+          'There is not enough recorded data to evaluate a single readiness rule for this school ' +
+          'yet, so there is no narrative to compose — only the holes above.',
+      }
+    }
+
+    const readiness = this.readiness
+      ? await this.readiness.getReadiness(ctx.schoolId, {}).catch(() => null)
+      : null
+    const trend = this.readinessHistory
+      ? await this.readinessHistory.getTrend(ctx.schoolId, {}).catch(() => null)
+      : null
+    const evidence = this.evidenceReadiness
+      ? await this.evidenceReadiness.getEvidenceReadiness(ctx.schoolId).catch(() => null)
+      : null
+
+    const specs: AdvisorySegmentSpec[] = []
+    const pct = (n: number): string => `${Math.round(n)}%`
+
+    // ① WHERE READINESS STANDS — the documented/defensible PAIR, never one number.
+    if (readiness) {
+      const band = readiness.band ? ` The framework places that in the “${readiness.band}” band.` : ''
+      const text =
+        `Readiness stands at ${pct(readiness.selfScoredPct)} documented and ` +
+        `${pct(readiness.verifiedPct)} defensible across ${readiness.leafCount} standards, ` +
+        `of which ${readiness.scoredCount} are scored and ${readiness.coveredCount} carry evidence.${band}`
+      specs.push({ id: 'standing', templateText: text, sourceStrings: [text] })
+    }
+
+    // ② WHAT MOVED SINCE THE BOARD MARKER — Phase-A computed, copied.
+    if (trend?.boardMarker.available && trend.boardMarker.since && trend.decomposition) {
+      const text =
+        `Since ${trend.boardMarker.label ?? 'your last board meeting'} on ` +
+        `${trend.boardMarker.since}, ${trend.decomposition.narrative}`
+      specs.push({
+        id: 'movement',
+        templateText: text,
+        sourceStrings: [text, trend.decomposition.narrative],
+      })
+    } else if (trend?.decomposition) {
+      specs.push({
+        id: 'movement',
+        templateText: trend.decomposition.narrative,
+        sourceStrings: [trend.decomposition.narrative],
+      })
+    }
+
+    // ③ THE TOP FIRING FINDINGS — title/rationale/consequence VERBATIM, ORDINAL
+    //    likelihood, and NO PERCENTAGE, ever. For a board audience the segment
+    //    carries voice:'governance', which activates the imperative guard: a board
+    //    is given a review prompt, not an instruction to go and fix something.
+    const findings = twin.findings.slice(0, 3)
+    if (findings.length > 0) {
+      const lines = findings.map(
+        (f) => `${f.title} ${f.rationale} ${f.consequence} Likelihood: ${f.likelihood}.`,
+      )
+      specs.push({
+        id: 'findings',
+        templateText: lines.join(' '),
+        sourceStrings: lines,
+        voice: audience === 'board' ? 'governance' : null,
+      })
+    }
+
+    // ④ EVIDENCE CURRENCY — Phase C. `evidenceHealthPct` is NULL when nothing is
+    //    rated, and null is rendered as a sentence, never as a zero.
+    if (evidence) {
+      const h = evidence.health
+      const text =
+        h.evidenceHealthPct === null
+          ? `Evidence currency cannot be scored yet: ${h.basis}`
+          : `Evidence currency is ${pct(h.evidenceHealthPct)} — ${h.current} current, ` +
+            `${h.expiring} expiring, ${h.stale} stale, ${h.missing} missing, ` +
+            `${h.unknown} undated, of ${h.rated} rated. ${h.basis}`
+      specs.push({ id: 'evidence', templateText: text, sourceStrings: [text, h.basis] })
+    }
+
+    // ⑤ WHAT WE COULD NOT EVALUATE — THE PHASE-H ACT-5 RULE: NEVER DROPPED. A
+    //    narrative that silently omits its own coverage hole reads as completeness,
+    //    which is the most expensive sentence this product could imply.
+    const cov = twin.coverage
+    const holes = twin.notEvaluated.slice(0, 4).map((h) => h.title)
+    const notEvaluatedText =
+      `${cov.rulesEvaluated} of ${cov.rulesTotal} readiness rules could be evaluated; ` +
+      `${cov.rulesNotEvaluated} could not.` +
+      (holes.length > 0 ? ` Not evaluated: ${holes.join('; ')}.` : '')
+    specs.push({
+      id: 'not-evaluated',
+      templateText: notEvaluatedText,
+      sourceStrings: [notEvaluatedText],
+    })
+
+    const composed = this.advisory ? await this.advisory.compose('C', audience, specs) : null
+    const segments: AdvisorySegment[] =
+      composed?.segments ??
+      specs.map((s) => ({ id: s.id, text: s.templateText, source: 'template' as const }))
+
+    // ⑥ THE DISCLAIMER is NOT a segment. It rides as its own first-class field and
+    //    AdvisoryCard renders it in its own always-visible slot. Pushing it into
+    //    `segments` after the composer put it on screen TWICE, gave it a provenance
+    //    chip as though it were a finding, and — worse — inflated the denominator of
+    //    the fallback tally by one, so a card on which the model was never called
+    //    read "5 of these 6 sentences were not accepted from the model".
+
+    return {
+      available: true,
+      mode: 'C',
+      audience,
+      segments,
+      templateFallbackCount: composed?.templateFallbackCount ?? specs.length,
+      // The tally's denominator: what was actually submitted to the composer.
+      checkedSegmentCount: specs.length,
+      modelCalled: composed?.modelCalled === true,
+      source: composed?.source ?? 'template',
+      coverage: {
+        rulesTotal: cov.rulesTotal,
+        rulesEvaluated: cov.rulesEvaluated,
+        rulesNotEvaluated: cov.rulesNotEvaluated,
+      },
+      demoData: twin.demoData,
+      disclaimer: READINESS_DISCLAIMER,
+    }
+  }
+
+  /** Turn a Phase-J advisory tool RESULT into the stream card. Null on a refusal. */
+  private advisoryCardFrom(
+    tool: 'explain_readiness_change' | 'generate_readiness_narrative',
+    result: unknown,
+  ): AdvisoryCard | null {
+    if (!isPlainObject(result) || result.available !== true) return null
+    type AdvisoryRaw = {
+      segments?: unknown
+      templateFallbackCount?: unknown
+      checkedSegmentCount?: unknown
+      modelCalled?: unknown
+    }
+    const raw =
+      tool === 'explain_readiness_change'
+        ? (result.explanation as AdvisoryRaw | undefined)
+        : (result as AdvisoryRaw)
+    const segments = Array.isArray(raw?.segments) ? (raw.segments as AdvisorySegment[]) : []
+    if (segments.length === 0) return null
+    return {
+      tool,
+      mode: tool === 'explain_readiness_change' ? 'B' : 'C',
+      title:
+        tool === 'explain_readiness_change'
+          ? 'What moved readiness'
+          : 'Readiness narrative',
+      segments: segments.map((s) => ({ id: s.id, text: s.text, source: s.source })),
+      templateFallbackCount:
+        typeof raw?.templateFallbackCount === 'number' ? raw.templateFallbackCount : 0,
+      // The tally's denominator travels WITH the numerator. Deriving it on the client
+      // from `segments.length` is what made the card count a sentence the composer
+      // never saw; falling back to segments.length here is only for a payload shape
+      // that predates the field.
+      checkedSegmentCount:
+        typeof raw?.checkedSegmentCount === 'number' ? raw.checkedSegmentCount : segments.length,
+      modelCalled: raw?.modelCalled === true,
+      disclaimer: READINESS_DISCLAIMER,
+      demoData: result.demoData === true,
+      ...(tool === 'explain_readiness_change'
+        ? { cannotAttribute: result.cannotAttribute === true }
+        : {}),
+    }
+  }
+
+  // ── suggest_evidence ──────────────────────────────────────────────────────
+
+  /**
+   * The KIND of artifact a standard asks for, when nothing matching EXISTS.
+   *
+   * Provenance order, highest first: the catalog requirement row's own seeded
+   * `label`, then the frozen per-tag label table, then the raw tag. NOTHING in this
+   * path composes a filename, a title or a URL — naming a kind is a statement about
+   * our catalog; naming a file would be a statement about the school's drive.
+   */
+  private async requiredEvidenceKind(
+    catalogStandardId: string | null,
+  ): Promise<{ tag: string; label: string } | null> {
+    if (!catalogStandardId) return null
+    const req = await this.prisma.accreditationCatalogRequirement
+      .findFirst({
+        where: { catalogStandardId },
+        orderBy: [{ orderIndex: 'asc' }, { tag: 'asc' }],
+        select: { tag: true, label: true },
+      })
+      .catch(() => null)
+    if (req) return { tag: req.tag, label: req.label }
+    const cat = await this.prisma.accreditationCatalogStandard
+      .findFirst({ where: { id: catalogStandardId }, select: { evidenceTags: true } })
+      .catch(() => null)
+    const tag = (cat?.evidenceTags ?? [])[0]
+    if (!tag) return null
+    return { tag, label: evidenceKindLabel(tag) }
+  }
+
+  private async suggestEvidence(
+    args: Record<string, unknown>,
+    ctx: Ctx,
+  ): Promise<Record<string, unknown>> {
+    if (!(await this.accreditationLicensed(ctx.schoolId))) {
+      return this.refuseNotLicensed('accreditation')
+    }
+    const std = await this.resolveStandardRef(ctx.schoolId, args)
+    if (!std) return this.refuseUnknownStandard(args)
+
+    const rawLimit = typeof args.limit === 'number' ? Math.trunc(args.limit) : 6
+    const limit = Math.max(1, Math.min(10, Number.isFinite(rawLimit) ? rawLimit : 6))
+
+    const res = await this.accreditation.listSuggestions(ctx.schoolId, std.id)
+    // "Already attached" is not a suggestion — offering it back would have Penny
+    // recommend work the school has already done.
+    const open = res.suggestions.filter((s) => !s.alreadyAttached)
+
+    if (open.length === 0) {
+      const kind = await this.requiredEvidenceKind(std.catalogStandardId)
+      const label = kind?.label ?? 'a dated artifact that evidences this standard'
+      // NOTE THE ABSENT KEYS: no `suggestions`, no `rows`, no `counts`. There is
+      // nothing here that could be mistaken for a file we have.
+      return {
+        available: false,
+        reason: 'no_matching_artifact',
+        wouldRequire: 'intake',
+        requiredKind: kind ? { tag: kind.tag, label: kind.label } : null,
+        standardCode: std.code,
+        standardTitle: std.title,
+        offerTask: {
+          tool: 'create_task',
+          title: `Locate evidence for ${std.code}: ${label}`,
+        },
+        message:
+          `Nothing already in KYRO matches ${std.code}. What it asks for is ${label} — I can’t ` +
+          'name a file on your side, because I can’t see your drive. Want me to open a task to go find it?',
+      }
+    }
+
+    return {
+      available: true,
+      standardId: std.id,
+      standardCode: std.code,
+      standardTitle: std.title,
+      // Every string here is a SERVER string: the artifact's own label and its own
+      // tag. There is no code path in which model-authored text re-enters this list.
+      suggestions: open.slice(0, limit).map((s) => ({
+        tag: s.tag,
+        sourceType: s.sourceType,
+        sourceRef: s.sourceRef,
+        label: s.label,
+        date: s.date,
+      })),
+      suggestionCount: open.length,
+      note:
+        'These are artifacts that already exist in KYRO. To attach one, call attach_evidence ' +
+        'with its sourceType and sourceRef exactly as given.',
+    }
+  }
+
+  // ── compare_accreditation_peers ───────────────────────────────────────────
+
+  private async compareAccreditationPeers(
+    args: Record<string, unknown>,
+    ctx: Ctx,
+  ): Promise<Record<string, unknown>> {
+    if (!this.portfolio || !ctx.userId) {
+      return {
+        available: false,
+        reason: 'not_org_scoped',
+        wouldRequire: 'org',
+        message: 'Peer comparison needs an organization, and I can’t resolve one for this session.',
+      }
+    }
+    const activeSchool = await this.prisma.school.findUnique({ where: { id: ctx.schoolId } })
+    const user = await this.prisma.user.findUnique({ where: { id: ctx.userId } })
+    if (!activeSchool?.organizationId || !user) {
+      return {
+        available: false,
+        reason: 'not_org_scoped',
+        wouldRequire: 'org',
+        message:
+          'This school is not part of an organization, so there are no in-organization peers to ' +
+          'compare it against.',
+      }
+    }
+    const orgId = activeSchool.organizationId
+
+    // resolveOrgScope is the tenancy boundary AND the naming rule's authority: it
+    // returns exactly the schools the caller holds an active membership at.
+    let scope: Awaited<ReturnType<PortfolioService['resolveOrgScope']>>
+    let portfolio: Awaited<ReturnType<PortfolioService['getPortfolio']>>
+    try {
+      scope = await this.portfolio.resolveOrgScope(user, orgId)
+      portfolio = await this.portfolio.getPortfolio(user, orgId, {})
+    } catch {
+      return {
+        available: false,
+        reason: 'not_org_scoped',
+        wouldRequire: 'org',
+        message: 'I can’t read an organization for this caller, so there is nothing to compare.',
+      }
+    }
+
+    // EXACT MATCH ONLY, the same rule resolveStandardRef applies to a standard code
+    // two hundred lines above. A substring fallback resolved "St. Mary" to whichever
+    // of "St. Mary Academy" and "St. Mary of the Angels" happened to sort first in
+    // the attention ranking, and then answered a question about the other one.
+    const asked = typeof args.schoolName === 'string' ? args.schoolName.trim() : ''
+    const resolved = resolveFocusSchool(portfolio.ranked, asked, ctx.schoolId)
+    if (resolved.refusal) return resolved.refusal
+    const focus = resolved.focus
+
+    if (!focus) {
+      return {
+        available: false,
+        reason: 'no_data',
+        wouldRequire: 'time',
+        message:
+          'That school has not been ranked in the portfolio — it is missing too much for a ' +
+          'comparison to mean anything, which is not the same as comparing badly.',
+      }
+    }
+
+    const panel = focus.peers
+    const peerCount = panel?.peerCount ?? 0
+    if (!panel || peerCount < 3) {
+      // NO RANKS, NO MEDIANS, NO PERCENTILE. With two peers a rank is a near-identity:
+      // "second of three" names the other two schools to anyone who can count.
+      return {
+        available: false,
+        reason: 'insufficient_peers',
+        wouldRequire: 'peers',
+        peerCount,
+        focusName: focus.name,
+        message:
+          `${focus.name} has ${peerCount} comparable peer(s) in this organization — fewer than the ` +
+          'three needed before a comparison says anything about the school rather than about the ' +
+          'handful it sits beside.',
+      }
+    }
+
+    // THE PEERS ARE THE PANEL'S OWN MEMBERS. Building this list from
+    // `portfolio.ranked` shipped `peerCount: 3` beside eleven named schools — two
+    // different populations in one payload — and handed the model every ranked
+    // school's verifiedPct, one division away from the percentile the very same
+    // payload refuses to state. `peerIds` is what `peerCount`, `rank` and
+    // `percentile` were computed over, so `peers.length === peerCount` by construction.
+    //
+    // The scope filter behind it is belt-and-braces, not a feature: `getPortfolio` is
+    // already bounded by `resolveOrgScope`, so every ranked school is covered today.
+    // It is written as an EXCLUSION rather than an anonymisation because if that
+    // boundary ever widens, dropping an uncovered school is fail-closed and inventing
+    // a "Peer A" label for it is not.
+    const peers = peerRowsFor(portfolio.ranked, panel.peerIds, scope.roleBySchool)
+
+    return {
+      available: true,
+      focus: {
+        name: focus.name,
+        verifiedPct: focus.verifiedPct,
+        attentionBand: focus.attentionBand,
+        band: focus.band,
+      },
+      peerCount,
+      matchTier: panel.matchTier,
+      sample: panel.sample,
+      // NAMED for its direction and its population: readiness rank WITHIN the peer
+      // group, 1 = best. See the `orgAttentionRank` note on the peer rows.
+      peerRank: panel.rank,
+      peerRankDirection: 'lower_is_better' as const,
+      // IMPORTED, not retyped. A duplicated `4` is how "enough peers" comes to mean
+      // two different things in one product.
+      percentile: peerCount < MIN_PEERS_FOR_PERCENTILE ? null : panel.percentile,
+      percentileReason:
+        peerCount < MIN_PEERS_FOR_PERCENTILE
+          ? `A percentile over ${peerCount} peers would be noise, so it is not stated. The rank is real.`
+          : null,
+      peers,
+      indexComparable: portfolio.indexComparable,
+      disclaimer: portfolio.disclaimer,
+    }
+  }
+
+  // ── get_org_readiness_portfolio ───────────────────────────────────────────
+
+  private async orgReadinessPortfolio(
+    args: Record<string, unknown>,
+    ctx: Ctx,
+  ): Promise<Record<string, unknown>> {
+    if (!this.portfolio || !ctx.userId) {
+      return {
+        available: false,
+        reason: 'not_org_scoped',
+        wouldRequire: 'org',
+        message: 'I can’t resolve an organization for this session.',
+      }
+    }
+    const activeSchool = await this.prisma.school.findUnique({ where: { id: ctx.schoolId } })
+    const user = await this.prisma.user.findUnique({ where: { id: ctx.userId } })
+    if (!activeSchool?.organizationId || !user) {
+      return {
+        available: false,
+        reason: 'not_org_scoped',
+        wouldRequire: 'org',
+        message:
+          'This school is not part of an organization, so there is no portfolio to rank.',
+      }
+    }
+    const rawLimit = typeof args.limit === 'number' ? Math.trunc(args.limit) : 10
+    const limit = Math.max(1, Math.min(20, Number.isFinite(rawLimit) ? rawLimit : 10))
+    const frameworkCode =
+      typeof args.frameworkCode === 'string' && /^[A-Za-z0-9._-]{1,40}$/.test(args.frameworkCode.trim())
+        ? args.frameworkCode.trim()
+        : undefined
+
+    let p: Awaited<ReturnType<PortfolioService['getPortfolio']>>
+    try {
+      p = await this.portfolio.getPortfolio(user, activeSchool.organizationId, {
+        ...(frameworkCode ? { frameworkCode } : {}),
+      })
+    } catch {
+      return {
+        available: false,
+        reason: 'not_org_scoped',
+        wouldRequire: 'org',
+        message: 'You don’t have access to an organization portfolio.',
+      }
+    }
+
+    return {
+      available: true,
+      asOf: p.asOf,
+      lens: p.lens,
+      indexComparable: p.indexComparable,
+      bandDistribution: p.bandDistribution,
+      schoolCount: p.schoolCount,
+      rankedCount: p.rankedCount,
+      ranked: p.ranked.slice(0, limit).map((r) => ({
+        name: r.name,
+        attentionBand: r.attentionBand,
+        urgency: r.urgency,
+        attentionScore: r.attentionScore,
+        verifiedPct: r.verifiedPct,
+        confidence: r.confidence,
+        // MANDATORY on every row. A rank without its drivers is a number a reader
+        // has to explain for themselves, and they will.
+        drivers: r.drivers,
+      })),
+      // UNMEASURED, NOT LOW-RISK — and the missing components are NAMED, so the
+      // difference is legible instead of inferred.
+      insufficientData: p.insufficientData.map((r) => ({
+        name: r.name,
+        reason: r.reason,
+        confidence: r.confidence,
+        missingComponents: r.missingComponents,
+      })),
+      // NAME ONLY. No readiness figure was ever read for these schools.
+      notLicensed: p.notLicensed.map((s) => s.name),
+      otherFramework: p.otherFramework.map((s) => ({
+        name: s.name,
+        frameworkCode: s.frameworkCode,
+        frameworkName: s.frameworkName,
+      })),
+      // The top of the SAME ranking, not a second computation. Deriving a separate
+      // "priority score" here would be a number with no page behind it.
+      interventionPriorities: p.ranked.slice(0, 3).map((r) => ({
+        name: r.name,
+        attentionBand: r.attentionBand,
+        urgency: r.urgency,
+        topDriver: r.drivers[0] ?? null,
+      })),
+      notes: p.notes,
+      disclaimer: p.disclaimer,
+    }
+  }
+
+  // ── check_kyro_collects ───────────────────────────────────────────────────
+
+  private async checkKyroCollects(
+    args: Record<string, unknown>,
+    ctx: Ctx,
+  ): Promise<Record<string, unknown>> {
+    const entry: CoverageTopicEntry = resolveCoverageTopic(args.topic)
+
+    if (!entry.collected) {
+      // BOTH refusal shapes carry no counts and no findings. `not_a_kyro_question`
+      // additionally carries the tools we CAN answer with, so the reframe is a real
+      // offer rather than a polite dead end.
+      return entry.reason === 'not_a_kyro_question'
+        ? {
+            available: false,
+            topic: entry.topic,
+            reason: entry.reason,
+            wouldRequire: entry.wouldRequire,
+            message: entry.message,
+            offer: entry.offer,
+          }
+        : {
+            available: false,
+            topic: entry.topic,
+            reason: entry.reason,
+            wouldRequire: entry.wouldRequire,
+            topicLabel: entry.topicLabel,
+            wouldEnable: entry.wouldEnable,
+            message: entry.message,
+          }
+    }
+
+    const licensed = await (
+      this.billing?.isEntitledForModule(ctx.schoolId, entry.moduleKey) ?? Promise.resolve(false)
+    ).catch(() => false)
+    if (!licensed) return this.refuseNotLicensed(entry.moduleKey)
+
+    const read =
+      entry.register === 'staff_evaluations'
+        ? await this.coverage?.staffEvaluations(ctx.schoolId)
+        : await this.coverage?.complianceInspections(ctx.schoolId)
+
+    if (!read) {
+      // UNREADABLE IS NOT ZERO. A comfortable zero we never observed is the worst
+      // available answer here.
+      return {
+        available: false,
+        topic: entry.topic,
+        reason: 'no_data',
+        wouldRequire: 'time',
+        topicLabel: entry.topicLabel,
+        message:
+          `I couldn’t read the ${entry.topicLabel} register just now, and I won’t report a zero I ` +
+          'didn’t observe. Try again in a moment.',
+      }
+    }
+
+    // ANSWERED — in COUNTS. The register may name people on its own screen to
+    // authorised roles; nothing here does, because nothing here loaded one.
+    return {
+      available: true,
+      topic: entry.topic,
+      topicLabel: entry.topicLabel,
+      collected: true,
+      moduleKey: entry.moduleKey,
+      counts: read.counts,
+      asOf: read.asOf,
+      note: 'Counts only. This register holds people; this tool does not return them.',
+    }
+  }
+
+  // ── MODE A — draft_improvement_plan (confirm-then-apply) ──────────────────
+
+  /**
+   * Build the confirmable Mode-A proposal. Calls the DETERMINISTIC drafter — no
+   * LLM anywhere on this path — and re-validates the returned tree before the user
+   * ever sees a confirm card.
+   */
+  private async buildDraftImprovementPlanProposal(
+    args: Record<string, unknown>,
+    ctx: Ctx,
+  ): Promise<ProposedAction> {
+    if (!this.planDrafterImprovement) {
+      throw new Error('The improvement plan drafter is not available on this server.')
+    }
+    const plan = await this.planDrafterImprovement.draft(ctx.schoolId, {
+      ...(typeof args.limit === 'number' ? { limit: args.limit } : {}),
+      ...(typeof args.focus === 'string' ? { focus: args.focus } : {}),
+    })
+    if (plan.steps.length === 0) {
+      // A plan with no steps is not a plan. Refusing here means the user never
+      // confirms an empty row, and the reason is the recommender's own `basis`.
+      // ONE source for the three cases, beside the `basis` it reads — see
+      // emptyDraftReason. The web card used to carry its own four-way copy of this,
+      // on a branch a zero-step proposal would have to exist to reach; it cannot,
+      // because of this throw.
+      throw new Error(emptyDraftReason(plan.basis))
+    }
+    return {
+      kind: 'draft_improvement_plan',
+      periodId: ctx.periodId ?? '',
+      summary: plan.alreadyDraftedInitiativeId
+        ? `${plan.title} — a draft already exists; this opens that one rather than creating a second.`
+        : `${plan.title}.`,
+      payload: plan as unknown as Record<string, unknown>,
+    }
+  }
+
+  // ── attach_evidence (confirm-then-apply) ──────────────────────────────────
+
+  /**
+   * VALIDATION HAPPENS TWICE, INDEPENDENTLY — here and again at apply.
+   *
+   * Not belt-and-braces: the confirm card can sit on screen for minutes while the
+   * underlying artifact is deleted or re-scoped, and the pair a forged /apply
+   * carries never passed through this method at all. Both times the suggestion set
+   * is RECOMPUTED; a pair that is not in the fresh set creates nothing.
+   */
+  private async assertSuggestedPair(
+    schoolId: string,
+    standardId: string,
+    sourceType: string,
+    sourceRef: string | null,
+  ): Promise<{ label: string; tag: string }> {
+    const res = await this.accreditation.listSuggestions(schoolId, standardId)
+    const hit = res.suggestions.find(
+      (s) => s.sourceType === sourceType && (s.sourceRef ?? null) === sourceRef,
+    )
+    if (!hit) {
+      throw new UnprocessableEntityException(
+        'That artifact is not among the ones KYRO can currently offer for this standard, so nothing was attached.',
+      )
+    }
+    if (hit.alreadyAttached) {
+      throw new UnprocessableEntityException('That artifact is already attached to this standard.')
+    }
+    return { label: hit.label, tag: hit.tag }
+  }
+
+  private async buildAttachEvidenceProposal(
+    args: Record<string, unknown>,
+    ctx: Ctx,
+  ): Promise<ProposedAction> {
+    const std = await this.resolveStandardRef(ctx.schoolId, args)
+    if (!std) throw new Error('I couldn’t find that standard in this school’s register.')
+    const sourceType = typeof args.sourceType === 'string' ? args.sourceType.trim() : ''
+    if (!sourceType) throw new Error('attach_evidence needs the sourceType from a suggest_evidence row.')
+    const sourceRef =
+      typeof args.sourceRef === 'string' && args.sourceRef.trim() ? args.sourceRef.trim() : null
+
+    // PROPOSE-TIME validation. A pair the model composed itself dies here, before a
+    // confirm card is ever shown.
+    const hit = await this.assertSuggestedPair(ctx.schoolId, std.id, sourceType, sourceRef)
+
+    return {
+      kind: 'attach_evidence',
+      periodId: ctx.periodId ?? '',
+      // The summary quotes the ARTIFACT'S OWN label. There is no title argument on
+      // this tool precisely so that no model-authored string can land in a record.
+      summary: `Attach “${hit.label}” to ${std.code} as evidence.`,
+      payload: { standardId: std.id, standardCode: std.code, sourceType, sourceRef },
+    }
   }
 
   /** Validate a write tool's args into a confirmable ProposedAction (no mutation). */
@@ -1173,6 +2426,12 @@ export class AssistantService {
     }
     if (name === 'draft_strategy_plan') {
       return this.buildDraftStrategyPlanProposal(args, ctx)
+    }
+    if (name === 'draft_improvement_plan') {
+      return this.buildDraftImprovementPlanProposal(args, ctx)
+    }
+    if (name === 'attach_evidence') {
+      return this.buildAttachEvidenceProposal(args, ctx)
     }
     const periodId = await this.resolvePeriod(args, ctx)
     if (name === 'set_budget') {
@@ -2511,7 +3770,7 @@ export class AssistantService {
    * `applied` + `summary` are unchanged; the extra fields are purely additive.
    */
   async applyAction(schoolId: string, user: User, action: ProposedAction): Promise<ApplyResult> {
-    const { summary, createdId } = await this.dispatchApply(schoolId, user, action)
+    const { summary, createdId, existingId } = await this.dispatchApply(schoolId, user, action)
     const reversible = REVERSIBLE_KINDS.has(action.kind) && createdId != null
     const metadata: Record<string, unknown> = {
       tool: action.kind,
@@ -2521,6 +3780,11 @@ export class AssistantService {
       createdId: createdId ?? null,
       periodId: action.periodId || null,
     }
+    // An idempotent no-op that OPENED an existing row rather than creating one. It
+    // is logged under its own key precisely because nothing reverses it: `createdId`
+    // is what `reversible` is computed from, and an Undo on a row this action did
+    // not create would delete somebody's work.
+    if (existingId) metadata.existingId = existingId
     // A TB import records which slot (cy/py/audit) it filled — useful log context.
     if (action.kind === 'import_trial_balance' && typeof action.payload.role === 'string') {
       metadata.importRole = action.payload.role
@@ -2711,6 +3975,29 @@ export class AssistantService {
         }
         await this.improvement.removeInitiative(schoolId, targetId, user.id)
         return
+      // AIC Phase J. ONE delete erases the WHOLE drafted plan: the steps are
+      // milestones on this same row, so there is no second table to sweep and no
+      // orphan is representable. That is the entire reason the root is one row.
+      case 'draft_improvement_plan':
+        if (!this.improvement) {
+          throw new UnprocessableEntityException('That action can’t be undone here.')
+        }
+        await this.improvement.removeInitiative(schoolId, targetId, user.id)
+        return
+      // AIC Phase J. removeEvidence is keyed by (schoolId, standardId, evidenceId)
+      // and the action log captures only the evidence id, so the standard is
+      // resolved from the row itself — tenant-scoped, so a cross-tenant id resolves
+      // to nothing and 404s into the already-undone no-op rather than deleting
+      // somebody else's evidence.
+      case 'attach_evidence': {
+        const ev = await this.prisma.accreditationEvidence.findFirst({
+          where: { id: targetId, schoolId },
+          select: { standardId: true },
+        })
+        if (!ev) throw new NotFoundException('That evidence was not found.')
+        await this.accreditation.removeEvidence(schoolId, ev.standardId, targetId, user.id)
+        return
+      }
       case 'file_document':
         await this.documents.deleteDocument(schoolId, targetId, user.id)
         return
@@ -2733,7 +4020,7 @@ export class AssistantService {
     schoolId: string,
     user: User,
     action: ProposedAction,
-  ): Promise<{ summary: string; createdId: string | null }> {
+  ): Promise<{ summary: string; createdId: string | null; existingId?: string | null }> {
     const userId = user.id
     const periodId = action.periodId
     const p = action.payload ?? {}
@@ -3308,6 +4595,12 @@ export class AssistantService {
     if (action.kind === 'draft_strategy_plan') {
       return this.applyDraftStrategyPlan(schoolId, user, action)
     }
+    if (action.kind === 'draft_improvement_plan') {
+      return this.applyDraftImprovementPlan(schoolId, userId, action)
+    }
+    if (action.kind === 'attach_evidence') {
+      return this.applyAttachEvidence(schoolId, userId, action)
+    }
     // draft_cap_entry
     await this.correctiveAction.upsertEntries(
       schoolId,
@@ -3503,6 +4796,120 @@ export class AssistantService {
    * orphan survives — then rethrow. createdId = the PLAN id (undo cascades the tree).
    * The payload is the UNTRUSTED §SEAM tree; display fields are ignored.
    */
+  /**
+   * MODE A APPLY — ONE ROW IS THE PLAN.
+   *
+   * The drafted steps become `milestones` JSON on that same `ImprovementInitiative`
+   * row, so a single `removeInitiative` erases the whole plan and an orphaned step
+   * is not representable. `findingKey`, `dueDate` and `targetRubricScore` on the
+   * root are NULL by design: a plan spans several findings, and a date nobody
+   * stated is the first number this phase would have invented.
+   *
+   * UNTRUSTED PAYLOAD — a forged /apply skips the DTO entirely, so every field is
+   * re-derived here, and the DEDUPE is re-checked: two confirms of one card must
+   * not produce two plans.
+   */
+  private async applyDraftImprovementPlan(
+    schoolId: string,
+    userId: string,
+    action: ProposedAction,
+  ): Promise<{ summary: string; createdId: string | null; existingId?: string | null }> {
+    if (!this.improvement) {
+      throw new Error('The improvement manager is not available on this server.')
+    }
+    const p = (action.payload ?? {}) as unknown as DraftImprovementPlan
+    const rawSteps = Array.isArray(p.steps) ? p.steps : []
+    const steps = rawSteps
+      .map((s) => ({
+        label: typeof s?.label === 'string' ? s.label.trim().slice(0, 200) : '',
+      }))
+      .filter((s) => s.label.length > 0)
+      .slice(0, 5)
+    if (steps.length === 0) throw new Error('That plan has no steps to create.')
+
+    // RE-CHECK THE DEDUPE AT APPLY. The propose-time check ran against the register
+    // as it was when the card was built; a second confirm (or a second tab) must
+    // still not create a second plan.
+    const existing = await this.prisma.improvementInitiative.findFirst({
+      where: { schoolId, originType: 'draft', status: { in: ['planned', 'in_progress'] } },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    })
+    if (existing) {
+      // `createdId: null` IS THE FIX, not an omission. `applyAction` computes
+      // `reversible = REVERSIBLE_KINDS.has(kind) && createdId != null`, so returning
+      // the PRE-EXISTING plan's id here made a no-op offer an Undo — and that Undo
+      // calls `removeInitiative`, deleting a plan the team may have been working for
+      // weeks, along with every milestone they had ticked. An action that created
+      // nothing must not be reversible. The id still travels, under a name nothing
+      // reverses, so the receipt can deep-link to the plan that already exists.
+      return {
+        summary: 'That improvement plan was already drafted — opening the existing one.',
+        createdId: null,
+        existingId: existing.id,
+      }
+    }
+
+    const title =
+      typeof p.title === 'string' && p.title.trim()
+        ? p.title.trim().slice(0, 200)
+        : `Improvement plan: ${steps.length} recommended steps`
+
+    const created = await this.improvement.createInitiative(
+      schoolId,
+      {
+        title,
+        // NO goalId: an accreditation-only school has no plan to hang this on, and
+        // requiring one is exactly what create_strategy_initiative gets wrong here.
+        goalId: null,
+        originType: 'draft',
+        // NULL, deliberately: see the docblock. A plan spans several findings.
+        findingKey: null,
+        progressSource: 'milestone',
+        milestones: steps.map((s) => ({ label: s.label, done: false })),
+        status: 'planned',
+      },
+      userId,
+    )
+    return { summary: action.summary, createdId: created?.id ?? null }
+  }
+
+  /**
+   * ATTACH EVIDENCE — LINKS, NEVER UPLOADS.
+   *
+   * The `(sourceType, sourceRef)` pair is re-validated against a FRESHLY RECOMPUTED
+   * suggestion set (spec AE-1). A pair that is not in that set — forged, stale, or
+   * pointing at an artifact deleted while the card was on screen — throws and
+   * NOTHING IS CREATED. The stored title is the matched suggestion's own label:
+   * there is no title argument on this tool, so no model-authored string can reach
+   * a permanent record.
+   */
+  private async applyAttachEvidence(
+    schoolId: string,
+    userId: string,
+    action: ProposedAction,
+  ): Promise<{ summary: string; createdId: string | null }> {
+    const p = action.payload ?? {}
+    const standardId = typeof p.standardId === 'string' ? p.standardId.trim() : ''
+    if (!standardId) throw new Error('attach_evidence needs a standardId.')
+    const sourceType = typeof p.sourceType === 'string' ? p.sourceType.trim() : ''
+    if (!sourceType) throw new Error('attach_evidence needs a sourceType.')
+    const sourceRef = typeof p.sourceRef === 'string' && p.sourceRef.trim() ? p.sourceRef.trim() : null
+
+    // APPLY-TIME RE-VALIDATION. Independent of the propose-time one, against a set
+    // computed now. Throws 422 rather than creating anything.
+    const hit = await this.assertSuggestedPair(schoolId, standardId, sourceType, sourceRef)
+
+    const dto: CreateEvidenceDto = {
+      // The ARTIFACT'S OWN label, verbatim.
+      title: hit.label.slice(0, 200),
+      sourceType: sourceType as EvidenceSourceType,
+      ...(sourceRef ? { sourceRef } : {}),
+    }
+    const created = await this.accreditation.createEvidence(schoolId, standardId, dto, userId)
+    return { summary: action.summary, createdId: created?.id ?? null }
+  }
+
   private async applyDraftStrategyPlan(
     schoolId: string,
     user: User,
@@ -3896,6 +5303,32 @@ export class AssistantService {
       'or to turn a briefing/attention item into one (e.g. "file that overdue conflict-of-interest policy"). ' +
       'Pull the title/name and details from the referenced item; pass dates (yyyy-mm-dd) only when the user ' +
       'states them, and never invent them. ' +
+      // ── AIC Phase J — ACCREDITATION ADVISORY ───────────────────────────────
+      // ADVICE ON TOP OF THE GUARANTEES, NEVER INSTEAD OF THEM. Everything below
+      // is already enforced in the payloads: a refusing tool returns nothing to
+      // improvise from, and every model-phrased segment has already survived a
+      // per-segment numeric guard before it reaches this model. This paragraph
+      // exists so the right tool gets CALLED, not to make the answers safe.
+      'ACCREDITATION. Eight tools cover accreditation readiness. check_kyro_collects answers ' +
+      '"does KYRO hold data on X" — call it BEFORE answering anything you are not certain this ' +
+      'product records, and ALWAYS for "will we pass / are we going to be accredited". ' +
+      'explain_readiness_change says what moved readiness between two dates. ' +
+      'generate_readiness_narrative composes the executive/board readiness summary. ' +
+      'suggest_evidence finds artifacts ALREADY in KYRO for one standard and attach_evidence ' +
+      'PROPOSES linking one (confirm-then-apply; it never uploads). compare_accreditation_peers ' +
+      'and get_org_readiness_portfolio are the cross-school views. draft_improvement_plan ' +
+      'PROPOSES a plan built entirely from the school’s own recommendation rail. ' +
+      'WHEN A TOOL RETURNS available:false, relay its message and its wouldRequire AS-IS and do ' +
+      'NOT supply the missing capability from memory, name a document we do not have, or say what ' +
+      'the answer probably is — "KYRO doesn’t collect that yet, and here is what we’d need" is a ' +
+      'complete and correct answer. NEVER state a probability, percentage, likelihood or "on ' +
+      'track" judgement about an accreditation outcome: there is no outcome data in this product ' +
+      'to calibrate one against. When a result carries mode "B" or "C" segments, those segments ' +
+      'are already written and already checked — introduce the card in ONE sentence CONTAINING NO ' +
+      'DIGITS, do not restate any figure from it, and do not re-word, re-order, merge or drop a ' +
+      'segment. When cannotAttribute is true, say the change cannot be attributed to anything in ' +
+      'the register and STOP; do not offer a plausible cause. Never name a member of staff or a ' +
+      'student: these tools return counts, never people. ' +
       'Be concise and board-appropriate; format money as USD. Only this school’s data is available. ' +
       'If a tool returns an error or needs data, say so plainly.'
     )
@@ -4380,6 +5813,23 @@ export class AssistantService {
           demoData: twin.demoData,
         }
       }
+      // ── AIC Phase J — the SIX READ-ONLY advisory tools ─────────────────────
+      // NONE of these is in WRITE_TOOLS or CONFIRM_TOOLS, none has a
+      // ProposedAction member, and none has an ApplyActionDto member — which is
+      // exactly what makes them safe to offer a `viewer` (board) caller, the same
+      // structural argument get_early_warnings makes.
+      case 'check_kyro_collects':
+        return this.checkKyroCollects(args, ctx)
+      case 'explain_readiness_change':
+        return this.explainReadinessChange(args, ctx)
+      case 'generate_readiness_narrative':
+        return this.generateReadinessNarrative(args, ctx)
+      case 'suggest_evidence':
+        return this.suggestEvidence(args, ctx)
+      case 'compare_accreditation_peers':
+        return this.compareAccreditationPeers(args, ctx)
+      case 'get_org_readiness_portfolio':
+        return this.orgReadinessPortfolio(args, ctx)
       case 'get_budget_vs_actual': {
         const pid = await this.resolvePeriod(args, ctx)
         const b = await this.budget.get(ctx.schoolId, pid)
