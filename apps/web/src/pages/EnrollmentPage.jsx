@@ -34,6 +34,7 @@ import EnrollmentConnectCard from '../components/enrollment/EnrollmentConnectCar
 import DemographicMixCard from '../components/analytics/v2/DemographicMixCard.jsx'
 import GradeMixCard from '../components/analytics/v2/GradeMixCard.jsx'
 import EnrollmentKpiRow from '../components/enrollment/EnrollmentKpiRow.jsx'
+import RosterSourceCard from '../components/enrollment/RosterSourceCard.jsx'
 import RosterAnalyticsSection from '../components/enrollment/RosterAnalyticsSection.jsx'
 import StudentRegister from '../components/enrollment/StudentRegister.jsx'
 
@@ -85,6 +86,10 @@ function EnrollmentWorkspace() {
   const [notLicensed, setNotLicensed] = useState(false)
   const [notEntitled, setNotEntitled] = useState(false)
   const [reverting, setReverting] = useState(false)
+  // How many students the REGISTER actually holds. Read here (not only inside the
+  // KPI row) because the overview needs to compare it against the headcount: a
+  // counted headcount over an empty register is the state the page must name.
+  const [rosterCount, setRosterCount] = useState(null)
 
   const load = useCallback(async () => {
     if (!activeId) return
@@ -113,6 +118,13 @@ function EnrollmentWorkspace() {
       } else {
         setSummary(null)
         setDemographics(null)
+      }
+      try {
+        const aggRes = await enrollmentApi.students.aggregate(activeId)
+        setRosterCount((aggRes.data ?? aggRes)?.kpis?.enrolled ?? 0)
+      } catch {
+        // A school without the register read simply gets no diagnosis, never an error.
+        setRosterCount(null)
       }
     } catch (e) {
       if (isModuleNotLicensed(e)) setNotLicensed(true)
@@ -271,6 +283,25 @@ function EnrollmentWorkspace() {
   // existing cards byte-identical.
   const rosterMode = status?.rosterMode === 'roster'
 
+  const goAddData = () => {
+    const next = new URLSearchParams(searchParams)
+    next.set('tab', 'add')
+    setSearchParams(next, { replace: false })
+  }
+
+  // Where the numbers came from + the counted-but-empty diagnosis. Rendered high
+  // on the overview: it is the answer to "I added a roster and nothing happened",
+  // and it was previously nowhere on the page.
+  const rosterSource = (
+    <RosterSourceCard
+      schoolId={activeId}
+      canEdit={canEdit}
+      headcount={summary?.latest?.totalEnrolled ?? null}
+      rosterCount={rosterCount}
+      onAddData={goAddData}
+    />
+  )
+
   // Shared overview extras (both the v2 tab and the flat page render these).
   const mixSection = (
     <>
@@ -304,6 +335,7 @@ function EnrollmentWorkspace() {
                   rosterMode={status?.rosterMode}
                   summary={summary}
                 />
+                {rosterSource}
                 <VsPlanKpi summary={summary} />
                 {summary?.latest?.byGrade && <ByGradeChart byGrade={summary.latest.byGrade} />}
                 {mixSection}
@@ -340,6 +372,8 @@ function EnrollmentWorkspace() {
 
       <div className="space-y-6">
         <EnrollmentKpiRow schoolId={activeId} rosterMode={status?.rosterMode} summary={summary} />
+
+        {rosterSource}
 
         <VsPlanKpi summary={summary} />
 

@@ -513,9 +513,14 @@ export default function StudentRegister({ schoolId, canEdit, hue = ENROLL_HUE, o
               ? 'No students on the roster yet.'
               : 'No students match these filters.'}
           </p>
-          <p className="mt-1 text-[13px] text-muted">
+          <p className="mx-auto mt-1 max-w-xl break-words text-[13px] leading-snug text-muted">
             {total === 0 && !Object.keys(buildStudentParams(filters)).length
-              ? 'Add students from the Add data tab — one at a time or a whole CSV.'
+              ? // Says the thing that was missing: an enrollment HEADCOUNT does not
+                // put anyone in this register, and a school looking at "436 enrolled"
+                // one tab away has every reason to expect that it does.
+                'Uploading a roster file here creates the student records. A headcount on the ' +
+                'Enrollment overview does not — if you have a total there but nothing here, ' +
+                'upload that file again from the Add data tab.'
               : 'Loosen a filter or clear the search.'}
           </p>
         </div>

@@ -1067,6 +1067,11 @@ export const enrollmentApi = {
   // list/get/import-preview return names over the role-gated register routes ONLY;
   // `aggregate` NEVER returns a name (counts + KPIs, same filter params as list).
   // Reads owner/accountant/viewer; writes owner/accountant (server-enforced).
+  // Intake receipts: which file (or sync) produced the numbers, and what it wrote.
+  listImports: (schoolId) => api.get(`/schools/${schoolId}/enrollment/imports`),
+  // Removes the RECORD of an import — never the students it created.
+  removeImport: (schoolId, importId) =>
+    api.delete(`/schools/${schoolId}/enrollment/imports/${importId}`),
   students: {
     // params: { q, grade, status, race, gender, ethnicity, flags, ageBand, sort,
     // dir, page, pageSize } — multi-value params are comma-joined strings; omit

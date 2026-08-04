@@ -108,61 +108,62 @@ model School {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  fiscalPeriods            FiscalPeriod[]
-  memberships              Membership[]
-  invitations              Invitation[]
-  imports                  Import[]
-  mappings                 Mapping[]
-  statementSnapshots       StatementSnapshot[]
-  subscription             Subscription?
-  auditLog                 AuditLog[]
-  operationalData          PeriodOperationalData[]
-  complianceInputs         PeriodComplianceInputs[]
-  scholarshipDisbursements ScholarshipDisbursement[]
-  correctiveActions        PeriodCorrectiveAction[]
-  checklistItems           PeriodChecklistItem[]
-  insights                 PeriodInsight[]
-  budgets                  PeriodBudget[]
-  analyticsDashboard       AnalyticsDashboard?
-  reportSchedule           ReportSchedule?
-  alerts                   Alert[]
-  qboConnection            QboConnection?
-  boardReports             BoardReport[]
-  capitalSchedules         CapitalSchedule[]
-  cashSchedules            CashSchedule[]
-  campaignSchedules        CampaignSchedule[]
-  monthlySnapshots         MonthlySnapshot[]
-  policies                 Policy[]
-  committees               Committee[]
-  meetings                 Meeting[]
-  tasks                    Task[]
-  accreditationStandards   AccreditationStandard[]
-  accreditationEvidence    AccreditationEvidence[]
-  readinessSnapshots       AccreditationReadinessSnapshot[]
-  accreditationFindings    AccreditationFinding[]
-  maintenanceItems         MaintenanceItem[]
-  vendors                  Vendor[]
-  maintenanceBids          MaintenanceBid[]
-  facilitiesSetting        FacilitiesSetting?
-  campaigns                AdvancementCampaign[]
-  advancementGifts         AdvancementGift[]
-  documents                KnowledgeDocument[]
-  orgQboMappings           OrgQboMapping[]
-  enrollmentSources        EnrollmentSource[]
-  enrollmentSnapshots      EnrollmentSnapshot[]
-  arApAgingSnapshots       ArApAgingSnapshot[]
-  cashFlowSnapshots        CashFlowSnapshot[]
-  strategicPlans           StrategicPlan[]
-  strategyPillars          StrategyPillar[]
-  strategyGoals            StrategyGoal[]
-  strategyInitiatives      ImprovementInitiative[]
-  nameAliases              SchoolNameAlias[]
-  governancePeople         GovernancePerson[]
-  committeeMemberships     CommitteeMembership[]
-  students                 Student[]
+  fiscalPeriods             FiscalPeriod[]
+  memberships               Membership[]
+  invitations               Invitation[]
+  imports                   Import[]
+  mappings                  Mapping[]
+  statementSnapshots        StatementSnapshot[]
+  subscription              Subscription?
+  auditLog                  AuditLog[]
+  operationalData           PeriodOperationalData[]
+  complianceInputs          PeriodComplianceInputs[]
+  scholarshipDisbursements  ScholarshipDisbursement[]
+  correctiveActions         PeriodCorrectiveAction[]
+  checklistItems            PeriodChecklistItem[]
+  insights                  PeriodInsight[]
+  budgets                   PeriodBudget[]
+  analyticsDashboard        AnalyticsDashboard?
+  reportSchedule            ReportSchedule?
+  alerts                    Alert[]
+  qboConnection             QboConnection?
+  boardReports              BoardReport[]
+  capitalSchedules          CapitalSchedule[]
+  cashSchedules             CashSchedule[]
+  campaignSchedules         CampaignSchedule[]
+  monthlySnapshots          MonthlySnapshot[]
+  policies                  Policy[]
+  committees                Committee[]
+  meetings                  Meeting[]
+  tasks                     Task[]
+  accreditationStandards    AccreditationStandard[]
+  accreditationEvidence     AccreditationEvidence[]
+  readinessSnapshots        AccreditationReadinessSnapshot[]
+  accreditationFindings     AccreditationFinding[]
+  maintenanceItems          MaintenanceItem[]
+  vendors                   Vendor[]
+  maintenanceBids           MaintenanceBid[]
+  facilitiesSetting         FacilitiesSetting?
+  campaigns                 AdvancementCampaign[]
+  advancementGifts          AdvancementGift[]
+  documents                 KnowledgeDocument[]
+  orgQboMappings            OrgQboMapping[]
+  enrollmentSources         EnrollmentSource[]
+  enrollmentSnapshots       EnrollmentSnapshot[]
+  arApAgingSnapshots        ArApAgingSnapshot[]
+  cashFlowSnapshots         CashFlowSnapshot[]
+  strategicPlans            StrategicPlan[]
+  strategyPillars           StrategyPillar[]
+  strategyGoals             StrategyGoal[]
+  strategyInitiatives       ImprovementInitiative[]
+  nameAliases               SchoolNameAlias[]
+  governancePeople          GovernancePerson[]
+  committeeMemberships      CommitteeMembership[]
+  students                  Student[]
   // ── AIC Phase F (additive) — the two new intake registers.
-  staffEvaluations         StaffEvaluation[]
-  priorVisitFindings       PriorVisitFinding[]
+  staffEvaluations          StaffEvaluation[]
+  priorVisitFindings        PriorVisitFinding[]
+  enrollmentImports         EnrollmentImport[]
   // ── AIC Phase G (additive) — the improvement observation series.
   improvementProgressEvents ImprovementProgressEvent[]
 
@@ -236,7 +237,7 @@ model User {
   // ── Platform admin (additive, defaulted false, no backfill/lockout) ─────────
   // DB-backed effective-admin flag the super-admin can grant/revoke. Effective
   // admin = isAdmin OR email ∈ ADMIN_EMAILS OR is the bootstrap super-admin.
-  isAdmin                    Boolean   @default(false) @map("is_admin")
+  isAdmin Boolean @default(false) @map("is_admin")
 
   // ── Platform-admin analytics (additive, all nullable, no backfill) ──────────
   // When the user verified their email (null = verified pre-migration → "unknown").
@@ -246,64 +247,65 @@ model User {
   lastLoginAt      DateTime? @map("last_login_at")
   lastLoginIp      String?   @map("last_login_ip")
   lastLoginCountry String?   @map("last_login_country") // ISO alpha-2
-  lastLoginRegion  String?   @map("last_login_region")  // 2-letter US state code
+  lastLoginRegion  String?   @map("last_login_region") // 2-letter US state code
   lastLoginCity    String?   @map("last_login_city")
   lastLoginLat     Float?    @map("last_login_lat")
   lastLoginLon     Float?    @map("last_login_lon")
 
-  memberships                  Membership[]
-  loginEvents                  UserLoginEvent[]
-  refreshTokens                RefreshToken[]
-  mfaBackupCodes               MfaBackupCode[]
-  mfaChallenges                MfaChallenge[]
-  imports                      Import[]                 @relation("ImportUploadedBy")
-  invitedMemberships           Membership[]             @relation("MembershipInvitedBy")
-  auditLog                     AuditLog[]
-  operationalUpdates           PeriodOperationalData[]  @relation("OperationalUpdatedBy")
-  complianceInputsUpdates      PeriodComplianceInputs[] @relation("ComplianceInputsUpdatedBy")
-  correctiveActionUpdates      PeriodCorrectiveAction[] @relation("CorrectiveActionUpdatedBy")
-  checklistUpdates             PeriodChecklistItem[]    @relation("ChecklistUpdatedBy")
-  dashboardUpdates             AnalyticsDashboard[]     @relation("DashboardUpdatedBy")
-  boardReportUpdates           BoardReport[]            @relation("BoardReportUpdatedBy")
-  capitalSchedulesUpdated      CapitalSchedule[]        @relation("CapitalScheduleUpdatedBy")
-  cashSchedulesUpdated         CashSchedule[]           @relation("CashScheduleUpdatedBy")
-  campaignSchedulesUpdated     CampaignSchedule[]       @relation("CampaignScheduleUpdatedBy")
-  monthlySnapshotsUploaded     MonthlySnapshot[]        @relation("MonthlySnapshotUploadedBy")
-  policyUpdates                Policy[]                 @relation("PolicyUpdatedBy")
-  committeeUpdates             Committee[]              @relation("CommitteeUpdatedBy")
-  meetingUpdates               Meeting[]                @relation("MeetingUpdatedBy")
-  meetingMinutesApproved       Meeting[]                @relation("MeetingMinutesApprovedBy")
-  tasksAssigned                Task[]                   @relation("TaskAssignee")
-  tasksCreated                 Task[]                   @relation("TaskCreatedBy")
-  tasksToApprove               Task[]                   @relation("TaskApprover")
-  tasksDecided                 Task[]                   @relation("TaskDecidedBy")
-  accreditationStandardUpdates AccreditationStandard[]  @relation("AccreditationStandardUpdatedBy")
-  accreditationRubricScored    AccreditationStandard[]  @relation("AccreditationRubricScoredBy")
-  accreditationEvidenceCreated AccreditationEvidence[]  @relation("AccreditationEvidenceCreatedBy")
-  maintenanceItemsCreated      MaintenanceItem[]        @relation("MaintenanceItemCreatedBy")
-  maintenanceItemsDecided      MaintenanceItem[]        @relation("MaintenanceDecidedBy")
-  vendorsCreated               Vendor[]                 @relation("VendorCreatedBy")
-  maintenanceBidsCreated       MaintenanceBid[]         @relation("MaintenanceBidCreatedBy")
-  facilitiesSettingsUpdated    FacilitiesSetting[]      @relation("FacilitiesSettingUpdatedBy")
-  advancementCampaignsCreated  AdvancementCampaign[]    @relation("AdvancementCampaignCreatedBy")
-  advancementGiftsCreated      AdvancementGift[]        @relation("AdvancementGiftCreatedBy")
-  knowledgeDocumentsUploaded   KnowledgeDocument[]      @relation("KnowledgeDocumentUploadedBy")
-  alertsCreated                Alert[]                  @relation("AlertCreatedBy")
-  enrollmentSnapshotsCreated   EnrollmentSnapshot[]     @relation("EnrollmentSnapshotCreatedBy")
-  strategicPlanUpdates         StrategicPlan[]          @relation("StrategicPlanUpdatedBy")
-  strategyPillarUpdates        StrategyPillar[]         @relation("StrategyPillarUpdatedBy")
-  strategyGoalUpdates          StrategyGoal[]           @relation("StrategyGoalUpdatedBy")
-  strategyGoalsOwned           StrategyGoal[]           @relation("StrategyGoalOwner")
-  strategyInitiativeUpdates    ImprovementInitiative[]  @relation("StrategyInitiativeUpdatedBy")
-  strategyInitiativesOwned     ImprovementInitiative[]  @relation("StrategyInitiativeOwner")
-  messages                     Message[]
-  governancePersons            GovernancePerson[]       @relation("GovernancePersonUser")
-  governancePersonsUpdated     GovernancePerson[]       @relation("GovernancePersonUpdatedBy")
-  createdStudents              Student[]                @relation("StudentCreatedBy")
+  memberships                      Membership[]
+  loginEvents                      UserLoginEvent[]
+  refreshTokens                    RefreshToken[]
+  mfaBackupCodes                   MfaBackupCode[]
+  mfaChallenges                    MfaChallenge[]
+  imports                          Import[]                   @relation("ImportUploadedBy")
+  invitedMemberships               Membership[]               @relation("MembershipInvitedBy")
+  auditLog                         AuditLog[]
+  operationalUpdates               PeriodOperationalData[]    @relation("OperationalUpdatedBy")
+  complianceInputsUpdates          PeriodComplianceInputs[]   @relation("ComplianceInputsUpdatedBy")
+  correctiveActionUpdates          PeriodCorrectiveAction[]   @relation("CorrectiveActionUpdatedBy")
+  checklistUpdates                 PeriodChecklistItem[]      @relation("ChecklistUpdatedBy")
+  dashboardUpdates                 AnalyticsDashboard[]       @relation("DashboardUpdatedBy")
+  boardReportUpdates               BoardReport[]              @relation("BoardReportUpdatedBy")
+  capitalSchedulesUpdated          CapitalSchedule[]          @relation("CapitalScheduleUpdatedBy")
+  cashSchedulesUpdated             CashSchedule[]             @relation("CashScheduleUpdatedBy")
+  campaignSchedulesUpdated         CampaignSchedule[]         @relation("CampaignScheduleUpdatedBy")
+  monthlySnapshotsUploaded         MonthlySnapshot[]          @relation("MonthlySnapshotUploadedBy")
+  policyUpdates                    Policy[]                   @relation("PolicyUpdatedBy")
+  committeeUpdates                 Committee[]                @relation("CommitteeUpdatedBy")
+  meetingUpdates                   Meeting[]                  @relation("MeetingUpdatedBy")
+  meetingMinutesApproved           Meeting[]                  @relation("MeetingMinutesApprovedBy")
+  tasksAssigned                    Task[]                     @relation("TaskAssignee")
+  tasksCreated                     Task[]                     @relation("TaskCreatedBy")
+  tasksToApprove                   Task[]                     @relation("TaskApprover")
+  tasksDecided                     Task[]                     @relation("TaskDecidedBy")
+  accreditationStandardUpdates     AccreditationStandard[]    @relation("AccreditationStandardUpdatedBy")
+  accreditationRubricScored        AccreditationStandard[]    @relation("AccreditationRubricScoredBy")
+  accreditationEvidenceCreated     AccreditationEvidence[]    @relation("AccreditationEvidenceCreatedBy")
+  maintenanceItemsCreated          MaintenanceItem[]          @relation("MaintenanceItemCreatedBy")
+  maintenanceItemsDecided          MaintenanceItem[]          @relation("MaintenanceDecidedBy")
+  vendorsCreated                   Vendor[]                   @relation("VendorCreatedBy")
+  maintenanceBidsCreated           MaintenanceBid[]           @relation("MaintenanceBidCreatedBy")
+  facilitiesSettingsUpdated        FacilitiesSetting[]        @relation("FacilitiesSettingUpdatedBy")
+  advancementCampaignsCreated      AdvancementCampaign[]      @relation("AdvancementCampaignCreatedBy")
+  advancementGiftsCreated          AdvancementGift[]          @relation("AdvancementGiftCreatedBy")
+  knowledgeDocumentsUploaded       KnowledgeDocument[]        @relation("KnowledgeDocumentUploadedBy")
+  alertsCreated                    Alert[]                    @relation("AlertCreatedBy")
+  enrollmentSnapshotsCreated       EnrollmentSnapshot[]       @relation("EnrollmentSnapshotCreatedBy")
+  strategicPlanUpdates             StrategicPlan[]            @relation("StrategicPlanUpdatedBy")
+  strategyPillarUpdates            StrategyPillar[]           @relation("StrategyPillarUpdatedBy")
+  strategyGoalUpdates              StrategyGoal[]             @relation("StrategyGoalUpdatedBy")
+  strategyGoalsOwned               StrategyGoal[]             @relation("StrategyGoalOwner")
+  strategyInitiativeUpdates        ImprovementInitiative[]    @relation("StrategyInitiativeUpdatedBy")
+  strategyInitiativesOwned         ImprovementInitiative[]    @relation("StrategyInitiativeOwner")
+  messages                         Message[]
+  governancePersons                GovernancePerson[]         @relation("GovernancePersonUser")
+  governancePersonsUpdated         GovernancePerson[]         @relation("GovernancePersonUpdatedBy")
+  createdStudents                  Student[]                  @relation("StudentCreatedBy")
   // ── AIC Phase F (additive) — audit stamps on the two new registers.
-  staffEvaluationsCreated      StaffEvaluation[]        @relation("StaffEvaluationCreatedBy")
-  staffEvaluationsUpdated      StaffEvaluation[]        @relation("StaffEvaluationUpdatedBy")
-  priorVisitFindingsCreated    PriorVisitFinding[]      @relation("PriorVisitFindingCreatedBy")
+  enrollmentImportsUploaded        EnrollmentImport[]         @relation("EnrollmentImportUploadedBy")
+  staffEvaluationsCreated          StaffEvaluation[]          @relation("StaffEvaluationCreatedBy")
+  staffEvaluationsUpdated          StaffEvaluation[]          @relation("StaffEvaluationUpdatedBy")
+  priorVisitFindingsCreated        PriorVisitFinding[]        @relation("PriorVisitFindingCreatedBy")
   // ── AIC Phase G (additive) — who recorded an improvement observation.
   improvementProgressEventsCreated ImprovementProgressEvent[] @relation("ImprovementProgressEventCreatedBy")
 
@@ -519,9 +521,9 @@ model StatementSnapshot {
   // Provenance stamp (audit trail / value-versioning). All nullable, no FK/relation
   // (soft refs) — legacy rows are null and fall through to read-time correlation.
   // trigger ∈ manual|upload|quickbooks_sync|scheduled_sync|remap (SnapshotTrigger).
-  trigger              String?  @map("trigger")
-  sourceImportId       String?  @map("source_import_id")
-  triggeredByUserId    String?  @map("triggered_by_user_id")
+  trigger           String? @map("trigger")
+  sourceImportId    String? @map("source_import_id")
+  triggeredByUserId String? @map("triggered_by_user_id")
 
   school       School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   fiscalPeriod FiscalPeriod @relation(fields: [fiscalPeriodId], references: [id], onDelete: Cascade)
@@ -624,35 +626,35 @@ model AuditLog {
 /// tuition discount rate). Decimals are converted to plain `number` at the API
 /// boundary to match the engine/analytics number convention.
 model PeriodOperationalData {
-  id                       String   @id @default(uuid()) @db.Uuid
-  schoolId                 String   @map("school_id") @db.Uuid
-  fiscalPeriodId           String   @map("fiscal_period_id") @db.Uuid
-  enrollment               Int?
-  enrollmentFte            Decimal? @map("enrollment_fte") @db.Decimal(10, 2)
-  studentsOnAid            Int?     @map("students_on_aid")
-  financialAidTotal        Decimal? @map("financial_aid_total") @db.Decimal(18, 2)
+  id                            String    @id @default(uuid()) @db.Uuid
+  schoolId                      String    @map("school_id") @db.Uuid
+  fiscalPeriodId                String    @map("fiscal_period_id") @db.Uuid
+  enrollment                    Int?
+  enrollmentFte                 Decimal?  @map("enrollment_fte") @db.Decimal(10, 2)
+  studentsOnAid                 Int?      @map("students_on_aid")
+  financialAidTotal             Decimal?  @map("financial_aid_total") @db.Decimal(18, 2)
   /// Phase 5 — actual STAFF FTEs (NOT the student-side enrollmentFte). teachingFte
   /// is the instructional/teaching subset of totalStaffFte. Drives the board KPIs
   /// teachingFte / totalStaffFte / teacherRatio. NULL = not entered. Cross-field
   /// teachingFte <= totalStaffFte enforced in OperationalService.upsert.
-  teachingFte              Decimal? @map("teaching_fte") @db.Decimal(10, 2)
-  totalStaffFte            Decimal? @map("total_staff_fte") @db.Decimal(10, 2)
-  notes                    String?
+  teachingFte                   Decimal?  @map("teaching_fte") @db.Decimal(10, 2)
+  totalStaffFte                 Decimal?  @map("total_staff_fte") @db.Decimal(10, 2)
+  notes                         String?
   /// Phase 2 — anticipated INCOMING (net-new) students by grade from feeder
   /// sources. JSON object keyed by GradeKey (PK0–PK4, K, 1–8) → non-negative
   /// count. Drives the FY-End Forecast's tuition (merged additively into the
   /// driver enrollmentByGrade). NULL = none entered. A free input, NOT a linked school.
-  feederEnrollmentByGrade  Json?    @map("feeder_enrollment_by_grade") @db.JsonB
+  feederEnrollmentByGrade       Json?     @map("feeder_enrollment_by_grade") @db.JsonB
   /// Phase 2 Enrollment Intelligence — the PLANNED enrollment by grade (JSONB keyed
   /// by GradeKey → non-negative count) a school targets for this period. A free input
   /// (does NOT require a full driver budget); its total is one of the plan sources for
   /// the enrollment_vs_plan metric. NULL = no plan entered.
-  plannedEnrollmentByGrade Json?    @map("planned_enrollment_by_grade") @db.JsonB
+  plannedEnrollmentByGrade      Json?     @map("planned_enrollment_by_grade") @db.JsonB
   /// Phase 2 — provenance stamp for a PROMOTED `enrollment` value: the connector/CSV
   /// provider that last filled it (e.g. 'blackbaud', 'oneroster_csv'). NULL when the
   /// value was hand-entered — the promote path NEVER overwrites a manual entry, and
   /// only re-promotes over a value it stamped itself (fill-when-null OR own stamp).
-  enrollmentSourceProvider String?  @map("enrollment_source_provider")
+  enrollmentSourceProvider      String?   @map("enrollment_source_provider")
   /// Granular diocesan enrollment — REVERSIBLE manual backup (Decision C). When a
   /// diocesan import supersedes a hand-entered `enrollment`, the original manual
   /// value+fte are copied here (once, preserving the ORIGINAL across re-imports) and
@@ -660,9 +662,9 @@ model PeriodOperationalData {
   enrollmentSupersededManual    Int?      @map("enrollment_superseded_manual")
   enrollmentSupersededManualFte Decimal?  @map("enrollment_superseded_manual_fte") @db.Decimal(10, 2)
   enrollmentSupersededAt        DateTime? @map("enrollment_superseded_at")
-  updatedByUserId          String?  @map("updated_by_user_id") @db.Uuid
-  createdAt                DateTime @default(now()) @map("created_at")
-  updatedAt                DateTime @updatedAt @map("updated_at")
+  updatedByUserId               String?   @map("updated_by_user_id") @db.Uuid
+  createdAt                     DateTime  @default(now()) @map("created_at")
+  updatedAt                     DateTime  @updatedAt @map("updated_at")
 
   school        School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   fiscalPeriod  FiscalPeriod @relation(fields: [fiscalPeriodId], references: [id], onDelete: Cascade)
@@ -918,14 +920,14 @@ model QboConnection {
 
   // Automated / scheduled nightly sync (QboSyncSchedulerService). Additive, all
   // defaulted so existing rows inherit auto_sync_enabled=true, needs_reauth=false.
-  autoSyncEnabled           Boolean   @default(true)  @map("auto_sync_enabled")
+  autoSyncEnabled           Boolean   @default(true) @map("auto_sync_enabled")
   needsReauth               Boolean   @default(false) @map("needs_reauth")
   lastScheduledSyncAt       DateTime? @map("last_scheduled_sync_at")
-  lastScheduledSyncStatus   String?   @map("last_scheduled_sync_status")   // synced|no_data|not_entitled|reauth_required|error|no_actor
-  lastScheduledSyncError    String?   @map("last_scheduled_sync_error")    // short message when status=error
+  lastScheduledSyncStatus   String?   @map("last_scheduled_sync_status") // synced|no_data|not_entitled|reauth_required|error|no_actor
+  lastScheduledSyncError    String?   @map("last_scheduled_sync_error") // short message when status=error
   lastScheduledSyncRowCount Int?      @map("last_scheduled_sync_row_count")
-  reauthNotifiedAt          DateTime? @map("reauth_notified_at")           // de-dupes the reconnect email per dead-token episode
-  autoSyncFailures          Int       @default(0)     @map("auto_sync_failures") // consecutive transient failures (backoff)
+  reauthNotifiedAt          DateTime? @map("reauth_notified_at") // de-dupes the reconnect email per dead-token episode
+  autoSyncFailures          Int       @default(0) @map("auto_sync_failures") // consecutive transient failures (backoff)
 
   school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
@@ -958,15 +960,15 @@ model ArApAgingSnapshot {
   apTotal    Float @default(0) @map("ap_total")
   apOverdue  Float @default(0) @map("ap_overdue")
   apDueSoon  Float @default(0) @map("ap_due_soon")
-  arAccounts Int   @default(0) @map("ar_accounts")   // distinct parties with an open balance
-  ar90Count  Int   @default(0) @map("ar_90_count")   // parties with any 90+ open balance
+  arAccounts Int   @default(0) @map("ar_accounts") // distinct parties with an open balance
+  ar90Count  Int   @default(0) @map("ar_90_count") // parties with any 90+ open balance
   apVendors  Int   @default(0) @map("ap_vendors")
 
   // Structured detail as JSON (small; read whole by the page, ignored by the briefing).
   arBuckets Json @map("ar_buckets") @db.JsonB // { current, d1_30, d31_60, d61_90, d90_plus }
   apBuckets Json @map("ap_buckets") @db.JsonB
-  arTop     Json @map("ar_top") @db.JsonB     // AgingParty[] (top debtors, capped 8)
-  apTop     Json @map("ap_top") @db.JsonB     // AgingParty[] (top creditors, capped 8)
+  arTop     Json @map("ar_top") @db.JsonB // AgingParty[] (top debtors, capped 8)
+  apTop     Json @map("ap_top") @db.JsonB // AgingParty[] (top creditors, capped 8)
 
   capturedAt DateTime @default(now()) @map("captured_at")
   createdAt  DateTime @default(now()) @map("created_at")
@@ -986,34 +988,34 @@ model ArApAgingSnapshot {
 /// reconciled against. The briefing reads the recon scalars DIRECTLY via Prisma
 /// (NO QboCashFlowService injection — the module rule). Topology A only.
 model CashFlowSnapshot {
-  id             String   @id @default(uuid()) @db.Uuid
-  schoolId       String   @map("school_id") @db.Uuid
-  fiscalPeriodId String   @map("fiscal_period_id") @db.Uuid
-  realmId        String?  @map("realm_id")
-  environment    String   @default("sandbox")
+  id             String  @id @default(uuid()) @db.Uuid
+  schoolId       String  @map("school_id") @db.Uuid
+  fiscalPeriodId String  @map("fiscal_period_id") @db.Uuid
+  realmId        String? @map("realm_id")
+  environment    String  @default("sandbox")
   /// 'cashflow' (native reports/CashFlow) | 'computed-scf' (derived from our own SCF).
-  source         String   @default("cashflow")
+  source         String  @default("cashflow")
   /// 'sync' | 'page' | 'penny' — what triggered this capture.
-  capturedVia    String   @map("captured_via")
+  capturedVia    String  @map("captured_via")
 
   // QBO cash-flow breakdown (Float; null when the report is degenerate + no SCF).
-  operating   Float? @map("operating")
-  investing   Float? @map("investing")
-  financing   Float? @map("financing")
-  netChange   Float? @map("net_change")
+  operating Float? @map("operating")
+  investing Float? @map("investing")
+  financing Float? @map("financing")
+  netChange Float? @map("net_change")
 
   // Sharpened runway (Float; null when uncomputable — value-safe).
-  openingCash  Float? @map("opening_cash")   // QBO BalanceSheet ending cash (current cash)
-  monthlyBurn  Float? @map("monthly_burn")   // QBO operating cash ÷ months elapsed in FY (signed)
-  runwayMonths Float? @map("runway_months")  // openingCash / |monthlyBurn| when burning; else null
+  openingCash  Float? @map("opening_cash") // QBO BalanceSheet ending cash (current cash)
+  monthlyBurn  Float? @map("monthly_burn") // QBO operating cash ÷ months elapsed in FY (signed)
+  runwayMonths Float? @map("runway_months") // openingCash / |monthlyBurn| when burning; else null
 
   // Reconciliation scalars (the briefing reads these directly — no JSON parse).
-  reconStatus    String  @default("unknown") @map("recon_status") // 'tied'|'differs'|'unknown'
-  cashDiff       Float?  @map("cash_diff")        // QBO BS cash − computed cash (STRONG check A)
-  netIncomeDiff  Float?  @map("net_income_diff")  // QBO P&L NI − computed netChange (STRONG check B)
-  cashChangeDiff Float?  @map("cash_change_diff") // QBO CF net-change − computed scf.netCashChange (LOOSE C)
-  cashTie        Boolean? @map("cash_tie")        // A within tie tolerance
-  netIncomeTie   Boolean? @map("net_income_tie")  // B within tie tolerance
+  reconStatus    String   @default("unknown") @map("recon_status") // 'tied'|'differs'|'unknown'
+  cashDiff       Float?   @map("cash_diff") // QBO BS cash − computed cash (STRONG check A)
+  netIncomeDiff  Float?   @map("net_income_diff") // QBO P&L NI − computed netChange (STRONG check B)
+  cashChangeDiff Float?   @map("cash_change_diff") // QBO CF net-change − computed scf.netCashChange (LOOSE C)
+  cashTie        Boolean? @map("cash_tie") // A within tie tolerance
+  netIncomeTie   Boolean? @map("net_income_tie") // B within tie tolerance
 
   // Per-check detail as JSON (page popover reads it; briefing reads the `material` flags).
   detail Json? @db.JsonB // { cash:{qbo,computed,diff,status,note?,material}, net_income:{…}, cash_change:{…} }
@@ -1051,14 +1053,14 @@ model OrgQboConnection {
   // Automated / scheduled sync — mirrored on the org connection for FORWARD-COMPAT
   // only. Topology-B org connections are NOT swept in this slice (deferred to the
   // diocesan/org auto-sync work); the fields exist so that path is additive later.
-  autoSyncEnabled           Boolean   @default(true)  @map("auto_sync_enabled")
+  autoSyncEnabled           Boolean   @default(true) @map("auto_sync_enabled")
   needsReauth               Boolean   @default(false) @map("needs_reauth")
   lastScheduledSyncAt       DateTime? @map("last_scheduled_sync_at")
   lastScheduledSyncStatus   String?   @map("last_scheduled_sync_status")
   lastScheduledSyncError    String?   @map("last_scheduled_sync_error")
   lastScheduledSyncRowCount Int?      @map("last_scheduled_sync_row_count")
   reauthNotifiedAt          DateTime? @map("reauth_notified_at")
-  autoSyncFailures          Int       @default(0)     @map("auto_sync_failures")
+  autoSyncFailures          Int       @default(0) @map("auto_sync_failures")
 
   organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   mappings     OrgQboMapping[]
@@ -1270,8 +1272,8 @@ model Committee {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
-  school        School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  updatedByUser User?     @relation("CommitteeUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  school        School                @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  updatedByUser User?                 @relation("CommitteeUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
   meetings      Meeting[] // back-ref; deleting a committee SetNulls each meeting.committeeId (meeting history preserved)
   memberships   CommitteeMembership[] // back-ref; deleting a committee CASCADES its memberships (join rows only)
 
@@ -1303,13 +1305,13 @@ model GovernancePerson {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  school        School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  user          User?   @relation("GovernancePersonUser", fields: [userId], references: [id], onDelete: SetNull)
-  updatedByUser User?   @relation("GovernancePersonUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
-  memberships   CommitteeMembership[]
+  school           School                @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  user             User?                 @relation("GovernancePersonUser", fields: [userId], references: [id], onDelete: SetNull)
+  updatedByUser    User?                 @relation("GovernancePersonUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  memberships      CommitteeMembership[]
   // ── AIC Phase F (additive) — staff evaluations point HERE. `groups ∋ 'staff'`
   // already models a staff member, so no second person table is introduced.
-  staffEvaluations StaffEvaluation[] @relation("StaffEvaluationPerson")
+  staffEvaluations StaffEvaluation[]     @relation("StaffEvaluationPerson")
 
   @@index([schoolId])
   @@map("governance_people")
@@ -1444,9 +1446,9 @@ model AccreditationCatalogStandard {
   domainWeights Json?    @map("domain_weights")
   signalKeys    String[] @default([]) @map("signal_keys")
 
-  framework       AccreditationFramework         @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
-  parent          AccreditationCatalogStandard?  @relation("CatalogTree", fields: [parentId], references: [id], onDelete: SetNull)
-  children        AccreditationCatalogStandard[] @relation("CatalogTree")
+  framework       AccreditationFramework            @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
+  parent          AccreditationCatalogStandard?     @relation("CatalogTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children        AccreditationCatalogStandard[]    @relation("CatalogTree")
   schoolStandards AccreditationStandard[]
   // AIC Phase C — the sparse, seed-only requirement rows hanging off this node.
   requirements    AccreditationCatalogRequirement[]
@@ -1506,8 +1508,8 @@ model AccreditationCatalogRequirement {
 
 // Tenant scoping + @db.Date UTC-midnight discipline + audit-lite all mirror Policy.
 model AccreditationStandard {
-  id              String    @id @default(uuid()) @db.Uuid
-  schoolId        String    @map("school_id") @db.Uuid
+  id                   String    @id @default(uuid()) @db.Uuid
+  schoolId             String    @map("school_id") @db.Uuid
   // Phase 4 depth — SELF-RELATION for a nested standard hierarchy (real accreditor
   // frameworks are trees: domain → standard → indicator). A NULL parentId is a
   // top-level node; a node with NO children is a LEAF (coverage/rating roll up over
@@ -1515,24 +1517,24 @@ model AccreditationStandard {
   // top-level (parentId→NULL) rather than cascade-deleting a whole subtree — the
   // safe rule (no accidental mass-delete of a domain's indicators). The service also
   // guards same-school + self-parent + cycles before writing parentId.
-  parentId        String?   @map("parent_id") @db.Uuid
+  parentId             String?   @map("parent_id") @db.Uuid
   // Framework code, free text v1 (e.g. 'MSA-3','Std 1.2') — schools name their own;
   // bounded only by the DTO @MaxLength, deliberately NOT unique (v1 tolerates dups).
-  code            String
-  title           String
+  code                 String
+  title                String
   // Free text v1 (e.g. 'Governance','Finance','Teaching & Learning'), nullable.
-  category        String?
+  category             String?
   // Per-standard accreditor RATING (met/partial/not-met lifecycle). TEXT + @default
   // so the migration needs NO backfill — every existing row reads 'not_started'. The
   // DTO @IsIn (STANDARD_RATINGS) + service normalizeRating enforce the closed set;
   // schema.prisma and the DDL stay in lockstep (like the evidence sourceType pattern).
   // 'not_started' | 'not_met' | 'partially_met' | 'met'
-  rating          String    @default("not_started")
+  rating               String    @default("not_started")
   // Next scheduled accreditation review/visit date. Unlike a Policy (anchor +
   // interval), this is the review date DIRECTLY (drives "review approaching").
-  reviewDate      DateTime? @map("review_date") @db.Date
-  owner           String?
-  notes           String?
+  reviewDate           DateTime? @map("review_date") @db.Date
+  owner                String?
+  notes                String?
   // ── Phase 3 catalog/rubric depth (ALL nullable — zero backfill; legacy `rating`
   // and briefing inputs untouched). frameworkId/catalogStandardId link an ADOPTED
   // row back to the platform catalog (SetNull — catalog cleanup never breaks a
@@ -1541,12 +1543,12 @@ model AccreditationStandard {
   // preserves accreditor order for adopted trees (null on hand-made rows).
   // strategySource* is a SOFT link (no FK — evidence sourceRef pattern; validated
   // ∈ school on write, tolerant of dangling on read) to a StrategicPlan/StrategyGoal.
-  frameworkId        String? @map("framework_id") @db.Uuid
-  catalogStandardId  String? @map("catalog_standard_id") @db.Uuid
-  rubricScore        Int?    @map("rubric_score") // 1..4
-  sortOrder          Int?    @map("sort_order")
-  strategySourceType String? @map("strategy_source_type") // 'strategic_plan' | 'strategy_goal'
-  strategySourceRef  String? @map("strategy_source_ref") @db.Uuid
+  frameworkId          String?   @map("framework_id") @db.Uuid
+  catalogStandardId    String?   @map("catalog_standard_id") @db.Uuid
+  rubricScore          Int?      @map("rubric_score") // 1..4
+  sortOrder            Int?      @map("sort_order")
+  strategySourceType   String?   @map("strategy_source_type") // 'strategic_plan' | 'strategy_goal'
+  strategySourceRef    String?   @map("strategy_source_ref") @db.Uuid
   // ── Accreditation Intelligence Phase A — SCORE PROVENANCE (defaulted/nullable;
   // ZERO backfill). A rubric self-score is an ASSERTION, and the product must
   // never let it read as an external finding. 'self' is the only value v1 writes;
@@ -1557,22 +1559,22 @@ model AccreditationStandard {
   scoreProvenance      String    @default("self") @map("score_provenance") // 'self'|'peer_reviewed'|'externally_validated'
   rubricScoredAt       DateTime? @map("rubric_scored_at")
   rubricScoredByUserId String?   @map("rubric_scored_by_user_id") @db.Uuid
-  updatedByUserId String?   @map("updated_by_user_id") @db.Uuid
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
+  updatedByUserId      String?   @map("updated_by_user_id") @db.Uuid
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
 
-  school          School                        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  framework       AccreditationFramework?       @relation(fields: [frameworkId], references: [id], onDelete: SetNull)
-  catalogStandard AccreditationCatalogStandard? @relation(fields: [catalogStandardId], references: [id], onDelete: SetNull)
+  school             School                        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  framework          AccreditationFramework?       @relation(fields: [frameworkId], references: [id], onDelete: SetNull)
+  catalogStandard    AccreditationCatalogStandard? @relation(fields: [catalogStandardId], references: [id], onDelete: SetNull)
   // Self-relation: deleting a parent SETS children's parentId to NULL (re-parent to
   // top-level), NEVER cascade — a subtree is never silently mass-deleted.
-  parent        AccreditationStandard?  @relation("AccreditationStandardHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
-  children      AccreditationStandard[] @relation("AccreditationStandardHierarchy")
-  updatedByUser User?                   @relation("AccreditationStandardUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  parent             AccreditationStandard?        @relation("AccreditationStandardHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children           AccreditationStandard[]       @relation("AccreditationStandardHierarchy")
+  updatedByUser      User?                         @relation("AccreditationStandardUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
   // Phase A provenance: WHO asserted the current rubric score. SetNull so deleting
   // a user never erases the score itself — only its attribution.
-  rubricScoredByUser User?              @relation("AccreditationRubricScoredBy", fields: [rubricScoredByUserId], references: [id], onDelete: SetNull)
-  evidence      AccreditationEvidence[]
+  rubricScoredByUser User?                         @relation("AccreditationRubricScoredBy", fields: [rubricScoredByUserId], references: [id], onDelete: SetNull)
+  evidence           AccreditationEvidence[]
 
   // Adopt idempotency backstop: a school holds each catalog node at most once.
   // Postgres NULLS-DISTINCT → hand-made rows (catalogStandardId NULL) unconstrained.
@@ -1715,67 +1717,67 @@ model AccreditationReadinessSnapshot {
 // House conventions: TEXT + @IsIn at the DTO/service boundary (never a PG enum),
 // @db.Date UTC-midnight discipline, school_id ON DELETE CASCADE, snake_case @map.
 model AccreditationFinding {
-  id                String   @id @default(uuid()) @db.Uuid
-  schoolId          String   @map("school_id") @db.Uuid
+  id       String @id @default(uuid()) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
 
   /// Rule vocabulary lives in Phase E's TWIN_RULE_IDS. Phase D only stores it.
-  ruleId            String   @map("rule_id")
+  ruleId     String @map("rule_id")
   /// The entity the rule fired ABOUT: 'school' | 'standard:<uuid>' | 'policy:<uuid>' | …
-  scopeKey          String   @map("scope_key")
+  scopeKey   String @map("scope_key")
   /// Denormalised ruleId + ':' + scopeKey. Stored so Phase G's initiative can
   /// join on ONE value; asserted equal to the pair by a service invariant + spec.
-  findingKey        String   @map("finding_key")
+  findingKey String @map("finding_key")
   /// F3 — the underlying FACT, e.g. 'metric:operating_margin@FY2026'. Domain
   /// counting is over DISTINCT factKeys, never over affected leaves.
-  factKey           String   @map("fact_key")
+  factKey    String @map("fact_key")
 
   /// School standard CODES this would be cited under. >= 1 required by Phase E (G3).
-  standardTags      String[] @default([]) @map("standard_tags")
+  standardTags     String[] @default([]) @map("standard_tags")
   /// Every accreditation domain the finding TOUCHES — for rendering.
-  domainKeys        String[] @default([]) @map("domain_keys")
+  domainKeys       String[] @default([]) @map("domain_keys")
   /// EXACTLY ONE domain — for COUNTING. See the anti-double-count invariant.
-  primaryDomainKey  String   @map("primary_domain_key")
+  primaryDomainKey String   @map("primary_domain_key")
 
-  severity          String // 'info' | 'warn' | 'critical'
+  severity   String // 'info' | 'warn' | 'critical'
   /// 'open' | 'acknowledged' | 'muted' | 'resolved' | 'dismissed'.
   /// WRITTEN ONLY BY A HUMAN ACTION. Never by reconciliation.
-  status            String   @default("open")
+  status     String  @default("open")
   /// ORDINAL ONLY: 'possible' | 'likely' | null. Never a percentage.
-  likelihood        String?
+  likelihood String?
   /// The trend-signal ladder, reused verbatim: 'insufficient'|'observation'|'directional'|'trend'.
-  confidence        String   @default("insufficient")
+  confidence String  @default("insufficient")
 
   horizonKind       String    @default("none") @map("horizon_kind") // 'by_date'|'periods_to_breach'|'none'
   horizonDate       DateTime? @map("horizon_date") @db.Date
   horizonPeriods    Int?      @map("horizon_periods")
   horizonConfidence String?   @map("horizon_confidence")
 
-  firstSeenAt       DateTime  @map("first_seen_at")
-  lastSeenAt        DateTime  @map("last_seen_at")
+  firstSeenAt    DateTime  @map("first_seen_at")
+  lastSeenAt     DateTime  @map("last_seen_at")
   /// The rule STOPPED firing on this date. A computed observation, NOT a close.
-  clearedAt         DateTime? @map("cleared_at")
+  clearedAt      DateTime? @map("cleared_at")
   /// 'improved' | 'stale_data' | 'dismissed'. Reconciliation writes only the first two.
-  resolutionKind    String?   @map("resolution_kind")
+  resolutionKind String?   @map("resolution_kind")
   /// Times this finding re-armed after having been cleared. Phase E's
   /// "re-arms and re-notifies exactly once" reads this.
-  reopenCount       Int       @default(0) @map("reopen_count")
+  reopenCount    Int       @default(0) @map("reopen_count")
 
   /// The BASIS CHAIN: every fact, its observed value, its as-of date, its lineage.
   /// A finding with an empty basis is a bug, not a prediction (Phase H).
-  evidencePayload   Json     @map("evidence_payload") @db.JsonB
+  evidencePayload Json   @map("evidence_payload") @db.JsonB
   /// sha256 of the stable-stringified basis. Unchanged hash => no rewrite.
-  payloadHash       String   @map("payload_hash")
+  payloadHash     String @map("payload_hash")
 
   /// Phase G links an improvement initiative here. DELIBERATELY NOT AN FK: the
   /// improvement model is RENAMED in Phase G and Phase D must not plant a
   /// relation name inside a model Phase G rewrites. Phase G's adopt path
   /// validates existence itself.
-  initiativeId      String?   @map("initiative_id") @db.Uuid
+  initiativeId String? @map("initiative_id") @db.Uuid
 
-  mutedReason       String?   @map("muted_reason")
-  mutedUntil        DateTime? @map("muted_until")
-  ackedUntil        DateTime? @map("acked_until")
-  lastNotifiedAt    DateTime? @map("last_notified_at")
+  mutedReason    String?   @map("muted_reason")
+  mutedUntil     DateTime? @map("muted_until")
+  ackedUntil     DateTime? @map("acked_until")
+  lastNotifiedAt DateTime? @map("last_notified_at")
 
   /// AIC Phase E — the NOTIFICATION WATERMARKS. "Re-notifies exactly once" is
   /// three distinct edges (a re-arm, an escalation, a mute lapsing) and each
@@ -1785,22 +1787,22 @@ model AccreditationFinding {
   ///
   /// STILL ABSENT FROM `ReconcileWrite`, deliberately: the nightly job cannot
   /// name these columns any more than it can name `status`.
-  notifiedReopenCount Int    @default(0) @map("notified_reopen_count")
+  notifiedReopenCount Int     @default(0) @map("notified_reopen_count")
   /// The severity at the last send. Escalation is strictly `>`, so a critical
   /// that softens to warn satisfies no clause and sends nothing.
-  notifiedSeverity  String?   @map("notified_severity")
+  notifiedSeverity    String? @map("notified_severity")
   /// Bookkeeping only — NO FK, for the same reason `initiative_id` has none:
   /// the audit log is the record of record, and a relation here would make a
   /// user deletion a two-phase coordination.
-  ackedByUserId     String?   @map("acked_by_user_id") @db.Uuid
+  ackedByUserId       String? @map("acked_by_user_id") @db.Uuid
 
   /// Inherited from the school's newest readiness snapshot, exactly like Phase A:
   /// demo is a property of the SERIES, so a finding derived from fabricated
   /// history can never launder itself into a real tenant's record.
-  isDemo            Boolean  @default(false) @map("is_demo")
-  engineVersion     String   @map("engine_version")
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  isDemo        Boolean  @default(false) @map("is_demo")
+  engineVersion String   @map("engine_version")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
   school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
@@ -1899,10 +1901,10 @@ model MaintenanceItem {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  school        School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  createdByUser User?   @relation("MaintenanceItemCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
-  vendorRef     Vendor? @relation(fields: [vendorId], references: [id], onDelete: SetNull)
-  decidedByUser User?   @relation("MaintenanceDecidedBy", fields: [decidedByUserId], references: [id], onDelete: SetNull)
+  school        School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  createdByUser User?            @relation("MaintenanceItemCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  vendorRef     Vendor?          @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  decidedByUser User?            @relation("MaintenanceDecidedBy", fields: [decidedByUserId], references: [id], onDelete: SetNull)
   bids          MaintenanceBid[]
 
   @@index([schoolId])
@@ -2238,26 +2240,26 @@ model EnrollmentSource {
 /// Phase 2 — DATED append-only roster observation (the enrollment TIME-SERIES;
 /// immutable, unlike the single mutable PeriodOperationalData row). Source-stamped.
 model EnrollmentSnapshot {
-  id              String             @id @default(uuid()) @db.Uuid
-  schoolId        String             @map("school_id") @db.Uuid
-  sourceId        String?            @map("source_id") @db.Uuid // null for CSV/manual
-  fiscalPeriodId  String?            @map("fiscal_period_id") @db.Uuid
-  observedOn      DateTime           @map("observed_on") @db.Date // as-of date (time axis)
-  provider        EnrollmentProvider
-  totalEnrolled   Int                @map("total_enrolled")
-  byGrade         Json               @map("by_grade") @db.JsonB // GradeKey -> count (active)
-  byStatus        Json?              @map("by_status") @db.JsonB // {enrolled,withdrawn?,applied?,accepted?}
+  id                 String             @id @default(uuid()) @db.Uuid
+  schoolId           String             @map("school_id") @db.Uuid
+  sourceId           String?            @map("source_id") @db.Uuid // null for CSV/manual
+  fiscalPeriodId     String?            @map("fiscal_period_id") @db.Uuid
+  observedOn         DateTime           @map("observed_on") @db.Date // as-of date (time axis)
+  provider           EnrollmentProvider
+  totalEnrolled      Int                @map("total_enrolled")
+  byGrade            Json               @map("by_grade") @db.JsonB // GradeKey -> count (active)
+  byStatus           Json?              @map("by_status") @db.JsonB // {enrolled,withdrawn?,applied?,accepted?}
   // Granular diocesan enrollment — aggregate gender/ethnicity/race COUNTS (no PII).
   // Canonical shape frozen in @finrep/analytics/demographics. NULL for shapes without it.
-  byDemographics     Json?     @map("by_demographics") @db.JsonB
+  byDemographics     Json?              @map("by_demographics") @db.JsonB
   // Manual-supersede provenance (Decision C): a hand-entered snapshot flagged when a
   // connected/imported snapshot supersedes it for promote-to-operational. Reversible.
-  supersededByImport Boolean   @default(false) @map("superseded_by_import")
-  supersededAt       DateTime? @map("superseded_at")
-  fte             Decimal?           @db.Decimal(10, 2)
-  raw             Json?              @db.JsonB // rawGradeCounts, droppedRows, warnings
-  createdByUserId String?            @map("created_by_user_id") @db.Uuid
-  createdAt       DateTime           @default(now()) @map("created_at")
+  supersededByImport Boolean            @default(false) @map("superseded_by_import")
+  supersededAt       DateTime?          @map("superseded_at")
+  fte                Decimal?           @db.Decimal(10, 2)
+  raw                Json?              @db.JsonB // rawGradeCounts, droppedRows, warnings
+  createdByUserId    String?            @map("created_by_user_id") @db.Uuid
+  createdAt          DateTime           @default(now()) @map("created_at")
 
   school        School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   source        EnrollmentSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
@@ -2429,9 +2431,9 @@ model StrategyPillar {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
-  school        School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  plan          StrategicPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
-  updatedByUser User?         @relation("StrategyPillarUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  school        School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  plan          StrategicPlan  @relation(fields: [planId], references: [id], onDelete: Cascade)
+  updatedByUser User?          @relation("StrategyPillarUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
   goals         StrategyGoal[]
 
   @@index([schoolId])
@@ -2478,10 +2480,10 @@ model StrategyGoal {
   createdAt              DateTime  @default(now()) @map("created_at")
   updatedAt              DateTime  @updatedAt @map("updated_at")
 
-  school        School               @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  pillar        StrategyPillar       @relation(fields: [pillarId], references: [id], onDelete: Cascade)
-  owner         User?                @relation("StrategyGoalOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
-  updatedByUser User?                @relation("StrategyGoalUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  school        School                  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  pillar        StrategyPillar          @relation(fields: [pillarId], references: [id], onDelete: Cascade)
+  owner         User?                   @relation("StrategyGoalOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  updatedByUser User?                   @relation("StrategyGoalUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
   initiatives   ImprovementInitiative[]
 
   @@index([schoolId])
@@ -2704,4 +2706,55 @@ model PriorVisitFinding {
   @@index([schoolId])
   @@index([schoolId, status])
   @@map("accreditation_prior_visit_findings")
+}
+
+/// THE RECEIPT FOR A ROSTER INTAKE — which file (or which live sync) produced the
+/// enrollment numbers on screen, and what it actually wrote.
+///
+/// This exists because of a support report that could not be answered from the
+/// product: "there isn't anywhere to edit, delete, or see the current file used
+/// for the roster." That was exactly right, and the reason was structural rather
+/// than a missing screen — the uploaded filename reached the API as
+/// `file.originalname` and was never written down. A school could see a headcount
+/// of 436 with an empty student register and had no way to learn which file made
+/// it, when, or why it produced no records.
+///
+/// `recordsCreated` and friends are the OUTCOME, not the intent. A file that
+/// counted 436 students and created 0 records is the exact shape of the bug that
+/// prompted this table, and storing the outcome is what lets the Enrollment page
+/// say so in a sentence instead of leaving a person to guess.
+///
+/// FERPA: a receipt, never a roster. No student name, no per-student row — only a
+/// filename, counts, and the aggregate notes already shown in the upload panel.
+model EnrollmentImport {
+  id               String    @id @default(uuid()) @db.Uuid
+  schoolId         String    @map("school_id") @db.Uuid
+  /// 'upload' | 'sync' | 'manual' — how the numbers arrived.
+  kind             String    @default("upload")
+  /// The provider for a sync; null for a file upload.
+  provider         String?
+  /// The uploaded file's own name. Null for a sync (there is no file).
+  fileName         String?   @map("file_name")
+  /// The date the roster describes, as resolved by the parser.
+  observedOn       DateTime? @map("observed_on") @db.Date
+  /// The headcount this intake counted.
+  totalCounted     Int       @default(0) @map("total_counted")
+  /// What it wrote to the student register. All zero ⇒ counts only, and
+  /// `recordsNote` says why in the user's words.
+  recordsCreated   Int       @default(0) @map("records_created")
+  recordsUpdated   Int       @default(0) @map("records_updated")
+  recordsDeleted   Int       @default(0) @map("records_deleted")
+  /// Server-authored explanation when no records were created. Never guessed at
+  /// in the browser — the panel used to infer this and pointed at unrelated notes.
+  recordsNote      String?   @map("records_note")
+  /// Aggregate skip reasons. Counts only; never a name.
+  warnings         String[]  @default([])
+  uploadedByUserId String?   @map("uploaded_by_user_id") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  school         School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  uploadedByUser User?  @relation("EnrollmentImportUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([schoolId, createdAt])
+  @@map("enrollment_imports")
 }

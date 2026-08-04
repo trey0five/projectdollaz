@@ -41,7 +41,7 @@
 // FERPA: this service reads names only to hand them to StudentsService, and its
 // response — like every warning it emits — carries counts and grade buckets only.
 // ─────────────────────────────────────────────────────────────────────────────
-import { BadRequestException, Injectable } from '@nestjs/common'
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
 import type { NormalizedEnrollmentSnapshot, User } from '@finrep/db'
 import type { GradeKey } from '@finrep/analytics'
 import {
@@ -176,6 +176,72 @@ export class RosterUploadService {
    * A provider that returns no identity keeps today's behaviour exactly: counts
    * land, `records` is null, and the note says why.
    */
+  /**
+   * Write the receipt. Best-effort ON PURPOSE: a failure to record WHAT happened
+   * must never fail the intake that already happened. The roster is in the
+   * database by the time this runs; throwing here would report an error for a
+   * successful import and invite the user to upload it a second time.
+   */
+  private async recordIntake(
+    schoolId: string,
+    actorId: string | null,
+    data: {
+      kind: 'upload' | 'sync'
+      provider?: string | null
+      fileName?: string | null
+      observedOn?: string | null
+      totalCounted: number
+      records: { created: number; updated: number; deleted: number } | null
+      recordsNote: string | null
+      warnings: string[]
+    },
+  ): Promise<void> {
+    try {
+      await this.prisma.enrollmentImport.create({
+        data: {
+          schoolId,
+          kind: data.kind,
+          provider: data.provider ?? null,
+          fileName: data.fileName ?? null,
+          observedOn: data.observedOn ? new Date(data.observedOn) : null,
+          totalCounted: data.totalCounted,
+          recordsCreated: data.records?.created ?? 0,
+          recordsUpdated: data.records?.updated ?? 0,
+          recordsDeleted: data.records?.deleted ?? 0,
+          recordsNote: data.recordsNote,
+          warnings: data.warnings,
+          uploadedByUserId: actorId,
+        },
+      })
+    } catch {
+      /* the intake succeeded; the receipt is not worth failing it for */
+    }
+  }
+
+  /** The intake receipts for a school, newest first. FERPA: counts only. */
+  async listImports(schoolId: string, limit = 10) {
+    return this.prisma.enrollmentImport.findMany({
+      where: { schoolId },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    })
+  }
+
+  /**
+   * Delete ONE receipt. This removes the RECORD OF an import, not the students it
+   * created — those live in the register and are removed there. Said plainly in
+   * the UI, because "delete import" reading as "delete the students" is exactly
+   * the kind of ambiguity that loses a school's roster.
+   */
+  async removeImport(schoolId: string, importId: string): Promise<{ deleted: boolean }> {
+    const existing = await this.prisma.enrollmentImport.findFirst({
+      where: { id: importId, schoolId },
+    })
+    if (!existing) throw new NotFoundException('Import not found.')
+    await this.prisma.enrollmentImport.delete({ where: { id: existing.id } })
+    return { deleted: true }
+  }
+
   async sync(
     actor: User,
     schoolId: string,
@@ -262,6 +328,18 @@ export class RosterUploadService {
     } else {
       recordsNote = `None of the ${rows.length} rows this provider returned could be saved as a student record — the notes below say why.`
     }
+
+    await this.recordIntake(schoolId, actor.id, {
+      kind: 'sync',
+      // The snapshot view the intake returns carries no provider field; the
+      // connected source is the authority on which provider ran.
+      provider: (await this.prisma.enrollmentSource.findUnique({ where: { schoolId } }))?.provider ?? null,
+      observedOn: intake.snapshot?.observedOn ?? null,
+      totalCounted: intake.snapshot?.totalEnrolled ?? 0,
+      records,
+      recordsNote,
+      warnings,
+    })
 
     return { ...intake, records, recordsNote, recordWarnings: warnings }
   }
@@ -509,6 +587,16 @@ export class RosterUploadService {
         ? undefined
         : 'No students in this file were counted as enrolled, so this period’s enrollment was left exactly as it was. ' +
           'The file and its grade breakdown were saved. Check the grade codes and the status column, then upload again.'
+
+    await this.recordIntake(schoolId, actor.id, {
+      kind: 'upload',
+      fileName: file.originalname ?? null,
+      observedOn: intake.snapshot?.observedOn ?? null,
+      totalCounted: intake.snapshot?.totalEnrolled ?? 0,
+      records,
+      recordsNote: records ? null : recordsNote,
+      warnings,
+    })
 
     return {
       snapshot: intake.snapshot,

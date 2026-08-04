@@ -128,6 +128,31 @@ export class EnrollmentController {
     return this.rosterUpload.sync(user, schoolId, dto.asOf)
   }
 
+  /**
+   * The intake receipts — which file (or sync) produced the numbers on screen and
+   * what each one wrote. Readable by any member: it is counts and a filename, the
+   * same things the Enrollment page already shows.
+   */
+  @Get('imports')
+  @Roles('owner', 'accountant', 'viewer')
+  listImports(@Param('schoolId', ParseUUIDPipe) schoolId: string) {
+    return this.rosterUpload.listImports(schoolId)
+  }
+
+  /**
+   * Delete ONE receipt. Removes the RECORD OF an import, never the students it
+   * created — those are removed in the register. The UI says so out loud, because
+   * "delete import" read as "delete the students" is how a school loses a roster.
+   */
+  @Delete('imports/:importId')
+  @Roles('owner', 'accountant')
+  removeImport(
+    @Param('schoolId', ParseUUIDPipe) schoolId: string,
+    @Param('importId', ParseUUIDPipe) importId: string,
+  ) {
+    return this.rosterUpload.removeImport(schoolId, importId)
+  }
+
   /** Save a hand-entered roster snapshot (byGrade). */
   @Post('manual')
   @Roles('owner', 'accountant')
