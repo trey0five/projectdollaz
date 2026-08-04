@@ -52,10 +52,39 @@ const MODES = [
   ['replace', 'Replace', 'Swap the whole roster for this file'],
 ]
 
-export default function RosterUpload({ schoolId, canEdit, onApplied, activePeriodLabel = '' }) {
+export default function RosterUpload({
+  schoolId,
+  canEdit,
+  onApplied,
+  activePeriodLabel = '',
+  periods = [],
+}) {
   const inputRef = useRef(null)
   const [file, setFile] = useState(null)
   const [observedOn, setObservedOn] = useState('')
+  // ── WHICH YEAR DOES THIS ROSTER COUNT FOR ────────────────────────────────────
+  // Asked, not inferred. The year used to be DERIVED from the as-of date, which
+  // defaults to today; the fiscal year runs Jul-Jun, so an August upload landed in
+  // the NEXT year. A real school's 436 students went to FY 2027 while their ledger
+  // and every finance metric sat in FY 2026, still computing from a hand-entered
+  // 1200 — cost per pupil $8,683 against 1200 versus $23,899 against 436.
+  //
+  // The date STAYS, and is not merely cosmetic: it positions the reading on the
+  // time axis, it is the idempotency key, and the enrollment trend is drawn from
+  // several readings inside one year (September's official count, January's,
+  // May's). Folding the two together would make a second upload overwrite the
+  // first and flatten the trend to a single point.
+  // `periods` arrives as a PROP, not from usePersistence: this component is
+  // mounted bare in its own specs and from two different places, and reaching for
+  // a provider here would couple a leaf to a context its tests do not mount. An
+  // empty list simply hides the control and falls back to the date-derived year.
+  const periodList = Array.isArray(periods) ? periods : []
+  // Default to the year that HAS a ledger — the one where this upload will
+  // actually move a number — falling back to the newest.
+  const [fiscalPeriodId, setFiscalPeriodId] = useState('')
+  const defaultPeriodId =
+    periodList.find((p) => p.hasSnapshot)?.id ?? periodList[0]?.id ?? ''
+  const chosenPeriodId = fiscalPeriodId || defaultPeriodId
   const [mode, setMode] = useState('merge')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -92,6 +121,9 @@ export default function RosterUpload({ schoolId, canEdit, onApplied, activePerio
       form.append('file', file)
       form.append('mode', mode)
       if (observedOn) form.append('observedOn', observedOn)
+      // Sent only when we actually have one, so a mount with no periods degrades
+      // to exactly the previous date-derived behaviour.
+      if (chosenPeriodId) form.append('fiscalPeriodId', chosenPeriodId)
       const res = await enrollmentApi.upload(schoolId, form)
       setResult(res.data ?? res)
       setFile(null)
@@ -232,6 +264,27 @@ export default function RosterUpload({ schoolId, canEdit, onApplied, activePerio
           )}
 
           <div className="mt-3 flex flex-wrap items-end gap-3">
+            {/* THE YEAR LEADS, because it is the decision that determines whether
+                this upload changes any finance number. Each option says whether
+                that year has a ledger, so "will this move my numbers" is answered
+                BEFORE the upload instead of explained afterwards. */}
+            {periodList.length > 0 && (
+              <label className="text-[13px] font-semibold text-muted">
+                Counts for
+                <select
+                  value={chosenPeriodId}
+                  onChange={(e) => setFiscalPeriodId(e.target.value)}
+                  className={`${inputCls} mt-1 max-w-[280px]`}
+                >
+                  {periodList.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.label}
+                      {p.hasSnapshot ? ' · has your financials' : ' · no financials yet'}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <label className="text-[13px] font-semibold text-muted">
               As-of date (optional)
               <DatePicker

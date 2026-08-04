@@ -107,6 +107,11 @@ export interface RosterPromoteResult {
 /** Options threaded through the roster→snapshot sync. */
 export interface RosterSyncOptions {
   /**
+   * The fiscal year the headcount promotes into, CHOSEN on the upload form rather
+   * than derived from the as-of date. Absent = today's-date behaviour, unchanged.
+   */
+  fiscalPeriodId?: string
+  /**
    * Opt this sync into the reversible Decision-C supersede of a hand-entered
    * enrollment. DEFAULT FALSE — the auto-sync after a single student edit must
    * never overwrite a head of school's own number.
@@ -613,6 +618,10 @@ export class StudentsService {
     // overwrite-own-stamp only, so a hand-entered manual value is never clobbered.
     const promo = await this.enrollment.promoteRoster(actor, schoolId, normalized, {
       supersedeManual: opts.supersedeManual ?? false,
+      // Forwarded, not re-derived: this is the promote that actually runs when an
+      // upload creates records, so the chosen year has to reach HERE or the picker
+      // is decorative.
+      ...(opts.fiscalPeriodId ? { fiscalPeriodId: opts.fiscalPeriodId } : {}),
     })
     const { fiscalPeriodId } = promo
 

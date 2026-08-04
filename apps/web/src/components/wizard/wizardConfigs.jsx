@@ -217,6 +217,9 @@ export const wizardConfigs = {
                file landed in a different fiscal year. AddDataTab already resolves
                it into ctx; without it the mismatch is invisible. */
             activePeriodLabel={ctx.periodLabel}
+            /* The school's fiscal years, so the form can ASK which one this
+               roster counts for instead of deriving it from today's date. */
+            periods={ctx.periods}
           />
         ),
       },

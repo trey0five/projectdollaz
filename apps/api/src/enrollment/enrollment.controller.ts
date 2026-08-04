@@ -104,6 +104,7 @@ export class EnrollmentController {
     return this.rosterUpload.upload(user, schoolId, file, {
       observedOn: dto.observedOn,
       mode: dto.mode,
+      fiscalPeriodId: dto.fiscalPeriodId,
     })
   }
 

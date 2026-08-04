@@ -93,6 +93,9 @@ export default function AddDataTab({
       schoolId,
       periodId,
       periodLabel,
+      // The school's fiscal years, so a wizard step can ASK which year an upload
+      // counts for rather than deriving it from today's date.
+      periods,
       canEdit,
       school: activeSchool,
       hydratedFiles,
@@ -106,6 +109,9 @@ export default function AddDataTab({
       schoolId,
       periodId,
       periodLabel,
+      // The school's fiscal years, so a wizard step can ASK which year an upload
+      // counts for rather than deriving it from today's date.
+      periods,
       canEdit,
       activeSchool,
       hydratedFiles,

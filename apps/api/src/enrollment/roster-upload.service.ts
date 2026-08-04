@@ -124,6 +124,8 @@ export interface RosterUploadResult {
 
 export interface RosterUploadOptions {
   observedOn?: string
+  /** The fiscal year chosen on the form; absent falls back to the date-derived one. */
+  fiscalPeriodId?: string
   mode?: 'merge' | 'replace'
 }
 
@@ -297,7 +299,16 @@ export class RosterUploadService {
         // …but ONLY when the file actually counted somebody. Superseding a
         // hand-entered 436 with a 0 nobody typed is exactly the failure Decision 2
         // was written to avoid, in the other direction.
-        { supersedeManual: fileCountsStudents, observedOn: normalized.observedOn },
+        {
+          supersedeManual: fileCountsStudents,
+          observedOn: normalized.observedOn,
+          // THE CHOSEN YEAR REACHES THE PROMOTE THAT ACTUALLY RUNS. When records
+          // land, the ROSTER promotes rather than the file — so passing the year
+          // only to intakeNormalized left the picker inert for precisely the
+          // uploads it exists for. Verified before the fix: an upload sent
+          // explicitly at FY 2026 still landed in FY 2027.
+          ...(opts.fiscalPeriodId ? { fiscalPeriodId: opts.fiscalPeriodId } : {}),
+        },
       )
       records = {
         created: commit.created,
@@ -333,6 +344,11 @@ export class RosterUploadService {
       sourceId: null,
       promote: filePromotes,
       supersedeManual: true,
+      // The year the uploader CHOSE, when they chose one. Threaded through rather
+      // than re-derived, so the snapshot, the promote and the response all name the
+      // same period — the thing that was silently not true when the date alone
+      // decided it.
+      ...(opts.fiscalPeriodId ? { fiscalPeriodId: opts.fiscalPeriodId } : {}),
     })
 
     // 8 — report the single writer that ran. Never recompute a number for display.

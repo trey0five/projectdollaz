@@ -78,6 +78,15 @@ export interface IntakeOptions {
   /** The connector source row id (null for CSV/manual/diocesan). */
   sourceId?: string | null
   /**
+   * The fiscal year this reading counts for, CHOSEN rather than inferred.
+   *
+   * Absent = the previous behaviour exactly: derive it from `observedOn`, which
+   * defaults to today. That default is what silently filed an August upload under
+   * the NEXT fiscal year (Jul-Jun), leaving a school's finance metrics computing
+   * from a stale hand-entered figure while the roster sat in a year with no ledger.
+   */
+  fiscalPeriodId?: string
+  /**
    * When true (org diocesan import only), a hand-entered manual enrollment is
    * SUPERSEDED (backed up + overwritten) rather than left untouched. Reversible.
    */
@@ -533,7 +542,12 @@ export class EnrollmentService {
     opts: IntakeOptions = {},
   ): Promise<EnrollmentIntakeResult> {
     const sourceId = opts.sourceId ?? null
-    const fiscalPeriodId = await this.resolveFiscalPeriodId(schoolId, normalized.observedOn)
+    // AN EXPLICIT YEAR WINS OVER THE DATE-DERIVED ONE. `observedOn` still dates the
+    // reading (it is the time axis and the idempotency key); it just no longer gets
+    // to DECIDE the year by itself. Absent an explicit id this is byte-identical to
+    // the previous behaviour, so every existing caller is unaffected.
+    const fiscalPeriodId =
+      opts.fiscalPeriodId ?? (await this.resolveFiscalPeriodId(schoolId, normalized.observedOn))
     const observedOn = new Date(normalized.observedOn)
     const provider = normalized.provider as EnrollmentProvider
 
@@ -859,14 +873,19 @@ export class EnrollmentService {
     actor: User,
     schoolId: string,
     normalized: NormalizedEnrollmentSnapshot,
-    opts: { supersedeManual?: boolean } = {},
+    opts: { supersedeManual?: boolean; fiscalPeriodId?: string } = {},
   ): Promise<{
     fiscalPeriodId: string
     promoted: boolean
     superseded: boolean
     supersededManual: number | null
   }> {
-    const fiscalPeriodId = await this.resolveFiscalPeriodId(schoolId, normalized.observedOn)
+    // THE ROSTER PATH NEEDS THE CHOSEN YEAR TOO. When an upload creates records the
+    // ROSTER promotes, not the file — so threading the chosen year only into
+    // intakeNormalized left the picker inert for exactly the uploads that matter.
+    // Verified: an upload sent explicitly at FY 2026 still landed in FY 2027.
+    const fiscalPeriodId =
+      opts.fiscalPeriodId ?? (await this.resolveFiscalPeriodId(schoolId, normalized.observedOn))
     const res = await this.promote(actor, schoolId, fiscalPeriodId, normalized, {
       skipAudit: true,
       supersedeManual: opts.supersedeManual ?? false,

@@ -75,6 +75,31 @@ export class EnrollmentUploadDto {
   @IsOptional()
   @IsIn(['merge', 'replace'])
   mode?: 'merge' | 'replace'
+
+  /**
+   * WHICH FISCAL YEAR THIS ROSTER COUNTS FOR — the decision the uploader is
+   * actually making, stated instead of inferred.
+   *
+   * Before this existed the year was DERIVED from `observedOn`, which defaults to
+   * today. The fiscal year runs Jul–Jun, so an August upload silently landed in
+   * the NEXT year: a real school's 436 students went to FY 2027 while their ledger
+   * and every finance metric sat in FY 2026, still computing from a hand-entered
+   * 1200 (cost per pupil $8,683 against 1200, $23,899 against 436). The upload was
+   * correct and the numbers never moved, and nothing on screen said so.
+   *
+   * `observedOn` IS NOT REPLACED by this, because it is not a period selector: it
+   * is the reading's position on the time axis, it is the idempotency key
+   * (`@@unique([schoolId, sourceId, observedOn])`), and the enrollment trend is
+   * drawn from several readings within one year — September's official count,
+   * January's, May's. Collapsing the two would make a second upload in the same
+   * year overwrite the first and flatten the trend to a single point.
+   *
+   * When present it wins outright; when absent the old date-derived behaviour is
+   * byte-identical, so every existing caller and integration is unaffected.
+   */
+  @IsOptional()
+  @IsUUID()
+  fiscalPeriodId?: string
 }
 
 /** Live sync of the connected provider as of an optional date. */

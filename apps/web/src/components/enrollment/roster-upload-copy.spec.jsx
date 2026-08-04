@@ -519,3 +519,55 @@ describe('RosterUpload — "no finance metric changed" is stated, never silent',
     expect(src).not.toMatch(/setObservedOn\([^)]*fiscal/i)
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE YEAR IS ASKED, NOT INFERRED.
+//
+// The fiscal year used to be DERIVED from the as-of date, which defaults to today.
+// The fiscal year runs Jul–Jun, so an August upload silently landed in the NEXT
+// year: a school's 436 students went to FY 2027 while their ledger and every
+// finance metric sat in FY 2026, still computing from a hand-entered 1200.
+//
+// The date is NOT replaced by the picker, and that is deliberate — it positions
+// the reading on the time axis, it is the idempotency key, and the enrollment
+// trend is drawn from several readings inside one year. Folding them together
+// would make a second upload overwrite the first.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('RosterUpload — the fiscal year is a choice', () => {
+  const src = readFileSync(at('src/components/enrollment/RosterUpload.jsx'), 'utf8')
+
+  it('renders a year picker and submits the chosen id', () => {
+    expect(src).toMatch(/Counts for/)
+    expect(src).toMatch(/form\.append\('fiscalPeriodId', chosenPeriodId\)/)
+  })
+
+  it('each option says whether that year has financials — answered BEFORE the upload', () => {
+    expect(src).toMatch(/has your financials/)
+    expect(src).toMatch(/no financials yet/)
+  })
+
+  it('defaults to the year that HAS a ledger, not to today', () => {
+    expect(src).toMatch(/periodList\.find\(\(p\) => p\.hasSnapshot\)/)
+  })
+
+  it('KEEPS the as-of date — it is the time axis and the idempotency key', () => {
+    expect(src, 'the as-of date was removed; the trend collapses to one reading a year').toMatch(
+      /As-of date/,
+    )
+    expect(src).toMatch(/observedOn/)
+  })
+
+  it('takes periods as a PROP, so the leaf needs no provider', () => {
+    // The IMPORT and the CALL, not the word — the file explains in a comment why
+    // it deliberately does not use the context, and matching prose would fail on
+    // its own reasoning.
+    expect(src).not.toMatch(/^import .*usePersistence/m)
+    expect(src).not.toMatch(/usePersistence\(/)
+    expect(src).toMatch(/periods = \[\]/)
+  })
+
+  it('degrades to the old behaviour when no periods are known', () => {
+    // No id sent ⇒ the server derives the year from the date exactly as before.
+    expect(src).toMatch(/if \(chosenPeriodId\) form\.append/)
+  })
+})
