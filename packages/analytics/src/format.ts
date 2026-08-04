@@ -131,3 +131,26 @@ export function describeLineage(
   })
   return parts.length > 0 ? `${base} — ${parts.join('; ')}` : base
 }
+
+/**
+ * A human sentence for an `inputsMissing` entry.
+ *
+ * Most entries are literally the NAME of an input that has not been entered, and
+ * the caller's "Needs: enrollment, studentsOnAid" phrasing is right for those. A
+ * few are namespaced tokens meaning "this input IS present and still cannot be
+ * used", where that phrasing is wrong twice over — it prints an internal token at
+ * a head of school, and it tells them to supply something they already supplied.
+ *
+ * Returns null for a plain input name, so a caller keeps its existing wording for
+ * the common case and only special-cases what genuinely differs.
+ */
+export function explainUnusableInput(token: string): string | null {
+  switch (token) {
+    case 'inconsistent:aid-exceeds-enrollment':
+      return 'More students are recorded as receiving aid than are enrolled. The aid figures were entered against a different headcount — update students on aid to match this year\'s enrollment.'
+    case 'scope:not-aggregatable':
+      return 'This metric cannot be summed across schools, so there is no organisation-level value.'
+    default:
+      return null
+  }
+}

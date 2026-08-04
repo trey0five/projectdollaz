@@ -35,6 +35,7 @@ export {
   resolveDisplayUnit,
   formatMetricValue,
   formatMetricDelta,
+  explainUnusableInput,
   formatMetricValueLong,
   describeLineage,
 } from './format.js'

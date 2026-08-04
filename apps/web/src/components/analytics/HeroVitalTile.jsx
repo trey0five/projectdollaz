@@ -1,3 +1,4 @@
+import { explainUnusableInput } from '@finrep/analytics'
 import { motion, useReducedMotion } from 'framer-motion'
 import AnimatedMetricValue from './AnimatedMetricValue.jsx'
 import DeltaChip from './DeltaChip.jsx'
@@ -61,8 +62,13 @@ export default function HeroVitalTile({ metric, index = 0, trend, periodKey, onO
         <div className="mt-5">
           <div className="font-serif text-4xl font-semibold text-gray-300">—</div>
           <p className="mt-2 text-[13px] italic text-muted">
+            {/* A namespaced token means the input IS present and unusable, so
+                "Needs: …" is wrong twice — it prints an internal token and asks
+                for something already supplied. The sentence is the semantic
+                layer's, not this component's. */}
             {metric.inputsMissing?.length
-              ? `Needs: ${metric.inputsMissing.join(', ')}`
+              ? (metric.inputsMissing.map(explainUnusableInput).find(Boolean) ??
+                `Needs: ${metric.inputsMissing.join(', ')}`)
               : 'Not enough data for this period.'}
           </p>
         </div>

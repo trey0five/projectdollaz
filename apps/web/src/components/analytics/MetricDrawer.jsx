@@ -1,3 +1,4 @@
+import { explainUnusableInput } from '@finrep/analytics'
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { X, Receipt, Loader2, Building2 } from 'lucide-react'
@@ -220,8 +221,11 @@ export default function MetricDrawer({ schoolId, metric, open, onClose, periodId
                 </div>
               ) : (
                 <div className="rounded-xl border border-border bg-section px-4 py-3 text-[15px] text-muted">
+                  {/* See HeroVitalTile: a namespaced token is a present-but-
+                      unusable input, and gets the semantic layer's sentence. */}
                   {metric.inputsMissing?.length
-                    ? `Unavailable — needs: ${metric.inputsMissing.join(', ')}`
+                    ? (metric.inputsMissing.map(explainUnusableInput).find(Boolean) ??
+                      `Unavailable — needs: ${metric.inputsMissing.join(', ')}`)
                     : 'Unavailable for this period.'}
                 </div>
               )}
