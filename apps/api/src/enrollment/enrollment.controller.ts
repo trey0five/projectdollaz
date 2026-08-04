@@ -108,7 +108,16 @@ export class EnrollmentController {
     })
   }
 
-  /** Live-sync the connected provider as of an optional date. */
+  /**
+   * Live-sync the connected provider as of an optional date → student records
+   * (when the provider carries per-student detail) → snapshot → promote.
+   *
+   * Routed through RosterUploadService for the same reason `upload` is: it is the
+   * one service that may touch BOTH the snapshot and the register (StudentsService
+   * imports EnrollmentService, so EnrollmentService can never import it back). The
+   * response is counts-only — the provider's rows carry student names and stop at
+   * that service.
+   */
   @Post('sync')
   @Roles('owner', 'accountant')
   sync(
@@ -116,7 +125,7 @@ export class EnrollmentController {
     @Body() dto: EnrollmentSyncDto,
     @CurrentUser() user: User,
   ) {
-    return this.enrollment.sync(user, schoolId, dto.asOf)
+    return this.rosterUpload.sync(user, schoolId, dto.asOf)
   }
 
   /** Save a hand-entered roster snapshot (byGrade). */

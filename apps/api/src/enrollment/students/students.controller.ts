@@ -35,6 +35,7 @@ import { RequiresModule } from '../../billing/requires-module.decorator.js'
 import { StudentsService } from './students.service.js'
 import {
   BatchCreateStudentsDto,
+  ClearRosterDto,
   CreateStudentDto,
   ImportCommitDto,
   ListStudentsQueryDto,
@@ -149,6 +150,25 @@ export class StudentsController {
   @Roles('owner', 'accountant', 'viewer')
   list(@Param('schoolId', ParseUUIDPipe) schoolId: string, @Query() query: ListStudentsQueryDto) {
     return this.students.list(schoolId, query)
+  }
+
+  /**
+   * Clear the WHOLE register. Declared here with the static routes and BEFORE
+   * `@Delete(':id')` — Nest matches in declaration order, and `/students` must not
+   * be read as an id.
+   *
+   * A DELETE with a body is unusual, and deliberate: `expectedCount` is the number
+   * the confirm dialog showed the user, and the service refuses if the register has
+   * changed since. Owner/accountant only, like every other write here.
+   */
+  @Delete()
+  @Roles('owner', 'accountant')
+  clear(
+    @Param('schoolId', ParseUUIDPipe) schoolId: string,
+    @Body() dto: ClearRosterDto,
+    @CurrentUser() user: User,
+  ) {
+    return this.students.clear(user, schoolId, dto.expectedCount)
   }
 
   @Post()

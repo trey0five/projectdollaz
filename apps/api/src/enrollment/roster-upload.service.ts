@@ -49,6 +49,8 @@ import {
   parseOneRosterStudents,
   type OneRosterStudentRow,
 } from '@finrep/ingestion/oneroster'
+import { gradeKeyFromLabel, isWithdrawnStatus } from './enrollment.normalize.js'
+import type { EnrollmentIntakeResult } from './enrollment.service.js'
 import { PrismaService } from '../prisma/prisma.service.js'
 import {
   EnrollmentService,
@@ -58,6 +60,22 @@ import {
 } from './enrollment.service.js'
 import { StudentsService } from './students/students.service.js'
 import { STUDENT_IMPORT_MAX_ROWS, type CreateStudentDto } from './students/students.dto.js'
+
+/**
+ * What a LIVE SYNC produced. The intake result the route already returned, plus
+ * the same two record-reporting fields the upload response carries — so the two
+ * doors into the roster describe their outcome in one vocabulary.
+ *
+ * FERPA: counts and aggregate notes only. No field here can hold a student name.
+ */
+export interface SyncResult extends EnrollmentIntakeResult {
+  /** null ⇔ no per-student detail was importable (counts-only provider, or over the ceiling). */
+  records: { created: number; updated: number; deleted: number; total: number } | null
+  /** Why `records` is null, in the user's words. Server-authored, never guessed at in JSX. */
+  recordsNote: string | null
+  /** Aggregate skip reasons. Never a name. */
+  recordWarnings: string[]
+}
 
 export interface RosterUploadResult {
   // ── byte-compatible with the EnrollmentIntakeResult this route returned before ──
@@ -136,6 +154,117 @@ export class RosterUploadService {
     private readonly enrollment: EnrollmentService,
     private readonly students: StudentsService,
   ) {}
+
+  /**
+   * LIVE SYNC, with student records.
+   *
+   * The connected-source counterpart of upload(), and the fix for a gap that was
+   * invisible because it looked like a feature: sync() has always written a
+   * headcount and never a single student row, so a school that connected its SIS
+   * got "436 enrolled" on the Enrollment page and a permanently EMPTY register —
+   * no records to edit, and Waitlist / Support flags / New this year dashed
+   * forever. The adapters were already fetching people; the snapshot builder threw
+   * them away one line later.
+   *
+   * MERGE, ALWAYS — never replace. An upload is a person deliberately choosing a
+   * file and a mode. A sync can be triggered by a schedule or a reconnect, and
+   * `replace` deletes every student the register holds; a hand-entered pupil the
+   * SIS does not know about must not vanish because a sync ran. The cost is that a
+   * pupil REMOVED from the SIS lingers until someone removes them here, which is
+   * the recoverable failure of the two.
+   *
+   * A provider that returns no identity keeps today's behaviour exactly: counts
+   * land, `records` is null, and the note says why.
+   */
+  async sync(
+    actor: User,
+    schoolId: string,
+    asOf?: string,
+  ): Promise<SyncResult> {
+    const { intake, rows } = await this.enrollment.syncAndIntake(actor, schoolId, asOf)
+
+    // Only rows the register can actually store. The filter is the SAME shape the
+    // upload path applies, and for the same reasons — but the counters stay
+    // aggregate: a sync report is read in a browser and pasted into tickets, so no
+    // provider row may contribute a NAME to a warning.
+    const candidates: CreateStudentDto[] = []
+    let missingName = 0
+    let unmappedGrade = 0
+    let duplicateId = 0
+    const seenExternalIds = new Set<string>()
+    for (const r of rows) {
+      const firstName = (r.firstName ?? '').trim()
+      const lastName = (r.lastName ?? '').trim()
+      if (!firstName || !lastName) {
+        missingName++
+        continue
+      }
+      const grade = gradeKeyFromLabel(r.grade)
+      if (grade === null) {
+        unmappedGrade++
+        continue
+      }
+      const externalId = (r.externalId ?? '').trim()
+      if (externalId) {
+        if (seenExternalIds.has(externalId)) {
+          duplicateId++
+          continue
+        }
+        seenExternalIds.add(externalId)
+      }
+      candidates.push({
+        firstName,
+        lastName,
+        grade,
+        status: isWithdrawnStatus(r.status) ? 'withdrawn' : 'enrolled',
+        ...(externalId ? { externalId } : {}),
+        ...(r.birthDate ? { birthDate: r.birthDate } : {}),
+      })
+    }
+
+    const warnings: string[] = []
+    if (unmappedGrade > 0) {
+      warnings.push(`${unmappedGrade} row(s) skipped: unmapped grade — no student record was created for them.`)
+    }
+    if (missingName > 0) {
+      warnings.push(`${missingName} row(s) skipped: the provider returned no name for them.`)
+    }
+    if (duplicateId > 0) {
+      warnings.push(`${duplicateId} row(s) skipped: the same student id appears earlier in the provider response.`)
+    }
+
+    let records: SyncResult['records'] = null
+    let recordsNote: string | null = null
+
+    if (rows.length === 0) {
+      recordsNote =
+        'This provider returned totals only — a headcount by grade, with no per-student rows to save.'
+    } else if (candidates.length > STUDENT_IMPORT_MAX_ROWS) {
+      // The ceiling degrades to counts-only rather than failing, exactly as the
+      // upload path does: a large school must not lose the sync that works for it.
+      recordsNote =
+        `This provider returned ${candidates.length} students, above the ${STUDENT_IMPORT_MAX_ROWS}-row limit for ` +
+        'one import, so the headcount was synced but the student records were not.'
+      warnings.push(recordsNote)
+    } else if (candidates.length > 0) {
+      const commit = await this.students.importCommit(actor, schoolId, 'merge', candidates, {
+        // A sync is NOT a deliberate dated act by a person, so it must not
+        // supersede a figure someone typed. That is the upload path's Decision 2,
+        // and the distinction is the whole reason it is a decision.
+        supersedeManual: false,
+      })
+      records = {
+        created: commit.created,
+        updated: commit.updated,
+        deleted: commit.deleted,
+        total: commit.total,
+      }
+    } else {
+      recordsNote = `None of the ${rows.length} rows this provider returned could be saved as a student record — the notes below say why.`
+    }
+
+    return { ...intake, records, recordsNote, recordWarnings: warnings }
+  }
 
   async upload(
     actor: User,

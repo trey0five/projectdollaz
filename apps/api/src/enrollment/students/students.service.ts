@@ -297,6 +297,57 @@ export class StudentsService {
     return { deleted: true }
   }
 
+  /**
+   * CLEAR THE WHOLE REGISTER. The register-level counterpart to remove().
+   *
+   * Why this exists as its own action: until now the ONLY way to get rid of an
+   * imported roster was to upload a replacement file in `replace` mode. A school
+   * that imported the wrong file, or a school offboarding a year, had no way to
+   * say "this roster should not exist" — the delete was reachable only as a side
+   * effect of a different import, which is not a thing anyone thinks to try.
+   *
+   * `expectedCount` is a WRITTEN-DOWN AGREEMENT, not decoration. The caller sends
+   * the number of students it showed the user in the confirm dialog; if the
+   * register has since changed (a co-admin's import landed, a sync ran) we refuse
+   * rather than delete a different roster than the one that was described. There
+   * is no undo for this.
+   *
+   * The enrollment SNAPSHOT is deliberately left alone. Clearing the register does
+   * not unlearn the headcount the school imported — the rollup falls back to the
+   * snapshot, so Total enrolled keeps reading 436 while the register reads empty.
+   * That is the honest state, and the confirm copy says so out loud.
+   *
+   * FERPA: counts only in the audit row, never a name.
+   */
+  async clear(
+    actor: User,
+    schoolId: string,
+    expectedCount: number,
+  ): Promise<{ deleted: number }> {
+    const actual = await this.prisma.student.count({ where: { schoolId } })
+    if (actual !== expectedCount) {
+      throw new ConflictException(
+        `The roster changed while you were looking at it — it now holds ${actual} student(s), ` +
+          `not the ${expectedCount} this action was about to delete. Nothing was deleted. ` +
+          'Reload the register and try again.',
+      )
+    }
+    if (actual === 0) return { deleted: 0 }
+    const { count } = await this.prisma.student.deleteMany({ where: { schoolId } })
+    await this.audit.write({
+      schoolId,
+      userId: actor.id,
+      action: 'enrollment.roster.cleared',
+      targetType: 'students',
+      targetId: schoolId,
+      metadata: { deleted: count },
+    })
+    // Re-derive the rollup. With no live rows it falls back to the snapshot, which
+    // is why the headcount survives a clear.
+    await this.syncRosterSnapshot(actor, schoolId)
+    return { deleted: count }
+  }
+
   /** All-or-nothing batch create (the Add-students wizard basket, ≤200 rows). */
   async batch(actor: User, schoolId: string, students: CreateStudentDto[]): Promise<{ created: number; ids: string[] }> {
     students.forEach((dto, i) => {

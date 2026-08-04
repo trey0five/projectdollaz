@@ -1078,6 +1078,12 @@ export const enrollmentApi = {
     create: (schoolId, body) => api.post(`/schools/${schoolId}/enrollment/students`, body),
     update: (schoolId, studentId, body) =>
       api.patch(`/schools/${schoolId}/enrollment/students/${studentId}`, body),
+    // Clear the WHOLE register. A DELETE with a body on purpose: `expectedCount`
+    // is the number the confirm dialog showed, and the API refuses (409) when the
+    // register has changed since — so a co-admin's import landing mid-confirm
+    // cannot be deleted by a click that was describing a different roster.
+    clear: (schoolId, expectedCount) =>
+      api.delete(`/schools/${schoolId}/enrollment/students`, { data: { expectedCount } }),
     remove: (schoolId, studentId) =>
       api.delete(`/schools/${schoolId}/enrollment/students/${studentId}`),
     // All-or-nothing transactional batch create ({ students: CreateStudentDto[] }, max 200).

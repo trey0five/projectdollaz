@@ -4,8 +4,8 @@
 // the provider registry is complete and always "configured" (the CSV path needs no
 // server credentials); fetch() is intentionally unsupported.
 import { BadRequestException, Injectable } from '@nestjs/common'
-import type { EnrollmentProviderKey, NormalizedEnrollmentSnapshot } from '@finrep/db'
-import type { EnrollmentAdapter } from './adapter.js'
+import type { EnrollmentProviderKey } from '@finrep/db'
+import type { AdapterRoster, EnrollmentAdapter } from './adapter.js'
 
 @Injectable()
 export class OneRosterCsvAdapter implements EnrollmentAdapter {
@@ -16,7 +16,7 @@ export class OneRosterCsvAdapter implements EnrollmentAdapter {
     return true
   }
 
-  fetch(): Promise<NormalizedEnrollmentSnapshot> {
+  fetch(): Promise<AdapterRoster> {
     throw new BadRequestException(
       'OneRoster CSV is imported by uploading the export file, not by sync.',
     )

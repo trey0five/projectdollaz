@@ -13,6 +13,18 @@ const AUTHORIZE_URL = 'https://app.blackbaud.com/oauth/authorize'
 const TOKEN_URL = 'https://oauth2.sky.blackbaud.com/token'
 const API_BASE = 'https://api.sky.blackbaud.com'
 
+/**
+ * yyyy-mm-dd or nothing. SKY emits several date shapes across endpoints and a
+ * birth date is only ever a MATCH FALLBACK here, so anything we cannot read
+ * confidently becomes null rather than a guess — a wrong birth date would split
+ * one pupil into two records on the next sync.
+ */
+function isoDateOrNull(raw: string | null | undefined): string | null {
+  if (!raw) return null
+  const m = /^(\d{4}-\d{2}-\d{2})/.exec(String(raw).trim())
+  return m ? m[1]! : null
+}
+
 export interface EnrollmentTokens {
   accessToken: string
   refreshToken: string
@@ -29,6 +41,13 @@ interface BbUser {
   grade?: string
   // Enrollment status (active/inactive) when the list includes it.
   status?: string
+  // ── Identity. SKY's /school/v1/users returns these on the same row we were
+  // already fetching, so reading them costs no extra request — the roster was
+  // always in the response and we were discarding it.
+  first_name?: string
+  last_name?: string
+  preferred_name?: string
+  birth_date?: string
 }
 
 @Injectable()
@@ -132,6 +151,13 @@ export class EnrollmentClient {
     return (data.value ?? []).map((u) => ({
       grade: u.grade_level ?? u.student_info?.grade_level ?? u.student_info?.grade ?? u.grade ?? null,
       status: u.status ?? null,
+      // LEGAL name, not preferred: `externalId` + name are the re-sync match key,
+      // and a preferred name can change without the person changing, which would
+      // re-create the same pupil as a new record on the next sync.
+      externalId: u.id == null ? null : String(u.id),
+      firstName: u.first_name ?? null,
+      lastName: u.last_name ?? null,
+      birthDate: isoDateOrNull(u.birth_date),
     }))
   }
 }

@@ -309,6 +309,19 @@ export class ImportCommitDto {
   rows!: CreateStudentDto[]
 }
 
+/**
+ * Clear the whole register. `expectedCount` is the number the confirm dialog
+ * showed the user; the service refuses when the register has since changed, so a
+ * co-admin's import landing mid-confirm cannot be deleted by a click that was
+ * describing a different roster. Required on purpose — an optional agreement is
+ * not an agreement.
+ */
+export class ClearRosterDto {
+  @IsInt()
+  @Min(0)
+  expectedCount!: number
+}
+
 /** Explicit dated roster→snapshot backfill (default today). */
 export class PromoteSnapshotDto {
   @IsOptional()

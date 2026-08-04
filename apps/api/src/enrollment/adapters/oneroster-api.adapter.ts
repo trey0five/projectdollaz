@@ -6,14 +6,23 @@
 // source's apiKeyId/apiKeySecret against the provider's token endpoint.
 import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
-import type { EnrollmentProviderKey, EnrollmentSource, NormalizedEnrollmentSnapshot } from '@finrep/db'
-import type { EnrollmentAdapter } from './adapter.js'
-import { buildNormalizedSnapshot, type RawStudentRow } from '../enrollment.normalize.js'
+import type { EnrollmentProviderKey, EnrollmentSource } from '@finrep/db'
+import type { AdapterRoster, EnrollmentAdapter } from './adapter.js'
+import { snapshotAndRows } from './adapter.js'
+import type { RawStudentRow } from '../enrollment.normalize.js'
 
 interface OneRosterUser {
   role?: string
   status?: string
   grades?: string[]
+// ── Identity, read from the SAME row the headcount already came from. Optional
+// on RawStudentRow, so a deployment whose provider omits them keeps today's
+// counts-only sync unchanged. This connector is config-gated dark, so the field
+// names are mapped defensively from the documented shape rather than verified
+// against a live tenant — an absent field is null, never a guess.
+  sourcedId?: string
+  givenName?: string
+  familyName?: string
 }
 
 function todayIso(): string {
@@ -46,7 +55,7 @@ export class OneRosterApiAdapter implements EnrollmentAdapter {
     return data.access_token ?? ''
   }
 
-  async fetch(source: EnrollmentSource, asOf?: string): Promise<NormalizedEnrollmentSnapshot> {
+  async fetch(source: EnrollmentSource, asOf?: string): Promise<AdapterRoster> {
     const token = await this.token(source)
     // GET /ims/oneroster/v1p1/users?filter=role='student' — the roster headcount source.
     const url = `${source.baseUrl ?? ''}/ims/oneroster/v1p1/users?filter=${encodeURIComponent("role='student'")}&limit=10000`
@@ -55,8 +64,16 @@ export class OneRosterApiAdapter implements EnrollmentAdapter {
     const data = (await res.json()) as { users?: OneRosterUser[] }
     const rows: RawStudentRow[] = (data.users ?? [])
       .filter((u) => (u.role ?? '').toLowerCase() === 'student')
-      .map((u) => ({ grade: u.grades?.[0] ?? null, status: u.status ?? null }))
-    return buildNormalizedSnapshot('oneroster_api', rows, {
+      .map((u) => ({
+        grade: u.grades?.[0] ?? null,
+        status: u.status ?? null,
+        // Same field names the OneRoster CSV path already reads, because it is the
+        // same specification — one vocabulary for both doors.
+        externalId: u.sourcedId ?? null,
+        firstName: u.givenName ?? null,
+        lastName: u.familyName ?? null,
+      }))
+    return snapshotAndRows('oneroster_api', rows, {
       observedOn: asOf ?? todayIso(),
       // OneRoster active-status vocabulary: tobedeleted = withdrawn.
       withdrawnStatuses: ['tobedeleted', 'inactive'],

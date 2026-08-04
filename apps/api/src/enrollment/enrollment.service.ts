@@ -23,8 +23,9 @@ import { PeriodsService } from '../periods/periods.service.js'
 import { AuditService } from '../common/audit/audit.service.js'
 import { EnrollmentClient } from './enrollment.client.js'
 import { normalizeManualSnapshot } from './enrollment.normalize.js'
+import type { RawStudentRow } from './enrollment.normalize.js'
 import { rosterRollup } from './students/roster-rollup.js'
-import type { EnrollmentAdapter } from './adapters/adapter.js'
+import type { AdapterRoster, EnrollmentAdapter } from './adapters/adapter.js'
 import { OneRosterCsvAdapter } from './adapters/oneroster-csv.adapter.js'
 import { BlackbaudAdapter } from './adapters/blackbaud.adapter.js'
 import { OneRosterApiAdapter } from './adapters/oneroster-api.adapter.js'
@@ -369,8 +370,24 @@ export class EnrollmentService {
     return this.intakeNormalized(actor, schoolId, normalized, { sourceId: null })
   }
 
-  /** Live sync the connected provider (Blackbaud/OneRoster REST/FACTS/Veracross). */
-  async sync(actor: User, schoolId: string, asOf?: string): Promise<EnrollmentIntakeResult> {
+  /**
+   * Live sync the connected provider (Blackbaud/OneRoster REST/FACTS/Veracross).
+   *
+   * INTERNAL — returns the provider's per-student ROWS alongside the intake result,
+   * and those rows carry student NAMES. It is deliberately not what the controller
+   * returns: RosterUploadService.sync() consumes the rows to create records and
+   * hands back a counts-only response. Renamed from `sync` so no caller can return
+   * this value to a client by reflex.
+   *
+   * Records are created by RosterUploadService, not here: StudentsService imports
+   * THIS service, so this one can never import StudentsService (the same cycle that
+   * made the upload path a third service).
+   */
+  async syncAndIntake(
+    actor: User,
+    schoolId: string,
+    asOf?: string,
+  ): Promise<{ intake: EnrollmentIntakeResult; rows: readonly RawStudentRow[] }> {
     const source = await this.prisma.enrollmentSource.findUnique({ where: { schoolId } })
     if (!source) throw new NotFoundException('No enrollment provider is connected for this school.')
     const adapter = this.adapters[source.provider]
@@ -381,9 +398,9 @@ export class EnrollmentService {
     if (source.refreshToken && source.expiresAt) {
       await this.ensureAccessToken(source)
     }
-    let normalized: NormalizedEnrollmentSnapshot
+    let roster: AdapterRoster
     try {
-      normalized = await adapter.fetch(source, asOf)
+      roster = await adapter.fetch(source, asOf)
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Enrollment sync failed.'
       await this.prisma.enrollmentSource
@@ -391,11 +408,11 @@ export class EnrollmentService {
         .catch(() => undefined)
       throw new BadRequestException(message)
     }
-    const result = await this.intakeNormalized(actor, schoolId, normalized, { sourceId: source.id })
+    const result = await this.intakeNormalized(actor, schoolId, roster.snapshot, { sourceId: source.id })
     await this.prisma.enrollmentSource
       .update({ where: { schoolId }, data: { status: 'connected', lastError: null, lastSyncedAt: new Date() } })
       .catch(() => undefined)
-    return result
+    return { intake: result, rows: roster.rows }
   }
 
   /** Save a hand-entered roster snapshot (byGrade validated against GRADE_KEYS). */

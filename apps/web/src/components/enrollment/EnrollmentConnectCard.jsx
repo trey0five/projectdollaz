@@ -106,12 +106,24 @@ export default function EnrollmentConnectCard({ schoolId, canEdit, status, onCha
     setSyncing(true)
     try {
       const res = await enrollmentApi.sync(schoolId, {})
-      const snap = (res.data ?? res)?.snapshot
-      setOk(
-        snap
-          ? `Synced ${snap.totalEnrolled?.toLocaleString('en-US')} students${snap.observedOn ? ` as of ${snap.observedOn}` : ''}.`
-          : 'Sync complete.',
-      )
+      const body = res.data ?? res
+      const snap = body?.snapshot
+      // A sync now creates STUDENT RECORDS too, so say which of the two happened.
+      // Reporting only the headcount is what made the old behaviour invisible: the
+      // message said "Synced 436 students" while the register stayed empty, and
+      // nothing in the product ever mentioned that no record had been written.
+      const rec = body?.records
+      const head = snap
+        ? `Synced ${snap.totalEnrolled?.toLocaleString('en-US')} students${snap.observedOn ? ` as of ${snap.observedOn}` : ''}.`
+        : 'Sync complete.'
+      const tail = rec
+        ? ` ${rec.created.toLocaleString('en-US')} student record${rec.created === 1 ? '' : 's'} added` +
+          (rec.updated > 0 ? `, ${rec.updated.toLocaleString('en-US')} updated` : '') +
+          '.'
+        : body?.recordsNote
+          ? ` ${body.recordsNote}`
+          : ''
+      setOk(head + tail)
       onChanged?.()
     } catch (e) {
       setErr(apiErrorMessage(e, 'Could not sync from the provider.'))

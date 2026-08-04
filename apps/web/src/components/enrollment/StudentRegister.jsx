@@ -12,7 +12,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowUp, ArrowDown, ChevronLeft, ChevronRight, UsersRound } from 'lucide-react'
+import { AlertTriangle, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, Trash2, UsersRound } from 'lucide-react'
 import { enrollmentApi, apiErrorMessage } from '../../lib/api.js'
 import EntityFormModal, { Field, Select, fieldInput, fieldTextarea } from '../ui/EntityFormModal.jsx'
 import DatePicker from '../ui/DatePicker.jsx'
@@ -36,6 +36,100 @@ import StudentFilterBar, {
 import StudentSlideOver, { StatusPill, FlagBadges } from './StudentSlideOver.jsx'
 
 const ENROLL_HUE = '#0EA5E9'
+
+/**
+ * CLEAR THE WHOLE ROSTER — the confirm.
+ *
+ * This action exists because there was no way to get rid of an imported roster
+ * except to upload a REPLACEMENT file in replace mode: the delete was reachable
+ * only as a side effect of a different import, which is not something anyone
+ * thinks to try. So the gap was "I imported the wrong file and now I am stuck".
+ *
+ * Three things this dialog does deliberately:
+ *  • It names the exact count, and sends that count to the server, which refuses
+ *    if the register changed while the dialog was open.
+ *  • It requires the word DELETE typed out. There is no undo, and a roster is
+ *    hundreds of real children's records.
+ *  • It says what SURVIVES. Clearing the register does not unlearn the headcount
+ *    the school imported — the rollup falls back to the enrollment snapshot, so
+ *    "Total enrolled" keeps reading its number over an empty register. Leaving
+ *    that unsaid would make the next screen look like a bug.
+ */
+function ClearRosterDialog({ total, busy, error, onCancel, onConfirm }) {
+  const [typed, setTyped] = useState('')
+  const armed = typed.trim().toUpperCase() === 'DELETE'
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-navy/60 p-4 backdrop-blur-sm"
+      onClick={busy ? undefined : onCancel}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="clear-roster-title"
+        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start gap-3">
+          <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-danger/10 text-danger">
+            <AlertTriangle size={20} />
+          </span>
+          <div className="min-w-0">
+            <h3 id="clear-roster-title" className="font-serif text-[18px] font-semibold text-navy">
+              Delete all {total.toLocaleString('en-US')} student record{total === 1 ? '' : 's'}?
+            </h3>
+            <p className="mt-1.5 break-words text-[13.5px] leading-snug text-muted">
+              This removes every student from the register, including any you added by hand. It
+              cannot be undone.
+            </p>
+            <p className="mt-2 break-words text-[13.5px] leading-snug text-muted">
+              Your enrollment <span className="font-semibold text-navy">headcount stays</span> — it
+              comes from the snapshot you imported, not from these records, so the Enrollment page
+              will still show its total over an empty register.
+            </p>
+          </div>
+        </div>
+
+        <label className="mt-5 block text-[12.5px] font-semibold uppercase tracking-[0.08em] text-muted">
+          Type DELETE to confirm
+          <input
+            autoFocus
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            disabled={busy}
+            className="mt-1.5 w-full rounded-xl border-2 border-border px-3 py-2 text-[14px] font-normal normal-case tracking-normal text-navy outline-none focus:border-navy"
+          />
+        </label>
+
+        {error ? (
+          <p className="mt-3 break-words rounded-lg border border-danger/30 bg-danger/[0.06] px-3 py-2 text-[13px] text-danger">
+            {error}
+          </p>
+        ) : null}
+
+        <div className="mt-5 flex flex-col gap-2 sm:flex-row-reverse">
+          <button
+            type="button"
+            disabled={!armed || busy}
+            onClick={onConfirm}
+            className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-danger px-5 text-[13px] font-semibold uppercase tracking-[0.08em] text-white transition-opacity disabled:opacity-40 sm:w-auto"
+          >
+            <Trash2 size={15} />
+            {busy ? 'Deleting…' : 'Delete the roster'}
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onCancel}
+            className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border-2 border-border px-5 text-[13.5px] font-semibold text-muted transition-colors hover:border-navy hover:text-navy disabled:opacity-40 sm:w-auto"
+          >
+            Keep it
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 const PAGE_SIZE = 25
 
 const fmtDay = (iso) => {
@@ -255,6 +349,9 @@ export default function StudentRegister({ schoolId, canEdit, hue = ENROLL_HUE, o
   const [error, setError] = useState('')
   const [panelStudent, setPanelStudent] = useState(null)
   const [editStudent, setEditStudent] = useState(null)
+  const [clearOpen, setClearOpen] = useState(false)
+  const [clearBusy, setClearBusy] = useState(false)
+  const [clearError, setClearError] = useState('')
   const [panelRefresh, setPanelRefresh] = useState(0)
   const [refresh, setRefresh] = useState(0)
 
@@ -325,6 +422,25 @@ export default function StudentRegister({ schoolId, canEdit, hue = ENROLL_HUE, o
   const from = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
   const to = Math.min(total, page * PAGE_SIZE)
 
+  const doClear = async () => {
+    setClearBusy(true)
+    setClearError('')
+    try {
+      await enrollmentApi.students.clear(schoolId, total)
+      setClearOpen(false)
+      setPage(1)
+      reload()
+      onChanged?.()
+    } catch (e) {
+      // A 409 here is the server refusing because the register changed under the
+      // dialog. Its message names both counts, so it is shown verbatim rather than
+      // flattened into a generic failure.
+      setClearError(apiErrorMessage(e))
+    } finally {
+      setClearBusy(false)
+    }
+  }
+
   const saveEdit = async (body) => {
     await enrollmentApi.students.update(schoolId, editStudent.id, body)
     reload()
@@ -345,14 +461,34 @@ export default function StudentRegister({ schoolId, canEdit, hue = ENROLL_HUE, o
             <p className="text-[12.5px] text-muted">
               {loading && !data ? 'Loading…' : `${total.toLocaleString('en-US')} student${total === 1 ? '' : 's'}`}
             </p>
+            {/* Edit and delete have always existed, one row-click away, and nothing
+                said so — "there is no way to change a roster" is what an invisible
+                affordance feels like from the outside. */}
+            {total > 0 && canEdit ? (
+              <p className="text-[12px] text-muted">Click a student to view, edit or delete them.</p>
+            ) : null}
           </div>
         </div>
-        <span
-          className="rounded-full border px-3 py-1 text-[12.5px] font-bold"
-          style={{ borderColor: `${hue}55`, backgroundColor: `${hue}12`, color: '#0369A1' }}
-        >
-          {total.toLocaleString('en-US')}
-        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          {canEdit && total > 0 ? (
+            <button
+              type="button"
+              onClick={() => {
+                setClearError('')
+                setClearOpen(true)
+              }}
+              className="inline-flex min-h-[36px] items-center gap-1.5 rounded-xl border-2 border-border px-3 py-1.5 text-[12.5px] font-semibold text-muted transition-colors hover:border-danger hover:text-danger"
+            >
+              <Trash2 size={14} /> Clear roster
+            </button>
+          ) : null}
+          <span
+            className="rounded-full border px-3 py-1 text-[12.5px] font-bold"
+            style={{ borderColor: `${hue}55`, backgroundColor: `${hue}12`, color: '#0369A1' }}
+          >
+            {total.toLocaleString('en-US')}
+          </span>
+        </div>
       </div>
 
       <StudentFilterBar filters={filters} onChange={onFilters} hue={hue} />
@@ -483,6 +619,15 @@ export default function StudentRegister({ schoolId, canEdit, hue = ENROLL_HUE, o
             setPanelStudent(null)
             reload()
           }}
+        />
+      ) : null}
+      {clearOpen ? (
+        <ClearRosterDialog
+          total={total}
+          busy={clearBusy}
+          error={clearError}
+          onCancel={() => setClearOpen(false)}
+          onConfirm={doClear}
         />
       ) : null}
       {editStudent ? (

@@ -9,7 +9,22 @@ import { GRADE_KEYS, type GradeKey } from '@finrep/analytics'
 import type { EnrollmentProviderKey, NormalizedEnrollmentSnapshot } from '@finrep/db'
 import { ONEROSTER_GRADE_MAP } from '@finrep/ingestion/oneroster'
 
-/** One student as seen by a live adapter — just the fields that drive headcount. */
+/**
+ * One student as seen by a live adapter.
+ *
+ * The first three fields drive the HEADCOUNT and are all this interface used to
+ * carry — which is precisely why a connected school got a number and never a
+ * roster: the adapters fetched people and this shape threw the people away.
+ *
+ * The identity fields are OPTIONAL and stay optional. A provider that returns no
+ * names still syncs its headcount exactly as before; one that does lets the sync
+ * create the same student records a file upload would. Nothing here is required,
+ * so no adapter is broken by the widening.
+ *
+ * FERPA: these are student names. They travel adapter → sync → StudentsService and
+ * stop there, in the same role-gated register the file path writes to. No aggregate,
+ * no snapshot, no warning and no audit row may carry one.
+ */
 export interface RawStudentRow {
   /** Raw grade label/code from the provider ('Grade 9', 'KG', '10th', 'PK4', …). */
   grade?: string | null
@@ -17,12 +32,36 @@ export interface RawStudentRow {
   status?: string | null
   /** Full-time-equivalent when the provider reports it (averaged into snapshot.fte). */
   fte?: number | null
+  /** The provider's own stable id — becomes `externalId`, the re-sync match key. */
+  externalId?: string | null
+  /** Given name, as the provider spells it. */
+  firstName?: string | null
+  /** Family name, as the provider spells it. */
+  lastName?: string | null
+  /** ISO yyyy-mm-dd when the provider returns one; used only as a match fallback. */
+  birthDate?: string | null
 }
 
 /** Statuses that mean "no longer enrolled" — case-insensitive. */
 const DEFAULT_WITHDRAWN = ['inactive', 'withdrawn', 'tobedeleted', 'deleted', 'disabled', 'former']
 
 const lc = (s: string | null | undefined): string => (s ?? '').trim().toLowerCase()
+
+/**
+ * Is this provider status "no longer enrolled"?
+ *
+ * Exported so the RECORD-creating sync and the HEADCOUNT-building snapshot ask the
+ * same question of the same row. Re-deriving it at the second call site is how a
+ * school ends up with a register that disagrees with its own total — a pupil
+ * counted as withdrawn in the headcount and stored as enrolled in the register.
+ */
+export function isWithdrawnStatus(
+  status: string | null | undefined,
+  withdrawnStatuses: readonly string[] = DEFAULT_WITHDRAWN,
+): boolean {
+  const t = lc(status)
+  return t !== '' && withdrawnStatuses.some((w) => w.toLowerCase() === t)
+}
 
 /**
  * Lenient grade-label → GradeKey mapper covering OneRoster codes AND the free-text

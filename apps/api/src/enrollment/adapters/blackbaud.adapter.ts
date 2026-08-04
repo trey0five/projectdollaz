@@ -4,10 +4,10 @@
 // so this adapter just pulls the roster and normalizes it. Config-gated: dark until
 // the server carries the SKY OAuth app credentials.
 import { Injectable } from '@nestjs/common'
-import type { EnrollmentProviderKey, EnrollmentSource, NormalizedEnrollmentSnapshot } from '@finrep/db'
-import type { EnrollmentAdapter } from './adapter.js'
+import type { EnrollmentProviderKey, EnrollmentSource } from '@finrep/db'
+import type { AdapterRoster, EnrollmentAdapter } from './adapter.js'
+import { snapshotAndRows } from './adapter.js'
 import { EnrollmentClient } from '../enrollment.client.js'
-import { buildNormalizedSnapshot } from '../enrollment.normalize.js'
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10)
@@ -23,9 +23,9 @@ export class BlackbaudAdapter implements EnrollmentAdapter {
     return this.client.isConfigured()
   }
 
-  async fetch(source: EnrollmentSource, asOf?: string): Promise<NormalizedEnrollmentSnapshot> {
+  async fetch(source: EnrollmentSource, asOf?: string): Promise<AdapterRoster> {
     // `source.accessToken` was refreshed + set by the service prior to this call.
     const rows = await this.client.getStudents(source, source.accessToken ?? '')
-    return buildNormalizedSnapshot('blackbaud', rows, { observedOn: asOf ?? todayIso() })
+    return snapshotAndRows('blackbaud', rows, { observedOn: asOf ?? todayIso() })
   }
 }
