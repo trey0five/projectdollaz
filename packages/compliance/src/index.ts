@@ -408,6 +408,8 @@ export type {
   // AIC Phase F — the three register-axis views the new rules read.
   TwinPriorVisitCitationView,
   TwinStaffEvaluationSummaryView,
+  TwinClearanceSummaryView,
+  TwinPdSummaryView,
   TwinComplianceInspectionSummaryView,
   PriorFact,
   TwinSeverity,

@@ -177,12 +177,27 @@ describe('CR-1 — the capability registry names only holes the twin actually sh
     expect('moduleKey' in t ? t.moduleKey : null).toBe('hr')
   })
 
-  it('professional development and safe-environment clearances are the refusals', () => {
-    for (const key of ['professional_development', 'safe_environment_clearances'] as const) {
+  it('professional development and safe-environment clearances are now ANSWERED', () => {
+    // AIC Phase K built both registers, so Penny must no longer deny them — the
+    // exact failure Phase J's tripwire exists to prevent, and the one Phase F
+    // nearly shipped in the other direction. Each names the register it reads.
+    for (const [key, register] of [
+      ['professional_development', 'professional_development'],
+      ['safe_environment_clearances', 'clearances'],
+    ] as const) {
       const e = COVERAGE_REGISTRY[key]
-      expect(e.collected).toBe(false)
-      expect('reason' in e ? e.reason : null).toBe('not_collected')
+      expect(e.collected, key).toBe(true)
+      expect('register' in e ? e.register : null, key).toBe(register)
+      expect('moduleKey' in e ? e.moduleKey : null, key).toBe('hr')
     }
+  })
+
+  it('learning growth is the ONLY not-collected topic left with a rule behind it', () => {
+    // Derived, so closing another hole without updating Penny fails HERE.
+    const refusals = Object.values(COVERAGE_REGISTRY)
+      .filter((e) => e.collected === false && 'wouldEnable' in e && e.wouldEnable)
+      .map((e) => (e as { wouldEnable: string }).wouldEnable)
+    expect([...new Set(refusals)].sort()).toEqual(['ACAD-GROWTH-FLAT'])
   })
 
   it('a not-collected message names its own wouldEnable rule, so nothing drifts silently', () => {

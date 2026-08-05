@@ -797,6 +797,36 @@ export const hrApi = {
     api.patch(`/schools/${schoolId}/hr/staff-evaluations/${evaluationId}`, body),
   removeStaffEvaluation: (schoolId, evaluationId) =>
     api.delete(`/schools/${schoolId}/hr/staff-evaluations/${evaluationId}`),
+
+  // ── AIC Phase K — SAFE-ENVIRONMENT CLEARANCES. The register NAMES PEOPLE and
+  // is owner/accountant only (viewer 403s — stricter than any other register in
+  // the product). `getClearanceSummary` is counts only and is the one clearance
+  // surface a viewer may read.
+  listClearances: (schoolId, params) => api.get(`/schools/${schoolId}/hr/clearances`, { params }),
+  getClearanceSummary: (schoolId) => api.get(`/schools/${schoolId}/hr/clearances/summary`),
+  createClearance: (schoolId, body) => api.post(`/schools/${schoolId}/hr/clearances`, body),
+  updateClearance: (schoolId, clearanceId, body) =>
+    api.patch(`/schools/${schoolId}/hr/clearances/${clearanceId}`, body),
+  removeClearance: (schoolId, clearanceId) =>
+    api.delete(`/schools/${schoolId}/hr/clearances/${clearanceId}`),
+  // The per-diocese import. Idempotent on re-upload: (person, kind, issuedOn) is a
+  // database unique key, so the same file twice updates rather than duplicates.
+  // Rows whose person cannot be matched by name are RETURNED, never created.
+  importClearances: (schoolId, rows) =>
+    api.post(`/schools/${schoolId}/hr/clearances/import`, { rows }),
+
+  // ── AIC Phase K — PROFESSIONAL DEVELOPMENT. Participation is counted per
+  // PERSON and never inferred from spend; there is no cost field to send.
+  listProfessionalDevelopment: (schoolId, params) =>
+    api.get(`/schools/${schoolId}/hr/professional-development`, { params }),
+  getProfessionalDevelopmentSummary: (schoolId) =>
+    api.get(`/schools/${schoolId}/hr/professional-development/summary`),
+  createProfessionalDevelopment: (schoolId, body) =>
+    api.post(`/schools/${schoolId}/hr/professional-development`, body),
+  updateProfessionalDevelopment: (schoolId, pdId, body) =>
+    api.patch(`/schools/${schoolId}/hr/professional-development/${pdId}`, body),
+  removeProfessionalDevelopment: (schoolId, pdId) =>
+    api.delete(`/schools/${schoolId}/hr/professional-development/${pdId}`),
 }
 
 // ── Phase 4 Advancement v1: the fundraising campaign/appeal register ──────────

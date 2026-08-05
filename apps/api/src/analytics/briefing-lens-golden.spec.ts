@@ -93,10 +93,10 @@ describe('briefing-lens — the Phase-E additions are ADDITIVE', () => {
   })
 
   it('the early-warning COMPLIANCE_ORDER ids sit as ONE contiguous block after accreditation', () => {
-    // Eleven at Phase E; AIC Phase F appended three to the SAME block (it did not
-    // open a second one). The count is derived, not retyped, so the assertion that
+    // Eleven at Phase E; AIC Phase F appended three to the SAME block and AIC
+    // Phase K appended two more (neither opened a second one). The assertion that
     // matters — CONTIGUITY, and the block's two neighbours — is what is pinned.
-    const EARLY_WARNING_BLOCK = 14
+    const EARLY_WARNING_BLOCK = 16
     const start = COMPLIANCE_ORDER.indexOf('earlywarning:acc-assurance-gap')
     expect(COMPLIANCE_ORDER[start - 1]).toBe('accreditation:review-approaching')
     const block = COMPLIANCE_ORDER.slice(start, start + EARLY_WARNING_BLOCK)

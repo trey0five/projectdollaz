@@ -234,6 +234,44 @@ export interface TwinComplianceInspectionSummaryView {
   anyLifeSafety: boolean
 }
 
+/**
+ * AIC Phase K — the CLEARANCE register, reduced to counts.
+ *
+ * THIS IS THE MOST SENSITIVE DATA IN THE PRODUCT and this interface is the whole
+ * reason it can be spoken about safely: a background check on an adult who works
+ * with children is simultaneously employment PII, a safeguarding record, and —
+ * when it has lapsed — an allegation-shaped fact about a named person who has
+ * done nothing wrong. Four integers is the entire payload that leaves the
+ * register. There is deliberately no field here that could carry a name, a
+ * personId, a kind, or a per-person status.
+ */
+export interface TwinClearanceSummaryView {
+  /** Clearance records on file. */
+  trackedCount: number
+  /** Records whose recorded expiry date has PASSED. */
+  lapsedCount: number
+  /** Records expiring inside the caller's look-ahead period (see thresholds). */
+  expiringSoonCount: number
+  /** Days since expiry for the OLDEST lapsed record. 0 when none has lapsed. */
+  oldestLapsedDays: number
+}
+
+/**
+ * AIC Phase K — PROFESSIONAL-DEVELOPMENT participation.
+ *
+ * PARTICIPATION, NEVER SPEND. The hole's own copy is emphatic and it is the
+ * design: "We will not use PD spend as a proxy — one expensive conference for one
+ * person would score as healthy." So this counts PEOPLE WITH A RECORD against
+ * people, and there is no money field here to be tempted by. The register has no
+ * cost column either; a column that exists is a column something eventually reads.
+ */
+export interface TwinPdSummaryView {
+  /** Active staff the school records. The denominator. */
+  staffCount: number
+  /** DISTINCT staff with at least one PD record in the look-back period. */
+  participantCount: number
+}
+
 export interface TwinRegisterView {
   frameworkCode: string | null
   standards: readonly TwinStandardView[]
@@ -244,6 +282,10 @@ export interface TwinRegisterView {
   staffEvaluations: TwinStaffEvaluationSummaryView | null
   /** AIC Phase F. Null when the register was unreadable or holds no flagged item. */
   complianceInspections: TwinComplianceInspectionSummaryView | null
+  /** AIC Phase K. Null when the register was unreadable or empty. COUNTS ONLY. */
+  clearances: TwinClearanceSummaryView | null
+  /** AIC Phase K. Null when the register was unreadable or empty. COUNTS ONLY. */
+  professionalDevelopment: TwinPdSummaryView | null
   demoData: boolean
   snapshotAsOf: string | null
 }
@@ -601,10 +643,24 @@ export const TWIN_RULE_IDS = [
 
 export type TwinRuleId = (typeof TWIN_RULE_IDS)[number]
 
-/** The four that ship VISIBLE and cannot evaluate. A feature, in this order. */
+/**
+ * The rules that ship VISIBLE and cannot evaluate. A feature, in this order.
+ *
+ * AIC PHASE K took this four → two. `HR-PD-LOW` and `SAFE-ENV-GAP` now have
+ * registers behind them and FIRE; the two that remain are still genuinely
+ * uncollected, and for different reasons worth keeping straight:
+ *
+ *   CURR-DOC-AGING is a DATA-ENTRY gap, not a build gap. It is closable today
+ *   with one Policy row per curriculum document (category 'Curriculum', with a
+ *   review interval). Building a second curriculum register would be building a
+ *   feature the product already has.
+ *
+ *   ACAD-GROWTH-FLAT needs an LMS/assessment integration KYRO does not have, and
+ *   is deferred indefinitely. Nothing may proxy measured learning growth —
+ *   there is no substitute figure that would not be a lie about children's
+ *   attainment.
+ */
 export const VISIBLE_HOLE_RULE_IDS = [
-  'HR-PD-LOW',
-  'SAFE-ENV-GAP',
   'CURR-DOC-AGING',
   'ACAD-GROWTH-FLAT',
 ] as const satisfies readonly TwinRuleId[]
@@ -703,6 +759,36 @@ export const TWIN_THRESHOLDS = Object.freeze({
   STAFF_EVAL_OVERDUE_CRITICAL_DAYS: t(
     365,
     'A full year past its own due date is a missed cycle, not a late one — and it is one whole review period a team can point at.',
+  ),
+
+  // ── AIC Phase K ───────────────────────────────────────────────────────────
+  SAFE_ENV_LAPSED_WARN_COUNT: t(
+    1,
+    'ONE. Every other count threshold in this file tolerates a small backlog, because a late policy review or a late work order is a queue. A lapsed safe-environment clearance is not a queue — a school either has a current clearance on file for an adult or it does not, and the answer to "how many lapsed are acceptable" is none.',
+  ),
+  SAFE_ENV_LAPSED_CRITICAL_COUNT: t(
+    3,
+    'Three lapsed clearances at once is a renewal process that is not running, rather than one person who is between certificates.',
+  ),
+  SAFE_ENV_LAPSED_CRITICAL_DAYS: t(
+    90,
+    'A quarter past expiry is long enough that a renewal cycle has been missed rather than delayed.',
+  ),
+  SAFE_ENV_EXPIRING_WINDOW_DAYS: t(
+    60,
+    'Two months is the shortest notice that still leaves time to renew a diocesan clearance before it lapses; a shorter window would report a problem the school can no longer prevent.',
+  ),
+  HR_PD_PARTICIPATION_WARN_PCT: t(
+    0.75,
+    'Three in four staff with any professional-development record in a year. Below that, the school cannot evidence a faculty-wide programme when a team asks how it develops its teachers — and the standards ask about the FACULTY, not about whoever attended.',
+  ),
+  HR_PD_PARTICIPATION_CRITICAL_PCT: t(
+    0.5,
+    'Fewer than half of staff with any record in twelve months is not a thin programme; it is the absence of one for most of the faculty.',
+  ),
+  HR_PD_MIN_STAFF: t(
+    5,
+    'Below five staff a single person swings the percentage by twenty points, so the figure describes an individual rather than a programme — and a rule about a faculty must not become a rule about one teacher.',
   ),
 } as const)
 
@@ -2194,13 +2280,56 @@ const HR_PD_LOW: TwinRuleDef = {
   },
   rationaleTemplate:
     '{{participationPct}} of staff have a professional-development record in the last twelve months.',
-  unlock: {
-    moduleKey: 'hr',
-    intake: 'ProfessionalDevelopment register (Phase K)',
-    copy: 'We cannot tell you whether your staff are getting professional development, because KYRO holds no PD records. We will not use PD spend as a proxy — one expensive conference for one person would score as healthy. A four-field register unlocks this rule.',
-  },
-  evaluate() {
-    return []
+  // CLOSED BY AIC PHASE K. `unlock` is null because the intake it named now
+  // exists; leaving the copy in place would have the product offer to build a
+  // register it ships.
+  unlock: null,
+  // ADULT-STAFF PII STOPS AT THE REGISTER. Two integers and a ratio are the whole
+  // payload: no name, no personId, no activity title, no category, and no money —
+  // the register has no cost column precisely so this rule cannot acquire one.
+  evaluate(c) {
+    const sig = c.signal('hr.pd_participation')
+    const sum = c.register.professionalDevelopment
+    if (sum === null) {
+      throw new TwinCannotEvaluate('value_not_usable', 'hr.pd_participation', PD_SUMMARY_MISSING)
+    }
+    // A summary that contradicts itself cannot be narrated honestly.
+    if (sum.staffCount < 0 || sum.participantCount < 0 || sum.participantCount > sum.staffCount) {
+      throw new TwinCannotEvaluate('value_not_usable', 'hr.pd_participation', PD_SUMMARY_MISSING)
+    }
+    // Too few staff for a percentage to describe a PROGRAMME rather than a person.
+    // Refused by name rather than rendered: "50% of staff" across four people is a
+    // sentence about one teacher, and a head of school reading it would know that.
+    if (sum.staffCount < TH.HR_PD_MIN_STAFF.value) {
+      throw new TwinCannotEvaluate('value_not_usable', 'hr.pd_participation', PD_TOO_FEW_STAFF)
+    }
+    const pct = sum.participantCount / sum.staffCount
+    if (pct >= TH.HR_PD_PARTICIPATION_WARN_PCT.value) return []
+    return [
+      {
+        scopeKey: 'school',
+        factKey: `register:pd_participation@${sig.observedOn ?? 'undated'}`,
+        evidence: [
+          ev('participationPct', 'Staff with a PD record in the last year', pct, fmtPct0(pct), sig.observedOn, sig.lineage),
+          ev('participantCount', 'Staff with at least one record', sum.participantCount, fmtCount(sum.participantCount)),
+          ev('staffCount', 'Active staff on file', sum.staffCount, fmtCount(sum.staffCount)),
+          ev(
+            'threshold',
+            'Working expectation',
+            TH.HR_PD_PARTICIPATION_WARN_PCT.value,
+            fmtPct0(TH.HR_PD_PARTICIPATION_WARN_PCT.value),
+          ),
+        ],
+        severity: pct < TH.HR_PD_PARTICIPATION_CRITICAL_PCT.value ? 'critical' : 'warn',
+        // ORDINAL, CONSTANT. Participation is a counted documentary fact about a
+        // twelve-month window that has already happened, not a forecast.
+        likelihood: 'likely',
+        confidence: 'observation',
+        horizon: NO_HORIZON(HORIZON_DATE_PASSED),
+        consequence:
+          'Cognia COG-6 and COG-29 ask how the school builds the capacity of its staff, and a visiting team asks for the faculty-wide record rather than a highlight. A participation rate this low is answered from the register you already keep, or not at all.',
+      },
+    ]
   },
 }
 
@@ -2219,14 +2348,70 @@ const SAFE_ENV_GAP: TwinRuleDef = {
     msa_cess_2022: ['MSA-3'],
     nsbecs: ['NSBECS-5'],
   },
-  rationaleTemplate: '{{clearedCount}} of {{staffCount}} staff have a current clearance on file.',
-  unlock: {
-    moduleKey: 'hr',
-    intake: 'Clearance register + per-diocese CSV import (Phase K)',
-    copy: 'Background-check and safe-environment compliance is not tracked in KYRO. It lives in your diocesan system. A register plus a CSV import unlocks this rule; a live connector is a later conversation — the market reality is CSV.',
-  },
-  evaluate() {
-    return []
+  // REWRITTEN BY PHASE K. The Phase-E template — "{{cleared" + "Count}} of
+  // {{staff" + "Count}} staff have a current clearance" — described the PASSING
+  // state, which is not what a finding is. This rule fires on what has LAPSED, so
+  // that is what it must say, and its placeholders now resolve against evidence
+  // that exists. It states the fact and its date and stops: no speculation about
+  // consequences for children, which would be both unfounded from a paperwork
+  // state and the fastest way to make a head of school stop reading these.
+  rationaleTemplate:
+    '{{lapsedCount}} of {{trackedCount}} clearance records on file have passed their recorded expiry date; the oldest expired {{oldestLapsedDays}} ago.',
+  // CLOSED BY AIC PHASE K.
+  unlock: null,
+  // COUNTS ONLY, AND THIS ONE MATTERS MOST. A lapsed background check names a
+  // real adult who has done nothing wrong; the briefing, Penny, every export and
+  // every alert render this payload VERBATIM. Nothing below carries a name, a
+  // personId, a clearance kind, or a per-person status.
+  //
+  // IT ALSO DOES NOT EDITORIALISE. The rationale states the fact and its date and
+  // stops. A rule that speculated about risk to children would be both unfounded
+  // — a lapsed certificate is a paperwork state, not an allegation — and the
+  // single fastest way to make a head of school stop reading these findings.
+  evaluate(c) {
+    const sig = c.signal('safe.clearances')
+    const sum = c.register.clearances
+    if (sum === null) {
+      throw new TwinCannotEvaluate('value_not_usable', 'safe.clearances', CLEARANCE_SUMMARY_MISSING)
+    }
+    const lapsed = sum.lapsedCount
+    const oldest = sum.oldestLapsedDays
+    if (
+      lapsed < 0 ||
+      sum.trackedCount < lapsed ||
+      sum.expiringSoonCount < 0 ||
+      (lapsed >= 1 && oldest < 1)
+    ) {
+      throw new TwinCannotEvaluate('value_not_usable', 'safe.clearances', CLEARANCE_SUMMARY_MISSING)
+    }
+    if (lapsed < TH.SAFE_ENV_LAPSED_WARN_COUNT.value) return []
+    return [
+      {
+        scopeKey: 'school',
+        factKey: `register:clearances_lapsed@${sig.observedOn ?? 'undated'}`,
+        evidence: [
+          ev('lapsedCount', 'Clearances past their recorded expiry', lapsed, fmtCount(lapsed), sig.observedOn, sig.lineage),
+          ev('oldestLapsedDays', 'How long the oldest has been expired', oldest, fmtDays(oldest)),
+          ev('trackedCount', 'Clearance records on file', sum.trackedCount, fmtCount(sum.trackedCount)),
+          ev(
+            'expiringSoonCount',
+            `Expiring within ${fmtDays(TH.SAFE_ENV_EXPIRING_WINDOW_DAYS.value)}`,
+            sum.expiringSoonCount,
+            fmtCount(sum.expiringSoonCount),
+          ),
+        ],
+        severity:
+          lapsed >= TH.SAFE_ENV_LAPSED_CRITICAL_COUNT.value ||
+          oldest > TH.SAFE_ENV_LAPSED_CRITICAL_DAYS.value
+            ? 'critical'
+            : 'warn',
+        likelihood: 'likely',
+        confidence: 'observation',
+        horizon: NO_HORIZON(HORIZON_DATE_PASSED),
+        consequence:
+          'Safe-environment compliance is the first thing a diocesan review verifies, and it is verified against the file rather than assurance. A clearance past its recorded expiry date is a documentary gap the school closes by renewing it and recording the renewal.',
+      },
+    ]
   },
 }
 
@@ -2398,6 +2583,15 @@ const HR_EVAL_OVERDUE: TwinRuleDef = {
     ]
   },
 }
+
+const PD_SUMMARY_MISSING =
+  'Your professional-development register reported a reading, but the counts behind it did not come through on this run, so there is no basis to quote.'
+
+const PD_TOO_FEW_STAFF =
+  'There are too few staff on file for a participation percentage to describe a programme rather than one person, so this is left unevaluated rather than reported as a rate.'
+
+const CLEARANCE_SUMMARY_MISSING =
+  'Your clearance register reported a reading, but the counts behind it did not come through on this run, so there is no basis to quote.'
 
 const INSPECTION_SUMMARY_MISSING =
   'Your facilities register reported a compliance-inspection reading, but the counts behind it did not come through on this run, so there is no basis to quote.'

@@ -90,7 +90,7 @@ export interface CollectedTopic {
   collected: true
   moduleKey: ModuleKey
   /** Which counts reader answers it. Kept as a literal so the tool switch is total. */
-  register: 'staff_evaluations' | 'compliance_inspections'
+  register: 'staff_evaluations' | 'compliance_inspections' | 'clearances' | 'professional_development'
 }
 
 /** A topic KYRO genuinely does NOT hold. Carries no counts and no findings: there
@@ -163,31 +163,25 @@ export const COVERAGE_REGISTRY: Readonly<Record<CoverageTopic, CoverageTopicEntr
     moduleKey: 'facilities',
     register: 'compliance_inspections',
   },
+  // ── AIC PHASE K FLIPPED BOTH OF THESE, and the build would not compile until it
+  // did: `wouldEnable` is typed against VISIBLE_HOLE_RULE_IDS, so removing the two
+  // rules from that list broke this file on purpose. That is the Phase-J design —
+  // Penny must never deny a capability the product ships, and Phase F proved how
+  // easily a stale refusal survives (its plan would have had Penny deny the
+  // staff-evaluation register in the same phase that built it).
   professional_development: {
     topic: 'professional_development',
     topicLabel: 'professional development',
-    collected: false,
-    reason: 'not_collected',
-    wouldRequire: 'intake',
-    wouldEnable: 'HR-PD-LOW',
-    message:
-      'KYRO doesn’t collect professional development yet — there is no register for it, so I have ' +
-      'no hours, no completions and no roster to read. What we’d need is a professional-development ' +
-      'register you could enter or import records into; that is also what would let the HR-PD-LOW ' +
-      'early warning evaluate at all, instead of being reported as not evaluated.',
+    collected: true,
+    moduleKey: 'hr',
+    register: 'professional_development',
   },
   safe_environment_clearances: {
     topic: 'safe_environment_clearances',
     topicLabel: 'safe-environment clearances',
-    collected: false,
-    reason: 'not_collected',
-    wouldRequire: 'intake',
-    wouldEnable: 'SAFE-ENV-GAP',
-    message:
-      'KYRO doesn’t collect safe-environment clearances yet — no clearance register exists, so I ' +
-      'can’t tell you who is cleared or when a clearance lapses. What we’d need is a clearance ' +
-      'register plus a per-diocese importer for the file your diocese already produces; that is ' +
-      'what would let the SAFE-ENV-GAP early warning evaluate.',
+    collected: true,
+    moduleKey: 'hr',
+    register: 'clearances',
   },
   lms_assessment: {
     topic: 'lms_assessment',

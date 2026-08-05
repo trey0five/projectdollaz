@@ -179,22 +179,19 @@ describe('TwinSignalsService — the whole catalog, always', () => {
     const set = await service.collect('school-A', { now: NOW })
     const map = byKey(set.signals)
 
-    // THREE, not five. AIC Phase F LIT `hr.staff_evaluations` and `fac.inspections`
-    // — the registers behind them exist, so they are collected rather than declared
-    // blind. These three remain: PD and clearances are Phase K, and measured
-    // learning growth needs an LMS integration KYRO does not have.
-    for (const key of [
-      'hr.pd_participation',
-      'safe.clearances',
-      'acad.assessment_growth',
-    ] as TwinSignalKey[]) {
+    // ONE, not five. Phase F lit `hr.staff_evaluations` and `fac.inspections`;
+    // AIC PHASE K lit `hr.pd_participation` and `safe.clearances` — the registers
+    // behind all four exist, so they are collected rather than declared blind.
+    // Only measured learning growth remains, and it remains because it needs an
+    // LMS/assessment integration KYRO does not have. Nothing may proxy it.
+    for (const key of ['acad.assessment_growth'] as TwinSignalKey[]) {
       const s = map.get(key) as TwinSignal
       expect(s.availability).toBe('not_tracked')
       expect(s.value).toBeNull()
       // The sentence is the Phase-C seed's own — imported, never retyped.
       expect(s.unavailableReason && s.unavailableReason.length).toBeGreaterThan(20)
     }
-    expect(set.counts.not_tracked).toBe(3)
+    expect(set.counts.not_tracked).toBe(1)
     // Nothing in the catalog would have queried an LMS, so this only proves the
     // collectors are not invoked — which is the claim.
     expect(analytics.trends).not.toHaveBeenCalledWith('school-A', 'assessment_results')

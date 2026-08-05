@@ -68,9 +68,12 @@ const ALLOWED_COLUMNS = ['completedDate', 'dueDate', 'status']
  * not a type-level check: a type would be satisfied by a widened select, and the
  * thing being defended is the SQL that actually runs.
  */
-function staffSelects(src: string): string[][] {
+function staffSelects(src: string, delegate = 'staffEvaluation'): string[][] {
   const out: string[][] = []
-  const re = /staffEvaluation\s*\.\s*(?:findMany|findFirst)\s*\(\{[\s\S]*?select:\s*\{([^}]*)\}/g
+  const re = new RegExp(
+    `${delegate}\\s*\\.\\s*(?:findMany|findFirst)\\s*\\(\\{[\\s\\S]*?select:\\s*\\{([^}]*)\\}`,
+    'g',
+  )
   for (const m of src.matchAll(re)) {
     out.push(
       m[1]
@@ -135,6 +138,88 @@ describe('twin — no staff PII (AIC Phase F)', () => {
     const src = readFileSync(join(HERE, 'twin-register.service.ts'), 'utf8')
     expect(src).toContain('registerSize: rows.length')
     expect(src).toMatch(/overdueCount: overdue\.length/)
+  })
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // AIC PHASE K — the same discipline, over the two most sensitive registers the
+  // product has ever held.
+  //
+  // A CLEARANCE is a background check on an adult who works with children.
+  // "Two clearances are past their expiry date" is a fact about a school.
+  // "Sarah's background check lapsed" is a fact about an employee, it is
+  // allegation-shaped, and it is false in the way that matters most — a lapsed
+  // certificate is a paperwork state, not a finding about a person. The twin
+  // renders its payload VERBATIM into the briefing, Penny, exports and alerts,
+  // so anything that reaches this directory reaches all of them.
+  // ───────────────────────────────────────────────────────────────────────────
+
+  const CLEARANCE_DELEGATE = new RegExp(['pris', 'ma\\s*\\.\\s*clear', 'ance\\b'].join(''))
+  const PD_DELEGATE = new RegExp(['pris', 'ma\\s*\\.\\s*professional', 'Development\\b'].join(''))
+  const CLEARANCE_IDENTITY = new RegExp(`\\b(?:${['verified' + 'By', 'external' + 'Ref'].join('|')})\\b`)
+
+  it('never names a clearance identity column, anywhere in the directory', () => {
+    const offenders = FILES.filter((f) => CLEARANCE_IDENTITY.test(readFileSync(f, 'utf8')))
+    expect(offenders.map(rel)).toEqual([])
+  })
+
+  it('reads the clearance register from exactly the two allowed files', () => {
+    const readers = FILES.filter(
+      (f) => !f.endsWith('.spec.ts') && CLEARANCE_DELEGATE.test(readFileSync(f, 'utf8')),
+    )
+    expect(readers.map(rel).sort()).toEqual(ALLOWED_READERS)
+  })
+
+  it('every clearance select is DATES ONLY — no person, no kind, no verifier', () => {
+    // The whole guarantee for the most sensitive table in the product. A third
+    // column fails HERE, in the build, before it can reach a payload.
+    const ALLOWED_CLEARANCE_COLUMNS = [['expiresOn'], ['expiresOn', 'issuedOn'].sort()]
+    const seen: string[][] = []
+    for (const f of FILES) {
+      for (const cols of staffSelects(readFileSync(f, 'utf8'), 'clearance')) {
+        expect(
+          ALLOWED_CLEARANCE_COLUMNS.some((a) => a.join(',') === cols.join(',')),
+          `${rel(f)}: ${cols.join(',')}`,
+        ).toBe(true)
+        seen.push(cols)
+      }
+    }
+    expect(seen.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('every professionalDevelopment select is a FOREIGN KEY and a date, nothing else', () => {
+    // `personId` is selected because participation is counted PER PERSON and a set
+    // of ids is the only way to do that. It is a foreign key, it is never
+    // rendered, and it is consumed only by `new Set(...).size`. A `title`, a
+    // `category` or a `notes` column here would be a description of what one named
+    // teacher was sent on.
+    const ALLOWED_PD_COLUMNS = [['personId'], ['activityDate', 'personId'].sort()]
+    const seen: string[][] = []
+    for (const f of FILES) {
+      for (const cols of staffSelects(readFileSync(f, 'utf8'), 'professionalDevelopment')) {
+        expect(
+          ALLOWED_PD_COLUMNS.some((a) => a.join(',') === cols.join(',')),
+          `${rel(f)}: ${cols.join(',')}`,
+        ).toBe(true)
+        seen.push(cols)
+      }
+    }
+    expect(seen.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('reads the PD register from exactly the two allowed files', () => {
+    const readers = FILES.filter(
+      (f) => !f.endsWith('.spec.ts') && PD_DELEGATE.test(readFileSync(f, 'utf8')),
+    )
+    expect(readers.map(rel).sort()).toEqual(ALLOWED_READERS)
+  })
+
+  it('the Phase-K SUMMARIES the engine receives are counts only', () => {
+    const src = readFileSync(join(HERE, 'twin-register.service.ts'), 'utf8')
+    expect(src).toMatch(/trackedCount: rows\.length/)
+    expect(src).toMatch(/participantCount: new Set\(rows\.map\(\(r\) => r\.personId\)\)\.size/)
+    // PD participation is PEOPLE, never money — and the register carries no cost
+    // column at all, so there is nothing here to be tempted by.
+    expect(src).not.toMatch(/\b(?:cost|spend|amount)\b/i)
   })
 
   it('names no prior-visit free text either', () => {

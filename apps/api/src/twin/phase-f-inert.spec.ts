@@ -91,6 +91,14 @@ const BASE_BRIEFING = preFBriefing as unknown as {
 
 /** The two signals AIC Phase F lit, and the one it appended. */
 const FLIPPED = ['hr.staff_evaluations', 'fac.inspections']
+/**
+ * AIC PHASE K flipped two more of the SAME baseline rows, by the same mechanism:
+ * removing `declaredNotTracked` once the register behind each existed. This file
+ * is Phase F's inertness record, and Phase K is the next legitimate movement of
+ * that baseline — so the flip is named here rather than the guard weakened.
+ */
+const FLIPPED_K = ['hr.pd_participation', 'safe.clearances']
+const FLIPPED_ALL = [...FLIPPED, ...FLIPPED_K]
 const APPENDED = 'acc.prior_visit_findings'
 const NEW_RULES = ['HR-EVAL-OVERDUE', 'FAC-INSPECTION-DUE', 'ACC-PRIOR-FINDING-OPEN']
 
@@ -158,16 +166,17 @@ describe('AIC Phase F — the signal roster moved by exactly one APPENDED row', 
     }
   })
 
-  it('EXACTLY the two flipped rows lost declaredNotTracked — no others', () => {
+  it('EXACTLY the flipped rows lost declaredNotTracked — no others', () => {
     const wasNotTracked = BASE.signals.filter((s) => s.availability === 'not_tracked').map((s) => s.key)
     expect(wasNotTracked).toHaveLength(5)
     const stillDeclared = TWIN_SIGNAL_CATALOG.filter((d) => d.declaredNotTracked).map((d) => d.key)
     expect([...stillDeclared].sort()).toEqual(
-      wasNotTracked.filter((k) => !FLIPPED.includes(k)).sort(),
+      wasNotTracked.filter((k) => !FLIPPED_ALL.includes(k)).sort(),
     )
-    // …and the three that remain still carry a sentence, byte-identical to the one
-    // the baseline recorded. `WHY.evaluations` and `WHY.inspections` were rewritten
-    // this phase; `WHY.pd`, `WHY.safeEnv` and `WHY.assessment` were NOT.
+    // …and whatever remains still carries a sentence, byte-identical to the one the
+    // baseline recorded. Phase F rewrote `WHY.evaluations` and `WHY.inspections`;
+    // Phase K flipped `WHY.pd` and `WHY.safeEnv` away entirely. No surviving
+    // sentence has been touched by either phase.
     for (const d of TWIN_SIGNAL_CATALOG) {
       if (!d.declaredNotTracked) continue
       const before = BASE.signals.find((s) => s.key === d.key)!
@@ -197,9 +206,16 @@ describe('AIC Phase F — the rule vocabulary moved by exactly three APPENDED id
     }
   })
 
-  it('the VISIBLE HOLES are still exactly the four — Phase F closes none of them', () => {
-    expect(VISIBLE_HOLE_RULE_IDS).toHaveLength(4)
-    expect(BASE.coverage.namedHoles.map((h) => h.ruleId)).toEqual([...VISIBLE_HOLE_RULE_IDS])
+  it('Phase F closed no hole; Phase K closed exactly two', () => {
+    // The BASELINE still records four — it is a frozen Phase-F payload and must
+    // not be edited. What moved is the live list, and the two it lost are exactly
+    // the two Phase K built registers for.
+    expect(BASE.coverage.namedHoles).toHaveLength(4)
+    expect(VISIBLE_HOLE_RULE_IDS).toHaveLength(2)
+    const closedByK = BASE.coverage.namedHoles
+      .map((h) => h.ruleId)
+      .filter((id) => !(VISIBLE_HOLE_RULE_IDS as readonly string[]).includes(id))
+    expect(closedByK.sort()).toEqual(['HR-PD-LOW', 'SAFE-ENV-GAP'])
     for (const id of NEW_RULES) {
       expect(VISIBLE_HOLE_RULE_IDS as readonly string[], id).not.toContain(id)
     }
@@ -378,11 +394,15 @@ describe('AIC Phase F — the coverage counters, DERIVED from a real zero-row ru
 })
 
 describe('AIC Phase F — a zero-row school is INERT at the collector', () => {
-  it('the three Phase-F signals report no_data — a hole, never a zero', async () => {
+  it('every flipped signal reports no_data on a zero-row school — a hole, never a zero', async () => {
     const { svc } = zeroRowHarness()
     const set = await svc.collect('school-A', { now: new Date('2026-08-02T00:00:00Z') })
     const byKey = new Map(set.signals.map((s) => [s.key, s]))
-    for (const key of [...FLIPPED, APPENDED]) {
+    // Phase K's two are held to the identical standard: a school with no clearance
+    // and no PD row must read "we could not look", never "we looked and it is
+    // fine". Reporting a confident zero here would invent a clean safeguarding
+    // record for a school that has entered nothing.
+    for (const key of [...FLIPPED_ALL, APPENDED]) {
       const s = byKey.get(key as never)!
       expect(s.availability, key).toBe('no_data')
       expect(s.value, key).toBeNull()
@@ -390,7 +410,8 @@ describe('AIC Phase F — a zero-row school is INERT at the collector', () => {
       // cannot fire, so no school gains a finding it did not have yesterday.
       expect(s.unavailableReason, key).toBeTruthy()
     }
-    expect(set.counts.not_tracked).toBe(3)
+    // One remains: measured learning growth, which has no table to query.
+    expect(set.counts.not_tracked).toBe(1)
   })
 
   // WHY `toBeTruthy()` ABOVE IS NOT ENOUGH. Before Phase F these three signals were

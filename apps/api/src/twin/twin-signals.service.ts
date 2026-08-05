@@ -145,6 +145,11 @@ const EMPTY_REGISTER_READING: Readonly<Record<string, string>> = {
     'No facilities item declares what kind of compliance inspection it is. Set that field on an item in Facilities and this reads from it. We will not guess it from the title.',
   'acc.prior_visit_findings':
     'No findings from a previous accreditation visit are on file. Add them once, from your last visit report, and KYRO can tell you which are still open.',
+  // ── AIC Phase K.
+  'safe.clearances':
+    'Your clearance register is empty. Add a clearance in HR — person, kind, issued and expiry dates — or import your diocesan file, and this reads from it.',
+  'hr.pd_participation':
+    'No professional-development records are on file, or no active staff are recorded to measure participation against. Add either in HR and this reads from it.',
 }
 const COLLECTOR_FAILED = 'We could not read this signal on this run.'
 const NOT_LICENSED_PREFIX = 'Unlock the '
@@ -499,6 +504,12 @@ export class TwinSignalsService {
         return this.collectStaffEvaluations(ctx)
       case 'acc.prior_visit_findings':
         return this.collectPriorVisitFindings(ctx)
+      // ── AIC Phase K. Reachable ONLY because the catalog entries dropped their
+      // `declaredNotTracked`; before that these cases were dead code.
+      case 'safe.clearances':
+        return this.collectClearances(ctx)
+      case 'hr.pd_participation':
+        return this.collectPdParticipation(ctx)
 
       case 'enr.headcount':
         return this.collectHeadcount(ctx)
@@ -786,6 +797,53 @@ export class TwinSignalsService {
     return { value: open, observedOn: isoOrNull(maxDate(rows.map((r) => r.visitDate))) }
   }
 
+  /**
+   * AIC Phase K — SAFE-ENVIRONMENT CLEARANCES. The value is the count of records
+   * past their OWN recorded expiry date: a documentary fact, not a judgement
+   * about a person, and not a claim about anybody's fitness to work with
+   * children.
+   *
+   * `ctx.clearances()` selects ONE column. Nothing about WHO is lapsed leaves
+   * this method — no name, no personId, not even the kind of clearance, because
+   * "this person's background check lapsed" is a materially different and far
+   * more damaging statement than "two clearances are past their date".
+   *
+   * ZERO ROWS IS `no_data` ("we could not look"). A register that HAS rows and
+   * none lapsed is `available` with value 0 ("we looked and it is fine").
+   */
+  private async collectClearances(ctx: CollectContext): Promise<Collected | null> {
+    const rows = await ctx.clearances()
+    if (rows.length === 0)
+      return { value: null, observedOn: null, noData: true, noDataReason: EMPTY_REGISTER_READING['safe.clearances'] }
+    const lapsed = rows.filter(
+      (r) => r.expiresOn !== null && isoOrNull(r.expiresOn)! < ctx.today,
+    ).length
+    // The most recent thing this register RECORDED. An expiry date is a plan; the
+    // day a clearance was issued is the observation — the gov.board_terms precedent.
+    return { value: lapsed, observedOn: isoOrNull(maxDate(rows.map((r) => r.issuedOn))) }
+  }
+
+  /**
+   * AIC Phase K — PD PARTICIPATION. The value is the SHARE of active staff with
+   * at least one record in the last twelve months.
+   *
+   * PEOPLE, NEVER MONEY, and distinct people rather than records: one teacher
+   * with six workshops must not read as six participants. The register carries no
+   * cost column at all, so there is nothing here to be tempted into using as a
+   * proxy — which is what the hole's own copy asked for.
+   */
+  private async collectPdParticipation(ctx: CollectContext): Promise<Collected | null> {
+    const { staffCount, rows } = await ctx.pdParticipation()
+    // No staff on file ⇒ no denominator. A share of nobody is not zero.
+    if (staffCount === 0 || rows.length === 0)
+      return { value: null, observedOn: null, noData: true, noDataReason: EMPTY_REGISTER_READING['hr.pd_participation'] }
+    const participants = new Set(rows.map((r) => r.personId)).size
+    return {
+      value: participants / staffCount,
+      observedOn: isoOrNull(maxDate(rows.map((r) => r.activityDate))),
+    }
+  }
+
   private async collectHeadcount(ctx: CollectContext): Promise<Collected | null> {
     const snap = await ctx.enrollmentSnapshot()
     if (!snap) return null
@@ -1035,6 +1093,44 @@ export class TwinSignalsService {
       ),
 
       /**
+       * AIC Phase K — the CLEARANCE register. TWO DATE COLUMNS, and that is the
+       * entire read. No person, no kind, no notes, and none of the register's
+       * identity columns — deliberately not named even here, for the reason the
+       * guard states: a field named in this directory is a field somebody starts
+       * selecting tomorrow.
+       * This is background-check data on named adults; no-staff-pii.spec.ts parses
+       * this select and fails the BUILD on a third column.
+       */
+      clearances: once(() =>
+        prisma.clearance.findMany({
+          where: { schoolId },
+          select: { expiresOn: true, issuedOn: true },
+        }),
+      ),
+
+      /**
+       * AIC Phase K — PD participation. `personId` is selected because
+       * PARTICIPATION IS COUNTED PER PERSON and a set of ids is the only way to
+       * do that; it is a foreign key, never rendered, and never leaves the
+       * `new Set(...).size` it is consumed by. The denominator is a COUNT, so no
+       * person row is read for it at all.
+       */
+      pdParticipation: once(async () => {
+        const since = new Date(now)
+        since.setUTCFullYear(since.getUTCFullYear() - 1)
+        const [staffCount, rows] = await Promise.all([
+          prisma.governancePerson.count({
+            where: { schoolId, active: true, groups: { has: 'staff' } },
+          }),
+          prisma.professionalDevelopment.findMany({
+            where: { schoolId, activityDate: { gte: since } },
+            select: { personId: true, activityDate: true },
+          }),
+        ])
+        return { staffCount, rows }
+      }),
+
+      /**
        * AIC Phase F — the prior-visit register. `citedStandardCode` is selected
        * because the register view matches it against the school's own standards;
        * the free-text `text` of a citation is NEVER read on this path, and no
@@ -1185,6 +1281,13 @@ interface CollectContext {
   priorVisitFindings(): Promise<
     { visitDate: Date; status: string; citedStandardCode: string }[]
   >
+  /** AIC Phase K. TWO DATES — no identity of any kind. */
+  clearances(): Promise<{ expiresOn: Date | null; issuedOn: Date }[]>
+  /** AIC Phase K. A count and a set of person ids consumed only as a SIZE. */
+  pdParticipation(): Promise<{
+    staffCount: number
+    rows: { personId: string; activityDate: Date }[]
+  }>
   enrollmentSnapshot(): Promise<{
     observedOn: Date
     totalEnrolled: number

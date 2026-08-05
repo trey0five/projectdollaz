@@ -252,8 +252,14 @@ const SIGNAL_SEEDS: Record<string, SignalSeed> = {
 
 const ALL_SIGNAL_KEYS = Object.keys(SIGNAL_SEEDS)
 
-/** The four signals no school populates today — `not_tracked`/`no_data` by default. */
-const HOLE_SIGNAL_KEYS = ['hr.pd_participation', 'safe.clearances', 'acad.assessment_growth']
+/**
+ * The signals no school populates today — `not_tracked`/`no_data` by default.
+ *
+ * AIC PHASE K removed `hr.pd_participation` and `safe.clearances`: both now have
+ * a register behind them and resolve through the licence check like any other
+ * register signal, exactly as Phase F did for staff evaluations.
+ */
+const HOLE_SIGNAL_KEYS = ['acad.assessment_growth']
 
 function mkSignal(key: string, over: Partial<TwinSignalView> = {}): TwinSignalView {
   const seed = SIGNAL_SEEDS[key]
@@ -360,6 +366,10 @@ function mkRegister(over: Partial<TwinRegisterView> = {}): TwinRegisterView {
     priorVisitCitations: [],
     staffEvaluations: null,
     complianceInspections: null,
+    // AIC Phase K. Same empty-register default: a school that has entered nothing
+    // must look exactly as it did before Phase K.
+    clearances: null,
+    professionalDevelopment: null,
     demoData: false,
     snapshotAsOf: '2026-06-30',
     ...over,
@@ -439,6 +449,14 @@ function cells(spec: Record<string, number | null>): SmallCell[] {
 // ── Scenario: every firing rule, on demand ───────────────────────────────────
 
 interface ScenarioOpts {
+  /**
+   * AIC Phase K. The two Phase-K registers hold FIRING data.
+   *
+   * Same shape as `phaseF` and for the same reason: the base scenario lights both
+   * signals with a PASSING value, so every count-shaped assertion elsewhere keeps
+   * reading a school whose clearances are current and whose staff all have PD.
+   */
+  phaseK?: boolean
   /** false ⇒ gov.minutes_lag is no_data, which is GOV-MINUTES-NEVER-RECORDED's fact. */
   minutesLagReadable?: boolean
   /** true ⇒ the strategic plan has already ended. */
@@ -461,6 +479,7 @@ function scenario(opts: ScenarioOpts = {}) {
   const i = opts.seed ?? 0
   const minutesLagReadable = opts.minutesLagReadable ?? true
   const phaseF = opts.phaseF ?? false
+  const phaseK = opts.phaseK ?? false
   const planEnd = opts.planExpired ? `2026-0${(i % 6) + 1}-15` : `2026-12-1${i % 10}`
 
   const over: Record<string, Partial<TwinSignalView>> = {
@@ -501,6 +520,12 @@ function scenario(opts: ScenarioOpts = {}) {
     'hr.staff_evaluations': available(phaseF ? 4 + (i % 3) : 0, '2026-05-31'),
     'fac.inspections': available(phaseF ? 1 + (i % 3) : 0, '2026-04-15'),
     'acc.prior_visit_findings': available(phaseF ? 2 : 0, '2021-03-12'),
+    // ── AIC Phase K. Lit for the same reason Phase F's were: these shipped
+    // `declaredNotTracked` and now resolve through the licence check. The base
+    // value PASSES (every clearance current, PD participation above the bar), so
+    // only the phaseK sweep produces findings.
+    'safe.clearances': available(phaseK ? 2 + (i % 3) : 0, '2026-06-30'),
+    'hr.pd_participation': available(phaseK ? 0.4 : 0.9, '2026-06-30'),
   }
   if (minutesLagReadable) over['gov.minutes_lag'] = available(74 + i, '2026-05-20')
 
@@ -630,6 +655,24 @@ function scenario(opts: ScenarioOpts = {}) {
         overdueKinds: [] as string[],
         anyLifeSafety: false,
       }
+  // AIC Phase K summaries. The PASS shape is a register that HAS rows and nothing
+  // wrong in it — the "we looked and it is fine" state, which is a different fact
+  // from an empty register and must not be conflated with it.
+  const clearances = phaseK
+    ? {
+        trackedCount: 24 + i,
+        lapsedCount: 2 + (i % 3),
+        // Seeds leaving (i % 3) === 0 give exactly two lapsed; the day count
+        // crosses SAFE_ENV_LAPSED_CRITICAL_DAYS across the sweep so both severity
+        // branches are exercised.
+        expiringSoonCount: i % 4,
+        oldestLapsedDays: 30 + i * 7,
+      }
+    : { trackedCount: 24, lapsedCount: 0, expiringSoonCount: 1, oldestLapsedDays: 0 }
+  const professionalDevelopment = phaseK
+    ? { staffCount: 20 + i, participantCount: Math.floor((20 + i) * 0.4) }
+    : { staffCount: 20, participantCount: 19 }
+
   const priorVisitCitations = phaseF
     ? [
         // Sorted by code, as the caller's contract requires.
@@ -650,6 +693,8 @@ function scenario(opts: ScenarioOpts = {}) {
       staffEvaluations,
       complianceInspections,
       priorVisitCitations,
+      clearances,
+      professionalDevelopment,
     }),
     priors,
   }
@@ -682,6 +727,9 @@ function generatedFindings(iterations = 25): TwinFinding[] {
     // so the numeral, standard-code and vocabulary specs below run over the new
     // rules while every count-shaped assertion keeps reading the base scenario.
     out.push(...runScenario({ seed: i, phaseF: true }).findings)
+    // AIC Phase K. Same reasoning: the two Phase-K registers hold firing data
+    // here and nowhere else.
+    out.push(...runScenario({ seed: i, phaseK: true }).findings)
   }
   return out
 }
@@ -691,14 +739,16 @@ function generatedFindings(iterations = 25): TwinFinding[] {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('the frozen catalog', () => {
-  it('ships 25 firing rules + 4 visible holes = 29, with no duplicate id', () => {
+  it('ships 27 firing rules + 2 visible holes = 29, with no duplicate id', () => {
     expect(TWIN_RULE_IDS).toHaveLength(29)
     expect(new Set(TWIN_RULE_IDS).size).toBe(29)
     expect(TWIN_RULE_DEFS).toHaveLength(29)
     expect(TWIN_RULE_DEFS.map((d) => d.id)).toEqual([...TWIN_RULE_IDS])
-    // AIC Phase F took the catalog 26 → 29 and the HOLE COUNT DID NOT MOVE. None of
-    // the three new rules is a named hole, and Phase F closes none of the four.
-    expect(VISIBLE_HOLE_RULE_IDS).toHaveLength(4)
+    // AIC Phase F took the catalog 26 → 29 and the HOLE COUNT DID NOT MOVE. AIC
+    // Phase K leaves the catalog at 29 and moves the HOLE COUNT instead: it builds
+    // no new rule, it gives two existing ones the registers they were waiting for.
+    expect(VISIBLE_HOLE_RULE_IDS).toHaveLength(2)
+    expect([...VISIBLE_HOLE_RULE_IDS]).toEqual(['CURR-DOC-AGING', 'ACAD-GROWTH-FLAT'])
   })
 
   it('AIC Phase F appended its three rules and interleaved nothing', () => {
@@ -2091,11 +2141,11 @@ describe('§5 every numeral in a rationale traces to that finding’s evidence',
     expect(orphans).toEqual([])
   })
 
-  it('(b) covers every one of the 25 firing rules', () => {
+  it('(b) covers every one of the 27 firing rules', () => {
     const fired = new Set(generatedFindings().map((f) => f.ruleId))
     const holes = new Set<string>(VISIBLE_HOLE_RULE_IDS)
     const expected = TWIN_RULE_IDS.filter((id) => !holes.has(id))
-    expect(expected).toHaveLength(25)
+    expect(expected).toHaveLength(27)
     expect([...fired].sort()).toEqual([...expected].sort())
   })
 
@@ -2717,9 +2767,13 @@ describe('§13 coverage', () => {
     }
   })
 
-  it('the four named holes are on EVERY payload, with the intake that closes each', () => {
+  it('the named holes are on EVERY payload, with the intake that closes each', () => {
+    // AIC Phase K took this four → two. The two that remain each keep a REASON of
+    // its own: CURR-DOC-AGING is closable today with a Policy row (a data-entry
+    // gap, not a build gap), and ACAD-GROWTH-FLAT needs an integration KYRO does
+    // not have and must never be proxied.
     for (const r of [runScenario(), deriveTwin([], mkRegister({ standards: [] }), TWIN_RULE_DEFS, NOW)]) {
-      expect(r.coverage.namedHoles).toHaveLength(4)
+      expect(r.coverage.namedHoles).toHaveLength(2)
       expect(r.coverage.namedHoles.map((h) => h.ruleId)).toEqual([...VISIBLE_HOLE_RULE_IDS])
       for (const h of r.coverage.namedHoles) {
         expect(h.intake.length).toBeGreaterThan(5)

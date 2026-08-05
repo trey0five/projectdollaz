@@ -466,10 +466,10 @@ export const TWIN_SIGNAL_CATALOG: readonly TwinSignalDef[] = Object.freeze([
     domainKeys: ['facilities'],
   },
 
-  // ── 32–34: STILL DECLARED NOT TRACKED. The collector is never invoked and no
-  //          query is issued. These are the visible holes Phase E renders as
-  //          `cannot_evaluate` and Phase K (or an integration) closes by changing
-  //          ONE field. Phase F closes NONE of them.
+  // ── 32–34: PHASE K CLOSED THE FIRST TWO by removing exactly one field each.
+  //          `acad.assessment_growth` remains declared-not-tracked: its collector
+  //          is never invoked and no query is issued, because there is no table to
+  //          query — it needs an LMS/assessment integration KYRO does not have.
   {
     key: 'hr.pd_participation',
     label: 'Professional-development participation',
@@ -479,7 +479,9 @@ export const TWIN_SIGNAL_CATALOG: readonly TwinSignalDef[] = Object.freeze([
     expectedCadenceDays: CADENCE_ANNUAL,
     ferpaSensitive: false,
     domainKeys: ['hr'],
-    declaredNotTracked: { reason: notTrackedReasonForTag('pd_records') },
+    // AIC PHASE K — THE FLIP. `declaredNotTracked` is GONE: the register exists,
+    // so this resolves through the licence check like any other register signal.
+    // Leaving the field would keep the collector uninvoked and no query issued.
   },
   {
     key: 'safe.clearances',
@@ -488,9 +490,13 @@ export const TWIN_SIGNAL_CATALOG: readonly TwinSignalDef[] = Object.freeze([
     moduleKey: 'hr',
     source: { table: 'Clearance', phase: 'K' },
     expectedCadenceDays: CADENCE_ANNUAL,
+    // NOT ferpaSensitive — this is ADULT-STAFF data, and FERPA is a student
+    // statute. The protection it needs is the staff-PII guard, which is stricter
+    // here than anywhere else in the product; mislabelling it would route it
+    // through the wrong rulebook.
     ferpaSensitive: false,
     domainKeys: ['governance', 'student_services'],
-    declaredNotTracked: { reason: notTrackedReasonForTag('safe_environment') },
+    // AIC PHASE K — THE FLIP. See hr.pd_participation above.
   },
   {
     key: 'acad.assessment_growth',

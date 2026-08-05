@@ -47,6 +47,7 @@ import {
   UserRound,
   Gift,
   GraduationCap,
+  ShieldCheck,
 } from 'lucide-react'
 
 import { HOME_TILES, tileLabel } from '../home/tileRegistry.jsx'
@@ -414,6 +415,31 @@ export const wizardConfigs = {
           'Record an evaluation cycle against someone on your people register — and the accreditation evidence for it answers itself once you date the completion.',
         cta: 'Add evaluations',
         flow: recordFlows['hr.staffEvaluation'],
+      },
+      // AIC Phase K. Listed here for the reason the comment above records: Phase F
+      // shipped a flow that was written, gated and DTO-correct — and unreachable,
+      // because nothing listed it. These two close the last two visible holes in
+      // the twin, so a school that cannot find them keeps two rules reporting
+      // "not evaluated" forever while holding the very data that would answer them.
+      {
+        key: 'clearance',
+        kind: 'flow',
+        Icon: ShieldCheck,
+        label: 'Safe-environment clearances',
+        blurb:
+          'Record a background check or safe-environment training against someone on your people register. Only your school sees who — the early warning counts, and never names anyone.',
+        cta: 'Add clearances',
+        flow: recordFlows['hr.clearance'],
+      },
+      {
+        key: 'professional-development',
+        kind: 'flow',
+        Icon: GraduationCap,
+        label: 'Professional development',
+        blurb:
+          'Record what your staff attended. Participation is counted per person over twelve months — never inferred from what it cost.',
+        cta: 'Add PD records',
+        flow: recordFlows['hr.professionalDevelopment'],
       },
     ],
   },

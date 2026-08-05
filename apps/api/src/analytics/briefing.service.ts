@@ -179,6 +179,20 @@ const EARLY_WARNING_BRIEFABLE_RULE_IDS: readonly string[] = [
   // you here, and it is still open" is the single most credible sentence this
   // product can say, and the briefing is where it belongs.
   'ACC-PRIOR-FINDING-OPEN',
+  // ── AIC Phase K — two rules, two CONSCIOUS briefable decisions ──────────────
+  //
+  // A lapsed safe-environment clearance is the single most consequential
+  // documentary gap a diocesan school can carry into a review, and the briefing
+  // states nothing like it today. It is briefable ONLY because the finding is
+  // counts-only: four count/day keys, no name, no personId, not even the kind of
+  // clearance. A per-person version of this sentence would be unbriefable at any
+  // severity — the briefing is read aloud by Penny and pasted into board packets.
+  'SAFE-ENV-GAP',
+  // STEP 1's HR metrics are the student-teacher ratio and staff FTEs; neither says
+  // anything about whether the faculty is being developed, so nothing is restated.
+  // Counts only, and never a currency figure — the rule reads participation and
+  // the register holds no spend to leak.
+  'HR-PD-LOW',
 ]
 
 export {

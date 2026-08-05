@@ -25,6 +25,7 @@ import {
   HeartHandshake,
   Gift,
   GraduationCap,
+  ShieldCheck,
 } from 'lucide-react'
 
 import {
@@ -51,6 +52,13 @@ import {
   STAFF_EVALUATION_STATUSES,
   statusLabel as staffEvaluationStatusLabel,
 } from '../hr/staffEvaluationMeta.js'
+// AIC Phase K — the same discipline for the two new HR registers.
+import {
+  CLEARANCE_KINDS,
+  PD_CATEGORIES,
+  clearanceKindLabel,
+  pdCategoryLabel,
+} from '../hr/clearanceMeta.js'
 // Grade vocab for the planning enrollment-plan grid — the DRIVER grade row
 // (PK3…12), which is exactly the EnrollmentByGradeDto whitelist.
 import { GRADE_ROW, GRADE_LABELS as DRIVER_GRADE_LABELS } from '../budget/driverModel.js'
@@ -1491,6 +1499,268 @@ export const recordFlows = {
       ['Completed date', orDash(v.completedDate)],
       ['Status', staffEvaluationStatusLabel(v.status)],
       ['Evaluator', orDash(v.evaluatorName)],
+      ['Notes', orDash(v.notes)],
+    ],
+  },
+
+  // ═══════════════ HR · SAFE-ENVIRONMENT CLEARANCE (AIC Phase K) ═════════════
+  // The most sensitive record a school enters in this product. Everything the
+  // register holds stays on the register: the twin reads two date columns, and
+  // the finding it produces is four counts with no name in it.
+  'hr.clearance': {
+    key: 'hr.clearance',
+    noun: 'clearance',
+    nounPlural: 'clearances',
+    Icon: ShieldCheck,
+    loaders: {
+      // Filtered to the staff group on BOTH sides, exactly as the evaluation flow
+      // does: the server accepts only a GovernancePerson of this school whose
+      // `groups` contains 'staff'.
+      people: (ctx) =>
+        governancePeopleApi.list(ctx.schoolId, { group: 'staff' }).then((r) => {
+          const list = Array.isArray(r.data) ? r.data : (r.data?.people ?? [])
+          return list.filter((p) => (p.groups ?? []).includes('staff'))
+        }),
+    },
+    gate: (data) =>
+      data.people == null
+        ? {
+            title: 'We couldn’t load your people',
+            body: 'These records attach to someone on your people register, which lives in the Governance module. Refresh and try again — and if Governance isn’t on your plan yet, that’s why.',
+          }
+        : data.people.length === 0
+          ? {
+              title: 'No one is in your Staff group yet',
+              body: 'These records attach to a person on your people register. Add your staff in Governance first — we never keep a second copy of a person.',
+            }
+          : null,
+    defaults: {
+      personId: '',
+      kind: 'background_check',
+      issuedOn: '',
+      expiresOn: '',
+      verifiedBy: '',
+      notes: '',
+    },
+    steps: [
+      {
+        key: 'person',
+        label: 'Person',
+        title: 'First, who it’s for',
+        blurb: 'From your existing people register — the same person, one record.',
+        fields: [
+          {
+            key: 'personId',
+            label: 'Member of staff',
+            type: 'select',
+            required: true,
+            requiredMsg: 'Pick the member of staff',
+            emptyOptionLabel: '— pick a person —',
+            lookupKey: 'people',
+            span: 2,
+            options: (data) =>
+              (data.people ?? []).map((p) => ({
+                value: p.id,
+                label: p.title ? `${p.name} — ${p.title}` : p.name,
+              })),
+          },
+        ],
+      },
+      {
+        key: 'dates',
+        label: 'Clearance',
+        title: 'What was cleared, and when',
+        blurb:
+          'The expiry date is the clock the lapsed count reads. Leave it blank if this clearance does not expire — blank is never treated as lapsed.',
+        fields: [
+          {
+            key: 'kind',
+            label: 'Kind',
+            type: 'select',
+            required: true,
+            requiredMsg: 'Pick the kind of clearance',
+            span: 2,
+            options: CLEARANCE_KINDS.map((k) => ({ value: k, label: clearanceKindLabel(k) })),
+          },
+          {
+            key: 'issuedOn',
+            label: 'Issued on',
+            type: 'date',
+            required: true,
+            requiredMsg: 'Pick the date it was issued',
+          },
+          { key: 'expiresOn', label: 'Expires on', type: 'date' },
+        ],
+      },
+      {
+        key: 'record',
+        label: 'Record',
+        title: 'Who verified it',
+        optional: true,
+        blurb: 'Kept on the register for your own audit trail. It never leaves it.',
+        fields: [
+          {
+            key: 'verifiedBy',
+            label: 'Verified by',
+            type: 'text',
+            maxLength: 120,
+            placeholder: 'e.g. Business Manager',
+          },
+          { key: 'notes', label: 'Notes', type: 'textarea', rows: 3, maxLength: 2000, span: 2, fold: true },
+        ],
+      },
+    ],
+    // CreateClearanceDto ✓ — key by key, no spread.
+    toBody: (v) => ({
+      personId: v.personId,
+      kind: v.kind,
+      issuedOn: v.issuedOn,
+      ...(v.expiresOn ? { expiresOn: v.expiresOn } : {}),
+      ...(v.verifiedBy.trim() ? { verifiedBy: v.verifiedBy.trim() } : {}),
+      ...(v.notes.trim() ? { notes: v.notes.trim() } : {}),
+    }),
+    submit: (ctx, body) => hrApi.createClearance(ctx.schoolId, body),
+    itemLabel: (v) => clearanceKindLabel(v.kind),
+    itemSub: (v) => `clearance · issued ${v.issuedOn || '—'}`,
+    reviewPairs: (v, data) => [
+      ['Member of staff', (data?.people ?? []).find((p) => p.id === v.personId)?.name ?? '—'],
+      ['Kind', clearanceKindLabel(v.kind)],
+      ['Issued on', orDash(v.issuedOn)],
+      ['Expires on', v.expiresOn ? v.expiresOn : 'Does not expire'],
+      ['Verified by', orDash(v.verifiedBy)],
+      ['Notes', orDash(v.notes)],
+    ],
+  },
+
+  // ═══════════════ HR · PROFESSIONAL DEVELOPMENT (AIC Phase K) ═══════════════
+  // PARTICIPATION, NEVER SPEND. There is no cost field on this form because
+  // there is no cost column on the register: one expensive conference for one
+  // person would otherwise score as a healthy faculty.
+  'hr.professionalDevelopment': {
+    key: 'hr.professionalDevelopment',
+    noun: 'PD record',
+    nounPlural: 'PD records',
+    Icon: GraduationCap,
+    loaders: {
+      // Filtered to the staff group on BOTH sides, exactly as the evaluation flow
+      // does: the server accepts only a GovernancePerson of this school whose
+      // `groups` contains 'staff'.
+      people: (ctx) =>
+        governancePeopleApi.list(ctx.schoolId, { group: 'staff' }).then((r) => {
+          const list = Array.isArray(r.data) ? r.data : (r.data?.people ?? [])
+          return list.filter((p) => (p.groups ?? []).includes('staff'))
+        }),
+    },
+    gate: (data) =>
+      data.people == null
+        ? {
+            title: 'We couldn’t load your people',
+            body: 'These records attach to someone on your people register, which lives in the Governance module. Refresh and try again — and if Governance isn’t on your plan yet, that’s why.',
+          }
+        : data.people.length === 0
+          ? {
+              title: 'No one is in your Staff group yet',
+              body: 'These records attach to a person on your people register. Add your staff in Governance first — we never keep a second copy of a person.',
+            }
+          : null,
+    defaults: {
+      personId: '',
+      title: '',
+      activityDate: '',
+      category: 'instructional',
+      hours: '',
+      verified: false,
+      notes: '',
+    },
+    steps: [
+      {
+        key: 'person',
+        label: 'Person',
+        title: 'First, who it’s for',
+        blurb: 'From your existing people register — the same person, one record.',
+        fields: [
+          {
+            key: 'personId',
+            label: 'Member of staff',
+            type: 'select',
+            required: true,
+            requiredMsg: 'Pick the member of staff',
+            emptyOptionLabel: '— pick a person —',
+            lookupKey: 'people',
+            span: 2,
+            options: (data) =>
+              (data.people ?? []).map((p) => ({
+                value: p.id,
+                label: p.title ? `${p.name} — ${p.title}` : p.name,
+              })),
+          },
+        ],
+      },
+      {
+        key: 'activity',
+        label: 'Activity',
+        title: 'What they did, and when',
+        blurb:
+          'Participation is counted per person over the last twelve months. Hours are recorded for your own register and never score anything.',
+        fields: [
+          {
+            key: 'title',
+            label: 'Activity',
+            type: 'text',
+            required: true,
+            requiredMsg: 'Name the activity',
+            maxLength: 160,
+            span: 2,
+            placeholder: 'e.g. Orton-Gillingham Level 1',
+          },
+          {
+            key: 'activityDate',
+            label: 'Date',
+            type: 'date',
+            required: true,
+            requiredMsg: 'Pick the date it happened',
+          },
+          {
+            key: 'category',
+            label: 'Category',
+            type: 'select',
+            options: PD_CATEGORIES.map((c) => ({ value: c, label: pdCategoryLabel(c) })),
+          },
+        ],
+      },
+      {
+        key: 'evidence',
+        label: 'Evidence',
+        title: 'Hours and evidence',
+        optional: true,
+        blurb: 'Both are for your register. Neither changes the participation count.',
+        fields: [
+          { key: 'hours', label: 'Contact hours', type: 'number', min: 0, max: 9999 },
+          { key: 'verified', label: 'Certificate sighted', type: 'checkbox' },
+          { key: 'notes', label: 'Notes', type: 'textarea', rows: 3, maxLength: 2000, span: 2, fold: true },
+        ],
+      },
+    ],
+    // CreateProfessionalDevelopmentDto ✓ — and NO cost key, because none exists.
+    toBody: (v) => ({
+      personId: v.personId,
+      title: v.title.trim(),
+      activityDate: v.activityDate,
+      category: v.category,
+      ...(String(v.hours).trim() !== '' ? { hours: Number(v.hours) } : {}),
+      verified: !!v.verified,
+      ...(v.notes.trim() ? { notes: v.notes.trim() } : {}),
+    }),
+    submit: (ctx, body) => hrApi.createProfessionalDevelopment(ctx.schoolId, body),
+    itemLabel: (v) => v.title.trim(),
+    itemSub: (v) => `PD · ${pdCategoryLabel(v.category).toLowerCase()}`,
+    reviewPairs: (v, data) => [
+      ['Member of staff', (data?.people ?? []).find((p) => p.id === v.personId)?.name ?? '—'],
+      ['Activity', orDash(v.title)],
+      ['Date', orDash(v.activityDate)],
+      ['Category', pdCategoryLabel(v.category)],
+      ['Contact hours', orDash(String(v.hours))],
+      ['Certificate sighted', v.verified ? 'Yes' : 'No'],
       ['Notes', orDash(v.notes)],
     ],
   },

@@ -164,6 +164,8 @@ model School {
   staffEvaluations          StaffEvaluation[]
   priorVisitFindings        PriorVisitFinding[]
   enrollmentImports         EnrollmentImport[]
+  clearances                Clearance[]
+  professionalDevelopment   ProfessionalDevelopment[]
   // ── AIC Phase G (additive) — the improvement observation series.
   improvementProgressEvents ImprovementProgressEvent[]
 
@@ -303,6 +305,10 @@ model User {
   createdStudents                  Student[]                  @relation("StudentCreatedBy")
   // ── AIC Phase F (additive) — audit stamps on the two new registers.
   enrollmentImportsUploaded        EnrollmentImport[]         @relation("EnrollmentImportUploadedBy")
+  clearancesCreated                Clearance[]                @relation("ClearanceCreatedBy")
+  clearancesUpdated                Clearance[]                @relation("ClearanceUpdatedBy")
+  pdRecordsCreated                 ProfessionalDevelopment[]  @relation("PdCreatedBy")
+  pdRecordsUpdated                 ProfessionalDevelopment[]  @relation("PdUpdatedBy")
   staffEvaluationsCreated          StaffEvaluation[]          @relation("StaffEvaluationCreatedBy")
   staffEvaluationsUpdated          StaffEvaluation[]          @relation("StaffEvaluationUpdatedBy")
   priorVisitFindingsCreated        PriorVisitFinding[]        @relation("PriorVisitFindingCreatedBy")
@@ -1305,13 +1311,17 @@ model GovernancePerson {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  school           School                @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  user             User?                 @relation("GovernancePersonUser", fields: [userId], references: [id], onDelete: SetNull)
-  updatedByUser    User?                 @relation("GovernancePersonUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  school           School                    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  user             User?                     @relation("GovernancePersonUser", fields: [userId], references: [id], onDelete: SetNull)
+  updatedByUser    User?                     @relation("GovernancePersonUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
   memberships      CommitteeMembership[]
   // ── AIC Phase F (additive) — staff evaluations point HERE. `groups ∋ 'staff'`
   // already models a staff member, so no second person table is introduced.
-  staffEvaluations StaffEvaluation[]     @relation("StaffEvaluationPerson")
+  staffEvaluations StaffEvaluation[]         @relation("StaffEvaluationPerson")
+  // ── AIC Phase K (additive) — clearances and PD point at the SAME person table
+  // for the same reason: `groups ∋ 'staff'` already models a staff member.
+  clearances       Clearance[]               @relation("ClearancePerson")
+  pdRecords        ProfessionalDevelopment[] @relation("PdPerson")
 
   @@index([schoolId])
   @@map("governance_people")
@@ -2757,4 +2767,103 @@ model EnrollmentImport {
 
   @@index([schoolId, createdAt])
   @@map("enrollment_imports")
+}
+
+/// AIC Phase K — SAFE-ENVIRONMENT CLEARANCES. THE MOST SENSITIVE TABLE IN KYRO.
+///
+/// A background check on an adult who works with children. More sensitive than the
+/// evaluation register and considerably more sensitive than anything else the
+/// product holds, because a single row is simultaneously employment PII, a
+/// safeguarding record, and — when it has lapsed — an allegation-shaped fact about
+/// a named person who has done nothing wrong.
+///
+/// THE RULE, ENFORCED BY no-staff-pii.spec.ts AT BUILD TIME: this register may name
+/// people on its OWN endpoint to owner/accountant. The briefing, Penny, every
+/// export and every alert get COUNTS ONLY — never a name, never a per-person
+/// status. "Three clearances lapse within sixty days" is the whole payload.
+///
+/// `kind` is TEXT + a DTO @IsIn (house convention; no Postgres enums) because the
+/// vocabulary is diocesan and varies by state — a schema enum would make a new
+/// diocese a migration.
+model Clearance {
+  id              String    @id @default(uuid()) @db.Uuid
+  schoolId        String    @map("school_id") @db.Uuid
+  personId        String    @map("person_id") @db.Uuid
+  /// TEXT + DTO @IsIn CLEARANCE_KINDS: 'background_check'|'safe_environment_training'
+  /// |'fingerprinting'|'mandated_reporter'|'child_abuse_clearance'|'other'.
+  kind            String
+  /// REQUIRED. When the clearance was granted.
+  issuedOn        DateTime  @map("issued_on") @db.Date
+  /// The clock every rule reads. NULLABLE because some clearances genuinely do not
+  /// expire; a null is "no expiry recorded" and is NEVER treated as lapsed.
+  expiresOn       DateTime? @map("expires_on") @db.Date
+  /// PII. NEVER selected by anything under apps/api/src/twin/.
+  verifiedBy      String?   @map("verified_by")
+  /// Where the row came from: 'manual' | 'import'. Drives the idempotent re-upload.
+  source          String    @default("manual")
+  /// The diocesan file's own row identifier, when it supplies one. The (schoolId,
+  /// personId, kind, issuedOn) tuple is what actually makes a re-import idempotent;
+  /// this is kept for reconciliation against the source system, not for matching.
+  externalRef     String?   @map("external_ref")
+  notes           String?
+  createdByUserId String?   @map("created_by_user_id") @db.Uuid
+  updatedByUserId String?   @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  school        School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  person        GovernancePerson @relation("ClearancePerson", fields: [personId], references: [id], onDelete: Cascade)
+  createdByUser User?            @relation("ClearanceCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  updatedByUser User?            @relation("ClearanceUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  /// The idempotency key for a re-imported diocesan file: the same person's same
+  /// clearance issued on the same day is the same row, however many times the file
+  /// is uploaded. A RENEWAL has a different issuedOn and is correctly a new row —
+  /// which is what keeps the history a history.
+  @@unique([schoolId, personId, kind, issuedOn], name: "clearance_identity")
+  @@index([schoolId])
+  @@index([schoolId, expiresOn])
+  @@index([personId])
+  @@map("clearances")
+}
+
+/// AIC Phase K — PROFESSIONAL DEVELOPMENT. Participation, counted per person.
+///
+/// The hole's own copy is the design brief and it is emphatic: PD spend is NOT a
+/// proxy. One expensive conference for one person would score as healthy while
+/// every other teacher went without, so this register counts PEOPLE WITH A RECORD
+/// and never money. There is deliberately no `cost` column — a column that exists
+/// is a column something will eventually read.
+model ProfessionalDevelopment {
+  id              String   @id @default(uuid()) @db.Uuid
+  schoolId        String   @map("school_id") @db.Uuid
+  personId        String   @map("person_id") @db.Uuid
+  /// Free text bounded by the DTO (@MaxLength(160)) — e.g. 'Orton-Gillingham L1'.
+  title           String
+  /// REQUIRED. The date the activity happened — the clock the twelve-month
+  /// participation window reads.
+  activityDate    DateTime @map("activity_date") @db.Date
+  /// Contact hours. OPTIONAL and never used to score participation — a person with
+  /// a record participated, whatever the hours say.
+  hours           Decimal? @db.Decimal(6, 2)
+  /// TEXT + DTO @IsIn PD_CATEGORIES: 'instructional'|'catholic_identity'|
+  /// 'leadership'|'safety'|'technology'|'other'.
+  category        String   @default("other")
+  /// Whether a certificate or evidence was sighted. Reported as a count only.
+  verified        Boolean  @default(false)
+  notes           String?
+  createdByUserId String?  @map("created_by_user_id") @db.Uuid
+  updatedByUserId String?  @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  school        School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  person        GovernancePerson @relation("PdPerson", fields: [personId], references: [id], onDelete: Cascade)
+  createdByUser User?            @relation("PdCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  updatedByUser User?            @relation("PdUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([schoolId])
+  @@index([schoolId, activityDate])
+  @@index([personId])
+  @@map("professional_development")
 }

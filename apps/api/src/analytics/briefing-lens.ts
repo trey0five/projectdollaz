@@ -186,6 +186,13 @@ export const COMPLIANCE_ORDER = [
   'earlywarning:acc-prior-finding-open',
   'earlywarning:fac-inspection-due',
   'earlywarning:hr-eval-overdue',
+  // ── AIC Phase K. Appended for the same reason and by the same rule: appending
+  // preserves every pre-existing pair's index difference. Ordered against each
+  // other deliberately — a lapsed safe-environment clearance is a compliance
+  // matter a diocese verifies directly, while thin PD participation is a
+  // programme observation, so the clearance leads.
+  'earlywarning:safe-env-gap',
+  'earlywarning:hr-pd-low',
   // Facilities deferred-maintenance item (Phase 4). Placed after accreditation,
   // before workflow (grouped with the board-oversight domains). KEPT for the
   // viewer lens (board/capital-relevant) — see keepForViewer.

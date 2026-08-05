@@ -83,6 +83,9 @@ const EMPTY_REGISTER: TwinRegisterView = {
   priorVisitCitations: [],
   staffEvaluations: null,
   complianceInspections: null,
+  // AIC Phase K — the empty-register default, same as every other summary here.
+  clearances: null,
+  professionalDevelopment: null,
   demoData: false,
   snapshotAsOf: null,
 }
@@ -421,11 +424,13 @@ describe('acceptance 1 — an unlicensed module lowers COVERAGE, never the score
     }
   })
 
-  it('the FOUR VISIBLE HOLES are on every payload, licensed or not — that is the feature', () => {
+  it('the VISIBLE HOLES are on every payload, licensed or not — that is the feature', () => {
+    // AIC Phase K closed HR-PD-LOW and SAFE-ENV-GAP by building their registers.
+    // The two that remain are still genuinely uncollected.
     for (const set of [licensedSet(), unlicensedSet()]) {
       const holes = derive(set).coverage.namedHoles
       expect(holes.map((h) => h.ruleId).sort()).toEqual(
-        ['ACAD-GROWTH-FLAT', 'CURR-DOC-AGING', 'HR-PD-LOW', 'SAFE-ENV-GAP'].sort(),
+        ['ACAD-GROWTH-FLAT', 'CURR-DOC-AGING'].sort(),
       )
       for (const h of holes) expect(h.copy.length).toBeGreaterThan(40)
     }

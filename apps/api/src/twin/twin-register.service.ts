@@ -2,14 +2,17 @@ import { Injectable, Logger } from '@nestjs/common'
 import {
   DOMAIN_KEYS,
   SIGNAL_ATTRIBUTION_MIN_WEIGHT,
+  TWIN_THRESHOLDS,
   daysFromCivil,
   toCivil,
   type CurrencyState,
   type DataAvailability,
   type DomainKey,
   type RequirementCurrency,
+  type TwinClearanceSummaryView,
   type TwinComplianceInspectionSummaryView,
   type TwinEvidenceGroupView,
+  type TwinPdSummaryView,
   type TwinPriorVisitCitationView,
   type TwinRegisterView,
   type TwinRequirementView,
@@ -115,6 +118,10 @@ export function emptyTwinRegister(): TwinRegisterView {
     priorVisitCitations: [],
     staffEvaluations: null,
     complianceInspections: null,
+    // AIC Phase K. Same rule: null is UNREADABLE-or-empty and makes the rule
+    // refuse; it is never a zero the rule could pass on.
+    clearances: null,
+    professionalDevelopment: null,
     demoData: false,
     snapshotAsOf: null,
   }
@@ -174,6 +181,8 @@ export class TwinRegisterService {
       staffEvaluations,
       complianceInspections,
       citationRows,
+      clearances,
+      professionalDevelopment,
     ] = await Promise.all([
       this.accreditation.listStandards(schoolId, now).catch((err) => {
         this.logger.warn(`twin register: standards read failed: ${(err as Error).message}`)
@@ -188,6 +197,9 @@ export class TwinRegisterService {
       this.staffEvaluationSummary(schoolId, now),
       this.complianceInspectionSummary(schoolId, now),
       this.priorVisitRows(schoolId),
+      // AIC Phase K — two more fail-soft-per-source reads, same discipline.
+      this.clearanceSummary(schoolId, now),
+      this.pdSummary(schoolId, now),
     ])
 
     // The read FAILED (null) vs the school genuinely has no standards ([]) — one
@@ -205,6 +217,8 @@ export class TwinRegisterService {
           // truthful summary is never thrown away on the way past.
           staffEvaluations,
           complianceInspections,
+          clearances,
+          professionalDevelopment,
         },
         weights: {},
         registerAvailable,
@@ -264,6 +278,8 @@ export class TwinRegisterService {
         // AIC Phase F — matched HERE, against the standards this same build already
         // read, so the codes the engine is handed are the school's own verbatim.
         priorVisitCitations: this.matchCitations(citationRows, rows),
+        clearances,
+        professionalDevelopment,
         staffEvaluations,
         complianceInspections,
         // Demo provenance is a property of the SERIES and is INHERITED, never set.
@@ -404,6 +420,91 @@ export class TwinRegisterService {
       return { registerSize: rows.length, overdueCount: overdue.length, oldestOverdueDays: oldest }
     } catch {
       // Unreadable is NOT "zero overdue". Null makes the rule refuse.
+      return null
+    }
+  }
+
+  /**
+   * THE CLEARANCE REGISTER, AS FOUR INTEGERS.
+   *
+   * This is the most sensitive read in the product and the select is the control:
+   * `expiresOn` and nothing else — no name, no person, no kind, and none of the
+   * register's identity columns (this comment does not name them either: a field
+   * named in this directory is a field somebody starts selecting tomorrow, which
+   * is why no-staff-pii.spec.ts greps for them here too).
+   * no-staff-pii.spec.ts parses this select and fails the BUILD on a second
+   * column, which is what makes the rule structural rather than a promise.
+   *
+   * A row with NO expiry date is not lapsed. Some clearances genuinely never
+   * expire, and treating "no date recorded" as expired would manufacture a
+   * safeguarding finding out of a blank field.
+   */
+  private async clearanceSummary(
+    schoolId: string,
+    now: Date,
+  ): Promise<TwinClearanceSummaryView | null> {
+    try {
+      const rows = await this.prisma.clearance.findMany({
+        where: { schoolId },
+        select: { expiresOn: true },
+      })
+      if (rows.length === 0) return null
+      const today = isoDate(now) as string
+      let lapsed = 0
+      let expiringSoon = 0
+      let oldest = 0
+      for (const r of rows) {
+        if (!r.expiresOn) continue
+        const days = daysBetweenIso(isoDate(r.expiresOn) as string, today)
+        if (days > 0) {
+          lapsed++
+          if (days > oldest) oldest = days
+          // The look-ahead comes from the frozen threshold, not a second copy of
+          // the number: the rule quotes it in its own evidence row, and two
+          // constants would eventually disagree about what "soon" means.
+        } else if (-days <= TWIN_THRESHOLDS.SAFE_ENV_EXPIRING_WINDOW_DAYS.value) {
+          expiringSoon++
+        }
+      }
+      return {
+        trackedCount: rows.length,
+        lapsedCount: lapsed,
+        expiringSoonCount: expiringSoon,
+        oldestLapsedDays: oldest,
+      }
+    } catch {
+      // Unreadable is NOT "nothing lapsed". Null makes the rule refuse.
+      return null
+    }
+  }
+
+  /**
+   * PD PARTICIPATION, AS TWO INTEGERS — people, never money.
+   *
+   * The denominator is ACTIVE STAFF from the governance-people register
+   * (`groups ∋ 'staff'`), and the numerator is DISTINCT people with a record in
+   * the last twelve months. Counting records rather than people would let one
+   * teacher with six workshops carry a faculty, which is the precise failure the
+   * hole's own copy warned about in the other currency.
+   */
+  private async pdSummary(schoolId: string, now: Date): Promise<TwinPdSummaryView | null> {
+    try {
+      const since = new Date(now)
+      since.setUTCFullYear(since.getUTCFullYear() - 1)
+      const [staffCount, rows] = await Promise.all([
+        this.prisma.governancePerson.count({
+          where: { schoolId, active: true, groups: { has: 'staff' } },
+        }),
+        this.prisma.professionalDevelopment.findMany({
+          where: { schoolId, activityDate: { gte: since } },
+          select: { personId: true },
+        }),
+      ])
+      // No staff on file ⇒ no denominator ⇒ no reading. Null, not a zero rate.
+      if (staffCount === 0) return null
+      if (rows.length === 0) return { staffCount, participantCount: 0 }
+      return { staffCount, participantCount: new Set(rows.map((r) => r.personId)).size }
+    } catch {
       return null
     }
   }
