@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer'
-import { IsBoolean, IsEmail, IsIn, IsOptional } from 'class-validator'
+import { IsBoolean, IsEmail, IsIn, IsOptional, IsString, MaxLength } from 'class-validator'
 import type { MembershipRole } from '@finrep/db'
 
 export class CreateInvitationDto {
@@ -16,4 +16,17 @@ export class CreateInvitationDto {
   @IsOptional()
   @IsBoolean()
   orgWide?: boolean
+
+  // The POSITION the invitee will hold ("Business Manager"), copied onto their
+  // membership when they redeem. Optional — an invite without one behaves as it
+  // always has, and an owner can set it later in Settings → Members.
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === null || value === undefined) return undefined
+    const t = String(value).trim()
+    return t === '' ? undefined : t
+  })
+  @IsString()
+  @MaxLength(80)
+  title?: string
 }

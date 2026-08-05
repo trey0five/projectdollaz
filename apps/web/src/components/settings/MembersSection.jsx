@@ -77,6 +77,24 @@ export default function MembersSection() {
     }
   }
 
+  // Position is a free-text field saved on blur (an org chart is not an enum).
+  // Optimistic in the local row so typing never fights a refetch; a failure puts
+  // the stored value back rather than leaving a title the server never took.
+  const onTitleSave = async (m, raw) => {
+    const next = raw.trim()
+    if (next === (m.title ?? '')) return
+    clearErr(m.id)
+    setMembers((prev) => prev.map((x) => (x.id === m.id ? { ...x, title: next || null } : x)))
+    try {
+      await schoolsApi.updateMemberTitle(activeId, m.id, next || null)
+    } catch (err) {
+      setMembers((prev) =>
+        prev.map((x) => (x.id === m.id ? { ...x, title: m.title ?? null } : x)),
+      )
+      setErr(m.id, apiErrorMessage(err, 'Could not save the position.'))
+    }
+  }
+
   const onAccessChange = async (m, orgWide) => {
     clearErr(m.id)
     try {
@@ -107,6 +125,7 @@ export default function MembersSection() {
   // Invite form
   const [email, setEmail] = useState('')
   const [inviteRole, setInviteRole] = useState('viewer')
+  const [inviteTitle, setInviteTitle] = useState('')
   const [inviteOrgWide, setInviteOrgWide] = useState(false)
   const [inviteErr, setInviteErr] = useState('')
   const [inviteOk, setInviteOk] = useState('')
@@ -122,8 +141,10 @@ export default function MembersSection() {
         email: email.trim(),
         role: inviteRole,
         orgWide: inviteOrgWide,
+        ...(inviteTitle.trim() ? { title: inviteTitle.trim() } : {}),
       })
       setEmail('')
+      setInviteTitle('')
       setInviteOk('Invitation sent.')
       await load()
     } catch (err) {
@@ -179,6 +200,7 @@ export default function MembersSection() {
               <thead>
                 <tr className="border-b border-border text-[14px] uppercase tracking-[0.1em] text-muted">
                   <th className="py-2 pr-3 font-semibold">Name</th>
+                  <th className="py-2 pr-3 font-semibold">Position</th>
                   <th className="py-2 pr-3 font-semibold">Email</th>
                   <th className="py-2 pr-3 font-semibold">Role</th>
                   <th className="py-2 pr-3 font-semibold">Access</th>
@@ -196,6 +218,30 @@ export default function MembersSection() {
                         {name}
                         {m.id === user?.id && (
                           <span className="ml-1 text-[14px] text-muted">(you)</span>
+                        )}
+                      </td>
+                      {/* POSITION — what this person does here, as opposed to
+                          Role, which is what they may see. It is what every
+                          owner picker in the app shows beside their name, and
+                          what lets an engine-suggested owner resolve to a
+                          colleague instead of opening Unassigned. */}
+                      <td className="py-3 pr-3">
+                        {isOwner ? (
+                          <input
+                            type="text"
+                            defaultValue={m.title ?? ''}
+                            maxLength={80}
+                            placeholder="Add a position"
+                            onBlur={(e) => onTitleSave(m, e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') e.currentTarget.blur()
+                            }}
+                            className="min-h-[40px] w-44 rounded-lg border-2 border-border bg-white px-3 py-1.5 text-[15px] text-ink outline-none transition-colors placeholder:text-muted/70 focus:border-gold"
+                          />
+                        ) : (
+                          <span className={m.title ? 'text-ink' : 'text-muted'}>
+                            {m.title || '—'}
+                          </span>
                         )}
                       </td>
                       <td className="py-3 pr-3 text-muted">{m.email}</td>
@@ -275,8 +321,10 @@ export default function MembersSection() {
 
       {isOwner && (
         <SettingsCard title="Invite a member" description="They receive an email invitation.">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-            <div className="flex-1">
+          {/* Five controls on one row crushed the email field to a few
+              characters once Position joined it. Wrap, and give email a floor. */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+            <div className="min-w-[16rem] flex-1">
               <label className="mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-muted">
                 Email
               </label>
@@ -285,6 +333,19 @@ export default function MembersSection() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="person@example.com"
+                className={inputCls}
+              />
+            </div>
+            <div className="min-w-[11rem] flex-1 sm:max-w-[14rem]">
+              <label className="mb-2 block text-[14px] font-semibold uppercase tracking-[0.14em] text-muted">
+                Position
+              </label>
+              <input
+                type="text"
+                value={inviteTitle}
+                onChange={(e) => setInviteTitle(e.target.value)}
+                maxLength={80}
+                placeholder="Business Manager"
                 className={inputCls}
               />
             </div>

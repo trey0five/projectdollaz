@@ -492,13 +492,31 @@ describe('the seeded flow can only POST keys its endpoint whitelists', () => {
   })
 
   it('never guesses a person from a suggested ROLE', () => {
-    // The members roster carries an ACCESS role, not a job title. Assigning the
-    // wrong colleague to accreditation work is worse than assigning nobody.
-    const members = [{ id: 'u1', firstName: 'Jo', lastName: 'Ruiz', email: 'jo@x.edu' }]
+    // Fixtures are snake_case because that is what GET /schools/:id/members
+    // sends. A member with no POSITION cannot be matched by one: an access role
+    // (Leadership/Finance/Board) is not a job, and assigning the wrong colleague
+    // to accreditation work is worse than assigning nobody.
+    const members = [{ id: 'u1', first_name: 'Jo', last_name: 'Ruiz', email: 'jo@x.edu' }]
     expect(matchOwnerId('accreditation_lead', members)).toBeNull()
     expect(seedFromRecommendation(rec, members).ownerUserId).toBe('')
-    // …but a roster that genuinely carries the title still matches.
-    expect(matchOwnerId('business_manager', [{ id: 'u2', title: 'Business Manager' }])).toBe('u2')
+  })
+
+  it('a roster that CARRIES the position auto-selects that person', () => {
+    // The payoff of Membership.title: the suggested owner stops being a hint
+    // beside an Unassigned picker and becomes the pre-selected colleague. Pinned
+    // against the real roster shape so a casing regression cannot quietly send
+    // every school back to Unassigned.
+    const roster = [
+      { id: 'u1', first_name: 'Jo', last_name: 'Ruiz', email: 'jo@x.edu', title: 'Business Manager' },
+      { id: 'u2', first_name: 'Sam', last_name: 'Lee', email: 'sam@x.edu', title: 'Head of School' },
+    ]
+    expect(matchOwnerId('business_manager', roster)).toBe('u1')
+    expect(matchOwnerId('head_of_school', roster)).toBe('u2')
+    // Still nobody when no position matches — the honesty rail is unchanged.
+    expect(matchOwnerId('accreditation_lead', roster)).toBeNull()
+    expect(
+      seedFromRecommendation({ ...rec, suggestedOwnerRole: 'business_manager' }, roster).ownerUserId,
+    ).toBe('u1')
   })
 })
 

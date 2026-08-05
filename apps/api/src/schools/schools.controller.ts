@@ -18,6 +18,7 @@ import { CreateSchoolDto } from './dto/create-school.dto.js'
 import { CreateInvitationDto } from './dto/create-invitation.dto.js'
 import { AcceptInvitationDto } from './dto/accept-invitation.dto.js'
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto.js'
+import { UpdateMemberTitleDto } from './dto/update-member-title.dto.js'
 import { UpdateMemberAccessDto } from './dto/update-member-access.dto.js'
 import { UpdateSchoolDto } from './dto/update-school.dto.js'
 import { DeleteSchoolDto } from './dto/delete-school.dto.js'
@@ -54,6 +55,18 @@ export class SchoolsController {
     @Body() dto: UpdateMemberRoleDto,
   ) {
     return this.schools.changeMemberRole(user, schoolId, userId, dto.role)
+  }
+
+  @Patch('schools/:schoolId/members/:userId/title')
+  @UseGuards(RolesGuard)
+  @Roles('owner')
+  changeMemberTitle(
+    @CurrentUser() user: User,
+    @Param('schoolId') schoolId: string,
+    @Param('userId') userId: string,
+    @Body() dto: UpdateMemberTitleDto,
+  ) {
+    return this.schools.changeMemberTitle(user, schoolId, userId, dto.title ?? null)
   }
 
   @Patch('schools/:schoolId/members/:userId/access')

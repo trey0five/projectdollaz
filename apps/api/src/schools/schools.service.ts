@@ -275,6 +275,10 @@ export class SchoolsService {
       ...toUserPublic(m.user),
       role: m.role,
       status: m.status,
+      // The POSITION lives on the membership, not the account: the same person
+      // can be Business Manager at one school and a trustee at another. Projected
+      // here only — toUserPublic serves login/me and stays school-agnostic.
+      title: m.title ?? null,
       orgWide:
         orgSchoolCount > 1 && activeOrgSchoolsByUser.get(m.userId) === orgSchoolCount,
     }))
@@ -301,6 +305,7 @@ export class SchoolsService {
         schoolId,
         email: dto.email,
         role: dto.role,
+        title: dto.title ?? null,
         orgWide: dto.orgWide ?? false,
         token,
         expiresAt: new Date(Date.now() + INVITE_TTL_MS),
@@ -335,12 +340,20 @@ export class SchoolsService {
 
     const membership = await this.prisma.membership.upsert({
       where: { userId_schoolId: { userId: user.id, schoolId: invitation.schoolId } },
-      update: { role: invitation.role, status: 'active' },
+      // A position the inviter pre-assigned is carried onto the membership, but
+      // never over one that already exists — a re-invite must not silently
+      // rewrite a title an owner has since corrected in Settings.
+      update: {
+        role: invitation.role,
+        status: 'active',
+        ...(invitation.title ? { title: invitation.title } : {}),
+      },
       create: {
         userId: user.id,
         schoolId: invitation.schoolId,
         role: invitation.role,
         status: 'active',
+        title: invitation.title ?? null,
       },
     })
 
@@ -419,7 +432,12 @@ export class SchoolsService {
     }
 
     if (membership.role === role) {
-      return { ...toUserPublic(membership.user), role: membership.role, status: membership.status }
+      return {
+        ...toUserPublic(membership.user),
+        role: membership.role,
+        status: membership.status,
+        title: membership.title ?? null,
+      }
     }
 
     const updated = await this.prisma.membership.update({
@@ -435,7 +453,12 @@ export class SchoolsService {
       targetId: membership.id,
       metadata: { targetUserId, from: membership.role, to: role },
     })
-    return { ...toUserPublic(updated.user), role: updated.role, status: updated.status }
+    return {
+      ...toUserPublic(updated.user),
+      role: updated.role,
+      status: updated.status,
+      title: updated.title ?? null,
+    }
   }
 
   /**
@@ -508,7 +531,118 @@ export class SchoolsService {
       targetId: membership.id,
       metadata: { targetUserId, orgWide, orgId: organizationId },
     })
-    return { ...toUserPublic(membership.user), role: membership.role, status: membership.status }
+    return {
+      ...toUserPublic(membership.user),
+      role: membership.role,
+      status: membership.status,
+      title: membership.title ?? null,
+    }
+  }
+
+  /**
+   * Set (or clear) a member's POSITION at this school. Owner-only at the
+   * controller, like every other membership mutation. Deliberately its own
+   * sub-route rather than a field on the role PATCH: changing what someone is
+   * called must never be able to change what they can see.
+   */
+  async changeMemberTitle(
+    actor: User,
+    schoolId: string,
+    targetUserId: string,
+    title: string | null,
+  ) {
+    const membership = await this.prisma.membership.findUnique({
+      where: { userId_schoolId: { userId: targetUserId, schoolId } },
+      include: { user: true },
+    })
+    if (!membership) throw new NotFoundException('Member not found in this school.')
+
+    const next = title && title.trim() !== '' ? title.trim() : null
+    if ((membership.title ?? null) === next) {
+      return {
+        ...toUserPublic(membership.user),
+        role: membership.role,
+        status: membership.status,
+        title: next,
+      }
+    }
+
+    const updated = await this.prisma.membership.update({
+      where: { id: membership.id },
+      data: { title: next },
+      include: { user: true },
+    })
+    await this.audit.write({
+      schoolId,
+      userId: actor.id,
+      action: 'member.title_changed',
+      targetType: 'membership',
+      targetId: membership.id,
+      metadata: { targetUserId, from: membership.title ?? null, to: next },
+    })
+    return {
+      ...toUserPublic(updated.user),
+      role: updated.role,
+      status: updated.status,
+      title: updated.title ?? null,
+    }
+  }
+
+  /**
+   * Resolve a free-text person reference against this school's ACTIVE roster: a
+   * full name, either name alone, or a POSITION. Case-insensitive; underscores
+   * read as spaces, so an engine-suggested role ("business_manager") resolves the
+   * same way a typed one does.
+   *
+   * WHY IT LIVES HERE. Penny needs this — "assign it to the business manager" is
+   * how people actually talk — but the assistant directory is forbidden from
+   * naming an identity column at all, so the comparison cannot happen there. It
+   * happens here, and only an opaque userId crosses back.
+   *
+   * AMBIGUITY IS RETURNED, NEVER RESOLVED. Two people named Sam, or two sharing a
+   * position, is a question for the user: assigning work to the wrong colleague
+   * is a worse outcome than asking, and it is the failure this exists to avoid.
+   */
+  async resolveMemberRef(
+    schoolId: string,
+    raw: string,
+  ): Promise<{ kind: 'none' } | { kind: 'one'; userId: string } | { kind: 'many' }> {
+    // People say "the business manager", not "business manager". Strip a leading
+    // article so the way someone naturally refers to a colleague matches the way
+    // the position was typed into Settings.
+    const want = String(raw ?? '')
+      .replace(/_/g, ' ')
+      .trim()
+      .toLowerCase()
+      .replace(/^(?:the|our|a|an)\s+/, '')
+      .trim()
+    if (!want) return { kind: 'none' }
+    const rows = await this.prisma.membership.findMany({
+      where: { schoolId, status: 'active' },
+      select: { userId: true, title: true, user: { select: { firstName: true, lastName: true } } },
+    })
+    const norm = (v: string | null | undefined): string =>
+      String(v ?? '')
+        .replace(/_/g, ' ')
+        .trim()
+        .toLowerCase()
+        .replace(/^(?:the|our|a|an)\s+/, '')
+        .trim()
+
+    // EXACT first, across all three ways of naming someone. Only when nothing
+    // matches exactly do we consider a single name, so "Sam Lee" can never lose
+    // to a different Sam.
+    const exact = rows.filter(
+      (r) =>
+        norm([r.user.firstName, r.user.lastName].filter(Boolean).join(' ')) === want ||
+        norm(r.title) === want,
+    )
+    const pool = exact.length
+      ? exact
+      : rows.filter((r) => norm(r.user.firstName) === want || norm(r.user.lastName) === want)
+    if (pool.length === 0) return { kind: 'none' }
+    if (pool.length > 1) return { kind: 'many' }
+    return { kind: 'one', userId: pool[0].userId }
   }
 
   /** Remove a member. Blocks removing the LAST remaining owner. */

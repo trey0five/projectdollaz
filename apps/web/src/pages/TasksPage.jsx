@@ -43,6 +43,7 @@ import DatePicker from '../components/ui/DatePicker.jsx'
 import EntityFormModal, { Field, Select, fieldInput, fieldTextarea } from '../components/ui/EntityFormModal.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useTasks } from '../hooks/useTasks.js'
+import { memberLabel, memberName } from '../lib/memberLabels.js'
 
 const STATUSES = ['open', 'in_progress', 'done', 'cancelled']
 const PRIORITIES = ['low', 'normal', 'high']
@@ -74,15 +75,9 @@ function UrgencyBadge({ urgency, dueDate, daysUntilDue }) {
   )
 }
 
-function memberName(m) {
-  const full = [m.first_name, m.last_name].filter(Boolean).join(' ').trim()
-  return full || m.email
-}
-
 function assigneeName(a) {
   if (!a) return 'Unassigned'
-  const full = [a.firstName, a.lastName].filter(Boolean).join(' ').trim()
-  return full || a.email
+  return memberName(a)
 }
 
 // ── Light-theme approval / sign-off status badge. 'none' renders nothing. ────
@@ -189,7 +184,7 @@ function TaskFormModal({ open, initial, members, onClose, onSave, reduce }) {
           <option value="">Unassigned</option>
           {members.map((m) => (
             <option key={m.id} value={m.id}>
-              {memberName(m)}
+              {memberLabel(m)}
             </option>
           ))}
         </Select>
@@ -386,7 +381,7 @@ function ApproverPickerModal({ open, task, members, onClose, onSubmit, reduce })
               <option value="">Add an approver…</option>
               {available.map((m) => (
                 <option key={m.id} value={m.id}>
-                  {memberName(m)}
+                  {memberLabel(m)}
                 </option>
               ))}
             </select>

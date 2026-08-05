@@ -213,6 +213,10 @@ export const schoolsApi = {
     api.patch(`/schools/${schoolId}/members/${userId}`, data),
   updateMemberAccess: (schoolId, userId, body) =>
     api.patch(`/schools/${schoolId}/members/${userId}/access`, body),
+  // Position ("Business Manager") — its own route, because renaming someone must
+  // never share a request with changing what they can see. null clears it.
+  updateMemberTitle: (schoolId, userId, title) =>
+    api.patch(`/schools/${schoolId}/members/${userId}/title`, { title }),
   removeMember: (schoolId, userId) => api.delete(`/schools/${schoolId}/members/${userId}`),
   invite: (schoolId, data) => api.post(`/schools/${schoolId}/invitations`, data),
   listInvitations: (schoolId) => api.get(`/schools/${schoolId}/invitations`),

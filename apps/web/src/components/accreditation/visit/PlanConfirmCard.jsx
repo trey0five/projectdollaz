@@ -46,6 +46,7 @@ import { AlertTriangle, Check, CircleCheck, Loader2, X } from 'lucide-react'
 import DatePicker from '../../ui/DatePicker.jsx'
 import { OWNER_ROLE_LABELS } from '../../improvement/improvementMeta.js'
 import { planItemId } from './ActPlan.jsx'
+import { memberLabel } from '../../../lib/memberLabels.js'
 
 /** The three per-row outcomes. Frozen: 200 and 201 never share a word. */
 export const ROW_COPY = Object.freeze({
@@ -57,10 +58,6 @@ export const ROW_COPY = Object.freeze({
 /** Frozen. The sentence that makes pressing the button twice safe to do. */
 export const RERUN_SAFE_NOTE =
   'Adopting the same item twice returns the same initiative — it never mints a second plan. Re-running this whole confirmation is safe.'
-
-function memberLabel(m) {
-  return [m?.firstName, m?.lastName].filter(Boolean).join(' ').trim() || m?.email || 'Member'
-}
 
 function RowStatus({ state }) {
   if (!state) return null

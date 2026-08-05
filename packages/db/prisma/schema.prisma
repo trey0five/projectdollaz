@@ -330,6 +330,9 @@ model Message {
   subject     String
   body        String    @db.Text
   senderLabel String    @default("KYRO Team") @map("sender_label")
+  // Where this message is ABOUT — an in-app path ("/tasks?task=…"). An assignment
+  // notice whose whole point is "go look at this" is useless without a door.
+  link        String?
   readAt      DateTime? @map("read_at")
   createdAt   DateTime  @default(now()) @map("created_at")
 
@@ -369,6 +372,11 @@ model Membership {
   schoolId  String           @map("school_id") @db.Uuid
   role      MembershipRole
   status    MembershipStatus @default(active)
+  // The member's POSITION at this school ("Head of School", "Business Manager").
+  // Distinct from `role`, which is access (owner/accountant/viewer): one answers
+  // what they may see, this one answers who they are — it is what owner pickers
+  // read and what matches an engine-suggested owner to a person.
+  title     String?
   invitedBy String?          @map("invited_by") @db.Uuid
   createdAt DateTime         @default(now()) @map("created_at")
 
@@ -387,6 +395,8 @@ model Invitation {
   schoolId   String         @map("school_id") @db.Uuid
   email      String
   role       MembershipRole
+  // Position pre-assigned by the inviter; copied onto the membership on redemption.
+  title      String?
   token      String         @unique
   orgWide    Boolean        @default(false) @map("org_wide")
   expiresAt  DateTime       @map("expires_at")

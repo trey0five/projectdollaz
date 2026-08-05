@@ -27,6 +27,7 @@ import { TrendingUp } from 'lucide-react'
 import { improvementApi, schoolsApi } from '../../lib/api.js'
 import { METRIC_OPTIONS, isPercentMetric } from '../../hooks/useStrategy.js'
 import { OWNER_ROLE_LABELS } from './improvementMeta.js'
+import { memberLabel } from '../../lib/memberLabels.js'
 
 // ── Enum mirrors. The DTO is the authority; each is a documented hard-copy. ───
 // apps/api/src/strategy/strategy.constants.ts (INITIATIVE_STATUSES) — shared by
@@ -313,11 +314,12 @@ const stepWork = (defaults) => ({
       options: (data) =>
         (data?.members ?? []).map((m) => ({
           value: m.id,
-          label: [m.firstName, m.lastName].filter(Boolean).join(' ').trim() || m.email || 'Member',
+          label: memberLabel(m),
         })),
-      // The engine SUGGESTS a role, never a person: the members roster carries an
-      // access role, not a job title, so naming a colleague here would be a guess.
-      // The suggestion is shown as a hint, and the picker still opens Unassigned.
+      // The engine SUGGESTS a role. It becomes a PERSON only when the roster
+      // carries a position that matches it (matchOwnerId) — otherwise the
+      // suggestion stays a hint beside an Unassigned picker, because assigning
+      // the wrong colleague to accreditation work is worse than assigning nobody.
       hint: defaults.suggestedOwnerRole
         ? `Suggested: ${OWNER_ROLE_LABELS[defaults.suggestedOwnerRole] ?? defaults.suggestedOwnerRole}`
         : undefined,

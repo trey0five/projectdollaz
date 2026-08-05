@@ -16,6 +16,7 @@ import { Target, Layers, Flag, ListChecks } from 'lucide-react'
 import EntityFormModal, { Field, Select, fieldInput, fieldTextarea } from '../ui/EntityFormModal.jsx'
 import DatePicker from '../ui/DatePicker.jsx'
 import { METRIC_OPTIONS, isPercentMetric, METRIC_CATALOG } from '../../hooks/useStrategy.js'
+import { memberLabel } from '../../lib/memberLabels.js'
 
 const MILESTONE_MODE = '__milestone__'
 const PLAN_STATUSES = [
@@ -30,12 +31,6 @@ const INITIATIVE_STATUSES = [
   { value: 'done', label: 'Done' },
   { value: 'cancelled', label: 'Cancelled' },
 ]
-
-/** Display label for a school member (firstName lastName, else email). */
-function memberLabel(m) {
-  const full = [m.firstName, m.lastName].filter(Boolean).join(' ').trim()
-  return full || m.email || 'Member'
-}
 
 /** The shared Owner picker, rendered only when the members roster is available. */
 function OwnerField({ members, value, onChange, reduce, index }) {
