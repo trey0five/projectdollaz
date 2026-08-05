@@ -274,6 +274,12 @@ function FigureRow({ label, amount, format = 'currency', pct = null }) {
 function VitalRow({ metric }) {
   const available = metric?.available
   const fmt = metric ? metricFormat(metric.key, metric.unit) : 'ratio'
+  // THE FLOOD STATE the SectionCard already broadcasts (it drives the count-up
+  // re-run). The DeltaChip has had an onDark variant all along for exactly this
+  // kind of surface — the two were never connected, so on hover the card turned
+  // solid module-blue while the chip kept its pastel light-surface palette:
+  // emerald-50 on flood blue, unreadable at a glance.
+  const hovered = useContext(TileHoverCtx)
   return (
     <div className="flex items-center gap-2.5 border-b border-rule/40 py-2 last:border-0">
       <StatusDot status={available ? metric.status : 'neutral'} />
@@ -290,6 +296,7 @@ function VitalRow({ metric }) {
           delta={metric.periodOverPeriodDelta}
           format={fmt}
           goodDirection={metric.goodDirection}
+          onDark={hovered}
         />
       )}
     </div>

@@ -53,6 +53,16 @@ export function PersistenceProvider({ children }) {
   const schoolId = activeSchool?.id ?? null
 
   const [hydrating, setHydrating] = useState(true)
+  // WHICH school the current state actually belongs to. `hydrating` alone has a
+  // stale-false window: when the active school RESOLVES (null → id), this
+  // provider's effect flips hydrating back to true — but React runs CHILD
+  // effects first, so a page effect firing on the same schoolId change reads
+  // hydrating === false with periods still []. FinancePage's first-run latch
+  // fired in exactly that window and TRAPPED a school with two saved years on
+  // the first-run screen after a plain reload. Deriving hydrating from "have I
+  // hydrated THIS school" closes the window for every consumer at once — the
+  // same race class as the school-swap period-pinning bug (fix 29c163b).
+  const [hydratedFor, setHydratedFor] = useState(null)
   const [error, setError] = useState('')
   const [periods, setPeriods] = useState([]) // PeriodWithCoverage[] newest-first
   const [activePeriod, setActivePeriod] = useState(null) // the hydrated period
@@ -96,6 +106,7 @@ export function PersistenceProvider({ children }) {
           setActivePeriod(null)
           setPeriodImports([])
           setLatestSnapshot(null)
+          setHydratedFor(sid)
           setHydrating(false)
           setHydrationToken((t) => t + 1)
           return
@@ -133,6 +144,7 @@ export function PersistenceProvider({ children }) {
         setActivePeriod(newest)
         setPeriodImports(imports)
         setLatestSnapshot(snapshot)
+        setHydratedFor(sid)
         setHydrating(false)
         setHydrationToken((t) => t + 1)
       } catch {
@@ -141,6 +153,7 @@ export function PersistenceProvider({ children }) {
         setActivePeriod(null)
         setPeriodImports([])
         setLatestSnapshot(null)
+        setHydratedFor(sid)
         setHydrating(false)
         setHydrationToken((t) => t + 1)
       }
@@ -162,6 +175,7 @@ export function PersistenceProvider({ children }) {
         setActivePeriod(null)
         setPeriodImports([])
         setLatestSnapshot(null)
+        setHydratedFor(null)
         setHydrating(false)
       }
     })
@@ -410,7 +424,10 @@ export function PersistenceProvider({ children }) {
 
   const value = {
     schoolId,
-    hydrating,
+    // Derived, not the raw flag — see hydratedFor above. A same-school refresh()
+    // keeps this false (hydratedFor already matches), so background refreshes
+    // never flash a loading state.
+    hydrating: hydrating || (schoolId != null && hydratedFor !== schoolId),
     error,
     periods,
     activePeriod,

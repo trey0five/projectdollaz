@@ -75,3 +75,23 @@ describe('a cold load lands on a period that actually holds something', () => {
     expect(content).toBeGreaterThan(order)
   })
 })
+
+// The SECOND race in this file's family: `hydrating` had a stale-false window
+// when the active school RESOLVED (null → id) — child effects run before parent
+// effects, so a page effect on the same change read hydrating === false with
+// periods still []. FinancePage's first-run latch fired in that window and
+// trapped a school with two saved years on the first-run screen after a plain
+// reload. The exported flag now derives from "have I hydrated THIS school".
+describe('hydrating has no stale-false window on school resolve', () => {
+  it('every settle path stamps hydratedFor with the school it hydrated', () => {
+    const stamps = src.match(/setHydratedFor\(sid\)/g) ?? []
+    expect(stamps.length).toBe(3) // empty-list, success, and failure branches
+    expect(src).toMatch(/setHydratedFor\(null\)/) // the no-school branch clears
+  })
+
+  it('the exported flag stays true until THIS school is the one in state', () => {
+    expect(src).toMatch(
+      /hydrating: hydrating \|\| \(schoolId != null && hydratedFor !== schoolId\)/,
+    )
+  })
+})
