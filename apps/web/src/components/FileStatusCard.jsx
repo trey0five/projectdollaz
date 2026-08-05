@@ -11,7 +11,7 @@ import {
   Loader2,
   X,
 } from 'lucide-react'
-import { findUnmapped, DEFAULT_CHART } from '@finrep/engine'
+import { findUnmapped, suggestCategories, DEFAULT_CHART } from '@finrep/engine'
 import { useApp } from '../context/AppContext.jsx'
 import { formatShortDate } from '../lib/format.js'
 import RoleChip from './RoleChip.jsx'
@@ -32,6 +32,7 @@ export default function FileStatusCard({ file, needsReview, onOverride }) {
     removeFile,
     canEdit,
     mapAccount = () => {},
+    mapAccounts = () => {},
     activeChart = DEFAULT_CHART,
     mappingAccts = EMPTY_SET,
   } = useApp()
@@ -48,6 +49,12 @@ export default function FileStatusCard({ file, needsReview, onOverride }) {
     [file.rows, activeChart],
   )
   const reviewCount = unmapped.length
+
+  // NAME-BASED GUESSES for the accounts still awaiting review. Pure and derived
+  // — nothing is written from here. Recomputed off `unmapped` so a row that has
+  // just been confirmed drops out with it.
+  const suggestions = useMemo(() => suggestCategories(unmapped), [unmapped])
+  const suggestedCount = unmapped.filter((r) => suggestions[r.acct]).length
 
   // Once the last flagged account is categorized, show the all-done flourish for a
   // beat, then auto-collapse the panel so the card returns to its normal height —
@@ -206,10 +213,34 @@ export default function FileStatusCard({ file, needsReview, onOverride }) {
               >
                 {reviewCount > 0 && (
                   <p className="text-[13px] leading-relaxed text-[#7a5e00]">
-                    These accounts aren&rsquo;t in the standard chart yet, so they&rsquo;re{' '}
-                    <span className="font-semibold">left out of your statements</span> until they&rsquo;re
-                    categorized. Assign each a category to flow it in live:
+                    We don&rsquo;t know what these accounts are yet, so they&rsquo;re{' '}
+                    <span className="font-semibold">left out of your statements</span> until
+                    somebody says. Tell us once and every future upload knows:
                   </p>
+                )}
+
+                {/* BULK CONFIRM. Thirty-odd dropdowns is the reason a school
+                    gives up on this screen — but each guess still has to be
+                    AGREED to, so this presses "use this" on all of them at
+                    once rather than applying them quietly on upload. */}
+                {canEdit && suggestedCount > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // ONE request for the whole file. Firing these per account
+                      // sent thirty-three concurrent writes that clobbered each
+                      // other and left the school with wrong numbers.
+                      const entries = {}
+                      for (const r of unmapped) {
+                        const s = suggestions[r.acct]
+                        if (s) entries[String(r.acct)] = s.category
+                      }
+                      mapAccounts(entries)
+                    }}
+                    className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg border-2 border-gold/50 bg-gold/10 px-3 py-1.5 text-[12.5px] font-semibold text-[#7a5e00] transition-colors hover:border-gold hover:bg-gold/20"
+                  >
+                    Use all {suggestedCount} suggestions
+                  </button>
                 )}
 
                 <div className="mt-1 divide-y divide-[#efdfa8]">
@@ -232,6 +263,7 @@ export default function FileStatusCard({ file, needsReview, onOverride }) {
                           busy={mappingAccts.has(String(r.acct))}
                           disabled={!canEdit}
                           onPick={mapAccount}
+                          suggestion={suggestions[r.acct] ?? null}
                         />
                       </motion.div>
                     ))}

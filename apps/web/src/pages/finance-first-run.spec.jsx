@@ -198,12 +198,19 @@ describe('FinancePage — first run is latched, not yanked away by its own succe
     ).toMatch(/\{ready \? null : \(/)
   })
 
-  it('"keep adding files" lands somewhere with files', () => {
+  it('"keep adding files" lands somewhere with files, from EITHER screen', () => {
     // The reveal opens BECAUSE the user confirmed, and confirming is what folds
     // the uploader away — so its own "keep adding files" button would otherwise
     // dismiss onto a screen with no files in sight, one beat after asking for
     // exactly that.
-    expect(SRC).toMatch(/onKeepAdding=\{\(\) => expandIntake\('single'\)\}/)
+    //
+    // And it is reachable from the overview now, where the first-run screen no
+    // longer exists: expandIntake drives first-run-only state, so from there the
+    // equivalent is the Add-data tab. One button, two homes, both real.
+    expect(SRC).toMatch(/expandIntake\('single'\)/)
+    const handler = SRC.slice(SRC.indexOf('onKeepAdding='), SRC.indexOf('onKeepAdding=') + 400)
+    expect(handler).toMatch(/firstRunLatched/)
+    expect(handler).toMatch(/addDataHref/)
   })
 
   it('the celebration stays reachable after the fold', () => {

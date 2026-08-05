@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ChevronDown, Printer, FileSpreadsheet } from 'lucide-react'
+import { ChevronDown, Printer, FileSpreadsheet, X } from 'lucide-react'
 import { useApp } from '../context/AppContext.jsx'
 import { downloadExcel } from '../lib/excel.js'
 
@@ -13,7 +13,14 @@ const OPTIONS = [
   { key: 'all', label: 'Excel — All Three Reports', icon: FileSpreadsheet },
 ]
 
-export default function ExportMenu() {
+/**
+ * @param onCancel  Optional. When given, the menu also carries "Discard these
+ *   files" — the old Cancel button, folded in. It had equal visual weight with
+ *   Save in the intake header while being something a user needs about once a
+ *   year, and a destructive control sitting beside the primary action is a
+ *   mis-click waiting to happen.
+ */
+export default function ExportMenu({ onCancel = null }) {
   const { reports, school, dateLabel, setStatus } = useApp()
   const [open, setOpen] = useState(false)
   const wrapRef = useRef(null)
@@ -80,6 +87,18 @@ export default function ExportMenu() {
                 {opt.label}
               </button>
             ))}
+            {onCancel && (
+              <button
+                onClick={() => {
+                  setOpen(false)
+                  onCancel()
+                }}
+                className="flex w-full items-center gap-3 border-t-2 border-rule px-5 py-3 text-left text-sm text-muted transition-colors hover:bg-section hover:text-danger"
+              >
+                <X size={17} className="shrink-0" />
+                Discard these files
+              </button>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

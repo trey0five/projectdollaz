@@ -16,7 +16,18 @@ import { motion, useReducedMotion } from 'framer-motion'
 import { Check, Sparkles } from 'lucide-react'
 import { SLOT_ROLES, ROLE_META } from '../../lib/roleMeta.js'
 
-export default function IntakeConfirmBand({ period, files = [], onConfirm, onFix }) {
+export default function IntakeConfirmBand({
+  period,
+  files = [],
+  onConfirm,
+  onFix,
+  // Whether the save actually produced statement figures. When it did not, the
+  // accounts have not been categorised yet — and offering "show me what lit up"
+  // there is the product congratulating itself over an empty statement, which
+  // is precisely how a school came to believe its books were live when every
+  // number was zero.
+  dataReady = true,
+}) {
   const reduce = useReducedMotion()
   if (!period) return null
 
@@ -38,11 +49,13 @@ export default function IntakeConfirmBand({ period, files = [], onConfirm, onFix
         </span>
         <div className="min-w-0 flex-1 basis-[16rem]">
           <h3 className="font-serif text-[18px] font-semibold leading-snug text-navy">
-            Does this look right?
+            {dataReady ? 'Does this look right?' : 'Saved — but we can’t read it yet'}
           </h3>
           <p className="mt-1 min-w-0 break-words text-[14px] leading-snug text-muted">
-            Saved to <span className="font-semibold text-navy">{period.label}</span>. Check the
-            files below — then we&apos;ll show you everywhere this data just lit up.
+            Saved to <span className="font-semibold text-navy">{period.label}</span>.{' '}
+            {dataReady
+              ? 'Check the files below — then we’ll show you everywhere this data just lit up.'
+              : 'Your accounts aren’t named in a way we recognise yet, so your statements are still empty. Open a file below and confirm what each account is — we’ve suggested most of them.'}
           </p>
         </div>
       </div>
@@ -78,21 +91,35 @@ export default function IntakeConfirmBand({ period, files = [], onConfirm, onFix
       </ul>
 
       <div className="mt-5 flex flex-col gap-2.5 sm:flex-row-reverse sm:items-center">
-        <button
-          type="button"
-          onClick={onConfirm}
-          className="btn-cta inline-flex min-h-[46px] w-full items-center justify-center gap-2 rounded-xl px-6 text-[12.5px] font-semibold uppercase tracking-[0.1em] outline-none focus-visible:ring-2 focus-visible:ring-gold/50 sm:w-auto"
-        >
-          <Sparkles size={15} />
-          Yes — show me what lit up
-        </button>
-        <button
-          type="button"
-          onClick={onFix}
-          className="inline-flex min-h-[46px] w-full items-center justify-center rounded-xl border-2 border-border px-5 text-[13.5px] font-semibold text-muted outline-none transition-colors hover:border-navy hover:text-navy focus-visible:ring-2 focus-visible:ring-navy/30 sm:w-auto"
-        >
-          Not quite — let me fix a file
-        </button>
+        {dataReady ? (
+          <>
+            <button
+              type="button"
+              onClick={onConfirm}
+              className="btn-cta inline-flex min-h-[46px] w-full items-center justify-center gap-2 rounded-xl px-6 text-[12.5px] font-semibold uppercase tracking-[0.1em] outline-none focus-visible:ring-2 focus-visible:ring-gold/50 sm:w-auto"
+            >
+              <Sparkles size={15} />
+              Yes — show me what lit up
+            </button>
+            <button
+              type="button"
+              onClick={onFix}
+              className="inline-flex min-h-[46px] w-full items-center justify-center rounded-xl border-2 border-border px-5 text-[13.5px] font-semibold text-muted outline-none transition-colors hover:border-navy hover:text-navy focus-visible:ring-2 focus-visible:ring-navy/30 sm:w-auto"
+            >
+              Not quite — let me fix a file
+            </button>
+          </>
+        ) : (
+          // NO CELEBRATION ON OFFER. There is exactly one useful next step from
+          // here, and it is naming the accounts.
+          <button
+            type="button"
+            onClick={onFix}
+            className="btn-cta inline-flex min-h-[46px] w-full items-center justify-center gap-2 rounded-xl px-6 text-[12.5px] font-semibold uppercase tracking-[0.1em] outline-none focus-visible:ring-2 focus-visible:ring-gold/50 sm:w-auto"
+          >
+            Categorise my accounts
+          </button>
+        )}
       </div>
     </motion.div>
   )

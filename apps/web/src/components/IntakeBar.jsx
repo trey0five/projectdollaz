@@ -1,6 +1,6 @@
 import { useMemo, useRef } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { AlertTriangle, Files, Plus, X } from 'lucide-react'
+import { AlertTriangle, Files, Plus } from 'lucide-react'
 import { useApp } from '../context/AppContext.jsx'
 import DragOverlay from './DragOverlay.jsx'
 import HeroDropzone from './HeroDropzone.jsx'
@@ -201,9 +201,14 @@ export default function IntakeBar() {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
           >
-            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            {/* ONE ROW, ONE JOB. This header used to carry four controls of
+                equal weight — Add, Save, Cancel, Export — beside a heading, on
+                top of an explainer, on top of three tall cards, on top of a
+                period bar. Saving is the job; Add is secondary; Cancel and
+                Export are things you occasionally need and never look for. */}
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="font-serif text-lg font-semibold text-navy sm:text-xl">
-                Imported trial balances
+                Your files
               </h2>
               <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end sm:gap-2">
                 {canEdit && (
@@ -219,23 +224,10 @@ export default function IntakeBar() {
                 <span id="tb-save-button" className="contents">
                   <SaveBar />
                 </span>
-                <button
-                  type="button"
-                  onClick={collapse}
-                  title="Cancel"
-                  className="inline-flex min-h-[44px] w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border-2 border-border px-4 py-2 text-[14px] font-semibold uppercase tracking-[0.1em] text-muted transition-colors hover:border-navy hover:text-navy sm:h-[52px] sm:w-auto"
-                >
-                  <X size={15} /> Cancel
-                </button>
                 <div className="w-full shrink-0 sm:w-auto">
-                  <ExportMenu />
+                  <ExportMenu onCancel={canEdit ? collapse : null} />
                 </div>
               </div>
-            </div>
-
-            {/* plain-English explainer of the three slots */}
-            <div className="mb-5">
-              <IntakeGuide />
             </div>
 
             {/* same-document warning (e.g. the same TB dropped into every slot) */}

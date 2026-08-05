@@ -73,7 +73,7 @@ function budOf(lines, kind, key) {
 }
 
 // ── Page header (mirrors AnalyticsDashboard's PageHeader) ─────────────────────
-function FinanceHeader() {
+function FinanceHeader({ onWhatLitUp = null }) {
   // Under v2 the ModuleTabs shell already renders the "Back to dashboard" link,
   // so this header omits its own to avoid a duplicate; v1 (standalone page, no
   // ModuleTabs) keeps it.
@@ -96,6 +96,20 @@ function FinanceHeader() {
         {/* On-page Add-data + Records entries (mirror the sidebar tabs) — v2 only. */}
         {uiV2 && (
           <span className="ml-auto flex flex-wrap items-center gap-2">
+            {/* THE REPLAY, ON THE OVERVIEW TOO. The celebration used to be
+                reachable only from the first-run screen — the one place a user
+                leaves and cannot get back to. It is the clearest summary of
+                what their data now powers, so it belongs where they actually
+                live. Rendered only when there is something to show. */}
+            {onWhatLitUp && (
+              <button
+                type="button"
+                onClick={onWhatLitUp}
+                className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border-2 border-border bg-white px-3.5 py-2 text-[12px] font-semibold uppercase tracking-[0.1em] text-muted transition-colors hover:border-navy hover:text-navy"
+              >
+                <Sparkles size={14} /> What lit up
+              </button>
+            )}
             <RecordsCta module="finance" />
             <AddDataCta />
           </span>
@@ -386,10 +400,25 @@ export default function FinancePage() {
     setIntakeTab(tab ?? 'single')
   }, [])
 
-  const { data, metrics, loading: metricsLoading, notEntitled } = useAnalytics(
-    schoolId,
-    selectedPeriodId,
-  )
+  const {
+    data,
+    metrics,
+    loading: metricsLoading,
+    notEntitled,
+    reload: reloadMetrics,
+  } = useAnalytics(schoolId, selectedPeriodId)
+
+  // Categorising an account rebuilds the statements server-side, so the figures
+  // this page is reasoning about — including whether it can honestly say the
+  // books are readable at all — are stale the moment it happens. Same listener
+  // AnalyticsDashboard uses for Penny's autonomous writes.
+  useEffect(() => {
+    const onDataChanged = (e) => {
+      if (e?.detail?.key === 'metrics') reloadMetrics()
+    }
+    window.addEventListener('penny:data-changed', onDataChanged)
+    return () => window.removeEventListener('penny:data-changed', onDataChanged)
+  }, [reloadMetrics])
   const { text: insightText, source: insightSource } = useInsights(schoolId, selectedPeriodId)
   const { summary: complianceSummary } = useCompliance(schoolId, selectedPeriodId)
   const { budget } = useBudget(schoolId, selectedPeriodId)
@@ -438,6 +467,15 @@ export default function FinancePage() {
   const revealPeriodMatches =
     activePeriod?.id != null && activePeriod.id === selectedPeriodId
 
+  // WHICH PERIOD THE CELEBRATION IS ABOUT. During first run these are the same
+  // row. On the overview they need not be: that screen hands the user a period
+  // picker, while activePeriod is whichever period the intake last wrote to. A
+  // replay that headlined FY 2025 while the cards behind it showed FY 2026
+  // would be the page contradicting itself, so the reveal follows the period
+  // the user is actually looking at.
+  const revealPeriod =
+    savedPeriods.find((p) => p.id === selectedPeriodId) ?? activePeriod
+
   const revealHasBudget = useMemo(() => {
     const lines = budget?.lines
     if (!lines) return false
@@ -472,12 +510,21 @@ export default function FinancePage() {
   // fabricated number. Cash / full net-asset balances are NOT cleanly on the FE
   // metrics, so they are deliberately omitted (days_cash_on_hand vital covers cash
   // health); the card is a link-through into /statements for the full statements.
+  // ── DID THE STATEMENTS ACTUALLY PRODUCE ANYTHING? ────────────────────────────
+  // A trial balance can save perfectly, balance perfectly, and still yield an
+  // entirely empty set of statements — that is exactly what happened to every
+  // school whose accounts we could not name. The product went on to say
+  // "Balanced", "your statements are ready" and "your books are live" over the
+  // top of thirty-three zeros. This is the one honest signal, read from the
+  // computed metrics rather than from the fact that a file arrived.
   const revM = metricsByKey.revenue_mix
   const expM = metricsByKey.expense_mix
   const totalRevenue = revM?.available ? revM.value : null
   const totalExpense = expM?.available ? expM.value : null
   const changeInNetAssets =
     totalRevenue != null && totalExpense != null ? totalRevenue - totalExpense : null
+
+  const statementsHaveNumbers = (totalRevenue ?? 0) !== 0 || (totalExpense ?? 0) !== 0
 
   // ── Budget vs actual net variance (REAL DATA ONLY) ───────────────────────────
   // Reproduces BudgetVsActual's derivation: budgeted totals summed over the mix
@@ -574,7 +621,9 @@ export default function FinancePage() {
                 </span>
                 <div className="min-w-0">
                   <h2 className="font-serif text-[19px] font-semibold leading-snug text-navy">
-                    Your statements are ready
+                    {statementsHaveNumbers
+                      ? 'Your statements are ready'
+                      : 'One step left — tell us what these accounts are'}
                   </h2>
                   {/* A COUNT OF WHAT IS ACTUALLY STORED, not a claim about what
                       it unlocks — the reveal makes that claim, with evidence. */}
@@ -582,14 +631,17 @@ export default function FinancePage() {
                     {readyFileCount > 0
                       ? `${readyFileCount} file${readyFileCount === 1 ? '' : 's'} in`
                       : 'Saved'}
-                    {activePeriod?.label ? ` \u00b7 ${activePeriod.label}` : ''}. Open your
-                    overview whenever you like.
+                    {activePeriod?.label ? ` \u00b7 ${activePeriod.label}` : ''}.{' '}
+                    {statementsHaveNumbers
+                      ? 'Open your overview whenever you like.'
+                      : 'Your books are saved, but we can’t read them yet — categorise the accounts below and your statements fill in.'}
                   </p>
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
+                  hidden={!statementsHaveNumbers}
                   onClick={() => setRevealSchoolId(schoolId)}
                   className="inline-flex min-h-[42px] shrink-0 items-center gap-1.5 rounded-xl border-2 border-border bg-white px-4 py-2.5 text-[12px] font-semibold uppercase tracking-[0.1em] text-muted transition-colors hover:border-navy hover:text-navy"
                 >
@@ -696,6 +748,9 @@ export default function FinancePage() {
                   setCondensedSchoolId(schoolId)
                 }}
                 onAnswered={() => setConfirmedSchoolId(schoolId)}
+                // See statementsHaveNumbers: the checkpoint must not offer a
+                // celebration when there is nothing to celebrate yet.
+                dataReady={statementsHaveNumbers}
               />
             </div>
           ) : canEdit ? null : (
@@ -749,7 +804,7 @@ export default function FinancePage() {
   } else {
     overview = (
     <div className="mx-auto max-w-page space-y-5 px-4 py-6 sm:space-y-8 sm:px-10 sm:py-8">
-      <FinanceHeader />
+      <FinanceHeader onWhatLitUp={statementsHaveNumbers ? () => setRevealSchoolId(schoolId) : null} />
 
       <HomeHero
         schoolName={activeSchool?.name}
@@ -894,14 +949,22 @@ export default function FinancePage() {
       open={revealOpen}
       onClose={() => setRevealSchoolId(null)}
       schoolName={activeSchool?.name ?? null}
-      period={activePeriod}
+      period={revealPeriod}
       priorPeriodLabel={revealPriorLabel}
       hasBudget={revealPeriodMatches && revealHasBudget}
       accreditationLicensed={hasModule('accreditation')}
       // The reveal's own "keep adding files" must land somewhere with files.
-      onKeepAdding={() => expandIntake('single')}
+      // "Keep adding files" has to land somewhere with files. On the first-run
+      // screen that means unfolding the intake in place; from the overview that
+      // screen is gone, so the equivalent is the Add-data tab.
+      onKeepAdding={() => {
+        if (savedPeriods.length === 0 || firstRunLatched) expandIntake('single')
+        else navigate(addDataHref(uiV2, { add: 'tb' }))
+      }}
       vitals={revealPeriodMatches ? revealVitals : []}
-      accounts={revealAccounts}
+      // The account count comes from the files hydrated for activePeriod, so it
+      // is only true of the period the reveal names when those agree.
+      accounts={revealPeriodMatches ? revealAccounts : 0}
     />
   )
 
@@ -919,6 +982,7 @@ export default function FinancePage() {
             periodId={selectedPeriodId}
             canEdit={canEdit}
             onLitUp={() => setRevealSchoolId(schoolId)}
+            dataReady={statementsHaveNumbers}
           />
         }
         records={<FinanceRecords />}

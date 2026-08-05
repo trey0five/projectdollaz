@@ -48,6 +48,10 @@ export default function TrialBalanceModalBody({
   // signalling nothing on dismiss left that user with the band gone and no way
   // out of first run.
   onAnswered = null,
+  // Whether the saved trial balance actually produced statement figures. False
+  // means the accounts have not been categorised yet, so the checkpoint asks
+  // for that instead of offering a celebration over an empty statement.
+  dataReady = true,
 }) {
   const [mode, setMode] = useState(() =>
     TABS.some((t) => t.key === initialTab) ? initialTab : 'single',
@@ -130,6 +134,7 @@ export default function TrialBalanceModalBody({
       {showConfirm && (
         <div className="px-5 pb-5">
           <IntakeConfirmBand
+          dataReady={dataReady}
             period={activePeriod}
             files={hydratedFiles}
             onConfirm={() => {

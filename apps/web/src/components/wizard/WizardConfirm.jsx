@@ -8,7 +8,19 @@ import { motion, useReducedMotion } from 'framer-motion'
 import { CircleCheck, Plus, Sparkles } from 'lucide-react'
 import { hueRgba } from './wizardConfigs.jsx'
 
-export default function WizardConfirm({ option, hue, moduleLabel, onAddAnother, onDone }) {
+export default function WizardConfirm({
+  option,
+  hue,
+  moduleLabel,
+  onAddAnother,
+  onDone,
+  // WHERE THE WORK ACTUALLY PAYS OFF. "Done" leaves for the module's records
+  // tab, which is a filing cabinet — a user who has just handed over their
+  // books wants to see what those books now say. Optional: modules with no
+  // such destination simply keep the two buttons they had.
+  onSeeResult = null,
+  seeResultLabel = 'See what lit up',
+}) {
   const reduce = useReducedMotion()
   const isHandoff = option?.kind === 'handoff'
   const isExternal = !!option?.external
@@ -56,11 +68,25 @@ export default function WizardConfirm({ option, hue, moduleLabel, onAddAnother, 
         <button
           type="button"
           onClick={onDone}
-          className="inline-flex items-center gap-1.5 rounded-lg px-5 py-2.5 text-[14px] font-bold uppercase tracking-[0.06em] text-white shadow-glow transition-transform hover:-translate-y-0.5"
-          style={{ backgroundColor: hue }}
+          className={
+            onSeeResult
+              ? 'inline-flex items-center gap-1.5 rounded-lg border-2 border-border bg-white px-4 py-2.5 text-[14px] font-bold uppercase tracking-[0.06em] text-muted transition-colors hover:border-navy hover:text-navy'
+              : 'inline-flex items-center gap-1.5 rounded-lg px-5 py-2.5 text-[14px] font-bold uppercase tracking-[0.06em] text-white shadow-glow transition-transform hover:-translate-y-0.5'
+          }
+          style={onSeeResult ? undefined : { backgroundColor: hue }}
         >
           Done
         </button>
+        {onSeeResult && (
+          <button
+            type="button"
+            onClick={onSeeResult}
+            className="inline-flex items-center gap-1.5 rounded-lg px-5 py-2.5 text-[14px] font-bold uppercase tracking-[0.06em] text-white shadow-glow transition-transform hover:-translate-y-0.5"
+            style={{ backgroundColor: hue }}
+          >
+            <Sparkles size={15} /> {seeResultLabel}
+          </button>
+        )}
       </div>
     </motion.div>
   )

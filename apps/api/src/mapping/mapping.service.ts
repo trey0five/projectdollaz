@@ -158,14 +158,29 @@ export class MappingService {
     }
 
     const { mapping } = await this.ensureActive(schoolId)
-    const existing = (mapping.entries as Record<string, string>) ?? {}
-    const next = { ...existing, ...validated }
-    const updated = await this.prisma.mapping.update({
-      where: { id: mapping.id },
-      data: { entries: next as unknown as Prisma.InputJsonValue },
-    })
+
+    // ATOMIC MERGE, IN ONE STATEMENT.
+    //
+    // This was a read-modify-write: load entries, spread the patch over them,
+    // write the whole object back. Two categorisations landing together read
+    // the same "before" and the second overwrote the first — and the intake's
+    // review panel is exactly where a person categorises a run of accounts in
+    // quick succession. Caught with a 33-account trial balance: eleven picks
+    // survived and the rest vanished silently, leaving a school with numbers
+    // that were wrong rather than merely absent.
+    //
+    // `||` is Postgres' jsonb concatenation: right-hand keys win, the read and
+    // the write are the same statement, so concurrent merges cannot lose each
+    // other. Prisma has no typed operator for it, hence the raw query.
+    const rows = await this.prisma.$queryRaw<{ entries: Record<string, string> }[]>`
+      UPDATE mappings
+         SET entries = entries || ${JSON.stringify(validated)}::jsonb
+       WHERE id = ${mapping.id}::uuid
+      RETURNING entries
+    `
+    const next = rows[0]?.entries ?? {}
     return {
-      mappingVersion: updated.version,
+      mappingVersion: mapping.version,
       entriesCount: Object.keys(next).length,
       merged: Object.keys(validated).length,
     }

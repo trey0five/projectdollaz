@@ -27,6 +27,10 @@ export default function AddDataTab({
   onDone,
   // Optional celebrate-hook, forwarded to whichever embed wants it (see ctx).
   onLitUp = null,
+  // Whether the saved data actually produced statement figures. Travels with
+  // onLitUp because it governs the same thing: whether a celebration is
+  // truthful yet. See FinancePage.statementsHaveNumbers.
+  dataReady = true,
 }) {
   const { activeSchool } = useSchools()
   const { periods, hydratedFiles, activePeriod, hydrationToken } = usePersistence()
@@ -107,6 +111,7 @@ export default function AddDataTab({
       // Optional: the host page's "celebrate what this upload lit up" hook. Only
       // Finance passes one today; an embed without it simply renders no gate.
       onLitUp,
+      dataReady,
       // Advisory tab hint for whichever embed the deep link opened.
       intake: deepLink.intake,
     }),
@@ -124,6 +129,7 @@ export default function AddDataTab({
       hydrationToken,
       handleSaved,
       onLitUp,
+      dataReady,
       deepLink,
     ],
   )

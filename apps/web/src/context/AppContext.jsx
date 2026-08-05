@@ -425,6 +425,15 @@ export function AppProvider({
       try {
         await mappingApi.mergeEntries(school.id, { [key]: categoryKey })
         setStatus(`Categorized account ${key}.`)
+        // THE SERVER JUST REBUILT THE STATEMENTS. Categorising an account is
+        // the one edit that changes every number on the page without touching a
+        // file, and the API regenerates the affected periods on this call — but
+        // nothing here told the rest of the app to look again, so a user could
+        // classify their whole chart and watch the screen keep insisting it
+        // could not read their books. Same signal Penny's writes use.
+        window.dispatchEvent(
+          new CustomEvent('penny:data-changed', { detail: { key: 'metrics' } }),
+        )
       } catch (err) {
         // Roll the optimistic pick back so the account re-flags for another try.
         setMappedOverlay((prev) => {
@@ -442,6 +451,49 @@ export function AppProvider({
       }
     },
     [readOnly, school],
+  )
+
+  /**
+   * Categorise SEVERAL accounts in ONE request.
+   *
+   * The review panel's "use all suggestions" fired mapAccount per account, so a
+   * 33-account trial balance sent 33 concurrent PATCHes — each merging into the
+   * same row and rebuilding the statements. Most picks were lost and the school
+   * was left with numbers that were WRONG rather than missing. (The server-side
+   * merge is atomic now too; this is the other half — one request, one rebuild.)
+   */
+  const mapAccounts = useCallback(
+    async (entries) => {
+      const keys = Object.keys(entries ?? {})
+      if (readOnly || !school?.id || keys.length === 0) return
+      setMappedOverlay((prev) => ({ ...prev, ...entries }))
+      setMappingAccts((prev) => {
+        const n = new Set(prev)
+        for (const k of keys) n.add(String(k))
+        return n
+      })
+      try {
+        await mappingApi.mergeEntries(school.id, entries)
+        setStatus(`Categorized ${keys.length} account${keys.length === 1 ? '' : 's'}.`)
+        window.dispatchEvent(
+          new CustomEvent('penny:data-changed', { detail: { key: 'metrics' } }),
+        )
+      } catch (err) {
+        setMappedOverlay((prev) => {
+          const next = { ...prev }
+          for (const k of keys) delete next[k]
+          return next
+        })
+        setStatus(`Could not categorize: ${err?.message ?? 'try again'}`)
+      } finally {
+        setMappingAccts((prev) => {
+          const n = new Set(prev)
+          for (const k of keys) n.delete(String(k))
+          return n
+        })
+      }
+    },
+    [readOnly, school?.id, setStatus],
   )
 
   // ── SAVE (Phase 1C): persist the slotted, newly-uploaded imports + request the
@@ -666,6 +718,7 @@ export function AppProvider({
     // mappingAccts is the per-row in-flight set (consumers call .has(key)).
     activeChart,
     mapAccount,
+    mapAccounts,
     mappingAccts,
   }
 

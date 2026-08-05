@@ -121,6 +121,10 @@ export const wizardConfigs = {
             // so adding a SECOND year through the wizard is rewarded too — not
             // only a school's very first upload.
             onConfirmed={ctx.onLitUp}
+            // Without this the Add-data tab — the screen most schools actually
+            // use — kept offering "show me what lit up" over an empty
+            // statement, which is the exact claim this release exists to stop.
+            dataReady={ctx.dataReady !== false}
           />
         ),
       },

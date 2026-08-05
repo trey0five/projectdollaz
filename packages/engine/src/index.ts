@@ -38,6 +38,8 @@ export type {
 export { SCOA_CATEGORIES } from './scoa/categories.js'
 export type { SchoolToScoaMapping } from './scoa/defaultMapping.js'
 export { ACCT_MAP, DEFAULT_MAPPING } from './scoa/defaultMapping.js'
+export { suggestCategory, suggestCategories } from './scoa/suggest.js'
+export type { CategorySuggestion, SuggestionConfidence, SuggestInput } from './scoa/suggest.js'
 export type { StandardChart } from './scoa/chart.js'
 export {
   DEFAULT_CHART,

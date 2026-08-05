@@ -174,6 +174,25 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
   // later, which is the same class of action as the Records pill in ModuleCtas,
   // and it uses the identical `?tab=records` URL model so the two cannot
   // disagree about where Records lives.
+  /**
+   * Leave for the module OVERVIEW rather than its records tab, and — when the
+   * host offered one (finance) — replay the celebration on arrival.
+   *
+   * `finish` is unchanged and still goes to records: this is an additional door,
+   * not a redefinition of that one. A user who has just handed over their books
+   * wants to see what those books now SAY, and the records tab is a filing
+   * cabinet.
+   */
+  const seeResult = () => {
+    setFlowResult(null)
+    flowGuardRef.current = null
+    savedRef.current = false
+    setOptionKey(null)
+    setStep('choose')
+    navigate(pathname)
+    ctx?.onLitUp?.()
+  }
+
   const finish = () => {
     setFlowResult(null)
     flowGuardRef.current = null
@@ -225,9 +244,15 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
             >
               {moduleLabel} · Add data
             </p>
-            <h2 className="mt-0.5 font-serif text-lg font-semibold text-navy">
-              Get your {moduleLabel.toLowerCase()} numbers in
-            </h2>
+            {/* ON THE WORK STEP THE PANEL BELOW ALREADY NAMES THE JOB ("Trial
+                balance", under its own back pill), so this said the same thing
+                a second time forty pixels above it. Kept for Choose and Done,
+                where nothing else does. */}
+            {step !== 'work' && (
+              <h2 className="mt-0.5 font-serif text-lg font-semibold text-navy">
+                Get your {moduleLabel.toLowerCase()} numbers in
+              </h2>
+            )}
           </div>
         </div>
         <WizardStepper
@@ -390,6 +415,8 @@ export default function AddDataWizard({ config, ctx, initialOption = null }) {
                     moduleLabel={moduleLabel}
                     onAddAnother={addAnother}
                     onDone={finish}
+                    // Only where the host can actually show a result.
+                    onSeeResult={ctx?.onLitUp ? seeResult : null}
                   />
                 )}
               </>
