@@ -133,7 +133,7 @@ describe('getPeerBenchmark', () => {
     )
   })
 
-  it('single-school org → matchTier none + emptyState single_school', async () => {
+  it('single-school org → matchTier none + emptyState single_school + THE BAND FALLBACK', async () => {
     const svc = buildService()
     stub(svc, { schools: [school('f', 'Focus')], notReported: [] })
     const r = await svc.getPeerBenchmark(USER, 'org1', 'f', {})
@@ -141,6 +141,45 @@ describe('getPeerBenchmark', () => {
     expect(r.peers).toEqual([])
     expect(r.stats).toEqual({})
     expect(r.emptyState?.reason).toBe('single_school')
+    // DECIDED: the dead end became a comparison. One row per headline metric,
+    // the school's own value paired with the sector band.
+    expect(r.benchmark).not.toBeNull()
+    expect(r.benchmark!.map((b) => b.key)).toEqual([
+      'days_cash_on_hand',
+      'operating_margin',
+      'months_operating_reserve',
+      'tuition_dependency',
+      'cost_per_pupil',
+    ])
+    const dcoh = r.benchmark!.find((b) => b.key === 'days_cash_on_hand')!
+    expect(dcoh.value).toBe(50) // THIS school's value, so the band bar can place it
+    expect(dcoh.bands).toMatchObject({ good: 60, risk: 30 })
+    // cost_per_pupil is DELIBERATELY unbanded — no invented target, ever.
+    expect(r.benchmark!.find((b) => b.key === 'cost_per_pupil')!.bands).toBeUndefined()
+  })
+
+  it('no_peers (multi-school, none reported) gets NO band fallback — the nudge stays', async () => {
+    // A multi-school org that simply hasn't reported must keep "your other
+    // schools haven't reported", not be quietly rerouted to sector defaults.
+    const svc = buildService()
+    stub(svc, {
+      schools: [school('f', 'Focus')],
+      notReported: [{ schoolId: 'x', name: 'Xray' }],
+    })
+    const r = await svc.getPeerBenchmark(USER, 'org1', 'f', {})
+    expect(r.emptyState?.reason).toBe('no_peers')
+    expect(r.benchmark).toBeNull()
+  })
+
+  it('a working peer group gets NO band fallback — never a second axis', async () => {
+    const svc = buildService()
+    stub(svc, {
+      schools: [school('f', 'Focus'), school('p1', 'P1'), school('p2', 'P2'), school('p3', 'P3')],
+      notReported: [],
+    })
+    const r = await svc.getPeerBenchmark(USER, 'org1', 'f', {})
+    expect(r.peers.length).toBeGreaterThanOrEqual(3)
+    expect(r.benchmark).toBeNull()
   })
 
   it('all peers not-reported this FY → emptyState no_peers', async () => {

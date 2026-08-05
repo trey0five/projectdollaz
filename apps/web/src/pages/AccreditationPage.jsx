@@ -86,6 +86,7 @@ import HorizonTimeline from '../components/accreditation/HorizonTimeline.jsx'
 import CoverageCta from '../components/accreditation/CoverageCta.jsx'
 import NamedHolesPanel from '../components/accreditation/NamedHolesPanel.jsx'
 import ImprovementPlaceholder from '../components/accreditation/ImprovementPlaceholder.jsx'
+import { mergeAttentionRail } from '../components/accreditation/attentionRail.js'
 import {
   actionsForFinding,
   NOT_YET_RECORDED_TOOLTIP,
@@ -736,15 +737,34 @@ export function EvidencePanel({
               // Assurance leaves are binary evidence gates — no rubric pips.
               <AssuranceGateChip dark satisfied={(standard.evidenceCount ?? 0) > 0} />
             ) : (
-              <RubricPicker
-                dark
-                showLabel
-                value={standard.rubricScore ?? null}
-                labels={rubricLabels}
-                activeLabel={standard.rubricLabel ?? null}
-                disabled={!canEdit || !onRubric}
-                onChange={onRubric ? (v) => onRubric(standard.id, v) : undefined}
-              />
+              <>
+                <RubricPicker
+                  dark
+                  showLabel
+                  value={standard.rubricScore ?? null}
+                  labels={rubricLabels}
+                  activeLabel={standard.rubricLabel ?? null}
+                  disabled={!canEdit || !onRubric}
+                  onChange={onRubric ? (v) => onRubric(standard.id, v) : undefined}
+                />
+                {/* PROVENANCE, finally read. Who asserted this score and when has
+                    been recorded on every change since Phase A — and rendered
+                    nowhere, an honesty ledger with no reader. A self-score is an
+                    assertion; this chip says whose. (Scorer deleted → SetNull
+                    keeps the score and drops the name; the chip degrades to the
+                    date. Older scores predate the stamp → no chip, no guess.) */}
+                {standard.rubricScore != null && standard.rubricScoredAt ? (
+                  <span className="inline-flex items-center rounded-md border border-white/15 bg-white/5 px-2 py-0.5 text-[11px] font-medium text-white/60">
+                    {standard.scoreProvenance === 'peer_reviewed'
+                      ? 'Peer-reviewed'
+                      : standard.scoreProvenance === 'externally_validated'
+                        ? 'Externally validated'
+                        : 'Self-scored'}
+                    {standard.rubricScoredBy ? ` · ${standard.rubricScoredBy}` : ''}
+                    {` · ${standard.rubricScoredAt}`}
+                  </span>
+                ) : null}
+              </>
             )
           ) : null}
           {linkStrategy ? (
@@ -1945,6 +1965,10 @@ function AccreditationWorkspace() {
 
       return {
         id: `ew-${f.findingKey ?? f.factKey}`,
+        // Carried OUT of the mapper for the merged rail comparator: the concat
+        // that preceded it compared nothing across the two lists.
+        severity: f.severity,
+        focused,
         tone: SEVERITY_TONE[f.severity] ?? 'neutral',
         title: code ? `${code} — ${f.title}` : f.title,
         why: `${f.rationale} ${f.consequence}`,
@@ -2014,7 +2038,15 @@ function AccreditationWorkspace() {
   // cited under, so nothing is lost by putting them first. A viewer sees them too
   // (they can read /twin), with navigation actions and no acknowledge control.
   const attentionItems = useMemo(() => {
-    if (!canEdit) return earlyWarningItems.slice(0, 6)
+    if (!canEdit) {
+      // Viewers get engine findings only (they cannot act on readiness prompts) —
+      // already severity-sorted upstream. Same {list, more} shape as the editor
+      // branch so the overflow line renders for both.
+      return {
+        list: earlyWarningItems.slice(0, 6),
+        more: Math.max(0, earlyWarningItems.length - 6),
+      }
+    }
     const items = []
     const assuranceUnmet = new Map(
       (readiness?.assurances ?? []).filter((a) => !a.satisfied).map((a) => [a.standardId, a]),
@@ -2028,6 +2060,12 @@ function AccreditationWorkspace() {
       items.push({
         id: `gap-${s.id}`,
         tone: 'risk',
+        // Readiness prompts now carry a SEVERITY so the merged comparator can
+        // weigh them against engine findings instead of concatenating blind.
+        // 'warn', not 'critical': an unmet gate is serious, but when the twin
+        // agrees it emits its own ACC-ASSURANCE-GAP critical — the prompt is the
+        // reminder, the finding is the alarm, and the alarm must outrank it.
+        severity: 'warn',
         sortKey: isGate ? -1 : 0,
         title: isGate ? `Assurance ${s.code} is unmet` : `${s.code} has no evidence`,
         why: isGate ? `${s.title} · binary accreditation gate — attach evidence` : s.title,
@@ -2042,6 +2080,7 @@ function AccreditationWorkspace() {
       items.push({
         id: `review-${s.id}`,
         tone: 'watch',
+        severity: 'watch',
         sortKey: 1,
         title: `${s.code} review is due`,
         why:
@@ -2061,6 +2100,7 @@ function AccreditationWorkspace() {
       items.push({
         id: `score-${g.standardId}`,
         tone: 'watch',
+        severity: 'watch',
         sortKey: 2,
         title: `${g.code} is unscored`,
         why: lift != null ? `${g.title} · worth +${lift} index pts at full marks` : g.title,
@@ -2070,14 +2110,13 @@ function AccreditationWorkspace() {
       })
     }
 
-    // THE EARLY WARNINGS LEAD, BUT THEY DO NOT EVICT. Once six findings are open,
-    // an unqualified concat left zero slots for the Phase-A–C readiness prompts —
-    // the no-evidence and unscored rows became unreachable from the rail
-    // altogether. Four slots to the engine, the remainder to readiness; if either
-    // side is short the other simply fills the rail.
-    const ranked = items.sort((a, b) => a.sortKey - b.sortKey)
-    const leadCount = Math.max(6 - ranked.length, Math.min(earlyWarningItems.length, 4))
-    return [...earlyWarningItems.slice(0, leadCount), ...ranked].slice(0, 6)
+    // ONE LIST, ONE COMPARATOR — mergeAttentionRail (attentionRail.js), where
+    // the ordering rules are documented and behaviourally tested. The shape it
+    // replaces reserved four slots for the engine and concatenated two lists
+    // whose sort keys were never compared, so a fifth open CRITICAL was evicted
+    // by a watch-level "«code» is unscored" prompt — and viewers, who skipped
+    // the concat, saw a strictly better list than editors.
+    return mergeAttentionRail(earlyWarningItems, items)
   }, [standards, canEdit, readiness, scrollToStandard, earlyWarningItems])
 
   // ── Gate ───────────────────────────────────────────────────────────────────
@@ -2269,7 +2308,7 @@ function AccreditationWorkspace() {
       eyebrow="Domain · Accreditation engine · system of record"
       title="Accreditation"
       Icon={BadgeCheck}
-      attentionCount={attentionItems.length}
+      attentionCount={attentionItems.list.length}
       kpis={kpis}
       tabs={CENTER_TABS}
       activeTab={tab}
@@ -2286,7 +2325,9 @@ function AccreditationWorkspace() {
                 ? improvementTab
                 : registerTable
       }
-      attentionItems={attentionItems}
+      attentionItems={attentionItems.list}
+      attentionMoreCount={attentionItems.more}
+      attentionOnMore={() => chooseTab('signals')}
       aboveKpis={readinessHero}
       headerAside={
         <>

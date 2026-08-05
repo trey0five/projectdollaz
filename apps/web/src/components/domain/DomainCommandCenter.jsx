@@ -69,6 +69,8 @@ export default function DomainCommandCenter({
   onNew,
   registerTable,
   attentionItems = [],
+  attentionMoreCount = 0,
+  attentionOnMore = null,
   headerAside = null,
   beforeBody = null,
   aboveKpis = null,
@@ -211,7 +213,11 @@ export default function DomainCommandCenter({
 
         {/* RIGHT — needs attention */}
         <div className="lg:col-span-1">
-          <NeedsAttentionPanel items={attentionItems} />
+          <NeedsAttentionPanel
+            items={attentionItems}
+            moreCount={attentionMoreCount}
+            onMore={attentionOnMore}
+          />
         </div>
       </div>
 

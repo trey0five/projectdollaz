@@ -28,6 +28,10 @@ export default function WizardChoose({ options, hue, onChoose }) {
           >
             <button
               type="button"
+              // Stable anchor for Penny's walkthrough glide: under ui.v2 the
+              // Data-hub cards are gone, and these chooser cards are their
+              // successors — the target registry's v2 overrides point here.
+              id={`adddata-card-${opt.key}`}
               onClick={() => onChoose(opt.key)}
               className="module-tile group w-full text-left"
               style={{ '--tile-hue': hue }}

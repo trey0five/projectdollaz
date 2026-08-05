@@ -21,8 +21,10 @@ import {
   sizeBandOf,
   DEFAULT_PEER_DIMS,
   METRIC_KEYS,
+  bandsFor,
   PEER_DIMS,
   type MatchTier,
+  type TargetBands,
   type MetricKey,
   type MetricResult,
   type OrgMetricResult,
@@ -219,6 +221,16 @@ export interface PeerBenchmarkResponse {
   stats: Record<string, PeerStatEntry>
   insights: string[]
   emptyState: { reason: 'single_school' | 'no_peers'; message: string } | null
+  /**
+   * DECIDED fallback for a single-school head: the sector target bands from
+   * @finrep/analytics DEFAULT_BANDS ("sensible private-school sector defaults —
+   * NOT hard truths"), paired with THIS school's own values, so the Peers tab
+   * renders a band comparison instead of a dead end. Alongside the emptyState,
+   * never instead of it: a sector default is not a peer, and the copy says so.
+   * Only for reason 'single_school'; a multi-school org that simply hasn't
+   * reported keeps its "others haven't reported" nudge unchanged.
+   */
+  benchmark: { key: string; value: number | null; bands: TargetBands | undefined }[] | null
 }
 
 /** Options for getPeerBenchmark (dims may arrive as CSV or an array). */
@@ -853,8 +865,20 @@ export class OrgMetricsService {
       const reason: 'single_school' | 'no_peers' = totalInOrg <= 1 ? 'single_school' : 'no_peers'
       const message =
         reason === 'single_school'
-          ? 'Add another school to unlock peer benchmarking.'
+          ? 'One school here — so your context is the sector band, not a peer group.'
           : "Your other schools haven't reported this year yet."
+      // The band fallback needs the school's OWN values to place on each band;
+      // `focus.metrics` already carries them when the school has reported.
+      // `bandsFor` returns undefined for deliberately-unbanded metrics
+      // (cost_per_pupil) — those rows ship with bands omitted and the tile says
+      // "no sector band" rather than inventing one.
+      const benchmark =
+        reason === 'single_school'
+          ? HEADLINE_METRICS.map((key) => {
+              const v = (focus.metrics as Record<string, { value?: number | null } | undefined>)[key]
+              return { key, value: v?.value ?? null, bands: bandsFor(key as MetricKey) }
+            })
+          : null
       return {
         orgId,
         fiscalYearStart,
@@ -874,6 +898,7 @@ export class OrgMetricsService {
         stats: {},
         insights: [],
         emptyState: { reason, message },
+        benchmark,
       }
     }
 
@@ -972,6 +997,9 @@ export class OrgMetricsService {
       stats,
       insights,
       emptyState: null,
+      // Real peers on screen — the sector-band fallback is for the school that
+      // has none, never a second axis on a working comparison.
+      benchmark: null,
     }
   }
 }

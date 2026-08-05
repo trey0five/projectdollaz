@@ -26,7 +26,7 @@ import { EnrollmentController } from './enrollment.controller.js'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js'
 import { RolesGuard } from '../common/guards/roles.guard.js'
 import { EntitlementGuard } from '../billing/entitlement.guard.js'
-import { STUDENT_IMPORT_MAX_ROWS } from './students/students.dto.js'
+import { ROSTER_UPLOAD_HARD_CAP, STUDENT_IMPORT_MAX_ROWS } from './students/students.dto.js'
 
 const USER = { id: 'u1', email: 'head@school.test' } as unknown as User
 const SCHOOL = 'school-A'
@@ -572,12 +572,48 @@ describe('the file snapshot does not clobber the roster snapshot', () => {
   })
 })
 
-// ── The row ceiling ──────────────────────────────────────────────────────────
+// ── The row ceiling is GONE: writes chunk. Only the backstop degrades. ───────
 
-describe('the import-row ceiling degrades to counts, it does not fail', () => {
-  it('over the ceiling: no records, still promoted, and it says why', async () => {
-    const { svc, student, opUpsert } = makeHarness()
+describe('a file above the old 2,000-row ceiling now CREATES records, chunked', () => {
+  it('2,001 rows → records created across 5 chunks, promote runs ONCE, on the last', async () => {
+    // The exact size that used to degrade to counts-only with "split it into
+    // files of 2,000 or fewer" — the product asking the user to do the chunking
+    // it would not do itself.
+    const spy = vi.spyOn(StudentsService.prototype, 'importCommit')
+    const promoteSpy = vi.spyOn(StudentsService.prototype, 'syncRosterSnapshot')
+    const { svc } = makeHarness()
     const n = STUDENT_IMPORT_MAX_ROWS + 1
+    const res = await svc.upload(USER, SCHOOL, file(usersCsv(roster(n))))
+
+    expect(res.records).not.toBeNull()
+    expect(res.records!.created).toBe(n)
+    expect(spy).toHaveBeenCalledTimes(Math.ceil(n / 500))
+    // Every chunk but the last defers the tail; the last runs it.
+    const skipFlags = spy.mock.calls.map((c) => (c[4] as { skipPromote?: boolean }).skipPromote)
+    expect(skipFlags.slice(0, -1).every(Boolean)).toBe(true)
+    expect(skipFlags[skipFlags.length - 1]).toBe(false)
+    // ONE promote for the whole import — never five intermediate headcounts.
+    expect(promoteSpy).toHaveBeenCalledTimes(1)
+    spy.mockRestore()
+    promoteSpy.mockRestore()
+  })
+
+  it('a REPLACE above one chunk replaces ONCE then merges — never delete-per-chunk', async () => {
+    const spy = vi.spyOn(StudentsService.prototype, 'importCommit')
+    const { svc, student } = makeHarness()
+    const res = await svc.upload(USER, SCHOOL, file(usersCsv(roster(1200))), { mode: 'replace' })
+    expect(res.records!.created).toBe(1200)
+    const modes = spy.mock.calls.map((c) => c[2])
+    expect(modes[0]).toBe('replace')
+    expect(modes.slice(1).every((m) => m === 'merge')).toBe(true)
+    // deleteMany fired exactly once — chunk 2 must NOT wipe chunk 1's writes.
+    expect(student.deleteMany).toHaveBeenCalledTimes(1)
+    spy.mockRestore()
+  })
+
+  it('above the runaway backstop: counts-only, promoted, and it says why', async () => {
+    const { svc, student, opUpsert } = makeHarness()
+    const n = ROSTER_UPLOAD_HARD_CAP + 1
     const res = await svc.upload(USER, SCHOOL, file(usersCsv(roster(n))))
 
     expect(res.records).toBeNull()
@@ -585,7 +621,7 @@ describe('the import-row ceiling degrades to counts, it does not fail', () => {
     expect(student.createMany).not.toHaveBeenCalled()
     expect(res.promoted).toBe(true)
     expect(res.enrollment).toMatchObject({ value: n, source: 'file' })
-    expect(res.warnings.some((w) => w.includes(`${STUDENT_IMPORT_MAX_ROWS}-row import ceiling`))).toBe(true)
+    expect(res.warnings.some((w) => w.includes(`${ROSTER_UPLOAD_HARD_CAP}-row backstop`))).toBe(true)
     expect(opUpsert).toHaveBeenCalledTimes(1)
   })
 })

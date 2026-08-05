@@ -125,6 +125,14 @@ export interface RosterSyncOptions {
    * uploaded in August must not count toward next year.
    */
   observedOn?: string
+  /**
+   * CHUNKED-IMPORT PLUMBING. True on every chunk but the last: the audit row
+   * still writes (each one is a true, counts-only record of what that chunk
+   * did), but the roster→snapshot promote is DEFERRED to the final chunk — a
+   * 6-chunk import must not narrate five wrong intermediate headcounts, and
+   * `promote` on the response must describe the finished roster, not a slice.
+   */
+  skipPromote?: boolean
 }
 
 export interface ImportPreviewResult {
@@ -500,7 +508,7 @@ export class StudentsService {
       targetType: 'students',
       metadata: { mode, created, updated, deleted, total },
     })
-    const promote = await this.syncRosterSnapshot(actor, schoolId, opts)
+    const promote = opts.skipPromote ? null : await this.syncRosterSnapshot(actor, schoolId, opts)
     return { created, updated, deleted, total, ...(promote ? { promote } : {}) }
   }
 

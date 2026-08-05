@@ -27,7 +27,7 @@ const TrendChart = lazy(() => import('./TrendChart.jsx'))
  * for banded metrics. risk / watch / good segments use the status tokens; the
  * marker sits proportionally between a sensible min/max derived from the bands.
  */
-function TargetBandBar({ metric }) {
+export function TargetBandBar({ metric }) {
   const bands = metric.bands
   if (!bands || metric.value == null) return null
   const fmt = metricFormat(metric.key, metric.unit)

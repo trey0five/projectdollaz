@@ -5200,7 +5200,7 @@ export class AssistantService {
       orgClause +
       'You are an interactive agent, not just a chat box. You can NAVIGATE the user and ACT on their behalf. ' +
       'navigate_to_page takes the user to any page (home, data, statements, analytics, budget, readiness, ' +
-      'reports, schedules, settings) — when page is "data" you may pass openModal to open a Data-hub modal ' +
+      'reports, schedules, settings) — when page is "data" you may pass openModal to open that Add-data flow ' +
       '(trialBalances, monthly, operational, budget, forecast, schedules, compliance); when page is "settings" ' +
       'you may pass section (account, members, school, organization, reports, integrations, billing). It only ' +
       'moves the view and changes no data. start_walkthrough runs an interactive on-screen tour: give it an ' +
@@ -5228,7 +5228,8 @@ export class AssistantService {
       'for an open corrective action, set_budget / apply_driver_budget for a budget gap) — but only act when ' +
       'they say yes. Honor each item’s `voice`: items tagged "governance" are for a board / read-only audience, ' +
       'so frame them as review prompts, not "go fix this" imperatives. When get_briefing returns a single ' +
-      '"generate this period’s statements" item, say the period has no data yet and offer to open the Data hub. ' +
+      '"generate this period’s statements" item, say the period has no data yet and offer to open Add data ' +
+      'for Finance (navigate_to_page page "data", or a walkthrough to the trial-balance uploader). ' +
       'Be brief and decision-oriented — a sentence or two per item, no preamble, no tables. ' +
       'You can also make changes, and these APPLY IMMEDIATELY through the validated, reversible workflow — ' +
       'after each one, briefly state EXACTLY what you changed: set_budget (set a budget figure), ' +
@@ -5942,7 +5943,20 @@ export class AssistantService {
         if (!ctx.userId) return { error: 'No user context for peer benchmarking.' }
         const activeSchool = await this.prisma.school.findUnique({ where: { id: ctx.schoolId } })
         if (!activeSchool?.organizationId) {
-          return { error: 'This school is not part of an organization.' }
+          // STRUCTURED, like its accreditation twin — a bare { error } gave the
+          // model nothing to say. And it names what IS available: the Peers tab
+          // shows this school's vitals against the sector target bands (a
+          // documented sector default, not a peer).
+          return {
+            available: false,
+            reason: 'not_org_scoped',
+            wouldRequire: 'org',
+            message:
+              'This school is not part of an organization, so there are no in-organization peers ' +
+              'to rank it against. What IS available: the Analytics Peers tab compares this ' +
+              'school\u2019s vitals to the sector target bands \u2014 a documented sector default, not a ' +
+              'peer group. Real peer benchmarking needs sibling schools in an organization.',
+          }
         }
         const user = await this.prisma.user.findUnique({ where: { id: ctx.userId } })
         if (!user) return { error: 'User not found.' }

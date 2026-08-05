@@ -211,7 +211,7 @@ export const wizardConfigs = {
         Icon: Upload,
         label: 'Upload a roster file',
         blurb:
-          'Drop a OneRoster ZIP or CSV and we do the whole job in one step — a student record for every row, plus the enrollment count by grade for the period the file is dated to. Records are created for up to 2,000 students per file; above that the count still lands, so split the file. Best when the file is already correct.',
+          'Drop a OneRoster ZIP or CSV and we do the whole job in one step — a student record for every row, plus the enrollment count by grade for the period the file is dated to. Records are created for files of up to 10,000 students; above that the count still lands. Best when the file is already correct.',
         cta: 'Upload roster file',
         renderEmbed: (ctx) => (
           <RosterUpload

@@ -73,6 +73,8 @@ function makeService(over: {
   seeds?: Seed[]
   findManyThrows?: boolean
   capture?: (args: Record<string, unknown>) => void
+  /** Return rows WARN-FIRST, simulating a collation the orderBy does not promise. */
+  hostileOrder?: boolean
 }) {
   const rows = (over.seeds ?? []).map(seedRow)
   const findMany = vi.fn(async (args: Record<string, unknown>) => {
@@ -85,7 +87,11 @@ function makeService(over: {
       .filter((r) => allowed.size === 0 || allowed.has(r.ruleId))
       .filter((r) => sevs.size === 0 || sevs.has(r.severity))
       .filter((r) => r.mutedUntil === null || r.mutedUntil.getTime() <= Date.now())
-      .sort((a, b) => a.severity.localeCompare(b.severity))
+      .sort((a, b) =>
+        over.hostileOrder
+          ? b.severity.localeCompare(a.severity)
+          : a.severity.localeCompare(b.severity),
+      )
       .slice(0, args.take as number)
   })
 
@@ -222,6 +228,26 @@ describe('STEP 2.16 — the gate and the cap', () => {
     })
     const res = await h.svc.getBriefing('school-1', PERIOD.id, 'owner')
     expect(ew(res.items)).toHaveLength(0)
+  })
+
+  it('the cap does not TRUST the database order — a critical survives a hostile sort', async () => {
+    // The orderBy was luck, not design: `severity` is a plain String column and
+    // 'critical' < 'warn' only lexically. With the two-item cap downstream, any
+    // collation or vocabulary change that reordered rows would silently drop the
+    // critical. The service now re-ranks in code; this feeds it WARN-FIRST rows
+    // and demands the critical lead anyway.
+    const h = makeService({
+      hostileOrder: true,
+      seeds: [
+        { ruleId: 'GOV-CADENCE-GAP', severity: 'warn', standardTags: ['COG-1'] },
+        { ruleId: 'EVI-STALE', severity: 'warn', standardTags: ['COG-2'] },
+        { ruleId: 'ACC-ASSURANCE-GAP', severity: 'critical', standardTags: ['COG-A1'] },
+      ],
+    })
+    const res = await h.svc.getBriefing('school-1', PERIOD.id, 'owner')
+    const items = ew(res.items)
+    expect(items).toHaveLength(2)
+    expect(items[0].severity).toBe('critical')
   })
 
   it('ACCEPTANCE 4: forty open findings produce EXACTLY TWO items, under every lens', async () => {

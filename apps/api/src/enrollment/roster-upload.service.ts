@@ -59,7 +59,7 @@ import {
   type UploadedRosterFile,
 } from './enrollment.service.js'
 import { StudentsService } from './students/students.service.js'
-import { STUDENT_IMPORT_MAX_ROWS, type CreateStudentDto } from './students/students.dto.js'
+import { ROSTER_UPLOAD_HARD_CAP, type CreateStudentDto } from './students/students.dto.js'
 
 /**
  * What a LIVE SYNC produced. The intake result the route already returned, plus
@@ -242,6 +242,63 @@ export class RosterUploadService {
     return { deleted: true }
   }
 
+  /**
+   * THE 2,000-ROW CEILING IS GONE — writes are CHUNKED instead of refused.
+   *
+   * The hand-off this closes: a 2,400-student school's one honest path was
+   * "split it into files of 2,000 or fewer — by grade band, say", i.e. the
+   * product asking the user to do the chunking it would not do itself. The
+   * per-transaction limit was real (merge issues one statement per row inside
+   * one transaction); the ceiling on the FILE never was.
+   *
+   * Why each hazard from the single-call shape is safe here:
+   *   • CROSS-CHUNK MATCHING — importCommit re-reads the register at the top of
+   *     every call, so chunk 2 UPDATES what chunk 1 created. Already correct.
+   *   • DUPLICATE externalIds — both callers (upload and sync) dedupe the whole
+   *     candidate set BEFORE this point (`seenExternalIds`, with an aggregate
+   *     "skipped" warning), so no duplicate can span a chunk boundary. The
+   *     reviewed HTTP import keeps its own per-call 400 untouched.
+   *   • REPLACE — `deleteMany` runs unconditionally inside importCommit, so only
+   *     CHUNK 1 may carry mode 'replace'; the rest merge into the fresh register.
+   *   • THE TAIL — `skipPromote` defers the roster→snapshot promote to the final
+   *     chunk, so the response narrates the finished roster, never a slice. The
+   *     per-chunk audit rows stay: each is a true, counts-only record of what
+   *     that chunk did, and an under-counting single audit row would be worse
+   *     than several honest ones.
+   */
+  private async commitInChunks(
+    actor: User,
+    schoolId: string,
+    mode: 'merge' | 'replace',
+    candidates: CreateStudentDto[],
+    opts: Parameters<StudentsService['importCommit']>[4],
+  ): Promise<Awaited<ReturnType<StudentsService['importCommit']>>> {
+    const CHUNK = 500
+    if (candidates.length <= CHUNK) {
+      return this.students.importCommit(actor, schoolId, mode, candidates, opts)
+    }
+    let created = 0
+    let updated = 0
+    let deleted = 0
+    let last: Awaited<ReturnType<StudentsService['importCommit']>> | null = null
+    for (let i = 0; i < candidates.length; i += CHUNK) {
+      const chunk = candidates.slice(i, i + CHUNK)
+      const isLast = i + CHUNK >= candidates.length
+      last = await this.students.importCommit(
+        actor,
+        schoolId,
+        mode === 'replace' && i > 0 ? 'merge' : mode,
+        chunk,
+        { ...opts, skipPromote: !isLast },
+      )
+      created += last.created
+      updated += last.updated
+      deleted += last.deleted
+    }
+    // last is non-null (candidates.length > CHUNK ⇒ at least one iteration).
+    return { ...(last as NonNullable<typeof last>), created, updated, deleted }
+  }
+
   async sync(
     actor: User,
     schoolId: string,
@@ -305,15 +362,16 @@ export class RosterUploadService {
     if (rows.length === 0) {
       recordsNote =
         'This provider returned totals only — a headcount by grade, with no per-student rows to save.'
-    } else if (candidates.length > STUDENT_IMPORT_MAX_ROWS) {
-      // The ceiling degrades to counts-only rather than failing, exactly as the
-      // upload path does: a large school must not lose the sync that works for it.
+    } else if (candidates.length > ROSTER_UPLOAD_HARD_CAP) {
+      // The BACKSTOP degrades to counts-only rather than failing — but it is a
+      // runaway-file guard now, not a product limit: writes are chunked, so a
+      // 3,000-student school syncs records like anyone else.
       recordsNote =
-        `This provider returned ${candidates.length} students, above the ${STUDENT_IMPORT_MAX_ROWS}-row limit for ` +
-        'one import, so the headcount was synced but the student records were not.'
+        `This provider returned ${candidates.length} students, above the ${ROSTER_UPLOAD_HARD_CAP}-row backstop for ` +
+        'one sync, so the headcount was synced but the student records were not.'
       warnings.push(recordsNote)
     } else if (candidates.length > 0) {
-      const commit = await this.students.importCommit(actor, schoolId, 'merge', candidates, {
+      const commit = await this.commitInChunks(actor, schoolId, 'merge', candidates, {
         // A sync is NOT a deliberate dated act by a person, so it must not
         // supersede a figure someone typed. That is the upload path's Decision 2,
         // and the distinction is the whole reason it is a decision.
@@ -462,8 +520,8 @@ export class RosterUploadService {
       )
     }
 
-    // 5/6 — the ceiling degrades to counts-only rather than failing: a 3,000-student
-    // school must not lose the path that works for it today.
+    // 5/6 — writes are CHUNKED (commitInChunks), so a 3,000-student school gets
+    // records like anyone else; only the runaway-file backstop degrades to counts.
     let records: RosterUploadResult['records'] = null
     let rosterPromote: Awaited<ReturnType<StudentsService['importCommit']>>['promote']
 
@@ -477,22 +535,21 @@ export class RosterUploadService {
     const fileCountsStudents =
       normalized.totalEnrolled > 0 || candidates.some((c) => c.status !== 'withdrawn')
 
-    if (candidates.length > STUDENT_IMPORT_MAX_ROWS) {
+    if (candidates.length > ROSTER_UPLOAD_HARD_CAP) {
       warnings.push(
-        `This file has ${candidates.length} students, above the ${STUDENT_IMPORT_MAX_ROWS}-row import ceiling — ` +
+        `This file has ${candidates.length} students, above the ${ROSTER_UPLOAD_HARD_CAP}-row backstop — ` +
           'enrollment was counted but records were not created.',
       )
       recordsNote =
-        `This file lists ${candidates.length} students, above the ${STUDENT_IMPORT_MAX_ROWS}-row limit for one ` +
-        'import, so the headcount was saved but the student records were not. Split it into files of ' +
-        `${STUDENT_IMPORT_MAX_ROWS} or fewer — by grade band, say — and upload them one after another; ` +
-        'merge adds each file to the same register.'
+        `This file lists ${candidates.length} students, above the ${ROSTER_UPLOAD_HARD_CAP}-row backstop for one ` +
+        'upload, so the headcount was saved but the student records were not. Split it and upload the parts ' +
+        'one after another; merge adds each file to the same register.'
     } else if (candidates.length > 0) {
       // The register's OWN importer does the writes: one matching dialect
       // (sourcedId → externalId, then name+birthDate, then create), one set of
       // validation rules, one audit row. A BadRequest/Conflict from it — a
       // duplicate sourcedId in the file, say — propagates unchanged.
-      const commit = await this.students.importCommit(
+      const commit = await this.commitInChunks(
         actor,
         schoolId,
         opts.mode ?? 'merge',

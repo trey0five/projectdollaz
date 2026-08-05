@@ -24,7 +24,7 @@ function ActionButton({ action }) {
   )
 }
 
-export default function NeedsAttentionPanel({ items = [] }) {
+export default function NeedsAttentionPanel({ items = [], moreCount = 0, onMore = null }) {
   const reduce = useReducedMotion()
 
   return (
@@ -66,6 +66,25 @@ export default function NeedsAttentionPanel({ items = [] }) {
               </div>
             </motion.li>
           ))}
+          {/* THE OVERFLOW IS SAID, NEVER SILENT. The rail caps at six, and a cap
+              that reads as "this is everything" hides whatever it dropped — the
+              defect that let a critical finding vanish behind two watch-level
+              prompts. One honest line with a door to the full list. */}
+          {moreCount > 0 ? (
+            <li className="pt-0.5">
+              {onMore ? (
+                <button
+                  type="button"
+                  onClick={onMore}
+                  className="text-[12.5px] font-semibold text-muted underline decoration-rule underline-offset-2 transition-colors hover:text-navy"
+                >
+                  …and {moreCount} more — see the full list
+                </button>
+              ) : (
+                <p className="text-[12.5px] font-semibold text-muted">…and {moreCount} more</p>
+              )}
+            </li>
+          ) : null}
         </ul>
       )}
     </div>

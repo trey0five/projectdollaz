@@ -69,4 +69,40 @@ export const TARGET_REGISTRY = {
 
 export const TARGET_KEYS = Object.keys(TARGET_REGISTRY)
 
-export const resolveTarget = (key) => TARGET_REGISTRY[key] ?? null
+// ─────────────────────────────────────────────────────────────────────────────
+// ui.v2 OVERRIDES. Under v2 the Data hub never mounts: /data is a static
+// redirect, the modal listener does not exist, and every datahub-* dom id is
+// absent — so each dataHub.* step used to resolve to a target that silently
+// no-oped (runAgentGuide drops unresolvable steps, and a resolvable-but-absent
+// id just parks the coin). Penny OFFERED nine tours she could not give.
+//
+// The keys are FROZEN (the backend schema enum and this file must stay
+// byte-identical, and v1 must keep working), so the split lives here, at
+// resolution time: same key, flag-dependent destination. The v2 rows point at
+// the surfaces that actually replaced the hub — the Add-data chooser cards
+// (adddata-card-<key>, WizardChoose.jsx) and the pages the modals' contents
+// moved to. `page` values here are CLIENT vocabulary consumed only by
+// PennyAgentBridge.pageToPath — the LLM never sends them.
+// ─────────────────────────────────────────────────────────────────────────────
+const V2_TARGET_OVERRIDES = {
+  'dataHub.trialBalanceCard': { domId: 'adddata-card-tb', page: 'finance-add' },
+  'dataHub.monthlyCard': { domId: 'adddata-card-monthly', page: 'finance-add' },
+  'dataHub.operationalCard': { domId: 'adddata-card-students', page: 'enrollment-add' },
+  'dataHub.budgetCard': { domId: 'adddata-card-budget', page: 'finance-add' },
+  'dataHub.forecastCard': { domId: 'forecast-workspace', page: 'planning' },
+  'dataHub.schedulesCard': { domId: 'schedules-capital-tab', page: 'schedules' },
+  'dataHub.complianceCard': { domId: 'readiness-cap-panel', page: 'readiness' },
+  // The hub's tour and period picker have no v2 equivalent; the honest nearest
+  // is the Add-data chooser itself, where every intake now starts.
+  'dataHub.tourButton': { domId: 'adddata-card-tb', page: 'finance-add' },
+  'dataHub.periodSelect': { domId: 'adddata-card-tb', page: 'finance-add' },
+  // The modal INTERIORS survive under v2 — IntakeBar and BudgetSetup mount
+  // inside the Add-data wizard embeds with their ids intact — so these keep
+  // their base rows; PennyAgentBridge remaps the page:'data'+openModal nav to
+  // the wizard deep link. Only the forecast pair moved pages outright.
+  'forecast.workspace': { domId: 'forecast-workspace', page: 'planning' },
+  'forecast.feederInput': { domId: 'forecast-feeder-input', page: 'planning' },
+}
+
+export const resolveTarget = (key, uiV2 = false) =>
+  (uiV2 ? (V2_TARGET_OVERRIDES[key] ?? TARGET_REGISTRY[key]) : TARGET_REGISTRY[key]) ?? null

@@ -101,7 +101,9 @@ describe('sync creates records through the one service allowed to', () => {
     // schedule or a reconnect; a hand-entered pupil the SIS does not know about
     // must not vanish because one ran.
     const body = rosterUpload.slice(rosterUpload.indexOf('async sync('), rosterUpload.indexOf('async upload('))
-    expect(body).toMatch(/importCommit\(actor, schoolId, 'merge'/)
+    // Through the chunker now, mode still hard-coded 'merge' — a sync can fire
+    // from a schedule, and replace deletes hand-entered pupils the SIS never knew.
+    expect(body).toMatch(/commitInChunks\(actor, schoolId, 'merge'/)
     expect(body).not.toMatch(/'replace'/)
   })
 
@@ -119,9 +121,10 @@ describe('sync creates records through the one service allowed to', () => {
     expect(rosterUpload).toMatch(/isWithdrawnStatus\(r\.status\)/)
   })
 
-  it('the ceiling degrades to counts-only rather than failing the sync', () => {
+  it('sync writes are CHUNKED; only the runaway backstop degrades to counts-only', () => {
     const body = rosterUpload.slice(rosterUpload.indexOf('async sync('), rosterUpload.indexOf('async upload('))
-    expect(body).toMatch(/STUDENT_IMPORT_MAX_ROWS/)
+    expect(body).toMatch(/ROSTER_UPLOAD_HARD_CAP/)
+    expect(body).toMatch(/commitInChunks\(actor, schoolId, 'merge'/)
     expect(body).toMatch(/headcount was synced but the student records were not/)
   })
 })

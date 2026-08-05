@@ -47,6 +47,17 @@ import {
  */
 export const STUDENT_IMPORT_MAX_ROWS = 2000
 
+/**
+ * The SERVER-SIDE ceiling for the one-step upload and the SIS sync, which chunk
+ * writes internally and so are not bound by the single-transaction limit above.
+ * STUDENT_IMPORT_MAX_ROWS stays on the reviewed HTTP import because that flow
+ * renders a full per-row preview in the browser first — its ceiling is the
+ * preview, not the write. Above THIS cap the upload still degrades to
+ * counts-only with the same honest note; it is a runaway-file backstop, not a
+ * product limit anyone should meet.
+ */
+export const ROSTER_UPLOAD_HARD_CAP = 10000
+
 /** Sortable register columns (grade sorts in JS by GRADE_KEYS index — see service). */
 export const STUDENT_SORT_KEYS = [
   'lastName',

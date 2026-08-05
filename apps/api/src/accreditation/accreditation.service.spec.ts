@@ -124,7 +124,11 @@ describe('AccreditationService — standards', () => {
       evidence: { groupBy: vi.fn(async () => [{ standardId: 's1', _count: { _all: 3 } }]) },
     })
     const res = await svc.listStandards('school-A', NOW)
-    expect(standard.findMany).toHaveBeenCalledWith({ where: { schoolId: 'school-A' } })
+    expect(standard.findMany).toHaveBeenCalledWith({
+      where: { schoolId: 'school-A' },
+      // A5: the scorer's name for the provenance chip rides the same read.
+      include: { rubricScoredByUser: { select: { firstName: true, lastName: true } } },
+    })
     expect(evidence.groupBy).toHaveBeenCalledWith(
       expect.objectContaining({ where: { schoolId: 'school-A' } }),
     )

@@ -60,6 +60,15 @@ export interface StandardPublic {
   rubricScore: number | null
   /** Framework rubric label for rubricScore; null when unscored/frameworkless. */
   rubricLabel: string | null
+  // ── Score PROVENANCE (hand-off "O7"). Recorded since Phase A on every score
+  // change and, until now, shown to NOBODY — an honesty ledger with no reader.
+  // A rubric self-score is an ASSERTION; these say whose, and when. ──────────
+  /** 'self' today; 'peer_reviewed'/'externally_validated' reserved for real external inputs. */
+  scoreProvenance: string
+  /** When the CURRENT score was asserted; null when never scored. */
+  rubricScoredAt: string | null
+  /** Who asserted it — display name, or null (scorer deleted: SetNull keeps the score, drops the name). */
+  rubricScoredBy: string | null
   frameworkId: string | null
   catalogStandardId: string | null
   /** Accreditor order on adopted trees; null on hand-made rows. */
@@ -274,7 +283,9 @@ export class AccreditationService {
    *  `ctx` carries the BATCHED Phase-3 lookups (framework rubric labels, catalog
    *  assurance flags, strategy labels) — when omitted those resolve to null/false. */
   private toStandardPublic(
-    row: AccreditationStandard,
+    row: AccreditationStandard & {
+      rubricScoredByUser?: { firstName: string | null; lastName: string | null } | null
+    },
     evidenceCount: number,
     now: Date,
     tree?: { depth: number; isLeaf: boolean; leafSummary: RatingSummary },
@@ -308,6 +319,14 @@ export class AccreditationService {
       rubricLabel:
         rubricScore != null && frameworkId
           ? (ctx?.rubricLabelsByFramework.get(frameworkId)?.[rubricScore - 1] ?? null)
+          : null,
+      scoreProvenance: row.scoreProvenance ?? 'self',
+      rubricScoredAt: rubricScore != null ? toIsoDate(row.rubricScoredAt ?? null) : null,
+      rubricScoredBy:
+        rubricScore != null && row.rubricScoredByUser
+          ? [row.rubricScoredByUser.firstName, row.rubricScoredByUser.lastName]
+              .filter(Boolean)
+              .join(' ') || null
           : null,
       frameworkId,
       catalogStandardId,
@@ -455,7 +474,12 @@ export class AccreditationService {
     ratingSummary: RatingSummary
     byId: Map<string, StandardPublic>
   }> {
-    const rows = await this.prisma.accreditationStandard.findMany({ where: { schoolId } })
+    const rows = await this.prisma.accreditationStandard.findMany({
+      where: { schoolId },
+      // The scorer's NAME for the provenance chip — the one place the join is
+      // needed; create/update return paths resolve through this tree anyway.
+      include: { rubricScoredByUser: { select: { firstName: true, lastName: true } } },
+    })
     const counts = await this.prisma.accreditationEvidence.groupBy({
       by: ['standardId'],
       where: { schoolId },

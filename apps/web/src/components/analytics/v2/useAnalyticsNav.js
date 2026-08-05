@@ -82,7 +82,12 @@ function buildSearch({ scope, view, school, schools, highlight, focus, dims }) {
 
 /**
  * @param {object} opts
- * @param {boolean} opts.isMultiSchool  false → every scope clamps to 'school'.
+ * @param {boolean} opts.isMultiSchool  false → every scope clamps to 'school',
+ *        EXCEPT 'peers' when allowPeers is set — the sector-band fallback gives a
+ *        single-school head a real Peers surface (bands, not siblings).
+ * @param {boolean} opts.allowPeers  keep scope 'peers' reachable for a
+ *        single-school org (DECIDED: sector-band fallback). compare/org stay
+ *        multi-school-only — they genuinely need siblings.
  * @param {boolean} opts.ready  TRUE once isMultiSchool is actually KNOWN (the org
  *        roster resolved). The mount normalization MUST wait for it: running while
  *        isMultiSchool is still its loading default (false) would clamp a
@@ -91,7 +96,7 @@ function buildSearch({ scope, view, school, schools, highlight, focus, dims }) {
  * @param {{scope?:string, school?:string, schools?:string[]}} opts.seed  read-only
  *        seed from the global scope (org→'org', else school+activeSchool).
  */
-export function useAnalyticsNav({ isMultiSchool, ready = true, seed }) {
+export function useAnalyticsNav({ isMultiSchool, allowPeers = false, ready = true, seed }) {
   const [params, setParams] = useSearchParams()
   const stored = useMemo(() => readStored(), [])
 
@@ -109,7 +114,7 @@ export function useAnalyticsNav({ isMultiSchool, ready = true, seed }) {
   let scope =
     normalizeScope(rawScope) ??
     (normalizedRef.current ? 'school' : stored?.scope ?? seed?.scope ?? 'school')
-  if (!isMultiSchool) scope = 'school'
+  if (!isMultiSchool) scope = allowPeers && scope === 'peers' ? 'peers' : 'school'
 
   // Per-scope last-view memory (survives scope switches within the session). Read
   // ONLY inside event handlers (setScope/go) — never during render — so the current
@@ -155,7 +160,7 @@ export function useAnalyticsNav({ isMultiSchool, ready = true, seed }) {
       if (cancelled) return
       let nextScope =
         normalizeScope(params.get('scope')) ?? stored?.scope ?? seed?.scope ?? 'school'
-      if (!isMultiSchool) nextScope = 'school'
+      if (!isMultiSchool) nextScope = allowPeers && nextScope === 'peers' ? 'peers' : 'school'
       const urlView = params.get('view')
       const nextView = VIEWS.includes(urlView)
         ? urlView
@@ -194,7 +199,7 @@ export function useAnalyticsNav({ isMultiSchool, ready = true, seed }) {
   const go = useCallback(
     (patch = {}) => {
       const next = { ...current, ...patch }
-      if (!isMultiSchool) next.scope = 'school'
+      if (!isMultiSchool) next.scope = allowPeers && next.scope === 'peers' ? 'peers' : 'school'
       // Switching scope with no explicit view restores that scope's remembered view.
       if (patch.scope && patch.view === undefined) {
         next.view = viewByScope.current[patch.scope] ?? 'overview'
@@ -204,7 +209,7 @@ export function useAnalyticsNav({ isMultiSchool, ready = true, seed }) {
       setParams(buildSearch(next))
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [scope, view, school, schoolsSig, highlight, focus, dimsSig, isMultiSchool, setParams],
+    [scope, view, school, schoolsSig, highlight, focus, dimsSig, isMultiSchool, allowPeers, setParams],
   )
 
   const setScope = useCallback((next) => go({ scope: next }), [go])

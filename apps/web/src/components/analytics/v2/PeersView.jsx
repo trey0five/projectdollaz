@@ -23,6 +23,7 @@ import { lightStatus } from './statusStyle.js'
 import { formatMetric } from './helpers.js'
 import BarList from '../charts/BarList.jsx'
 import PercentileStrip from '../charts/PercentileStrip.jsx'
+import { TargetBandBar } from '../MetricDrawer.jsx'
 
 // The headline metrics of the peer scorecard (contract-frozen order).
 const HEADLINE_KEYS = [
@@ -347,33 +348,96 @@ function PeerScorecard({ data }) {
   )
 }
 
+// ── The sector-band fallback (DECIDED): a single-school head gets a real
+// comparison surface — this school's vitals against the sector target bands —
+// instead of a dead end. HONEST FRAMING IS THE WHOLE FEATURE: the bands are
+// documented sector defaults ("NOT hard truths", health.ts), not a peer group,
+// and every sentence here says so. cost_per_pupil ships without a band on
+// purpose — spending levels vary by mission, and inventing a target would be a
+// judgement the product refuses to fake. ─────────────────────────────────────
+function SectorBandTile({ row, metric }) {
+  const label = metric?.label ?? metricLabel(row.key)
+  const value = metric?.value ?? row.value
+  const formatted = metric ? formatMetric(metric) : value != null ? String(value) : '—'
+  return (
+    <div className="av2-card min-w-0 p-4 sm:p-5">
+      <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted">{label}</p>
+      <p className="mt-1 font-serif text-[26px] font-semibold text-navy tabular-nums">{formatted}</p>
+      {row.bands && value != null ? (
+        <TargetBandBar metric={{ key: row.key, unit: metric?.unit, value, bands: row.bands }} />
+      ) : (
+        <p className="mt-2 text-[12.5px] italic leading-snug text-muted">
+          {value == null
+            ? 'No value for this year yet.'
+            : 'No sector band — deliberately: spending levels vary by mission.'}
+        </p>
+      )}
+    </div>
+  )
+}
+
+function SectorBandFallback({ data }) {
+  const byKey = data.focus?.metrics ?? {}
+  return (
+    <div className="av2-card p-5 sm:p-6">
+      <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="font-serif text-lg font-semibold text-navy">Your school vs the sector band</h3>
+        <span className="rounded-full border border-rule/60 bg-section px-2.5 py-0.5 text-[11.5px] font-semibold text-muted">
+          Sector default — not a peer group
+        </span>
+      </div>
+      <p className="mb-4 max-w-2xl text-[13.5px] leading-snug text-muted">
+        These are documented private-school sector targets, not your peers&apos; numbers — a
+        starting point, not a verdict. Real peer benchmarking unlocks when your organization has
+        sibling schools reporting.
+      </p>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {data.benchmark.map((row) => (
+          <SectorBandTile key={row.key} row={row} metric={byKey[row.key]} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ── Degradation: no comparable peers ─────────────────────────────────────────
 function PeerEmpty({ data }) {
   const es = data.emptyState || {}
+  const single = es.reason === 'single_school'
   const msg =
     es.message ||
-    (es.reason === 'single_school'
-      ? 'Add another school to unlock peer benchmarking.'
+    (single
+      ? 'One school here — so your context is the sector band, not a peer group.'
       : "Your other schools haven't reported this year yet.")
   const needsProfile = data.focus && data.focus.profileComplete === false
+  const bands = single && Array.isArray(data.benchmark) && data.benchmark.length > 0
   return (
     <div className="space-y-6">
       <PeerHero data={data} />
-      <div className="av2-card flex flex-col items-center gap-3 px-6 py-12 text-center">
-        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-cream text-navy">
-          <Users size={26} />
-        </span>
-        <h3 className="font-serif text-lg font-semibold text-navy">No comparable peers yet</h3>
-        <p className="max-w-md text-[14px] text-muted">{msg}</p>
-        {needsProfile && (
-          <Link
-            to="/settings"
-            className="mt-1 inline-flex items-center gap-2 rounded-lg bg-navy px-4 py-2.5 text-[13.5px] font-semibold text-white transition-colors hover:bg-navy/90"
-          >
-            <Settings2 size={15} /> Complete your school profile
-          </Link>
-        )}
-      </div>
+      {bands ? (
+        // The band comparison IS the surface for a single school — the dead-end
+        // card demoted to a footnote beneath it.
+        <>
+          <SectorBandFallback data={data} />
+          <p className="text-center text-[12.5px] text-muted">{msg}</p>
+        </>
+      ) : (
+        <div className="av2-card flex flex-col items-center gap-3 px-6 py-12 text-center">
+          <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-cream text-navy">
+            <Users size={26} />
+          </span>
+          <h3 className="font-serif text-lg font-semibold text-navy">No comparable peers yet</h3>
+          <p className="max-w-md text-[14px] text-muted">{msg}</p>
+          {needsProfile && (
+            <Link
+              to="/settings"
+              className="mt-1 inline-flex items-center gap-2 rounded-lg bg-navy px-4 py-2.5 text-[13.5px] font-semibold text-white transition-colors hover:bg-navy/90"
+            >
+              <Settings2 size={15} /> Complete your school profile
+            </Link>
+          )}
+        </div>
+      )}
     </div>
   )
 }

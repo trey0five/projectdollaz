@@ -7,6 +7,7 @@ import { AccreditationModule } from '../accreditation/accreditation.module.js'
 import { ImprovementController } from './improvement.controller.js'
 import { ImprovementService } from './improvement.service.js'
 import { ImprovementPlanDrafterService } from './improvement-plan-drafter.service.js'
+import { TaskRollupRecorderService } from './task-rollup-recorder.service.js'
 
 /**
  * AIC Phase G — the Continuous Improvement Manager.
@@ -48,7 +49,10 @@ import { ImprovementPlanDrafterService } from './improvement-plan-drafter.servic
   // injects PrismaService + ImprovementService only (no LLM client, by spec MA-3),
   // so it adds no module edge at all: everything it needs is already in this
   // module's graph.
-  providers: [ImprovementService, ImprovementPlanDrafterService],
+  // TaskRollupRecorderService is the nightly recorder the ImprovementProgressEvent
+  // schema comment promised: it injects PrismaService ONLY, adds no module edge,
+  // and is deliberately NOT exported — nothing calls it; it runs on its own clock.
+  providers: [ImprovementService, ImprovementPlanDrafterService, TaskRollupRecorderService],
   // EXPORTED for exactly one consumer: AssistantModule, for Penny's
   // create_initiative tool and its reverser. A provider injected but not exported
   // killed the API on boot in Phase E while every unit test passed. The drafter

@@ -14,6 +14,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
 import { resolveTarget } from '../components/penny/guide/targetRegistry.js'
+import { useUiV2 } from './UiFlagContext.jsx'
 
 const PennyContext = createContext(null)
 
@@ -55,6 +56,7 @@ const markSeen = (k) => {
 }
 
 export function PennyProvider({ children }) {
+  const uiV2 = useUiV2()
   const [chatOpen, setChatOpen] = useState(false)
   // guide: { steps: Step[], index, agent? } | null.
   //   Step (page tours)  = { targetId, message, cardKey?, action? }
@@ -144,7 +146,10 @@ export function PennyProvider({ children }) {
   const runAgentGuide = useCallback((agentSteps) => {
     const steps = (agentSteps || [])
       .map((s) => {
-        const t = resolveTarget(s?.target)
+        // Flag-aware: under ui.v2 the dataHub.* keys resolve to the surfaces
+        // that replaced the hub (see V2_TARGET_OVERRIDES) instead of to dom ids
+        // that no longer mount anywhere.
+        const t = resolveTarget(s?.target, uiV2)
         if (!t) return null
         return {
           targetId: t.domId,
@@ -157,7 +162,7 @@ export function PennyProvider({ children }) {
     if (!steps.length) return
     setChatOpen(false)
     setGuide({ steps, index: 0, agent: true })
-  }, [])
+  }, [uiV2])
 
   const value = useMemo(
     () => ({

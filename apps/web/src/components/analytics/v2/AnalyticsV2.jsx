@@ -91,8 +91,15 @@ export default function AnalyticsV2() {
 
   // ready: the mount URL-normalization must wait until isMultiSchool is KNOWN
   // (org roster resolved) — else it clamps a ?scope=org deep link to school.
-  const nav = useAnalyticsNav({ isMultiSchool, ready: orgResolved, seed })
-  const scopes = isMultiSchool ? ['school', 'compare', 'org', 'peers'] : ['school']
+  // DECIDED: a single-school org still gets the Peers tab — the sector-band
+  // fallback renders there (bands, not siblings). compare/org stay multi-school.
+  const hasOrg = !!orgId
+  const nav = useAnalyticsNav({ isMultiSchool, allowPeers: hasOrg, ready: orgResolved, seed })
+  const scopes = isMultiSchool
+    ? ['school', 'compare', 'org', 'peers']
+    : hasOrg
+      ? ['school', 'peers']
+      : ['school']
 
   // Keep the analytics school scope in sync with the global header context: when
   // the top-bar ContextSwitcher switches the ACTIVE school, mirror it into the

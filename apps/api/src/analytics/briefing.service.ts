@@ -443,7 +443,7 @@ export class BriefingService {
     generatedAt: string,
   ): Promise<EarlyWarningRow[] | null> {
     if (!this.prisma?.accreditationFinding) return null
-    return this.prisma.accreditationFinding
+    const rows = await this.prisma.accreditationFinding
       .findMany({
         where: {
           schoolId,
@@ -465,7 +465,18 @@ export class BriefingService {
           evidencePayload: true,
         },
       })
-      .catch(() => null) as Promise<EarlyWarningRow[] | null>
+      .catch(() => null)
+    if (rows === null) return null
+    // EXPLICIT severity rank, because the DB orderBy above was LUCK, not design:
+    // `severity` is a plain String column, so `asc` is lexical, and it put
+    // 'critical' before 'warn' only because c < w in the alphabet. The two-item
+    // hard cap downstream (EARLY_WARNING_MAX_ITEMS) makes this ordering
+    // load-bearing — introduce a severity named 'high' or 'urgent' and the cap
+    // would silently start dropping criticals. Ranked here, in code that says so.
+    const SEVERITY_ORDER: Record<string, number> = { critical: 0, warn: 1 }
+    return [...(rows as EarlyWarningRow[])].sort(
+      (a, b) => (SEVERITY_ORDER[a.severity] ?? 9) - (SEVERITY_ORDER[b.severity] ?? 9),
+    )
   }
 
   /**

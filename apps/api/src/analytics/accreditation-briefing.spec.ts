@@ -34,6 +34,9 @@ function standard(over: Partial<StandardPublic>): StandardPublic {
     // Phase 3 additive fields (typecheck-only here — the briefing never reads them).
     rubricScore: over.rubricScore ?? null,
     rubricLabel: over.rubricLabel ?? null,
+  scoreProvenance: 'self',
+  rubricScoredAt: null,
+  rubricScoredBy: null,
     frameworkId: over.frameworkId ?? null,
     catalogStandardId: over.catalogStandardId ?? null,
     sortOrder: over.sortOrder ?? null,

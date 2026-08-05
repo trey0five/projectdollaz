@@ -452,11 +452,13 @@ describe('the two Choose cards describe what actually happens', () => {
     expect(reviewed, 'the blurb must stand on its own').toMatch(/Same roster file/)
   })
 
-  it('both cards state the 2,000-student-per-file limit they are subject to', () => {
-    // Above the ceiling the one-step upload creates no records and the reviewed
-    // one 400s on a class-validator ArrayMaxSize after a full preview. Promising
-    // "a student record for every row" without the limit is a promise the product
-    // cannot keep for a 2,400-student school.
+  it('each card states the limit it is ACTUALLY subject to — and they differ now', () => {
+    // The one-step upload CHUNKS its writes server-side, so its old 2,000-row
+    // ceiling is gone; only a 10,000-row runaway backstop remains, and the card
+    // says so. The REVIEWED import keeps 2,000 — its ceiling is the full per-row
+    // browser preview (ArrayMaxSize 400s above it), which chunking cannot fix.
+    // Promising "a student record for every row" without the true limit is a
+    // promise the product cannot keep for the school that exceeds it.
     const block = enrollmentBlock()
     const reviewed = block.slice(
       block.indexOf("key: 'import-students'"),
@@ -464,7 +466,9 @@ describe('the two Choose cards describe what actually happens', () => {
     )
     const roster = block.slice(block.indexOf("key: 'roster'"))
     expect(reviewed).toMatch(/2,000 students per file/)
-    expect(roster).toMatch(/2,000 students per file/)
+    expect(roster).toMatch(/10,000 students/)
+    expect(roster).not.toMatch(/2,000 students per file/)
+    expect(roster).not.toMatch(/so split the file/)
   })
 
   it('the panel no longer disowns the records it now creates', () => {
