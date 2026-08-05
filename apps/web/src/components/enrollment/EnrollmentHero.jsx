@@ -190,12 +190,6 @@ export default function EnrollmentHero({
               animate={{ x: [0, -38, 0], y: [0, -20, 0] }}
               transition={{ duration: 21, repeat: Infinity, ease: 'easeInOut' }}
             />
-            <motion.span
-              className="absolute inset-y-0 w-28 -skew-x-12 bg-white/[0.05]"
-              initial={{ x: '-20%' }}
-              animate={{ x: '480%' }}
-              transition={{ duration: 5.5, repeat: Infinity, repeatDelay: 5, ease: 'easeInOut' }}
-            />
           </>
         )}
       </div>
