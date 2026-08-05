@@ -32,9 +32,13 @@ export default function Sparkline({ vals = [], color = '#2563EB', w = 110, h = 3
 
   const max = Math.max(...nums)
   const min = Math.min(...nums)
+  const flat = max === min
   const span = max - min || 1
   const X = (i) => 2 + (W - 4) * (i / (nums.length - 1))
-  const Y = (v) => 2 + (h - 6) * (1 - (v - min) / span)
+  // A FLAT series centres. With span forced to 1 the old maths put every point
+  // at (v-min)/span = 0 → the bottom edge — a line on the card floor that read
+  // as "zero" about a value that was anything but.
+  const Y = (v) => (flat ? h / 2 : 2 + (h - 6) * (1 - (v - min) / span))
   const d = nums.map((v, i) => (i ? 'L' : 'M') + X(i) + ' ' + Y(v)).join(' ')
   const lx = X(nums.length - 1)
   const ly = Y(nums[nums.length - 1])

@@ -360,8 +360,19 @@ function Th({ label, sortKey, sort, dir, onSort, className = '' }) {
   )
 }
 
-export default function StudentRegister({ schoolId, canEdit, hue = ENROLL_HUE, onChanged }) {
-  const [filters, setFilters] = useState(EMPTY_STUDENT_FILTERS)
+export default function StudentRegister({
+  schoolId,
+  canEdit,
+  hue = ENROLL_HUE,
+  onChanged,
+  // A hero ring segment deep-links here pre-filtered to its grade (?grade=…).
+  // Seed-once via lazy init: it is the arrival state, not a controlled filter —
+  // the user can clear or change it like any chip they picked themselves.
+  initialGrade = null,
+}) {
+  const [filters, setFilters] = useState(() =>
+    initialGrade ? { ...EMPTY_STUDENT_FILTERS, grade: [initialGrade] } : EMPTY_STUDENT_FILTERS,
+  )
   const [sort, setSort] = useState('lastName')
   const [dir, setDir] = useState('asc')
   const [page, setPage] = useState(1)

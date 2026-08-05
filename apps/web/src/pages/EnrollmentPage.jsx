@@ -12,7 +12,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { GraduationCap, RotateCcw, Building2, ArrowRight } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
-import ModuleTabs from '../components/module/ModuleTabs.jsx'
+import ModuleTabs, { ModuleAccent } from '../components/module/ModuleTabs.jsx'
 import { AddDataCta, RecordsCta } from '../components/module/ModuleCtas.jsx'
 import ModuleRegister from '../components/module/ModuleRegister.jsx'
 import { moduleHue } from '../components/module/moduleAnatomy.js'
@@ -29,11 +29,9 @@ import {
   apiErrorMessage,
 } from '../lib/api.js'
 import VsPlanKpi from '../components/enrollment/VsPlanKpi.jsx'
-import ByGradeChart from '../components/enrollment/ByGradeChart.jsx'
 import EnrollmentConnectCard from '../components/enrollment/EnrollmentConnectCard.jsx'
 import DemographicMixCard from '../components/analytics/v2/DemographicMixCard.jsx'
-import GradeMixCard from '../components/analytics/v2/GradeMixCard.jsx'
-import EnrollmentKpiRow from '../components/enrollment/EnrollmentKpiRow.jsx'
+import EnrollmentHero from '../components/enrollment/EnrollmentHero.jsx'
 import RosterSourceCard from '../components/enrollment/RosterSourceCard.jsx'
 import RosterAnalyticsSection from '../components/enrollment/RosterAnalyticsSection.jsx'
 import StudentRegister from '../components/enrollment/StudentRegister.jsx'
@@ -90,6 +88,8 @@ function EnrollmentWorkspace() {
   // KPI row) because the overview needs to compare it against the headcount: a
   // counted headcount over an empty register is the state the page must name.
   const [rosterCount, setRosterCount] = useState(null)
+  // The full unfiltered aggregate — the hero's stat pips + Withdrawn read it.
+  const [agg, setAgg] = useState(null)
 
   const load = useCallback(async () => {
     if (!activeId) return
@@ -122,9 +122,13 @@ function EnrollmentWorkspace() {
       try {
         const aggRes = await enrollmentApi.students.aggregate(activeId)
         setRosterCount((aggRes.data ?? aggRes)?.kpis?.enrolled ?? 0)
+        // The hero rides the SAME read: kpis for the stat pips, counts.status for
+        // Withdrawn (returned by the API since Phase 5, rendered nowhere until now).
+        setAgg((aggRes.data ?? aggRes) ?? null)
       } catch {
         // A school without the register read simply gets no diagnosis, never an error.
         setRosterCount(null)
+        setAgg(null)
       }
     } catch (e) {
       if (isModuleNotLicensed(e)) setNotLicensed(true)
@@ -230,7 +234,6 @@ function EnrollmentWorkspace() {
   const ethnicity = demSrc.ethnicity?.counts ?? demSrc.ethnicity ?? null
   const race = demSrc.race?.counts ?? demSrc.race ?? null
   const byDemographics = gender || ethnicity || race ? { gender, ethnicity, race } : null
-  const mixByGrade = demSrc.gradeMix?.counts ?? summary?.latest?.byGrade ?? null
   const dvIndex = demSrc.race?.diversityIndex ?? demSrc.diversityIndex
 
   // Manual-supersede state (Decision C): summary.supersededManual is { value, fte, at }
@@ -289,6 +292,28 @@ function EnrollmentWorkspace() {
     setSearchParams(next, { replace: false })
   }
 
+  // The hero: ring + dome + pips. It ABSORBED the old 4-card KPI row — same
+  // four figures, same honesty rules (no roster ⇒ em-dash + why, never a zero
+  // we didn't count), one surface instead of two.
+  const enrollmentHero = (
+    <EnrollmentHero
+      total={summary?.latest?.totalEnrolled ?? null}
+      byGrade={summary?.latest?.byGrade ?? null}
+      asOf={summary?.latest?.observedOn ?? null}
+      source={summary?.source ?? null}
+      provider={summary?.provider ?? null}
+      vsPlan={summary?.vsPlan ?? null}
+      kpis={rosterMode ? (agg?.kpis ?? null) : null}
+      withdrawn={rosterMode ? (agg?.counts?.status?.withdrawn ?? null) : null}
+      onGradeClick={(grade) => {
+        const next = new URLSearchParams(searchParams)
+        next.set('tab', 'records')
+        next.set('grade', grade)
+        setSearchParams(next, { replace: false })
+      }}
+    />
+  )
+
   // Where the numbers came from + the counted-but-empty diagnosis. Rendered high
   // on the overview: it is the answer to "I added a roster and nothing happened",
   // and it was previously nowhere on the page.
@@ -307,13 +332,13 @@ function EnrollmentWorkspace() {
     <>
       {supersedeBanner}
       {rosterMode ? (
-        <RosterAnalyticsSection schoolId={activeId} />
+        <RosterAnalyticsSection schoolId={activeId} planTotal={summary?.vsPlan?.planTotal ?? null} />
       ) : (
         <>
           {byDemographics && (
             <DemographicMixCard byDemographics={byDemographics} diversityIndex={dvIndex} />
           )}
-          {mixByGrade && <GradeMixCard byGrade={mixByGrade} />}
+          
         </>
       )}
       {diocesanLink}
@@ -324,20 +349,24 @@ function EnrollmentWorkspace() {
   // so the Overview shows only the vs-plan summary + by-grade breakdown.
   if (uiV2) {
     return (
+      // B0 — THE UNLOCK. /enrollment was the ONLY module page rendering
+      // <ModuleTabs> bare: every other page wraps <ModuleAccent>, which re-hues
+      // --c-module/--c-glow/--grad-cta-* to the module colour. Without it,
+      // kpi-3d, btn-cta and card-flashy all rendered default gold/blue here
+      // while three components hand-painted sky on top.
+      <ModuleAccent moduleKey="enrollment">
       <ModuleTabs
           moduleKey="enrollment"
           overview={
             <div className="mx-auto max-w-page px-4 py-8 sm:px-10">
               {header}
               <div className="space-y-6">
-                <EnrollmentKpiRow
-                  schoolId={activeId}
-                  rosterMode={status?.rosterMode}
-                  summary={summary}
-                />
+                {enrollmentHero}
                 {rosterSource}
-                <VsPlanKpi summary={summary} />
-                {summary?.latest?.byGrade && <ByGradeChart byGrade={summary.latest.byGrade} />}
+                {/* The 3-tile vs-plan detail earns its space only when a plan
+                    EXISTS — with none, it repeated the hero's no-plan line
+                    twice more in near-empty cards. The hero carries the door. */}
+                {summary?.vsPlan ? <VsPlanKpi summary={summary} /> : null}
                 {mixSection}
               </div>
             </div>
@@ -358,11 +387,14 @@ function EnrollmentWorkspace() {
                   canEdit={canEdit}
                   hue={moduleHue('enrollment')}
                   onChanged={load}
+                  // A hero ring segment deep-links here filtered to its grade.
+                  initialGrade={searchParams.get('grade')}
                 />
               }
             />
           }
         />
+      </ModuleAccent>
     )
   }
 
@@ -371,13 +403,11 @@ function EnrollmentWorkspace() {
       {header}
 
       <div className="space-y-6">
-        <EnrollmentKpiRow schoolId={activeId} rosterMode={status?.rosterMode} summary={summary} />
+        {enrollmentHero}
 
         {rosterSource}
 
-        <VsPlanKpi summary={summary} />
-
-        {summary?.latest?.byGrade && <ByGradeChart byGrade={summary.latest.byGrade} />}
+        {summary?.vsPlan ? <VsPlanKpi summary={summary} /> : null}
 
         {mixSection}
 

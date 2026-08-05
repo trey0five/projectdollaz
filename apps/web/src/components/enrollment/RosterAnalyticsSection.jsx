@@ -10,17 +10,15 @@
 // order (color follows the entity — a filter never repaints survivors); the
 // grade distribution is a magnitude read → ONE hue (sky) across the ordered
 // grade grid; flags are a stat strip, not a chart; the headcount trend is the
-// shared single-series Sparkline (no legend needed — the title names it).
 // The '<5' min-cell rule (formatMinCell) masks every CATEGORICAL cell —
 // masked cells also drop their % gutter so the pair can't be re-derived at a
 // glance. Headline totals stay true counts (frozen spec).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { BarChart3, TrendingUp } from 'lucide-react'
+import { BarChart3, LifeBuoy, FileCheck2, Languages, Flag } from 'lucide-react'
 import { enrollmentApi, apiErrorMessage } from '../../lib/api.js'
 import BarList from '../analytics/charts/BarList.jsx'
-import Sparkline from '../analytics/charts/Sparkline.jsx'
 import { CATEGORICAL_LIGHT } from '../analytics/v2/chartPalette.js'
 import {
   GRADE_KEYS,
@@ -35,13 +33,16 @@ import {
   STUDENT_FLAG_LABELS,
   formatMinCell,
 } from '../../lib/demographicVocab.js'
+import { moduleHue } from '../module/moduleAnatomy.js'
+import EnrollmentTrend from './EnrollmentTrend.jsx'
+import { demographicColor } from '../../lib/demographicColor.js'
 import StudentFilterBar, {
   EMPTY_STUDENT_FILTERS,
   GRADE_LABELS,
   buildStudentParams,
 } from './studentFilters.jsx'
 
-const ENROLL_HUE = '#0EA5E9'
+const ENROLL_HUE = moduleHue('enrollment')
 
 // counts map + FIXED key order → BarList rows. value = true count (bar length);
 // formatted = the min-cell-masked count; % gutter only on unmasked cells.
@@ -66,16 +67,23 @@ function toRows(counts, keys, labels, colorFor) {
 }
 
 function MixCard({ title, rows, sortDesc = true }) {
-  if (!rows.length) return null
   return (
-    <div className="rounded-2xl border-2 border-rule/50 bg-white p-4 shadow-card">
+    <div className="card-soft min-w-0 p-4 sm:p-5">
       <h4 className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-muted">{title}</h4>
-      <BarList rows={rows} sortDesc={sortDesc} formatter={(v) => formatMinCell(v)} />
+      {rows.length ? (
+        <BarList rows={rows} sortDesc={sortDesc} formatter={(v) => formatMinCell(v)} />
+      ) : (
+        // An ALL-EMPTY dimension collapses to one honest sentence instead of a
+        // near-empty chart — the same vocabulary the filter pickers use.
+        <p className="rounded-lg border border-dashed border-rule/60 bg-cream/40 px-3 py-4 text-center text-[12.5px] italic text-muted">
+          Not in your roster data.
+        </p>
+      )}
     </div>
   )
 }
 
-export default function RosterAnalyticsSection({ schoolId }) {
+export default function RosterAnalyticsSection({ schoolId, planTotal = null }) {
   const [filters, setFilters] = useState(EMPTY_STUDENT_FILTERS)
   const [agg, setAgg] = useState(null)
   // UNFILTERED facet counts for the picker vocabulary. The `agg` above is the
@@ -142,12 +150,9 @@ export default function RosterAnalyticsSection({ schoolId }) {
         .snapshots(schoolId)
         .then((res) => {
           if (cancelled) return
-          const rows = res.data ?? []
-          setSnapshots(
-            [...rows]
-              .sort((a, b) => String(a.observedOn).localeCompare(String(b.observedOn)))
-              .map((r) => ({ observedOn: r.observedOn, total: r.totalEnrolled })),
-          )
+          // RAW rows — EnrollmentTrend owns the per-day dedupe and the date
+          // axis; pre-mapping here is how the flat line got its shape.
+          setSnapshots(res.data ?? [])
         })
         .catch(() => {
           if (!cancelled) setSnapshots([])
@@ -159,25 +164,38 @@ export default function RosterAnalyticsSection({ schoolId }) {
   }, [schoolId])
 
   const counts = agg?.counts ?? {}
-  const catColor = (i) => CATEGORICAL_LIGHT[i % CATEGORICAL_LIGHT.length]
-  const race = toRows(counts.race, RACE_KEYS, RACE_LABELS, catColor)
-  const gender = toRows(counts.gender, GENDER_KEYS, GENDER_LABELS, catColor)
-  const ethnicity = toRows(counts.ethnicity, ETHNICITY_KEYS, ETHNICITY_LABELS, catColor)
-  const ageBand = toRows(counts.ageBand, AGE_BAND_KEYS, AGE_BAND_LABELS, catColor)
-  // Magnitude across the ordered grade grid → ONE hue, canonical order (no re-sort).
-  const grades = toRows(counts.grade, GRADE_KEYS, GRADE_LABELS, () => ENROLL_HUE)
+  // ONE COLOUR PER VALUE, EVERYWHERE: the same demographicColor the register
+  // pills and the hero ring use, keyed by CANONICAL position — never by which
+  // values happen to be present, and never by rank. BarList's own contract
+  // ("colour follows the entity") makes a filter or re-sort repaint nothing.
+  const dimColor = (dimension, keys) => (i) =>
+    demographicColor(dimension, keys[i]) ?? CATEGORICAL_LIGHT[i % CATEGORICAL_LIGHT.length]
+  const race = toRows(counts.race, RACE_KEYS, RACE_LABELS, dimColor('race', RACE_KEYS))
+  const gender = toRows(counts.gender, GENDER_KEYS, GENDER_LABELS, dimColor('gender', GENDER_KEYS))
+  const ethnicity = toRows(
+    counts.ethnicity,
+    ETHNICITY_KEYS,
+    ETHNICITY_LABELS,
+    dimColor('ethnicity', ETHNICITY_KEYS),
+  )
+  const ageBand = toRows(
+    counts.ageBand,
+    AGE_BAND_KEYS,
+    AGE_BAND_LABELS,
+    dimColor('ageBand', AGE_BAND_KEYS),
+  )
+  // Grades wear their OWN hues — the ring, the pills and this chart agree.
+  const grades = toRows(counts.grade, GRADE_KEYS, GRADE_LABELS, dimColor('grade', GRADE_KEYS))
 
   const flags = counts.flags ?? {}
   const flagStrip = [
-    ['iep', STUDENT_FLAG_LABELS.iep],
-    ['plan504', STUDENT_FLAG_LABELS.plan504],
-    ['ell', STUDENT_FLAG_LABELS.ell],
-    ['any', 'Any flag'],
+    ['iep', STUDENT_FLAG_LABELS.iep, LifeBuoy],
+    ['plan504', STUDENT_FLAG_LABELS.plan504, FileCheck2],
+    ['ell', STUDENT_FLAG_LABELS.ell, Languages],
+    ['any', 'Any flag', Flag],
   ]
 
-  const trendVals = snapshots.map((s) => s.total).filter((v) => Number.isFinite(v))
-  const latestSnap = snapshots[snapshots.length - 1] ?? null
-
+  
   const filtered = agg?.filteredTotal ?? null
   const total = agg?.total ?? null
 
@@ -185,7 +203,7 @@ export default function RosterAnalyticsSection({ schoolId }) {
     <motion.section
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="rounded-2xl border-2 border-rule/50 bg-white p-5 shadow-card"
+      className="card-soft p-5 sm:p-6"
       aria-label="Roster analytics"
     >
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -240,41 +258,46 @@ export default function RosterAnalyticsSection({ schoolId }) {
             <MixCard title="Ethnicity" rows={ethnicity} />
           </div>
 
-          {/* Flags strip — stat chips, not a chart (categorical cells → masked) */}
+          {/* Flags strip — icon tiles, hue-lit when >0, quiet at 0. Still stat
+              chips rather than a chart: categorical cells stay masked. */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {flagStrip.map(([k, label]) => (
-              <div key={k} className="rounded-xl border border-rule/50 bg-cream/40 px-3.5 py-2.5">
-                <p className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-muted">{label}</p>
-                <p className="mt-0.5 font-serif text-[20px] font-bold text-navy">
-                  {formatMinCell(flags[k] ?? 0)}
-                </p>
-              </div>
-            ))}
+            {flagStrip.map(([k, label, FlagIcon]) => {
+              const n = flags[k] ?? 0
+              const lit = n > 0
+              return (
+                <div
+                  key={k}
+                  className={`flex items-center gap-2.5 rounded-xl border px-3.5 py-2.5 transition-colors ${
+                    lit ? 'bg-white' : 'border-rule/50 bg-cream/40'
+                  }`}
+                  style={lit ? { borderColor: `${ENROLL_HUE}55` } : undefined}
+                >
+                  <span
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+                    style={
+                      lit
+                        ? { backgroundColor: `${ENROLL_HUE}18`, color: ENROLL_HUE }
+                        : { backgroundColor: 'rgba(0,0,0,0.04)', color: '#9aa4b2' }
+                    }
+                  >
+                    <FlagIcon size={15} />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-muted">
+                      {label}
+                    </p>
+                    <p className={`font-serif text-[20px] font-bold ${lit ? 'text-navy' : 'text-muted'}`}>
+                      {formatMinCell(n)}
+                    </p>
+                  </div>
+                </div>
+              )
+            })}
           </div>
 
-          {/* Headcount trend from the snapshot series */}
-          {trendVals.length >= 2 && (
-            <div className="rounded-2xl border-2 border-rule/50 bg-white p-4 shadow-card">
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <h4 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-muted">
-                  <TrendingUp size={13} style={{ color: ENROLL_HUE }} /> Headcount over time
-                </h4>
-                {latestSnap && (
-                  <span className="text-[12px] text-muted">
-                    Latest{' '}
-                    <span className="font-bold text-navy">
-                      {Number(latestSnap.total).toLocaleString('en-US')}
-                    </span>{' '}
-                    · {latestSnap.observedOn}
-                  </span>
-                )}
-              </div>
-              <Sparkline vals={trendVals} color={ENROLL_HUE} h={44} fill stretch />
-              <p className="mt-1.5 text-[11.5px] text-muted">
-                From your enrollment snapshots — the roster writes one per day it changes.
-              </p>
-            </div>
-          )}
+          {/* Headcount trend — real dates, one reading per day, honest states.
+              EnrollmentTrend owns the dedupe and the axis; see its header. */}
+          <EnrollmentTrend snapshots={snapshots} planTotal={planTotal} />
         </div>
       )}
     </motion.section>

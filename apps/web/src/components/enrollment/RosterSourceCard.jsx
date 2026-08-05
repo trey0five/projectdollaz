@@ -28,8 +28,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { AlertTriangle, FileSpreadsheet, Plug, Trash2, Upload } from 'lucide-react'
 import { enrollmentApi, apiErrorMessage } from '../../lib/api.js'
+import { moduleHue } from '../module/moduleAnatomy.js'
 
-const ENROLL_HUE = '#0EA5E9'
+const ENROLL_HUE = moduleHue('enrollment')
 
 function fmtDay(iso) {
   if (!iso) return null
