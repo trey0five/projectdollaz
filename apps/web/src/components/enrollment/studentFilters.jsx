@@ -100,7 +100,41 @@ function Chip({ label, hue, onRemove }) {
   )
 }
 
-export default function StudentFilterBar({ filters, onChange, hue = '#0EA5E9', showSearch = true }) {
+/**
+ * WHAT THE REGISTER ACTUALLY HOLDS, per dimension.
+ *
+ * `facets` is the UNFILTERED aggregate's `counts` — { grade: {'9':120,…},
+ * gender: {}, … }. A value is OFFERED only when its count is above zero.
+ *
+ * This exists because of a report that the filters "aren't working". They were
+ * working perfectly; they were offering the wrong things. Every picker listed the
+ * entire vocabulary regardless of the data, so a 9–12 high school was invited to
+ * filter by PK3 and Grade 3, and a roster imported from a users.csv — which
+ * carries no demographics at all — offered fully populated Race, Gender,
+ * Ethnicity and Age-band menus. Every one of those picks returns an empty list,
+ * and a control that answers "nothing" to a reasonable question is
+ * indistinguishable from a broken one.
+ *
+ * NULL facets ⇒ we do not know yet (still loading, or a caller that does not
+ * supply them), and the honest fallback is the full vocabulary — exactly today's
+ * behaviour. Absence of knowledge must not masquerade as absence of data.
+ */
+function availableKeys(dim, facets) {
+  if (!facets) return dim.keys
+  const counts = facets[dim.key]
+  if (!counts || typeof counts !== 'object') return []
+  return dim.keys.filter((k) => Number(counts[k] ?? 0) > 0)
+}
+
+export default function StudentFilterBar({
+  filters,
+  onChange,
+  hue = '#0EA5E9',
+  showSearch = true,
+  // Unfiltered facet counts from GET …/students/aggregate. Optional: callers that
+  // do not pass it keep the previous full-vocabulary behaviour.
+  facets = null,
+}) {
   const f = filters ?? EMPTY_STUDENT_FILTERS
 
   // Debounced search — local echo state, 300ms push to the caller. The
@@ -171,25 +205,40 @@ export default function StudentFilterBar({ filters, onChange, hue = '#0EA5E9', s
         <span className="hidden items-center gap-1 text-[11.5px] font-semibold uppercase tracking-[0.1em] text-muted sm:inline-flex">
           <SlidersHorizontal size={13} /> Filter
         </span>
-        {STUDENT_FILTER_DIMENSIONS.map((d) => (
+        {STUDENT_FILTER_DIMENSIONS.map((d) => {
+          const keys = availableKeys(d, facets)
+          // A dimension the roster carries NO data for is disabled and says so.
+          // Rendering it live would offer a menu whose every option returns zero.
+          const empty = facets != null && keys.length === 0
+          return (
           <select
             key={d.key}
             value=""
+            disabled={empty}
             onChange={(e) => {
               if (e.target.value) toggleValue(d.key, e.target.value)
             }}
-            aria-label={`Add a ${d.label.toLowerCase()} filter`}
-            className={pickerCls}
+            aria-label={
+              empty
+                ? `${d.label} — not in your roster data`
+                : `Add a ${d.label.toLowerCase()} filter`
+            }
+            title={empty ? `Your roster carries no ${d.label.toLowerCase()} data.` : undefined}
+            className={`${pickerCls}${empty ? ' cursor-not-allowed opacity-45' : ''}`}
           >
-            <option value="">{d.label}</option>
-            {d.keys.map((k) => (
+            <option value="">{empty ? `${d.label} — none` : d.label}</option>
+            {keys.map((k) => (
               <option key={k} value={k}>
                 {(f[d.key] ?? []).includes(k) ? '✓ ' : ''}
                 {d.labels[k] ?? k}
+                {/* The count is the point: it tells you the answer before you
+                    ask, so an empty result is never a surprise. */}
+                {facets?.[d.key]?.[k] != null ? ` (${facets[d.key][k]})` : ''}
               </option>
             ))}
           </select>
-        ))}
+          )
+        })}
         {STUDENT_FLAG_KEYS.map((k) => {
           const on = (f.flags ?? []).includes(k)
           return (

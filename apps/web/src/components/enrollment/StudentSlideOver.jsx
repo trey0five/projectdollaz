@@ -31,6 +31,7 @@ import {
   ETHNICITY_LABELS,
   RACE_LABELS,
 } from '../../lib/demographicVocab.js'
+import { demographicPillStyle } from '../../lib/demographicColor.js'
 import { GRADE_LABELS } from './studentFilters.jsx'
 
 const ENROLL_HUE = '#0EA5E9'
@@ -219,9 +220,17 @@ export default function StudentSlideOver({
                 {fullName || 'Student'}
               </h2>
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                {/* The grade's own colour, matching its pill in the register —
+                    one grade, one colour, wherever it appears. */}
                 <span
                   className="inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11.5px] font-semibold"
-                  style={{ borderColor: `${ENROLL_HUE}55`, backgroundColor: `${ENROLL_HUE}14`, color: '#0369A1' }}
+                  style={
+                    demographicPillStyle('grade', s.grade) ?? {
+                      borderColor: `${ENROLL_HUE}55`,
+                      backgroundColor: `${ENROLL_HUE}14`,
+                      color: '#0369A1',
+                    }
+                  }
                 >
                   <GraduationCap size={12} /> {GRADE_LABELS[s.grade] ?? s.grade}
                 </span>
@@ -322,19 +331,38 @@ export default function StudentSlideOver({
           {/* Demographics (aggregate vocab; "not recorded" when unset) */}
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             {[
-              ['Gender', s.gender ? (GENDER_LABELS[s.gender] ?? s.gender) : null],
-              ['Race', s.race ? (RACE_LABELS[s.race] ?? s.race) : null],
-              ['Ethnicity', s.ethnicity ? (ETHNICITY_LABELS[s.ethnicity] ?? s.ethnicity) : null],
-            ].map(([label, value]) => (
-              <div key={label} className="rounded-xl border border-rule/50 bg-cream/40 px-3 py-2">
-                <p className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-muted">
-                  {label}
-                </p>
-                <p className={`mt-0.5 text-[13.5px] font-semibold ${value ? 'text-navy' : 'italic text-muted'}`}>
-                  {value ?? 'Not recorded'}
-                </p>
-              </div>
-            ))}
+              ['Gender', 'gender', s.gender, s.gender ? (GENDER_LABELS[s.gender] ?? s.gender) : null],
+              ['Race', 'race', s.race, s.race ? (RACE_LABELS[s.race] ?? s.race) : null],
+              [
+                'Ethnicity',
+                'ethnicity',
+                s.ethnicity,
+                s.ethnicity ? (ETHNICITY_LABELS[s.ethnicity] ?? s.ethnicity) : null,
+              ],
+            ].map(([label, dimension, raw, value]) => {
+              const pill = raw ? demographicPillStyle(dimension, raw) : null
+              return (
+                <div key={label} className="rounded-xl border border-rule/50 bg-cream/40 px-3 py-2">
+                  <p className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-muted">
+                    {label}
+                  </p>
+                  {value && pill ? (
+                    <span
+                      className="mt-1 inline-flex max-w-full items-center rounded-full border px-2.5 py-0.5 text-[12.5px] font-semibold"
+                      style={pill}
+                    >
+                      <span className="min-w-0 truncate">{value}</span>
+                    </span>
+                  ) : (
+                    <p
+                      className={`mt-0.5 text-[13.5px] font-semibold ${value ? 'text-navy' : 'italic text-muted'}`}
+                    >
+                      {value ?? 'Not recorded'}
+                    </p>
+                  )}
+                </div>
+              )
+            })}
           </div>
 
           {/* Notes */}

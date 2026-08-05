@@ -34,8 +34,29 @@ import StudentFilterBar, {
   buildStudentParams,
 } from './studentFilters.jsx'
 import StudentSlideOver, { StatusPill, FlagBadges } from './StudentSlideOver.jsx'
+import { demographicPillStyle } from '../../lib/demographicColor.js'
 
 const ENROLL_HUE = '#0EA5E9'
+
+/**
+ * One demographic value as a coloured pill. Falls back to plain text for a value
+ * outside the known vocabulary rather than inventing a swatch for it, and to an
+ * em-dash for nothing at all — a roster imported from a users.csv carries no
+ * demographics, and a blank must stay visibly blank.
+ */
+function ValuePill({ dimension, value, label }) {
+  if (value == null || value === '') return <span className="text-muted">—</span>
+  const style = demographicPillStyle(dimension, value)
+  if (!style) return <span className="text-navy">{label ?? value}</span>
+  return (
+    <span
+      className="inline-flex max-w-full items-center rounded-full border px-2.5 py-0.5 text-[12.5px] font-semibold"
+      style={style}
+    >
+      <span className="min-w-0 truncate">{label ?? value}</span>
+    </span>
+  )
+}
 
 /**
  * CLEAR THE WHOLE ROSTER — the confirm.
@@ -349,6 +370,10 @@ export default function StudentRegister({ schoolId, canEdit, hue = ENROLL_HUE, o
   const [error, setError] = useState('')
   const [panelStudent, setPanelStudent] = useState(null)
   const [editStudent, setEditStudent] = useState(null)
+  // The UNFILTERED facet counts, so the pickers offer what the roster actually
+  // holds. Deliberately not re-read per filter change: options must not vanish as
+  // you narrow, or deselecting becomes impossible.
+  const [facets, setFacets] = useState(null)
   const [clearOpen, setClearOpen] = useState(false)
   const [clearBusy, setClearBusy] = useState(false)
   const [clearError, setClearError] = useState('')
@@ -409,6 +434,28 @@ export default function StudentRegister({ schoolId, canEdit, hue = ENROLL_HUE, o
     },
     [sort],
   )
+
+  useEffect(() => {
+    if (!schoolId) return undefined
+    let cancelled = false
+    Promise.resolve().then(() => {
+      if (cancelled) return
+      enrollmentApi.students
+        .aggregate(schoolId)
+        .then((res) => {
+          if (!cancelled) setFacets((res.data ?? res)?.counts ?? null)
+        })
+        .catch(() => {
+          // Unknown ⇒ null ⇒ the bar falls back to the full vocabulary. Not
+          // knowing what the roster holds must never be rendered as "it holds
+          // nothing", which would disable every picker on a transient error.
+          if (!cancelled) setFacets(null)
+        })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [schoolId, refresh])
 
   const reload = useCallback(() => {
     setRefresh((n) => n + 1)
@@ -491,7 +538,7 @@ export default function StudentRegister({ schoolId, canEdit, hue = ENROLL_HUE, o
         </div>
       </div>
 
-      <StudentFilterBar filters={filters} onChange={onFilters} hue={hue} />
+      <StudentFilterBar filters={filters} onChange={onFilters} hue={hue} facets={facets} />
 
       {error ? (
         <div className="rounded-xl border border-danger/30 bg-danger/[0.06] px-4 py-6 text-center">
@@ -561,7 +608,9 @@ export default function StudentRegister({ schoolId, canEdit, hue = ENROLL_HUE, o
                       </span>
                     </span>
                   </td>
-                  <td className="px-3 py-2.5 text-navy">{GRADE_LABELS[s.grade] ?? s.grade}</td>
+                  <td className="px-3 py-2.5">
+                    <ValuePill dimension="grade" value={s.grade} label={GRADE_LABELS[s.grade] ?? s.grade} />
+                  </td>
                   <td className="px-3 py-2.5 text-muted">{s.age ?? ageFromBirthDate(s.birthDate) ?? '—'}</td>
                   <td className="px-3 py-2.5">
                     <StatusPill status={s.status} />

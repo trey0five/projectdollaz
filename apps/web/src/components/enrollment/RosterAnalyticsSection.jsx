@@ -78,11 +78,35 @@ function MixCard({ title, rows, sortDesc = true }) {
 export default function RosterAnalyticsSection({ schoolId }) {
   const [filters, setFilters] = useState(EMPTY_STUDENT_FILTERS)
   const [agg, setAgg] = useState(null)
+  // UNFILTERED facet counts for the picker vocabulary. The `agg` above is the
+  // FILTERED read that drives the charts; feeding that to the bar would delete
+  // each option the moment you selected it — narrowing to Grade 12 would leave
+  // "Grade 12" as the only grade on offer and no way back.
+  const [facets, setFacets] = useState(null)
   const [snapshots, setSnapshots] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   const params = useMemo(() => buildStudentParams(filters), [filters])
+
+  useEffect(() => {
+    if (!schoolId) return undefined
+    let cancelled = false
+    Promise.resolve().then(() => {
+      if (cancelled) return
+      enrollmentApi.students
+        .aggregate(schoolId)
+        .then((res) => {
+          if (!cancelled) setFacets((res.data ?? res)?.counts ?? null)
+        })
+        .catch(() => {
+          if (!cancelled) setFacets(null)
+        })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [schoolId])
 
   useEffect(() => {
     if (!schoolId) return undefined
@@ -190,7 +214,7 @@ export default function RosterAnalyticsSection({ schoolId }) {
       </div>
 
       <div className="mb-4">
-        <StudentFilterBar filters={filters} onChange={setFilters} hue={ENROLL_HUE} />
+        <StudentFilterBar filters={filters} onChange={setFilters} hue={ENROLL_HUE} facets={facets} />
       </div>
 
       {error ? (
