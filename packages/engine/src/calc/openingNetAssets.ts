@@ -36,12 +36,10 @@
 // semantics already used by calc/validate.ts (300–399 = equity).
 // ─────────────────────────────────────────────────────────────
 import type { Dataset } from '../types/rows.js'
+import { DEFAULT_CHART, categoryOfRow, type StandardChart } from '../scoa/chart.js'
 
 const EPSILON = 0.01
 
-/** Equity / opening-net-assets account range (300-series). */
-const EQUITY_MIN = 300
-const EQUITY_MAX = 399
 
 /** How the opening figure was obtained. */
 export type OpeningNetAssetsSource = 'equity-row' | 'plug' | 'unavailable'
@@ -74,12 +72,26 @@ const sumTotals = (rows: Dataset): number => rows.reduce((s, r) => s + r.total, 
  * Recover opening net assets from a parsed trial balance.
  * @see OpeningNetAssetsResult for the three cases and their confidence.
  */
-export function deriveOpeningNetAssets(data: Dataset): OpeningNetAssetsResult {
+export function deriveOpeningNetAssets(
+  data: Dataset,
+  chart: StandardChart = DEFAULT_CHART
+): OpeningNetAssetsResult {
   const imbalance = round2(sumTotals(data))
-  const equityRows = data.filter((r) => r.acct >= EQUITY_MIN && r.acct <= EQUITY_MAX)
+  // The equity rows and "does this TB have a balance sheet at all" used to be
+  // account RANGES (300–399, and "anything below 300"). Both are statements
+  // about one chart of accounts: a school numbering net assets 3000 and cash
+  // 1010 had its complete trial balance read as an activity-only extract, and
+  // its opening net assets reported unavailable.
+  const sectionOf = (r: (typeof data)[number]) => {
+    const c = categoryOfRow(r, chart)
+    return c != null ? chart.categories[c]?.section : undefined
+  }
+  const equityRows = data.filter((r) => sectionOf(r) === 'netAssets')
   const hasEquityRow = equityRows.length > 0
-  // Balance-sheet (asset/liability) accounts sit below the equity range.
-  const hasBalanceSheet = data.some((r) => r.acct > 0 && r.acct < EQUITY_MIN)
+  const hasBalanceSheet = data.some((r) => {
+    const sec = sectionOf(r)
+    return sec === 'asset' || sec === 'liability'
+  })
 
   if (hasEquityRow) {
     // Complete TB: opening is the equity row(s) themselves (credit → flip sign).

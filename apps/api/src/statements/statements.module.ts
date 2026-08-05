@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common'
+import { Module, forwardRef } from '@nestjs/common'
 import { AuthModule } from '../auth/auth.module.js'
 import { AuditModule } from '../common/audit/audit.module.js'
 import { PeriodsModule } from '../periods/periods.module.js'
@@ -15,7 +15,7 @@ import { SnapshotHistoryService } from './snapshot-history.service.js'
  * @finrep/engine, and AuditService.
  */
 @Module({
-  imports: [AuthModule, AuditModule, PeriodsModule, MappingModule, BillingModule, ComplianceModule],
+  imports: [AuthModule, AuditModule, PeriodsModule, forwardRef(() => MappingModule), BillingModule, ComplianceModule],
   controllers: [StatementsController],
   providers: [StatementsService, SnapshotHistoryService],
   exports: [StatementsService, SnapshotHistoryService],

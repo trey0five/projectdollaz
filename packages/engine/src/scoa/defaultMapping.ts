@@ -40,7 +40,7 @@ export const ACCT_MAP: Record<number, SCoaCategory> = {
   // Fixed charges & other
   800: 'fixedOther', 810: 'fixedOther', 811: 'fixedOther', 815: 'fixedOther',
   820: 'fixedOther', 821: 'fixedOther', 822: 'fixedOther', 823: 'fixedOther', 824: 'fixedOther',
-  840: 'fixedOther', 841: 'fixedOther', 860: 'fixedOther', 865: 'fixedOther', 866: 'fixedOther',
+  840: 'fixedOther', 841: 'fixedOther', 860: 'fixedOther', 865: 'deprExpense', 866: 'fixedOther',
   880: 'fixedOther', 890: 'fixedOther',
 
   // Auxiliary programs
@@ -51,7 +51,48 @@ export const ACCT_MAP: Record<number, SCoaCategory> = {
   963: 'restricted', 960: 'restricted', 988: 'intlExp',
 }
 
+/**
+ * THE LEGACY BALANCE SHEET, as a mapping.
+ *
+ * Until now calcSFP summed these account numbers as literals in its own source —
+ * cash WAS "accounts 100,101,102,105,107,109" — so the balance sheet only ever
+ * worked for this one chart of accounts, and no amount of categorising could
+ * teach it another. Restating the same accounts as mapping entries is what lets
+ * the statement read the mapping instead: schools on this chart reach identical
+ * numbers by the new route, and a school on any other chart can finally describe
+ * its own balance sheet.
+ *
+ * NOT HERE, deliberately: accounts 120 and 200. Each carries more than one kind
+ * of balance, told apart by the row description, so they are covered by
+ * LEGACY_DESCRIPTION_RULES in chart.ts rather than by a single category.
+ *
+ * Equity (300–399) is enumerated rather than expressed as a range: a range is
+ * another way of assuming a chart. These rows never enter the SFP — the ending
+ * balance comes from the SOA — they are what tells us a trial balance is
+ * complete rather than an activity-only extract.
+ */
+const BALANCE_SHEET_MAP: Record<number, SCoaCategory> = {
+  // Cash & equivalents
+  100: 'cash', 101: 'cash', 102: 'cash', 105: 'cash', 107: 'cash', 109: 'cash',
+  110: 'restrictedCash', 111: 'restrictedCash', 112: 'restrictedCash',
+  113: 'restrictedCash', 115: 'restrictedCash',
+  // Other current assets (120 = receivables, via description rules)
+  125: 'prepaid',
+  135: 'restrictInvst',
+  // Property & equipment, gross, then accumulated depreciation (a credit)
+  140: 'ppGross', 150: 'ppGross', 151: 'ppGross', 153: 'ppGross', 165: 'ppGross',
+  170: 'accumDepr',
+  160: 'rouAsset',
+  // Liabilities (200 = payables + lease current portion, via description rules)
+  230: 'deferredIntl',
+  240: 'studentClubs',
+  260: 'leaseNonCurr',
+}
+
+// Opening equity, 300–399.
+for (let acct = 300; acct <= 399; acct++) BALANCE_SHEET_MAP[acct] = 'equityOpening'
+
 export const DEFAULT_MAPPING: SchoolToScoaMapping = {
   mappingVersion: 'map-v1',
-  entries: ACCT_MAP,
+  entries: { ...ACCT_MAP, ...BALANCE_SHEET_MAP },
 }

@@ -79,10 +79,28 @@ export class MappingService {
     const storedChart = chartVersion.chart as unknown as StandardChart
     const chart: StandardChart = {
       standardChartVersion: chartVersion.version,
-      categories: storedChart.categories ?? DEFAULT_CHART.categories,
+      // Same reasoning as the mapping below: the stored chart row is seeded per
+      // VERSION, so a row written under an older version knows nothing about
+      // categories added since. Defaults underneath, stored values on top.
+      categories: { ...DEFAULT_CHART.categories, ...(storedChart.categories ?? {}) },
+      descriptionRules: storedChart.descriptionRules ?? DEFAULT_CHART.descriptionRules,
       mapping: {
         mappingVersion: mapping.version,
-        entries: mapping.entries as unknown as Record<number, string>,
+        // THE DEFAULTS UNDERNEATH, THE SCHOOL'S PICKS ON TOP.
+        //
+        // This row was seeded once, on the school's first use, and never
+        // revisited — so a school seeded before the balance sheet became
+        // mapping-driven holds only its income-statement entries. Reading the
+        // stored row alone would hand the engine a chart with no cash, no
+        // receivables and no liabilities, and every existing school's balance
+        // sheet would go to zero the moment the statements started reading
+        // categories. Unioning at READ time means new defaults reach every
+        // school without a migration or a DML pass, while anything the school
+        // has actually chosen still wins.
+        entries: {
+          ...(DEFAULT_MAPPING.entries as unknown as Record<number, string>),
+          ...(mapping.entries as unknown as Record<number, string>),
+        },
       } as StandardChart['mapping'],
     }
     return { mapping, chartVersion, chart }

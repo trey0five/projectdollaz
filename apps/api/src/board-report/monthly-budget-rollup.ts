@@ -94,7 +94,8 @@ export function rollupMonthlyBudget(spread: unknown): MonthlyBudgetRollup | null
       const cat = ACCT_MAP[acct]
       const def = SCOA_CATEGORIES[cat]
       line = def.rollupLine || null
-      section = def.section
+      // Balance-sheet categories have no budget section — see budget.spread.ts.
+      section = def.section === 'revenue' || def.section === 'expense' ? def.section : null
       included = def.includedInTotals
     } else {
       // acct===0 label-only row, OR acct>0 unmapped: use the spread's own annotation.

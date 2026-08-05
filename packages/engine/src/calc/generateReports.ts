@@ -50,9 +50,9 @@ export function generateReports({
     cyNABegin, cyNAEnd, pyNABegin, pyNAEnd, auditNABegin, auditNAEnd,
   }
 
-  const sfpCy = calcSFP(cyData, cyNAEnd)
-  const sfpPy = hasPY && pyNAEnd != null ? calcSFP(pyData, pyNAEnd) : null
-  const sfpAudit = hasAudit && auditNAEnd != null ? calcSFP(auditData, auditNAEnd) : null
+  const sfpCy = calcSFP(cyData, cyNAEnd, chart)
+  const sfpPy = hasPY && pyNAEnd != null ? calcSFP(pyData, pyNAEnd, chart) : null
+  const sfpAudit = hasAudit && auditNAEnd != null ? calcSFP(auditData, auditNAEnd, chart) : null
   const sfpResults: SFPResults = {
     cy: sfpCy,
     py: sfpPy,
@@ -61,7 +61,7 @@ export function generateReports({
     hasAudit,
   }
 
-  const scf = calcSCF({ soaResults, sfpResults, cyData, pyData, auditData })
+  const scf = calcSCF({ soaResults, sfpResults, cyData, pyData, auditData, chart })
 
   const netAssets = calcNetAssets({ soaResults, sfpResults })
 
@@ -75,11 +75,11 @@ export function generateReports({
       audit: audit ? buildSOALineage(auditData, audit, chart) : null,
     },
     sfp: {
-      cy: sfpCy ? buildSFPLineage(cyData, sfpCy) : null,
-      py: sfpPy ? buildSFPLineage(pyData, sfpPy) : null,
-      audit: sfpAudit ? buildSFPLineage(auditData, sfpAudit) : null,
+      cy: sfpCy ? buildSFPLineage(cyData, sfpCy, chart) : null,
+      py: sfpPy ? buildSFPLineage(pyData, sfpPy, chart) : null,
+      audit: sfpAudit ? buildSFPLineage(auditData, sfpAudit, chart) : null,
     },
-    scf: scf ? buildSCFLineage(cyData, scf) : null,
+    scf: scf ? buildSCFLineage(cyData, scf, chart) : null,
     netAssets: buildNetAssetsLineage(netAssets),
   }
 

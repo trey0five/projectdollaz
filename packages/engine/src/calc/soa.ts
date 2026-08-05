@@ -61,7 +61,9 @@ export function calcSOA(
 
   const instructional = sumC('instrSal') + sumC('instrSup')
   const facilities = sumC('facilSal') + sumC('facilCost')
-  const fixedOther = sumC('fixedOther')
+  // deprExpense shares this rollup line — it is a separate category ONLY so the
+  // cash-flow statement can find depreciation without naming an account number.
+  const fixedOther = sumC('fixedOther') + sumC('deprExpense')
   const intlExp = sumC('intlExp')
   const bus = sumC('bus')
   const food = sumC('food')
@@ -131,7 +133,7 @@ export function buildSOALineage(
 
   expLine('instructional', ['instrSal', 'instrSup'], result.instructional)
   expLine('facilities', ['facilSal', 'facilCost'], result.facilities)
-  expLine('fixedOther', ['fixedOther'], result.fixedOther)
+  expLine('fixedOther', ['fixedOther', 'deprExpense'], result.fixedOther)
   expLine('intlExp', ['intlExp'], result.intlExp)
   expLine('bus', ['bus'], result.bus)
   expLine('food', ['food'], result.food)

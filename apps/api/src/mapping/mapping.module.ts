@@ -1,5 +1,6 @@
-import { Module } from '@nestjs/common'
+import { Module, forwardRef } from '@nestjs/common'
 import { AuthModule } from '../auth/auth.module.js'
+import { StatementsModule } from '../statements/statements.module.js'
 import { MappingController } from './mapping.controller.js'
 import { MappingService } from './mapping.service.js'
 
@@ -8,7 +9,9 @@ import { MappingService } from './mapping.service.js'
  * Statements module can resolve the active mapping/chart before generating.
  */
 @Module({
-  imports: [AuthModule],
+  // forwardRef both ways: Statements needs the active chart, and a remap needs
+  // to rebuild the statements computed under the old one.
+  imports: [AuthModule, forwardRef(() => StatementsModule)],
   controllers: [MappingController],
   providers: [MappingService],
   exports: [MappingService],

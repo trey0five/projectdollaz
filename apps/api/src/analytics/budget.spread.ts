@@ -177,11 +177,17 @@ export function rollupSpread(
       continue
     }
     const def = categoryDef(cat)!
+    // A BUDGET LINE IS REVENUE OR EXPENSE. Since the chart gained balance-sheet
+    // categories, a mapped account can now be an asset or a liability — which a
+    // budget spread has no line for. Narrow it here rather than widening the
+    // budget's own vocabulary to admit things it cannot budget.
+    const budgetSection: 'revenue' | 'expense' | null =
+      def.section === 'revenue' || def.section === 'expense' ? def.section : null
     accounts.push({
       acct: a.acct,
       label: a.label,
       category: cat,
-      section: def.section,
+      section: budgetSection,
       rollupLine: def.rollupLine || null,
       includedInTotals: def.includedInTotals,
       months: a.months,
@@ -189,7 +195,8 @@ export function rollupSpread(
       mappedBy,
     })
     if (!def.includedInTotals || !def.rollupLine) continue
-    const bucket = def.section === 'revenue' ? revenue : expense
+    if (budgetSection === null) continue
+    const bucket = budgetSection === 'revenue' ? revenue : expense
     bucket[def.rollupLine] = round2((bucket[def.rollupLine] ?? 0) + a.annual)
   }
 

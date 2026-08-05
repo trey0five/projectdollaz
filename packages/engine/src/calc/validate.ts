@@ -25,27 +25,42 @@
 // ─────────────────────────────────────────────────────────────
 import type { Dataset, NormalizedRow } from '../types/rows.js'
 import type { ValidationResult, ValidationIssue } from '../types/validation.js'
-import { DEFAULT_CHART, type StandardChart } from '../scoa/chart.js'
+import { DEFAULT_CHART, categoryOfRow, type StandardChart } from '../scoa/chart.js'
 
 const EPSILON = 0.01
 
-/** Equity / opening-net-assets account range (300-series). */
-const EQUITY_MIN = 300
-const EQUITY_MAX = 399
-
-/** Whether the dataset includes an equity/opening row (a complete TB). */
-export function hasEquityRow(data: Dataset): boolean {
-  return data.some((r) => r.acct >= EQUITY_MIN && r.acct <= EQUITY_MAX)
+/**
+ * Whether the dataset includes an equity/opening row — i.e. whether this is a
+ * COMPLETE trial balance rather than an activity-only extract.
+ *
+ * Was `acct >= 300 && acct <= 399`, which is a statement about one chart of
+ * accounts, not about the data. A school numbering its net assets 3000 had a
+ * complete trial balance read as an activity extract.
+ */
+export function hasEquityRow(data: Dataset, chart: StandardChart = DEFAULT_CHART): boolean {
+  return data.some((r) => {
+    const c = categoryOfRow(r, chart)
+    return c != null && chart.categories[c]?.section === 'netAssets'
+  })
 }
 
-/** Legacy unmapped predicate: revenue/expense accts with a nonzero balance and no mapping. */
+/**
+ * Accounts carrying a real balance that the chart cannot name.
+ *
+ * Was `acct >= 400`, i.e. "only income-statement accounts can be unmapped" —
+ * which quietly assumed the balance sheet lives below 400. On a four-digit chart
+ * that let every asset and liability through unflagged while the statements
+ * silently reported nothing for them: the user was told 33 accounts needed
+ * review and, having reviewed them, still had no balance sheet.
+ *
+ * Now: any row with a balance and no category, whatever it is numbered. For the
+ * legacy chart this is the same set, because its balance sheet is mapped.
+ */
 export function findUnmapped(
   data: Dataset,
   chart: StandardChart = DEFAULT_CHART
 ): NormalizedRow[] {
-  return data.filter(
-    (r) => r.acct >= 400 && r.total !== 0 && !chart.mapping.entries[r.acct]
-  )
+  return data.filter((r) => r.total !== 0 && !categoryOfRow(r, chart))
 }
 
 export function validateDataset(
@@ -61,7 +76,7 @@ export function validateDataset(
     else if (r.total < 0) totalCredits += -r.total
   }
 
-  const completeTB = hasEquityRow(data)
+  const completeTB = hasEquityRow(data, chart)
   // A strict debits=credits assertion only applies to a complete TB. A
   // management TB that omits the opening equity row is "balanced" in the
   // sense the engine cares about — its imbalance is the known, external

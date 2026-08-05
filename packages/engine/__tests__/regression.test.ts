@@ -147,6 +147,11 @@ describe('meta versions', () => {
   it('carries engine/mapping/chart versions', () => {
     expect(out.meta.engineVersion).toBeTruthy()
     expect(out.meta.mappingVersion).toBe('map-v1')
-    expect(out.meta.standardChartVersion).toBe('scoa-v1')
+    // scoa-v2: the chart gained a balance-sheet vocabulary and the legacy
+    // description splits became chart data. THE ONLY EDIT THIS FILE HAS TAKEN
+    // for that change — every figure above is untouched, which is the whole
+    // point of this file: the legacy chart reaches identical numbers by the new
+    // category route.
+    expect(out.meta.standardChartVersion).toBe('scoa-v2')
   })
 })
