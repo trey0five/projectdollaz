@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import { APPLY_KINDS } from './dto/apply-action.dto.js'
-import { REFRESH, REVERSIBLE_KINDS, CONFIRM_TOOLS, type ProposedAction } from './assistant.service.js'
+import {
+  REFRESH,
+  REVERSIBLE_KINDS,
+  CONFIRM_TOOLS,
+  WRITE_TOOLS,
+  type ProposedAction,
+} from './assistant.service.js'
 import { TOOL_SCHEMAS, TOOL_LABELS } from './assistant.tools.js'
 import { VISIBLE_HOLE_RULE_IDS } from '@finrep/compliance'
 import { COVERAGE_REGISTRY } from './coverage-topics.js'
@@ -84,6 +90,46 @@ describe('AC-1 — a ProposedAction kind reaches every touchpoint', () => {
     }
     for (const tool of PHASE_J_KINDS) {
       expect([...CONFIRM_TOOLS], `${tool} is not confirm-then-apply`).toContain(tool)
+    }
+  })
+
+  it('AC-1.7 every WRITE tool is a registered tool WITH a status label', () => {
+    // THE REVERSE OF AC-1.5, and the direction that was missing. AC-1.5 walks
+    // CONFIRM_TOOLS → schema; nothing walked the autonomous writes, so a write
+    // tool with no schema entry (a tool the model can never call) or no label
+    // (a silent spinner during a real mutation) passed every assertion here.
+    const schemaNames = new Set(TOOL_SCHEMAS.map((t) => t.function.name))
+    expect(WRITE_TOOLS.size).toBeGreaterThan(5)
+    for (const tool of WRITE_TOOLS) {
+      expect(schemaNames, `${tool} writes but is not in TOOL_SCHEMAS`).toContain(tool)
+      expect(TOOL_LABELS[tool as keyof typeof TOOL_LABELS], `no TOOL_LABELS entry for ${tool}`).toBeTruthy()
+    }
+  })
+
+  it('AC-1.8 every create_* kind is REVERSIBLE, or is on the named exception list', () => {
+    // AC-1.4 checks REVERSIBLE_KINDS ⊆ union, which is the easy direction: it
+    // cannot notice a create that FORGOT to be undoable. That is exactly how
+    // import_diocesan_enrollment — a fan-out write across every school in an org —
+    // shipped with no undo and no test said a word. A create that cannot be
+    // reversed is a decision, so it is written down here rather than defaulted to.
+    const IRREVERSIBLE_BY_DESIGN = new Set<string>([
+      // Fans out across an ORG's schools and merges into existing snapshots; there
+      // is no single row to delete, so undo would have to reconstruct prior state.
+      'import_diocesan_enrollment',
+    ])
+    // `create_*` plus the two plan DRAFTERS, which mint whole trees of records.
+    // NOT every `draft_*`: draft_cap_entry fills a field on a corrective-action
+    // row that already exists, so there is nothing for an undo to delete — an
+    // update is not a create, and the distinction is the point of this list.
+    const creates = UNION_KINDS.filter((k) => k.startsWith('create_') || /^draft_.*_plan$/.test(k))
+    expect(creates.length).toBeGreaterThan(8)
+    for (const kind of creates) {
+      if (IRREVERSIBLE_BY_DESIGN.has(kind)) continue
+      expect([...REVERSIBLE_KINDS], `${kind} creates a record but has no undo`).toContain(kind)
+    }
+    // The exception list may not rot into a place kinds go to be forgotten.
+    for (const kind of IRREVERSIBLE_BY_DESIGN) {
+      expect(UNION_KINDS as readonly string[], `${kind} is exempted but is not a kind`).toContain(kind)
     }
   })
 

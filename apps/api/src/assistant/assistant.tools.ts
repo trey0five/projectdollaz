@@ -494,7 +494,7 @@ export const TOOL_SCHEMAS = [
     function: {
       name: 'create_task',
       description:
-        'PROPOSE a new workflow Task for the user to CONFIRM before it is created (like drafting a corrective action — this does NOT create the task itself; the user must confirm). Use when the user asks to create or assign a task, or to "turn this into a task / make a task for the chair to review this" off a briefing or governance attention item — pull the title and source from the referenced item. assignee is "me" (the current user), a school member’s email address, or omitted (unassigned); it can ONLY be an active member of this school. dueDate is yyyy-mm-dd — only pass one the user actually stated; never invent one. Task, not period-scoped.',
+        'PROPOSE a new workflow Task for the user to CONFIRM before it is created (like drafting a corrective action — this does NOT create the task itself; the user must confirm). Use when the user asks to create or assign a task, or to "turn this into a task / make a task for the chair to review this" off a briefing or governance attention item — pull the title and source from the referenced item. assignee is "me" (the current user), a school member’s email address, their NAME (“Sam Lee”), or their POSITION at the school (“the business manager”, “head of school”), or omitted (unassigned) — pass what the user said and let the server resolve it; it can ONLY be an active member of this school, and an ambiguous reference comes back as an error asking which person they meant. dueDate is yyyy-mm-dd — only pass one the user actually stated; never invent one. Task, not period-scoped.',
       parameters: {
         type: 'object',
         properties: {
@@ -509,7 +509,7 @@ export const TOOL_SCHEMAS = [
           assignee: {
             type: 'string',
             description:
-              'Who to assign to: "me" for the current user, or a school member’s email address. Omit to leave unassigned.',
+              'Who to assign to: "me" for the current user, a school member’s email address, their NAME, or their POSITION at the school (e.g. "business manager"). Pass the user’s own words — do NOT ask for an email address first. Omit to leave unassigned.',
           },
           priority: { type: 'string', enum: ['low', 'normal', 'high'] },
           sourceType: {
@@ -718,6 +718,20 @@ export const TOOL_SCHEMAS = [
           estimatedCost: { type: 'number', description: 'Estimated cost in USD. Omit if unknown.' },
           targetDate: { type: 'string', description: 'YYYY-MM-DD; target completion. Omit unless stated.' },
           notes: { type: 'string', description: 'Optional notes.' },
+          complianceKind: {
+            type: 'string',
+            enum: [
+              'fire_life_safety',
+              'boiler',
+              'elevator',
+              'asbestos',
+              'health',
+              'water_quality',
+              'playground',
+            ],
+            description:
+              'ONLY when the user says this item IS a regulatory inspection of one of these kinds (e.g. "log our annual fire inspection"). NEVER infer it from the title, category or location — an unnamed kind is omitted, and the item is then an ordinary maintenance item. Setting it is what makes the item count toward inspection coverage.',
+          },
         },
         required: ['title'],
       },
@@ -846,6 +860,11 @@ export const TOOL_SCHEMAS = [
         properties: {
           page: {
             type: 'string',
+            // THE WHOLE PRODUCT, not the finance-era third of it. This enum was
+            // frozen at nine pages while ten more routes shipped and mounted —
+            // governance, accreditation, improvement, strategy, HR, enrollment,
+            // facilities, advancement, tasks, portfolio — so Penny could discuss
+            // a strategic plan at length and had no way to take anyone to it.
             enum: [
               'home',
               'data',
@@ -856,6 +875,16 @@ export const TOOL_SCHEMAS = [
               'reports',
               'schedules',
               'settings',
+              'governance',
+              'accreditation',
+              'improvement',
+              'strategy',
+              'hr',
+              'enrollment',
+              'facilities',
+              'advancement',
+              'tasks',
+              'portfolio',
             ],
             description: 'Which page to open.',
           },
@@ -869,6 +898,8 @@ export const TOOL_SCHEMAS = [
               'reports',
               'integrations',
               'billing',
+              // A real route since Phase 4E, and absent here ever since.
+              'alerts',
             ],
             description: 'Only when page is settings: which settings section to open.',
           },
@@ -919,6 +950,9 @@ export const TOOL_SCHEMAS = [
                 },
                 page: {
                   type: 'string',
+                  // Kept byte-identical in MEANING to navigate_to_page's list —
+                  // a step that can only pre-navigate to a third of the app is a
+                  // walkthrough that cannot start where the control lives.
                   enum: [
                     'home',
                     'data',
@@ -929,6 +963,16 @@ export const TOOL_SCHEMAS = [
                     'reports',
                     'schedules',
                     'settings',
+                    'governance',
+                    'accreditation',
+                    'improvement',
+                    'strategy',
+                    'hr',
+                    'enrollment',
+                    'facilities',
+                    'advancement',
+                    'tasks',
+                    'portfolio',
                   ],
                   description: 'Optional: navigate to this page before this step.',
                 },
@@ -972,7 +1016,7 @@ export const TOOL_SCHEMAS = [
     function: {
       name: 'submit_for_approval',
       description:
-        'PROPOSE routing an existing task to one or more approvers for sign-off, for the user to CONFIRM (this does NOT submit until the user confirms). approvers is an ORDERED list of "me" (the current user) and/or school-member email addresses — sign-off happens in that order (step 1, then 2, …). Resolve the task the user names to its taskId first via list_open_tasks. Each approver must be an active member of this school.',
+        'PROPOSE routing an existing task to one or more approvers for sign-off, for the user to CONFIRM (this does NOT submit until the user confirms). approvers is an ORDERED list of "me" (the current user) and/or school members named by email, NAME, or POSITION (e.g. "head of school") — sign-off happens in that order (step 1, then 2, …). Resolve the task the user names to its taskId first via list_open_tasks. Each approver must be an active member of this school.',
       parameters: {
         type: 'object',
         properties: {
@@ -980,7 +1024,7 @@ export const TOOL_SCHEMAS = [
           approvers: {
             type: 'array',
             items: { type: 'string' },
-            description: 'Ordered approvers: "me" or member email addresses. One or more.',
+            description: 'Ordered approvers: "me", or members named by email, name, or position. One or more. Pass the user’s own words — do NOT ask for an email address first.',
           },
         },
         required: ['taskId', 'approvers'],
@@ -1115,6 +1159,45 @@ export const TOOL_SCHEMAS = [
       name: 'get_plan_status',
       description:
         "The school's ACTIVE strategic plan — its overall progress, pace, and which measurable goals are on or off track. Returns the plan name/status, overallProgressPct (0..1) and overallPaceStatus, goalCounts (onTrack/atRisk/behind/achieved/noData), per-pillar and per-goal progress — each goal carrying its metricKey + metricLabel, current-vs-target (formatted), pctToTarget, and paceStatus (on_track|at_risk|behind|achieved|no_data) — plus the behind-pace goals and any stalled initiatives. Use for \"how is our strategic plan going?\", \"are we on track on our goals?\", \"which goals are behind?\", \"what's our plan progress?\". Read-only; EVERY metric goal's figure is COMPUTED live from the school's QuickBooks & enrollment data (never typed in). Says so when the school has no plan. To explain WHY a metric-bound goal is behind, chain into get_trend / get_cash_flow / get_account_transactions using that goal's metricKey. State ONLY the figures this tool returns — never invent a goal, a value, or a pace.",
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_improvement_status',
+      description:
+        "The school's CONTINUOUS-IMPROVEMENT plan — the initiatives it is actually working, and how they are going. Returns each initiative's title, status, owner, due date, progressPct and how that progress is measured (task rollup, a bound metric, milestones, or manual), plus linked-task counts, days since last movement (stale work), and the count of open recommendations it has NOT yet adopted. Use for \"how is our improvement plan going?\", \"what are we working on?\", \"which initiatives are stalled?\", \"what should we take on next?\". Read-only. State ONLY the initiatives and figures this tool returns — never invent an initiative, an owner, or a percentage. To CREATE one, use create_initiative; to draft a whole plan, draft_improvement_plan.",
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_visit_readiness',
+      description:
+        "The MOCK VISIT — what an accreditation visiting team would find today, composed from the school's own registers. Returns the executive summary, the framework and whether one has been adopted, self-scored vs. verified coverage, the findings a team would raise (with severity), the strengths worth citing, the evidence a team asks for first, and the improvement work already under way. Use for \"are we ready for our visit?\", \"what would a visiting team say?\", \"run a mock visit\", \"what would they flag?\". Read-only and requires the accreditation module. NEVER state or imply a pass/fail likelihood, a probability, or a percentage chance of any outcome — KYRO holds no accreditation outcome data. State ONLY what this tool returns.",
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_roster_summary',
+      description:
+        "The STUDENT ROSTER as counts — headcount by grade and status, plus which file or connected system those students came from and when. Returns total and enrolled/waitlisted/withdrawn counts, the grade distribution, support-flag counts (IEP/504/ELL) and the most recent roster import (its source, row counts and date). Use for \"how many students do we have?\", \"what's our enrollment by grade?\", \"where did these numbers come from?\", \"why is the roster empty?\". COUNTS ONLY — this tool never returns a student, and you must never name, describe, or speculate about an individual student for any reason. For the historical enrollment SNAPSHOT (the figure the finance metrics use), use get_enrollment_demographics instead.",
       parameters: {
         type: 'object',
         properties: {},
@@ -1575,6 +1658,9 @@ export const TOOL_LABELS: Record<string, string> = {
   get_cash_flow: 'Reading cash flow & reconciliation…',
   get_value_history: 'Tracing how that number changed…',
   get_plan_status: 'Reading the strategic plan…',
+  get_improvement_status: 'Reading the improvement plan…',
+  get_visit_readiness: 'Running a mock visit…',
+  get_roster_summary: 'Counting the student roster…',
   get_governance_status: 'Reviewing governance…',
   get_early_warnings: 'Reading the early warnings…',
   draft_strategy_plan: 'Drafting a strategic plan…',

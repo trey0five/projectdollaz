@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { isEvaluationOverdue, isInspectionOverdue } from '../twin/twin-contract.js'
+import { TWIN_THRESHOLDS } from '@finrep/compliance'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AIC PHASE J — COUNTS ONLY. NEVER A NAME.
@@ -38,6 +39,9 @@ import { isEvaluationOverdue, isInspectionOverdue } from '../twin/twin-contract.
 
 const DAY_MS = 86_400_000
 
+/** Matches the twin's PD look-back exactly — one year, not a tunable. */
+const PD_LOOKBACK_YEARS = 1
+
 /** UTC calendar day, the house civil-day convention. */
 function isoDay(d: Date): string {
   return d.toISOString().slice(0, 10)
@@ -64,6 +68,36 @@ export interface StaffEvaluationCoverage {
   oldestOverdueDays: number
   completedLast12m: number
   byStatus: Record<string, number>
+}
+
+/** Safe-environment clearances, as counts. Same three-integer shape the twin's
+ *  own clearance view uses, so Penny's number and the rule's number agree. */
+export interface ClearanceCoverage {
+  total: number
+  lapsed: number
+  expiringSoon: number
+  /** Days past the OLDEST still-lapsed row's own expiry. 0 when none. */
+  oldestLapsedDays: number
+}
+
+/**
+ * Professional-development participation over the trailing twelve months.
+ *
+ * NO PARTICIPATION RATE HERE, and that is deliberate. The denominator is active
+ * staff, which lives in the governance-people register — a register this whole
+ * directory is forbidden to read, because trustees and staff are named
+ * individuals. The twin computes the rate behind that boundary and Penny reports
+ * it through get_early_warnings; this tool answers the COVERAGE question ("do you
+ * hold this, and how much of it?"), which needs no denominator.
+ *
+ * `participants` counts DISTINCT people, never records: one teacher with six
+ * workshops must not read as six developed staff.
+ */
+export interface PdCoverage {
+  total: number
+  participants: number
+  byCategory: Record<string, number>
+  lookbackYears: number
 }
 
 /** The compliance-inspection subset of the facilities register, as counts. */
@@ -169,6 +203,83 @@ export class CoverageService {
       }
     } catch (e) {
       this.logger.warn(`inspection coverage unreadable for ${schoolId}: ${String(e)}`)
+      return null
+    }
+  }
+
+  /**
+   * Safe-environment clearance COUNTS for one school.
+   *
+   * A row with NO expiry date is not lapsed — some clearances genuinely never
+   * expire, and reading a blank field as expired would manufacture a safeguarding
+   * finding out of nothing. The "expiring soon" window is the FROZEN threshold the
+   * SAFE-ENV rule quotes in its own evidence, not a second copy of the number:
+   * two constants would eventually disagree about what "soon" means and the
+   * disagreement would be invisible.
+   *
+   * Two columns. Neither of them is a person.
+   */
+  async clearances(
+    schoolId: string,
+    now: Date = new Date(),
+  ): Promise<CoverageCounts<ClearanceCoverage> | null> {
+    try {
+      const rows = await this.prisma.clearance.findMany({
+        where: { schoolId },
+        select: { kind: true, expiresOn: true },
+      })
+      const today = isoDay(now)
+      let lapsed = 0
+      let expiringSoon = 0
+      let oldest = 0
+      for (const r of rows) {
+        if (!r.expiresOn) continue
+        const days = daysBetweenIso(isoDay(r.expiresOn), today)
+        if (days > 0) {
+          lapsed++
+          if (days > oldest) oldest = days
+        } else if (-days <= TWIN_THRESHOLDS.SAFE_ENV_EXPIRING_WINDOW_DAYS.value) {
+          expiringSoon++
+        }
+      }
+      return {
+        counts: { total: rows.length, lapsed, expiringSoon, oldestLapsedDays: oldest },
+        asOf: today,
+      }
+    } catch (e) {
+      this.logger.warn(`clearance coverage unreadable for ${schoolId}: ${String(e)}`)
+      return null
+    }
+  }
+
+  /**
+   * Professional-development COUNTS for one school, trailing twelve months.
+   *
+   * Two columns: a category (a kind of activity, not a person) and the FK used
+   * only to size a Set. See {@link PdCoverage} for why no rate is returned.
+   */
+  async professionalDevelopment(
+    schoolId: string,
+    now: Date = new Date(),
+  ): Promise<CoverageCounts<PdCoverage> | null> {
+    try {
+      const since = new Date(now)
+      since.setUTCFullYear(since.getUTCFullYear() - PD_LOOKBACK_YEARS)
+      const rows = await this.prisma.professionalDevelopment.findMany({
+        where: { schoolId, activityDate: { gte: since } },
+        select: { personId: true, category: true },
+      })
+      return {
+        counts: {
+          total: rows.length,
+          participants: new Set(rows.map((r) => r.personId)).size,
+          byCategory: tally(rows.map((r) => r.category)),
+          lookbackYears: PD_LOOKBACK_YEARS,
+        },
+        asOf: isoDay(now),
+      }
+    } catch (e) {
+      this.logger.warn(`PD coverage unreadable for ${schoolId}: ${String(e)}`)
       return null
     }
   }

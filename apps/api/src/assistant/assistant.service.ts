@@ -91,6 +91,8 @@ import {
 } from '../strategy/strategy-plan-drafter.service.js'
 import { INITIATIVE_STATUSES, MIX_METRIC_KEYS } from '../strategy/strategy.constants.js'
 import { ImprovementService } from '../improvement/improvement.service.js'
+import { VisitService } from '../visit/visit.service.js'
+import { StudentsService } from '../enrollment/students/students.service.js'
 import {
   ImprovementPlanDrafterService,
   emptyDraftReason,
@@ -116,6 +118,7 @@ import type { CreateCommitteeDto } from '../governance/dto/create-committee.dto.
 import type { CreateMeetingDto } from '../governance/dto/create-meeting.dto.js'
 import type { CreateStandardDto } from '../accreditation/dto/create-standard.dto.js'
 import type { CreateMaintenanceDto } from '../facilities/dto/create-maintenance.dto.js'
+import { MAINTENANCE_COMPLIANCE_KINDS } from '../facilities/dto/create-maintenance.dto.js'
 import type { CreateCampaignDto } from '../advancement/dto/create-campaign.dto.js'
 import { AuditService } from '../common/audit/audit.service.js'
 import { ConfigService } from '@nestjs/config'
@@ -142,6 +145,15 @@ const MAX_TURNS = 6
 
 // Page / settings / modal / target vocab — FROZEN, must mirror the tool-schema enums
 // in assistant.tools.ts byte-for-byte (and the frontend route/registry maps).
+//
+// THIS IS A RUNTIME ALLOW-LIST, and it is the copy that BITES. Extending the tool
+// schema alone is not enough: a page the model may name but this set rejects
+// throws inside runToolCall, and the model — seeing its own tool fail — APOLOGISES
+// to the user for a page that exists and is one line away from working. That is
+// how "take me to the strategy page" answered "the strategy page isn't available"
+// while /strategy sat mounted. A page belongs in all four places or none:
+// this set, PageKey below, the two tool-schema enums, and the web bridge's map.
+
 const PAGE_KEYS = new Set<string>([
   'home',
   'data',
@@ -152,6 +164,16 @@ const PAGE_KEYS = new Set<string>([
   'reports',
   'schedules',
   'settings',
+  'governance',
+  'accreditation',
+  'improvement',
+  'strategy',
+  'hr',
+  'enrollment',
+  'facilities',
+  'advancement',
+  'tasks',
+  'portfolio',
 ])
 const SETTINGS_SECTIONS = new Set<string>([
   'account',
@@ -161,6 +183,7 @@ const SETTINGS_SECTIONS = new Set<string>([
   'reports',
   'integrations',
   'billing',
+  'alerts',
 ])
 const MODAL_KEYS = new Set<string>([
   'trialBalances',
@@ -284,7 +307,11 @@ export const REVERSIBLE_KINDS = new Set<ProposedAction['kind']>([
 
 // Tools that perform a write. Membership UNCHANGED — but the meaning flips from
 // "propose for confirmation" to "execute autonomously, then report what changed".
-const WRITE_TOOLS = new Set([
+//
+// Exported so advisory-apply-chain.spec can assert the REVERSE of AC-1.5: that
+// every write tool is a registered, labelled tool. The old spec only checked
+// CONFIRM_TOOLS → schema, so a write with no schema entry passed in silence.
+export const WRITE_TOOLS = new Set([
   'set_budget',
   'draft_cap_entry',
   'apply_driver_budget',
@@ -535,6 +562,16 @@ type PageKey =
   | 'reports'
   | 'schedules'
   | 'settings'
+  | 'governance'
+  | 'accreditation'
+  | 'improvement'
+  | 'strategy'
+  | 'hr'
+  | 'enrollment'
+  | 'facilities'
+  | 'advancement'
+  | 'tasks'
+  | 'portfolio'
 type SettingsSection =
   | 'account'
   | 'members'
@@ -543,6 +580,7 @@ type SettingsSection =
   | 'reports'
   | 'integrations'
   | 'billing'
+  | 'alerts'
 type ModalKey =
   | 'trialBalances'
   | 'monthly'
@@ -946,6 +984,23 @@ export class AssistantService {
     // `arity - 1` precisely so that a new dependency cannot silently shift them;
     // appending here would have shifted them anyway and broken eight specs. Adding
     // ahead of the pair keeps that derivation correct and that spec byte-identical.
+    // The two surfaces the month's shipping left Penny blind to: AIC Phase H's
+    // Mock Visit, and the student-level roster.
+    //
+    // INSERTED HERE, NOT APPENDED, and that is load-bearing: create-initiative.spec
+    // and get-early-warnings.spec derive their positional-DI indices from this
+    // constructor's arity counting BACK from the end (`improvement` at arity-3, the
+    // two Phase-E deps at arity-2/arity-1). Appending shifted all three and turned
+    // fourteen unrelated tests red — which is precisely what those specs promise to
+    // do, so the tail stays where it is and new deps go in front of it.
+    //
+    // The roster arrives as an injected SERVICE, never a direct delegate read:
+    // no-penny-pii makes the roster table unreachable from this whole directory
+    // (naming that delegate here, even inside a comment, IS the violation), and an
+    // aggregate that went straight to it would be one careless select away from a
+    // child's name in a chat transcript.
+    @Optional() private readonly visit?: VisitService,
+    @Optional() private readonly students?: StudentsService,
     @Optional() private readonly improvement?: ImprovementService,
     @Optional() private readonly earlyWarning?: EarlyWarningService,
     @Optional() private readonly billing?: BillingService,
@@ -2231,10 +2286,30 @@ export class AssistantService {
     ).catch(() => false)
     if (!licensed) return this.refuseNotLicensed(entry.moduleKey)
 
-    const read =
-      entry.register === 'staff_evaluations'
-        ? await this.coverage?.staffEvaluations(ctx.schoolId)
-        : await this.coverage?.complianceInspections(ctx.schoolId)
+    // A TOTAL SWITCH, and it must stay total. This was a two-way ternary over a
+    // FOUR-member register union, so the two Phase-K registers fell to the
+    // else-branch and Penny answered "do we track safe-environment clearances?"
+    // with facility-inspection counts — wearing this very tool's honesty copy
+    // ("Counts only. This register holds people."). A confident wrong number is
+    // worse than the refusal the whole phase was built to prevent. The `never`
+    // default is what makes a fifth register a COMPILE error instead of a
+    // silently mislabelled answer.
+    const read = await (async () => {
+      switch (entry.register) {
+        case 'staff_evaluations':
+          return this.coverage?.staffEvaluations(ctx.schoolId)
+        case 'compliance_inspections':
+          return this.coverage?.complianceInspections(ctx.schoolId)
+        case 'clearances':
+          return this.coverage?.clearances(ctx.schoolId)
+        case 'professional_development':
+          return this.coverage?.professionalDevelopment(ctx.schoolId)
+        default: {
+          const exhaustive: never = entry.register
+          throw new Error(`Unhandled coverage register: ${String(exhaustive)}`)
+        }
+      }
+    })()
 
     if (!read) {
       // UNREADABLE IS NOT ZERO. A comfortable zero we never observed is the worst
@@ -3068,7 +3143,20 @@ export class AssistantService {
         : undefined
     const notes =
       typeof args.notes === 'string' && args.notes.trim() ? args.notes.trim().slice(0, 4000) : undefined
+    // WHAT KIND OF REGULATORY INSPECTION, when the user actually said so. Without
+    // this every item Penny created was born `complianceKind: null` — invisible to
+    // the twin's inspection coverage and to FAC-INSPECTION-DUE — so a school could
+    // log its fire inspection through Penny and still be told it had none. The
+    // closed vocabulary is re-checked HERE against the DTO's own list, never
+    // inferred from the title: "we will not guess it from free text" is a promise
+    // the register already published.
+    const complianceKind =
+      typeof args.complianceKind === 'string' &&
+      (MAINTENANCE_COMPLIANCE_KINDS as readonly string[]).includes(args.complianceKind)
+        ? args.complianceKind
+        : undefined
     const bits: string[] = []
+    if (complianceKind) bits.push(`${complianceKind.replace(/_/g, ' ')} inspection`)
     if (priority) bits.push(`${priority} priority`)
     if (location) bits.push(`at ${location}`)
     if (estimatedCost != null) bits.push(`est. $${estimatedCost.toLocaleString('en-US')}`)
@@ -3085,6 +3173,7 @@ export class AssistantService {
         ...(estimatedCost != null ? { estimatedCost } : {}),
         ...(targetDate ? { targetDate } : {}),
         ...(notes ? { notes } : {}),
+        ...(complianceKind ? { complianceKind } : {}),
       },
     }
   }
@@ -3639,18 +3728,26 @@ export class AssistantService {
         user: { is: { email: { equals: a, mode: 'insensitive' } } },
       },
     })
-    if (!m) {
+    if (m) return m.userId
+    // Same name/position resolution the assignee path uses — an approver named
+    // "the head of school" is as ordinary a phrasing as an email address.
+    const byPerson = await this.resolveMemberByNameOrTitle(schoolId, a)
+    if (byPerson.kind === 'one') return byPerson.userId
+    if (byPerson.kind === 'many') {
       throw new BadRequestException(
-        `No active member of this school has the email “${a}”. Ask an owner to invite them first.`,
+        `More than one active member of this school matches “${a}”. Ask the user which one they mean, or give me their email address.`,
       )
     }
-    return m.userId
+    throw new BadRequestException(
+      `No active member of this school matches “${a}” — not by email, name, or position. Ask an owner to invite them first.`,
+    )
   }
 
   /**
    * Resolve an assignee string to an ACTIVE-member userId of THIS school, or null.
-   * "me" → the caller; an email → the active member with that email (case-insensitive)
-   * or a clear error; omitted/empty → null (unassigned). The membership query is
+   * "me" → the caller; an email, a NAME, or a POSITION → the active member it
+   * matches (case-insensitive, and an ambiguous match is refused rather than
+   * guessed); omitted/empty → null (unassigned). The membership query is
    * scoped to schoolId, so a matching email in ANOTHER school is invisible — a
    * cross-tenant assignee is impossible and never silently falls back to a wrong user.
    */
@@ -3670,16 +3767,50 @@ export class AssistantService {
         user: { is: { email: { equals: a, mode: 'insensitive' } } },
       },
     })
-    if (!m) {
-      // A 4xx (not a 500): an unknown/cross-school email is a user-correctable
-      // input, and the message must surface to the FE (a bare Error → opaque 500).
-      // Tenant-safe: the membership query is scoped to THIS school, so a real user
-      // in another school matches nothing here → same clear error, never assigned.
+    if (m) return m.userId
+
+    // NOT AN EMAIL — try the way people actually refer to each other: by name, or
+    // by the job. Members carry a POSITION now ("Business Manager"), so "assign it
+    // to the business manager" is a resolvable instruction rather than a 400 that
+    // asks the user to go look up an address.
+    //
+    // AMBIGUITY IS REFUSED, NEVER GUESSED. Two people named Sam, or two people
+    // sharing a position, means we ask — assigning work to the wrong colleague is
+    // the failure this whole resolution path exists to avoid, and it is worse than
+    // a question.
+    const byPerson = await this.resolveMemberByNameOrTitle(schoolId, a)
+    if (byPerson.kind === 'one') return byPerson.userId
+    if (byPerson.kind === 'many') {
       throw new BadRequestException(
-        `No active member of this school has the email “${a}”. Ask an owner to invite them first, or leave the task unassigned.`,
+        `More than one active member of this school matches “${a}”. Ask the user which one they mean, or give me their email address.`,
       )
     }
-    return m.userId
+
+    // A 4xx (not a 500): an unknown/cross-school name is a user-correctable
+    // input, and the message must surface to the FE (a bare Error → opaque 500).
+    // Tenant-safe: every query above is scoped to THIS school, so a real user in
+    // another school matches nothing here → same clear error, never assigned.
+    throw new BadRequestException(
+      `No active member of this school matches “${a}” — not by email, name, or position. Ask an owner to invite them first, or leave it unassigned.`,
+    )
+  }
+
+  /**
+   * Resolve a free-text person reference — a name or a position — to a userId on
+   * THIS school's roster.
+   *
+   * THE MATCHING HAPPENS IN SchoolsService, NOT HERE, and that is structural.
+   * `no-penny-pii.spec.ts` forbids this whole directory from so much as NAMING an
+   * identity column, precisely so a person's name can never reach a chat payload
+   * — and it caught the first version of this method, which selected them to do
+   * the comparison. Delegating means the names are compared behind the boundary
+   * and only an OPAQUE ID crosses it: this file cannot leak what it never loads.
+   */
+  private async resolveMemberByNameOrTitle(
+    schoolId: string,
+    raw: string,
+  ): Promise<{ kind: 'none' } | { kind: 'one'; userId: string } | { kind: 'many' }> {
+    return this.schools.resolveMemberRef(schoolId, raw)
   }
 
   /** Pick a sane ISO periodEndDate from metadata, else derive FL June-30 from FY, else default. */
@@ -4441,6 +4572,14 @@ export class AssistantService {
           : undefined
       const notes =
         typeof p.notes === 'string' && p.notes.trim() ? p.notes.trim().slice(0, 4000) : undefined
+      // RE-CHECKED AT APPLY TIME. The payload came back over the wire, so the
+      // closed vocabulary is enforced here too — a kind we did not model is
+      // dropped to undefined, and the item is an ordinary maintenance item.
+      const complianceKind =
+        typeof p.complianceKind === 'string' &&
+        (MAINTENANCE_COMPLIANCE_KINDS as readonly string[]).includes(p.complianceKind)
+          ? p.complianceKind
+          : undefined
       const dto: CreateMaintenanceDto = {
         title,
         ...(location ? { location } : {}),
@@ -4449,6 +4588,7 @@ export class AssistantService {
         ...(estimatedCost != null ? { estimatedCost } : {}),
         ...(targetDate ? { targetDate } : {}),
         ...(notes ? { notes } : {}),
+        ...(complianceKind ? { complianceKind } : {}),
       }
       const created = await this.facilities.createMaintenance(schoolId, dto, userId)
       return { summary: action.summary, createdId: created?.id ?? null }
@@ -5182,7 +5322,7 @@ export class AssistantService {
     // proactively explain limits rather than attempting a withheld action).
     const roleClause =
       ctx.role === 'viewer'
-        ? 'ACCESS LEVEL — BOARD (VIEW-ONLY), THIS OVERRIDES EVERYTHING BELOW: This user can only VIEW. You have NO write tools for them and CANNOT create, file, upload, import, assign, approve-with-changes, or modify anything — and CRUCIALLY, every capability described later in these instructions about filing documents, creating policies/committees/meetings/standards/maintenance/campaigns/tasks, setting budgets/forecasts, or importing data DOES NOT APPLY to this user; treat those sections as if they were absent. If they ask whether you CAN add/file/create/upload/change something — including phrasings like "are you able to…", "can you help me add…", "how do I add…" — answer plainly and warmly that you cannot do it for them: it is beyond their Board (view-only) access, and an owner or a finance member would need to make that change. NEVER list, offer, or describe a create/file/change action as something you can do for them. Instead offer read-only help: answer questions about the numbers, deliver the briefing, point things out, and navigate. '
+        ? 'ACCESS LEVEL — BOARD (VIEW-ONLY), THIS OVERRIDES EVERYTHING BELOW: This user can only VIEW. You have NO write tools for them and CANNOT create, file, upload, import, assign, approve-with-changes, or modify anything — and CRUCIALLY, every capability described later in these instructions that CREATES, CHANGES or IMPORTS anything DOES NOT APPLY to this user \u2014 filing documents, creating policies/committees/meetings/standards/maintenance/campaigns/tasks/alerts, adding improvement initiatives or strategic plans, goals and pillars, attaching evidence, inviting members, setting budgets/forecasts, or importing data of any kind; treat those sections as if they were absent. If they ask whether you CAN add/file/create/upload/change something — including phrasings like "are you able to…", "can you help me add…", "how do I add…" — answer plainly and warmly that you cannot do it for them: it is beyond their Board (view-only) access, and an owner or a finance member would need to make that change. NEVER list, offer, or describe a create/file/change action as something you can do for them. Instead offer read-only help: answer questions about the numbers, deliver the briefing, point things out, and navigate. '
         : ctx.role === 'accountant'
           ? 'ACCESS LEVEL: This user is a FINANCE member with edit access — you may PROPOSE creating and updating records; they confirm before anything is written. '
           : 'ACCESS LEVEL: This user is an OWNER (Leadership) with full edit access — you may PROPOSE creating and updating records; they confirm before anything is written. '
@@ -5199,11 +5339,13 @@ export class AssistantService {
       'consolidation across the organization’s schools). ' +
       orgClause +
       'You are an interactive agent, not just a chat box. You can NAVIGATE the user and ACT on their behalf. ' +
-      'navigate_to_page takes the user to any page (home, data, statements, analytics, budget, readiness, ' +
-      'reports, schedules, settings) — when page is "data" you may pass openModal to open that Add-data flow ' +
+      'navigate_to_page takes the user to any page in the product: the finance surfaces (home, data, ' +
+      'statements, analytics, budget, reports, schedules), the module pages (governance, accreditation, ' +
+      'improvement, strategy, hr, enrollment, facilities, advancement, portfolio), readiness, tasks, and ' +
+      'settings — when page is "data" you may pass openModal to open that Add-data flow ' +
       '(trialBalances, monthly, operational, budget, forecast, schedules, compliance); when page is "settings" ' +
-      'you may pass section (account, members, school, organization, reports, integrations, billing). It only ' +
-      'moves the view and changes no data. start_walkthrough runs an interactive on-screen tour: give it an ' +
+      'you may pass section (account, members, school, organization, reports, integrations, billing, alerts). ' +
+      'It only moves the view and changes no data. start_walkthrough runs an interactive on-screen tour: give it an ' +
       'ORDERED list of steps and Penny physically glides to each control, navigating across pages as needed. ' +
       'Use ONLY the provided target keys; each step has a short message and may name a page/openModal to open ' +
       'first. Walk the user through a process step by step when they ask how to do something. ' +
@@ -5298,12 +5440,37 @@ export class AssistantService {
       'file bytes, so NEVER retype the file). It does NOT file anything until the user confirms. ' +
       'You can also CREATE records across the modules — each is a confirm-then-create PROPOSAL (propose → ' +
       'the user confirms → apply; NEVER autonomous), so never claim the record exists until the user confirms: ' +
-      'create_policy (a governance Policy), create_committee and create_meeting (governance), create_standard ' +
-      '(an accreditation Standard), create_maintenance_item (a facilities deferred-maintenance item), and ' +
-      'create_campaign (an advancement fundraising campaign). Use them when the user asks to add such a record, ' +
+      'create_policy, create_committee and create_meeting (governance), create_standard and attach_evidence ' +
+      '(accreditation), create_maintenance_item (a facilities item — set complianceKind ONLY when the user ' +
+      'says it IS a regulatory inspection of that kind, never inferred from its title), create_campaign ' +
+      '(advancement), create_task / submit_for_approval / decide_approval (workflow), create_alert (a standing ' +
+      'alert or digest), create_initiative and draft_improvement_plan (continuous improvement), ' +
+      'draft_strategy_plan with create_strategy_plan / create_strategy_pillar / create_strategy_goal ' +
+      '(strategic planning), file_document (the Knowledge store), import_diocesan_enrollment, and ' +
+      'invite_member (owners only). Use them when the user asks to add such a record, ' +
       'or to turn a briefing/attention item into one (e.g. "file that overdue conflict-of-interest policy"). ' +
       'Pull the title/name and details from the referenced item; pass dates (yyyy-mm-dd) only when the user ' +
       'states them, and never invent them. ' +
+      // ── THE MODULES BEYOND FINANCE ─────────────────────────────────────────
+      // A month of shipping (AIC A–K, enrollment intelligence, strategy,
+      // governance, improvement) reached the product and never reached this
+      // prompt: it taught six register writes where twenty-one exist and named
+      // no module built after Phase 2. A tool the model is never told about is a
+      // tool that does not exist, which is why whole shipped phases read as gaps.
+      'THE OTHER MODULES, and the tool that answers each. STRATEGIC PLAN — get_plan_status (progress and ' +
+      'pace on the active plan; every metric figure is COMPUTED from real data, never typed in). ' +
+      'CONTINUOUS IMPROVEMENT — get_improvement_status (the initiatives being worked, what is stalled, and ' +
+      'how many recommendations are still unadopted). GOVERNANCE — get_governance_status (board, committees, ' +
+      'credential coverage, policy review, minutes). EARLY WARNINGS — get_early_warnings (the accreditation ' +
+      'twin\u2019s open findings, with an ORDINAL likelihood word and never a percentage). MOCK VISIT — ' +
+      'get_visit_readiness (what a visiting team would find today; relay its executive summary as written). ' +
+      'STUDENT ROSTER — get_roster_summary (headcount by grade and status, plus WHICH file or connected ' +
+      'system those students came from; use it for "where did these numbers come from" and for an empty ' +
+      'roster). Note the difference from get_enrollment_demographics, which reads the enrollment SNAPSHOT ' +
+      'the finance metrics use. HR REGISTERS — staff evaluations, safe-environment clearances and ' +
+      'professional development are answered through check_kyro_collects with the matching topic; it ' +
+      'returns COUNTS for the register asked about and never a person. ORGANIZATION — list_schools_status, ' +
+      'get_org_readiness_portfolio and compare_accreditation_peers. ' +
       // ── AIC Phase J — ACCREDITATION ADVISORY ───────────────────────────────
       // ADVICE ON TOP OF THE GUARANTEES, NEVER INSTEAD OF THEM. Everything below
       // is already enforced in the payloads: a refusing tool returns nothing to
@@ -5620,6 +5787,149 @@ export class AssistantService {
               ...(k.note ? { note: k.note } : {}),
             })),
           },
+        }
+      }
+      case 'get_improvement_status': {
+        // THE OTHER HALF OF PHASE G. Penny could CREATE initiatives and draft whole
+        // plans, and could not list one back — so "how is our improvement plan
+        // going?" had no answer except the plan she was about to write. Read-only,
+        // no entitlement branch of its own: getImprovement reads the school's OWN
+        // initiative rows (getRecommendations is the accreditation-gated half, and
+        // it degrades on its own).
+        if (!this.improvement) return { available: false, note: 'Improvement is not available on this server.' }
+        const imp = await this.improvement.getImprovement(ctx.schoolId)
+        const recs = await this.improvement
+          .getRecommendations(ctx.schoolId, { limit: 5 })
+          .catch(() => null)
+        if (imp.initiatives.length === 0) {
+          return {
+            hasPlan: false,
+            note: 'No improvement initiatives have been created for this school yet.',
+            openRecommendationCount: recs?.recommendations?.length ?? 0,
+          }
+        }
+        return {
+          hasPlan: true,
+          dataAsOf: imp.dataAsOf ?? null,
+          summary: imp.summary ?? null,
+          // COMPACT under the payload cap: the fields a person asks about, and no
+          // free text that a model could re-narrate as its own finding.
+          initiatives: imp.initiatives.slice(0, 25).map((i) => ({
+            title: i.title,
+            status: i.status,
+            owner: i.owner?.name ?? null,
+            dueDate: i.dueDate,
+            progressPct: i.progressPct,
+            progressSource: i.progressSource,
+            staleDays: i.staleDays,
+            linkedTaskCounts: i.linkedTaskCounts,
+            metricKey: i.metricKey,
+          })),
+          openRecommendationCount: recs?.recommendations?.length ?? 0,
+          recommendationBasis: recs?.basis ?? null,
+        }
+      }
+      case 'get_visit_readiness': {
+        // AIC Phase H, reachable at last. The 402 comes from VisitService itself
+        // (it is fail-closed on the licence), so an unlicensed school gets the
+        // structured refusal rather than a composed visit.
+        if (!this.visit) return { available: false, note: 'Mock Visit is not available on this server.' }
+        try {
+          const v = await this.visit.getVisit(ctx.schoolId)
+          // A COMPACT projection, not the whole composed visit: the full payload
+          // carries six acts of rendered prose and would blow the tool-result cap,
+          // and the screen is where a visitor reads it. What Penny needs is the
+          // executive summary the composer already wrote (verbatim — she must not
+          // re-narrate it) and the counts behind it.
+          return {
+            available: true,
+            generatedAt: v.generatedAt,
+            framework: v.framework,
+            frameworkAdopted: v.acts.arrival.frameworkLabel !== null,
+            arrival: {
+              documented: v.acts.arrival.documented,
+              defensible: v.acts.arrival.defensible,
+              readinessPct: v.acts.arrival.readinessPct,
+              band: v.acts.arrival.band,
+              asOfLine: v.acts.arrival.asOfLine,
+              evaluableLine: v.acts.arrival.evaluableLine,
+              demoData: v.acts.arrival.demoData,
+            },
+            findings: {
+              severityCounts: v.acts.findings.severityCounts,
+              standardCount: v.acts.findings.standardCount,
+              top: v.acts.findings.groups.slice(0, 5),
+            },
+            commendationCount: v.acts.commendations.commendations.length,
+            evidence: {
+              counts: v.acts.requests.counts,
+              health: v.acts.requests.health,
+            },
+            plan: {
+              itemCount: v.acts.plan.items.length,
+              moreAvailable: v.acts.plan.moreAvailable,
+              basis: v.acts.plan.basis,
+              emptyReason: v.acts.plan.emptyReason,
+            },
+            executiveSummary: v.executiveSummary.segments,
+            disclaimer: v.disclaimer,
+          }
+        } catch (e) {
+          const code = (e as { response?: { code?: string } })?.response?.code
+          if (code === 'MODULE_NOT_LICENSED') return this.refuseNotLicensed('accreditation')
+          throw e
+        }
+      }
+      case 'get_roster_summary': {
+        // COUNTS ONLY, VIA THE SERVICE. Penny had the enrollment SNAPSHOT and no
+        // sight of the roster the school actually uploaded — so she could not
+        // answer "how many students by grade?" or diagnose the state the roster
+        // panel was built for (a connected SIS, a headcount, and no students).
+        //
+        // The import receipt is the other half of that answer: "where did these
+        // numbers come from" is a provenance question, and provenance is what the
+        // upload receipts were added to record.
+        if (!this.students) return { available: false, note: 'The student roster is not available on this server.' }
+        const agg = await this.students.aggregate(ctx.schoolId, {} as never)
+        const lastImport = await this.prisma.enrollmentImport.findFirst({
+          where: { schoolId: ctx.schoolId },
+          orderBy: { createdAt: 'desc' },
+          select: {
+            kind: true,
+            provider: true,
+            fileName: true,
+            observedOn: true,
+            totalCounted: true,
+            recordsCreated: true,
+            recordsUpdated: true,
+            recordsNote: true,
+            createdAt: true,
+          },
+        })
+        return {
+          available: true,
+          total: agg.total,
+          kpis: agg.kpis,
+          byGrade: agg.counts.grade,
+          byStatus: agg.counts.status,
+          supportFlags: agg.counts.flags,
+          lastImport: lastImport
+            ? {
+                kind: lastImport.kind,
+                provider: lastImport.provider,
+                fileName: lastImport.fileName,
+                observedOn: lastImport.observedOn ? lastImport.observedOn.toISOString().slice(0, 10) : null,
+                totalCounted: lastImport.totalCounted,
+                recordsCreated: lastImport.recordsCreated,
+                recordsUpdated: lastImport.recordsUpdated,
+                note: lastImport.recordsNote,
+                at: lastImport.createdAt.toISOString(),
+              }
+            : null,
+          note:
+            agg.total === 0
+              ? 'The student register is empty. A roster import that counted a headcount but created no student records leaves this at zero — lastImport says whether that happened and why.'
+              : 'Counts only. This register holds students; this tool never returns one.',
         }
       }
       case 'get_plan_status': {

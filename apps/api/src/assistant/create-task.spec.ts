@@ -35,6 +35,7 @@ function makeService(opts: {
   const tasksCreate = vi.fn(async (schoolId: string, dto: unknown) => ({ id: 't1', schoolId, dto }))
   const tasks = { create: tasksCreate }
   const stub = {} as never
+  const schools = { resolveMemberRef: vi.fn(async () => ({ kind: 'none' as const })) }
   const svc = new AssistantService(
     prisma as never, // prisma
     stub, // periods
@@ -64,7 +65,10 @@ function makeService(opts: {
     stub, // orgBriefing
     stub, // audit
     stub, // alerts
-    stub, // schools (LAST) — only invite_member paths touch it
+    // schools — invite_member, and (since positions shipped) resolving an
+    // assignee named by NAME or POSITION. `none` keeps these cases on the
+    // email-only path they were written to exercise.
+    schools as never,
     stub, // qboDrill — only get_account_transactions touches it
     stub, // aging — only get_cash_collections touches it
     stub, // snapshotHistory — only get_value_history touches it

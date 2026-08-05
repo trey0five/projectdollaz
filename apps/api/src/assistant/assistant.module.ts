@@ -21,6 +21,7 @@ import { AlertModule } from '../alerts/alert.module.js'
 import { SchoolsModule } from '../schools/schools.module.js'
 import { IntegrationsModule } from '../integrations/integrations.module.js'
 import { EnrollmentModule } from '../enrollment/enrollment.module.js'
+import { VisitModule } from '../visit/visit.module.js'
 import { AuditModule } from '../common/audit/audit.module.js'
 import { TwinModule } from '../twin/twin.module.js'
 import { AssistantController } from './assistant.controller.js'
@@ -101,6 +102,12 @@ import { CoverageService } from './coverage.service.js'
     // import_diocesan_enrollment confirm-tool reuses the SAME org import the REST
     // route uses. No cycle: EnrollmentModule imports no AssistantModule.
     EnrollmentModule,
+    // AIC Phase H — exports VisitService for Penny's read-only get_visit_readiness
+    // tool. The Mock Visit shipped with NO assistant path at all: a whole phase the
+    // product renders and Penny could not see. ACYCLIC: VisitModule imports
+    // Auth/Billing/Twin/Accreditation/AccreditationSignals/Improvement — every one
+    // of which the assistant already imports, and none of which reaches back here.
+    VisitModule,
   ],
   // OrgNarrationController is a SECOND @Controller('organizations/:orgId') alongside
   // OrgBriefingController — valid in Nest because the sub-paths differ (briefing vs

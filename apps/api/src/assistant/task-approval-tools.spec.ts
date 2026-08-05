@@ -36,6 +36,7 @@ function makeService(opts: { member?: { userId: string } | null } = {}) {
   }))
   const tasks = { submitForApproval, decide, list }
   const stub = {} as never
+  const schools = { resolveMemberRef: vi.fn(async () => ({ kind: 'none' as const })) }
   const svc = new AssistantService(
     // prisma, periods, analytics, budget, rollup, briefing, compliance, reconciliation,
     // correctiveAction, boardReport, operational, client, files, imports, monthlySnapshots, statements
@@ -47,7 +48,10 @@ function makeService(opts: { member?: { userId: string } | null } = {}) {
     stub, // orgBriefing
     stub, // audit
     stub, // alerts
-    stub, // schools (LAST) — only invite_member paths touch it
+    // schools — invite_member, and (since positions shipped) resolving an
+    // assignee named by NAME or POSITION. `none` keeps these cases on the
+    // email-only path they were written to exercise.
+    schools as never,
     stub, // qboDrill — only get_account_transactions touches it
     stub, // aging — only get_cash_collections touches it
     stub, // snapshotHistory — only get_value_history touches it
