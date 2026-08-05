@@ -114,6 +114,13 @@ export default function LightUpReveal({
   accreditationLicensed = false,
   vitals = [],
   accounts = 0,
+  // "Keep adding files" USED to be a plain dismiss, back onto a screen that
+  // still had the uploader on it. The first-run screen now folds that uploader
+  // away once the user confirms — which is the very action that opened this
+  // dialog — so a bare close would land them on a page with no files in sight,
+  // one beat after asking for exactly that. Hosts that fold pass this to reopen
+  // the intake; hosts that never fold pass nothing and keep today's behaviour.
+  onKeepAdding = null,
 }) {
   const reduce = useReducedMotion()
   const navigate = useNavigate()
@@ -415,7 +422,10 @@ export default function LightUpReveal({
             </button>
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => {
+                onKeepAdding?.()
+                onClose?.()
+              }}
               className="inline-flex min-h-[46px] w-full items-center justify-center rounded-xl px-5 text-[14px] font-semibold text-white/65 outline-none transition-colors hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/40 sm:w-auto"
             >
               Keep adding files

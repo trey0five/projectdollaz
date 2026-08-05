@@ -11,7 +11,7 @@
 // tabs). Structure/gates/skeleton/microtask-deferred-default mirror HomeDashboard
 // and AnalyticsDashboard exactly.
 // ─────────────────────────────────────────────────────────────────────────────
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { animate, motion, useReducedMotion } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
 import {
@@ -24,6 +24,7 @@ import {
   ArrowRight,
   Scale,
   Sparkles,
+  ChevronUp,
 } from 'lucide-react'
 import { BACK_PILL, BackPillBody } from '../components/ui/BackLink.jsx'
 import { AddDataCta, RecordsCta } from '../components/module/ModuleCtas.jsx'
@@ -37,6 +38,7 @@ import { moduleHue } from '../components/module/moduleAnatomy.js'
 import AddDataTab from '../components/wizard/AddDataTab.jsx'
 import TrialBalanceModalBody from '../components/datahub/TrialBalanceModalBody.jsx'
 import LightUpReveal from '../components/finance/LightUpReveal.jsx'
+import UploadsSummary from '../components/finance/UploadsSummary.jsx'
 import { useAnalytics, useInsights, useBudget } from '../hooks/useAnalytics.js'
 import { useCompliance } from '../hooks/useCompliance.js'
 import { metricFormat, formatMetricValue } from '../lib/metricMeta.js'
@@ -365,6 +367,25 @@ export default function FinancePage() {
   const intakeConfirmed = confirmedSchoolId != null && confirmedSchoolId === schoolId
   const revealOpen = revealSchoolId != null && revealSchoolId === schoolId
 
+  // ── Condense latch ──────────────────────────────────────────────────────────
+  // The finished job folds itself away. Set at the ONE moment the user has told
+  // us they are done — answering "yes, show me what lit up" on the confirm band —
+  // and never on save alone, because the band lives inside the embed and folding
+  // the embed would take the question away before it was answered.
+  //
+  // School-keyed like every other latch on this page: a swap must not inherit the
+  // previous school's "already put away".
+  const [condensedSchoolId, setCondensedSchoolId] = useState(null)
+  const condensed = condensedSchoolId != null && condensedSchoolId === schoolId
+  // Which tab the intake opens on when a door in the summary is used. Also the
+  // remount key: TrialBalanceModalBody seeds its `mode` from initialTab ONCE, so
+  // asking for a different tab has to be a different component instance.
+  const [intakeTab, setIntakeTab] = useState(null)
+  const expandIntake = useCallback((tab) => {
+    setCondensedSchoolId(null)
+    setIntakeTab(tab ?? 'single')
+  }, [])
+
   const { data, metrics, loading: metricsLoading, notEntitled } = useAnalytics(
     schoolId,
     selectedPeriodId,
@@ -525,6 +546,7 @@ export default function FinancePage() {
     // below appears the moment there is a real overview to go to — but the user
     // decides when to leave.
     const ready = savedPeriods.length > 0
+    const readyFileCount = (hydratedFiles || []).filter((f) => f?.role).length
     overview = (
       <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
         <FinanceHeader />
@@ -534,93 +556,122 @@ export default function FinancePage() {
           transition={{ duration: 0.45 }}
           className="space-y-5"
         >
-          {/* Hero band — .card-flashy now takes its ring/glow from --c-module, so
-              under v2 this wears the finance blue instead of framing a blue badge
-              in a gold ring (index.css; v1 and print resolve to gold unchanged). */}
-          <div className="card-flashy flex flex-col items-center gap-4 px-6 py-10 text-center">
-            <motion.span
-              className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gold-gradient text-white shadow-glow"
-              animate={reduce ? undefined : { y: [0, -10, 0] }}
-              transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
-            >
-              <CircleDollarSign size={34} />
-            </motion.span>
-            <div>
-              <h2 className="font-serif text-2xl font-semibold text-navy">
-                {ready ? 'Finance is lit up' : 'Light up Finance'}
-              </h2>
-              <p className="mx-auto mt-2 max-w-xl text-[16px] leading-relaxed text-muted">
-                {ready
-                  ? 'Your first snapshot is saved. Add last year and your audited numbers below to unlock comparatives — or go straight to your overview.'
-                  : 'Drop in your trial balance — statements, analytics, budget and board reports all light up from this one upload.'}
-              </p>
-            </div>
-          </div>
-
-          {/* THE REVEAL — appears only once a snapshot actually exists, and is the
-              ONLY thing that ends first run. Honest: it is not shown before there
-              is an overview to show, and it never interrupts the upload in
-              progress above it.
-
-              Two beats. FIRST the confirm band asks the user to look at what was
-              actually stored and agree with it — the intake autosaves, so until
-              now nothing had ever shown them the result and waited. THEN the
-              celebration, which is the only place the reward is claimed. A user
-              who says "not quite" is dropped back to the calm bar and their files,
-              never trapped. Once either beat is answered, `intakeConfirmed` keeps
-              the band from re-appearing every time they add a fourth file. */}
-          {ready && intakeConfirmed ? (
+          {/* THE HERO IS THE NEXT STEP, not a status announcement.
+              "Finance is lit up" told the user something they had just watched
+              happen and then left them to work out what to do about it. Before
+              any files land it PITCHES; after they land it POINTS — one card,
+              one primary action, and the celebration they can replay beside it. */}
+          {ready ? (
             <motion.div
               initial={reduce ? { opacity: 0 } : { opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ type: 'spring', stiffness: 240, damping: 22 }}
-              className="card-soft flex flex-wrap items-center justify-between gap-4 p-5 sm:p-6"
+              className="card-flashy flex flex-wrap items-center justify-between gap-4 p-5 sm:p-6"
             >
-              <div className="min-w-0">
-                <p className="font-serif text-[17px] font-semibold text-navy">
-                  Your statements are ready
-                </p>
-                <p className="mt-0.5 min-w-0 break-words text-[13.5px] leading-snug text-muted">
-                  Keep adding files here, or open the Finance overview whenever you like.
-                </p>
+              <div className="flex min-w-0 flex-1 basis-[18rem] items-start gap-3.5">
+                <span className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold-gradient text-navy shadow-glow">
+                  <Sparkles size={20} />
+                </span>
+                <div className="min-w-0">
+                  <h2 className="font-serif text-[19px] font-semibold leading-snug text-navy">
+                    Your statements are ready
+                  </h2>
+                  {/* A COUNT OF WHAT IS ACTUALLY STORED, not a claim about what
+                      it unlocks — the reveal makes that claim, with evidence. */}
+                  <p className="mt-1 min-w-0 break-words text-[14px] leading-snug text-muted">
+                    {readyFileCount > 0
+                      ? `${readyFileCount} file${readyFileCount === 1 ? '' : 's'} in`
+                      : 'Saved'}
+                    {activePeriod?.label ? ` \u00b7 ${activePeriod.label}` : ''}. Open your
+                    overview whenever you like.
+                  </p>
+                </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setRevealSchoolId(schoolId)}
-                  className="inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-xl border-2 border-border px-4 py-2.5 text-[12px] font-semibold uppercase tracking-[0.1em] text-muted transition-colors hover:border-navy hover:text-navy"
+                  className="inline-flex min-h-[42px] shrink-0 items-center gap-1.5 rounded-xl border-2 border-border bg-white px-4 py-2.5 text-[12px] font-semibold uppercase tracking-[0.1em] text-muted transition-colors hover:border-navy hover:text-navy"
                 >
                   <Sparkles size={14} /> What lit up
                 </button>
                 <button
                   type="button"
                   onClick={() => setFirstRunSchoolId(null)}
-                  className="btn-cta inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-xl px-5 py-2.5 text-[12px] font-semibold uppercase tracking-[0.1em] outline-none transition-transform focus-visible:ring-2 focus-visible:ring-gold/50"
+                  className="btn-cta inline-flex min-h-[42px] shrink-0 items-center gap-1.5 rounded-xl px-5 py-2.5 text-[12px] font-semibold uppercase tracking-[0.1em] outline-none transition-transform focus-visible:ring-2 focus-visible:ring-gold/50"
                 >
                   See my Finance overview
                   <ArrowRight size={14} />
                 </button>
               </div>
             </motion.div>
+          ) : (
+            <div className="card-flashy flex flex-col items-center gap-4 px-6 py-10 text-center">
+              <motion.span
+                className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gold-gradient text-white shadow-glow"
+                animate={reduce ? undefined : { y: [0, -10, 0] }}
+                transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
+              >
+                <CircleDollarSign size={34} />
+              </motion.span>
+              <div>
+                <h2 className="font-serif text-2xl font-semibold text-navy">Light up Finance</h2>
+                <p className="mx-auto mt-2 max-w-xl text-[16px] leading-relaxed text-muted">
+                  Drop in your trial balance — statements, analytics, budget and board reports
+                  all light up from this one upload.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* THE RECEIPT. Once the user has confirmed what was stored, the intake
+              apparatus folds into this strip and the three doors back in live on
+              it. Rendered whenever there is a saved period, so the summary of
+              what they have is never the thing that disappears. */}
+          {ready ? (
+            <UploadsSummary
+              period={activePeriod}
+              files={hydratedFiles}
+              canEdit={canEdit}
+              onExpand={expandIntake}
+            />
           ) : null}
 
-          {canEdit ? (
+          {canEdit && !condensed ? (
             /* The uploader, right there — the EXISTING embed, chrome only. It owns
                its own intake/progress/applied UI, so the card around it never
                navigates or changes state mid-upload. No padding on the card: the
-               embed carries its own internal chrome (same as the wizard's wrap). */
+               embed carries its own internal chrome (same as the wizard's wrap).
+
+               CONDENSED hides it, and `condensed` can only ever be true once the
+               user has CONFIRMED a save — so the empty state can never lose its
+               uploader, which is the whole point of the guard on this branch. The
+               doors on UploadsSummary bring it straight back. */
             <div className="card-soft overflow-hidden">
               {/* Heading ONLY. The embed renders its own bordered tab band
                   (This year / Add years / QuickBooks) with its own hint line
                   directly underneath, so a second rule + a second subtitle
                   restating the same three options stacked two near-identical
                   headers ~90px apart. One rule, from the embed. */}
-              <div className="px-5 pt-5 pb-3 sm:px-6">
+              <div className="flex flex-wrap items-center justify-between gap-3 px-5 pt-5 pb-3 sm:px-6">
                 <h3 className="font-serif text-[17px] font-semibold text-navy">
                   Add your trial balance
                 </h3>
+                {/* The way back OUT of the apparatus, offered only once there is
+                    something to fold onto. */}
+                {ready ? (
+                  <button
+                    type="button"
+                    onClick={() => setCondensedSchoolId(schoolId)}
+                    className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-[12.5px] font-semibold text-muted outline-none transition-colors hover:border-navy hover:text-navy focus-visible:border-navy focus-visible:ring-2 focus-visible:ring-navy/25"
+                  >
+                    <ChevronUp size={14} /> Done for now
+                  </button>
+                ) : null}
               </div>
               <TrialBalanceModalBody
+                key={intakeTab ?? 'single'}
+                initialTab={intakeTab}
                 school={activeSchool}
                 hydratedFiles={hydratedFiles}
                 activePeriod={activePeriod}
@@ -635,11 +686,19 @@ export default function FinancePage() {
                 // The confirm gate lives INSIDE the embed so both doors into the
                 // trial-balance intake — this first-run screen and the Add-data
                 // wizard — get the identical checkpoint from one implementation.
-                onConfirmed={() => setRevealSchoolId(schoolId)}
+                // "Yes, show me what lit up" is the user saying the job is DONE.
+                // The celebration opens over the page and the apparatus folds
+                // behind it, so closing the reveal lands on the receipt and the
+                // way forward instead of the uploader they just finished with.
+                // "Not quite — let me fix a file" answers WITHOUT folding.
+                onConfirmed={() => {
+                  setRevealSchoolId(schoolId)
+                  setCondensedSchoolId(schoolId)
+                }}
                 onAnswered={() => setConfirmedSchoolId(schoolId)}
               />
             </div>
-          ) : (
+          ) : canEdit ? null : (
             /* Viewer/board lens: no upload chrome a viewer can't use. */
             <div className="card-soft px-6 py-10 text-center">
               <p className="mx-auto max-w-md text-[15px] leading-relaxed text-muted">
@@ -649,7 +708,11 @@ export default function FinancePage() {
             </div>
           )}
 
-          {/* What lights up — future-tense labels only; no numbers we don't have. */}
+          {/* What lights up — future-tense labels only; no numbers we don't have.
+              GONE once data lands: five promises about what WILL happen, printed
+              under a screen where it already has, is the page arguing with
+              itself. The past-tense version is the reveal, with real counts. */}
+          {ready ? null : (
           <div>
             <p className="mb-3 text-[12px] font-bold uppercase tracking-[0.12em] text-muted">
               What lights up
@@ -679,6 +742,7 @@ export default function FinancePage() {
               ))}
             </div>
           </div>
+          )}
         </motion.div>
       </div>
     )
@@ -834,6 +898,8 @@ export default function FinancePage() {
       priorPeriodLabel={revealPriorLabel}
       hasBudget={revealPeriodMatches && revealHasBudget}
       accreditationLicensed={hasModule('accreditation')}
+      // The reveal's own "keep adding files" must land somewhere with files.
+      onKeepAdding={() => expandIntake('single')}
       vitals={revealPeriodMatches ? revealVitals : []}
       accounts={revealAccounts}
     />

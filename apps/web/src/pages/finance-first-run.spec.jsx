@@ -128,16 +128,89 @@ describe('FinancePage — first run is latched, not yanked away by its own succe
     expect(branch).toMatch(/\{ready \?/)
   })
 
-  it('the uploader itself is NOT gated on `ready` — it stays mounted after the first file', () => {
+  it('the uploader is never gated on the DATA — only on a deliberate fold', () => {
+    // THE ORIGINAL BUG, restated for the new shape. The embed used to be gated
+    // on nothing but canEdit, and this assertion forbade `ready`/savedPeriods
+    // appearing in that wrapper — because deriving it from the data made the
+    // intake delete itself the instant the first snapshot landed, taking slots
+    // 2 and 3 away mid-task.
+    //
+    // The screen now DOES fold the intake away once the user is finished with
+    // it, so the letter of that rule had to change. The substance did not: the
+    // only thing permitted to hide the uploader is `condensed`, a latch set at
+    // one place — the confirm band's "yes" — which cannot fire before a save
+    // exists. A data-derived condition here is still the self-destruct bug.
     const branch = emptyBranch()
     const embedAt = branch.indexOf('<TrialBalanceModalBody')
     expect(embedAt).toBeGreaterThan(-1)
-    // The embed sits under the canEdit gate only. If a `ready`/savedPeriods
-    // condition ever wraps it, slots 2 and 3 disappear again.
-    const wrapper = branch.slice(branch.lastIndexOf('{canEdit ?', embedAt), embedAt)
+    // The wrapper's CONDITION only — from `{canEdit` to its `?`. Slicing all the
+    // way to the embed would sweep up the card's own chrome, where `ready`
+    // legitimately decides whether to offer the collapse control.
+    const gateStart = branch.lastIndexOf('{canEdit', embedAt)
+    const condition = branch.slice(gateStart, branch.indexOf('?', gateStart))
     expect(
-      wrapper,
+      condition,
       'the trial-balance embed became conditional on the first snapshot — that is the self-destruct bug returning',
-    ).not.toMatch(/ready|savedPeriods/)
+    ).not.toMatch(/\bready\b|savedPeriods|hydratedFiles/)
+    // …and what DOES gate it is the deliberate fold, nothing else.
+    expect(condition.replace(/\s+/g, ' ').trim()).toBe('{canEdit && !condensed')
+  })
+
+  it('`condensed` is set ONLY by the confirm band, never by a save', () => {
+    // If saving alone folded the intake, the confirm band — which lives INSIDE
+    // the embed — would vanish before the user could answer it, and the reveal
+    // could never be reached.
+    expect(SRC).toMatch(/const \[condensedSchoolId, setCondensedSchoolId\] = useState\(null\)/)
+    expect(SRC).toMatch(/condensedSchoolId != null && condensedSchoolId === schoolId/)
+    const setters = SRC.match(/setCondensedSchoolId\(schoolId\)/g) ?? []
+    expect(
+      setters.length,
+      'condensed must be set in exactly two places: the confirm handler and the explicit collapse control',
+    ).toBe(2)
+    // The confirm handler is one of them, beside the reveal it opens.
+    expect(SRC).toMatch(/setRevealSchoolId\(schoolId\)\s*\n\s*setCondensedSchoolId\(schoolId\)/)
+  })
+
+  it('the folded state still shows what was uploaded, and the way back in', () => {
+    const branch = emptyBranch()
+    expect(
+      branch,
+      'the uploads receipt must render whenever there is a saved period — folding the intake must never fold away the record of what is in it',
+    ).toContain('<UploadsSummary')
+    // Its doors reopen the intake IN PLACE. A link-out here would be the ghost
+    // hub returning by another name (the /data and "data hub" bans still apply
+    // to this whole branch, asserted above).
+    expect(SRC).toMatch(/const expandIntake = useCallback/)
+    expect(SRC).toMatch(/setCondensedSchoolId\(null\)/)
+    expect(branch).toMatch(/onExpand=\{expandIntake\}/)
+  })
+
+  it('the future-tense promise tiles are gone once the data is real', () => {
+    // Five cards promising what WILL light up, printed under a screen where it
+    // already has, is the page arguing with itself. The past-tense version is
+    // the reveal, which counts real rows.
+    const branch = emptyBranch()
+    const tilesAt = branch.indexOf('FIRST_RUN_LIGHTS.map')
+    expect(tilesAt).toBeGreaterThan(-1)
+    expect(
+      branch.slice(0, tilesAt),
+      'the What-lights-up tiles are no longer gated on the empty state',
+    ).toMatch(/\{ready \? null : \(/)
+  })
+
+  it('"keep adding files" lands somewhere with files', () => {
+    // The reveal opens BECAUSE the user confirmed, and confirming is what folds
+    // the uploader away — so its own "keep adding files" button would otherwise
+    // dismiss onto a screen with no files in sight, one beat after asking for
+    // exactly that.
+    expect(SRC).toMatch(/onKeepAdding=\{\(\) => expandIntake\('single'\)\}/)
+  })
+
+  it('the celebration stays reachable after the fold', () => {
+    // The reveal + its button are the one part of this screen the user asked to
+    // keep. Folding the apparatus must not fold away the replay.
+    const branch = emptyBranch()
+    expect(branch).toMatch(/onClick=\{\(\) => setRevealSchoolId\(schoolId\)\}/)
+    expect(branch).toContain('What lit up')
   })
 })
