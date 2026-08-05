@@ -146,6 +146,11 @@ export default function TrialBalanceModalBody({
               setAnsweredPeriodId(activePeriod.id)
               onAnswered?.()
             }}
+            // The file cards own the review panel and live inside AppProvider,
+            // which this band deliberately sits outside of — so the request
+            // travels as an event rather than by threading state through the
+            // boundary that keeps the band reading PERSISTED data.
+            onCategorise={() => window.dispatchEvent(new CustomEvent('finrep:open-review'))}
           />
         </div>
       )}

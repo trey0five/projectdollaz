@@ -53,6 +53,32 @@ describe('the claim follows the numbers', () => {
     expect(band).toMatch(/Categorise my accounts/)
   })
 
+  it('…and that call to action actually DOES something', () => {
+    // THE BUG THIS FILE PREVIOUSLY MISSED. The previous assertion checked that
+    // the button existed with the right words on it — and it was wired to
+    // `onFix`, the band's dismiss handler. A user pressed the only button the
+    // screen offered, watched it disappear, categorised nothing, and had no
+    // figures anywhere: identical in appearance to the engine bug this whole
+    // release is the cure for. A label is not a behaviour.
+    // lastIndexOf: the phrase also appears in the prop's doc comment above.
+    const at = band.lastIndexOf('Categorise my accounts')
+    expect(at).toBeGreaterThan(-1)
+    const handler = band.slice(band.lastIndexOf('onClick', at), at)
+    expect(handler, 'the button is still just a dismiss').toContain('onCategorise')
+    expect(band).toMatch(/onCategorise = null/)
+
+    // …and the host turns that into a real, receivable request.
+    expect(embed).toMatch(/onCategorise=\{\(\) => window\.dispatchEvent\(new CustomEvent\('finrep:open-review'\)\)\}/)
+
+    // …which the file cards listen for, and only act on when they have
+    // something to review.
+    const cardSrc = read('components/FileStatusCard.jsx')
+    expect(cardSrc).toMatch(/window\.addEventListener\('finrep:open-review', onOpenReview\)/)
+    expect(cardSrc).toMatch(/if \(reviewCount === 0\) return/)
+    expect(cardSrc).toMatch(/setShowReview\(true\)/)
+    expect(cardSrc).toMatch(/scrollIntoView/)
+  })
+
   it('the ADD-DATA TAB gets the same gate — it is the screen most schools use', () => {
     // Live-caught: the honesty gate was wired only into the first-run branch,
     // so the wizard path went on asking "does this look right?" and offering

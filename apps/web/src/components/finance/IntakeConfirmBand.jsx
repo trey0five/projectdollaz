@@ -27,6 +27,10 @@ export default function IntakeConfirmBand({
   // is precisely how a school came to believe its books were live when every
   // number was zero.
   dataReady = true,
+  // What "Categorise my accounts" actually DOES. Without it that button was
+  // wired to onFix — the dismiss handler — so the one call to action the screen
+  // offered hid itself and changed nothing.
+  onCategorise = null,
 }) {
   const reduce = useReducedMotion()
   if (!period) return null
@@ -114,7 +118,11 @@ export default function IntakeConfirmBand({
           // here, and it is naming the accounts.
           <button
             type="button"
-            onClick={onFix}
+            onClick={() => {
+              // Open the review panel FIRST, then step out of its way.
+              onCategorise?.()
+              onFix?.()
+            }}
             className="btn-cta inline-flex min-h-[46px] w-full items-center justify-center gap-2 rounded-xl px-6 text-[12.5px] font-semibold uppercase tracking-[0.1em] outline-none focus-visible:ring-2 focus-visible:ring-gold/50 sm:w-auto"
           >
             Categorise my accounts

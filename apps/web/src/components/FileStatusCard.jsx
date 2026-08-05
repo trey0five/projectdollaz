@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import {
   AlertOctagon,
@@ -38,6 +38,7 @@ export default function FileStatusCard({ file, needsReview, onOverride }) {
   } = useApp()
   const reduce = useReducedMotion()
   const [showReview, setShowReview] = useState(false)
+  const cardRef = useRef(null)
   // The actual accounts behind the "N to review" flag: income-statement accounts
   // (acct ≥ 400) with a balance that aren't in the active chart yet, so they're
   // currently left OUT of the statements until categorized. Derived from the LIVE
@@ -55,6 +56,24 @@ export default function FileStatusCard({ file, needsReview, onOverride }) {
   // just been confirmed drops out with it.
   const suggestions = useMemo(() => suggestCategories(unmapped), [unmapped])
   const suggestedCount = unmapped.filter((r) => suggestions[r.acct]).length
+
+  // THE "CATEGORISE MY ACCOUNTS" BUTTON HAS TO LAND SOMEWHERE.
+  //
+  // The confirm band's call to action used to be wired straight to the band's
+  // dismiss handler: it hid the band and did nothing else. A user pressed the
+  // one button the screen offered them, watched it vanish, categorised nothing,
+  // and had no data anywhere — which looked exactly like the engine bug it was
+  // meant to be the cure for. The button opens THIS panel now, on the first card
+  // that actually has something to review, and brings it into view.
+  useEffect(() => {
+    const onOpenReview = () => {
+      if (reviewCount === 0) return
+      setShowReview(true)
+      cardRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
+    }
+    window.addEventListener('finrep:open-review', onOpenReview)
+    return () => window.removeEventListener('finrep:open-review', onOpenReview)
+  }, [reviewCount])
 
   // Once the last flagged account is categorized, show the all-done flourish for a
   // beat, then auto-collapse the panel so the card returns to its normal height —
@@ -76,6 +95,7 @@ export default function FileStatusCard({ file, needsReview, onOverride }) {
 
   return (
     <motion.div
+      ref={cardRef}
       initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.98 }}
       animate={reduce ? { opacity: 1 } : { opacity: 1, scale: 1 }}
       exit={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.98 }}
