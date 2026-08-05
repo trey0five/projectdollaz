@@ -44,7 +44,12 @@ function makeService(over?: {
   const progress = {
     resolveCurrentMetric: over?.resolveCurrentMetric ?? vi.fn().mockResolvedValue({ value: 0.03, periodId: 'period-1', date: new Date('2026-06-30T00:00:00.000Z') }),
   } as unknown as StrategyProgressService
-  return { svc: new StrategyService(prisma, audit, progress), goalCreate, goalUpdate }
+  const notifications = { notify: vi.fn(async () => undefined), notifyAssignment: vi.fn(async () => undefined) }
+  return {
+    svc: new StrategyService(prisma, audit, progress, notifications as never),
+    goalCreate,
+    goalUpdate,
+  }
 }
 
 describe('StrategyService — metric bind validation', () => {

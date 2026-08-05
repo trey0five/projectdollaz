@@ -129,6 +129,7 @@ function makeService(opts: {
     progress as never,
     readiness as never,
     billing as never,
+    { notify: vi.fn(async () => undefined), notifyAssignment: vi.fn(async () => undefined) } as never,
   )
   return { svc, prisma, audit, findFirst, create, updateMany, created, readiness, isEntitledForModule }
 }

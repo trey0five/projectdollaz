@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common'
 import { AuthModule } from '../auth/auth.module.js'
 import { BillingModule } from '../billing/billing.module.js'
 import { AuditModule } from '../common/audit/audit.module.js'
+import { NotificationsModule } from '../common/notifications/notifications.module.js'
 import { StrategyModule } from '../strategy/strategy.module.js'
 import { AccreditationModule } from '../accreditation/accreditation.module.js'
 import { ImprovementController } from './improvement.controller.js'
@@ -43,7 +44,7 @@ import { TaskRollupRecorderService } from './task-rollup-recorder.service.js'
  * create_initiative), never the reverse.
  */
 @Module({
-  imports: [AuthModule, BillingModule, AuditModule, StrategyModule, AccreditationModule],
+  imports: [AuthModule, BillingModule, AuditModule, NotificationsModule, StrategyModule, AccreditationModule],
   controllers: [ImprovementController],
   // AIC Phase J — ImprovementPlanDrafterService is Penny's MODE-A drafter. It
   // injects PrismaService + ImprovementService only (no LLM client, by spec MA-3),

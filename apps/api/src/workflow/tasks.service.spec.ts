@@ -65,8 +65,11 @@ function makeService(over: {
   }
   const prisma = { task, membership }
   const audit = { write: vi.fn(async () => undefined) }
-  const svc = new TasksService(prisma as never, audit as never)
-  return { svc, task, membership, audit }
+  // Notification is a side channel: these tests are about the task record, so a
+  // no-op stub keeps them measuring exactly what they measured before.
+  const notifications = { notify: vi.fn(async () => undefined), notifyAssignment: vi.fn(async () => undefined) }
+  const svc = new TasksService(prisma as never, audit as never, notifications as never)
+  return { svc, task, membership, audit, notifications }
 }
 
 describe('TasksService', () => {

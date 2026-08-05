@@ -3,6 +3,7 @@ import { Prisma } from '@finrep/db'
 import { isMetricKey } from '@finrep/analytics'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { AuditService } from '../common/audit/audit.service.js'
+import { NotificationsService } from '../common/notifications/notifications.service.js'
 import { StrategyProgressService } from './strategy-progress.service.js'
 import { MIX_METRIC_KEYS } from './strategy.constants.js'
 import type { CreatePlanDto } from './dto/create-plan.dto.js'
@@ -80,6 +81,7 @@ export class StrategyService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly progress: StrategyProgressService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   // ── Membership guard (owner assignment) — clone of TasksService.assertAssigneeIsMember ──
@@ -493,6 +495,15 @@ export class StrategyService {
       },
     })
     await this.audit.write({ schoolId, userId, action: 'strategy.goal.created', targetType: 'strategy_goals', targetId: row.id })
+    await this.notifications.notifyAssignment({
+      userId: row.ownerUserId,
+      actorUserId: userId,
+      schoolId,
+      what: 'strategic goal',
+      title: row.title,
+      dueDate: row.targetDate,
+      link: '/strategy',
+    })
     return this.rawGoal(row)
   }
 
@@ -556,6 +567,17 @@ export class StrategyService {
     }
 
     const row = await this.prisma.strategyGoal.update({ where: { id: existing.id }, data })
+    if (row.ownerUserId && row.ownerUserId !== existing.ownerUserId) {
+      await this.notifications.notifyAssignment({
+        userId: row.ownerUserId,
+        actorUserId: userId,
+        schoolId,
+        what: 'strategic goal',
+        title: row.title,
+        dueDate: row.targetDate,
+        link: '/strategy',
+      })
+    }
     await this.audit.write({ schoolId, userId, action: 'strategy.goal.updated', targetType: 'strategy_goals', targetId: row.id })
     return this.rawGoal(row)
   }
@@ -612,6 +634,15 @@ export class StrategyService {
       include: { owner: OWNER_SELECT },
     })
     await this.audit.write({ schoolId, userId, action: 'strategy.initiative.created', targetType: 'strategy_initiatives', targetId: row.id })
+    await this.notifications.notifyAssignment({
+      userId: row.ownerUserId,
+      actorUserId: userId,
+      schoolId,
+      what: 'strategic initiative',
+      title: row.title,
+      dueDate: row.dueDate,
+      link: '/strategy',
+    })
     return this.rawInitiative(row)
   }
 
@@ -634,6 +665,17 @@ export class StrategyService {
       data,
       include: { owner: OWNER_SELECT },
     })
+    if (row.ownerUserId && row.ownerUserId !== existing.ownerUserId) {
+      await this.notifications.notifyAssignment({
+        userId: row.ownerUserId,
+        actorUserId: userId,
+        schoolId,
+        what: 'strategic initiative',
+        title: row.title,
+        dueDate: row.dueDate,
+        link: '/strategy',
+      })
+    }
     await this.audit.write({ schoolId, userId, action: 'strategy.initiative.updated', targetType: 'strategy_initiatives', targetId: row.id })
     return this.rawInitiative(row)
   }

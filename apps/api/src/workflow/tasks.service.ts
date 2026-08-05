@@ -13,6 +13,7 @@ import {
 } from '@finrep/compliance'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { AuditService } from '../common/audit/audit.service.js'
+import { NotificationsService } from '../common/notifications/notifications.service.js'
 import {
   APPROVAL_STATUSES,
   TASK_PRIORITIES,
@@ -210,6 +211,7 @@ export class TasksService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** Map a DB row → the public shape, attaching the computed urgency + assignee. */
@@ -420,6 +422,17 @@ export class TasksService {
       targetType: 'tasks',
       targetId: row.id,
     })
+    // Being handed work is news. Until now the ONLY record of it was the audit
+    // log, which the assignee cannot read.
+    await this.notifications.notifyAssignment({
+      userId: row.assigneeUserId,
+      actorUserId: userId,
+      schoolId,
+      what: 'task',
+      title: row.title,
+      dueDate: row.dueDate,
+      link: `/tasks?task=${row.id}`,
+    })
     return this.toPublic(row)
   }
 
@@ -470,6 +483,20 @@ export class TasksService {
       targetType: 'tasks',
       targetId: row.id,
     })
+    // ONLY on a change of hands. Every other edit — a due date, a priority, a
+    // typo in the title — is not news for the assignee, and notifying on all of
+    // them is how an inbox becomes something people stop opening.
+    if (row.assigneeUserId && row.assigneeUserId !== existing.assigneeUserId) {
+      await this.notifications.notifyAssignment({
+        userId: row.assigneeUserId,
+        actorUserId: userId,
+        schoolId,
+        what: 'task',
+        title: row.title,
+        dueDate: row.dueDate,
+        link: `/tasks?task=${row.id}`,
+      })
+    }
     // Completing a recurring task via the edit modal also advances the series (same
     // shared helper + wasDone guard, so it's safe and never double-spawns).
     if (transitionsToDone) await this.spawnNextIfRecurring(existing, userId, now)
@@ -565,6 +592,17 @@ export class TasksService {
       targetType: 'tasks',
       targetId: row.id,
     })
+    // Only the FIRST approver is on the clock; the rest are notified as the chain
+    // advances to them (below), so nobody is asked to act out of turn.
+    await this.notifications.notifyAssignment({
+      userId: steps[0].approverUserId,
+      actorUserId: userId,
+      schoolId,
+      what: 'sign-off request',
+      title: row.title,
+      link: `/tasks?task=${row.id}`,
+      note: 'This task is waiting on your approval.',
+    })
     return this.toPublic(row)
   }
 
@@ -629,6 +667,7 @@ export class TasksService {
         targetType: 'tasks',
         targetId: row.id,
       })
+      await this.notifyDecision(schoolId, existing, row.title, decision, note, user.id)
       // Terminal approve on a recurring legacy task advances the series.
       if (decision === 'approve') await this.spawnNextIfRecurring(existing, user.id, now)
       return this.toPublic(row)
@@ -702,8 +741,55 @@ export class TasksService {
       targetType: 'tasks',
       targetId: row.id,
     })
+    if (nextPending) {
+      // The chain moved: the next approver is on the clock now, and nobody else
+      // in the chain has been asked for anything yet.
+      await this.notifications.notifyAssignment({
+        userId: nextPending.approverUserId,
+        actorUserId: user.id,
+        schoolId,
+        what: 'sign-off request',
+        title: row.title,
+        link: `/tasks?task=${row.id}`,
+        note: 'This task is waiting on your approval.',
+      })
+    } else {
+      await this.notifyDecision(schoolId, existing, row.title, decision, note, user.id)
+    }
     if (spawnAfter) await this.spawnNextIfRecurring(existing, user.id, now)
     return this.toPublic(row)
+  }
+
+  /**
+   * Close the loop on the person who asked for sign-off. A decision that only the
+   * decider learns about leaves the submitter watching a page — which is the
+   * whole reason the approval chain felt unfinished.
+   */
+  private async notifyDecision(
+    schoolId: string,
+    existing: { assigneeUserId: string | null; createdByUserId: string | null; id: string },
+    title: string,
+    decision: TaskDecision,
+    note: string | null,
+    deciderId: string,
+  ): Promise<void> {
+    const target = existing.assigneeUserId ?? existing.createdByUserId
+    if (!target) return
+    await this.notifications.notify({
+      userId: target,
+      actorUserId: deciderId,
+      subject:
+        decision === 'approve' ? `Approved: ${title}` : `Sent back for rework: ${title}`,
+      body: [
+        decision === 'approve'
+          ? `Your task "${title}" was approved.`
+          : `Your task "${title}" was not approved and is back in progress.`,
+        note ? `Note: ${note}` : null,
+      ]
+        .filter(Boolean)
+        .join('\n\n'),
+      link: `/tasks?task=${existing.id}`,
+    })
   }
 
   async remove(schoolId: string, taskId: string, userId: string): Promise<{ id: string }> {

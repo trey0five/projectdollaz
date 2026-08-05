@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common'
 import { AuthModule } from '../auth/auth.module.js'
 import { BillingModule } from '../billing/billing.module.js'
 import { AuditModule } from '../common/audit/audit.module.js'
+import { NotificationsModule } from '../common/notifications/notifications.module.js'
 import { TasksController } from './tasks.controller.js'
 import { TasksService } from './tasks.service.js'
 
@@ -18,7 +19,7 @@ import { TasksService } from './tasks.service.js'
  * PrismaService is global.
  */
 @Module({
-  imports: [AuthModule, BillingModule, AuditModule],
+  imports: [AuthModule, BillingModule, AuditModule, NotificationsModule],
   controllers: [TasksController],
   providers: [TasksService],
   exports: [TasksService],

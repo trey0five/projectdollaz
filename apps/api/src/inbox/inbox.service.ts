@@ -6,6 +6,8 @@ interface InboxMessage {
   subject: string
   body: string
   senderLabel: string
+  /** In-app path this message is about, or null for a broadcast with no target. */
+  link: string | null
   readAt: string | null
   createdAt: string
 }
@@ -32,6 +34,7 @@ export class InboxService {
           subject: true,
           body: true,
           senderLabel: true,
+          link: true,
           readAt: true,
           createdAt: true,
         },
@@ -43,6 +46,7 @@ export class InboxService {
       subject: m.subject,
       body: m.body,
       senderLabel: m.senderLabel,
+      link: m.link ?? null,
       readAt: m.readAt ? m.readAt.toISOString() : null,
       createdAt: m.createdAt.toISOString(),
     }))

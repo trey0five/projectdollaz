@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common'
 import { AuthModule } from '../auth/auth.module.js'
 import { BillingModule } from '../billing/billing.module.js'
 import { AuditModule } from '../common/audit/audit.module.js'
+import { NotificationsModule } from '../common/notifications/notifications.module.js'
 import { PlansController } from './plans.controller.js'
 import { PillarsController } from './pillars.controller.js'
 import { GoalsController } from './goals.controller.js'
@@ -26,7 +27,7 @@ import { StrategyPlanDrafterService } from './strategy-plan-drafter.service.js'
  * Byte-for-byte the AccreditationModule posture.
  */
 @Module({
-  imports: [AuthModule, BillingModule, AuditModule],
+  imports: [AuthModule, BillingModule, AuditModule, NotificationsModule],
   controllers: [PlansController, PillarsController, GoalsController, InitiativesController],
   // StrategyPlanDrafterService (Penny's "draft the plan" generator) is EXPORTED so the
   // AssistantModule (which already imports StrategyModule one-directionally) can inject

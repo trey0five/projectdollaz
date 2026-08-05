@@ -10,7 +10,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { CheckCheck, X, Inbox as InboxIcon, ChevronLeft, Mail } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { CheckCheck, X, Inbox as InboxIcon, ChevronLeft, Mail, ArrowRight } from 'lucide-react'
 import { inboxApi, apiErrorMessage } from '../../lib/api.js'
 import { LoadState, ErrorState, relTime, fmtDateTime } from '../../pages/admin/_ui.jsx'
 
@@ -51,6 +52,7 @@ function Avatar({ label, size = 40 }) {
 }
 
 export default function InboxPanel({ setUnread, onClose }) {
+  const navigate = useNavigate()
   const reduce = useReducedMotion()
   const [messages, setMessages] = useState(null)
   const [err, setErr] = useState(null)
@@ -306,6 +308,22 @@ export default function InboxPanel({ setUnread, onClose }) {
                     <p className="whitespace-pre-wrap text-[14.5px] leading-relaxed text-white/80">
                       {selected.body}
                     </p>
+                    {/* THE DOOR. "You've been assigned X" without a way to reach
+                        X is a notice that makes the reader go hunting. Renders
+                        only when the message carries a destination — broadcasts
+                        have nothing to point at and get no dangling button. */}
+                    {selected.link ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose?.()
+                          navigate(selected.link)
+                        }}
+                        className="mt-5 inline-flex items-center gap-1.5 rounded-full bg-gold-gradient px-4 py-2 text-[13px] font-semibold text-navy shadow-glow transition hover:brightness-105"
+                      >
+                        Open <ArrowRight size={14} />
+                      </button>
+                    ) : null}
                   </div>
                 </motion.div>
               ) : (

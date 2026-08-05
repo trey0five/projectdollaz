@@ -17,6 +17,7 @@ import {
 } from '@finrep/compliance'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { AuditService } from '../common/audit/audit.service.js'
+import { NotificationsService } from '../common/notifications/notifications.service.js'
 import { BillingService } from '../billing/billing.service.js'
 import { AccreditationReadinessService } from '../accreditation/readiness.service.js'
 import { StrategyProgressService } from '../strategy/strategy-progress.service.js'
@@ -201,6 +202,7 @@ export class ImprovementService {
     // recommendation rail is built from accreditation-module data, so it needs
     // its own per-source check. See getRecommendations.
     private readonly billing: BillingService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   // ── Resolvers (tenant gate) ────────────────────────────────────────────────
@@ -474,6 +476,16 @@ export class ImprovementService {
       targetType: INITIATIVE_AUDIT_TARGET,
       targetId: row.id,
     })
+    // Covers adopt-a-recommendation for free: that path routes through here.
+    await this.notifications.notifyAssignment({
+      userId: row.ownerUserId,
+      actorUserId: userId,
+      schoolId,
+      what: 'improvement initiative',
+      title: row.title,
+      dueDate: row.dueDate,
+      link: '/improvement',
+    })
     return this.rawInitiative(row)
   }
 
@@ -536,6 +548,17 @@ export class ImprovementService {
     })
     if (row.progressSource === 'metric' && row.metricKey && row.baselineValue === null) {
       await this.freezeBaseline(schoolId, row.id, row.metricKey)
+    }
+    if (row.ownerUserId && row.ownerUserId !== existing.ownerUserId) {
+      await this.notifications.notifyAssignment({
+        userId: row.ownerUserId,
+        actorUserId: userId,
+        schoolId,
+        what: 'improvement initiative',
+        title: row.title,
+        dueDate: row.dueDate,
+        link: '/improvement',
+      })
     }
     await this.audit.write({
       schoolId,
