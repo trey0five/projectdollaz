@@ -29,7 +29,10 @@ import { accreditationApi, isModuleNotLicensed } from '../lib/api.js'
 const EMPTY_SIGNALS = []
 const EMPTY_MAP = {}
 
-export function useAccreditationSignals(schoolId, { enabled = true, periodId = null } = {}) {
+export function useAccreditationSignals(
+  schoolId,
+  { enabled = true, periodId = null, frameworkId = null } = {},
+) {
   const [payload, setPayload] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -46,7 +49,13 @@ export function useAccreditationSignals(schoolId, { enabled = true, periodId = n
       setError('')
       setNotLicensed(false)
       try {
-        const res = await accreditationApi.getSignals(sid, periodId ? { periodId } : {})
+        // frameworkId: which adopted framework's standards this panel grades.
+        // Omitted for the single-accreditation school, where the server's
+        // dominance rule and the page's selection are the same framework anyway.
+        const res = await accreditationApi.getSignals(sid, {
+          ...(periodId ? { periodId } : {}),
+          ...(frameworkId ? { frameworkId } : {}),
+        })
         if (activeSchoolRef.current !== sid) return // stale school swap — drop
         setPayload(res.data ?? null)
       } catch (e) {
@@ -58,7 +67,7 @@ export function useAccreditationSignals(schoolId, { enabled = true, periodId = n
         if (activeSchoolRef.current === sid) setLoading(false)
       }
     },
-    [periodId],
+    [periodId, frameworkId],
   )
 
   useEffect(() => {

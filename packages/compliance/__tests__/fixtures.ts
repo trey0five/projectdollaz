@@ -408,6 +408,8 @@ export function visitFixtureInput(over: Partial<VisitInput> = {}): VisitInput {
   return {
     now: '2026-07-31T12:00:00.000Z',
     framework: { code: 'cognia_2022', name: 'the Cognia Performance Standards' },
+    // The ORDINARY school holds one. Multi-framework cases override this.
+    otherFrameworks: [],
     frameworkAdopted: true,
     snapshotAsOf: '2026-06-30',
     demoData: false,

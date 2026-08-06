@@ -53,11 +53,25 @@ export function useAccreditation(schoolId) {
   const activeSchoolRef = useRef(schoolId)
   activeSchoolRef.current = schoolId
 
+  // WHICH FRAMEWORK THIS PAGE IS READING. Null = let the server pick (the
+  // dominant one — most linked standards), which is what every read did before
+  // and what a single-accreditation school still gets.
+  //
+  // A school may hold several accreditations at once, and the register has always
+  // been able to carry both; what it could not do was SAY which one the scored
+  // surfaces described, or let you look at the other. This is that choice, owned
+  // by the page and handed to every panel, so the hero, the evidence table, the
+  // signals and the trend can never be describing different frameworks.
+  const [frameworkId, setFrameworkId] = useState(null)
+
   // Fail-soft readiness pull — a readiness hiccup must never blank the register.
-  const loadReadiness = useCallback(async (sid, targetOverride) => {
+  const loadReadiness = useCallback(async (sid, targetOverride, fwId) => {
     try {
       const target = targetOverride !== undefined ? targetOverride : readStoredTarget(sid)
-      const res = await accreditationApi.getReadiness(sid, target != null ? { target } : {})
+      const res = await accreditationApi.getReadiness(sid, {
+        ...(target != null ? { target } : {}),
+        ...(fwId ? { frameworkId: fwId } : {}),
+      })
       if (activeSchoolRef.current !== sid) return // stale school swap — drop
       setReadiness(res.data ?? null)
     } catch {
@@ -66,6 +80,12 @@ export function useAccreditation(schoolId) {
     }
   }, [])
 
+  // The selection must reach loadReadiness WITHOUT joining its dependency array —
+  // `load` is depended on by the mount effect, so a changing identity there would
+  // re-run the entire register fetch on every switch.
+  const frameworkIdRef = useRef(null)
+  frameworkIdRef.current = frameworkId
+
   const load = useCallback(async (sid) => {
     setError('')
     setNotLicensed(false)
@@ -73,7 +93,7 @@ export function useAccreditation(schoolId) {
     try {
       const [res] = await Promise.all([
         accreditationApi.listStandards(sid),
-        loadReadiness(sid), // self-catching — never rejects
+        loadReadiness(sid, undefined, frameworkIdRef.current), // self-catching
       ])
       if (activeSchoolRef.current !== sid) return // stale school swap — drop
       setStandards(res.data?.standards ?? [])
@@ -240,7 +260,23 @@ export function useAccreditation(schoolId) {
       } catch {
         /* private mode — target just won't persist */
       }
-      await loadReadiness(schoolId, target)
+      await loadReadiness(schoolId, target, frameworkIdRef.current)
+    },
+    [schoolId, loadReadiness],
+  )
+
+  /**
+   * Switch which adopted framework this page reads. Re-pulls readiness ONLY —
+   * the register itself is framework-agnostic (it holds every adopted standard,
+   * always), so a switch must not blank and refetch the list the user is
+   * looking at. Passing null hands the choice back to the server's dominance rule.
+   */
+  const selectFramework = useCallback(
+    async (nextId) => {
+      const id = nextId || null
+      setFrameworkId(id)
+      frameworkIdRef.current = id
+      if (schoolId) await loadReadiness(schoolId, undefined, id)
     },
     [schoolId, loadReadiness],
   )
@@ -308,6 +344,11 @@ export function useAccreditation(schoolId) {
     removeEvidence,
     // Phase 3 additive surface
     readiness,
+    // The page's framework selection. `frameworkId` is null until the user
+    // chooses; `readiness.framework.id` is what the server actually resolved,
+    // and is what the switcher should show as active.
+    frameworkId,
+    selectFramework,
     frameworks,
     loadFrameworks,
     adoptFramework,

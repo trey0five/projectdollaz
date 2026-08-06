@@ -88,6 +88,19 @@ export default function ActArrival({ arrival = null, demoData = false }) {
         ) : null}
       </div>
 
+      {/* SCOPED, AND SAYING SO. A mock visit reads exactly ONE framework; a school
+          holding two used to be told how it looked "to an accreditor" with no hint
+          that half its register was outside the read. The sentence is composed
+          server-side beside the framework it qualifies, never here. */}
+      {arrival.alsoHoldsLine ? (
+        <p
+          data-testid="arrival-also-holds"
+          className="rounded-xl border border-navy/15 bg-navy/[0.04] px-3 py-2 text-[12.5px] leading-relaxed text-muted"
+        >
+          {arrival.alsoHoldsLine}
+        </p>
+      ) : null}
+
       {/* The readiness read FAILED. Its own frozen sentence, verbatim — never an
           em dash pretending to be "nothing scored yet". */}
       {arrival.unavailableReason ? (

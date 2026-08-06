@@ -75,6 +75,7 @@ function signalSet(over: Partial<TwinSignalSet> = {}): TwinSignalSet {
 
 const EMPTY_REGISTER: TwinRegisterView = {
   frameworkCode: 'cognia_2022',
+  otherFrameworks: [],
   standards: [],
   evidenceGroups: [],
   // AIC Phase F — the three register axes the new rules read. An empty school

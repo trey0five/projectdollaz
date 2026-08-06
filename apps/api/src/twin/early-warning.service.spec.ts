@@ -52,6 +52,7 @@ function result(findings: TwinFinding[]): TwinResult {
     version: '1.0.0',
     now: '2026-08-01',
     frameworkCode: 'cognia_2022',
+    otherFrameworks: [],
     demoData: false,
     snapshotAsOf: '2026-07-31',
     findings,

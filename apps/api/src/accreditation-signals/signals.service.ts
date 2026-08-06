@@ -160,7 +160,7 @@ export class AccreditationSignalsService {
 
   async getSignals(
     schoolId: string,
-    opts: { periodId?: string } = {},
+    opts: { periodId?: string; frameworkId?: string } = {},
   ): Promise<AccreditationSignalsResponse> {
     // ── 1. What is bound? A school with no bindings costs one query and no
     //       metric compute at all.
@@ -203,7 +203,7 @@ export class AccreditationSignalsService {
     const { signalKeys: byStandard } = buildDomainMap(standards, catalogRows)
     // GRADED POPULATION: the dominant framework's non-assurance leaves — exactly
     // what AccreditationReadinessService builds `domains[].signalCount` from.
-    const graded = await this.gradedLeaves(standards, catalogRows)
+    const graded = await this.gradedLeaves(standards, catalogRows, opts.frameworkId)
     const { map, signalKeys: gradedKeys } = buildDomainMap(graded, catalogRows)
 
     // Distinct bound keys, in the registry's own order — the same order every
@@ -291,10 +291,19 @@ export class AccreditationSignalsService {
    */
   private async gradedLeaves<
     T extends { id: string; parentId: string | null; catalogStandardId: string | null; frameworkId: string | null },
-  >(standards: readonly T[], catalogRows: readonly CatalogDomainRow[]): Promise<T[]> {
+  >(
+    standards: readonly T[],
+    catalogRows: readonly CatalogDomainRow[],
+    explicitFrameworkId?: string,
+  ): Promise<T[]> {
     const ids = frameworkIdsIn(standards)
     let frameworkId: string | null = null
-    if (ids.length > 0) {
+    // AN EXPLICIT CHOICE BEATS DOMINANCE. Same precedence the readiness read has
+    // always had; without it a page-wide framework switcher could move the hero
+    // and leave this panel describing a different population on the same screen.
+    if (explicitFrameworkId && ids.includes(explicitFrameworkId)) {
+      frameworkId = explicitFrameworkId
+    } else if (ids.length > 0) {
       const candidates = await this.prisma.accreditationFramework.findMany({
         where: { id: { in: ids } },
         select: { id: true, code: true },

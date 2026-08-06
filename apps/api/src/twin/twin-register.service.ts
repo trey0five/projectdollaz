@@ -108,6 +108,7 @@ function daysBetweenIso(a: string, b: string): number {
 export function emptyTwinRegister(): TwinRegisterView {
   return {
     frameworkCode: null,
+    otherFrameworks: [],
     standards: [],
     evidenceGroups: [],
     // AIC Phase F. `[]` and `null` are the DEGRADED shapes, and they are not the
@@ -273,6 +274,12 @@ export class TwinRegisterService {
         frameworkCode: this.frameworkCodeFrom(
           readinessRes?.framework?.code ?? evidenceRes?.framework?.code ?? null,
         ),
+        // Named, not resolved. The twin still reads exactly one framework — this
+        // only stops it from implying that one is all the school has.
+        otherFrameworks: (readinessRes?.otherFrameworks ?? []).map((f) => ({
+          code: f.code,
+          name: f.name,
+        })),
         standards,
         evidenceGroups,
         // AIC Phase F — matched HERE, against the standards this same build already

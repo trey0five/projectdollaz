@@ -272,8 +272,26 @@ export interface TwinPdSummaryView {
   participantCount: number
 }
 
+/** One of the school's adopted frameworks, named. */
+export interface TwinOtherFrameworkView {
+  code: string
+  name: string
+}
+
 export interface TwinRegisterView {
   frameworkCode: string | null
+  /**
+   * The school's OTHER adopted frameworks — everything it holds that this build
+   * is NOT reading. `[]` for the ordinary single-accreditation school.
+   *
+   * The twin resolves its framework internally and deliberately takes no
+   * caller-supplied override (the visit DTO forbids one, with a spec). That is
+   * still the right design — a mock visit is one accreditor's visit — but it used
+   * to make an unqualified claim, telling a dually-accredited school how it looked
+   * to "an accreditor" while silently reading only one of the two it holds.
+   * Naming the others turns a hidden assumption into a stated one.
+   */
+  otherFrameworks: readonly TwinOtherFrameworkView[]
   standards: readonly TwinStandardView[]
   evidenceGroups: readonly TwinEvidenceGroupView[]
   /** AIC Phase F. ALWAYS present; `[]` when the register is empty or unreadable. */
@@ -467,6 +485,8 @@ export interface TwinResult {
   version: string
   now: string
   frameworkCode: string | null
+  /** Copied from the register. The other frameworks this read is NOT covering. */
+  otherFrameworks: readonly TwinOtherFrameworkView[]
   demoData: boolean
   snapshotAsOf: string | null
   findings: TwinFinding[]
@@ -3035,6 +3055,7 @@ export function deriveTwin(
     version: ACCREDITATION_TWIN_VERSION,
     now,
     frameworkCode: register.frameworkCode,
+    otherFrameworks: register.otherFrameworks,
     demoData: register.demoData,
     snapshotAsOf: register.snapshotAsOf,
     findings,

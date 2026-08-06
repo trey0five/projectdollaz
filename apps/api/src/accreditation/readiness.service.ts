@@ -103,6 +103,18 @@ export interface ReadinessInFlight {
 
 export interface ReadinessResponse {
   framework: ReadinessFrameworkPublic | null
+  /**
+   * The school's OTHER adopted frameworks — everything it holds that this read
+   * is NOT grading. Empty for the ordinary single-accreditation school.
+   *
+   * Dual accreditation is normal (FCIS beside Cognia in Florida, ACSI beside
+   * Cognia, the WCEA/WASC joint protocol), and the register has always been able
+   * to hold both. But every scored read picks ONE framework, so the second one's
+   * standards sat in the register contributing to nothing, with no indication on
+   * screen that a whole accreditation was being left out of the number. Naming
+   * them is what turns a silent omission into a choice the user can see and make.
+   */
+  otherFrameworks: { id: string; code: string; name: string }[]
   readinessPct: number
   /**
    * Phase A — readiness is never ONE number. `selfScoredPct` is DOCUMENTED (the
@@ -376,7 +388,21 @@ export class AccreditationReadinessService {
       }
     }
 
+    // Everything adopted that this read is not grading. Resolved from the rows
+    // already in hand — no extra query when the school holds only one.
+    const otherIds = frameworkIdsIn(rows).filter((id) => id !== framework?.id)
+    const otherFrameworks =
+      otherIds.length > 0
+        ? (
+            await this.prisma.accreditationFramework.findMany({
+              where: { id: { in: otherIds } },
+              select: { id: true, code: true, name: true },
+            })
+          ).sort((a, b) => a.code.localeCompare(b.code))
+        : []
+
     return {
+      otherFrameworks,
       framework: framework
         ? {
             id: framework.id,

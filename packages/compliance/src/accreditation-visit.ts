@@ -235,6 +235,11 @@ export interface VisitInput<G = unknown> {
   now: string
   framework: { code: string | null; name: string | null }
   /**
+   * Other frameworks this school holds and this visit is NOT reading. `[]` is the
+   * ordinary case; anything else makes the arrival act say so.
+   */
+  otherFrameworks: readonly { code: string; name: string }[]
+  /**
    * HAS THE SCHOOL ADOPTED A FRAMEWORK? It cannot be inferred from `readiness`:
    * `selfScoredPct` and `verifiedPctCurrent` both return 0 over an empty leaf
    * set, so "no framework, nothing scored" and "a framework, everything scored
@@ -273,6 +278,12 @@ export interface VisitInput<G = unknown> {
 
 export interface VisitArrivalAct {
   frameworkLabel: string
+  /**
+   * "You also hold X — switch frameworks on the Accreditation page." Null unless
+   * the school actually holds another framework, so the ordinary single-accreditor
+   * visit reads exactly as it did before.
+   */
+  alsoHoldsLine: string | null
   /** Phase A's DOCUMENTED — the rubric term alone. Never "readiness %" alone. */
   documented: number | null
   /** Phase A's DEFENSIBLE — the evidence term alone. */
@@ -502,6 +513,21 @@ function frameworkLabelOf(framework: { code: string | null; name: string | null 
 }
 
 /**
+ * The honesty line. A visit reads ONE framework by design; when the school holds
+ * more, saying which ones were left out is the difference between a scoped read
+ * and a silent omission. Names, never codes — `fcis_2023` is not a sentence.
+ */
+function alsoHoldsLineOf(others: readonly { code: string; name: string }[]): string | null {
+  const names = others.map((f) => f.name ?? f.code).filter((n) => !!n)
+  if (names.length === 0) return null
+  const list =
+    names.length === 1
+      ? names[0]
+      : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+  return `You also hold ${list} — switch frameworks on the Accreditation page to be read against ${names.length === 1 ? 'it' : 'one of those'} instead.`
+}
+
+/**
  * BOTH SOURCES MUST AGREE, and the label is the tie-breaker: whatever the flag
  * claims, a school the opening sentence is about to call "a school with no
  * adopted accreditation framework" has no framework. One sentence cannot name a
@@ -534,6 +560,7 @@ function composeArrival(input: VisitInput<unknown>): VisitArrivalAct {
     : VISIT_NO_SNAPSHOT_LINE
   return {
     frameworkLabel: frameworkLabelOf(input.framework),
+    alsoHoldsLine: alsoHoldsLineOf(input.otherFrameworks),
     documented: r ? r.selfScoredPct : null,
     defensible: r ? r.verifiedPct : null,
     readinessPct: r ? r.readinessPct : null,

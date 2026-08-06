@@ -616,8 +616,8 @@ export const accreditationApi = {
   // and a favorable bound operating figure. Zero commendations is a legitimate and
   // common answer, returned with the exclusion counts that explain it — never a
   // padded, rubric-only list.
-  getCommendations: (schoolId) =>
-    api.get(`/schools/${schoolId}/accreditation/commendations`),
+  getCommendations: (schoolId, params = {}) =>
+    api.get(`/schools/${schoolId}/accreditation/commendations`, { params }),
   // ── Phase E: THE EARLY WARNING ENGINE (the digital twin) ────────────────────
   // "What would a visiting team likely find, and what can we NOT answer?" — the
   // whole payload is server-derived by deterministic rules over live operating

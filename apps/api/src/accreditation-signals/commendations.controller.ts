@@ -26,6 +26,9 @@ export class AccreditationCommendationsController {
   @Get()
   @Roles('owner', 'accountant', 'viewer')
   get(@Param('schoolId', ParseUUIDPipe) schoolId: string, @Query() query: SignalsQueryDto) {
-    return this.commendations.getCommendations(schoolId, { periodId: query.periodId })
+    return this.commendations.getCommendations(schoolId, {
+      periodId: query.periodId,
+      frameworkId: query.frameworkId,
+    })
   }
 }

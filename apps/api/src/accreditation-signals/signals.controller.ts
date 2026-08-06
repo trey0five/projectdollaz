@@ -32,6 +32,9 @@ export class AccreditationSignalsController {
   @Get()
   @Roles('owner', 'accountant', 'viewer')
   get(@Param('schoolId', ParseUUIDPipe) schoolId: string, @Query() query: SignalsQueryDto) {
-    return this.signals.getSignals(schoolId, { periodId: query.periodId })
+    return this.signals.getSignals(schoolId, {
+      periodId: query.periodId,
+      frameworkId: query.frameworkId,
+    })
   }
 }

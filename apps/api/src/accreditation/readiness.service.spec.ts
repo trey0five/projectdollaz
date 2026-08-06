@@ -192,6 +192,42 @@ describe('AccreditationReadinessService — Cognia (index) mode', () => {
     expect(res.projectedIndex).toBeNull()
   })
 
+  // ───────────────────────────────────────────────────────────────────────────
+  // NAMING WHAT WAS LEFT OUT. Reading one framework is correct; reading one
+  // WITHOUT SAYING SO is the part that misleads — a dually-accredited school was
+  // handed a readiness number for one accreditor with nothing on the payload to
+  // indicate a second accreditation existed at all.
+  // ───────────────────────────────────────────────────────────────────────────
+  it('names the frameworks this read is NOT grading', async () => {
+    const both = [
+      stdRow({ id: 'x', code: 'COG-1', frameworkId: 'fw-cognia' }),
+      stdRow({ id: 'y', code: 'COG-2', frameworkId: 'fw-cognia' }),
+      stdRow({ id: 'z', code: 'MSA-1', frameworkId: 'fw-msa' }),
+    ]
+    const { svc } = makeService({ standards: both })
+    const res = await svc.getReadiness('school-A')
+    expect(res.framework?.code).toBe('cognia_2022') // dominant, 2 vs 1
+    expect(res.otherFrameworks.map((f) => f.code)).toEqual(['msa_cess_2022'])
+  })
+
+  it('follows the SELECTION — switching frameworks swaps which one is "other"', async () => {
+    const both = [
+      stdRow({ id: 'x', code: 'COG-1', frameworkId: 'fw-cognia' }),
+      stdRow({ id: 'y', code: 'COG-2', frameworkId: 'fw-cognia' }),
+      stdRow({ id: 'z', code: 'MSA-1', frameworkId: 'fw-msa' }),
+    ]
+    const { svc } = makeService({ standards: both })
+    const res = await svc.getReadiness('school-A', { frameworkId: 'fw-msa' })
+    expect(res.framework?.code).toBe('msa_cess_2022')
+    expect(res.otherFrameworks.map((f) => f.code)).toEqual(['cognia_2022'])
+  })
+
+  it('is EMPTY for the ordinary single-accreditation school', async () => {
+    const { svc } = makeService({ standards: rows, groupBy, assuranceCatalog })
+    const res = await svc.getReadiness('school-A')
+    expect(res.otherFrameworks).toEqual([])
+  })
+
   it('dominance tie breaks by framework code asc', async () => {
     const tied = [
       stdRow({ id: 'x', code: 'COG-1', frameworkId: 'fw-cognia' }),

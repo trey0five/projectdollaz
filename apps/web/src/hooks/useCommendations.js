@@ -21,7 +21,7 @@ import { accreditationApi, isModuleNotLicensed } from '../lib/api.js'
 
 const EMPTY = []
 
-export function useCommendations(schoolId, { enabled = true } = {}) {
+export function useCommendations(schoolId, { enabled = true, frameworkId = null } = {}) {
   const [payload, setPayload] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -30,22 +30,28 @@ export function useCommendations(schoolId, { enabled = true } = {}) {
   const activeSchoolRef = useRef(schoolId)
   activeSchoolRef.current = schoolId
 
-  const load = useCallback(async (sid) => {
-    setError('')
-    setNotLicensed(false)
-    try {
-      const res = await accreditationApi.getCommendations(sid)
-      if (activeSchoolRef.current !== sid) return // stale school swap — drop
-      setPayload(res.data ?? null)
-    } catch (e) {
-      if (activeSchoolRef.current !== sid) return
-      setPayload(null)
-      if (isModuleNotLicensed(e)) setNotLicensed(true)
-      else setError('Commendations are unavailable right now.')
-    } finally {
-      if (activeSchoolRef.current === sid) setLoading(false)
-    }
-  }, [])
+  const load = useCallback(
+    async (sid) => {
+      setError('')
+      setNotLicensed(false)
+      try {
+        const res = await accreditationApi.getCommendations(
+          sid,
+          frameworkId ? { frameworkId } : {},
+        )
+        if (activeSchoolRef.current !== sid) return // stale school swap — drop
+        setPayload(res.data ?? null)
+      } catch (e) {
+        if (activeSchoolRef.current !== sid) return
+        setPayload(null)
+        if (isModuleNotLicensed(e)) setNotLicensed(true)
+        else setError('Commendations are unavailable right now.')
+      } finally {
+        if (activeSchoolRef.current === sid) setLoading(false)
+      }
+    },
+    [frameworkId],
+  )
 
   useEffect(() => {
     let cancelled = false

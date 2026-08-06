@@ -16,7 +16,7 @@
 // operations" SourcePicker). The evidence panel, source picker, and the standard
 // create/edit form modal remain dark navy/gold overlays over the light page.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import {
@@ -50,6 +50,11 @@ import { formatShortDate } from '../lib/format.js'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useUiV2 } from '../context/UiFlagContext.jsx'
 import { useAccreditation } from '../hooks/useAccreditation.js'
+import {
+  frameworkPillLabel,
+  buildRubricLabelsByFrameworkId,
+  labelsForStandard,
+} from '../lib/frameworkLabels.js'
 import { useReadinessTrend } from '../hooks/useReadinessTrend.js'
 import { useAccreditationSignals } from '../hooks/useAccreditationSignals.js'
 import { useEvidenceReadiness } from '../hooks/useEvidenceReadiness.js'
@@ -1219,6 +1224,10 @@ function StandardsTable({
   onEdit,
   onDelete,
   labelsFor = null, // (standard) => rubricLabels[4] | null — per-row framework labels
+  // frameworkId → pill label, passed ONLY when this school holds more than one
+  // accreditation. Null for everyone else, and the register renders exactly as it
+  // always did — a chip naming the only framework you have says nothing.
+  frameworkChipById = null,
   onRubric = null,
   // Phase C: standardId → the WORST currency state among the required artifacts
   // this standard is served by, straight off the evidence-readiness payload. A
@@ -1296,6 +1305,16 @@ function StandardsTable({
               <td className="px-4 py-3">
                 <div className="font-semibold text-navy" style={{ paddingLeft: `${(s.depth ?? 0) * 18}px` }}>
                   {s.title}
+                  {/* WHOSE STANDARD IS THIS? In a mixed register the same code
+                      space is shared by two accreditors, and a row's rubric now
+                      speaks its own framework's vocabulary — so the row has to
+                      say which framework it belongs to for either to be read
+                      correctly. */}
+                  {frameworkChipById && s.frameworkId && frameworkChipById[s.frameworkId] ? (
+                    <span className="ml-2 rounded-full border border-rule/70 bg-section px-1.5 py-0.5 align-middle text-[10.5px] font-semibold tracking-wide text-muted">
+                      {frameworkChipById[s.frameworkId]}
+                    </span>
+                  ) : null}
                   {s.category ? (
                     <span className="ml-2 text-[12px] font-normal text-muted">· {s.category}</span>
                   ) : null}
@@ -1451,6 +1470,8 @@ function AccreditationWorkspace() {
     removeEvidence,
     // Phase 3: framework catalog + rubric readiness
     readiness,
+    frameworkId,
+    selectFramework,
     frameworks,
     loadFrameworks,
     adoptFramework,
@@ -1459,6 +1480,27 @@ function AccreditationWorkspace() {
     fetchSuggestions,
     linkStrategy,
   } = useAccreditation(schoolId)
+
+  // ── THE PAGE'S ONE FRAMEWORK SELECTION ─────────────────────────────────────
+  // Every scored surface on this page — hero, evidence, signals, commendations,
+  // trend — used to resolve its own framework independently, by two DIFFERENT
+  // default rules (the read services pick the framework with the most linked
+  // standards; the trend picks by its own series ordering). For the ordinary
+  // school holding one accreditation that never showed. For a school holding two
+  // it meant the hero could describe FCIS while the strip below it charted Cognia,
+  // with nothing on screen naming either.
+  //
+  // So the selection is owned HERE and passed down, and the server's dominance
+  // rule survives as the no-selection default. `activeFrameworkId` is what the
+  // server actually resolved — the selection once one is made, otherwise whatever
+  // dominance chose — which is what the panels and the switcher must agree on.
+  const activeFrameworkId = frameworkId ?? readiness?.framework?.id ?? null
+
+  // WHAT THE PANELS ARE GIVEN is the explicit selection (`frameworkId`), NOT
+  // `activeFrameworkId`. Until the user picks, every read service applies the same
+  // dominance rule, so sending the resolved id back would change nothing except to
+  // make each panel refetch the moment readiness lands — an extra round-trip per
+  // panel on every page load, for an identical answer.
 
   // Phase A: the recorded readiness history, passed straight through to the hero
   // (fail-soft on its own — a history hiccup never blanks the register). Gated on
@@ -1475,6 +1517,7 @@ function AccreditationWorkspace() {
   // hook, for the same reason (hooks run above the page's entitlement return).
   const signals = useAccreditationSignals(schoolId, {
     enabled: !loading && !notLicensed && !notEntitled,
+    frameworkId,
   })
 
   // Phase C: the EVIDENCE READINESS payload — one request for the whole page, used
@@ -1483,6 +1526,7 @@ function AccreditationWorkspace() {
   // already-made module check as the two hooks above, for the same reason.
   const evidence = useEvidenceReadiness(schoolId, {
     enabled: !loading && !notLicensed && !notEntitled,
+    frameworkId,
   })
 
   // Phase C: the strengths surface. Separate endpoint because it needs the signals
@@ -1490,6 +1534,7 @@ function AccreditationWorkspace() {
   // must never take the evidence index down with it.
   const commendations = useCommendations(schoolId, {
     enabled: !loading && !notLicensed && !notEntitled,
+    frameworkId,
   })
 
   // Phase E: the EARLY WARNING ENGINE. One request for the whole page — the rail,
@@ -1604,16 +1649,104 @@ function AccreditationWorkspace() {
   // ── Phase 3 derived state ──────────────────────────────────────────────────
   // A framework is "adopted" when any standard carries a frameworkId.
   const adopted = useMemo(() => standards.some((s) => s.frameworkId), [standards])
-  // Per-row rubric labels: the readiness payload carries the DOMINANT framework's
-  // labels, which are only correct for rows of that framework (or hand-made rows
-  // with no framework link). A row adopted from a DIFFERENT framework (a school
-  // may adopt several) must not borrow them — its own server-resolved
-  // s.rubricLabel still names the active score via RubricPicker's activeLabel.
-  const readinessFrameworkId = readiness?.framework?.id ?? null
+
+  // How many DISTINCT frameworks this register actually holds — the fact that
+  // decides whether this page needs a switcher at all.
+  const registerFrameworkIds = useMemo(
+    () => [...new Set(standards.map((s) => s.frameworkId).filter(Boolean))],
+    [standards],
+  )
+  const multiFramework = registerFrameworkIds.length > 1
+
+  // The catalog is normally fetched lazily, when the adopt modal opens. A
+  // multi-framework school needs it up front for two things it cannot get from
+  // the register rows: every framework's NAME (for the switcher) and its RUBRIC
+  // LABELS (for the rows below). Fetched only for that school — the single-
+  // accreditation case keeps the lazy behaviour exactly as it was.
+  useEffect(() => {
+    if (multiFramework && frameworks == null) loadFrameworks()
+  }, [multiFramework, frameworks, loadFrameworks])
+
+  const adoptedFrameworks = useMemo(
+    () => (frameworks ?? []).filter((f) => f.adopted),
+    [frameworks],
+  )
+
+  // PER-ROW RUBRIC LABELS, framework by framework.
+  //
+  // The readiness payload carries ONE framework's labels — the one being read.
+  // Rows belonging to any other adopted framework used to be handed `null` and
+  // rendered their 1–4 rubric as bare numbers with no words: a school holding two
+  // accreditations saw half its register lose the vocabulary that makes a rubric
+  // score mean anything. Each row now gets ITS OWN framework's labels from the
+  // catalog, so the register reads correctly whichever framework is selected —
+  // and a hand-made row with no framework link still falls back to the read
+  // framework's labels, as before.
+  const rubricLabelsByFrameworkId = useMemo(
+    () => buildRubricLabelsByFrameworkId(frameworks, readiness?.framework),
+    [frameworks, readiness],
+  )
+
+  // Only built for a multi-framework register — see StandardsTable's prop docs.
+  const frameworkChipById = useMemo(() => {
+    if (!multiFramework) return null
+    const map = {}
+    for (const f of frameworks ?? []) if (f?.id) map[f.id] = frameworkPillLabel(f)
+    return map
+  }, [multiFramework, frameworks])
+
   const rubricLabels = readiness?.framework?.rubricLabels ?? null
   const labelsFor = useCallback(
-    (s) => (!s?.frameworkId || s.frameworkId === readinessFrameworkId ? rubricLabels : null),
-    [readinessFrameworkId, rubricLabels],
+    (s) => labelsForStandard(s, rubricLabelsByFrameworkId, rubricLabels),
+    [rubricLabels, rubricLabelsByFrameworkId],
+  )
+
+  // ── The switcher drives the TREND STRIP too ────────────────────────────────
+  // History is keyed by framework CODE (`seriesKey`), not by id — the recorded
+  // series outlives any single framework row, which is why the two vocabularies
+  // exist and why they are NOT unified. This is the one seam that translates
+  // between them, so the hero and the strip beneath it can never chart different
+  // frameworks. Guarded on the series actually existing: a framework adopted
+  // today has no recorded history, and asking for a series that was never
+  // recorded would blank a strip that was correctly showing another.
+  const historySetSeriesKey = history.setSeriesKey
+  const activeFrameworkCode = readiness?.framework?.code ?? null
+  const availableSeriesKeys = history.series?.series
+  useEffect(() => {
+    if (!activeFrameworkCode) return
+    const keys = (availableSeriesKeys ?? []).map((x) => x?.seriesKey)
+    if (!keys.includes(activeFrameworkCode)) return
+    historySetSeriesKey(activeFrameworkCode)
+  }, [activeFrameworkCode, availableSeriesKeys, historySetSeriesKey])
+
+  // DEEP-LINKABLE. `?framework=<id>` lets the briefing, Penny and a bookmark land
+  // on the framework they are talking about rather than on whichever one happens
+  // to dominate the register. Applied once, and only for a framework this school
+  // actually holds — a stale or foreign id in a URL must be ignored, not sent.
+  const frameworkParam = searchParams.get('framework')
+  const frameworkParamAppliedRef = useRef(false)
+  useEffect(() => {
+    if (frameworkParamAppliedRef.current) return
+    if (!frameworkParam || registerFrameworkIds.length === 0) return
+    frameworkParamAppliedRef.current = true
+    if (registerFrameworkIds.includes(frameworkParam)) selectFramework(frameworkParam)
+  }, [frameworkParam, registerFrameworkIds, selectFramework])
+
+  const onSelectFramework = useCallback(
+    (id) => {
+      selectFramework(id)
+      frameworkParamAppliedRef.current = true // our own write must not re-trigger
+      setSearchParams(
+        (cur) => {
+          const next = new URLSearchParams(cur)
+          if (id) next.set('framework', id)
+          else next.delete('framework')
+          return next
+        },
+        { replace: true },
+      )
+    },
+    [selectFramework, setSearchParams],
   )
 
   const openAdoptModal = () => {
@@ -2134,6 +2267,7 @@ function AccreditationWorkspace() {
       onEdit={openEdit}
       onDelete={onDelete}
       labelsFor={labelsFor}
+      frameworkChipById={frameworkChipById}
       onRubric={canEdit ? setRubric : null}
       currencyByStandard={evidence.byStandard}
       riskByStandard={riskByStandard}
@@ -2343,6 +2477,39 @@ function AccreditationWorkspace() {
           >
             <ShieldAlert size={14} className="text-[#F59E0B]" /> Mock visit
           </Link>
+          {/* THE FRAMEWORK SWITCHER. Rendered only for a school that actually
+              holds more than one accreditation — for everyone else this page
+              gains no new control at all. Not role-gated: choosing which
+              framework you are LOOKING at changes nothing about the school, and
+              a viewer is exactly the person who needs to look at both. */}
+          {multiFramework && adoptedFrameworks.length > 1 ? (
+            <div
+              data-testid="framework-switcher"
+              role="group"
+              aria-label="Which framework this page is read against"
+              className="inline-flex items-center gap-1 rounded-full border border-rule/70 bg-white p-0.5"
+            >
+              {adoptedFrameworks.map((f) => {
+                const on = f.id === activeFrameworkId
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => onSelectFramework(f.id)}
+                    title={f.name}
+                    className={
+                      on
+                        ? 'rounded-full bg-navy px-3 py-1 text-[12.5px] font-semibold text-white'
+                        : 'rounded-full px-3 py-1 text-[12.5px] font-semibold text-muted transition hover:text-navy'
+                    }
+                  >
+                    {frameworkPillLabel(f)}
+                  </button>
+                )
+              })}
+            </div>
+          ) : null}
           {canEdit && adopted ? (
             <button
               type="button"

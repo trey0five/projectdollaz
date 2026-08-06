@@ -534,6 +534,60 @@ describe('the other five acts', () => {
     }
   })
 
+  // ───────────────────────────────────────────────────────────────────────────
+  // A SCOPED READ THAT SAYS IT IS SCOPED.
+  //
+  // The visit resolves its own framework and takes no caller override — that is
+  // deliberate and stays (a mock visit is ONE accreditor's visit, and the query
+  // DTO forbids a passthrough with a spec of its own). What was wrong was the
+  // silence: a school holding FCIS beside Cognia was told how it looked "to an
+  // accreditor" while half its register sat outside the read, with nothing on
+  // screen to say so. Scoping is fine; unstated scoping is a claim.
+  // ───────────────────────────────────────────────────────────────────────────
+  describe('the arrival act names the frameworks it is NOT reading', () => {
+    it('says nothing extra for the ordinary single-accreditation school', () => {
+      const a = composeMockVisit(visitFixtureInput()).acts.arrival
+      expect(a.alsoHoldsLine).toBeNull()
+    })
+
+    it('names the other framework, and points at where to switch', () => {
+      const a = composeMockVisit(
+        visitFixtureInput({
+          otherFrameworks: [{ code: 'fcis_2023', name: 'the FCIS Standards' }],
+        }),
+      ).acts.arrival
+      expect(a.alsoHoldsLine).toContain('the FCIS Standards')
+      expect(a.alsoHoldsLine).toContain('Accreditation page')
+      // NAMES, never codes — `fcis_2023` is an identifier, not a sentence.
+      expect(a.alsoHoldsLine).not.toContain('fcis_2023')
+    })
+
+    it('lists three the way a person would, not as an array dump', () => {
+      const a = composeMockVisit(
+        visitFixtureInput({
+          otherFrameworks: [
+            { code: 'fcis_2023', name: 'FCIS' },
+            { code: 'acsi', name: 'ACSI' },
+            { code: 'sais', name: 'SAIS' },
+          ],
+        }),
+      ).acts.arrival
+      expect(a.alsoHoldsLine).toContain('FCIS, ACSI and SAIS')
+    })
+
+    it('falls back to the code rather than printing "undefined"', () => {
+      // A framework row with no name is a data defect, not a reason to emit a
+      // sentence with a hole in it.
+      const a = composeMockVisit(
+        visitFixtureInput({
+          otherFrameworks: [{ code: 'sais', name: null as unknown as string }],
+        }),
+      ).acts.arrival
+      expect(a.alsoHoldsLine).toContain('sais')
+      expect(a.alsoHoldsLine).not.toMatch(/undefined|null/)
+    })
+  })
+
   it('acts is an OBJECT with six fixed keys — never an array a client could filter', () => {
     const v = composeMockVisit(visitFixtureInput())
     expect(Array.isArray(v.acts)).toBe(false)

@@ -50,13 +50,20 @@ export class AccreditationCommendationsService {
 
   async getCommendations(
     schoolId: string,
-    opts: { periodId?: string } = {},
+    opts: { periodId?: string; frameworkId?: string } = {},
   ): Promise<CommendationsResponse> {
     const rows = await this.prisma.accreditationStandard.findMany({ where: { schoolId } })
 
+    // ONE FRAMEWORK CHOICE, THREADED THROUGH BOTH READS. `gradedLeaves` below
+    // has always accepted an explicit framework; it just had no way to be given
+    // one, because the public surface stopped at periodId. A school holding two
+    // accreditations therefore had its strengths drawn from whichever framework
+    // happened to be dominant, with no way to look at the other.
     const [signals, currency] = await Promise.all([
-      this.signals.getSignals(schoolId, { periodId: opts.periodId }).catch(() => null),
-      this.currency.getCurrencyByStandard(schoolId),
+      this.signals
+        .getSignals(schoolId, { periodId: opts.periodId, frameworkId: opts.frameworkId })
+        .catch(() => null),
+      this.currency.getCurrencyByStandard(schoolId, { frameworkId: opts.frameworkId }),
     ])
 
     const framework = currency.framework

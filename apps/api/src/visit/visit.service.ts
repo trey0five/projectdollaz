@@ -104,6 +104,11 @@ export class VisitService {
     const input: VisitInput<EvidenceGroup> = {
       now: at.toISOString(),
       framework: { code: twin.frameworkCode, name: evidence?.framework?.name ?? null },
+      // The visit reads ONE framework, by design — the query DTO forbids a
+      // caller-supplied override so a mock visit is always one accreditor's
+      // visit. These are the OTHERS the school holds, named so the arrival act
+      // can say what it is not reading.
+      otherFrameworks: twin.otherFrameworks ?? [],
       // HAS A FRAMEWORK BEEN ADOPTED AT ALL? A fact, not a wording — and one the
       // composer cannot derive, because `selfScoredPct([])` and
       // `verifiedPctCurrent([])` are BOTH 0 by construction for a school with no

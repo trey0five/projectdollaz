@@ -16,4 +16,19 @@ export class SignalsQueryDto {
   @IsOptional()
   @IsUUID()
   periodId?: string
+
+  /**
+   * Which adopted framework the GRADED population belongs to. Omitted ⇒ the
+   * dominant one, exactly as before.
+   *
+   * A school holding two accreditations was silently graded on whichever had
+   * more standards, so this panel and the readiness hero could only ever
+   * describe that one — the other framework's standards sat in the register
+   * contributing to nothing. The readiness and evidence-readiness routes already
+   * took this param; the signals panel is one of the two that did not, which is
+   * how a page-wide framework choice could not reach it.
+   */
+  @IsOptional()
+  @IsUUID()
+  frameworkId?: string
 }

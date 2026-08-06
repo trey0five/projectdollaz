@@ -348,48 +348,79 @@ describe('AccreditationSignalsService — attribution + tenancy', () => {
     )
   })
 
+  // Cognia is DOMINANT here (2 standards vs 1) — the fixture the dominance test
+  // and the explicit-selection tests both read, so they cannot drift apart.
+  const TWO_FRAMEWORK_FIXTURE = {
+    standards: [
+      { id: 'cog-1', catalogStandardId: 'c-cog-1', parentId: null, frameworkId: 'fw-cognia' },
+      { id: 'cog-2', catalogStandardId: 'c-cog-2', parentId: null, frameworkId: 'fw-cognia' },
+      { id: 'nsb-1', catalogStandardId: 'c-nsb-1', parentId: null, frameworkId: 'fw-nsbecs' },
+    ],
+    frameworks: [
+      { id: 'fw-cognia', code: 'cognia_2022' },
+      { id: 'fw-nsbecs', code: 'nsbecs' },
+    ],
+    catalog: [
+      {
+        id: 'c-cog-1',
+        isAssurance: false,
+        domainKey: 'finance',
+        domainWeights: null,
+        signalKeys: ['operating_margin'],
+      },
+      // An ASSURANCE gate is excluded from the graded population too.
+      {
+        id: 'c-cog-2',
+        isAssurance: true,
+        domainKey: 'finance',
+        domainWeights: null,
+        signalKeys: ['tuition_dependency'],
+      },
+      {
+        id: 'c-nsb-1',
+        isAssurance: false,
+        domainKey: 'finance',
+        domainWeights: null,
+        signalKeys: ['days_cash_on_hand'],
+      },
+    ],
+    metrics: [metric(), metric({ key: 'days_cash_on_hand' }), metric({ key: 'tuition_dependency' })],
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // …AND THE CALLER CAN SAY WHICH. Dominance is the DEFAULT, not the rule: a
+  // school holding two accreditations was graded on whichever had more standards,
+  // with no way to look at the other, so this panel could only ever describe one
+  // half of what the school is actually accredited against.
+  // ───────────────────────────────────────────────────────────────────────────
+  it('an EXPLICIT frameworkId beats dominance', async () => {
+    const { svc } = makeService(TWO_FRAMEWORK_FIXTURE)
+    const res = await svc.getSignals('school-A', { frameworkId: 'fw-nsbecs' })
+    // The NON-dominant framework's leaf, because it was asked for by name.
+    expect(res.byDomain.finance.keys).toEqual(['days_cash_on_hand'])
+  })
+
+  it('omitting it still falls back to dominance — nothing changes for one framework', async () => {
+    const { svc } = makeService(TWO_FRAMEWORK_FIXTURE)
+    const res = await svc.getSignals('school-A')
+    expect(res.byDomain.finance.keys).toEqual(['operating_margin'])
+  })
+
+  it('a framework the school does NOT hold falls back rather than emptying the grid', async () => {
+    // A stale bookmark or a deleted framework must degrade to the previous
+    // behaviour, not silently report a school with no bound signals at all.
+    const { svc } = makeService(TWO_FRAMEWORK_FIXTURE)
+    const res = await svc.getSignals('school-A', { frameworkId: 'fw-does-not-exist' })
+    expect(res.byDomain.finance.keys).toEqual(['operating_margin'])
+  })
+
   it('byDomain is scoped to the DOMINANT framework — the two-framework card', async () => {
     // The defect: /signals resolved bindings over EVERY standard while
     // /readiness graded one framework's leaves, so a school that had adopted
     // both NSBECS and Cognia saw a Cognia Finance card reading "N of 3 live"
     // directly above "your framework has 1 finance standard". One card, two
     // populations. Cognia is dominant here (2 standards vs 1).
-    const { svc } = makeService({
-      standards: [
-        { id: 'cog-1', catalogStandardId: 'c-cog-1', parentId: null, frameworkId: 'fw-cognia' },
-        { id: 'cog-2', catalogStandardId: 'c-cog-2', parentId: null, frameworkId: 'fw-cognia' },
-        { id: 'nsb-1', catalogStandardId: 'c-nsb-1', parentId: null, frameworkId: 'fw-nsbecs' },
-      ],
-      frameworks: [
-        { id: 'fw-cognia', code: 'cognia_2022' },
-        { id: 'fw-nsbecs', code: 'nsbecs' },
-      ],
-      catalog: [
-        {
-          id: 'c-cog-1',
-          isAssurance: false,
-          domainKey: 'finance',
-          domainWeights: null,
-          signalKeys: ['operating_margin'],
-        },
-        // An ASSURANCE gate is excluded from the graded population too.
-        {
-          id: 'c-cog-2',
-          isAssurance: true,
-          domainKey: 'finance',
-          domainWeights: null,
-          signalKeys: ['tuition_dependency'],
-        },
-        {
-          id: 'c-nsb-1',
-          isAssurance: false,
-          domainKey: 'finance',
-          domainWeights: null,
-          signalKeys: ['days_cash_on_hand'],
-        },
-      ],
-      metrics: [metric(), metric({ key: 'days_cash_on_hand' }), metric({ key: 'tuition_dependency' })],
-    })
+    const { svc } = makeService(TWO_FRAMEWORK_FIXTURE)
     const res = await svc.getSignals('school-A')
     // Only the dominant framework's NON-ASSURANCE leaf reaches the domain grid.
     expect(res.byDomain.finance.keys).toEqual(['operating_margin'])

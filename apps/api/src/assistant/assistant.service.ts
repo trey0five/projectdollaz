@@ -1796,10 +1796,21 @@ export class AssistantService {
     // ① WHERE READINESS STANDS — the documented/defensible PAIR, never one number.
     if (readiness) {
       const band = readiness.band ? ` The framework places that in the “${readiness.band}” band.` : ''
+      // WHOSE STANDARDS ARE THESE? A school holding two accreditations is graded
+      // on one of them, and a narrative that says "across N standards" without
+      // naming the framework reads as "across everything you are accredited
+      // against". Both halves are named, or neither is.
+      const others = readiness.otherFrameworks ?? []
+      const scope = readiness.framework?.name ? ` against ${readiness.framework.name}` : ''
+      const alsoHolds =
+        others.length > 0
+          ? ` This school also holds ${others.map((f) => f.name).join(' and ')}, ` +
+            `which ${others.length === 1 ? 'is' : 'are'} scored separately and not included above.`
+          : ''
       const text =
         `Readiness stands at ${pct(readiness.selfScoredPct)} documented and ` +
-        `${pct(readiness.verifiedPct)} defensible across ${readiness.leafCount} standards, ` +
-        `of which ${readiness.scoredCount} are scored and ${readiness.coveredCount} carry evidence.${band}`
+        `${pct(readiness.verifiedPct)} defensible across ${readiness.leafCount} standards${scope}, ` +
+        `of which ${readiness.scoredCount} are scored and ${readiness.coveredCount} carry evidence.${band}${alsoHolds}`
       specs.push({ id: 'standing', templateText: text, sourceStrings: [text] })
     }
 
@@ -5463,7 +5474,9 @@ export class AssistantService {
       'how many recommendations are still unadopted). GOVERNANCE — get_governance_status (board, committees, ' +
       'credential coverage, policy review, minutes). EARLY WARNINGS — get_early_warnings (the accreditation ' +
       'twin\u2019s open findings, with an ORDINAL likelihood word and never a percentage). MOCK VISIT — ' +
-      'get_visit_readiness (what a visiting team would find today; relay its executive summary as written). ' +
+      'get_visit_readiness (what a visiting team would find today; relay its executive summary as written — ' +
+      'and if its arrival carries alsoHoldsLine, say that too: it means the school holds another accreditation ' +
+      'this visit did not read). ' +
       'STUDENT ROSTER — get_roster_summary (headcount by grade and status, plus WHICH file or connected ' +
       'system those students came from; use it for "where did these numbers come from" and for an empty ' +
       'roster). Note the difference from get_enrollment_demographics, which reads the enrollment SNAPSHOT ' +
@@ -5847,6 +5860,12 @@ export class AssistantService {
             framework: v.framework,
             frameworkAdopted: v.acts.arrival.frameworkLabel !== null,
             arrival: {
+              // SCOPED, AND SAYING SO. The visit reads ONE framework by design;
+              // when the school holds more, this names the ones it did not read.
+              // Relay it — the alternative is telling a dually-accredited school
+              // how it looks "to an accreditor" while half its register sat
+              // outside the read.
+              alsoHoldsLine: v.acts.arrival.alsoHoldsLine,
               documented: v.acts.arrival.documented,
               defensible: v.acts.arrival.defensible,
               readinessPct: v.acts.arrival.readinessPct,
