@@ -176,6 +176,7 @@ export {
   sampleTierOf,
   computePeerStats,
   computeShareStats,
+  MIN_PEERS_FOR_PERCENTILE,
 } from './peers.js'
 export type {
   SizeBandKey,

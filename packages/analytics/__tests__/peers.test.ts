@@ -11,6 +11,7 @@ import {
   computePeerStats,
   type PeerProfile,
   type PeerDim,
+  MIN_PEERS_FOR_PERCENTILE,
 } from '../src/peers.js'
 
 // A tiny profile builder — every field optional, defaults null.
@@ -199,18 +200,53 @@ describe('computePeerStats', () => {
     expect(computePeerStats(5, [1, 2, 3, 4, 6], 'higher').sample).toBe('rich')
   })
 
-  it('null focus value is safe', () => {
-    const s = computePeerStats(null, [10, 20, 30], 'higher')
-    expect(s.count).toBe(3)
-    expect(s.rank).toBe(4) // count + 1
-    expect(s.percentile).toBe(0)
-    expect(s.median).toBe(20)
+  it('a school that has not reported gets NO percentile', () => {
+    // Was percentile 0, which the peer view printed as "0th pctile" next to a
+    // dash: a school was told it ranked bottom of its group on a figure it had
+    // simply never filed.
+    const s = computePeerStats(null, [10, 20, 30, 40], 'higher')
+    expect(s.count).toBe(4)
+    expect(s.rank).toBe(5) // count + 1
+    expect(s.percentile).toBeNull()
+    expect(s.median).toBe(25)
   })
 
-  it('empty group returns zeros', () => {
+  it('empty group returns zeros and no percentile', () => {
     const s = computePeerStats(null, [], 'higher')
     expect(s.count).toBe(0)
     expect(s.sample).toBe('none')
-    expect(s.percentile).toBe(0)
+    expect(s.percentile).toBeNull()
+  })
+
+  describe('a percentile needs a distribution to be a percentile of', () => {
+    // THE DEFECT: with one peer the arithmetic can only return 1 or 0, and the
+    // UI rendered those as "100th pctile" / "0th pctile" — statistical-sounding
+    // claims that mean nothing but "you won" / "you lost". A school was shown
+    // "Top quartile on days cash on hand" against a single other school.
+    it('is withheld below the threshold, at every size under it', () => {
+      expect(MIN_PEERS_FOR_PERCENTILE).toBe(4)
+      for (const peers of [[10], [10, 20], [10, 20, 30]]) {
+        const s = computePeerStats(99, peers, 'higher')
+        expect(s.percentile, `${peers.length} peer(s)`).toBeNull()
+      }
+    })
+
+    it('…and returns the moment there is a real group', () => {
+      const s = computePeerStats(99, [10, 20, 30, 40], 'higher')
+      expect(s.percentile).toBeCloseTo(1, 10)
+    })
+
+    it('RANK survives at every size — it is a fact, not an estimate', () => {
+      // "2nd of 3" says something true about two schools. The rank is what the
+      // small-group view leans on once the percentile is gone.
+      expect(computePeerStats(99, [10], 'higher').rank).toBe(1)
+      expect(computePeerStats(5, [10], 'higher').rank).toBe(2)
+      expect(computePeerStats(20, [10, 30], 'higher').rank).toBe(2)
+      // …and so do the distribution figures the rail draws with.
+      const s = computePeerStats(20, [10, 30], 'higher')
+      expect(s.median).toBe(20)
+      expect(s.min).toBe(10)
+      expect(s.max).toBe(30)
+    })
   })
 })

@@ -247,10 +247,32 @@ export interface PeerStats {
   max: number
   /** 1 = best (direction-aware); ties share the better rank. */
   rank: number
-  /** Fraction of the OTHER group members the focus is at least as good as, [0,1]. */
-  percentile: number
+  /**
+   * Fraction of the OTHER group members the focus is at least as good as, [0,1] —
+   * or NULL when the group is too small for the number to mean anything. See
+   * {@link MIN_PEERS_FOR_PERCENTILE}.
+   */
+  percentile: number | null
   sample: SampleTier
 }
+
+/**
+ * The smallest peer group a percentile may be quoted for.
+ *
+ * A percentile is a position within a distribution, and below this there is no
+ * distribution to be positioned in: with ONE peer the arithmetic can only ever
+ * yield 1 or 0, which the UI then rendered as "100th pctile" or "0th pctile".
+ * Those read as strong statistical claims and mean nothing more than "you won"
+ * or "you lost" — a school was told it was in the top percentile of a group of
+ * two, and told a metric was bottom-quartile when it simply had no value.
+ *
+ * RANK is unaffected and stays honest at any size: "2nd of 3" is a fact.
+ *
+ * The number is 4 because the portfolio surface already chose 4 and defends it
+ * with a red-proof spec; this is now the single source both import, rather than
+ * two constants free to drift.
+ */
+export const MIN_PEERS_FOR_PERCENTILE = 4
 
 /** Sample tier from the number of peers (not the group) carrying a value. */
 export function sampleTierOf(peerCount: number): SampleTier {
@@ -277,8 +299,12 @@ function quantile(sorted: number[], q: number): number {
  * Direction-aware distribution of the focus value within its peers. `goodDirection`
  * is 'higher' | 'lower' (never 'neutral'). The median/quartiles/min/max/mean are
  * computed over the GROUP (focus + non-null peers); rank/percentile locate the
- * focus within it. A null focus value is null-safe: rank = count+1, percentile 0.
+ * focus within it. A null focus value is null-safe: rank = count+1, percentile null.
  * `sample` reflects the NUMBER OF PEERS with a value (headtohead == 1 peer).
+ *
+ * PERCENTILE IS NULL BELOW {@link MIN_PEERS_FOR_PERCENTILE} PEERS, and null when
+ * the focus has no value at all — an unreported metric used to come back as
+ * percentile 0, which the UI printed as "0th pctile" beside a dash.
  */
 export function computePeerStats(
   focusValue: number | null,
@@ -301,7 +327,7 @@ export function computePeerStats(
       min: 0,
       max: 0,
       rank: hasFocus ? 1 : 1,
-      percentile: 0,
+      percentile: null,
       sample,
     }
   }
@@ -315,8 +341,10 @@ export function computePeerStats(
   const max = sorted[sorted.length - 1]
 
   if (!hasFocus) {
-    // No focus value → return the peer distribution; rank worst, percentile 0.
-    return { count, median, mean, p25, p75, min, max, rank: count + 1, percentile: 0, sample }
+    // No focus value → the peer distribution, rank worst, and NO percentile:
+    // there is nothing to place. Reporting 0 here read as "bottom of the group"
+    // for a school that had simply not filed the figure.
+    return { count, median, mean, p25, p75, min, max, rank: count + 1, percentile: null, sample }
   }
 
   const fv = focusValue as number
@@ -335,7 +363,10 @@ export function computePeerStats(
   const strictlyBetter = others.filter((v) => isBetter(v)).length
   const rank = strictlyBetter + 1
   const atLeastAsGood = others.length - strictlyBetter
-  const percentile = others.length > 0 ? atLeastAsGood / others.length : 0
+  // Withheld below the threshold: see MIN_PEERS_FOR_PERCENTILE. `others.length`
+  // is the peer count here (the focus has been removed).
+  const percentile =
+    others.length >= MIN_PEERS_FOR_PERCENTILE ? atLeastAsGood / others.length : null
 
   return { count, median, mean, p25, p75, min, max, rank, percentile, sample }
 }

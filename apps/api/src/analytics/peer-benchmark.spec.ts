@@ -125,6 +125,73 @@ describe('getPeerBenchmark', () => {
     expect(r.emptyState).toBeNull()
   })
 
+  describe('a percentile needs a distribution, and a quartile needs one more', () => {
+    // THE DEFECT THIS PINS. With one peer the percentile arithmetic can only
+    // return 1 or 0, and the view printed those as "100th pctile" / "0th
+    // pctile" beside a sparkle reading "Top quartile on days cash on hand".
+    // A school was being handed a statistical claim about a group of two.
+    it('withholds the percentile — but not the rank — with one peer', async () => {
+      const svc = buildService()
+      const focus = school('f', 'Focus', { enrollment: 300, daysCash: 88 })
+      const peer = school('a', 'Alpha', { enrollment: 320, daysCash: 63 })
+      stub(svc, { schools: [focus, peer] })
+
+      const r = await svc.getPeerBenchmark(USER, 'org1', 'f', { dims: ['size'] })
+
+      expect(r.group.peerCount).toBe(1)
+      expect(r.stats.days_cash_on_hand.percentile).toBeNull()
+      // Rank is a fact at any size and is what the small-group view leans on.
+      expect(r.stats.days_cash_on_hand.rank).toBe(1)
+      expect(r.stats.days_cash_on_hand.median).toBeDefined()
+    })
+
+    it('emits NO quartile copy for a two-school comparison', async () => {
+      const svc = buildService()
+      stub(svc, {
+        schools: [
+          school('f', 'Focus', { enrollment: 300, daysCash: 88 }),
+          school('a', 'Alpha', { enrollment: 320, daysCash: 63 }),
+        ],
+      })
+      const r = await svc.getPeerBenchmark(USER, 'org1', 'f', { dims: ['size'] })
+      for (const line of r.insights) {
+        expect(line, `quartile claim over 1 peer: "${line}"`).not.toMatch(/quartile/i)
+      }
+    })
+
+    it('…and says something TRUE instead', async () => {
+      // Silence would be honest but useless. "25 days ahead of Alpha" is the
+      // sentence a head of school would actually say.
+      const svc = buildService()
+      stub(svc, {
+        schools: [
+          school('f', 'Focus', { enrollment: 300, daysCash: 88 }),
+          school('a', 'Alpha', { enrollment: 320, daysCash: 63 }),
+        ],
+      })
+      const r = await svc.getPeerBenchmark(USER, 'org1', 'f', { dims: ['size'] })
+      expect(r.insights.length).toBeGreaterThan(0)
+      expect(r.insights.some((l) => /ahead of|behind|Level with|of \d+ on/.test(l))).toBe(true)
+    })
+
+    it('restores quartile language once the group is real', async () => {
+      const svc = buildService()
+      stub(svc, {
+        schools: [
+          school('f', 'Focus', { enrollment: 300, daysCash: 88 }),
+          school('a', 'Alpha', { enrollment: 320, daysCash: 10 }),
+          school('b', 'Bravo', { enrollment: 280, daysCash: 20 }),
+          school('c', 'Charlie', { enrollment: 350, daysCash: 30 }),
+          school('d', 'Delta', { enrollment: 310, daysCash: 40 }),
+        ],
+      })
+      const r = await svc.getPeerBenchmark(USER, 'org1', 'f', { dims: ['size'] })
+      expect(r.group.peerCount).toBe(4)
+      expect(r.stats.days_cash_on_hand.percentile).toBeCloseTo(1, 10)
+      expect(r.insights.some((l) => /Top quartile/i.test(l))).toBe(true)
+    })
+  })
+
   it('403s a school outside the caller in-org set', async () => {
     const svc = buildService()
     stub(svc, { schools: [school('f', 'Focus')], notReported: [] })

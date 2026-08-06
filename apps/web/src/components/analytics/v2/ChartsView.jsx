@@ -11,7 +11,7 @@
 // Each scope is its own component so hooks stay unconditional across scope switches.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useRef, useState } from 'react'
-import { formatMetricValue } from '../../../lib/metricMeta.js'
+import { formatMetricValue, metricLabel } from '../../../lib/metricMeta.js'
 import { schoolColor, CHROME } from './chartPalette.js'
 import LineChart from '../charts/LineChart.jsx'
 import TrendSpark from './TrendSpark.jsx'
@@ -21,6 +21,7 @@ import DimensionRows from '../charts/DimensionRows.jsx'
 import BarRace from '../charts/BarRace.jsx'
 import ArcGauge from '../charts/ArcGauge.jsx'
 import Legend from '../charts/Legend.jsx'
+import HealthRail from '../charts/HealthRail.jsx'
 import { useMeasuredWidth } from '../charts/useMeasuredWidth.js'
 import { useTooltip } from '../charts/Tooltip.jsx'
 import ChartCard from './ChartCard.jsx'
@@ -369,6 +370,15 @@ function SchoolCharts({ school, onCrossToTable }) {
   )
 }
 
+/** The headline five, same order the peer view uses. */
+const COMPARE_RAIL_KEYS = [
+  'days_cash_on_hand',
+  'operating_margin',
+  'months_operating_reserve',
+  'tuition_dependency',
+  'cost_per_pupil',
+]
+
 function CompareCharts({ compare }) {
   const schools = compare.schools
   const cost = byMetric(schools, 'cost_per_pupil')
@@ -380,6 +390,15 @@ function CompareCharts({ compare }) {
   }))
   const dims = fingerprintDims(schools.slice(0, 5))
   const hasFingerprint = dims.some((d) => d.cells.some((c) => c.score != null))
+
+  // THE SAME LANGUAGE AS PEERS. `DimensionRows` normalises every metric to a
+  // 0–100 score, which makes the shapes comparable and throws the actual figures
+  // and the healthy range away — so "longer is better" can look reassuring for a
+  // school that is failing on all five. The rails put the real numbers back,
+  // against the band, exactly as the peer view now does.
+  const railKeys = COMPARE_RAIL_KEYS.filter((k) =>
+    schools.some((s) => s.metrics?.[k]?.available !== false && s.metrics?.[k]?.value != null),
+  )
   return (
     <QuestionGroup title="How do we compare?">
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -406,6 +425,45 @@ function CompareCharts({ compare }) {
           )}
         </ChartCard>
       </div>
+
+      {railKeys.length > 0 && (
+        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {railKeys.map((k) => {
+            // The first school with a band defines the healthy range: bands are
+            // a property of the METRIC, not of a school, so any of them serves.
+            const withBands = schools.find((s) => s.metrics?.[k]?.bands)
+            const bands = withBands?.metrics?.[k]?.bands ?? null
+            const points = schools.map((s) => {
+              const m = s.metrics?.[k]
+              const v =
+                m && m.available !== false && m.value != null && Number.isFinite(m.value)
+                  ? m.value
+                  : null
+              return {
+                id: s.schoolId,
+                name: s.schoolName,
+                value: v,
+                formatted: v != null ? m?.formatted ?? null : null,
+                // No focus school in Compare — every school is equally the
+                // subject here, so none is singled out.
+                isFocus: false,
+              }
+            })
+            return (
+              <ChartCard
+                key={k}
+                id={`chart-rail-${k}`}
+                metricKey={k}
+                title={metricLabel(k)}
+                sub="Every school, against the healthy range"
+                asOf={compare.asOf}
+              >
+                <HealthRail points={points} bands={bands} ariaLabel={metricLabel(k)} />
+              </ChartCard>
+            )
+          })}
+        </div>
+      )}
     </QuestionGroup>
   )
 }

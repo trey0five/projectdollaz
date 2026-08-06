@@ -18,11 +18,13 @@ import { Link } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
 import { Users, Sparkles, Info, Settings2 } from 'lucide-react'
 import { metricLabel, formatMetricValue } from '../../../lib/metricMeta.js'
+import { healthStatus } from '@finrep/analytics'
 import { schoolColor } from './chartPalette.js'
 import { lightStatus } from './statusStyle.js'
 import { formatMetric } from './helpers.js'
 import BarList from '../charts/BarList.jsx'
-import PercentileStrip from '../charts/PercentileStrip.jsx'
+import HealthRail from '../charts/HealthRail.jsx'
+import { peerCaption } from './peerCaption.js'
 import { TargetBandBar } from '../MetricDrawer.jsx'
 
 // The headline metrics of the peer scorecard (contract-frozen order).
@@ -38,6 +40,10 @@ const intFmt = (v) => (Number.isFinite(v) ? Math.round(v).toLocaleString() : '�
 
 // Percentile → a status token for the standing pill (direction already baked into
 // the server's percentile). Top quartile = on track, bottom quartile = at risk.
+// These null-guards were already here and, until now, UNREACHABLE: the server
+// always sent a number, even for a group of two where it could only be 1 or 0.
+// packages/analytics withholds it below MIN_PEERS_FOR_PERCENTILE now, so the
+// defensive branch the UI was written with finally does its job.
 function pctStatus(percentile) {
   if (percentile == null) return 'neutral'
   if (percentile >= 0.75) return 'good'
@@ -51,20 +57,42 @@ function pctLabel(percentile) {
   return `${p}${suffix} pctile`
 }
 
-/** Focus + every peer as points for one metric key (focus flagged). */
+/**
+ * Focus + every peer as points for one metric key (focus flagged).
+ *
+ * `available` IS RESPECTED. A metric the school cannot compute — cost per pupil
+ * with no enrolment on file — arrives with available:false and a value of 0, and
+ * plotting that put a school on the rail at $0 as though it educated children
+ * for nothing. A missing value is not a zero; it becomes null and the caption
+ * says the school has not reported.
+ */
+function pointValue(m) {
+  return m && m.available !== false && m.value != null && Number.isFinite(m.value)
+    ? m.value
+    : null
+}
+
 function metricPoints(data, key) {
   const pts = []
   const fm = data.focus.metrics?.[key]
+  const fv = pointValue(fm)
   pts.push({
     id: data.focus.schoolId,
     name: data.focus.schoolName,
-    value: fm?.value ?? null,
-    formatted: fm?.formatted ?? null,
+    value: fv,
+    formatted: fv != null ? fm?.formatted ?? null : null,
     isFocus: true,
   })
   for (const p of data.peers) {
     const m = p.metrics?.[key]
-    pts.push({ id: p.schoolId, name: p.schoolName, value: m?.value ?? null, formatted: m?.formatted ?? null, isFocus: false })
+    const v = pointValue(m)
+    pts.push({
+      id: p.schoolId,
+      name: p.schoolName,
+      value: v,
+      formatted: v != null ? m?.formatted ?? null : null,
+      isFocus: false,
+    })
   }
   return pts
 }
@@ -134,7 +162,13 @@ function PeerHero({ data }) {
         {tierChip && (
           <p
             className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-semibold ${
-              tierChip.tone === 'amber' ? 'bg-amber-400/15 text-amber-200' : 'bg-sky-400/15 text-sky-200'
+              // NOT sky-400/sky-200: tailwind.config.js defines `sky` as a FLAT
+              // rgb(var(--c-sky)) string, which replaces Tailwind's whole sky
+              // scale — so every `sky-<number>` utility emits NO CSS and this
+              // chip rendered as dark text on a navy band, invisible.
+              tierChip.tone === 'amber'
+                ? 'bg-amber-400/15 text-amber-200'
+                : 'bg-white/10 text-white/75'
             }`}
           >
             <Info size={13} /> {tierChip.text}
@@ -197,25 +231,51 @@ function PeerOverview({ data }) {
   )
 }
 
-// ── Charts: per-metric percentile strips + demographics ──────────────────────
-function StripCard({ data, metricKey }) {
+// ── Charts: one HEALTH RAIL per metric ───────────────────────────────────────
+//
+// The card used to be a name, a number, a percentile, and two unlabelled rows
+// with a dot on each. It answered "where do I rank?" — badly, because a dot
+// with no domain says nothing — and never answered "is this any good?", which
+// is the question a head of school is actually asking. The rail answers both:
+// health is where the dots stand, comparison is the space between them.
+function RailCard({ data, metricKey }) {
   const stat = data.stats?.[metricKey]
   if (!stat) return null
+  const fm = data.focus.metrics?.[metricKey]
   const points = metricPoints(data, metricKey)
-  const fmtRaw = (v) => {
-    const fm = data.focus.metrics?.[metricKey]
-    return formatMetricValue(v, fm?.unit ?? 'number')
-  }
+  // The BANDS come off the focus school's own metric — the same object the
+  // metric drawer and the scorecard read, so the healthy range cannot differ
+  // between two places in the product. Absent for metrics with no agreed range
+  // (cost per pupil), and the rail renders plain rather than inventing one.
+  const bands = fm?.bands ?? null
+  const caption = peerCaption({
+    stat,
+    points,
+    metricKey,
+    unit: fm?.unit,
+    bands,
+  })
+  const status = lightStatus(healthStatus(stat.focusValue ?? null, bands ?? undefined, stat.focusValue != null))
+
   return (
-    <div className="av2-card p-4">
-      <div className="mb-2 flex items-baseline justify-between gap-2">
-        <p className="text-[13px] font-semibold text-navy">{metricLabel(metricKey)}</p>
-        <p className="text-[12px] text-muted">
-          you <b className="text-navy tabular-nums">{stat.focusFormatted ?? '—'}</b>
-          {stat.percentile != null && <span className="ml-1.5 text-slate-400">· {pctLabel(stat.percentile)}</span>}
+    <div className="av2-card p-4 sm:p-5">
+      <div className="mb-1 flex items-baseline justify-between gap-2">
+        <p className="text-[13.5px] font-semibold text-navy">{metricLabel(metricKey)}</p>
+        <p className="text-[13px] tabular-nums">
+          <b className="text-navy">{stat.focusFormatted ?? '—'}</b>
+          {bands && stat.focusValue != null && (
+            <span className={`ml-2 rounded-full px-2 py-0.5 text-[11px] font-semibold ${status.pill}`}>
+              {status.label}
+            </span>
+          )}
         </p>
       </div>
-      <PercentileStrip stat={stat} points={points} format={fmtRaw} />
+      <HealthRail
+        points={points}
+        bands={bands}
+        caption={caption}
+        ariaLabel={`${metricLabel(metricKey)} — ${caption ?? 'peer comparison'}`}
+      />
     </div>
   )
 }
@@ -250,7 +310,7 @@ function PeerCharts({ data }) {
         <h4 className="mb-2.5 text-[12px] font-bold uppercase tracking-[0.14em] text-slate-400">Where you stand</h4>
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {stripKeys.map((k) => (
-            <StripCard key={k} data={data} metricKey={k} />
+            <RailCard key={k} data={data} metricKey={k} />
           ))}
         </div>
       </div>

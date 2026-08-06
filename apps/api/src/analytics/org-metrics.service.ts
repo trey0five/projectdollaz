@@ -188,7 +188,8 @@ export interface PeerStatEntry {
   max: number
   focusValue: number | null
   rank: number
-  percentile: number
+  /** NULL below MIN_PEERS_FOR_PERCENTILE peers, or when the focus has no value. */
+  percentile: number | null
   sample: SampleTier
   goodDirection: 'higher' | 'lower'
   focusFormatted: string
@@ -966,6 +967,7 @@ export class OrgMetricsService {
 
     // Insights (built here — they need labels). Enrollment standing + quartiles.
     const insights: string[] = []
+    let quartileSaid = false
     if (focusEnroll != null && enrollStats.count >= 2) {
       const typeLabel = focus.profile.schoolType ?? 'school'
       insights.push(`${ordinal(enrollStats.rank)}-largest ${typeLabel} in your organization`)
@@ -974,8 +976,55 @@ export class OrgMetricsService {
       const st = stats[key]
       if (!st || st.focusValue == null || st.count < 2 || st.sample === 'none') continue
       const label = (focus.metrics[key]?.label ?? key).toLowerCase()
-      if (st.percentile >= 0.75) insights.push(`Top quartile on ${label}`)
-      else if (st.percentile <= 0.25) insights.push(`Bottom quartile on ${label}`)
+      // QUARTILE LANGUAGE NEEDS A DISTRIBUTION. `st.percentile` is null below
+      // MIN_PEERS_FOR_PERCENTILE, and the old guard (`count < 2`, where count is
+      // focus+peers) let "Top quartile on days cash on hand" through for a
+      // school compared against exactly ONE other — where the arithmetic can
+      // only ever say "you won".
+      if (st.percentile == null) continue
+      if (st.percentile >= 0.75) {
+        insights.push(`Top quartile on ${label}`)
+        quartileSaid = true
+      } else if (st.percentile <= 0.25) {
+        insights.push(`Bottom quartile on ${label}`)
+        quartileSaid = true
+      }
+    }
+
+    // SMALL GROUPS GET A FACT INSTEAD OF A CLAIM. With one or two peers there is
+    // no distribution to be top-of, but "25 days more than Northside" is true,
+    // useful, and the thing a head of school would actually say out loud.
+    // Gated on whether a QUARTILE was said, not on whether the list is empty:
+    // the enrollment standing line above is about size, not about this metric,
+    // and it would otherwise crowd out the only sentence that compares them.
+    if (!quartileSaid && peers.length > 0) {
+      for (const key of HEADLINE_METRICS) {
+        const st = stats[key]
+        if (!st || st.focusValue == null || st.sample === 'none') continue
+        const label = (focus.metrics[key]?.label ?? key).toLowerCase()
+        if (peers.length === 1) {
+          const only = peers[0]
+          const pv = only?.metrics?.[key]?.value
+          if (only && pv != null && Number.isFinite(pv)) {
+            const diff = st.focusValue - pv
+            if (diff === 0) {
+              insights.push(`Level with ${only.schoolName} on ${label}`)
+            } else {
+              const better =
+                st.goodDirection === 'higher' ? diff > 0 : diff < 0
+              const unit = resolveDisplayUnit(key as MetricKey, focus.metrics[key]?.unit ?? 'ratio')
+              const gap = formatMetricValue(Math.abs(diff), unit)
+              insights.push(
+                `${gap} ${better ? 'ahead of' : 'behind'} ${only.schoolName} on ${label}`,
+              )
+            }
+            break
+          }
+        } else {
+          insights.push(`${ordinal(st.rank)} of ${st.count} on ${label}`)
+          break
+        }
+      }
     }
 
     return {

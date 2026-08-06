@@ -99,8 +99,16 @@ import { DEFAULT_VELOCITY_WINDOW_DAYS, type VelocityQueryDto } from './dto/veloc
 /** The per-school licence this whole surface is gated on. */
 const ACCREDITATION_MODULE = 'accreditation'
 
-/** Peers below this count get a RANK but no PERCENTILE (acceptance 5). */
-export const MIN_PEERS_FOR_PERCENTILE = 4
+/**
+ * Peers below this count get a RANK but no PERCENTILE (acceptance 5).
+ *
+ * Re-exported from @finrep/analytics rather than declared here: the peer
+ * benchmark surface had NO such gate and was quoting "100th pctile" over a group
+ * of two, so the two surfaces are now the same number by construction.
+ */
+export { MIN_PEERS_FOR_PERCENTILE } from '@finrep/analytics'
+// …and imported for use inside this file (a re-export creates no local binding).
+import { MIN_PEERS_FOR_PERCENTILE } from '@finrep/analytics'
 
 /**
  * The rubric score at or below which a standard is "below the improvement
