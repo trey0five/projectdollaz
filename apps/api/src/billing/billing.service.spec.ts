@@ -11,7 +11,19 @@ import type { ConfigService } from '@nestjs/config'
 // real Prisma/Stripe). We stub subscription.findUnique to return a fixture and
 // assert the isEntitledForModule matrix + resolveLicensed no-lockout behavior +
 // getBilling's licensedModules surface.
+//
+// EVERY TEST BELOW RUNS WITH ENFORCEMENT ON. Billing enforcement currently ships
+// OFF — checkout does not exist yet, so locking a school out of a product it
+// cannot pay for would be a bug, not a feature. That switch is the whole reason
+// this pin matters: without it the paid logic would simply stop being exercised
+// and would rot silently until the day someone flips it back. See the
+// "enforcement kill switch" describe at the foot of this file for the switch's
+// own behaviour.
 // ─────────────────────────────────────────────────────────────────────────────
+
+beforeEach(() => {
+  process.env.BILLING_ENFORCEMENT = 'on'
+})
 
 const FUTURE = new Date(Date.now() + 30 * 86_400_000)
 const PAST = new Date(Date.now() - 30 * 86_400_000)
@@ -266,5 +278,67 @@ describe('BillingController.addModule roles metadata', () => {
     const { ROLES_KEY } = await import('../common/decorators/roles.decorator.js')
     const roles = Reflect.getMetadata(ROLES_KEY, BillingController.prototype.addModule)
     expect(roles).toEqual(['owner'])
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('the enforcement kill switch', () => {
+  // Billing is unfinished: no live Stripe configuration exists, so nobody CAN
+  // subscribe. A trial expiring therefore locked a school out of a product it
+  // had no way to pay for — "Generation is paused, subscribe to resume", with
+  // no working subscribe. Enforcement is off until checkout is real.
+  it('OFF (the default today): an expired trial is still fully entitled', async () => {
+    delete process.env.BILLING_ENFORCEMENT
+    const { svc } = makeHarness(sub({ status: 'trialing', trialEnd: PAST }))
+    expect(await svc.isEntitled('school-1')).toBe(true)
+    for (const key of ['core', 'finance', 'planning', 'governance', 'accreditation']) {
+      expect(await svc.isEntitledForModule('school-1', key), key).toBe(true)
+    }
+  })
+
+  it('OFF: a canceled subscription is entitled too — nothing can be paid for yet', async () => {
+    delete process.env.BILLING_ENFORCEMENT
+    const { svc } = makeHarness(sub({ status: 'canceled', currentPeriodEnd: PAST }))
+    expect(await svc.isEntitled('school-1')).toBe(true)
+    expect(await svc.isEntitledForModule('school-1', 'strategy')).toBe(true)
+  })
+
+  it('OFF: the billing VIEW licenses every module, so the UI matches the guard', async () => {
+    // A mismatch here renders padlocks over features the API would happily
+    // serve, and upsell banners for things that already work.
+    delete process.env.BILLING_ENFORCEMENT
+    const { svc } = makeHarness(sub({ status: 'trialing', trialEnd: PAST }))
+    const view = await svc.getBilling('school-1')
+    expect(view.isEntitled).toBe(true)
+    const keys = view.licensedModules.map((m) => m.key)
+    for (const key of ['finance', 'planning', 'governance', 'accreditation', 'strategy']) {
+      expect(keys, key).toContain(key)
+    }
+  })
+
+  it('ON: enforcement is unchanged and still locks an expired trial out', async () => {
+    // The switch has to be reversible in one environment variable, which means
+    // the paid path must keep working the whole time it is off.
+    process.env.BILLING_ENFORCEMENT = 'on'
+    const { svc } = makeHarness(sub({ status: 'trialing', trialEnd: PAST }))
+    expect(await svc.isEntitled('school-1')).toBe(false)
+    expect(await svc.isEntitledForModule('school-1', 'core')).toBe(false)
+    const view = await svc.getBilling('school-1')
+    expect(view.isEntitled).toBe(false)
+    expect(view.licensedModules).toEqual([])
+  })
+
+  it('only the exact string "on" enforces — a typo must not lock everyone out', async () => {
+    for (const v of ['', 'off', 'true', '1', 'ON ', 'yes']) {
+      process.env.BILLING_ENFORCEMENT = v
+      const { svc } = makeHarness(sub({ status: 'trialing', trialEnd: PAST }))
+      expect(await svc.isEntitled('school-1'), JSON.stringify(v)).toBe(true)
+    }
+    // …and the one spelling that does, case-insensitively.
+    for (const v of ['on', 'ON', 'On']) {
+      process.env.BILLING_ENFORCEMENT = v
+      const { svc } = makeHarness(sub({ status: 'trialing', trialEnd: PAST }))
+      expect(await svc.isEntitled('school-1'), JSON.stringify(v)).toBe(false)
+    }
   })
 })

@@ -5,6 +5,7 @@ import type { Subscription, SubscriptionStatus, LicensedModule, ModuleKey } from
 import {
   CORE_MODULE,
   DEFAULT_LICENSED_MODULES,
+  MODULE_KEYS,
   MODULE_META,
   Prisma,
   SELLABLE_MODULE_KEYS,
@@ -93,7 +94,31 @@ export class BillingService {
 
   // ── Entitlement (single source of truth) ────────────────────────────────────
 
+  /**
+   * BILLING ENFORCEMENT KILL SWITCH.
+   *
+   * Billing is not finished — there is no live Stripe configuration, so nobody
+   * CAN subscribe, and a trial running out therefore locks a school out of a
+   * product it has no way to pay for. Until checkout is real, enforcement is
+   * off and every school is entitled to everything.
+   *
+   * WHY A SWITCH AND NOT A DELETION. The gating is correct and hard-won — the
+   * guard, the per-module registry, the no-lockout fallbacks — and ripping it
+   * out would mean rebuilding it under time pressure the day billing ships.
+   * This flips one boolean instead.
+   *
+   * TO TURN BILLING BACK ON: set BILLING_ENFORCEMENT=on in the API environment.
+   * Nothing else has to change. Both entitlement paths and the billing view read
+   * this one flag, and a spec pins that enforcement still works when it is on —
+   * so the paid tiers cannot rot while the switch is thrown.
+   */
+  private get enforcementOn(): boolean {
+    return (process.env.BILLING_ENFORCEMENT ?? '').toLowerCase() === 'on'
+  }
+
   private computeEntitled(sub: Subscription): boolean {
+    // See enforcementOn: everything is unlocked until checkout exists.
+    if (!this.enforcementOn) return true
     if (sub.status === 'active') return true
     if (sub.status === 'trialing' && sub.trialEnd && sub.trialEnd.getTime() > Date.now()) {
       return true
@@ -140,6 +165,10 @@ export class BillingService {
    * per-key via the unlock endpoint (pre-Stripe stub) / future checkout.
    */
   async isEntitledForModule(schoolId: string, moduleKey: string): Promise<boolean> {
+    // Enforcement off ⇒ every module, without a DB round-trip. A school that has
+    // never unlocked anything still resolves to finance-only otherwise, which
+    // would 402 most of the product while nobody can pay.
+    if (!this.enforcementOn) return true
     const sub = await this.getOrCreateSubscription(schoolId)
     if (!this.computeEntitled(sub)) return false // not paying at all → false
     if (moduleKey === CORE_MODULE) return true // core is always-on when entitled
@@ -211,7 +240,13 @@ export class BillingService {
     // Surface the licensed set so the FE matches the guard. TRIALING RESOLVES
     // EXACTLY LIKE ACTIVE: the resolved set (legacy/null → [{finance}]);
     // not entitled → [] (nothing to render).
-    const licensedModules: LicensedModule[] = isEntitled ? this.resolveLicensed(sub) : []
+    // The FE must match the guard exactly, or it renders locks the API would
+    // happily open (and upsell banners for things already working).
+    const licensedModules: LicensedModule[] = !this.enforcementOn
+      ? MODULE_KEYS.map((key) => ({ key, tier: null }))
+      : isEntitled
+        ? this.resolveLicensed(sub)
+        : []
 
     return {
       status: sub.status,
