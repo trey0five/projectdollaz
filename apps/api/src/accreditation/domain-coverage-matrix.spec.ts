@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
@@ -98,6 +98,18 @@ function computedMatrix(): Record<string, MatrixFramework> {
 
 describe('per-framework domain-coverage matrix (computed, not hand-maintained)', () => {
   it('deep-equals the committed fixture — the artifact IS the seed', () => {
+    // THE SANCTIONED REGENERATION PATH. Adding a framework legitimately changes
+    // this artifact, and the alternative to a documented escape hatch is somebody
+    // hand-editing a 900-line JSON file until the diff goes green — which is
+    // exactly the drift the fixture exists to prevent.
+    //
+    //   REGEN_MATRIX_FIXTURE=1 npx vitest run src/accreditation/domain-coverage-matrix.spec.ts
+    //
+    // Then READ the diff. Every moved cell is a real change to what a school on
+    // that framework will see.
+    if (process.env.REGEN_MATRIX_FIXTURE === '1') {
+      writeFileSync(FIXTURE_PATH, `${JSON.stringify({ frameworks: computedMatrix() }, null, 2)}\n`)
+    }
     const fixture = JSON.parse(readFileSync(FIXTURE_PATH, 'utf-8')) as {
       frameworks: Record<string, MatrixFramework>
     }

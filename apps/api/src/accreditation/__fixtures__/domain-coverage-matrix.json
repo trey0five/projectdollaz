@@ -323,6 +323,438 @@
           "reason": "Your framework has 1 continuous improvement standard counting for 0.5 — fewer than the 3 needed to score this domain."
         }
       ]
+    },
+    "fcis_2023": {
+      "leafCount": 12,
+      "measuredDomains": 0,
+      "coveragePct": 0,
+      "caveat": "No domain has enough standards to score on its own. Your school-wide readiness figures are exact; the domain grid shows what your framework covers.",
+      "domains": [
+        {
+          "domainKey": "mission_identity",
+          "label": "Mission & Catholic Identity",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 1,
+          "effectiveLeafWeight": 1,
+          "signalCount": 0,
+          "reason": "Your framework has 1 mission and Catholic identity standard — fewer than the 3 needed to score this domain."
+        },
+        {
+          "domainKey": "governance",
+          "label": "Governance",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 1,
+          "effectiveLeafWeight": 1,
+          "signalCount": 0,
+          "reason": "Your framework has 1 governance standard — fewer than the 3 needed to score this domain."
+        },
+        {
+          "domainKey": "leadership",
+          "label": "Leadership",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 2,
+          "effectiveLeafWeight": 2,
+          "signalCount": 0,
+          "reason": "Your framework has 2 leadership standards — fewer than the 3 needed to score this domain."
+        },
+        {
+          "domainKey": "academic_excellence",
+          "label": "Academic Excellence",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 1,
+          "effectiveLeafWeight": 1,
+          "signalCount": 0,
+          "reason": "Your framework has 1 academic excellence standard — fewer than the 3 needed to score this domain."
+        },
+        {
+          "domainKey": "student_services",
+          "label": "Student Services",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 2,
+          "effectiveLeafWeight": 2,
+          "signalCount": 1,
+          "reason": "Your framework has 2 student services standards — fewer than the 3 needed to score this domain."
+        },
+        {
+          "domainKey": "hr",
+          "label": "Human Resources",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 2,
+          "effectiveLeafWeight": 2,
+          "signalCount": 4,
+          "reason": "Your framework has 2 human resources standards — fewer than the 3 needed to score this domain."
+        },
+        {
+          "domainKey": "finance",
+          "label": "Finance",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 2,
+          "effectiveLeafWeight": 1.5,
+          "signalCount": 10,
+          "reason": "Your framework has 2 finance standards counting for 1.5 — fewer than the 3 needed to score this domain."
+        },
+        {
+          "domainKey": "facilities",
+          "label": "Facilities",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 1,
+          "effectiveLeafWeight": 0.75,
+          "signalCount": 0,
+          "reason": "Your framework has 1 facilities standard counting for 0.75 — fewer than the 3 needed to score this domain."
+        },
+        {
+          "domainKey": "technology",
+          "label": "Technology",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 1,
+          "effectiveLeafWeight": 0.25,
+          "signalCount": 0,
+          "reason": "Your framework has 1 technology standard counting for 0.25 — fewer than the 3 needed to score this domain."
+        },
+        {
+          "domainKey": "continuous_improvement",
+          "label": "Continuous Improvement",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 1,
+          "effectiveLeafWeight": 0.5,
+          "signalCount": 3,
+          "reason": "Your framework has 1 continuous improvement standard counting for 0.5 — fewer than the 3 needed to score this domain."
+        }
+      ]
+    },
+    "acsi_reach": {
+      "leafCount": 8,
+      "measuredDomains": 0,
+      "coveragePct": 0,
+      "caveat": "No domain has enough standards to score on its own. Your school-wide readiness figures are exact; the domain grid shows what your framework covers.",
+      "domains": [
+        {
+          "domainKey": "mission_identity",
+          "label": "Mission & Catholic Identity",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 1,
+          "effectiveLeafWeight": 1,
+          "signalCount": 0,
+          "reason": "Your framework has 1 mission and Catholic identity standard — fewer than the 3 needed to score this domain."
+        },
+        {
+          "domainKey": "governance",
+          "label": "Governance",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 1,
+          "effectiveLeafWeight": 0.5,
+          "signalCount": 0,
+          "reason": "Your framework has 1 governance standard counting for 0.5 — fewer than the 3 needed to score this domain."
+        },
+        {
+          "domainKey": "leadership",
+          "label": "Leadership",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 2,
+          "effectiveLeafWeight": 1.5,
+          "signalCount": 0,
+          "reason": "Your framework has 2 leadership standards counting for 1.5 — fewer than the 3 needed to score this domain."
+        },
+        {
+          "domainKey": "academic_excellence",
+          "label": "Academic Excellence",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 1,
+          "effectiveLeafWeight": 1,
+          "signalCount": 0,
+          "reason": "Your framework has 1 academic excellence standard — fewer than the 3 needed to score this domain."
+        },
+        {
+          "domainKey": "student_services",
+          "label": "Student Services",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 1,
+          "effectiveLeafWeight": 1,
+          "signalCount": 2,
+          "reason": "Your framework has 1 student services standard — fewer than the 3 needed to score this domain."
+        },
+        {
+          "domainKey": "hr",
+          "label": "Human Resources",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 1,
+          "effectiveLeafWeight": 1,
+          "signalCount": 4,
+          "reason": "Your framework has 1 human resources standard — fewer than the 3 needed to score this domain."
+        },
+        {
+          "domainKey": "finance",
+          "label": "Finance",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 1,
+          "effectiveLeafWeight": 0.5,
+          "signalCount": 7,
+          "reason": "Your framework has 1 finance standard counting for 0.5 — fewer than the 3 needed to score this domain."
+        },
+        {
+          "domainKey": "facilities",
+          "label": "Facilities",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 1,
+          "effectiveLeafWeight": 0.75,
+          "signalCount": 0,
+          "reason": "Your framework has 1 facilities standard counting for 0.75 — fewer than the 3 needed to score this domain."
+        },
+        {
+          "domainKey": "technology",
+          "label": "Technology",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 1,
+          "effectiveLeafWeight": 0.25,
+          "signalCount": 0,
+          "reason": "Your framework has 1 technology standard counting for 0.25 — fewer than the 3 needed to score this domain."
+        },
+        {
+          "domainKey": "continuous_improvement",
+          "label": "Continuous Improvement",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 1,
+          "effectiveLeafWeight": 0.5,
+          "signalCount": 7,
+          "reason": "Your framework has 1 continuous improvement standard counting for 0.5 — fewer than the 3 needed to score this domain."
+        }
+      ]
+    },
+    "acs_wasc": {
+      "leafCount": 13,
+      "measuredDomains": 1,
+      "coveragePct": 10,
+      "caveat": "Based on 1 of 10 domains. 9 with too few standards to score.",
+      "domains": [
+        {
+          "domainKey": "mission_identity",
+          "label": "Mission & Catholic Identity",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 1,
+          "effectiveLeafWeight": 1,
+          "signalCount": 0,
+          "reason": "Your framework has 1 mission and Catholic identity standard — fewer than the 3 needed to score this domain."
+        },
+        {
+          "domainKey": "governance",
+          "label": "Governance",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 1,
+          "effectiveLeafWeight": 0.5,
+          "signalCount": 0,
+          "reason": "Your framework has 1 governance standard counting for 0.5 — fewer than the 3 needed to score this domain."
+        },
+        {
+          "domainKey": "leadership",
+          "label": "Leadership",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 2,
+          "effectiveLeafWeight": 1.5,
+          "signalCount": 0,
+          "reason": "Your framework has 2 leadership standards counting for 1.5 — fewer than the 3 needed to score this domain."
+        },
+        {
+          "domainKey": "academic_excellence",
+          "label": "Academic Excellence",
+          "covered": true,
+          "measured": true,
+          "contributingLeafCount": 4,
+          "effectiveLeafWeight": 3.5,
+          "signalCount": 0,
+          "reason": null
+        },
+        {
+          "domainKey": "student_services",
+          "label": "Student Services",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 1,
+          "effectiveLeafWeight": 1,
+          "signalCount": 2,
+          "reason": "Your framework has 1 student services standard — fewer than the 3 needed to score this domain."
+        },
+        {
+          "domainKey": "hr",
+          "label": "Human Resources",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 1,
+          "effectiveLeafWeight": 1,
+          "signalCount": 3,
+          "reason": "Your framework has 1 human resources standard — fewer than the 3 needed to score this domain."
+        },
+        {
+          "domainKey": "finance",
+          "label": "Finance",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 1,
+          "effectiveLeafWeight": 0.5,
+          "signalCount": 6,
+          "reason": "Your framework has 1 finance standard counting for 0.5 — fewer than the 3 needed to score this domain."
+        },
+        {
+          "domainKey": "facilities",
+          "label": "Facilities",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 2,
+          "effectiveLeafWeight": 1.25,
+          "signalCount": 0,
+          "reason": "Your framework has 2 facilities standards counting for 1.25 — fewer than the 3 needed to score this domain."
+        },
+        {
+          "domainKey": "technology",
+          "label": "Technology",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 2,
+          "effectiveLeafWeight": 1.25,
+          "signalCount": 0,
+          "reason": "Your framework has 2 technology standards counting for 1.25 — fewer than the 3 needed to score this domain."
+        },
+        {
+          "domainKey": "continuous_improvement",
+          "label": "Continuous Improvement",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 2,
+          "effectiveLeafWeight": 1.5,
+          "signalCount": 1,
+          "reason": "Your framework has 2 continuous improvement standards counting for 1.5 — fewer than the 3 needed to score this domain."
+        }
+      ]
+    },
+    "sais_2023": {
+      "leafCount": 11,
+      "measuredDomains": 0,
+      "coveragePct": 0,
+      "caveat": "No domain has enough standards to score on its own. Your school-wide readiness figures are exact; the domain grid shows what your framework covers.",
+      "domains": [
+        {
+          "domainKey": "mission_identity",
+          "label": "Mission & Catholic Identity",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 1,
+          "effectiveLeafWeight": 1,
+          "signalCount": 0,
+          "reason": "Your framework has 1 mission and Catholic identity standard — fewer than the 3 needed to score this domain."
+        },
+        {
+          "domainKey": "governance",
+          "label": "Governance",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 1,
+          "effectiveLeafWeight": 1,
+          "signalCount": 0,
+          "reason": "Your framework has 1 governance standard — fewer than the 3 needed to score this domain."
+        },
+        {
+          "domainKey": "leadership",
+          "label": "Leadership",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 2,
+          "effectiveLeafWeight": 1.5,
+          "signalCount": 3,
+          "reason": "Your framework has 2 leadership standards counting for 1.5 — fewer than the 3 needed to score this domain."
+        },
+        {
+          "domainKey": "academic_excellence",
+          "label": "Academic Excellence",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 1,
+          "effectiveLeafWeight": 0.5,
+          "signalCount": 2,
+          "reason": "Your framework has 1 academic excellence standard counting for 0.5 — fewer than the 3 needed to score this domain."
+        },
+        {
+          "domainKey": "student_services",
+          "label": "Student Services",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 1,
+          "effectiveLeafWeight": 1,
+          "signalCount": 0,
+          "reason": "Your framework has 1 student services standard — fewer than the 3 needed to score this domain."
+        },
+        {
+          "domainKey": "hr",
+          "label": "Human Resources",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 2,
+          "effectiveLeafWeight": 1.5,
+          "signalCount": 4,
+          "reason": "Your framework has 2 human resources standards counting for 1.5 — fewer than the 3 needed to score this domain."
+        },
+        {
+          "domainKey": "finance",
+          "label": "Finance",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 2,
+          "effectiveLeafWeight": 1.5,
+          "signalCount": 11,
+          "reason": "Your framework has 2 finance standards counting for 1.5 — fewer than the 3 needed to score this domain."
+        },
+        {
+          "domainKey": "facilities",
+          "label": "Facilities",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 1,
+          "effectiveLeafWeight": 0.5,
+          "signalCount": 0,
+          "reason": "Your framework has 1 facilities standard counting for 0.5 — fewer than the 3 needed to score this domain."
+        },
+        {
+          "domainKey": "technology",
+          "label": "Technology",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 1,
+          "effectiveLeafWeight": 0.5,
+          "signalCount": 0,
+          "reason": "Your framework has 1 technology standard counting for 0.5 — fewer than the 3 needed to score this domain."
+        },
+        {
+          "domainKey": "continuous_improvement",
+          "label": "Continuous Improvement",
+          "covered": true,
+          "measured": false,
+          "contributingLeafCount": 2,
+          "effectiveLeafWeight": 2,
+          "signalCount": 1,
+          "reason": "Your framework has 2 continuous improvement standards — fewer than the 3 needed to score this domain."
+        }
+      ]
     }
   }
 }

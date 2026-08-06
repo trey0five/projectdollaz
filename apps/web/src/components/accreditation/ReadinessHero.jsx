@@ -81,9 +81,10 @@ function AdoptPrompt({ canEdit, onAdopt }) {
             Adopt your accreditor&apos;s framework
           </h2>
           <p className="mt-1.5 max-w-2xl text-[14px] leading-relaxed text-white/70">
-            Pull in the full Cognia, MSA-CESS, or NSBECS standards catalog — then self-score each
-            standard on the official rubric and watch your projected accreditation status build
-            live, with the fastest path to your target mapped for you.
+            Pull in a full standards catalog — Cognia, MSA-CESS, NSBECS, FCIS, ACSI, ACS WASC or
+            SAIS — then self-score each standard on the rubric and watch your readiness build live,
+            with the fastest path to your target mapped for you. Hold more than one accreditation?
+            Adopt them both and switch between them here.
           </p>
         </div>
         {canEdit ? (

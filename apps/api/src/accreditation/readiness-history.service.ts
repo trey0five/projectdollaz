@@ -38,7 +38,7 @@ import type { ReadinessDiffQueryDto, ReadinessTrendQueryDto } from './dto/readin
 
 /** The standing disclaimer carried on every readiness-history payload. */
 export const READINESS_DISCLAIMER =
-  "Self-assessment produced by KYRO from school-entered and integrated data. Not an accreditation product; not affiliated with, endorsed by, or a submission to Cognia, MSA-CESS or WCEA. The accreditor's portal remains the authoritative repository."
+  "Self-assessment produced by KYRO from school-entered and integrated data. Not an accreditation product; not affiliated with, endorsed by, or a submission to any accreditor, including Cognia, MSA-CESS, WCEA, FCIS, ACSI, ACS WASC or SAIS. The accreditor's portal remains the authoritative repository."
 
 const DEFAULT_WINDOW_DAYS = 365
 

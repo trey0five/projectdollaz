@@ -75,7 +75,15 @@ import type { DomainWeightIndex } from './fact-domains.js'
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Frameworks the Phase-E rule catalog carries standard codes for. */
-const KNOWN_FRAMEWORK_CODES = new Set(['cognia_2022', 'msa_cess_2022', 'nsbecs'])
+const KNOWN_FRAMEWORK_CODES = new Set([
+  'cognia_2022',
+  'msa_cess_2022',
+  'nsbecs',
+  'fcis_2023',
+  'acsi_reach',
+  'acs_wasc',
+  'sais_2023',
+])
 
 function isoDate(d: Date | null | undefined): string | null {
   if (!d) return null
@@ -384,7 +392,17 @@ export class TwinRegisterService {
     return best
   }
 
-  /** Only the three frameworks the rule catalog carries codes for; else null. */
+  /**
+   * Only frameworks the rule catalog carries standard codes for; else NULL.
+   *
+   * NULL IS THE IMPORTANT RETURN. A framework the catalog does not know about
+   * must arrive at the engine as "no framework", where `frameworkOf` degrades it
+   * to the default and every rule refuses to cite a standard. The alternative —
+   * passing an unrecognised code through — would have each finding cite standards
+   * from Cognia while the school's register is somebody else's entirely.
+   *
+   * This set must be widened in lockstep with TWIN_FRAMEWORK_CODES.
+   */
   private frameworkCodeFrom(code: string | null): string | null {
     if (!code) return null
     return KNOWN_FRAMEWORK_CODES.has(code) ? code : null

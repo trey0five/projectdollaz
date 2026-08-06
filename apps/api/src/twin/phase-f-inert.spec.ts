@@ -444,16 +444,26 @@ describe('AIC Phase F — a zero-row school is INERT at the collector', () => {
 })
 
 describe('AIC Phase F — the requirement seed is inert for a zero-row school', () => {
-  it('exactly THREE rows are module-gated, and they are the three that flipped', () => {
+  it('the module-gated rows are exactly the ones naming a gated register', () => {
     const gated = Object.entries(FRAMEWORK_REQUIREMENT_SEEDS).flatMap(([fw, rows]) =>
       rows
         .filter((r) => r.sourceRegister !== null && r.sourceRegister in MODULE_GATED_REGISTERS)
         .map((r) => `${fw}/${r.standardCode}/${r.tag}`),
     )
+    // Phase F flipped THREE (the Cognia and NSBECS rows). The four frameworks
+    // added for dually-accredited schools reuse the same two registers where
+    // their own standards ask for the same artifact — no new register and no new
+    // resolver, so the gate behaves identically: a school that has recorded
+    // nothing reads `not_tracked` with its own sentence.
     expect(gated.sort()).toEqual([
+      'acs_wasc/WASC-E1/inspection',
+      'acsi_reach/ACSI-4/staff_evaluation',
       'cognia_2022/COG-10/staff_evaluation',
       'cognia_2022/COG-A3/inspection',
+      'fcis_2023/FCIS-11/inspection',
+      'fcis_2023/FCIS-6/staff_evaluation',
       'nsbecs/NSBECS-12/inspection',
+      'sais_2023/SAIS-7/staff_evaluation',
     ])
   })
 
@@ -470,7 +480,10 @@ describe('AIC Phase F — the requirement seed is inert for a zero-row school', 
   })
 
   it('no OTHER row changed its dataAvailability', () => {
-    // 45 rows, and the only intake row left is COG-29/pd_records (Phase K).
+    // 93 rows, and the only intake row left is STILL COG-29/pd_records (Phase K).
+    // Four added frameworks did not conjure a PD register, so none of them asks
+    // for PD participation — an `intake` row is a promise, and four more copies of
+    // a promise we have not kept would just be four more holes.
     const intake = Object.values(FRAMEWORK_REQUIREMENT_SEEDS)
       .flat()
       .filter((r) => r.dataAvailability === 'intake')

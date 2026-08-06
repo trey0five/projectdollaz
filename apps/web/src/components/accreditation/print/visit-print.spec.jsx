@@ -80,7 +80,7 @@ afterEach(cleanup)
 // The server's READINESS_DISCLAIMER, character for character. It appears in this
 // file BECAUSE the scan below forbids it everywhere else under apps/web/src.
 const DISCLAIMER =
-  "Self-assessment produced by KYRO from school-entered and integrated data. Not an accreditation product; not affiliated with, endorsed by, or a submission to Cognia, MSA-CESS or WCEA. The accreditor's portal remains the authoritative repository."
+  "Self-assessment produced by KYRO from school-entered and integrated data. Not an accreditation product; not affiliated with, endorsed by, or a submission to any accreditor, including Cognia, MSA-CESS, WCEA, FCIS, ACSI, ACS WASC or SAIS. The accreditor's portal remains the authoritative repository."
 
 const SEGMENTS = [
   { key: 'opening', text: 'St. Example Academy is preparing under Cognia.' },

@@ -63,7 +63,7 @@ describe('sendBoardSummary — the readiness claims never travel without the dis
     expect(text).toContain(READINESS_DISCLAIMER)
     // The HTML template escapes, so assert on a fragment with no escapable
     // character rather than on the whole sentence.
-    expect(html).toContain('not affiliated with, endorsed by, or a submission to Cognia')
+    expect(html).toContain('not affiliated with, endorsed by, or a submission to any accreditor')
     // Exactly once, and LAST — where a footer would be.
     expect(text.split(READINESS_DISCLAIMER)).toHaveLength(2)
     expect(text.trimEnd().endsWith(READINESS_DISCLAIMER)).toBe(true)

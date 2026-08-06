@@ -95,6 +95,63 @@ describe('catalog seed — the framework shapes are unchanged', () => {
     expect(leavesOf('nsbecs')).toHaveLength(13)
   })
 
+  // ───────────────────────────────────────────────────────────────────────────
+  // THE FOUR ADDED FRAMEWORKS, AND THE HONESTY THEY SHIP WITH.
+  //
+  // FCIS, ACSI, ACS WASC and SAIS are the accreditors schools most often hold
+  // ALONGSIDE Cognia, which is what made a single-framework read visibly wrong.
+  // Unlike the three above they are KYRO's own condensed summaries rather than
+  // transcriptions, and these tests pin the two things that must stay true of
+  // anything authored that way.
+  // ───────────────────────────────────────────────────────────────────────────
+  it('the four condensed frameworks keep their authored shapes', () => {
+    const shapes: [string, number, number][] = [
+      // code, total rows, non-assurance leaves
+      ['fcis_2023', 16, 12],
+      ['acsi_reach', 8, 8],
+      ['acs_wasc', 18, 13],
+      ['sais_2023', 16, 11],
+    ]
+    for (const [code, rows, leaves] of shapes) {
+      const fw = FRAMEWORK_SEEDS.find((f) => f.code === code)
+      expect(fw, `${code} is seeded`).toBeDefined()
+      expect(fw!.standards, `${code} row count`).toHaveLength(rows)
+      expect(leavesOf(code).filter((s) => !s.isAssurance), `${code} leaf count`).toHaveLength(leaves)
+    }
+  })
+
+  it('NONE of them invents a numeric accreditation index', () => {
+    // Cognia publishes an index scale (100–400, banded). These accreditors do not,
+    // and manufacturing one would be the single most misleading thing this file
+    // could do — a school would read a number its accreditor never awards.
+    for (const code of ['fcis_2023', 'acsi_reach', 'acs_wasc', 'sais_2023']) {
+      const fw = FRAMEWORK_SEEDS.find((f) => f.code === code)!
+      expect(fw.statusBands, `${code} bands`).toEqual([])
+      expect(fw.indexMin, `${code} indexMin`).toBeNull()
+      expect(fw.indexMax, `${code} indexMax`).toBeNull()
+      expect(fw.defaultTarget, `${code} defaultTarget`).toBeNull()
+    }
+  })
+
+  it('each one SAYS it is a KYRO summary, on every screen that shows a version', () => {
+    // The version string is rendered on the adopt screen and on the readiness
+    // hero. A school must never be able to mistake our condensation for its
+    // accreditor's own document.
+    for (const code of ['fcis_2023', 'acsi_reach', 'acs_wasc', 'sais_2023']) {
+      const fw = FRAMEWORK_SEEDS.find((f) => f.code === code)!
+      expect(fw.version, `${code} version`).toContain('KYRO condensed')
+      expect(fw.description ?? '', `${code} description`).toMatch(/not the accreditor/i)
+    }
+  })
+
+  it('every framework still offers exactly four rubric levels', () => {
+    // The engine hardcodes RUBRIC_MIN/MAX at 1..4. A framework seeded with three
+    // or five labels would render a picker whose pips and words disagree.
+    for (const fw of FRAMEWORK_SEEDS) {
+      expect(fw.rubricLabels, `${fw.code} rubric`).toHaveLength(4)
+    }
+  })
+
   it("each framework's leaf weights conserve: Σ weights === leaf count", () => {
     for (const fw of FRAMEWORK_SEEDS) {
       const leaves = leavesOf(fw.code).filter((s) => !s.isAssurance)

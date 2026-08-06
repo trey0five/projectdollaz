@@ -503,9 +503,39 @@ export interface TwinResult {
 
 export type TwinRuleKind = 'register' | 'trend' | 'comparison' | 'standard' | 'evidence' | 'meta'
 
-export type TwinFrameworkCode = 'cognia_2022' | 'msa_cess_2022' | 'nsbecs'
+/**
+ * The frameworks the rule catalog carries standard citations for.
+ *
+ * WIDENING THIS IS THE TRIPWIRE, and it is meant to hurt: every rule's
+ * `standardCodes` is a TOTAL `Record` over this union, so adding a code stops the
+ * whole file compiling until somebody has decided, rule by rule, which standard
+ * of the new framework each finding should cite. A framework added without that
+ * decision would cite nothing and the twin would quietly report `no_standards`
+ * across the board — a working-looking engine with no attribution.
+ *
+ * An EMPTY array is a legitimate answer and appears below: where an accreditor
+ * genuinely has no equivalent standard, the rule refuses with `no_standards` for
+ * that framework rather than citing a standard that does not mean what the
+ * finding says.
+ */
+export type TwinFrameworkCode =
+  | 'cognia_2022'
+  | 'msa_cess_2022'
+  | 'nsbecs'
+  | 'fcis_2023'
+  | 'acsi_reach'
+  | 'acs_wasc'
+  | 'sais_2023'
 
-export const TWIN_FRAMEWORK_CODES = ['cognia_2022', 'msa_cess_2022', 'nsbecs'] as const
+export const TWIN_FRAMEWORK_CODES = [
+  'cognia_2022',
+  'msa_cess_2022',
+  'nsbecs',
+  'fcis_2023',
+  'acsi_reach',
+  'acs_wasc',
+  'sais_2023',
+] as const
 
 export interface TwinRuleUnlock {
   moduleKey: string | null
@@ -1101,18 +1131,30 @@ const GOV_CODES: Readonly<Record<TwinFrameworkCode, readonly string[]>> = {
   cognia_2022: ['COG-8', 'COG-A1'],
   msa_cess_2022: ['MSA-2'],
   nsbecs: ['NSBECS-5'],
+  fcis_2023: ['FCIS-2'],
+  acsi_reach: ['ACSI-2'],
+  acs_wasc: ['WASC-A2'],
+  sais_2023: ['SAIS-3'],
 }
 
 const FIN_CODES: Readonly<Record<TwinFrameworkCode, readonly string[]>> = {
   cognia_2022: ['COG-15'],
   msa_cess_2022: ['MSA-4'],
   nsbecs: ['NSBECS-10'],
+  fcis_2023: ['FCIS-10'],
+  acsi_reach: ['ACSI-8'],
+  acs_wasc: ['WASC-A4'],
+  sais_2023: ['SAIS-8'],
 }
 
 const NO_CODES: Readonly<Record<TwinFrameworkCode, readonly string[]>> = {
   cognia_2022: [],
   msa_cess_2022: [],
   nsbecs: [],
+  fcis_2023: [],
+  acsi_reach: [],
+  acs_wasc: [],
+  sais_2023: [],
 }
 
 // ── 2.1 GOVERNANCE ───────────────────────────────────────────────────────────
@@ -1257,6 +1299,10 @@ const GOV_POLICY_OVERDUE: TwinRuleDef = {
     cognia_2022: ['COG-8', 'COG-11', 'COG-A1', 'COG-A4'],
     msa_cess_2022: ['MSA-2'],
     nsbecs: ['NSBECS-5', 'NSBECS-11'],
+    fcis_2023: ['FCIS-2', 'FCIS-6'],
+    acsi_reach: ['ACSI-2', 'ACSI-4'],
+    acs_wasc: ['WASC-A2'],
+    sais_2023: ['SAIS-3', 'SAIS-7'],
   },
   rationaleTemplate: '{{overdueCount}} policies are past their own scheduled review date.',
   unlock: null,
@@ -1335,6 +1381,10 @@ const GOV_COMMITTEE_NO_CHAIR: TwinRuleDef = {
     cognia_2022: ['COG-8', 'COG-9'],
     msa_cess_2022: ['MSA-2'],
     nsbecs: ['NSBECS-5'],
+    fcis_2023: ['FCIS-2', 'FCIS-3'],
+    acsi_reach: ['ACSI-2'],
+    acs_wasc: ['WASC-A2'],
+    sais_2023: ['SAIS-3', 'SAIS-4'],
   },
   rationaleTemplate: '{{committeeCount}} active committees have no chair recorded.',
   unlock: null,
@@ -1442,6 +1492,10 @@ const FIN_RESERVE_THIN: TwinRuleDef = {
     cognia_2022: ['COG-15'],
     msa_cess_2022: ['MSA-4'],
     nsbecs: ['NSBECS-10'],
+    fcis_2023: ['FCIS-10'],
+    acsi_reach: ['ACSI-8'],
+    acs_wasc: ['WASC-A4'],
+    sais_2023: ['SAIS-8'],
   },
   rationaleTemplate:
     'Operating reserve stands at {{reserveMonths}} months at {{asOf}}, below the {{riskThreshold}}-month level the sector treats as the risk line.',
@@ -1635,6 +1689,10 @@ const STRAT_CODES: Readonly<Record<TwinFrameworkCode, readonly string[]>> = {
   cognia_2022: ['COG-7', 'COG-26'],
   msa_cess_2022: ['MSA-1'],
   nsbecs: ['NSBECS-10', 'NSBECS-1'],
+  fcis_2023: ['FCIS-12', 'FCIS-1'],
+  acsi_reach: ['ACSI-8', 'ACSI-1'],
+  acs_wasc: ['WASC-D2', 'WASC-A1'],
+  sais_2023: ['SAIS-2', 'SAIS-1'],
 }
 
 const PLAN_VALUE_NOT_USABLE =
@@ -1752,6 +1810,10 @@ const ENR_DECLINE: TwinRuleDef = {
     cognia_2022: ['COG-15', 'COG-24'],
     msa_cess_2022: ['MSA-4'],
     nsbecs: ['NSBECS-13', 'NSBECS-10'],
+    fcis_2023: ['FCIS-10', 'FCIS-12'],
+    acsi_reach: ['ACSI-8'],
+    acs_wasc: ['WASC-A4', 'WASC-D2'],
+    sais_2023: ['SAIS-8', 'SAIS-10'],
   },
   rationaleTemplate:
     'Enrollment fell from {{headcountPrior}} at {{priorAsOf}} to {{headcountNow}} at {{asOf}} — a decline of {{declinePct}}.',
@@ -1823,6 +1885,10 @@ const ENR_FEEDER_EROSION: TwinRuleDef = {
     cognia_2022: ['COG-24', 'COG-15'],
     msa_cess_2022: ['MSA-4'],
     nsbecs: ['NSBECS-13'],
+    fcis_2023: ['FCIS-12', 'FCIS-10'],
+    acsi_reach: ['ACSI-8'],
+    acs_wasc: ['WASC-D2', 'WASC-A4'],
+    sais_2023: ['SAIS-10', 'SAIS-8'],
   },
   rationaleTemplate:
     'Entry-grade enrollment ({{grades}}) fell from {{entryPrior}} at {{priorAsOf}} to {{entryNow}} at {{asOf}} — a decline of {{declinePct}}, while the headline total may still look flat.',
@@ -2134,6 +2200,10 @@ const FAC_BACKLOG: TwinRuleDef = {
     cognia_2022: ['COG-A3', 'COG-15'],
     msa_cess_2022: ['MSA-4'],
     nsbecs: ['NSBECS-12'],
+    fcis_2023: ['FCIS-11', 'FCIS-10'],
+    acsi_reach: ['ACSI-7', 'ACSI-8'],
+    acs_wasc: ['WASC-E1', 'WASC-A4'],
+    sais_2023: ['SAIS-9', 'SAIS-8'],
   },
   rationaleTemplate:
     // "FEWER THAN" for the same reason as HR-EVAL-OVERDUE below: the gate is
@@ -2185,6 +2255,10 @@ const HR_RATIO_DRIFT: TwinRuleDef = {
     cognia_2022: ['COG-13', 'COG-15'],
     msa_cess_2022: ['MSA-4', 'MSA-5'],
     nsbecs: ['NSBECS-11'],
+    fcis_2023: ['FCIS-5', 'FCIS-10'],
+    acsi_reach: ['ACSI-4', 'ACSI-8'],
+    acs_wasc: ['WASC-A3', 'WASC-A4'],
+    sais_2023: ['SAIS-5', 'SAIS-8'],
   },
   rationaleTemplate:
     'The student-teacher ratio has risen across {{readings}} readings, {{fyFirst}} to {{fyLast}} — from {{firstValue}} to {{lastValue}}, about {{slopePerYear}} a year (Mann-Kendall p = {{pValue}}).',
@@ -2230,6 +2304,10 @@ const SCHOOL_NOT_REPORTING: TwinRuleDef = {
     cognia_2022: ['COG-24'],
     msa_cess_2022: ['MSA-1'],
     nsbecs: ['NSBECS-10'],
+    fcis_2023: ['FCIS-12'],
+    acsi_reach: ['ACSI-8'],
+    acs_wasc: ['WASC-D2'],
+    sais_2023: ['SAIS-2'],
   },
   rationaleTemplate:
     '{{staleSignalCount}} operating signals have gone quiet past their own expected cadence; the oldest was last observed {{oldestAgeDays}} days ago.',
@@ -2297,6 +2375,10 @@ const HR_PD_LOW: TwinRuleDef = {
     cognia_2022: ['COG-6', 'COG-29'],
     msa_cess_2022: ['MSA-5'],
     nsbecs: ['NSBECS-11'],
+    fcis_2023: ['FCIS-6'],
+    acsi_reach: ['ACSI-4'],
+    acs_wasc: ['WASC-A3'],
+    sais_2023: ['SAIS-7'],
   },
   rationaleTemplate:
     '{{participationPct}} of staff have a professional-development record in the last twelve months.',
@@ -2367,6 +2449,10 @@ const SAFE_ENV_GAP: TwinRuleDef = {
     cognia_2022: ['COG-A3', 'COG-A4'],
     msa_cess_2022: ['MSA-3'],
     nsbecs: ['NSBECS-5'],
+    fcis_2023: ['FCIS-9'],
+    acsi_reach: ['ACSI-6'],
+    acs_wasc: ['WASC-E1'],
+    sais_2023: ['SAIS-6'],
   },
   // REWRITTEN BY PHASE K. The Phase-E template — "{{cleared" + "Count}} of
   // {{staff" + "Count}} staff have a current clearance" — described the PASSING
@@ -2449,6 +2535,10 @@ const CURR_DOC_AGING: TwinRuleDef = {
     cognia_2022: ['COG-12', 'COG-14'],
     msa_cess_2022: ['MSA-5'],
     nsbecs: ['NSBECS-7'],
+    fcis_2023: ['FCIS-7'],
+    acsi_reach: ['ACSI-5'],
+    acs_wasc: ['WASC-B1'],
+    sais_2023: ['SAIS-5'],
   },
   rationaleTemplate:
     '{{overdueCount}} curriculum documents are past their own scheduled review date.',
@@ -2496,6 +2586,10 @@ const ACAD_GROWTH_FLAT: TwinRuleDef = {
     cognia_2022: ['COG-30', 'COG-31'],
     msa_cess_2022: ['MSA-5'],
     nsbecs: ['NSBECS-8'],
+    fcis_2023: [],
+    acsi_reach: ['ACSI-5'],
+    acs_wasc: ['WASC-D1'],
+    sais_2023: ['SAIS-11'],
   },
   rationaleTemplate: 'Measured growth has been flat across {{readings}} readings.',
   unlock: {
@@ -2538,6 +2632,10 @@ const HR_EVAL_OVERDUE: TwinRuleDef = {
     cognia_2022: ['COG-10', 'COG-13'],
     msa_cess_2022: ['MSA-4'],
     nsbecs: ['NSBECS-11'],
+    fcis_2023: ['FCIS-6'],
+    acsi_reach: ['ACSI-4'],
+    acs_wasc: ['WASC-A3'],
+    sais_2023: ['SAIS-7'],
   },
   // ONE template. There is no `rationaleTemplateLow`: the rule does not fire below
   // STAFF_EVAL_OVERDUE_WARN_COUNT (3), so the plural is always correct and no
@@ -2630,6 +2728,10 @@ const FAC_INSPECTION_DUE: TwinRuleDef = {
     cognia_2022: ['COG-A3'],
     msa_cess_2022: ['MSA-3'],
     nsbecs: ['NSBECS-12'],
+    fcis_2023: ['FCIS-11'],
+    acsi_reach: ['ACSI-7'],
+    acs_wasc: ['WASC-E1'],
+    sais_2023: ['SAIS-9'],
   },
   // Both templates take the day figure WITH its noun (`fmtDays`): an inspection
   // one day past its target date is the most common way this rule first fires,
@@ -2855,6 +2957,19 @@ const NO_PRIOR_MESSAGE =
 const NO_STANDARDS_MESSAGE =
   'None of the standards this rule would be cited under exists in your framework, so there is nothing to report it against.'
 
+/**
+ * Which framework's standard codes this run should cite.
+ *
+ * THE DEFAULT IS A DEGRADE, NOT A GUESS. An unrecognised code falls back to
+ * `cognia_2022`, which would be indefensible if an unrecognised code could ever
+ * reach here — the findings would cite Cognia standards at a school accredited by
+ * somebody else. It cannot: the API's `frameworkCodeFrom` maps anything outside
+ * the catalog to NULL before the register is built, and a null code takes this
+ * same branch. So the fallback is only ever reached by a school with NO framework
+ * on its register, where citing nothing real is exactly right — the citation
+ * arrays are consulted against that school's own standards and simply miss,
+ * leaving the rule to report `no_standards`.
+ */
 function frameworkOf(register: TwinRegisterView): TwinFrameworkCode {
   const code = register.frameworkCode
   return code !== null && (TWIN_FRAMEWORK_CODES as readonly string[]).includes(code)

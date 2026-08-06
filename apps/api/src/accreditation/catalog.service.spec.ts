@@ -183,10 +183,18 @@ function makeStore() {
 const COGNIA = FRAMEWORK_SEEDS.find((f) => f.code === 'cognia_2022')!
 
 describe('AccreditationCatalogService — seed (idempotent)', () => {
-  it('first run seeds 3 frameworks + full catalog trees with wired parents', async () => {
+  it('first run seeds all 7 frameworks + full catalog trees with wired parents', async () => {
     const { svc, frameworks, catalog } = makeStore()
     await svc.seedCatalog()
-    expect([...frameworks.keys()].sort()).toEqual(['cognia_2022', 'msa_cess_2022', 'nsbecs'])
+    expect([...frameworks.keys()].sort()).toEqual([
+      'acs_wasc',
+      'acsi_reach',
+      'cognia_2022',
+      'fcis_2023',
+      'msa_cess_2022',
+      'nsbecs',
+      'sais_2023',
+    ])
 
     const cogId = frameworks.get('cognia_2022')!.id
     const cognia = [...catalog.values()].filter((c) => c.frameworkId === cogId)
@@ -263,7 +271,7 @@ describe('AccreditationCatalogService — seed (idempotent)', () => {
 
   // ── AIC Phase C — pass 3 ────────────────────────────────────────────────────
 
-  it('pass 3 seeds all 45 requirement rows, on BOTH the create and the update path', async () => {
+  it('pass 3 seeds all 93 requirement rows, on BOTH the create and the update path', async () => {
     // THE SELF-HEAL ASSERTION, repeated for Phase C. Production catalog rows
     // already exist; requirement rows reach them ONLY because the update path
     // carries the same reqData the create path does. If a field ever appears on
@@ -271,12 +279,12 @@ describe('AccreditationCatalogService — seed (idempotent)', () => {
     // forever and no migration exists to notice.
     const { svc, prisma, requirements } = makeStore()
     await svc.seedCatalog()
-    expect(requirements.size).toBe(45)
+    expect(requirements.size).toBe(93)
 
     const calls = prisma.accreditationCatalogRequirement.upsert.mock.calls as unknown as [
       { create: Record<string, unknown>; update: Record<string, unknown> },
     ][]
-    expect(calls).toHaveLength(45)
+    expect(calls).toHaveLength(93)
     for (const [args] of calls) {
       for (const shape of [args.create, args.update]) {
         expect(typeof shape.label).toBe('string')
@@ -312,7 +320,7 @@ describe('AccreditationCatalogService — seed (idempotent)', () => {
     prisma.accreditationCatalogRequirement.deleteMany.mockClear()
 
     await svc.seedCatalog()
-    expect(requirements.size).toBe(45)
+    expect(requirements.size).toBe(93)
     // Same physical rows — an upsert hit, never a duplicate insert.
     for (const r of requirements.values()) expect(ids.has(r.id)).toBe(true)
     for (const res of prisma.accreditationCatalogRequirement.deleteMany.mock.results) {
@@ -359,7 +367,7 @@ describe('AccreditationCatalogService — seed (idempotent)', () => {
     })
     try {
       await expect(svc.seedCatalog()).resolves.toBeUndefined()
-      expect(requirements.size).toBe(45) // the ghost row is simply not written
+      expect(requirements.size).toBe(93) // the ghost row is simply not written
     } finally {
       seeds.pop()
     }
