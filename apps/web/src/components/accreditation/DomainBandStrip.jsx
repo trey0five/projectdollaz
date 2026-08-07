@@ -29,8 +29,8 @@
 // back to the key itself rather than a guessed English word.
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion, useReducedMotion } from 'framer-motion'
-import { ShieldQuestion } from 'lucide-react'
-import { domainIcon } from './domainMeta.js'
+import { ShieldQuestion, ArrowRight } from 'lucide-react'
+import { domainIcon, domainHue } from './domainMeta.js'
 import { riskBandMeta } from './RiskChip.jsx'
 import { DemoChip } from './ReadinessTrendStrip.jsx'
 
@@ -39,7 +39,7 @@ const AMBER = '#F59E0B'
 /** The glyph, read off props (the house workaround for the render-resolved-component lint). */
 function DomainGlyph(props) {
   const Icon = props.icon
-  return <Icon size={14} className={props.className} aria-hidden />
+  return <Icon size={14} className={props.className} style={props.style} aria-hidden />
 }
 
 /** "1 critical · 2 warnings" — counted facts, never a score. */
@@ -52,27 +52,26 @@ function factSummary(facts) {
   return parts.length ? parts.join(' · ') : null
 }
 
-function BandCard({ band, label, index, reduce }) {
+function BandCard({ band, label, index, reduce, onOpen }) {
   const measured = band.band !== null && band.band !== undefined
   const meta = riskBandMeta(band.band)
   const Icon = domainIcon(band.domainKey)
+  const hue = domainHue(band.domainKey)
   const summary = measured ? factSummary(band.facts) : null
+  // CLICKABLE ONLY WHERE THERE IS SOMETHING TO OPEN. A domain with no open fact
+  // has nothing to resolve, and an unmeasured one has nothing to show at all —
+  // making those look interactive would teach the reader that the affordance
+  // means nothing.
+  const openable = !!onOpen && measured && (band.facts?.critical > 0 || band.facts?.warn > 0)
 
-  return (
-    <motion.li
-      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: reduce ? 0 : Math.min(index, 9) * 0.025 }}
-      className={`rounded-xl border p-3 ${
-        measured ? 'border-rule/60 bg-white' : 'border-dashed border-rule/60 bg-cream/50'
-      }`}
-    >
+  const body = (
+    <>
       {/* The band strip is a 5-up grid: at 1280 each cell gave the label ~53px,
           so every domain rendered as a stub ("MISSI…", "GOVE…", "ACAD…") and the
           strip named nothing. The label WRAPS instead (card contract §5.3 — a
           card title is never truncated; prefer wrapping over shrinking). */}
       <p className="flex items-start gap-1.5 text-[11.5px] font-semibold uppercase leading-snug tracking-[0.08em] text-muted">
-        <DomainGlyph icon={Icon} className="mt-px shrink-0" />
+        <DomainGlyph icon={Icon} className="mt-px shrink-0" style={{ color: hue }} />
         <span className="min-w-0 hyphens-auto break-words">{label}</span>
       </p>
 
@@ -104,6 +103,37 @@ function BandCard({ band, label, index, reduce }) {
         // and nothing else. This is the whole point of the null case.
         <p className="mt-1.5 text-[12px] leading-relaxed text-muted">{band.reason}</p>
       )}
+      {openable ? (
+        <span className="mt-1.5 inline-flex items-center gap-1 text-[11.5px] font-semibold text-navy">
+          What to do <ArrowRight size={11} aria-hidden />
+        </span>
+      ) : null}
+    </>
+  )
+
+  return (
+    <motion.li
+      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: reduce ? 0 : Math.min(index, 9) * 0.025 }}
+      // The domain's own hue as a left rail — identity, not status. See
+      // DOMAIN_HUE's note on why the two colour languages stay apart.
+      style={measured ? { borderLeftColor: hue, borderLeftWidth: 3 } : undefined}
+      className={`overflow-hidden rounded-xl border p-3 ${
+        measured ? 'border-rule/60 bg-white' : 'border-dashed border-rule/60 bg-cream/50'
+      }`}
+    >
+      {openable ? (
+        <button
+          type="button"
+          onClick={() => onOpen(band)}
+          className="w-full rounded-lg text-left transition hover:opacity-80"
+        >
+          {body}
+        </button>
+      ) : (
+        body
+      )}
     </motion.li>
   )
 }
@@ -116,6 +146,8 @@ export default function DomainBandStrip({
   notLicensed = false,
   /** The twin payload's own provenance flag — same chip the readiness strip uses. */
   demoData = false,
+  /** (band) => void — opens the resolution panel for that domain. Optional. */
+  onOpenDomain = null,
 }) {
   const reduce = useReducedMotion()
 
@@ -165,6 +197,7 @@ export default function DomainBandStrip({
             index={i}
             reduce={reduce}
             label={labels?.[b.domainKey] ?? b.domainKey}
+            onOpen={onOpenDomain}
           />
         ))}
       </ul>

@@ -34,6 +34,40 @@ import {
   Wallet,
 } from 'lucide-react'
 
+/**
+ * domainKey → an ACCENT HUE, for telling ten cards apart at a glance.
+ *
+ * IDENTITY, NEVER STATUS. These colours say "this card is Finance"; they say
+ * nothing about whether Finance is in trouble. The status vocabulary — the
+ * red/amber/green of a band chip — is separate and stays separate, because a
+ * grid where the card colour and the risk colour compete teaches a reader to
+ * trust neither. So the hue is spent on the icon and a hairline rail, and the
+ * status keeps the chip.
+ *
+ * Ten hues, chosen to stay distinguishable side by side and to sit legibly on
+ * the light card surface. Finance takes the brand gold — it is the domain this
+ * product is actually about.
+ */
+export const DOMAIN_HUE = {
+  mission_identity: '#7C3AED',
+  governance: '#1D4ED8',
+  leadership: '#0891B2',
+  academic_excellence: '#059669',
+  student_services: '#DB2777',
+  hr: '#EA580C',
+  finance: '#CA8A04',
+  facilities: '#57534E',
+  technology: '#4F46E5',
+  continuous_improvement: '#0D9488',
+}
+
+/** Neutral for a domain the server ships that this file has not met yet. */
+const FALLBACK_HUE = '#64748B'
+
+export function domainHue(key) {
+  return DOMAIN_HUE[key] ?? FALLBACK_HUE
+}
+
 /** domainKey → lucide glyph. Order mirrors the frozen DOMAIN_KEYS order. */
 export const DOMAIN_ICON = {
   mission_identity: Church,

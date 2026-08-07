@@ -40,6 +40,8 @@ import BillingBanner from '../components/BillingBanner.jsx'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import EntityFormModal, { Field, Select, fieldInput, fieldTextarea } from '../components/ui/EntityFormModal.jsx'
 import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
+import DomainResolvePanel from '../components/accreditation/DomainResolvePanel.jsx'
+import StandardImprovePanel from '../components/accreditation/StandardImprovePanel.jsx'
 import ModuleTabs, { ModuleAccent } from '../components/module/ModuleTabs.jsx'
 import BackLink from '../components/ui/BackLink.jsx'
 import ModuleRegister from '../components/module/ModuleRegister.jsx'
@@ -1228,6 +1230,8 @@ function StandardsTable({
   // accreditation. Null for everyone else, and the register renders exactly as it
   // always did — a chip naming the only framework you have says nothing.
   frameworkChipById = null,
+  /** (standard) => void — opens the "how do I raise this" panel. Optional. */
+  onImprove = null,
   onRubric = null,
   // Phase C: standardId → the WORST currency state among the required artifacts
   // this standard is served by, straight off the evidence-readiness payload. A
@@ -1304,7 +1308,23 @@ function StandardsTable({
               </td>
               <td className="px-4 py-3">
                 <div className="font-semibold text-navy" style={{ paddingLeft: `${(s.depth ?? 0) * 18}px` }}>
-                  {s.title}
+                  {/* THE TITLE IS THE WAY IN. A row stated three problems and
+                      offered three icon buttons, none of which was the answer —
+                      knowing that a rating comes from the rubric and that
+                      evidence lives in a separate panel is product knowledge a
+                      head of school does not have. Clicking the standard opens
+                      the steps that actually raise it. */}
+                  {onImprove ? (
+                    <button
+                      type="button"
+                      onClick={() => onImprove(s)}
+                      className="text-left underline-offset-2 hover:underline"
+                    >
+                      {s.title}
+                    </button>
+                  ) : (
+                    s.title
+                  )}
                   {/* WHOSE STANDARD IS THIS? In a mixed register the same code
                       space is shared by two accreditors, and a row's rubric now
                       speaks its own framework's vocabulary — so the row has to
@@ -2027,6 +2047,21 @@ function AccreditationWorkspace() {
     [chooseTab, navigate, scrollToStandard],
   )
 
+  // ── "Finance is High. Now what?" ───────────────────────────────────────────
+  // The band grid named ten problems and offered nothing to do about any of
+  // them. Clicking a domain now opens its open findings with the actions that go
+  // where each fix lives. The findings are filtered by the SAME domainKeys the
+  // engine attributed them to — no re-derivation here, or the panel could
+  // disagree with the card that opened it.
+  const [improveStandard, setImproveStandard] = useState(null)
+  const [resolveDomain, setResolveDomain] = useState(null)
+  const resolveFindings = useMemo(() => {
+    if (!resolveDomain) return []
+    return (twin.findings ?? []).filter((f) =>
+      (f.domainKeys ?? []).includes(resolveDomain.domainKey),
+    )
+  }, [resolveDomain, twin.findings])
+
   // ── THE EARLY-WARNING RAIL ENTRIES ─────────────────────────────────────────
   // F7, verbatim: the shared server AttentionItem contract is NOT touched. These
   // are composed CLIENT-SIDE from `ruleId` + `scopeKey`, exactly as every other
@@ -2270,6 +2305,7 @@ function AccreditationWorkspace() {
       onDelete={onDelete}
       labelsFor={labelsFor}
       frameworkChipById={frameworkChipById}
+      onImprove={setImproveStandard}
       onRubric={canEdit ? setRubric : null}
       currencyByStandard={evidence.byStandard}
       riskByStandard={riskByStandard}
@@ -2294,6 +2330,7 @@ function AccreditationWorkspace() {
         error={twin.error}
         notLicensed={twin.notLicensed}
         demoData={twin.demoData}
+        onOpenDomain={setResolveDomain}
       />
       <DomainGrid
         readiness={readiness}
@@ -2465,6 +2502,12 @@ function AccreditationWorkspace() {
       attentionMoreCount={attentionItems.more}
       attentionOnMore={() => chooseTab('signals')}
       aboveKpis={readinessHero}
+      // THE DENSEST REGISTER IN THE APP. Standards carries code, standard,
+      // rating, coverage, risk, review and actions; at two-thirds width the last
+      // two sat behind a horizontal scrollbar, so a reader had to scroll sideways
+      // to find out whether a standard needed a decision. Full width, with the
+      // needs-attention rail beneath rather than squeezed beside.
+      wideRegister
       headerAside={
         <>
           {/* AIC PHASE H — the one entry control into the Mock Visit. A LINK, not a
@@ -2528,6 +2571,25 @@ function AccreditationWorkspace() {
 
   const overlays = (
     <>
+      {/* The band grid's answer to "now what?" — see the resolveDomain note above. */}
+      <StandardImprovePanel
+        open={!!improveStandard}
+        standard={improveStandard}
+        rubricLabels={improveStandard ? labelsFor(improveStandard) : null}
+        canEdit={canEdit}
+        onRubric={setRubric}
+        onAttachEvidence={(s) => scrollToStandard(s.id)}
+        onOpenImprovement={() => chooseTab('improvement')}
+        onClose={() => setImproveStandard(null)}
+      />
+      <DomainResolvePanel
+        open={!!resolveDomain}
+        band={resolveDomain}
+        label={resolveDomain ? (domainLabels?.[resolveDomain.domainKey] ?? resolveDomain.domainKey) : ''}
+        findings={resolveFindings}
+        api={ruleApi}
+        onClose={() => setResolveDomain(null)}
+      />
       {/* Expanded standard → its evidence, shown as a light panel below the center
           (the register table rows can't host their own tbody sub-row cleanly, so the
           evidence for the open row lives here — the interaction is preserved). */}

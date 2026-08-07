@@ -82,6 +82,13 @@ export default function DomainCommandCenter({
   // RecordsCta self-hide for modules with no records tab (hr, planning).
   showAddData = false,
   moduleKey = null,
+  /**
+   * Give the register the FULL page width and drop the needs-attention rail
+   * beneath it. For dense registers whose columns do not fit in two thirds —
+   * see the body comment below. Off by default: every other domain page was
+   * designed around the two-column shape.
+   */
+  wideRegister = false,
 }) {
   const reduce = useReducedMotion()
 
@@ -159,13 +166,28 @@ export default function DomainCommandCenter({
       {/* ── Optional full-width block between the KPI row and the body ──────── */}
       {beforeBody}
 
-      {/* ── Two-column body ────────────────────────────────────────────────── */}
-      <div className="grid gap-6 lg:grid-cols-3">
+      {/* ── Body: two columns, or a full-width register with the rail beneath ──
+          WHY THE OPT-OUT EXISTS. The register lives in two of three columns,
+          which is right for a five-column table and wrong for a dense one: the
+          accreditation standards register carries code, standard, rating,
+          coverage, risk, review and actions, and at two-thirds width the last two
+          fell off the right edge behind a horizontal scrollbar. A reader had to
+          scroll sideways to find out whether a standard needed a decision.
+
+          `wideRegister` gives the register the full width and drops the
+          needs-attention rail below it, where it reads as a full-width strip
+          rather than a squeezed column. Opt-in per page, so every other domain
+          keeps the two-column shape it was designed around. */}
+      <div className={wideRegister ? 'space-y-6' : 'grid gap-6 lg:grid-cols-3'}>
         {/* LEFT — the register (tabs + active table). min-w-0 lets a wide register
             (e.g. Cash & Collections' aging table) scroll inside its own
             overflow-x-auto instead of pushing the page body horizontally.
             p-5/sm:p-6 is the content-card cushion scale (card contract §5). */}
-        <div className="card-soft flex min-w-0 flex-col p-5 sm:p-6 lg:col-span-2">
+        <div
+          className={`card-soft flex min-w-0 flex-col p-5 sm:p-6 ${
+            wideRegister ? '' : 'lg:col-span-2'
+          }`}
+        >
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             {tabs.length <= 1 ? (
               /* A single-entry tab bar is dead chrome — render a static register
@@ -211,8 +233,8 @@ export default function DomainCommandCenter({
           {registerTable}
         </div>
 
-        {/* RIGHT — needs attention */}
-        <div className="lg:col-span-1">
+        {/* Needs attention — beside the register, or beneath it when wide. */}
+        <div className={wideRegister ? '' : 'lg:col-span-1'}>
           <NeedsAttentionPanel
             items={attentionItems}
             moreCount={attentionMoreCount}
