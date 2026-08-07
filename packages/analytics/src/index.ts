@@ -245,5 +245,53 @@ export type {
   AgeBandKey,
 } from './demographics.js'
 
+// ── CASH FLOW PROJECTION ─────────────────────────────────────────────────────
+// The forward cash view: opening balance + dated events → the date of first
+// shortfall. Deterministic and clock-free; see cashflow/types.ts for why no
+// language model is allowed to produce a figure in it.
+export {
+  CONFIDENCE_CLASSES,
+  RECURRENCES,
+  DEFAULT_PLAN_MIX,
+  DEFAULT_COLLECTION_RATE,
+  expandCommitment,
+  expandCommitments,
+  sortEvents,
+  projectCash,
+  committedShare,
+  eventsInBucket,
+  netTuitionBilled,
+  tuitionReceipts,
+  deriveCollectionRate,
+  defaultFirstBillingDate,
+  spreadDisbursements,
+  spreadReceipts,
+  // Pure civil-date helpers — exported because the API layer builds horizons.
+  addDays,
+  addMonths,
+  isoToDays,
+  daysToIso,
+  daysBetween,
+  monthKey as cashMonthKey,
+  startOfWeek,
+} from './cashflow/index.js'
+export type {
+  ConfidenceClass,
+  CashDirection,
+  Recurrence,
+  CashEvent,
+  CashCommitmentInput,
+  Granularity,
+  CashBucket,
+  CashProjectionInput,
+  CashProjectionResult,
+  PaymentPlanMix,
+  TuitionDriverInput,
+  AgingBuckets,
+  CollectionRateSuggestion,
+  SpreadAccountLike,
+  SpreadDisbursementInput,
+} from './cashflow/index.js'
+
 // Version
 export { ANALYTICS_VERSION } from './version.js'
