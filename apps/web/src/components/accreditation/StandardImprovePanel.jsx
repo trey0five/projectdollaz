@@ -25,8 +25,30 @@ import { motion, useReducedMotion, AnimatePresence } from 'framer-motion'
 import { X, Check } from 'lucide-react'
 import RubricPicker from './RubricPicker.jsx'
 
+/**
+ * WHAT THIS STEP ACTUALLY MOVES, said before the reader does the work.
+ *
+ * Live-caught: a school attached the artifact that satisfied an assurance gate
+ * and then asked why the projected index had not changed. It could not have. The
+ * index is `mean(rubric score) × 100` over the NON-assurance leaves — evidence is
+ * not a term in it, and an assurance is not one of the leaves. The behaviour is
+ * right and the silence was not: a product that shows one big number and then
+ * quietly does nothing to it has taught the reader that their work did not count.
+ *
+ * So each step names its own effect. These sentences describe the formula in
+ * @finrep/compliance's schoolReadiness and must move with it — they are the
+ * user-facing half of a computation, not decoration.
+ */
+const MOVES = {
+  rubric: 'Moves your projected index and the “documented” figure.',
+  evidence: 'Moves the “defensible” figure. It does not move the projected index — that comes from rubric scores alone.',
+  assurance:
+    'Clears the gate, which is pass or fail on its own. It does not move the projected index or your readiness percentages — an assurance sits outside both.',
+  plan: 'Moves nothing on its own. It gives the work an owner and a date.',
+}
+
 /** One step. `done` renders it as history rather than as a thing still to do. */
-function Step({ n, title, body, done, children }) {
+function Step({ n, title, body, moves, done, children }) {
   return (
     <li className="flex gap-3">
       <span
@@ -40,6 +62,9 @@ function Step({ n, title, body, done, children }) {
       <div className="min-w-0 flex-1">
         <p className={`text-[14px] font-semibold ${done ? 'text-muted' : 'text-navy'}`}>{title}</p>
         {body ? <p className="mt-0.5 text-[13px] leading-relaxed text-muted">{body}</p> : null}
+        {moves ? (
+          <p className="mt-1 text-[12px] font-medium leading-snug text-navy/60">{moves}</p>
+        ) : null}
         {children ? <div className="mt-2">{children}</div> : null}
       </div>
     </li>
@@ -133,6 +158,7 @@ export default function StandardImprovePanel({
                     n={1}
                     done={evidenced}
                     title="Attach the artifact"
+                    moves={MOVES.assurance}
                     body={
                       evidenced
                         ? 'This gate is satisfied — an artifact is attached.'
@@ -147,6 +173,7 @@ export default function StandardImprovePanel({
                       n={1}
                       done={scored}
                       title="Score it against the rubric"
+                      moves={MOVES.rubric}
                       body={
                         scored
                           ? 'Scored. Change it here if your own assessment has moved.'
@@ -166,6 +193,7 @@ export default function StandardImprovePanel({
                       n={2}
                       done={evidenced}
                       title="Attach evidence"
+                      moves={MOVES.evidence}
                       body={
                         evidenced
                           ? `${standard.evidenceCount} attached. A visiting team reads these, not the score.`
@@ -177,6 +205,7 @@ export default function StandardImprovePanel({
                     <Step
                       n={3}
                       title="Plan the work"
+                      moves={MOVES.plan}
                       body="When the gap is real rather than undocumented, improvement work is where it gets an owner and a date."
                     >
                       {onOpenImprovement ? (

@@ -1812,6 +1812,9 @@ function AccreditationWorkspace() {
   const clearStrategy = (standardId) => linkStrategy(standardId, null)
 
   // ── Phase C: keep the currency surfaces honest after an evidence write ──────
+  // The twin's refresh, hoisted above the evidence wrapper that now needs it.
+  const refreshTwinAfterWrite = twin.refresh
+
   // useAccreditation's evidence mutators refresh the register's coverage counts
   // but know nothing about the Phase-C endpoints, and a stale Evidence tab after
   // dating an artifact is exactly the kind of quiet lie this phase exists to
@@ -1827,7 +1830,20 @@ function AccreditationWorkspace() {
   const afterEvidenceWrite = useCallback(() => {
     refreshEvidenceReadiness()
     refreshCommendations()
-  }, [refreshEvidenceReadiness, refreshCommendations])
+    // AND THE TWIN. Live-caught: a school attached the artifact that satisfies an
+    // assurance gate, watched the gate flip to "Assurance met" in front of it, and
+    // the early-warning grid above went on reporting the same "2 critical" —
+    // because the twin is a separate read that only re-pulls on mount or on
+    // `penny:data-changed`, and this path dispatched neither.
+    //
+    // Evidence is an INPUT to that engine, not a decoration on it:
+    // ACC-ASSURANCE-GAP, ACC-UNSUPPORTED-SCORE and EVI-MISSING-REQUIRED all fire
+    // off evidence. The prior-visit path already learned this and refreshed the
+    // twin for exactly the same reason — see afterPriorVisitWrite below. This one
+    // was simply missed, so a school was shown a stale warning about work it had
+    // just done.
+    refreshTwinAfterWrite()
+  }, [refreshEvidenceReadiness, refreshCommendations, refreshTwinAfterWrite])
 
   // AIC Phase F — the SAME idea for the prior-visit register, and it matters more
   // there. Writing an open citation against a code the school holds moves
@@ -1837,10 +1853,9 @@ function AccreditationWorkspace() {
   // separate read that only re-pulls on mount or on `penny:data-changed`, and the
   // panel dispatches neither, so without this the phase's headline finding never
   // appeared after the write that created it.
-  const refreshTwin = twin.refresh
   const afterPriorVisitWrite = useCallback(async () => {
-    await Promise.allSettled([refreshTwin(), refreshEvidenceReadiness()])
-  }, [refreshTwin, refreshEvidenceReadiness])
+    await Promise.allSettled([refreshTwinAfterWrite(), refreshEvidenceReadiness()])
+  }, [refreshTwinAfterWrite, refreshEvidenceReadiness])
 
   const createEvidenceAndRefresh = useCallback(
     async (standardId, body) => {

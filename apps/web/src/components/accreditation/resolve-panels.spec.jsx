@@ -157,6 +157,49 @@ describe('an instruction that cannot be acted on is worse than no instruction', 
   })
 })
 
+describe('the reader is told what their work will and will NOT move', () => {
+  const panel = read('components/accreditation/StandardImprovePanel.jsx')
+  const page = read('pages/AccreditationPage.jsx')
+
+  it('THE TWIN REFRESHES after an evidence write', () => {
+    // Live-caught: a school attached the artifact that satisfied an assurance,
+    // watched the gate flip to "Assurance met" in front of it, and the
+    // early-warning grid went on reporting the same "2 critical". The twin only
+    // re-pulls on mount or on penny:data-changed, and this path dispatched
+    // neither — so the school was shown a stale warning about work it had just
+    // done. Evidence is an INPUT to that engine: ACC-ASSURANCE-GAP,
+    // ACC-UNSUPPORTED-SCORE and EVI-MISSING-REQUIRED all fire off it.
+    const fn = page.slice(
+      page.indexOf('const afterEvidenceWrite = useCallback'),
+      page.indexOf('const afterPriorVisitWrite'),
+    )
+    expect(fn).toContain('refreshTwinAfterWrite()')
+    expect(fn).toContain('refreshEvidenceReadiness()')
+    expect(fn).toContain('refreshCommendations()')
+  })
+
+  it('says evidence does NOT move the projected index', () => {
+    // Because it does not: the index is mean(rubric score) × 100 over the
+    // non-assurance leaves, and evidence is not a term in it. The behaviour is
+    // right; the silence was what misled.
+    expect(panel).toMatch(/does not move the projected index — that comes from rubric scores alone/)
+  })
+
+  it('says an assurance sits outside the index AND the percentages', () => {
+    expect(panel).toMatch(/an assurance sits outside both/)
+  })
+
+  it('says the rubric IS what moves the index', () => {
+    // The other half. If only the negatives were stated, a reader would conclude
+    // nothing they do matters.
+    expect(panel).toMatch(/Moves your projected index/)
+  })
+
+  it('is honest that planning moves no number by itself', () => {
+    expect(panel).toMatch(/Moves nothing on its own/)
+  })
+})
+
 describe('the densest register gets the whole width', () => {
   const page = read('pages/AccreditationPage.jsx')
   const shell = read('components/domain/DomainCommandCenter.jsx')
