@@ -178,30 +178,25 @@ describe('a metric you have not reported', () => {
 })
 
 describe('the invisible-class trap', () => {
-  // tailwind.config.js maps `sky` to a FLAT rgb(var(--c-sky)) string, which
-  // REPLACES Tailwind's entire sky scale. Every `sky-<number>` utility therefore
-  // compiles to nothing at all — no error, no warning, just an element with no
-  // styling. That is exactly how the peer hero's explanatory chip came to render
-  // as dark text on a navy band: present in the DOM, unreadable on screen.
+  // HISTORY, AND WHY THIS TEST IS NOW ONE LINE.
   //
-  // Scoped to the analytics tree — the same dead classes exist elsewhere in the
-  // app and are reported separately rather than silently swept into this file.
-  const SKY_N = new RegExp(['sky', '-', '\\d'].join(''))
-
-  it('no analytics file styles anything with a sky-<number> utility', () => {
-    const files = [
-      'components/analytics/v2/PeersView.jsx',
-      'components/analytics/v2/ChartsView.jsx',
-      'components/analytics/v2/OverviewView.jsx',
-      'components/analytics/charts/HealthRail.jsx',
-    ]
-    const offenders = []
-    for (const f of files) {
-      // Strip comments: the note explaining the ban must not be its first breach.
-      const src = read(f).replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
-      if (SKY_N.test(src)) offenders.push(f)
-    }
-    expect(offenders).toEqual([])
+  // tailwind.config.js used to map `sky` to a FLAT rgb() string, which REPLACES
+  // Tailwind's entire sky scale — so every `sky-<number>` utility compiled to
+  // nothing at all. That is how this view's explanatory chip came to render as
+  // dark text on a navy band, and it is why this file once banned the whole
+  // pattern inside the analytics tree.
+  //
+  // The ban was a workaround. `sky` now has a real scale with DEFAULT on the
+  // theme token, so those utilities work, and the general form of the rule —
+  // no `-<number>` on ANY colour still defined as a flat string — lives in
+  // src/flat-token-shades.spec.js, checked across every source file rather than
+  // four hand-listed ones.
+  it('the general guard exists, so this one does not need to duplicate it', () => {
+    const guard = readFileSync(
+      resolve(process.cwd(), 'src', 'flat-token-shades.spec.js'),
+      'utf8',
+    )
+    expect(guard).toMatch(/flatColorKeys/)
   })
 })
 

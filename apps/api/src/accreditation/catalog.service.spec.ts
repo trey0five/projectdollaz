@@ -271,7 +271,7 @@ describe('AccreditationCatalogService — seed (idempotent)', () => {
 
   // ── AIC Phase C — pass 3 ────────────────────────────────────────────────────
 
-  it('pass 3 seeds all 93 requirement rows, on BOTH the create and the update path', async () => {
+  it('pass 3 seeds all 98 requirement rows, on BOTH the create and the update path', async () => {
     // THE SELF-HEAL ASSERTION, repeated for Phase C. Production catalog rows
     // already exist; requirement rows reach them ONLY because the update path
     // carries the same reqData the create path does. If a field ever appears on
@@ -279,12 +279,12 @@ describe('AccreditationCatalogService — seed (idempotent)', () => {
     // forever and no migration exists to notice.
     const { svc, prisma, requirements } = makeStore()
     await svc.seedCatalog()
-    expect(requirements.size).toBe(93)
+    expect(requirements.size).toBe(98)
 
     const calls = prisma.accreditationCatalogRequirement.upsert.mock.calls as unknown as [
       { create: Record<string, unknown>; update: Record<string, unknown> },
     ][]
-    expect(calls).toHaveLength(93)
+    expect(calls).toHaveLength(98)
     for (const [args] of calls) {
       for (const shape of [args.create, args.update]) {
         expect(typeof shape.label).toBe('string')
@@ -320,7 +320,7 @@ describe('AccreditationCatalogService — seed (idempotent)', () => {
     prisma.accreditationCatalogRequirement.deleteMany.mockClear()
 
     await svc.seedCatalog()
-    expect(requirements.size).toBe(93)
+    expect(requirements.size).toBe(98)
     // Same physical rows — an upsert hit, never a duplicate insert.
     for (const r of requirements.values()) expect(ids.has(r.id)).toBe(true)
     for (const res of prisma.accreditationCatalogRequirement.deleteMany.mock.results) {
@@ -367,7 +367,7 @@ describe('AccreditationCatalogService — seed (idempotent)', () => {
     })
     try {
       await expect(svc.seedCatalog()).resolves.toBeUndefined()
-      expect(requirements.size).toBe(93) // the ghost row is simply not written
+      expect(requirements.size).toBe(98) // the ghost row is simply not written
     } finally {
       seeds.pop()
     }

@@ -456,14 +456,14 @@ describe('AIC Phase F — the requirement seed is inert for a zero-row school', 
     // resolver, so the gate behaves identically: a school that has recorded
     // nothing reads `not_tracked` with its own sentence.
     expect(gated.sort()).toEqual([
-      'acs_wasc/WASC-E1/inspection',
+      'acs_wasc/WASC-E/inspection',
       'acsi_reach/ACSI-4/staff_evaluation',
       'cognia_2022/COG-10/staff_evaluation',
       'cognia_2022/COG-A3/inspection',
-      'fcis_2023/FCIS-11/inspection',
-      'fcis_2023/FCIS-6/staff_evaluation',
+      'fcis_2023/FCIS-11/staff_evaluation',
+      'fcis_2023/FCIS-12/inspection',
       'nsbecs/NSBECS-12/inspection',
-      'sais_2023/SAIS-7/staff_evaluation',
+      'sais_2023/SAIS-5/staff_evaluation',
     ])
   })
 
@@ -480,7 +480,7 @@ describe('AIC Phase F — the requirement seed is inert for a zero-row school', 
   })
 
   it('no OTHER row changed its dataAvailability', () => {
-    // 93 rows, and the only intake row left is STILL COG-29/pd_records (Phase K).
+    // 98 rows, and the only intake row left is STILL COG-29/pd_records (Phase K).
     // Four added frameworks did not conjure a PD register, so none of them asks
     // for PD participation — an `intake` row is a promise, and four more copies of
     // a promise we have not kept would just be four more holes.

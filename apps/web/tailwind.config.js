@@ -28,7 +28,34 @@ export default {
           pale: 'rgb(var(--c-penny-pale) / <alpha-value>)',
         },
         coral: 'rgb(var(--c-coral) / <alpha-value>)',
-        sky: 'rgb(var(--c-sky) / <alpha-value>)',
+        // THE INVISIBLE-CLASS TRAP, FIXED AT THE SOURCE.
+        //
+        // This was `sky: 'rgb(var(--c-sky) / <alpha-value>)'` — a flat string,
+        // which REPLACES Tailwind's entire sky scale rather than extending it.
+        // Every `sky-<number>` utility in the app therefore compiled to nothing:
+        // no error, no warning, just elements with no styling. That is how the
+        // peer hero's explanatory chip came to render as dark text on a navy
+        // band, and ten more usages across enrollment, HR, facilities and
+        // knowledge were silently dead for the same reason.
+        //
+        // DEFAULT keeps `bg-sky` / `text-sky` working through the theme token, so
+        // nothing that relied on the flat form changes. The numbered shades are
+        // Tailwind's own — and note that --c-sky (56 189 248) IS sky-400, so the
+        // brand colour and the scale agree by construction rather than by luck.
+        sky: {
+          DEFAULT: 'rgb(var(--c-sky) / <alpha-value>)',
+          50: '#f0f9ff',
+          100: '#e0f2fe',
+          200: '#bae6fd',
+          300: '#7dd3fc',
+          400: '#38bdf8',
+          500: '#0ea5e9',
+          600: '#0284c7',
+          700: '#0369a1',
+          800: '#075985',
+          900: '#0c4a6e',
+          950: '#082f49',
+        },
         cream: 'rgb(var(--c-cream) / <alpha-value>)',
         section: 'rgb(var(--c-section) / <alpha-value>)',
         rule: 'rgb(var(--c-rule) / <alpha-value>)',

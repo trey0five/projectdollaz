@@ -230,57 +230,54 @@ const NSBECS_STANDARDS: CatalogStandardSeed[] = [
 // ─────────────────────────────────────────────────────────────────────────────
 // THE FOUR ACCREDITORS SCHOOLS ACTUALLY PAIR WITH — FCIS, ACSI, ACS WASC, SAIS.
 //
-// PROVENANCE, STATED PLAINLY. The three frameworks above were transcribed from
-// the accreditors' own published documents. THESE FOUR ARE NOT. Their structures
-// and titles are KYRO's own condensed summaries, authored from general knowledge
-// of each accreditor as of 2026 and NOT verified line-by-line against a current
-// official protocol. That is why:
+// PROVENANCE. These four shipped first as KYRO's own condensed summaries,
+// authored from general knowledge, and checking them against the accreditors'
+// published manuals found real errors — ACSI standard 7 was seeded as
+// "facilities" when it is "Character, Values, and Spiritual Formation of
+// Students", SAIS was missing "Stakeholder Communication & Relationships"
+// entirely, and FCIS was a four-group invention where the manual is a flat list
+// of eighteen. Every structure and title below is now the accreditor's own,
+// transcribed from:
 //
-//   • every `version` string carries "(KYRO condensed)", which is what a school
-//     sees on the adopt screen and on its readiness hero;
-//   • the codes (FCIS-1, ACSI-3…) are OURS, not the accreditors' numbering, so a
-//     school can never mistake one of our codes for a citation;
-//   • the titles are paraphrases in our own words — the same choice made for MSA
-//     and NSBECS above, and the opposite of Cognia's near-verbatim titles, which
-//     remain the outlier rather than the precedent.
+//   FCIS   — Manual for Evaluation and Accreditation, 2023 revised (18 standards)
+//   ACSI   — REACH 2019 Edition Standards Manual (8 standards)
+//   WASC   — Focus on Learning, ACS WASC (5 categories, A–E)
+//   SAIS   — 2022 Accreditation Standards and Indicators (6 standards)
 //
-// A school self-scores its own register against its own accreditor's document.
-// These seeds save it the typing; they are not a substitute for the protocol, and
-// they must be checked against current official documents before any marketing
-// claim of "supports FCIS/ACSI/WASC/SAIS accreditation" is made.
+// WHAT IS OURS AND WHAT IS THEIRS. The codes, numbering and standard titles are
+// the accreditors'. The `domainKey` / `domainWeights` / `signalKeys` mapping is
+// KYRO's own product decision about which of our ten domains a standard belongs
+// to and which operating figures belong inside it — it is not a claim about the
+// accreditor's own structure.
+//
+// INDICATORS ARE NOT MODELLED. Every one of these frameworks hangs numbered
+// indicators under each standard (FCIS 4.1–4.5, SAIS 1.a–1.d, and so on). Those
+// are NOT seeded: a school self-scores at the standard level, and inventing an
+// indicator tree would repeat exactly the mistake this rewrite corrects. The
+// register is flat for all four, which the engine already supports — MSA-CESS
+// ships the same way.
+//
+// CONDITIONAL STANDARDS ARE INCLUDED AND LABELLED. FCIS 8 and 13–18, and SAIS 6,
+// apply only to schools running those programs. They are seeded because the
+// register should be the accreditor's actual list, and their descriptions say
+// when they apply — a school without a residential program removes that one row.
 //
 // ALL FOUR SHIP INDEX-LESS (`statusBands: []`, index fields null). None of these
 // accreditors publishes a Cognia-style numeric index, and inventing one would be
 // the single most misleading thing this file could do. Rubric-only is a path MSA
-// and NSBECS already exercise end to end, so this adds no new engine branch.
+// and NSBECS already exercise, so this adds no new engine branch.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── FCIS (Florida Council of Independent Schools) ────────────────────────────
+// ── FCIS — Manual for Evaluation and Accreditation (2023 revised) ────────────
 // The Florida half of the pairing that started this work: FCIS beside Cognia is
-// the ordinary arrangement for a Florida independent school, and it is what made
-// a single-framework read visibly wrong.
+// the ordinary arrangement for a Florida independent school.
 const FCIS_STANDARDS: CatalogStandardSeed[] = [
-  { code: 'FCIS-S1', title: 'School Identity and Governance', domainKey: 'mission_identity' },
-  { code: 'FCIS-S2', title: 'People', domainKey: 'hr' },
-  { code: 'FCIS-S3', title: 'Program', domainKey: 'academic_excellence' },
-  { code: 'FCIS-S4', title: 'Operations and Stewardship', domainKey: 'finance' },
-
-  { code: 'FCIS-1', parentCode: 'FCIS-S1', title: 'A stated mission and philosophy that guides decisions and is reviewed periodically.', evidenceTags: ['strategic_plan'], domainKey: 'mission_identity' },
-  { code: 'FCIS-2', parentCode: 'FCIS-S1', title: 'A governing body with defined authority, written policies, and a board that governs rather than manages.', evidenceTags: ['governance', 'board_minutes', 'policy_manual'], domainKey: 'governance' },
-  { code: 'FCIS-3', parentCode: 'FCIS-S1', title: 'A head of school with clear authority for daily operation, evaluated against defined expectations.', evidenceTags: ['governance'], domainKey: 'leadership' },
-  { code: 'FCIS-4', parentCode: 'FCIS-S1', title: 'Truthful publications, admissions materials and public representations of the school.', evidenceTags: ['marketing'], domainKey: 'leadership' },
-
-  { code: 'FCIS-5', parentCode: 'FCIS-S2', title: 'Faculty qualified for the subjects and ages they teach, with credentials on file.', evidenceTags: ['staff_credentials'], domainKey: 'hr', signalKeys: ['student_teacher_ratio', 'teaching_staff_share'] },
-  { code: 'FCIS-6', parentCode: 'FCIS-S2', title: 'Written personnel policies, contracts, evaluation and professional development for all staff.', evidenceTags: ['policy_manual', 'staff_credentials'], domainKey: 'hr', signalKeys: ['total_staff_fte', 'fte_change_yoy'] },
-
-  { code: 'FCIS-7', parentCode: 'FCIS-S3', title: 'A documented curriculum appropriate to the school\u2019s mission and the students it enrolls.', domainKey: 'academic_excellence' },
-  { code: 'FCIS-8', parentCode: 'FCIS-S3', title: 'Student records, transcripts and reporting maintained accurately and securely.', evidenceTags: ['enrollment_data'], domainKey: 'student_services' },
-  { code: 'FCIS-9', parentCode: 'FCIS-S3', title: 'Student support, guidance and health services appropriate to the enrolled population.', evidenceTags: ['survey'], domainKey: 'student_services', signalKeys: ['pct_students_on_aid'] },
-
+  { code: 'FCIS-1', title: 'Mission', evidenceTags: ['strategic_plan'], domainKey: 'mission_identity' },
+  { code: 'FCIS-2', title: 'Governance', evidenceTags: ['governance', 'board_minutes', 'policy_manual'], domainKey: 'governance' },
+  { code: 'FCIS-3', title: 'Strategic and Long Term Planning', evidenceTags: ['strategic_plan'], domainKey: 'continuous_improvement', signalKeys: ['plan_readiness'] },
   {
-    code: 'FCIS-10',
-    parentCode: 'FCIS-S4',
-    title: 'Sound financial management: an annual budget, an external audit or review, and reserves adequate to the school\u2019s obligations.',
+    code: 'FCIS-4',
+    title: 'Finance',
     evidenceTags: ['budget', 'financial_audit', 'fiscal_resources'],
     domainKey: 'finance',
     signalKeys: [
@@ -289,132 +286,119 @@ const FCIS_STANDARDS: CatalogStandardSeed[] = [
       'months_operating_reserve',
       'tuition_dependency',
       'net_tuition_per_student',
-      'tuition_discount_rate',
-      'forecast_vs_budget_net',
-    ],
-  },
-  { code: 'FCIS-11', parentCode: 'FCIS-S4', title: 'Facilities, grounds and transportation that are safe, licensed where required, and inspected on schedule.', evidenceTags: ['safety_plan'], domainKey: 'facilities', domainWeights: { facilities: 0.75, technology: 0.25 } },
-  { code: 'FCIS-12', parentCode: 'FCIS-S4', title: 'Enrolment planning and advancement activity sufficient to sustain the school\u2019s program.', evidenceTags: ['enrollment_data', 'marketing'], domainKey: 'continuous_improvement', domainWeights: { continuous_improvement: 0.5, finance: 0.5 }, signalKeys: ['enrollment_change_yoy', 'enrollment_vs_plan', 'plan_readiness'] },
-]
-
-// ── ACSI (Association of Christian Schools International) ────────────────────
-// Pairs with Cognia the way NSBECS pairs with WCEA. Standard 1 is deliberately
-// UNBOUND for the same reason NSBECS-1..4 are: KYRO does not measure spiritual
-// formation from a general ledger and will not proxy it with anything it has.
-const ACSI_STANDARDS: CatalogStandardSeed[] = [
-  { code: 'ACSI-1', title: 'Philosophy and foundations: a Christ-centred purpose expressed in the school\u2019s stated philosophy and lived program.', evidenceTags: ['strategic_plan'], domainKey: 'mission_identity' },
-  { code: 'ACSI-2', title: 'Governance and executive leadership: a board governing by written policy and a qualified head with defined authority.', evidenceTags: ['governance', 'board_minutes', 'policy_manual'], domainKey: 'governance', domainWeights: { governance: 0.5, leadership: 0.5 } },
-  { code: 'ACSI-3', title: 'Home, school and community relations: honest communication with families and the constituency the school serves.', evidenceTags: ['survey', 'marketing'], domainKey: 'leadership' },
-  { code: 'ACSI-4', title: 'Personnel: qualified, credentialed staff supported by written policies, evaluation and professional growth.', evidenceTags: ['staff_credentials', 'policy_manual'], domainKey: 'hr', signalKeys: ['total_staff_fte', 'teaching_staff_share', 'student_teacher_ratio', 'fte_change_yoy'] },
-  { code: 'ACSI-5', title: 'Instructional program: a written curriculum aligned to the school\u2019s philosophy, delivered and assessed effectively.', evidenceTags: ['enrollment_data'], domainKey: 'academic_excellence' },
-  { code: 'ACSI-6', title: 'Student services: guidance, health, and support services appropriate to the students enrolled.', evidenceTags: ['survey'], domainKey: 'student_services', signalKeys: ['pct_students_on_aid', 'financial_aid_per_student'] },
-  { code: 'ACSI-7', title: 'Facilities, environment and transportation: safe, maintained and adequate to the program offered.', evidenceTags: ['safety_plan'], domainKey: 'facilities', domainWeights: { facilities: 0.75, technology: 0.25 } },
-  {
-    code: 'ACSI-8',
-    title: 'Continuous school improvement: a documented improvement plan supported by a sustainable financial model.',
-    evidenceTags: ['strategic_plan', 'budget', 'financial_audit', 'fiscal_resources'],
-    domainKey: 'continuous_improvement',
-    domainWeights: { continuous_improvement: 0.5, finance: 0.5 },
-    signalKeys: [
-      'plan_readiness',
-      'operating_margin',
-      'days_cash_on_hand',
-      'months_operating_reserve',
-      'tuition_dependency',
-      'forecast_operating_margin',
-      'forecast_vs_budget_net',
-    ],
-  },
-]
-
-// ── ACS WASC (Focus on Learning) ─────────────────────────────────────────────
-// Five categories, A\u2013E, in the accreditor's own lettering. The finance and
-// facilities weight sits in Category A, which is where WASC puts resources \u2014
-// so a WASC school's finance domain rests on a single leaf, exactly as Cognia's
-// does. That is the framework's shape, not a gap in ours.
-const WASC_STANDARDS: CatalogStandardSeed[] = [
-  { code: 'WASC-A', title: 'Organization for Student Learning', domainKey: 'governance' },
-  { code: 'WASC-B', title: 'Curriculum', domainKey: 'academic_excellence' },
-  { code: 'WASC-C', title: 'Instruction', domainKey: 'academic_excellence' },
-  { code: 'WASC-D', title: 'Assessment and Accountability', domainKey: 'continuous_improvement' },
-  { code: 'WASC-E', title: 'School Culture and Support for Student Growth', domainKey: 'student_services' },
-
-  { code: 'WASC-A1', parentCode: 'WASC-A', title: 'A vision, mission and schoolwide learner outcomes defined with the community and reviewed on a cycle.', evidenceTags: ['strategic_plan', 'survey'], domainKey: 'mission_identity' },
-  { code: 'WASC-A2', parentCode: 'WASC-A', title: 'A governing body and leadership structure with defined roles, written policies and an evaluated head.', evidenceTags: ['governance', 'board_minutes', 'policy_manual'], domainKey: 'governance', domainWeights: { governance: 0.5, leadership: 0.5 } },
-  { code: 'WASC-A3', parentCode: 'WASC-A', title: 'Qualified staff assigned and supported so that the instructional program can be delivered as designed.', evidenceTags: ['staff_credentials'], domainKey: 'hr', signalKeys: ['student_teacher_ratio', 'teaching_staff_share', 'total_staff_fte'] },
-  {
-    code: 'WASC-A4',
-    parentCode: 'WASC-A',
-    title: 'Financial, physical and technology resources allocated and monitored to support the schoolwide learner outcomes.',
-    evidenceTags: ['budget', 'financial_audit', 'fiscal_resources', 'safety_plan'],
-    domainKey: 'finance',
-    domainWeights: { finance: 0.5, facilities: 0.25, technology: 0.25 },
-    signalKeys: [
-      'operating_margin',
-      'days_cash_on_hand',
-      'months_operating_reserve',
-      'tuition_dependency',
       'cost_per_pupil',
       'forecast_vs_budget_net',
     ],
   },
-
-  { code: 'WASC-B1', parentCode: 'WASC-B', title: 'A curriculum aligned to the schoolwide learner outcomes and accessible to every student enrolled.', domainKey: 'academic_excellence' },
-  { code: 'WASC-B2', parentCode: 'WASC-B', title: 'Programs and pathways that prepare students for their stated post-school goals.', evidenceTags: ['enrollment_data'], domainKey: 'academic_excellence' },
-
-  { code: 'WASC-C1', parentCode: 'WASC-C', title: 'Instruction that engages every student in the intended learning, differentiated where needed.', domainKey: 'academic_excellence' },
-  { code: 'WASC-C2', parentCode: 'WASC-C', title: 'Teachers use current materials, digital resources and applied learning appropriate to the program.', domainKey: 'technology' },
-
-  { code: 'WASC-D1', parentCode: 'WASC-D', title: 'An assessment system that reports student progress against the schoolwide learner outcomes.', evidenceTags: ['enrollment_data'], domainKey: 'continuous_improvement', domainWeights: { continuous_improvement: 0.5, academic_excellence: 0.5 } },
-  { code: 'WASC-D2', parentCode: 'WASC-D', title: 'Assessment results drive the schoolwide action plan and the resources committed to it.', evidenceTags: ['strategic_plan'], domainKey: 'continuous_improvement', signalKeys: ['plan_readiness'] },
-
-  { code: 'WASC-E1', parentCode: 'WASC-E', title: 'A safe, inclusive environment with health, safety and emergency procedures maintained and rehearsed.', evidenceTags: ['safety_plan'], domainKey: 'facilities' },
-  { code: 'WASC-E2', parentCode: 'WASC-E', title: 'Personal, academic and career support services available and used by the students who need them.', evidenceTags: ['survey'], domainKey: 'student_services', signalKeys: ['pct_students_on_aid', 'financial_aid_per_student'] },
-  { code: 'WASC-E3', parentCode: 'WASC-E', title: 'Families and the community are engaged as partners in student learning.', evidenceTags: ['survey', 'marketing'], domainKey: 'leadership' },
+  { code: 'FCIS-5', title: 'Advancement', evidenceTags: ['marketing'], domainKey: 'finance', domainWeights: { finance: 0.5, leadership: 0.5 }, signalKeys: ['tuition_dependency'] },
+  { code: 'FCIS-6', title: 'Data and Research', evidenceTags: ['enrollment_data', 'survey'], domainKey: 'continuous_improvement' },
+  { code: 'FCIS-7', title: 'Admissions', evidenceTags: ['enrollment_data', 'marketing'], domainKey: 'student_services', domainWeights: { student_services: 0.5, finance: 0.5 }, signalKeys: ['enrollment_change_yoy', 'enrollment_vs_plan', 'pct_students_on_aid', 'tuition_discount_rate'] },
+  { code: 'FCIS-8', title: 'Early Childhood Programs', description: 'Applies only to schools operating an early childhood program.', domainKey: 'academic_excellence' },
+  { code: 'FCIS-9', title: 'Academic Program', domainKey: 'academic_excellence' },
+  { code: 'FCIS-10', title: 'Student Life', evidenceTags: ['survey'], domainKey: 'student_services' },
+  { code: 'FCIS-11', title: 'Personnel', evidenceTags: ['staff_credentials', 'policy_manual'], domainKey: 'hr', signalKeys: ['student_teacher_ratio', 'teaching_staff_share', 'total_staff_fte', 'fte_change_yoy'] },
+  { code: 'FCIS-12', title: 'Safety, Security and Risk Management', evidenceTags: ['safety_plan'], domainKey: 'facilities' },
+  { code: 'FCIS-13', title: 'International Students', description: 'Applies only to schools enrolling international students.', domainKey: 'student_services' },
+  { code: 'FCIS-14', title: 'Domestic and International Travel', description: 'Applies only to schools offering student travel.', domainKey: 'student_services' },
+  { code: 'FCIS-15', title: 'Residential Life', description: 'Applies only to schools with a residential (boarding) program.', domainKey: 'student_services' },
+  { code: 'FCIS-16', title: 'Proprietary Schools', description: 'Applies only to proprietary schools.', domainKey: 'governance' },
+  { code: 'FCIS-17', title: 'Special Education', description: 'Applies only to schools operating a special education program.', domainKey: 'student_services' },
+  { code: 'FCIS-18', title: 'Online and Blended Learning', description: 'Applies only to schools offering online or blended instruction.', domainKey: 'technology' },
 ]
 
-// ── SAIS (Southern Association of Independent Schools) ───────────────────────
-// SAIS is the Southeast's independent-school accreditor and is very often paired
-// with Cognia \u2014 a joint SAIS/Cognia protocol is the common arrangement, which
-// makes it the second framework a great many of these schools actually hold.
-const SAIS_STANDARDS: CatalogStandardSeed[] = [
-  { code: 'SAIS-S1', title: 'Mission and Strategy', domainKey: 'mission_identity' },
-  { code: 'SAIS-S2', title: 'Governance and Leadership', domainKey: 'governance' },
-  { code: 'SAIS-S3', title: 'Teaching, Learning and Student Life', domainKey: 'academic_excellence' },
-  { code: 'SAIS-S4', title: 'Resources and Sustainability', domainKey: 'finance' },
-  { code: 'SAIS-S5', title: 'Continuous Improvement', domainKey: 'continuous_improvement' },
-
-  { code: 'SAIS-1', parentCode: 'SAIS-S1', title: 'A clear mission, adopted by the board, that the school\u2019s program and decisions can be measured against.', evidenceTags: ['strategic_plan'], domainKey: 'mission_identity' },
-  { code: 'SAIS-2', parentCode: 'SAIS-S1', title: 'A current strategic plan with named owners, resources and review points.', evidenceTags: ['strategic_plan'], domainKey: 'continuous_improvement', signalKeys: ['plan_readiness'] },
-
-  { code: 'SAIS-3', parentCode: 'SAIS-S2', title: 'A board that governs by written policy, maintains its own succession and evaluates the head.', evidenceTags: ['governance', 'board_minutes', 'policy_manual'], domainKey: 'governance' },
-  { code: 'SAIS-4', parentCode: 'SAIS-S2', title: 'A head and leadership team with the authority and support to run the school day to day.', evidenceTags: ['governance'], domainKey: 'leadership' },
-
-  { code: 'SAIS-5', parentCode: 'SAIS-S3', title: 'A documented program appropriate to the mission, reviewed on a cycle and staffed by qualified faculty.', evidenceTags: ['staff_credentials'], domainKey: 'academic_excellence', domainWeights: { academic_excellence: 0.5, hr: 0.5 }, signalKeys: ['student_teacher_ratio', 'teaching_staff_share'] },
-  { code: 'SAIS-6', parentCode: 'SAIS-S3', title: 'Student wellbeing, safety and support services appropriate to the students enrolled.', evidenceTags: ['safety_plan', 'survey'], domainKey: 'student_services' },
-  { code: 'SAIS-7', parentCode: 'SAIS-S3', title: 'Written personnel policies, evaluation and professional growth for faculty and staff.', evidenceTags: ['policy_manual', 'staff_credentials'], domainKey: 'hr', signalKeys: ['total_staff_fte', 'fte_change_yoy'] },
-
+// ── ACSI — REACH 2019 Edition ────────────────────────────────────────────────
+// Pairs with Cognia the way NSBECS pairs with WCEA. Standard 7 is deliberately
+// UNBOUND to any operating signal for the same reason NSBECS-1..4 are: KYRO does
+// not measure spiritual formation from a general ledger and will not proxy it.
+const ACSI_STANDARDS: CatalogStandardSeed[] = [
+  { code: 'ACSI-1', title: 'Philosophy and Foundations', evidenceTags: ['strategic_plan'], domainKey: 'mission_identity' },
   {
-    code: 'SAIS-8',
-    parentCode: 'SAIS-S4',
-    title: 'A financial model that sustains the mission: budget, audit, reserves and a multi-year view of tuition and enrolment.',
-    evidenceTags: ['budget', 'financial_audit', 'fiscal_resources'],
+    code: 'ACSI-2',
+    title: 'Governance and Executive Leadership',
+    evidenceTags: ['governance', 'board_minutes', 'policy_manual', 'financial_audit', 'budget'],
+    domainKey: 'governance',
+    // REACH has no standalone finance standard; financial oversight sits with the
+    // board and head, so that is where the operating figures belong. A product
+    // mapping decision, not a claim about ACSI's structure.
+    domainWeights: { governance: 0.5, finance: 0.5 },
+    signalKeys: [
+      'operating_margin',
+      'days_cash_on_hand',
+      'months_operating_reserve',
+      'tuition_dependency',
+      'forecast_vs_budget_net',
+    ],
+  },
+  { code: 'ACSI-3', title: 'Home and Community Relations and Student Services', evidenceTags: ['survey', 'marketing'], domainKey: 'student_services', domainWeights: { student_services: 0.5, leadership: 0.5 }, signalKeys: ['pct_students_on_aid'] },
+  { code: 'ACSI-4', title: 'Personnel', evidenceTags: ['staff_credentials', 'policy_manual'], domainKey: 'hr', signalKeys: ['student_teacher_ratio', 'teaching_staff_share', 'total_staff_fte', 'fte_change_yoy'] },
+  { code: 'ACSI-5', title: 'Instructional Program and Resources', evidenceTags: ['enrollment_data'], domainKey: 'academic_excellence' },
+  { code: 'ACSI-6', title: 'Student Care', evidenceTags: ['safety_plan'], domainKey: 'facilities', domainWeights: { facilities: 0.5, student_services: 0.5 } },
+  { code: 'ACSI-7', title: 'Character, Values, and Spiritual Formation of Students', domainKey: 'mission_identity' },
+  { code: 'ACSI-8', title: 'Continuous School Improvement Plan', evidenceTags: ['strategic_plan'], domainKey: 'continuous_improvement', signalKeys: ['plan_readiness'] },
+]
+
+// ── ACS WASC — Focus on Learning ─────────────────────────────────────────────
+// Five categories, A–E, in the accreditor's own lettering. Category A carries
+// governance, leadership, staffing AND resources together, which is WASC's own
+// grouping — so a WASC school's finance figures sit inside a standard that is
+// three-quarters about other things. That is the framework's shape, not a gap
+// in ours, and the weights say so.
+const WASC_STANDARDS: CatalogStandardSeed[] = [
+  {
+    code: 'WASC-A',
+    title: 'Organization: Vision and Purpose, Governance, Leadership, Staff, and Resources',
+    evidenceTags: ['strategic_plan', 'governance', 'board_minutes', 'policy_manual', 'staff_credentials', 'budget', 'financial_audit'],
+    domainKey: 'governance',
+    domainWeights: { governance: 0.25, leadership: 0.25, hr: 0.25, finance: 0.25 },
+    signalKeys: [
+      'operating_margin',
+      'days_cash_on_hand',
+      'months_operating_reserve',
+      'tuition_dependency',
+      'student_teacher_ratio',
+      'total_staff_fte',
+    ],
+  },
+  { code: 'WASC-B', title: 'Curriculum', domainKey: 'academic_excellence' },
+  { code: 'WASC-C', title: 'Learning and Teaching', domainKey: 'academic_excellence' },
+  { code: 'WASC-D', title: 'Assessment and Accountability', evidenceTags: ['enrollment_data', 'strategic_plan'], domainKey: 'continuous_improvement', signalKeys: ['plan_readiness'] },
+  {
+    code: 'WASC-E',
+    title:
+      'School Culture and Support for Student Personal, Social-Emotional, and Academic Growth',
+    evidenceTags: ['survey', 'safety_plan'],
+    domainKey: 'student_services',
+    signalKeys: ['pct_students_on_aid', 'financial_aid_per_student'],
+  },
+]
+
+// ── SAIS — 2022 Accreditation Standards and Indicators ───────────────────────
+// SAIS is the Southeast's independent-school accreditor and is very often paired
+// with Cognia, which makes it the second framework a great many of these schools
+// actually hold.
+const SAIS_STANDARDS: CatalogStandardSeed[] = [
+  { code: 'SAIS-1', title: 'Mission', evidenceTags: ['strategic_plan'], domainKey: 'mission_identity' },
+  { code: 'SAIS-2', title: 'Governance & Leadership', evidenceTags: ['governance', 'board_minutes', 'policy_manual'], domainKey: 'governance', domainWeights: { governance: 0.5, leadership: 0.5 } },
+  { code: 'SAIS-3', title: 'Teaching & Learning', evidenceTags: ['enrollment_data'], domainKey: 'academic_excellence' },
+  { code: 'SAIS-4', title: 'Stakeholder Communication & Relationships', evidenceTags: ['survey', 'marketing'], domainKey: 'leadership' },
+  {
+    code: 'SAIS-5',
+    title: 'Resources & Support Systems',
+    evidenceTags: ['budget', 'financial_audit', 'fiscal_resources', 'staff_credentials', 'safety_plan'],
     domainKey: 'finance',
+    domainWeights: { finance: 0.4, hr: 0.3, facilities: 0.3 },
     signalKeys: [
       'operating_margin',
       'days_cash_on_hand',
       'months_operating_reserve',
       'tuition_dependency',
       'net_tuition_per_student',
-      'tuition_discount_rate',
-      'forecast_operating_margin',
+      'student_teacher_ratio',
+      'total_staff_fte',
       'forecast_vs_budget_net',
     ],
   },
-  { code: 'SAIS-9', parentCode: 'SAIS-S4', title: 'Facilities and technology maintained, inspected and adequate to the program offered.', evidenceTags: ['safety_plan'], domainKey: 'facilities', domainWeights: { facilities: 0.5, technology: 0.5 } },
-  { code: 'SAIS-10', parentCode: 'SAIS-S4', title: 'Enrolment management and advancement sufficient to sustain the school over the plan\u2019s horizon.', evidenceTags: ['enrollment_data', 'marketing'], domainKey: 'finance', domainWeights: { finance: 0.5, leadership: 0.5 }, signalKeys: ['enrollment_change_yoy', 'enrollment_vs_plan', 'pct_students_on_aid'] },
-
-  { code: 'SAIS-11', parentCode: 'SAIS-S5', title: 'Evidence gathered on a schedule and used to change what the school does.', evidenceTags: ['survey', 'enrollment_data'], domainKey: 'continuous_improvement' },
+  { code: 'SAIS-6', title: 'Virtual Learning', description: 'Applies only to schools offering virtual or online instruction.', domainKey: 'technology' },
 ]
 
 /** The frozen framework rows. ONE Cognia framework contains all 31 standards. */
@@ -467,9 +451,9 @@ export const FRAMEWORK_SEEDS: FrameworkSeed[] = [
     code: 'fcis_2023',
     accreditor: 'FCIS',
     name: 'Florida Council of Independent Schools Accreditation Standards',
-    version: '2023 (KYRO condensed)',
+    version: '2023 Manual',
     description:
-      'A condensed summary of the FCIS accreditation standards, written by KYRO. Codes and wording are ours, not the accreditor\u2019s \u2014 check against your current FCIS protocol.',
+      'The 18 standards of the FCIS Manual for Evaluation and Accreditation (2023 revised). Standard titles and numbering are the accreditor\u2019s; indicators are not modelled \u2014 score at the standard level. Standards 8 and 13\u201318 apply only to schools running those programs.',
     rubricLabels: ['Not Addressed', 'Developing', 'Meets Standard', 'Exceeds Standard'],
     statusBands: [],
     indexMin: null,
@@ -481,9 +465,9 @@ export const FRAMEWORK_SEEDS: FrameworkSeed[] = [
     code: 'acsi_reach',
     accreditor: 'ACSI',
     name: 'ACSI REACH Accreditation Standards',
-    version: '2023 (KYRO condensed)',
+    version: 'REACH 2019',
     description:
-      'A condensed summary of the ACSI REACH standards, written by KYRO. Codes and wording are ours, not the accreditor\u2019s \u2014 check against your current ACSI protocol.',
+      'The 8 standards of the ACSI REACH 2019 Edition Standards Manual. Standard titles and numbering are the accreditor\u2019s; indicators are not modelled \u2014 score at the standard level.',
     rubricLabels: ['Not Met', 'Partially Met', 'Met', 'Exemplary'],
     statusBands: [],
     indexMin: null,
@@ -495,9 +479,9 @@ export const FRAMEWORK_SEEDS: FrameworkSeed[] = [
     code: 'acs_wasc',
     accreditor: 'ACS WASC',
     name: 'ACS WASC Focus on Learning Criteria',
-    version: '2023 (KYRO condensed)',
+    version: 'Focus on Learning',
     description:
-      'A condensed summary of the ACS WASC Focus on Learning criteria, written by KYRO. Codes and wording are ours, not the accreditor\u2019s \u2014 check against your current WASC protocol.',
+      'The five Focus on Learning categories (A\u2013E) used by ACS WASC. Category letters and titles are the accreditor\u2019s; criteria and indicators are not modelled \u2014 score at the category level.',
     rubricLabels: ['Little Evidence', 'Some Evidence', 'Consistent Evidence', 'Highly Effective'],
     statusBands: [],
     indexMin: null,
@@ -509,9 +493,9 @@ export const FRAMEWORK_SEEDS: FrameworkSeed[] = [
     code: 'sais_2023',
     accreditor: 'SAIS',
     name: 'Southern Association of Independent Schools Accreditation Standards',
-    version: '2023 (KYRO condensed)',
+    version: '2022 Standards',
     description:
-      'A condensed summary of the SAIS accreditation standards, written by KYRO. Codes and wording are ours, not the accreditor\u2019s \u2014 check against your current SAIS protocol.',
+      'The 6 standards of the SAIS 2022 Accreditation Standards and Indicators. Standard titles and numbering are the accreditor\u2019s; indicators are not modelled \u2014 score at the standard level. Standard 6 applies only to schools offering virtual learning.',
     rubricLabels: ['Not Evident', 'Emerging', 'Meets Standard', 'Exceeds Standard'],
     statusBands: [],
     indexMin: null,

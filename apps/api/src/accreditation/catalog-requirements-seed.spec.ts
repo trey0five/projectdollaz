@@ -112,7 +112,7 @@ describe('requirement seed — shape rules the engine relies on', () => {
 })
 
 describe('requirement seed — the frozen inventory', () => {
-  it('20 / 11 / 14 + 12 / 12 / 12 / 12 = 93 rows across seven frameworks', () => {
+  it('20 / 11 / 14 + 16 / 13 / 12 / 12 = 98 rows across seven frameworks', () => {
     // The three transcribed frameworks are UNCHANGED — that is the point of
     // listing them separately. FCIS, ACSI, ACS WASC and SAIS were added for the
     // schools that hold a second accreditation alongside Cognia, and each asks for
@@ -120,11 +120,11 @@ describe('requirement seed — the frozen inventory', () => {
     expect(FRAMEWORK_REQUIREMENT_SEEDS.cognia_2022).toHaveLength(20)
     expect(FRAMEWORK_REQUIREMENT_SEEDS.msa_cess_2022).toHaveLength(11)
     expect(FRAMEWORK_REQUIREMENT_SEEDS.nsbecs).toHaveLength(14)
-    expect(FRAMEWORK_REQUIREMENT_SEEDS.fcis_2023).toHaveLength(12)
-    expect(FRAMEWORK_REQUIREMENT_SEEDS.acsi_reach).toHaveLength(12)
+    expect(FRAMEWORK_REQUIREMENT_SEEDS.fcis_2023).toHaveLength(16)
+    expect(FRAMEWORK_REQUIREMENT_SEEDS.acsi_reach).toHaveLength(13)
     expect(FRAMEWORK_REQUIREMENT_SEEDS.acs_wasc).toHaveLength(12)
     expect(FRAMEWORK_REQUIREMENT_SEEDS.sais_2023).toHaveLength(12)
-    expect(EVERY_ROW).toHaveLength(93)
+    expect(EVERY_ROW).toHaveLength(98)
   })
 
   it('every seeded framework has a catalog to hang its requirements on', () => {
@@ -136,7 +136,7 @@ describe('requirement seed — the frozen inventory', () => {
     }
   })
 
-  it('78 platform, 1 intake, 6 integration, 8 external', () => {
+  it('83 platform, 1 intake, 6 integration, 8 external', () => {
     // AIC Phase F moved THREE rows intake → platform (COG-10/staff_evaluation,
     // COG-A3 and NSBECS-12/inspection) and added none. `integration` and `external`
     // did not move: an LMS we are not connected to and an accreditor portal we do
@@ -149,11 +149,11 @@ describe('requirement seed — the frozen inventory', () => {
     // `intake` stays at ONE: the PD register does not exist, and a second framework
     // asking for PD would not conjure it.
     const by = (v: string) => EVERY_ROW.filter(([, r]) => r.dataAvailability === v).length
-    expect(by('platform')).toBe(78)
+    expect(by('platform')).toBe(83)
     expect(by('intake')).toBe(1)
     expect(by('integration')).toBe(6)
     expect(by('external')).toBe(8)
-    expect(by('platform') + by('intake') + by('integration') + by('external')).toBe(93)
+    expect(by('platform') + by('intake') + by('integration') + by('external')).toBe(98)
   })
 
   it('the module-gated registers are named only where they resolve', () => {
@@ -165,14 +165,14 @@ describe('requirement seed — the frozen inventory', () => {
       ([, r]) => r.sourceRegister === 'staff_evaluation_register' || r.sourceRegister === 'maintenance_item',
     )
     expect(flipped.map(([fw, r]) => `${fw}/${r.standardCode}/${r.tag}`).sort()).toEqual([
-      'acs_wasc/WASC-E1/inspection',
+      'acs_wasc/WASC-E/inspection',
       'acsi_reach/ACSI-4/staff_evaluation',
       'cognia_2022/COG-10/staff_evaluation',
       'cognia_2022/COG-A3/inspection',
-      'fcis_2023/FCIS-11/inspection',
-      'fcis_2023/FCIS-6/staff_evaluation',
+      'fcis_2023/FCIS-11/staff_evaluation',
+      'fcis_2023/FCIS-12/inspection',
       'nsbecs/NSBECS-12/inspection',
-      'sais_2023/SAIS-7/staff_evaluation',
+      'sais_2023/SAIS-5/staff_evaluation',
     ])
     for (const [, r] of flipped) {
       expect(r.dataAvailability).toBe('platform')
@@ -258,11 +258,11 @@ describe('requirement seed — the frozen inventory', () => {
 
   it('the curriculum convention ships as a POLICY delegation, not a curriculum feature', () => {
     const curriculum = EVERY_ROW.filter(([, r]) => r.tag === 'curriculum_review')
-    // COG-12, MSA-5, NSBECS-7, ACSI-5, WASC-B1. Every framework asks about
+    // COG-12, MSA-5, NSBECS-7, FCIS-9, ACSI-5, WASC-B, SAIS-3. Every framework asks about
     // curriculum; none of them gets a curriculum feature out of us. The Policy row
     // whose category names curriculum carries the review cycle, and
     // computeReviewStatus does the rest.
-    expect(curriculum.length).toBe(5)
+    expect(curriculum.length).toBe(7)
     for (const [, r] of curriculum) {
       expect(r.sourceRegister).toBe('policy')
       expect(r.windowKind).toBe('source_interval')

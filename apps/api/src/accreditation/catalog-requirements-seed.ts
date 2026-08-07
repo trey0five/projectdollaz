@@ -179,84 +179,93 @@ const NSBECS_REQUIREMENTS: CatalogRequirementSeed[] = [
   { standardCode: 'NSBECS-13', tag: 'marketing', label: 'Advancement / communications materials', windowKind: 'fixed', windowMonths: 24, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
 ]
 
-// ── The four condensed frameworks — 12 / 11 / 12 / 12 rows ──────────────────
+// ── The four added frameworks, on their accreditors' own standard numbers ───
 // SAME ARTIFACTS, DIFFERENT STANDARDS. Every accreditor asks a school for the
 // same small pile of documents — a budget, an audit, board minutes, a policy
 // manual, a safety plan, a strategic plan, an enrolment record — which is why
 // "enter data once" works across frameworks at all. What changes is which
-// standard each one hangs on.
+// standard each one hangs on, and these hang on the numbering the accreditors
+// actually publish.
 //
-// Nothing new is claimed here: every `platform` row names a register that already
-// has a live resolver, and every hole reuses a frozen WHY sentence rather than
-// inventing a new one. Standards about curriculum content, spiritual formation
-// and student growth carry NO rows on purpose, exactly as they do above.
+// Nothing new is claimed here: every `platform` row names a register that
+// already has a live resolver, and every hole reuses a frozen WHY sentence
+// rather than inventing a new one. Standards about curriculum content, spiritual
+// formation and student growth carry NO rows on purpose, exactly as they do
+// above — and neither do the conditional standards (FCIS 8, 13–18, SAIS 6),
+// because a school that does not run a boarding program should not be asked for
+// boarding evidence.
 const FCIS_REQUIREMENTS: CatalogRequirementSeed[] = [
-  { standardCode: 'FCIS-1', tag: 'strategic_plan', label: 'Current strategic plan', windowKind: 'source_interval', dataAvailability: 'platform', sourceRegister: 'strategic_plan' },
-  { standardCode: 'FCIS-1', tag: 'self_study', label: 'FCIS self-study', windowKind: 'fixed', windowMonths: 60, dataAvailability: 'external', sourceRegister: 'portal', notTrackedReason: WHY.portal },
+  { standardCode: 'FCIS-1', tag: 'strategic_plan', label: 'Mission statement and review record', windowKind: 'source_interval', dataAvailability: 'platform', sourceRegister: 'strategic_plan' },
   { standardCode: 'FCIS-2', tag: 'policy_manual', label: 'Board policy manual', windowKind: 'source_interval', dataAvailability: 'platform', sourceRegister: 'policy' },
   { standardCode: 'FCIS-2', tag: 'board_minutes', label: 'Approved board minutes', windowKind: 'fixed', windowMonths: 6, dataAvailability: 'platform', sourceRegister: 'meeting' },
-  { standardCode: 'FCIS-4', tag: 'marketing', label: 'Current publications and admissions materials', windowKind: 'fixed', windowMonths: 24, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
-  { standardCode: 'FCIS-5', tag: 'staff_credentials', label: 'Faculty credential / certification records', windowKind: 'fixed', windowMonths: 24, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
-  { standardCode: 'FCIS-6', tag: 'policy_manual', label: 'Written personnel policies', windowKind: 'source_interval', dataAvailability: 'platform', sourceRegister: 'policy' },
-  { standardCode: 'FCIS-6', tag: 'staff_evaluation', label: 'Staff evaluation cycle records', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'staff_evaluation_register', notTrackedReason: WHY.evaluations },
-  { standardCode: 'FCIS-8', tag: 'enrollment_data', label: 'Current enrollment record', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'enrollment_snapshot' },
-  { standardCode: 'FCIS-10', tag: 'budget', label: 'Board-approved operating budget', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'period_budget' },
-  { standardCode: 'FCIS-10', tag: 'financial_audit', label: 'Annual external financial audit', windowKind: 'fixed', windowMonths: 18, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
-  { standardCode: 'FCIS-11', tag: 'inspection', label: 'Fire / life-safety inspection record', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'maintenance_item', notTrackedReason: WHY.inspections },
+  { standardCode: 'FCIS-3', tag: 'strategic_plan', label: 'Strategic / long-term plan', windowKind: 'source_interval', dataAvailability: 'platform', sourceRegister: 'strategic_plan' },
+  { standardCode: 'FCIS-3', tag: 'self_study', label: 'FCIS self-study', windowKind: 'fixed', windowMonths: 60, dataAvailability: 'external', sourceRegister: 'portal', notTrackedReason: WHY.portal },
+  { standardCode: 'FCIS-4', tag: 'financial_audit', label: 'Most recent external financial audit', windowKind: 'fixed', windowMonths: 18, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
+  { standardCode: 'FCIS-4', tag: 'budget', label: 'Board-approved operating budget', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'period_budget' },
+  { standardCode: 'FCIS-5', tag: 'marketing', label: 'Fundraising and advancement materials', windowKind: 'fixed', windowMonths: 24, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
+  { standardCode: 'FCIS-6', tag: 'enrollment_data', label: 'Current enrollment record', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'enrollment_snapshot' },
+  { standardCode: 'FCIS-7', tag: 'marketing', label: 'Admissions materials provided to parents', windowKind: 'fixed', windowMonths: 24, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
+  { standardCode: 'FCIS-9', tag: 'curriculum_review', label: 'Curriculum review record', windowKind: 'source_interval', dataAvailability: 'platform', sourceRegister: 'policy' },
+  { standardCode: 'FCIS-11', tag: 'staff_credentials', label: 'Faculty credential / certification records', windowKind: 'fixed', windowMonths: 24, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
+  { standardCode: 'FCIS-11', tag: 'policy_manual', label: 'Written personnel policies', windowKind: 'source_interval', dataAvailability: 'platform', sourceRegister: 'policy' },
+  { standardCode: 'FCIS-11', tag: 'staff_evaluation', label: 'Staff evaluation cycle records', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'staff_evaluation_register', notTrackedReason: WHY.evaluations },
+  { standardCode: 'FCIS-12', tag: 'safety_plan', label: 'Safety, security and risk-management plan', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
+  { standardCode: 'FCIS-12', tag: 'inspection', label: 'Fire / life-safety inspection record', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'maintenance_item', notTrackedReason: WHY.inspections },
 ]
 
 const ACSI_REQUIREMENTS: CatalogRequirementSeed[] = [
-  { standardCode: 'ACSI-1', tag: 'strategic_plan', label: 'Current strategic plan', windowKind: 'source_interval', dataAvailability: 'platform', sourceRegister: 'strategic_plan' },
-  { standardCode: 'ACSI-1', tag: 'self_study', label: 'ACSI self-study', windowKind: 'fixed', windowMonths: 60, dataAvailability: 'external', sourceRegister: 'portal', notTrackedReason: WHY.portal },
+  { standardCode: 'ACSI-1', tag: 'strategic_plan', label: 'Statement of philosophy and foundations', windowKind: 'source_interval', dataAvailability: 'platform', sourceRegister: 'strategic_plan' },
   { standardCode: 'ACSI-2', tag: 'policy_manual', label: 'Board policy manual', windowKind: 'source_interval', dataAvailability: 'platform', sourceRegister: 'policy' },
   { standardCode: 'ACSI-2', tag: 'board_minutes', label: 'Approved board minutes', windowKind: 'fixed', windowMonths: 6, dataAvailability: 'platform', sourceRegister: 'meeting' },
+  { standardCode: 'ACSI-2', tag: 'financial_audit', label: 'Annual external financial audit', windowKind: 'fixed', windowMonths: 18, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
+  { standardCode: 'ACSI-2', tag: 'budget', label: 'Board-approved operating budget', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'period_budget' },
   { standardCode: 'ACSI-3', tag: 'marketing', label: 'Family and constituent communications', windowKind: 'fixed', windowMonths: 24, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
+  { standardCode: 'ACSI-3', tag: 'enrollment_data', label: 'Current enrollment record', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'enrollment_snapshot' },
   { standardCode: 'ACSI-4', tag: 'staff_credentials', label: 'Staff credential / certification records', windowKind: 'fixed', windowMonths: 24, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
   { standardCode: 'ACSI-4', tag: 'staff_evaluation', label: 'Staff evaluation cycle records', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'staff_evaluation_register', notTrackedReason: WHY.evaluations },
   { standardCode: 'ACSI-5', tag: 'curriculum_review', label: 'Curriculum review record', windowKind: 'source_interval', dataAvailability: 'platform', sourceRegister: 'policy' },
-  { standardCode: 'ACSI-6', tag: 'enrollment_data', label: 'Current enrollment record', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'enrollment_snapshot' },
-  { standardCode: 'ACSI-7', tag: 'safety_plan', label: 'Safety and crisis plan', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
-  { standardCode: 'ACSI-8', tag: 'budget', label: 'Board-approved operating budget', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'period_budget' },
-  { standardCode: 'ACSI-8', tag: 'financial_audit', label: 'Annual external financial audit', windowKind: 'fixed', windowMonths: 18, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
+  { standardCode: 'ACSI-6', tag: 'safety_plan', label: 'Student-care health and safety plan', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
+  { standardCode: 'ACSI-8', tag: 'strategic_plan', label: 'Continuous school improvement plan', windowKind: 'source_interval', dataAvailability: 'platform', sourceRegister: 'strategic_plan' },
+  { standardCode: 'ACSI-8', tag: 'self_study', label: 'ACSI self-study', windowKind: 'fixed', windowMonths: 60, dataAvailability: 'external', sourceRegister: 'portal', notTrackedReason: WHY.portal },
 ]
 
 const WASC_REQUIREMENTS: CatalogRequirementSeed[] = [
-  { standardCode: 'WASC-A1', tag: 'strategic_plan', label: 'Vision / mission and schoolwide learner outcomes', windowKind: 'source_interval', dataAvailability: 'platform', sourceRegister: 'strategic_plan' },
-  { standardCode: 'WASC-A1', tag: 'self_study', label: 'WASC self-study', windowKind: 'fixed', windowMonths: 72, dataAvailability: 'external', sourceRegister: 'portal', notTrackedReason: WHY.portal },
-  { standardCode: 'WASC-A2', tag: 'policy_manual', label: 'Board policy manual', windowKind: 'source_interval', dataAvailability: 'platform', sourceRegister: 'policy' },
-  { standardCode: 'WASC-A2', tag: 'board_minutes', label: 'Approved board minutes', windowKind: 'fixed', windowMonths: 6, dataAvailability: 'platform', sourceRegister: 'meeting' },
-  { standardCode: 'WASC-A3', tag: 'staff_credentials', label: 'Staff credential / certification records', windowKind: 'fixed', windowMonths: 24, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
-  { standardCode: 'WASC-A4', tag: 'budget', label: 'Board-approved operating budget', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'period_budget' },
-  { standardCode: 'WASC-A4', tag: 'financial_audit', label: 'Annual external financial audit', windowKind: 'fixed', windowMonths: 18, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
-  { standardCode: 'WASC-B1', tag: 'curriculum_review', label: 'Curriculum review record', windowKind: 'source_interval', dataAvailability: 'platform', sourceRegister: 'policy' },
-  { standardCode: 'WASC-D1', tag: 'assessment_results', label: 'Student assessment results', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'integration', sourceRegister: 'lms', notTrackedReason: WHY.assessment },
-  { standardCode: 'WASC-D2', tag: 'strategic_plan', label: 'Schoolwide action plan', windowKind: 'source_interval', dataAvailability: 'platform', sourceRegister: 'strategic_plan' },
-  { standardCode: 'WASC-E1', tag: 'safety_plan', label: 'Safety and crisis plan', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
-  { standardCode: 'WASC-E1', tag: 'inspection', label: 'Fire / life-safety inspection record', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'maintenance_item', notTrackedReason: WHY.inspections },
+  { standardCode: 'WASC-A', tag: 'strategic_plan', label: 'Vision, purpose and schoolwide learner outcomes', windowKind: 'source_interval', dataAvailability: 'platform', sourceRegister: 'strategic_plan' },
+  { standardCode: 'WASC-A', tag: 'policy_manual', label: 'Governance policy manual', windowKind: 'source_interval', dataAvailability: 'platform', sourceRegister: 'policy' },
+  { standardCode: 'WASC-A', tag: 'board_minutes', label: 'Approved board minutes', windowKind: 'fixed', windowMonths: 6, dataAvailability: 'platform', sourceRegister: 'meeting' },
+  { standardCode: 'WASC-A', tag: 'staff_credentials', label: 'Staff credential / certification records', windowKind: 'fixed', windowMonths: 24, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
+  { standardCode: 'WASC-A', tag: 'budget', label: 'Board-approved operating budget', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'period_budget' },
+  { standardCode: 'WASC-A', tag: 'financial_audit', label: 'Annual external financial audit', windowKind: 'fixed', windowMonths: 18, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
+  { standardCode: 'WASC-A', tag: 'self_study', label: 'WASC self-study', windowKind: 'fixed', windowMonths: 72, dataAvailability: 'external', sourceRegister: 'portal', notTrackedReason: WHY.portal },
+  { standardCode: 'WASC-B', tag: 'curriculum_review', label: 'Curriculum review record', windowKind: 'source_interval', dataAvailability: 'platform', sourceRegister: 'policy' },
+  { standardCode: 'WASC-D', tag: 'assessment_results', label: 'Student assessment results', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'integration', sourceRegister: 'lms', notTrackedReason: WHY.assessment },
+  { standardCode: 'WASC-D', tag: 'strategic_plan', label: 'Schoolwide action plan', windowKind: 'source_interval', dataAvailability: 'platform', sourceRegister: 'strategic_plan' },
+  { standardCode: 'WASC-E', tag: 'safety_plan', label: 'Safety and crisis plan', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
+  { standardCode: 'WASC-E', tag: 'inspection', label: 'Fire / life-safety inspection record', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'maintenance_item', notTrackedReason: WHY.inspections },
 ]
 
 const SAIS_REQUIREMENTS: CatalogRequirementSeed[] = [
   { standardCode: 'SAIS-1', tag: 'strategic_plan', label: 'Board-adopted mission statement', windowKind: 'source_interval', dataAvailability: 'platform', sourceRegister: 'strategic_plan' },
-  { standardCode: 'SAIS-2', tag: 'strategic_plan', label: 'Current strategic plan', windowKind: 'source_interval', dataAvailability: 'platform', sourceRegister: 'strategic_plan' },
+  { standardCode: 'SAIS-2', tag: 'policy_manual', label: 'Board policy manual', windowKind: 'source_interval', dataAvailability: 'platform', sourceRegister: 'policy' },
+  { standardCode: 'SAIS-2', tag: 'board_minutes', label: 'Approved board minutes', windowKind: 'fixed', windowMonths: 6, dataAvailability: 'platform', sourceRegister: 'meeting' },
   { standardCode: 'SAIS-2', tag: 'self_study', label: 'SAIS self-study', windowKind: 'fixed', windowMonths: 60, dataAvailability: 'external', sourceRegister: 'portal', notTrackedReason: WHY.portal },
-  { standardCode: 'SAIS-3', tag: 'policy_manual', label: 'Board policy manual', windowKind: 'source_interval', dataAvailability: 'platform', sourceRegister: 'policy' },
-  { standardCode: 'SAIS-3', tag: 'board_minutes', label: 'Approved board minutes', windowKind: 'fixed', windowMonths: 6, dataAvailability: 'platform', sourceRegister: 'meeting' },
+  { standardCode: 'SAIS-3', tag: 'curriculum_review', label: 'Curriculum review record', windowKind: 'source_interval', dataAvailability: 'platform', sourceRegister: 'policy' },
+  { standardCode: 'SAIS-3', tag: 'enrollment_data', label: 'Current enrollment record', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'enrollment_snapshot' },
+  { standardCode: 'SAIS-4', tag: 'marketing', label: 'Stakeholder communications', windowKind: 'fixed', windowMonths: 24, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
+  { standardCode: 'SAIS-5', tag: 'budget', label: 'Board-approved operating budget', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'period_budget' },
+  { standardCode: 'SAIS-5', tag: 'financial_audit', label: 'Annual external financial audit', windowKind: 'fixed', windowMonths: 18, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
   { standardCode: 'SAIS-5', tag: 'staff_credentials', label: 'Faculty credential / certification records', windowKind: 'fixed', windowMonths: 24, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
-  { standardCode: 'SAIS-6', tag: 'safety_plan', label: 'Safety and crisis plan', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
-  { standardCode: 'SAIS-7', tag: 'policy_manual', label: 'Written personnel policies', windowKind: 'source_interval', dataAvailability: 'platform', sourceRegister: 'policy' },
-  { standardCode: 'SAIS-7', tag: 'staff_evaluation', label: 'Staff evaluation cycle records', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'staff_evaluation_register', notTrackedReason: WHY.evaluations },
-  { standardCode: 'SAIS-8', tag: 'budget', label: 'Board-approved operating budget', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'period_budget' },
-  { standardCode: 'SAIS-8', tag: 'financial_audit', label: 'Annual external financial audit', windowKind: 'fixed', windowMonths: 18, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
-  { standardCode: 'SAIS-10', tag: 'enrollment_data', label: 'Current enrollment record', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'enrollment_snapshot' },
+  { standardCode: 'SAIS-5', tag: 'staff_evaluation', label: 'Staff evaluation cycle records', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'staff_evaluation_register', notTrackedReason: WHY.evaluations },
+  { standardCode: 'SAIS-5', tag: 'safety_plan', label: 'Safety and crisis plan', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
 ]
 
 /**
  * frameworkCode → its requirement rows.
  *
- * Counts: 20 / 11 / 14 for the three transcribed frameworks, plus 12 / 12 / 12 / 12
- * for the four KYRO-condensed ones = 93. The spec pins each number so a row
- * added or dropped by accident is a failing build, not a quiet change to what
- * every school on that framework is asked for.
+ * Counts: 20 / 11 / 14 for the three originally transcribed frameworks, plus
+ * 16 / 13 / 12 / 12 for FCIS / ACSI / WASC / SAIS = 98. The spec pins each number
+ * so a row added or dropped by accident is a failing build, not a quiet change to
+ * what every school on that framework is asked for.
  */
 export const FRAMEWORK_REQUIREMENT_SEEDS: Record<string, CatalogRequirementSeed[]> = {
   cognia_2022: COGNIA_REQUIREMENTS,

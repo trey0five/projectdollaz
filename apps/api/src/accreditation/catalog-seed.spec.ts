@@ -104,13 +104,15 @@ describe('catalog seed — the framework shapes are unchanged', () => {
   // transcriptions, and these tests pin the two things that must stay true of
   // anything authored that way.
   // ───────────────────────────────────────────────────────────────────────────
-  it('the four condensed frameworks keep their authored shapes', () => {
+  it('the four added frameworks match their published standard lists', () => {
     const shapes: [string, number, number][] = [
-      // code, total rows, non-assurance leaves
-      ['fcis_2023', 16, 12],
+      // code, total rows, non-assurance leaves. FLAT for all four: the standard
+      // list is the accreditor's own and indicators are deliberately not modelled,
+      // so every row is a leaf.
+      ['fcis_2023', 18, 18],
       ['acsi_reach', 8, 8],
-      ['acs_wasc', 18, 13],
-      ['sais_2023', 16, 11],
+      ['acs_wasc', 5, 5],
+      ['sais_2023', 6, 6],
     ]
     for (const [code, rows, leaves] of shapes) {
       const fw = FRAMEWORK_SEEDS.find((f) => f.code === code)
@@ -133,14 +135,53 @@ describe('catalog seed — the framework shapes are unchanged', () => {
     }
   })
 
-  it('each one SAYS it is a KYRO summary, on every screen that shows a version', () => {
-    // The version string is rendered on the adopt screen and on the readiness
-    // hero. A school must never be able to mistake our condensation for its
-    // accreditor's own document.
+  it('each one names its source document and says indicators are not modelled', () => {
+    // These four shipped first as KYRO's own condensed summaries and were WRONG —
+    // ACSI standard 7 was seeded as "facilities" when it is spiritual formation,
+    // SAIS was missing an entire standard, FCIS was a four-group invention where
+    // the manual is a flat list of eighteen. The titles are now the accreditors'
+    // own, and what remains unmodelled has to be stated rather than implied.
     for (const code of ['fcis_2023', 'acsi_reach', 'acs_wasc', 'sais_2023']) {
       const fw = FRAMEWORK_SEEDS.find((f) => f.code === code)!
-      expect(fw.version, `${code} version`).toContain('KYRO condensed')
-      expect(fw.description ?? '', `${code} description`).toMatch(/not the accreditor/i)
+      expect(fw.version, `${code} version`).not.toMatch(/KYRO/i)
+      expect(fw.description ?? '', `${code} says indicators are not modelled`).toMatch(
+        /not modelled/i,
+      )
+      expect(fw.description ?? '', `${code} attributes the titles`).toMatch(/accreditor’s/)
+    }
+  })
+
+  it('the accreditors’ OWN standard titles are used verbatim', () => {
+    // The check that would have caught the original errors. Each of these is a
+    // title transcribed from the accreditor's published manual — a rewrite that
+    // paraphrases one of them back into KYRO's words reddens here.
+    const titleOf = (fw: string, code: string) =>
+      FRAMEWORK_SEEDS.find((f) => f.code === fw)!.standards.find((s) => s.code === code)?.title
+    expect(titleOf('fcis_2023', 'FCIS-12')).toBe('Safety, Security and Risk Management')
+    expect(titleOf('acsi_reach', 'ACSI-7')).toBe(
+      'Character, Values, and Spiritual Formation of Students',
+    )
+    expect(titleOf('acsi_reach', 'ACSI-6')).toBe('Student Care')
+    expect(titleOf('acs_wasc', 'WASC-C')).toBe('Learning and Teaching')
+    expect(titleOf('sais_2023', 'SAIS-4')).toBe('Stakeholder Communication & Relationships')
+  })
+
+  it('conditional standards SAY when they apply', () => {
+    // FCIS 8 and 13–18 and SAIS 6 apply only to schools running those programs.
+    // Seeding them without saying so would hand a day school seven standards it
+    // can never meet and no way to know why.
+    const conditional = [
+      ['fcis_2023', 'FCIS-8'],
+      ['fcis_2023', 'FCIS-13'],
+      ['fcis_2023', 'FCIS-15'],
+      ['fcis_2023', 'FCIS-18'],
+      ['sais_2023', 'SAIS-6'],
+    ]
+    for (const [fw, code] of conditional) {
+      const row = FRAMEWORK_SEEDS.find((f) => f.code === fw)!.standards.find(
+        (s) => s.code === code,
+      )!
+      expect(row.description ?? '', `${fw}:${code}`).toMatch(/^Applies only to schools/)
     }
   })
 
