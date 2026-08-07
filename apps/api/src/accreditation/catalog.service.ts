@@ -42,6 +42,39 @@ export interface AdoptResult {
 }
 
 /**
+ * WHAT REMOVING A FRAMEWORK WOULD COST, counted before anything is touched.
+ *
+ * Adopting is cheap and looks reversible; removing a framework a school has
+ * spent a year scoring is neither. So the count comes first and the deletion
+ * only happens on a second, informed call — the school reads exactly what it is
+ * about to lose, in its own numbers, and then decides.
+ */
+export interface FrameworkRemovalImpact {
+  frameworkId: string
+  code: string
+  name: string
+  /** Register rows that would be deleted — parents, leaves and assurance gates. */
+  standards: number
+  /** Of those, how many carry a self-score the school entered. */
+  rubricScored: number
+  /** Of those, how many carry a rating other than the untouched default. */
+  rated: number
+  /** Evidence LINK rows. The documents themselves live in the doc store and stay. */
+  evidenceLinks: number
+  /**
+   * Improvement initiatives raised from these standards. They are NOT deleted —
+   * an initiative is a school's own plan of work, not the framework's property —
+   * but their link back to a standard stops resolving, so they are counted and
+   * named rather than silently orphaned.
+   */
+  initiativesOrphaned: number
+}
+
+export interface RemoveFrameworkResult extends FrameworkRemovalImpact {
+  removed: number
+}
+
+/**
  * Accreditation Phase 3 — the platform FRAMEWORK CATALOG service. Two jobs:
  *
  * 1. BOOT SEED (OnModuleInit): idempotently upsert the 3 accreditor frameworks +
@@ -325,6 +358,111 @@ export class AccreditationCatalogService implements OnModuleInit {
     // write paths — an adopt must never be slowed or failed by snapshotting.
     this.snapshot?.captureOnEvent(schoolId)
     return result
+  }
+
+  /**
+   * Count what removing this framework would take with it. READ-ONLY.
+   *
+   * Scoped to standards carrying THIS frameworkId, so a hand-made standard the
+   * school typed itself is never in scope — those belong to nobody's catalog and
+   * survive every framework change.
+   */
+  async removalImpact(schoolId: string, code: string): Promise<FrameworkRemovalImpact> {
+    const framework = await this.prisma.accreditationFramework.findFirst({
+      where: { code, active: true },
+      select: { id: true, code: true, name: true },
+    })
+    if (!framework) throw new NotFoundException('Framework not found.')
+
+    const rows = await this.prisma.accreditationStandard.findMany({
+      where: { schoolId, frameworkId: framework.id },
+      select: { id: true, rubricScore: true, rating: true },
+    })
+    const ids = rows.map((r) => r.id)
+
+    // Two independent counts, both over the SAME id set, so the sentence the
+    // school reads cannot disagree with what the delete then does.
+    const [evidenceLinks, initiativesOrphaned] = await Promise.all([
+      ids.length
+        ? this.prisma.accreditationEvidence.count({ where: { schoolId, standardId: { in: ids } } })
+        : Promise.resolve(0),
+      ids.length
+        ? this.prisma.improvementInitiative.count({
+            // A SOFT link — originRef holds a standardId with no foreign key, so
+            // nothing in the database would tell us these had gone stale.
+            where: { schoolId, originRef: { in: ids } },
+          })
+        : Promise.resolve(0),
+    ])
+
+    return {
+      frameworkId: framework.id,
+      code: framework.code,
+      name: framework.name,
+      standards: rows.length,
+      rubricScored: rows.filter((r) => r.rubricScore != null).length,
+      rated: rows.filter((r) => r.rating && r.rating !== 'not_started').length,
+      evidenceLinks,
+      initiativesOrphaned,
+    }
+  }
+
+  /**
+   * Remove a framework from a school's register.
+   *
+   * ALWAYS PERMITTED, and that is the decision: refusing to remove a framework
+   * the school had already scored would strand anyone who adopted the wrong one
+   * and noticed late — exactly the mistake this product now invites by offering
+   * seven frameworks and encouraging more than one. What protects the school is
+   * the COUNT, not a locked door: `removalImpact` names the loss in the school's
+   * own numbers and the UI makes it read it first.
+   *
+   * WHAT IS NOT DELETED, deliberately:
+   *   • the documents behind evidence links — they live in the doc store, serve
+   *     other standards, and are the school's records, not the framework's;
+   *   • improvement initiatives raised from these standards — an initiative is a
+   *     plan of work the school committed to, and deleting somebody's plan
+   *     because they changed accreditor would be indefensible. Their originRef
+   *     stops resolving, which is why it is counted and told.
+   *
+   * Idempotent: removing a framework the school does not hold deletes nothing
+   * and reports zero rather than throwing.
+   */
+  async removeFramework(
+    schoolId: string,
+    code: string,
+    userId: string,
+  ): Promise<RemoveFrameworkResult> {
+    const impact = await this.removalImpact(schoolId, code)
+
+    // Evidence rows carry an FK to the standard; delete them first rather than
+    // relying on a cascade that the schema may or may not declare. The parent/
+    // child hierarchy is SetNull on delete, so children re-parent harmlessly
+    // even though every row in this set is going anyway.
+    const removed = await this.prisma.$transaction(async (tx) => {
+      const rows = await tx.accreditationStandard.findMany({
+        where: { schoolId, frameworkId: impact.frameworkId },
+        select: { id: true },
+      })
+      const ids = rows.map((r) => r.id)
+      if (ids.length === 0) return 0
+      await tx.accreditationEvidence.deleteMany({ where: { schoolId, standardId: { in: ids } } })
+      const del = await tx.accreditationStandard.deleteMany({ where: { id: { in: ids } } })
+      return del.count
+    })
+
+    await this.audit.write({
+      schoolId,
+      userId,
+      action: 'accreditation.framework.removed',
+      targetType: 'accreditation_frameworks',
+      targetId: impact.frameworkId,
+    })
+
+    // Readiness changed the instant those standards left. Same fire-and-forget
+    // debounced capture as adopt — a removal must never be slowed by a snapshot.
+    this.snapshot?.captureOnEvent(schoolId)
+    return { ...impact, removed }
   }
 
   /** Parents-first order (roots by orderIndex, then children) — safe for creates. */

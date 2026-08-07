@@ -1475,6 +1475,8 @@ function AccreditationWorkspace() {
     frameworks,
     loadFrameworks,
     adoptFramework,
+    frameworkRemovalImpact,
+    removeFramework,
     setReadinessTarget,
     setRubric,
     fetchSuggestions,
@@ -2603,6 +2605,8 @@ function AccreditationWorkspace() {
         onClose={() => setAdoptOpen(false)}
         frameworks={frameworks}
         onAdopt={adoptFramework}
+        onRemovalImpact={frameworkRemovalImpact}
+        onRemove={removeFramework}
         reduce={reduce}
       />
     </>

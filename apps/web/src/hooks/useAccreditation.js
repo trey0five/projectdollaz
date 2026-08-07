@@ -239,6 +239,38 @@ export function useAccreditation(schoolId) {
     }
   }, [schoolId])
 
+  /** READ-ONLY — what removing this framework would cost. Never mutates. */
+  const frameworkRemovalImpact = useCallback(
+    async (code) => {
+      if (!schoolId) return null
+      const res = await accreditationApi.getFrameworkRemovalImpact(schoolId, code)
+      return res.data ?? null
+    },
+    [schoolId],
+  )
+
+  /**
+   * Remove a framework from the register. Reloads EVERYTHING — the standards
+   * list, the readiness read and the catalog's adoption flags all changed, and a
+   * page still showing the removed framework's pill would be lying about what it
+   * just did. The selection is cleared for the same reason: it may name the
+   * framework that no longer exists.
+   */
+  const removeFramework = useCallback(
+    async (code) => {
+      if (!schoolId) return null
+      const res = await accreditationApi.removeFramework(schoolId, code)
+      setFrameworkId(null)
+      frameworkIdRef.current = null
+      // RE-FETCH, never null: the modal that triggered this is still open and
+      // reads `frameworks` directly, so blanking it would leave the user staring
+      // at "Loading frameworks…" with nothing on its way.
+      await Promise.all([loadFrameworks(), load(schoolId)])
+      return res.data ?? null
+    },
+    [schoolId, load, loadFrameworks],
+  )
+
   // Adopt (or re-adopt — idempotent, fills gaps) a framework into the register.
   const adoptFramework = useCallback(
     async (code) => {
@@ -352,6 +384,8 @@ export function useAccreditation(schoolId) {
     frameworks,
     loadFrameworks,
     adoptFramework,
+    frameworkRemovalImpact,
+    removeFramework,
     setReadinessTarget,
     setRubric,
     fetchSuggestions,

@@ -560,6 +560,13 @@ export const accreditationApi = {
   // Frameworks are PLATFORM-level (Cognia / MSA-CESS / NSBECS) but listed under the
   // school so adoption state rides along. adopt is idempotent (re-adopt fills gaps).
   listFrameworks: (schoolId) => api.get(`/schools/${schoolId}/accreditation/frameworks`),
+  // Removing a framework is TWO calls on purpose: count first, delete second, so
+  // the school reads what it is about to lose before it loses it. The impact GET
+  // is read-only and safe to call speculatively.
+  getFrameworkRemovalImpact: (schoolId, code) =>
+    api.get(`/schools/${schoolId}/accreditation/frameworks/${code}/removal-impact`),
+  removeFramework: (schoolId, code) =>
+    api.delete(`/schools/${schoolId}/accreditation/frameworks/${code}`),
   adoptFramework: (schoolId, code) =>
     api.post(`/schools/${schoolId}/accreditation/frameworks/${code}/adopt`, {}),
   // Readiness is COMPUTED server-side (rubric×evidence blend + projected index/band
