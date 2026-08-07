@@ -57,7 +57,13 @@ const attachEvidence = (f, api) => [
     primary: true,
     onClick: () => {
       const id = findingStandardId(f)
-      if (id) api.scrollToStandard(id)
+      // OPEN THE STANDARD, don't just travel to it. `scrollToStandard` expanded a
+      // row and left the reader looking for a chevron — an action that names a
+      // task and then delivers you near it is the shape this whole change is
+      // correcting. `improveStandard` opens the panel that hosts the attach
+      // controls; scrolling stays as the fallback for a host that has no panel.
+      if (id && api.improveStandard) api.improveStandard(id)
+      else if (id) api.scrollToStandard(id)
       else api.goTab('standards')
     },
   },

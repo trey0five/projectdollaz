@@ -2043,7 +2043,18 @@ function AccreditationWorkspace() {
   // the tab; it cannot mutate anything, which is why the acknowledge control is
   // composed below rather than inside the rule map.
   const ruleApi = useMemo(
-    () => ({ goTab: chooseTab, navigate, scrollToStandard }),
+    () => ({
+      goTab: chooseTab,
+      navigate,
+      scrollToStandard,
+      // Opens the standard's own "what raises this" panel — which is where the
+      // attach controls live — rather than scrolling the page toward it.
+      improveStandard: (id) => {
+        const s = standardsRef.current.find((row) => row.id === id)
+        if (s) setImproveStandard(s)
+        else scrollToStandard(id)
+      },
+    }),
     [chooseTab, navigate, scrollToStandard],
   )
 
@@ -2054,6 +2065,24 @@ function AccreditationWorkspace() {
   // engine attributed them to — no re-derivation here, or the panel could
   // disagree with the card that opened it.
   const [improveStandard, setImproveStandard] = useState(null)
+  // Read inside ruleApi's stable callback — joining its dependency array would
+  // rebuild every finding's actions on each register refresh.
+  const standardsRef = useRef(standards)
+  standardsRef.current = standards
+
+  // THE OPEN DRAWER FOLLOWS THE REGISTER. Attaching evidence inside the drawer
+  // refreshes `standards`, but the drawer was holding the row object captured
+  // when it opened — so a school could attach a document, watch it appear in the
+  // list below, and still be told by the step above that it had not. The panel
+  // re-reads its row by id on every refresh; a row that has gone (its framework
+  // removed from another surface) closes the drawer rather than freezing a
+  // standard that no longer exists.
+  useEffect(() => {
+    if (!improveStandard) return
+    const fresh = standards.find((row) => row.id === improveStandard.id)
+    if (!fresh) setImproveStandard(null)
+    else if (fresh !== improveStandard) setImproveStandard(fresh)
+  }, [standards, improveStandard])
   const [resolveDomain, setResolveDomain] = useState(null)
   const resolveFindings = useMemo(() => {
     if (!resolveDomain) return []
@@ -2578,9 +2607,36 @@ function AccreditationWorkspace() {
         rubricLabels={improveStandard ? labelsFor(improveStandard) : null}
         canEdit={canEdit}
         onRubric={setRubric}
-        onAttachEvidence={(s) => scrollToStandard(s.id)}
         onOpenImprovement={() => chooseTab('improvement')}
         onClose={() => setImproveStandard(null)}
+        // THE SAME PANEL THE EXPANDED ROW RENDERS, not a copy — one attach flow
+        // in this product, hosted wherever the instruction to attach appears.
+        evidenceSlot={
+          improveStandard ? (
+            <div className="overflow-hidden rounded-xl border-2 border-gold/20 bg-navy-gradient px-4 py-1">
+              <EvidencePanel
+                key={improveStandard.id}
+                standardId={improveStandard.id}
+                canEdit={canEdit}
+                reduce={reduce}
+                listEvidenceSources={listEvidenceSources}
+                listEvidence={listEvidence}
+                createEvidence={createEvidenceAndRefresh}
+                updateEvidence={updateEvidenceAndRefresh}
+                removeEvidence={removeEvidenceAndRefresh}
+                schoolId={schoolId}
+                standard={improveStandard}
+                rubricLabels={labelsFor(improveStandard)}
+                // The rubric has its own step above; a second picker here would
+                // be two controls for one value.
+                onRubric={null}
+                fetchSuggestions={fetchSuggestions}
+                linkStrategy={linkStrategy}
+                clearStrategy={clearStrategy}
+              />
+            </div>
+          ) : null
+        }
       />
       <DomainResolvePanel
         open={!!resolveDomain}

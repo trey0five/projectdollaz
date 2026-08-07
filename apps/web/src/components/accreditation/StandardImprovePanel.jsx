@@ -52,9 +52,22 @@ export default function StandardImprovePanel({
   rubricLabels = null,
   canEdit = false,
   onRubric = null,
-  onAttachEvidence = null,
   onOpenImprovement = null,
   onClose,
+  /**
+   * THE ATTACH CONTROLS THEMSELVES, rendered inside step 2.
+   *
+   * The first cut had a button here that scrolled the page to the standard's row
+   * and expanded it — which is to say, it told a school to attach evidence and
+   * then took it to a chevron. The controls were real and had always worked; they
+   * were simply somewhere the instruction did not go. A step that names a task
+   * and then hands you a shortcut to somewhere else is worse than no step.
+   *
+   * So the page passes its EXISTING evidence panel in here. Not a copy — the same
+   * component the expanded row renders, so there is exactly one attach flow in
+   * this product and it cannot drift into two.
+   */
+  evidenceSlot = null,
 }) {
   const reduce = useReducedMotion()
   if (!standard) return null
@@ -123,21 +136,10 @@ export default function StandardImprovePanel({
                     body={
                       evidenced
                         ? 'This gate is satisfied — an artifact is attached.'
-                        : 'This is an assurance gate: it is pass or fail on evidence, not a rubric score. One attached artifact settles it.'
+                        : 'This is an assurance gate: it is pass or fail on evidence, not a rubric score. One attached artifact settles it, and until then the gate blocks accreditation regardless of how well the rest scores.'
                     }
                   >
-                    {!evidenced && onAttachEvidence ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onAttachEvidence(standard)
-                          onClose?.()
-                        }}
-                        className="rounded-lg btn-cta px-3 py-1.5 text-[13px] font-semibold"
-                      >
-                        Attach evidence
-                      </button>
-                    ) : null}
+                    {evidenceSlot}
                   </Step>
                 ) : (
                   <>
@@ -167,25 +169,10 @@ export default function StandardImprovePanel({
                       body={
                         evidenced
                           ? `${standard.evidenceCount} attached. A visiting team reads these, not the score.`
-                          : 'A score with nothing behind it is documented but not defensible — the two figures on your hero are exactly this difference.'
+                          : 'A score with nothing behind it is documented but not defensible — the two figures on your hero are exactly this difference. Attach a document you already hold, or pull one straight from your policies, minutes and board reports.'
                       }
                     >
-                      {onAttachEvidence ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            onAttachEvidence(standard)
-                            onClose?.()
-                          }}
-                          className={
-                            evidenced
-                              ? 'rounded-lg border border-rule/70 bg-white px-3 py-1.5 text-[13px] font-semibold text-navy transition hover:border-navy/40'
-                              : 'rounded-lg btn-cta px-3 py-1.5 text-[13px] font-semibold'
-                          }
-                        >
-                          {evidenced ? 'Review evidence' : 'Attach evidence'}
-                        </button>
-                      ) : null}
+                      {evidenceSlot}
                     </Step>
                     <Step
                       n={3}

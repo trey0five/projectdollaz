@@ -112,6 +112,51 @@ describe('the standard panel explains the mechanism, not the answer', () => {
   })
 })
 
+describe('an instruction that cannot be acted on is worse than no instruction', () => {
+  const panel = read('components/accreditation/StandardImprovePanel.jsx')
+  const page = read('pages/AccreditationPage.jsx')
+  const rules = read('components/accreditation/ruleActions.js')
+
+  it('the drawer HOSTS the attach controls rather than linking to them', () => {
+    // THE BUG THIS REPLACES. Step 2 said "attach evidence" and offered a button
+    // that scrolled the page to the standard's row and expanded it — delivering
+    // the reader to a chevron and calling that an answer. The controls were real
+    // and had always worked; they were simply somewhere the instruction did not go.
+    expect(panel).toMatch(/\{evidenceSlot\}/)
+    expect(panel).not.toMatch(/onAttachEvidence/)
+  })
+
+  it('and it is the SAME panel the expanded row renders, not a copy', () => {
+    // Two attach flows would drift, and the one behind the drawer would be the
+    // one nobody maintained.
+    const slot = page.slice(page.indexOf('evidenceSlot={'), page.indexOf('onOpenImprovement'))
+    expect(page.match(/<EvidencePanel/g) ?? []).toHaveLength(2)
+    expect(slot === '' || page.includes('<EvidencePanel')).toBe(true)
+  })
+
+  it('a finding OPENS its standard instead of scrolling near it', () => {
+    expect(rules).toMatch(/if \(id && api\.improveStandard\) api\.improveStandard\(id\)/)
+    // Scrolling survives as the fallback for a host with no panel — the org
+    // portfolio and the print pages both build actions from this same map.
+    expect(rules).toMatch(/else if \(id\) api\.scrollToStandard\(id\)/)
+  })
+
+  it('the OPEN drawer follows the register after an attach', () => {
+    // Live-caught in review: attaching evidence inside the drawer refreshes the
+    // standards list, but the drawer held the row captured when it opened — so a
+    // school could attach a document, see it land in the list below, and still be
+    // told by the step above that it had not.
+    expect(page).toMatch(/const fresh = standards\.find\(\(row\) => row\.id === improveStandard\.id\)/)
+    expect(page).toMatch(/if \(!fresh\) setImproveStandard\(null\)/)
+  })
+
+  it('the rubric is not offered twice for one value', () => {
+    // The drawer's step 1 owns the rubric; the hosted panel must not render a
+    // second picker for the same score.
+    expect(page).toMatch(/onRubric=\{null\}/)
+  })
+})
+
 describe('the densest register gets the whole width', () => {
   const page = read('pages/AccreditationPage.jsx')
   const shell = read('components/domain/DomainCommandCenter.jsx')
