@@ -36,7 +36,12 @@ overrides:
   # GHSA-4c8g-83qw-93j6 + GHSA-v2hh-gcrm-f6hx — host confusion. Transitive via ajv.
   'fast-uri@<3.1.5': '3.1.5'
   # GHSA-52cp-r559-cp3m — quadratic blow-up on merge-key chains. Transitive.
-  'js-yaml@>=4.0.0 <4.3.0': '4.3.0'
+  # THEN GHSA-5p4m-2wfm-xmqj (CVE-2026-59870) — the same quadratic shape again, in
+  # !!omap resolution this time, and 4.3.0 was itself vulnerable to it. Third
+  # re-raise of this file and second of this package: the pins are snapshots, not
+  # floors. All 16 paths are DEV-ONLY (@nestjs/cli, eslint, typescript-eslint) —
+  # no js-yaml reaches the production runtime.
+  'js-yaml@>=4.0.0 <4.3.1': '4.3.1'
   # GHSA-r28c-9q8g-f849 — path traversal in the source-map reader. Patch-level.
   'postcss@<=8.5.17': '8.5.18'
   # GHSA-mwp4-54f8-5fhr — transitive via the SSH/socks chain.
