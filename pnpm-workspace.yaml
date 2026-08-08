@@ -44,6 +44,12 @@ overrides:
   'js-yaml@>=4.0.0 <4.3.1': '4.3.1'
   # GHSA-r28c-9q8g-f849 — path traversal in the source-map reader. Patch-level.
   'postcss@<=8.5.17': '8.5.18'
+  # Two advisories landed together: a non-secure generator that loops forever on a
+  # negative size, and a custom generator that loops forever on zero. The second
+  # patch supersedes the first, so ONE pin at 3.3.17 covers both. DEV-ONLY — the
+  # path is vitest → vite → postcss → nanoid, so this was a hang in our own test
+  # runner, not anything a school could be hit with.
+  'nanoid@<3.3.17': '3.3.17'
   # GHSA-mwp4-54f8-5fhr — transitive via the SSH/socks chain.
   'ip-address@<10.3.1': '10.3.1'
   # GHSA-gcfj-64vw-6mp9 — the Node adapter can inherit a proxy from the
