@@ -1,4 +1,4 @@
-import { IsIn, IsInt, IsISO8601, IsNumber, IsOptional, Max, Min } from 'class-validator'
+import { IsBoolean, IsIn, IsInt, IsISO8601, IsNumber, IsOptional, Max, Min } from 'class-validator'
 
 /**
  * The projection request.
@@ -22,17 +22,40 @@ export class ProjectCashDto {
   asOfDate!: string
 
   @IsOptional()
-  @IsIn(['keyed', 'trial_balance'])
-  openingSource?: 'keyed' | 'trial_balance'
+  @IsIn(['keyed', 'trial_balance', 'quickbooks'])
+  openingSource?: 'keyed' | 'trial_balance' | 'quickbooks'
 
   @IsOptional()
   @IsIn(['week', 'month'])
   granularity?: 'week' | 'month'
 
-  /** Weekly horizon length. 13 is the cash-management convention. */
+  /**
+   * Horizon preset. Each carries its sensible grain — weekly buckets while the
+   * window is short enough to read week by week, monthly beyond that:
+   *   13w → 13 weeks, weekly (the treasury convention; the default)
+   *   1m  →  1 month, weekly
+   *   3m  →  3 months, weekly
+   *   6m  →  6 months, monthly
+   *   12m → 12 months, monthly
+   * An explicit `granularity` overrides the preset's grain.
+   */
+  @IsOptional()
+  @IsIn(['13w', '1m', '3m', '6m', '12m'])
+  horizon?: '13w' | '1m' | '3m' | '6m' | '12m'
+
+  /** Weekly horizon length — the pre-preset compat knob. `horizon` wins. */
   @IsOptional()
   @IsInt()
   @Min(1)
   @Max(104)
   horizonWeeks?: number
+
+  /**
+   * Include the QuickBooks event source (open AR/AP + seasonal history) when
+   * the school is connected. Defaults ON — a connected school's whole point is
+   * zero manual entry; pass false to see the manual-only forecast.
+   */
+  @IsOptional()
+  @IsBoolean()
+  useQuickBooks?: boolean
 }

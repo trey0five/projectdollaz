@@ -22,6 +22,7 @@ import type {
   SpreadAccountLike,
 } from '@finrep/analytics'
 import { PrismaService } from '../prisma/prisma.service.js'
+import { QboEventsService } from './qbo-events.service.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The cash-flow projection service — assembly, not arithmetic.
@@ -66,7 +67,7 @@ export interface OpeningCashView {
   /** What the projection actually started from. */
   openingCash: number | null
   asOfDate: string | null
-  source: 'keyed' | 'trial_balance' | null
+  source: 'keyed' | 'trial_balance' | 'quickbooks' | null
   /** The trial-balance cash total, for the cross-check. Null when none is on file. */
   tbCash: number | null
   /** Days since the balance was stated. Null when never stated. */
@@ -94,6 +95,16 @@ export interface ProjectionResponse {
   /** Why the school cannot be projected yet, when it cannot. */
   blockedReason: string | null
   /**
+   * WHERE THE EVENTS CAME FROM — per-origin counts and totals, so the screen
+   * can say which parts of a forecast are the school's own entries, which are
+   * its budget, and which are live from QuickBooks. Provenance is the price of
+   * a zero-entry forecast being trusted: a number nobody can attribute is a
+   * number nobody schedules payroll around.
+   */
+  sources: Record<string, { count: number; total: number }>
+  /** The QuickBooks opening-balance OFFER, when the school is connected. */
+  qboOpeningCash: { amount: number; asOf: string; source: 'live' | 'snapshot' } | null
+  /**
    * WHAT IS MISSING FROM THIS FORECAST, named.
    *
    * Live-caught on the first real run: a school with commitments recorded and no
@@ -114,7 +125,10 @@ const ISO = (d: Date): string => d.toISOString().slice(0, 10)
 export class CashFlowService {
   private readonly log = new Logger(CashFlowService.name)
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly qboEvents: QboEventsService,
+  ) {}
 
   // ── Commitments ────────────────────────────────────────────────────────────
 
@@ -293,7 +307,7 @@ export class CashFlowService {
     return {
       openingCash: Number(run.openingCash),
       asOfDate,
-      source: run.openingSource as 'keyed' | 'trial_balance',
+      source: run.openingSource as 'keyed' | 'trial_balance' | 'quickbooks',
       tbCash,
       ageDays,
       stale: ageDays != null && ageDays > STALE_OPENING_DAYS,
@@ -340,15 +354,32 @@ export class CashFlowService {
     opts: {
       openingCash: number
       asOfDate: string
-      openingSource?: 'keyed' | 'trial_balance'
+      openingSource?: 'keyed' | 'trial_balance' | 'quickbooks'
       granularity?: Granularity
+      horizon?: '13w' | '1m' | '3m' | '6m' | '12m'
       horizonWeeks?: number
+      useQuickBooks?: boolean
       persist?: boolean
     },
   ): Promise<ProjectionResponse> {
-    const granularity: Granularity = opts.granularity ?? 'week'
-    const horizonEnd =
-      granularity === 'week'
+    // Preset → window + grain. Weekly while the window reads week by week,
+    // monthly beyond; an explicit granularity overrides the preset's grain.
+    const preset = opts.horizon ?? null
+    const presetGranularity: Granularity =
+      preset === '6m' || preset === '12m' ? 'month' : 'week'
+    const granularity: Granularity = opts.granularity ?? (preset ? presetGranularity : 'week')
+    // Ends are INCLUSIVE, so a preset's window stops the day BEFORE the next
+    // period begins — six months from July 1st ends December 31st, not on a
+    // January 1st that drags a seventh month into the grid.
+    const monthsEnd = (n: number) => {
+      const next = addMonths(opts.asOfDate, n)
+      return next ? addDays(next, -1) : null
+    }
+    const horizonEnd = preset
+      ? preset === '13w'
+        ? addDays(opts.asOfDate, 7 * 13 - 1)
+        : monthsEnd(preset === '1m' ? 1 : preset === '3m' ? 3 : preset === '6m' ? 6 : 12)
+      : granularity === 'week'
         ? addDays(opts.asOfDate, 7 * (opts.horizonWeeks ?? 13))
         : addMonths(opts.asOfDate, 12)
 
@@ -378,13 +409,56 @@ export class CashFlowService {
 
     const omissions: { key: string; message: string }[] = []
     const tuition = await this.tuitionEvents(schoolId, assumptions, omissions)
-    const budgeted = await this.budgetEvents(schoolId, commitmentInputs, omissions)
+
+    // ── The QuickBooks source, blended MANUAL-WINS ──────────────────────────
+    // A connected school gets a forecast with zero entry: open invoices and
+    // bills as dated near-term events, and a seasonal year modelled from its
+    // own monthly P&L history. Anything the school entered by hand suppresses
+    // the derived version of that same category — a business manager's payroll
+    // calendar beats an average of last year's payroll, every time.
+    const manualCategories = [...new Set(commitmentInputs.map((c) => c.category))]
+    const qbo =
+      opts.useQuickBooks === false
+        ? null
+        : await this.qboEvents
+            .eventsFor(schoolId, {
+              asOfDate: opts.asOfDate,
+              horizonEnd,
+              collectionRate: assumptions.collectionRate,
+              excludeCategories: manualCategories,
+              tuitionDriverActive: tuition.length > 0,
+            })
+            .catch(() => null)
+    if (qbo) omissions.push(...qbo.omissions)
+
+    // Budget spread is the phasing source only where QBO history is absent —
+    // both derive "the shape of the year" and stacking them doubles it.
+    const qboHistoryActive = (qbo?.sources.qbo_history.count ?? 0) > 0
+    const budgeted = qboHistoryActive
+      ? []
+      : await this.budgetEvents(schoolId, commitmentInputs, omissions)
+
+    const commitmentEvents = expandCommitments(commitmentInputs, opts.asOfDate, horizonEnd)
     const events: CashEvent[] = [
-      ...expandCommitments(commitmentInputs, opts.asOfDate, horizonEnd),
+      ...commitmentEvents,
       ...tuition,
       ...budgeted,
+      ...(qbo?.events ?? []),
     ]
-    if (commitmentInputs.length === 0) {
+    const sum = (evs: readonly CashEvent[]) => evs.reduce((t, e) => t + Math.abs(e.amount), 0)
+    const sources: Record<string, { count: number; total: number }> = {
+      commitments: { count: commitmentEvents.length, total: sum(commitmentEvents) },
+      tuition_driver: { count: tuition.length, total: sum(tuition) },
+      budget: { count: budgeted.length, total: sum(budgeted) },
+      qbo_ar: qbo?.sources.qbo_ar ?? { count: 0, total: 0 },
+      qbo_ap: qbo?.sources.qbo_ap ?? { count: 0, total: 0 },
+      qbo_history: qbo?.sources.qbo_history ?? { count: 0, total: 0 },
+    }
+
+    // "No commitments" stops being an omission when QuickBooks carries the
+    // forecast — for a connected school an empty commitment list is the happy
+    // path, and warning about it would teach the reader to ignore the band.
+    if (commitmentInputs.length === 0 && !(qbo && qbo.connected && qbo.events.length > 0)) {
       omissions.push({
         key: 'no_commitments',
         message:
@@ -431,6 +505,11 @@ export class CashFlowService {
       }
     }
 
+    const qboOpeningCash =
+      qbo?.connected === true
+        ? await this.qboEvents.openingCashOffer(schoolId, opts.asOfDate).catch(() => null)
+        : null
+
     return {
       projection,
       opening: {
@@ -441,18 +520,23 @@ export class CashFlowService {
         ageDays: 0,
         stale: false,
       },
-      dataTier: tierInfo.tier,
-      dataTierReason: tierInfo.reason,
+      dataTier: qbo?.connected && qbo.events.length > 0 ? 'high' : tierInfo.tier,
+      dataTierReason:
+        qbo?.connected && qbo.events.length > 0
+          ? `Live from QuickBooks: ${sources.qbo_ar.count} open invoice${sources.qbo_ar.count === 1 ? '' : 's'}, ${sources.qbo_ap.count} bill${sources.qbo_ap.count === 1 ? '' : 's'}, ${sources.qbo_history.count > 0 ? 'and a seasonal year modelled from your monthly history' : 'plus your recorded inputs'}.`
+          : tierInfo.reason,
       disclaimer: CONFIDENCE_DISCLAIMER,
       committedShare: committedShare(projection),
       assumptions,
       blockedReason: null,
+      sources,
+      qboOpeningCash,
       omissions,
     }
   }
 
   private blocked(
-    opts: { openingCash: number; asOfDate: string; openingSource?: 'keyed' | 'trial_balance' },
+    opts: { openingCash: number; asOfDate: string; openingSource?: 'keyed' | 'trial_balance' | 'quickbooks' },
     assumptions: ProjectionResponse['assumptions'],
     tierInfo: { tier: DataTier; reason: string },
     tbCash: number | null,
@@ -474,6 +558,8 @@ export class CashFlowService {
       committedShare: null,
       assumptions,
       blockedReason: reason,
+      sources: {},
+      qboOpeningCash: null,
       omissions: [],
     }
   }

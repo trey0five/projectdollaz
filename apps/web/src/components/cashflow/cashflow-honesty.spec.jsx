@@ -150,6 +150,71 @@ describe('the page does not overstate what it knows', () => {
   })
 })
 
+describe('v2 — two views, one derivation', () => {
+  const page = read('pages/CashFlowPage.jsx')
+  const wb = read('components/cashflow/CashWorkbook.jsx')
+
+  it('the workbook renders the ENGINE\u2019s rows, never local aggregation', () => {
+    // The grid a treasurer reads and the chart beside it must be one
+    // derivation — the engine's workbookRows is tested to reconcile with the
+    // buckets, and a component that re-aggregated events could drift from it.
+    expect(page).toMatch(/import \{ workbookRows \} from '@finrep\/analytics'/)
+    expect(page).toMatch(/workbookRows\(p\)/)
+    expect(wb).not.toMatch(/reduce\(.*amount/)
+  })
+
+  it('offers all five horizons and sends the preset, not a guessed window', () => {
+    for (const h of ["'1m'", "'3m'", "'6m'", "'12m'", "'13w'"]) {
+      expect(page).toContain(`key: ${h}`)
+    }
+    expect(page).toMatch(/horizon: over\.horizon \?\? horizon/)
+  })
+
+  it('the QuickBooks balance is an OFFER the user clicks, never an auto-fill', () => {
+    // v1 proved red that the keyed balance is what the school said is
+    // AVAILABLE; the bank total routinely includes restricted funds. Accepting
+    // must be an explicit click that also records the source.
+    expect(page).toMatch(/qboOffer \? \(/)
+    expect(page).toMatch(/openingSource: 'quickbooks'/)
+  })
+
+  it('provenance chips render only for sources that contributed', () => {
+    expect(page).toMatch(/\.filter\(\(\[, v\]\) => v\.count > 0\)/)
+  })
+
+  it('the workbook flags below-reserve columns in the header AND the closing row', () => {
+    // Which week goes wrong is the grid's whole answer; a red cell buried
+    // mid-table is easy to scan past.
+    expect(wb).toMatch(/c\.belowReserve \? 'text-danger'/)
+    expect(wb).toMatch(/row\.kind === 'closing' && col\.belowReserve/)
+  })
+
+  it('the chart marker prints the TRUE low, not the bucket closing', () => {
+    // Live-caught: the hero said $397,740 while the chart's marker said
+    // $405,111 — the marker was printing the low bucket's closing balance,
+    // which hides whatever recovery happened inside that bucket. One number,
+    // printed twice, must be the same number.
+    const rail = read('components/cashflow/CashRail.jsx')
+    expect(rail).toMatch(/Low \{fmt\(lowestBalance \?\? pts\[lowIdx\]\)\}/)
+    expect(page).toMatch(/lowestBalance=\{p\.lowestBalance\}/)
+  })
+
+  it('QuickBooks category keys never leak raw into the Why sentence', () => {
+    // Live-caught: "About $7,530 of other expense and facilCost falls due" —
+    // an internal key in a sentence a head of school reads.
+    const why = read('components/cashflow/whyLine.js')
+    for (const k of ['facilCost', 'instrSal', 'fixedOther', 'receivables', 'payables']) {
+      expect(why).toContain(`${k}:`)
+    }
+  })
+
+  it('the honesty system survived the redesign', () => {
+    expect(page).toMatch(/What is not in this forecast/)
+    expect(page).toMatch(/\{cf\.projection\.disclaimer\}/)
+    expect(page).toMatch(/committedShare \* 100/)
+  })
+})
+
 describe('the forecast is reached from the Finance tile board', () => {
   it('sits on the board beside Analytics and Budget', () => {
     // Where a finance user actually looks. The first version put it only in the

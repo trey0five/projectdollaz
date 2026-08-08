@@ -30,7 +30,19 @@ const LINE = '#1D4ED8'
 const RESERVE = '#EF4444'
 const LOW = '#EA580C'
 
-export default function CashRail({ buckets = [], reserveThreshold = null, lowestDate = null, format }) {
+export default function CashRail({
+  buckets = [],
+  reserveThreshold = null,
+  lowestDate = null,
+  /**
+   * The TRUE low — the intra-bucket, event-level minimum the engine reports.
+   * Live-caught: the marker used to print the low bucket's CLOSING balance,
+   * which disagreed with the hero's figure by whatever the recovery inside
+   * that bucket was. One number, printed twice, must be the same number.
+   */
+  lowestBalance = null,
+  format,
+}) {
   const reduce = useReducedMotion()
   const [hostRef, width] = useMeasuredWidth(720)
 
@@ -145,7 +157,7 @@ export default function CashRail({ buckets = [], reserveThreshold = null, lowest
               fontWeight="700"
               fill={LOW}
             >
-              Low {fmt(pts[lowIdx])}
+              Low {fmt(lowestBalance ?? pts[lowIdx])}
             </text>
           </>
         ) : null}

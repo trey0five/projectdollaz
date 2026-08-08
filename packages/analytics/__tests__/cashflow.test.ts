@@ -27,6 +27,7 @@ import {
   startOfWeek,
   isoToDays,
 } from '../src/index.js'
+import { workbookRows } from '../src/index.js'
 import type { CashCommitmentInput, CashEvent } from '../src/index.js'
 
 // ── The fixture school ───────────────────────────────────────────────────────
@@ -439,6 +440,81 @@ describe('total and never-throws', () => {
 
   it('leaves months-of-cash null rather than guessing a denominator', () => {
     expect(project({ annualOperatingExpense: null }).monthsCashAtLowPoint).toBeNull()
+  })
+})
+
+describe('the workbook and the chart are one derivation', () => {
+  it('per-category cells sum to the bucket totals they sit under', () => {
+    // The grid's rows are computed where the bucket totals are computed. If
+    // these ever diverge, a treasurer's workbook disagrees with the chart
+    // beside it — the exact drift the shared builder exists to prevent.
+    const r = project({ granularity: 'week' })
+    for (const b of r.buckets) {
+      const inSum = Object.values(b.receiptsByCategory).reduce((s2, v) => s2 + v, 0)
+      const outSum = Object.values(b.disbursementsByCategory).reduce((s2, v) => s2 + v, 0)
+      expect(inSum).toBeCloseTo(b.receipts, 6)
+      expect(outSum).toBeCloseTo(b.disbursements, 6)
+    }
+  })
+
+  it('weekly and monthly agree per CATEGORY, not just in total', () => {
+    const sumCat = (r2: ReturnType<typeof project>, side: 'in' | 'out') => {
+      const out: Record<string, number> = {}
+      for (const b of r2.buckets) {
+        const m = side === 'in' ? b.receiptsByCategory : b.disbursementsByCategory
+        for (const [k, v] of Object.entries(m)) out[k] = (out[k] ?? 0) + v
+      }
+      return out
+    }
+    const w = project({ granularity: 'week' })
+    const m = project({ granularity: 'month' })
+    for (const side of ['in', 'out'] as const) {
+      const ws = sumCat(w, side)
+      const ms = sumCat(m, side)
+      expect(Object.keys(ws).sort()).toEqual(Object.keys(ms).sort())
+      for (const k of Object.keys(ws)) expect(ws[k]).toBeCloseTo(ms[k], 6)
+    }
+  })
+
+  it('the workbook closing row IS the buckets\' closing balances', () => {
+    const r = project({ granularity: 'week' })
+    const wb = workbookRows(r)
+    const closing = wb.rows.find((row) => row.kind === 'closing')!
+    expect(closing.values).toEqual(r.buckets.map((b) => b.closingBalance))
+    // …and the opening row opens where the projection opened.
+    const opening = wb.rows.find((row) => row.kind === 'opening')!
+    expect(opening.values[0]).toBe(400_000)
+  })
+
+  it('subtotal rows equal the sum of their category rows, column by column', () => {
+    const r = project({ granularity: 'month' })
+    const wb = workbookRows(r)
+    for (const side of ['in', 'out'] as const) {
+      const cats = wb.rows.filter((row) => row.kind === 'category' && row.side === side)
+      const sub = wb.rows.find((row) => row.kind === 'subtotal' && row.side === side)!
+      for (let c = 0; c < wb.columns.length; c += 1) {
+        const sum = cats.reduce((s2, row) => s2 + (row.values[c] ?? 0), 0)
+        expect(sum).toBeCloseTo((sub.values[c] as number) ?? 0, 6)
+      }
+    }
+  })
+
+  it('every category row is FULL-WIDTH — a ragged grid cannot be scanned', () => {
+    const r = project({ granularity: 'week' })
+    const wb = workbookRows(r)
+    for (const row of wb.rows) {
+      expect(row.values).toHaveLength(wb.columns.length)
+    }
+  })
+
+  it('orders category rows largest-first so the rows that matter sit on top', () => {
+    const r = project({ granularity: 'month' })
+    const wb = workbookRows(r)
+    const outs = wb.rows.filter((row) => row.kind === 'category' && row.side === 'out')
+    const totals = outs.map((row) => row.values.reduce((s2, v) => (s2 ?? 0) + (v ?? 0), 0) as number)
+    for (let i = 1; i < totals.length; i += 1) {
+      expect(totals[i - 1]).toBeGreaterThanOrEqual(totals[i])
+    }
   })
 })
 

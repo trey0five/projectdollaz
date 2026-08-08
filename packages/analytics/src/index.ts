@@ -266,6 +266,8 @@ export {
   defaultFirstBillingDate,
   spreadDisbursements,
   spreadReceipts,
+  workbookRows,
+  categoryLabel,
   // Pure civil-date helpers — exported because the API layer builds horizons.
   addDays,
   addMonths,
@@ -291,6 +293,9 @@ export type {
   CollectionRateSuggestion,
   SpreadAccountLike,
   SpreadDisbursementInput,
+  Workbook,
+  WorkbookRow,
+  WorkbookRowKind,
 } from './cashflow/index.js'
 
 // Version

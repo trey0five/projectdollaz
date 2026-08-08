@@ -642,54 +642,85 @@ export default function OrbitScrolly() {
               orbit's trig layout is untouched; hidden below xl where there is
               no room beside the system. Both re-mount per dock, sliding in from
               their own side, and ride the payload card's opacity ramp. */}
+          {/* ANCHORED OFF CENTER, not the viewport: `right-[calc(50%+330px)]`
+              pins this panel's inner edge just outside the orbit, so on an
+              ultrawide monitor it hugs the system instead of drifting to the
+              screen edge — which is exactly what it shipped doing. */}
           <div
             ref={flankLRef}
-            className="pointer-events-none absolute left-[max(2vw,16px)] top-1/2 z-[3] hidden w-[300px] -translate-y-1/2 xl:block"
+            className="pointer-events-none absolute right-[calc(50%+330px)] top-1/2 z-[3] hidden w-[300px] -translate-y-1/2 xl:block"
             style={{ opacity: 0 }}
           >
             <AnimatePresence mode="popLayout">
               <motion.div
                 key={d.key}
-                initial={{ x: -28, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                exit={{ x: -16, opacity: 0 }}
-                transition={{ duration: 0.45, ease: [0.2, 0.9, 0.2, 1] }}
-                className="relative overflow-hidden rounded-2xl border border-navy/10 bg-white/80 px-5 py-4 shadow-[0_24px_60px_-24px_rgba(16,28,61,0.35)] backdrop-blur-md"
+                initial={{ x: -36, opacity: 0, rotate: -2.5, scale: 0.95 }}
+                animate={{ x: 0, opacity: 1, rotate: 0, scale: 1 }}
+                exit={{ x: -20, opacity: 0, scale: 0.97 }}
+                transition={{ type: 'spring', stiffness: 260, damping: 24 }}
               >
-                <span aria-hidden="true" className="absolute inset-x-0 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${d.hue}, transparent)` }} />
-                <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-navy/50">
-                  What it does
-                </p>
-                <ul className="mt-2.5 space-y-2.5">
-                  {d.points.map((pt) => (
-                    <li key={pt} className="flex items-start gap-2.5 text-[13px] leading-snug text-navy/80">
-                      <span aria-hidden="true" className="mt-[5px] h-[7px] w-[7px] shrink-0 rounded-full" style={{ backgroundColor: d.hue }} />
-                      {pt}
-                    </li>
-                  ))}
-                </ul>
+                {/* Gentle idle float, offset from the right panel's phase so the
+                    pair breathes rather than bounces in lockstep. */}
+                <motion.div
+                  animate={{ y: [0, -7, 0] }}
+                  transition={{ duration: 5.5, repeat: Infinity, ease: 'easeInOut' }}
+                  className="relative overflow-hidden rounded-2xl border px-5 py-4 backdrop-blur-md"
+                  style={{
+                    borderColor: `${d.hue}33`,
+                    background: `linear-gradient(160deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.78) 60%, ${d.hue}14 100%)`,
+                    boxShadow: `0 24px 60px -24px rgba(16,28,61,0.35), 0 0 40px -18px ${d.hue}66`,
+                  }}
+                >
+                  <span aria-hidden="true" className="absolute inset-x-0 top-0 h-[2px]" style={{ background: `linear-gradient(90deg, transparent, ${d.hue}, transparent)` }} />
+                  {/* The beam toward the core — these panels ORBIT the system,
+                      they are not stray cards. */}
+                  <span aria-hidden="true" className="absolute left-full top-1/2 h-px w-9 -translate-y-1/2" style={{ background: `linear-gradient(90deg, ${d.hue}88, transparent)` }} />
+                  <p className="flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: d.hue }}>
+                    <span aria-hidden="true" className="inline-block h-[7px] w-[7px] rounded-full" style={{ backgroundColor: d.hue, boxShadow: `0 0 8px ${d.hue}` }} />
+                    What it does
+                  </p>
+                  <ul className="mt-2.5 space-y-2.5">
+                    {d.points.map((pt) => (
+                      <li key={pt} className="flex items-start gap-2.5 text-[13px] leading-snug text-navy/80">
+                        <span aria-hidden="true" className="mt-[5px] h-[7px] w-[7px] shrink-0 rounded-full" style={{ backgroundColor: d.hue }} />
+                        {pt}
+                      </li>
+                    ))}
+                  </ul>
+                </motion.div>
               </motion.div>
             </AnimatePresence>
           </div>
 
           <div
             ref={flankRRef}
-            className="pointer-events-none absolute right-[max(2vw,16px)] top-1/2 z-[3] hidden w-[300px] -translate-y-1/2 xl:block"
+            className="pointer-events-none absolute left-[calc(50%+330px)] top-1/2 z-[3] hidden w-[300px] -translate-y-1/2 xl:block"
             style={{ opacity: 0 }}
           >
             <AnimatePresence mode="popLayout">
               <motion.div
                 key={d.key}
-                initial={{ x: 28, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                exit={{ x: 16, opacity: 0 }}
-                transition={{ duration: 0.45, ease: [0.2, 0.9, 0.2, 1] }}
-                className="relative overflow-hidden rounded-2xl border border-navy/10 bg-white/80 px-5 py-4 shadow-[0_24px_60px_-24px_rgba(16,28,61,0.35)] backdrop-blur-md"
+                initial={{ x: 36, opacity: 0, rotate: 2.5, scale: 0.95 }}
+                animate={{ x: 0, opacity: 1, rotate: 0, scale: 1 }}
+                exit={{ x: 20, opacity: 0, scale: 0.97 }}
+                transition={{ type: 'spring', stiffness: 260, damping: 24 }}
               >
-                <span aria-hidden="true" className="absolute inset-x-0 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${d.hue}, transparent)` }} />
-                <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-navy/50">
-                  In your morning briefing
-                </p>
+                <motion.div
+                  animate={{ y: [0, -7, 0] }}
+                  transition={{ duration: 5.5, repeat: Infinity, ease: 'easeInOut', delay: 1.6 }}
+                  className="relative overflow-hidden rounded-2xl border px-5 py-4 backdrop-blur-md"
+                  style={{
+                    borderColor: `${d.hue}33`,
+                    background: `linear-gradient(200deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.78) 60%, ${d.hue}14 100%)`,
+                    boxShadow: `0 24px 60px -24px rgba(16,28,61,0.35), 0 0 40px -18px ${d.hue}66`,
+                  }}
+                >
+                  <span aria-hidden="true" className="absolute inset-x-0 top-0 h-[2px]" style={{ background: `linear-gradient(90deg, transparent, ${d.hue}, transparent)` }} />
+                  <span aria-hidden="true" className="absolute right-full top-1/2 h-px w-9 -translate-y-1/2" style={{ background: `linear-gradient(270deg, ${d.hue}88, transparent)` }} />
+                  <p className="flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: d.hue }}>
+                    <span aria-hidden="true" className="inline-block h-[7px] w-[7px] rounded-full" style={{ backgroundColor: d.hue, boxShadow: `0 0 8px ${d.hue}` }} />
+                    In your morning briefing
+                  </p>
                 {/* One attention item, the way the app actually renders one:
                     severity dot, the sentence, and where it takes you. */}
                 <div className="mt-2.5 rounded-xl border border-navy/10 bg-white px-3.5 py-3">
@@ -705,9 +736,10 @@ export default function OrbitScrolly() {
                     {d.brief.sev === 'critical' ? 'Needs a decision' : d.brief.sev === 'watch' ? 'Worth watching' : 'Good news travels too'} · {d.label}
                   </p>
                 </div>
-                <p className="mt-2.5 text-[12px] leading-snug text-navy/55">
-                  Penny reads this domain every morning and says only what needs saying.
-                </p>
+                  <p className="mt-2.5 text-[12px] leading-snug text-navy/55">
+                    Penny reads this domain every morning and says only what needs saying.
+                  </p>
+                </motion.div>
               </motion.div>
             </AnimatePresence>
           </div>

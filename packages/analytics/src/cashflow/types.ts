@@ -124,6 +124,14 @@ export interface CashBucket {
   closingBalance: number
   /** Receipts − disbursements per confidence class, for the honesty breakdown. */
   byConfidence: Record<ConfidenceClass, number>
+  /**
+   * The WORKBOOK's rows: per-category totals inside this bucket, receipts and
+   * disbursements kept apart. Computed where the bucket totals are computed so
+   * the grid a treasurer reads can never disagree with the chart beside it —
+   * two derivations of the same cells is how a workbook and a chart drift.
+   */
+  receiptsByCategory: Record<string, number>
+  disbursementsByCategory: Record<string, number>
   /** True when this bucket's closing balance is under the reserve threshold. */
   belowReserve: boolean
 }

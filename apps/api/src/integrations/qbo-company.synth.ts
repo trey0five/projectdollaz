@@ -67,6 +67,47 @@ export interface MatchedColumns {
  * "Total" columns are identified by title. A dimension value with no activity
  * in the window simply has no column — callers treat a missing index as zero.
  */
+/**
+ * Bind a MONTH-summarized report's columns to 'YYYY-MM' keys — the sibling of
+ * matchColumns for `summarize_column_by=Month`, and the only month-specific
+ * piece: flattenRows is column-agnostic and needs nothing.
+ *
+ * QBO labels month columns two ways depending on tenant: MetaData StartDate
+ * entries (authoritative when present — an ISO date cannot be misread), else a
+ * ColTitle like "Jan 2026". Both are handled; a column neither yields is simply
+ * skipped — a skipped month reads as "no figure", never a wrong one. The
+ * trailing "Total" column is identified by title and excluded.
+ */
+export function matchMonthColumns(
+  columns: QboReportColumn[],
+): { monthByIndex: Map<number, string>; total: number | null } {
+  const MONTHS: Record<string, string> = {
+    jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
+    jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12',
+  }
+  const out = { monthByIndex: new Map<number, string>(), total: null as number | null }
+  for (let i = 1; i < columns.length; i++) {
+    const col = columns[i]
+    const title = (col.ColTitle ?? '').trim()
+    if (title.toLowerCase() === 'total') {
+      out.total = i
+      continue
+    }
+    const start = (col.MetaData ?? []).find((m) => /^startdate$/i.test((m.Name ?? '').trim()))
+    const iso = (start?.Value ?? '').trim()
+    if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+      out.monthByIndex.set(i, iso.slice(0, 7))
+      continue
+    }
+    const m = /^([A-Za-z]{3,9})\s+(\d{4})$/.exec(title)
+    if (m) {
+      const mm = MONTHS[m[1].slice(0, 3).toLowerCase()]
+      if (mm) out.monthByIndex.set(i, `${m[2]}-${mm}`)
+    }
+  }
+  return out
+}
+
 export function matchColumns(
   columns: QboReportColumn[],
   dimensionList: Array<{ id: string; name: string }>,

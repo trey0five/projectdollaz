@@ -163,6 +163,8 @@ export function projectCash(input: CashProjectionInput): CashProjectionResult {
     if (wEndZ == null) continue
     const opening = balance
     const bucketByConfidence = zeroByConfidence()
+    const receiptsByCategory: Record<string, number> = {}
+    const disbursementsByCategory: Record<string, number> = {}
     let receipts = 0
     let disbursements = 0
 
@@ -171,8 +173,14 @@ export function projectCash(input: CashProjectionInput): CashProjectionResult {
       const z = isoToDays(e.date)
       if (z == null || z > wEndZ) break
       const signed = e.direction === 'in' ? Math.abs(e.amount) : -Math.abs(e.amount)
-      if (e.direction === 'in') receipts += Math.abs(e.amount)
-      else disbursements += Math.abs(e.amount)
+      if (e.direction === 'in') {
+        receipts += Math.abs(e.amount)
+        receiptsByCategory[e.category] = (receiptsByCategory[e.category] ?? 0) + Math.abs(e.amount)
+      } else {
+        disbursements += Math.abs(e.amount)
+        disbursementsByCategory[e.category] =
+          (disbursementsByCategory[e.category] ?? 0) + Math.abs(e.amount)
+      }
       bucketByConfidence[e.confidence] += signed
       byConfidence[e.confidence] += signed
       balance += signed
@@ -208,6 +216,8 @@ export function projectCash(input: CashProjectionInput): CashProjectionResult {
       netChange: receipts - disbursements,
       closingBalance: balance,
       byConfidence: bucketByConfidence,
+      receiptsByCategory,
+      disbursementsByCategory,
       belowReserve: threshold != null && balance < threshold,
     })
   }

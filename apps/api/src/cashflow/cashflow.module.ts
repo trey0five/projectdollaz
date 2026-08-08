@@ -2,7 +2,9 @@ import { Module } from '@nestjs/common'
 import { AuthModule } from '../auth/auth.module.js'
 import { PrismaModule } from '../prisma/prisma.module.js'
 import { BillingModule } from '../billing/billing.module.js'
+import { QboClient } from '../integrations/qbo.client.js'
 import { CashFlowService } from './cashflow.service.js'
+import { QboEventsService } from './qbo-events.service.js'
 import { CashFlowController } from './cashflow.controller.js'
 
 /**
@@ -23,7 +25,12 @@ import { CashFlowController } from './cashflow.controller.js'
 @Module({
   imports: [AuthModule, PrismaModule, BillingModule],
   controllers: [CashFlowController],
-  providers: [CashFlowService],
+  // QboClient is provided DIRECTLY rather than by importing IntegrationsModule:
+  // it is a leaf (ConfigService only), while IntegrationsModule drags the whole
+  // QBO service graph in — and QboEventsService already reaches the stateful
+  // services (QboService, QboAgingService) lazily via ModuleRef with
+  // strict:false, which resolves them from wherever they actually live.
+  providers: [CashFlowService, QboEventsService, QboClient],
   exports: [CashFlowService],
 })
 export class CashFlowModule {}

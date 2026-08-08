@@ -172,6 +172,36 @@ export class QboAgingService {
    * failure returns the last stored snapshot with stale:true + a soft note — never
    * throws. Not-connected / org-fed → connected:false. `refresh` bypasses the cache.
    */
+  /**
+   * The UNCAPPED invoice-level items, for the cash forecast.
+   *
+   * Every pull already computes the full per-invoice rollup — due date and open
+   * amount per invoice — and then throws all but 25 rows away at the register
+   * cap, because the Cash & Collections screen is a register for humans. The
+   * forecast needs the whole set: an open invoice due in three weeks IS a dated
+   * cash event, and 25 of 400 invoices is not a forecast input.
+   *
+   * Same cache, same live pull, same never-throws posture: no connection, an
+   * org-fed school, or a QBO failure all return null and the forecast simply
+   * proceeds without a receivables source (and says so via its omissions).
+   */
+  async getItems(
+    schoolId: string,
+  ): Promise<{ asOf: string; ar: AgingItem[]; ap: AgingItem[] } | null> {
+    try {
+      const connection = await this.qboService().connectionForSchool(schoolId)
+      if (!connection) return null
+      const { conn, token } = connection
+      const env: QboEnvironment = conn.environment === 'production' ? 'production' : 'sandbox'
+      const asOf = this.today()
+      const pull = await this.pull(schoolId, conn.realmId, token, asOf, env, false)
+      return { asOf, ar: pull.ar, ap: pull.ap }
+    } catch (e) {
+      this.logger.warn(`aging items unavailable for ${schoolId}: ${(e as Error).message}`)
+      return null
+    }
+  }
+
   async getAging(schoolId: string, opts: { refresh?: boolean } = {}): Promise<AgingResponse> {
     const connection = await this.qboService().connectionForSchool(schoolId)
     if (!connection) {

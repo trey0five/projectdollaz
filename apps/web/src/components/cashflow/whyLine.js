@@ -30,9 +30,37 @@ const CATEGORY_NOUNS = {
   tuition: 'tuition receipts',
   supplies: 'supplies',
   utilities: 'utilities',
+  // The SCoA vocabulary — QuickBooks-derived events carry these keys, and a raw
+  // `facilCost` leaking into a sentence was live-caught on the first QBO run.
+  instrSal: 'instructional salaries',
+  instrSup: 'instructional supplies',
+  adminSal: 'administrative salaries',
+  adminCost: 'administrative costs',
+  facilSal: 'facilities salaries',
+  facilCost: 'facilities costs',
+  fixedOther: 'fixed costs',
+  support: 'gifts and support',
+  development: 'development income',
+  receivables: 'collections of billed invoices',
+  payables: 'bills due',
+  other_income: 'other income',
+  other_expense: 'other spending',
+  bus: 'transportation',
+  food: 'food service',
+  athletics: 'athletics',
 }
 
 const noun = (c) => CATEGORY_NOUNS[c] ?? String(c ?? '').replace(/_/g, ' ')
+
+/**
+ * Exported for the workbook's row labels — one vocabulary for sentences and
+ * grids, capitalised for a table cell. "FacilCost" in a row label is the same
+ * leak as "facilCost" in a sentence.
+ */
+export function categoryNoun(c) {
+  const n = noun(c)
+  return n.charAt(0).toUpperCase() + n.slice(1)
+}
 
 /** "payroll and debt service" / "payroll, benefits and insurance" */
 function list(items) {

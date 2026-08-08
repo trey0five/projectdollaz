@@ -1,54 +1,95 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // CashFlowPage — "on what date do we run out, and by how much?"
 //
-// THIS PAGE DOES NOT OPEN WITH A TABLE, deliberately. A school arriving here has
-// one question and a 52-row grid answers it only after work. So the first screen
-// is five figures and a sentence explaining them; the detail is underneath for
-// anyone who wants to check the working.
+// V2: five horizons, two views, and QuickBooks doing the typing.
 //
-// The summer trough is the thing being sold. Schools run negative from June
-// through August — payroll and benefits continue while tuition receipts stop —
-// and most heads feel that rather than see it coming. A dated low point, its
-// size, and how many days of warning it carries is the single most useful output
-// this product can produce.
+// The page opens with a HERO that answers the question before anything else —
+// the five figures as counting numerals over the navy aurora band, because the
+// first three seconds of a demo are the whole demo. Below it: the setup strip
+// (opening cash, with a one-click QuickBooks offer beside the keyed field),
+// horizon pills, and the two views — CHARTS (balance rail + receipts/
+// disbursements bars) and WORKBOOK (the treasury grid every business manager
+// already reads in Excel).
 //
-// EVERY FIGURE ON THIS PAGE CAME OFF THE ENGINE. Nothing here computes cash;
-// `whyLine` composes a sentence from figures already returned, and the currency
-// formatter is the canonical one from @finrep/analytics so a number in a sentence
-// can never disagree with the same number in a card.
+// EVERY FIGURE CAME OFF THE ENGINE. The workbook's rows come from the engine's
+// own workbookRows — one derivation, so the grid can never disagree with the
+// chart beside it — and the flash never displaces the honesty system: the
+// omissions band, the Why line, the data-tier sentence and the confidence
+// disclaimer all render exactly as before.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { motion } from 'framer-motion'
-import { AlertTriangle, ArrowRight, CalendarClock, Info, TrendingUp } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import {
+  AlertTriangle,
+  ArrowRight,
+  CalendarClock,
+  Info,
+  LayoutGrid,
+  LineChart,
+  Sparkles,
+  TrendingUp,
+  Zap,
+} from 'lucide-react'
+import { workbookRows } from '@finrep/analytics'
 import { formatMetricValue } from '../lib/metricMeta.js'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useCashFlowProjection } from '../hooks/useCashFlowProjection.js'
+import AuroraFlow from '../components/home/AuroraFlow.jsx'
+import CountUp from '../components/CountUp.jsx'
 import CashRail from '../components/cashflow/CashRail.jsx'
+import CashWorkbook from '../components/cashflow/CashWorkbook.jsx'
+import FlowBars from '../components/cashflow/FlowBars.jsx'
 import { whyLine, potentialActions } from '../components/cashflow/whyLine.js'
 
 const money = (v) => formatMetricValue(v == null ? null : v, 'currency')
 const todayIso = () => new Date().toISOString().slice(0, 10)
 
 const TIER_META = {
-  high: { label: 'High confidence', cls: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700' },
-  moderate: { label: 'Moderate confidence', cls: 'border-[#F59E0B]/40 bg-[#F59E0B]/10 text-[#8a5a06]' },
-  limited: { label: 'Limited confidence', cls: 'border-rule/70 bg-section text-muted' },
+  high: { label: 'High confidence', cls: 'border-emerald-300/60 bg-emerald-400/15 text-emerald-100' },
+  moderate: { label: 'Moderate confidence', cls: 'border-[#F59E0B]/50 bg-[#F59E0B]/15 text-amber-100' },
+  limited: { label: 'Limited confidence', cls: 'border-white/25 bg-white/10 text-white/75' },
 }
 
-/** One headline answer. `tone` marks the figure that carries the bad news. */
-function Answer({ label, value, sub, tone }) {
+const HORIZONS = [
+  { key: '1m', label: '1M' },
+  { key: '3m', label: '3M' },
+  { key: '6m', label: '6M' },
+  { key: '12m', label: '12M' },
+  { key: '13w', label: '13W' },
+]
+
+const SOURCE_LABELS = {
+  commitments: 'Your commitments',
+  tuition_driver: 'Tuition driver',
+  budget: 'Budget phasing',
+  qbo_ar: 'QuickBooks invoices',
+  qbo_ap: 'QuickBooks bills',
+  qbo_history: 'QuickBooks history',
+}
+
+/** One hero figure — a counting numeral with its caption beneath. */
+function HeroStat({ label, value, sub, tone }) {
+  const negative = typeof value === 'number' && value < 0
   return (
-    <div className="rounded-xl border border-rule/60 bg-white p-4">
-      <p className="text-[11.5px] font-semibold uppercase tracking-[0.1em] text-muted">{label}</p>
+    <div className="min-w-[140px]">
+      <p className="font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-white/55">
+        {label}
+      </p>
       <p
-        className={`mt-1 font-serif text-[26px] font-semibold leading-none ${
-          tone === 'bad' ? 'text-danger' : 'text-navy'
+        className={`mt-1 font-serif text-[30px] font-semibold leading-none tabular-nums ${
+          tone === 'bad' ? 'text-[#ff8a80]' : 'text-white'
         }`}
       >
-        {value}
+        {typeof value === 'number' ? (
+          <>
+            {negative ? '−' : ''}$<CountUp value={Math.abs(Math.round(value))} />
+          </>
+        ) : (
+          value
+        )}
       </p>
-      {sub ? <p className="mt-1 text-[12.5px] leading-snug text-muted">{sub}</p> : null}
+      {sub ? <p className="mt-1 text-[12px] leading-snug text-white/60">{sub}</p> : null}
     </div>
   )
 }
@@ -56,12 +97,11 @@ function Answer({ label, value, sub, tone }) {
 export default function CashFlowPage() {
   const { activeSchool } = useSchools()
   const cf = useCashFlowProjection(activeSchool?.id ?? null)
-  const [granularity, setGranularity] = useState('week')
+  const [view, setView] = useState('charts')
+  const [horizon, setHorizon] = useState('13w')
 
-  // DERIVED, NOT SYNCED. The last stated balance pre-fills these fields — a
-  // school re-forecasting weekly should not retype the same number — but copying
-  // it into state inside an effect means two sources of truth for one value and a
-  // race on every reload. The draft wins only once the user has actually typed.
+  // DERIVED, NOT SYNCED — see v1's note: the last stated balance pre-fills, the
+  // draft wins once the user types, and there is never a second source of truth.
   const [openingDraft, setOpeningDraft] = useState(null)
   const [asOfDraft, setAsOfDraft] = useState(null)
   const openingInput =
@@ -69,24 +109,37 @@ export default function CashFlowPage() {
   const asOf = asOfDraft ?? cf.opening?.asOfDate ?? todayIso()
 
   const run = useCallback(
-    (g) => {
-      const n = Number(openingInput)
-      if (!Number.isFinite(n)) return
+    (over = {}) => {
+      const amount = over.openingCash ?? Number(openingInput)
+      if (!Number.isFinite(amount)) return
       cf.project({
-        openingCash: n,
-        asOfDate: asOf,
-        openingSource: 'keyed',
-        granularity: g ?? granularity,
-        ...(( g ?? granularity) === 'week' ? { horizonWeeks: 13 } : {}),
+        openingCash: amount,
+        asOfDate: over.asOfDate ?? asOf,
+        openingSource: over.openingSource ?? 'keyed',
+        horizon: over.horizon ?? horizon,
       })
     },
-    [openingInput, asOf, granularity, cf],
+    [openingInput, asOf, horizon, cf],
   )
+
+  const pickHorizon = (h) => {
+    setHorizon(h)
+    if (cf.projection) run({ horizon: h })
+  }
 
   const p = cf.projection?.projection ?? null
   const tier = TIER_META[cf.projection?.dataTier ?? 'limited']
   const why = useMemo(() => whyLine(p, money), [p])
   const actions = useMemo(() => potentialActions(p, money), [p])
+  const workbook = useMemo(() => (p ? workbookRows(p) : null), [p])
+  const sources = cf.projection?.sources ?? null
+  const activeSources = useMemo(
+    () => Object.entries(sources ?? {}).filter(([, v]) => v.count > 0),
+    [sources],
+  )
+  const qboLive =
+    (sources?.qbo_ar?.count ?? 0) + (sources?.qbo_ap?.count ?? 0) + (sources?.qbo_history?.count ?? 0) > 0
+  const qboOffer = cf.projection?.qboOpeningCash ?? null
 
   const tbGap =
     cf.opening?.tbCash != null && Number.isFinite(Number(openingInput))
@@ -108,43 +161,94 @@ export default function CashFlowPage() {
   }
 
   return (
-    <div className="mx-auto max-w-page space-y-6 px-4 py-6 sm:px-10 sm:py-8">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.14em] text-muted">
-            <TrendingUp size={14} className="text-navy" /> Finance · Cash forecast
-          </p>
-          <h1 className="mt-1 font-serif text-[28px] font-semibold text-navy">
-            When does cash run low?
-          </h1>
-        </div>
-        {cf.projection ? (
-          <span
-            className={`rounded-full border px-3 py-1 text-[12.5px] font-semibold ${tier.cls}`}
-            title={cf.projection.dataTierReason}
-          >
-            {tier.label}
-          </span>
-        ) : null}
-      </header>
+    <div className="mx-auto max-w-page space-y-5 px-4 py-6 sm:px-10 sm:py-8">
+      {/* ── HERO — the five answers, counting in over the aurora ───────────── */}
+      <motion.section
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45 }}
+        className="relative overflow-hidden rounded-3xl bg-navy-gradient px-6 py-6 sm:px-8 sm:py-7"
+      >
+        <AuroraFlow />
+        <div className="relative">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="flex items-center gap-2 font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-penny-light">
+                <TrendingUp size={13} /> Finance · Cash forecast
+              </p>
+              <h1 className="mt-1.5 font-serif text-[26px] font-semibold leading-tight text-white sm:text-[30px]">
+                When does cash run low?
+              </h1>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {qboLive ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300/50 bg-emerald-400/15 px-3 py-1 text-[12px] font-semibold text-emerald-100">
+                  <Zap size={12} /> Live from QuickBooks
+                </span>
+              ) : null}
+              {cf.projection ? (
+                <span
+                  className={`rounded-full border px-3 py-1 text-[12px] font-semibold ${tier.cls}`}
+                  title={cf.projection.dataTierReason}
+                >
+                  {tier.label}
+                </span>
+              ) : null}
+            </div>
+          </div>
 
-      {/* ── Where the forecast starts ─────────────────────────────────────────
-          The opening balance is the whole foundation and the one thing KYRO
-          cannot derive: there is no bank feed. The trial-balance figure sits
-          beside the keyed one rather than replacing it, because the gap between
-          them is the point — a school can hold $600k on the balance sheet with
-          $125k that operations may actually spend. */}
+          {p ? (
+            <div className="mt-5 flex flex-wrap gap-x-10 gap-y-4">
+              <HeroStat label="Cash today" value={p.openingCash} sub={`as of ${p.asOfDate}`} />
+              <HeroStat
+                label="Lowest projected"
+                value={p.lowestBalance}
+                sub={p.lowestDate ? `on ${p.lowestDate}` : 'no movement in this horizon'}
+                tone={p.firstShortfallDate ? 'bad' : undefined}
+              />
+              <HeroStat
+                label="Minimum reserve"
+                value={
+                  cf.projection.assumptions.reserveThreshold == null
+                    ? 'Not set'
+                    : cf.projection.assumptions.reserveThreshold
+                }
+                sub={
+                  cf.projection.assumptions.reserveThreshold == null
+                    ? 'set one to be told when you would breach it'
+                    : 'the balance you said you must hold'
+                }
+              />
+              {p.firstShortfallDate ? (
+                <HeroStat
+                  label="Projected gap"
+                  value={p.shortfallAmount}
+                  sub={`first breach ${p.firstShortfallDate} · ${p.daysOfNotice} days' notice`}
+                  tone="bad"
+                />
+              ) : (
+                <HeroStat
+                  label="Ending balance"
+                  value={p.endingBalance}
+                  sub="stays above the reserve throughout"
+                />
+              )}
+            </div>
+          ) : (
+            <p className="mt-4 max-w-2xl text-[14px] leading-relaxed text-white/70">
+              Enter what operations can actually spend — or accept the QuickBooks balance — and
+              build the forecast. Commitments, budget phasing, enrollment and your books do the
+              rest.
+            </p>
+          )}
+        </div>
+      </motion.section>
+
+      {/* ── Setup strip ─────────────────────────────────────────────────────── */}
       <section className="rounded-2xl border border-rule/60 bg-white p-5">
-        <h2 className="font-serif text-[17px] font-semibold text-navy">
-          Available operating cash
-        </h2>
-        <p className="mt-1 text-[13px] leading-relaxed text-muted">
-          The amount operations can actually spend — not the balance-sheet total. Restricted,
-          board-designated and reserve balances are not available.
-        </p>
-        <div className="mt-3 flex flex-wrap items-end gap-3">
+        <div className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1">
-            <span className="text-[12px] font-semibold text-muted">Amount</span>
+            <span className="text-[12px] font-semibold text-muted">Available operating cash</span>
             <input
               type="number"
               value={openingInput}
@@ -170,14 +274,32 @@ export default function CashFlowPage() {
           >
             {cf.projecting ? 'Building…' : 'Build forecast'}
           </button>
+
+          {/* The one-click QuickBooks OFFER — beside the keyed field, never in
+              place of it. Accepting it states the amount AND records the source. */}
+          {qboOffer ? (
+            <button
+              type="button"
+              onClick={() => {
+                setOpeningDraft(String(qboOffer.amount))
+                run({ openingCash: qboOffer.amount, openingSource: 'quickbooks' })
+              }}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3.5 py-2 text-[13px] font-semibold text-emerald-700 transition hover:bg-emerald-500/20"
+            >
+              <Zap size={13} /> Use QuickBooks balance · {money(qboOffer.amount)}
+            </button>
+          ) : null}
         </div>
 
+        <p className="mt-2 text-[12.5px] leading-relaxed text-muted">
+          The amount operations can actually spend — not the balance-sheet total. Restricted,
+          board-designated and reserve balances are not available.
+        </p>
         {cf.opening?.tbCash != null ? (
-          <p className="mt-3 flex items-start gap-2 text-[12.5px] leading-relaxed text-muted">
+          <p className="mt-1.5 flex items-start gap-2 text-[12.5px] leading-relaxed text-muted">
             <Info size={14} className="mt-px shrink-0" />
             <span>
-              Your trial balance shows <strong className="text-navy">{money(cf.opening.tbCash)}</strong> of
-              cash
+              Your trial balance shows <strong className="text-navy">{money(cf.opening.tbCash)}</strong> of cash
               {tbGap != null && Math.abs(tbGap) > 0.5 ? (
                 <>
                   {' '}— {money(Math.abs(tbGap))} {tbGap > 0 ? 'more' : 'less'} than the figure above.
@@ -189,9 +311,6 @@ export default function CashFlowPage() {
             </span>
           </p>
         ) : null}
-
-        {/* An opening balance keyed weeks ago compounds silently into every week
-            that follows it. */}
         {cf.opening?.stale ? (
           <p className="mt-2 flex items-start gap-2 rounded-lg border border-[#F59E0B]/40 bg-[#F59E0B]/10 px-3 py-2 text-[12.5px] leading-relaxed text-[#8a5a06]">
             <CalendarClock size={14} className="mt-px shrink-0" />
@@ -204,53 +323,7 @@ export default function CashFlowPage() {
 
       {p ? (
         <>
-          {/* ── The five answers ───────────────────────────────────────────── */}
-          <motion.section
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
-          >
-            <Answer label="Cash today" value={money(p.openingCash)} sub={`as of ${p.asOfDate}`} />
-            <Answer
-              label="Lowest projected"
-              value={money(p.lowestBalance)}
-              sub={p.lowestDate ? `on ${p.lowestDate}` : 'no movement in this horizon'}
-              tone={p.firstShortfallDate ? 'bad' : undefined}
-            />
-            <Answer
-              label="Minimum reserve"
-              value={
-                cf.projection.assumptions.reserveThreshold == null
-                  ? 'Not set'
-                  : money(cf.projection.assumptions.reserveThreshold)
-              }
-              sub={
-                cf.projection.assumptions.reserveThreshold == null
-                  ? 'Set one to be told when you would breach it'
-                  : 'the balance you have said you must hold'
-              }
-            />
-            <Answer
-              label={p.firstShortfallDate ? 'Projected gap' : 'Ending balance'}
-              value={
-                p.firstShortfallDate ? money(p.shortfallAmount) : money(p.endingBalance)
-              }
-              sub={
-                p.firstShortfallDate
-                  ? `first breach ${p.firstShortfallDate} · ${p.daysOfNotice} days' notice`
-                  : 'stays above the reserve throughout'
-              }
-              tone={p.firstShortfallDate ? 'bad' : undefined}
-            />
-          </motion.section>
-
-          {/* ── WHAT IS NOT IN THIS FORECAST ──────────────────────────────────
-              Live-caught: a school with commitments and no budget saw every
-              outflow and none of its tuition — a catastrophic trough that was an
-              artefact of missing data, with nothing on screen to say so. A
-              forecast quietly missing a school's largest receipt is worse than no
-              forecast, because the number looks complete. Sits ABOVE the Why line
-              deliberately: it changes how everything below should be read. */}
+          {/* ── What is not in this forecast ─────────────────────────────────── */}
           {cf.projection.omissions?.length > 0 ? (
             <section className="rounded-2xl border-2 border-[#F59E0B]/40 bg-[#F59E0B]/[0.07] p-5">
               <h2 className="flex items-center gap-2 text-[13px] font-semibold uppercase tracking-[0.1em] text-[#8a5a06]">
@@ -266,7 +339,7 @@ export default function CashFlowPage() {
             </section>
           ) : null}
 
-          {/* ── Why ────────────────────────────────────────────────────────── */}
+          {/* ── Why ──────────────────────────────────────────────────────────── */}
           {why ? (
             <section className="rounded-2xl border border-rule/60 bg-cream/40 p-5">
               <h2 className="text-[12px] font-semibold uppercase tracking-[0.1em] text-muted">Why</h2>
@@ -274,49 +347,115 @@ export default function CashFlowPage() {
             </section>
           ) : null}
 
-          {/* ── The line ───────────────────────────────────────────────────── */}
+          {/* ── The outlook: horizons + views ────────────────────────────────── */}
           <section className="rounded-2xl border border-rule/60 bg-white p-5">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <h2 className="font-serif text-[17px] font-semibold text-navy">
-                {granularity === 'week' ? '13-week cash outlook' : '12-month cash outlook'}
-              </h2>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div className="inline-flex rounded-full border border-rule/70 bg-white p-0.5">
-                {['week', 'month'].map((g) => (
+                {HORIZONS.map((h) => (
                   <button
-                    key={g}
+                    key={h.key}
                     type="button"
-                    onClick={() => {
-                      setGranularity(g)
-                      run(g)
-                    }}
+                    onClick={() => pickHorizon(h.key)}
                     className={
-                      granularity === g
-                        ? 'rounded-full bg-navy px-3 py-1 text-[12.5px] font-semibold text-white'
-                        : 'rounded-full px-3 py-1 text-[12.5px] font-semibold text-muted transition hover:text-navy'
+                      horizon === h.key
+                        ? 'rounded-full bg-gold-gradient px-3.5 py-1 text-[12.5px] font-bold text-navy shadow-glow'
+                        : 'rounded-full px-3.5 py-1 text-[12.5px] font-semibold text-muted transition hover:text-navy'
                     }
                   >
-                    {g === 'week' ? '13 weeks' : '12 months'}
+                    {h.label}
+                  </button>
+                ))}
+              </div>
+              <div className="inline-flex rounded-full border border-rule/70 bg-white p-0.5">
+                {[
+                  { key: 'charts', label: 'Charts', Icon: LineChart },
+                  { key: 'workbook', label: 'Workbook', Icon: LayoutGrid },
+                ].map(({ key, label, Icon }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setView(key)}
+                    className={
+                      view === key
+                        ? 'inline-flex items-center gap-1.5 rounded-full bg-navy px-3.5 py-1 text-[12.5px] font-semibold text-white'
+                        : 'inline-flex items-center gap-1.5 rounded-full px-3.5 py-1 text-[12.5px] font-semibold text-muted transition hover:text-navy'
+                    }
+                  >
+                    <Icon size={13} /> {label}
                   </button>
                 ))}
               </div>
             </div>
-            <CashRail
-              buckets={p.buckets}
-              reserveThreshold={cf.projection.assumptions.reserveThreshold}
-              lowestDate={p.lowestDate}
-              format={money}
-            />
-            {/* How much of this rests on known dates AND amounts. */}
+
+            <AnimatePresence mode="wait">
+              {view === 'charts' ? (
+                <motion.div
+                  key="charts"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.3 }}
+                  className="space-y-6"
+                >
+                  <CashRail
+                    buckets={p.buckets}
+                    reserveThreshold={cf.projection.assumptions.reserveThreshold}
+                    lowestDate={p.lowestDate}
+                    lowestBalance={p.lowestBalance}
+                    format={money}
+                  />
+                  <div>
+                    <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-[0.1em] text-muted">
+                      Money in vs money out
+                    </h3>
+                    <FlowBars buckets={p.buckets} format={money} />
+                  </div>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="workbook"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <CashWorkbook
+                    workbook={workbook}
+                    granularity={p.granularity}
+                    sources={sources}
+                    reserveThreshold={cf.projection.assumptions.reserveThreshold}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Provenance — which parts of this forecast came from where. Only
+                sources that actually contributed are shown. */}
+            {activeSources.length > 0 ? (
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <Sparkles size={13} className="text-muted" />
+                {activeSources.map(([key, v]) => (
+                  <span
+                    key={key}
+                    className="rounded-full border border-rule/70 bg-section px-2.5 py-0.5 text-[11.5px] font-semibold text-muted"
+                    title={`${v.count} event${v.count === 1 ? '' : 's'} · ${money(v.total)}`}
+                  >
+                    {SOURCE_LABELS[key] ?? key} · {v.count}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+
             {cf.projection.committedShare != null ? (
               <p className="mt-3 text-[12.5px] leading-relaxed text-muted">
                 {Math.round(cf.projection.committedShare * 100)}% of the movement in this forecast is
                 committed — dates and amounts you already know. The rest is scheduled, modelled from
-                your budget, or an assumption you entered.
+                your history or budget, or an assumption you entered.
               </p>
             ) : null}
           </section>
 
-          {/* ── Potential actions ──────────────────────────────────────────── */}
+          {/* ── Potential actions ───────────────────────────────────────────── */}
           {actions.length > 0 ? (
             <section className="rounded-2xl border border-rule/60 bg-white p-5">
               <h2 className="font-serif text-[17px] font-semibold text-navy">Potential actions</h2>
@@ -339,7 +478,6 @@ export default function CashFlowPage() {
             </section>
           ) : null}
 
-          {/* ── The confidence disclaimer, verbatim ────────────────────────── */}
           <p className="flex items-start gap-2 text-[12.5px] leading-relaxed text-muted">
             <AlertTriangle size={14} className="mt-px shrink-0" />
             <span>
@@ -351,8 +489,9 @@ export default function CashFlowPage() {
         <section className="rounded-2xl border border-dashed border-rule/60 bg-cream/30 p-6">
           <p className="text-[14px] leading-relaxed text-muted">
             Enter what operations can actually spend today and build the forecast. It uses the
-            commitments you record here, your budget&apos;s monthly phasing, and your enrollment —
-            no bank connection required.
+            commitments you record here, your budget&apos;s monthly phasing, your enrollment — and,
+            when QuickBooks is connected, your open invoices, bills and seasonal history, with no
+            typing at all.
           </p>
         </section>
       ) : null}

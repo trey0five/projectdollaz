@@ -421,9 +421,14 @@ export class QboClient {
     report: 'ProfitAndLoss' | 'BalanceSheet',
     startDate: string,
     endDate: string,
-    dimensionType: 'department' | 'class',
+    dimensionType: 'department' | 'class' | 'month',
   ): Promise<QboSummarizedReport> {
-    const by = dimensionType === 'department' ? 'Departments' : 'Classes'
+    // 'month' reuses the identical report shape with one Money column per month —
+    // the cash-forecast's seasonal-history source. The pure parser downstream is
+    // column-agnostic (flattenRows emits positional values), so the only
+    // dimension-specific piece is column matching.
+    const by =
+      dimensionType === 'department' ? 'Departments' : dimensionType === 'class' ? 'Classes' : 'Month'
     return (await this.apiGet(
       realmId,
       accessToken,

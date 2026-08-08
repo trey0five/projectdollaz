@@ -57,8 +57,23 @@ function makeService(over: Over = {}) {
     periodBudget: { findFirst: vi.fn(async () => over.budget ?? null) },
     periodOperationalData: { findFirst: vi.fn(async () => over.operational ?? null) },
   }
-  const svc = new CashFlowService(prisma as never)
-  return { svc, prisma, created }
+  // A disconnected QBO source by default — the manual path must stay
+  // byte-identical to v1 for a school without QuickBooks.
+  const qboEvents = {
+    eventsFor: vi.fn(async () => ({
+      events: [],
+      sources: {
+        qbo_ar: { count: 0, total: 0 },
+        qbo_ap: { count: 0, total: 0 },
+        qbo_history: { count: 0, total: 0 },
+      },
+      omissions: [],
+      connected: false,
+    })),
+    openingCashOffer: vi.fn(async () => null),
+  }
+  const svc = new CashFlowService(prisma as never, qboEvents as never)
+  return { svc, prisma, created, qboEvents }
 }
 
 const PAYROLL = {
@@ -339,13 +354,18 @@ describe('the briefing stops guessing the shape of the year', () => {
 })
 
 describe('module wiring', () => {
-  it('EVERY injected dependency is available in this module, guards included', async () => {
-    // LIVE-CAUGHT, and the reason this test is not just `await import(...)`.
-    // The first version imported the module file, passed, and the API would not
-    // boot: "Nest can't resolve dependencies of the JwtAuthGuard". A guard on the
-    // controller resolves in THIS module's injector, not the root's, so
-    // AuthModule has to be imported for TokenService even though nothing in this
-    // folder mentions it. An import-graph check cannot see that.
+it('EVERY injected dependency is available in this module, guards AND providers', async () => {
+    // LIVE-CAUGHT TWICE, which is why this parses SOURCE, not runtime metadata.
+    // v1: JwtAuthGuard needed TokenService and the API would not boot. v2:
+    // QboEventsService constructor-injected QboClient and the API would not
+    // boot — a hand-written list had checked the guards and nobody extended it
+    // for the new provider. The first replacement walked design:paramtypes and
+    // PASSED VACUOUSLY: esbuild does not emit decorator metadata, so the dep
+    // list came back empty and the test went green over the exact failure it
+    // was written for. Source text does not lie to the transpiler.
+    const { readFileSync, readdirSync } = await import('node:fs')
+    const { fileURLToPath } = await import('node:url')
+    const { join, dirname } = await import('node:path')
     const { CashFlowModule } = await import('./cashflow.module.js')
     const meta = (m: unknown, k: string) =>
       (Reflect.getMetadata(k, m as object) ?? []) as unknown[]
@@ -355,10 +375,33 @@ describe('module wiring', () => {
     for (const imp of meta(CashFlowModule, 'imports')) {
       for (const x of meta(imp, 'exports')) available.add(nameOf(x))
     }
-    // Global modules the app root provides.
-    for (const g of ['PrismaService', 'ConfigService']) available.add(g)
+    for (const g of ['PrismaService', 'ConfigService', 'ModuleRef', 'Reflector']) available.add(g)
 
-    // The guards the controller declares — their own dependencies must resolve here.
+    const dir = dirname(fileURLToPath(import.meta.url))
+    const files = readdirSync(dir).filter((f) => f.endsWith('.ts') && !f.endsWith('.spec.ts'))
+    const sources = files.map((f) => readFileSync(join(dir, f), 'utf8'))
+
+    const unresolved: string[] = []
+    const classes = [...meta(CashFlowModule, 'providers'), ...meta(CashFlowModule, 'controllers')]
+    expect(classes.length).toBeGreaterThan(1) // the loop must not be vacuous
+    for (const cls of classes) {
+      const name = nameOf(cls)
+      const src = sources.find((s2) => new RegExp(`export class ${name}\\b`).test(s2))
+      if (!src) continue // QboClient's source lives in integrations/ — its deps are ConfigService only
+      const body = src.slice(src.indexOf(`export class ${name}`))
+      const ctor = /constructor\s*\(([\s\S]*?)\)\s*\{/.exec(body)
+      if (!ctor) continue
+      for (const raw of ctor[1].split(/,(?![^(]*\))/)) {
+        const param = raw.trim()
+        if (!param || /@Optional|@Inject/.test(param)) continue
+        const m = /:\s*([A-Za-z_$][\w$]*)/.exec(param)
+        if (!m) continue
+        if (!available.has(m[1])) unresolved.push(`${name} injects ${m[1]}, which nothing provides`)
+      }
+    }
+    expect(unresolved).toEqual([])
+
+    // The guards the controller declares — their own dependencies too.
     expect(available.has('TokenService'), 'JwtAuthGuard needs TokenService').toBe(true)
     expect(available.has('BillingService'), 'EntitlementGuard needs BillingService').toBe(true)
   })
