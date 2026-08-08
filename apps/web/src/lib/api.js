@@ -1192,6 +1192,26 @@ export const diocesanEnrollmentApi = {
 }
 
 // ── Phase 6: QuickBooks Online connector (per school) ────────────────────────
+// ── CASH FLOW PROJECTION ─────────────────────────────────────────────────────
+// `project` is a POST because it WRITES: every run is frozen server-side so a
+// forecast can be compared against the actual later. It is not a GET that
+// happens to compute.
+export const cashFlowApi = {
+  getOpening: (schoolId, today) =>
+    api.get(`/schools/${schoolId}/cash-flow/opening`, { params: today ? { today } : {} }),
+  project: (schoolId, body) => api.post(`/schools/${schoolId}/cash-flow/project`, body),
+  listCommitments: (schoolId) => api.get(`/schools/${schoolId}/cash-flow/commitments`),
+  createCommitment: (schoolId, body) =>
+    api.post(`/schools/${schoolId}/cash-flow/commitments`, body),
+  updateCommitment: (schoolId, id, body) =>
+    api.patch(`/schools/${schoolId}/cash-flow/commitments/${id}`, body),
+  removeCommitment: (schoolId, id) =>
+    api.delete(`/schools/${schoolId}/cash-flow/commitments/${id}`),
+  getAssumptions: (schoolId) => api.get(`/schools/${schoolId}/cash-flow/assumptions`),
+  saveAssumptions: (schoolId, body) =>
+    api.put(`/schools/${schoolId}/cash-flow/assumptions`, body),
+}
+
 export const qboApi = {
   status: (schoolId) => api.get(`/schools/${schoolId}/integrations/qb/status`),
   connectUrl: (schoolId) => api.get(`/schools/${schoolId}/integrations/qb/connect`),

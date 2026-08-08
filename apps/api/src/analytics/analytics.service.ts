@@ -340,8 +340,6 @@ export class AnalyticsService {
       soaExpense = fin.totalExp > 0 ? fin.totalExp : null
     }
 
-    // The driver budget (when applied) gives the annual expense + an even monthly
-    // net-cashflow spread (evenMonths(netIncome), matching the stored budget spread).
     const lines = (budget?.lines as Record<string, unknown> | null) ?? null
     const kpis = (lines?.driverModel as Record<string, unknown> | undefined)?.kpis as
       | Record<string, unknown>
@@ -349,7 +347,27 @@ export class AnalyticsService {
     const driverExpense =
       kpis && typeof kpis.totalExpense === 'number' ? kpis.totalExpense : null
     const driverNet = kpis && typeof kpis.netIncome === 'number' ? kpis.netIncome : null
-    const monthlyNetCashflow = driverNet !== null ? evenMonths(driverNet) : null
+
+    // ── THE MONTHLY SHAPE OF THE YEAR ───────────────────────────────────────
+    // This used to be `evenMonths(driverNet)` — a flat twelfth of annual net
+    // income — which is precisely the assumption that hides a summer trough. It
+    // spreads instructional supplies evenly when they land in July and August,
+    // and it spreads payroll evenly across months when a ten-month contract pays
+    // nothing. A cash consequence computed off a flat line cannot ever surface
+    // the months that actually hurt.
+    //
+    // The real phasing was already in the database: `lines.spread.accounts[].
+    // months` carries per-account monthly figures from the imported budget. Using
+    // it makes the briefing's cash-runway breach land in the month the school's
+    // own budget says it will.
+    //
+    // The flat spread REMAINS the fallback, not because it is good but because a
+    // school with no imported spread still deserves a cash consequence rather
+    // than silence — and it is marked here so the next reader knows which of the
+    // two they are looking at.
+    const spreadMonthly = monthlyNetFromSpread(lines)
+    const monthlyNetCashflow =
+      spreadMonthly ?? (driverNet !== null ? evenMonths(driverNet) : null)
     const annualExpense = driverExpense ?? soaExpense
 
     return {
@@ -796,3 +814,45 @@ function monthEndDate(monthKey: string): string {
   // Day 0 of the NEXT month (mm as a 0-based index) === last day of THIS month.
   return new Date(Date.UTC(yyyy, mm, 0)).toISOString().slice(0, 10)
 }
+
+/**
+ * Net cashflow per fiscal month, from the imported budget spread.
+ *
+ * Sums each account row's own monthly column into a 12-month net — revenue
+ * positive, expense negative — which is the shape `projectCashRunway` expects.
+ * Returns null rather than a partial series when the spread is absent or
+ * unusable: a half-real phasing quietly mixed with a flat one would be the worst
+ * of both, and the caller's documented fallback is better than a lie.
+ *
+ * Rows excluded from totals are excluded here too, so this net matches the
+ * budget's own totals rather than a second, larger definition of them.
+ */
+function monthlyNetFromSpread(lines: Record<string, unknown> | null): number[] | null {
+  const spread = (lines?.spread as Record<string, unknown> | undefined) ?? null
+  const accounts = spread?.accounts
+  if (!Array.isArray(accounts) || accounts.length === 0) return null
+
+  const out = new Array<number>(12).fill(0)
+  let sawAny = false
+  for (const raw of accounts) {
+    const row = raw as {
+      section?: string | null
+      includedInTotals?: boolean | null
+      months?: unknown
+    }
+    if (row.includedInTotals === false) continue
+    if (row.section !== 'revenue' && row.section !== 'expense') continue
+    const months = row.months
+    if (!Array.isArray(months)) continue
+    const sign = row.section === 'revenue' ? 1 : -1
+    for (let i = 0; i < Math.min(12, months.length); i += 1) {
+      const v = months[i]
+      if (typeof v === 'number' && Number.isFinite(v)) {
+        out[i] += sign * v
+        sawAny = true
+      }
+    }
+  }
+  return sawAny ? out : null
+}
+

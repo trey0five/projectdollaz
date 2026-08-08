@@ -63,6 +63,9 @@ function emptyResult(input: CashProjectionInput): CashProjectionResult {
     byConfidence: zeroByConfidence(),
     totalReceipts: 0,
     totalDisbursements: 0,
+    driversToLowPoint: [],
+    nextReceiptAfterLow: null,
+    receiptsBeforeLowPoint: 0,
   }
 }
 
@@ -216,6 +219,32 @@ export function projectCash(input: CashProjectionInput): CashProjectionResult {
       ? input.annualOperatingExpense
       : null
 
+  // ── What explains the trough ────────────────────────────────────────────
+  // A second pass over the already-filtered events, because the low point is not
+  // known until the first pass finishes. Cheap (one linear scan) and it keeps the
+  // explanation attached to the same event set the balance came from — a
+  // breakdown computed from a different set could disagree with the number it
+  // claims to explain.
+  const lowRef = lowestDate ?? input.horizonEnd
+  const outByCategory = new Map<string, number>()
+  let receiptsBeforeLowPoint = 0
+  let nextReceiptAfterLow: { category: string; date: string; amount: number } | null = null
+  for (const e of events) {
+    if (e.date <= lowRef) {
+      if (e.direction === 'out') {
+        outByCategory.set(e.category, (outByCategory.get(e.category) ?? 0) + Math.abs(e.amount))
+      } else {
+        receiptsBeforeLowPoint += Math.abs(e.amount)
+      }
+    } else if (e.direction === 'in' && nextReceiptAfterLow == null) {
+      // `events` is already date-sorted, so the first match IS the next receipt.
+      nextReceiptAfterLow = { category: e.category, date: e.date, amount: Math.abs(e.amount) }
+    }
+  }
+  const driversToLowPoint = [...outByCategory.entries()]
+    .map(([category, amount]) => ({ category, amount }))
+    .sort((a, b) => b.amount - a.amount || a.category.localeCompare(b.category))
+
   return {
     asOfDate: input.asOfDate,
     horizonEnd: input.horizonEnd,
@@ -236,6 +265,9 @@ export function projectCash(input: CashProjectionInput): CashProjectionResult {
     byConfidence,
     totalReceipts,
     totalDisbursements,
+    driversToLowPoint,
+    nextReceiptAfterLow,
+    receiptsBeforeLowPoint,
   }
 }
 

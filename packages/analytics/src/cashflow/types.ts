@@ -185,4 +185,24 @@ export interface CashProjectionResult {
   /** Total receipts and disbursements across the horizon. */
   totalReceipts: number
   totalDisbursements: number
+  /**
+   * WHAT DUG THE HOLE — outflow by category between the start and the low point,
+   * largest first.
+   *
+   * Computed here rather than left to the caller because the surface above has to
+   * explain the trough and cannot be handed the raw event list to do it: a
+   * 12-month horizon is hundreds of events, and shipping them all so a sentence
+   * can name two categories is the wrong trade. The first version of that
+   * sentence had no drivers at all and told a school to add commitments it had
+   * already added.
+   */
+  driversToLowPoint: { category: string; amount: number }[]
+  /**
+   * The first receipt AFTER the low point — the thing the school is waiting for,
+   * which is the other half of any honest explanation of a trough. Null when
+   * nothing arrives inside the horizon, and that silence is itself the finding.
+   */
+  nextReceiptAfterLow: { category: string; date: string; amount: number } | null
+  /** Total received BEFORE the low point. Zero is a materially different story. */
+  receiptsBeforeLowPoint: number
 }

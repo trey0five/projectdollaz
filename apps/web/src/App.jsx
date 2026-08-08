@@ -28,6 +28,7 @@ import DataHubPage from './pages/DataHubPage.jsx'
 import FinancePage from './pages/FinancePage.jsx'
 import StatementsPage from './pages/StatementsPage.jsx'
 import CashCollectionsPage from './pages/CashCollectionsPage.jsx'
+import CashFlowPage from './pages/CashFlowPage.jsx'
 import AnalyticsPage from './pages/AnalyticsPage.jsx'
 import BudgetPage from './pages/BudgetPage.jsx'
 import ReadinessPage from './pages/ReadinessPage.jsx'
@@ -242,6 +243,7 @@ export default function App() {
         <Route path="/finance" element={<FinancePage />} />
         <Route path="/statements" element={<StatementsPage />} />
         <Route path="/cash" element={<CashCollectionsPage />} />
+        <Route path="/cash-flow" element={<CashFlowPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/budget" element={<BudgetPage />} />
         <Route path="/readiness" element={<ReadinessPage />} />

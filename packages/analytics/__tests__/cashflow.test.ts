@@ -336,6 +336,48 @@ describe('budget phasing is MODELLED, and never double counted', () => {
   })
 })
 
+describe('the engine explains its own trough', () => {
+  it('names what dug the hole, largest first', () => {
+    // The surface above has to explain the low point and cannot be handed
+    // hundreds of events to do it. Reporting the breakdown here keeps the
+    // explanation attached to the same event set the balance came from.
+    const r = project()
+    expect(r.driversToLowPoint.length).toBeGreaterThan(0)
+    expect(r.driversToLowPoint[0].category).toBe('payroll')
+    for (let i = 1; i < r.driversToLowPoint.length; i += 1) {
+      expect(r.driversToLowPoint[i - 1].amount).toBeGreaterThanOrEqual(
+        r.driversToLowPoint[i].amount,
+      )
+    }
+  })
+
+  it('counts only outflows BEFORE the low point', () => {
+    // Counting the whole horizon would attribute the trough to money that had not
+    // moved yet — a plausible explanation of the wrong cause.
+    const r = project()
+    const total = r.driversToLowPoint.reduce((s, d) => s + d.amount, 0)
+    expect(total).toBeLessThan(r.totalDisbursements)
+  })
+
+  it('names the next receipt after the low point — what the school is waiting for', () => {
+    const r = project()
+    expect(r.nextReceiptAfterLow?.category).toBe('tuition')
+    expect(r.nextReceiptAfterLow!.date > r.lowestDate!).toBe(true)
+  })
+
+  it('reports ZERO receipts before the trough as the distinct case it is', () => {
+    const r = projectCash({
+      openingCash: 400_000,
+      asOfDate: '2026-06-30',
+      horizonEnd: '2026-07-31',
+      events: expandCommitments([PAYROLL, DEBT], '2026-07-01', '2026-07-31'),
+      granularity: 'week',
+    })
+    expect(r.receiptsBeforeLowPoint).toBe(0)
+    expect(r.nextReceiptAfterLow).toBeNull()
+  })
+})
+
 describe('the reader can see how much of this is calendar and how much is estimate', () => {
   it('reports movement per confidence class', () => {
     const r = project()

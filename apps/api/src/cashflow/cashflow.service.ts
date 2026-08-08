@@ -93,6 +93,19 @@ export interface ProjectionResponse {
   }
   /** Why the school cannot be projected yet, when it cannot. */
   blockedReason: string | null
+  /**
+   * WHAT IS MISSING FROM THIS FORECAST, named.
+   *
+   * Live-caught on the first real run: a school with commitments recorded and no
+   * budget on file got a projection containing every outflow and NONE of its
+   * tuition — a catastrophic-looking trough that was an artefact of absent data,
+   * with nothing on screen to say so. A forecast quietly missing a school's
+   * largest receipt is worse than no forecast, because the number looks complete.
+   *
+   * Each entry names the missing input and what to do about it. Empty is the
+   * ordinary case and renders nothing.
+   */
+  omissions: { key: string; message: string }[]
 }
 
 const ISO = (d: Date): string => d.toISOString().slice(0, 10)
@@ -363,11 +376,21 @@ export class CashFlowService {
       dayRule: Array.isArray(c.dayRule) ? (c.dayRule as number[]) : null,
     }))
 
+    const omissions: { key: string; message: string }[] = []
+    const tuition = await this.tuitionEvents(schoolId, assumptions, omissions)
+    const budgeted = await this.budgetEvents(schoolId, commitmentInputs, omissions)
     const events: CashEvent[] = [
       ...expandCommitments(commitmentInputs, opts.asOfDate, horizonEnd),
-      ...(await this.tuitionEvents(schoolId, assumptions)),
-      ...(await this.budgetEvents(schoolId, commitmentInputs)),
+      ...tuition,
+      ...budgeted,
     ]
+    if (commitmentInputs.length === 0) {
+      omissions.push({
+        key: 'no_commitments',
+        message:
+          'No commitments are recorded, so payroll, debt service and insurance are not in this forecast. Add them below — they are usually most of a school\u2019s outflow.',
+      })
+    }
 
     const annualExpense = await this.annualOperatingExpense(schoolId)
 
@@ -424,6 +447,7 @@ export class CashFlowService {
       committedShare: committedShare(projection),
       assumptions,
       blockedReason: null,
+      omissions,
     }
   }
 
@@ -450,6 +474,7 @@ export class CashFlowService {
       committedShare: null,
       assumptions,
       blockedReason: reason,
+      omissions: [],
     }
   }
 
@@ -464,8 +489,18 @@ export class CashFlowService {
   private async tuitionEvents(
     schoolId: string,
     assumptions: ProjectionResponse['assumptions'],
+    omissions: { key: string; message: string }[],
   ): Promise<CashEvent[]> {
-    if (!assumptions.firstBillingDate) return []
+    const miss = (key: string, message: string) => {
+      omissions.push({ key, message })
+      return [] as CashEvent[]
+    }
+    if (!assumptions.firstBillingDate) {
+      return miss(
+        'tuition_no_billing_date',
+        'Tuition is not in this forecast: no first billing date is set. Tuition is usually a school\u2019s largest receipt, so the low point below is deeper than reality until you set one.',
+      )
+    }
     const op = await this.prisma.periodOperationalData
       .findFirst({
         where: { fiscalPeriod: { schoolId } },
@@ -474,14 +509,24 @@ export class CashFlowService {
       })
       .catch(() => null)
     const enrollment = op?.enrollment ?? null
-    if (!enrollment || enrollment <= 0) return []
+    if (!enrollment || enrollment <= 0) {
+      return miss(
+        'tuition_no_enrollment',
+        'Tuition is not in this forecast: no enrollment figure is on file for the latest period. The low point below is deeper than reality until one is.',
+      )
+    }
 
     const aid = op?.financialAidTotal == null ? 0 : Number(op.financialAidTotal)
     // Gross tuition per student is derived from the school's own aid and
     // enrollment where a rate is not separately recorded. Returning nothing beats
     // inventing a rate — an invented tuition line would dominate the forecast.
     const gross = await this.grossTuitionPerStudent(schoolId, enrollment, aid)
-    if (gross == null) return []
+    if (gross == null) {
+      return miss(
+        'tuition_no_rate',
+        'Tuition is not in this forecast: no tuition revenue figure is on file to derive a rate from. Import or enter a budget and it will be included \u2014 until then the low point below is deeper than reality.',
+      )
+    }
 
     return tuitionReceipts({
       enrollment,
@@ -521,6 +566,7 @@ export class CashFlowService {
   private async budgetEvents(
     schoolId: string,
     commitments: readonly CashCommitmentInput[],
+    omissions: { key: string; message: string }[],
   ): Promise<CashEvent[]> {
     const budget = await this.prisma.periodBudget
       .findFirst({
@@ -532,7 +578,14 @@ export class CashFlowService {
       spread?: { accounts?: SpreadAccountLike[]; fiscalYearStart?: string }
     } | null
     const spread = lines?.spread
-    if (!spread?.accounts?.length || !spread.fiscalYearStart) return []
+    if (!spread?.accounts?.length || !spread.fiscalYearStart) {
+      omissions.push({
+        key: 'no_budget_spread',
+        message:
+          'Only your recorded commitments are in this forecast \u2014 no monthly budget phasing is on file, so day-to-day operating spend and receipts are missing from it.',
+      })
+      return []
+    }
 
     const excludeCategories = [...new Set(commitments.map((c) => c.category))]
     // Tuition is always excluded from spread revenue: the driver produces it, and

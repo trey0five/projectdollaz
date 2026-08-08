@@ -217,6 +217,65 @@ describe('every run is frozen on creation', () => {
   })
 })
 
+describe('a forecast SAYS what is missing from it', () => {
+  it('names absent tuition — the largest receipt a school has', async () => {
+    // LIVE-CAUGHT on the first real run. A school with commitments recorded and
+    // no budget got every outflow and none of its tuition: a catastrophic-looking
+    // trough that was an artefact of missing data, with nothing on screen to say
+    // so. A number that looks complete and is not is the worst output here.
+    const { svc } = makeService({ commitments: [PAYROLL] })
+    const r = await svc.project('s1', 'u1', { openingCash: 100_000, asOfDate: '2026-07-01' })
+    const keys = r.omissions.map((o) => o.key)
+    expect(keys).toContain('tuition_no_billing_date')
+    expect(r.omissions.every((o) => o.message.length > 40)).toBe(true)
+  })
+
+  it('says the trough is DEEPER THAN REALITY when a receipt is missing', async () => {
+    // The consequence, not just the fact. "Tuition is missing" leaves a reader to
+    // work out what that does to the number they are looking at.
+    const { svc } = makeService({ commitments: [PAYROLL] })
+    const r = await svc.project('s1', 'u1', { openingCash: 100_000, asOfDate: '2026-07-01' })
+    expect(r.omissions.some((o) => /deeper than reality/.test(o.message))).toBe(true)
+  })
+
+  it('names an empty commitment list — usually most of the outflow', async () => {
+    const { svc } = makeService()
+    const r = await svc.project('s1', 'u1', { openingCash: 100_000, asOfDate: '2026-07-01' })
+    expect(r.omissions.map((o) => o.key)).toContain('no_commitments')
+  })
+
+  it('says NOTHING when the forecast is complete', async () => {
+    // A permanent warning band teaches a reader to ignore the band.
+    const { svc } = makeService({
+      commitments: [PAYROLL],
+      operational: { enrollment: 300, financialAidTotal: 600_000 },
+      assumptions: {
+        planMix: { annual: 1, semiannual: 0, monthly10: 0, monthly12: 0 },
+        collectionRate: 0.95,
+        collectionRateSource: 'entered',
+        reserveThreshold: 250_000,
+        firstBillingDate: new Date('2026-08-01'),
+      },
+      budget: {
+        totalExpenses: 2_000_000,
+        lines: {
+          revenue: { tuition: 3_000_000 },
+          spread: {
+            fiscalYearStart: '2026-07-01',
+            accounts: [
+              { acct: '6200', label: 'Supplies', category: 'supplies', section: 'expense', months: [10_000] },
+            ],
+          },
+        },
+      },
+    })
+    const r = await svc.project('s1', 'u1', { openingCash: 400_000, asOfDate: '2026-07-01' })
+    expect(r.omissions).toEqual([])
+    // …and the tuition actually made it in.
+    expect(r.projection!.totalReceipts).toBeGreaterThan(0)
+  })
+})
+
 describe('no double counting', () => {
   it('a category covered by a commitment is EXCLUDED from budget phasing', async () => {
     // Payroll counted from both sources draws a trough twice as deep as the
@@ -249,13 +308,59 @@ describe('no double counting', () => {
   })
 })
 
+describe('the briefing stops guessing the shape of the year', () => {
+  it('reads REAL monthly phasing from the budget spread', async () => {
+    // The cash-consequence step used evenMonths(annual net) — a flat twelfth,
+    // which is precisely the assumption that hides a summer trough. The real
+    // phasing was already in the database and nothing read it.
+    const svcFile = await import('node:fs').then((fs) =>
+      fs.readFileSync(
+        new URL('../analytics/analytics.service.ts', import.meta.url),
+        'utf8',
+      ),
+    )
+    expect(svcFile).toMatch(/const spreadMonthly = monthlyNetFromSpread\(lines\)/)
+    expect(svcFile).toMatch(/spreadMonthly \?\? \(driverNet !== null \? evenMonths\(driverNet\) : null\)/)
+  })
+
+  it('returns NULL rather than a half-real series', async () => {
+    // A partial phasing quietly mixed with a flat one is the worst of both.
+    const svcFile = await import('node:fs').then((fs) =>
+      fs.readFileSync(
+        new URL('../analytics/analytics.service.ts', import.meta.url),
+        'utf8',
+      ),
+    )
+    expect(svcFile).toMatch(/return sawAny \? out : null/)
+    // Rows the budget excludes from its own totals are excluded here too, or this
+    // net would be a second and larger definition of the same figure.
+    expect(svcFile).toMatch(/if \(row\.includedInTotals === false\) continue/)
+  })
+})
+
 describe('module wiring', () => {
-  it('the module resolves — an import CYCLE would fail here', async () => {
-    // The ESM import graph is the thing under test: a cycle resolves to a
-    // partially-initialised module and the constructor blows up at boot rather
-    // than in a test.
-    const mod = await import('./cashflow.module.js')
-    expect(mod.CashFlowModule).toBeDefined()
+  it('EVERY injected dependency is available in this module, guards included', async () => {
+    // LIVE-CAUGHT, and the reason this test is not just `await import(...)`.
+    // The first version imported the module file, passed, and the API would not
+    // boot: "Nest can't resolve dependencies of the JwtAuthGuard". A guard on the
+    // controller resolves in THIS module's injector, not the root's, so
+    // AuthModule has to be imported for TokenService even though nothing in this
+    // folder mentions it. An import-graph check cannot see that.
+    const { CashFlowModule } = await import('./cashflow.module.js')
+    const meta = (m: unknown, k: string) =>
+      (Reflect.getMetadata(k, m as object) ?? []) as unknown[]
+    const nameOf = (c: unknown) => (c as { name?: string })?.name ?? String(c)
+
+    const available = new Set<string>(meta(CashFlowModule, 'providers').map(nameOf))
+    for (const imp of meta(CashFlowModule, 'imports')) {
+      for (const x of meta(imp, 'exports')) available.add(nameOf(x))
+    }
+    // Global modules the app root provides.
+    for (const g of ['PrismaService', 'ConfigService']) available.add(g)
+
+    // The guards the controller declares — their own dependencies must resolve here.
+    expect(available.has('TokenService'), 'JwtAuthGuard needs TokenService').toBe(true)
+    expect(available.has('BillingService'), 'EntitlementGuard needs BillingService').toBe(true)
   })
 
   it('the controller delegates without doing arithmetic of its own', async () => {
