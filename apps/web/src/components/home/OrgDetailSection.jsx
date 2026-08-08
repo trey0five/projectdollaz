@@ -1,17 +1,21 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// OrgDetailModal — the consolidated ORGANIZATION VIEW as a popup. The org home
-// used to inline this whole dashboard (header + KPI strip + schools table +
-// triage) under the tile grid; it now opens from the briefing band's
-// "Organization view" action and is TABBED so each section reads on its own:
-//   Organization KPIs · Schools · Needs attention
+// OrgDetailSection — the consolidated ORGANIZATION VIEW, inline on the org page.
+//
+// This content has now lived three lives: inlined under the tile grid, then
+// hidden behind the briefing band's "Organization view" popup, and now inline
+// again UNDER "Jump into a school" — visible on arrival, no click required. The
+// popup round taught the lesson: a consolidated view behind a button is a view
+// most people never see, and the org page's whole job is this consolidation.
+//
+// The TABS survive from the popup version (Organization KPIs · Schools · Modules
+// · Needs attention) because they were the good part — each section reads on its
+// own instead of stacking into one long scroll.
+//
 // Presentational: OrgTiles owns all the data hooks and passes everything down.
-// Tabs are module-scope (no in-render component defs); a11y tablist + arrow keys
-// kept simple (roving via click; the three tabs are also plain buttons).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { Layers, Gauge, School, AlertTriangle, Blocks } from 'lucide-react'
-import BriefingModal from './BriefingModal.jsx'
 import OrgKpiStrip from '../budget/OrgKpiStrip.jsx'
 import OrgSchoolsTable from '../budget/OrgSchoolsTable.jsx'
 import OrgBriefing from '../budget/OrgBriefing.jsx'
@@ -24,9 +28,7 @@ const TABS = [
   { key: 'attention', label: 'Needs attention', Icon: AlertTriangle },
 ]
 
-export default function OrgDetailModal({
-  open,
-  onClose,
+export default function OrgDetailSection({
   orgName,
   orgSchoolCount,
   fy,
@@ -49,9 +51,9 @@ export default function OrgDetailModal({
   const attentionTotal = briefing?.summary?.total ?? 0
 
   return (
-    <BriefingModal open={open} onClose={onClose} wide ariaLabel="Organization view">
+    <section aria-label="Organization view" className="card-soft p-5 sm:p-6">
       {/* ── Header: org identity + fiscal-year picker ─────────────────────────── */}
-      <div className="flex flex-col gap-3 pr-10 sm:flex-row sm:items-center sm:gap-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-5">
         <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gold-gradient text-white shadow-glow">
           <Layers size={24} />
         </span>
@@ -144,6 +146,6 @@ export default function OrgDetailModal({
           />
         )}
       </div>
-    </BriefingModal>
+    </section>
   )
 }

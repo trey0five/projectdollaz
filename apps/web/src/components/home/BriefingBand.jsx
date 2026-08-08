@@ -2,7 +2,7 @@
 // BriefingBand — the HOME v2 hero above the tile map. Two columns on lg+:
 //   LEFT   greeting ("Good evening, {name}.") + "N things that need your
 //          attention" + the actions (▶ Play → onOpenBrief('narrate'); Open Daily
-//          Briefing → onOpenBrief('open'); Organization view when org-scoped).
+//          Briefing → onOpenBrief('open')).
 //   RIGHT  the top-3 performing metric cards (BriefingPerformers, self-contained
 //          + fail-soft — renders nothing when there's no genuine win to show).
 // The "alive" feature is AuroraFlow: slow flowing gradient ribbons (no dots /
@@ -12,7 +12,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion, useReducedMotion } from 'framer-motion'
 import { Link } from 'react-router-dom'
-import { Sparkles, Play, ArrowRight, Database, Layers, School, Clock } from 'lucide-react'
+import { Sparkles, Play, ArrowRight, Database, School, Clock } from 'lucide-react'
 import { LENS_VERB, greeting } from './tileRegistry.jsx'
 import { useAuth } from '../../context/AuthContext.jsx'
 import AuroraFlow from './AuroraFlow.jsx'
@@ -31,8 +31,6 @@ export default function BriefingBand({
   // these. Absent (org scope / no period) → BriefingPerformers renders nothing.
   schoolId = null,
   periodId = null,
-  // Org scope only: a third action opening the consolidated organization view.
-  onOpenOrgView = null,
   // School scope (from a multi-school org): `hue` is the school's identity colour
   // and `schoolTitle` its name — the band renders as a frosted-glass panel tinted
   // in that colour with the name shown.
@@ -146,15 +144,6 @@ export default function BriefingBand({
                 <Clock size={13} /> {readMin} min read
               </span>
 
-              {onOpenOrgView ? (
-                <button
-                  type="button"
-                  onClick={onOpenOrgView}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-white/25 px-4 py-2 text-[13px] font-semibold text-white/80 transition-colors hover:border-white/45 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
-                >
-                  <Layers size={13} /> Organization view <ArrowRight size={13} />
-                </button>
-              ) : null}
             </div>
           </div>
 

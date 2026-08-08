@@ -66,11 +66,14 @@ export default function ContextSwitcher() {
   const pickOrg = () => {
     setScope('org')
     setOpen(false)
-    // Analytics owns its OWN scope space (School · Compare · All schools) and
-    // ignores the global scope, so flipping to org here is otherwise inert there.
-    // Picking "Whole organization" from analytics means "take me to the org level"
-    // → land on the organization home (/app renders org mode under scope='org').
-    if (location.pathname.startsWith('/analytics')) navigate('/app')
+    // ALWAYS land on the organization home. This used to navigate only from
+    // /analytics, on the theory that other pages would react to the scope flip —
+    // but module pages are school-scoped, so picking "Whole organization" from
+    // /finance or /accreditation changed a value nobody read and the screen sat
+    // still. A control that visibly does nothing teaches people it is broken.
+    // Choosing the org IS choosing to go where the org lives; /app renders the
+    // org dashboard under scope='org'.
+    if (location.pathname !== '/app') navigate('/app')
   }
   const pickSchool = (id) => {
     setActiveSchool(id)

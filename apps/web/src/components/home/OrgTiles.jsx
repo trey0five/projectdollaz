@@ -7,10 +7,14 @@
 // (BriefingModal) from the band; the core row is gone (duplicated the top nav).
 //
 // It reuses OrgHome's proven org hooks (useOrgBriefing / useOrgMetrics) and its
-// child components verbatim — nothing new server-side. Tiles navigate to each
-// module exactly as the sidebar did in org scope (the module page resolves the
-// active school); the org value on the tile is the recognition cue "where across
-// the org needs attention".
+// child components verbatim — nothing new server-side.
+//
+// The consolidated ORGANIZATION VIEW (KPIs / schools / modules / needs
+// attention) renders INLINE below the school tiles, visible on arrival. It spent
+// a while as a popup behind an "Organization view" button on the briefing band,
+// which taught the obvious in retrospect: a consolidation behind a click is a
+// consolidation most people never open, and this page's whole job is that
+// consolidation.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo, useState } from 'react'
 import { useOrgBriefing, useOrgMetrics } from '../../hooks/useAnalytics.js'
@@ -20,7 +24,7 @@ import { summariseBadges } from '../../hooks/useNavBadges.js'
 import PennyMorningBrief from './PennyMorningBrief.jsx'
 import BriefingBand from './BriefingBand.jsx'
 import BriefingModal from './BriefingModal.jsx'
-import OrgDetailModal from './OrgDetailModal.jsx'
+import OrgDetailSection from './OrgDetailSection.jsx'
 import SchoolTile from './SchoolTile.jsx'
 import { TILE_SOURCES } from './tileRegistry.jsx'
 import '../../styles/home-tiles.css'
@@ -46,8 +50,6 @@ export default function OrgTiles({
   const [previewLens, setPreviewLens] = useState(null)
   // Morning-brief popup: null (closed) | 'open' | 'narrate' (autoplay on open).
   const [brief, setBrief] = useState(null)
-  // The consolidated organization-view popup (tabbed KPIs / schools / triage).
-  const [orgDetail, setOrgDetail] = useState(false)
 
   const {
     briefing,
@@ -97,7 +99,6 @@ export default function OrgTiles({
         lens={lens}
         hasPeriod
         onOpenBrief={setBrief}
-        onOpenOrgView={() => setOrgDetail(true)}
       />
 
       {/* Jump into a school — each tile swaps the whole app to that school's
@@ -132,22 +133,10 @@ export default function OrgTiles({
         )}
       </section>
 
-      {/* The narrated org brief — a POPUP now. ▶ Play opens with autoNarrate
-          (the modal dispatches 'penny:narrate' after the brief mounts). */}
-      <BriefingModal
-        open={!!brief}
-        autoNarrate={brief === 'narrate'}
-        onClose={() => setBrief(null)}
-      >
-        <PennyMorningBrief scope="org" orgId={orgId} fiscalYearStart={fiscalYearStart} lens={lens} />
-      </BriefingModal>
-
-      {/* The consolidated ORGANIZATION VIEW — a tabbed popup now (KPIs / Schools /
-          Needs attention), opened from the band's "Organization view" action
-          instead of stacking the whole dashboard under the tile grid. */}
-      <OrgDetailModal
-        open={orgDetail}
-        onClose={() => setOrgDetail(false)}
+      {/* The consolidated ORGANIZATION VIEW — inline and visible on arrival,
+          directly under the school tiles. Tabbed (KPIs / Schools / Modules /
+          Needs attention) so each section reads on its own. */}
+      <OrgDetailSection
         orgName={orgName}
         orgSchoolCount={orgSchoolCount}
         fy={fy}
@@ -165,6 +154,17 @@ export default function OrgTiles({
         availableLenses={availableLenses}
         onLensChange={setPreviewLens}
       />
+
+      {/* The narrated org brief — a POPUP now. ▶ Play opens with autoNarrate
+          (the modal dispatches 'penny:narrate' after the brief mounts). */}
+      <BriefingModal
+        open={!!brief}
+        autoNarrate={brief === 'narrate'}
+        onClose={() => setBrief(null)}
+      >
+        <PennyMorningBrief scope="org" orgId={orgId} fiscalYearStart={fiscalYearStart} lens={lens} />
+      </BriefingModal>
+
     </div>
   )
 }
