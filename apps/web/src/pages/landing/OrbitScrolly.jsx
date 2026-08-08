@@ -46,17 +46,31 @@ import PennyAvatar from '../../components/penny/PennyAvatar.jsx'
 import AuroraFlow from '../../components/home/AuroraFlow.jsx'
 import '../../styles/landing-orbit.css'
 
-// The eight domains — hue, proof line, and the payload stat. Real platform
-// truths (statements from a TB; SIS name-matching; self-measuring plans…).
+// The eight domains — hue, proof line, the payload stat, and a PHOTOGRAPH.
+// Real platform truths (statements from a TB; SIS name-matching…).
+//
+// The photos live in /public/landing/orbit-*.jpg (Unsplash — free commercial
+// license, no attribution required) and each was chosen for the domain it rides
+// with, not for generic office ambience: a classroom full of students for
+// Enrollment, an empty board table for Governance, thrown graduation caps for
+// Accreditation, the campus building itself for Facilities, cupped hands giving
+// for Advancement, a sticky-note planning wall for Strategy, a staff training
+// session for HR, and two people working the numbers for Finance. The card
+// re-mounts per dock, so the photo swaps with the same deal-in the rest of the
+// payload gets.
+// Each domain also carries its EXPLANATION (three concrete, platform-true
+// points — what the module actually does, no adjectives doing the work) and a
+// SAMPLE BRIEFING ITEM (severity + sentence, styled like the real app's
+// attention rail) for the flanking panels beside the orbit.
 const DOMAINS = [
-  { key: 'finance', label: 'Finance', hue: '#2563EB', Icon: CircleDollarSign, line: 'Trial balance in — four board-ready statements out.', stat: 4, unit: 'statements' },
-  { key: 'enrollment', label: 'Enrollment', hue: '#0891b2', Icon: GraduationCap, line: 'SIS rosters reconcile by name; projections flow into tuition and cash.', stat: 412, unit: 'students synced' },
-  { key: 'governance', label: 'Governance', hue: '#7c3aed', Icon: Landmark, line: 'Policies, meetings, minutes — reviewed on schedule, never lost.', stat: 36, unit: 'policies tracked' },
-  { key: 'accreditation', label: 'Accreditation', hue: '#d97706', Icon: BadgeCheck, line: 'Standards and evidence tracked; gaps surface in the briefing.', stat: 87, unit: '% evidence ready' },
-  { key: 'facilities', label: 'Facilities', hue: '#ea580c', Icon: Wrench, line: 'Maintenance with real costs — variance you can defend.', stat: 23, unit: 'work orders' },
-  { key: 'advancement', label: 'Advancement', hue: '#e11d48', Icon: HeartHandshake, line: 'Campaigns, gifts, pledges — pacing vs goal at a glance.', stat: 72, unit: '% to goal' },
-  { key: 'strategy', label: 'Strategy', hue: '#8b5cf6', Icon: Target, line: 'A strategic plan that measures itself against the live numbers.', stat: 9, unit: 'goals on pace' },
-  { key: 'hr', label: 'HR', hue: '#059669', Icon: Users, line: 'Staffing feeds student-teacher ratio straight into analytics.', stat: 14, unit: 'students per teacher' },
+  { key: 'finance', label: 'Finance', hue: '#2563EB', Icon: CircleDollarSign, line: 'Trial balance in — four board-ready statements out.', stat: 4, unit: 'statements', img: '/landing/orbit-finance.jpg', imgAlt: 'Two people working through financial statements together' , points: ['Upload a trial balance or connect QuickBooks \u2014 four board-ready statements build themselves.', 'Analytics, budget vs actual and the board packet read from the same numbers.', 'A cash forecast dates the summer trough before it arrives.'], brief: { sev: 'critical', text: 'Days cash on hand fell below 60 \u2014 first shortfall projected July 18.' } },
+  { key: 'enrollment', label: 'Enrollment', hue: '#0891b2', Icon: GraduationCap, line: 'SIS rosters reconcile by name; projections flow into tuition and cash.', stat: 412, unit: 'students synced', img: '/landing/orbit-enrollment.jpg', imgAlt: 'A classroom full of students' , points: ['SIS rosters sync and reconcile by name \u2014 FACTS, Blackbaud, OneRoster.', 'Enrollment flows into tuition, aid and cash projections automatically.', 'Demographics and retention read from the same roster.'], brief: { sev: 'watch', text: 'Enrollment is 12 under plan \u2014 projected tuition impact \u2212$146K.' } },
+  { key: 'governance', label: 'Governance', hue: '#7c3aed', Icon: Landmark, line: 'Policies, meetings, minutes — reviewed on schedule, never lost.', stat: 36, unit: 'policies tracked', img: '/landing/orbit-governance.jpg', imgAlt: 'An empty boardroom table before a meeting' , points: ['Policies with owners and review dates that actually come due.', 'Meetings, minutes and committees in one register.', 'Review lapses surface in the briefing before an auditor finds them.'], brief: { sev: 'watch', text: '4 policies are past their scheduled review \u2014 the oldest by 210 days.' } },
+  { key: 'accreditation', label: 'Accreditation', hue: '#d97706', Icon: BadgeCheck, line: 'Standards and evidence tracked; gaps surface in the briefing.', stat: 87, unit: '% evidence ready', img: '/landing/orbit-accreditation.jpg', imgAlt: 'Graduates throwing their caps' , points: ['Adopt your accreditor\u2019s framework \u2014 Cognia, FCIS, ACSI, WASC, SAIS.', 'Score standards on the rubric; attach evidence where it lives.', 'A mock visit shows what a visiting team would find today.'], brief: { sev: 'critical', text: 'An assurance gate is unmet \u2014 one attached artifact settles it.' } },
+  { key: 'facilities', label: 'Facilities', hue: '#ea580c', Icon: Wrench, line: 'Maintenance with real costs — variance you can defend.', stat: 23, unit: 'work orders', img: '/landing/orbit-facilities.jpg', imgAlt: 'A school campus building and grounds' , points: ['Work orders with real costs, not estimates that never close.', 'Recurring maintenance on a calendar, with inspection records.', 'Variance against the facilities budget you can defend to a board.'], brief: { sev: 'watch', text: 'Maintenance backlog reached 23 work orders \u2014 $41K over budget.' } },
+  { key: 'advancement', label: 'Advancement', hue: '#e11d48', Icon: HeartHandshake, line: 'Campaigns, gifts, pledges — pacing vs goal at a glance.', stat: 72, unit: '% to goal', img: '/landing/orbit-advancement.jpg', imgAlt: 'Cupped hands holding a donation' , points: ['Campaigns, gifts and pledges in one register.', 'Pledge pacing versus goal, visible at a glance.', 'Giving flows into the finance picture automatically.'], brief: { sev: 'info', text: 'Annual fund reached 72% of goal \u2014 $84K ahead of last year\u2019s pace.' } },
+  { key: 'strategy', label: 'Strategy', hue: '#8b5cf6', Icon: Target, line: 'A strategic plan that measures itself against the live numbers.', stat: 9, unit: 'goals on pace', img: '/landing/orbit-strategy.jpg', imgAlt: 'A team planning with sticky notes on a wall' , points: ['Goals bound to live metrics \u2014 progress computes itself.', 'Direction-aware pacing: ahead or behind, with no manual updates.', 'Strategy-linked tasks land with the people who own them.'], brief: { sev: 'info', text: '9 of 12 goals on pace \u2014 two need attention before the board meets.' } },
+  { key: 'hr', label: 'HR', hue: '#059669', Icon: Users, line: 'Staffing feeds student-teacher ratio straight into analytics.', stat: 14, unit: 'students per teacher', img: '/landing/orbit-hr.jpg', imgAlt: 'Staff in a professional development session' , points: ['A staff roster with credentials, clearances and evaluations.', 'Student-teacher ratio feeds analytics straight from staffing.', 'Professional development tracked with dates that come due.'], brief: { sev: 'watch', text: 'Student-teacher ratio hit 27.9:1 \u2014 above the board\u2019s threshold.' } },
 ]
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v))
@@ -288,6 +302,17 @@ function CountStat({ target }) {
 
 export default function OrbitScrolly() {
   const reduce = useReducedMotion()
+
+  // Warm the eight photos once the section is near — the card mounts each one
+  // at dock time, and a photo that pops in a beat after its own card undoes the
+  // deal-in. Fire-and-forget; a failed fetch just means the browser loads it on
+  // dock like it would have anyway.
+  useEffect(() => {
+    for (const { img } of DOMAINS) {
+      const el = new Image()
+      el.src = img
+    }
+  }, [])
   const trackRef = useRef(null)
   const stageRef = useRef(null)
   const introRef = useRef(null)
@@ -298,6 +323,9 @@ export default function OrbitScrolly() {
   const coreRef = useRef(null)
   const typeRef = useRef(null)
   const payWrapRef = useRef(null)
+  const photoWrapRef = useRef(null)
+  const flankLRef = useRef(null)
+  const flankRRef = useRef(null)
   const finaleRef = useRef(null)
 
   const { scrollYProgress } = useScroll({ target: trackRef, offset: ['start start', 'end end'] })
@@ -383,13 +411,22 @@ export default function OrbitScrolly() {
     // Giant type, core scale, payload + finale opacity.
     // Giant type is GONE before the finale card arrives (was: faded with
     // `collapse`, which left a ghost "HR" hanging behind the briefing).
-    if (typeRef.current) typeRef.current.style.opacity = String(0.9 * seg(v, 0.1, 0.14) * (1 - seg(v, 0.88, 0.93)))
+    if (typeRef.current) typeRef.current.style.opacity = String(seg(v, 0.1, 0.14) * (1 - seg(v, 0.88, 0.93)))
     if (introRef.current) introRef.current.style.opacity = String(1 - seg(v, 0.05, 0.11))
     if (coreRef.current) {
       coreRef.current.style.transform = `scale(${1 + 0.5 * collapse})`
       coreRef.current.style.opacity = String(1 - seg(v, 0.94, 1))
     }
     if (payWrapRef.current) payWrapRef.current.style.opacity = String(seg(v, 0.1, 0.14) * (1 - seg(v, 0.88, 0.94)))
+    // The flanking panels ride the same window as the payload card.
+    const flankO = String(seg(v, 0.1, 0.14) * (1 - seg(v, 0.88, 0.94)))
+    if (flankLRef.current) flankLRef.current.style.opacity = flankO
+    if (flankRRef.current) flankRRef.current.style.opacity = flankO
+    // The backdrop photograph rides the FORMATION: it fades in as the planets
+    // erupt from behind Penny (the same 0→0.1 window `form` runs on), so the
+    // room fills with Finance while the system is assembling — not a beat after
+    // it. Stays through the finale (the briefing floats over the last scene).
+    if (photoWrapRef.current) photoWrapRef.current.style.opacity = String(seg(v, 0.02, 0.1))
     if (finaleRef.current) {
       const f = seg(v, 0.94, 1)
       finaleRef.current.style.opacity = String(f)
@@ -429,9 +466,47 @@ export default function OrbitScrolly() {
       <div ref={trackRef} className="relative h-[560vh]">
         <div
           ref={stageRef}
-          className="sticky top-0 flex h-screen flex-col items-center justify-center overflow-hidden transition-[background] duration-1000"
-          style={{ background: `radial-gradient(760px 540px at 50% 34%, ${d.hue}30, transparent 65%), linear-gradient(168deg, #f4f7fd 0%, #e2ebf9 55%, #d4e1f6 100%)` }}
+          className="sticky top-0 flex h-screen flex-col items-center justify-center overflow-hidden"
+          style={{ background: 'linear-gradient(168deg, #f4f7fd 0%, #e2ebf9 55%, #d4e1f6 100%)' }}
         >
+          {/* ── The module's PHOTOGRAPH, as the whole section's backdrop ──────
+              Fills the pinned frame — all the whitespace around the system —
+              and crossfades on every dock. Under a heavy light veil, because
+              the scene on top is pastel UI with navy type: the photo is meant
+              to read as context, not compete as content. The veil is lightest
+              at the edges (where there is only whitespace) and densest in the
+              middle (where the orbit, giant type and payload card live), and it
+              carries the dock's hue radial so the docked-domain glow still
+              tints the room. The stage keeps its plain gradient underneath as
+              the first-paint fallback while a photo streams in. */}
+          {/* STARTS INVISIBLE (opacity 0, handler-written): the very first frame
+              belongs to Penny alone — the photograph fades in WITH the planets'
+              eruption, so the room fills with Finance as the system assembles. */}
+          <div ref={photoWrapRef} aria-hidden="true" className="absolute inset-0 z-0 overflow-hidden" style={{ opacity: 0 }}>
+            <AnimatePresence initial={false}>
+              <motion.img
+                key={d.key}
+                src={d.img}
+                alt=""
+                draggable="false"
+                initial={{ opacity: 0, scale: 1.06 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 1.1, ease: [0.22, 1, 0.36, 1] }}
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+            </AnimatePresence>
+            <div
+              className="absolute inset-0 transition-[background] duration-1000"
+              style={{
+                // Tuned DOWN once already — the first veil washed the photos to
+                // near-invisibility. Centre stays milky enough for navy type and
+                // the pastel card; the edges drop to a light haze so the image
+                // actually reads as a scene, not a stain.
+                background: `radial-gradient(760px 540px at 50% 34%, ${d.hue}30, transparent 65%), radial-gradient(105% 80% at 50% 45%, rgba(240,245,252,0.82) 28%, rgba(236,242,251,0.46) 60%, rgba(233,240,251,0.16) 100%)`,
+              }}
+            />
+          </div>
           {/* The heading, lowered INTO the scene: overlays the stage top during
               Penny's entrance + formation, fades as the first dock lands. */}
           <div
@@ -468,11 +543,14 @@ export default function OrbitScrolly() {
                 animate={{ y: 0, opacity: 1, scale: 1 }}
                 exit={{ y: -20, opacity: 0 }}
                 transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-                className="mx-auto w-max select-none whitespace-nowrap font-serif font-semibold uppercase"
+                className="mx-auto w-max select-none whitespace-nowrap font-serif font-bold uppercase"
                 style={{
                   fontSize: 'clamp(52px, 8.4vw, 128px)',
                   letterSpacing: '0.06em',
-                  backgroundImage: `linear-gradient(180deg, ${d.hue}59 0%, rgba(16,28,61,0.10) 55%, transparent 100%)`,
+                  // Heavier fill than the pre-photo era: bold weight, hue at ~65%
+                  // alpha and a navy (not transparent) tail — semibold at 35%
+                  // dissolved into the backdrop photograph.
+                  backgroundImage: `linear-gradient(180deg, ${d.hue}a6 0%, rgba(16,28,61,0.38) 60%, rgba(16,28,61,0.12) 100%)`,
                   WebkitBackgroundClip: 'text',
                   backgroundClip: 'text',
                   color: 'transparent',
@@ -557,6 +635,81 @@ export default function OrbitScrolly() {
                 </div>
               )
             })}
+          </div>
+
+          {/* ── The flanking panels: WHAT IT DOES (left) and the module in
+              practice as a real briefing item (right). Absolutely placed so the
+              orbit's trig layout is untouched; hidden below xl where there is
+              no room beside the system. Both re-mount per dock, sliding in from
+              their own side, and ride the payload card's opacity ramp. */}
+          <div
+            ref={flankLRef}
+            className="pointer-events-none absolute left-[max(2vw,16px)] top-1/2 z-[3] hidden w-[300px] -translate-y-1/2 xl:block"
+            style={{ opacity: 0 }}
+          >
+            <AnimatePresence mode="popLayout">
+              <motion.div
+                key={d.key}
+                initial={{ x: -28, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: -16, opacity: 0 }}
+                transition={{ duration: 0.45, ease: [0.2, 0.9, 0.2, 1] }}
+                className="relative overflow-hidden rounded-2xl border border-navy/10 bg-white/80 px-5 py-4 shadow-[0_24px_60px_-24px_rgba(16,28,61,0.35)] backdrop-blur-md"
+              >
+                <span aria-hidden="true" className="absolute inset-x-0 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${d.hue}, transparent)` }} />
+                <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-navy/50">
+                  What it does
+                </p>
+                <ul className="mt-2.5 space-y-2.5">
+                  {d.points.map((pt) => (
+                    <li key={pt} className="flex items-start gap-2.5 text-[13px] leading-snug text-navy/80">
+                      <span aria-hidden="true" className="mt-[5px] h-[7px] w-[7px] shrink-0 rounded-full" style={{ backgroundColor: d.hue }} />
+                      {pt}
+                    </li>
+                  ))}
+                </ul>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+
+          <div
+            ref={flankRRef}
+            className="pointer-events-none absolute right-[max(2vw,16px)] top-1/2 z-[3] hidden w-[300px] -translate-y-1/2 xl:block"
+            style={{ opacity: 0 }}
+          >
+            <AnimatePresence mode="popLayout">
+              <motion.div
+                key={d.key}
+                initial={{ x: 28, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: 16, opacity: 0 }}
+                transition={{ duration: 0.45, ease: [0.2, 0.9, 0.2, 1] }}
+                className="relative overflow-hidden rounded-2xl border border-navy/10 bg-white/80 px-5 py-4 shadow-[0_24px_60px_-24px_rgba(16,28,61,0.35)] backdrop-blur-md"
+              >
+                <span aria-hidden="true" className="absolute inset-x-0 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${d.hue}, transparent)` }} />
+                <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-navy/50">
+                  In your morning briefing
+                </p>
+                {/* One attention item, the way the app actually renders one:
+                    severity dot, the sentence, and where it takes you. */}
+                <div className="mt-2.5 rounded-xl border border-navy/10 bg-white px-3.5 py-3">
+                  <div className="flex items-start gap-2.5">
+                    <span
+                      aria-hidden="true"
+                      className="mt-[5px] h-[8px] w-[8px] shrink-0 rounded-full"
+                      style={{ backgroundColor: d.brief.sev === 'critical' ? '#ef4444' : d.brief.sev === 'watch' ? '#f59e0b' : '#3b82f6' }}
+                    />
+                    <p className="text-[13px] font-medium leading-snug text-navy">{d.brief.text}</p>
+                  </div>
+                  <p className="mt-2 pl-[18px] font-mono text-[10.5px] uppercase tracking-[0.12em] text-navy/45">
+                    {d.brief.sev === 'critical' ? 'Needs a decision' : d.brief.sev === 'watch' ? 'Worth watching' : 'Good news travels too'} · {d.label}
+                  </p>
+                </div>
+                <p className="mt-2.5 text-[12px] leading-snug text-navy/55">
+                  Penny reads this domain every morning and says only what needs saying.
+                </p>
+              </motion.div>
+            </AnimatePresence>
           </div>
 
           {/* Live payload card — deals in on every dock. */}
