@@ -76,10 +76,10 @@ export const NAV_GROUPS = [
     items: [
       { to: '/statements', navId: 'nav-statements', label: 'Statements', Icon: FileStack, match: (p) => p.startsWith('/statements') || p.startsWith('/history') },
       // The match is EXACT-plus-children, not a prefix: `startsWith('/cash')`
-      // also matches '/cash-flow' and would light this entry while the reader is
-      // on a different page.
+      // also matches '/cash-flow', and the forecast is reached from the Finance
+      // tile board rather than from here — a sidebar entry that lit up for a page
+      // it does not link to would be worse than no entry.
       { to: '/cash', navId: 'nav-cash', label: 'Cash & Collections', Icon: HandCoins, match: (p) => p === '/cash' || p.startsWith('/cash/') },
-      { to: '/cash-flow', navId: 'nav-cash-flow', label: 'Cash Forecast', Icon: TrendingUp, match: (p) => p.startsWith('/cash-flow') },
       { to: '/analytics', navId: 'nav-analytics', label: 'Analytics', Icon: BarChart3, match: (p) => p.startsWith('/analytics') },
       { to: '/budget', navId: 'nav-budget', label: 'Budget', Icon: Wallet, match: (p) => p.startsWith('/budget') },
       { to: '/reports', navId: 'nav-reports', label: 'Reports', Icon: FileBarChart2, match: (p) => p.startsWith('/reports') },

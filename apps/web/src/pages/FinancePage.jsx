@@ -18,6 +18,7 @@ import {
   CircleDollarSign,
   FileStack,
   BarChart3,
+  TrendingUp,
   Wallet,
   FileBarChart2,
   ShieldCheck,
@@ -165,7 +166,7 @@ function FinanceRecords() {
     <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
       <ModuleOverviewLink module="finance" className="mb-3" />
       <p className="mb-4 text-[14.5px] text-muted">
-        Your finance workspaces — statements, cash and budget, each one click away.
+        Your finance workspaces — statements, cash, forecast and budget, each one click away.
       </p>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         <SectionCard to="/statements" Icon={FileStack} title="Statements" viewLabel="Open statements">
@@ -176,6 +177,15 @@ function FinanceRecords() {
         <SectionCard to="/cash" Icon={CircleDollarSign} title="Cash & Collections" viewLabel="Open cash">
           <p className="text-[14.5px] text-muted">
             Cash position, runway, and collections aging.
+          </p>
+        </SectionCard>
+        {/* The FORWARD view, deliberately its own tile rather than folded into
+            Cash & Collections. That page answers "what is outstanding today";
+            this one answers "when do we run low" — different questions, and
+            burying the second inside the first is how it stops being found. */}
+        <SectionCard to="/cash-flow" Icon={TrendingUp} title="Cash Forecast" viewLabel="Open forecast">
+          <p className="text-[14.5px] text-muted">
+            When cash is projected to run low, by how much, and what is driving it.
           </p>
         </SectionCard>
         <SectionCard to="/budget" Icon={Wallet} title="Budget" viewLabel="Open budget">
@@ -896,7 +906,26 @@ export default function FinancePage() {
           )}
         </SectionCard>
 
-        {/* (4) REPORTS — board packet export + link */}
+        {/* (4) CASH FORECAST — the FORWARD view.
+            Its own tile rather than a line inside Cash & Collections: that page
+            answers "what is outstanding today", this one answers "when do we run
+            low". Different questions, and folding the second into the first is
+            how it stops being found. Description-only, like Reports — the figures
+            need a projection run, and a tile that invented one to look livelier
+            would be the exact thing this feature refuses to do. */}
+        <SectionCard
+          to="/cash-flow"
+          Icon={TrendingUp}
+          title="Cash Forecast"
+          viewLabel="Open forecast"
+        >
+          <p className="text-[14.5px] text-muted">
+            When cash is projected to run low, by how much, and how many days&apos; notice you
+            have. Built from your payroll calendar, budget phasing and enrollment.
+          </p>
+        </SectionCard>
+
+        {/* (5) REPORTS — board packet export + link */}
         <SectionCard to="/reports" Icon={FileBarChart2} title="Reports" viewLabel="Open Reports">
           <p className="mb-3 text-[14.5px] text-muted">
             Export a board-ready finance-committee packet for the selected period, or open the
@@ -905,7 +934,7 @@ export default function FinancePage() {
           {selectedPeriodId && <BoardPacketExportButton periodId={selectedPeriodId} />}
         </SectionCard>
 
-        {/* (5) READINESS — material / reportable counts */}
+        {/* (6) READINESS — material / reportable counts */}
         <SectionCard
           to="/readiness"
           Icon={ShieldCheck}

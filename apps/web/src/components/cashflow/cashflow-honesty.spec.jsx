@@ -150,12 +150,24 @@ describe('the page does not overstate what it knows', () => {
   })
 })
 
-describe('the nav match does not swallow its neighbour', () => {
-  it('/cash no longer prefix-matches /cash-flow', () => {
+describe('the forecast is reached from the Finance tile board', () => {
+  it('sits on the board beside Analytics and Budget', () => {
+    // Where a finance user actually looks. The first version put it only in the
+    // sidebar, where it did not appear at all and would not have belonged if it
+    // had — the tiles are the entry point to every other finance workspace.
+    const fin = read('pages/FinancePage.jsx')
+    const board = fin.slice(fin.indexOf('(1) STATEMENTS'), fin.indexOf('READINESS'))
+    expect(board).toMatch(/to="\/cash-flow"/)
+    expect(board).toMatch(/title="Cash Forecast"/)
+    // Beside the others, not buried after them.
+    expect(board.indexOf('to="/cash-flow"')).toBeGreaterThan(board.indexOf('to="/analytics"'))
+  })
+
+  it('does NOT add a sidebar entry, and /cash stops swallowing its route', () => {
     // `startsWith('/cash')` also matches '/cash-flow' and would light Cash &
     // Collections while the reader is on the forecast.
     const nav = read('components/nav/sidebarNav.js')
     expect(nav).toMatch(/p === '\/cash' \|\| p\.startsWith\('\/cash\/'\)/)
-    expect(nav).toMatch(/navId: 'nav-cash-flow'/)
+    expect(nav).not.toMatch(/nav-cash-flow/)
   })
 })
