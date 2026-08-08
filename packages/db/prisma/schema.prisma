@@ -130,6 +130,9 @@ model School {
   boardReports              BoardReport[]
   capitalSchedules          CapitalSchedule[]
   cashSchedules             CashSchedule[]
+  cashCommitments           CashCommitment[]
+  cashProjectionRuns        CashProjectionRun[]
+  cashAssumptions           CashAssumptions?
   campaignSchedules         CampaignSchedule[]
   monthlySnapshots          MonthlySnapshot[]
   policies                  Policy[]
@@ -270,6 +273,7 @@ model User {
   boardReportUpdates               BoardReport[]              @relation("BoardReportUpdatedBy")
   capitalSchedulesUpdated          CapitalSchedule[]          @relation("CapitalScheduleUpdatedBy")
   cashSchedulesUpdated             CashSchedule[]             @relation("CashScheduleUpdatedBy")
+  cashProjectionRunsCreated        CashProjectionRun[]        @relation("CashProjectionRunCreatedBy")
   campaignSchedulesUpdated         CampaignSchedule[]         @relation("CampaignScheduleUpdatedBy")
   monthlySnapshotsUploaded         MonthlySnapshot[]          @relation("MonthlySnapshotUploadedBy")
   policyUpdates                    Policy[]                   @relation("PolicyUpdatedBy")
@@ -2876,4 +2880,128 @@ model ProfessionalDevelopment {
   @@index([schoolId, activityDate])
   @@index([personId])
   @@map("professional_development")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CASH FLOW PROJECTION — the forward view.
+//
+// The pure maths lives in @finrep/analytics (cashflow/). These three tables hold
+// what the engine cannot derive: the school's own dated obligations, the
+// assumptions it has chosen, and a record of what was forecast when.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A dated obligation or receipt the school records itself — payroll, debt
+/// service, insurance, a lease, a capital project. `confidence` is the four-way
+/// predictability class from the engine (committed | scheduled | modelled |
+/// assumption): a payroll DATE is known while its AMOUNT can change, so "known
+/// vs forecast" is the wrong axis and this is the right one.
+model CashCommitment {
+  id         String    @id @default(uuid()) @db.Uuid
+  schoolId   String    @map("school_id") @db.Uuid
+  label      String
+  /// Grouping key — 'payroll', 'debt_service', 'insurance', 'lease', …
+  /// Also the double-count key: a category named here is EXCLUDED from budget
+  /// spread phasing, or the school's payroll would be counted from both sources
+  /// and its trough drawn twice as deep as the truth.
+  category   String
+  /// 'in' | 'out'. Amount is always positive; direction carries the sign.
+  direction  String
+  amount     Decimal   @db.Decimal(14, 2)
+  /// 'committed' | 'scheduled' | 'modelled' | 'assumption'
+  confidence String
+  /// 'once' | 'weekly' | 'biweekly' | 'semimonthly' | 'monthly' | 'quarterly' | 'annual'
+  recurrence String
+  startDate  DateTime  @map("start_date") @db.Date
+  /// Inclusive. Null = runs to the end of whatever horizon is projected.
+  endDate    DateTime? @map("end_date") @db.Date
+  /// Semi-monthly only: which days of the month, e.g. [15, 31]. 31 clamps to the
+  /// month's last day rather than spilling into the next one.
+  dayRule    Json?     @map("day_rule")
+  notes      String?
+  active     Boolean   @default(true)
+
+  createdByUserId String?  @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+  @@index([schoolId, active])
+  @@map("cash_commitments")
+}
+
+/// The assumptions a projection runs on. ONE row per school.
+///
+/// Every field records whether it was DERIVED or ENTERED, because a collection
+/// rate suggested from receivable aging and one a business manager chose are
+/// different claims and the screen has to be able to say which it is showing.
+model CashAssumptions {
+  id       String @id @default(uuid()) @db.Uuid
+  schoolId String @unique @map("school_id") @db.Uuid
+
+  /// Share of billed tuition on each plan; keys annual/semiannual/monthly10/monthly12.
+  planMix Json @map("plan_mix")
+  /// 0..1 — the one genuinely estimated input in the whole model.
+  collectionRate       Decimal @map("collection_rate") @db.Decimal(5, 4)
+  /// 'derived' | 'entered' — never presented as the other.
+  collectionRateSource String  @default("entered") @map("collection_rate_source")
+  /// The balance the school must not drop below. NULL means no threshold, and
+  /// then no shortfall is reported — inventing a floor invents an alarm.
+  reserveThreshold     Decimal? @map("reserve_threshold") @db.Decimal(14, 2)
+  /// ISO date the tuition billing calendar starts, e.g. the first draft date.
+  firstBillingDate     DateTime? @map("first_billing_date") @db.Date
+
+  updatedByUserId String?  @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@map("cash_assumptions")
+}
+
+/// A FROZEN forecast, stored the moment it is computed.
+///
+/// Nothing reads this yet — the forecast-vs-actual comparison is a later phase.
+/// It is written from day one anyway because back-testing cannot be added
+/// retroactively: without a history of what was forecast when, there is nothing
+/// to compare an actual against, and the school's own behaviour (which is what
+/// eventually makes this better than a spreadsheet) can never be learned.
+///
+/// `openingSource` records whether the starting balance was keyed by the school
+/// or taken from the trial balance, and `tbCashAtAsOf` keeps the cross-check
+/// beside it. A school can hold $600k of balance-sheet cash and have $125k
+/// available to operations; a forecast that started from the wrong one of those
+/// overstated every week that followed, and this is the record of which was used.
+model CashProjectionRun {
+  id       String @id @default(uuid()) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+
+  asOfDate    DateTime @map("as_of_date") @db.Date
+  horizonEnd  DateTime @map("horizon_end") @db.Date
+  granularity String
+  openingCash Decimal  @map("opening_cash") @db.Decimal(14, 2)
+  /// 'keyed' | 'trial_balance'
+  openingSource String   @map("opening_source")
+  /// The trial-balance cash figure at as-of, for the cross-check. Null when none.
+  tbCashAtAsOf  Decimal? @map("tb_cash_at_as_of") @db.Decimal(14, 2)
+
+  /// The assumptions this run used, copied in — a run has to stay readable after
+  /// the school changes its assumptions, or the record explains nothing.
+  assumptions Json
+  /// The full CashProjectionResult.
+  result      Json
+  /// 'high' | 'moderate' | 'limited' — data confidence at the time of the run.
+  dataTier    String
+
+  createdByUserId String?  @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  school        School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  createdByUser User?  @relation("CashProjectionRunCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([schoolId, asOfDate])
+  @@index([schoolId, createdAt])
+  @@map("cash_projection_runs")
 }
