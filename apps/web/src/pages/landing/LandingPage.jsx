@@ -15,6 +15,8 @@ import VideoHero from './VideoHero.jsx'
 import OrbitScrolly from './OrbitScrolly.jsx'
 import BentoWall from './BentoWall.jsx'
 import TbToStatements from './TbToStatements.jsx'
+import CashForecastCinema from './CashForecastCinema.jsx'
+import OrgCommandShow from './OrgCommandShow.jsx'
 import BoardReadyShow from './BoardReadyShow.jsx'
 import LandingFooter from './LandingFooter.jsx'
 import TrustBar from './TrustBar.jsx'
@@ -44,6 +46,10 @@ export default function LandingPage() {
         <BentoWall />
         {/* TB → four statements, with the auto-cycling live example. */}
         <TbToStatements />
+        {/* The self-typing QuickBooks cash forecast — dark cinema band. */}
+        <CashForecastCinema />
+        {/* Six schools stream into one superintendent console. */}
+        <OrgCommandShow />
         {/* The board-ready path: slideshow + the demo packet. */}
         <BoardReadyShow />
       </main>

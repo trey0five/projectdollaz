@@ -12,6 +12,8 @@ export const NAV = {
     { label: 'Home', href: '#top', top: true },
     { label: 'How it works', href: '#how-it-works' },
     { label: 'Platform', href: '#platform' },
+    { label: 'Cash forecast', href: '#cash-forecast' },
+    { label: 'Networks', href: '#networks' },
     { label: 'Board-ready', href: '#board-ready' },
   ],
   signIn: { label: 'Sign in', to: '/login' },
@@ -169,6 +171,50 @@ export const FINALE = {
 }
 
 // Trust signals shown near the footer of the public homepage.
+// ── Cash Forecast cinema (#cash-forecast) ────────────────────────────────────
+export const CASH_CINEMA = {
+  kicker: 'Cash forecast',
+  h2: 'See your low point before it sees you.',
+  sub: 'Connect QuickBooks and the forecast types itself — open invoices, bills due and a year of history become a rolling cash projection. Five horizons, an Excel-style workbook and the one date that matters, with zero manual entry.',
+  liveChip: 'Live from QuickBooks',
+  proofChips: [
+    'Open invoices scheduled to their due dates',
+    'Twelve months of history, seasonalized',
+    'Manual entry required: none',
+  ],
+  cta: { label: 'Run it on your books', to: '/register' },
+}
+
+// ── Networks / superintendent command (#networks) ────────────────────────────
+export const ORG_COMMAND = {
+  kicker: 'For networks & dioceses',
+  h2: 'Every school on one screen.',
+  sub: 'The superintendent view consolidates the whole network — finances, enrollment, alerts and the morning brief roll up from every school, and every number drills back down to the school that produced it.',
+  consoleKicker: 'Superintendent view',
+  consoleTitle: 'Diocese of Sample · FY26',
+  kpis: [
+    { label: 'Schools', value: 6 },
+    { label: 'Students', value: 2840 },
+    { label: 'Collections', value: 93, suffix: '%' },
+    { label: 'Need attention', value: 2, tone: 'amber' },
+  ],
+  schools: [
+    { name: "St. Mary's Academy", stat: 'Collections 8 days behind', tone: 'amber' },
+    { name: 'Holy Cross Prep', stat: 'Audit packet clean', tone: 'good' },
+    { name: 'Sacred Heart', stat: 'Enrollment +4% vs plan', tone: 'good' },
+    { name: "St. Joseph's", stat: 'Maintenance backlog rising', tone: 'amber' },
+    { name: 'Immaculata High', stat: 'Cash runway 121 days', tone: 'good' },
+    { name: 'Our Lady of Peace', stat: 'On plan across domains', tone: 'good' },
+  ],
+  brief: [
+    "St. Mary's — tuition collections are 8 days behind the network pace.",
+    'Consolidated cash runway is 94 days; two schools carry the drag.',
+    "St. Joseph's — maintenance backlog crossed its budget line.",
+    'Holy Cross — board packet is clean and ready to send.',
+  ],
+  closing: 'One login. Every school. Drill from the network to a single invoice.',
+}
+
 export const TRUST = {
   heading: 'Built for the trust schools require',
   items: [
