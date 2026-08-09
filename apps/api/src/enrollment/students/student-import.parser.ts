@@ -327,7 +327,7 @@ function parseSimple(header: string[], rows: string[][], warnings: string[]): Pa
   const iStatus = col('status')
   const iEnrolled = col('enrolledon', 'enrolled')
   const iWithdrawn = col('withdrawnon', 'withdrawn')
-  const iIep = col('iep', 'hasiep')
+  const iIep = col('iep', 'hasiep', 'isp', 'hasisp') // ISP = private-school term; both header spellings accepted
   const i504 = col('504', 'plan504', 'has504')
   const iEll = col('ell')
   const iNotes = col('notes')

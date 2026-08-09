@@ -137,8 +137,11 @@ export const STUDENT_STATUS_LABELS: Record<StudentStatusKey, string> = {
 export const STUDENT_FLAG_KEYS = ['iep', 'plan504', 'ell'] as const
 export type StudentFlagKey = (typeof STUDENT_FLAG_KEYS)[number]
 
+// Private schools use ISP (Individual Service Plan), not the public-school
+// IEP. The KEY stays 'iep' — it is a stored data shape and import alias — but
+// every surface renders the label below.
 export const STUDENT_FLAG_LABELS: Record<StudentFlagKey, string> = {
-  iep: 'IEP',
+  iep: 'ISP',
   plan504: '504',
   ell: 'ELL',
 }

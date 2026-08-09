@@ -886,7 +886,7 @@ export class TwinSignalsService {
    * `flags.any` beside an unprotected cell set is the differencing hole §2 calls
    * "primary suppression is theatre": with iep=4, plan504=30, ell=0 the reader
    * computes 34 - 30 - 0 = 4 and, from the suppression itself, iep <= 9 — "between
-   * 4 and 9 students at this school have an IEP", and exactly 4 whenever the flags
+   * 4 and 9 students at this school have an ISP", and exactly 4 whenever the flags
    * do not overlap, which in a 200-student school they usually do not. Since
    * |I u P u E| <= |I| + |P| + |E|, the published headline is always a usable lower
    * bound on the hidden cell. Withholding it removes the subtraction entirely and

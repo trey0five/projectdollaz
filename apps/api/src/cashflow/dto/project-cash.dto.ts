@@ -58,4 +58,16 @@ export class ProjectCashDto {
   @IsOptional()
   @IsBoolean()
   useQuickBooks?: boolean
+
+  /**
+   * Freeze this run? Defaults ON — the archive is what back-testing is built
+   * from. Pass false for previews: every toggle, adjustment and edit re-projects
+   * with persist:false, and only the explicit "Build forecast" writes a run, so
+   * the archive records decisions rather than keystrokes. The service honored
+   * this before the DTO admitted it — forbidNonWhitelisted 400'd any caller who
+   * tried, which is why every UI re-projection used to freeze a run.
+   */
+  @IsOptional()
+  @IsBoolean()
+  persist?: boolean
 }

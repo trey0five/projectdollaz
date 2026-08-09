@@ -44,7 +44,8 @@ export const STUDENT_STATUS_LABELS = {
 }
 
 export const STUDENT_FLAG_KEYS = ['iep', 'plan504', 'ell']
-export const STUDENT_FLAG_LABELS = { iep: 'IEP', plan504: '504', ell: 'ELL' }
+// ISP (Individual Service Plan) — the private-school term; key stays 'iep'.
+export const STUDENT_FLAG_LABELS = { iep: 'ISP', plan504: '504', ell: 'ELL' }
 
 export const AGE_BAND_KEYS = ['under5', '5to10', '11to13', '14to18', '19plus', 'unknown']
 export const AGE_BAND_LABELS = {

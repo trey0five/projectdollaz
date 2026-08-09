@@ -1197,7 +1197,7 @@ export const TOOL_SCHEMAS = [
     function: {
       name: 'get_roster_summary',
       description:
-        "The STUDENT ROSTER as counts — headcount by grade and status, plus which file or connected system those students came from and when. Returns total and enrolled/waitlisted/withdrawn counts, the grade distribution, support-flag counts (IEP/504/ELL) and the most recent roster import (its source, row counts and date). Use for \"how many students do we have?\", \"what's our enrollment by grade?\", \"where did these numbers come from?\", \"why is the roster empty?\". COUNTS ONLY — this tool never returns a student, and you must never name, describe, or speculate about an individual student for any reason. For the historical enrollment SNAPSHOT (the figure the finance metrics use), use get_enrollment_demographics instead.",
+        "The STUDENT ROSTER as counts — headcount by grade and status, plus which file or connected system those students came from and when. Returns total and enrolled/waitlisted/withdrawn counts, the grade distribution, support-flag counts (ISP/504/ELL) and the most recent roster import (its source, row counts and date). Use for \"how many students do we have?\", \"what's our enrollment by grade?\", \"where did these numbers come from?\", \"why is the roster empty?\". COUNTS ONLY — this tool never returns a student, and you must never name, describe, or speculate about an individual student for any reason. For the historical enrollment SNAPSHOT (the figure the finance metrics use), use get_enrollment_demographics instead.",
       parameters: {
         type: 'object',
         properties: {},

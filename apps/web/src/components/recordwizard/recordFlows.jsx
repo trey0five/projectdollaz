@@ -234,7 +234,7 @@ export const recordFlows = {
                 ? 'Set status to Withdrawn or Graduated when a withdrawal date is set'
                 : null,
           },
-          { key: 'hasIep', label: 'IEP', type: 'checkbox', placeholder: 'Has an IEP' },
+          { key: 'hasIep', label: 'ISP', type: 'checkbox', placeholder: 'Has an ISP (Individual Service Plan)' },
           { key: 'has504', label: '504 plan', type: 'checkbox', placeholder: 'Has a 504 plan' },
           { key: 'ell', label: 'ELL', type: 'checkbox', placeholder: 'English language learner' },
           {
@@ -302,7 +302,7 @@ export const recordFlows = {
       ['Withdrawn on', orDash(v.withdrawnOn)],
       [
         'Support',
-        [v.hasIep && 'IEP', v.has504 && '504', v.ell && 'ELL'].filter(Boolean).join(', ') || '—',
+        [v.hasIep && 'ISP', v.has504 && '504', v.ell && 'ELL'].filter(Boolean).join(', ') || '—',
       ],
       ['Notes', orDash(v.notes)],
       ['SIS id', orDash(v.externalId)],

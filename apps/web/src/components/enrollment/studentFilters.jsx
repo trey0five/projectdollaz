@@ -8,7 +8,7 @@
 //
 // StudentFilterBar is presentational + controlled: the caller owns the `filters`
 // object; the bar renders a debounced search, per-dimension pickers that ADD
-// chips, IEP/504/ELL flag toggles, and the active-chip row with per-chip ✕ and
+// chips, ISP/504/ELL flag toggles, and the active-chip row with per-chip ✕ and
 // "Clear all". Sky-hued via the `hue` prop (enrollment #0EA5E9).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useRef, useState } from 'react'

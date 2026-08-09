@@ -1210,6 +1210,14 @@ export const cashFlowApi = {
   getAssumptions: (schoolId) => api.get(`/schools/${schoolId}/cash-flow/assumptions`),
   saveAssumptions: (schoolId, body) =>
     api.put(`/schools/${schoolId}/cash-flow/assumptions`, body),
+  // ── Line adjustments — include/exclude a DERIVED flow group (QuickBooks,
+  //    budget, driver) without ever mutating the source data. Upsert by
+  //    (school, sourceRef); DELETE is a soft-delete server-side. Commitments are
+  //    never adjusted this way — they are edited directly.
+  listAdjustments: (schoolId) => api.get(`/schools/${schoolId}/cash-flow/adjustments`),
+  saveAdjustment: (schoolId, body) => api.put(`/schools/${schoolId}/cash-flow/adjustments`, body),
+  removeAdjustment: (schoolId, id) =>
+    api.delete(`/schools/${schoolId}/cash-flow/adjustments/${id}`),
 }
 
 export const qboApi = {

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common'
+import { BadRequestException, Injectable, Logger } from '@nestjs/common'
 import {
   DEFAULT_COLLECTION_RATE,
   DEFAULT_PLAN_MIX,
@@ -75,6 +75,75 @@ export interface OpeningCashView {
   stale: boolean
 }
 
+/** Where a flow's figures came from — which source family produced its events. */
+export type FlowOrigin =
+  | 'commitment'
+  | 'tuition_driver'
+  | 'budget'
+  | 'qbo_ar'
+  | 'qbo_ap'
+  | 'qbo_history'
+
+/**
+ * ONE LINE OF THE FORECAST, grouped by provenance key — the unit a reader can
+ * point at and say "that's wrong". Raw events are the engine's atoms (hundreds
+ * over a year); flows are the ten-to-forty rows a person actually reasons
+ * about: "payroll", "the Jones invoice", "cafeteria from history".
+ */
+export interface FlowRow {
+  /** The engine's provenance key — the adjustment handle. */
+  sourceRef: string
+  origin: FlowOrigin
+  /**
+   * How true the figures are:
+   *   observed — a real invoice or bill in QuickBooks (qbo_ar / qbo_ap)
+   *   derived  — modelled from the school's own history, budget or driver
+   *   assumed  — the school's own entry (a commitment)
+   */
+  provenance: 'observed' | 'derived' | 'assumed'
+  label: string
+  category: string
+  direction: 'in' | 'out'
+  confidence: ConfidenceClass
+  eventCount: number
+  /** What the sources derived for this line, before any adjustment. */
+  derivedTotal: number
+  /** Signed net cash effect (in − out) — ±derivedTotal for single-direction
+   *  groups; the honest override target for mixed seasonal groups. */
+  derivedNet: number
+  /** What actually entered the projection. Equals derivedTotal when untouched. */
+  appliedTotal: number
+  /** ISO dates of the group's first and last events. */
+  firstDate: string
+  lastDate: string
+  /**
+   * How this line is changed: 'direct' = edit the commitment itself
+   * (commitments have their own editor); 'adjustable' = via a line adjustment.
+   */
+  editable: 'direct' | 'adjustable'
+  /** The commitment behind a direct line, for the editor to open. */
+  commitmentId: string | null
+  /** The active adjustment on this line, when one applied. */
+  adjustment: PublicAdjustment | null
+}
+
+export interface PublicAdjustment {
+  id: string
+  sourceRef: string
+  kind: 'exclude' | 'override'
+  overrideAmount: number | null
+  note: string | null
+}
+
+/** A stored adjustment row, as composition consumes it. */
+interface AdjustmentRow {
+  id: string
+  sourceRef: string
+  kind: string
+  overrideAmount: unknown
+  note: string | null
+}
+
 export interface ProjectionResponse {
   projection: CashProjectionResult | null
   opening: OpeningCashView
@@ -117,6 +186,15 @@ export interface ProjectionResponse {
    * ordinary case and renders nothing.
    */
   omissions: { key: string; message: string }[]
+  /**
+   * THE FORECAST'S LINES, grouped by provenance key — what a reader edits.
+   * Built from the PRE-adjustment event list so an excluded line stays visible
+   * at appliedTotal 0 rather than vanishing (a line that disappears cannot be
+   * un-excluded). Empty when the projection is blocked.
+   */
+  flows: FlowRow[]
+  /** True when the flows list was capped (largest + all adjusted lines kept). */
+  flowsTruncated: boolean
 }
 
 const ISO = (d: Date): string => d.toISOString().slice(0, 10)
@@ -220,6 +298,79 @@ export class CashFlowService {
       endDate: r.endDate ? ISO(r.endDate) : null,
       dayRule: Array.isArray(r.dayRule) ? (r.dayRule as number[]) : null,
       notes: r.notes,
+    }
+  }
+
+  // ── Line adjustments ───────────────────────────────────────────────────────
+  //
+  // The school's tunings of its DERIVED lines — exclude a modelled flow that is
+  // wrong, or override a group's total. The source data (QuickBooks, budget,
+  // driver) is never mutated; adjustments are applied at assembly time in
+  // project(), so clearing one restores the derived line exactly.
+
+  async listAdjustments(schoolId: string) {
+    const rows = await this.prisma.cashFlowLineAdjustment.findMany({
+      where: { schoolId, active: true },
+      orderBy: { sourceRef: 'asc' },
+    })
+    return { adjustments: rows.map((r) => this.publicAdjustment(r)) }
+  }
+
+  /** Upsert by (school, sourceRef) — one adjustment per line, latest wins. */
+  async saveAdjustment(schoolId: string, userId: string, body: Record<string, unknown>) {
+    const sourceRef = String(body.sourceRef)
+    const kind = String(body.kind) as 'exclude' | 'override'
+    const overrideAmount = body.overrideAmount == null ? null : Number(body.overrideAmount)
+    // The iff the DTO cannot express. An override with no amount has nothing to
+    // apply; an exclude WITH an amount is a caller confused about which of the
+    // two it asked for — both fail loudly rather than being half-honored.
+    if (kind === 'override' && overrideAmount == null) {
+      throw new BadRequestException('overrideAmount is required when kind is "override".')
+    }
+    if (kind === 'exclude' && overrideAmount != null) {
+      throw new BadRequestException('overrideAmount only applies when kind is "override".')
+    }
+    const row = await this.prisma.cashFlowLineAdjustment.upsert({
+      where: { schoolId_sourceRef: { schoolId, sourceRef } },
+      create: {
+        schoolId,
+        sourceRef,
+        kind,
+        overrideAmount,
+        note: body.note ? String(body.note) : null,
+        active: true,
+        createdByUserId: userId,
+      },
+      update: {
+        kind,
+        overrideAmount,
+        note: body.note ? String(body.note) : null,
+        // Re-saving a cleared adjustment revives the same row — the (school,
+        // sourceRef) unique means a soft-deleted row would otherwise block the
+        // line from ever being adjusted again.
+        active: true,
+      },
+    })
+    return this.publicAdjustment(row)
+  }
+
+  /** Soft delete — frozen runs reference applied adjustments by id. */
+  async removeAdjustment(schoolId: string, adjustmentId: string) {
+    // Tenant-scoped like commitment removal: a foreign id removes nothing.
+    const { count } = await this.prisma.cashFlowLineAdjustment.updateMany({
+      where: { id: adjustmentId, schoolId },
+      data: { active: false },
+    })
+    return { removed: count }
+  }
+
+  private publicAdjustment(r: AdjustmentRow): PublicAdjustment {
+    return {
+      id: r.id,
+      sourceRef: r.sourceRef,
+      kind: r.kind as 'exclude' | 'override',
+      overrideAmount: r.overrideAmount == null ? null : Number(r.overrideAmount),
+      note: r.note,
     }
   }
 
@@ -383,11 +534,12 @@ export class CashFlowService {
         ? addDays(opts.asOfDate, 7 * (opts.horizonWeeks ?? 13))
         : addMonths(opts.asOfDate, 12)
 
-    const [assumptions, commitments, tierInfo, tbCash] = await Promise.all([
+    const [assumptions, commitments, tierInfo, tbCash, adjustmentRows] = await Promise.all([
       this.getAssumptions(schoolId),
       this.prisma.cashCommitment.findMany({ where: { schoolId, active: true } }),
       this.dataTier(schoolId),
       this.tbCash(schoolId),
+      this.prisma.cashFlowLineAdjustment.findMany({ where: { schoolId, active: true } }),
     ])
 
     if (!horizonEnd) {
@@ -439,12 +591,29 @@ export class CashFlowService {
       : await this.budgetEvents(schoolId, commitmentInputs, omissions)
 
     const commitmentEvents = expandCommitments(commitmentInputs, opts.asOfDate, horizonEnd)
-    const events: CashEvent[] = [
+    const assembled: CashEvent[] = [
       ...commitmentEvents,
       ...tuition,
       ...budgeted,
       ...(qbo?.events ?? []),
     ]
+
+    // ── The school's line adjustments, applied at assembly time ─────────────
+    // AFTER every source has contributed (and after manual-wins suppression,
+    // which happened inside the sources above — an adjustment can never
+    // resurrect a suppressed line), BEFORE anything is summed or projected: the
+    // engine and every figure downstream see only the adjusted events, so the
+    // chart, the workbook and the flows list cannot disagree about what a line
+    // contributes. An adjustment whose ref matches nothing is silently inert —
+    // a settled invoice or a renumbered budget row is not an error.
+    // Compose over the engine's admission window only (events strictly after the
+    // as-of date): month-end history outflows and same-day commitments CAN land
+    // exactly ON the as-of date, and projectCash drops those — composing over the
+    // raw list would overstate flows totals, breaking "exclude moves the ending
+    // balance by exactly derivedTotal" (review finding, as-of on a month end).
+    const inWindow = assembled.filter((e) => e.date > opts.asOfDate)
+    const { events, flows, flowsTruncated, applied, adjustmentNet } = this.composeFlows(inWindow, adjustmentRows)
+
     const sum = (evs: readonly CashEvent[]) => evs.reduce((t, e) => t + Math.abs(e.amount), 0)
     const sources: Record<string, { count: number; total: number }> = {
       commitments: { count: commitmentEvents.length, total: sum(commitmentEvents) },
@@ -453,6 +622,10 @@ export class CashFlowService {
       qbo_ar: qbo?.sources.qbo_ar ?? { count: 0, total: 0 },
       qbo_ap: qbo?.sources.qbo_ap ?? { count: 0, total: 0 },
       qbo_history: qbo?.sources.qbo_history ?? { count: 0, total: 0 },
+      // The adjustments' own provenance entry: how many lines the school tuned
+      // and the NET effect on cash across the horizon (signed — excluding an
+      // outflow raises it, excluding a receipt lowers it).
+      adjustments: { count: applied.length, total: adjustmentNet },
     }
 
     // "No commitments" stops being an omission when QuickBooks carries the
@@ -494,6 +667,11 @@ export class CashFlowService {
             openingSource: opts.openingSource ?? 'keyed',
             tbCashAtAsOf: tbCash,
             assumptions: assumptions as never,
+            // The adjustments that ACTUALLY APPLIED, copied in like the
+            // assumptions: the school can edit or clear an adjustment later
+            // and this run must still explain why its numbers differ from
+            // what the sources derived. Omitted (null) when none applied.
+            ...(applied.length > 0 ? { adjustments: applied as never } : {}),
             result: projection as never,
             dataTier: tierInfo.tier,
             createdByUserId: userId,
@@ -532,6 +710,8 @@ export class CashFlowService {
       sources,
       qboOpeningCash,
       omissions,
+      flows,
+      flowsTruncated,
     }
   }
 
@@ -561,7 +741,142 @@ export class CashFlowService {
       sources: {},
       qboOpeningCash: null,
       omissions: [],
+      flows: [],
+      flowsTruncated: false,
     }
+  }
+
+  /**
+   * Group the assembled events by sourceRef, apply the school's adjustments,
+   * and describe every line — ONE pass so the flows list, the adjusted event
+   * set and the frozen "what applied" record can never disagree.
+   *
+   * exclude  → the group's events are dropped; the flow row stays, at
+   *            appliedTotal 0, so the line remains visible and un-excludable.
+   * override → every event in the group scales by overrideAmount/derivedTotal,
+   *            preserving the group's timing shape while retotalling it. A
+   *            group that derived zero cannot be scaled and the adjustment is
+   *            inert (there is nothing honest to distribute the amount over).
+   *
+   * Adjustments matching no group — or targeting commitment:* refs, which the
+   * DTO rejects but old rows might hold — are silently inert.
+   */
+  private composeFlows(
+    assembled: readonly CashEvent[],
+    adjustmentRows: readonly AdjustmentRow[],
+  ): {
+    events: CashEvent[]
+    flows: FlowRow[]
+    /** True when the flows list was capped (largest lines + all adjusted kept). */
+    flowsTruncated: boolean
+    applied: (PublicAdjustment & { derivedTotal: number; appliedTotal: number })[]
+    adjustmentNet: number
+  } {
+    const groups = new Map<string, CashEvent[]>()
+    for (const e of assembled) {
+      const group = groups.get(e.sourceRef)
+      if (group) group.push(e)
+      else groups.set(e.sourceRef, [e])
+    }
+    const adjBySource = new Map<string, AdjustmentRow>()
+    for (const row of adjustmentRows) {
+      if (row.sourceRef.startsWith('commitment:')) continue
+      adjBySource.set(row.sourceRef, row)
+    }
+
+    const signed = (evs: readonly CashEvent[]) =>
+      evs.reduce((t, e) => t + (e.direction === 'in' ? e.amount : -e.amount), 0)
+
+    const events: CashEvent[] = []
+    const flows: FlowRow[] = []
+    const applied: (PublicAdjustment & { derivedTotal: number; appliedTotal: number })[] = []
+    let adjustmentNet = 0
+
+    for (const [sourceRef, group] of groups) {
+      const derivedTotal = group.reduce((t, e) => t + Math.abs(e.amount), 0)
+      const adj = adjBySource.get(sourceRef) ?? null
+
+      let kept: readonly CashEvent[] = group
+      let appliedTotal = derivedTotal
+      let didApply = false
+      if (adj?.kind === 'exclude') {
+        kept = []
+        appliedTotal = 0
+        didApply = true
+      } else if (adj?.kind === 'override') {
+        const target = adj.overrideAmount == null ? null : Number(adj.overrideAmount)
+        if (target != null && Number.isFinite(target) && target >= 0 && derivedTotal > 0) {
+          const scale = target / derivedTotal
+          kept = group.map((e) => ({ ...e, amount: e.amount * scale }))
+          appliedTotal = target
+          didApply = true
+        }
+      }
+      if (didApply && adj) {
+        adjustmentNet += signed(kept) - signed(group)
+        applied.push({ ...this.publicAdjustment(adj), derivedTotal, appliedTotal })
+      }
+      events.push(...kept)
+
+      // The row describes the PRE-adjustment group: an excluded line keeps its
+      // label, dates and derived figure — what changed is appliedTotal.
+      const inTotal = group.reduce(
+        (t, e) => t + (e.direction === 'in' ? Math.abs(e.amount) : 0),
+        0,
+      )
+      let firstDate = group[0].date
+      let lastDate = group[0].date
+      for (const e of group) {
+        if (e.date < firstDate) firstDate = e.date
+        if (e.date > lastDate) lastDate = e.date
+      }
+      const origin = originOf(sourceRef)
+      flows.push({
+        sourceRef,
+        origin,
+        provenance:
+          origin === 'qbo_ar' || origin === 'qbo_ap'
+            ? 'observed'
+            : origin === 'commitment'
+              ? 'assumed'
+              : 'derived',
+        label: group[0].label,
+        category: group[0].category,
+        // A group is single-direction in practice; a mixed one (a seasonal
+        // category that flips sign across months) reads as its dominant side.
+        direction: inTotal * 2 >= derivedTotal ? 'in' : 'out',
+        confidence: group[0].confidence,
+        eventCount: group.length,
+        derivedTotal,
+        // Signed net cash effect (in − out). For single-direction groups this
+        // equals ±derivedTotal; for mixed seasonal groups it is the honest
+        // number an override caller must read (review finding: overriding a
+        // mixed group's |Σ| total misstates the cash effect).
+        derivedNet: inTotal - (derivedTotal - inTotal),
+        appliedTotal,
+        firstDate,
+        lastDate,
+        editable: origin === 'commitment' ? 'direct' : 'adjustable',
+        commitmentId: origin === 'commitment' ? sourceRef.slice('commitment:'.length) : null,
+        adjustment: didApply && adj ? this.publicAdjustment(adj) : null,
+      })
+    }
+
+    // Largest lines first — the order a reader scans a forecast in.
+    flows.sort((a, b) => b.derivedTotal - a.derivedTotal)
+    // Cap the payload for pathological rosters (hundreds of open AR invoices):
+    // keep the largest 200 lines PLUS any adjusted line (an exclusion must stay
+    // visible to be un-excludable), and say so rather than truncating silently.
+    const FLOWS_CAP = 200
+    let flowsTruncated = false
+    let cappedFlows = flows
+    if (flows.length > FLOWS_CAP) {
+      const kept = new Set(flows.slice(0, FLOWS_CAP))
+      for (const f of flows) if (f.adjustment) kept.add(f)
+      cappedFlows = flows.filter((f) => kept.has(f))
+      flowsTruncated = cappedFlows.length < flows.length
+    }
+    return { events, flows: cappedFlows, flowsTruncated, applied, adjustmentNet }
   }
 
   private async tbCash(schoolId: string): Promise<number | null> {
@@ -698,6 +1013,16 @@ export class CashFlowService {
     const total = budget?.totalExpenses == null ? null : Number(budget.totalExpenses)
     return total != null && total > 0 ? total : null
   }
+}
+
+/** Which source family a provenance key belongs to. */
+function originOf(sourceRef: string): FlowOrigin {
+  if (sourceRef.startsWith('commitment:')) return 'commitment'
+  if (sourceRef.startsWith('driver:')) return 'tuition_driver'
+  if (sourceRef.startsWith('budget:')) return 'budget'
+  if (sourceRef.startsWith('qbo:ar:')) return 'qbo_ar'
+  if (sourceRef.startsWith('qbo:ap:')) return 'qbo_ap'
+  return 'qbo_history'
 }
 
 /** Local ISO day difference — the service may use the clock; the engine may not. */

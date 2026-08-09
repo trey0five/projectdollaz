@@ -311,7 +311,7 @@ function StudentFormModal({ student, onClose, onSave }) {
       </Field>
       <div className="flex flex-wrap items-center gap-5 sm:col-span-2">
         {[
-          ['hasIep', 'IEP'],
+          ['hasIep', 'ISP'],
           ['has504', '504 plan'],
           ['ell', 'ELL'],
         ].map(([k, label]) => (

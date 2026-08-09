@@ -10,6 +10,7 @@ import { CashFlowService } from './cashflow.service.js'
 import { ProjectCashDto } from './dto/project-cash.dto.js'
 import { SaveCommitmentDto } from './dto/save-commitment.dto.js'
 import { SaveAssumptionsDto } from './dto/save-assumptions.dto.js'
+import { SaveLineAdjustmentDto } from './dto/save-line-adjustment.dto.js'
 
 /**
  * CASH FLOW PROJECTION — the forward cash view.
@@ -88,6 +89,40 @@ export class CashFlowController {
     @Param('commitmentId', ParseUUIDPipe) commitmentId: string,
   ) {
     return this.cashflow.removeCommitment(schoolId, commitmentId)
+  }
+
+  // ── Line adjustments ───────────────────────────────────────────────────────
+  //
+  // Tunings of the DERIVED lines (QuickBooks, budget phasing, the tuition
+  // driver) — exclude one, or override a group's total. Commitments are NOT
+  // adjustable here; they have a real editor of their own above, and the DTO's
+  // sourceRef pattern rejects commitment:* so one line can never carry two
+  // competing edits. Same read/write split as everything else on this surface.
+
+  @Get('adjustments')
+  @Roles('owner', 'accountant', 'viewer')
+  listAdjustments(@Param('schoolId', ParseUUIDPipe) schoolId: string) {
+    return this.cashflow.listAdjustments(schoolId)
+  }
+
+  /** Upsert by (school, sourceRef) — PUT because saving twice must not stack. */
+  @Put('adjustments')
+  @Roles('owner', 'accountant')
+  saveAdjustment(
+    @Param('schoolId', ParseUUIDPipe) schoolId: string,
+    @CurrentUser() user: User,
+    @Body() dto: SaveLineAdjustmentDto,
+  ) {
+    return this.cashflow.saveAdjustment(schoolId, user.id, dto as unknown as Record<string, unknown>)
+  }
+
+  @Delete('adjustments/:adjustmentId')
+  @Roles('owner', 'accountant')
+  removeAdjustment(
+    @Param('schoolId', ParseUUIDPipe) schoolId: string,
+    @Param('adjustmentId', ParseUUIDPipe) adjustmentId: string,
+  ) {
+    return this.cashflow.removeAdjustment(schoolId, adjustmentId)
   }
 
   // ── Assumptions ────────────────────────────────────────────────────────────

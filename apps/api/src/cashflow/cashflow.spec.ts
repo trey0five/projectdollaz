@@ -24,6 +24,7 @@ interface Over {
   operational?: unknown
   cashFlowSnapshot?: unknown
   lastRun?: unknown
+  lineAdjustments?: unknown[]
 }
 
 function makeService(over: Over = {}) {
@@ -48,6 +49,13 @@ function makeService(over: Over = {}) {
       }),
     },
     cashFlowSnapshot: { findFirst: vi.fn(async () => over.cashFlowSnapshot ?? null) },
+    cashFlowLineAdjustment: {
+      findMany: vi.fn(async () => over.lineAdjustments ?? []),
+      upsert: vi.fn(async ({ create }: { create: Record<string, unknown> }) => ({
+        id: 'a1', note: null, overrideAmount: null, ...create,
+      })),
+      updateMany: vi.fn(async () => ({ count: 1 })),
+    },
     arApAgingSnapshot: {
       findFirst: vi.fn(async () => over.aging ?? null),
       count: vi.fn(async () => over.agingCount ?? 0),
@@ -320,6 +328,195 @@ describe('no double counting', () => {
     // at 2.91m and draw the trough half a million dollars too deep.
     expect(out).toBeCloseTo(2_410_000, 2)
     expect(out).not.toBeCloseTo(2_910_000, 2)
+  })
+})
+
+// A budget spread whose supplies row phases 10k in July + 20k in August —
+// sourceRef budget:6200, derivedTotal 30k. The one derived line in these tests.
+const SUPPLIES_BUDGET = {
+  totalExpenses: 2_000_000,
+  lines: {
+    spread: {
+      fiscalYearStart: '2026-07-01',
+      accounts: [
+        { acct: '6200', label: 'Supplies', category: 'supplies', section: 'expense', months: [10_000, 20_000] },
+      ],
+    },
+  },
+}
+
+describe('line adjustments tune the derived sources', () => {
+  it('EXCLUDE drops the line and the ending balance rises by exactly its derived total', async () => {
+    const baseline = await makeService({ budget: SUPPLIES_BUDGET }).svc.project('s1', 'u1', {
+      openingCash: 100_000, asOfDate: '2026-07-01',
+    })
+    expect(baseline.projection!.endingBalance).toBe(70_000)
+
+    const { svc } = makeService({
+      budget: SUPPLIES_BUDGET,
+      lineAdjustments: [{ id: 'a1', sourceRef: 'budget:6200', kind: 'exclude', overrideAmount: null, note: 'One-off, already paid' }],
+    })
+    const r = await svc.project('s1', 'u1', { openingCash: 100_000, asOfDate: '2026-07-01' })
+    // The whole 30k outflow is gone from the arithmetic…
+    expect(r.projection!.endingBalance).toBe(100_000)
+    expect(r.sources.adjustments).toEqual({ count: 1, total: 30_000 })
+    // …but the LINE is still visible, at appliedTotal 0 — a row that vanished
+    // could never be un-excluded.
+    const flow = r.flows.find((f) => f.sourceRef === 'budget:6200')!
+    expect(flow.derivedTotal).toBe(30_000)
+    expect(flow.appliedTotal).toBe(0)
+    expect(flow.adjustment).toMatchObject({ kind: 'exclude', note: 'One-off, already paid' })
+  })
+
+  it('OVERRIDE retotals the group and scales its events proportionally', async () => {
+    // 30k derived, overridden to 15k: the July 10k and August 20k events must
+    // HALVE, not be replaced by a flat 7.5k each — the phasing is the point.
+    const { svc } = makeService({
+      budget: SUPPLIES_BUDGET,
+      lineAdjustments: [{ id: 'a1', sourceRef: 'budget:6200', kind: 'override', overrideAmount: 15_000, note: null }],
+    })
+    const r = await svc.project('s1', 'u1', {
+      openingCash: 100_000, asOfDate: '2026-07-01', granularity: 'month',
+    })
+    expect(r.projection!.endingBalance).toBe(85_000)
+    const flow = r.flows.find((f) => f.sourceRef === 'budget:6200')!
+    expect(flow.derivedTotal).toBe(30_000)
+    expect(flow.appliedTotal).toBe(15_000)
+    const july = r.projection!.buckets[0]
+    const august = r.projection!.buckets[1]
+    expect(july.disbursements).toBe(5_000)
+    expect(august.disbursements).toBe(10_000)
+  })
+
+  it('an adjustment matching nothing is silently inert — a settled invoice is not an error', async () => {
+    const { svc, created } = makeService({
+      budget: SUPPLIES_BUDGET,
+      lineAdjustments: [{ id: 'a1', sourceRef: 'budget:9999', kind: 'exclude', overrideAmount: null, note: null }],
+    })
+    const r = await svc.project('s1', 'u1', { openingCash: 100_000, asOfDate: '2026-07-01' })
+    expect(r.projection!.endingBalance).toBe(70_000)
+    expect(r.sources.adjustments).toEqual({ count: 0, total: 0 })
+    expect(r.flows.some((f) => f.sourceRef === 'budget:9999')).toBe(false)
+    // …and the frozen run does not claim an adjustment that never applied.
+    expect(created[0].adjustments).toBeUndefined()
+  })
+
+  it('the frozen run copies in the adjustments that ACTUALLY applied', async () => {
+    // Same reason the assumptions are copied: the school can clear the
+    // adjustment tomorrow, and the run must still explain its own numbers.
+    const { svc, created } = makeService({
+      budget: SUPPLIES_BUDGET,
+      lineAdjustments: [{ id: 'a1', sourceRef: 'budget:6200', kind: 'exclude', overrideAmount: null, note: null }],
+    })
+    await svc.project('s1', 'u1', { openingCash: 100_000, asOfDate: '2026-07-01' })
+    expect(created).toHaveLength(1)
+    expect(created[0].adjustments).toMatchObject([
+      { id: 'a1', sourceRef: 'budget:6200', kind: 'exclude', derivedTotal: 30_000, appliedTotal: 0 },
+    ])
+  })
+
+  it('overrideAmount is required iff the kind is override — half an instruction fails loudly', async () => {
+    const { svc } = makeService()
+    await expect(
+      svc.saveAdjustment('s1', 'u1', { sourceRef: 'budget:6200', kind: 'override' }),
+    ).rejects.toThrow(/overrideAmount is required/)
+    await expect(
+      svc.saveAdjustment('s1', 'u1', { sourceRef: 'budget:6200', kind: 'exclude', overrideAmount: 5_000 }),
+    ).rejects.toThrow(/only applies/)
+  })
+
+  it('re-saving a cleared adjustment REVIVES the row — the unique key must never brick a line', async () => {
+    const { svc, prisma } = makeService()
+    await svc.saveAdjustment('s1', 'u1', { sourceRef: 'qbo:history:cafeteria', kind: 'exclude' })
+    const call = (prisma.cashFlowLineAdjustment.upsert as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    expect(call.where).toEqual({ schoolId_sourceRef: { schoolId: 's1', sourceRef: 'qbo:history:cafeteria' } })
+    expect(call.update.active).toBe(true)
+  })
+
+  it('removal is tenant-scoped soft delete — a foreign id removes nothing', async () => {
+    const { svc, prisma } = makeService()
+    await svc.removeAdjustment('s1', 'adj-1')
+    const call = (prisma.cashFlowLineAdjustment.updateMany as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    expect(call.where).toEqual({ id: 'adj-1', schoolId: 's1' })
+    expect(call.data).toEqual({ active: false })
+  })
+})
+
+describe('the sourceRef boundary: only DERIVED lines may be adjusted', () => {
+  it('commitment:* is rejected at the DTO — a commitment already has an editor', async () => {
+    const { validate } = await import('class-validator')
+    const { plainToInstance } = await import('class-transformer')
+    const { SaveLineAdjustmentDto } = await import('./dto/save-line-adjustment.dto.js')
+    const bad = plainToInstance(SaveLineAdjustmentDto, {
+      sourceRef: 'commitment:p1', kind: 'exclude',
+    })
+    const errors = await validate(bad, { whitelist: true, forbidNonWhitelisted: true })
+    expect(errors.length).toBeGreaterThan(0)
+    expect(JSON.stringify(errors)).toContain('commitments are edited directly')
+
+    // …while every derived family passes.
+    for (const ref of ['qbo:ar:1042', 'qbo:ap:88', 'qbo:history:cafeteria', 'budget:6200', 'driver:tuition']) {
+      const ok = plainToInstance(SaveLineAdjustmentDto, { sourceRef: ref, kind: 'exclude' })
+      expect(await validate(ok, { whitelist: true, forbidNonWhitelisted: true })).toEqual([])
+    }
+  })
+})
+
+describe('persist:false previews without freezing a run', () => {
+  it('a preview writes NOTHING — the archive records decisions, not keystrokes', async () => {
+    const { svc, created } = makeService({ budget: SUPPLIES_BUDGET })
+    const r = await svc.project('s1', 'u1', {
+      openingCash: 100_000, asOfDate: '2026-07-01', persist: false,
+    })
+    expect(r.projection).not.toBeNull()
+    expect(created).toHaveLength(0)
+  })
+
+  it('and the DTO actually ADMITS the flag — forbidNonWhitelisted must not 400 previews', async () => {
+    const { validate } = await import('class-validator')
+    const { plainToInstance } = await import('class-transformer')
+    const { ProjectCashDto } = await import('./dto/project-cash.dto.js')
+    const dto = plainToInstance(ProjectCashDto, {
+      openingCash: 100_000, asOfDate: '2026-07-01', persist: false,
+    })
+    expect(await validate(dto, { whitelist: true, forbidNonWhitelisted: true })).toEqual([])
+  })
+})
+
+describe('the flows list — the forecast, grouped into lines a reader can point at', () => {
+  it('carries provenance and editability per line', async () => {
+    const { svc } = makeService({ commitments: [PAYROLL], budget: SUPPLIES_BUDGET })
+    const r = await svc.project('s1', 'u1', { openingCash: 1_000_000, asOfDate: '2026-07-01' })
+
+    // A commitment is the school's own claim, edited directly — never adjusted.
+    const payroll = r.flows.find((f) => f.sourceRef === 'commitment:p1')!
+    expect(payroll).toMatchObject({
+      origin: 'commitment', provenance: 'assumed', editable: 'direct',
+      commitmentId: 'p1', direction: 'out', adjustment: null,
+    })
+    expect(payroll.eventCount).toBeGreaterThan(1) // semimonthly expands
+    expect(payroll.appliedTotal).toBe(payroll.derivedTotal)
+
+    // A budget row is derived and adjustable.
+    const supplies = r.flows.find((f) => f.sourceRef === 'budget:6200')!
+    expect(supplies).toMatchObject({
+      origin: 'budget', provenance: 'derived', editable: 'adjustable',
+      commitmentId: null, category: 'supplies', confidence: 'modelled',
+      derivedTotal: 30_000, eventCount: 2,
+      firstDate: '2026-07-31', lastDate: '2026-08-31',
+    })
+
+    // Grouped rows, not raw events — and ordered largest first, the order a
+    // reader scans a forecast in.
+    expect(r.flows.length).toBe(2)
+    expect(r.flows[0].sourceRef).toBe('commitment:p1')
+  })
+
+  it('a blocked projection returns an EMPTY flows list, not a missing one', async () => {
+    const { svc } = makeService()
+    const r = await svc.project('s1', 'u1', { openingCash: 1, asOfDate: 'not-a-date' })
+    expect(r.blockedReason).not.toBeNull()
+    expect(r.flows).toEqual([])
   })
 })
 

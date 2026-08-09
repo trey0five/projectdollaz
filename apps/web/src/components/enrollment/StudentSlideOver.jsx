@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // StudentSlideOver — the light slide-over for ONE roster student (the
 // PersonDetailPanel precedent): initials avatar, sky grade/status pills, derived
-// age, IEP/504/ELL badges, enrollment dates, notes. Edit hands off to the
+// age, ISP/504/ELL badges, enrollment dates, notes. Edit hands off to the
 // register's EntityFormModal form; Delete is a two-step inline confirm (hard
 // delete — school data stewardship). FERPA posture: this role-gated register
 // surface is the ONLY place a name renders; the record itself is data-minimal
@@ -318,7 +318,7 @@ export default function StudentSlideOver({
             </Row>
             <Row Icon={LifeBuoy} label="Support">
               {s.hasIep || s.has504 || s.ell
-                ? [s.hasIep && 'IEP', s.has504 && '504 plan', s.ell && 'ELL']
+                ? [s.hasIep && 'ISP', s.has504 && '504 plan', s.ell && 'ELL']
                     .filter(Boolean)
                     .join(' · ')
                 : 'None recorded'}

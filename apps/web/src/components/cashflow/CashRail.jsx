@@ -15,16 +15,16 @@
 // exactly the school that needs this screen, and clamping at zero would draw its
 // deficit as the floor.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useMemo } from 'react'
+import { useId, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { useMeasuredWidth } from '../analytics/charts/useMeasuredWidth.js'
 import { useReducedMotion } from '../analytics/charts/useReducedMotion.js'
 
-const H = 220
+const H = 240
 const PAD_L = 8
 const PAD_R = 8
 const PAD_T = 26
-const PAD_B = 28
+const PAD_B = 48
 
 const LINE = '#1D4ED8'
 const RESERVE = '#EF4444'
@@ -41,10 +41,22 @@ export default function CashRail({
    * that bucket was. One number, printed twice, must be the same number.
    */
   lowestBalance = null,
+  /**
+   * Projection IDENTITY (asOfDate + horizon + totals) — NOT the container width.
+   * When it changes, the line re-runs its draw-in so cause (an edit) is visibly
+   * followed by effect (the chart redrawing). Width changes must NOT re-key, or
+   * every window resize would replay the animation.
+   */
+  redrawKey = '',
   format,
 }) {
   const reduce = useReducedMotion()
   const [hostRef, width] = useMeasuredWidth(720)
+  // Instance-unique ids (Sparkline idiom) — global ids would cross-wire when two
+  // rails render, and the legend swatch must not reach into another svg's defs.
+  const uid = useId().replace(/:/g, '')
+  const fillId = `cashfill-${uid}`
+  const hatchId = `cashhatch-${uid}`
 
   const fmt = typeof format === 'function' ? format : (n) => `$${Math.round(n).toLocaleString()}`
 
@@ -77,6 +89,24 @@ export default function CashRail({
     (b) => lowestDate && b.start <= lowestDate && b.end >= lowestDate,
   )
 
+  // ── Per-bucket provenance: is this stretch of the line a CALENDAR or an
+  //    ESTIMATE? Dominance of |committed|+|scheduled| (dates known) vs
+  //    |modelled|+|assumption| (derived/entered) inside each bucket. A strip
+  //    under the axis — never a dashed line, which would break the continuous
+  //    quantity the line itself is. ──
+  const hasProvenance = buckets.some((b) => b.byConfidence)
+  const provenance = hasProvenance
+    ? buckets.map((b) => {
+        const c = b.byConfidence ?? {}
+        const known = Math.abs(c.committed ?? 0) + Math.abs(c.scheduled ?? 0)
+        const est = Math.abs(c.modelled ?? 0) + Math.abs(c.assumption ?? 0)
+        if (known === 0 && est === 0) return 'quiet'
+        return known >= est ? 'known' : 'estimated'
+      })
+    : []
+  const stripY = PAD_T + innerH + 8
+  const cellW = buckets.length > 0 ? innerW / buckets.length : 0
+
   return (
     <div ref={hostRef} className="w-full">
       <svg
@@ -88,10 +118,22 @@ export default function CashRail({
         style={{ display: 'block', overflow: 'visible' }}
       >
         <defs>
-          <linearGradient id="cashfill" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={LINE} stopOpacity="0.18" />
             <stop offset="100%" stopColor={LINE} stopOpacity="0.02" />
           </linearGradient>
+          {/* Estimated stretches wear a light diagonal hatch — visibly "sketched"
+              beside the solid cells of the known-date stretches. */}
+          <pattern
+            id={hatchId}
+            width="5"
+            height="5"
+            patternUnits="userSpaceOnUse"
+            patternTransform="rotate(45)"
+          >
+            <rect width="5" height="5" fill={LINE} fillOpacity="0.10" />
+            <line x1="0" y1="0" x2="0" y2="5" stroke={LINE} strokeOpacity="0.35" strokeWidth="1.5" />
+          </pattern>
         </defs>
 
         {/* Zero, when it is inside the domain. An overdrawn school needs to see
@@ -100,17 +142,22 @@ export default function CashRail({
           <line x1={PAD_L} x2={PAD_L + innerW} y1={y(0)} y2={y(0)} stroke="#94A3B8" strokeWidth={1} />
         ) : null}
 
-        <path d={area} fill="url(#cashfill)" />
-        <motion.path
-          d={path}
-          fill="none"
-          stroke={LINE}
-          strokeWidth={2.5}
-          strokeLinejoin="round"
-          initial={reduce ? { pathLength: 1 } : { pathLength: 0 }}
-          animate={{ pathLength: 1 }}
-          transition={{ duration: 0.7, ease: [0.22, 0.8, 0.2, 1] }}
-        />
+        {/* Keyed by PROJECTION IDENTITY: every rebuild re-runs the draw-in, so an
+            edit is answered by the line visibly redrawing (reduced-motion draws
+            it complete). The key deliberately excludes width — see prop note. */}
+        <g key={`draw-${redrawKey}`} data-redraw={redrawKey}>
+          <path d={area} fill={`url(#${fillId})`} />
+          <motion.path
+            d={path}
+            fill="none"
+            stroke={LINE}
+            strokeWidth={2.5}
+            strokeLinejoin="round"
+            initial={reduce ? { pathLength: 1 } : { pathLength: 0 }}
+            animate={{ pathLength: 1 }}
+            transition={{ duration: 0.7, ease: [0.22, 0.8, 0.2, 1] }}
+          />
+        </g>
 
         {/* THE FLOOR. Drawn on the chart, not printed beside it. */}
         {reserveThreshold != null ? (
@@ -149,6 +196,32 @@ export default function CashRail({
               strokeDasharray="3 3"
               opacity={0.7}
             />
+            {/* ONE pulse when the low point (re)appears — a glance-catcher, not a
+                siren. Keyed with the redraw so a rebuild pulses once more; it
+                NEVER loops. Reduced-motion gets a static halo ring instead. */}
+            {reduce ? (
+              <circle
+                cx={x(lowIdx)}
+                cy={y(pts[lowIdx])}
+                r={10}
+                fill="none"
+                stroke={LOW}
+                strokeOpacity={0.35}
+                strokeWidth={2}
+              />
+            ) : (
+              <motion.circle
+                key={`pulse-${redrawKey}`}
+                cx={x(lowIdx)}
+                cy={y(pts[lowIdx])}
+                fill="none"
+                stroke={LOW}
+                strokeWidth={2}
+                initial={{ r: 5, opacity: 0.75 }}
+                animate={{ r: 18, opacity: 0 }}
+                transition={{ duration: 1.1, delay: 0.65, ease: 'easeOut' }}
+              />
+            )}
             <circle cx={x(lowIdx)} cy={y(pts[lowIdx])} r={5} fill={LOW} stroke="#fff" strokeWidth={2} />
             <text
               x={Math.min(x(lowIdx) + 8, width - 90)}
@@ -162,6 +235,42 @@ export default function CashRail({
           </>
         ) : null}
 
+        {/* Provenance strip — which stretches of this line are a CALENDAR (solid:
+            committed/scheduled dominate) and which are an ESTIMATE (hatched:
+            modelled/assumption dominate). Cells with no movement stay faint. */}
+        {hasProvenance ? (
+          <g aria-label="Which parts of the forecast have known dates">
+            {provenance.map((kind, i) => (
+              <rect
+                key={buckets[i]?.key ?? i}
+                x={PAD_L + i * cellW}
+                y={stripY}
+                width={Math.max(0, cellW - 1)}
+                height={10}
+                rx={2}
+                fill={
+                  kind === 'known'
+                    ? LINE
+                    : kind === 'estimated'
+                      ? `url(#${hatchId})`
+                      : '#E2E8F0'
+                }
+                fillOpacity={kind === 'known' ? 0.55 : 1}
+              >
+                <title>
+                  {`${buckets[i]?.key} · ${
+                    kind === 'known'
+                      ? 'mostly known dates'
+                      : kind === 'estimated'
+                        ? 'mostly estimated'
+                        : 'no movement'
+                  }`}
+                </title>
+              </rect>
+            ))}
+          </g>
+        ) : null}
+
         {/* First and last bucket only — a 52-label axis is unreadable and the
             headline figures above already carry the exact dates. */}
         <text x={PAD_L} y={H - 8} fontSize="11" fill="#64748B">
@@ -171,6 +280,38 @@ export default function CashRail({
           {buckets[buckets.length - 1]?.end}
         </text>
       </svg>
+
+      {hasProvenance ? (
+        <div className="mt-1 flex items-center gap-4 text-[11.5px] text-muted">
+          <span className="inline-flex items-center gap-1.5">
+            <span
+              className="inline-block h-2 w-3 rounded-sm"
+              style={{ background: LINE, opacity: 0.55 }}
+            />
+            Known dates
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <svg width="12" height="8" aria-hidden="true">
+              {/* Own tiny defs copy — a separate <svg> must not reference the
+                  chart svg's defs (undefined in strict renderers). */}
+              <defs>
+                <pattern
+                  id={`${hatchId}-legend`}
+                  width="5"
+                  height="5"
+                  patternUnits="userSpaceOnUse"
+                  patternTransform="rotate(45)"
+                >
+                  <rect width="5" height="5" fill={LINE} fillOpacity="0.10" />
+                  <line x1="0" y1="0" x2="0" y2="5" stroke={LINE} strokeOpacity="0.35" strokeWidth="1.5" />
+                </pattern>
+              </defs>
+              <rect width="12" height="8" rx="2" fill={`url(#${hatchId}-legend)`} />
+            </svg>
+            Estimated
+          </span>
+        </div>
+      ) : null}
     </div>
   )
 }

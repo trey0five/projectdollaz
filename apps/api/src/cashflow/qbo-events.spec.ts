@@ -265,6 +265,7 @@ describe('the service blend (CashFlowService + QBO)', () => {
       cashAssumptions: { findUnique: vi.fn(async () => null) },
       cashProjectionRun: { findFirst: vi.fn(async () => null), create: vi.fn(async () => ({})) },
       cashFlowSnapshot: { findFirst: vi.fn(async () => null) },
+      cashFlowLineAdjustment: { findMany: vi.fn(async () => []) },
       arApAgingSnapshot: { findFirst: vi.fn(async () => null), count: vi.fn(async () => 0) },
       qboConnection: { findFirst: vi.fn(async () => ({ id: 'q' })) },
       monthlySnapshot: { count: vi.fn(async () => 3) },

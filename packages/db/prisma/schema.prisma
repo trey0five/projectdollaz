@@ -133,6 +133,7 @@ model School {
   cashCommitments           CashCommitment[]
   cashProjectionRuns        CashProjectionRun[]
   cashAssumptions           CashAssumptions?
+  cashFlowLineAdjustments   CashFlowLineAdjustment[]
   campaignSchedules         CampaignSchedule[]
   monthlySnapshots          MonthlySnapshot[]
   policies                  Policy[]
@@ -2990,6 +2991,12 @@ model CashProjectionRun {
   /// The assumptions this run used, copied in — a run has to stay readable after
   /// the school changes its assumptions, or the record explains nothing.
   assumptions Json
+  /// The line adjustments that were ACTUALLY APPLIED to this run, copied in for
+  /// the same reason the assumptions are: the school can edit or remove an
+  /// adjustment later, and the frozen run must still explain why its numbers
+  /// differ from what the sources derived. Null on runs made before adjustments
+  /// existed, and on runs where none applied.
+  adjustments Json?
   /// The full CashProjectionResult.
   result      Json
   /// 'high' | 'moderate' | 'limited' — data confidence at the time of the run.
@@ -3004,4 +3011,42 @@ model CashProjectionRun {
   @@index([schoolId, asOfDate])
   @@index([schoolId, createdAt])
   @@map("cash_projection_runs")
+}
+
+/// A per-line tuning of the DERIVED forecast sources — "this modelled line is
+/// wrong, drop it" (exclude) or "this group's total should be X" (override).
+///
+/// `sourceRef` is the engine's own provenance key (qbo:ar:{doc}, qbo:ap:{doc},
+/// qbo:history:{category}, budget:{acct|rowN}, driver:tuition) — NEVER
+/// commitment:{id}, because a commitment is the school's own entry and is
+/// edited directly. The QBO source data is never mutated: adjustments are
+/// applied at assembly time only, so disconnecting the adjustment restores the
+/// derived line exactly. An adjustment whose ref no longer matches anything
+/// (a re-imported budget renumbering its rows, a settled invoice) is silently
+/// inert rather than an error.
+model CashFlowLineAdjustment {
+  id       String @id @default(uuid()) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+
+  /// The provenance key this adjustment targets. One adjustment per line.
+  sourceRef String @map("source_ref")
+  /// 'exclude' | 'override'
+  kind      String
+  /// Required iff kind is 'override': the group's new total. The group's events
+  /// scale proportionally so its timing shape is preserved.
+  overrideAmount Decimal? @map("override_amount") @db.Decimal(14, 2)
+  /// Why — shown beside the adjusted line so a later reader knows who decided what.
+  note String?
+  /// Soft delete: a cleared adjustment must stay resolvable from frozen runs.
+  active Boolean @default(true)
+
+  createdByUserId String?  @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, sourceRef])
+  @@index([schoolId, active])
+  @@map("cash_flow_line_adjustments")
 }
