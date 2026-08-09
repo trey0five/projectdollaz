@@ -260,7 +260,7 @@ export default function BoardReadyShow() {
   const s = SLIDES[i]
 
   return (
-    <section aria-labelledby="board-h2" className="bg-transparent py-24">
+    <section id="board-ready" aria-labelledby="board-h2" className="scroll-mt-20 bg-transparent py-24">
       <div className="mx-auto max-w-5xl px-5 sm:px-8">
         <div className="text-center">
           <p className="text-[12px] font-bold uppercase tracking-[0.22em] text-[#7a5e00]">

@@ -59,7 +59,7 @@ export default function BentoWall() {
   }, [reduce])
 
   return (
-    <section aria-labelledby="bento-h2" className="bg-transparent py-24">
+    <section id="platform" aria-labelledby="bento-h2" className="scroll-mt-20 bg-transparent py-24">
       <div className="mx-auto max-w-5xl px-5 sm:px-8">
         <p className="text-[12px] font-bold uppercase tracking-[0.22em] text-[#7a5e00]">The platform, today</p>
         <h2 id="bento-h2" className="mt-3 font-serif text-[32px] font-semibold leading-tight text-navy sm:text-[42px]">

@@ -5,11 +5,14 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const NAV = {
+  // Anchor ids must exist on the CURRENT composition (LandingPage.jsx) — the
+  // old #your-day/#inside/#networks targets died with the retired day-timeline
+  // acts and the links silently went nowhere.
   anchors: [
     { label: 'Home', href: '#top', top: true },
-    { label: 'How it works', href: '#your-day' },
-    { label: 'Platform', href: '#inside' },
-    { label: 'Networks', href: '#networks' },
+    { label: 'How it works', href: '#how-it-works' },
+    { label: 'Platform', href: '#platform' },
+    { label: 'Board-ready', href: '#board-ready' },
   ],
   signIn: { label: 'Sign in', to: '/login' },
   getStarted: { label: 'Get started', to: '/register' },

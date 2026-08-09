@@ -439,7 +439,7 @@ export default function OrbitScrolly() {
   // ── Reduced motion: one static, settled composition — no pin, no scrub. ────
   if (reduce) {
     return (
-      <section aria-labelledby="orbit-h2" className="relative overflow-hidden bg-[#e9f0fb] py-24">
+      <section id="how-it-works" aria-labelledby="orbit-h2" className="relative scroll-mt-20 overflow-hidden bg-[#e9f0fb] py-24">
         <div className="mx-auto max-w-4xl px-5 text-center sm:px-8">
           <p className="text-[12px] font-bold uppercase tracking-[0.22em] text-[#7a5e00]">One AI · Eight domains</p>
           <h2 id="orbit-h2" className="mt-3 font-serif text-[32px] font-semibold leading-tight text-navy sm:text-[42px]">
@@ -462,7 +462,7 @@ export default function OrbitScrolly() {
     // Top padding clears the hero's straddling glass card (its -mb overhang
     // lands on this section). The heading lives INSIDE the pinned stage now —
     // no standalone header block, no dead empty viewport before the scene.
-    <section aria-labelledby="orbit-h2" className="relative bg-[#e9f0fb] pt-44 sm:pt-56 lg:pt-64">
+    <section id="how-it-works" aria-labelledby="orbit-h2" className="relative scroll-mt-20 bg-[#e9f0fb] pt-44 sm:pt-56 lg:pt-64">
       <div ref={trackRef} className="relative h-[560vh]">
         <div
           ref={stageRef}
