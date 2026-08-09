@@ -533,7 +533,9 @@ export default function OrbitScrolly() {
           <div
             ref={typeRef}
             aria-hidden="true"
-            className="pointer-events-none absolute inset-x-0 top-[30%] z-0"
+            // Raised from 30% so the word clears Penny instead of running through her
+            // — the coin was covering the middle letters at most window heights.
+            className="pointer-events-none absolute inset-x-0 top-[21%] z-0"
             style={{ opacity: 0 }}
           >
             <AnimatePresence mode="popLayout">
