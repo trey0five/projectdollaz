@@ -537,51 +537,6 @@ const DEEP = [
 
 const TITLES = [...document.querySelectorAll('.slide')].map((s) => s.dataset.title);
 
-/* ── presenter window: same file opened with #presenter — notes-only view
-   on HER screen while the audience sees the deck. Synced via postMessage. ── */
-if (location.hash === '#presenter') {
-  document.body.classList.add('presenter');
-  document.title = 'KYRO — Presenter';
-  const pv = document.createElement('div');
-  pv.className = 'pv';
-  pv.innerHTML = '<div class="pv-top"><div><h2 id="pv-title"></h2>' +
-    '<div class="pv-next"><b>NEXT</b> <span id="pv-next"></span></div></div>' +
-    '<div style="text-align:right"><div class="pv-timer" id="pv-timer">00:00</div>' +
-    '<div class="pv-count" id="pv-count"></div></div></div>' +
-    '<div class="pv-body" id="pv-body"></div>' +
-    '<div class="pv-hint">←  → advance both screens · timer started when this window opened</div>';
-  document.body.appendChild(pv);
-  const t0 = Date.now();
-  setInterval(() => {
-    const s = Math.floor((Date.now() - t0) / 1000);
-    document.getElementById('pv-timer').textContent =
-      String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
-  }, 1000);
-  function show(i) {
-    document.getElementById('pv-title').textContent = (i + 1) + ' · ' + TITLES[i];
-    document.getElementById('pv-count').textContent = (i + 1) + ' / ' + TITLES.length;
-    document.getElementById('pv-next').textContent =
-      i + 1 < TITLES.length ? TITLES[i + 1] : 'End — the ask';
-    document.getElementById('pv-body').innerHTML = DEEP[i];
-  }
-  show(0);
-  window.addEventListener('message', (e) => {
-    if (e.data && typeof e.data.slide === 'number') show(e.data.slide);
-  });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowRight' || e.key === ' ') window.opener?.postMessage({ nav: 1 }, '*');
-    else if (e.key === 'ArrowLeft') window.opener?.postMessage({ nav: -1 }, '*');
-  });
-  window.opener?.postMessage({ ready: true }, '*');
-  throw new Error('presenter-mode'); // stop the deck script in this window
-}
-
-let presenterWin = null;
-window.addEventListener('message', (e) => {
-  if (e.data?.ready) presenterWin?.postMessage({ slide: cur }, '*');
-  else if (typeof e.data?.nav === 'number') go(cur + e.data.nav);
-});
-
 const slides = [...document.querySelectorAll('.slide')];
 const dots = document.getElementById('dots');
 const counter = document.getElementById('counter');
@@ -607,7 +562,64 @@ function go(i) {
   slides[cur].classList.add('active');
   dots.children[cur].classList.add('on');
   counter.textContent = (cur + 1) + ' / ' + slides.length;
-  presenterWin?.postMessage({ slide: cur }, '*');
+  updatePresenter();
+}
+
+/* ── presenter window: an about:blank popup we build and drive DIRECTLY.
+   No URL, no hash, no postMessage — immune to viewers/wrappers/origins. ── */
+let presenterWin = null;
+function openPresenter() {
+  const w = window.open('', 'kyro-presenter', 'width=1020,height=780');
+  if (!w) {
+    alert('The browser blocked the presenter pop-up. Allow pop-ups for this page and press P again — or present from the downloaded file.');
+    return;
+  }
+  presenterWin = w;
+  w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>KYRO — Presenter</title><style>' +
+    '*{margin:0;box-sizing:border-box}' +
+    'body{background:#eef3fc;color:#16294f;font-family:"Segoe UI",system-ui,sans-serif;padding:24px 30px}' +
+    '.top{display:flex;justify-content:space-between;align-items:baseline;gap:16px;border-bottom:2px solid rgba(22,41,79,.15);padding-bottom:12px;margin-bottom:16px}' +
+    'h2{font-family:Palatino,Georgia,serif;font-size:25px}' +
+    '.nx{font-size:13px;color:#4b5a74;margin-top:4px}.nx b{color:#8a6d1f;font-family:monospace;font-size:11px;letter-spacing:.16em}' +
+    '.tm{font-family:ui-monospace,Consolas,monospace;font-size:22px;font-weight:700;text-align:right}' +
+    '.ct{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:#8a6d1f;letter-spacing:.2em;text-align:right}' +
+    '.bd{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px 32px}' +
+    '.dd h3{font-family:Palatino,Georgia,serif;font-size:18px;margin-bottom:8px}' +
+    '.dd li{margin:6px 0 6px 18px;font-size:13.5px;line-height:1.6;color:#4b5a74}.dd li b{color:#16294f}' +
+    '.dd .qa{margin:8px 0;font-size:13.5px;line-height:1.6}.dd .qa b{display:block;color:#16294f}.dd .qa span{color:#4b5a74}' +
+    '.dd.wide{grid-column:1/-1}' +
+    '.script{font-family:Palatino,Georgia,serif;font-size:15px;line-height:1.75;background:rgba(212,180,122,.16);border-left:3px solid #b8962e;padding:15px 20px;border-radius:0 12px 12px 0;max-width:95ch}' +
+    '.script i{color:#8a6d1f}' +
+    '.hint{font-family:ui-monospace,monospace;font-size:11px;color:#4b5a74;border-top:1px solid rgba(22,41,79,.12);padding-top:9px;margin-top:16px;letter-spacing:.05em}' +
+    '</style></head><body>' +
+    '<div class="top"><div><h2 id="t"></h2><div class="nx"><b>NEXT</b> <span id="n"></span></div></div>' +
+    '<div><div class="tm" id="tm">00:00</div><div class="ct" id="c"></div></div></div>' +
+    '<div class="bd" id="b"></div>' +
+    '<div class="hint">← → advance both screens · keep this window on YOUR screen, project the deck</div>' +
+    '</body></html>');
+  w.document.close();
+  const t0 = Date.now();
+  const tick = setInterval(() => {
+    if (w.closed) { clearInterval(tick); return }
+    const sec = Math.floor((Date.now() - t0) / 1000);
+    const el = w.document.getElementById('tm');
+    if (el) el.textContent = String(Math.floor(sec / 60)).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0');
+  }, 1000);
+  w.document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === ' ') go(cur + 1);
+    else if (e.key === 'ArrowLeft') go(cur - 1);
+  });
+  updatePresenter();
+}
+function updatePresenter() {
+  const w = presenterWin;
+  if (!w || w.closed) return;
+  const d = w.document;
+  const titles = slides.map((s) => s.dataset.title);
+  d.getElementById('t').textContent = (cur + 1) + ' · ' + titles[cur];
+  d.getElementById('c').textContent = (cur + 1) + ' / ' + slides.length;
+  d.getElementById('n').textContent = cur + 1 < slides.length ? titles[cur + 1] : 'End — the ask';
+  d.getElementById('b').innerHTML = DEEP[cur];
 }
 function openDrawer() {
   drawerTitle.textContent = 'Deep dive — ' + slides[cur].dataset.title;
@@ -624,10 +636,7 @@ document.getElementById('drawer-close').addEventListener('click', closeDrawer);
 document.addEventListener('keydown', (e) => {
   if (e.key === 'ArrowRight' || e.key === ' ') go(cur + 1);
   else if (e.key === 'ArrowLeft') go(cur - 1);
-  else if (e.key === 'p' || e.key === 'P') {
-    presenterWin = window.open(location.href.split('#')[0] + '#presenter', 'kyro-presenter',
-      'width=1000,height=760');
-  }
+  else if (e.key === 'p' || e.key === 'P') openPresenter();
   else if (e.key === 'd' || e.key === 'D')
     drawer.classList.contains('open') ? closeDrawer() : openDrawer();
   else if (e.key === 'Escape') closeDrawer();
