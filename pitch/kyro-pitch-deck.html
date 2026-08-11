@@ -86,6 +86,27 @@
   .pain::before { content: "—"; position: absolute; left: 0; top: 0; color: var(--gold); font-weight: 700 }
   .pain b { color: #fff; font-weight: 600 }
 
+  /* ── statement slide: the thesis couplet ── */
+  .thesis { display: flex; gap: clamp(20px, 3vw, 44px); margin-top: 36px; max-width: 1240px;
+            width: 100%; justify-content: center; align-items: stretch }
+  .thesis-card { flex: 1; max-width: 520px; border-radius: 22px; padding: clamp(26px, 3.2vw, 46px);
+                 text-align: left; display: flex; flex-direction: column; gap: 18px }
+  .thesis-card .eyebrow { font-size: clamp(10px, .85vw, 12px) }
+  .thesis-card p { font-family: var(--serif); font-size: clamp(16px, 1.55vw, 23px); line-height: 1.5;
+                   text-wrap: balance }
+  .thesis-card .punch { font-family: var(--serif); font-style: italic; font-size: clamp(18px, 1.8vw, 27px);
+                        margin-top: auto; padding-top: 10px }
+  .thesis-problem { background: rgba(255,255,255,.045); border: 1px solid rgba(255,255,255,.12) }
+  .thesis-problem p { color: var(--mist) }
+  .thesis-problem .punch { color: #fff }
+  .thesis-solution { background: linear-gradient(165deg, rgba(212,180,122,.16), rgba(212,180,122,.05));
+                     border: 1px solid rgba(212,180,122,.5);
+                     box-shadow: 0 30px 80px -30px rgba(212,180,122,.35) }
+  .thesis-solution p { color: rgba(255,255,255,.88) }
+  .thesis-solution .punch { color: var(--gold-hi) }
+  .hinge { align-self: center; font-family: var(--serif); font-size: clamp(26px, 2.6vw, 40px);
+           color: var(--gold); flex: none }
+
   /* ── slide 3: brief mock + steps ── */
   .brief { width: min(680px, 92%); margin: 22px auto 0; text-align: left; border-radius: 18px;
            background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12);
@@ -177,6 +198,11 @@
   .dd .qa { margin: 9px 0; font-size: 14px; line-height: 1.6 }
   .dd .qa b { display: block; color: var(--paper-ink) }
   .dd .qa span { color: var(--paper-muted) }
+  .dd.wide { grid-column: 1 / -1 }
+  .script { font-family: var(--serif); font-size: 15.5px; line-height: 1.8; color: var(--paper-ink);
+            background: rgba(212,180,122,.13); border-left: 3px solid #b8962e;
+            padding: 18px 24px; border-radius: 0 14px 14px 0; max-width: 95ch }
+  .script i { color: #8a6d1f }
 
   /* ── print: handout mode ── */
   @media print {
@@ -235,7 +261,28 @@
   </div>
 </section>
 
-<!-- ══════════ SLIDE 3 · THE SOLUTION ══════════ -->
+<!-- ══════════ SLIDE 3 · THE THESIS ══════════ -->
+<section class="slide" data-title="Problem &amp; Solution">
+  <p class="eyebrow rise">Plainly, then</p>
+  <h1 class="rise d1">Said <em>simply.</em></h1>
+  <div class="thesis rise d2">
+    <div class="thesis-card thesis-problem">
+      <span class="eyebrow" style="color: rgba(255,255,255,.5)">The problem</span>
+      <p>Everything a school needs to know already exists — scattered across systems it can
+         barely afford, and spreadsheets only one person truly understands.</p>
+      <span class="punch">The picture never assembles itself.</span>
+    </div>
+    <span class="hinge rise d3" aria-hidden="true">→</span>
+    <div class="thesis-card thesis-solution">
+      <span class="eyebrow">The solution</span>
+      <p>KYRO assembles it — every domain of the school on one affordable platform, read each
+         morning by an AI chief of staff, so leaders act on the picture instead of building it.</p>
+      <span class="punch">One platform. One brief. Time to lead.</span>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ SLIDE 4 · THE SOLUTION ══════════ -->
 <section class="slide" data-title="The Solution">
   <p class="eyebrow rise">The solution</p>
   <h1 class="rise d1">One platform. One morning brief.<br><em>One afternoon to go live.</em></h1>
@@ -346,6 +393,7 @@
 <script>
 const DEEP = [
   /* 1 · welcome */ `
+  <div class="dd wide"><h3>Say it like this — the 30-second script</h3><p class="script">“This is KYRO — the operating platform for independent schools. One platform that runs finance, enrollment, accreditation, governance, facilities, advancement, HR and strategy — and reads all of it every morning, so you know what needs attention before someone has to tell you. In the next few minutes I’ll show you the problem it ends, and how little it takes to switch it on.” <i>[advance]</i></p></div>
   <div class="dd"><h3>The 10-second version</h3>
     <ul><li>"KYRO is the operating platform for independent schools — finance, enrollment, accreditation and five more domains on one platform, read every morning by an AI chief of staff named Penny."</li></ul>
     <h3>The 30-second version</h3>
@@ -361,6 +409,7 @@ const DEEP = [
     <li><b>Board:</b> professional packet, defensible numbers, benchmarks.</li></ul></div>`,
 
   /* 2 · problem */ `
+  <div class="dd wide"><h3>Say it like this — the 30-second script</h3><p class="script">“Here’s what running a school looks like today. The left side is the software bill — a student system here, a donor CRM there, tools for tuition, reporting, accreditation. Thirty to eighty thousand a year, before anyone has answered a single strategic question. And the right side is what that money still doesn’t buy: the systems don’t talk, the picture is never current, and your best people give up nights and weekends stitching it together by hand. The old way feels free because a person quietly absorbs the cost. <i>[beat]</i> It isn’t free.”</p></div>
   <div class="dd"><h3>Walking the bill pile</h3>
     <ul><li>These are typical mid-market quotes; big-name SIS + advancement CRM contracts alone routinely clear $30k/yr before support and add-ons.</li>
     <li>The last line is the one to land: the glue is a person — someone re-keys the same numbers into three systems, on hours nobody planned for.</li>
@@ -385,7 +434,22 @@ const DEEP = [
     <li>Enterprise vendors sell per-module, per-student, with implementation fees — the model breaks under 400 students.</li>
     <li>Result: the schools with the least slack get the least tooling. That's the injustice KYRO was built against.</li></ul></div>`,
 
-  /* 3 · solution */ `
+  /* 3 · thesis */ `
+  <div class="dd wide"><h3>Say it like this — the 30-second script</h3><p class="script">“Let me say the whole thing simply. Everything your school needs to know already exists — it’s just scattered across systems you can barely afford, and spreadsheets one person truly understands. The picture never assembles itself. <i>[pause — two full beats]</i> KYRO assembles it. Every domain, one affordable platform, read every morning by an AI chief of staff. One platform. One brief. Time to lead.”</p></div>
+  <div class="dd"><h3>Delivering the couplet</h3>
+    <ul><li>Slow down here — this is the slide you say almost word for word, then stop talking.</li>
+    <li>Read the problem card, pause two beats on "The picture never assembles itself." Let it sit.</li>
+    <li>Then the turn, softer: "KYRO assembles it." The whole pitch is those three words.</li></ul></div>
+  <div class="dd"><h3>Tuning it to the listener</h3>
+    <ul><li><b>Head of school:</b> "…so you act on the picture instead of building it — and your evenings go back to the school, not the spreadsheet."</li>
+    <li><b>Superintendent:</b> "…and for a network, the picture assembles across every school at once — exceptions first."</li>
+    <li><b>Board chair:</b> "…so the board reads one defensible picture, not a different story from every binder."</li></ul></div>
+  <div class="dd"><h3>If they push back here</h3>
+    <ul><li>"Sounds too simple." — "The hard part isn't the idea, it's the plumbing: statements that tie out, forecasts from live books, privacy-safe AI. That's what the demo shows."</li>
+    <li>Resist feature-listing on this slide — the couplet is the product of the whole deck; features live two slides ahead.</li></ul></div>`,
+
+  /* 4 · solution */ `
+  <div class="dd wide"><h3>Say it like this — the 30-second script</h3><p class="script">“Here’s what Monday looks like instead. One brief, across every school: seven items need a decision — each one explained, prioritized, and owned. And getting there takes an afternoon: connect QuickBooks, or drop the trial balance your bookkeeper already makes; load the roster from a CSV or your student system — and the next morning the brief is waiting. A red light is not intelligence. KYRO tells you what changed, why it matters, and what to do about it.”</p></div>
   <div class="dd"><h3>Demo flow (3–5 min, mirrors the video)</h3>
     <ul><li>1 · Open the morning brief — read one item aloud.</li>
     <li>2 · Click into the flagged school; show the signal's evidence.</li>
@@ -410,6 +474,7 @@ const DEEP = [
     <li>Penny performs tasks on request — files documents, creates records, drafts reports — and asks permission before every change.</li></ul></div>`,
 
   /* 4 · validation */ `
+  <div class="dd wide"><h3>Say it like this — the 30-second script</h3><p class="script">“Fair question: is anyone else doing this? Pieces of it — yes. And honestly, that’s the proof. Schools already pay real money for every dim star on this map. What doesn’t exist is the whole picture, in one place, at a price a two-hundred-student school can say yes to. There are thirty thousand private schools in this country, most under four hundred students, and a hundred and seventy dioceses running networks. <i>[gesture at the gold star]</i> That corner was empty. We built KYRO to live there.”</p></div>
   <div class="dd"><h3>Honest positioning (use these words)</h3>
     <ul><li>"Are others doing this? Pieces of it, yes — and that's the proof schools pay for it. Nobody does all of it, in one place, at small-school pricing."</li>
     <li>Never trash competitors — respect them into a corner: each is excellent at its slice and priced for schools three times our buyer's size.</li></ul></div>
@@ -424,6 +489,7 @@ const DEEP = [
     <li>Buying trigger moments: accreditation cycles, new head of school, board pressure after a deficit surprise.</li></ul></div>`,
 
   /* 5 · advantage */ `
+  <div class="dd wide"><h3>Say it like this — the 30-second script</h3><p class="script">“So what’s actually different? Everything in gold. The whole school in one login. An AI chief of staff that’s privacy-safe by construction — it works from counts, and it cannot name a student. Cash forecasting straight from QuickBooks with zero typing. A board packet that drafts its own narrative. And the superintendent roll-up that, at this level, nobody else offers at all. Setup is an afternoon. And the price was designed for exactly the schools everyone else priced out.”</p></div>
   <div class="dd"><h3>Objection handling</h3>
     <div class="qa"><b>"We already have Blackbaud / FACTS."</b><span>"Keep what works — KYRO reads your books and roster rather than replacing them. The question is who assembles the operating picture. Today that's a person. With KYRO it's every morning, automatically."</span></div>
     <div class="qa"><b>"We don't see a problem — we have someone who handles all that."</b><span>"And they're clearly excellent — that's exactly why it works today. It's also a single point of failure. KYRO doesn't replace that person; it gives them their weekends back, makes their knowledge part of the school instead of their memory, and frees them for the judgment work you actually hired them for."</span></div>
@@ -440,6 +506,7 @@ const DEEP = [
     <li>For dioceses: per-school network pricing with the org console included — the thing they literally cannot buy elsewhere.</li></ul></div>`,
 
   /* 6 · close */ `
+  <div class="dd wide"><h3>Say it like this — the 30-second script</h3><p class="script">“So here’s the ask — and it’s small. Give me one afternoon with your books; last June’s trial balance is enough. I’ll hand you back your own board packet and your first morning brief. From fragmented systems to timely leadership action — in a day. <i>[beat]</i> That’s KYRO.”</p></div>
   <div class="dd"><h3>Landing the close</h3>
     <ul><li>Ask for the smallest yes: "Send me last June's trial balance and I'll show you your own board packet this week."</li>
     <li>Or: "Give me one afternoon with your bookkeeper — the first morning brief arrives tomorrow."</li>
