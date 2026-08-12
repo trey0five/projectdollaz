@@ -40,8 +40,8 @@ describe('enrollment_change_yoy — registry wiring', () => {
     // student_teacher_ratio, enrollment_vs_plan (Phase 2) and the six Phase-6
     // hr/planning keys were appended after enrollment_change_yoy (see registry),
     // so it is now ninth-to-last.
-    expect(METRIC_KEYS[METRIC_KEYS.length - 9]).toBe('enrollment_change_yoy')
-    expect(METRIC_KEYS).toHaveLength(21)
+    expect(METRIC_KEYS[12]).toBe('enrollment_change_yoy')
+    expect(METRIC_KEYS).toHaveLength(25)
     // The first 12 are unchanged.
     expect(METRIC_KEYS.slice(0, 12)).toEqual([
       'operating_margin', 'days_cash_on_hand', 'months_operating_reserve',
@@ -231,7 +231,7 @@ describe('enrollment_change_yoy — org scope recomputes from summed enrollment'
       schoolWithPrior('B', 40, 40),
     ])
     expect(org.find((x) => x.key === 'operating_margin')!.available).toBe(true)
-    expect(org).toHaveLength(21)
+    expect(org).toHaveLength(25)
   })
 })
 

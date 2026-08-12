@@ -30,6 +30,7 @@ export const MODULE_KEYS = [
   'advancement',
   'accreditation',
   'strategy',
+  'academics',
 ] as const
 
 export type ModuleKey = (typeof MODULE_KEYS)[number]
@@ -116,6 +117,12 @@ export const MODULE_META: Record<ModuleKey, ModuleDef> = {
     key: 'strategy',
     label: 'Strategic Planning',
     description: 'Strategic plan, pillars, measurable goals & execution initiatives.',
+    core: false,
+  },
+  academics: {
+    key: 'academics',
+    label: 'Academics',
+    description: 'Grades, lesson plans & standardized assessments — the classroom, measured.',
     core: false,
   },
 }

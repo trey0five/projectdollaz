@@ -18,7 +18,14 @@ export type MetricUnit = 'percent' | 'days' | 'months' | 'ratio' | 'currency' | 
  * DOMAIN_TO_MODULE gate (a Record<MetricDomain,…>, so adding a member here
  * deliberately FORCES an explicit gate entry there).
  */
-export type MetricDomain = 'finance' | 'operations' | 'aid' | 'enrollment' | 'hr' | 'planning'
+export type MetricDomain =
+  | 'finance'
+  | 'operations'
+  | 'aid'
+  | 'enrollment'
+  | 'hr'
+  | 'planning'
+  | 'academics'
 
 /**
  * How a metric rolls up from a single school to the whole organization. This is
@@ -124,6 +131,12 @@ export type MetricKey =
   | 'forecast_vs_budget_net'
   | 'forecast_operating_margin'
   | 'plan_readiness'
+  // Academics — the classroom domain. Appended LAST so every prior key's order
+  // (and therefore every saved dashboard layout) stays byte-identical.
+  | 'act_composite'
+  | 'sat_total'
+  | 'benchmark_attainment'
+  | 'assessment_participation_rate'
 
 /**
  * Operational reference data for a period — enrollment + financial aid figures
@@ -202,6 +215,29 @@ export interface PeriodOperational {
   /** Phase 6 Planning — the artifact denominator (constant 3 per school-period;
    *  Σ3·n at org scope). Extensive. */
   planArtifactsTotal?: number | null
+  /**
+   * Academics — EXTENSIVE assessment components, API-threaded from the school's
+   * derived assessment aggregate. Sums and counts rather than averages, because
+   * the org value must be Σscore ÷ Σtested (tester-weighted): averaging school
+   * averages would let a twelve-tester school move the network as much as a
+   * three-hundred-tester one. Absent/null means the school has no scored file for
+   * the period → the metric resolves available:false, never a fabricated 0.
+   */
+  actScoreSum?: number | null
+  /** Academics — students who sat the ACT (denominator of act_composite). */
+  actTestedCount?: number | null
+  /** Academics — Σ of SAT totals. Extensive. */
+  satScoreSum?: number | null
+  /** Academics — students who sat the SAT. Extensive. */
+  satTestedCount?: number | null
+  /** Academics — students meeting every college-readiness benchmark. Extensive. */
+  benchmarkMetCount?: number | null
+  /** Academics — students with a benchmark determination (the denominator; a
+   *  student with no scored sections cannot be counted either way). Extensive. */
+  benchmarkTestedCount?: number | null
+  /** Academics — students ELIGIBLE to sit the exam (the participation
+   *  denominator, typically the tested grade's enrollment). Extensive. */
+  assessmentEligibleCount?: number | null
 }
 
 /**

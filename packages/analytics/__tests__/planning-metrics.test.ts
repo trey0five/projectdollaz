@@ -43,12 +43,14 @@ function record(cur: PeriodOperational) {
 
 describe('Phase 6 planning — registry wiring', () => {
   it('the three planning keys are appended LAST in the frozen contract order', () => {
-    expect(METRIC_KEYS.slice(18)).toEqual([
+    // Positions are absolute, not "from the end": academics appended four keys
+    // after these, and the planning trio must still sit exactly where it did.
+    expect(METRIC_KEYS.slice(18, 21)).toEqual([
       'forecast_vs_budget_net',
       'forecast_operating_margin',
       'plan_readiness',
     ])
-    expect(METRIC_KEYS).toHaveLength(21)
+    expect(METRIC_KEYS).toHaveLength(25)
   })
 
   it('metadata: planning domain, directions, units, rollup rules, bands', () => {

@@ -36,7 +36,7 @@ describe('enrollment_vs_plan — registry wiring', () => {
     expect(METRIC_KEYS).toContain('enrollment_vs_plan')
     // The six Phase-6 hr/planning keys were appended AFTER enrollment_vs_plan,
     // so it is now seventh-to-last (the prior 15-key order stays byte-identical).
-    expect(METRIC_KEYS[METRIC_KEYS.length - 7]).toBe('enrollment_vs_plan')
+    expect(METRIC_KEYS[14]).toBe('enrollment_vs_plan')
     const m = METRIC_META.find((x) => x.key === 'enrollment_vs_plan')!
     expect(m.domain).toBe('enrollment')
     expect(m.goodDirection).toBe('higher')

@@ -33,6 +33,10 @@ import { teachingStaffShare } from './metrics/teachingStaffShare.js'
 import { forecastVsBudgetNet } from './metrics/forecastVsBudgetNet.js'
 import { forecastOperatingMargin } from './metrics/forecastOperatingMargin.js'
 import { planReadiness } from './metrics/planReadiness.js'
+import { actComposite } from './metrics/actComposite.js'
+import { satTotal } from './metrics/satTotal.js'
+import { benchmarkAttainment } from './metrics/benchmarkAttainment.js'
+import { assessmentParticipationRate } from './metrics/assessmentParticipationRate.js'
 
 export const METRIC_REGISTRY: Record<MetricKey, MetricDef> = {
   operating_margin: operatingMargin,
@@ -62,6 +66,12 @@ export const METRIC_REGISTRY: Record<MetricKey, MetricDef> = {
   forecast_vs_budget_net: forecastVsBudgetNet,
   forecast_operating_margin: forecastOperatingMargin,
   plan_readiness: planReadiness,
+  // Academics — the classroom domain (assessment components from the derived
+  // school aggregate; tester-weighted at org scope).
+  act_composite: actComposite,
+  sat_total: satTotal,
+  benchmark_attainment: benchmarkAttainment,
+  assessment_participation_rate: assessmentParticipationRate,
 }
 
 /** Stable ordering for the dashboard's default layout (Tier-1 first, then Tier-2). */
@@ -92,6 +102,11 @@ export const METRIC_KEYS: MetricKey[] = [
   'forecast_vs_budget_net',
   'forecast_operating_margin',
   'plan_readiness',
+  // Academics — appended LAST (keeps every prior key's order byte-identical).
+  'act_composite',
+  'sat_total',
+  'benchmark_attainment',
+  'assessment_participation_rate',
 ]
 
 /** All metric defs in default-layout order. */

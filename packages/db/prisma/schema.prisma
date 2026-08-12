@@ -69,11 +69,12 @@ model Organization {
   name      String
   createdAt DateTime @default(now()) @map("created_at")
 
-  schools          School[]
-  auditLog         AuditLog[]
-  orgQboConnection OrgQboConnection?
-  diocesanImports  DiocesanEnrollmentImport[]
-  nameAliases      SchoolNameAlias[]
+  schools           School[]
+  auditLog          AuditLog[]
+  orgQboConnection  OrgQboConnection?
+  diocesanImports   DiocesanEnrollmentImport[]
+  nameAliases       SchoolNameAlias[]
+  assessmentImports AssessmentImport[]
 
   @@map("organizations")
 }
@@ -172,6 +173,14 @@ model School {
   professionalDevelopment   ProfessionalDevelopment[]
   // ── AIC Phase G (additive) — the improvement observation series.
   improvementProgressEvents ImprovementProgressEvent[]
+  // ── Academics (additive) — the classroom domain.
+  assessmentImports         AssessmentImport[]
+  assessmentResults         AssessmentResult[]
+  assessmentAggregates      AssessmentSchoolAggregate[]
+  assessmentObjectives      AssessmentObjectiveAggregate[]
+  courses                   Course[]
+  gradeRecords              GradeRecord[]
+  lessonPlans               LessonPlan[]
 
   @@index([organizationId])
   @@map("schools")
@@ -308,6 +317,9 @@ model User {
   governancePersons                GovernancePerson[]         @relation("GovernancePersonUser")
   governancePersonsUpdated         GovernancePerson[]         @relation("GovernancePersonUpdatedBy")
   createdStudents                  Student[]                  @relation("StudentCreatedBy")
+  // ── Academics (additive) — audit stamps on the classroom registers.
+  assessmentImportsUploaded        AssessmentImport[]         @relation("AssessmentImportUploadedBy")
+  lessonPlansCreated               LessonPlan[]               @relation("LessonPlanCreatedBy")
   // ── AIC Phase F (additive) — audit stamps on the two new registers.
   enrollmentImportsUploaded        EnrollmentImport[]         @relation("EnrollmentImportUploadedBy")
   clearancesCreated                Clearance[]                @relation("ClearanceCreatedBy")
@@ -683,6 +695,18 @@ model PeriodOperationalData {
   enrollmentSupersededManual    Int?      @map("enrollment_superseded_manual")
   enrollmentSupersededManualFte Decimal?  @map("enrollment_superseded_manual_fte") @db.Decimal(10, 2)
   enrollmentSupersededAt        DateTime? @map("enrollment_superseded_at")
+  /// Academics — EXTENSIVE components for tester-weighted org roll-up. A diocesan
+  /// average is Σ(score)/Σ(tested), never the mean of school means: a 12-tester
+  /// school must not swing the network like a 300-tester school. Promoted from the
+  /// derived school aggregate at ingest; NULL when a file carried averages only,
+  /// in which case the org metric honestly resolves available:false.
+  actScoreSum                   Int?      @map("act_score_sum")
+  actTestedCount                Int?      @map("act_tested_count")
+  satScoreSum                   Int?      @map("sat_score_sum")
+  satTestedCount                Int?      @map("sat_tested_count")
+  benchmarkMetCount             Int?      @map("benchmark_met_count")
+  benchmarkTestedCount          Int?      @map("benchmark_tested_count")
+  assessmentEligibleCount       Int?      @map("assessment_eligible_count")
   updatedByUserId               String?   @map("updated_by_user_id") @db.Uuid
   createdAt                     DateTime  @default(now()) @map("created_at")
   updatedAt                     DateTime  @updatedAt @map("updated_at")
@@ -2322,8 +2346,10 @@ model Student {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  school        School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  createdByUser User?  @relation("StudentCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  school            School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  createdByUser     User?              @relation("StudentCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  assessmentResults AssessmentResult[]
+  gradeRecords      GradeRecord[]
 
   @@unique([schoolId, externalId])
   @@index([schoolId, status])
@@ -2942,14 +2968,14 @@ model CashAssumptions {
   schoolId String @unique @map("school_id") @db.Uuid
 
   /// Share of billed tuition on each plan; keys annual/semiannual/monthly10/monthly12.
-  planMix Json @map("plan_mix")
+  planMix              Json      @map("plan_mix")
   /// 0..1 — the one genuinely estimated input in the whole model.
-  collectionRate       Decimal @map("collection_rate") @db.Decimal(5, 4)
+  collectionRate       Decimal   @map("collection_rate") @db.Decimal(5, 4)
   /// 'derived' | 'entered' — never presented as the other.
-  collectionRateSource String  @default("entered") @map("collection_rate_source")
+  collectionRateSource String    @default("entered") @map("collection_rate_source")
   /// The balance the school must not drop below. NULL means no threshold, and
   /// then no shortfall is reported — inventing a floor invents an alarm.
-  reserveThreshold     Decimal? @map("reserve_threshold") @db.Decimal(14, 2)
+  reserveThreshold     Decimal?  @map("reserve_threshold") @db.Decimal(14, 2)
   /// ISO date the tuition billing calendar starts, e.g. the first draft date.
   firstBillingDate     DateTime? @map("first_billing_date") @db.Date
 
@@ -2979,10 +3005,10 @@ model CashProjectionRun {
   id       String @id @default(uuid()) @db.Uuid
   schoolId String @map("school_id") @db.Uuid
 
-  asOfDate    DateTime @map("as_of_date") @db.Date
-  horizonEnd  DateTime @map("horizon_end") @db.Date
-  granularity String
-  openingCash Decimal  @map("opening_cash") @db.Decimal(14, 2)
+  asOfDate      DateTime @map("as_of_date") @db.Date
+  horizonEnd    DateTime @map("horizon_end") @db.Date
+  granularity   String
+  openingCash   Decimal  @map("opening_cash") @db.Decimal(14, 2)
   /// 'keyed' | 'trial_balance'
   openingSource String   @map("opening_source")
   /// The trial-balance cash figure at as-of, for the cross-check. Null when none.
@@ -3029,16 +3055,16 @@ model CashFlowLineAdjustment {
   schoolId String @map("school_id") @db.Uuid
 
   /// The provenance key this adjustment targets. One adjustment per line.
-  sourceRef String @map("source_ref")
+  sourceRef      String   @map("source_ref")
   /// 'exclude' | 'override'
-  kind      String
+  kind           String
   /// Required iff kind is 'override': the group's new total. The group's events
   /// scale proportionally so its timing shape is preserved.
   overrideAmount Decimal? @map("override_amount") @db.Decimal(14, 2)
   /// Why — shown beside the adjusted line so a later reader knows who decided what.
-  note String?
+  note           String?
   /// Soft delete: a cleared adjustment must stay resolvable from frozen runs.
-  active Boolean @default(true)
+  active         Boolean  @default(true)
 
   createdByUserId String?  @map("created_by_user_id") @db.Uuid
   createdAt       DateTime @default(now()) @map("created_at")
@@ -3049,4 +3075,251 @@ model CashFlowLineAdjustment {
   @@unique([schoolId, sourceRef])
   @@index([schoolId, active])
   @@map("cash_flow_line_adjustments")
+}
+
+// ═══ ACADEMICS — the classroom domain (assessments, gradebook, lesson plans) ═══
+//
+// FERPA SHAPE, STATED ONCE: identity lives in exactly two tables — AssessmentResult
+// and GradeRecord — and those are read ONLY by role-gated register endpoints. Every
+// analytics, briefing, org-roll-up and Penny read goes through
+// AssessmentSchoolAggregate / groupBy counts, which carry no identity column at all.
+// That is a structural guarantee (the shape cannot leak a name because it never
+// loads one), the same discipline as the twin registers' counts-only reads.
+
+/// Provenance for one ingest — file or sync, school-scoped or diocese-scoped.
+/// Append-only: reverting an import deletes the rows it wrote, never this record's
+/// history. `warnings` holds COUNTS AND REASONS ONLY ("3 rows had no test date"),
+/// never a student name — this row is read by summary surfaces.
+model AssessmentImport {
+  id                 String   @id @default(uuid()) @db.Uuid
+  /// Exactly one of schoolId / organizationId is set: a per-school upload vs a
+  /// diocesan file covering every school at once.
+  schoolId           String?  @map("school_id") @db.Uuid
+  organizationId     String?  @map("organization_id") @db.Uuid
+  kind               String   @default("upload") // upload | sync | manual
+  provider           String? // oneroster_gradebook | collegeboard | act (sync only)
+  scope              String // student | school_aggregate
+  fileName           String?  @map("file_name")
+  testTypeHint       String?  @map("test_type_hint")
+  yearHint           Int?     @map("year_hint")
+  rowsParsed         Int      @default(0) @map("rows_parsed")
+  resultsCreated     Int      @default(0) @map("results_created")
+  aggregatesUpserted Int      @default(0) @map("aggregates_upserted")
+  studentsMatched    Int      @default(0) @map("students_matched")
+  studentsUnmatched  Int      @default(0) @map("students_unmatched")
+  warnings           String[] @default([])
+  uploadedByUserId   String?  @map("uploaded_by_user_id") @db.Uuid
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  school       School?                        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  organization Organization?                  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  uploadedBy   User?                          @relation("AssessmentImportUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+  results      AssessmentResult[]
+  aggregates   AssessmentSchoolAggregate[]
+  objectives   AssessmentObjectiveAggregate[]
+  gradeRecords GradeRecord[]
+
+  @@index([schoolId, createdAt])
+  @@index([organizationId, createdAt])
+  @@map("assessment_imports")
+}
+
+/// STUDENT-LEVEL score row. `studentId` links to the roster when the row matched;
+/// an UNMATCHED row still ingests (matchName kept for the review register) and still
+/// counts toward the school aggregate — a school with no roster loaded gets full
+/// dashboards, which is the whole point of accepting a scores file on its own.
+model AssessmentResult {
+  id              String    @id @default(uuid()) @db.Uuid
+  schoolId        String    @map("school_id") @db.Uuid
+  importId        String?   @map("import_id") @db.Uuid
+  studentId       String?   @map("student_id") @db.Uuid
+  matchStatus     String    @default("unmatched") @map("match_status") // auto | manual | unmatched
+  matchExternalId String?   @map("match_external_id")
+  /// The name exactly as the file spelled it. Register-gated; never selected by an
+  /// analytics, briefing or assistant read.
+  matchName       String?   @map("match_name")
+  testType        String    @map("test_type") // TEST_TYPE_KEYS
+  schoolYear      Int       @map("school_year") // spring year of administration
+  testDate        DateTime? @map("test_date") @db.Date
+  gradeLevel      String?   @map("grade_level")
+  /// The headline number: an ACT composite (1–36), an SAT total (400–1600), or a
+  /// norm-referenced total (e.g. a TerraNova national percentile, 1–99).
+  composite       Int?
+  /// WHAT the numbers mean — 'scale' (ACT/SAT points), 'percentile' (national
+  /// percentile rank), 'nce' (normal-curve equivalent). Carried per row because a
+  /// percentile and a scale score must never be averaged into one figure, and an
+  /// axis labelled "score" while holding percentiles is a lie.
+  scoreType       String    @default("scale") @map("score_type")
+  /// Per-subject scores; the vocabulary follows the test family:
+  /// ACT {english,math,reading,science} · SAT {erw,math} ·
+  /// norm-referenced {reading,language,math,science,socialStudies}.
+  sectionScores   Json?     @map("section_scores") @db.JsonB
+  /// Per-section booleans derived server-side at ingest against the published
+  /// college-readiness benchmarks, so attainment never depends on a file column.
+  benchmarksMet   Json?     @map("benchmarks_met") @db.JsonB
+  source          String    @default("upload") // upload | api | manual
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  school  School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student Student?          @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  import  AssessmentImport? @relation(fields: [importId], references: [id], onDelete: SetNull)
+
+  @@index([schoolId, testType, schoolYear])
+  @@index([studentId])
+  @@index([importId])
+  @@map("assessment_results")
+}
+
+/// THE ONE DOOR every safe read uses. Either ingested directly (a school×year
+/// averages file — the common diocesan case) or derived from student rows at
+/// ingest; `derivation` keeps both without either clobbering the other, and the
+/// dashboard prefers 'derived' when present because it carries tester counts.
+/// `gradeLevel` defaults to the sentinel "all" rather than NULL: Postgres treats
+/// NULLs as distinct, which would defeat the unique and duplicate on re-ingest.
+model AssessmentSchoolAggregate {
+  id                String   @id @default(uuid()) @db.Uuid
+  schoolId          String   @map("school_id") @db.Uuid
+  importId          String?  @map("import_id") @db.Uuid
+  schoolYear        Int      @map("school_year")
+  testType          String   @map("test_type")
+  gradeLevel        String   @default("all") @map("grade_level")
+  derivation        String // ingested | derived
+  scoreType         String   @default("scale") @map("score_type")
+  testedCount       Int?     @map("tested_count")
+  eligibleCount     Int?     @map("eligible_count")
+  avgComposite      Decimal? @map("avg_composite") @db.Decimal(6, 2)
+  sectionAverages   Json?    @map("section_averages") @db.JsonB
+  /// How students SPREAD, not just where the mean sits — a school can hold a
+  /// respectable average while a quarter of its students sit in the bottom band.
+  /// Counts keyed by achievement level ({below,approaching,proficient,advanced} or
+  /// quartiles), optionally nested per subject.
+  distribution      Json?    @db.JsonB
+  benchmarkMetCount Int?     @map("benchmark_met_count")
+  benchmarkRates    Json?    @map("benchmark_rates") @db.JsonB
+  participationRate Decimal? @map("participation_rate") @db.Decimal(5, 4)
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  school School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  import AssessmentImport? @relation(fields: [importId], references: [id], onDelete: SetNull)
+
+  @@unique([schoolId, schoolYear, testType, gradeLevel, derivation])
+  @@index([schoolId, schoolYear])
+  @@map("assessment_school_aggregates")
+}
+
+/// OBJECTIVE-LEVEL mastery — the grain that turns "Math is weak" into "Math:
+/// Measurement, grade 5 — 41% mastery." One row per school × year × grade ×
+/// subject × objective, sourced from an objective summary (TerraNova and its peers
+/// all publish this shape). Aggregate-only by design: the instructional
+/// conversation is about a class, never about a named child.
+model AssessmentObjectiveAggregate {
+  id             String   @id @default(uuid()) @db.Uuid
+  schoolId       String   @map("school_id") @db.Uuid
+  importId       String?  @map("import_id") @db.Uuid
+  schoolYear     Int      @map("school_year")
+  testType       String   @map("test_type")
+  gradeLevel     String   @default("all") @map("grade_level")
+  subject        String
+  /// Publisher's objective code when the file carries one (e.g. '05'), else null.
+  objectiveCode  String?  @map("objective_code")
+  objectiveLabel String   @map("objective_label")
+  /// Objective Performance Index (0–100) — the publisher's mastery estimate.
+  opi            Decimal? @db.Decimal(5, 2)
+  /// Student counts by mastery band: {mastery, partial, nonMastery}.
+  masteryCounts  Json?    @map("mastery_counts") @db.JsonB
+  testedCount    Int?     @map("tested_count")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  school School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  import AssessmentImport? @relation(fields: [importId], references: [id], onDelete: SetNull)
+
+  @@unique([schoolId, schoolYear, testType, gradeLevel, subject, objectiveLabel])
+  @@index([schoolId, schoolYear, subject])
+  @@map("assessment_objective_aggregates")
+}
+
+/// A class/section. `externalId` is the OneRoster class sourcedId, which makes a
+/// re-sync idempotent. `teacherName` is register-gated PII.
+model Course {
+  id          String   @id @default(uuid()) @db.Uuid
+  schoolId    String   @map("school_id") @db.Uuid
+  name        String
+  subject     String?
+  gradeLevel  String?  @map("grade_level")
+  term        String?
+  schoolYear  Int?     @map("school_year")
+  teacherName String?  @map("teacher_name")
+  externalId  String?  @map("external_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  school       School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  gradeRecords GradeRecord[]
+
+  @@unique([schoolId, externalId])
+  @@index([schoolId, schoolYear])
+  @@map("courses")
+}
+
+/// One student's mark in one course for one term. Same match triad as
+/// AssessmentResult, same rule: summary reads are groupBy counts/averages that
+/// never select an identity column.
+model GradeRecord {
+  id              String   @id @default(uuid()) @db.Uuid
+  schoolId        String   @map("school_id") @db.Uuid
+  courseId        String?  @map("course_id") @db.Uuid
+  studentId       String?  @map("student_id") @db.Uuid
+  importId        String?  @map("import_id") @db.Uuid
+  matchStatus     String   @default("unmatched") @map("match_status")
+  matchExternalId String?  @map("match_external_id")
+  matchName       String?  @map("match_name")
+  schoolYear      Int?     @map("school_year")
+  term            String?
+  numericGrade    Decimal? @map("numeric_grade") @db.Decimal(5, 2)
+  letterGrade     String?  @map("letter_grade")
+  /// OneRoster result sourcedId — the idempotency key for a re-sync.
+  externalId      String?  @map("external_id")
+  source          String   @default("upload")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  school  School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  course  Course?           @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  student Student?          @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  import  AssessmentImport? @relation(fields: [importId], references: [id], onDelete: SetNull)
+
+  @@unique([schoolId, externalId])
+  @@index([schoolId, schoolYear])
+  @@index([courseId])
+  @@index([studentId])
+  @@map("grade_records")
+}
+
+/// The lesson-plan register — a standing school-scoped list (no fiscal period).
+/// Attached files become KnowledgeDocument rows pointed back here by
+/// sourceType/sourceRef, so there is one document store, not two.
+model LessonPlan {
+  id              String    @id @default(uuid()) @db.Uuid
+  schoolId        String    @map("school_id") @db.Uuid
+  title           String
+  subject         String?
+  gradeLevel      String?   @map("grade_level")
+  teacherName     String?   @map("teacher_name")
+  status          String    @default("draft") // LESSON_PLAN_STATUS_KEYS
+  plannedOn       DateTime? @map("planned_on") @db.Date
+  weekOf          DateTime? @map("week_of") @db.Date
+  notes           String?
+  createdByUserId String?   @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  school        School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  createdByUser User?  @relation("LessonPlanCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([schoolId, status])
+  @@index([schoolId, weekOf])
+  @@map("lesson_plans")
 }

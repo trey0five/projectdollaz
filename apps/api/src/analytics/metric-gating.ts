@@ -52,6 +52,7 @@ export const DOMAIN_TO_MODULE: Record<MetricDomain, ModuleKey> = {
   enrollment: 'enrollment',
   hr: 'hr',
   planning: 'planning',
+  academics: 'academics',
 }
 
 /**
@@ -85,31 +86,35 @@ export interface EntitlementResolver {
  * The set of modules a school is entitled to that are REACHABLE by metric gating.
  * 'finance' is seeded true UNCONDITIONALLY (never behind a fragile billing call —
  * these surfaces already run behind the entitlement guard / getOwnedPeriod, so the
- * school is entitled and licenses finance). Only 'enrollment', 'hr' and 'planning'
- * are resolved via isEntitledForModule, each FAIL-CLOSED (.catch(()=>false)).
+ * school is entitled and licenses finance). Only 'enrollment', 'hr', 'planning' and
+ * 'academics' are resolved via isEntitledForModule, each FAIL-CLOSED
+ * (.catch(()=>false)) — a billing hiccup HIDES a module's metrics rather than
+ * leaking them.
  */
 export async function entitledModulesForSchool(
   schoolId: string,
   billing: EntitlementResolver,
 ): Promise<Set<ModuleKey>> {
   const set = new Set<ModuleKey>([FINANCE_MODULE])
-  const [enrollment, hr, planning] = await Promise.all([
+  const [enrollment, hr, planning, academics] = await Promise.all([
     billing.isEntitledForModule(schoolId, 'enrollment').catch(() => false),
     billing.isEntitledForModule(schoolId, 'hr').catch(() => false),
     billing.isEntitledForModule(schoolId, 'planning').catch(() => false),
+    billing.isEntitledForModule(schoolId, 'academics').catch(() => false),
   ])
   if (enrollment) set.add('enrollment')
   if (hr) set.add('hr')
   if (planning) set.add('planning')
+  if (academics) set.add('academics')
   return set
 }
 
 /**
  * The org-level reachable-module set = the WIDEST licensed set across the
  * contributing schools (mirrors the shipped "org ceiling = widest in-org role"
- * briefing precedent): keep an enrollment/hr/planning org metric if ANY
+ * briefing precedent): keep an enrollment/hr/planning/academics org metric if ANY
  * contributing school is entitled for that module. 'finance' is always present;
- * enrollment/hr/planning are OR-ed over the schools, each lookup FAIL-CLOSED.
+ * the rest are OR-ed over the schools, each lookup FAIL-CLOSED.
  */
 export async function entitledModulesForOrg(
   schoolIds: string[],
@@ -121,6 +126,7 @@ export async function entitledModulesForOrg(
       billing.isEntitledForModule(id, 'enrollment').catch(() => false).then((v) => ['enrollment', v] as const),
       billing.isEntitledForModule(id, 'hr').catch(() => false).then((v) => ['hr', v] as const),
       billing.isEntitledForModule(id, 'planning').catch(() => false).then((v) => ['planning', v] as const),
+      billing.isEntitledForModule(id, 'academics').catch(() => false).then((v) => ['academics', v] as const),
     ]),
   )
   for (const [mod, ok] of results) if (ok) set.add(mod as ModuleKey)

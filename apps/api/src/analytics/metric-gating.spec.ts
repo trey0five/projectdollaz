@@ -51,10 +51,11 @@ function billingMock(opts: {
 }
 
 describe('domain → module map', () => {
-  it('finance/operations/aid all map to finance; enrollment→enrollment; hr→hr; planning→planning', () => {
+  it('finance/operations/aid map to finance; every other domain owns its module', () => {
     expect(DOMAIN_TO_MODULE).toEqual({
       finance: 'finance', operations: 'finance', aid: 'finance',
       enrollment: 'enrollment', hr: 'hr', planning: 'planning',
+      academics: 'academics',
     })
   })
 

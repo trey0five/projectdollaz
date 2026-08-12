@@ -53,7 +53,7 @@ describe('metric metadata', () => {
   it('every metric declares a domain + a valid scopeAggregation', () => {
     for (const def of ALL_METRICS) {
       expect(def.domain).toBeDefined()
-      expect(['finance', 'operations', 'aid', 'enrollment', 'hr', 'planning']).toContain(def.domain)
+      expect(['finance', 'operations', 'aid', 'enrollment', 'hr', 'planning', 'academics']).toContain(def.domain)
       expect(def.scopeAggregation).toBeDefined()
       expect(SCOPE_RULES).toContain(def.scopeAggregation)
     }
