@@ -95,7 +95,12 @@ export class DataExportService {
    * Tell every OTHER owner. Best-effort by construction: a notification that
    * fails must never be the reason a school cannot get its own data out.
    */
-  private async tellTheOtherOwners(schoolId: string, actor: User, jobId: string): Promise<void> {
+  private async tellTheOtherOwners(
+    schoolId: string,
+    actor: User,
+    jobId: string,
+    orgSchools?: number,
+  ): Promise<void> {
     try {
       const owners = await this.prisma.membership.findMany({
         where: { schoolId, role: 'owner', userId: { not: actor.id } },
@@ -107,12 +112,18 @@ export class DataExportService {
           this.notifications.notify({
             userId: m.userId,
             actorUserId: actor.id,
-            subject: 'A full data export was requested',
-            body:
-              `${who} requested a complete export of your school's records in KYRO — every module, ` +
-              `including the student roster and the audit log. This is a normal thing for an owner to do, ` +
-              `and you are being told because it is a complete copy leaving the platform. ` +
-              `If you did not expect it, speak to them.`,
+            subject: orgSchools
+              ? 'A network-wide data export included your school'
+              : 'A full data export was requested',
+            body: orgSchools
+              ? `${who} requested a complete export covering ${orgSchools} schools in your organization, ` +
+                `including yours — every module, with the student roster and the audit log. You are being told ` +
+                `because it is a complete copy of your school's records leaving the platform. ` +
+                `If you did not expect it, speak to them.`
+              : `${who} requested a complete export of your school's records in KYRO — every module, ` +
+                `including the student roster and the audit log. This is a normal thing for an owner to do, ` +
+                `and you are being told because it is a complete copy leaving the platform. ` +
+                `If you did not expect it, speak to them.`,
             link: '/settings/data',
             senderLabel: 'KYRO',
           }),
@@ -120,6 +131,156 @@ export class DataExportService {
       )
     } catch (err) {
       this.logger.warn(`export ${jobId}: could not notify co-owners — ${String(err)}`)
+    }
+  }
+
+  /**
+   * The diocesan export: every school in the organization, in one archive.
+   *
+   * Scoped by what the CALLER may actually see, not by what the org contains —
+   * a superintendent who owns three schools of twenty gets three. The archive is
+   * foldered by school so it is navigable rather than one flat pile, and each
+   * school's owners are told, because a network-wide pull is a bigger act than a
+   * principal taking their own school's records.
+   */
+  async requestOrg(actor: User, organizationId: string): Promise<{ id: string; status: string; schools: number }> {
+    const schools = await this.writableSchools(actor, organizationId)
+    if (schools.length === 0) {
+      throw new ForbiddenException('You do not own any school in this organization.')
+    }
+
+    const job = await this.prisma.dataExport.create({
+      data: {
+        organizationId,
+        requestedByUserId: actor.id,
+        status: 'running',
+        scope: 'organization',
+      },
+      select: { id: true, status: true },
+    })
+
+    await Promise.all(
+      schools.map((sc) =>
+        this.audit.write({
+          organizationId,
+          schoolId: sc.id,
+          userId: actor.id,
+          action: 'export.requested',
+          targetType: 'dataExport',
+          targetId: job.id,
+          metadata: { scope: 'organization', schools: schools.length },
+        }),
+      ),
+    )
+    for (const sc of schools) await this.tellTheOtherOwners(sc.id, actor, job.id, schools.length)
+
+    void this.runOrg(job.id, organizationId, schools).catch((err: unknown) => {
+      this.logger.error(`org export ${job.id} failed: ${String(err)}`)
+    })
+
+    return { ...job, schools: schools.length }
+  }
+
+  /** Schools in the org this caller OWNS — the same floor the school route uses. */
+  private async writableSchools(actor: User, organizationId: string): Promise<Array<{ id: string; name: string }>> {
+    const memberships = await this.prisma.membership.findMany({
+      where: { userId: actor.id, role: 'owner', school: { organizationId } },
+      select: { school: { select: { id: true, name: true } } },
+    })
+    return memberships.map((m) => m.school).filter((sc): sc is { id: string; name: string } => !!sc)
+  }
+
+  /** Recent exports for an organization. */
+  async listOrg(organizationId: string) {
+    return this.prisma.dataExport.findMany({
+      where: { organizationId },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      select: {
+        id: true,
+        status: true,
+        scope: true,
+        byteSize: true,
+        rowCounts: true,
+        error: true,
+        expiresAt: true,
+        createdAt: true,
+        completedAt: true,
+      },
+    })
+  }
+
+  /** Download an org archive. Owner of at least one school in the org. */
+  async orgDownloadUrl(actor: User, organizationId: string, id: string): Promise<{ url: string }> {
+    if ((await this.writableSchools(actor, organizationId)).length === 0) {
+      throw new ForbiddenException('You do not own any school in this organization.')
+    }
+    const job = await this.prisma.dataExport.findFirst({
+      where: { id, organizationId },
+      select: { status: true, fileKey: true, expiresAt: true },
+    })
+    if (!job) throw new NotFoundException('Export not found.')
+    if (job.status !== 'ready' || !job.fileKey) throw new ForbiddenException('That export is not ready to download.')
+    if (job.expiresAt && job.expiresAt.getTime() < Date.now()) {
+      throw new ForbiddenException('That export has expired. Request a new one — it takes a moment.')
+    }
+    await this.audit.write({
+      organizationId,
+      userId: actor.id,
+      action: 'export.downloaded',
+      targetType: 'dataExport',
+      targetId: id,
+      metadata: { scope: 'organization' },
+    })
+    return { url: await this.storage.presignGetUrl(job.fileKey) }
+  }
+
+  private async runOrg(
+    jobId: string,
+    organizationId: string,
+    schools: Array<{ id: string; name: string }>,
+  ): Promise<void> {
+    const entries: ZipEntry[] = []
+    const rowCounts: Record<string, number> = {}
+    try {
+      for (const sc of schools) {
+        // Folder per school, named readably. A twenty-school diocese opening one
+        // flat directory of six hundred CSVs has been handed a puzzle, not data.
+        const slug = sc.name.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || sc.id
+        for (const table of EXPORTED_TABLES) {
+          const rows = await this.readTable(table, sc.id)
+          rowCounts[`${slug}/${table.folder}/${table.file}`] = rows.length
+          entries.push({
+            name: `${slug}/${table.folder}/${table.file}.csv`,
+            data: Buffer.from(toCsv(rows, this.columnsFor(table)), 'utf8'),
+          })
+        }
+      }
+      entries.push({
+        name: 'README.txt',
+        data: Buffer.from(this.readme(`${schools.length} schools`, rowCounts), 'utf8'),
+      })
+
+      const zip = buildZip(entries)
+      const key = `exports/org/${organizationId}/${jobId}.zip`
+      await this.storage.putObject(zip, key, 'application/zip')
+      await this.prisma.dataExport.update({
+        where: { id: jobId },
+        data: {
+          status: 'ready',
+          fileKey: key,
+          byteSize: zip.length,
+          rowCounts,
+          completedAt: new Date(),
+          expiresAt: new Date(Date.now() + EXPIRY_DAYS * 24 * 60 * 60 * 1000),
+        },
+      })
+    } catch (err) {
+      await this.prisma.dataExport.update({
+        where: { id: jobId },
+        data: { status: 'failed', error: String((err as Error)?.message ?? err).slice(0, 500) },
+      })
+      throw err
     }
   }
 

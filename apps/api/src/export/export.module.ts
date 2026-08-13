@@ -4,7 +4,7 @@ import { PrismaModule } from '../prisma/prisma.module.js'
 import { AuditModule } from '../common/audit/audit.module.js'
 import { NotificationsModule } from '../common/notifications/notifications.module.js'
 import { KnowledgeModule } from '../knowledge/knowledge.module.js'
-import { DataExportController } from './export.controller.js'
+import { DataExportController, DataExportOrgController } from './export.controller.js'
 import { DataExportService } from './export.service.js'
 
 /**
@@ -17,7 +17,7 @@ import { DataExportService } from './export.service.js'
   // passed without it and the CONTAINER refused to boot — the module-resolution
   // spec beside this file is what turns that into a test failure instead.
   imports: [AuthModule, PrismaModule, AuditModule, KnowledgeModule, NotificationsModule],
-  controllers: [DataExportController],
+  controllers: [DataExportController, DataExportOrgController],
   providers: [DataExportService],
   exports: [DataExportService],
 })

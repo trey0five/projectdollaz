@@ -15,6 +15,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { AlertTriangle, CheckCircle2, Download, Loader2, Package, ShieldCheck } from 'lucide-react'
 import { useSchools } from '../../context/SchoolContext.jsx'
+import { useScope } from '../../context/ScopeContext.jsx'
 import { exportApi } from '../../lib/api.js'
 
 const EASE = [0.2, 0.8, 0.2, 1]
@@ -34,8 +35,13 @@ const fmtWhen = (iso) => {
 
 export default function DataExportSection() {
   const { activeSchool } = useSchools()
+  const { orgId, orgName, isMultiSchool } = useScope()
   const schoolId = activeSchool?.id ?? null
   const isOwner = activeSchool?.role === 'owner'
+  // 'school' | 'network' — the network archive is foldered per school and only
+  // contains the schools this caller actually owns.
+  const [scope, setScope] = useState('school')
+  const networkAvailable = isMultiSchool && !!orgId
 
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
@@ -46,7 +52,7 @@ export default function DataExportSection() {
   const load = useCallback(async () => {
     if (!schoolId) return
     try {
-      const res = await exportApi.list(schoolId)
+      const res = scope === 'network' && orgId ? await exportApi.orgList(orgId) : await exportApi.list(schoolId)
       setRows(res.data ?? res ?? [])
       setError('')
     } catch (e) {
@@ -54,7 +60,7 @@ export default function DataExportSection() {
     } finally {
       setLoading(false)
     }
-  }, [schoolId])
+  }, [schoolId, scope, orgId])
 
   useEffect(() => {
     load()
@@ -80,7 +86,8 @@ export default function DataExportSection() {
     setBusy(true)
     setError('')
     try {
-      await exportApi.request(schoolId)
+      if (scope === 'network' && orgId) await exportApi.orgRequest(orgId)
+      else await exportApi.request(schoolId)
       await load()
     } catch (e) {
       setError(e?.response?.data?.message ?? 'Could not start that export.')
@@ -92,7 +99,8 @@ export default function DataExportSection() {
   const download = async (id) => {
     setError('')
     try {
-      const res = await exportApi.downloadUrl(schoolId, id)
+      const res =
+        scope === 'network' && orgId ? await exportApi.orgDownloadUrl(orgId, id) : await exportApi.downloadUrl(schoolId, id)
       const url = (res.data ?? res)?.url
       if (url) window.location.assign(url)
     } catch (e) {
@@ -120,9 +128,30 @@ export default function DataExportSection() {
           <div>
             <h2 className="font-serif text-[22px] font-semibold text-navy">Export your data</h2>
             <p className="mt-1.5 max-w-prose text-[13.5px] text-muted">
-              Your school owns everything it puts into KYRO. This builds a complete copy — every module, as
-              spreadsheets you can open in Excel — with no involvement from us and nothing to ask for.
+              {scope === 'network'
+                ? `Every school in ${orgName ?? 'your network'} that you own, in one archive with a folder per school — every module, as spreadsheets you can open in Excel.`
+                : 'Your school owns everything it puts into KYRO. This builds a complete copy — every module, as spreadsheets you can open in Excel — with no involvement from us and nothing to ask for.'}
             </p>
+            {networkAvailable ? (
+              <div className="mt-3 inline-flex rounded-lg border border-navy/15 p-0.5" role="group" aria-label="Export scope">
+                {[
+                  ['school', activeSchool?.name ?? 'This school'],
+                  ['network', 'Whole network'],
+                ].map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    aria-pressed={scope === key}
+                    onClick={() => setScope(key)}
+                    className={`rounded-md px-3 py-1.5 text-[12px] font-semibold transition-colors ${
+                      scope === key ? 'bg-navy text-white' : 'text-muted hover:text-navy'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
           <button
             type="button"
@@ -136,7 +165,14 @@ export default function DataExportSection() {
 
         <div className="mt-4 grid gap-2.5 sm:grid-cols-3">
           {[
-            { Icon: Package, t: 'Every module', d: 'Finance, enrollment, academics, governance, accreditation, facilities, advancement and your audit log.' },
+            {
+              Icon: Package,
+              t: scope === 'network' ? 'Every school you own' : 'Every module',
+              d:
+                scope === 'network'
+                  ? 'One folder per school, each with finance, enrollment, academics, governance and the rest. Schools you do not own are not included.'
+                  : 'Finance, enrollment, academics, governance, accreditation, facilities, advancement and your audit log.',
+            },
             { Icon: ShieldCheck, t: 'No credentials', d: 'Connection tokens for QuickBooks and your SIS are stripped — they are keys to other systems, not your data.' },
             { Icon: Download, t: 'Yours to keep', d: 'Plain CSV. Nothing in the archive needs KYRO to read it, now or later.' },
           ].map(({ Icon, t, d }) => (
@@ -157,6 +193,9 @@ export default function DataExportSection() {
         <p className="mt-1 text-[12.5px] text-muted">
           A finished archive stays available for seven days, then the file is removed. The record of it stays here.
           Run a new one whenever you like.
+          {scope === 'network'
+            ? ' Because a network pull takes a complete copy of each school’s records, every owner at those schools is told it happened.'
+            : ' Every other owner at your school is told when an export is requested.'}
         </p>
 
         {loading ? (

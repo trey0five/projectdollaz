@@ -937,6 +937,10 @@ export const exportApi = {
   request: (schoolId) => api.post(`/schools/${schoolId}/export`),
   list: (schoolId) => api.get(`/schools/${schoolId}/exports`),
   downloadUrl: (schoolId, id) => api.get(`/schools/${schoolId}/exports/${id}/download`),
+  // Network scope — every school the caller OWNS in the org, foldered per school.
+  orgRequest: (orgId) => api.post(`/organizations/${orgId}/export`),
+  orgList: (orgId) => api.get(`/organizations/${orgId}/exports`),
+  orgDownloadUrl: (orgId, id) => api.get(`/organizations/${orgId}/exports/${id}/download`),
 }
 
 export const strategyApi = {

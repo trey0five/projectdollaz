@@ -48,3 +48,34 @@ export class DataExportController {
     return this.exports.downloadUrl(user, schoolId, id)
   }
 }
+
+/**
+ * The diocesan export. A separate controller because the path is org-scoped and
+ * RolesGuard resolves membership from a :schoolId it does not have here — the
+ * floor is enforced in the service, which returns only the schools this caller
+ * actually owns rather than everything the organization contains.
+ */
+@Controller('organizations/:orgId')
+@UseGuards(JwtAuthGuard)
+export class DataExportOrgController {
+  constructor(private readonly exports: DataExportService) {}
+
+  @Post('export')
+  request(@CurrentUser() user: User, @Param('orgId', ParseUUIDPipe) orgId: string) {
+    return this.exports.requestOrg(user, orgId)
+  }
+
+  @Get('exports')
+  list(@CurrentUser() user: User, @Param('orgId', ParseUUIDPipe) orgId: string) {
+    return this.exports.listOrg(orgId)
+  }
+
+  @Get('exports/:id/download')
+  download(
+    @CurrentUser() user: User,
+    @Param('orgId', ParseUUIDPipe) orgId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.exports.orgDownloadUrl(user, orgId, id)
+  }
+}
