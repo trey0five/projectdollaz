@@ -28,7 +28,6 @@ export const satTotal: MetricDef = {
   basis: 'Average SAT total across every student who sat the exam in the period.',
   formula: 'Σ SAT total scores ÷ students tested',
   description: 'Average SAT total score (400–1600).',
-  bands: { good: 1200, warn: 1050 },
   compute(_cur, _prior, curOp) {
     const sum = curOp?.satScoreSum ?? null
     const tested = curOp?.satTestedCount ?? null

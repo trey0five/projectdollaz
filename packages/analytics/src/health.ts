@@ -70,6 +70,24 @@ export const DEFAULT_BANDS: Partial<Record<MetricKey, TargetBands>> = {
   // Planning coverage: ALL three artifacts (budget · forecast · enrollment plan)
   // in place = good; one of three (≤ 1/3) = risk. TUNABLE default.
   plan_readiness: { goodDirection: 'higher', good: 1, risk: 0.33 },
+  // Academics. These four are the only assessment metrics with a defensible
+  // universal band, and each band is the TEST PUBLISHER'S own line rather than a
+  // sector guess: ACT's college-readiness composite sits at 24 (national mean is
+  // near 19.5, so 18 is the risk frontier), and the SAT benchmark total is
+  // 1010 = ERW 480 + Math 530, which puts a comfortable clear at 1050 and a
+  // clear miss under 950. Percentile-scored norm-referenced tests
+  // (TerraNova/Iowa/MAP) deliberately have NO entry: a national percentile is
+  // defined so that 50 is average, and coloring a school "risk" for scoring at
+  // the national midpoint would be a statement about its students, not its
+  // teaching.
+  act_composite: { goodDirection: 'higher', good: 24, risk: 18 },
+  sat_total: { goodDirection: 'higher', good: 1050, risk: 950 },
+  // Share of tested students clearing EVERY benchmark on their exam. Half the
+  // cohort college-ready is the sector's working definition of a good outcome.
+  benchmark_attainment: { goodDirection: 'higher', good: 0.5, risk: 0.3 },
+  // Below ~70% participation a score comparison is about who sat the exam
+  // rather than how the school taught, which is why this one bands at all.
+  assessment_participation_rate: { goodDirection: 'higher', good: 0.9, risk: 0.7 },
 }
 
 /** The target band for a metric, or undefined when the metric is contextual. */

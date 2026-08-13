@@ -34,7 +34,6 @@ export const actComposite: MetricDef = {
   basis: 'Average ACT composite across every student who sat the exam in the period — the college-exam headline for a high school.',
   formula: 'Σ ACT composite scores ÷ students tested',
   description: 'Average ACT composite score (1–36).',
-  bands: { good: 24, warn: 20 },
   compute(_cur, _prior, curOp) {
     const sum = curOp?.actScoreSum ?? null
     const tested = curOp?.actTestedCount ?? null

@@ -31,7 +31,6 @@ export const benchmarkAttainment: MetricDef = {
   basis: "Share of tested students meeting every college-readiness benchmark published for the exam — the readiness measure a mean score can hide.",
   formula: 'Students meeting all benchmarks ÷ students with a benchmark determination',
   description: 'Percentage of tested students meeting all college-readiness benchmarks.',
-  bands: { good: 0.5, warn: 0.3 },
   compute(_cur, _prior, curOp) {
     const met = curOp?.benchmarkMetCount ?? null
     const tested = curOp?.benchmarkTestedCount ?? null

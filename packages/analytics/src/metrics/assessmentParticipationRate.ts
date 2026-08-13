@@ -30,7 +30,6 @@ export const assessmentParticipationRate: MetricDef = {
   basis: 'Share of eligible students who sat the exam — the figure that decides whether a score comparison is fair.',
   formula: 'Students tested ÷ students eligible',
   description: 'Percentage of eligible students who sat the assessment.',
-  bands: { good: 0.9, warn: 0.7 },
   compute(_cur, _prior, curOp) {
     // Whichever exam the school runs, the tested count is the numerator. Summing
     // both exams DOUBLE-COUNTS the student who sat the ACT and the SAT, which is

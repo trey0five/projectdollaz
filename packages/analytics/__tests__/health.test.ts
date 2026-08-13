@@ -68,7 +68,7 @@ describe('tuition_discount_rate (lower: good<=0.20, risk>0.35)', () => {
 describe('contextual metrics are NEUTRAL (no band)', () => {
   const banded = new Set(Object.keys(DEFAULT_BANDS))
   const contextual = METRIC_KEYS.filter((k) => !banded.has(k))
-  it('exactly the 12 banded metrics have bands', () => {
+  it('exactly the 16 banded metrics have bands', () => {
     expect([...banded].sort()).toEqual(
       [
         'days_cash_on_hand',
@@ -88,6 +88,14 @@ describe('contextual metrics are NEUTRAL (no band)', () => {
         'forecast_vs_budget_net',
         'forecast_operating_margin',
         'plan_readiness',
+        // Academics: the two college-exam scores plus benchmark attainment and
+        // participation. Percentile-scored norm-referenced tests are absent on
+        // purpose — 50 IS the national average, so banding one would color a
+        // school for being exactly typical.
+        'act_composite',
+        'sat_total',
+        'benchmark_attainment',
+        'assessment_participation_rate',
       ].sort(),
     )
   })
