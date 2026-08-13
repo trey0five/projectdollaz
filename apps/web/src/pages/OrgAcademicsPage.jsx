@@ -21,6 +21,7 @@ import { Award, BookOpenCheck, ChevronRight, TrendingDown, Upload } from 'lucide
 import { useScope } from '../context/ScopeContext.jsx'
 import { academicsApi } from '../lib/api.js'
 import { testTypeLabel } from '../lib/academicsVocab.js'
+import BackLink from '../components/ui/BackLink.jsx'
 import OrgAssessmentUpload from '../components/academics/OrgAssessmentUpload.jsx'
 
 const HUE = '#0D9488'
@@ -111,6 +112,12 @@ export default function OrgAcademicsPage() {
 
   return (
     <div className="mx-auto max-w-page space-y-4 p-4 sm:p-6">
+      {/* The sidebar's module section only grows on an EXACT module path, so a
+          nested route like this one loses it — the same as
+          /enrollment/diocesan-import, which is why that page carries a BackLink
+          too. Without it there is no way back to Academics but the browser. */}
+      <BackLink fallback="/academics" fallbackLabel="Back to Academics" />
+
       {/* ── Hero ── */}
       <motion.div
         initial={reduce ? false : { opacity: 0, y: 16 }}
