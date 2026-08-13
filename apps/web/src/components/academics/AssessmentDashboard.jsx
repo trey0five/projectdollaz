@@ -727,8 +727,20 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
             ))}
           </select>
         ) : null}
+        {/* THE SERVER DECIDES. This used to flip a local flag that re-labelled
+            one chart, while the payload still carried every peer school's name
+            and the table two sections down still printed them. The round-3 API
+            change added `hidePeerNames`; nothing ever sent it. Now the checkbox
+            re-fetches, so the names genuinely do not leave the server. */}
         <label className="ml-auto flex items-center gap-1.5 text-[12px] text-muted">
-          <input type="checkbox" checked={anonymous} onChange={(e) => setAnonymous(e.target.checked)} />
+          <input
+            type="checkbox"
+            checked={Boolean(data?.hidePeerNames ?? anonymous)}
+            onChange={(e) => {
+              setAnonymous(e.target.checked)
+              select({ hidePeerNames: e.target.checked ? true : null })
+            }}
+          />
           Hide peer names
         </label>
         {loading ? <span className="text-[11.5px] text-muted">Updating…</span> : null}

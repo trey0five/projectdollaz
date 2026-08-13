@@ -145,6 +145,74 @@ describe('gateAggregates — the derived-over-ingested collapse', () => {
   })
 })
 
+describe('gateAggregates — the complement', () => {
+  const g = (gradeLevel, testedCount, avgComposite) =>
+    row({ gradeLevel, testedCount, avgComposite, derivation: 'derived' })
+
+  it('the whole-school row is withheld when subtracting the visible grades exposes a hidden one', () => {
+    // 5 juniors averaging 22.0 and ONE senior scoring 33. Suppressing only the
+    // senior leaves (6 x 23.833 - 5 x 22.0) / (6 - 5) = 33 — his exact score,
+    // rebuilt from two rows that each cleared the floor on their own.
+    const out = gateAggregates([g('11', 5, 22), g('12', 1, 33), g('all', 6, 23.833)], familyOf, scoreTypeOf)
+    const byGrade = Object.fromEntries(out.map((r) => [r.gradeLevel, r]))
+    expect(byGrade['12'].avgComposite).toBeNull()
+    // Grade 11 is the only cover available, so it goes too — and with no grade
+    // row left to subtract, the whole-school average is safe to publish.
+    expect(byGrade['11'].avgComposite).toBeNull()
+    expect(byGrade.all.avgComposite).toBeCloseTo(23.833)
+  })
+
+  it('a visible neighbour is hidden WITH it so the whole-school number survives', () => {
+    // Grades 10 (6 students) and 11 (30) are both publishable on their own, and
+    // grade 12 has one senior. Hiding only grade 12 leaves his score recoverable
+    // no matter how many students are visible — the rows are an exact partition.
+    // Hiding grade 10 alongside makes the recovered figure describe 7 children,
+    // and the whole-school average stays on screen, which is the number that
+    // matters most.
+    const out = gateAggregates(
+      [g('10', 6, 20), g('11', 30, 22), g('12', 1, 33), g('all', 37, 21.9)],
+      familyOf,
+      scoreTypeOf,
+    )
+    const byGrade = Object.fromEntries(out.map((r) => [r.gradeLevel, r]))
+    expect(byGrade['12'].avgComposite).toBeNull()
+    expect(byGrade['10'].avgComposite, 'the smallest publishable neighbour goes too').toBeNull()
+    expect(byGrade['11'].avgComposite, 'the big grade is untouched').toBe(22)
+    expect(byGrade.all.avgComposite, 'the headline number survives').toBeCloseTo(21.9)
+  })
+
+  it('with nothing left to hide behind, the whole-school row comes down instead', () => {
+    // Only one other grade and it is itself thin: no combination reaches the
+    // floor, so the total is the thing that has to go.
+    const out = gateAggregates([g('11', 3, 22), g('12', 1, 33), g('all', 4, 24.75)], familyOf, scoreTypeOf)
+    for (const r of out) expect(r.avgComposite).toBeNull()
+  })
+
+  it('a hidden grade with an UNKNOWN count makes the residual unknowable, so the total goes too', () => {
+    const out = gateAggregates([g('11', 30, 22), g('12', null, 33), g('all', 31, 22.35)], familyOf, scoreTypeOf)
+    expect(Object.fromEntries(out.map((r) => [r.gradeLevel, r])).all.avgComposite).toBeNull()
+  })
+
+  it('no hidden grade, no complement problem', () => {
+    const out = gateAggregates([g('11', 30, 22), g('12', 12, 25), g('all', 42, 22.86)], familyOf, scoreTypeOf)
+    for (const r of out) expect(r.avgComposite).not.toBeNull()
+  })
+
+  it('the complement is scoped per (school, year, test) — one school does not mute another', () => {
+    const out = gateAggregates(
+      [
+        g('11', 5, 22),
+        g('12', 1, 33),
+        g('all', 6, 23.833),
+        row({ schoolId: 's2', gradeLevel: 'all', testedCount: 40, avgComposite: 70, derivation: 'derived' }),
+      ],
+      familyOf,
+      scoreTypeOf,
+    )
+    expect(out.find((r) => r.schoolId === 's2').avgComposite).toBe(70)
+  })
+})
+
 describe('cohortPublishable — the same floor, for callers holding only a count', () => {
   it('is the floor, and fails closed', () => {
     expect(cohortPublishable(MIN_CELL)).toBe(true)

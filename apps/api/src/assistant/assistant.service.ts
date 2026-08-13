@@ -64,6 +64,7 @@ import {
   type CreateDocumentDto,
   type DocumentSourceType,
 } from '../knowledge/dto/create-document.dto.js'
+import { GradebookService } from '../academics/gradebook.service.js'
 import { PoliciesService } from '../governance/policies.service.js'
 import { CommitteesService } from '../governance/committees.service.js'
 import { MeetingsService } from '../governance/meetings.service.js'
@@ -1005,6 +1006,10 @@ export class AssistantService {
     @Optional() private readonly improvement?: ImprovementService,
     @Optional() private readonly earlyWarning?: EarlyWarningService,
     @Optional() private readonly billing?: BillingService,
+    // LAST, deliberately. Every spec in this directory constructs the class
+    // positionally, so a parameter inserted anywhere else silently shifts the
+    // optional tail and each spec starts injecting the wrong service.
+    @Optional() private readonly gradebook?: GradebookService,
   ) {}
 
   isConfigured(): boolean {
@@ -6108,25 +6113,20 @@ export class AssistantService {
           }
         }
 
+        // THROUGH THE SERVICE, not around it. This case used to run its own
+        // gradeRecord.aggregate/groupBy, so the small-cell floor added to
+        // GradebookService.summary protected the REST route and left the most
+        // conversational surface in the product answering with a two-mark
+        // average — at one mark, that child's exact grade. Every figure below is
+        // already floored, complement-checked and counted in distinct STUDENTS.
         const q = (args ?? {}) as { schoolYear?: number }
-        const where = { schoolId: ctx.schoolId, ...(q.schoolYear ? { schoolYear: q.schoolYear } : {}) }
-        const [total, courses, overall, byTerm] = await Promise.all([
-          this.prisma.gradeRecord.count({ where }),
-          this.prisma.course.count({ where: { schoolId: ctx.schoolId } }),
-          this.prisma.gradeRecord.aggregate({ where, _avg: { numericGrade: true } }),
-          this.prisma.gradeRecord.groupBy({ by: ['term'], where, _count: { _all: true }, _avg: { numericGrade: true } }),
-        ])
-        return {
-          available: true,
-          total,
-          courses,
-          average: overall._avg.numericGrade === null ? null : Number(overall._avg.numericGrade),
-          byTerm: byTerm.map((t) => ({
-            term: t.term ?? 'unspecified',
-            count: t._count._all,
-            average: t._avg.numericGrade === null ? null : Number(t._avg.numericGrade),
-          })),
+        if (!this.gradebook) {
+          // Fail CLOSED. Without the floored reader there is no safe way to
+          // answer, and answering from raw Prisma is exactly the bug this fixes.
+          return { available: false, message: 'The gradebook is not readable right now.' }
         }
+        const summary = await this.gradebook.summaryRaw(ctx.schoolId, q.schoolYear)
+        return { available: true, ...summary }
       }
 
       case 'get_roster_summary': {

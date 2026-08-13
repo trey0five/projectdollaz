@@ -12,6 +12,7 @@ import {
   type MetricResult,
   type PeriodOperational,
 } from '@finrep/analytics'
+import { toPeriodOperational } from '../analytics/operational.service.js'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { ownerName, rollUpInitiatives } from './initiative-rollup.js'
 import { computePace, meanFraction, worstPace, type PaceStatus } from './strategy-progress.js'
@@ -130,14 +131,7 @@ export class StrategyProgressService {
       where: { schoolId_fiscalPeriodId: { schoolId, fiscalPeriodId: period.id } },
     })
     const operational: PeriodOperational | null = opRow
-      ? {
-          enrollment: opRow.enrollment,
-          enrollmentFte: dec(opRow.enrollmentFte),
-          studentsOnAid: opRow.studentsOnAid,
-          financialAidTotal: dec(opRow.financialAidTotal),
-          teachingFte: dec(opRow.teachingFte),
-          totalStaffFte: dec(opRow.totalStaffFte),
-        }
+      ? toPeriodOperational(opRow)
       : null
     const results = computeMetricsForPeriod({
       current: snap.payload as unknown as ReportBundle,
@@ -172,14 +166,7 @@ export class StrategyProgressService {
       where: { schoolId_fiscalPeriodId: { schoolId, fiscalPeriodId: period.id } },
     })
     const operational: PeriodOperational | null = opRow
-      ? {
-          enrollment: opRow.enrollment,
-          enrollmentFte: dec(opRow.enrollmentFte),
-          studentsOnAid: opRow.studentsOnAid,
-          financialAidTotal: dec(opRow.financialAidTotal),
-          teachingFte: dec(opRow.teachingFte),
-          totalStaffFte: dec(opRow.totalStaffFte),
-        }
+      ? toPeriodOperational(opRow)
       : null
     const results = computeMetricsForPeriod({
       current: snap.payload as unknown as ReportBundle,
@@ -242,14 +229,7 @@ export class StrategyProgressService {
           where: { schoolId_fiscalPeriodId: { schoolId, fiscalPeriodId: period.id } },
         })
         const operational: PeriodOperational | null = opRow
-          ? {
-              enrollment: opRow.enrollment,
-              enrollmentFte: dec(opRow.enrollmentFte),
-              studentsOnAid: opRow.studentsOnAid,
-              financialAidTotal: dec(opRow.financialAidTotal),
-              teachingFte: dec(opRow.teachingFte),
-              totalStaffFte: dec(opRow.totalStaffFte),
-            }
+          ? toPeriodOperational(opRow)
           : null
         // enrollment_vs_plan has NO plan threaded here (Prisma-only, no
         // EnrollmentPlanService) → available:false → a bound goal reads no_data, per

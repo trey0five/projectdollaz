@@ -32,10 +32,12 @@ const CTX = { schoolId: 'school-1', periodId: '', userId: USER.id, user: USER, r
 // Positional DI, matching the sibling specs. The indices are DERIVED from the
 // constructor's own arity rather than retyped — `improvement` sits immediately
 // ahead of the two Phase-E deps, which `get-early-warnings.spec.ts` pins at
-// `arity - 2` / `arity - 1`. A future dependency added anywhere cannot silently
+// `arity - 3` / `arity - 2`. A future dependency added anywhere cannot silently
 // shift this without one of the two specs saying so.
 const ARITY = AssistantService.length
-const IMPROVEMENT_ARG_INDEX = ARITY - 3
+// -4, not -3: `gradebook` joined the optional tail (see
+// get-early-warnings.spec.ts, which pins the other two).
+const IMPROVEMENT_ARG_INDEX = ARITY - 4
 const STRATEGY_ARG_INDEX = 33
 
 function makeService(

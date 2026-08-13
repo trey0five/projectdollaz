@@ -10,7 +10,7 @@
 // creating a second.
 // ─────────────────────────────────────────────────────────────────────────────
 import { BadRequestException, Injectable } from '@nestjs/common'
-import { MIN_CELL } from '@finrep/analytics'
+import { gateGradebookSummary, type GradebookSummaryOutput } from '@finrep/analytics'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { parseGradebookCsv } from './parsers/gradebook-file.parser.js'
 import { matchAll, type MatchCandidate, type RosterStudent } from './matching/student-match.js'
@@ -248,36 +248,63 @@ export class GradebookService {
    * method, which is what makes it safe to expose to the assistant.
    */
   async summary(schoolId: string, schoolYear?: number) {
+    return this.summaryRaw(schoolId, schoolYear)
+  }
+
+  /**
+   * The raw counts every gradebook summary is built from, floored by the ONE
+   * gate in @finrep/analytics. Public so the assistant calls THIS rather than
+   * running its own copy of the query — round 3 floored this method and left
+   * Penny's tool re-querying Prisma, so the REST route answered "suppressed"
+   * while the chattiest surface in the product answered with the number.
+   *
+   * The distinct-student count is the floor that matters: one student with five
+   * courses is five MARKS and one child, and a floor counting marks published
+   * that child's own average as the school's.
+   */
+  async summaryRaw(schoolId: string, schoolYear?: number): Promise<GradebookSummaryOutput> {
     const where = { schoolId, ...(schoolYear ? { schoolYear } : {}) }
-    const [total, byTerm, courses, marks] = await Promise.all([
+    const scored = { ...where, numericGrade: { not: null } }
+    const [totalMarks, courses, overall, byTermAgg, students, termStudents] = await Promise.all([
       this.prisma.gradeRecord.count({ where }),
-      this.prisma.gradeRecord.groupBy({ by: ['term'], where, _count: { _all: true }, _avg: { numericGrade: true } }),
       this.prisma.course.count({ where: { schoolId, ...(schoolYear ? { schoolYear } : {}) } }),
-      this.prisma.gradeRecord.aggregate({ where, _avg: { numericGrade: true } }),
+      this.prisma.gradeRecord.aggregate({ where: scored, _avg: { numericGrade: true }, _count: { _all: true } }),
+      this.prisma.gradeRecord.groupBy({
+        by: ['term'],
+        where: scored,
+        _count: { _all: true },
+        _avg: { numericGrade: true },
+      }),
+      this.prisma.gradeRecord.groupBy({ by: ['studentId'], where: scored, _count: { _all: true } }),
+      this.prisma.gradeRecord.groupBy({ by: ['term', 'studentId'], where: scored, _count: { _all: true } }),
     ])
-    // THE SMALL-CELL FLOOR REACHES HERE TOO.
-    //
-    // Every other academics aggregate goes through gateAggregates or
-    // cohortPublishable; this one was serving a term average straight from
-    // Prisma to `viewer` on /gradebook/summary, to the module status card and to
-    // Penny's get_gradebook_summary. A term with two marks in it publishes an
-    // average that is one of two children's grades — the same disclosure the
-    // score path spends a whole pure module preventing.
-    const floor = (count: number, avg: unknown) =>
-      count >= MIN_CELL && avg !== null && avg !== undefined ? Number(avg) : null
-    return {
-      total,
-      courses,
-      average: floor(total, marks._avg.numericGrade),
-      suppressed: total > 0 && total < MIN_CELL,
-      byTerm: byTerm.map((t) => ({
-        term: t.term ?? 'unspecified',
-        // The COUNT is safe to publish — "3 marks on file" names nobody — but
-        // the average computed from those three is not.
-        count: t._count._all,
-        average: floor(t._count._all, t._avg.numericGrade),
-        suppressed: t._count._all < MIN_CELL,
-      })),
+
+    // An UNMATCHED mark has a null studentId and cannot be told apart from
+    // another unmatched mark, so each counts as its own child — the cautious
+    // read, which is the right direction for a privacy floor to err in.
+    const distinct = (rows: Array<{ studentId: string | null; _count: { _all: number } }>): number =>
+      rows.reduce((acc, r) => acc + (r.studentId === null ? r._count._all : 1), 0)
+
+    const byTermStudents = new Map<string, typeof termStudents>()
+    for (const r of termStudents) {
+      const key = r.term ?? ''
+      const list = byTermStudents.get(key) ?? []
+      list.push(r)
+      byTermStudents.set(key, list)
     }
+
+    return gateGradebookSummary({
+      totalMarks,
+      courses,
+      scoredCount: overall._count._all,
+      studentCount: distinct(students),
+      average: overall._avg.numericGrade === null ? null : Number(overall._avg.numericGrade),
+      byTerm: byTermAgg.map((t) => ({
+        term: t.term,
+        scoredCount: t._count._all,
+        studentCount: distinct(byTermStudents.get(t.term ?? '') ?? []),
+        average: t._avg.numericGrade === null ? null : Number(t._avg.numericGrade),
+      })),
+    })
   }
 }

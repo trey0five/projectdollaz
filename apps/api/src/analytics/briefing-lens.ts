@@ -389,6 +389,13 @@ function keepForViewer(item: AttentionItem): boolean {
   // the advancement register for development planning" — no per-donor PII, no
   // operator "go fix" CTA), so it passes through with no VIEWER_REFRAME entry.
   if (item.source === 'advancement') return true
+  // ACADEMICS. SOURCE_WEIGHT.viewer deliberately ranks academics ABOVE most
+  // finance sources — test results are the thing a board actually convenes
+  // about — and without a branch here every STEP 2.17 item fell through to the
+  // final `return false` and the board lens never saw one of them. The items
+  // are aggregate-only by construction (the gate runs before they are built),
+  // so there is nothing here a viewer may not read.
+  if (item.source === 'academics') return true
   // Phase 5 — strategic plan health (goals off pace, stale initiatives, review due)
   // is a fiduciary matter the board OWNS (the board adopts and monitors the plan) —
   // KEPT for the viewer/board lens like the other oversight domains, UNLIKE

@@ -637,7 +637,11 @@ export class AssessmentsService {
     // every sibling school's name and the toggle merely declined to paint it —
     // one devtools tab away from the thing the control promises. Anonymising
     // here means the names genuinely never leave the server.
-    return q.hidePeerNames ? this.anonymizePayload(payload, schoolId) : payload
+    // Echo the decision back so the control reflects what the SERVER did rather
+    // than what the browser last remembered.
+    return q.hidePeerNames
+      ? { ...this.anonymizePayload(payload, schoolId), hidePeerNames: true }
+      : { ...payload, hidePeerNames: false }
   }
 
   /**
@@ -1286,33 +1290,23 @@ export class AssessmentsService {
    * org roll-up) light up without a second ingest path.
    */
   private async promoteOperational(schoolId: string, schoolYear: number) {
-    const rows: Array<{
-      testType: string
-      derivation: string
-      avgComposite: unknown
-      testedCount: number | null
-      benchmarkMetCount: number | null
-      benchmarkTestedCount: number | null
-      eligibleCount: number | null
-    }> = await this.prisma.assessmentSchoolAggregate.findMany({
-      where: { schoolId, schoolYear, gradeLevel: 'all' },
-      select: {
-        testType: true,
-        derivation: true,
-        avgComposite: true,
-        testedCount: true,
-        benchmarkMetCount: true,
-        benchmarkTestedCount: true,
-        eligibleCount: true,
-      },
-    })
+    // THROUGH THE GATE, like every other reader of this table.
+    //
+    // This method used to query the aggregates itself and re-implement the
+    // derived-over-ingested collapse with a local pick(). That copy did not
+    // carry the eligibleCount forward from the ingested row (only a summary file
+    // reports who did NOT sit the exam), so the moment a school uploaded
+    // student-level results the participation metric went unavailable — for
+    // exactly the schools that had given us the most data. gateAggregates has
+    // owned that rule since round 3; this was the last caller reimplementing it.
+    //
     // NO EARLY RETURN when the aggregates are gone. Reverting an import deletes
     // the rows, and returning here would leave the promoted ACT/SAT figures on
     // the operational record forever — the scorecard would keep showing a score
     // for a school whose results were withdrawn. An empty set writes explicit
     // nulls instead, which is what "we no longer have this" looks like.
-    const pick = (test: string) =>
-      rows.find((r) => r.testType === test && r.derivation === 'derived') ?? rows.find((r) => r.testType === test) ?? null
+    const gated = (await this.aggregates([schoolId], { schoolYear })).filter((r) => r.gradeLevel === 'all')
+    const pick = (test: string) => gated.find((r) => r.testType === test) ?? null
     const act = pick('act')
     const sat = pick('sat')
     // The FY that OWNS a spring administration ends that June 30 (the house FY is

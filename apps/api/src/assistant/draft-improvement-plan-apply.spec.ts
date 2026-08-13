@@ -28,7 +28,10 @@ const USER = { id: 'caller-1', email: 'caller@school.test' } as unknown as User
 const ARITY = AssistantService.length
 // Same positional-DI convention as create-initiative.spec.ts, whose own green pins
 // this index: `improvement` sits three ahead of the end of the constructor list.
-const IMPROVEMENT_ARG_INDEX = ARITY - 3
+// -4, not -3: `gradebook` joined the optional tail so Penny's gradebook
+// summary reads the SAME floored service the REST route does instead of
+// running its own un-floored copy of the query.
+const IMPROVEMENT_ARG_INDEX = ARITY - 4
 
 function makeService(existing: { id: string } | null) {
   const findFirst = vi.fn(async () => existing)

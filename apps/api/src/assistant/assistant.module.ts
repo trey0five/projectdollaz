@@ -14,6 +14,7 @@ import { GovernanceModule } from '../governance/governance.module.js'
 import { AccreditationModule } from '../accreditation/accreditation.module.js'
 import { FacilitiesModule } from '../facilities/facilities.module.js'
 import { AdvancementModule } from '../advancement/advancement.module.js'
+import { AcademicsModule } from '../academics/academics.module.js'
 import { StrategyModule } from '../strategy/strategy.module.js'
 import { ImprovementModule } from '../improvement/improvement.module.js'
 import { PortfolioModule } from '../portfolio/portfolio.module.js'
@@ -67,6 +68,11 @@ import { CoverageService } from './coverage.service.js'
     // reads the ACTIVE plan's computed progress. No cycle: StrategyModule imports no
     // AssistantModule (BriefingService already injects it, proving it's safe).
     StrategyModule,
+    // Exports GradebookService so get_gradebook_summary reads the SAME floored
+    // summary the REST route serves. No cycle: AcademicsModule imports no
+    // AssistantModule (BriefingService already injects its siblings, proving
+    // this direction is safe).
+    AcademicsModule,
     // AIC Phase G — the Continuous Improvement Manager, for Penny's
     // create_initiative tool and its undo. The edge is ONE-WAY: nothing under
     // src/improvement/ imports the assistant (improvement.module.spec.ts reads the

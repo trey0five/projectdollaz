@@ -134,8 +134,18 @@ export const DOMAIN_SECTION_TITLES = {
   enrollment: 'Enrollment',
   hr: 'People & Staffing',
   planning: 'Planning & Forecasting',
+  // Without this line metricSection() falls through to its default and the ACT
+  // composite is filed under "Finance & Operations" — a test score sitting in
+  // the finance section of the board's own scorecard.
+  academics: 'Academics',
 }
-export const SECTION_ORDER = ['Finance & Operations', 'Enrollment', 'People & Staffing', 'Planning & Forecasting']
+export const SECTION_ORDER = [
+  'Finance & Operations',
+  'Enrollment',
+  'Academics',
+  'People & Staffing',
+  'Planning & Forecasting',
+]
 
 /** The section title a metric key groups under (unknown → the merged finance section). */
 export function metricSection(key) {
@@ -145,6 +155,7 @@ export function metricSection(key) {
 // Section header hue dot — the module hues for the module-owned sections (hr
 // emerald / planning teal, locked brand hues); others use the default accent.
 export const SECTION_HUES = {
+  Academics: '#0D9488',
   'People & Staffing': '#059669',
   'Planning & Forecasting': '#0891B2',
 }

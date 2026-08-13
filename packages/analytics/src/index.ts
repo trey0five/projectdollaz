@@ -340,6 +340,9 @@ export {
   movements,
   SUBJECT_LABELS,
   subjectLabelOf,
+  gateGradebookSummary,
+  type GradebookSummaryOutput,
+  type GradebookSummaryInput,
 } from './academics/assessments.js'
 export type {
   AssessmentRow,

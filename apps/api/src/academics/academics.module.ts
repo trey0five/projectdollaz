@@ -26,6 +26,9 @@ import { NameMatchService } from '../enrollment/diocesan/name-match.service.js'
   // directly rather than importing EnrollmentModule, which would pull the roster
   // writer (deliberately unexported, one-writer rule) into this graph.
   providers: [AssessmentsService, GradebookService, LessonPlansService, NameMatchService],
-  exports: [AssessmentsService, LessonPlansService],
+  // GradebookService is exported so the ASSISTANT can call its floored summary
+  // rather than running a second, un-floored copy of the same query — the
+  // one-door rule the score path already follows.
+  exports: [AssessmentsService, LessonPlansService, GradebookService],
 })
 export class AcademicsModule {}

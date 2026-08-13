@@ -259,13 +259,11 @@ export default function GradesPanel({ schoolId, canEdit }) {
                 {canEdit ? (
                   <button
                     type="button"
-                    onClick={async () => {
-                      await academicsApi.revertImport(schoolId, imp.id)
-                      load()
-                    }}
-                    className="rounded border border-navy/15 px-2 py-0.5 text-[10.5px] text-muted hover:border-danger hover:text-danger"
+                    disabled={reverting === imp.id}
+                    onClick={() => setConfirming(imp)}
+                    className="rounded border border-navy/15 px-2 py-0.5 text-[10.5px] text-muted hover:border-danger hover:text-danger disabled:opacity-40"
                   >
-                    Undo
+                    {reverting === imp.id ? 'Undoing…' : 'Undo'}
                   </button>
                 ) : null}
               </div>
@@ -273,6 +271,54 @@ export default function GradesPanel({ schoolId, canEdit }) {
           </div>
         )}
       </Card>
+
+      {/* UNDO DELETES ROWS. It used to fire on the first click with no
+          confirmation, no busy state and no error branch, so a rejected DELETE
+          became an unhandled rejection and the list simply did not change —
+          indistinguishable from an undo that worked. */}
+      {confirming ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/40 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
+            <h4 className="font-serif text-[18px] font-semibold text-navy">Undo this import?</h4>
+            <p className="mt-1.5 text-[12.5px] text-muted">
+              {confirming.fileName ?? `${confirming.kind} import`} — this removes the{' '}
+              {confirming.resultsCreated > 0
+                ? `${confirming.resultsCreated} student rows`
+                : `${confirming.aggregatesUpserted} summary rows`}{' '}
+              it added and recomputes the averages built from them. It cannot be undone.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirming(null)}
+                className="rounded-xl border border-navy/15 px-4 py-2 text-[12px] text-navy"
+              >
+                Keep it
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const imp = confirming
+                  setConfirming(null)
+                  setReverting(imp.id)
+                  setError('')
+                  try {
+                    await academicsApi.revertImport(schoolId, imp.id)
+                    await load()
+                  } catch (e) {
+                    setError(e?.response?.data?.message ?? 'Could not undo that import.')
+                  } finally {
+                    setReverting(null)
+                  }
+                }}
+                className="rounded-xl bg-danger px-4 py-2 text-[12px] font-bold uppercase tracking-[0.12em] text-white"
+              >
+                Undo import
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {error ? <p className="text-[12.5px] text-danger">{error}</p> : null}
     </div>

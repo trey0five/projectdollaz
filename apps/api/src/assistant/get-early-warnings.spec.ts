@@ -155,8 +155,10 @@ function makeService(over: { licensed?: boolean; twin?: Record<string, unknown> 
   const args: unknown[] = Array(arity).fill({} as never)
   args[0] = prisma
   args[1] = periods
-  args[arity - 2] = earlyWarning
-  args[arity - 1] = billing
+  // -3 / -2: `gradebook` is now the last constructor parameter, so these two
+  // moved up one. This spec exists to make exactly that shift loud.
+  args[arity - 3] = earlyWarning
+  args[arity - 2] = billing
   const svc = new (AssistantService as unknown as new (...a: unknown[]) => AssistantService)(...args)
   return { svc, getTwin, billing }
 }

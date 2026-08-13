@@ -53,6 +53,50 @@ function coerceFeeder(v: unknown): Record<string, number> | null {
   return Object.keys(out).length ? out : null
 }
 
+/**
+ * The ONE projection from a period_operational_data row into the pure layer's
+ * shape.
+ *
+ * There were FOUR copies of this literal — one here and three inside
+ * StrategyProgressService — and the academics columns were added to exactly one
+ * of them. The other three kept returning rows with no academics data, so a
+ * strategic goal legitimately bound to an academics metric could never resolve
+ * a baseline or report a single point of progress. A column added to the schema
+ * now reaches every caller or none of them.
+ *
+ * The `as` casts are the house style for additive columns: they let this compile
+ * before the Prisma client is regenerated (see plannedEnrollmentByGrade above).
+ */
+export function toPeriodOperational(row: {
+  enrollment: number | null
+  enrollmentFte: unknown
+  studentsOnAid: number | null
+  financialAidTotal: unknown
+  teachingFte: unknown
+  totalStaffFte: unknown
+}): PeriodOperational {
+  return {
+    enrollment: row.enrollment,
+    enrollmentFte: dec(row.enrollmentFte as Parameters<typeof dec>[0]),
+    studentsOnAid: row.studentsOnAid,
+    financialAidTotal: dec(row.financialAidTotal as Parameters<typeof dec>[0]),
+    // Phase 4 HR — the staff FTEs that feed student_teacher_ratio.
+    teachingFte: dec(row.teachingFte as Parameters<typeof dec>[0]),
+    totalStaffFte: dec(row.totalStaffFte as Parameters<typeof dec>[0]),
+    // Academics — raw ints (counts and sums, never Decimals).
+    actScoreSum: (row as { actScoreSum?: number | null }).actScoreSum ?? null,
+    actTestedCount: (row as { actTestedCount?: number | null }).actTestedCount ?? null,
+    satScoreSum: (row as { satScoreSum?: number | null }).satScoreSum ?? null,
+    satTestedCount: (row as { satTestedCount?: number | null }).satTestedCount ?? null,
+    benchmarkMetCount: (row as { benchmarkMetCount?: number | null }).benchmarkMetCount ?? null,
+    benchmarkTestedCount: (row as { benchmarkTestedCount?: number | null }).benchmarkTestedCount ?? null,
+    assessmentEligibleCount:
+      (row as { assessmentEligibleCount?: number | null }).assessmentEligibleCount ?? null,
+    assessmentTestedCount:
+      (row as { assessmentTestedCount?: number | null }).assessmentTestedCount ?? null,
+  }
+}
+
 @Injectable()
 export class OperationalService {
   constructor(
@@ -137,31 +181,7 @@ export class OperationalService {
   ): Promise<PeriodOperational | null> {
     const row = await this.findRow(schoolId, fiscalPeriodId)
     if (!row) return null
-    return {
-      enrollment: row.enrollment,
-      enrollmentFte: dec(row.enrollmentFte),
-      studentsOnAid: row.studentsOnAid,
-      financialAidTotal: dec(row.financialAidTotal),
-      // Phase 4 HR — surface the already-captured staff FTEs to the pure compute
-      // layer (feeds student_teacher_ratio). Same dec() as toPublic on these cols.
-      teachingFte: dec(row.teachingFte),
-      totalStaffFte: dec(row.totalStaffFte),
-      // Academics — raw ints (counts and sums, never Decimals). THIS function,
-      // not toPublic, is the only operational feed into computeMetricsForPeriod
-      // and computeOrgMetrics: omitting them here leaves every academics metric
-      // available:false while the sparkline built from the trend path shows real
-      // numbers right beside the card that says "no data".
-      actScoreSum: (row as { actScoreSum?: number | null }).actScoreSum ?? null,
-      actTestedCount: (row as { actTestedCount?: number | null }).actTestedCount ?? null,
-      satScoreSum: (row as { satScoreSum?: number | null }).satScoreSum ?? null,
-      satTestedCount: (row as { satTestedCount?: number | null }).satTestedCount ?? null,
-      benchmarkMetCount: (row as { benchmarkMetCount?: number | null }).benchmarkMetCount ?? null,
-      benchmarkTestedCount: (row as { benchmarkTestedCount?: number | null }).benchmarkTestedCount ?? null,
-      assessmentEligibleCount:
-        (row as { assessmentEligibleCount?: number | null }).assessmentEligibleCount ?? null,
-      assessmentTestedCount:
-        (row as { assessmentTestedCount?: number | null }).assessmentTestedCount ?? null,
-    }
+    return toPeriodOperational(row)
   }
 
   /** GET — tenant-checked read; returns the row or an all-nulls public shape. */

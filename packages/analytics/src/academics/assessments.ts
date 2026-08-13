@@ -205,7 +205,72 @@ export function gateAggregates(
     }
   }
 
-  return [...best.values()].map((r) => {
+  // ── THE COMPLEMENT PASS ────────────────────────────────────────────────────
+  //
+  // Suppressing a row in isolation is not suppression. The per-grade rows and
+  // the gradeLevel:'all' row of one (school, year, test) are an exact PARTITION:
+  // grade 11 has 5 scored students averaging 22.0, grade 12 has 1 averaging 33,
+  // and 'all' has 6 averaging 23.833. Nulling only grade 12 leaves
+  //   (6 x 23.833 - 5 x 22.0) / (6 - 5) = 33
+  // — that senior's exact ACT composite, reconstructed from two rows that each
+  // cleared the floor. Round 1 caught this shape on subgroups and round 3 caught
+  // it on distribution bands; grades are the third instance.
+  //
+  // The rule: if any grade in a group is suppressed, the RESIDUAL must still
+  // cover at least MIN_CELL students. If it does not, the 'all' row goes with
+  // it — the whole-school number is the one thing the subtraction needs.
+  const collapsed = [...best.values()]
+  const thinOf = (r: RawAggregateRow): boolean => {
+    const c = r.testedCount ?? null
+    return c === null || c < MIN_CELL
+  }
+  const suppressAll = new Set<string>()
+  /** Grades hidden not for their own size but to cover a smaller neighbour. */
+  const alsoHide = new Set<string>()
+  const rowKey = (r: RawAggregateRow): string =>
+    `${r.schoolId}|${r.schoolYear}|${r.testType}|${r.gradeLevel}`
+  const groups = new Map<string, RawAggregateRow[]>()
+  for (const r of collapsed) {
+    const key = `${r.schoolId}|${r.schoolYear}|${r.testType}`
+    const list = groups.get(key) ?? []
+    list.push(r)
+    groups.set(key, list)
+  }
+  for (const [key, list] of groups) {
+    const all = list.find((r) => r.gradeLevel === 'all')
+    if (!all || thinOf(all)) continue
+    const grades = list.filter((r) => r.gradeLevel !== 'all')
+    const hidden = grades.filter(thinOf)
+    if (hidden.length === 0) continue
+
+    // IT IS THE HIDDEN SET THAT HAS TO BE BIG, not the visible remainder. The
+    // rows form an exact partition, so the hidden grades' combined mean is
+    // ALWAYS recoverable as (T_all x A_all - Σ T_g x A_g) ÷ (T_all - Σ T_g) —
+    // whether five children or five hundred are visible makes no difference to
+    // that arithmetic. What matters is how many students the recovered number
+    // describes: one senior is a disclosure, twelve students is a statistic.
+    //
+    // So hide the next-smallest grades until the hidden set itself clears the
+    // floor — exactly the second-band rule safeDistribution already applies to
+    // achievement bands. Only when no combination can (too few grades, or a
+    // count we never knew) does the whole-school row itself come down.
+    if (hidden.some((g) => g.testedCount === null || g.testedCount === undefined)) {
+      suppressAll.add(key)
+      continue
+    }
+    let hiddenTotal = hidden.reduce((acc, g) => acc + (g.testedCount ?? 0), 0)
+    const spare = grades
+      .filter((g) => !thinOf(g))
+      .sort((a2, b2) => (a2.testedCount ?? 0) - (b2.testedCount ?? 0))
+    for (const g of spare) {
+      if (hiddenTotal >= MIN_CELL) break
+      alsoHide.add(rowKey(g))
+      hiddenTotal += g.testedCount ?? 0
+    }
+    if (hiddenTotal < MIN_CELL) suppressAll.add(key)
+  }
+
+  return collapsed.map((r) => {
     const family = familyOf(r.testType)
     // FAIL CLOSED on an unknown count: a row whose cohort size nobody recorded
     // is not known to be safe, and the whole point of a floor is that it holds
@@ -218,7 +283,11 @@ export function gateAggregates(
     // exists to stop, so it suppresses like any other unknown; a genuinely
     // empty row (no count, no score) has nothing to suppress either way.
     const count = r.testedCount ?? null
-    const thin = count === null || count < MIN_CELL
+    const thin =
+      count === null ||
+      count < MIN_CELL ||
+      alsoHide.has(rowKey(r)) ||
+      (r.gradeLevel === 'all' && suppressAll.has(`${r.schoolId}|${r.schoolYear}|${r.testType}`))
     return {
       schoolId: r.schoolId,
       schoolName: r.schoolName,
@@ -1049,4 +1118,92 @@ export function movements(
       }
     })
     .sort((a, b) => (b.change ?? -Infinity) - (a.change ?? -Infinity))
+}
+
+// ── THE GRADEBOOK GATE ───────────────────────────────────────────────────────
+//
+// The score path has gateAggregates; the gradebook needed the same one door and
+// did not have it. Round 3 put a floor inside GradebookService.summary and left
+// Penny's get_gradebook_summary running its own copy of the query, so the REST
+// route answered "suppressed" while the chattiest surface in the product
+// answered with the number. That is the identical mistake round 2 found on the
+// score path, one table over.
+//
+// Three things the first floor got wrong, fixed here:
+//   1. It counted MARKS. One student with five courses cleared a floor meant to
+//      mean five students, so their own average was published as the school's.
+//   2. It gated on the ROW count while the average it guarded is computed by SQL
+//      over non-null marks only — a cohort of two scored marks among five rows
+//      passed a floor its own average never met.
+//   3. It floored each term independently while publishing the school total, so
+//      a thin term was recoverable by subtraction — the same complement attack
+//      as the grades above.
+
+export interface GradebookTermInput {
+  term: string | null
+  /** Marks with a NUMBER in them — the population the average is taken over. */
+  scoredCount: number
+  /** Distinct students behind those marks. */
+  studentCount: number
+  average: number | null
+}
+
+export interface GradebookSummaryInput {
+  totalMarks: number
+  courses: number
+  scoredCount: number
+  studentCount: number
+  average: number | null
+  byTerm: GradebookTermInput[]
+}
+
+export interface GradebookTermOutput {
+  term: string
+  count: number
+  average: number | null
+  suppressed: boolean
+}
+
+export interface GradebookSummaryOutput {
+  total: number
+  courses: number
+  average: number | null
+  suppressed: boolean
+  byTerm: GradebookTermOutput[]
+}
+
+/**
+ * Floor a gradebook summary. The ONE function both the REST route and the
+ * assistant call — a floor that lives in one caller is not a floor.
+ */
+export function gateGradebookSummary(input: GradebookSummaryInput): GradebookSummaryOutput {
+  const publishable = (studentCount: number, scoredCount: number, average: number | null): boolean =>
+    average !== null && studentCount >= MIN_CELL && scoredCount >= MIN_CELL
+
+  const terms = input.byTerm.map((t) => ({
+    term: t.term ?? 'unspecified',
+    // The COUNT is safe — "3 marks on file" names nobody. The average is not.
+    count: t.scoredCount,
+    average: publishable(t.studentCount, t.scoredCount, t.average) ? t.average : null,
+    suppressed: !publishable(t.studentCount, t.scoredCount, t.average),
+  }))
+
+  // THE COMPLEMENT, again. A school average of 87.0 over 11 marks beside a
+  // visible term of 10 marks averaging 88.0 gives up the eleventh mark exactly:
+  // 11 x 87.0 - 10 x 88.0 = 77. If the suppressed terms together hold fewer than
+  // MIN_CELL scored marks, the school-wide average is the thing that hands them
+  // over, so it comes down with them.
+  const hiddenScored = input.byTerm
+    .filter((t) => !publishable(t.studentCount, t.scoredCount, t.average))
+    .reduce((acc, t) => acc + t.scoredCount, 0)
+  const hiddenExposed = hiddenScored > 0 && hiddenScored < MIN_CELL
+  const overallOk = publishable(input.studentCount, input.scoredCount, input.average) && !hiddenExposed
+
+  return {
+    total: input.totalMarks,
+    courses: input.courses,
+    average: overallOk ? input.average : null,
+    suppressed: !overallOk && input.totalMarks > 0,
+    byTerm: terms,
+  }
 }

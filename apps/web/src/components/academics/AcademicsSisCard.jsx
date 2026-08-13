@@ -49,8 +49,16 @@ export default function AcademicsSisCard({ schoolId }) {
   // reports `provider: 'oneroster_csv'`. Only `connected`/`configured` mean a
   // connection exists, and this card exists precisely to avoid claiming one
   // that does not.
+  // `connected` is the ONLY per-school signal here.
+  //
+  // `provider` is populated on every payload (it is the default roster mode),
+  // and `configured` answers a different question entirely — whether the SERVER
+  // has the OAuth environment variables at all. ORing it in re-introduced the
+  // exact overclaim this card was written to remove, just one field over: every
+  // school in the deployment would read as connected the moment the box had
+  // credentials for any of them.
   const provider = status?.provider ?? null
-  const connected = Boolean(status?.connected || status?.configured)
+  const connected = Boolean(status?.connected)
   const capable = connected && provider ? GRADEBOOK_CAPABLE.has(provider) : false
 
   return (
