@@ -147,8 +147,8 @@ export default function GradesPanel({ schoolId, canEdit }) {
           </div>
         ) : (
           <p className="text-[12.5px] text-muted">
-            No course marks loaded yet. A gradebook export — or a OneRoster sync once your SIS credentials are in —
-            lands here.
+            No course marks loaded yet. Upload a gradebook export from the Add data tab and it lands here — live SIS
+            grade sync is not available yet, whatever your roster connection.
           </p>
         )}
       </Card>
