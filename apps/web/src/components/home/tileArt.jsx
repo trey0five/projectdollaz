@@ -148,3 +148,17 @@ export function PlanningArt(props) {
     </svg>
   )
 }
+
+/** Academics — an open book with a rising score line across its pages. */
+export function AcademicsArt(props) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M4 12c7-3 13-3 20 1v29c-7-4-13-4-20-1z" fill="currentColor" opacity=".15" />
+      <path d="M44 12c-7-3-13-3-20 1v29c7-4 13-4 20-1z" fill="currentColor" opacity=".22" />
+      <path d="M4 12c7-3 13-3 20 1v29c-7-4-13-4-20-1zM44 12c-7-3-13-3-20 1v29c7-4 13-4 20-1z" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" />
+      <path d="M24 13v29" stroke="currentColor" strokeWidth="2.2" />
+      <path d="M28 33l4-6 4 3 5-9" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="41" cy="21" r="2.4" fill="currentColor" />
+    </svg>
+  )
+}

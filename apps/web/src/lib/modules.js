@@ -19,6 +19,7 @@ export const MODULE_KEYS = [
   'advancement',
   'accreditation',
   'strategy',
+  'academics',
 ]
 
 /** The always-on module. Never gated, never sold. */
@@ -38,6 +39,7 @@ export const MODULE_META = {
   advancement: { key: 'advancement', label: 'Advancement', description: 'Development, campaigns, giving, gift schedules.', core: false },
   accreditation: { key: 'accreditation', label: 'Accreditation', description: 'Compliance & accreditation readiness, self-study, evidence.', core: false },
   strategy: { key: 'strategy', label: 'Strategic Planning', description: 'Strategic plans, pillars, goals & initiatives — self-measuring against your live financials.', core: false },
+  academics: { key: 'academics', label: 'Academics', description: 'Grades, lesson plans & standardized assessments — the classroom, measured against your peers.', core: false },
 }
 
 /** The sellable (non-core) module keys. */

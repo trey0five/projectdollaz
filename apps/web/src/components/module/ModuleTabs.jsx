@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // ModuleTabs — the ui.v2 module-page chrome. PURE chrome: it knows nothing about
 // a module's data; each module page supplies the panel nodes (overview / addData /
-// records / reports).
+// records / analytics / reports).
 //
 // NAV MODEL: the module's sections (Overview · Add data · Records · Reports) are
 // now rows in the LEFT SIDEBAR (AppShell renders a module section while you're on
@@ -53,11 +53,11 @@ export function ModuleAccent({ moduleKey, children }) {
   return <div style={{ display: 'contents', ...moduleAccentVars(moduleKey) }}>{children}</div>
 }
 
-export default function ModuleTabs({ moduleKey, overview, addData, records, reports }) {
+export default function ModuleTabs({ moduleKey, overview, addData, records, analytics, reports }) {
   const tabs = moduleTabs(moduleKey)
   const [active] = useModuleTab(tabs)
 
-  const panels = { overview, add: addData, records, reports }
+  const panels = { overview, add: addData, records, analytics, reports }
   const panel = panels[active] ?? overview
 
   return (

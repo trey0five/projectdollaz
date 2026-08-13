@@ -42,6 +42,7 @@ import {
   LineChart,
   Users2,
   Settings,
+  BookOpen,
 } from 'lucide-react'
 
 export const NAV_GROUPS = [
@@ -208,6 +209,14 @@ export const NAV_GROUPS = [
     module: 'strategy',
     items: [
       { to: '/strategy', navId: 'nav-strategy', label: 'Strategic Planning', Icon: Target, match: (p) => p.startsWith('/strategy') },
+    ],
+  },
+  {
+    id: 'academics',
+    label: 'Academics',
+    module: 'academics',
+    items: [
+      { to: '/academics', navId: 'nav-academics', label: 'Academics', Icon: BookOpen, match: (p) => p.startsWith('/academics') },
     ],
   },
 ]

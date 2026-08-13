@@ -30,6 +30,7 @@ import {
   StrategyArt,
   HrArt,
   PlanningArt,
+  AcademicsArt,
 } from './tileArt.jsx'
 
 export const HOME_TILES = [
@@ -95,6 +96,16 @@ export const HOME_TILES = [
     tagline: 'Your strategic plan, measured against the live numbers.',
     Art: StrategyArt,
     badgeSources: ['strategy'],
+  },
+  {
+    // Academics — the classroom domain: assessments, gradebook, lesson plans.
+    key: 'academics',
+    hue: '#0D9488',
+    route: '/academics',
+    navId: 'tile-academics',
+    tagline: 'Test scores, grades and lesson plans — your classroom against its peers.',
+    Art: AcademicsArt,
+    badgeSources: ['academics'],
   },
   {
     // Phase 6 — HR & Staffing command center at /hr (ratio, FTEs, trends + the

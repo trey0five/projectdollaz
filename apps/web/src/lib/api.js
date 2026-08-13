@@ -869,6 +869,50 @@ export const advancementApi = {
 // isModuleNotLicensed). getActiveProgress / getPlanProgress return the COMPUTED
 // payload (fractions 0..1); getPlan is the raw editable tree. rebaseline re-freezes
 // a metric goal's baseline to its current live value.
+// ── Academics — assessments, gradebook, lesson plans ─────────────────────────
+// The dashboard is ONE server-built payload (every number computed by the pure
+// @finrep/analytics layer) so the school page, the org page and a print packet
+// cannot drift apart. Uploads are two-step: /upload previews without writing,
+// /commit writes — the reviewer always sees the parse before it lands.
+export const academicsApi = {
+  status: (schoolId) => api.get(`/schools/${schoolId}/academics/status`),
+  dashboard: (schoolId, params = {}) =>
+    api.get(`/schools/${schoolId}/academics/assessments/dashboard`, { params }),
+  summary: (schoolId, params = {}) =>
+    api.get(`/schools/${schoolId}/academics/assessments/summary`, { params }),
+  preview: (schoolId, formData) =>
+    api.post(`/schools/${schoolId}/academics/assessments/upload`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  commit: (schoolId, formData) =>
+    api.post(`/schools/${schoolId}/academics/assessments/commit`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  results: (schoolId, params = {}) =>
+    api.get(`/schools/${schoolId}/academics/assessments/results`, { params }),
+  attachResult: (schoolId, resultId, studentId) =>
+    api.patch(`/schools/${schoolId}/academics/assessments/results/${resultId}/attach`, { studentId }),
+  imports: (schoolId) => api.get(`/schools/${schoolId}/academics/assessments/imports`),
+  revertImport: (schoolId, importId) =>
+    api.delete(`/schools/${schoolId}/academics/assessments/imports/${importId}`),
+  lessonPlans: (schoolId, params = {}) => api.get(`/schools/${schoolId}/academics/lesson-plans`, { params }),
+  createLessonPlan: (schoolId, body) => api.post(`/schools/${schoolId}/academics/lesson-plans`, body),
+  updateLessonPlan: (schoolId, id, body) => api.patch(`/schools/${schoolId}/academics/lesson-plans/${id}`, body),
+  removeLessonPlan: (schoolId, id) => api.delete(`/schools/${schoolId}/academics/lesson-plans/${id}`),
+  gradebookSummary: (schoolId, params = {}) =>
+    api.get(`/schools/${schoolId}/academics/gradebook/summary`, { params }),
+  // Diocesan: one file covering every school, name-matched server-side.
+  orgDashboard: (orgId, params = {}) => api.get(`/organizations/${orgId}/academics/dashboard`, { params }),
+  orgPreview: (orgId, formData) =>
+    api.post(`/organizations/${orgId}/academics/assessments/upload`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  orgCommit: (orgId, formData) =>
+    api.post(`/organizations/${orgId}/academics/assessments/commit`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+}
+
 export const strategyApi = {
   getPlans: (schoolId) => api.get(`/schools/${schoolId}/strategy/plans`),
   getPlan: (schoolId, planId) => api.get(`/schools/${schoolId}/strategy/plans/${planId}`),

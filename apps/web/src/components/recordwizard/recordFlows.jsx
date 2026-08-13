@@ -26,6 +26,7 @@ import {
   Gift,
   GraduationCap,
   ShieldCheck,
+  BookOpen,
 } from 'lucide-react'
 
 import {
@@ -38,8 +39,7 @@ import {
   advancementApi,
   enrollmentApi,
   analyticsApi,
-  hrApi,
-} from '../../lib/api.js'
+  hrApi, academicsApi} from '../../lib/api.js'
 // AIC Phase F — the WEB-side display authority for MaintenanceItem.complianceKind
 // and for StaffEvaluation's status vocabulary. Imported rather than re-declared:
 // each is already a documented hard-copy of its DTO array, and a third copy would
@@ -119,6 +119,72 @@ const gradeOpt = GRADE_KEYS.map((g) => ({
 const keyedOpt = (keys, labels) => keys.map((k) => ({ value: k, label: labels[k] ?? k }))
 
 export const recordFlows = {
+  // ── Academics ──────────────────────────────────────────────────────────────
+  'academics.lessonPlan': {
+    key: 'academics.lessonPlan',
+    noun: 'lesson plan',
+    nounPlural: 'lesson plans',
+    Icon: BookOpen,
+    defaults: { status: 'draft' },
+    steps: [
+      {
+        key: 'what',
+        label: 'The plan',
+        title: 'What are you teaching?',
+        blurb: 'A title the teacher will recognise, plus where it sits.',
+        fields: [
+          { key: 'title', label: 'Title', type: 'text', required: true, placeholder: 'Fractions — introduction' },
+          { key: 'subject', label: 'Subject', type: 'text', placeholder: 'Math' },
+          { key: 'gradeLevel', label: 'Grade', type: 'text', placeholder: '5' },
+          { key: 'teacherName', label: 'Teacher', type: 'text', placeholder: 'Optional' },
+        ],
+      },
+      {
+        key: 'when',
+        label: 'When & status',
+        title: 'When does it run?',
+        blurb: 'The week it belongs to and where it stands.',
+        fields: [
+          { key: 'weekOf', label: 'Week of', type: 'date' },
+          {
+            key: 'status',
+            label: 'Status',
+            type: 'select',
+            options: [
+              { value: 'draft', label: 'Draft' },
+              { value: 'planned', label: 'Planned' },
+              { value: 'delivered', label: 'Delivered' },
+              { value: 'reviewed', label: 'Reviewed' },
+            ],
+          },
+          { key: 'notes', label: 'Notes', type: 'textarea', placeholder: 'Optional' },
+        ],
+      },
+    ],
+    // Built key by key against CreateLessonPlanDto — the API runs
+    // forbidNonWhitelisted, so a spread would 400 the moment a field drifts.
+    toBody: (v) => {
+      const body = { title: v.title }
+      if (v.subject) body.subject = v.subject
+      if (v.gradeLevel) body.gradeLevel = String(v.gradeLevel)
+      if (v.teacherName) body.teacherName = v.teacherName
+      if (v.status) body.status = v.status
+      if (v.weekOf) body.weekOf = v.weekOf
+      if (v.notes) body.notes = v.notes
+      return body
+    },
+    submit: (ctx, body) => academicsApi.createLessonPlan(ctx.schoolId, body),
+    itemLabel: (v) => v.title || 'Lesson plan',
+    itemSub: (v) => [v.subject, v.gradeLevel ? `Gr ${v.gradeLevel}` : null].filter(Boolean).join(' · '),
+    reviewPairs: (v) => [
+      ['Title', v.title],
+      ['Subject', v.subject],
+      ['Grade', v.gradeLevel],
+      ['Week of', v.weekOf],
+      ['Status', v.status],
+    ],
+  },
+
   // ══════════════════════ ENROLLMENT · STUDENT (Phase 5 roster) ══════════════
   // The school's own roster record — DATA-MINIMAL by FERPA design (no address/
   // phone/medical text; support needs are coarse booleans). Optional empties are

@@ -349,6 +349,32 @@ export const wizardConfigs = {
     ],
   },
 
+  academics: {
+
+    label: 'Academics',
+
+    options: [
+
+      {
+
+        key: 'lesson-plan',
+
+        kind: 'flow',
+
+        label: 'Lesson plan',
+
+        blurb: 'Add a plan to the classroom register — subject, grade, week and status.',
+
+        cta: 'Add lesson plan',
+
+        flow: recordFlows['academics.lessonPlan'],
+
+      },
+
+    ],
+
+  },
+
   strategy: {
     module: 'strategy',
     hue: HUE.strategy,

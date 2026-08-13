@@ -77,6 +77,7 @@ const LandingPage = lazy(() => import('./pages/landing/LandingPage.jsx'))
 // Strategic Planning (Phase 5) — lazy so the flashy SVG-arc hero + its module
 // bundle only load for schools that actually open /strategy.
 const StrategyPage = lazy(() => import('./pages/StrategyPage.jsx'))
+const AcademicsPage = lazy(() => import('./pages/AcademicsPage.jsx'))
 
 // AIC Phase G — the Continuous Improvement Manager. Lazy for the same reason:
 // it pulls the record-wizard chunk (the seeded "Work this gap" flow) and the
@@ -283,6 +284,14 @@ export default function App() {
           element={
             <Suspense fallback={<div className="min-h-screen bg-cream" />}>
               <StrategyPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/academics"
+          element={
+            <Suspense fallback={<div className="min-h-screen bg-cream" />}>
+              <AcademicsPage />
             </Suspense>
           }
         />

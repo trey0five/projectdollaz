@@ -14,6 +14,7 @@
 // supplies the actual panel nodes.
 // ─────────────────────────────────────────────────────────────────────────────
 import {
+  BookOpen,
   CircleDollarSign,
   GraduationCap,
   Landmark,
@@ -31,11 +32,15 @@ import { HOME_TILES } from '../home/tileRegistry.jsx'
 const HUE = Object.fromEntries(HOME_TILES.map((t) => [t.key, t.hue]))
 
 // The canonical tab order + human labels.
-export const TAB_ORDER = ['overview', 'add', 'records', 'reports']
+export const TAB_ORDER = ['overview', 'add', 'records', 'analytics', 'reports']
 export const TAB_LABEL = {
   overview: 'Overview',
   add: 'Add data',
   records: 'Records',
+  // Academics is the first module whose analysis is too large for the Overview
+  // tab — a whole diocesan dashboard rather than a KPI strip — so it earns its
+  // own door. Declarative like every other tab: a module that omits it has none.
+  analytics: 'Analytics',
   reports: 'Reports',
 }
 
@@ -55,6 +60,11 @@ export const MODULE_ANATOMY = {
     tabs: ['overview', 'add', 'records'],
     Icon: GraduationCap,
     eyebrow: 'Enrollment intelligence',
+  },
+  academics: {
+    tabs: ['overview', 'add', 'records', 'analytics'],
+    Icon: BookOpen,
+    eyebrow: 'Academics',
   },
   governance: {
     tabs: ['overview', 'add', 'records'],
