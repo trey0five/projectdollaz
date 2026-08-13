@@ -44,9 +44,14 @@ export default function AcademicsSisCard({ schoolId }) {
     }
   }, [schoolId])
 
-  const provider = status?.source?.provider ?? status?.provider ?? null
-  const connected = Boolean(provider)
-  const capable = provider ? GRADEBOOK_CAPABLE.has(provider) : false
+  // `provider` is populated on EVERY status payload — it is the default mode,
+  // not evidence of a connection — so a school that has connected nothing still
+  // reports `provider: 'oneroster_csv'`. Only `connected`/`configured` mean a
+  // connection exists, and this card exists precisely to avoid claiming one
+  // that does not.
+  const provider = status?.provider ?? null
+  const connected = Boolean(status?.connected || status?.configured)
+  const capable = connected && provider ? GRADEBOOK_CAPABLE.has(provider) : false
 
   return (
     <div className="rounded-2xl border border-navy/10 bg-white p-5">
