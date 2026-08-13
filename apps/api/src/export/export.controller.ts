@@ -67,7 +67,7 @@ export class DataExportOrgController {
 
   @Get('exports')
   list(@CurrentUser() user: User, @Param('orgId', ParseUUIDPipe) orgId: string) {
-    return this.exports.listOrg(orgId)
+    return this.exports.listOrg(user, orgId)
   }
 
   @Get('exports/:id/download')

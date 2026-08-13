@@ -24,6 +24,21 @@ import { buildZip, toCsv, type ZipEntry } from './zip.js'
 /** How long a finished archive stays downloadable. */
 const EXPIRY_DAYS = 7
 
+/**
+ * The whole archive is built in memory, so there has to be a ceiling — an
+ * unbounded walk of a large tenant would take the API process down for every
+ * school on it, which is a far worse outcome than one school being told to ask.
+ * Well above any real tenant: the live three-school diocese archive is 334 KB.
+ */
+const MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
+
+/**
+ * A job older than this that is still 'running' was orphaned — the API restarted
+ * mid-walk, so nothing will ever finish it. Without this the UI polls a row that
+ * can never change and the school is told "preparing…" forever.
+ */
+const STALE_JOB_MINUTES = 30
+
 interface DmmfModel {
   name: string
   fields: Array<{ name: string; kind: string }>
@@ -190,8 +205,20 @@ export class DataExportService {
     return memberships.map((m) => m.school).filter((sc): sc is { id: string; name: string } => !!sc)
   }
 
-  /** Recent exports for an organization. */
-  async listOrg(organizationId: string) {
+  /**
+   * Recent exports for an organization.
+   *
+   * TAKES THE ACTOR AND CHECKS THEM. This shipped without the check while the
+   * download route beside it had one, which meant any authenticated user could
+   * list any org's exports by id — and `rowCounts` is keyed by school folder
+   * slug, so the response spelled out every school's NAME and how many rows of
+   * each kind it holds. Metadata about a tenant is still that tenant's.
+   */
+  async listOrg(actor: User, organizationId: string) {
+    if ((await this.writableSchools(actor, organizationId)).length === 0) {
+      throw new ForbiddenException('You do not own any school in this organization.')
+    }
+    await this.reapStale({ organizationId })
     return this.prisma.dataExport.findMany({
       where: { organizationId },
       orderBy: { createdAt: 'desc' },
@@ -261,7 +288,7 @@ export class DataExportService {
         data: Buffer.from(this.readme(`${schools.length} schools`, rowCounts), 'utf8'),
       })
 
-      const zip = buildZip(entries)
+      const zip = this.sealed(entries)
       const key = `exports/org/${organizationId}/${jobId}.zip`
       await this.storage.putObject(zip, key, 'application/zip')
       await this.prisma.dataExport.update({
@@ -286,6 +313,7 @@ export class DataExportService {
 
   /** Recent exports for a school, newest first. */
   async list(schoolId: string) {
+    await this.reapStale({ schoolId })
     return this.prisma.dataExport.findMany({
       where: { schoolId },
       orderBy: { createdAt: 'desc' },
@@ -358,7 +386,7 @@ export class DataExportService {
         data: Buffer.from(this.readme(schoolName, rowCounts), 'utf8'),
       })
 
-      const zip = buildZip(entries)
+      const zip = this.sealed(entries)
       const key = `exports/${schoolId}/${jobId}.zip`
       await this.storage.putObject(zip, key, 'application/zip')
 
@@ -404,6 +432,44 @@ export class DataExportService {
       .filter((f) => f.kind === 'scalar' || f.kind === 'enum')
       .map((f) => f.name)
       .filter((n) => !omit.has(n))
+  }
+
+  /**
+   * Build the archive, refusing rather than exhausting the process.
+   *
+   * The message is written for the person who sees it: it says what to do next
+   * instead of "export failed", because the school still needs its data and the
+   * per-module exports on each page are a real answer while we lift this.
+   */
+  private sealed(entries: ZipEntry[]): Buffer {
+    const raw = entries.reduce((acc, e) => acc + e.data.length, 0)
+    if (raw > MAX_ARCHIVE_BYTES) {
+      throw new Error(
+        'This archive is larger than a single download can hold. Export one module at a time from its own page, ' +
+          'or contact support@ourkyro.com and we will send it in parts.',
+      )
+    }
+    return buildZip(entries)
+  }
+
+  /**
+   * Mark orphaned jobs failed. Called on every list, which is the cheapest place
+   * to notice: the only reader of a stuck row is the page that polls it.
+   */
+  private async reapStale(where: { schoolId?: string; organizationId?: string }): Promise<void> {
+    await this.prisma.dataExport
+      .updateMany({
+        where: {
+          ...where,
+          status: 'running',
+          createdAt: { lt: new Date(Date.now() - STALE_JOB_MINUTES * 60 * 1000) },
+        },
+        data: {
+          status: 'failed',
+          error: 'This export was interrupted before it finished. Start a new one — nothing was lost.',
+        },
+      })
+      .catch(() => undefined)
   }
 
   /** One table, tenant-scoped, with credential columns stripped. */
