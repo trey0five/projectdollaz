@@ -484,6 +484,17 @@ export class AssessmentsService {
         family,
         scoreType,
       }),
+      // The board-ready table: one row per school with both years, the change,
+      // and the gap to each reference line — computed here so the table, the
+      // charts and a printed packet can never disagree.
+      table: this.comparisonTable(inScope, {
+        year,
+        grade,
+        peerValue: peer.value,
+        national: nationalReference(scoreType),
+        family,
+        scoreType,
+      }),
       cohort,
       availableCohorts: availableCohorts(inScope),
       objectives: strengthsAndOpportunities(standings),
@@ -1034,6 +1045,44 @@ export class AssessmentsService {
   private async orgSchoolIds(organizationId: string): Promise<string[]> {
     const schools = await this.prisma.school.findMany({ where: { organizationId }, select: { id: true } })
     return schools.map((s) => s.id)
+  }
+
+  /** One row per school: this year, last year, the move, and the two gaps. */
+  private comparisonTable(
+    rows: AssessmentRow[],
+    opts: {
+      year: number
+      grade: string
+      peerValue: number | null
+      national: number | null
+      family: 'act' | 'sat' | 'nrt'
+      scoreType: 'scale' | 'percentile' | 'nce'
+    },
+  ) {
+    const inGrade = rows.filter((r) => r.gradeLevel === opts.grade)
+    const ids = [...new Set(inGrade.map((r) => r.schoolId))]
+    const ranked = rankSchools(inGrade.filter((r) => r.schoolYear === opts.year))
+    return ids
+      .map((schoolId) => {
+        const cur = inGrade.find((r) => r.schoolId === schoolId && r.schoolYear === opts.year) ?? null
+        const prev = inGrade.find((r) => r.schoolId === schoolId && r.schoolYear === opts.year - 1) ?? null
+        const current = cur?.avgComposite ?? null
+        const prior = prev?.avgComposite ?? null
+        const rankRow = ranked.find((r) => r.schoolId === schoolId)
+        return {
+          schoolId,
+          schoolName: cur?.schoolName ?? prev?.schoolName ?? null,
+          current,
+          prior,
+          change: current !== null && prior !== null ? current - prior : null,
+          vsNetwork: current !== null && opts.peerValue !== null ? current - opts.peerValue : null,
+          vsNational: current !== null && opts.national !== null ? current - opts.national : null,
+          tested: cur?.testedCount ?? null,
+          rank: rankRow?.rank ?? null,
+          forthcoming: current === null && isForthcoming(rows, schoolId, opts.year, opts.grade),
+        }
+      })
+      .sort((a, b) => (b.current ?? -Infinity) - (a.current ?? -Infinity))
   }
 
   private benchmarkKpi(own: AssessmentRow | null, peers: AssessmentRow[], schoolId: string) {

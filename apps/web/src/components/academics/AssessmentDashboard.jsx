@@ -302,6 +302,251 @@ function CohortPanel({ cohort, reduce }) {
   )
 }
 
+// ── Multi-year trend ─────────────────────────────────────────────────────────
+
+/**
+ * The school's line against the network's, year by year. Two lines and nothing
+ * else: a trend chart earns its space by answering "are we moving, and are we
+ * moving differently from everyone around us" — anything more is decoration.
+ */
+function TrendChart({ points, national, range, reduce }) {
+  const usable = points.filter((p) => p.school !== null || p.peer !== null)
+  if (usable.length < 2) {
+    return (
+      <p className="text-[12.5px] text-muted">
+        One year on file — load a second year and the trend appears here.
+      </p>
+    )
+  }
+  const W = 640
+  const H = 190
+  const PAD = { l: 34, r: 12, t: 14, b: 24 }
+  // Scale to the DATA (plus the national line and a little air), not to the
+  // theoretical 1–99. A percentile axis pinned to its full range flattens every
+  // real movement into a straight line — which is exactly the thing this chart
+  // exists to show.
+  const vals = usable.flatMap((p) => [p.school, p.peer]).filter((v) => v !== null)
+  const anchors = national === null || national === undefined ? vals : [...vals, national]
+  const rawLo = Math.min(...anchors)
+  const rawHi = Math.max(...anchors)
+  const pad = Math.max(2, (rawHi - rawLo) * 0.25)
+  const lo = Math.max(range?.min ?? -Infinity, rawLo - pad)
+  const hi = Math.min(range?.max ?? Infinity, rawHi + pad)
+  const span = hi - lo || 1
+  const x = (i) => PAD.l + (i / Math.max(1, usable.length - 1)) * (W - PAD.l - PAD.r)
+  const y = (v) => PAD.t + (1 - (v - lo) / span) * (H - PAD.t - PAD.b)
+  const path = (key) =>
+    usable
+      .map((p, i) => (p[key] === null ? null : `${i === 0 || usable[i - 1][key] === null ? 'M' : 'L'}${x(i)},${y(p[key])}`))
+      .filter(Boolean)
+      .join(' ')
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="block w-full" role="img" aria-label="Score by year, school against the network">
+      {national !== null && national !== undefined ? (
+        <>
+          <line x1={PAD.l} x2={W - PAD.r} y1={y(national)} y2={y(national)} stroke="#e11d48" strokeWidth="1.2" strokeDasharray="5 4" />
+          <text x={PAD.l + 2} y={y(national) - 4} fontSize="9" fontWeight="700" fill="#e11d48">
+            National {national}
+          </text>
+        </>
+      ) : null}
+      <motion.path
+        d={path('peer')}
+        fill="none"
+        stroke="#2563EB"
+        strokeWidth="2"
+        strokeDasharray="4 3"
+        initial={reduce ? { pathLength: 1 } : { pathLength: 0 }}
+        animate={{ pathLength: 1 }}
+        transition={{ duration: 0.8, ease: EASE }}
+      />
+      <motion.path
+        d={path('school')}
+        fill="none"
+        stroke={HUE}
+        strokeWidth="2.8"
+        strokeLinejoin="round"
+        initial={reduce ? { pathLength: 1 } : { pathLength: 0 }}
+        animate={{ pathLength: 1 }}
+        transition={{ duration: 0.9, ease: EASE, delay: 0.1 }}
+      />
+      {usable.map((p, i) =>
+        p.school === null ? null : (
+          <g key={p.schoolYear}>
+            <circle cx={x(i)} cy={y(p.school)} r="4" fill={HUE} stroke="#fff" strokeWidth="1.6" />
+            <text x={x(i)} y={y(p.school) - 9} fontSize="10" fontWeight="700" textAnchor="middle" fill="#0f766e">
+              {fmt(p.school, 0)}
+            </text>
+          </g>
+        ),
+      )}
+      {usable.map((p, i) => (
+        <text key={`x-${p.schoolYear}`} x={x(i)} y={H - 6} fontSize="10" textAnchor="middle" fill="#64748b">
+          {p.schoolYear}
+        </text>
+      ))}
+      <text x={PAD.l - 4} y={PAD.t + 6} fontSize="9" textAnchor="end" fill="#94a3b8">
+        {Math.round(hi)}
+      </text>
+      <text x={PAD.l - 4} y={H - PAD.b} fontSize="9" textAnchor="end" fill="#94a3b8">
+        {Math.round(lo)}
+      </text>
+    </svg>
+  )
+}
+
+// ── Achievement distribution ─────────────────────────────────────────────────
+
+const BAND_LABEL = {
+  q1: 'Bottom quarter',
+  q2: 'Lower middle',
+  q3: 'Upper middle',
+  q4: 'Top quarter',
+}
+const BAND_COLOR = { q1: '#e11d48', q2: '#f59e0b', q3: '#0ea5e9', q4: '#059669' }
+
+/**
+ * Where students actually sit, not just where the mean does. Two schools can
+ * share an average while one has everybody near the middle and the other has a
+ * quarter of its students in the bottom band — this is the chart that tells them
+ * apart.
+ */
+function Distribution({ slices, reduce }) {
+  const total = slices.reduce((acc, s) => acc + (s.count ?? 0), 0)
+  if (total === 0) {
+    return (
+      <p className="text-[12.5px] text-muted">
+        This file carried averages only — upload student-level results to see the spread.
+      </p>
+    )
+  }
+  return (
+    <div className="space-y-3">
+      <div className="flex h-8 overflow-hidden rounded-lg">
+        {slices.map((s, i) => (
+          <motion.div
+            key={s.band}
+            initial={reduce ? { width: `${(s.share ?? 0) * 100}%` } : { width: 0 }}
+            animate={{ width: `${(s.share ?? 0) * 100}%` }}
+            transition={{ duration: 0.7, ease: EASE, delay: reduce ? 0 : i * 0.08 }}
+            style={{ background: BAND_COLOR[s.band] }}
+            title={`${BAND_LABEL[s.band]}: ${s.count} students`}
+          />
+        ))}
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {slices.map((s) => (
+          <div key={s.band} className="flex items-center gap-2">
+            <span className="h-2.5 w-2.5 rounded-sm" style={{ background: BAND_COLOR[s.band] }} />
+            <span className="text-[11.5px] text-muted">{BAND_LABEL[s.band]}</span>
+            <span className="ml-auto text-[12px] font-bold tabular-nums text-navy">
+              {s.count} · {Math.round((s.share ?? 0) * 100)}%
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── The board table ──────────────────────────────────────────────────────────
+
+/**
+ * The table a board packet prints: every school, both years, the move, and the
+ * gap to each reference. Sortable because the question changes — "who is
+ * highest" and "who moved most" are different meetings.
+ */
+function ComparisonTable({ rows, scoreType }) {
+  const [sort, setSort] = useState('current')
+  const sorted = useMemo(() => {
+    const copy = [...rows]
+    if (sort === 'name') return copy.sort((a, b) => (a.schoolName ?? '').localeCompare(b.schoolName ?? ''))
+    if (sort === 'change') return copy.sort((a, b) => (b.change ?? -Infinity) - (a.change ?? -Infinity))
+    return copy.sort((a, b) => (b.current ?? -Infinity) - (a.current ?? -Infinity))
+  }, [rows, sort])
+
+  const th = 'px-2 py-1.5 text-right font-mono text-[9px] font-bold uppercase tracking-wider text-muted'
+  const td = 'px-2 py-2 text-right text-[12.5px] tabular-nums'
+
+  return (
+    <div className="overflow-x-auto">
+      <div className="mb-2 flex gap-1.5">
+        {[
+          ['current', 'Score'],
+          ['change', 'Change'],
+          ['name', 'A–Z'],
+        ].map(([k, l]) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => setSort(k)}
+            className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+              sort === k ? 'text-white' : 'text-muted hover:text-navy'
+            }`}
+            style={sort === k ? { background: HUE } : { background: 'rgba(16,28,61,0.05)' }}
+          >
+            {l}
+          </button>
+        ))}
+      </div>
+      <table className="w-full min-w-[560px] border-collapse">
+        <thead>
+          <tr className="border-b border-navy/12">
+            <th className={`${th} text-left`}>School</th>
+            <th className={th}>This year</th>
+            <th className={th}>Last year</th>
+            <th className={th}>Change</th>
+            <th className={th}>vs network</th>
+            <th className={th}>vs national</th>
+            <th className={th}>Tested</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((r) => (
+            <tr key={r.schoolId} className="border-b border-navy/[0.07] hover:bg-navy/[0.02]">
+              <td className="px-2 py-2 text-left text-[12.5px] text-navy">
+                {r.rank ? <span className="mr-1.5 font-mono text-[10px] text-muted">{r.rank}</span> : null}
+                {r.schoolName}
+              </td>
+              <td className={`${td} font-bold text-navy`}>
+                {r.forthcoming ? <span className="font-mono text-[10px] italic text-muted">forthcoming</span> : fmt(r.current, 0)}
+              </td>
+              <td className={`${td} text-muted`}>{fmt(r.prior, 0)}</td>
+              <td className={td}>
+                <ChangeBadge value={r.change} />
+              </td>
+              <td className={`${td} ${gapTone(r.vsNetwork)}`}>{signed(r.vsNetwork, 0)}</td>
+              <td className={`${td} ${gapTone(r.vsNational)}`}>
+                {scoreType === 'scale' ? '—' : signed(r.vsNational, 0)}
+              </td>
+              <td className={`${td} text-muted`}>{r.tested ?? '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+const gapTone = (v) => (v === null || v === undefined ? 'text-muted' : v > 0 ? 'text-emerald-700' : v < 0 ? 'text-rose-700' : 'text-muted')
+
+function ChangeBadge({ value }) {
+  if (value === null || value === undefined) return <span className="text-muted">—</span>
+  const up = value > 0
+  const flat = Math.abs(value) < 0.05
+  return (
+    <span
+      className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[11px] font-bold ${
+        flat ? 'bg-navy/[0.06] text-navy/60' : up ? 'bg-emerald-500/12 text-emerald-700' : 'bg-rose-500/12 text-rose-700'
+      }`}
+    >
+      {flat ? null : up ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+      {signed(value, 0)}
+    </span>
+  )
+}
+
 // ── Section shell ────────────────────────────────────────────────────────────
 
 function Section({ title, eyebrow, children, aside, delay = 0, reduce }) {
@@ -543,6 +788,46 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
           </p>
         </Section>
       </div>
+
+      {/* ── Trend + distribution ── */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Section eyebrow="Across the years" title="Are we moving?" reduce={reduce}>
+          <TrendChart
+            points={data?.trend ?? []}
+            national={ctx?.nationalReference}
+            range={ctx?.scoreRange}
+            reduce={reduce}
+          />
+          <p className="mt-1 flex items-center gap-3 text-[11px] text-muted">
+            <span className="inline-flex items-center gap-1">
+              <span className="inline-block h-0.5 w-4" style={{ background: HUE }} /> This school
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="inline-block h-0.5 w-4 border-t-2 border-dashed border-[#2563EB]" /> Network
+            </span>
+          </p>
+        </Section>
+
+        <Section eyebrow="The spread" title="Where students actually sit" reduce={reduce} delay={0.05}>
+          <Distribution slices={data?.distribution ?? []} reduce={reduce} />
+        </Section>
+      </div>
+
+      {/* ── The board table ── */}
+      {(data?.table ?? []).length > 0 ? (
+        <Section
+          eyebrow="Board-ready"
+          title="Every school, both years"
+          reduce={reduce}
+          aside={
+            <span className="font-mono text-[10px] uppercase tracking-wider text-muted">
+              {ctx?.grade === 'all' ? 'All grades' : `Grade ${ctx?.grade}`}
+            </span>
+          }
+        >
+          <ComparisonTable rows={data.table} scoreType={ctx?.scoreType} />
+        </Section>
+      ) : null}
 
       {/* ── Cohort ── */}
       {data?.cohort ? (

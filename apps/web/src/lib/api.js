@@ -901,6 +901,12 @@ export const academicsApi = {
   removeLessonPlan: (schoolId, id) => api.delete(`/schools/${schoolId}/academics/lesson-plans/${id}`),
   gradebookSummary: (schoolId, params = {}) =>
     api.get(`/schools/${schoolId}/academics/gradebook/summary`, { params }),
+  gradebookCourses: (schoolId, params = {}) =>
+    api.get(`/schools/${schoolId}/academics/gradebook/courses`, { params }),
+  // Register — role-gated server-side; a viewer gets 403, which the panel says
+  // out loud rather than rendering an empty table.
+  gradebookRecords: (schoolId, params = {}) =>
+    api.get(`/schools/${schoolId}/academics/gradebook/records`, { params }),
   // Diocesan: one file covering every school, name-matched server-side.
   orgDashboard: (orgId, params = {}) => api.get(`/organizations/${orgId}/academics/dashboard`, { params }),
   orgPreview: (orgId, formData) =>

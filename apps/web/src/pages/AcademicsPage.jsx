@@ -18,6 +18,7 @@ import AddDataTab from '../components/wizard/AddDataTab.jsx'
 import AssessmentDashboard from '../components/academics/AssessmentDashboard.jsx'
 import AssessmentUpload from '../components/academics/AssessmentUpload.jsx'
 import LessonPlanRegister from '../components/academics/LessonPlanRegister.jsx'
+import GradesPanel from '../components/academics/GradesPanel.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { academicsApi } from '../lib/api.js'
 
@@ -142,7 +143,16 @@ export default function AcademicsPage() {
         }
         records={
           <Panel>
-            <LessonPlanRegister schoolId={activeId} canEdit={canEdit} />
+            <div className="space-y-4">
+              <GradesPanel schoolId={activeId} canEdit={canEdit} />
+              <section className="rounded-2xl border border-navy/10 bg-white p-5">
+                <p className="font-mono text-[9.5px] font-bold uppercase tracking-[0.18em]" style={{ color: HUE }}>
+                  Lesson plans
+                </p>
+                <h3 className="mb-3 mt-0.5 font-serif text-[19px] font-semibold text-navy">The classroom register</h3>
+                <LessonPlanRegister schoolId={activeId} canEdit={canEdit} />
+              </section>
+            </div>
           </Panel>
         }
       />
