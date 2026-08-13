@@ -68,6 +68,8 @@ export default function GradesPanel({ schoolId, canEdit }) {
   const [unmatchedOnly, setUnmatchedOnly] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [confirming, setConfirming] = useState(null)
+  const [reverting, setReverting] = useState(null)
 
   const load = useCallback(async () => {
     if (!schoolId) return

@@ -418,7 +418,15 @@ const BAND_COLOR = { q1: '#e11d48', q2: '#f59e0b', q3: '#0ea5e9', q4: '#059669' 
  * apart.
  */
 function Distribution({ slices, reduce }) {
-  const total = slices.reduce((acc, s) => acc + (s.count ?? 0), 0)
+  // Width comes from the COUNTS we were given, not from a server-sent share.
+  // Once any band is suppressed the server withholds every share — a visible
+  // count beside its share is the cohort total, and the total gives up the
+  // hidden bands by subtraction — so a share-driven bar would collapse to zero
+  // width exactly when part of the distribution is hidden.
+  const visible = slices.reduce((acc, s) => acc + (s.count ?? 0), 0)
+  const total = visible
+  const width = (s) => (visible > 0 ? ((s.count ?? 0) / visible) * 100 : 0)
+  const anyHidden = slices.some((s) => s.suppressed || s.count === null)
   if (total === 0) {
     return (
       <p className="text-[12.5px] text-muted">
@@ -432,21 +440,31 @@ function Distribution({ slices, reduce }) {
         {slices.map((s, i) => (
           <motion.div
             key={s.band}
-            initial={reduce ? { width: `${(s.share ?? 0) * 100}%` } : { width: 0 }}
-            animate={{ width: `${(s.share ?? 0) * 100}%` }}
+            initial={reduce ? { width: `${width(s)}%` } : { width: 0 }}
+            animate={{ width: `${width(s)}%` }}
             transition={{ duration: 0.7, ease: EASE, delay: reduce ? 0 : i * 0.08 }}
             style={{ background: BAND_COLOR[s.band] }}
             title={`${BAND_LABEL[s.band]}: ${s.count} students`}
           />
         ))}
       </div>
+      {anyHidden ? (
+        <p className="text-[11.5px] text-muted">
+          Bands under five students are hidden, and the percentages with them — a share beside a count would give the
+          hidden bands away.
+        </p>
+      ) : null}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {slices.map((s) => (
           <div key={s.band} className="flex items-center gap-2">
             <span className="h-2.5 w-2.5 rounded-sm" style={{ background: BAND_COLOR[s.band] }} />
             <span className="text-[11.5px] text-muted">{BAND_LABEL[s.band]}</span>
             <span className="ml-auto text-[12px] font-bold tabular-nums text-navy">
-              {s.suppressed || s.count === null ? '<5' : `${s.count} · ${Math.round((s.share ?? 0) * 100)}%`}
+              {s.suppressed || s.count === null
+                ? '<5'
+                : anyHidden
+                  ? `${s.count}`
+                  : `${s.count} · ${Math.round(width(s))}%`}
             </span>
           </div>
         ))}
@@ -476,7 +494,10 @@ function ComparisonTable({ rows, scoreType }) {
 
   return (
     <div className="overflow-x-auto">
-      <div className="mb-2 flex gap-1.5">
+      {/* A toggle group, not three unrelated buttons: without the role and the
+          pressed state a screen reader announces "Score, Change, A to Z" and
+          never says which one the table is currently sorted by. */}
+      <div className="mb-2 flex gap-1.5" role="group" aria-label="Sort schools by">
         {[
           ['current', 'Score'],
           ['change', 'Change'],
@@ -485,6 +506,7 @@ function ComparisonTable({ rows, scoreType }) {
           <button
             key={k}
             type="button"
+            aria-pressed={sort === k}
             onClick={() => setSort(k)}
             className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${
               sort === k ? 'text-white' : 'text-muted hover:text-navy'
@@ -636,8 +658,13 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
       <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-navy/10 bg-white px-4 py-3">
         <span className="font-mono text-[9.5px] font-bold uppercase tracking-[0.16em] text-muted">View</span>
         <select
-          value={ctx?.testType ?? ''}
-          onChange={(e) => select({ testType: e.target.value })}
+          aria-label="Test"
+            value={ctx?.testType ?? ''}
+          // A NEW TEST IS A NEW QUESTION. Merging the patch carried the old
+          // test's year and grade across — a school with TerraNova grade 5 and
+          // an ACT in grade 11 switched to ACT, kept gradeLevel 5, got an empty
+          // dashboard, and had no grade 5 option left to click back out of.
+          onChange={(e) => select({ testType: e.target.value, schoolYear: null, gradeLevel: null, cohortGrade: null })}
           className="rounded-lg border border-navy/15 bg-white px-2.5 py-1.5 text-[12.5px] text-navy"
         >
           {(ctx?.availableTestTypes ?? []).map((t) => (
@@ -647,6 +674,7 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
           ))}
         </select>
         <select
+          aria-label="School year"
           value={ctx?.year ?? ''}
           onChange={(e) => select({ schoolYear: Number(e.target.value) })}
           className="rounded-lg border border-navy/15 bg-white px-2.5 py-1.5 text-[12.5px] text-navy"
@@ -658,7 +686,8 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
           ))}
         </select>
         <select
-          value={ctx?.grade ?? 'all'}
+          aria-label="Grade"
+            value={ctx?.grade ?? 'all'}
           onChange={(e) => select({ gradeLevel: e.target.value })}
           className="rounded-lg border border-navy/15 bg-white px-2.5 py-1.5 text-[12.5px] text-navy"
         >
@@ -670,6 +699,7 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
         </select>
         {(data?.availableCohorts ?? []).length > 0 ? (
           <select
+            aria-label="Cohort"
             value={data?.cohort?.grade ?? ''}
             onChange={(e) => select({ cohortGrade: e.target.value || undefined })}
             className="rounded-lg border border-navy/15 bg-white px-2.5 py-1.5 text-[12.5px] text-navy"

@@ -113,6 +113,23 @@ describe('gateAggregates — the derived-over-ingested collapse', () => {
     expect(out).toHaveLength(3)
   })
 
+  it('the derived winner INHERITS the eligible count only a summary file carries', () => {
+    // deriveAggregates cannot know who did not sit the exam, so the derived row
+    // always has eligibleCount null. Dropping the ingested row wholesale killed
+    // participation for exactly the schools that uploaded the most data.
+    const out = gateAggregates(
+      [
+        row({ ...key, derivation: 'ingested', eligibleCount: 44, testedCount: 40 }),
+        row({ ...key, derivation: 'derived', eligibleCount: null, testedCount: 38 }),
+      ],
+      familyOf,
+      scoreTypeOf,
+    )
+    expect(out).toHaveLength(1)
+    expect(out[0].testedCount).toBe(38)
+    expect(out[0].eligibleCount).toBe(44)
+  })
+
   it('the collapse runs BEFORE the floor — a thin derived row does not inherit a fat ingested one', () => {
     const out = gateAggregates(
       [

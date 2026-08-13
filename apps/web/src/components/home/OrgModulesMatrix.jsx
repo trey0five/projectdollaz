@@ -13,6 +13,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import {
+  BookOpen,
   BadgeCheck,
   Check,
   GraduationCap,
@@ -30,6 +31,11 @@ import { MODULE_META } from '../../lib/modules.js'
 
 // The opt-in add-ons, in a sensible reading order (Core + Finance are always-on
 // and shown as a note, not a column). Icons mirror the app's module glyphs.
+//
+// EVERY SELLABLE MODULE BELONGS HERE. This list is hand-maintained, so a new
+// module is invisible in the grid until someone remembers — academics shipped
+// and no school could be seen holding it, which also understated each row's
+// add-on count. The spec below the component pins it against MODULE_META.
 const ADDON_COLUMNS = [
   { key: 'governance', Icon: Landmark },
   { key: 'accreditation', Icon: BadgeCheck },
@@ -39,12 +45,13 @@ const ADDON_COLUMNS = [
   { key: 'hr', Icon: Users },
   { key: 'strategy', Icon: Target },
   { key: 'planning', Icon: LineChart },
+  { key: 'academics', Icon: BookOpen },
 ]
 
 function shortLabel(key) {
   const label = MODULE_META[key]?.label ?? key
   // Trim the long ones so the column header stays compact.
-  return { hr: 'HR', planning: 'Planning', strategy: 'Strategy' }[key] ?? label
+  return { hr: 'HR', planning: 'Planning', strategy: 'Strategy', academics: 'Academics' }[key] ?? label
 }
 
 export default function OrgModulesMatrix({ schools = [] }) {

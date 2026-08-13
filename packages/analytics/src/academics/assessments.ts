@@ -187,7 +187,22 @@ export function gateAggregates(
   for (const r of rows) {
     const key = `${r.schoolId}|${r.schoolYear}|${r.testType}|${r.gradeLevel}`
     const cur = best.get(key)
-    if (!cur || (r.derivation === 'derived' && cur.derivation !== 'derived')) best.set(key, r)
+    if (!cur) {
+      best.set(key, r)
+      continue
+    }
+    if (r.derivation === 'derived' && cur.derivation !== 'derived') {
+      // The derived row wins on SCORES, but it cannot know how many students
+      // were ELIGIBLE — only a summary file reports the ones who did not sit the
+      // exam, and deriveAggregates always writes eligibleCount: null. Discarding
+      // the ingested row wholesale therefore destroyed the participation
+      // denominator the moment a school uploaded student-level results, and
+      // participation silently became unavailable for exactly the schools that
+      // gave us the most data.
+      best.set(key, { ...r, eligibleCount: r.eligibleCount ?? cur.eligibleCount ?? null })
+    } else if (cur.derivation === 'derived' && r.derivation !== 'derived') {
+      best.set(key, { ...cur, eligibleCount: cur.eligibleCount ?? r.eligibleCount ?? null })
+    }
   }
 
   return [...best.values()].map((r) => {
@@ -576,10 +591,16 @@ export function objectiveStandings(
       const matches = pool.filter(
         (p) => p.objectiveLabel === o.objectiveLabel && p.subject === o.subject && p.gradeLevel === o.gradeLevel && p.opi !== null,
       )
+      // ALL-OR-NOTHING, like averageOf. Mixing real tester counts with a
+      // fallback weight of 1 silently makes a 400-student school count the same
+      // as a 4-student one — this was the only weighted average in the file
+      // that neither followed the rule nor said which statistic it produced.
+      // If ANY matched peer is missing its count, every peer weighs the same.
+      const weighted = matches.every((m) => m.testedCount !== null && m.testedCount !== undefined)
       let num = 0
       let den = 0
       for (const m of matches) {
-        const w = m.testedCount ?? 1
+        const w = weighted ? (m.testedCount as number) : 1
         num += (m.opi as number) * w
         den += w
       }
@@ -614,9 +635,13 @@ export function strengthsAndOpportunities(
       const bv = b.variance ?? (b.opi as number) - 50
       return bv - av
     })
+  // SPLIT, don't slice twice. With fewer than 2 x limit standings the two slices
+  // overlap, and a school with six objectives on file was told the same one was
+  // both its greatest strength and its biggest opportunity — in adjacent cards.
+  const half = Math.min(limit, Math.floor(ranked.length / 2))
   return {
-    strengths: ranked.slice(0, limit),
-    opportunities: ranked.slice(-limit).reverse(),
+    strengths: ranked.slice(0, half),
+    opportunities: ranked.slice(ranked.length - half).reverse(),
   }
 }
 

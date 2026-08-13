@@ -62,7 +62,9 @@ export class GradebookService {
     const imp = await this.prisma.assessmentImport.create({
       data: {
         schoolId,
-        kind: 'upload',
+        // 'gradebook', not 'upload': revert branches on kind, and these rows
+        // live in grade_records rather than the assessment tables.
+        kind: 'gradebook',
         scope: 'student',
         provider: null,
         fileName: file.originalname ?? null,

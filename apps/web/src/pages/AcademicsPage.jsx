@@ -76,7 +76,11 @@ export default function AcademicsPage() {
   const onQuery = useCallback(
     (patch) => {
       const next = { ...query, ...patch }
-      for (const k of Object.keys(next)) if (next[k] === undefined || next[k] === '') delete next[k]
+      // null is an explicit CLEAR (see the test-type select), '' and undefined
+      // are an absent value — all three drop the key rather than sending it.
+      for (const k of Object.keys(next)) {
+        if (next[k] === undefined || next[k] === '' || next[k] === null) delete next[k]
+      }
       setQuery(next)
       load(next)
     },
@@ -133,7 +137,25 @@ export default function AcademicsPage() {
               loading={loading}
             />
             <div className="mt-5">
-              <AssessmentDashboard data={dashboard} onQuery={onQuery} loading={busy} />
+              {/* A failed fetch used to fall through to a fully rendered
+                  dashboard of em-dashes, which reads as "we measured this and
+                  it is empty" rather than "we could not load it". */}
+              {error ? (
+                <div className="rounded-2xl border border-danger/25 bg-white p-6">
+                  <p className="text-[13px] font-semibold text-danger">{error}</p>
+                  <button
+                    type="button"
+                    onClick={() => load(query)}
+                    className="mt-3 rounded-xl border border-navy/15 px-4 py-2 text-[12px] font-semibold text-navy"
+                  >
+                    Try again
+                  </button>
+                </div>
+              ) : loading && !dashboard ? (
+                <p className="text-[13px] text-muted">Loading the comparison…</p>
+              ) : (
+                <AssessmentDashboard data={dashboard} onQuery={onQuery} loading={busy} />
+              )}
             </div>
           </Panel>
         }

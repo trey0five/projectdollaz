@@ -109,6 +109,10 @@ describe('assessment parser — messy real files', () => {
     expect(guessTestType(['School', 'Total Battery', 'NPR'])).toBe('terranova')
     expect(guessTestType(['Composite', 'English', 'Science'])).toBe('act')
     expect(guessTestType(['EBRW', 'Math'])).toBe('sat')
+    // A file we cannot place returns null rather than defaulting to the ACT —
+    // it is the only determination in the pipeline, and a wrong one puts a
+    // percentile on a 1-36 axis against college-readiness benchmarks.
+    expect(guessTestType(['Widget', 'Sprocket'])).toBeNull()
     const csv = ['School,Grade,Total Battery', 'All Souls,3,72'].join('\n')
     expect(parseAssessmentCsv(enc(csv), { testType: 'iowa' }).testType).toBe('iowa')
   })

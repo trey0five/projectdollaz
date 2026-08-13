@@ -279,11 +279,34 @@ export class AssessmentsService {
 
   /** Delete one import's rows and re-derive what it touched. */
   async revert(schoolId: string, importId: string): Promise<{ deleted: number }> {
+    // A DIOCESAN upload records ONE import with an organizationId and a null
+    // schoolId, so a schoolId-only lookup could never find it: an org import was
+    // invisible to every listing and impossible to undo through any route. A
+    // school may revert an org import, but only its OWN rows come out.
+    const school = await this.prisma.school.findUnique({
+      where: { id: schoolId },
+      select: { organizationId: true },
+    })
     const imp = await this.prisma.assessmentImport.findFirst({
-      where: { id: importId, schoolId },
-      select: { id: true, yearHint: true, testTypeHint: true },
+      where: {
+        id: importId,
+        OR: [{ schoolId }, ...(school?.organizationId ? [{ organizationId: school.organizationId }] : [])],
+      },
+      select: { id: true, kind: true, yearHint: true, testTypeHint: true },
     })
     if (!imp) throw new NotFoundException('Import not found.')
+
+    // GRADEBOOK and OBJECTIVE imports write to different tables entirely.
+    // Reverting them deleted nothing at all and reported success — the Undo
+    // button listed them, removed nothing, and left the row on screen.
+    if (imp.kind === 'gradebook') {
+      const removed = await this.prisma.gradeRecord.deleteMany({ where: { importId, schoolId } })
+      return { deleted: removed.count }
+    }
+    if (imp.kind === 'objectives') {
+      const removed = await this.prisma.assessmentObjectiveAggregate.deleteMany({ where: { importId, schoolId } })
+      return { deleted: removed.count }
+    }
     // Capture the affected years BEFORE deleting — afterwards there is nothing
     // left to tell us which years need re-deriving.
     // Both tables, not just the student rows: a SCHOOL-SUMMARY import creates no
@@ -291,20 +314,20 @@ export class AssessmentsService {
     // revert fell back to yearHint — which is null for a multi-year file.
     const [resultYears, aggregateYears] = await Promise.all([
       this.prisma.assessmentResult.findMany({
-        where: { importId },
+        where: { importId, schoolId },
         select: { schoolYear: true },
         distinct: ['schoolYear'],
       }),
       this.prisma.assessmentSchoolAggregate.findMany({
-        where: { importId },
+        where: { importId, schoolId },
         select: { schoolYear: true },
         distinct: ['schoolYear'],
       }),
     ])
     const affectedYears = [...new Set([...resultYears, ...aggregateYears].map((r) => r.schoolYear))]
     const [results, aggregates] = await Promise.all([
-      this.prisma.assessmentResult.deleteMany({ where: { importId } }),
-      this.prisma.assessmentSchoolAggregate.deleteMany({ where: { importId } }),
+      this.prisma.assessmentResult.deleteMany({ where: { importId, schoolId } }),
+      this.prisma.assessmentSchoolAggregate.deleteMany({ where: { importId, schoolId } }),
     ])
     // Re-derive every year this import touched, not just its hint: a multi-year
     // file reverted by hint alone would leave the other years' aggregates
@@ -323,8 +346,17 @@ export class AssessmentsService {
   }
 
   async listImports(schoolId: string) {
+    // Include the DIOCESAN uploads that wrote this school's rows. They carry an
+    // organizationId and no schoolId, so a schoolId-only filter hid them —
+    // leaving a school able to see numbers it had no record of receiving.
+    const school = await this.prisma.school.findUnique({
+      where: { id: schoolId },
+      select: { organizationId: true },
+    })
     return this.prisma.assessmentImport.findMany({
-      where: { schoolId },
+      where: {
+        OR: [{ schoolId }, ...(school?.organizationId ? [{ organizationId: school.organizationId }] : [])],
+      },
       orderBy: { createdAt: 'desc' },
       take: 50,
       select: {
@@ -397,6 +429,31 @@ export class AssessmentsService {
     })
   }
 
+  /**
+   * The test family a school leads with when the caller names none.
+   *
+   * `all[0].testType` was a findMany with no orderBy, handed through a Map that
+   * preserves insertion order — so a school holding both an ACT and a TerraNova
+   * got whichever row Postgres happened to return first, and its dashboard's
+   * default family, score type and axis range changed between two identical
+   * requests. Most-recent year wins, then the most rows, then alphabetical: a
+   * total order with no ties left to chance.
+   */
+  private defaultTestType(rows: AssessmentRow[]): string {
+    const stats = new Map<string, { latest: number; count: number }>()
+    for (const r of rows) {
+      const cur = stats.get(r.testType) ?? { latest: -Infinity, count: 0 }
+      cur.latest = Math.max(cur.latest, r.schoolYear)
+      cur.count += 1
+      stats.set(r.testType, cur)
+    }
+    return (
+      [...stats.entries()].sort(
+        (a, b) => b[1].latest - a[1].latest || b[1].count - a[1].count || a[0].localeCompare(b[0]),
+      )[0]?.[0] ?? 'terranova'
+    )
+  }
+
   // ── Summaries (counts only — safe for Penny, briefing, anyone) ─────────────
 
   async summary(schoolId: string, q: { schoolYear?: number; testType?: string } = {}) {
@@ -453,7 +510,7 @@ export class AssessmentsService {
 
     const years = [...new Set(all.map((a) => a.schoolYear))].sort((a, b) => b - a)
     const year = q.schoolYear ?? years[0]
-    const testType = (q.testType ?? all[0].testType) as TestTypeKey
+    const testType = (q.testType ?? this.defaultTestType(all)) as TestTypeKey
     const family = TEST_FAMILY[testType] ?? 'nrt'
     const scoreType = SCORE_TYPE_FOR_FAMILY[family]
     const subjects = [...SUBJECTS_FOR_FAMILY[family]]
@@ -631,7 +688,7 @@ export class AssessmentsService {
 
     const years = [...new Set(all.map((a) => a.schoolYear))].sort((a, b) => b - a)
     const year = q.schoolYear ?? years[0]
-    const testType = (q.testType ?? all[0].testType) as TestTypeKey
+    const testType = (q.testType ?? this.defaultTestType(all)) as TestTypeKey
     const family = TEST_FAMILY[testType] ?? 'nrt'
     const scoreType = SCORE_TYPE_FOR_FAMILY[family]
     const grade = q.gradeLevel ?? 'all'
@@ -730,7 +787,9 @@ export class AssessmentsService {
     const imp = await this.prisma.assessmentImport.create({
       data: {
         schoolId,
-        kind: 'upload',
+        // 'objectives', not 'upload' — revert branches on this, and an
+        // objective import's rows live in a different table entirely.
+        kind: 'objectives',
         scope: 'school_aggregate',
         fileName: file.originalname ?? null,
         testTypeHint: parsed.testType,
@@ -1608,7 +1667,13 @@ export class AssessmentsService {
   ) {
     const inGrade = rows.filter((r) => r.gradeLevel === opts.grade)
     const ids = [...new Set(inGrade.map((r) => r.schoolId))]
-    const ranked = rankSchools(inGrade.filter((r) => r.schoolYear === opts.year))
+    const thisYearRows = inGrade.filter((r) => r.schoolYear === opts.year)
+    const ranked = rankSchools(thisYearRows)
+    const peerCache = new Map<string, number | null>()
+    const peerFor = (id: string): number | null => {
+      if (!peerCache.has(id)) peerCache.set(id, peerAverage(thisYearRows, { excludeSchoolId: id }).value)
+      return peerCache.get(id) ?? null
+    }
     return ids
       .map((schoolId) => {
         const cur = inGrade.find((r) => r.schoolId === schoolId && r.schoolYear === opts.year) ?? null
@@ -1622,7 +1687,11 @@ export class AssessmentsService {
           current,
           prior,
           change: current !== null && prior !== null ? current - prior : null,
-          vsNetwork: current !== null && opts.peerValue !== null ? current - opts.peerValue : null,
+          // Each row against the network EXCLUDING ITSELF — the same statistic the
+          // focus row gets. opts.peerValue excludes the VIEWING school, so every
+          // other row used to be compared with a benchmark that contained itself
+          // and omitted the viewer: a different question per row, in one column.
+          vsNetwork: current !== null && peerFor(schoolId) !== null ? current - (peerFor(schoolId) as number) : null,
           vsNational: current !== null && opts.national !== null ? current - opts.national : null,
           tested: cur?.testedCount ?? null,
           eligible: cur?.eligibleCount ?? null,
@@ -1660,9 +1729,18 @@ export class AssessmentsService {
         .sort((a, b) => (a.count ?? 0) - (b.count ?? 0))[0]
       if (next) hidden.add(next.band)
     }
-    return slices.map((s) =>
-      hidden.has(s.band) ? { band: s.band, count: null, share: null, suppressed: true } : { ...s, suppressed: false },
-    )
+    // AND THE SHARE HAS TO GO WITH THEM. A visible band publishes both its count
+    // and its share of the whole, and count ÷ share IS the cohort total — from
+    // which the hidden bands' combined size follows by subtraction. Once anything
+    // is hidden, no band may carry a share; the web draws its bars from counts.
+    if (hidden.size > 0) {
+      return slices.map((s) =>
+        hidden.has(s.band)
+          ? { band: s.band, count: null, share: null, suppressed: true }
+          : { ...s, share: null, suppressed: false },
+      )
+    }
+    return slices.map((s) => ({ ...s, suppressed: false }))
   }
 
   private benchmarkKpi(own: AssessmentRow | null, peers: AssessmentRow[], schoolId: string) {

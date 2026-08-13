@@ -10,6 +10,7 @@
 import { useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AlertTriangle, CheckCircle2, FileUp, Loader2 } from 'lucide-react'
+import { TEST_TYPE_KEYS, TEST_TYPE_LABELS } from '../../lib/academicsVocab.js'
 import { academicsApi } from '../../lib/api.js'
 
 const HUE = '#0D9488'
@@ -21,26 +22,37 @@ export default function AssessmentUpload({ schoolId, canEdit, onDone }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState(null)
+  const [needsType, setNeedsType] = useState(false)
+  const [chosenType, setChosenType] = useState('')
 
   const reset = () => {
     setFile(null)
     setPreview(null)
     setDone(null)
     setError('')
+    setNeedsType(false)
+    setChosenType('')
     if (inputRef.current) inputRef.current.value = ''
   }
 
-  const doPreview = async (f) => {
+  const doPreview = async (f, testType = chosenType) => {
     setBusy(true)
     setError('')
     setDone(null)
     try {
       const fd = new FormData()
       fd.append('file', f)
+      if (testType) fd.append('testType', testType)
       const res = await academicsApi.preview(schoolId, fd)
       setPreview(res.data ?? res)
+      setNeedsType(false)
     } catch (e) {
-      setError(e?.response?.data?.message ?? 'Could not read that file.')
+      const message = e?.response?.data?.message ?? 'Could not read that file.'
+      // The parser refuses to guess a test it cannot recognise rather than
+      // labelling the file ACT — so this is the one error the reader can fix
+      // themselves, and the picker appears instead of a dead end.
+      setNeedsType(/which test/i.test(message))
+      setError(message)
       setPreview(null)
     } finally {
       setBusy(false)
@@ -54,7 +66,7 @@ export default function AssessmentUpload({ schoolId, canEdit, onDone }) {
     try {
       const fd = new FormData()
       fd.append('file', file)
-      if (preview?.testType) fd.append('testType', preview.testType)
+      if (chosenType || preview?.testType) fd.append('testType', chosenType || preview.testType)
       if (preview?.years?.[0]) fd.append('schoolYear', String(preview.years[0]))
       const res = await academicsApi.commit(schoolId, fd)
       setDone(res.data ?? res)
@@ -164,6 +176,38 @@ export default function AssessmentUpload({ schoolId, canEdit, onDone }) {
           <CheckCircle2 size={14} /> Saved — {done.resultsCreated ?? 0} student rows, {done.aggregatesUpserted ?? 0} summary rows.
         </p>
       ) : null}
+      {needsType && file ? (
+        <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/[0.06] p-4">
+          <p className="text-[12.5px] text-navy">
+            Nothing in this file names the test. Choose it and we will read the file again.
+          </p>
+          <div className="mt-2.5 flex flex-wrap gap-2">
+            <select
+              aria-label="Test type"
+              value={chosenType}
+              onChange={(e) => setChosenType(e.target.value)}
+              className="rounded-lg border border-navy/15 bg-white px-2.5 py-1.5 text-[12.5px] text-navy"
+            >
+              <option value="">Choose a test…</option>
+              {TEST_TYPE_KEYS.map((k) => (
+                <option key={k} value={k}>
+                  {TEST_TYPE_LABELS[k] ?? k.toUpperCase()}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              disabled={!chosenType || busy}
+              onClick={() => doPreview(file, chosenType)}
+              className="rounded-xl px-4 py-2 text-[12px] font-bold uppercase tracking-[0.12em] text-white disabled:opacity-40"
+              style={{ background: HUE }}
+            >
+              Read it again
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {error ? <p className="mt-3 text-[12.5px] text-danger">{error}</p> : null}
     </div>
   )

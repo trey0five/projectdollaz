@@ -43,6 +43,25 @@ export default function LessonPlanRegister({ schoolId, canEdit }) {
 
   if (loading) return <p className="text-[13px] text-muted">Loading…</p>
 
+  // BEFORE the empty state, not after it. A failed load also produces zero rows,
+  // and the early return below sits above the only place `error` is rendered —
+  // so "we could not reach the server" was displayed as "you have not added
+  // anything yet", which invites the reader to add a duplicate.
+  if (error) {
+    return (
+      <div className="rounded-2xl border border-danger/25 bg-white p-6">
+        <p className="text-[12.5px] font-semibold text-danger">{error}</p>
+        <button
+          type="button"
+          onClick={load}
+          className="mt-3 rounded-xl border border-navy/15 px-4 py-2 text-[12px] font-semibold text-navy"
+        >
+          Try again
+        </button>
+      </div>
+    )
+  }
+
   if (rows.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-navy/20 bg-white p-10 text-center">

@@ -310,7 +310,7 @@ export function parseAssessmentGrid(grid: string[][], opts: ParseOptions = {}): 
   }
 
   const headers = (grid[headerIdx] ?? []).map((h) => String(h ?? ''))
-  const testType: TestTypeKey = isTestTypeKey(opts.testType) ? opts.testType : guessTestType(headers, opts.label)
+  const testType: TestTypeKey = resolveTestType(headers, opts.label, opts.testType)
   const family = TEST_FAMILY[testType]
   const scoreType = SCORE_TYPE_FOR_FAMILY[family]
 
@@ -525,7 +525,7 @@ export function splitName(raw: string): { first: string | null; last: string | n
  * Best-effort test type from the headers and a sheet/file label. The caller's
  * declared type always wins; this only saves a step when a file names itself.
  */
-export function guessTestType(headers: string[], label?: string): TestTypeKey {
+export function guessTestType(headers: string[], label?: string): TestTypeKey | null {
   const hay = norm([...(headers ?? []), label ?? ''].join(' '))
   if (hay.includes('terranova') || hay.includes('terra nova')) return 'terranova'
   if (hay.includes('iowa')) return 'iowa'
@@ -536,7 +536,24 @@ export function guessTestType(headers: string[], label?: string): TestTypeKey {
   if (hay.includes('act') || hay.includes('composite')) return 'act'
   // Percentile vocabulary without an exam name means a norm-referenced test.
   if (hay.includes('npr') || hay.includes('percentile') || hay.includes('battery')) return 'terranova'
-  return 'act'
+  return null
+}
+
+/**
+ * The guess, with a floor under it.
+ *
+ * guessTestType used to end in `return 'act'`, and it is the ONLY determination
+ * of test type in the whole pipeline — the upload panel has no picker, it echoes
+ * whatever the preview reported straight back to /commit. So an unrecognised
+ * file was labelled ACT with no hesitation: its numbers landed on the 1-36 axis,
+ * against ACT college-readiness benchmarks, and promoted into act_composite.
+ * "We could not tell" is the honest answer, and the caller can still insist.
+ */
+export function resolveTestType(headers: string[], label: string | undefined, chosen?: string): TestTypeKey {
+  if (isTestTypeKey(chosen)) return chosen
+  const guess = guessTestType(headers, label)
+  if (guess) return guess
+  throw new Error('Could not tell which test this file is from. Choose the test type and upload it again.')
 }
 
 /** Subjects actually present across the parsed rows, in family order. */
@@ -616,7 +633,14 @@ export function parseObjectiveGrid(grid: string[][], opts: ParseOptions = {}): O
   if (headerIdx > 0) warnings.push(`Skipped ${headerIdx} row${headerIdx === 1 ? '' : 's'} above the header.`)
 
   const headers = (grid[headerIdx] ?? []).map((h) => String(h ?? ''))
-  const testType: TestTypeKey = isTestTypeKey(opts.testType) ? opts.testType : guessTestType(headers, opts.label)
+  // An OBJECTIVE summary is about skills, not scores, and only the
+  // norm-referenced publishers produce one — so an unnamed file defaults to the
+  // NRT family rather than refusing. The score path above cannot do that: there,
+  // the family decides the axis, the benchmarks and the metric the numbers
+  // promote into, so guessing wrong is a wrong number rather than a wrong label.
+  const testType: TestTypeKey = isTestTypeKey(opts.testType)
+    ? opts.testType
+    : (guessTestType(headers, opts.label) ?? 'terranova')
 
   const idx = {
     school: headers.findIndex((h) => matchHeader(h, SCHOOL_HEADERS)),
