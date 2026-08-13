@@ -83,6 +83,9 @@ export type AttentionSource =
   // suppression table below is what enforces that distinction, and it is a Set in
   // code rather than a convention in a comment.
   | 'earlywarning'
+  // Academics — the classroom domain (STEP 2.17). Aggregates only: this source
+  // reads the school-aggregate table, which carries no identity column.
+  | 'academics'
 
 /**
  * A task at least this many days past due escalates the workflow overdue item from
@@ -399,6 +402,23 @@ export class BriefingService {
    * BOTH directions: an absent PrismaService (older positional-arg unit mocks) → null,
    * and a query error → null. NEVER throws, so STEP 2.11 can never 500 the briefing.
    */
+  /**
+   * The school's assessment aggregates — AGGREGATES ONLY. This table carries no
+   * identity column, which is why the briefing may read it directly: there is
+   * nothing here that could name a child even by mistake.
+   */
+  private async readAcademicRows(schoolId: string) {
+    if (!this.prisma?.assessmentSchoolAggregate) return null
+    return this.prisma.assessmentSchoolAggregate
+      .findMany({
+        where: { schoolId, gradeLevel: 'all' },
+        select: { schoolYear: true, testType: true, avgComposite: true, testedCount: true },
+        orderBy: { schoolYear: 'desc' },
+        take: 24,
+      })
+      .catch(() => null)
+  }
+
   private async readAgingRow(schoolId: string) {
     if (!this.prisma?.arApAgingSnapshot) return null
     return this.prisma.arApAgingSnapshot
@@ -595,6 +615,8 @@ export class BriefingService {
       agingRow,
       cashFlowRow,
       earlyWarnings,
+      academicsLicensed,
+      academicRows,
     ] = await Promise.all([
       this.compliance.evaluateForPeriod(schoolId, period.id).catch(() => null),
       this.reconciliation.reconcileForPeriod(schoolId, period.id).catch(() => null),
@@ -641,6 +663,16 @@ export class BriefingService {
       // Fail-soft to null: a missing table (deploy order) or a query error yields
       // NO items and a 200, never a partial briefing and never a 500.
       this.readEarlyWarnings(schoolId, generatedAt),
+      // Academics gate — same fan-out, fail CLOSED (hides the academic items for
+      // a school without the 'academics' module). Appended LAST so every prior
+      // position in this destructuring stays exactly where it was.
+      this.billing.isEntitledForModule(schoolId, 'academics').catch(() => false),
+      // The academic aggregates for STEP 2.17, read DIRECTLY via the global
+      // PrismaService inside this SAME fan-out — the module rule again (importing
+      // AcademicsModule for one read would be a new module edge). AGGREGATES
+      // ONLY: this table has no identity column, so no briefing line can name a
+      // student even by accident. Fail-soft to null.
+      this.readAcademicRows(schoolId),
     ])
 
     // 2a — open 2A findings (material -> critical, reportable -> warn).
@@ -1518,6 +1550,63 @@ export class BriefingService {
       }
       // THE HARD CAP, in code, over the items a reader would actually see.
       for (const it of composed.slice(0, EARLY_WARNING_MAX_ITEMS)) items.push(it)
+    }
+
+    // ── STEP 2.17: ACADEMICS (source 'academics') ────────────────────────────
+    // Module-gated FAIL-CLOSED like every other domain gate; the data read is
+    // fail-soft. AGGREGATES ONLY — this step reads the school-aggregate table,
+    // which has no identity column, so no briefing line can name a student.
+    //
+    // Two signals only, both of which a head of school would act on:
+    //   • the module is licensed but nothing has ever been loaded, and
+    //   • the headline score fell materially from the prior year.
+    // A score simply being low is NOT a briefing item: a school below the
+    // national midpoint every year does not need to be told so every morning.
+    if (academicsLicensed && Array.isArray(academicRows)) {
+      if (academicRows.length === 0) {
+        items.push({
+          id: 'academics:no-assessment-data',
+          severity: 'info',
+          source: 'academics',
+          title: 'No assessment results loaded',
+          why: 'Academics is switched on but no test results have been uploaded, so this school cannot be compared with its peers.',
+          metricKey: null,
+          value: null,
+          link: '/academics?tab=add',
+          dueDate: null,
+        })
+      } else {
+        const byTest = new Map<string, typeof academicRows>()
+        for (const r of academicRows) {
+          const list = byTest.get(r.testType) ?? []
+          list.push(r)
+          byTest.set(r.testType, list)
+        }
+        for (const [testType, rows] of byTest) {
+          const sorted = [...rows].sort((a2, b2) => b2.schoolYear - a2.schoolYear)
+          const latest = sorted[0]
+          const prior = sorted.find((r) => r.schoolYear === latest.schoolYear - 1)
+          if (!latest || !prior) continue
+          const now = latest.avgComposite === null ? null : Number(latest.avgComposite)
+          const was = prior.avgComposite === null ? null : Number(prior.avgComposite)
+          if (now === null || was === null) continue
+          const drop = was - now
+          // The same materiality floor the dashboards use: a percentile move
+          // under five points is inside the noise of one cohort replacing another.
+          if (drop < 5) continue
+          items.push({
+            id: `academics:composite-declined:${testType}`,
+            severity: 'warn',
+            source: 'academics',
+            title: `${testType.toUpperCase()} results fell ${drop.toFixed(1)} points`,
+            why: `The school average moved from ${was.toFixed(1)} to ${now.toFixed(1)} between ${prior.schoolYear} and ${latest.schoolYear}. Worth reviewing which grades and subjects drove it.`,
+            metricKey: null,
+            value: now,
+            link: '/academics?tab=analytics',
+            dueDate: null,
+          })
+        }
+      }
     }
 
     // ── STEP 3: lens-shape (rank + filter + reframe) + summarise ─────────────

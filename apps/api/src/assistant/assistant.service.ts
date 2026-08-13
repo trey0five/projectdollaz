@@ -5899,6 +5899,153 @@ export class AssistantService {
           throw e
         }
       }
+      case 'get_assessment_summary': {
+        // AGGREGATES ONLY. Every figure below is read from the school-aggregate
+        // table, which has no identity column in it — the protection is the
+        // shape of the read, not a filter someone must remember to apply.
+        const q = (args ?? {}) as { schoolYear?: number; testType?: string }
+        // The comparison set is the school's own organization — the network it is
+        // actually measured against.
+        const home = await this.prisma.school.findUnique({
+          where: { id: ctx.schoolId },
+          select: { organizationId: true },
+        })
+        const rows = await this.prisma.assessmentSchoolAggregate.findMany({
+          where: {
+            ...(home?.organizationId
+              ? { school: { organizationId: home.organizationId } }
+              : { schoolId: ctx.schoolId }),
+            ...(q.testType ? { testType: q.testType } : {}),
+          },
+          select: {
+            schoolId: true,
+            schoolYear: true,
+            testType: true,
+            gradeLevel: true,
+            derivation: true,
+            avgComposite: true,
+            sectionAverages: true,
+            testedCount: true,
+            eligibleCount: true,
+          },
+        })
+        if (rows.length === 0) {
+          return { available: false, note: 'No assessment results have been loaded for this school yet.' }
+        }
+        const years = [...new Set(rows.map((r) => r.schoolYear))].sort((a2, b2) => b2 - a2)
+        const year = q.schoolYear ?? years[0]
+        const testType = q.testType ?? rows[0].testType
+        const num = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v))
+        const inYear = rows.filter((r) => r.schoolYear === year && r.testType === testType)
+        const schoolRow = inYear.find((r) => r.schoolId === ctx.schoolId && r.gradeLevel === 'all') ?? null
+        const peers = inYear.filter((r) => r.gradeLevel === 'all' && r.schoolId !== ctx.schoolId)
+
+        const weighted = (list: typeof inYear): number | null => {
+          let n = 0
+          let d = 0
+          for (const r of list) {
+            const v = num(r.avgComposite)
+            const w = r.testedCount ?? 0
+            if (v !== null && w > 0) {
+              n += v * w
+              d += w
+            }
+          }
+          if (d > 0) return n / d
+          const vals = list.map((r) => num(r.avgComposite)).filter((v): v is number => v !== null)
+          return vals.length > 0 ? vals.reduce((a2, b2) => a2 + b2, 0) / vals.length : null
+        }
+        const schoolAvg = num(schoolRow?.avgComposite)
+        const networkAvg = weighted(peers)
+        const ranked = inYear
+          .filter((r) => r.gradeLevel === 'all' && num(r.avgComposite) !== null)
+          .sort((a2, b2) => (num(b2.avgComposite) as number) - (num(a2.avgComposite) as number))
+        const rank = ranked.findIndex((r) => r.schoolId === ctx.schoolId)
+
+        const subjects: Record<string, { school: number | null; network: number | null; gap: number | null }> = {}
+        const ownSections = (schoolRow?.sectionAverages ?? {}) as Record<string, number>
+        for (const key of Object.keys(ownSections)) {
+          const own = typeof ownSections[key] === 'number' ? ownSections[key] : null
+          let n = 0
+          let d = 0
+          for (const p2 of peers) {
+            const sec = (p2.sectionAverages ?? {}) as Record<string, number>
+            const v = typeof sec[key] === 'number' ? sec[key] : null
+            const w = p2.testedCount ?? 1
+            if (v !== null) {
+              n += v * w
+              d += w
+            }
+          }
+          const net = d > 0 ? n / d : null
+          subjects[key] = { school: own, network: net, gap: own !== null && net !== null ? own - net : null }
+        }
+
+        const priorRow = rows.find(
+          (r) => r.schoolId === ctx.schoolId && r.schoolYear === year - 1 && r.testType === testType && r.gradeLevel === 'all',
+        )
+        const prior = num(priorRow?.avgComposite)
+
+        const byGrade = inYear
+          .filter((r) => r.schoolId === ctx.schoolId && r.gradeLevel !== 'all')
+          .map((r) => ({ grade: r.gradeLevel, average: num(r.avgComposite), tested: r.testedCount }))
+          .sort((a2, b2) => Number(a2.grade) - Number(b2.grade))
+
+        return {
+          available: true,
+          year,
+          yearsOnFile: years,
+          testType,
+          testTypesOnFile: [...new Set(rows.map((r) => r.testType))],
+          schoolAverage: schoolAvg,
+          networkAverage: networkAvg,
+          gapToNetwork: schoolAvg !== null && networkAvg !== null ? schoolAvg - networkAvg : null,
+          rank: rank >= 0 ? rank + 1 : null,
+          ofSchools: ranked.length,
+          subjects,
+          byGrade,
+          tested: schoolRow?.testedCount ?? null,
+          eligible: schoolRow?.eligibleCount ?? null,
+          changeFromPriorYear: schoolAvg !== null && prior !== null ? schoolAvg - prior : null,
+        }
+      }
+
+      case 'get_lesson_plan_status': {
+        const [byStatus, bySubject, total] = await Promise.all([
+          this.prisma.lessonPlan.groupBy({ by: ['status'], where: { schoolId: ctx.schoolId }, _count: { _all: true } }),
+          this.prisma.lessonPlan.groupBy({ by: ['subject'], where: { schoolId: ctx.schoolId }, _count: { _all: true } }),
+          this.prisma.lessonPlan.count({ where: { schoolId: ctx.schoolId } }),
+        ])
+        return {
+          available: true,
+          total,
+          byStatus: Object.fromEntries(byStatus.map((r) => [r.status, r._count._all])),
+          bySubject: Object.fromEntries(bySubject.map((r) => [r.subject ?? 'unspecified', r._count._all])),
+        }
+      }
+
+      case 'get_gradebook_summary': {
+        const q = (args ?? {}) as { schoolYear?: number }
+        const where = { schoolId: ctx.schoolId, ...(q.schoolYear ? { schoolYear: q.schoolYear } : {}) }
+        const [total, courses, overall, byTerm] = await Promise.all([
+          this.prisma.gradeRecord.count({ where }),
+          this.prisma.course.count({ where: { schoolId: ctx.schoolId } }),
+          this.prisma.gradeRecord.aggregate({ where, _avg: { numericGrade: true } }),
+          this.prisma.gradeRecord.groupBy({ by: ['term'], where, _count: { _all: true }, _avg: { numericGrade: true } }),
+        ])
+        return {
+          available: true,
+          total,
+          courses,
+          average: overall._avg.numericGrade === null ? null : Number(overall._avg.numericGrade),
+          byTerm: byTerm.map((t) => ({
+            term: t.term ?? 'unspecified',
+            count: t._count._all,
+            average: t._avg.numericGrade === null ? null : Number(t._avg.numericGrade),
+          })),
+        }
+      }
+
       case 'get_roster_summary': {
         // COUNTS ONLY, VIA THE SERVICE. Penny had the enrollment SNAPSHOT and no
         // sight of the roster the school actually uploaded — so she could not

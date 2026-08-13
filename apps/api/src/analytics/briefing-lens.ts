@@ -94,6 +94,10 @@ export const SOURCE_RANK: Record<AttentionSource, number> = {
   // existing sources, so pre-Phase-6 accountant snapshots stay byte-identical.
   hr: 9,
   planning: 10,
+  // Academics — a domain signal like facilities/advancement. Given a FRACTIONAL
+  // rank so no pre-existing key moves: the shipped accountant snapshot stays
+  // byte-identical, which is the promise this table has made since Phase 2.
+  academics: 10.5,
   workflow: 11,
   metric: 12,
   // AIC Phase E — the accreditation CONSEQUENCE of a fact (STEP 2.16). APPENDED at
@@ -304,9 +308,9 @@ export const COMPLIANCE_ORDER = [
 // `Record<AttentionSource, number>` already admits non-integers. A golden fixture
 // generated BEFORE this edit pins all of the above for all three lenses.
 const SOURCE_WEIGHT: Record<Lens, Record<AttentionSource, number>> = {
-  owner: { metric: 0, enrollment: 1, cash: 2, governance: 3, accreditation: 4, earlywarning: 4.5, facilities: 5, advancement: 6, strategy: 7, planning: 8, compliance: 9, data: 10, hr: 11, workflow: 12 },
-  viewer: { metric: 0, enrollment: 1, cash: 2, governance: 3, accreditation: 4, earlywarning: 4.5, facilities: 5, advancement: 6, strategy: 7, planning: 8, compliance: 9, data: 10, hr: 11, workflow: 12 },
-  accountant: { data: 0, compliance: 1, enrollment: 2, cash: 3, governance: 4, accreditation: 5, earlywarning: 5.5, facilities: 6, advancement: 7, strategy: 8, hr: 9, planning: 10, workflow: 11, metric: 12 }, // == SOURCE_RANK on every pre-existing key
+  owner: { metric: 0, enrollment: 1, cash: 2, governance: 3, accreditation: 4, earlywarning: 4.5, facilities: 5, advancement: 6, strategy: 7, academics: 7.5, planning: 8, compliance: 9, data: 10, hr: 11, workflow: 12 },
+  viewer: { metric: 0, enrollment: 1, academics: 1.5, cash: 2, governance: 3, accreditation: 4, earlywarning: 4.5, facilities: 5, advancement: 6, strategy: 7, planning: 8, compliance: 9, data: 10, hr: 11, workflow: 12 },
+  accountant: { data: 0, compliance: 1, enrollment: 2, cash: 3, governance: 4, accreditation: 5, earlywarning: 5.5, facilities: 6, advancement: 7, strategy: 8, hr: 9, planning: 10, academics: 10.5, workflow: 11, metric: 12 }, // == SOURCE_RANK on every pre-existing key
 }
 
 // ── VOICE: per-lens reframing tone (additive metadata, never a value rewrite) ──

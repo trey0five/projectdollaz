@@ -1208,6 +1208,44 @@ export const TOOL_SCHEMAS = [
   {
     type: 'function',
     function: {
+      name: 'get_assessment_summary',
+      description:
+        "ACADEMIC ASSESSMENT results as counts and averages — how the school scored on its standardized tests and how that compares with the other schools in its organization. Returns the years on file, the test types, the school's average and the network average (tester-weighted, excluding this school), rank in the network, per-subject averages with the gap to the network, per-grade averages, participation, and the year-over-year change. Use for \"how did our test scores compare?\", \"how are we doing in math?\", \"which grade is struggling?\", \"are we above or below the diocese?\", \"did scores improve?\". AGGREGATES ONLY — this tool returns no individual result and no roster row, and you must never name, describe, or speculate about an individual student for any reason.",
+      parameters: {
+        type: 'object',
+        properties: {
+          schoolYear: { type: 'number', description: 'Optional year to read; defaults to the most recent on file.' },
+          testType: { type: 'string', description: 'Optional test to read (e.g. act, sat, terranova); defaults to the first on file.' },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_lesson_plan_status',
+      description:
+        "LESSON PLAN coverage as counts — how many plans exist and how they break down by status (draft, planned, delivered, reviewed) and by subject. Use for \"how many lesson plans are still in draft?\", \"what does our planning coverage look like?\". COUNTS ONLY — never name a teacher and never describe an individual plan's contents beyond its title.",
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_gradebook_summary',
+      description:
+        "GRADEBOOK coverage as counts and averages — how many marks are on file, across how many courses, the overall average mark and the average by term. Use for \"how many grades have we loaded?\", \"what's the average by term?\". COUNTS AND AVERAGES ONLY — never a student, never an individual mark.",
+      parameters: {
+        type: 'object',
+        properties: { schoolYear: { type: 'number', description: 'Optional year; defaults to every year on file.' } },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'get_governance_status',
       description:
         "The school's GOVERNANCE health — board composition, committee membership, finance-team credentials, policy review, and minutes discipline, composed from the live governance registers. Returns boardSize/activeBoardSize, termsExpiringSoon (board terms ending within 90 days), per-committee memberCount + hasChair, financeCredentialCoverage (finance-team people with credential documents on file vs. total), policies (total + pastReview), minutes (approved count + lastApprovedAt), and a gaps list of plain-language governance gaps. Use for \"do we have proper governance?\", \"is our board in good shape?\", \"whose term is expiring?\", \"does the CFO have credentials on file?\", \"are our minutes approved?\". Read-only. State ONLY the figures this tool returns — never invent a person, a committee, a document, or a gap.",
@@ -1661,6 +1699,9 @@ export const TOOL_LABELS: Record<string, string> = {
   get_improvement_status: 'Reading the improvement plan…',
   get_visit_readiness: 'Running a mock visit…',
   get_roster_summary: 'Counting the student roster…',
+  get_assessment_summary: 'Reading the test results…',
+  get_lesson_plan_status: 'Counting lesson plans…',
+  get_gradebook_summary: 'Reading the gradebook…',
   get_governance_status: 'Reviewing governance…',
   get_early_warnings: 'Reading the early warnings…',
   draft_strategy_plan: 'Drafting a strategic plan…',
