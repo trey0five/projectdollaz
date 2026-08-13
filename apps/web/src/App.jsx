@@ -78,6 +78,7 @@ const LandingPage = lazy(() => import('./pages/landing/LandingPage.jsx'))
 // bundle only load for schools that actually open /strategy.
 const StrategyPage = lazy(() => import('./pages/StrategyPage.jsx'))
 const AcademicsPage = lazy(() => import('./pages/AcademicsPage.jsx'))
+const OrgAcademicsPage = lazy(() => import('./pages/OrgAcademicsPage.jsx'))
 
 // AIC Phase G — the Continuous Improvement Manager. Lazy for the same reason:
 // it pulls the record-wizard chunk (the seeded "Work this gap" flow) and the
@@ -313,6 +314,17 @@ export default function App() {
         />
         <Route path="/enrollment" element={<EnrollmentPage />} />
         <Route path="/enrollment/diocesan-import" element={<DiocesanImportPage />} />
+        {/* The superintendent's academic console. A separate route rather than a
+            branch inside /academics: it answers a different question, and the
+            sidebar can link straight to it. */}
+        <Route
+          path="/academics/network"
+          element={
+            <Suspense fallback={<div className="min-h-screen bg-cream" />}>
+              <OrgAcademicsPage />
+            </Suspense>
+          }
+        />
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/knowledge" element={<KnowledgePage />} />
         <Route path="/readiness/cap/print" element={<CapPrintPage />} />

@@ -14,6 +14,9 @@ import { motion } from 'framer-motion'
 import { BookOpen, Sparkles, Upload, Users2 } from 'lucide-react'
 import ModuleTabs, { ModuleAccent, useModuleTab } from '../components/module/ModuleTabs.jsx'
 import { moduleTabs } from '../components/module/moduleAnatomy.js'
+import { Link } from 'react-router-dom'
+import { ArrowRight, Building2 } from 'lucide-react'
+import { useScope } from '../context/ScopeContext.jsx'
 import AddDataTab from '../components/wizard/AddDataTab.jsx'
 import AssessmentDashboard from '../components/academics/AssessmentDashboard.jsx'
 import LessonPlanRegister from '../components/academics/LessonPlanRegister.jsx'
@@ -25,6 +28,7 @@ const HUE = '#0D9488'
 const EASE = [0.2, 0.8, 0.2, 1]
 
 export default function AcademicsPage() {
+  const { isMultiSchool } = useScope()
   const { activeId, activeSchool } = useSchools()
   // The sidebar drives ?tab= for every module; this page only reads it (and
   // writes it from the Overview's own door into the dashboard).
@@ -140,6 +144,21 @@ export default function AcademicsPage() {
                 onGoAdd={() => setTab('add')}
               />
               )}
+              {/* THE NETWORK VIEW. The org endpoints existed with no caller at
+                  all — the diocesan dashboard, the thing this module was asked
+                  for, was reachable only as JSON. Same placement and phrasing as
+                  enrollment's diocesan-import link, which is where a
+                  superintendent has already learned to look. */}
+              {isMultiSchool ? (
+                <Link
+                  to="/academics/network"
+                  className="group mt-4 inline-flex items-center gap-1.5 self-start rounded-lg border px-3.5 py-2 text-[13.5px] font-semibold text-navy transition-all"
+                  style={{ borderColor: `${HUE}55`, background: `${HUE}0A` }}
+                >
+                  <Building2 size={15} style={{ color: HUE }} /> See every school in the network
+                  <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
+                </Link>
+              ) : null}
             </div>
           </Panel>
         }

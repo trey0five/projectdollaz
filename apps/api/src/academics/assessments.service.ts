@@ -1297,8 +1297,13 @@ export class AssessmentsService {
         derivation: input.derivation,
       },
     }
+    // AN UPDATE DOES NOT TRANSFER OWNERSHIP. importId used to be part of the
+    // update payload, so re-importing a year re-stamped rows the FIRST import
+    // created — and reverting the second then deleted them outright instead of
+    // leaving the first import's data standing. I watched it happen: undoing a
+    // three-school diocesan upload took two schools' original grade-3 rows with
+    // it. The row keeps the import that created it; only `create` sets it.
     const data = {
-      importId: input.importId,
       scoreType: input.scoreType,
       avgComposite: input.avgComposite,
       sectionAverages: Object.keys(input.sectionAverages).length > 0 ? input.sectionAverages : undefined,
@@ -1311,6 +1316,7 @@ export class AssessmentsService {
     await this.prisma.assessmentSchoolAggregate.upsert({
       where,
       create: {
+        importId: input.importId,
         schoolId: input.schoolId,
         schoolYear: input.schoolYear,
         testType: input.testType,
