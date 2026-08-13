@@ -387,9 +387,17 @@ export function parseAssessmentGrid(grid: string[][], opts: ParseOptions = {}): 
   // And not only the school column: "Total Tested" would have satisfied
   // NAME_HEADERS' relatives just as happily. A column that already has a role is
   // never also an identity column.
+  //
+  // And it is not enough to exclude the ONE column that won the school role:
+  // "School Name" takes it and "School ID" is still sitting there satisfying
+  // ID_HEADERS, which is all it takes to call a diocesan summary a student file.
+  // Anything whose header names a school is disqualified, whatever role it holds.
   const nonIdentity = new Set(
     [idx.school, idx.year, idx.grade, idx.tested, idx.eligible, idx.total].filter((i) => i >= 0),
   )
+  headers.forEach((h, col) => {
+    if (matchHeader(h, SCHOOL_HEADERS)) nonIdentity.add(col)
+  })
   const identityCols = [idx.extId, idx.last, idx.name].filter((i) => i >= 0 && !nonIdentity.has(i))
   const hasIdentity = identityCols.length > 0
   const scope: ParsedScope = hasIdentity ? 'student' : 'school_aggregate'
