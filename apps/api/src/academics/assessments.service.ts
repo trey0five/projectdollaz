@@ -429,7 +429,14 @@ export class AssessmentsService {
    */
   async dashboard(
     schoolId: string,
-    q: { schoolYear?: number; testType?: string; gradeLevel?: string; subject?: string; cohortGrade?: string } = {},
+    q: {
+      schoolYear?: number
+      testType?: string
+      gradeLevel?: string
+      subject?: string
+      cohortGrade?: string
+      hidePeerNames?: boolean
+    } = {},
   ) {
     const school = await this.prisma.school.findUnique({
       where: { id: schoolId },
@@ -488,7 +495,7 @@ export class AssessmentsService {
         }
       : null
 
-    return {
+    const payload = {
       school: { id: school.id, name: school.name, level },
       context: {
         year,
@@ -553,7 +560,7 @@ export class AssessmentsService {
       subgroups: await this.subgroupBreakdown(schoolId, year, testType),
       // The cross-domain read KYRO can do and a standalone score dashboard
       // cannot: outcomes beside the class size and the money that produced them.
-      crossDomain: await this.crossDomain(peerIds, year, testType, grade, all),
+      crossDomain: await this.crossDomain(peerIds, year, testType, grade, all, schoolId),
       insights: systemInsights(thisYear),
       keyInsight: buildAssessmentInsight({
         schoolName: school.name,
@@ -566,6 +573,50 @@ export class AssessmentsService {
         participation,
       }),
     }
+
+    // "Hide peer names" is a SERVER decision or it is not a decision at all.
+    // The checkbox existed only in the browser, so the payload always carried
+    // every sibling school's name and the toggle merely declined to paint it —
+    // one devtools tab away from the thing the control promises. Anonymising
+    // here means the names genuinely never leave the server.
+    return q.hidePeerNames ? this.anonymizePayload(payload, schoolId) : payload
+  }
+
+  /**
+   * Replace every peer school's name with a stable "School N" label, keeping the
+   * focus school's own name. Ranked by score so the same peer carries the same
+   * label across every section of one payload — otherwise School 2 in the table
+   * and School 2 in the chart would be different schools.
+   */
+  private anonymizePayload<T>(payload: T, focusSchoolId: string): T {
+    const labels = new Map<string, string>()
+    let n = 0
+    const labelFor = (id: string): string => {
+      const existing = labels.get(id)
+      if (existing) return existing
+      n += 1
+      const label = `School ${n}`
+      labels.set(id, label)
+      return label
+    }
+    const walk = (node: unknown): unknown => {
+      if (Array.isArray(node)) return node.map(walk)
+      if (node === null || typeof node !== 'object') return node
+      const obj = node as Record<string, unknown>
+      const out: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(obj)) out[k] = walk(v)
+      const id = typeof obj.schoolId === 'string' ? obj.schoolId : null
+      if (id && id !== focusSchoolId && 'schoolName' in obj) {
+        out.schoolName = labelFor(id)
+        out.schoolId = null
+      }
+      if (id && id !== focusSchoolId && 'label' in obj && typeof obj.label === 'string') {
+        out.label = labelFor(id)
+        out.schoolId = null
+      }
+      return out
+    }
+    return walk(payload) as T
   }
 
   /** The diocesan view: every school at once, nobody anonymised (this is the
@@ -896,12 +947,16 @@ export class AssessmentsService {
       select: { avgComposite: true, sectionAverages: true, testedCount: true, eligibleCount: true, scoreType: true },
     })
     if (rows.length === 0) {
-      // NOTHING LEFT TO ROLL UP. The 'all' row is synthesized, so it carries no
-      // importId and revert's delete-by-importId cannot reach it — without this
-      // it survives its own source rows, describing a year the school no longer
-      // has any data for.
+      // NOTHING TO ROLL UP — but that is NOT the same as nothing to keep.
+      //
+      // A summary file with no grade column parses entirely to gradeLevel:'all',
+      // so this branch is the NORMAL case for it, not an empty one. Deleting the
+      // 'all' row here erased every row such a file had just written. Only a row
+      // this function SYNTHESIZED may be removed, and only when its inputs are
+      // gone: a synthesized row is the one with no importId, because
+      // upsertAggregate stamps ingested rows with the import that produced them.
       await this.prisma.assessmentSchoolAggregate.deleteMany({
-        where: { schoolId, schoolYear, testType, derivation: 'ingested', gradeLevel: 'all' },
+        where: { schoolId, schoolYear, testType, derivation: 'ingested', gradeLevel: 'all', importId: null },
       })
       return
     }
@@ -1014,7 +1069,20 @@ export class AssessmentsService {
   private async deriveAggregates(schoolId: string, schoolYear: number, testType: TestTypeKey, importId: string | null) {
     const rows = await this.prisma.assessmentResult.findMany({
       where: { schoolId, schoolYear, testType },
-      select: { gradeLevel: true, composite: true, sectionScores: true, benchmarksMet: true, scoreType: true },
+      // id / studentId / matchExternalId identify a ROW's student for the distinct
+      // count below. matchName is deliberately NOT selected: a name never has to
+      // enter this method, and the two columns that hold identity stay behind the
+      // register routes where the rest of the module keeps them.
+      select: {
+        id: true,
+        studentId: true,
+        matchExternalId: true,
+        gradeLevel: true,
+        composite: true,
+        sectionScores: true,
+        benchmarksMet: true,
+        scoreType: true,
+      },
     })
     await this.prisma.assessmentSchoolAggregate.deleteMany({
       where: { schoolId, schoolYear, testType, derivation: 'derived' },
@@ -1036,6 +1104,27 @@ export class AssessmentsService {
 
     for (const [gradeLevel, group] of groups) {
       const composites = group.map((r) => r.composite).filter((v): v is number => v !== null)
+      // THE DENOMINATOR MUST DESCRIBE THE STATISTIC IT GATES.
+      //
+      // The average is a mean over students who actually HAVE a score; the
+      // published testedCount used to be `group.length`, every row in the file.
+      // The parser deliberately keeps a roster row with no score (it records an
+      // issue rather than dropping the child), so uploading a 40-student grade
+      // where one senior has sat the ACT produced avgComposite = that one
+      // student's exact composite alongside testedCount = 40. gateAggregates
+      // reads only the count, saw 40 >= MIN_CELL, suppressed nothing, and served
+      // one child's score as the grade average to every viewer — then
+      // promoteOperational reconstructed a score sum of avg x 40, inventing
+      // scores for 39 students who never sat the exam.
+      //
+      // Counting DISTINCT scored students also closes the duplicate-row inflation
+      // path: the same child listed twice cannot lift a cohort over the floor.
+      const scoredKeys = new Set(
+        group
+          .filter((r) => r.composite !== null)
+          .map((r) => r.studentId ?? r.matchExternalId ?? `row:${r.id}`),
+      )
+      const scoredCount = scoredKeys.size
       const sectionSums = new Map<string, { sum: number; n: number }>()
       let benchMet = 0
       let benchTested = 0
@@ -1070,9 +1159,11 @@ export class AssessmentsService {
         scoreType,
         avgComposite: composites.length > 0 ? composites.reduce((a, b) => a + b, 0) / composites.length : null,
         sectionAverages: Object.fromEntries([...sectionSums].map(([k, v]) => [k, v.sum / v.n])),
-        testedCount: group.length,
+        testedCount: scoredCount > 0 ? scoredCount : null,
+        // Only an ingested SUMMARY file knows how many students were eligible;
+        // student rows cannot tell us who did not sit the exam.
         eligibleCount: null,
-          benchmarkMetCount: benchTested > 0 ? benchMet : null,
+        benchmarkMetCount: benchTested > 0 ? benchMet : null,
         benchmarkTested: benchTested > 0 ? benchTested : null,
         distribution: scoreType === 'percentile' ? bands : null,
       })
@@ -1320,13 +1411,26 @@ export class AssessmentsService {
         testedCount: true,
         masteryCounts: true,
       },
+      // Deterministic slice: without an orderBy, Postgres is free to return an
+      // arbitrary 2000 of a large network's rows, and the focus school's own
+      // objectives could be missing from its own report.
+      orderBy: [{ schoolYear: 'desc' }, { subject: 'asc' }, { objectiveCode: 'asc' }, { schoolId: 'asc' }],
       take: 2000,
     })
-    return rows.map((r) => ({
-      ...r,
-      opi: r.opi === null ? null : Number(r.opi),
-      masteryCounts: (r.masteryCounts ?? null) as Record<string, number> | null,
-    }))
+    // THE SAME FLOOR, ON THE SAME TABLE'S SIBLING.
+    //
+    // A mastery profile is a FULLER disclosure than the composite the gate
+    // suppresses, not a lesser one: fifteen per-objective percentages for a
+    // grade of three children, and at a cohort of one every OPI is that child's
+    // own mastery. gateAggregates covers assessment_school_aggregates; this
+    // table needed the identical rule, failing closed on an unknown count.
+    return rows
+      .filter((r) => cohortPublishable(r.testedCount))
+      .map((r) => ({
+        ...r,
+        opi: r.opi === null ? null : Number(r.opi),
+        masteryCounts: (r.masteryCounts ?? null) as Record<string, number> | null,
+      }))
   }
 
   private async orgSchoolIds(organizationId: string): Promise<string[]> {
@@ -1403,6 +1507,7 @@ export class AssessmentsService {
     testType: string,
     grade: string,
     gated: AssessmentRow[],
+    focusSchoolId: string,
   ) {
     if (schoolIds.length === 0) return []
     // Scores come from the ALREADY-GATED rows the dashboard built. Re-querying
@@ -1414,25 +1519,40 @@ export class AssessmentsService {
     )
     if (scored.length === 0) return []
 
-    const [operational, snapshots] = await Promise.all([
-      this.prisma.periodOperationalData.findMany({
-        where: { schoolId: { in: schoolIds } },
-        select: { schoolId: true, enrollment: true, teachingFte: true, updatedAt: true },
-        orderBy: { updatedAt: 'desc' },
+    // ONLY THE CALLER'S OWN SCHOOL CONTRIBUTES FINANCE.
+    //
+    // RolesGuard proves membership at :schoolId and nothing more, so a viewer at
+    // one school was receiving every sibling school's enrollment, staffing ratio
+    // and cost-per-pupil — the last of those computed from that school's total
+    // expenses — beside its name, from a route about test scores. Peers still
+    // appear (the chart needs the cloud) but as scores under an anonymous label,
+    // which is exactly how the ranked chart beside it already treats them.
+    //
+    // The operational read is also pinned to the SELECTED year's fiscal period
+    // rather than to whichever row was written most recently; pairing a 2024
+    // score with today's enrollment silently answers a different question than
+    // the one the year filter asked.
+    const fyEnd = new Date(Date.UTC(schoolYear, 5, 30))
+    const [operational, snapshot] = await Promise.all([
+      this.prisma.periodOperationalData.findFirst({
+        where: {
+          schoolId: focusSchoolId,
+          fiscalPeriod: { periodEndDate: { lte: fyEnd } },
+        },
+        select: { schoolId: true, enrollment: true, teachingFte: true },
+        orderBy: { fiscalPeriod: { periodEndDate: 'desc' } },
       }),
-      Promise.all(
-        schoolIds.map((id) =>
-          this.prisma.statementSnapshot.findFirst({
-            where: { schoolId: id },
-            select: { schoolId: true, payload: true, createdAt: true },
-            orderBy: { createdAt: 'desc' },
-          }),
-        ),
-      ).then((rows) => rows.filter((r): r is NonNullable<typeof r> => r !== null)),
+      this.prisma.statementSnapshot.findFirst({
+        where: { schoolId: focusSchoolId, createdAt: { lte: new Date(Date.UTC(schoolYear, 11, 31)) } },
+        select: { schoolId: true, payload: true },
+        orderBy: { createdAt: 'desc' },
+      }),
     ])
+    const operationalRows = operational ? [operational] : []
+    const snapshots = snapshot ? [snapshot] : []
 
-    const opBySchool = new Map<string, (typeof operational)[number]>()
-    for (const o of operational) if (!opBySchool.has(o.schoolId)) opBySchool.set(o.schoolId, o)
+    const opBySchool = new Map<string, (typeof operationalRows)[number]>()
+    for (const o of operationalRows) if (!opBySchool.has(o.schoolId)) opBySchool.set(o.schoolId, o)
     const expBySchool = new Map<string, number>()
     for (const snap of snapshots) {
       const soa = (snap.payload as { soaResults?: { cy?: { totalExp?: number } } })?.soaResults?.cy
@@ -1440,21 +1560,38 @@ export class AssessmentsService {
       if (exp !== null) expBySchool.set(snap.schoolId, exp)
     }
 
-    return scored.map((r) => {
-      const op = opBySchool.get(r.schoolId)
-      const enrollment = op?.enrollment ?? null
-      const teachingFte = op?.teachingFte === null || op?.teachingFte === undefined ? null : Number(op.teachingFte)
-      const totalExp = expBySchool.get(r.schoolId) ?? null
-      return {
-        schoolId: r.schoolId,
-        schoolName: r.schoolName ?? null,
-        score: r.avgComposite as number,
-        enrollment,
-        studentTeacherRatio:
-          enrollment !== null && teachingFte !== null && teachingFte > 0 ? enrollment / teachingFte : null,
-        costPerPupil: totalExp !== null && enrollment !== null && enrollment > 0 ? totalExp / enrollment : null,
-      }
-    })
+    let peerN = 0
+    return scored
+      .sort((a, b) => (b.avgComposite as number) - (a.avgComposite as number))
+      .map((r) => {
+        const isFocus = r.schoolId === focusSchoolId
+        if (!isFocus) {
+          peerN += 1
+          return {
+            schoolId: null,
+            schoolName: `School ${peerN}`,
+            isFocus: false,
+            score: r.avgComposite as number,
+            enrollment: null,
+            studentTeacherRatio: null,
+            costPerPupil: null,
+          }
+        }
+        const op = opBySchool.get(r.schoolId)
+        const enrollment = op?.enrollment ?? null
+        const teachingFte = op?.teachingFte === null || op?.teachingFte === undefined ? null : Number(op.teachingFte)
+        const totalExp = expBySchool.get(r.schoolId) ?? null
+        return {
+          schoolId: r.schoolId,
+          schoolName: r.schoolName ?? null,
+          isFocus: true,
+          score: r.avgComposite as number,
+          enrollment,
+          studentTeacherRatio:
+            enrollment !== null && teachingFte !== null && teachingFte > 0 ? enrollment / teachingFte : null,
+          costPerPupil: totalExp !== null && enrollment !== null && enrollment > 0 ? totalExp / enrollment : null,
+        }
+      })
   }
 
   /** One row per school: this year, last year, the move, and the two gaps. */

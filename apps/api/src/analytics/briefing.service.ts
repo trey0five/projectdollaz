@@ -6,8 +6,10 @@ import {
   healthStatus,
   projectCashRunway,
   resolveDisplayUnit,
+  gateAggregates,
+  materialGap,
 } from '@finrep/analytics'
-import type { MembershipRole } from '@finrep/db'
+import { SCORE_TYPE_FOR_FAMILY, TEST_FAMILY, type MembershipRole, type TestTypeKey } from '@finrep/db'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { PeriodsService } from '../periods/periods.service.js'
 import { AnalyticsService } from './analytics.service.js'
@@ -203,12 +205,6 @@ export {
   EARLY_WARNING_SUPPRESSED,
   EARLY_WARNING_BRIEFABLE_RULE_IDS,
 }
-
-/**
- * The small-cell floor, restated here rather than imported so the briefing's
- * guard is visible at the point of use. Must track MIN_CELL in @finrep/analytics.
- */
-const ACADEMICS_MIN_CELL = 5
 
 /** The ledger columns STEP 2.16 reads. Nothing else is selected. */
 interface EarlyWarningRow {
@@ -1586,16 +1582,28 @@ export class BriefingService {
         // NARRATES its numbers ("results fell 4.8 points, from 72.1 to 67.3"), so
         // a suppressed average restated in prose is the same disclosure as
         // publishing it in a chart — with the school named in the title.
-        const collapsed = new Map<string, (typeof academicRows)[number]>()
-        for (const r of academicRows) {
-          const key = `${r.schoolYear}|${r.testType}`
-          const cur = collapsed.get(key)
-          if (!cur || (r.derivation === 'derived' && cur.derivation !== 'derived')) collapsed.set(key, r)
-        }
-        const publishable = [...collapsed.values()].filter(
-          (r) => r.testedCount !== null && r.testedCount !== undefined && r.testedCount >= ACADEMICS_MIN_CELL,
-        )
-        const byTest = new Map<string, typeof academicRows>()
+        // THROUGH gateAggregates, like every other reader. Re-implementing the
+        // collapse and the floor here meant the invariant was enforced by a
+        // comment asking the next person to remember — which is exactly the
+        // shape of the bypass the previous round found.
+        const publishable = gateAggregates(
+          academicRows.map((r) => ({
+            schoolId,
+            schoolYear: r.schoolYear,
+            testType: r.testType,
+            // readAcademicRows selects only the school-wide rows, so the gate's
+            // per-cohort key is constant here.
+            gradeLevel: 'all',
+            derivation: r.derivation,
+            avgComposite: r.avgComposite === null ? null : Number(r.avgComposite),
+            sectionAverages: null,
+            testedCount: r.testedCount,
+            eligibleCount: null,
+          })),
+          (t) => TEST_FAMILY[t as TestTypeKey] ?? 'nrt',
+          (f) => SCORE_TYPE_FOR_FAMILY[f],
+        ).filter((r) => r.avgComposite !== null)
+        const byTest = new Map<string, typeof publishable>()
         for (const r of publishable) {
           const list = byTest.get(r.testType) ?? []
           list.push(r)
@@ -1610,9 +1618,14 @@ export class BriefingService {
           const was = prior.avgComposite === null ? null : Number(prior.avgComposite)
           if (now === null || was === null) continue
           const drop = was - now
-          // The same materiality floor the dashboards use: a percentile move
-          // under five points is inside the noise of one cohort replacing another.
-          if (drop < 5) continue
+          // THE SAME MATERIALITY FLOOR THE DASHBOARDS USE — which is per family,
+          // not a flat five. On the ACT's 1-36 scale a five-point fall is a
+          // collapse no school ever posts, so ACT declines were never briefed at
+          // all; on the SAT's 400-1600 scale five points is rounding, so SAT noise
+          // was briefed every morning. materialGap is the module's one answer to
+          // "is this move big enough to say out loud".
+          const family = TEST_FAMILY[testType as TestTypeKey] ?? 'nrt'
+          if (drop < materialGap(family, SCORE_TYPE_FOR_FAMILY[family])) continue
           items.push({
             id: `academics:composite-declined:${testType}`,
             severity: 'warn',

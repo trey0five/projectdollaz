@@ -47,6 +47,7 @@ import {
   UserRound,
   Gift,
   GraduationCap,
+  BookOpen,
   ShieldCheck,
 } from 'lucide-react'
 
@@ -63,6 +64,9 @@ import WizardStrategyGoal from './WizardStrategyGoal.jsx'
 // The multi-step multi-item record flows (kind:'flow'). The page *FormModal
 // exports stay untouched — they remain the EDIT path on the register tabs.
 import { recordFlows } from '../recordwizard/recordFlows.jsx'
+import AssessmentUpload from '../academics/AssessmentUpload.jsx'
+import GradebookUpload from '../academics/GradebookUpload.jsx'
+import AcademicsSisCard from '../academics/AcademicsSisCard.jsx'
 
 // Per-module hue lookup — read straight from tileRegistry (the single source).
 const HUE = Object.fromEntries(HOME_TILES.map((t) => [t.key, t.hue]))
@@ -350,29 +354,57 @@ export const wizardConfigs = {
   },
 
   academics: {
-
-    label: 'Academics',
-
+    // `module` is not optional: AddDataWizard resolves its heading, its aria
+    // label and its back button from it, and without it the sole-option path
+    // rendered a literal "Back to undefined overview".
+    module: 'academics',
+    hue: HUE.academics,
     options: [
-
       {
-
-        key: 'lesson-plan',
-
-        kind: 'flow',
-
-        label: 'Lesson plan',
-
-        blurb: 'Add a plan to the classroom register — subject, grade, week and status.',
-
-        cta: 'Add lesson plan',
-
-        flow: recordFlows['academics.lessonPlan'],
-
+        key: 'assessment-file',
+        kind: 'embed',
+        Icon: FileSpreadsheet,
+        label: 'Assessment results',
+        blurb:
+          'A network summary, a publisher export, or a student-level file. Title rows and odd column names are handled, and you see exactly what was read before anything saves.',
+        cta: 'Upload results',
+        renderEmbed: (ctx) => (
+          <AssessmentUpload schoolId={ctx.schoolId} canEdit={ctx.canEdit} onDone={ctx.onSaved} />
+        ),
       },
-
+      {
+        key: 'gradebook-file',
+        kind: 'embed',
+        Icon: GraduationCap,
+        label: 'Course marks',
+        blurb:
+          'A gradebook export — one row per mark, or one row per student with a column per course. Letter grades are converted and the letter is kept.',
+        cta: 'Upload gradebook',
+        renderEmbed: (ctx) => (
+          <GradebookUpload schoolId={ctx.schoolId} canEdit={ctx.canEdit} onDone={ctx.onSaved} />
+        ),
+      },
+      {
+        key: 'lesson-plan',
+        kind: 'flow',
+        Icon: BookOpen,
+        label: 'Lesson plan',
+        blurb: 'Add a plan to the classroom register — subject, grade, week and status.',
+        cta: 'Add lesson plan',
+        flow: recordFlows['academics.lessonPlan'],
+      },
+      {
+        key: 'connect',
+        kind: 'embed',
+        external: true,
+        Icon: Plug,
+        label: 'Connect your SIS',
+        blurb:
+          'Academics reads the connection you already made under Enrollment rather than asking for a second set of credentials.',
+        cta: 'See the connection',
+        renderEmbed: (ctx) => <AcademicsSisCard schoolId={ctx.schoolId} />,
+      },
     ],
-
   },
 
   strategy: {

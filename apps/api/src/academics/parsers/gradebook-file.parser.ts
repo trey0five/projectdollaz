@@ -48,7 +48,23 @@ const NAME_HEADERS = ['name', 'student', 'student name', 'full name']
 const GRADE_HEADERS = ['grade level', 'gradelevel', 'year level', 'gr']
 const COURSE_HEADERS = ['course', 'class', 'subject', 'course name', 'section']
 const TERM_HEADERS = ['term', 'quarter', 'semester', 'marking period', 'period', 'mp']
-const MARK_HEADERS = ['grade', 'mark', 'score', 'final', 'final grade', 'percent', 'average', 'pct']
+// SPECIFIC FIRST, and the mark column is resolved LAST against columns nothing
+// else claimed. "Grade Level" ends with the mark vocab's bare 'grade' via the
+// startsWith rule, so a perfectly ordinary export — First, Last, Grade Level,
+// Course, Term, Letter Grade — silently stored each student's grade LEVEL as
+// their mark. Six letter grades averaged to 10.8 and nothing anywhere said so.
+const MARK_HEADERS = [
+  'letter grade',
+  'final grade',
+  'numeric grade',
+  'mark',
+  'score',
+  'percent',
+  'pct',
+  'average',
+  'final',
+  'grade',
+]
 const TEACHER_HEADERS = ['teacher', 'instructor', 'teacher name']
 const YEAR_HEADERS = ['year', 'school year', 'sy']
 
@@ -130,10 +146,30 @@ export function parseGradebookCsv(
     gradeLevel: headers.findIndex((h) => matches(h, GRADE_HEADERS)),
     course: headers.findIndex((h) => matches(h, COURSE_HEADERS)),
     term: headers.findIndex((h) => matches(h, TERM_HEADERS)),
-    mark: headers.findIndex((h) => matches(h, MARK_HEADERS)),
     teacher: headers.findIndex((h) => matches(h, TEACHER_HEADERS)),
     year: headers.findIndex((h) => matches(h, YEAR_HEADERS)),
+    // Placeholder — resolved below, once every other column has been claimed.
+    mark: -1,
   }
+
+  // THE MARK COLUMN IS WHATEVER IS LEFT that looks like a mark. Every other
+  // column is identified by a vocabulary far more specific than the mark's, so
+  // resolving it last and skipping already-claimed indices is what keeps a
+  // grade-level, a year or a student id from being scored as a grade. Within
+  // the leftovers, MARK_HEADERS is ordered most-specific-first and the earlier
+  // vocabulary entry wins, so an explicit "Letter Grade" beats a bare "Grade".
+  const takenBeforeMark = new Set(Object.values(idx).filter((i) => i >= 0))
+  let bestMark = -1
+  let bestRank = Number.POSITIVE_INFINITY
+  headers.forEach((h, col) => {
+    if (takenBeforeMark.has(col)) return
+    const rank = MARK_HEADERS.findIndex((v) => matches(h, [v]))
+    if (rank >= 0 && rank < bestRank) {
+      bestRank = rank
+      bestMark = col
+    }
+  })
+  idx.mark = bestMark
 
   // A named course column + a mark column is the long shape; otherwise wide.
   const shape: 'long' | 'wide' = idx.course >= 0 && idx.mark >= 0 ? 'long' : 'wide'

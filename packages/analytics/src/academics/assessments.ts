@@ -195,7 +195,15 @@ export function gateAggregates(
     // FAIL CLOSED on an unknown count: a row whose cohort size nobody recorded
     // is not known to be safe, and the whole point of a floor is that it holds
     // when someone forgot to thread the count through.
-    const thin = r.testedCount === null || r.testedCount === undefined || (r.testedCount > 0 && r.testedCount < MIN_CELL)
+    //
+    // A count of ZERO is the same problem wearing a number. If the row also
+    // carries an average, that average came from students the count denies —
+    // a contradiction that used to sail through, because 0 is not "> 0 and
+    // under the floor". A score with no denominator is exactly the row a floor
+    // exists to stop, so it suppresses like any other unknown; a genuinely
+    // empty row (no count, no score) has nothing to suppress either way.
+    const count = r.testedCount ?? null
+    const thin = count === null || count < MIN_CELL
     return {
       schoolId: r.schoolId,
       schoolName: r.schoolName,

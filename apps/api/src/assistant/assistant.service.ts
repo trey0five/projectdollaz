@@ -5901,6 +5901,23 @@ export class AssistantService {
         }
       }
       case 'get_assessment_summary': {
+        // LICENSED FIRST. Every academics REST route carries
+        // @RequiresModule('academics') and the briefing's STEP 2.17 gate fails
+        // closed; these three tools checked nothing, so an unlicensed school
+        // could simply ASK for the data the 402 was there to withhold. The gate
+        // is the same shape as the accreditation tool's, and fails closed.
+        {
+          const licensedAcademics = await (
+            this.billing?.isEntitledForModule(ctx.schoolId, 'academics') ?? Promise.resolve(false)
+          ).catch(() => false)
+          if (!licensedAcademics) {
+            return {
+              notLicensed: true,
+              message: 'The academics module is not licensed for this school, so there is nothing to read here.',
+            }
+          }
+        }
+
         // AGGREGATES ONLY. Every figure below is read from the school-aggregate
         // table, which has no identity column in it — the protection is the
         // shape of the read, not a filter someone must remember to apply.
@@ -6043,6 +6060,23 @@ export class AssistantService {
       }
 
       case 'get_lesson_plan_status': {
+        // LICENSED FIRST. Every academics REST route carries
+        // @RequiresModule('academics') and the briefing's STEP 2.17 gate fails
+        // closed; these three tools checked nothing, so an unlicensed school
+        // could simply ASK for the data the 402 was there to withhold. The gate
+        // is the same shape as the accreditation tool's, and fails closed.
+        {
+          const licensedAcademics = await (
+            this.billing?.isEntitledForModule(ctx.schoolId, 'academics') ?? Promise.resolve(false)
+          ).catch(() => false)
+          if (!licensedAcademics) {
+            return {
+              notLicensed: true,
+              message: 'The academics module is not licensed for this school, so there is nothing to read here.',
+            }
+          }
+        }
+
         const [byStatus, bySubject, total] = await Promise.all([
           this.prisma.lessonPlan.groupBy({ by: ['status'], where: { schoolId: ctx.schoolId }, _count: { _all: true } }),
           this.prisma.lessonPlan.groupBy({ by: ['subject'], where: { schoolId: ctx.schoolId }, _count: { _all: true } }),
@@ -6057,6 +6091,23 @@ export class AssistantService {
       }
 
       case 'get_gradebook_summary': {
+        // LICENSED FIRST. Every academics REST route carries
+        // @RequiresModule('academics') and the briefing's STEP 2.17 gate fails
+        // closed; these three tools checked nothing, so an unlicensed school
+        // could simply ASK for the data the 402 was there to withhold. The gate
+        // is the same shape as the accreditation tool's, and fails closed.
+        {
+          const licensedAcademics = await (
+            this.billing?.isEntitledForModule(ctx.schoolId, 'academics') ?? Promise.resolve(false)
+          ).catch(() => false)
+          if (!licensedAcademics) {
+            return {
+              notLicensed: true,
+              message: 'The academics module is not licensed for this school, so there is nothing to read here.',
+            }
+          }
+        }
+
         const q = (args ?? {}) as { schoolYear?: number }
         const where = { schoolId: ctx.schoolId, ...(q.schoolYear ? { schoolYear: q.schoolYear } : {}) }
         const [total, courses, overall, byTerm] = await Promise.all([

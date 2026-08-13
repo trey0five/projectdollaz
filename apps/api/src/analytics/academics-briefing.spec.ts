@@ -41,7 +41,21 @@ describe('academics briefing + assistant — the two rules', () => {
   it('a low score alone is NOT an item — only a material DECLINE is', () => {
     // A school below the national midpoint every year should not be told so
     // every morning; the step only fires on a drop past the materiality floor.
-    expect(briefing).toContain('if (drop < 5) continue')
+    //
+    // That floor is PER FAMILY. This assertion used to pin the literal `drop < 5`,
+    // which quietly froze in a threshold no ACT school can ever cross (five points
+    // on a 1-36 scale) and that SAT noise crosses daily (five points on 400-1600).
+    expect(briefing).toContain('materialGap(family, SCORE_TYPE_FOR_FAMILY[family])')
+    expect(briefing).not.toContain('if (drop < 5) continue')
+  })
+
+  it('the briefing goes through gateAggregates, not its own copy of the rule', () => {
+    // Round 2 caught five readers that queried the aggregate table directly and
+    // walked past the suppression. The fix is only durable if the gate is CALLED,
+    // not restated — a re-implementation is a bypass waiting for its next edit.
+    const step = briefing.slice(briefing.indexOf('STEP 2.17'))
+    expect(step).toContain('gateAggregates(')
+    expect(briefing).not.toContain('ACADEMICS_MIN_CELL')
   })
 
   it('the three assistant tools exist and declare themselves aggregate-only', () => {

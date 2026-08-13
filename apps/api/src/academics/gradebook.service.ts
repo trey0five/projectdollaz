@@ -10,6 +10,7 @@
 // creating a second.
 // ─────────────────────────────────────────────────────────────────────────────
 import { BadRequestException, Injectable } from '@nestjs/common'
+import { MIN_CELL } from '@finrep/analytics'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { parseGradebookCsv } from './parsers/gradebook-file.parser.js'
 import { matchAll, type MatchCandidate, type RosterStudent } from './matching/student-match.js'
@@ -118,10 +119,21 @@ export class GradebookService {
         }),
       ).values(),
     ]
+    // REPLACE THIS FILE'S SLICE, NOT THE WHOLE TERM.
+    //
+    // Schools export one course, one teacher or one department at a time. Wiping
+    // every uploaded mark in the (year, term) slices a file touches meant the
+    // second upload silently deleted the first, and a school that loaded twelve
+    // course files kept only the twelfth — with the summary card cheerfully
+    // reporting the smaller number as fact. Scope the replace to the COURSES
+    // this file actually carries, which is what "re-uploading a corrected file
+    // does not double" was always meant to mean.
+    const courseNames = [...new Set(parsed.rows.map((r) => r.courseName).filter((n): n is string => !!n))]
     await this.prisma.gradeRecord.deleteMany({
       where: {
         schoolId,
         source: 'upload',
+        ...(courseNames.length > 0 ? { course: { name: { in: courseNames } } } : {}),
         OR: slices.map((sl) => ({
           schoolYear: sl.schoolYear,
           ...(sl.term === null ? { term: null } : { term: sl.term }),
@@ -241,14 +253,28 @@ export class GradebookService {
       this.prisma.course.count({ where: { schoolId, ...(schoolYear ? { schoolYear } : {}) } }),
       this.prisma.gradeRecord.aggregate({ where, _avg: { numericGrade: true } }),
     ])
+    // THE SMALL-CELL FLOOR REACHES HERE TOO.
+    //
+    // Every other academics aggregate goes through gateAggregates or
+    // cohortPublishable; this one was serving a term average straight from
+    // Prisma to `viewer` on /gradebook/summary, to the module status card and to
+    // Penny's get_gradebook_summary. A term with two marks in it publishes an
+    // average that is one of two children's grades — the same disclosure the
+    // score path spends a whole pure module preventing.
+    const floor = (count: number, avg: unknown) =>
+      count >= MIN_CELL && avg !== null && avg !== undefined ? Number(avg) : null
     return {
       total,
       courses,
-      average: marks._avg.numericGrade === null ? null : Number(marks._avg.numericGrade),
+      average: floor(total, marks._avg.numericGrade),
+      suppressed: total > 0 && total < MIN_CELL,
       byTerm: byTerm.map((t) => ({
         term: t.term ?? 'unspecified',
+        // The COUNT is safe to publish — "3 marks on file" names nobody — but
+        // the average computed from those three is not.
         count: t._count._all,
-        average: t._avg.numericGrade === null ? null : Number(t._avg.numericGrade),
+        average: floor(t._count._all, t._avg.numericGrade),
+        suppressed: t._count._all < MIN_CELL,
       })),
     }
   }

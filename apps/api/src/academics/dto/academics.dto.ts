@@ -7,7 +7,7 @@
 // @finrep/db arrays, never a Postgres enum, so adding a test type is a one-line
 // change rather than a migration.
 // ─────────────────────────────────────────────────────────────────────────────
-import { Type } from 'class-transformer'
+import { Transform, Type } from 'class-transformer'
 import {
   IsBoolean,
   IsIn,
@@ -23,6 +23,20 @@ import {
 import { LESSON_PLAN_STATUS_KEYS, TEST_TYPE_KEYS } from '@finrep/db'
 
 /** Shared query shape for the summary/dashboard reads. */
+/**
+ * A query string has no booleans, only text — and `@Type(() => Boolean)` runs
+ * Boolean("false"), which is TRUE. `unmatchedOnly=false` therefore filtered to
+ * exactly the rows it was asked to stop filtering to. Only the words that mean
+ * false are false; anything else non-empty is true.
+ */
+const queryBoolean = ({ value }: { value: unknown }): boolean | undefined => {
+  if (value === undefined || value === null || value === '') return undefined
+  if (typeof value === 'boolean') return value
+  const s = String(value).trim().toLowerCase()
+  if (s === 'false' || s === '0' || s === 'no' || s === 'off') return false
+  return true
+}
+
 export class AssessmentQueryDto {
   @IsOptional()
   @Type(() => Number)
@@ -49,6 +63,16 @@ export class AssessmentQueryDto {
   @IsString()
   @MaxLength(8)
   cohortGrade?: string
+
+  /**
+   * Anonymise every peer school SERVER-side. The dashboard's "Hide peer names"
+   * control used to be a paint decision in the browser while the payload still
+   * carried every name — this makes the control mean what it says.
+   */
+  @IsOptional()
+  @Transform(queryBoolean)
+  @IsBoolean()
+  hidePeerNames?: boolean
 }
 
 /** Multipart upload fields (the file itself rides outside the DTO). */
@@ -72,7 +96,7 @@ export class AssessmentUploadDto {
 
 export class ResultQueryDto extends AssessmentQueryDto {
   @IsOptional()
-  @Type(() => Boolean)
+  @Transform(queryBoolean)
   @IsBoolean()
   unmatchedOnly?: boolean
 }

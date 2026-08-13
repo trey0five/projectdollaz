@@ -899,6 +899,16 @@ export const academicsApi = {
   createLessonPlan: (schoolId, body) => api.post(`/schools/${schoolId}/academics/lesson-plans`, body),
   updateLessonPlan: (schoolId, id, body) => api.patch(`/schools/${schoolId}/academics/lesson-plans/${id}`, body),
   removeLessonPlan: (schoolId, id) => api.delete(`/schools/${schoolId}/academics/lesson-plans/${id}`),
+  // Preview then commit, same two-step as the assessment file. These two had no
+  // web caller at all — the endpoints and the parser shipped without a door.
+  gradebookPreview: (schoolId, formData) =>
+    api.post(`/schools/${schoolId}/academics/gradebook/upload`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  gradebookCommit: (schoolId, formData) =>
+    api.post(`/schools/${schoolId}/academics/gradebook/commit`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
   gradebookSummary: (schoolId, params = {}) =>
     api.get(`/schools/${schoolId}/academics/gradebook/summary`, { params }),
   gradebookCourses: (schoolId, params = {}) =>

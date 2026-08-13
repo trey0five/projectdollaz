@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Get,
   Param,
+  ParseUUIDPipe,
   Post,
   Query,
   UploadedFile,
@@ -50,13 +51,24 @@ export class AcademicsOrgController {
     private readonly billing: BillingService,
   ) {}
 
+  /**
+   * The diocesan console.
+   *
+   * @RequiresModule cannot guard this route — the EntitlementGuard resolves a
+   * schoolId from the path and an org route has none — so the check happens here
+   * instead, per school and fail-closed, exactly as writableSchools does for the
+   * upload. Reading a network's ranked results is the module's headline feature;
+   * membership in one school of the org was never enough on its own to license
+   * it, and this route was the one place that let it through.
+   */
   @Get('academics/dashboard')
   async dashboard(
     @CurrentUser() user: User,
-    @Param('orgId') orgId: string,
+    @Param('orgId', ParseUUIDPipe) orgId: string,
     @Query() q: AssessmentQueryDto,
   ) {
     await this.assertMember(user, orgId)
+    await this.readableSchools(user, orgId)
     return this.assessments.orgDashboard(orgId, q)
   }
 
@@ -71,7 +83,7 @@ export class AcademicsOrgController {
   @UseInterceptors(FileInterceptor('file', { storage: memoryStorage(), limits: { fileSize: MAX_UPLOAD_BYTES } }))
   async orgPreview(
     @CurrentUser() user: User,
-    @Param('orgId') orgId: string,
+    @Param('orgId', ParseUUIDPipe) orgId: string,
     @UploadedFile() file: UploadedAssessmentFile | undefined,
     @Body() dto: AssessmentUploadDto,
   ) {
@@ -95,7 +107,7 @@ export class AcademicsOrgController {
   @UseInterceptors(FileInterceptor('file', { storage: memoryStorage(), limits: { fileSize: MAX_UPLOAD_BYTES } }))
   async orgCommit(
     @CurrentUser() user: User,
-    @Param('orgId') orgId: string,
+    @Param('orgId', ParseUUIDPipe) orgId: string,
     @UploadedFile() file: UploadedAssessmentFile | undefined,
     @Body() dto: AssessmentUploadDto,
   ) {
@@ -123,6 +135,31 @@ export class AcademicsOrgController {
       select: { id: true },
     })
     if (!membership) throw new ForbiddenException('Not a member of this organization.')
+  }
+
+  /**
+   * Every school in the org the caller may READ academics for: any membership
+   * role, but the module still has to be licensed somewhere. Fail-closed on a
+   * billing error, like every other entitlement read in the app.
+   */
+  private async readableSchools(user: User, orgId: string): Promise<Set<string>> {
+    const memberships = await this.prisma.membership.findMany({
+      where: { userId: user.id, school: { organizationId: orgId } },
+      select: { schoolId: true },
+    })
+    const licensed = await Promise.all(
+      memberships.map((m) =>
+        this.billing
+          .isEntitledForModule(m.schoolId, 'academics')
+          .catch(() => false)
+          .then((ok) => [m.schoolId, ok] as const),
+      ),
+    )
+    const allowed = new Set(licensed.filter(([, ok]) => ok).map(([id]) => id))
+    if (allowed.size === 0) {
+      throw new ForbiddenException('No school in this organization has the Academics module.')
+    }
+    return allowed
   }
 
   /**

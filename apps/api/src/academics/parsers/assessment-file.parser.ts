@@ -122,8 +122,11 @@ const SUBJECT_SYNONYMS: Array<[string[], string]> = [
   [['reading', 'read'], 'reading'],
   [['mathematics', 'math'], 'math'],
   [['language', 'lang'], 'language'],
-  [['science', 'sci'], 'science'],
+  // Before plain science, for the same reason ERW comes before reading:
+  // "Social Science" contains "sci", so the science rule used to claim it and
+  // then the real science column overwrote the value under the same key.
   [['social studies', 'socialstudies', 'social science'], 'socialStudies'],
+  [['science', 'sci'], 'science'],
   [['english'], 'english'],
 ]
 
@@ -311,7 +314,18 @@ export function parseAssessmentGrid(grid: string[][], opts: ParseOptions = {}): 
   const family = TEST_FAMILY[testType]
   const scoreType = SCORE_TYPE_FOR_FAMILY[family]
 
-  // Column roles
+  // ── Column roles, resolved MOST SPECIFIC FIRST ────────────────────────────
+  //
+  // Every vocabulary here matches a leading or trailing word, so the broad ones
+  // swallow the narrow ones whenever they get to look first. Two live examples:
+  // "Total Tested" satisfies TOTAL_HEADERS via the bare 'total', which made a
+  // school's headline score its HEADCOUNT; and "Reading NPR" satisfies
+  // TOTAL_HEADERS via 'npr', which published the first subject's percentile as
+  // the composite and discarded the real Total Battery column.
+  //
+  // The rule that fixes both: a column may hold exactly ONE role, counts and
+  // subjects are named far more precisely than "total", and the composite is
+  // whatever is left. Order below is the specificity order — do not reshuffle.
   const idx = {
     school: headers.findIndex((h) => matchHeader(h, SCHOOL_HEADERS)),
     year: headers.findIndex((h) => matchHeader(h, YEAR_HEADERS)),
@@ -322,17 +336,46 @@ export function parseAssessmentGrid(grid: string[][], opts: ParseOptions = {}): 
     first: headers.findIndex((h) => matchHeader(h, FIRST_HEADERS)),
     last: headers.findIndex((h) => matchHeader(h, LAST_HEADERS)),
     name: headers.findIndex((h) => matchHeader(h, NAME_HEADERS)),
-    total: headers.findIndex((h) => matchHeader(h, TOTAL_HEADERS)),
+    // Resolved below, against the columns nothing more specific claimed.
+    total: -1,
   }
 
   // Subject columns — everything that names a subject and is not already a role.
-  const claimed = new Set(Object.values(idx).filter((i) => i >= 0))
+  const claimedRoles = new Set(Object.values(idx).filter((i) => i >= 0))
   const subjectCols: Array<{ col: number; subject: string }> = []
+  const seenSubjects = new Map<string, string>()
   headers.forEach((h, col) => {
-    if (claimed.has(col) || isJunkHeader(h)) return
+    if (claimedRoles.has(col) || isJunkHeader(h)) return
     const subject = subjectFromHeader(h)
-    if (subject) subjectCols.push({ col, subject })
+    if (!subject) return
+    // TWO COLUMNS, ONE SUBJECT. A file carrying both "Reading" and "Reading NPR"
+    // used to write both into the same key and keep whichever came last, with
+    // nothing said. Keep the first and say so — a silent overwrite is how a
+    // scale score ends up stored as a percentile.
+    const prior = seenSubjects.get(subject)
+    if (prior !== undefined) {
+      warnings.push(`Two columns both read as ${subject} ("${prior}" and "${h}") — kept "${prior}".`)
+      return
+    }
+    seenSubjects.set(subject, h)
+    subjectCols.push({ col, subject })
   })
+
+  // The composite: the best TOTAL_HEADERS match among columns no role and no
+  // subject has taken. Earlier vocabulary entries are the more specific ones.
+  const takenBeforeTotal = new Set([...claimedRoles, ...subjectCols.map((c) => c.col)])
+  let bestTotal = -1
+  let bestTotalRank = Number.POSITIVE_INFINITY
+  headers.forEach((h, col) => {
+    if (takenBeforeTotal.has(col) || isJunkHeader(h)) return
+    const rank = TOTAL_HEADERS.findIndex((v) => matchHeader(h, [v]))
+    if (rank >= 0 && rank < bestTotalRank) {
+      bestTotalRank = rank
+      bestTotal = col
+    }
+  })
+  idx.total = bestTotal
+  const claimed = new Set([...takenBeforeTotal, ...(bestTotal >= 0 ? [bestTotal] : [])])
 
   // The shape question: is there a STUDENT in this file?
   //
@@ -340,7 +383,14 @@ export function parseAssessmentGrid(grid: string[][], opts: ParseOptions = {}): 
   // and "School ID" satisfies ID_HEADERS — which classified a diocesan summary
   // as a student file and tried to write one AssessmentResult per school. A
   // column already claimed as the school column is never also an identity column.
-  const identityCols = [idx.extId, idx.last, idx.name].filter((i) => i >= 0 && i !== idx.school)
+  //
+  // And not only the school column: "Total Tested" would have satisfied
+  // NAME_HEADERS' relatives just as happily. A column that already has a role is
+  // never also an identity column.
+  const nonIdentity = new Set(
+    [idx.school, idx.year, idx.grade, idx.tested, idx.eligible, idx.total].filter((i) => i >= 0),
+  )
+  const identityCols = [idx.extId, idx.last, idx.name].filter((i) => i >= 0 && !nonIdentity.has(i))
   const hasIdentity = identityCols.length > 0
   const scope: ParsedScope = hasIdentity ? 'student' : 'school_aggregate'
 

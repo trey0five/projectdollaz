@@ -16,7 +16,6 @@ import ModuleTabs, { ModuleAccent, useModuleTab } from '../components/module/Mod
 import { moduleTabs } from '../components/module/moduleAnatomy.js'
 import AddDataTab from '../components/wizard/AddDataTab.jsx'
 import AssessmentDashboard from '../components/academics/AssessmentDashboard.jsx'
-import AssessmentUpload from '../components/academics/AssessmentUpload.jsx'
 import LessonPlanRegister from '../components/academics/LessonPlanRegister.jsx'
 import GradesPanel from '../components/academics/GradesPanel.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
@@ -140,10 +139,11 @@ export default function AcademicsPage() {
         }
         addData={
           <Panel>
-            <div className="space-y-4">
-              <AssessmentUpload schoolId={activeId} canEdit={canEdit} onDone={() => load(query)} />
-              <AddDataTab module="academics" />
-            </div>
+            {/* The wizard is the ONE door — it now carries the assessment
+                upload, the gradebook upload, the lesson-plan flow and the SIS
+                card. Rendering the uploader here too put the same dropzone on
+                screen twice and pushed the wizard below the fold. */}
+            <AddDataTab module="academics" onDone={() => load(query)} />
           </Panel>
         }
         records={
