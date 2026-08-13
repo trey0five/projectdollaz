@@ -489,3 +489,160 @@ export function subjectsSeen(result: AssessmentParseResult): string[] {
     return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib)
   })
 }
+
+
+// ═══ OBJECTIVE SUMMARIES ═════════════════════════════════════════════════════
+//
+// The grain that turns "Math is weak" into "Math: Measurement, grade 5 — 41%
+// mastery". TerraNova and its peers all publish the same shape: one row per
+// objective, with an Objective Performance Index (0–100) and usually a mastery
+// split. It is a DIFFERENT file from the score summary, so it is detected and
+// parsed separately rather than bolted onto the score path.
+
+const OBJECTIVE_HEADERS = ['objective', 'skill', 'standard', 'objective name', 'learning objective']
+const OBJ_CODE_HEADERS = ['objective code', 'code', 'obj', 'obj #', 'objective #']
+const OPI_HEADERS = ['opi', 'objective performance index', 'mastery index', 'index', 'mastery %', 'percent mastery']
+const MASTERY_HEADERS = ['mastery', 'mastered', 'full mastery']
+const PARTIAL_HEADERS = ['partial', 'partial mastery', 'partially']
+const NON_MASTERY_HEADERS = ['non-mastery', 'non mastery', 'nonmastery', 'not mastered', 'below']
+
+export interface ParsedObjectiveRow {
+  rowNumber: number
+  schoolName: string | null
+  schoolYear: number | null
+  gradeLevel: string
+  subject: string
+  objectiveCode: string | null
+  objectiveLabel: string
+  opi: number | null
+  masteryCounts: Record<string, number> | null
+  testedCount: number | null
+  issues: string[]
+}
+
+export interface ObjectiveParseResult {
+  testType: TestTypeKey
+  rows: ParsedObjectiveRow[]
+  subjects: string[]
+  years: number[]
+  warnings: string[]
+  skipped: number
+}
+
+/**
+ * Does this grid look like an objective summary rather than a score summary?
+ * The deciding fact is an objective/skill column — a score file never has one.
+ */
+export function looksLikeObjectiveFile(grid: string[][]): boolean {
+  const headerIdx = detectHeaderRow(grid)
+  if (headerIdx < 0) return false
+  const headers = (grid[headerIdx] ?? []).map((h) => String(h ?? ''))
+  const hasObjective = headers.some((h) => matchHeader(h, OBJECTIVE_HEADERS))
+  const hasIndex = headers.some((h) => matchHeader(h, OPI_HEADERS) || matchHeader(h, MASTERY_HEADERS))
+  return hasObjective && hasIndex
+}
+
+export function parseObjectiveCsv(bytes: Uint8Array | Buffer, opts: ParseOptions = {}): ObjectiveParseResult {
+  const text = stripBom(new TextDecoder('utf-8').decode(bytes instanceof Buffer ? new Uint8Array(bytes) : bytes))
+  return parseObjectiveGrid(parseCsv(text).map((r) => r.map((c) => String(c ?? ''))), opts)
+}
+
+export function parseObjectiveGrid(grid: string[][], opts: ParseOptions = {}): ObjectiveParseResult {
+  const warnings: string[] = []
+  const headerIdx = detectHeaderRow(grid)
+  if (headerIdx < 0) throw new Error('No header row found — this does not look like an objective summary.')
+  if (headerIdx > 0) warnings.push(`Skipped ${headerIdx} row${headerIdx === 1 ? '' : 's'} above the header.`)
+
+  const headers = (grid[headerIdx] ?? []).map((h) => String(h ?? ''))
+  const testType: TestTypeKey = isTestTypeKey(opts.testType) ? opts.testType : guessTestType(headers, opts.label)
+
+  const idx = {
+    school: headers.findIndex((h) => matchHeader(h, SCHOOL_HEADERS)),
+    year: headers.findIndex((h) => matchHeader(h, YEAR_HEADERS)),
+    grade: headers.findIndex((h) => matchHeader(h, GRADE_HEADERS)),
+    // Resolve the CODE column first and exclude it from the label search:
+    // "Objective Code" also matches the objective-name vocabulary (it starts with
+    // "objective "), which would otherwise make the label the code — a bug this
+    // file's spec caught, and a good argument for ordering claims by specificity.
+    code: headers.findIndex((h) => matchHeader(h, OBJ_CODE_HEADERS)),
+    objective: -1,
+    opi: headers.findIndex((h) => matchHeader(h, OPI_HEADERS)),
+    mastery: headers.findIndex((h) => matchHeader(h, MASTERY_HEADERS)),
+    partial: headers.findIndex((h) => matchHeader(h, PARTIAL_HEADERS)),
+    nonMastery: headers.findIndex((h) => matchHeader(h, NON_MASTERY_HEADERS)),
+    tested: headers.findIndex((h) => matchHeader(h, TESTED_HEADERS)),
+  }
+  idx.objective = headers.findIndex((h, i) => i !== idx.code && matchHeader(h, OBJECTIVE_HEADERS))
+  if (idx.objective < 0) throw new Error('No objective/skill column found.')
+
+  // The subject arrives three ways: a column LITERALLY named "Subject" whose
+  // VALUES are subjects, a column NAMED for a subject, or nothing at all — in
+  // which case the sheet/file name implies it.
+  const SUBJECT_COLUMN_HEADERS = ['subject', 'content area', 'content', 'area', 'domain', 'test']
+  let subjectCol = headers.findIndex((h, i) => i !== idx.objective && matchHeader(h, SUBJECT_COLUMN_HEADERS))
+  if (subjectCol < 0) {
+    subjectCol = headers.findIndex((h, i) => i !== idx.objective && !isJunkHeader(h) && subjectFromHeader(h) !== null)
+  }
+  const impliedSubject = subjectFromHeader(opts.label ?? '') ?? null
+
+  const rows: ParsedObjectiveRow[] = []
+  const subjects = new Set<string>()
+  const years = new Set<number>()
+  let skipped = 0
+
+  for (let r = headerIdx + 1; r < grid.length; r++) {
+    const line = grid[r] ?? []
+    const cell = (i: number): string => (i >= 0 ? String(line[i] ?? '') : '')
+    const objectiveLabel = cell(idx.objective).trim()
+    if (objectiveLabel === '') {
+      skipped++
+      continue
+    }
+    const opi = toNumber(cell(idx.opi))
+    const mastery = toNumber(cell(idx.mastery))
+    const partial = toNumber(cell(idx.partial))
+    const nonMastery = toNumber(cell(idx.nonMastery))
+    if (opi === null && mastery === null) {
+      skipped++
+      continue
+    }
+    const subject =
+      (subjectCol >= 0 ? subjectFromHeader(cell(subjectCol)) ?? cell(subjectCol).trim().toLowerCase() : null) ??
+      impliedSubject ??
+      'general'
+    const year = toYear(cell(idx.year)) ?? opts.defaultYear ?? null
+    if (year !== null) years.add(year)
+    subjects.add(subject)
+
+    const masteryCounts =
+      mastery !== null || partial !== null || nonMastery !== null
+        ? {
+            ...(mastery !== null ? { mastery } : {}),
+            ...(partial !== null ? { partial } : {}),
+            ...(nonMastery !== null ? { nonMastery } : {}),
+          }
+        : null
+
+    rows.push({
+      rowNumber: r + 1,
+      schoolName: idx.school >= 0 ? cell(idx.school).trim() || null : null,
+      schoolYear: year,
+      gradeLevel: toGrade(cell(idx.grade)) ?? opts.defaultGrade ?? 'all',
+      subject,
+      objectiveCode: idx.code >= 0 ? cell(idx.code).trim() || null : null,
+      objectiveLabel,
+      // When only mastery counts are given, the index IS the mastery share.
+      opi: opi ?? (mastery !== null && (mastery + (partial ?? 0) + (nonMastery ?? 0)) > 0
+        ? (mastery / (mastery + (partial ?? 0) + (nonMastery ?? 0))) * 100
+        : null),
+      masteryCounts,
+      testedCount: toNumber(cell(idx.tested)),
+      issues: [],
+    })
+  }
+
+  if (rows.length === 0) throw new Error('No usable objective rows found.')
+  if (skipped > 0) warnings.push(`${skipped} row${skipped === 1 ? '' : 's'} had no objective or index and were skipped.`)
+
+  return { testType, rows, subjects: [...subjects], years: [...years].sort((a, b) => b - a), warnings, skipped }
+}

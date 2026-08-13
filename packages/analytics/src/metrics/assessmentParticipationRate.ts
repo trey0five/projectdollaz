@@ -32,11 +32,15 @@ export const assessmentParticipationRate: MetricDef = {
   description: 'Percentage of eligible students who sat the assessment.',
   bands: { good: 0.9, warn: 0.7 },
   compute(_cur, _prior, curOp) {
-    // Whichever exam the school runs, the tested count is the numerator; a school
-    // reporting both contributes both cohorts.
+    // Whichever exam the school runs, the tested count is the numerator. Summing
+    // both exams DOUBLE-COUNTS the student who sat the ACT and the SAT, which is
+    // common in a college-bound cohort and can push the rate past 100% — a rate
+    // above one is a tell that the numerator counts sittings while the
+    // denominator counts children. Take the LARGER cohort instead: it is the
+    // most defensible lower bound on how many distinct students sat an exam.
     const act = curOp?.actTestedCount ?? null
     const sat = curOp?.satTestedCount ?? null
-    const tested = act === null && sat === null ? null : (act ?? 0) + (sat ?? 0)
+    const tested = act === null && sat === null ? null : Math.max(act ?? 0, sat ?? 0)
     const eligible = curOp?.assessmentEligibleCount ?? null
     const inputs = [
       { key: 'actTestedCount', label: 'Students tested', value: tested, unit: 'ratio' as const },

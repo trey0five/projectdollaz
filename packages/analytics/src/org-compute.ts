@@ -180,6 +180,18 @@ export function sumOperational(
     // the artifact-count-weighted coverage ('weighted-by-components' label).
     planArtifactsPresent: foldNullable(present.map((r) => r.planArtifactsPresent)),
     planArtifactsTotal: foldNullable(present.map((r) => r.planArtifactsTotal)),
+    // Academics components — extensive sums and counts, so the org value is the
+    // metric's own formula on the sums: Σscore ÷ Σtested, a tester-weighted
+    // diocesan composite rather than a mean of school means. SAME MANDATORY
+    // PAIRED EDIT as the block above: omitting these compiles clean and would
+    // null every academics metric at org scope forever.
+    actScoreSum: foldNullable(present.map((r) => r.actScoreSum)),
+    actTestedCount: foldNullable(present.map((r) => r.actTestedCount)),
+    satScoreSum: foldNullable(present.map((r) => r.satScoreSum)),
+    satTestedCount: foldNullable(present.map((r) => r.satTestedCount)),
+    benchmarkMetCount: foldNullable(present.map((r) => r.benchmarkMetCount)),
+    benchmarkTestedCount: foldNullable(present.map((r) => r.benchmarkTestedCount)),
+    assessmentEligibleCount: foldNullable(present.map((r) => r.assessmentEligibleCount)),
   }
 }
 

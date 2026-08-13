@@ -64,9 +64,14 @@ export default function AcademicsPage() {
     [activeId],
   )
 
+  // Reset the filters when the SCHOOL changes: last school's year/test/grade
+  // almost certainly do not exist at the next one, so carrying them over asks
+  // the API for a slice that is empty and shows "no data" for a school that has
+  // plenty. `load` is keyed on activeId, so this fires exactly on a swap.
   useEffect(() => {
     setLoading(true)
-    load(query)
+    setQuery({})
+    load({})
   }, [load]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const onQuery = useCallback(

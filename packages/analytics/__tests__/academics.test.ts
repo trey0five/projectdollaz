@@ -435,12 +435,33 @@ describe('academics — registry wiring', () => {
     expect(out.value).toBe(0.5)
   })
 
-  it('participation sums both exams when a school runs ACT and SAT', () => {
+  it('participation takes the LARGER exam cohort — summing double-counts the dual-sitter', () => {
+    // 40 ACT + 20 SAT in a class of 100 is not 60% participation: the SAT
+    // sitters are largely the same college-bound students. Summing them can even
+    // push the rate past 100%, which is a tell that the numerator counts
+    // sittings while the denominator counts children.
     const out = METRIC_REGISTRY.assessment_participation_rate.compute(
       {} as never,
       undefined,
       { actTestedCount: 40, satTestedCount: 20, assessmentEligibleCount: 100 } as never,
     )
-    expect(out.value).toBeCloseTo(0.6, 9)
+    expect(out.value).toBeCloseTo(0.4, 9)
+
+    // The pathological case the old sum produced: 60 + 55 of 100 → 115%.
+    const overlap = METRIC_REGISTRY.assessment_participation_rate.compute(
+      {} as never,
+      undefined,
+      { actTestedCount: 60, satTestedCount: 55, assessmentEligibleCount: 100 } as never,
+    )
+    expect(overlap.value as number).toBeLessThanOrEqual(1)
+  })
+
+  it('suppressSmallCell fails CLOSED when the count is unknown', () => {
+    // A missing denominator is the absence of evidence, not evidence of safety.
+    expect(suppressSmallCell(42, undefined).suppressed).toBe(true)
+    expect(suppressSmallCell(42, null).suppressed).toBe(true)
+    expect(suppressSmallCell(42, 5).suppressed).toBe(false)
+    // A null value is not a disclosure, so it is not "suppressed".
+    expect(suppressSmallCell(null, undefined)).toEqual({ value: null, suppressed: false })
   })
 })

@@ -16,6 +16,7 @@ import type { User } from '@finrep/db'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js'
 import { CurrentUser } from '../common/decorators/current-user.decorator.js'
 import { PrismaService } from '../prisma/prisma.service.js'
+import { BillingService } from '../billing/billing.service.js'
 import { AssessmentsService } from './assessments.service.js'
 import { NameMatchService } from '../enrollment/diocesan/name-match.service.js'
 import { AssessmentQueryDto, AssessmentUploadDto } from './dto/academics.dto.js'
@@ -46,6 +47,7 @@ export class AcademicsOrgController {
     private readonly assessments: AssessmentsService,
     private readonly prisma: PrismaService,
     private readonly nameMatch: NameMatchService,
+    private readonly billing: BillingService,
   ) {}
 
   @Get('academics/dashboard')
@@ -73,11 +75,19 @@ export class AcademicsOrgController {
     @UploadedFile() file: UploadedAssessmentFile | undefined,
     @Body() dto: AssessmentUploadDto,
   ) {
-    await this.assertMember(user, orgId)
+    const allowed = await this.writableSchools(user, orgId)
     const index = await this.nameMatch.buildIndex(orgId)
     return this.assessments.orgPreview(orgId, file as UploadedAssessmentFile, dto, (name) => {
       const m = this.nameMatch.matchOne(name, index)
-      return { schoolId: m.decision === 'auto' ? m.matchedSchoolId : null, matchedName: m.matchedName, decision: m.decision }
+      const id = m.decision === 'auto' ? m.matchedSchoolId : null
+      // A school the caller cannot write is reported as unmatched in the preview,
+      // so the review step shows exactly what would be skipped.
+      const writable = id !== null && allowed.has(id)
+      return {
+        schoolId: writable ? id : null,
+        matchedName: m.matchedName,
+        decision: writable ? m.decision : 'not-permitted',
+      }
     })
   }
 
@@ -89,7 +99,7 @@ export class AcademicsOrgController {
     @UploadedFile() file: UploadedAssessmentFile | undefined,
     @Body() dto: AssessmentUploadDto,
   ) {
-    await this.assertMember(user, orgId)
+    const allowed = await this.writableSchools(user, orgId)
     const index = await this.nameMatch.buildIndex(orgId)
     return this.assessments.orgCommit(
       orgId,
@@ -97,17 +107,62 @@ export class AcademicsOrgController {
       { ...dto, userId: user?.id },
       (name) => {
         const m = this.nameMatch.matchOne(name, index)
-        return { schoolId: m.decision === 'auto' ? m.matchedSchoolId : null }
+        const id = m.decision === 'auto' ? m.matchedSchoolId : null
+        return { schoolId: id !== null && allowed.has(id) ? id : null }
       },
     )
   }
 
-  /** Membership in ANY school of the org — the same rule the other roll-ups use. */
+  /**
+   * Membership in ANY school of the org — the READ floor, matching the other
+   * roll-ups. Reads are aggregate-only, so membership is the right bar.
+   */
   private async assertMember(user: User, orgId: string): Promise<void> {
     const membership = await this.prisma.membership.findFirst({
       where: { userId: user.id, school: { organizationId: orgId } },
       select: { id: true },
     })
     if (!membership) throw new ForbiddenException('Not a member of this organization.')
+  }
+
+  /**
+   * The WRITE floor. A diocesan commit rewrites assessment aggregates and the
+   * promoted operational figures for EVERY school in the org — the rows the
+   * scorecard, the briefing and the board report read. Membership alone is not
+   * enough for that: the equivalent per-school route demands owner/accountant,
+   * and an org route that asks for less is a hole around it.
+   *
+   * EntitlementGuard resolves a schoolId from the request and so cannot fire on
+   * an orgId route; the licence check therefore lives here, per school, and is
+   * FAIL-CLOSED like every other module gate.
+   *
+   * Returns the schools this user may actually write, so the service can skip
+   * the rest and REPORT the skips rather than silently dropping rows.
+   */
+  private async writableSchools(user: User, orgId: string): Promise<Set<string>> {
+    const memberships = await this.prisma.membership.findMany({
+      where: {
+        userId: user.id,
+        role: { in: ['owner', 'accountant'] },
+        school: { organizationId: orgId },
+      },
+      select: { schoolId: true },
+    })
+    if (memberships.length === 0) {
+      throw new ForbiddenException('Diocesan uploads require an owner or business-manager role.')
+    }
+    const licensed = await Promise.all(
+      memberships.map((m) =>
+        this.billing
+          .isEntitledForModule(m.schoolId, 'academics')
+          .catch(() => false)
+          .then((ok) => [m.schoolId, ok] as const),
+      ),
+    )
+    const allowed = new Set(licensed.filter(([, ok]) => ok).map(([id]) => id))
+    if (allowed.size === 0) {
+      throw new ForbiddenException('No school in this organization has the Academics module.')
+    }
+    return allowed
   }
 }

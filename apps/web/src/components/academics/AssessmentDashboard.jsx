@@ -106,9 +106,19 @@ function RankedSchools({ schools, focusId, national, peerAvg, range, reduce, ano
   const span = hi - lo || 1
   const pct = (v) => ((v - lo) / span) * 100
 
+  // The bars occupy a track that starts after the fixed label column and ends
+  // before the value column, so a line positioned against the OUTER box lands
+  // in the wrong place. Inset the overlay by exactly those two widths.
+  const LABEL_W = 112
+  const GAP = 10
+  const VALUE_W = 40
   return (
     <div className="relative">
-      {/* Reference lines drawn ON the field. */}
+      {/* Reference lines drawn ON the bar track, not the outer container. */}
+      <div
+        className="pointer-events-none absolute inset-y-0"
+        style={{ left: LABEL_W + GAP, right: VALUE_W + GAP }}
+      >
       {[
         national !== null && national !== undefined ? { v: national, color: '#e11d48', text: `National ${fmt(national, 0)}` } : null,
         peerAvg !== null && peerAvg !== undefined ? { v: peerAvg, color: '#2563EB', text: `Diocese ${fmt(peerAvg)}` } : null,
@@ -128,6 +138,7 @@ function RankedSchools({ schools, focusId, national, peerAvg, range, reduce, ano
             </span>
           </div>
         ))}
+      </div>
 
       <div className="space-y-1.5 pt-3">
         {rows.map((r, i) => (
@@ -296,7 +307,7 @@ function CohortPanel({ cohort, reduce }) {
         })}
       </div>
       <p className="text-[11.5px] text-muted">
-        The same students, one year apart — they were in grade {Number(grade) - 1} last year.
+        The same students, one year apart — they were in {priorGradeLabel(grade)} last year.
       </p>
     </div>
   )
@@ -441,7 +452,7 @@ function Distribution({ slices, reduce }) {
             <span className="h-2.5 w-2.5 rounded-sm" style={{ background: BAND_COLOR[s.band] }} />
             <span className="text-[11.5px] text-muted">{BAND_LABEL[s.band]}</span>
             <span className="ml-auto text-[12px] font-bold tabular-nums text-navy">
-              {s.count} · {Math.round((s.share ?? 0) * 100)}%
+              {s.suppressed || s.count === null ? '<5' : `${s.count} · ${Math.round((s.share ?? 0) * 100)}%`}
             </span>
           </div>
         ))}
@@ -520,13 +531,23 @@ function ComparisonTable({ rows, scoreType }) {
               <td className={`${td} ${gapTone(r.vsNational)}`}>
                 {scoreType === 'scale' ? '—' : signed(r.vsNational, 0)}
               </td>
-              <td className={`${td} text-muted`}>{r.tested ?? '—'}</td>
+              <td className={`${td} text-muted`}>
+                {r.tested === null || r.tested === undefined ? '—' : r.tested < 5 ? '<5' : r.tested}
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
     </div>
   )
+}
+
+/** The ceiling a SUBJECT score is measured against, per family. */
+function subjectMax(ctx) {
+  if (ctx?.scoreType === 'percentile' || ctx?.scoreType === 'nce') return 99
+  if (ctx?.family === 'sat') return 800 // a section, not the 1600 total
+  if (ctx?.family === 'act') return 36
+  return ctx?.scoreRange?.max ?? 100
 }
 
 const gapTone = (v) => (v === null || v === undefined ? 'text-muted' : v > 0 ? 'text-emerald-700' : v < 0 ? 'text-rose-700' : 'text-muted')
@@ -545,6 +566,15 @@ function ChangeBadge({ value }) {
       {signed(value, 0)}
     </span>
   )
+}
+
+/** The grade BELOW this one, named — arithmetic prints "grade NaN" for K/PK. */
+function priorGradeLabel(grade) {
+  const g = String(grade ?? '').trim().toUpperCase()
+  if (g === '1') return 'kindergarten'
+  if (g === 'K') return 'pre-K'
+  const n = Number.parseInt(g, 10)
+  return Number.isFinite(n) && n > 1 ? `grade ${n - 1}` : 'the grade below'
 }
 
 // ── Section shell ────────────────────────────────────────────────────────────
@@ -750,7 +780,12 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
               .filter((s) => s.value !== null)
               .map((s, i) => {
                 const tone = STANDING_TONE[s.standing]
-                const max = ctx?.scoreRange?.max ?? 100
+                // A SECTION is not scored on the composite's scale: an SAT
+                // section runs 200–800 while the total runs 400–1600, so
+                // dividing by the composite max drew every SAT subject bar at
+                // half its true length. Scale each family's sections against
+                // their own ceiling.
+                const max = subjectMax(ctx)
                 return (
                   <div key={s.subject} className="flex items-center gap-2.5">
                     <span className="w-24 shrink-0 text-right text-[11.5px] text-muted">{label(s.subject)}</span>

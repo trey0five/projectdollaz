@@ -27,6 +27,7 @@ import {
 import {
   anonymizePeers,
   availableCohorts,
+  benchmarksFor,
   averageOf,
   buildAssessmentInsight,
   cohortMovements,
@@ -43,9 +44,9 @@ import {
   rankOf,
   rankSchools,
   scoreRange,
+  MIN_CELL,
   strengthsAndOpportunities,
   subjectComparisons,
-  suppressSmallCell,
   systemInsights,
   trendDirection,
   trendSeries,
@@ -56,7 +57,9 @@ import {
 import { PrismaService } from '../prisma/prisma.service.js'
 import {
   TOTAL_KEY,
+  looksLikeObjectiveFile,
   parseAssessmentCsv,
+  parseObjectiveCsv,
   subjectsSeen,
   type AssessmentParseResult,
 } from './parsers/assessment-file.parser.js'
@@ -97,6 +100,9 @@ export class AssessmentsService {
     file: { buffer: Buffer; originalname?: string },
     opts: { testType?: string; schoolYear?: number; gradeLevel?: string } = {},
   ): Promise<UploadPreview> {
+    // An objective summary is a different file with a different grain, so it is
+    // detected and routed here rather than being forced through the score path.
+    if (this.isObjectiveFile(file)) return this.previewObjectives(file, opts)
     const parsed = this.parse(file, opts)
     const subjects = subjectsSeen(parsed)
 
@@ -146,6 +152,7 @@ export class AssessmentsService {
     file: { buffer: Buffer; originalname?: string },
     opts: { testType?: string; schoolYear?: number; gradeLevel?: string; userId?: string } = {},
   ): Promise<{ importId: string; resultsCreated: number; aggregatesUpserted: number; matched: number; unmatched: number; warnings: string[] }> {
+    if (this.isObjectiveFile(file)) return this.commitObjectives(schoolId, file, opts)
     const parsed = this.parse(file, opts)
     const year = opts.schoolYear ?? parsed.years[0] ?? null
     if (year === null) {
@@ -170,6 +177,7 @@ export class AssessmentsService {
     let resultsCreated = 0
     let matched = 0
     let unmatched = 0
+    let touchedYears: number[] = [year]
 
     if (parsed.scope === 'student') {
       const roster = await this.roster(schoolId)
@@ -195,16 +203,21 @@ export class AssessmentsService {
           source: 'upload',
         }
       })
-      // Replace this (year, test) slice so a corrected re-upload does not double.
+      // Replace EVERY year the file carries, not just the hint year. A file
+      // spanning two years re-uploaded would otherwise clear one year and append
+      // the other, doubling it — and the untouched years would never be
+      // re-aggregated, so their dashboards would keep the stale average.
+      const years = [...new Set(rows.map((r) => r.schoolYear))]
       await this.prisma.assessmentResult.deleteMany({
-        where: { schoolId, schoolYear: year, testType: parsed.testType, source: 'upload' },
+        where: { schoolId, schoolYear: { in: years }, testType: parsed.testType, source: 'upload' },
       })
       for (let i = 0; i < rows.length; i += 500) {
         const chunk = rows.slice(i, i + 500)
         const created = await this.prisma.assessmentResult.createMany({ data: chunk })
         resultsCreated += created.count
       }
-      await this.deriveAggregates(schoolId, year, parsed.testType, imp.id)
+      for (const y of years) await this.deriveAggregates(schoolId, y, parsed.testType, imp.id)
+      touchedYears = years
     }
 
     let aggregatesUpserted = 0
@@ -244,13 +257,20 @@ export class AssessmentsService {
         })
         aggregatesUpserted += 1
       }
+      // Synthesize the whole-school row from the per-grade rows this file
+      // carried. Without it a by-grade summary file leaves gradeLevel:'all'
+      // empty, so the headline KPI, the rank and promoteOperational all see
+      // nothing — the dashboard reads "no data" while the grades are right there.
+      const rowYears = [...new Set(rows.map((a2) => a2.schoolYear ?? year))]
+      for (const y of rowYears) await this.rollUpAllGrades(schoolId, y, parsed.testType)
+      touchedYears = rowYears
     }
 
     await this.prisma.assessmentImport.update({
       where: { id: imp.id },
       data: { resultsCreated, aggregatesUpserted, studentsMatched: matched, studentsUnmatched: unmatched },
     })
-    await this.promoteOperational(schoolId, year)
+    for (const y of touchedYears) await this.promoteOperational(schoolId, y)
 
     return { importId: imp.id, resultsCreated, aggregatesUpserted, matched, unmatched, warnings: parsed.warnings }
   }
@@ -262,13 +282,32 @@ export class AssessmentsService {
       select: { id: true, yearHint: true, testTypeHint: true },
     })
     if (!imp) throw new NotFoundException('Import not found.')
+    // Capture the affected years BEFORE deleting — afterwards there is nothing
+    // left to tell us which years need re-deriving.
+    const affectedYears = [
+      ...new Set(
+        (
+          await this.prisma.assessmentResult.findMany({
+            where: { importId },
+            select: { schoolYear: true },
+            distinct: ['schoolYear'],
+          })
+        ).map((r) => r.schoolYear),
+      ),
+    ]
     const [results, aggregates] = await Promise.all([
       this.prisma.assessmentResult.deleteMany({ where: { importId } }),
       this.prisma.assessmentSchoolAggregate.deleteMany({ where: { importId } }),
     ])
-    if (imp.yearHint && isTestTypeKey(imp.testTypeHint)) {
-      await this.deriveAggregates(schoolId, imp.yearHint, imp.testTypeHint, null)
-      await this.promoteOperational(schoolId, imp.yearHint)
+    // Re-derive every year this import touched, not just its hint: a multi-year
+    // file reverted by hint alone would leave the other years' aggregates
+    // describing rows that no longer exist.
+    if (isTestTypeKey(imp.testTypeHint)) {
+      const years = [...new Set([...(affectedYears ?? []), ...(imp.yearHint ? [imp.yearHint] : [])])]
+      for (const y of years) {
+        await this.deriveAggregates(schoolId, y, imp.testTypeHint, null)
+        await this.promoteOperational(schoolId, y)
+      }
     }
     return { deleted: results.count + aggregates.count }
   }
@@ -476,7 +515,7 @@ export class AssessmentsService {
         subjects,
         { excludeSchoolId: schoolId },
       ),
-      distribution: distributionOf(own, ACHIEVEMENT_BANDS),
+      distribution: this.safeDistribution(own),
       trend,
       trendDirection: trendDirection(trend, family, scoreType),
       movements: movements(inScope.filter((a) => a.gradeLevel === grade), {
@@ -579,6 +618,133 @@ export class AssessmentsService {
       cohort: cohortGrade ? { grade: cohortGrade, movements: moves, summary: cohortSummary(moves) } : null,
       availableCohorts: availableCohorts(inScope),
       insights: systemInsights(thisYear),
+    }
+  }
+
+  // ── Objective summaries (the instructional grain) ──────────────────────────
+
+  private isObjectiveFile(file: { buffer: Buffer }): boolean {
+    try {
+      const text = new TextDecoder('utf-8').decode(new Uint8Array(file.buffer)).slice(0, 20000)
+      const grid = text.split('\n').map((line) => line.split(','))
+      return looksLikeObjectiveFile(grid)
+    } catch {
+      return false
+    }
+  }
+
+  private previewObjectives(
+    file: { buffer: Buffer; originalname?: string },
+    opts: { testType?: string; schoolYear?: number; gradeLevel?: string },
+  ): UploadPreview {
+    const parsed = this.parseObjectives(file, opts)
+    return {
+      scope: 'school_aggregate',
+      testType: parsed.testType,
+      family: TEST_FAMILY[parsed.testType] ?? 'nrt',
+      scoreType: 'percentile',
+      years: parsed.years,
+      subjects: parsed.subjects,
+      rows: parsed.rows.length,
+      warnings: [...parsed.warnings, 'This is an OBJECTIVE summary — it fills Strengths & Opportunities, not the score charts.'],
+      sample: parsed.rows.slice(0, 5).map((r) => ({
+        subject: r.subject,
+        grade: r.gradeLevel,
+        objective: r.objectiveLabel,
+        opi: r.opi === null ? null : Math.round(r.opi),
+      })),
+      token: 'objective',
+    }
+  }
+
+  private async commitObjectives(
+    schoolId: string,
+    file: { buffer: Buffer; originalname?: string },
+    opts: { testType?: string; schoolYear?: number; gradeLevel?: string; userId?: string },
+  ) {
+    const parsed = this.parseObjectives(file, opts)
+    const year = opts.schoolYear ?? parsed.years[0] ?? null
+    if (year === null) throw new BadRequestException('No school year in the file — choose one before committing.')
+
+    const imp = await this.prisma.assessmentImport.create({
+      data: {
+        schoolId,
+        kind: 'upload',
+        scope: 'school_aggregate',
+        fileName: file.originalname ?? null,
+        testTypeHint: parsed.testType,
+        yearHint: year,
+        rowsParsed: parsed.rows.length,
+        warnings: parsed.warnings,
+        uploadedByUserId: opts.userId ?? null,
+      },
+      select: { id: true },
+    })
+
+    let upserted = 0
+    for (const r of parsed.rows) {
+      await this.prisma.assessmentObjectiveAggregate.upsert({
+        where: {
+          schoolId_schoolYear_testType_gradeLevel_subject_objectiveLabel: {
+            schoolId,
+            schoolYear: r.schoolYear ?? year,
+            testType: parsed.testType,
+            gradeLevel: r.gradeLevel,
+            subject: r.subject,
+            objectiveLabel: r.objectiveLabel,
+          },
+        },
+        create: {
+          schoolId,
+          importId: imp.id,
+          schoolYear: r.schoolYear ?? year,
+          testType: parsed.testType,
+          gradeLevel: r.gradeLevel,
+          subject: r.subject,
+          objectiveCode: r.objectiveCode,
+          objectiveLabel: r.objectiveLabel,
+          opi: r.opi,
+          masteryCounts: r.masteryCounts ?? undefined,
+          testedCount: r.testedCount,
+        },
+        update: {
+          importId: imp.id,
+          objectiveCode: r.objectiveCode,
+          opi: r.opi,
+          masteryCounts: r.masteryCounts ?? undefined,
+          testedCount: r.testedCount,
+        },
+      })
+      upserted += 1
+    }
+
+    await this.prisma.assessmentImport.update({
+      where: { id: imp.id },
+      data: { aggregatesUpserted: upserted },
+    })
+    return {
+      importId: imp.id,
+      resultsCreated: 0,
+      aggregatesUpserted: upserted,
+      matched: 0,
+      unmatched: 0,
+      warnings: parsed.warnings,
+    }
+  }
+
+  private parseObjectives(
+    file: { buffer: Buffer; originalname?: string },
+    opts: { testType?: string; schoolYear?: number; gradeLevel?: string },
+  ) {
+    try {
+      return parseObjectiveCsv(file.buffer, {
+        testType: opts.testType,
+        defaultYear: opts.schoolYear,
+        defaultGrade: opts.gradeLevel,
+        label: file.originalname,
+      })
+    } catch (e) {
+      throw new BadRequestException((e as Error).message)
     }
   }
 
@@ -790,14 +956,30 @@ export class AssessmentsService {
     })
   }
 
-  /** Per-section benchmark determination, computed here rather than trusted. */
-  private benchmarksMet(parsed: AssessmentParseResult, sections: Record<string, number>): Record<string, boolean> | undefined {
-    const table = parsed.family === 'act' ? { english: 18, math: 22, reading: 22, science: 23 } : parsed.family === 'sat' ? { erw: 480, math: 530 } : null
+  /**
+   * Per-section benchmark determination, computed here rather than trusted.
+   *
+   * REQUIRES FULL COVERAGE. "Met every college-readiness benchmark" is only a
+   * true statement if every section was actually scored — deciding it over the
+   * two sections a file happened to include would let a student who cleared
+   * English and Math count as college-ready without a Reading or Science score,
+   * inflating the published attainment rate. A student without full coverage
+   * falls out of BOTH the numerator and the denominator, which is what the
+   * metric's contract says.
+   *
+   * The cut scores come from the pure layer, not a second hard-coded copy here.
+   */
+  private benchmarksMet(
+    parsed: AssessmentParseResult,
+    sections: Record<string, number>,
+  ): Record<string, boolean> | undefined {
+    const table = benchmarksFor(parsed.family)
     if (!table) return undefined
     const out: Record<string, boolean> = {}
     for (const [k, cut] of Object.entries(table)) {
       const v = sections[k]
-      if (typeof v === 'number') out[k] = v >= cut
+      if (typeof v !== 'number') return undefined // incomplete → no determination
+      out[k] = v >= cut
     }
     return Object.keys(out).length > 0 ? out : undefined
   }
@@ -864,7 +1046,7 @@ export class AssessmentsService {
         sectionAverages: Object.fromEntries([...sectionSums].map(([k, v]) => [k, v.sum / v.n])),
         testedCount: group.length,
         eligibleCount: null,
-        benchmarkMetCount: benchTested > 0 ? benchMet : null,
+          benchmarkMetCount: benchTested > 0 ? benchMet : null,
         benchmarkTested: benchTested > 0 ? benchTested : null,
         distribution: scoreType === 'percentile' ? bands : null,
       })
@@ -904,6 +1086,7 @@ export class AssessmentsService {
       testedCount: input.testedCount,
       eligibleCount: input.eligibleCount,
       benchmarkMetCount: input.benchmarkMetCount ?? null,
+      benchmarkTestedCount: input.benchmarkTested ?? null,
       distribution: input.distribution ?? undefined,
     }
     await this.prisma.assessmentSchoolAggregate.upsert({
@@ -926,32 +1109,80 @@ export class AssessmentsService {
    * org roll-up) light up without a second ingest path.
    */
   private async promoteOperational(schoolId: string, schoolYear: number) {
-    const rows = await this.prisma.assessmentSchoolAggregate.findMany({
+    const rows: Array<{
+      testType: string
+      derivation: string
+      avgComposite: unknown
+      testedCount: number | null
+      benchmarkMetCount: number | null
+      benchmarkTestedCount: number | null
+      eligibleCount: number | null
+    }> = await this.prisma.assessmentSchoolAggregate.findMany({
       where: { schoolId, schoolYear, gradeLevel: 'all' },
-      select: { testType: true, derivation: true, avgComposite: true, testedCount: true, benchmarkMetCount: true, eligibleCount: true },
+      select: {
+        testType: true,
+        derivation: true,
+        avgComposite: true,
+        testedCount: true,
+        benchmarkMetCount: true,
+        benchmarkTestedCount: true,
+        eligibleCount: true,
+      },
     })
-    if (rows.length === 0) return
+    // NO EARLY RETURN when the aggregates are gone. Reverting an import deletes
+    // the rows, and returning here would leave the promoted ACT/SAT figures on
+    // the operational record forever — the scorecard would keep showing a score
+    // for a school whose results were withdrawn. An empty set writes explicit
+    // nulls instead, which is what "we no longer have this" looks like.
     const pick = (test: string) =>
       rows.find((r) => r.testType === test && r.derivation === 'derived') ?? rows.find((r) => r.testType === test) ?? null
     const act = pick('act')
     const sat = pick('sat')
-    const period = await this.prisma.fiscalPeriod.findFirst({
-      where: { schoolId, periodEndDate: { gte: new Date(`${schoolYear}-01-01`), lte: new Date(`${schoolYear}-12-31`) } },
-      orderBy: { periodEndDate: 'desc' },
-      select: { id: true },
-    })
+    // The FY that OWNS a spring administration ends that June 30 (the house FY is
+    // Jul–Jun). Matching any period ending in the calendar year and taking the
+    // latest would attach spring 2026 results to a December-2026 stub period, and
+    // an interim period would silently outrank the annual one.
+    const fyEnd = new Date(Date.UTC(schoolYear, 5, 30))
+    const period =
+      (await this.prisma.fiscalPeriod.findFirst({
+        where: { schoolId, periodEndDate: fyEnd },
+        orderBy: { periodType: 'asc' },
+        select: { id: true },
+      })) ??
+      (await this.prisma.fiscalPeriod.findFirst({
+        where: {
+          schoolId,
+          periodType: 'fy',
+          periodEndDate: { gte: new Date(Date.UTC(schoolYear, 0, 1)), lte: new Date(Date.UTC(schoolYear, 11, 31)) },
+        },
+        orderBy: { periodEndDate: 'desc' },
+        select: { id: true },
+      }))
     if (!period) return
 
     const num = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v))
     const actAvg = num(act?.avgComposite)
     const satAvg = num(sat?.avgComposite)
+    // The benchmark DENOMINATOR is students with a determination, not everyone
+    // tested: a student with an incomplete section set cannot be counted as
+    // meeting or missing the benchmark, and folding them into the denominator
+    // silently deflates the rate. `|| null` is deliberately NOT used on these —
+    // a genuine 0 met (nobody cleared the bar) is a real, publishable finding
+    // and must not read as "no data".
+    const metSum = (act?.benchmarkMetCount ?? null) === null && (sat?.benchmarkMetCount ?? null) === null
+      ? null
+      : (act?.benchmarkMetCount ?? 0) + (sat?.benchmarkMetCount ?? 0)
+    const determinedSum =
+      (act?.benchmarkTestedCount ?? null) === null && (sat?.benchmarkTestedCount ?? null) === null
+        ? null
+        : (act?.benchmarkTestedCount ?? 0) + (sat?.benchmarkTestedCount ?? 0)
     const data = {
       actScoreSum: actAvg !== null && act?.testedCount ? Math.round(actAvg * act.testedCount) : null,
       actTestedCount: act?.testedCount ?? null,
       satScoreSum: satAvg !== null && sat?.testedCount ? Math.round(satAvg * sat.testedCount) : null,
       satTestedCount: sat?.testedCount ?? null,
-      benchmarkMetCount: (act?.benchmarkMetCount ?? 0) + (sat?.benchmarkMetCount ?? 0) || null,
-      benchmarkTestedCount: (act?.testedCount ?? 0) + (sat?.testedCount ?? 0) || null,
+      benchmarkMetCount: metSum,
+      benchmarkTestedCount: determinedSum,
       assessmentEligibleCount: act?.eligibleCount ?? sat?.eligibleCount ?? null,
     }
     await this.prisma.periodOperationalData.upsert({
@@ -982,6 +1213,7 @@ export class AssessmentsService {
         testedCount: true,
         eligibleCount: true,
         benchmarkMetCount: true,
+        benchmarkTestedCount: true,
         benchmarkRates: true,
         distribution: true,
         school: { select: { name: true } },
@@ -994,7 +1226,13 @@ export class AssessmentsService {
       const cur = best.get(key)
       if (!cur || (r.derivation === 'derived' && cur.derivation !== 'derived')) best.set(key, r)
     }
+    // SUPPRESS AT THE SOURCE. A school-year with fewer than five testers has an
+    // average that IS a small cell — with two testers it is half of one child's
+    // score. Gating here, before the pure layer ever sees the row, means every
+    // downstream consumer (rank, peer average, board table, trend, cross-domain)
+    // inherits the suppression instead of each needing to remember it.
     return [...best.values()].map((r) => {
+      const thin = r.testedCount !== null && r.testedCount > 0 && r.testedCount < MIN_CELL
       const family = TEST_FAMILY[r.testType as TestTypeKey] ?? 'nrt'
       return {
         schoolId: r.schoolId,
@@ -1004,13 +1242,15 @@ export class AssessmentsService {
         family,
         scoreType: (r.scoreType as 'scale' | 'percentile' | 'nce') ?? SCORE_TYPE_FOR_FAMILY[family],
         gradeLevel: r.gradeLevel,
-        avgComposite: r.avgComposite === null ? null : Number(r.avgComposite),
-        sectionAverages: (r.sectionAverages ?? null) as Record<string, number> | null,
+        avgComposite: thin || r.avgComposite === null ? null : Number(r.avgComposite),
+        sectionAverages: thin ? null : ((r.sectionAverages ?? null) as Record<string, number> | null),
+        suppressed: thin,
         testedCount: r.testedCount,
         eligibleCount: r.eligibleCount,
         benchmarkMetCount: r.benchmarkMetCount,
-        benchmarkRates: (r.benchmarkRates ?? null) as Record<string, number> | null,
-        distribution: (r.distribution ?? null) as Record<string, number> | null,
+        benchmarkTestedCount: (r as { benchmarkTestedCount?: number | null }).benchmarkTestedCount ?? null,
+        benchmarkRates: thin ? null : ((r.benchmarkRates ?? null) as Record<string, number> | null),
+        distribution: thin ? null : ((r.distribution ?? null) as Record<string, number> | null),
       }
     })
   }
@@ -1076,13 +1316,29 @@ export class AssessmentsService {
         ;(pick(r.student) ? withFlag : without).push(r.composite)
       }
       const mean = (xs: number[]) => (xs.length > 0 ? xs.reduce((a2, b2) => a2 + b2, 0) / xs.length : null)
-      const flagged = suppressSmallCell(mean(withFlag), withFlag.length)
-      const rest = suppressSmallCell(mean(without), without.length)
+
+      // SUPPRESS THE PAIR, NOT EACH SIDE — and never publish the raw count.
+      //
+      // Suppressing only the thin side is not suppression at all. With 30 tested
+      // students and 1 flagged, publishing count:1 alone discloses that exactly
+      // one tested child carries that flag; publishing the complement's mean
+      // then recovers that child's exact score by subtraction
+      // (30·M30 − 29·M29). So when EITHER side is under the floor, both sides
+      // and the count go, and the caller learns only that the split cannot be
+      // shown. A subgroup breakdown of a class is worth nothing if it can be
+      // inverted into one named child's result.
+      const safe = withFlag.length >= MIN_CELL && without.length >= MIN_CELL
+      if (!safe) {
+        return {
+          withFlag: { value: null, suppressed: true, count: null },
+          without: { value: null, suppressed: true, count: null },
+          gap: null,
+        }
+      }
       return {
-        withFlag: { value: flagged.value, suppressed: flagged.suppressed, count: withFlag.length },
-        without: { value: rest.value, suppressed: rest.suppressed, count: without.length },
-        gap:
-          flagged.value !== null && rest.value !== null ? (flagged.value as number) - (rest.value as number) : null,
+        withFlag: { value: mean(withFlag), suppressed: false, count: withFlag.length },
+        without: { value: mean(without), suppressed: false, count: without.length },
+        gap: (mean(withFlag) as number) - (mean(without) as number),
       }
     }
 
@@ -1113,12 +1369,18 @@ export class AssessmentsService {
         select: { schoolId: true, enrollment: true, teachingFte: true, updatedAt: true },
         orderBy: { updatedAt: 'desc' },
       }),
-      this.prisma.statementSnapshot.findMany({
-        where: { schoolId: { in: schoolIds } },
-        select: { schoolId: true, payload: true, createdAt: true },
-        orderBy: { createdAt: 'desc' },
-        take: schoolIds.length * 3,
-      }),
+      // One snapshot PER SCHOOL, not a global take — a global cap sorted by date
+      // is spent entirely on whichever school generated statements most recently,
+      // so every other school silently loses its cost-per-pupil.
+      Promise.all(
+        schoolIds.map((id) =>
+          this.prisma.statementSnapshot.findFirst({
+            where: { schoolId: id },
+            select: { schoolId: true, payload: true, createdAt: true },
+            orderBy: { createdAt: 'desc' },
+          }),
+        ),
+      ).then((rows) => rows.filter((r): r is NonNullable<typeof r> => r !== null)),
       this.prisma.school.findMany({ where: { id: { in: schoolIds } }, select: { id: true, name: true } }),
     ])
 
@@ -1193,21 +1455,50 @@ export class AssessmentsService {
       .sort((a, b) => (b.current ?? -Infinity) - (a.current ?? -Infinity))
   }
 
+  /**
+   * Achievement bands, suppressed. A band of two students is two children, and
+   * the complementary rule matters as much as the primary one: hiding a single
+   * thin band while publishing the total and the other three recovers it by
+   * subtraction, so a second band goes with it.
+   */
+  private safeDistribution(own: AssessmentRow | null) {
+    const slices = distributionOf(own, ACHIEVEMENT_BANDS)
+    const total = slices.reduce((acc, s) => acc + (s.count ?? 0), 0)
+    if (total === 0) return slices
+    // The whole cohort is a small cell — nothing about its shape may be shown.
+    if (total < MIN_CELL) return ACHIEVEMENT_BANDS.map((band) => ({ band, count: null, share: null, suppressed: true }))
+
+    const thin = slices.filter((s) => (s.count ?? 0) > 0 && (s.count as number) < MIN_CELL)
+    const hidden = new Set(thin.map((s) => s.band))
+    // Exactly one hidden band is recoverable from the total — hide the next
+    // smallest non-zero band with it.
+    if (hidden.size === 1) {
+      const next = slices
+        .filter((s) => !hidden.has(s.band) && (s.count ?? 0) > 0)
+        .sort((a, b) => (a.count ?? 0) - (b.count ?? 0))[0]
+      if (next) hidden.add(next.band)
+    }
+    return slices.map((s) =>
+      hidden.has(s.band) ? { band: s.band, count: null, share: null, suppressed: true } : { ...s, suppressed: false },
+    )
+  }
+
   private benchmarkKpi(own: AssessmentRow | null, peers: AssessmentRow[], schoolId: string) {
+    // Divide by students with a DETERMINATION, never by everyone tested.
     const rate = (r: AssessmentRow | null): number | null =>
-      r && r.benchmarkMetCount !== null && r.benchmarkMetCount !== undefined && (r.testedCount ?? 0) > 0
-        ? r.benchmarkMetCount / (r.testedCount as number)
+      r && r.benchmarkMetCount !== null && r.benchmarkMetCount !== undefined && (r.benchmarkTestedCount ?? 0) > 0
+        ? r.benchmarkMetCount / (r.benchmarkTestedCount as number)
         : null
     const peerPool = peers.filter((p) => p.schoolId !== schoolId)
     let met = 0
-    let tested = 0
+    let determined = 0
     for (const p of peerPool) {
-      if (p.benchmarkMetCount !== null && p.benchmarkMetCount !== undefined && (p.testedCount ?? 0) > 0) {
+      if (p.benchmarkMetCount !== null && p.benchmarkMetCount !== undefined && (p.benchmarkTestedCount ?? 0) > 0) {
         met += p.benchmarkMetCount
-        tested += p.testedCount as number
+        determined += p.benchmarkTestedCount as number
       }
     }
-    return { value: rate(own), peer: tested > 0 ? met / tested : null }
+    return { value: rate(own), peer: determined > 0 ? met / determined : null }
   }
 
   private emptyDashboard(school: { id: string; name: string }, level: string) {

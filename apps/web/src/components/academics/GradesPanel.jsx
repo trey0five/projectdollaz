@@ -17,6 +17,14 @@ const EASE = [0.2, 0.8, 0.2, 1]
 
 const fmt = (v, d = 1) => (v === null || v === undefined ? '—' : Number(v).toFixed(d).replace(/\.0$/, ''))
 
+/** Bar width for a term average, inferring the mark scale from the data. */
+function termBarPct(value, terms) {
+  if (value === null || value === undefined) return 0
+  const peak = Math.max(...(terms ?? []).map((t) => t.average ?? 0), 0)
+  const ceiling = peak <= 5 ? 4 : peak <= 20 ? 20 : 100 // GPA · points · percent
+  return Math.max(0, Math.min(100, (Number(value) / ceiling) * 100))
+}
+
 function Card({ title, eyebrow, children, aside }) {
   return (
     <motion.section
@@ -113,13 +121,16 @@ export default function GradesPanel({ schoolId, canEdit }) {
             </div>
             {(gradebook.byTerm ?? []).length > 0 ? (
               <div className="space-y-1.5">
+                {/* Scale to the scale the marks are ACTUALLY on. A 0–4 GPA
+                    gradebook drawn as a percentage renders 3.6 as a 3.6%-wide
+                    sliver; anything at or under 5 is a points scale. */}
                 {gradebook.byTerm.map((t) => (
                   <div key={t.term} className="flex items-center gap-3">
                     <span className="w-20 shrink-0 text-right text-[11.5px] text-muted">{t.term}</span>
                     <div className="h-5 flex-1 overflow-hidden rounded bg-navy/[0.05]">
                       <motion.div
                         initial={{ width: 0 }}
-                        animate={{ width: `${Math.min(100, (t.average ?? 0))}%` }}
+                        animate={{ width: `${termBarPct(t.average, gradebook.byTerm)}%` }}
                         transition={{ duration: 0.6, ease: EASE }}
                         className="h-full rounded"
                         style={{ background: `linear-gradient(90deg, ${HUE}, #14b8a6)` }}

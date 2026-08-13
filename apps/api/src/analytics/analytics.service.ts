@@ -677,6 +677,17 @@ export class AnalyticsService {
         // Staff FTEs so Tier-2 HR trend points (student_teacher_ratio) populate.
         teachingFte: dec(r.teachingFte),
         totalStaffFte: dec(r.totalStaffFte),
+        // Academics components so the four academics metrics have TREND points
+        // too — without these the sparkline is empty even when the scorecard
+        // shows a value.
+        actScoreSum: (r as { actScoreSum?: number | null }).actScoreSum ?? null,
+        actTestedCount: (r as { actTestedCount?: number | null }).actTestedCount ?? null,
+        satScoreSum: (r as { satScoreSum?: number | null }).satScoreSum ?? null,
+        satTestedCount: (r as { satTestedCount?: number | null }).satTestedCount ?? null,
+        benchmarkMetCount: (r as { benchmarkMetCount?: number | null }).benchmarkMetCount ?? null,
+        benchmarkTestedCount: (r as { benchmarkTestedCount?: number | null }).benchmarkTestedCount ?? null,
+        assessmentEligibleCount:
+          (r as { assessmentEligibleCount?: number | null }).assessmentEligibleCount ?? null,
       })
     }
 

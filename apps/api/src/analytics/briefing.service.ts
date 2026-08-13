@@ -412,7 +412,7 @@ export class BriefingService {
     return this.prisma.assessmentSchoolAggregate
       .findMany({
         where: { schoolId, gradeLevel: 'all' },
-        select: { schoolYear: true, testType: true, avgComposite: true, testedCount: true },
+        select: { schoolYear: true, testType: true, derivation: true, avgComposite: true, testedCount: true },
         orderBy: { schoolYear: 'desc' },
         take: 24,
       })
@@ -1576,8 +1576,18 @@ export class BriefingService {
           dueDate: null,
         })
       } else {
-        const byTest = new Map<string, typeof academicRows>()
+        // Collapse derived-over-ingested first — otherwise a school holding both
+        // a summary row and a derived row for the same year can appear to have
+        // "fallen" from one to the other, and the briefing would report a
+        // decline that never happened.
+        const collapsed = new Map<string, (typeof academicRows)[number]>()
         for (const r of academicRows) {
+          const key = `${r.schoolYear}|${r.testType}`
+          const cur = collapsed.get(key)
+          if (!cur || (r.derivation === 'derived' && cur.derivation !== 'derived')) collapsed.set(key, r)
+        }
+        const byTest = new Map<string, typeof academicRows>()
+        for (const r of collapsed.values()) {
           const list = byTest.get(r.testType) ?? []
           list.push(r)
           byTest.set(r.testType, list)

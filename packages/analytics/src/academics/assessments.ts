@@ -38,9 +38,14 @@ export interface AssessmentRow {
   testedCount?: number | null
   eligibleCount?: number | null
   benchmarkMetCount?: number | null
+  /** Students with a benchmark DETERMINATION — the denominator of attainment. */
+  benchmarkTestedCount?: number | null
   benchmarkRates?: Record<string, number | null> | null
   /** Achievement-band counts, e.g. { q1: 8, q2: 14, q3: 19, q4: 11 }. */
   distribution?: Record<string, number | null> | null
+  /** True when the row's cohort is under the small-cell floor and its values
+   *  were nulled server-side before this object was built. */
+  suppressed?: boolean
 }
 
 export type TestFamily = 'act' | 'sat' | 'nrt'
@@ -115,11 +120,20 @@ export interface Suppressible<T> {
   suppressed: boolean
 }
 
-/** Wrap a value with the count that produced it: under the floor, the value
- *  never leaves the server. */
+/**
+ * Wrap a value with the count that produced it: under the floor, the value never
+ * leaves the server.
+ *
+ * FAILS CLOSED on an UNKNOWN count. A missing denominator is not evidence of
+ * safety — it is the absence of evidence, and the whole point of a suppression
+ * rule is that it holds when nobody remembered to thread the count through. A
+ * caller with a genuinely unknown-but-large cohort passes `Infinity` to say so
+ * deliberately.
+ */
 export function suppressSmallCell<T>(value: T | null, count: number | null | undefined): Suppressible<T> {
-  const n = count ?? 0
-  if (n > 0 && n < MIN_CELL) return { value: null, suppressed: true }
+  if (value === null || value === undefined) return { value: null, suppressed: false }
+  if (count === null || count === undefined) return { value: null, suppressed: true }
+  if (count > 0 && count < MIN_CELL) return { value: null, suppressed: true }
   return { value, suppressed: false }
 }
 

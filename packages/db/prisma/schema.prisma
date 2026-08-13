@@ -3178,28 +3178,32 @@ model AssessmentResult {
 /// `gradeLevel` defaults to the sentinel "all" rather than NULL: Postgres treats
 /// NULLs as distinct, which would defeat the unique and duplicate on re-ingest.
 model AssessmentSchoolAggregate {
-  id                String   @id @default(uuid()) @db.Uuid
-  schoolId          String   @map("school_id") @db.Uuid
-  importId          String?  @map("import_id") @db.Uuid
-  schoolYear        Int      @map("school_year")
-  testType          String   @map("test_type")
-  gradeLevel        String   @default("all") @map("grade_level")
-  derivation        String // ingested | derived
-  scoreType         String   @default("scale") @map("score_type")
-  testedCount       Int?     @map("tested_count")
-  eligibleCount     Int?     @map("eligible_count")
-  avgComposite      Decimal? @map("avg_composite") @db.Decimal(6, 2)
-  sectionAverages   Json?    @map("section_averages") @db.JsonB
+  id                   String   @id @default(uuid()) @db.Uuid
+  schoolId             String   @map("school_id") @db.Uuid
+  importId             String?  @map("import_id") @db.Uuid
+  schoolYear           Int      @map("school_year")
+  testType             String   @map("test_type")
+  gradeLevel           String   @default("all") @map("grade_level")
+  derivation           String // ingested | derived
+  scoreType            String   @default("scale") @map("score_type")
+  testedCount          Int?     @map("tested_count")
+  eligibleCount        Int?     @map("eligible_count")
+  avgComposite         Decimal? @map("avg_composite") @db.Decimal(6, 2)
+  sectionAverages      Json?    @map("section_averages") @db.JsonB
   /// How students SPREAD, not just where the mean sits — a school can hold a
   /// respectable average while a quarter of its students sit in the bottom band.
   /// Counts keyed by achievement level ({below,approaching,proficient,advanced} or
   /// quartiles), optionally nested per subject.
-  distribution      Json?    @db.JsonB
-  benchmarkMetCount Int?     @map("benchmark_met_count")
-  benchmarkRates    Json?    @map("benchmark_rates") @db.JsonB
-  participationRate Decimal? @map("participation_rate") @db.Decimal(5, 4)
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  distribution         Json?    @db.JsonB
+  benchmarkMetCount    Int?     @map("benchmark_met_count")
+  /// Students with a benchmark DETERMINATION — the honest denominator. A student
+  /// whose file lacked a section has no determination and belongs in neither the
+  /// numerator nor the denominator; dividing by everyone tested deflates the rate.
+  benchmarkTestedCount Int?     @map("benchmark_tested_count")
+  benchmarkRates       Json?    @map("benchmark_rates") @db.JsonB
+  participationRate    Decimal? @map("participation_rate") @db.Decimal(5, 4)
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
 
   school School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   import AssessmentImport? @relation(fields: [importId], references: [id], onDelete: SetNull)

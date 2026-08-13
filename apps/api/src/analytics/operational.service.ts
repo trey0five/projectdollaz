@@ -17,6 +17,13 @@ export interface OperationalPublic {
   /** Phase 5 — actual STAFF FTEs (distinct from the student-side enrollmentFte). */
   teachingFte: number | null
   totalStaffFte: number | null
+  actScoreSum: number | null
+  actTestedCount: number | null
+  satScoreSum: number | null
+  satTestedCount: number | null
+  benchmarkMetCount: number | null
+  benchmarkTestedCount: number | null
+  assessmentEligibleCount: number | null
   notes: string | null
   /** Phase 2 — anticipated incoming feeder students by grade; null when none. */
   feederEnrollmentByGrade: Record<string, number> | null
@@ -62,6 +69,13 @@ export class OperationalService {
         financialAidTotal: null,
         teachingFte: null,
         totalStaffFte: null,
+        actScoreSum: null,
+        actTestedCount: null,
+        satScoreSum: null,
+        satTestedCount: null,
+        benchmarkMetCount: null,
+        benchmarkTestedCount: null,
+        assessmentEligibleCount: null,
         notes: null,
         feederEnrollmentByGrade: null,
         plannedEnrollmentByGrade: null,
@@ -75,6 +89,17 @@ export class OperationalService {
       financialAidTotal: dec(row.financialAidTotal),
       teachingFte: dec(row.teachingFte),
       totalStaffFte: dec(row.totalStaffFte),
+      // Academics components — raw ints (counts and sums, never Decimals). Read
+      // defensively so this compiles before the client is regenerated, exactly
+      // like plannedEnrollmentByGrade below.
+      actScoreSum: (row as { actScoreSum?: number | null }).actScoreSum ?? null,
+      actTestedCount: (row as { actTestedCount?: number | null }).actTestedCount ?? null,
+      satScoreSum: (row as { satScoreSum?: number | null }).satScoreSum ?? null,
+      satTestedCount: (row as { satTestedCount?: number | null }).satTestedCount ?? null,
+      benchmarkMetCount: (row as { benchmarkMetCount?: number | null }).benchmarkMetCount ?? null,
+      benchmarkTestedCount: (row as { benchmarkTestedCount?: number | null }).benchmarkTestedCount ?? null,
+      assessmentEligibleCount:
+        (row as { assessmentEligibleCount?: number | null }).assessmentEligibleCount ?? null,
       notes: row.notes,
       feederEnrollmentByGrade: coerceFeeder(row.feederEnrollmentByGrade),
       // Cast: plannedEnrollmentByGrade is an additive Phase-2 column — read

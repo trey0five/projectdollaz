@@ -5910,7 +5910,7 @@ export class AssistantService {
           where: { id: ctx.schoolId },
           select: { organizationId: true },
         })
-        const rows = await this.prisma.assessmentSchoolAggregate.findMany({
+        let rows = await this.prisma.assessmentSchoolAggregate.findMany({
           where: {
             ...(home?.organizationId
               ? { school: { organizationId: home.organizationId } }
@@ -5932,6 +5932,18 @@ export class AssistantService {
         if (rows.length === 0) {
           return { available: false, note: 'No assessment results have been loaded for this school yet.' }
         }
+        // COLLAPSE DERIVED-OVER-INGESTED, exactly as the dashboard does. A school
+        // with both a summary file and student rows has two aggregate rows for
+        // the same (year, test, grade); counting both puts it in the ranking
+        // twice and lets a stale ingested row masquerade as a prior year, which
+        // manufactures declines that never happened.
+        const collapsed = new Map<string, (typeof rows)[number]>()
+        for (const r of rows) {
+          const key = `${r.schoolId}|${r.schoolYear}|${r.testType}|${r.gradeLevel}`
+          const cur = collapsed.get(key)
+          if (!cur || (r.derivation === 'derived' && cur.derivation !== 'derived')) collapsed.set(key, r)
+        }
+        rows = [...collapsed.values()]
         const years = [...new Set(rows.map((r) => r.schoolYear))].sort((a2, b2) => b2 - a2)
         const year = q.schoolYear ?? years[0]
         const testType = q.testType ?? rows[0].testType

@@ -97,14 +97,35 @@ export class GradebookService {
       courseIdByName.set(name, created.id)
     }
 
-    // Replace this (year, term) slice so a corrected re-upload does not double.
+    // Replace ONLY the (year, term) slices this file actually carries.
+    //
+    // The previous shape used conditional spreads on both keys, so a file with no
+    // year header committed without an explicit year collapsed the filter to
+    // { schoolId, source:'upload' } — and since this method is the only writer of
+    // GradeRecord and hard-codes source:'upload', that deleted every mark the
+    // school had ever imported, silently and with no revert path. A delete whose
+    // scope depends on an optional field is a delete waiting to be unbounded.
     const year = opts.schoolYear ?? parsed.rows[0]?.schoolYear ?? null
+    if (year === null) {
+      throw new BadRequestException('No school year in the file — choose one before committing.')
+    }
+    const slices = [
+      ...new Map(
+        parsed.rows.map((r) => {
+          const y = r.schoolYear ?? year
+          const t = r.term ?? opts.term ?? null
+          return [`${y}|${t ?? ''}`, { schoolYear: y, term: t }] as const
+        }),
+      ).values(),
+    ]
     await this.prisma.gradeRecord.deleteMany({
       where: {
         schoolId,
         source: 'upload',
-        ...(year !== null ? { schoolYear: year } : {}),
-        ...(opts.term ? { term: opts.term } : {}),
+        OR: slices.map((sl) => ({
+          schoolYear: sl.schoolYear,
+          ...(sl.term === null ? { term: null } : { term: sl.term }),
+        })),
       },
     })
 
