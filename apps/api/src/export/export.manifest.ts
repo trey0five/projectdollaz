@@ -131,6 +131,11 @@ export const EXPORT_TABLES: ExportTable[] = [
   { model: 'alert', folder: 'account', file: 'alerts' },
   { model: 'membership', folder: 'account', file: 'members' },
   { model: 'auditLog', folder: 'account', file: 'audit-log' },
+  // NOTE: audit-log and members identify people by a bare userId. The service
+  // writes an extra account/people.csv resolving those ids to the name and email
+  // of the users who hold a membership at this school — without it both files
+  // are columns of uuids and the audit trail is unreadable, which is the
+  // opposite of what an audit trail is for.
   // The token is a live credential — anyone holding it can join the school.
   { model: 'invitation', folder: 'account', file: 'invitations', omit: ['token'] },
 

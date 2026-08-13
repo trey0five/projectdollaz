@@ -49,16 +49,24 @@ export default function DataExportSection() {
   const [error, setError] = useState('')
   const pollRef = useRef(null)
 
+  // A generation counter, because the two scopes hit different endpoints: switch
+  // from network to school while the network list is still in flight and the
+  // slower response lands last, painting the other scope's archives under a
+  // Download button that now points somewhere else.
+  const genRef = useRef(0)
   const load = useCallback(async () => {
     if (!schoolId) return
+    const gen = ++genRef.current
     try {
       const res = scope === 'network' && orgId ? await exportApi.orgList(orgId) : await exportApi.list(schoolId)
+      if (gen !== genRef.current) return
       setRows(res.data ?? res ?? [])
       setError('')
     } catch (e) {
+      if (gen !== genRef.current) return
       setError(e?.response?.data?.message ?? 'Could not load your exports.')
     } finally {
-      setLoading(false)
+      if (gen === genRef.current) setLoading(false)
     }
   }, [schoolId, scope, orgId])
 
@@ -142,7 +150,12 @@ export default function DataExportSection() {
                     key={key}
                     type="button"
                     aria-pressed={scope === key}
-                    onClick={() => setScope(key)}
+                    onClick={() => {
+                      if (scope === key) return
+                      setRows([])
+                      setLoading(true)
+                      setScope(key)
+                    }}
                     className={`rounded-md px-3 py-1.5 text-[12px] font-semibold transition-colors ${
                       scope === key ? 'bg-navy text-white' : 'text-muted hover:text-navy'
                     }`}

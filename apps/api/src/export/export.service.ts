@@ -70,8 +70,9 @@ export class DataExportService {
     })
     if (!school) throw new NotFoundException('School not found.')
 
+    await this.refuseIfBusy({ schoolId })
     const job = await this.prisma.dataExport.create({
-      data: { schoolId, requestedByUserId: actor.id, status: 'running', scope: 'school' },
+      data: { schoolId, requestedByUserId: actor.id, status: 'running', scope: 'school', schoolIds: [schoolId] },
       select: { id: true, status: true },
     })
 
@@ -96,7 +97,10 @@ export class DataExportService {
     // by name, that a complete copy was taken and by whom. That is the control
     // that actually matters here, and unlike a step-up MFA prompt it works for
     // every school rather than the few with TOTP switched on.
-    await this.tellTheOtherOwners(schoolId, actor, job.id)
+    // Told AFTER the job row exists but only once we know the archive can
+    // actually be produced — announcing "a complete copy left the platform" and
+    // then failing on unconfigured storage is an alarming lie.
+    if (this.storage.isConfigured()) await this.tellTheOtherOwners(schoolId, actor, job.id)
 
     // Deliberately not awaited — the caller gets the job id now.
     void this.run(job.id, schoolId, school.name).catch((err: unknown) => {
@@ -164,12 +168,16 @@ export class DataExportService {
       throw new ForbiddenException('You do not own any school in this organization.')
     }
 
+    await this.refuseIfBusy({ organizationId })
     const job = await this.prisma.dataExport.create({
       data: {
         organizationId,
         requestedByUserId: actor.id,
         status: 'running',
         scope: 'organization',
+        // WHAT IS ACTUALLY IN IT. Without this the download could only ask
+        // "does the caller own anything in this org", which is not the question.
+        schoolIds: schools.map((sc) => sc.id),
       },
       select: { id: true, status: true },
     })
@@ -187,7 +195,9 @@ export class DataExportService {
         }),
       ),
     )
-    for (const sc of schools) await this.tellTheOtherOwners(sc.id, actor, job.id, schools.length)
+    if (this.storage.isConfigured()) {
+      for (const sc of schools) await this.tellTheOtherOwners(sc.id, actor, job.id, schools.length)
+    }
 
     void this.runOrg(job.id, organizationId, schools).catch((err: unknown) => {
       this.logger.error(`org export ${job.id} failed: ${String(err)}`)
@@ -196,10 +206,30 @@ export class DataExportService {
     return { ...job, schools: schools.length }
   }
 
+  /**
+   * One at a time. Each job materialises every row of ~66 tables plus the CSVs
+   * plus the whole ZIP in memory, so a double-click — never mind a loop — is a
+   * straightforward way to take the API down for every school on it. Refusing is
+   * also the honest answer: the archive already running is the one they want.
+   */
+  private async refuseIfBusy(where: { schoolId?: string; organizationId?: string }): Promise<void> {
+    await this.reapStale(where)
+    const running = await this.prisma.dataExport.findFirst({
+      where: { ...where, status: 'running' },
+      select: { id: true },
+    })
+    if (running) {
+      throw new ForbiddenException('An export is already being prepared. It will appear here when it is ready.')
+    }
+  }
+
   /** Schools in the org this caller OWNS — the same floor the school route uses. */
   private async writableSchools(actor: User, organizationId: string): Promise<Array<{ id: string; name: string }>> {
     const memberships = await this.prisma.membership.findMany({
-      where: { userId: actor.id, role: 'owner', school: { organizationId } },
+      // status: 'active' matters — RolesGuard applies it on the school routes, so
+      // without it the org floor is strictly WEAKER than the school floor it
+      // claims to match, and a revoked membership still opens the whole network.
+      where: { userId: actor.id, role: 'owner', status: 'active', school: { organizationId } },
       select: { school: { select: { id: true, name: true } } },
     })
     return memberships.map((m) => m.school).filter((sc): sc is { id: string; name: string } => !!sc)
@@ -215,11 +245,15 @@ export class DataExportService {
    * each kind it holds. Metadata about a tenant is still that tenant's.
    */
   async listOrg(actor: User, organizationId: string) {
-    if ((await this.writableSchools(actor, organizationId)).length === 0) {
+    const mine = (await this.writableSchools(actor, organizationId)).map((sc) => sc.id)
+    if (mine.length === 0) {
       throw new ForbiddenException('You do not own any school in this organization.')
     }
     await this.reapStale({ organizationId })
-    return this.prisma.dataExport.findMany({
+    // ONLY ARCHIVES THIS CALLER COULD DOWNLOAD. rowCounts is keyed by school
+    // folder slug, so listing every org job told one owner the NAME of every
+    // other school and how many rows of each kind it holds.
+    const rows = await this.prisma.dataExport.findMany({
       where: { organizationId },
       orderBy: { createdAt: 'desc' },
       take: 20,
@@ -233,20 +267,35 @@ export class DataExportService {
         expiresAt: true,
         createdAt: true,
         completedAt: true,
+        schoolIds: true,
       },
     })
+    const owned = new Set(mine)
+    return rows.filter((r) => r.schoolIds.length > 0 && r.schoolIds.every((sid) => owned.has(sid)))
   }
 
-  /** Download an org archive. Owner of at least one school in the org. */
+  /** Download an org archive — the caller must own every school inside it. */
   async orgDownloadUrl(actor: User, organizationId: string, id: string): Promise<{ url: string }> {
-    if ((await this.writableSchools(actor, organizationId)).length === 0) {
-      throw new ForbiddenException('You do not own any school in this organization.')
-    }
     const job = await this.prisma.dataExport.findFirst({
       where: { id, organizationId },
-      select: { status: true, fileKey: true, expiresAt: true },
+      select: { status: true, fileKey: true, expiresAt: true, schoolIds: true },
     })
     if (!job) throw new NotFoundException('Export not found.')
+
+    // THE ARCHIVE'S CONTENTS DECIDE, NOT THE ORG.
+    //
+    // "Owns at least one school here" was the wrong question. An org archive is
+    // built from the REQUESTER's schools, so a principal who owns one school of
+    // twenty could download the superintendent's twenty-school archive — every
+    // roster, every gift, every audit log, of nineteen schools they have no
+    // membership in. The caller must own EVERY school inside it.
+    const mine = new Set((await this.writableSchools(actor, organizationId)).map((sc) => sc.id))
+    const notMine = job.schoolIds.filter((sid) => !mine.has(sid))
+    if (job.schoolIds.length === 0 || notMine.length > 0) {
+      throw new ForbiddenException(
+        'That export covers schools you do not own. Request your own — it will contain the schools you do.',
+      )
+    }
     if (job.status !== 'ready' || !job.fileKey) throw new ForbiddenException('That export is not ready to download.')
     if (job.expiresAt && job.expiresAt.getTime() < Date.now()) {
       throw new ForbiddenException('That export has expired. Request a new one — it takes a moment.')
@@ -270,10 +319,32 @@ export class DataExportService {
     const entries: ZipEntry[] = []
     const rowCounts: Record<string, number> = {}
     try {
+      // Folder per school, named readably. A twenty-school diocese opening one
+      // flat directory of six hundred CSVs has been handed a puzzle, not data.
+      //
+      // BUT THE NAME IS NOT UNIQUE. Two "St. Mary School" in one diocese — or
+      // "St. Mary (North)" and "St. Mary — North", which slug identically —
+      // produced the same folder, so one school's CSVs overwrote the other's on
+      // extraction and its rowCounts keys clobbered them on the row. The archive
+      // was silently missing a whole school while calling itself complete.
+      // Disambiguate only when we must, so the common case stays readable.
+      const slugs = new Map<string, string>()
+      const seen = new Map<string, number>()
       for (const sc of schools) {
-        // Folder per school, named readably. A twenty-school diocese opening one
-        // flat directory of six hundred CSVs has been handed a puzzle, not data.
-        const slug = sc.name.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || sc.id
+        const base = sc.name.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'school'
+        const n = (seen.get(base) ?? 0) + 1
+        seen.set(base, n)
+        slugs.set(sc.id, n === 1 ? base : `${base}-${sc.id.slice(0, 8)}`)
+      }
+      // A first occurrence keeps the bare name only if nothing else claims it.
+      const collided = new Set([...seen.entries()].filter(([, n]) => n > 1).map(([b]) => b))
+      for (const sc of schools) {
+        const base = sc.name.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'school'
+        if (collided.has(base)) slugs.set(sc.id, `${base}-${sc.id.slice(0, 8)}`)
+      }
+
+      for (const sc of schools) {
+        const slug = slugs.get(sc.id) as string
         for (const table of EXPORTED_TABLES) {
           const rows = await this.readTable(table, sc.id)
           rowCounts[`${slug}/${table.folder}/${table.file}`] = rows.length
@@ -283,13 +354,27 @@ export class DataExportService {
           })
         }
       }
+      for (const sc of schools) {
+        const slug = slugs.get(sc.id) as string
+        const people = await this.peopleFor([sc.id])
+        rowCounts[`${slug}/account/people`] = people.length
+        entries.push({
+          name: `${slug}/account/people.csv`,
+          data: Buffer.from(toCsv(people, ['userId', 'email', 'firstName', 'lastName', 'role', 'title']), 'utf8'),
+        })
+      }
+
       entries.push({
         name: 'README.txt',
         data: Buffer.from(this.readme(`${schools.length} schools`, rowCounts), 'utf8'),
       })
 
       const zip = this.sealed(entries)
-      const key = `exports/org/${organizationId}/${jobId}.zip`
+      // Filed under the FIRST school in the archive, for the same reason: an org
+      // archive has no prefix of its own, and an orphan is worse than an
+      // arbitrary-but-purged home. Deleting that school removes it; the school
+      // list on the row is what authorises the download either way.
+      const key = `${this.storage.schoolPrefix(schools[0].id)}exports/org-${jobId}.zip`
       await this.storage.putObject(zip, key, 'application/zip')
       await this.prisma.dataExport.update({
         where: { id: jobId },
@@ -381,13 +466,28 @@ export class DataExportService {
         })
       }
 
+      // Who the ids in the audit log and the member list actually are. Scoped to
+      // people with a membership at THIS school — a User is global, and the
+      // school is not entitled to the rest of them.
+      const people = await this.peopleFor([schoolId])
+      rowCounts['account/people'] = people.length
+      entries.push({
+        name: 'account/people.csv',
+        data: Buffer.from(toCsv(people, ['userId', 'email', 'firstName', 'lastName', 'role', 'title']), 'utf8'),
+      })
+
       entries.push({
         name: 'README.txt',
         data: Buffer.from(this.readme(schoolName, rowCounts), 'utf8'),
       })
 
       const zip = this.sealed(entries)
-      const key = `exports/${schoolId}/${jobId}.zip`
+      // UNDER THE SCHOOL'S OWN PREFIX, so deleting the school takes the archive
+      // with it. A top-level exports/ key sat outside the prefix that
+      // schools.service.deleteSchool purges, which meant a complete copy of a
+      // deleted school's records — every student, every gift — survived the
+      // deletion that was supposed to remove them, indefinitely.
+      const key = `${this.storage.schoolPrefix(schoolId)}exports/${jobId}.zip`
       await this.storage.putObject(zip, key, 'application/zip')
 
       await this.prisma.dataExport.update({
@@ -457,6 +557,25 @@ export class DataExportService {
    * to notice: the only reader of a stuck row is the page that polls it.
    */
   private async reapStale(where: { schoolId?: string; organizationId?: string }): Promise<void> {
+    // EXPIRY HAS TO DELETE THE FILE, not merely refuse to sign a URL for it.
+    // "Available for seven days, then the file is removed" is what the page and
+    // the privacy policy both say; without this the object lives forever and the
+    // sentence is false.
+    const expired = await this.prisma.dataExport
+      .findMany({
+        where: { ...where, fileKey: { not: null }, expiresAt: { lt: new Date() } },
+        select: { id: true, fileKey: true },
+      })
+      .catch(() => [] as Array<{ id: string; fileKey: string | null }>)
+    for (const job of expired) {
+      try {
+        if (job.fileKey) await this.storage.deleteObject(job.fileKey)
+        await this.prisma.dataExport.update({ where: { id: job.id }, data: { fileKey: null } })
+      } catch {
+        // Best effort — a storage hiccup must not break the listing.
+      }
+    }
+
     await this.prisma.dataExport
       .updateMany({
         where: {
@@ -470,6 +589,33 @@ export class DataExportService {
         },
       })
       .catch(() => undefined)
+  }
+
+  /**
+   * The people behind the ids. Membership rows and audit entries name a userId
+   * and nothing else, so without this the two files a school would actually
+   * reach for — who had access, and who did what — are columns of uuids.
+   * Passwords and MFA secrets are never touched: this reads three columns.
+   */
+  private async peopleFor(schoolIds: string[]): Promise<Array<Record<string, unknown>>> {
+    const memberships = await this.prisma.membership.findMany({
+      where: { schoolId: { in: schoolIds } },
+      select: {
+        role: true,
+        title: true,
+        user: { select: { id: true, email: true, firstName: true, lastName: true } },
+      },
+    })
+    return memberships
+      .filter((m) => m.user)
+      .map((m) => ({
+        userId: m.user!.id,
+        email: m.user!.email,
+        firstName: m.user!.firstName,
+        lastName: m.user!.lastName,
+        role: m.role,
+        title: m.title,
+      }))
   }
 
   /** One table, tenant-scoped, with credential columns stripped. */
@@ -511,7 +657,12 @@ export class DataExportService {
     ]
     const byFolder = new Map<string, string[]>()
     for (const [path, count] of Object.entries(rowCounts)) {
-      const [folder, file] = path.split('/')
+      // An org key is slug/folder/file, a school key is folder/file. Splitting
+      // blind listed the org archive's FOLDER name where the file name goes, so
+      // every school's contents read as a list of "finance, finance, finance".
+      const parts = path.split('/')
+      const file = parts.pop() as string
+      const folder = parts.join('/')
       const list = byFolder.get(folder) ?? []
       const label = `${count.toLocaleString()} row${count === 1 ? '' : 's'}`
       list.push(`    ${file}.csv${' '.repeat(Math.max(1, 34 - file.length))}${label}`)

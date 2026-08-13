@@ -112,6 +112,14 @@ export default function GradesPanel({ schoolId, canEdit }) {
     }
   }, [schoolId, canEdit, unmatchedOnly, year])
 
+  // A school swap must not carry the previous school's year filter across. The
+  // panel is not remounted on swap, so without this the register comes up
+  // filtered to a year the new school may not even have, showing nothing.
+  useEffect(() => {
+    setYear('')
+    setYears([])
+  }, [schoolId])
+
   useEffect(() => {
     load()
   }, [load])
@@ -207,8 +215,16 @@ export default function GradesPanel({ schoolId, canEdit }) {
           <Restricted what="Individual results" />
         ) : results.length === 0 && unmatchedOnly ? (
           <p className="text-[12.5px] text-muted">
-            Nothing unmatched — every result on file is attached to a roster student. Clear the filter above to see
-            them all.
+            {/* The claim has to match the filter. "Every result on file is
+                attached" is a statement about the whole school, and saying it
+                while a single year is selected is simply false. */}
+            {year
+              ? `Nothing unmatched in ${year}. Clear the filters above to see the rest.`
+              : 'Nothing unmatched — every result on file is attached to a roster student. Clear the filter above to see them all.'}
+          </p>
+        ) : results.length === 0 && year ? (
+          <p className="text-[12.5px] text-muted">
+            No student-level results for {year}. Choose another year, or clear the filter to see everything on file.
           </p>
         ) : results.length === 0 ? (
           <p className="text-[12.5px] text-muted">

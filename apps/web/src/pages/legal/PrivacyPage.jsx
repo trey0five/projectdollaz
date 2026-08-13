@@ -115,7 +115,9 @@ export default function PrivacyPage() {
         Your school owns its data. An owner can export a complete copy at any time from Settings &rarr; Your Data
         &mdash; every module, as spreadsheets, with no request to us and no involvement from us. The archive excludes
         connection credentials such as QuickBooks or SIS tokens, which are keys to other systems rather than
-        information about your school. Because a full export is a complete copy leaving the platform, every other owner
+        information about your school, together with a small number of records that describe our billing and export
+        machinery rather than your school. Everything left out is named in the archive&rsquo;s own README, with the
+        reason. Because a full export is a complete copy leaving the platform, every other owner
         at the school is notified when one is requested, and both the request and the download are recorded in the
         audit log.
       </P>

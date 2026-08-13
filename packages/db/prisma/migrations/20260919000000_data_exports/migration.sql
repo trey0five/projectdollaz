@@ -2,7 +2,7 @@
 -- a week, but "who took a complete copy of this school's records, and when"
 -- is an audit fact that should not.
 CREATE TABLE IF NOT EXISTS "data_exports" (
-  "id"                   TEXT PRIMARY KEY,
+  "id"                   UUID PRIMARY KEY,
   "school_id"            UUID,
   "organization_id"      UUID,
   "requested_by_user_id" UUID,

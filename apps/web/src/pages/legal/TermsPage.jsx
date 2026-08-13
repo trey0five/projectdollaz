@@ -50,8 +50,10 @@ export default function TermsPage() {
         and FERPA Compliance Overview for detail.
       </P>
       <P>
-        <strong>Portability and return.</strong> You may export a complete copy of Customer Data at any time from
-        Settings &rarr; Your Data, without notifying or involving us. On termination Customer Data remains available
+        <strong>Portability and return.</strong> You may export a copy of Customer Data at any time from
+        Settings &rarr; Your Data, without notifying or involving us. The archive lists, in its own README, anything
+        it does not contain and why &mdash; connection credentials, and a small number of records that describe our
+        systems rather than your school. On termination Customer Data remains available
         for export for <strong>thirty days</strong>; after that period, or earlier on your written request, we delete
         it from production systems and it ages out of encrypted backups within the backup retention window. We will
         certify deletion in writing on request. Export is not conditioned on your account being current &mdash; a

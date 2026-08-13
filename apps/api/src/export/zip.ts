@@ -114,14 +114,46 @@ export function buildZip(entries: ZipEntry[]): Buffer {
  * execute when they open it.
  */
 export function csvRow(values: unknown[]): string {
-  return values
-    .map((v) => {
-      if (v === null || v === undefined) return ''
-      let s = typeof v === 'object' ? JSON.stringify(v) : String(v)
-      if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`
-      return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
-    })
-    .join(',')
+  return values.map(cell).join(',')
+}
+
+/**
+ * One cell, serialized by TYPE.
+ *
+ * `typeof v === object ? JSON.stringify(v) : String(v)` looks reasonable and
+ * quietly ruined every archive. A Prisma Decimal and a JS Date are both objects
+ * and both define toJSON, so JSON.stringify returned a QUOTED string: 1234.56
+ * became a quoted "1234.56", csvRow then escaped those quotes, and the file held
+ * a triple-quoted literal. Excel reads that as nine characters of TEXT — every
+ * amount and every timestamp across a sixty-six-file archive, unsummable and
+ * unsortable, discovered by a school two years after they left.
+ */
+function cell(v: unknown): string {
+  if (v === null || v === undefined) return ''
+
+  let s: string
+  if (v instanceof Date) {
+    s = v.toISOString()
+  } else if (Buffer.isBuffer(v)) {
+    s = v.toString('base64')
+  } else if (typeof v === 'object' && typeof (v as { toFixed?: unknown }).toFixed === 'function') {
+    // Prisma.Decimal (decimal.js) — a number by intent, an object by type.
+    s = String(v)
+  } else if (typeof v === 'object') {
+    // A genuine Json column. These round-trip correctly through stringify.
+    s = JSON.stringify(v)
+  } else {
+    s = String(v)
+  }
+
+  // FORMULA INJECTION, without eating the minus sign. Guarding on a leading `-`
+  // or `+` turned every negative amount into text — a deficit of -48210.33
+  // became an apostrophe-prefixed literal and stopped being a number. A cell
+  // that parses as a plain number is not a formula, so it is left alone.
+  const numeric = typeof v === 'number' || /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(s)
+  if (!numeric && /^[=+\-@\t\r]/.test(s)) s = `'${s}`
+
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 
 /** A whole CSV file from a homogeneous row set, with a stable column order. */

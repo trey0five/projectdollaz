@@ -23,8 +23,12 @@ const schema = readFileSync(join(here, '../../../../packages/db/prisma/schema.pr
  */
 describe('export manifest — every tenant table is accounted for', () => {
   const models = [...schema.matchAll(/model (\w+) \{([\s\S]*?)\n\}/g)]
+  // A model counts as the school's if it names a schoolId OR relates to School.
+  // Matching only the literal field left anything scoped by a differently-named
+  // column or by a parent relation outside the guarantee entirely — which is the
+  // exact blind spot that would let a future table go unexported in silence.
   const tenantModels = models
-    .filter(([, , body]) => /^\s+schoolId\s/m.test(body))
+    .filter(([, , body]) => /^\s+schoolId\s/m.test(body) || /^\s+school\s+School\b/m.test(body))
     .map(([, name]) => name)
   const decl = (name: string) => `${name.charAt(0).toLowerCase()}${name.slice(1)}`
 

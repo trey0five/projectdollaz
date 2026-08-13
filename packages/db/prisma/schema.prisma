@@ -3338,10 +3338,14 @@ model LessonPlan {
 /// moment a full copy of the records leaves the platform. Rows outlive the file,
 /// which expires; the history of who asked and when does not.
 model DataExport {
-  id                String    @id @default(uuid())
-  schoolId          String?   @map("school_id")
-  organizationId    String?   @map("organization_id")
-  requestedByUserId String?   @map("requested_by_user_id")
+  // @db.Uuid on every id column, matching the hand-written migration. Without
+  // these Prisma types them as TEXT, so `prisma migrate dev` on a fresh database
+  // produces a schema that differs from the one production actually runs — and
+  // the join to schools would compare text against uuid.
+  id                String    @id @default(uuid()) @db.Uuid
+  schoolId          String?   @map("school_id") @db.Uuid
+  organizationId    String?   @map("organization_id") @db.Uuid
+  requestedByUserId String?   @map("requested_by_user_id") @db.Uuid
   /// running | ready | failed
   status            String    @default("running")
   /// school | organization
@@ -3351,6 +3355,10 @@ model DataExport {
   byteSize          Int?      @map("byte_size")
   /// Per-file row counts, so the UI can show what was in it after the file is gone.
   rowCounts         Json?     @map("row_counts")
+  /// The schools this archive actually contains. An org archive is built from the
+  /// REQUESTER's owned schools, so authorising a download on "owns something in
+  /// this org" would hand one owner another owner's schools.
+  schoolIds         String[]  @map("school_ids")
   error             String?
   expiresAt         DateTime? @map("expires_at")
   createdAt         DateTime  @default(now()) @map("created_at")

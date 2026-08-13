@@ -495,18 +495,44 @@ export class StudentsService {
     let deleted = 0
     if (mode === 'replace') {
       await this.prisma.$transaction(async (tx) => {
-        // Replace mode drops the whole register, so the same name-residue rule
-        // applies. The re-import re-matches these rows by externalId or name a
-        // moment later; what must not survive is the OLD name on a score
-        // belonging to a student the school just removed.
-        await tx.assessmentResult.updateMany({
-          where: { schoolId, studentId: { not: null } },
-          data: { matchName: null, matchExternalId: null, matchStatus: 'unmatched' },
+        // ONLY THE STUDENTS WHO ARE ACTUALLY LEAVING.
+        //
+        // Replace mode drops the register and rebuilds it from the file, so most
+        // of these students are about to come straight back. Scrubbing every
+        // matched row in the school stripped the name off scores belonging to
+        // children who never left — and since matchName is what a later re-match
+        // uses, it destroyed the only way those scores could find their student
+        // again. A returning pupil's history was silently orphaned by a routine
+        // re-upload.
+        //
+        // The set that is genuinely departing is the register MINUS the file.
+        const incomingExt = new Set(rows.map((r) => r.externalId).filter(Boolean) as string[])
+        const incomingName = new Set(
+          rows.map((r) => `${(r.lastName ?? '').trim().toLowerCase()}|${(r.firstName ?? '').trim().toLowerCase()}`),
+        )
+        const current = await tx.student.findMany({
+          where: { schoolId },
+          select: { id: true, externalId: true, firstName: true, lastName: true },
         })
-        await tx.gradeRecord.updateMany({
-          where: { schoolId, studentId: { not: null } },
-          data: { matchName: null, matchExternalId: null, matchStatus: 'unmatched' },
-        })
+        const departing = current
+          .filter(
+            (st) =>
+              !(st.externalId && incomingExt.has(st.externalId)) &&
+              !incomingName.has(
+                `${(st.lastName ?? '').trim().toLowerCase()}|${(st.firstName ?? '').trim().toLowerCase()}`,
+              ),
+          )
+          .map((st) => st.id)
+        if (departing.length > 0) {
+          await tx.assessmentResult.updateMany({
+            where: { schoolId, studentId: { in: departing } },
+            data: { matchName: null, matchExternalId: null, matchStatus: 'unmatched' },
+          })
+          await tx.gradeRecord.updateMany({
+            where: { schoolId, studentId: { in: departing } },
+            data: { matchName: null, matchExternalId: null, matchStatus: 'unmatched' },
+          })
+        }
         deleted = (await tx.student.deleteMany({ where: { schoolId } })).count
         await tx.student.createMany({ data: rows.map((dto) => this.toCreateData(schoolId, dto, actor.id)) })
         created = rows.length

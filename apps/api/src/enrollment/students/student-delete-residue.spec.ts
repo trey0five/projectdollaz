@@ -63,10 +63,18 @@ describe('deleting a student leaves no name behind', () => {
     expect(scrubs(block), 'clearRegister leaves every name on every score').toBe(true)
   })
 
-  it('a replace-mode roster import scrubs before it drops the register', () => {
+  it('a replace-mode roster import scrubs ONLY the students who are actually leaving', () => {
     const start = service.indexOf("if (mode === 'replace')")
-    const block = service.slice(start, start + 1600)
+    const block = service.slice(start, start + 3200)
     expect(scrubs(block), 'replace mode leaves the old names on the old scores').toBe(true)
+
+    // AND NOT THE ONES COMING BACK. Replace rebuilds the register from the file,
+    // so most of these students return immediately — scrubbing every matched row
+    // stripped the name off scores belonging to children who never left, and
+    // matchName is exactly what a later re-match needs, so their history was
+    // orphaned by a routine re-upload.
+    expect(block).toContain('departing')
+    expect(block, 'the scrub is still school-wide').not.toMatch(/studentId: \{ not: null \}/)
   })
 
   it('the scores themselves are NOT deleted — the history survives the child leaving', () => {
