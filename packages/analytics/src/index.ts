@@ -306,6 +306,8 @@ export {
   ACT_BENCHMARKS,
   SAT_BENCHMARKS,
   MIN_CELL,
+  gateAggregates,
+  cohortPublishable,
   benchmarksFor,
   scoreRange,
   materialGap,
@@ -339,6 +341,7 @@ export {
 } from './academics/assessments.js'
 export type {
   AssessmentRow,
+  RawAggregateRow,
   ObjectiveRow,
   TestFamily,
   ScoreType,

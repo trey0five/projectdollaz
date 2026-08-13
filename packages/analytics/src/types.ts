@@ -238,6 +238,8 @@ export interface PeriodOperational {
   /** Academics — students ELIGIBLE to sit the exam (the participation
    *  denominator, typically the tested grade's enrollment). Extensive. */
   assessmentEligibleCount?: number | null
+  /** Distinct students who sat SOME exam — resolved per school, so it sums. */
+  assessmentTestedCount?: number | null
 }
 
 /**

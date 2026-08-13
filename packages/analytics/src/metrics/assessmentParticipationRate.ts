@@ -38,9 +38,16 @@ export const assessmentParticipationRate: MetricDef = {
     // above one is a tell that the numerator counts sittings while the
     // denominator counts children. Take the LARGER cohort instead: it is the
     // most defensible lower bound on how many distinct students sat an exam.
+    // AND max() IS ONLY VALID AT ONE SCHOOL. Org scope sums each column before
+    // this runs, so max(Σact, Σsat) reads an all-ACT school beside an all-SAT
+    // school as half its real participation. `assessmentTestedCount` is the max
+    // already resolved per school at promote time, which means it survives
+    // summation; the max() below stays only as the fallback for rows promoted
+    // before that column existed.
     const act = curOp?.actTestedCount ?? null
     const sat = curOp?.satTestedCount ?? null
-    const tested = act === null && sat === null ? null : Math.max(act ?? 0, sat ?? 0)
+    const distinct = curOp?.assessmentTestedCount ?? null
+    const tested = distinct !== null ? distinct : act === null && sat === null ? null : Math.max(act ?? 0, sat ?? 0)
     const eligible = curOp?.assessmentEligibleCount ?? null
     const inputs = [
       { key: 'actTestedCount', label: 'Students tested', value: tested, unit: 'ratio' as const },

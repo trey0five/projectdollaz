@@ -137,6 +137,94 @@ export function suppressSmallCell<T>(value: T | null, count: number | null | und
   return { value, suppressed: false }
 }
 
+// ── THE GATE ─────────────────────────────────────────────────────────────────
+//
+// Every consumer of the aggregate table — the dashboard, the org roll-up, the
+// briefing, the assistant, the operational promote — must pass its raw rows
+// through this ONE function. Round 1 of review put the suppression inside a
+// single service method and five other readers simply queried the table
+// directly, which is the failure mode a rule enforced by convention always has.
+// Putting the gate here, in the pure layer, means it needs no DI, unit-tests
+// directly, and is the same code on every path.
+//
+// It does two jobs that must always happen together:
+//   1. COLLAPSE derived-over-ingested, so a school holding both a summary row
+//      and student-derived rows is counted once, at its better number.
+//   2. SUPPRESS every value on a row whose cohort is under the floor — the
+//      average, the per-subject averages, the distribution AND the benchmark
+//      counts, because a rate rebuilt from met/determined is just as invertible
+//      as the average it replaced.
+
+/** The raw shape a Prisma read of the aggregate table yields. */
+export interface RawAggregateRow {
+  schoolId: string
+  schoolName?: string
+  schoolYear: number
+  testType: string
+  gradeLevel: string
+  derivation: string
+  scoreType?: string | null
+  avgComposite: number | null
+  sectionAverages?: Record<string, number> | null
+  testedCount?: number | null
+  eligibleCount?: number | null
+  benchmarkMetCount?: number | null
+  benchmarkTestedCount?: number | null
+  benchmarkRates?: Record<string, number> | null
+  distribution?: Record<string, number> | null
+}
+
+/**
+ * Collapse + suppress. `familyOf` maps a testType to its family so the pure
+ * layer stays free of the vocabulary package.
+ */
+export function gateAggregates(
+  rows: RawAggregateRow[],
+  familyOf: (testType: string) => TestFamily,
+  scoreTypeOf: (family: TestFamily) => ScoreType,
+): AssessmentRow[] {
+  const best = new Map<string, RawAggregateRow>()
+  for (const r of rows) {
+    const key = `${r.schoolId}|${r.schoolYear}|${r.testType}|${r.gradeLevel}`
+    const cur = best.get(key)
+    if (!cur || (r.derivation === 'derived' && cur.derivation !== 'derived')) best.set(key, r)
+  }
+
+  return [...best.values()].map((r) => {
+    const family = familyOf(r.testType)
+    // FAIL CLOSED on an unknown count: a row whose cohort size nobody recorded
+    // is not known to be safe, and the whole point of a floor is that it holds
+    // when someone forgot to thread the count through.
+    const thin = r.testedCount === null || r.testedCount === undefined || (r.testedCount > 0 && r.testedCount < MIN_CELL)
+    return {
+      schoolId: r.schoolId,
+      schoolName: r.schoolName,
+      schoolYear: r.schoolYear,
+      testType: r.testType,
+      family,
+      scoreType: (r.scoreType as ScoreType | undefined) ?? scoreTypeOf(family),
+      gradeLevel: r.gradeLevel,
+      avgComposite: thin ? null : r.avgComposite,
+      sectionAverages: thin ? null : (r.sectionAverages ?? null),
+      testedCount: thin ? null : (r.testedCount ?? null),
+      eligibleCount: thin ? null : (r.eligibleCount ?? null),
+      // A benchmark RATE is met ÷ determined; publishing both counts for a
+      // two-student cohort restates one child's readiness determination exactly
+      // as surely as publishing the average would.
+      benchmarkMetCount: thin ? null : (r.benchmarkMetCount ?? null),
+      benchmarkTestedCount: thin ? null : (r.benchmarkTestedCount ?? null),
+      benchmarkRates: thin ? null : (r.benchmarkRates ?? null),
+      distribution: thin ? null : (r.distribution ?? null),
+      suppressed: thin,
+    }
+  })
+}
+
+/** Is this cohort publishable at all? The one predicate every writer should ask. */
+export function cohortPublishable(testedCount: number | null | undefined): boolean {
+  return testedCount !== null && testedCount !== undefined && testedCount >= MIN_CELL
+}
+
 // ── Averaging ────────────────────────────────────────────────────────────────
 
 export interface AverageResult {

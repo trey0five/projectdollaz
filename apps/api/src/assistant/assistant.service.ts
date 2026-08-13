@@ -29,6 +29,7 @@ import {
   toShares,
   type DriverAssumptions,
   type GradeKey,
+  gateAggregates,
 } from '@finrep/analytics'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { PeriodsService } from '../periods/periods.service.js'
@@ -5932,18 +5933,37 @@ export class AssistantService {
         if (rows.length === 0) {
           return { available: false, note: 'No assessment results have been loaded for this school yet.' }
         }
-        // COLLAPSE DERIVED-OVER-INGESTED, exactly as the dashboard does. A school
-        // with both a summary file and student rows has two aggregate rows for
-        // the same (year, test, grade); counting both puts it in the ranking
-        // twice and lets a stale ingested row masquerade as a prior year, which
-        // manufactures declines that never happened.
-        const collapsed = new Map<string, (typeof rows)[number]>()
-        for (const r of rows) {
-          const key = `${r.schoolId}|${r.schoolYear}|${r.testType}|${r.gradeLevel}`
-          const cur = collapsed.get(key)
-          if (!cur || (r.derivation === 'derived' && cur.derivation !== 'derived')) collapsed.set(key, r)
-        }
-        rows = [...collapsed.values()]
+        // THROUGH THE GATE. gateAggregates collapses derived-over-ingested AND
+        // suppresses every value on a sub-floor cohort — the same function the
+        // dashboard uses. Reading this table directly is how a "Grade 12
+        // averaged 30.5 across 2 students" answer reaches the most conversational
+        // surface in the product, one route away from where it was suppressed.
+        const gated = gateAggregates(
+          rows.map((r) => ({
+            schoolId: r.schoolId,
+            schoolYear: r.schoolYear,
+            testType: r.testType,
+            gradeLevel: r.gradeLevel,
+            derivation: r.derivation,
+            avgComposite: r.avgComposite === null ? null : Number(r.avgComposite),
+            sectionAverages: (r.sectionAverages ?? null) as Record<string, number> | null,
+            testedCount: r.testedCount,
+            eligibleCount: r.eligibleCount,
+          })),
+          () => 'nrt',
+          () => 'percentile',
+        ).filter((r) => r.avgComposite !== null || r.sectionAverages !== null)
+        rows = gated.map((r) => ({
+          schoolId: r.schoolId,
+          schoolYear: r.schoolYear,
+          testType: r.testType,
+          gradeLevel: r.gradeLevel,
+          derivation: 'derived',
+          avgComposite: r.avgComposite,
+          sectionAverages: r.sectionAverages,
+          testedCount: r.testedCount ?? null,
+          eligibleCount: r.eligibleCount ?? null,
+        })) as unknown as typeof rows
         const years = [...new Set(rows.map((r) => r.schoolYear))].sort((a2, b2) => b2 - a2)
         const year = q.schoolYear ?? years[0]
         const testType = q.testType ?? rows[0].testType

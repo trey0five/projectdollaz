@@ -28,6 +28,8 @@ import {
   anonymizePeers,
   availableCohorts,
   benchmarksFor,
+  cohortPublishable,
+  gateAggregates,
   averageOf,
   buildAssessmentInsight,
   cohortMovements,
@@ -284,17 +286,22 @@ export class AssessmentsService {
     if (!imp) throw new NotFoundException('Import not found.')
     // Capture the affected years BEFORE deleting — afterwards there is nothing
     // left to tell us which years need re-deriving.
-    const affectedYears = [
-      ...new Set(
-        (
-          await this.prisma.assessmentResult.findMany({
-            where: { importId },
-            select: { schoolYear: true },
-            distinct: ['schoolYear'],
-          })
-        ).map((r) => r.schoolYear),
-      ),
-    ]
+    // Both tables, not just the student rows: a SCHOOL-SUMMARY import creates no
+    // AssessmentResult at all, so a results-only sweep found nothing and the
+    // revert fell back to yearHint — which is null for a multi-year file.
+    const [resultYears, aggregateYears] = await Promise.all([
+      this.prisma.assessmentResult.findMany({
+        where: { importId },
+        select: { schoolYear: true },
+        distinct: ['schoolYear'],
+      }),
+      this.prisma.assessmentSchoolAggregate.findMany({
+        where: { importId },
+        select: { schoolYear: true },
+        distinct: ['schoolYear'],
+      }),
+    ])
+    const affectedYears = [...new Set([...resultYears, ...aggregateYears].map((r) => r.schoolYear))]
     const [results, aggregates] = await Promise.all([
       this.prisma.assessmentResult.deleteMany({ where: { importId } }),
       this.prisma.assessmentSchoolAggregate.deleteMany({ where: { importId } }),
@@ -306,6 +313,9 @@ export class AssessmentsService {
       const years = [...new Set([...(affectedYears ?? []), ...(imp.yearHint ? [imp.yearHint] : [])])]
       for (const y of years) {
         await this.deriveAggregates(schoolId, y, imp.testTypeHint, null)
+        // Re-synthesize (or delete) the gradeLevel:'all' row — it has no importId
+        // and would otherwise outlive the per-grade rows it was built from.
+        await this.rollUpAllGrades(schoolId, y, imp.testTypeHint)
         await this.promoteOperational(schoolId, y)
       }
     }
@@ -543,7 +553,7 @@ export class AssessmentsService {
       subgroups: await this.subgroupBreakdown(schoolId, year, testType),
       // The cross-domain read KYRO can do and a standalone score dashboard
       // cannot: outcomes beside the class size and the money that produced them.
-      crossDomain: await this.crossDomain(peerIds, year, testType, grade),
+      crossDomain: await this.crossDomain(peerIds, year, testType, grade, all),
       insights: systemInsights(thisYear),
       keyInsight: buildAssessmentInsight({
         schoolName: school.name,
@@ -885,12 +895,28 @@ export class AssessmentsService {
       where: { schoolId, schoolYear, testType, derivation: 'ingested', gradeLevel: { not: 'all' } },
       select: { avgComposite: true, sectionAverages: true, testedCount: true, eligibleCount: true, scoreType: true },
     })
-    if (rows.length === 0) return
+    if (rows.length === 0) {
+      // NOTHING LEFT TO ROLL UP. The 'all' row is synthesized, so it carries no
+      // importId and revert's delete-by-importId cannot reach it — without this
+      // it survives its own source rows, describing a year the school no longer
+      // has any data for.
+      await this.prisma.assessmentSchoolAggregate.deleteMany({
+        where: { schoolId, schoolYear, testType, derivation: 'ingested', gradeLevel: 'all' },
+      })
+      return
+    }
     let num = 0
     let den = 0
     let eligible = 0
+    // A row with no tested count still deserves a vote in the average, but its
+    // weight is a FALLBACK, not a headcount. Adding those 1s into `den` and then
+    // publishing den as testedCount reported "3 students tested" for a school
+    // that reported three GRADES and no counts at all — a fabricated number that
+    // also walks straight past the small-cell floor once six grades are present.
+    let counted = true
     const sections = new Map<string, { sum: number; w: number }>()
     for (const r of rows) {
+      if (r.testedCount === null || r.testedCount === undefined) counted = false
       const w = r.testedCount ?? 1
       const v = r.avgComposite === null ? null : Number(r.avgComposite)
       if (v !== null) {
@@ -916,7 +942,7 @@ export class AssessmentsService {
       scoreType: rows[0].scoreType ?? 'percentile',
       avgComposite: den > 0 ? num / den : null,
       sectionAverages: Object.fromEntries([...sections].map(([k, v]) => [k, v.sum / v.w])),
-      testedCount: den > 0 ? den : null,
+      testedCount: counted && den > 0 ? den : null,
       eligibleCount: eligible > 0 ? eligible : null,
     })
   }
@@ -1161,29 +1187,48 @@ export class AssessmentsService {
     if (!period) return
 
     const num = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v))
-    const actAvg = num(act?.avgComposite)
-    const satAvg = num(sat?.avgComposite)
+    // THE FLOOR TRAVELS WITH THE PROMOTED FIGURES. A one-senior school promoted
+    // actScoreSum:33 / actTestedCount:1, from which that student's exact score is
+    // simply 33 ÷ 1 — served by the operational endpoint and the scorecard to
+    // every role. Suppressing on the dashboard while promoting the components is
+    // no suppression at all.
+    const publishableAct = cohortPublishable(act?.testedCount ?? null) ? act : null
+    const publishableSat = cohortPublishable(sat?.testedCount ?? null) ? sat : null
+    const actAvg = num(publishableAct?.avgComposite)
+    const satAvg = num(publishableSat?.avgComposite)
     // The benchmark DENOMINATOR is students with a determination, not everyone
     // tested: a student with an incomplete section set cannot be counted as
     // meeting or missing the benchmark, and folding them into the denominator
     // silently deflates the rate. `|| null` is deliberately NOT used on these —
     // a genuine 0 met (nobody cleared the bar) is a real, publishable finding
     // and must not read as "no data".
-    const metSum = (act?.benchmarkMetCount ?? null) === null && (sat?.benchmarkMetCount ?? null) === null
-      ? null
-      : (act?.benchmarkMetCount ?? 0) + (sat?.benchmarkMetCount ?? 0)
-    const determinedSum =
-      (act?.benchmarkTestedCount ?? null) === null && (sat?.benchmarkTestedCount ?? null) === null
+    const determinedRaw =
+      (publishableAct?.benchmarkTestedCount ?? 0) + (publishableSat?.benchmarkTestedCount ?? 0)
+    const determinedSum = cohortPublishable(determinedRaw) ? determinedRaw : null
+    const metSum =
+      determinedSum === null
         ? null
-        : (act?.benchmarkTestedCount ?? 0) + (sat?.benchmarkTestedCount ?? 0)
+        : (publishableAct?.benchmarkMetCount ?? 0) + (publishableSat?.benchmarkMetCount ?? 0)
     const data = {
-      actScoreSum: actAvg !== null && act?.testedCount ? Math.round(actAvg * act.testedCount) : null,
-      actTestedCount: act?.testedCount ?? null,
-      satScoreSum: satAvg !== null && sat?.testedCount ? Math.round(satAvg * sat.testedCount) : null,
-      satTestedCount: sat?.testedCount ?? null,
+      actScoreSum:
+        actAvg !== null && publishableAct?.testedCount ? Math.round(actAvg * publishableAct.testedCount) : null,
+      actTestedCount: publishableAct?.testedCount ?? null,
+      satScoreSum:
+        satAvg !== null && publishableSat?.testedCount ? Math.round(satAvg * publishableSat.testedCount) : null,
+      satTestedCount: publishableSat?.testedCount ?? null,
       benchmarkMetCount: metSum,
       benchmarkTestedCount: determinedSum,
-      assessmentEligibleCount: act?.eligibleCount ?? sat?.eligibleCount ?? null,
+      assessmentEligibleCount: publishableAct?.eligibleCount ?? publishableSat?.eligibleCount ?? null,
+      // THE ONE FIGURE THAT SURVIVES SUMMATION. Participation's numerator has to
+      // be distinct students, and max(act, sat) is only that answer WITHIN one
+      // school. Roll two schools up and the org sums each column first, so an
+      // all-ACT school of 200 beside an all-SAT school of 200 became max(200,
+      // 200) = 200 against 400 eligible — half the real rate. Resolving the max
+      // per school and summing THAT is additive and correct at every scope.
+      assessmentTestedCount:
+        publishableAct?.testedCount || publishableSat?.testedCount
+          ? Math.max(publishableAct?.testedCount ?? 0, publishableSat?.testedCount ?? 0)
+          : null,
     }
     await this.prisma.periodOperationalData.upsert({
       where: { schoolId_fiscalPeriodId: { schoolId, fiscalPeriodId: period.id } },
@@ -1192,7 +1237,15 @@ export class AssessmentsService {
     })
   }
 
-  /** Aggregate rows as the pure layer wants them. Derived beats ingested. */
+  /**
+   * Aggregate rows as the pure layer wants them.
+   *
+   * The collapse and the suppression both live in `gateAggregates` — one
+   * function, in the pure package, that EVERY reader of this table goes through
+   * (this service, the operational promote, the briefing, the assistant). Round
+   * 2 of review found five readers bypassing a service-local gate, which is what
+   * a rule enforced by convention always eventually gets.
+   */
   private async aggregates(schoolIds: string[], q: { schoolYear?: number; testType?: string } = {}): Promise<AssessmentRow[]> {
     if (schoolIds.length === 0) return []
     const rows = await this.prisma.assessmentSchoolAggregate.findMany({
@@ -1219,40 +1272,27 @@ export class AssessmentsService {
         school: { select: { name: true } },
       },
     })
-    // One row per (school, year, test, grade): derived wins.
-    const best = new Map<string, (typeof rows)[number]>()
-    for (const r of rows) {
-      const key = `${r.schoolId}|${r.schoolYear}|${r.testType}|${r.gradeLevel}`
-      const cur = best.get(key)
-      if (!cur || (r.derivation === 'derived' && cur.derivation !== 'derived')) best.set(key, r)
-    }
-    // SUPPRESS AT THE SOURCE. A school-year with fewer than five testers has an
-    // average that IS a small cell — with two testers it is half of one child's
-    // score. Gating here, before the pure layer ever sees the row, means every
-    // downstream consumer (rank, peer average, board table, trend, cross-domain)
-    // inherits the suppression instead of each needing to remember it.
-    return [...best.values()].map((r) => {
-      const thin = r.testedCount !== null && r.testedCount > 0 && r.testedCount < MIN_CELL
-      const family = TEST_FAMILY[r.testType as TestTypeKey] ?? 'nrt'
-      return {
+    return gateAggregates(
+      rows.map((r) => ({
         schoolId: r.schoolId,
         schoolName: r.school?.name,
         schoolYear: r.schoolYear,
         testType: r.testType,
-        family,
-        scoreType: (r.scoreType as 'scale' | 'percentile' | 'nce') ?? SCORE_TYPE_FOR_FAMILY[family],
         gradeLevel: r.gradeLevel,
-        avgComposite: thin || r.avgComposite === null ? null : Number(r.avgComposite),
-        sectionAverages: thin ? null : ((r.sectionAverages ?? null) as Record<string, number> | null),
-        suppressed: thin,
+        derivation: r.derivation,
+        scoreType: r.scoreType,
+        avgComposite: r.avgComposite === null ? null : Number(r.avgComposite),
+        sectionAverages: (r.sectionAverages ?? null) as Record<string, number> | null,
         testedCount: r.testedCount,
         eligibleCount: r.eligibleCount,
         benchmarkMetCount: r.benchmarkMetCount,
-        benchmarkTestedCount: (r as { benchmarkTestedCount?: number | null }).benchmarkTestedCount ?? null,
-        benchmarkRates: thin ? null : ((r.benchmarkRates ?? null) as Record<string, number> | null),
-        distribution: thin ? null : ((r.distribution ?? null) as Record<string, number> | null),
-      }
-    })
+        benchmarkTestedCount: r.benchmarkTestedCount,
+        benchmarkRates: (r.benchmarkRates ?? null) as Record<string, number> | null,
+        distribution: (r.distribution ?? null) as Record<string, number> | null,
+      })),
+      (t) => TEST_FAMILY[t as TestTypeKey] ?? 'nrt',
+      (f) => SCORE_TYPE_FOR_FAMILY[f],
+    )
   }
 
   private async objectives(
@@ -1357,21 +1397,29 @@ export class AssessmentsService {
    * financials — and it is deliberately presented as a RELATIONSHIP, never as a
    * cause.
    */
-  private async crossDomain(schoolIds: string[], schoolYear: number, testType: string, grade: string) {
+  private async crossDomain(
+    schoolIds: string[],
+    schoolYear: number,
+    testType: string,
+    grade: string,
+    gated: AssessmentRow[],
+  ) {
     if (schoolIds.length === 0) return []
-    const [aggregates, operational, snapshots, schools] = await Promise.all([
-      this.prisma.assessmentSchoolAggregate.findMany({
-        where: { schoolId: { in: schoolIds }, schoolYear, testType, gradeLevel: grade },
-        select: { schoolId: true, avgComposite: true },
-      }),
+    // Scores come from the ALREADY-GATED rows the dashboard built. Re-querying
+    // the table here is exactly the bypass round 2 caught: it published a
+    // two-tester school's mean beside its NAME, to every role, on a route the
+    // dashboard believed it had suppressed.
+    const scored = gated.filter(
+      (r) => r.schoolYear === schoolYear && r.testType === testType && r.gradeLevel === grade && r.avgComposite !== null,
+    )
+    if (scored.length === 0) return []
+
+    const [operational, snapshots] = await Promise.all([
       this.prisma.periodOperationalData.findMany({
         where: { schoolId: { in: schoolIds } },
         select: { schoolId: true, enrollment: true, teachingFte: true, updatedAt: true },
         orderBy: { updatedAt: 'desc' },
       }),
-      // One snapshot PER SCHOOL, not a global take — a global cap sorted by date
-      // is spent entirely on whichever school generated statements most recently,
-      // so every other school silently loses its cost-per-pupil.
       Promise.all(
         schoolIds.map((id) =>
           this.prisma.statementSnapshot.findFirst({
@@ -1381,35 +1429,32 @@ export class AssessmentsService {
           }),
         ),
       ).then((rows) => rows.filter((r): r is NonNullable<typeof r> => r !== null)),
-      this.prisma.school.findMany({ where: { id: { in: schoolIds } }, select: { id: true, name: true } }),
     ])
 
     const opBySchool = new Map<string, (typeof operational)[number]>()
     for (const o of operational) if (!opBySchool.has(o.schoolId)) opBySchool.set(o.schoolId, o)
     const expBySchool = new Map<string, number>()
     for (const snap of snapshots) {
-      if (expBySchool.has(snap.schoolId)) continue
       const soa = (snap.payload as { soaResults?: { cy?: { totalExp?: number } } })?.soaResults?.cy
       const exp = typeof soa?.totalExp === 'number' ? soa.totalExp : null
       if (exp !== null) expBySchool.set(snap.schoolId, exp)
     }
 
-    return aggregates
-      .filter((a) => a.avgComposite !== null)
-      .map((a) => {
-        const op = opBySchool.get(a.schoolId)
-        const enrollment = op?.enrollment ?? null
-        const teachingFte = op?.teachingFte === null || op?.teachingFte === undefined ? null : Number(op.teachingFte)
-        const totalExp = expBySchool.get(a.schoolId) ?? null
-        return {
-          schoolId: a.schoolId,
-          schoolName: schools.find((sc) => sc.id === a.schoolId)?.name ?? null,
-          score: Number(a.avgComposite),
-          enrollment,
-          studentTeacherRatio: enrollment !== null && teachingFte !== null && teachingFte > 0 ? enrollment / teachingFte : null,
-          costPerPupil: totalExp !== null && enrollment !== null && enrollment > 0 ? totalExp / enrollment : null,
-        }
-      })
+    return scored.map((r) => {
+      const op = opBySchool.get(r.schoolId)
+      const enrollment = op?.enrollment ?? null
+      const teachingFte = op?.teachingFte === null || op?.teachingFte === undefined ? null : Number(op.teachingFte)
+      const totalExp = expBySchool.get(r.schoolId) ?? null
+      return {
+        schoolId: r.schoolId,
+        schoolName: r.schoolName ?? null,
+        score: r.avgComposite as number,
+        enrollment,
+        studentTeacherRatio:
+          enrollment !== null && teachingFte !== null && teachingFte > 0 ? enrollment / teachingFte : null,
+        costPerPupil: totalExp !== null && enrollment !== null && enrollment > 0 ? totalExp / enrollment : null,
+      }
+    })
   }
 
   /** One row per school: this year, last year, the move, and the two gaps. */

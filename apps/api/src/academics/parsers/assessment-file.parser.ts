@@ -111,9 +111,15 @@ const TOTAL_HEADERS = [
 /** Subject spellings → canonical subject key. Ordered so longer, more specific
  *  phrases match before their substrings. */
 const SUBJECT_SYNONYMS: Array<[string[], string]> = [
+  // ORDER IS THE CONTRACT: these match by substring, so the longest, most
+  // specific phrase must come first. "Evidence-Based Reading and Writing"
+  // contains "reading", and when the reading rule ran first every SAT file's
+  // ERW column landed under `reading` — which silently removed erw from the
+  // section set, so benchmarksMet (which now demands full coverage) returned
+  // undefined for every SAT student and attainment read as "no data".
+  [['evidence-based reading and writing', 'reading and writing', 'erw', 'ebrw'], 'erw'],
   [['english language arts', 'language arts', 'ela'], 'reading'],
   [['reading', 'read'], 'reading'],
-  [['evidence-based reading and writing', 'reading and writing', 'erw', 'ebrw'], 'erw'],
   [['mathematics', 'math'], 'math'],
   [['language', 'lang'], 'language'],
   [['science', 'sci'], 'science'],
@@ -328,8 +334,14 @@ export function parseAssessmentGrid(grid: string[][], opts: ParseOptions = {}): 
     if (subject) subjectCols.push({ col, subject })
   })
 
-  // The shape question: is there a student in this file?
-  const hasIdentity = idx.extId >= 0 || idx.last >= 0 || idx.name >= 0
+  // The shape question: is there a STUDENT in this file?
+  //
+  // matchHeader matches a trailing word, so "School Name" satisfies NAME_HEADERS
+  // and "School ID" satisfies ID_HEADERS — which classified a diocesan summary
+  // as a student file and tried to write one AssessmentResult per school. A
+  // column already claimed as the school column is never also an identity column.
+  const identityCols = [idx.extId, idx.last, idx.name].filter((i) => i >= 0 && i !== idx.school)
+  const hasIdentity = identityCols.length > 0
   const scope: ParsedScope = hasIdentity ? 'student' : 'school_aggregate'
 
   if (idx.total < 0 && subjectCols.length === 0) {

@@ -24,6 +24,7 @@ export interface OperationalPublic {
   benchmarkMetCount: number | null
   benchmarkTestedCount: number | null
   assessmentEligibleCount: number | null
+  assessmentTestedCount: number | null
   notes: string | null
   /** Phase 2 — anticipated incoming feeder students by grade; null when none. */
   feederEnrollmentByGrade: Record<string, number> | null
@@ -76,6 +77,7 @@ export class OperationalService {
         benchmarkMetCount: null,
         benchmarkTestedCount: null,
         assessmentEligibleCount: null,
+        assessmentTestedCount: null,
         notes: null,
         feederEnrollmentByGrade: null,
         plannedEnrollmentByGrade: null,
@@ -100,6 +102,8 @@ export class OperationalService {
       benchmarkTestedCount: (row as { benchmarkTestedCount?: number | null }).benchmarkTestedCount ?? null,
       assessmentEligibleCount:
         (row as { assessmentEligibleCount?: number | null }).assessmentEligibleCount ?? null,
+      assessmentTestedCount:
+        (row as { assessmentTestedCount?: number | null }).assessmentTestedCount ?? null,
       notes: row.notes,
       feederEnrollmentByGrade: coerceFeeder(row.feederEnrollmentByGrade),
       // Cast: plannedEnrollmentByGrade is an additive Phase-2 column — read
@@ -142,6 +146,21 @@ export class OperationalService {
       // layer (feeds student_teacher_ratio). Same dec() as toPublic on these cols.
       teachingFte: dec(row.teachingFte),
       totalStaffFte: dec(row.totalStaffFte),
+      // Academics — raw ints (counts and sums, never Decimals). THIS function,
+      // not toPublic, is the only operational feed into computeMetricsForPeriod
+      // and computeOrgMetrics: omitting them here leaves every academics metric
+      // available:false while the sparkline built from the trend path shows real
+      // numbers right beside the card that says "no data".
+      actScoreSum: (row as { actScoreSum?: number | null }).actScoreSum ?? null,
+      actTestedCount: (row as { actTestedCount?: number | null }).actTestedCount ?? null,
+      satScoreSum: (row as { satScoreSum?: number | null }).satScoreSum ?? null,
+      satTestedCount: (row as { satTestedCount?: number | null }).satTestedCount ?? null,
+      benchmarkMetCount: (row as { benchmarkMetCount?: number | null }).benchmarkMetCount ?? null,
+      benchmarkTestedCount: (row as { benchmarkTestedCount?: number | null }).benchmarkTestedCount ?? null,
+      assessmentEligibleCount:
+        (row as { assessmentEligibleCount?: number | null }).assessmentEligibleCount ?? null,
+      assessmentTestedCount:
+        (row as { assessmentTestedCount?: number | null }).assessmentTestedCount ?? null,
     }
   }
 

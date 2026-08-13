@@ -192,6 +192,7 @@ export function sumOperational(
     benchmarkMetCount: foldNullable(present.map((r) => r.benchmarkMetCount)),
     benchmarkTestedCount: foldNullable(present.map((r) => r.benchmarkTestedCount)),
     assessmentEligibleCount: foldNullable(present.map((r) => r.assessmentEligibleCount)),
+    assessmentTestedCount: foldNullable(present.map((r) => r.assessmentTestedCount)),
   }
 }
 

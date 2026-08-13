@@ -204,6 +204,12 @@ export {
   EARLY_WARNING_BRIEFABLE_RULE_IDS,
 }
 
+/**
+ * The small-cell floor, restated here rather than imported so the briefing's
+ * guard is visible at the point of use. Must track MIN_CELL in @finrep/analytics.
+ */
+const ACADEMICS_MIN_CELL = 5
+
 /** The ledger columns STEP 2.16 reads. Nothing else is selected. */
 interface EarlyWarningRow {
   ruleId: string
@@ -1576,18 +1582,21 @@ export class BriefingService {
           dueDate: null,
         })
       } else {
-        // Collapse derived-over-ingested first — otherwise a school holding both
-        // a summary row and a derived row for the same year can appear to have
-        // "fallen" from one to the other, and the briefing would report a
-        // decline that never happened.
+        // Collapse derived-over-ingested AND drop sub-floor cohorts. The briefing
+        // NARRATES its numbers ("results fell 4.8 points, from 72.1 to 67.3"), so
+        // a suppressed average restated in prose is the same disclosure as
+        // publishing it in a chart — with the school named in the title.
         const collapsed = new Map<string, (typeof academicRows)[number]>()
         for (const r of academicRows) {
           const key = `${r.schoolYear}|${r.testType}`
           const cur = collapsed.get(key)
           if (!cur || (r.derivation === 'derived' && cur.derivation !== 'derived')) collapsed.set(key, r)
         }
+        const publishable = [...collapsed.values()].filter(
+          (r) => r.testedCount !== null && r.testedCount !== undefined && r.testedCount >= ACADEMICS_MIN_CELL,
+        )
         const byTest = new Map<string, typeof academicRows>()
-        for (const r of collapsed.values()) {
+        for (const r of publishable) {
           const list = byTest.get(r.testType) ?? []
           list.push(r)
           byTest.set(r.testType, list)

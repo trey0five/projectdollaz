@@ -707,6 +707,7 @@ model PeriodOperationalData {
   benchmarkMetCount             Int?      @map("benchmark_met_count")
   benchmarkTestedCount          Int?      @map("benchmark_tested_count")
   assessmentEligibleCount       Int?      @map("assessment_eligible_count")
+  assessmentTestedCount         Int?      @map("assessment_tested_count")
   updatedByUserId               String?   @map("updated_by_user_id") @db.Uuid
   createdAt                     DateTime  @default(now()) @map("created_at")
   updatedAt                     DateTime  @updatedAt @map("updated_at")
