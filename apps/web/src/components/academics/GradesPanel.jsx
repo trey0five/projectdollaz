@@ -66,6 +66,9 @@ export default function GradesPanel({ schoolId, canEdit }) {
   const [results, setResults] = useState([])
   const [imports, setImports] = useState([])
   const [unmatchedOnly, setUnmatchedOnly] = useState(false)
+  const [year, setYear] = useState('')
+  const [years, setYears] = useState([])
+  const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [confirming, setConfirming] = useState(null)
@@ -79,13 +82,27 @@ export default function GradesPanel({ schoolId, canEdit }) {
         academicsApi.gradebookSummary(schoolId).catch(() => null),
         canEdit ? academicsApi.gradebookCourses(schoolId).catch(() => null) : Promise.resolve(null),
         canEdit ? academicsApi.gradebookRecords(schoolId).catch(() => null) : Promise.resolve(null),
-        canEdit ? academicsApi.results(schoolId, unmatchedOnly ? { unmatchedOnly: true } : {}).catch(() => null) : Promise.resolve(null),
+        canEdit
+          ? academicsApi
+              .results(schoolId, {
+                ...(unmatchedOnly ? { unmatchedOnly: true } : {}),
+                ...(year ? { schoolYear: Number(year) } : {}),
+              })
+              .catch(() => null)
+          : Promise.resolve(null),
         academicsApi.imports(schoolId).catch(() => null),
       ])
       setGradebook(g ? (g.data ?? g) : null)
       setCourses(c ? (c.data ?? c) : [])
       setRecords(r ? (r.data ?? r) : [])
-      setResults(res ? (res.data ?? res) : [])
+      // The register now answers with { rows, total, shown, years } so the page
+      // can show a year filter and say what it is not showing. Older shapes
+      // (a bare array) still render, so a stale client is not a blank screen.
+      const body = res ? (res.data ?? res) : null
+      const list = Array.isArray(body) ? body : (body?.rows ?? [])
+      setResults(list)
+      setTotal(Array.isArray(body) ? list.length : (body?.total ?? list.length))
+      if (body?.years?.length) setYears(body.years)
       setImports(imp ? (imp.data ?? imp) : [])
       setError('')
     } catch (e) {
@@ -93,7 +110,7 @@ export default function GradesPanel({ schoolId, canEdit }) {
     } finally {
       setLoading(false)
     }
-  }, [schoolId, canEdit, unmatchedOnly])
+  }, [schoolId, canEdit, unmatchedOnly, year])
 
   useEffect(() => {
     load()
@@ -158,11 +175,31 @@ export default function GradesPanel({ schoolId, canEdit }) {
         eyebrow="Register"
         title="Student results"
         aside={
-          canEdit && (results.length > 0 || unmatchedOnly) ? (
-            <label className="flex items-center gap-1.5 text-[11.5px] text-muted">
-              <input type="checkbox" checked={unmatchedOnly} onChange={(e) => setUnmatchedOnly(e.target.checked)} />
-              Unmatched only{unmatchedCount > 0 ? ` (${unmatchedCount})` : ''}
-            </label>
+          canEdit && (results.length > 0 || unmatchedOnly || year) ? (
+            <div className="flex items-center gap-3">
+              {/* PAST YEARS ARE REACHABLE. The register is ordered newest-first
+                  and capped, so without this a school's earlier years sat on the
+                  server with no way on screen to ask for them. */}
+              {years.length > 1 ? (
+                <select
+                  aria-label="School year"
+                  value={year}
+                  onChange={(e) => setYear(e.target.value)}
+                  className="rounded-lg border border-navy/15 bg-white px-2 py-1 text-[11.5px] text-navy"
+                >
+                  <option value="">All years</option>
+                  {years.map((y) => (
+                    <option key={y} value={y}>
+                      {y}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+              <label className="flex items-center gap-1.5 text-[11.5px] text-muted">
+                <input type="checkbox" checked={unmatchedOnly} onChange={(e) => setUnmatchedOnly(e.target.checked)} />
+                Unmatched only{unmatchedCount > 0 ? ` (${unmatchedCount})` : ''}
+              </label>
+            </div>
           ) : null
         }
       >
@@ -222,8 +259,17 @@ export default function GradesPanel({ schoolId, canEdit }) {
                 ))}
               </tbody>
             </table>
-            {results.length > 200 ? (
-              <p className="mt-2 text-[11.5px] text-muted">Showing the first 200 of {results.length}.</p>
+            {/* SAY WHAT IS NOT SHOWN. The old line reported the length of what
+                the server had already truncated, so "the first 200 of 1000" was
+                the ceiling talking, not the school's actual history. */}
+            {total > Math.min(results.length, 200) ? (
+              <p className="mt-2 text-[11.5px] text-muted">
+                Showing {Math.min(results.length, 200).toLocaleString()} of {total.toLocaleString()}
+                {year ? ` for ${year}` : ''}.
+                {total > results.length && !year && years.length > 1
+                  ? ' Pick a year above to narrow it, or export everything from Settings → Your Data.'
+                  : ''}
+              </p>
             ) : null}
           </div>
         )}

@@ -69,6 +69,9 @@ import {
 } from './parsers/assessment-file.parser.js'
 import { matchAll, type MatchCandidate, type RosterStudent } from './matching/student-match.js'
 
+/** How many register rows one page returns. The page reports the total too. */
+const REGISTER_PAGE = 500
+
 const ACHIEVEMENT_BANDS = ['q1', 'q2', 'q3', 'q4'] as const
 
 export interface UploadPreview {
@@ -422,16 +425,24 @@ export class AssessmentsService {
     schoolId: string,
     q: { schoolYear?: number; testType?: string; gradeLevel?: string; unmatchedOnly?: boolean } = {},
   ) {
+    // THE CAP HAS TO ANNOUNCE ITSELF, AND THE YEARS HAVE TO BE REACHABLE.
+    //
+    // A bare take:1000 ordered newest-first meant a school with a few years of
+    // history silently lost its oldest rows off the end of the register — the
+    // data was on the server, unreachable, with nothing on screen to suggest it
+    // existed. Returning the TOTAL lets the page say what it is not showing, and
+    // returning the YEARS ON FILE gives it the filter that reaches them.
+    const where = {
+      schoolId,
+      ...(q.schoolYear ? { schoolYear: q.schoolYear } : {}),
+      ...(q.testType ? { testType: q.testType } : {}),
+      ...(q.gradeLevel ? { gradeLevel: q.gradeLevel } : {}),
+      ...(q.unmatchedOnly ? { matchStatus: 'unmatched' } : {}),
+    }
     const rows = await this.prisma.assessmentResult.findMany({
-      where: {
-        schoolId,
-        ...(q.schoolYear ? { schoolYear: q.schoolYear } : {}),
-        ...(q.testType ? { testType: q.testType } : {}),
-        ...(q.gradeLevel ? { gradeLevel: q.gradeLevel } : {}),
-        ...(q.unmatchedOnly ? { matchStatus: 'unmatched' } : {}),
-      },
+      where,
       orderBy: [{ schoolYear: 'desc' }, { gradeLevel: 'asc' }, { composite: 'desc' }],
-      take: 1000,
+      take: REGISTER_PAGE,
       select: {
         id: true,
         studentId: true,
@@ -448,10 +459,24 @@ export class AssessmentsService {
         student: { select: { firstName: true, lastName: true, grade: true } },
       },
     })
-    return rows.map((r) => ({
-      ...r,
-      displayName: r.student ? `${r.student.lastName}, ${r.student.firstName}` : r.matchName,
-    }))
+    const [total, years] = await Promise.all([
+      this.prisma.assessmentResult.count({ where }),
+      this.prisma.assessmentResult.findMany({
+        where: { schoolId },
+        select: { schoolYear: true },
+        distinct: ['schoolYear'],
+        orderBy: { schoolYear: 'desc' },
+      }),
+    ])
+    return {
+      rows: rows.map((r) => ({
+        ...r,
+        displayName: r.student ? `${r.student.lastName}, ${r.student.firstName}` : r.matchName,
+      })),
+      total,
+      shown: rows.length,
+      years: years.map((y) => y.schoolYear),
+    }
   }
 
   /** Attach an unmatched row to a roster student by hand. */

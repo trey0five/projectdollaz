@@ -117,8 +117,15 @@ function makeHarness(opts: { source?: Record<string, unknown> | null; op?: Recor
   }
 
   const snapshots: Record<string, unknown>[] = []
+  // Deleting or replacing a roster scrubs the student's name off their scores
+  // and marks (student-delete-residue.spec.ts), so the double carries those two
+  // tables. Without them the service throws before it reaches the delete.
+  const assessmentResult = { updateMany: vi.fn(async () => ({ count: 0 })) }
+  const gradeRecord = { updateMany: vi.fn(async () => ({ count: 0 })) }
   const prisma = {
     student,
+    assessmentResult,
+    gradeRecord,
     fiscalPeriod: {
       // The period label the panel names. Derived from the id the periods stub
       // minted (fp-2026-06-30 → FY2026) so a promote into the WRONG year shows up

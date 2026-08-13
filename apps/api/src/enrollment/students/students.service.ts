@@ -291,7 +291,30 @@ export class StudentsService {
   async remove(actor: User, schoolId: string, id: string): Promise<{ deleted: boolean }> {
     const existing = await this.prisma.student.findFirst({ where: { id, schoolId } })
     if (!existing) throw new NotFoundException('Student not found.')
-    await this.prisma.student.delete({ where: { id: existing.id } })
+
+    // THE DELETE HAS TO REACH THE NAME, NOT JUST THE ROW.
+    //
+    // This method promises no PII shadow, and the schema quietly broke that
+    // promise: AssessmentResult.student and GradeRecord.student are both
+    // onDelete: SetNull, so deleting the student nulls the LINK and leaves
+    // `matchName` — the name as it appeared in the import file — sitting on
+    // every score and mark they ever had. The child would be gone from the
+    // roster and still named on their own test results.
+    //
+    // The scores themselves stay: they are the school's aggregate history, they
+    // are already counted in published averages, and removing them would silently
+    // restate years of reporting. What goes is the identity.
+    await this.prisma.$transaction([
+      this.prisma.assessmentResult.updateMany({
+        where: { studentId: existing.id },
+        data: { matchName: null, matchExternalId: null, matchStatus: 'unmatched' },
+      }),
+      this.prisma.gradeRecord.updateMany({
+        where: { studentId: existing.id },
+        data: { matchName: null, matchExternalId: null, matchStatus: 'unmatched' },
+      }),
+      this.prisma.student.delete({ where: { id: existing.id } }),
+    ])
     // FERPA: ids only, never names.
     await this.audit.write({
       schoolId,
@@ -341,7 +364,19 @@ export class StudentsService {
       )
     }
     if (actual === 0) return { deleted: 0 }
-    const { count } = await this.prisma.student.deleteMany({ where: { schoolId } })
+    // Same residue as remove(): SetNull leaves `matchName` on every score and
+    // mark. Clearing the register has to clear the names off the history too.
+    const [, , { count }] = await this.prisma.$transaction([
+      this.prisma.assessmentResult.updateMany({
+        where: { schoolId, studentId: { not: null } },
+        data: { matchName: null, matchExternalId: null, matchStatus: 'unmatched' },
+      }),
+      this.prisma.gradeRecord.updateMany({
+        where: { schoolId, studentId: { not: null } },
+        data: { matchName: null, matchExternalId: null, matchStatus: 'unmatched' },
+      }),
+      this.prisma.student.deleteMany({ where: { schoolId } }),
+    ])
     await this.audit.write({
       schoolId,
       userId: actor.id,
@@ -460,6 +495,18 @@ export class StudentsService {
     let deleted = 0
     if (mode === 'replace') {
       await this.prisma.$transaction(async (tx) => {
+        // Replace mode drops the whole register, so the same name-residue rule
+        // applies. The re-import re-matches these rows by externalId or name a
+        // moment later; what must not survive is the OLD name on a score
+        // belonging to a student the school just removed.
+        await tx.assessmentResult.updateMany({
+          where: { schoolId, studentId: { not: null } },
+          data: { matchName: null, matchExternalId: null, matchStatus: 'unmatched' },
+        })
+        await tx.gradeRecord.updateMany({
+          where: { schoolId, studentId: { not: null } },
+          data: { matchName: null, matchExternalId: null, matchStatus: 'unmatched' },
+        })
         deleted = (await tx.student.deleteMany({ where: { schoolId } })).count
         await tx.student.createMany({ data: rows.map((dto) => this.toCreateData(schoolId, dto, actor.id)) })
         created = rows.length

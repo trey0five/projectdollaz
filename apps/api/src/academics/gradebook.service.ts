@@ -246,7 +246,8 @@ export class GradebookService {
         ...(q.term ? { term: q.term } : {}),
       },
       orderBy: [{ schoolYear: 'desc' }, { term: 'asc' }],
-      take: 1000,
+      // Same cap, same reason as the assessment register — see listResults.
+      take: 500,
       select: {
         id: true,
         matchStatus: true,

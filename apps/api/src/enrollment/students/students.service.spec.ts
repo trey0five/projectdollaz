@@ -66,8 +66,15 @@ function makeService(over: {
     create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'snap-1', ...data })),
     update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'snap-1', ...data })),
   }
+  // Deleting a student must scrub the name off their scores and marks (see
+  // student-delete-residue.spec.ts), so the double has to carry those two
+  // tables — without them the service throws before it reaches the delete.
+  const assessmentResult = { updateMany: vi.fn(async () => ({ count: 0 })) }
+  const gradeRecord = { updateMany: vi.fn(async () => ({ count: 0 })) }
   const prisma = {
     student,
+    assessmentResult,
+    gradeRecord,
     enrollmentSource,
     enrollmentSnapshot,
     $transaction: vi.fn(async (arg: unknown) =>
@@ -82,8 +89,32 @@ function makeService(over: {
     })),
   }
   const svc = new StudentsService(prisma as never, audit as never, enrollment as never)
-  return { svc, prisma, student, enrollmentSource, enrollmentSnapshot, audit, enrollment }
+  return { svc, prisma, student, assessmentResult, gradeRecord, enrollmentSource, enrollmentSnapshot, audit, enrollment }
 }
+
+// ── Delete: the name must not survive on the scores ──────────────────────────
+
+describe('StudentsService.remove — the identity goes, the history stays', () => {
+  it('clears matchName and matchExternalId off the scores in the same transaction', async () => {
+    const { svc, prisma, assessmentResult, gradeRecord } = makeService({ students: [studentRow({ id: 's-1' })] })
+    await svc.remove(USER, SCHOOL, 's-1')
+
+    for (const table of [assessmentResult, gradeRecord]) {
+      expect(table.updateMany).toHaveBeenCalledTimes(1)
+      const call = table.updateMany.mock.calls[0] as unknown as Array<{
+        where: Record<string, unknown>
+        data: Record<string, unknown>
+      }>
+      const { where, data } = call[0]
+      expect(where).toEqual({ studentId: 's-1' })
+      expect(data.matchName).toBeNull()
+      expect(data.matchExternalId).toBeNull()
+    }
+    // All-or-nothing: a scrub without the delete, or a delete without the
+    // scrub, are each worse than neither.
+    expect(prisma.$transaction).toHaveBeenCalled()
+  })
+})
 
 // ── Register list: filters + pagination + grade sort ─────────────────────────
 
