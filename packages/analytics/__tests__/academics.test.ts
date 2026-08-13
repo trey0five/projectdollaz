@@ -366,7 +366,9 @@ describe('academics — objectives, insights, narrative', () => {
     })
     expect(text).toContain('ranks 4 of 5')
     expect(text).toContain('below the network average')
-    expect(text).toContain('math')
+    // The LABEL, not the key: this sentence sits inches from a chart that calls
+    // the same bar "Math", and the two must never disagree.
+    expect(text).toContain('Math is the widest gap')
     expect(text).toContain('-22')
     expect(text).toContain('declined')
     expect(text).toContain('fair')

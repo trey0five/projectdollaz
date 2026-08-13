@@ -639,7 +639,35 @@ export interface InsightInput {
   subjects: SubjectComparison[]
   trend: TrendDirection
   participation: Participation
+  /** Override only for a non-English packet; the default is the canonical map. */
   subjectLabel?: (subject: string) => string
+}
+
+/**
+ * The display name for a subject key — canonical, in the semantic layer, beside
+ * every other label the product renders.
+ *
+ * The hook above was optional and NOBODY SUPPLIED IT, so the narrative read
+ * "reading is the widest gap" in the same card whose chart, two inches away,
+ * labelled the identical bar "Reading". A default that is right is worth more
+ * than a hook that is available.
+ */
+export const SUBJECT_LABELS: Record<string, string> = {
+  english: 'English',
+  math: 'Math',
+  reading: 'Reading',
+  science: 'Science',
+  erw: 'Reading & Writing',
+  language: 'Language',
+  socialStudies: 'Social Studies',
+  writing: 'Writing',
+  vocabulary: 'Vocabulary',
+  spelling: 'Spelling',
+}
+
+/** Title-cased subject name, falling back to the raw key rather than blanking. */
+export function subjectLabelOf(subject: string): string {
+  return SUBJECT_LABELS[subject] ?? subject.charAt(0).toUpperCase() + subject.slice(1)
 }
 
 /**
@@ -649,7 +677,7 @@ export interface InsightInput {
  * to beat, exactly as the board report's narrative works.
  */
 export function buildAssessmentInsight(input: InsightInput): string {
-  const label = input.subjectLabel ?? ((s: string) => s)
+  const label = input.subjectLabel ?? subjectLabelOf
   const parts: string[] = []
 
   if (input.rank.rank !== null && input.rank.of > 1) {

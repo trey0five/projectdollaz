@@ -338,6 +338,8 @@ export {
   nationalReference,
   isForthcoming,
   movements,
+  SUBJECT_LABELS,
+  subjectLabelOf,
 } from './academics/assessments.js'
 export type {
   AssessmentRow,

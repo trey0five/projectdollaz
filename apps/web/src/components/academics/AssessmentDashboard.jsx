@@ -23,20 +23,14 @@ import {
   Users2,
 } from 'lucide-react'
 import { useReducedMotion } from '../analytics/charts/useReducedMotion.js'
+import { subjectLabelOf } from '@finrep/analytics'
 
 const EASE = [0.2, 0.8, 0.2, 1]
 const HUE = '#0D9488'
 
-const SUBJECT_LABEL = {
-  english: 'English',
-  math: 'Math',
-  reading: 'Reading',
-  science: 'Science',
-  erw: 'Reading & Writing',
-  language: 'Language',
-  socialStudies: 'Social Studies',
-}
-const label = (s) => SUBJECT_LABEL[s] ?? s
+// One map, in the semantic layer, so the chart axis and the sentence beside it
+// can never disagree about what a subject is called.
+const label = subjectLabelOf
 
 const fmt = (v, digits = 1) =>
   v === null || v === undefined ? '—' : Number(v).toFixed(digits).replace(/\.0$/, '')
@@ -55,7 +49,7 @@ const STANDING_TONE = {
   unknown: { text: 'text-muted', bg: 'bg-navy/[0.04]', ring: 'ring-navy/10', dot: '#cbd5e1' },
 }
 
-/** A variance chip — the "-45 points vs diocese" the whole deck hangs on. */
+/** A variance chip — the "-45 points vs network" the whole deck hangs on. */
 function VarianceChip({ variance, standing, unit = '' }) {
   const tone = STANDING_TONE[standing] ?? STANDING_TONE.unknown
   const Icon = standing === 'strong' ? TrendingUp : standing === 'below' ? TrendingDown : null
@@ -121,7 +115,7 @@ function RankedSchools({ schools, focusId, national, peerAvg, range, reduce, ano
       >
       {[
         national !== null && national !== undefined ? { v: national, color: '#e11d48', text: `National ${fmt(national, 0)}` } : null,
-        peerAvg !== null && peerAvg !== undefined ? { v: peerAvg, color: '#2563EB', text: `Diocese ${fmt(peerAvg)}` } : null,
+        peerAvg !== null && peerAvg !== undefined ? { v: peerAvg, color: '#2563EB', text: `Network ${fmt(peerAvg)}` } : null,
       ]
         .filter(Boolean)
         .map((line) => (
