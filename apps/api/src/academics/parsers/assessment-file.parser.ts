@@ -175,7 +175,14 @@ function toNumber(v: unknown): number | null {
 function toYear(v: unknown): number | null {
   const s = String(v ?? '').trim()
   // "2025-26" / "2025/26" → the spring year, which is how results are labelled.
-  const span = s.match(/^(\d{4})\s*[-/]\s*(\d{2,4})$/)
+  //
+  // The span may be DECORATED: "SY 2025-26", "2025-26 School Year" and "AY
+  // 2025/26" all name the same academic year. Anchoring this to the whole cell
+  // sent every decorated form to the bare four-digit fallback below, which
+  // returns the START year — so one label parsed as two different years
+  // depending on how the publisher dressed it, and a school's two files landed
+  // in different years.
+  const span = s.match(/(\d{4})\s*[-/]\s*(\d{2,4})(?!\d)/)
   if (span) {
     const start = Number.parseInt(span[1], 10)
     return Number.isFinite(start) ? start + 1 : null
@@ -335,7 +342,13 @@ export function parseAssessmentGrid(grid: string[][], opts: ParseOptions = {}): 
     extId: headers.findIndex((h) => matchHeader(h, ID_HEADERS)),
     first: headers.findIndex((h) => matchHeader(h, FIRST_HEADERS)),
     last: headers.findIndex((h) => matchHeader(h, LAST_HEADERS)),
-    name: headers.findIndex((h) => matchHeader(h, NAME_HEADERS)),
+    // A column already matching ID_HEADERS is not the name column, whatever the
+    // NAME vocabulary thinks of it: "Student ID" satisfies the bare 'student'
+    // and, being first, took the role the real "Student Name" column wanted.
+    // A column matching ID_HEADERS is not the NAME column, whatever the name
+    // vocabulary thinks of it: "Student ID" satisfies the bare 'student' and,
+    // coming first, took the role the real "Student Name" column wanted.
+    name: headers.findIndex((h) => matchHeader(h, NAME_HEADERS) && !matchHeader(h, ID_HEADERS)),
     // Resolved below, against the columns nothing more specific claimed.
     total: -1,
   }
@@ -392,11 +405,37 @@ export function parseAssessmentGrid(grid: string[][], opts: ParseOptions = {}): 
   // "School Name" takes it and "School ID" is still sitting there satisfying
   // ID_HEADERS, which is all it takes to call a diocesan summary a student file.
   // Anything whose header names a school is disqualified, whatever role it holds.
-  const nonIdentity = new Set(
-    [idx.school, idx.year, idx.grade, idx.tested, idx.eligible, idx.total].filter((i) => i >= 0),
-  )
+  //
+  // The disqualification list is DERIVED, not enumerated. Naming the six roles
+  // by hand left "District ID", "Norm Group Name", "Test Name" and "Form ID"
+  // still able to flip a school-summary file to student scope — every one of
+  // them ends in a word ID_HEADERS or NAME_HEADERS matches. A column is an
+  // identity column only if nothing else in the file has already claimed it AND
+  // its header does not name something that is plainly not a student.
+  const NOT_A_STUDENT = [
+    ...SCHOOL_HEADERS,
+    'district',
+    'diocese',
+    'norm',
+    'norm group',
+    'test',
+    'form',
+    'level',
+    'group',
+    'subtest',
+    'objective',
+    'teacher',
+    'class',
+    'course',
+    'site',
+  ]
+  // Derived from the roles that are NOT identity — building it from `claimed`
+  // includes the identity columns themselves, which disqualifies every one of
+  // them and turns a perfectly ordinary student file into a school summary.
+  const identityRoles = new Set([idx.extId, idx.first, idx.last, idx.name].filter((i) => i >= 0))
+  const nonIdentity = new Set([...claimed].filter((i) => i >= 0 && !identityRoles.has(i)))
   headers.forEach((h, col) => {
-    if (matchHeader(h, SCHOOL_HEADERS)) nonIdentity.add(col)
+    if (matchHeader(h, NOT_A_STUDENT)) nonIdentity.add(col)
   })
   const identityCols = [idx.extId, idx.last, idx.name].filter((i) => i >= 0 && !nonIdentity.has(i))
   const hasIdentity = identityCols.length > 0

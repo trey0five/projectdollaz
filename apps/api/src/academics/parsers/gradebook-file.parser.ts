@@ -101,9 +101,20 @@ export function parseMark(v: unknown): { numeric: number | null; letter: string 
     return { numeric: LETTER_TO_NUMBER[letter] ?? null, letter }
   }
   const n = Number.parseFloat(raw.replace(/[%\s]/g, ''))
-  if (!Number.isFinite(n)) return { numeric: null, letter: raw.slice(0, 8) }
-  return { numeric: n, letter: null }
+  if (Number.isFinite(n)) return { numeric: n, letter: null }
+  // NOT A NUMBER AND NOT A LETTER GRADE — so not a mark. This used to keep the
+  // first eight characters as the "letter", which meant any text at all became
+  // a grade: a Homeroom column of "B wing" / "C wing" read as B and C, and in
+  // the wide shape that turned the room into a course full of grades.
+  //
+  // The non-letter marks schools actually use are a short, closed vocabulary,
+  // and everything outside it is a cell we have no business guessing at.
+  const token = raw.toUpperCase().replace(/[.\s]/g, '')
+  return NON_LETTER_MARKS.has(token) ? { numeric: null, letter: token } : { numeric: null, letter: null }
 }
+
+/** Pass/fail and administrative marks — no numeric equivalent, but real marks. */
+const NON_LETTER_MARKS = new Set(['P', 'F', 'S', 'U', 'N', 'I', 'INC', 'W', 'WD', 'NG', 'CR', 'NC', 'AU', 'EX', 'M'])
 
 function parseCsv(text: string): string[][] {
   const rows: string[][] = []
@@ -142,7 +153,11 @@ export function parseGradebookCsv(
     extId: headers.findIndex((h) => matches(h, ID_HEADERS)),
     first: headers.findIndex((h) => matches(h, FIRST_HEADERS)),
     last: headers.findIndex((h) => matches(h, LAST_HEADERS)),
-    name: headers.findIndex((h) => matches(h, NAME_HEADERS)),
+    // A column that names a TEACHER is not the student name column. "Teacher
+    // Name" satisfies NAME_HEADERS via the endsWith(' name') branch, and if it
+    // came first it supplied every mark's student — filing a whole class under
+    // the teacher, who then matched no roster student and landed unmatched.
+    name: headers.findIndex((h) => matches(h, NAME_HEADERS) && !matches(h, TEACHER_HEADERS) && !matches(h, ID_HEADERS)),
     gradeLevel: headers.findIndex((h) => matches(h, GRADE_HEADERS)),
     course: headers.findIndex((h) => matches(h, COURSE_HEADERS)),
     term: headers.findIndex((h) => matches(h, TERM_HEADERS)),
@@ -174,9 +189,24 @@ export function parseGradebookCsv(
   // A named course column + a mark column is the long shape; otherwise wide.
   const shape: 'long' | 'wide' = idx.course >= 0 && idx.mark >= 0 ? 'long' : 'wide'
   const claimed = new Set(Object.values(idx).filter((i) => i >= 0))
+  // A WIDE COLUMN HAS TO CONTAIN MARKS. "Unclaimed and not junk" is not the same
+  // as "is a course": an export carrying Notes, Homeroom, Advisor or Email
+  // turned each of them into a course full of free text, because parseMark's
+  // letter fallback happily reads "B wing" as a B. Sample the body and keep only
+  // columns where most non-empty values actually parse as a mark.
+  const body = grid.slice(headerIdx + 1, headerIdx + 26)
+  const looksLikeMarks = (col: number): boolean => {
+    const vals = body.map((line) => String(line?.[col] ?? '').trim()).filter((v) => v !== '')
+    if (vals.length === 0) return false
+    const parsed = vals.filter((v) => {
+      const { numeric, letter } = parseMark(v)
+      return numeric !== null || letter !== null
+    })
+    return parsed.length / vals.length >= 0.6
+  }
   const wideCols = headers
     .map((h, col) => ({ h, col }))
-    .filter(({ h, col }) => !claimed.has(col) && !isJunk(h))
+    .filter(({ h, col }) => !claimed.has(col) && !isJunk(h) && (shape === 'long' || looksLikeMarks(col)))
 
   if (shape === 'wide' && wideCols.length === 0) {
     throw new Error('No course columns found — expected a course + grade column, or one column per course.')
@@ -208,6 +238,11 @@ export function parseGradebookCsv(
     const yearMatch = yearCell.match(/(20\d{2})/)
     const schoolYear = yearMatch ? Number.parseInt(yearMatch[1], 10) : (opts.schoolYear ?? null)
     const teacherName = idx.teacher >= 0 ? cell(idx.teacher).trim() || null : null
+    // Read ONCE, for both shapes. The wide branch used to stamp every row with
+    // opts.term even when the file carried a Term column — the column was
+    // correctly excluded from the course list and then never read, so a
+    // two-term wide export collapsed into one term.
+    const rowTerm = (idx.term >= 0 ? cell(idx.term).trim() : '') || opts.term || null
 
     const emit = (courseName: string | null, markCell: string, term: string | null) => {
       const { numeric, letter } = parseMark(markCell)
@@ -233,9 +268,9 @@ export function parseGradebookCsv(
     }
 
     if (shape === 'long') {
-      emit(cell(idx.course).trim() || null, cell(idx.mark), (idx.term >= 0 ? cell(idx.term).trim() : '') || opts.term || null)
+      emit(cell(idx.course).trim() || null, cell(idx.mark), rowTerm)
     } else {
-      for (const { h, col } of wideCols) emit(h.trim(), cell(col), opts.term ?? null)
+      for (const { h, col } of wideCols) emit(h.trim(), cell(col), rowTerm)
     }
   }
 

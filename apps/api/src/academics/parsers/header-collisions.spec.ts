@@ -101,6 +101,71 @@ describe('header collisions — the specific must beat the general', () => {
     expect(parsed.warnings.join(' ')).toMatch(/both read as reading/i)
   })
 
+  it('no column that plainly is not a student flips a summary to student scope', () => {
+    // Naming the six roles by hand left every one of these still able to do it —
+    // each ends in a word ID_HEADERS or NAME_HEADERS matches.
+    for (const decoy of ['District ID', 'Norm Group Name', 'Test Name', 'Form ID', 'Teacher Name']) {
+      const csv = [`School,${decoy},Grade,Total Battery,Tested`, `St. Mary,X,5,68,42`].join('\n')
+      const parsed = parseAssessmentCsv(enc(csv), { defaultYear: 2026, testType: 'terranova' })
+      expect(parsed.scope, `"${decoy}" must not imply a student`).toBe('school_aggregate')
+    }
+  })
+
+  it('"Student ID" does not take the role "Student Name" wanted', () => {
+    const csv = ['Student ID,Student Name,Grade,Composite', 'S1,"Nguyen, Amy",11,27'].join('\n')
+    const parsed = parseAssessmentCsv(enc(csv), { defaultYear: 2026, testType: 'act' })
+    expect(parsed.scope).toBe('student')
+    expect(parsed.students[0].externalId).toBe('S1')
+    expect(parsed.students[0].lastName).toBe('Nguyen')
+  })
+
+  it('a DECORATED school-year span still resolves to the spring year', () => {
+    // One label, dressed five ways by five publishers, must be one year.
+    for (const cell of ['2025-26', 'SY 2025-26', '2025-26 School Year', 'AY 2025/26', '2025 - 26']) {
+      const csv = [`School,Grade,Year,Total Battery,Tested`, `St. Mary,5,${cell},68,42`].join('\n')
+      const parsed = parseAssessmentCsv(enc(csv), { testType: 'terranova' })
+      expect(parsed.aggregates[0].schoolYear, `"${cell}" should be the spring year`).toBe(2026)
+    }
+  })
+
+  it('"Teacher Name" does not supply the STUDENT name', () => {
+    // It satisfies NAME_HEADERS via endsWith(' name'), and coming first it filed
+    // a whole class under the teacher — who then matched no roster student.
+    const csv = [
+      'Teacher Name,Student Name,Course,Term,Letter Grade,School Year',
+      'Ms. Alvarez,"Nguyen, Amy",Algebra II,Q3,A,2026',
+    ].join('\n')
+    const parsed = parseGradebookCsv(enc(csv), {})
+    expect(parsed.rows[0].lastName).toBe('Nguyen')
+    expect(parsed.rows[0].teacherName).toBe('Ms. Alvarez')
+  })
+
+  it('a wide column that holds no marks is not a course', () => {
+    // parseMark's letter fallback reads "B wing" as a B, so an export carrying
+    // Homeroom or Notes turned each into a course full of free text.
+    const csv = [
+      'Student Name,Homeroom,Algebra II,Biology',
+      '"Nguyen, Amy",B wing,A-,B+',
+      '"Adams, Ryan",C wing,B,A',
+      '"Kelly, Aiden",A wing,C+,B-',
+    ].join('\n')
+    const parsed = parseGradebookCsv(enc(csv), { schoolYear: 2026 })
+    const courses = new Set(parsed.rows.map((r) => r.courseName))
+    expect(courses.has('Algebra II')).toBe(true)
+    expect(courses.has('Biology')).toBe(true)
+    expect(courses.has('Homeroom'), 'a room is not a course').toBe(false)
+  })
+
+  it('the wide shape reads its own Term column instead of stamping one term', () => {
+    const csv = [
+      'Student Name,Term,Algebra II',
+      '"Nguyen, Amy",Q1,A-',
+      '"Nguyen, Amy",Q2,B+',
+    ].join('\n')
+    const parsed = parseGradebookCsv(enc(csv), { schoolYear: 2026 })
+    expect(new Set(parsed.rows.map((r) => r.term))).toEqual(new Set(['Q1', 'Q2']))
+  })
+
   it('"School Name"/"School ID" do not make a summary file look student-level', () => {
     const csv = ['School Name,School ID,Grade,Total Battery,Tested', 'St. Mary,SCH-1,5,68,42'].join('\n')
     const parsed = parseAssessmentCsv(enc(csv), { defaultYear: 2026, testType: 'terranova' })
