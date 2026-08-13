@@ -929,6 +929,16 @@ export const academicsApi = {
     }),
 }
 
+/**
+ * Data export — a school taking a complete copy of its own records.
+ * Owner-only server-side; the request returns a job the UI polls.
+ */
+export const exportApi = {
+  request: (schoolId) => api.post(`/schools/${schoolId}/export`),
+  list: (schoolId) => api.get(`/schools/${schoolId}/exports`),
+  downloadUrl: (schoolId, id) => api.get(`/schools/${schoolId}/exports/${id}/download`),
+}
+
 export const strategyApi = {
   getPlans: (schoolId) => api.get(`/schools/${schoolId}/strategy/plans`),
   getPlan: (schoolId, planId) => api.get(`/schools/${schoolId}/strategy/plans/${planId}`),

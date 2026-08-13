@@ -63,6 +63,7 @@ import ReportScheduleSection from './components/settings/ReportScheduleSection.j
 import AlertsSection from './components/settings/AlertsSection.jsx'
 import IntegrationsSection from './components/settings/IntegrationsSection.jsx'
 import BillingSection from './components/settings/BillingSection.jsx'
+import DataExportSection from './components/settings/DataExportSection.jsx'
 import QbCallbackPage from './pages/QbCallbackPage.jsx'
 import EnrollmentBlackbaudCallbackPage from './pages/EnrollmentBlackbaudCallbackPage.jsx'
 import LoginPage from './pages/LoginPage.jsx'
@@ -360,6 +361,7 @@ export default function App() {
           <Route path="alerts" element={<AlertsSection />} />
           <Route path="integrations" element={<IntegrationsSection />} />
           <Route path="billing" element={<BillingSection />} />
+          <Route path="data" element={<DataExportSection />} />
         </Route>
       </Route>
       {/* Hidden super-admin sign-in — PUBLIC (no gate); reached only from the

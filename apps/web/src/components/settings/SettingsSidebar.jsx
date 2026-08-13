@@ -3,7 +3,17 @@
 // change (mirrors the app's existing mobile dropdown pattern). Both deep-link
 // to nested /settings/* routes so a hard refresh lands on the right section.
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { User, Users, Building2, Briefcase, CreditCard, CalendarClock, Plug, Bell } from 'lucide-react'
+import {
+  User,
+  Users,
+  Building2,
+  Briefcase,
+  CreditCard,
+  CalendarClock,
+  Plug,
+  Bell,
+  Download,
+} from 'lucide-react'
 
 const NAV = [
   { to: 'account', label: 'My Account', Icon: User },
@@ -14,6 +24,9 @@ const NAV = [
   { to: 'alerts', label: 'Alerts', Icon: Bell },
   { to: 'integrations', label: 'Integrations', Icon: Plug },
   { to: 'billing', label: 'Billing', Icon: CreditCard },
+  // Last, and deliberately not hidden. A school asking "can we get our data
+  // out" should find the answer without asking us.
+  { to: 'data', label: 'Your Data', Icon: Download },
 ]
 
 export default function SettingsSidebar() {

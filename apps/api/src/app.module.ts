@@ -31,6 +31,7 @@ import { TwinModule } from './twin/twin.module.js'
 import { FacilitiesModule } from './facilities/facilities.module.js'
 import { HrModule } from './hr/hr.module.js'
 import { AdvancementModule } from './advancement/advancement.module.js'
+import { DataExportModule } from './export/export.module.js'
 import { KnowledgeModule } from './knowledge/knowledge.module.js'
 import { EnrollmentModule } from './enrollment/enrollment.module.js'
 import { AcademicsModule } from './academics/academics.module.js'
@@ -45,6 +46,7 @@ import { InboxModule } from './inbox/inbox.module.js'
 
 @Module({
   imports: [
+    DataExportModule,
     // envFilePath lets native `nest start` (cwd = apps/api) load the monorepo
     // root .env. In Docker the vars arrive via compose env_file, so the file
     // need not exist there. Vars already in process.env take precedence (so an

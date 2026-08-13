@@ -184,6 +184,8 @@ model School {
 
   @@index([organizationId])
   @@map("schools")
+  dataExports          DataExport[]
+
 }
 
 model FiscalPeriod {
@@ -3327,4 +3329,35 @@ model LessonPlan {
   @@index([schoolId, status])
   @@index([schoolId, weekOf])
   @@map("lesson_plans")
+}
+
+/// A tenant data export — the school taking a complete copy of its own records.
+///
+/// Kept as a durable row rather than a transient job because the fact that a
+/// school exported (and later downloaded) is an audit-relevant event: it is the
+/// moment a full copy of the records leaves the platform. Rows outlive the file,
+/// which expires; the history of who asked and when does not.
+model DataExport {
+  id                String    @id @default(uuid())
+  schoolId          String?   @map("school_id")
+  organizationId    String?   @map("organization_id")
+  requestedByUserId String?   @map("requested_by_user_id")
+  /// running | ready | failed
+  status            String    @default("running")
+  /// school | organization
+  scope             String    @default("school")
+  /// S3 key of the finished archive; null until ready.
+  fileKey           String?   @map("file_key")
+  byteSize          Int?      @map("byte_size")
+  /// Per-file row counts, so the UI can show what was in it after the file is gone.
+  rowCounts         Json?     @map("row_counts")
+  error             String?
+  expiresAt         DateTime? @map("expires_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  completedAt       DateTime? @map("completed_at")
+
+  school School? @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, createdAt])
+  @@map("data_exports")
 }
