@@ -55,6 +55,7 @@ import {
   yoyChange,
   type AssessmentRow,
   type ObjectiveRow,
+  getMetric,
 } from '@finrep/analytics'
 import { PrismaService } from '../prisma/prisma.service.js'
 import {
@@ -1640,6 +1641,14 @@ export class AssessmentsService {
         const enrollment = op?.enrollment ?? null
         const teachingFte = op?.teachingFte === null || op?.teachingFte === undefined ? null : Number(op.teachingFte)
         const totalExp = expBySchool.get(r.schoolId) ?? null
+        // THE SEMANTIC LAYER OWNS THESE TWO FORMULAS, not this file. Both already
+        // exist as MetricDefs and are rendered on the scorecard, so recomputing
+        // them here means two definitions of one number that agree only until
+        // somebody edits one — the exact drift @finrep/analytics exists to stop.
+        // Calling compute() also inherits its guards (a zero or absent
+        // denominator yields null rather than Infinity).
+        const cur = { totalExp: totalExp ?? 0 } as Parameters<ReturnType<typeof getMetric>['compute']>[0]
+        const curOp = { enrollment, teachingFte } as Parameters<ReturnType<typeof getMetric>['compute']>[2]
         return {
           schoolId: r.schoolId,
           schoolName: r.schoolName ?? null,
@@ -1647,8 +1656,10 @@ export class AssessmentsService {
           score: r.avgComposite as number,
           enrollment,
           studentTeacherRatio:
-            enrollment !== null && teachingFte !== null && teachingFte > 0 ? enrollment / teachingFte : null,
-          costPerPupil: totalExp !== null && enrollment !== null && enrollment > 0 ? totalExp / enrollment : null,
+            totalExp === null && enrollment === null
+              ? null
+              : (getMetric('student_teacher_ratio').compute(cur, undefined, curOp).value ?? null),
+          costPerPupil: totalExp === null ? null : (getMetric('cost_per_pupil').compute(cur, undefined, curOp).value ?? null),
         }
       })
   }

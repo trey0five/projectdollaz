@@ -42,6 +42,20 @@ const signed = (v, digits = 1) => {
   return `${r > 0 ? '+' : ''}${r}`
 }
 
+/**
+ * FIVE QUESTIONS, FIVE DOORS. Not five slices of one question — the ordering is
+ * the reading order a leadership team actually uses: where do we stand, what is
+ * happening in the classrooms, are we moving, are these the same children, and
+ * how does the network compare.
+ */
+const VIEWS = [
+  { key: 'standing', label: 'Standing' },
+  { key: 'classroom', label: 'Classroom' },
+  { key: 'time', label: 'Over time' },
+  { key: 'cohorts', label: 'Cohorts' },
+  { key: 'network', label: 'Network' },
+]
+
 const STANDING_TONE = {
   strong: { text: 'text-emerald-700', bg: 'bg-emerald-500/12', ring: 'ring-emerald-500/30', dot: '#059669' },
   below: { text: 'text-rose-700', bg: 'bg-rose-500/12', ring: 'ring-rose-500/30', dot: '#e11d48' },
@@ -636,6 +650,7 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
   const hasObjectives = objectives.strengths.length > 0 || objectives.opportunities.length > 0
 
   const select = (patch) => onQuery?.(patch)
+  const [view, setView] = useState('standing')
 
   const gradeOptions = useMemo(() => ['all', ...(ctx?.grades ?? [])], [ctx?.grades])
 
@@ -774,7 +789,43 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
         </motion.div>
       ) : null}
 
-      {/* ── Ranked schools ── */}
+      {/* ── The five reads ──────────────────────────────────────────────────
+          One scroll held every chart on the page, which meant the cohort panel
+          and the network table were three screens below the fold and nobody
+          knew they existed. These are five DIFFERENT QUESTIONS, not five slices
+          of one, so each gets its own door — and the KPI strip and the insight
+          stay above them, because those answer "how are we doing" regardless of
+          which question you came for. */}
+      <div className="flex flex-wrap gap-1.5 border-b border-navy/10 pb-px" role="tablist" aria-label="Analysis">
+        {VIEWS.map((v) => {
+          const on = view === v.key
+          return (
+            <button
+              key={v.key}
+              type="button"
+              role="tab"
+              aria-selected={on}
+              onClick={() => setView(v.key)}
+              className={`relative rounded-t-lg px-3.5 py-2 text-[12.5px] font-semibold transition-colors ${
+                on ? 'text-navy' : 'text-muted hover:text-navy'
+              }`}
+            >
+              {v.label}
+              {on ? (
+                <motion.span
+                  layoutId="academics-view-underline"
+                  className="absolute inset-x-2 -bottom-px h-0.5 rounded-full"
+                  style={{ background: HUE }}
+                />
+              ) : null}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* ── Standing ── */}
+      {view === 'standing' ? (
+      <>
       <Section
         eyebrow="Where this school stands"
         title={`Every school · ${ctx?.grade === 'all' ? 'all grades' : `grade ${ctx?.grade}`}`}
@@ -848,7 +899,58 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
         </Section>
       </div>
 
-      {/* ── Trend + distribution ── */}
+      {/* ── System insights ── */}
+      {data?.insights?.top ? (
+        <Section eyebrow="The network" title="Top, bottom and the spread between" reduce={reduce}>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {[
+              { k: 'Highest', v: data.insights.top?.schoolName, n: data.insights.top?.value, Icon: Award, color: '#059669' },
+              { k: 'Lowest', v: data.insights.bottom?.schoolName, n: data.insights.bottom?.value, Icon: TrendingDown, color: '#e11d48' },
+              { k: 'Spread', v: 'Top to bottom', n: data.insights.spread, Icon: ChevronRight, color: '#64748b' },
+            ].map((c) => (
+              <div key={c.k} className="rounded-xl border border-navy/10 px-3 py-2.5">
+                <p className="flex items-center gap-1.5 font-mono text-[9px] font-bold uppercase tracking-wider text-muted">
+                  <c.Icon size={11} style={{ color: c.color }} /> {c.k}
+                </p>
+                <p className="mt-0.5 truncate text-[13px] font-semibold text-navy">{c.v ?? '—'}</p>
+                <p className="font-serif text-[18px] tabular-nums" style={{ color: c.color }}>
+                  {fmt(c.n)}
+                </p>
+              </div>
+            ))}
+          </div>
+        </Section>
+      ) : null}
+      </>
+      ) : null}
+
+      {/* ── Classroom ── */}
+      {view === 'classroom' ? (
+      <>
+        <Section eyebrow="The spread" title="Where students actually sit" reduce={reduce}>
+          <Distribution slices={data?.distribution ?? []} reduce={reduce} />
+        </Section>
+
+        <Section eyebrow="Subgroups" title="Who the average is hiding" reduce={reduce} delay={0.05}>
+          <SubgroupBars groups={data?.subgroups} reduce={reduce} />
+        </Section>
+
+        {hasObjectives ? (
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Section eyebrow="Strengths" title="What this school does well" reduce={reduce}>
+              <ObjectiveList items={objectives.strengths} tone="strong" />
+            </Section>
+            <Section eyebrow="Opportunities" title="Where to put the next hour" reduce={reduce} delay={0.05}>
+              <ObjectiveList items={objectives.opportunities} tone="below" />
+            </Section>
+          </div>
+        ) : null}
+      </>
+      ) : null}
+
+      {/* ── Over time ── */}
+      {view === 'time' ? (
+      <>
       <div className="grid gap-4 lg:grid-cols-2">
         <Section eyebrow="Across the years" title="Are we moving?" reduce={reduce}>
           <TrendChart
@@ -867,38 +969,15 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
           </p>
         </Section>
 
-        <Section eyebrow="The spread" title="Where students actually sit" reduce={reduce} delay={0.05}>
-          <Distribution slices={data?.distribution ?? []} reduce={reduce} />
+        <Section eyebrow="Behind and falling" title="Growth against achievement" reduce={reduce} delay={0.05}>
+          <GrowthQuadrant
+            movements={(data?.movements ?? []).map((m) => ({ ...m, isFocus: m.schoolId === data?.school?.id }))}
+            peerAvg={peerAvg}
+            range={ctx?.scoreRange}
+            reduce={reduce}
+          />
         </Section>
       </div>
-
-      {/* ── The board table ── */}
-      {(data?.table ?? []).length > 0 ? (
-        <Section
-          eyebrow="Board-ready"
-          title="Every school, both years"
-          reduce={reduce}
-          aside={
-            <span className="font-mono text-[10px] uppercase tracking-wider text-muted">
-              {ctx?.grade === 'all' ? 'All grades' : `Grade ${ctx?.grade}`}
-            </span>
-          }
-        >
-          <ComparisonTable rows={data.table} scoreType={ctx?.scoreType} />
-        </Section>
-      ) : null}
-
-      {/* ── Cohort ── */}
-      {data?.cohort ? (
-        <Section
-          eyebrow="Longitudinal cohort"
-          title={`The same students, followed into grade ${data.cohort.grade}`}
-          reduce={reduce}
-          aside={<Users2 size={16} className="text-muted" />}
-        >
-          <CohortPanel cohort={data.cohort} reduce={reduce} />
-        </Section>
-      ) : null}
 
       {/* ── Movement ── */}
       {(data?.movements ?? []).length > 0 ? (
@@ -934,40 +1013,321 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
         </Section>
       ) : null}
 
-      {/* ── Objectives ── */}
-      {hasObjectives ? (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Section eyebrow="Strengths" title="What this school does well" reduce={reduce}>
-            <ObjectiveList items={objectives.strengths} tone="strong" />
-          </Section>
-          <Section eyebrow="Opportunities" title="Where to put the next hour" reduce={reduce} delay={0.05}>
-            <ObjectiveList items={objectives.opportunities} tone="below" />
-          </Section>
-        </div>
+      </>
       ) : null}
 
-      {/* ── System insights ── */}
-      {data?.insights?.top ? (
-        <Section eyebrow="The network" title="Top, bottom and the spread between" reduce={reduce}>
-          <div className="grid gap-3 sm:grid-cols-3">
-            {[
-              { k: 'Highest', v: data.insights.top?.schoolName, n: data.insights.top?.value, Icon: Award, color: '#059669' },
-              { k: 'Lowest', v: data.insights.bottom?.schoolName, n: data.insights.bottom?.value, Icon: TrendingDown, color: '#e11d48' },
-              { k: 'Spread', v: 'Top to bottom', n: data.insights.spread, Icon: ChevronRight, color: '#64748b' },
-            ].map((c) => (
-              <div key={c.k} className="rounded-xl border border-navy/10 px-3 py-2.5">
-                <p className="flex items-center gap-1.5 font-mono text-[9px] font-bold uppercase tracking-wider text-muted">
-                  <c.Icon size={11} style={{ color: c.color }} /> {c.k}
-                </p>
-                <p className="mt-0.5 truncate text-[13px] font-semibold text-navy">{c.v ?? '—'}</p>
-                <p className="font-serif text-[18px] tabular-nums" style={{ color: c.color }}>
-                  {fmt(c.n)}
-                </p>
-              </div>
-            ))}
-          </div>
-        </Section>
+      {/* ── Cohorts ── */}
+      {view === 'cohorts' ? (
+        data?.cohort ? (
+          <Section
+            eyebrow="Longitudinal cohort"
+            title={`The same students, followed into grade ${data.cohort.grade}`}
+            reduce={reduce}
+            aside={<Users2 size={16} className="text-muted" />}
+          >
+            <CohortPanel cohort={data.cohort} reduce={reduce} />
+          </Section>
+        ) : (
+          <Section eyebrow="Longitudinal cohort" title="Follow the same children forward" reduce={reduce}>
+            <p className="text-[12.5px] text-muted">
+              {(data?.availableCohorts ?? []).length > 0
+                ? 'Choose a cohort above and this follows that same group of children across the years, rather than comparing this year’s fifth graders with last year’s different fifth graders.'
+                : 'Two consecutive years of results for consecutive grades lets us follow one group of children forward. Load a second year and this fills in.'}
+            </p>
+          </Section>
+        )
       ) : null}
+
+      {/* ── Network ── */}
+      {view === 'network' ? (
+      <>
+        {(data?.table ?? []).length > 0 ? (
+          <Section
+            eyebrow="Board-ready"
+            title="Every school, both years"
+            reduce={reduce}
+            aside={
+              <span className="font-mono text-[10px] uppercase tracking-wider text-muted">
+                {ctx?.grade === 'all' ? 'All grades' : `Grade ${ctx?.grade}`}
+              </span>
+            }
+          >
+            <ComparisonTable rows={data.table} scoreType={ctx?.scoreType} />
+          </Section>
+        ) : null}
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Section eyebrow="Is the comparison fair?" title="Participation against score" reduce={reduce}>
+            <ParticipationScatter rows={data?.table ?? []} reduce={reduce} />
+          </Section>
+
+          <Section
+            eyebrow="Outcomes and the ledger"
+            title="What this score cost"
+            reduce={reduce}
+            delay={0.05}
+          >
+            <CrossDomainPanel rows={data?.crossDomain ?? []} scoreType={ctx?.scoreType} />
+          </Section>
+        </div>
+      </>
+      ) : null}
+    </div>
+  )
+}
+
+/** A school name that fits on a scatter point — "St. Mary Catholic School" is
+ *  three neighbours wide at 9.5px, and the long tail is never the identifying
+ *  part anyway. */
+function shortName(name) {
+  const n = String(name ?? '').replace(/\b(High School|School|Academy|Catholic)\b/g, '').replace(/\s+/g, ' ').trim()
+  const short = n || String(name ?? '')
+  return short.length > 18 ? `${short.slice(0, 17)}…` : short
+}
+
+// ── Growth × achievement ─────────────────────────────────────────────────────
+//
+// The question a superintendent actually asks: which schools are BOTH behind and
+// getting worse? A ranked bar answers "who is lowest" and a trend line answers
+// "who is falling", and neither answers the intersection — which is the one that
+// decides where the next visit goes. Achievement on x, one-year change on y,
+// quadrant lines at the network average and at zero change.
+function GrowthQuadrant({ movements, peerAvg, range, reduce }) {
+  const pts = (movements ?? []).filter((m) => m.current !== null && m.change !== null)
+  if (pts.length < 2) {
+    return <p className="text-[12.5px] text-muted">Two years of results across at least two schools lights this up.</p>
+  }
+  const W = 640
+  const H = 300
+  const PAD = { l: 42, r: 16, t: 16, b: 34 }
+  const xs = pts.map((p) => p.current)
+  const ys = pts.map((p) => p.change)
+  const xLo = Math.min(range?.min ?? Math.min(...xs), Math.min(...xs)) - 2
+  const xHi = Math.max(...xs) + 2
+  const yMag = Math.max(3, ...ys.map((v) => Math.abs(v))) * 1.25
+  const x = (v) => PAD.l + ((v - xLo) / (xHi - xLo || 1)) * (W - PAD.l - PAD.r)
+  const y = (v) => PAD.t + (1 - (v + yMag) / (2 * yMag)) * (H - PAD.t - PAD.b)
+  const midX = peerAvg === null || peerAvg === undefined ? null : x(peerAvg)
+
+  return (
+    <div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="block w-full" role="img" aria-label="Achievement against one-year change, by school">
+        {/* Quadrant ground — the "behind and falling" corner is the only one tinted. */}
+        {midX !== null ? (
+          <rect x={PAD.l} y={y(0)} width={Math.max(0, midX - PAD.l)} height={Math.max(0, H - PAD.b - y(0))} fill="#e11d48" opacity="0.05" />
+        ) : null}
+        <line x1={PAD.l} x2={W - PAD.r} y1={y(0)} y2={y(0)} stroke="#94a3b8" strokeWidth="1" />
+        {midX !== null ? (
+          <>
+            <line x1={midX} x2={midX} y1={PAD.t} y2={H - PAD.b} stroke="#2563EB" strokeWidth="1" strokeDasharray="5 4" />
+            <text x={midX + 4} y={PAD.t + 9} fontSize="9" fontWeight="700" fill="#2563EB">
+              Network avg
+            </text>
+          </>
+        ) : null}
+        <text x={PAD.l + 2} y={y(0) - 5} fontSize="9" fontWeight="700" fill="#64748b">
+          No change
+        </text>
+        {pts.map((p, i) => (
+          <motion.g
+            key={p.schoolId ?? p.schoolName ?? i}
+            initial={reduce ? false : { opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: reduce ? 0 : 0.05 + i * 0.07, duration: 0.4, ease: EASE }}
+          >
+            <circle
+              cx={x(p.current)}
+              cy={y(p.change)}
+              r={p.isFocus ? 8 : 6}
+              fill={p.change >= 0 ? '#059669' : '#e11d48'}
+              opacity={p.isFocus ? 1 : 0.75}
+              stroke="#fff"
+              strokeWidth="1.6"
+            />
+            {/* Two schools a point apart put their labels on top of each other and
+                both became unreadable. Alternate above/below and clip the name to
+                a width that cannot reach its neighbour. */}
+            <text
+              x={x(p.current)}
+              y={y(p.change) + (i % 2 === 0 ? -12 : 18)}
+              fontSize="9.5"
+              textAnchor="middle"
+              fill="#334155"
+            >
+              {shortName(p.schoolName)}
+            </text>
+          </motion.g>
+        ))}
+        <text x={PAD.l - 5} y={PAD.t + 8} fontSize="9" textAnchor="end" fill="#94a3b8">
+          +{Math.round(yMag)}
+        </text>
+        <text x={PAD.l - 5} y={H - PAD.b} fontSize="9" textAnchor="end" fill="#94a3b8">
+          −{Math.round(yMag)}
+        </text>
+        {[xLo, (xLo + xHi) / 2, xHi].map((t) => (
+          <text key={t} x={x(t)} y={H - 16} fontSize="9" textAnchor="middle" fill="#94a3b8">
+            {Math.round(t)}
+          </text>
+        ))}
+        <text x={W / 2} y={H - 4} fontSize="9.5" textAnchor="middle" fill="#64748b">
+          Score this year →
+        </text>
+      </svg>
+      <p className="mt-1 text-[11px] text-muted">
+        Bottom-left is the corner that matters: below the network average <em>and</em> falling.
+      </p>
+    </div>
+  )
+}
+
+// ── Participation against score ──────────────────────────────────────────────
+//
+// The honesty check on every other chart on this page. A school testing half its
+// class can post a flattering average for reasons that have nothing to do with
+// teaching, so the two numbers belong on one pair of axes rather than in two
+// cards that never meet.
+function ParticipationScatter({ rows, reduce }) {
+  const pts = (rows ?? []).filter((r) => r.current !== null && r.participationRate !== null && r.participationRate !== undefined)
+  if (pts.length === 0) {
+    return (
+      <p className="text-[12.5px] text-muted">
+        No school on file reports how many students were eligible, so participation cannot be compared yet — a summary
+        file with an eligible or enrolled column fills this in.
+      </p>
+    )
+  }
+  const W = 640
+  const H = 260
+  const PAD = { l: 42, r: 16, t: 16, b: 34 }
+  const ys = pts.map((p) => p.current)
+  const yLo = Math.min(...ys) - 3
+  const yHi = Math.max(...ys) + 3
+  const x = (v) => PAD.l + Math.max(0, Math.min(1, v)) * (W - PAD.l - PAD.r)
+  const y = (v) => PAD.t + (1 - (v - yLo) / (yHi - yLo || 1)) * (H - PAD.t - PAD.b)
+
+  return (
+    <div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="block w-full" role="img" aria-label="Participation rate against score, by school">
+        {/* Below ~70% a comparison is about who sat the exam, not how the school taught. */}
+        <rect x={PAD.l} y={PAD.t} width={Math.max(0, x(0.7) - PAD.l)} height={H - PAD.t - PAD.b} fill="#f59e0b" opacity="0.07" />
+        <line x1={x(0.7)} x2={x(0.7)} y1={PAD.t} y2={H - PAD.b} stroke="#f59e0b" strokeWidth="1" strokeDasharray="4 3" />
+        <text x={x(0.7) + 4} y={PAD.t + 9} fontSize="9" fontWeight="700" fill="#b45309">
+          70% — read with care
+        </text>
+        {pts.map((p, i) => (
+          <motion.g
+            key={p.schoolId ?? p.schoolName ?? i}
+            initial={reduce ? false : { opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: reduce ? 0 : 0.05 + i * 0.07, duration: 0.4, ease: EASE }}
+          >
+            <circle cx={x(p.participationRate)} cy={y(p.current)} r="6" fill={HUE} opacity="0.85" stroke="#fff" strokeWidth="1.6" />
+            <text
+              x={x(p.participationRate)}
+              y={y(p.current) + (i % 2 === 0 ? -10 : 17)}
+              fontSize="9.5"
+              textAnchor="middle"
+              fill="#334155"
+            >
+              {shortName(p.schoolName)}
+            </text>
+          </motion.g>
+        ))}
+        {[0, 0.5, 1].map((t) => (
+          <text key={t} x={x(t)} y={H - 6} fontSize="9" textAnchor="middle" fill="#64748b">
+            {Math.round(t * 100)}%
+          </text>
+        ))}
+        <text x={PAD.l - 5} y={PAD.t + 8} fontSize="9" textAnchor="end" fill="#94a3b8">
+          {Math.round(yHi)}
+        </text>
+        <text x={PAD.l - 5} y={H - PAD.b} fontSize="9" textAnchor="end" fill="#94a3b8">
+          {Math.round(yLo)}
+        </text>
+      </svg>
+      <p className="mt-1 text-[11px] text-muted">Students tested ÷ students eligible, against the score it produced.</p>
+    </div>
+  )
+}
+
+// ── Score against the money and the class size ───────────────────────────────
+//
+// The read a standalone score dashboard cannot do, because it has no ledger.
+// Only the school you are signed in to contributes its own enrolment, ratio and
+// cost-per-pupil — peers are anonymous scores, since membership at one school
+// proves nothing about the right to read another's finances.
+function CrossDomainPanel({ rows, scoreType }) {
+  const focus = (rows ?? []).find((r) => r.isFocus)
+  const peers = (rows ?? []).filter((r) => !r.isFocus && r.score !== null)
+  if (!focus) {
+    return <p className="text-[12.5px] text-muted">Load a year of results to see outcomes beside the money that produced them.</p>
+  }
+  const money = (v) => (v === null || v === undefined ? '—' : `$${Math.round(v).toLocaleString()}`)
+  const cards = [
+    { k: 'Score', v: fmt(focus.score), sub: scoreType === 'percentile' ? 'national percentile' : 'scale score' },
+    { k: 'Enrolment', v: focus.enrollment ?? '—', sub: 'students on the roster' },
+    { k: 'Students per teacher', v: fmt(focus.studentTeacherRatio), sub: 'from the staffing figures' },
+    { k: 'Cost per pupil', v: money(focus.costPerPupil), sub: 'total expenses ÷ enrolment' },
+  ]
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {cards.map((c) => (
+          <div key={c.k} className="rounded-xl border border-navy/10 px-3 py-2.5">
+            <p className="font-mono text-[9px] font-bold uppercase tracking-wider text-muted">{c.k}</p>
+            <p className="mt-0.5 font-serif text-[21px] font-semibold tabular-nums text-navy">{c.v}</p>
+            <p className="text-[10.5px] text-muted">{c.sub}</p>
+          </div>
+        ))}
+      </div>
+      {peers.length > 0 ? (
+        <p className="text-[11.5px] text-muted">
+          {peers.length} peer school{peers.length === 1 ? '' : 's'} scored{' '}
+          {peers.map((p) => fmt(p.score, 0)).join(', ')}. Their staffing and spending stay with them — this view only
+          reads the ledger of the school you are signed in to.
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
+// ── Subgroups ────────────────────────────────────────────────────────────────
+function SubgroupBars({ groups, reduce }) {
+  const rows = (groups ?? []).filter((g) => g.value !== null || g.suppressed)
+  if (rows.length === 0) {
+    return (
+      <p className="text-[12.5px] text-muted">
+        Nothing to break out yet. These groups come from the support flags already on your roster, and only appear
+        once at least five students in a group have a score.
+      </p>
+    )
+  }
+  const max = Math.max(...rows.map((r) => r.value ?? 0), 1)
+  return (
+    <div className="space-y-2">
+      {rows.map((g, i) => (
+        <div key={g.key ?? g.label} className="flex items-center gap-2.5">
+          <span className="w-32 shrink-0 text-right text-[11.5px] text-muted">{g.label ?? g.key}</span>
+          <div className="h-6 flex-1 overflow-hidden rounded-md bg-navy/[0.05]">
+            {g.suppressed ? null : (
+              <motion.div
+                initial={reduce ? { width: `${((g.value ?? 0) / max) * 100}%` } : { width: 0 }}
+                animate={{ width: `${((g.value ?? 0) / max) * 100}%` }}
+                transition={{ duration: 0.6, ease: EASE, delay: reduce ? 0 : i * 0.06 }}
+                className="h-full rounded-md"
+                style={{ background: `linear-gradient(90deg, ${HUE}, #14b8a6)` }}
+              />
+            )}
+          </div>
+          <span className="w-12 text-right text-[12px] font-semibold tabular-nums text-navy">
+            {g.suppressed ? '<5' : fmt(g.value)}
+          </span>
+        </div>
+      ))}
+      <p className="text-[11px] text-muted">
+        A group of fewer than five students is never shown — and neither is the group it would leave behind, because
+        the rest of the school minus one group is that group.
+      </p>
     </div>
   )
 }
