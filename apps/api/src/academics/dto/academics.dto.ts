@@ -161,3 +161,18 @@ export class GradebookQueryDto {
   @MaxLength(20)
   term?: string
 }
+
+/** Multipart fields for a gradebook upload (the file rides outside the DTO). */
+export class GradebookUploadDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1990)
+  @Max(2100)
+  schoolYear?: number
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  term?: string
+}

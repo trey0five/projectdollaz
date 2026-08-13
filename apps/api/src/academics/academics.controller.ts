@@ -30,6 +30,7 @@ import {
   AttachResultDto,
   CreateLessonPlanDto,
   GradebookQueryDto,
+  GradebookUploadDto,
   LessonPlanQueryDto,
   ResultQueryDto,
   UpdateLessonPlanDto,
@@ -147,6 +148,29 @@ export class AcademicsController {
   }
 
   // ── gradebook ─────────────────────────────────────────────────────────────
+
+  @Post('gradebook/upload')
+  @Roles('owner', 'accountant')
+  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage(), limits: { fileSize: MAX_UPLOAD_BYTES } }))
+  gradePreview(
+    @Param('schoolId', ParseUUIDPipe) schoolId: string,
+    @UploadedFile() file: UploadedAssessmentFile | undefined,
+    @Body() dto: GradebookUploadDto,
+  ) {
+    return this.gradebook.preview(schoolId, file as UploadedAssessmentFile, dto)
+  }
+
+  @Post('gradebook/commit')
+  @Roles('owner', 'accountant')
+  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage(), limits: { fileSize: MAX_UPLOAD_BYTES } }))
+  gradeCommit(
+    @Param('schoolId', ParseUUIDPipe) schoolId: string,
+    @UploadedFile() file: UploadedAssessmentFile | undefined,
+    @Body() dto: GradebookUploadDto,
+    @CurrentUser() user: User,
+  ) {
+    return this.gradebook.commit(schoolId, file as UploadedAssessmentFile, { ...dto, userId: user?.id })
+  }
 
   @Get('gradebook/summary')
   @Roles('owner', 'accountant', 'viewer')

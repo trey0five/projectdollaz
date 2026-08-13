@@ -45,6 +45,7 @@ import {
   scoreRange,
   strengthsAndOpportunities,
   subjectComparisons,
+  suppressSmallCell,
   systemInsights,
   trendDirection,
   trendSeries,
@@ -498,6 +499,12 @@ export class AssessmentsService {
       cohort,
       availableCohorts: availableCohorts(inScope),
       objectives: strengthsAndOpportunities(standings),
+      // Support-flag breakdown, from the roster this school already maintains.
+      // Aggregate + suppressed; a thin group never leaves the server.
+      subgroups: await this.subgroupBreakdown(schoolId, year, testType),
+      // The cross-domain read KYRO can do and a standalone score dashboard
+      // cannot: outcomes beside the class size and the money that produced them.
+      crossDomain: await this.crossDomain(peerIds, year, testType, grade),
       insights: systemInsights(thisYear),
       keyInsight: buildAssessmentInsight({
         schoolName: school.name,
@@ -1047,6 +1054,102 @@ export class AssessmentsService {
     return schools.map((s) => s.id)
   }
 
+  /**
+   * Scores broken down by the support flags the roster already carries (ISP,
+   * 504, ELL). Student-level rows are joined to the roster, averaged, and then
+   * SUPPRESSED below the five-student floor before anything is serialized — a
+   * subgroup of two is a child with extra steps.
+   */
+  private async subgroupBreakdown(schoolId: string, schoolYear: number, testType: string) {
+    const rows = await this.prisma.assessmentResult.findMany({
+      where: { schoolId, schoolYear, testType, studentId: { not: null } },
+      // Only the flags and the score — no name, no id beyond the join.
+      select: { composite: true, student: { select: { hasIep: true, has504: true, ell: true } } },
+    })
+    if (rows.length === 0) return null
+
+    const bucket = (pick: (s: { hasIep: boolean; has504: boolean; ell: boolean }) => boolean) => {
+      const withFlag: number[] = []
+      const without: number[] = []
+      for (const r of rows) {
+        if (r.composite === null || !r.student) continue
+        ;(pick(r.student) ? withFlag : without).push(r.composite)
+      }
+      const mean = (xs: number[]) => (xs.length > 0 ? xs.reduce((a2, b2) => a2 + b2, 0) / xs.length : null)
+      const flagged = suppressSmallCell(mean(withFlag), withFlag.length)
+      const rest = suppressSmallCell(mean(without), without.length)
+      return {
+        withFlag: { value: flagged.value, suppressed: flagged.suppressed, count: withFlag.length },
+        without: { value: rest.value, suppressed: rest.suppressed, count: without.length },
+        gap:
+          flagged.value !== null && rest.value !== null ? (flagged.value as number) - (rest.value as number) : null,
+      }
+    }
+
+    return {
+      isp: bucket((s) => s.hasIep),
+      plan504: bucket((s) => s.has504),
+      ell: bucket((s) => s.ell),
+      totalMatched: rows.length,
+    }
+  }
+
+  /**
+   * Outcome beside the two operational facts that plausibly explain it: how many
+   * students each teacher carries, and what the school spends per student. This
+   * is the join a standalone assessment dashboard cannot make, because it has no
+   * financials — and it is deliberately presented as a RELATIONSHIP, never as a
+   * cause.
+   */
+  private async crossDomain(schoolIds: string[], schoolYear: number, testType: string, grade: string) {
+    if (schoolIds.length === 0) return []
+    const [aggregates, operational, snapshots, schools] = await Promise.all([
+      this.prisma.assessmentSchoolAggregate.findMany({
+        where: { schoolId: { in: schoolIds }, schoolYear, testType, gradeLevel: grade },
+        select: { schoolId: true, avgComposite: true },
+      }),
+      this.prisma.periodOperationalData.findMany({
+        where: { schoolId: { in: schoolIds } },
+        select: { schoolId: true, enrollment: true, teachingFte: true, updatedAt: true },
+        orderBy: { updatedAt: 'desc' },
+      }),
+      this.prisma.statementSnapshot.findMany({
+        where: { schoolId: { in: schoolIds } },
+        select: { schoolId: true, payload: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+        take: schoolIds.length * 3,
+      }),
+      this.prisma.school.findMany({ where: { id: { in: schoolIds } }, select: { id: true, name: true } }),
+    ])
+
+    const opBySchool = new Map<string, (typeof operational)[number]>()
+    for (const o of operational) if (!opBySchool.has(o.schoolId)) opBySchool.set(o.schoolId, o)
+    const expBySchool = new Map<string, number>()
+    for (const snap of snapshots) {
+      if (expBySchool.has(snap.schoolId)) continue
+      const soa = (snap.payload as { soaResults?: { cy?: { totalExp?: number } } })?.soaResults?.cy
+      const exp = typeof soa?.totalExp === 'number' ? soa.totalExp : null
+      if (exp !== null) expBySchool.set(snap.schoolId, exp)
+    }
+
+    return aggregates
+      .filter((a) => a.avgComposite !== null)
+      .map((a) => {
+        const op = opBySchool.get(a.schoolId)
+        const enrollment = op?.enrollment ?? null
+        const teachingFte = op?.teachingFte === null || op?.teachingFte === undefined ? null : Number(op.teachingFte)
+        const totalExp = expBySchool.get(a.schoolId) ?? null
+        return {
+          schoolId: a.schoolId,
+          schoolName: schools.find((sc) => sc.id === a.schoolId)?.name ?? null,
+          score: Number(a.avgComposite),
+          enrollment,
+          studentTeacherRatio: enrollment !== null && teachingFte !== null && teachingFte > 0 ? enrollment / teachingFte : null,
+          costPerPupil: totalExp !== null && enrollment !== null && enrollment > 0 ? totalExp / enrollment : null,
+        }
+      })
+  }
+
   /** One row per school: this year, last year, the move, and the two gaps. */
   private comparisonTable(
     rows: AssessmentRow[],
@@ -1078,6 +1181,11 @@ export class AssessmentsService {
           vsNetwork: current !== null && opts.peerValue !== null ? current - opts.peerValue : null,
           vsNational: current !== null && opts.national !== null ? current - opts.national : null,
           tested: cur?.testedCount ?? null,
+          eligible: cur?.eligibleCount ?? null,
+          participationRate:
+            (cur?.testedCount ?? null) !== null && (cur?.eligibleCount ?? 0) > 0
+              ? (cur as AssessmentRow).testedCount! / (cur as AssessmentRow).eligibleCount!
+              : null,
           rank: rankRow?.rank ?? null,
           forthcoming: current === null && isForthcoming(rows, schoolId, opts.year, opts.grade),
         }
