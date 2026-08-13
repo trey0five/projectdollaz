@@ -17,6 +17,7 @@ import { moduleTabs } from '../components/module/moduleAnatomy.js'
 import { Link } from 'react-router-dom'
 import { ArrowRight, Building2 } from 'lucide-react'
 import { useScope } from '../context/ScopeContext.jsx'
+import ModuleHero from '../components/module/ModuleHero.jsx'
 import AddDataTab from '../components/wizard/AddDataTab.jsx'
 import AssessmentDashboard from '../components/academics/AssessmentDashboard.jsx'
 import LessonPlanRegister from '../components/academics/LessonPlanRegister.jsx'
@@ -244,57 +245,29 @@ function AcademicsHero({ schoolName, level, status, dashboard, loading }) {
   )
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, ease: EASE }}
-      className="relative overflow-hidden rounded-3xl px-6 py-6 text-white shadow-[0_28px_70px_-32px_rgba(13,148,136,0.6)]"
-      style={{ background: 'linear-gradient(135deg, #0f766e 0%, #115e59 45%, #101c3d 100%)' }}
-    >
-      {/* Ambient halo — the same visual grammar as the rest of the app. */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            'radial-gradient(40% 60% at 85% 20%, rgba(45,212,191,0.28) 0%, transparent 70%), radial-gradient(30% 50% at 10% 90%, rgba(59,130,246,0.20) 0%, transparent 70%)',
-        }}
-      />
-      <div className="relative flex flex-wrap items-end justify-between gap-5">
-        <div>
-          <p className="flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.22em] text-teal-200">
-            <BookOpen size={12} /> Academics
-            {level && level !== 'unknown' ? (
-              <span className="ml-1 rounded-full bg-white/15 px-2 py-0.5 text-[9px] tracking-wide">{level}</span>
-            ) : null}
-          </p>
-          <h1 className="mt-2 font-serif text-[30px] font-semibold leading-tight sm:text-[36px]">
-            {schoolName ?? 'This school'}, measured against its peers.
-          </h1>
-          <p className="mt-2 max-w-xl text-[14px] leading-relaxed text-white/70">
-            {ctx
-              ? `${(ctx.testType ?? '').toUpperCase()} · ${ctx.year} · ${
-                  ctx.scoreType === 'percentile' ? 'national percentile' : 'scale score'
-                } — grade by grade, subject by subject, against the schools around you.`
-              : 'Upload a scores file and this school appears beside every other school in the network.'}
-          </p>
-        </div>
-        <div className="flex gap-2.5">
-          {stats.map((s, i) => (
-            <motion.div
-              key={s.k}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 + i * 0.06, duration: 0.4, ease: EASE }}
-              className="rounded-xl bg-white/10 px-3 py-2 text-center ring-1 ring-white/15 backdrop-blur-sm"
-            >
-              <p className="font-serif text-[20px] font-semibold leading-none tabular-nums">{loading ? '·' : s.v}</p>
-              <p className="mt-1 font-mono text-[8.5px] uppercase tracking-[0.14em] text-white/60">{s.k}</p>
-            </motion.div>
-          ))}
-        </div>
-      </div>
-    </motion.div>
+    <ModuleHero
+      module="academics"
+      hue={HUE}
+      eyebrow={
+        <>
+          <BookOpen size={12} /> Academics
+          {level && level !== 'unknown' ? (
+            <span className="ml-1 rounded-full bg-white/12 px-2 py-0.5 text-[9px] tracking-wide text-white/80">
+              {level}
+            </span>
+          ) : null}
+        </>
+      }
+      title={`${schoolName ?? 'This school'}, measured against its peers.`}
+      subtitle={
+        ctx
+          ? `${(ctx.testType ?? '').toUpperCase()} · ${ctx.year} · ${
+              ctx.scoreType === 'percentile' ? 'national percentile' : 'scale score'
+            } — grade by grade, subject by subject, against the schools around you.`
+          : 'Upload a scores file and this school appears beside every other school in the network.'
+      }
+      stats={loading ? stats.map((st) => ({ ...st, v: '·' })) : stats}
+    />
   )
 }
 

@@ -80,22 +80,40 @@ function VarianceChip({ variance, standing, unit = '' }) {
 
 // ── KPI strip ────────────────────────────────────────────────────────────────
 
+/**
+ * A metric card.
+ *
+ * The 3px accent bar across the top went: it is a 2015 Material tic, it draws
+ * the eye to the frame rather than the number, and four of them in a row read as
+ * a striped table. The hue now arrives as a soft bloom from the top-right corner
+ * — present, unmistakable, and behind the content instead of in front of it —
+ * with a hairline ring doing the work the border used to.
+ *
+ * The card lifts on hover because these are the numbers people point at.
+ */
 function KpiCard({ title, value, sub, chip, delay = 0, reduce }) {
   return (
     <motion.div
       initial={reduce ? false : { opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, ease: EASE, delay }}
-      className="relative overflow-hidden rounded-2xl border border-navy/10 bg-white p-4 shadow-[0_14px_34px_-22px_rgba(16,28,61,0.4)]"
+      whileHover={reduce ? undefined : { y: -3 }}
+      className="group relative isolate overflow-hidden rounded-2xl bg-white p-4 transition-shadow duration-300"
+      style={{
+        boxShadow:
+          'inset 0 0 0 1px rgba(16,28,61,0.07), 0 16px 40px -26px rgba(16,28,61,0.45)',
+      }}
     >
       <span
         aria-hidden="true"
-        className="absolute inset-x-0 top-0 h-[3px]"
-        style={{ background: `linear-gradient(90deg, ${HUE}, ${HUE}33)` }}
+        className="pointer-events-none absolute inset-0 -z-10 opacity-70 transition-opacity duration-300 group-hover:opacity-100"
+        style={{
+          background: `radial-gradient(120% 100% at 100% 0%, ${HUE}1F 0%, ${HUE}08 38%, transparent 68%)`,
+        }}
       />
       <p className="font-mono text-[9.5px] font-bold uppercase tracking-[0.16em] text-muted">{title}</p>
-      <p className="mt-1.5 font-serif text-[30px] font-semibold leading-none text-navy tabular-nums">{value}</p>
-      {sub ? <p className="mt-1.5 text-[11.5px] text-muted">{sub}</p> : null}
+      <p className="mt-1.5 font-serif text-[32px] font-semibold leading-none text-navy tabular-nums">{value}</p>
+      {sub ? <p className="mt-1.5 text-[11.5px] leading-snug text-muted">{sub}</p> : null}
       {chip ? <div className="mt-2">{chip}</div> : null}
     </motion.div>
   )

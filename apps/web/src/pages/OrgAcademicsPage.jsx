@@ -22,6 +22,7 @@ import { useScope } from '../context/ScopeContext.jsx'
 import { academicsApi } from '../lib/api.js'
 import { testTypeLabel } from '../lib/academicsVocab.js'
 import BackLink from '../components/ui/BackLink.jsx'
+import ModuleHero from '../components/module/ModuleHero.jsx'
 import OrgAssessmentUpload from '../components/academics/OrgAssessmentUpload.jsx'
 
 const HUE = '#0D9488'
@@ -119,38 +120,26 @@ export default function OrgAcademicsPage() {
       <BackLink fallback="/academics" fallbackLabel="Back to Academics" />
 
       {/* ── Hero ── */}
-      <motion.div
-        initial={reduce ? false : { opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.55, ease: EASE }}
-        className="relative overflow-hidden rounded-2xl p-6 text-white"
-        style={{ background: `linear-gradient(135deg, #0f2a4a 0%, ${HUE} 140%)` }}
-      >
-        <p className="flex items-center gap-1.5 font-mono text-[9.5px] font-bold uppercase tracking-[0.22em] opacity-80">
-          <BookOpenCheck size={12} /> Academics · network
-        </p>
-        <h1 className="mt-1 font-serif text-[30px] font-semibold leading-tight sm:text-[34px]">
-          {orgName ?? 'Your network'}, school by school.
-        </h1>
-        <p className="mt-1 text-[13.5px] opacity-85">
-          {ctx ? `${testTypeLabel(ctx.testType)} · ${ctx.year} · ` : ''}
-          every school on one screen, ranked against the network they belong to.
-        </p>
-        {data && !data.empty ? (
-          <div className="mt-4 flex flex-wrap gap-2">
-            {[
-              ['Network average', fmt(data.average?.value)],
-              ['Schools', data.average?.schools ?? 0],
-              ['Students tested', data.average?.tested ?? 0],
-            ].map(([k, v]) => (
-              <div key={k} className="rounded-xl bg-white/12 px-3.5 py-2">
-                <p className="font-serif text-[22px] font-semibold leading-none tabular-nums">{v}</p>
-                <p className="mt-1 font-mono text-[8.5px] uppercase tracking-[0.16em] opacity-75">{k}</p>
-              </div>
-            ))}
-          </div>
-        ) : null}
-      </motion.div>
+      <ModuleHero
+        module="academics"
+        hue={HUE}
+        eyebrow={
+          <>
+            <BookOpenCheck size={12} /> Academics · network
+          </>
+        }
+        title={`${orgName ?? 'Your network'}, school by school.`}
+        subtitle={`${ctx ? `${testTypeLabel(ctx.testType)} · ${ctx.year} · ` : ''}every school on one screen, ranked against the network they belong to.`}
+        stats={
+          data && !data.empty
+            ? [
+                { k: 'Network average', v: fmt(data.average?.value) },
+                { k: 'Schools', v: data.average?.schools ?? 0 },
+                { k: 'Students tested', v: (data.average?.tested ?? 0).toLocaleString() },
+              ]
+            : []
+        }
+      />
 
       {/* ── One file, every school ── */}
       <OrgAssessmentUpload orgId={orgId} onDone={() => load(query)} />
