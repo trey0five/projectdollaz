@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common'
 import { AuthModule } from '../auth/auth.module.js'
 import { PrismaModule } from '../prisma/prisma.module.js'
 import { AuditModule } from '../common/audit/audit.module.js'
+import { NotificationsModule } from '../common/notifications/notifications.module.js'
 import { KnowledgeModule } from '../knowledge/knowledge.module.js'
 import { DataExportController } from './export.controller.js'
 import { DataExportService } from './export.service.js'
@@ -15,7 +16,7 @@ import { DataExportService } from './export.service.js'
   // AuthModule provides TokenService, which JwtAuthGuard needs. The unit tests
   // passed without it and the CONTAINER refused to boot — the module-resolution
   // spec beside this file is what turns that into a test failure instead.
-  imports: [AuthModule, PrismaModule, AuditModule, KnowledgeModule],
+  imports: [AuthModule, PrismaModule, AuditModule, KnowledgeModule, NotificationsModule],
   controllers: [DataExportController],
   providers: [DataExportService],
   exports: [DataExportService],

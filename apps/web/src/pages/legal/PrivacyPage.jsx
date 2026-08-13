@@ -72,25 +72,75 @@ export default function PrivacyPage() {
 
       <H2>7. Service providers (sub-processors)</H2>
       <P>
-        We host the Service on <strong>Amazon Web Services (AWS)</strong> in the United States and use a limited set of
-        vendors for functions such as transactional email and payment processing. These providers are bound to protect
-        the information and to use it only to perform their services.
+        We host the Service on <strong>Amazon Web Services (AWS)</strong> in the United States. The full list of
+        sub-processors is below. Each is bound to protect the information and to use it only to perform its service for
+        us, and each is subject to the same restrictions we accept: no sale of Customer Data, and no use of it to train
+        AI models. We will give notice before adding a sub-processor that processes Customer Data.
+      </P>
+      <UL>
+        <li>
+          <strong>Amazon Web Services</strong> (United States) &mdash; hosting, database, document storage, encryption
+          keys. Processes all categories of Customer Data.
+        </li>
+        <li>
+          <strong>Anthropic</strong> (United States) &mdash; the language model behind Penny and written insights.
+          Personal identifiers are replaced with placeholder tokens before anything leaves our systems and restored in
+          the response, so student and staff names are not transmitted. Anthropic does not train on data submitted
+          through its API.
+        </li>
+        <li>
+          <strong>OpenRouter</strong> (United States) &mdash; routes model requests to the provider above. It carries
+          the same tokenized content and retains no prompt content for training.
+        </li>
+        <li>
+          <strong>Intuit (QuickBooks)</strong> (United States) &mdash; accounting sync, at the school&rsquo;s election
+          and only for schools that connect it. Financial data only; no student records.
+        </li>
+        <li>
+          <strong>Stripe</strong> (United States) &mdash; subscription billing. Billing contact and payment details
+          only; no school data.
+        </li>
+        <li>
+          <strong>Brevo</strong> (European Union) &mdash; transactional email such as invitations, alerts and scheduled
+          reports. Recipient addresses and message contents only.
+        </li>
+        <li>
+          <strong>ElevenLabs</strong> (United States) &mdash; spoken narration, only when a user plays audio. Receives
+          narration text, which is aggregate and carries no student identifiers.
+        </li>
+      </UL>
+
+      <H2>8. Getting your data, and leaving</H2>
+      <P>
+        Your school owns its data. An owner can export a complete copy at any time from Settings &rarr; Your Data
+        &mdash; every module, as spreadsheets, with no request to us and no involvement from us. The archive excludes
+        connection credentials such as QuickBooks or SIS tokens, which are keys to other systems rather than
+        information about your school. Because a full export is a complete copy leaving the platform, every other owner
+        at the school is notified when one is requested, and both the request and the download are recorded in the
+        audit log.
+      </P>
+      <P>
+        On termination, Customer Data remains available for export for <strong>thirty days</strong>. After that period,
+        or earlier on written request, we delete it from production systems, and it ages out of encrypted backups
+        within the backup retention window. We will confirm deletion in writing on request. If we ever cease operating,
+        the export above is deliberately built so that retrieving your data does not depend on us being available to
+        help.
       </P>
 
-      <H2>8. Your choices &amp; requests</H2>
+      <H2>9. Your choices &amp; requests</H2>
       <P>
         Parents and eligible students should direct FERPA access, review, and amendment requests to their school, which
         controls the records; KYRO will assist the school in responding. Customer administrators can manage users and
         request data export or deletion at any time.
       </P>
 
-      <H2>9. Changes</H2>
+      <H2>10. Changes</H2>
       <P>
         We may update this Policy; material changes will be communicated through the Service or by email. Continued use
         after the effective date constitutes acceptance.
       </P>
 
-      <H2>10. Contact</H2>
+      <H2>11. Contact</H2>
       <P>
         Privacy questions or data requests: <a className="font-semibold text-gold underline" href="mailto:support@ourkyro.com">support@ourkyro.com</a>.
       </P>

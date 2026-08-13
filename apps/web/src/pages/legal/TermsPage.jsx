@@ -49,6 +49,20 @@ export default function TermsPage() {
         provide the Service. See our <a className="font-semibold text-gold underline" href="/privacy">Privacy Policy</a>{' '}
         and FERPA Compliance Overview for detail.
       </P>
+      <P>
+        <strong>Portability and return.</strong> You may export a complete copy of Customer Data at any time from
+        Settings &rarr; Your Data, without notifying or involving us. On termination Customer Data remains available
+        for export for <strong>thirty days</strong>; after that period, or earlier on your written request, we delete
+        it from production systems and it ages out of encrypted backups within the backup retention window. We will
+        certify deletion in writing on request. Export is not conditioned on your account being current &mdash; a
+        lapsed or suspended subscription does not remove your ability to retrieve your own data.
+      </P>
+      <P>
+        <strong>Sub-processors.</strong> We use the service providers listed in the Privacy Policy, each bound to the
+        same restrictions we accept: they may use Customer Data only to provide their service to us, may not sell it,
+        and may not use it to train AI models. We will give notice before adding a sub-processor that processes
+        Customer Data. We remain responsible for their performance.
+      </P>
 
       <H2>4. Acceptable use</H2>
       <P>You agree not to:</P>

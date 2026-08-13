@@ -17,6 +17,7 @@ import { Prisma, type User } from '@finrep/db'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { AuditService } from '../common/audit/audit.service.js'
 import { DocumentStorageService } from '../knowledge/document-storage.service.js'
+import { NotificationsService } from '../common/notifications/notifications.service.js'
 import { EXPORTED_TABLES, SKIPPED_TABLES, type ExportTable } from './export.manifest.js'
 import { buildZip, toCsv, type ZipEntry } from './zip.js'
 
@@ -40,6 +41,7 @@ export class DataExportService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly storage: DocumentStorageService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /**
@@ -70,12 +72,55 @@ export class DataExportService {
       metadata: { scope: 'school' },
     })
 
+    // AN EXPORT IS NEVER SILENT.
+    //
+    // The role floor is right — owner, which is ~1.1 people per school — but a
+    // role decides WHO MAY, not whether anyone finds out. This is the widest
+    // read in the product and it leaves the platform: once the zip is
+    // downloaded no control of ours applies to it. So every other owner is told,
+    // by name, that a complete copy was taken and by whom. That is the control
+    // that actually matters here, and unlike a step-up MFA prompt it works for
+    // every school rather than the few with TOTP switched on.
+    await this.tellTheOtherOwners(schoolId, actor, job.id)
+
     // Deliberately not awaited — the caller gets the job id now.
     void this.run(job.id, schoolId, school.name).catch((err: unknown) => {
       this.logger.error(`export ${job.id} failed: ${String(err)}`)
     })
 
     return job
+  }
+
+  /**
+   * Tell every OTHER owner. Best-effort by construction: a notification that
+   * fails must never be the reason a school cannot get its own data out.
+   */
+  private async tellTheOtherOwners(schoolId: string, actor: User, jobId: string): Promise<void> {
+    try {
+      const owners = await this.prisma.membership.findMany({
+        where: { schoolId, role: 'owner', userId: { not: actor.id } },
+        select: { userId: true },
+      })
+      const who = [actor.firstName, actor.lastName].filter(Boolean).join(' ').trim() || actor.email
+      await Promise.all(
+        owners.map((m) =>
+          this.notifications.notify({
+            userId: m.userId,
+            actorUserId: actor.id,
+            subject: 'A full data export was requested',
+            body:
+              `${who} requested a complete export of your school's records in KYRO — every module, ` +
+              `including the student roster and the audit log. This is a normal thing for an owner to do, ` +
+              `and you are being told because it is a complete copy leaving the platform. ` +
+              `If you did not expect it, speak to them.`,
+            link: '/settings/data',
+            senderLabel: 'KYRO',
+          }),
+        ),
+      )
+    } catch (err) {
+      this.logger.warn(`export ${jobId}: could not notify co-owners — ${String(err)}`)
+    }
   }
 
   /** Recent exports for a school, newest first. */
