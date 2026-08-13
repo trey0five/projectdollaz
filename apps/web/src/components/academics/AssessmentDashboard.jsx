@@ -441,6 +441,17 @@ function Distribution({ slices, reduce }) {
   const total = visible
   const width = (s) => (visible > 0 ? ((s.count ?? 0) / visible) * 100 : 0)
   const anyHidden = slices.some((s) => s.suppressed || s.count === null)
+  // A WHOLE cohort under the floor arrives as all-null counts, which is not the
+  // same as a file that carried averages only — telling the reader to "upload
+  // student-level results" when they already have is how someone uploads twice.
+  if (total === 0 && anyHidden) {
+    return (
+      <p className="text-[12.5px] text-muted">
+        Fewer than five students have a score here, so the spread is hidden — the shape of a handful of results
+        identifies the children in it.
+      </p>
+    )
+  }
   if (total === 0) {
     return (
       <p className="text-[12.5px] text-muted">
@@ -474,8 +485,12 @@ function Distribution({ slices, reduce }) {
             <span className="h-2.5 w-2.5 rounded-sm" style={{ background: BAND_COLOR[s.band] }} />
             <span className="text-[11.5px] text-muted">{BAND_LABEL[s.band]}</span>
             <span className="ml-auto text-[12px] font-bold tabular-nums text-navy">
+              {/* Not always "<5": safeDistribution deliberately hides a SECOND,
+                  arbitrarily large band so the first cannot be recovered by
+                  subtraction, and printing "<5" beside a band of forty is a
+                  false statement about the data. */}
               {s.suppressed || s.count === null
-                ? '<5'
+                ? 'hidden'
                 : anyHidden
                   ? `${s.count}`
                   : `${s.count} · ${Math.round(width(s))}%`}
@@ -495,6 +510,10 @@ function Distribution({ slices, reduce }) {
  * highest" and "who moved most" are different meetings.
  */
 function ComparisonTable({ rows, scoreType }) {
+  // A PERCENTILE is a whole number; an ACT composite is not. materialGap for the
+  // ACT is 0.5, so rounding to zero decimals erased every difference the module
+  // considers worth reporting — two schools 0.4 apart printed the same number.
+  const dp = scoreType === 'scale' ? 1 : 0
   const [sort, setSort] = useState('current')
   const sorted = useMemo(() => {
     const copy = [...rows]
@@ -551,15 +570,15 @@ function ComparisonTable({ rows, scoreType }) {
                 {r.schoolName}
               </td>
               <td className={`${td} font-bold text-navy`}>
-                {r.forthcoming ? <span className="font-mono text-[10px] italic text-muted">forthcoming</span> : fmt(r.current, 0)}
+                {r.forthcoming ? <span className="font-mono text-[10px] italic text-muted">forthcoming</span> : fmt(r.current, dp)}
               </td>
-              <td className={`${td} text-muted`}>{fmt(r.prior, 0)}</td>
+              <td className={`${td} text-muted`}>{fmt(r.prior, dp)}</td>
               <td className={td}>
                 <ChangeBadge value={r.change} />
               </td>
-              <td className={`${td} ${gapTone(r.vsNetwork)}`}>{signed(r.vsNetwork, 0)}</td>
+              <td className={`${td} ${gapTone(r.vsNetwork)}`}>{signed(r.vsNetwork, dp)}</td>
               <td className={`${td} ${gapTone(r.vsNational)}`}>
-                {scoreType === 'scale' ? '—' : signed(r.vsNational, 0)}
+                {scoreType === 'scale' ? '—' : signed(r.vsNational, dp)}
               </td>
               <td className={`${td} text-muted`}>
                 {r.tested === null || r.tested === undefined ? '—' : r.tested < 5 ? '<5' : r.tested}
@@ -720,9 +739,13 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
             className="rounded-lg border border-navy/15 bg-white px-2.5 py-1.5 text-[12.5px] text-navy"
           >
             <option value="">Cohort…</option>
-            {data.availableCohorts.map((c) => (
+            {/* The VALUE carries only the grade, so two cohorts differing by
+                year rendered as two identical options and picking either sent
+                the same request. Deduplicate to the most recent year per grade
+                and say which year it is. */}
+            {[...new Map(data.availableCohorts.map((c) => [c.currentGrade, c])).values()].map((c) => (
               <option key={`${c.currentYear}-${c.currentGrade}`} value={c.currentGrade}>
-                Grade {c.currentGrade} cohort
+                Grade {c.currentGrade} cohort · {c.currentYear}
               </option>
             ))}
           </select>
@@ -906,7 +929,8 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
           <Heatmap cells={data?.heatmap ?? []} subjects={subjects} reduce={reduce} />
           <p className="mt-2 text-[11px] text-muted">
             Each cell compares that grade with the SAME grade at other schools — the only comparison that means
-            anything. Cells under five students show &lt;5.
+            anything. A grade with fewer than five scored students is left blank: the gate nulls its values before
+            they reach this chart, so there is no number here to shade.
           </p>
         </Section>
       </div>

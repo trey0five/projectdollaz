@@ -83,7 +83,18 @@ export default function AddDataTab({
   })
   const initialOption = deepLink.option
 
-  const config = wizardConfigFor(module)
+  const rawConfig = wizardConfigFor(module)
+  // An option whose embed renders nothing for a viewer must not be OFFERED to a
+  // viewer: the academics uploaders return null without edit rights, so a board
+  // member who clicked "Assessment results" got a blank work panel and no
+  // explanation. Filtering here keeps the rule in one place for every module.
+  const config = useMemo(
+    () =>
+      rawConfig
+        ? { ...rawConfig, options: rawConfig.options.filter((o) => !o.requiresEdit || canEdit) }
+        : null,
+    [rawConfig, canEdit],
+  )
 
   // On save: refresh the mounting page, then fan out the standard refresh event.
   const handleSaved = useMemo(

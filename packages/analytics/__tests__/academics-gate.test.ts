@@ -56,6 +56,19 @@ describe('gateAggregates — the small-cell floor', () => {
     expect(r.distribution).toBeNull()
   })
 
+  it('the benchmark rate is floored on DETERMINED students, its own denominator', () => {
+    // A grade of forty clears the headline floor easily; if only two of them sat
+    // every section, the readiness rate they produce describes two children.
+    const [r] = gateAggregates(
+      [row({ testedCount: 40, benchmarkMetCount: 1, benchmarkTestedCount: 2 })],
+      familyOf,
+      scoreTypeOf,
+    )
+    expect(r.avgComposite, 'the score itself is fine').toBe(72)
+    expect(r.benchmarkMetCount).toBeNull()
+    expect(r.benchmarkTestedCount).toBeNull()
+  })
+
   it('a cohort of ONE is suppressed — that row is one child', () => {
     const [r] = gateAggregates([row({ testedCount: 1, avgComposite: 99 })], familyOf, scoreTypeOf)
     expect(r.avgComposite).toBeNull()

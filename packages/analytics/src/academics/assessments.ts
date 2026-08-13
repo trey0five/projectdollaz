@@ -288,6 +288,8 @@ export function gateAggregates(
       count < MIN_CELL ||
       alsoHide.has(rowKey(r)) ||
       (r.gradeLevel === 'all' && suppressAll.has(`${r.schoolId}|${r.schoolYear}|${r.testType}`))
+    const determined = r.benchmarkTestedCount ?? null
+    const thinBenchmark = thin || determined === null || determined < MIN_CELL
     return {
       schoolId: r.schoolId,
       schoolName: r.schoolName,
@@ -300,12 +302,14 @@ export function gateAggregates(
       sectionAverages: thin ? null : (r.sectionAverages ?? null),
       testedCount: thin ? null : (r.testedCount ?? null),
       eligibleCount: thin ? null : (r.eligibleCount ?? null),
-      // A benchmark RATE is met ÷ determined; publishing both counts for a
-      // two-student cohort restates one child's readiness determination exactly
-      // as surely as publishing the average would.
-      benchmarkMetCount: thin ? null : (r.benchmarkMetCount ?? null),
-      benchmarkTestedCount: thin ? null : (r.benchmarkTestedCount ?? null),
-      benchmarkRates: thin ? null : (r.benchmarkRates ?? null),
+      // A benchmark RATE is met ÷ determined, and DETERMINED is its own, smaller
+      // cohort: only students with a complete section set can be called ready or
+      // not. Flooring these on testedCount let a grade of forty publish a rate
+      // built from the two children who happened to sit every section — the
+      // headline count clears the floor while the number it guards does not.
+      benchmarkMetCount: thinBenchmark ? null : (r.benchmarkMetCount ?? null),
+      benchmarkTestedCount: thinBenchmark ? null : (r.benchmarkTestedCount ?? null),
+      benchmarkRates: thinBenchmark ? null : (r.benchmarkRates ?? null),
       distribution: thin ? null : (r.distribution ?? null),
       suppressed: thin,
     }

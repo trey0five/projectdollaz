@@ -368,6 +368,9 @@ export const wizardConfigs = {
         blurb:
           'A network summary, a publisher export, or a student-level file. Title rows and odd column names are handled, and you see exactly what was read before anything saves.',
         cta: 'Upload results',
+        // Both uploaders return null for a viewer, so without this the option
+        // is offered to every role and the work panel comes up blank.
+        requiresEdit: true,
         renderEmbed: (ctx) => (
           <AssessmentUpload schoolId={ctx.schoolId} canEdit={ctx.canEdit} onDone={ctx.onSaved} />
         ),
@@ -380,6 +383,7 @@ export const wizardConfigs = {
         blurb:
           'A gradebook export — one row per mark, or one row per student with a column per course. Letter grades are converted and the letter is kept.',
         cta: 'Upload gradebook',
+        requiresEdit: true,
         renderEmbed: (ctx) => (
           <GradebookUpload schoolId={ctx.schoolId} canEdit={ctx.canEdit} onDone={ctx.onSaved} />
         ),

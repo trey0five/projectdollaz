@@ -243,6 +243,25 @@ export class AssessmentsService {
         }
         rows = mine
       }
+      // A CORRECTED FILE REPLACES ITS SLICE. Upserting only the rows the new file
+      // carries left the ingested rows of grades the correction DROPPED sitting
+      // in the table — a school that removed a mis-keyed grade 6 kept it, and
+      // rollUpAllGrades folded the stale cohort straight back into the
+      // whole-school average. Clear this (year, test) slice's ingested rows for
+      // grades the new file does not mention, then write what it does.
+      const fileYears = [...new Set(rows.map((a2) => a2.schoolYear ?? year))]
+      for (const y of fileYears) {
+        const keep = rows.filter((a2) => (a2.schoolYear ?? year) === y).map((a2) => a2.gradeLevel)
+        await this.prisma.assessmentSchoolAggregate.deleteMany({
+          where: {
+            schoolId,
+            schoolYear: y,
+            testType: parsed.testType,
+            derivation: 'ingested',
+            gradeLevel: { notIn: [...keep, 'all'] },
+          },
+        })
+      }
       for (const a of rows) {
         const rowYear = a.schoolYear ?? year
         await this.upsertAggregate({
@@ -983,8 +1002,18 @@ export class AssessmentsService {
 
     // Roll the whole-school row up from the per-grade rows this file carried, so
     // the dashboards have a school-level number even when the file is by grade.
-    for (const schoolId of touched) await this.rollUpAllGrades(schoolId, year, parsed.testType)
-    for (const schoolId of touched) await this.promoteOperational(schoolId, year)
+    // EVERY year the file touched, not just its headline one. A diocesan export
+    // carrying two years rolled up and promoted only the newest, so the prior
+    // year kept whatever whole-school row it had before — the trend chart then
+    // compared a fresh number with a stale one and reported a move that was an
+    // artefact of the import.
+    const touchedYears = [...new Set(parsed.aggregates.map((a) => a.schoolYear ?? year))]
+    for (const schoolId of touched) {
+      for (const y of touchedYears) {
+        await this.rollUpAllGrades(schoolId, y, parsed.testType)
+        await this.promoteOperational(schoolId, y)
+      }
+    }
 
     await this.prisma.assessmentImport.update({
       where: { id: imp.id },
@@ -1042,7 +1071,11 @@ export class AssessmentsService {
         num += v * w
         den += w
       }
-      eligible += r.eligibleCount ?? 0
+      // Only from the grades that CONTRIBUTED to the average. Summing eligible
+      // over every grade while `den` accumulates only where a composite exists
+      // paired a partial numerator with a whole-school denominator, and the
+      // synthesized participation rate came out understated.
+      if (v !== null) eligible += r.eligibleCount ?? 0
       for (const [k, raw] of Object.entries((r.sectionAverages ?? {}) as Record<string, number>)) {
         if (typeof raw !== 'number') continue
         const cur = sections.get(k) ?? { sum: 0, w: 0 }
@@ -1167,7 +1200,17 @@ export class AssessmentsService {
     groups.set('all', rows)
 
     for (const [gradeLevel, group] of groups) {
-      const composites = group.map((r) => r.composite).filter((v): v is number => v !== null)
+      // ONE STUDENT, ONE VOTE. The average used to be a mean over ROWS while its
+      // published denominator counted distinct students, so a child listed twice
+      // weighted the average twice and the two numbers described different
+      // populations. Collapse to one row per student first — the newest wins,
+      // which is what a corrected re-listing means.
+      const byStudent = new Map<string, (typeof group)[number]>()
+      for (const r of group) {
+        byStudent.set(r.studentId ?? r.matchExternalId ?? `row:${r.id}`, r)
+      }
+      const unique = [...byStudent.values()]
+      const composites = unique.map((r) => r.composite).filter((v): v is number => v !== null)
       // THE DENOMINATOR MUST DESCRIBE THE STATISTIC IT GATES.
       //
       // The average is a mean over students who actually HAVE a score; the
@@ -1183,17 +1226,12 @@ export class AssessmentsService {
       //
       // Counting DISTINCT scored students also closes the duplicate-row inflation
       // path: the same child listed twice cannot lift a cohort over the floor.
-      const scoredKeys = new Set(
-        group
-          .filter((r) => r.composite !== null)
-          .map((r) => r.studentId ?? r.matchExternalId ?? `row:${r.id}`),
-      )
-      const scoredCount = scoredKeys.size
+      const scoredCount = composites.length
       const sectionSums = new Map<string, { sum: number; n: number }>()
       let benchMet = 0
       let benchTested = 0
       const bands: Record<string, number> = { q1: 0, q2: 0, q3: 0, q4: 0 }
-      for (const r of group) {
+      for (const r of unique) {
         const sections = (r.sectionScores ?? {}) as Record<string, number>
         for (const [k, v] of Object.entries(sections)) {
           if (typeof v !== 'number') continue
@@ -1596,10 +1634,19 @@ export class AssessmentsService {
         select: { schoolId: true, enrollment: true, teachingFte: true },
         orderBy: { fiscalPeriod: { periodEndDate: 'desc' } },
       }),
+      // BY FISCAL PERIOD, not by upload time. createdAt is when somebody pressed
+      // the button — a school that re-imported last year's statements in March
+      // had this year's score divided by last year's expenses, on a card headed
+      // "what this score cost". The operational read beside it is already
+      // period-scoped; these two must answer about the same year or neither
+      // should be shown.
       this.prisma.statementSnapshot.findFirst({
-        where: { schoolId: focusSchoolId, createdAt: { lte: new Date(Date.UTC(schoolYear, 11, 31)) } },
+        where: {
+          schoolId: focusSchoolId,
+          fiscalPeriod: { periodEndDate: { lte: fyEnd } },
+        },
         select: { schoolId: true, payload: true },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { fiscalPeriod: { periodEndDate: 'desc' } },
       }),
     ])
     const operationalRows = operational ? [operational] : []

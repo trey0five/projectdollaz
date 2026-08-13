@@ -116,6 +116,22 @@ export default function AcademicsPage() {
               loading={loading}
             />
             <div className="mt-5">
+              {/* BEFORE the tab, not after it. A failed load leaves `dashboard`
+                  and `status` null, and OverviewTab renders that as "start with
+                  a scores file" with zeros in the hero — a server error reading
+                  as an empty school, which invites a duplicate upload. */}
+              {error ? (
+                <div className="rounded-2xl border border-danger/25 bg-white p-6">
+                  <p className="text-[13px] font-semibold text-danger">{error}</p>
+                  <button
+                    type="button"
+                    onClick={() => load(query)}
+                    className="mt-3 rounded-xl border border-navy/15 px-4 py-2 text-[12px] font-semibold text-navy"
+                  >
+                    Try again
+                  </button>
+                </div>
+              ) : (
               <OverviewTab
                 dashboard={dashboard}
                 status={status}
@@ -123,8 +139,8 @@ export default function AcademicsPage() {
                 onGoAnalytics={() => setTab('analytics')}
                 onGoAdd={() => setTab('add')}
               />
+              )}
             </div>
-            {error ? <p className="mt-4 text-[13px] text-danger">{error}</p> : null}
           </Panel>
         }
         analytics={

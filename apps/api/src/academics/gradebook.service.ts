@@ -76,11 +76,17 @@ export class GradebookService {
       select: { id: true },
     })
 
-    // Courses first — one row per distinct name, reused across marks.
+    // Courses first — one row per distinct name PER YEAR, reused across marks.
+    const year = opts.schoolYear ?? parsed.rows[0]?.schoolYear ?? null
     const courseIdByName = new Map<string, string>()
     for (const name of parsed.courses) {
+      // Looked up by name AND YEAR. Course.schoolYear is stamped from whichever
+      // import created the row, so a name-only lookup attached a second year's
+      // marks to the first year's course — and a caller filtering courses by
+      // year then found none of them. A course is a section in a school year,
+      // not a name that outlives one.
       const existing = await this.prisma.course.findFirst({
-        where: { schoolId, name },
+        where: { schoolId, name, ...(year !== null ? { schoolYear: year } : {}) },
         select: { id: true },
       })
       if (existing) {
@@ -108,7 +114,6 @@ export class GradebookService {
     // GradeRecord and hard-codes source:'upload', that deleted every mark the
     // school had ever imported, silently and with no revert path. A delete whose
     // scope depends on an optional field is a delete waiting to be unbounded.
-    const year = opts.schoolYear ?? parsed.rows[0]?.schoolYear ?? null
     if (year === null) {
       throw new BadRequestException('No school year in the file — choose one before committing.')
     }
@@ -131,11 +136,24 @@ export class GradebookService {
     // this file actually carries, which is what "re-uploading a corrected file
     // does not double" was always meant to mean.
     const courseNames = [...new Set(parsed.rows.map((r) => r.courseName).filter((n): n is string => !!n))]
+    // A mark parsed with NO course name has a null courseId, which
+    // `course: { name: { in: … } }` can never match — those rows were never
+    // replaced and doubled on every re-upload. Scope the replace to the named
+    // courses OR the course-less rows, which is exactly the set this file writes.
+    const hasUnnamed = parsed.rows.some((r) => !r.courseName)
+    const courseScope =
+      courseNames.length > 0 && hasUnnamed
+        ? { OR: [{ course: { name: { in: courseNames } } }, { courseId: null }] }
+        : courseNames.length > 0
+          ? { course: { name: { in: courseNames } } }
+          : hasUnnamed
+            ? { courseId: null }
+            : {}
     await this.prisma.gradeRecord.deleteMany({
       where: {
         schoolId,
         source: 'upload',
-        ...(courseNames.length > 0 ? { course: { name: { in: courseNames } } } : {}),
+        ...courseScope,
         OR: slices.map((sl) => ({
           schoolYear: sl.schoolYear,
           ...(sl.term === null ? { term: null } : { term: sl.term }),

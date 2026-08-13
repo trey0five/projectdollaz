@@ -158,7 +158,7 @@ export default function GradesPanel({ schoolId, canEdit }) {
         eyebrow="Register"
         title="Student results"
         aside={
-          canEdit && results.length > 0 ? (
+          canEdit && (results.length > 0 || unmatchedOnly) ? (
             <label className="flex items-center gap-1.5 text-[11.5px] text-muted">
               <input type="checkbox" checked={unmatchedOnly} onChange={(e) => setUnmatchedOnly(e.target.checked)} />
               Unmatched only{unmatchedCount > 0 ? ` (${unmatchedCount})` : ''}
@@ -168,6 +168,11 @@ export default function GradesPanel({ schoolId, canEdit }) {
       >
         {!canEdit ? (
           <Restricted what="Individual results" />
+        ) : results.length === 0 && unmatchedOnly ? (
+          <p className="text-[12.5px] text-muted">
+            Nothing unmatched — every result on file is attached to a roster student. Clear the filter above to see
+            them all.
+          </p>
         ) : results.length === 0 ? (
           <p className="text-[12.5px] text-muted">
             No student-level results on file. A school-summary file fills the dashboards but carries no individual
