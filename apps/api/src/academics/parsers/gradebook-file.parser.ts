@@ -100,7 +100,11 @@ export function parseMark(v: unknown): { numeric: number | null; letter: string 
     const letter = letterMatch[1]
     return { numeric: LETTER_TO_NUMBER[letter] ?? null, letter }
   }
-  const n = Number.parseFloat(raw.replace(/[%\s]/g, ''))
+  // Number.parseFloat ACCEPTS A PREFIX: "5A" is 5, "10/3" is 10, "2026-01" is
+  // 2026. A homeroom column of 5A/5B/5A therefore passed as marks and became a
+  // course. The whole cell has to be the number, nothing left over.
+  const cleaned = raw.replace(/[%,\s]/g, '')
+  const n = /^[+-]?\d+(\.\d+)?$/.test(cleaned) ? Number.parseFloat(cleaned) : Number.NaN
   if (Number.isFinite(n)) return { numeric: n, letter: null }
   // NOT A NUMBER AND NOT A LETTER GRADE — so not a mark. This used to keep the
   // first eight characters as the "letter", which meant any text at all became

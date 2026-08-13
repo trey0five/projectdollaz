@@ -56,6 +56,7 @@ import {
   type AssessmentRow,
   type ObjectiveRow,
   getMetric,
+  coverHiddenSet,
 } from '@finrep/analytics'
 import { PrismaService } from '../prisma/prisma.service.js'
 import {
@@ -211,8 +212,26 @@ export class AssessmentsService {
       // the other, doubling it — and the untouched years would never be
       // re-aggregated, so their dashboards would keep the stale average.
       const years = [...new Set(rows.map((r) => r.schoolYear))]
+      // ...BUT ONLY THE GRADES THIS FILE CARRIES. Clearing the whole (year,
+      // test) slice meant a school uploading grade 3 and then grade 4 — or one
+      // administration then the next — silently destroyed the first upload, and
+      // the UI cheerfully reported "Saved — 31 student rows" while deleting 28.
+      // The summary path already scopes its replace by grade and the gradebook
+      // path by course; this was the last one still year-wide.
+      const grades = [...new Set(rows.map((r) => r.gradeLevel ?? null))]
+      const knownGrades = grades.filter((g): g is string => g !== null)
       await this.prisma.assessmentResult.deleteMany({
-        where: { schoolId, schoolYear: { in: years }, testType: parsed.testType, source: 'upload' },
+        where: {
+          schoolId,
+          schoolYear: { in: years },
+          testType: parsed.testType,
+          source: 'upload',
+          ...(grades.includes(null)
+            ? knownGrades.length > 0
+              ? { OR: [{ gradeLevel: { in: knownGrades } }, { gradeLevel: null }] }
+              : { gradeLevel: null }
+            : { gradeLevel: { in: knownGrades } }),
+        },
       })
       for (let i = 0; i < rows.length; i += 500) {
         const chunk = rows.slice(i, i + 500)
@@ -825,8 +844,31 @@ export class AssessmentsService {
       select: { id: true },
     })
 
+    // THE SAME SCHOOL FILTER THE SCORE PATH APPLIES. An objective summary is
+    // just as likely to arrive covering twelve schools, and the unique key has
+    // no school-name component — so every school's row for one objective landed
+    // on the SAME key under the uploading school, each overwriting the last, and
+    // the twelfth school's mastery was published as this school's greatest
+    // strength. The import happily reported "12 rows upserted" over one row.
+    const namedRows = parsed.rows.filter((r) => (r as { schoolName?: string | null }).schoolName)
+    let objectiveRows = parsed.rows
+    if (namedRows.length > 0) {
+      const own = await this.prisma.school.findUnique({ where: { id: schoolId }, select: { name: true } })
+      const target = (own?.name ?? '').trim().toLowerCase()
+      const mine = namedRows.filter(
+        (r) => ((r as { schoolName?: string | null }).schoolName ?? '').trim().toLowerCase() === target,
+      )
+      const others = namedRows.length - mine.length
+      if (others > 0) {
+        parsed.warnings.push(
+          `${others} objective row${others === 1 ? '' : 's'} named a different school and were skipped — upload a multi-school file from the organization page.`,
+        )
+      }
+      objectiveRows = mine
+    }
+
     let upserted = 0
-    for (const r of parsed.rows) {
+    for (const r of objectiveRows) {
       await this.prisma.assessmentObjectiveAggregate.upsert({
         where: {
           schoolId_schoolYear_testType_gradeLevel_subject_objectiveLabel: {
@@ -852,7 +894,9 @@ export class AssessmentsService {
           testedCount: r.testedCount,
         },
         update: {
-          importId: imp.id,
+          // NOT importId — an update does not transfer ownership. The row keeps
+          // the import that created it, so undoing a correction cannot delete
+          // rows the original import wrote. Same rule as upsertAggregate.
           objectiveCode: r.objectiveCode,
           opi: r.opi,
           masteryCounts: r.masteryCounts ?? undefined,
@@ -1007,6 +1051,29 @@ export class AssessmentsService {
     // year kept whatever whole-school row it had before — the trend chart then
     // compared a fresh number with a stale one and reported a move that was an
     // artefact of the import.
+    // A CORRECTED DIOCESAN FILE REPLACES ITS SLICE TOO. The school-scope path
+    // clears the grades a correction dropped; the org console — the door the
+    // product actually tells a diocese to use — did not, so a deleted mis-keyed
+    // grade survived the re-upload and rollUpAllGrades folded it back into that
+    // school's published whole-school average.
+    for (const schoolId of touched) {
+      // `cache` already holds every name→school decision this commit made, so
+      // reuse it rather than re-resolving (which would also re-run the matcher).
+      const forSchool = parsed.aggregates.filter((a) => cache.get(a.schoolName ?? '') === schoolId)
+      const years = [...new Set(forSchool.map((a) => a.schoolYear ?? year))]
+      for (const y of years) {
+        const keep = forSchool.filter((a) => (a.schoolYear ?? year) === y).map((a) => a.gradeLevel)
+        await this.prisma.assessmentSchoolAggregate.deleteMany({
+          where: {
+            schoolId,
+            schoolYear: y,
+            testType: parsed.testType,
+            derivation: 'ingested',
+            gradeLevel: { notIn: [...keep, 'all'] },
+          },
+        })
+      }
+    }
     const touchedYears = [...new Set(parsed.aggregates.map((a) => a.schoolYear ?? year))]
     for (const schoolId of touched) {
       for (const y of touchedYears) {
@@ -1260,7 +1327,16 @@ export class AssessmentsService {
         derivation: 'derived',
         scoreType,
         avgComposite: composites.length > 0 ? composites.reduce((a, b) => a + b, 0) / composites.length : null,
-        sectionAverages: Object.fromEntries([...sectionSums].map(([k, v]) => [k, v.sum / v.n])),
+        // PER SUBJECT, PER DENOMINATOR. sectionAverages was written as sum/n over
+        // whichever students happened to carry that column, with the count
+        // discarded — so a grade of twenty-five where two students sat the
+        // science section published a science average built from those two, and
+        // the gate could not tell (it floors sections on the COMPOSITE count).
+        // A subject below the floor is dropped here, at the only point that
+        // still knows its n.
+        sectionAverages: Object.fromEntries(
+          [...sectionSums].filter(([, v]) => v.n >= MIN_CELL).map(([k, v]) => [k, v.sum / v.n]),
+        ),
         testedCount: scoredCount > 0 ? scoredCount : null,
         // Only an ingested SUMMARY file knows how many students were eligible;
         // student rows cannot tell us who did not sit the exam.
@@ -1777,16 +1853,23 @@ export class AssessmentsService {
     // The whole cohort is a small cell — nothing about its shape may be shown.
     if (total < MIN_CELL) return ACHIEVEMENT_BANDS.map((band) => ({ band, count: null, share: null, suppressed: true }))
 
-    const thin = slices.filter((s) => (s.count ?? 0) > 0 && (s.count as number) < MIN_CELL)
-    const hidden = new Set(thin.map((s) => s.band))
-    // Exactly one hidden band is recoverable from the total — hide the next
-    // smallest non-zero band with it.
-    if (hidden.size === 1) {
-      const next = slices
-        .filter((s) => !hidden.has(s.band) && (s.count ?? 0) > 0)
-        .sort((a, b) => (a.count ?? 0) - (b.count ?? 0))[0]
-      if (next) hidden.add(next.band)
+    // THE SHARED COMPLEMENT RULE. Widening only when EXACTLY ONE band was thin
+    // left the two-thin-band case exactly recoverable: 22 tested, q3=10, q4=10
+    // visible, so 22 − 20 = 2 across two bands each known to be non-zero and
+    // under five means q1 = 1 and q2 = 1 — one child in the bottom quartile,
+    // named by arithmetic. The cohort total is published in the same payload
+    // (kpis.participation.tested and table[].tested), so nulling the shares was
+    // never enough on its own.
+    const cover = coverHiddenSet(slices, {
+      key: (sl) => sl.band,
+      weights: [(sl) => sl.count ?? 0],
+      hidden: (sl) => (sl.count ?? 0) > 0 && (sl.count as number) < MIN_CELL,
+    })
+    // No combination covers them — the shape of this cohort cannot be shown.
+    if (cover === null) {
+      return ACHIEVEMENT_BANDS.map((band) => ({ band, count: null, share: null, suppressed: true }))
     }
+    const hidden = cover
     // AND THE SHARE HAS TO GO WITH THEM. A visible band publishes both its count
     // and its share of the whole, and count ÷ share IS the cohort total — from
     // which the hidden bands' combined size follows by subtraction. Once anything

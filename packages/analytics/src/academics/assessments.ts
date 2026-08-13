@@ -316,6 +316,55 @@ export function gateAggregates(
   })
 }
 
+/**
+ * THE COMPLEMENT RULE, once.
+ *
+ * Suppressing a cell in isolation is never suppression when the cells partition
+ * a published total: the hidden cells' combined value follows by subtraction.
+ * What decides safety is not how much is VISIBLE but how many people the
+ * recovered figure describes — so keep hiding the smallest visible cells until
+ * the HIDDEN set itself clears the floor.
+ *
+ * This rule has now been got wrong independently at three sites: the grade rows
+ * (fixed), the achievement bands (widened only when exactly one band was thin,
+ * so two thin bands stayed exactly recoverable) and the gradebook terms
+ * (measured the hidden mass in MARKS while suppressing on distinct STUDENTS, so
+ * a one-child term with six marks sailed through). It lives here now, and every
+ * site calls it.
+ *
+ * Returns the final hidden key set, or null when no combination can cover the
+ * hidden cells — in which case the caller must suppress the total as well.
+ */
+export function coverHiddenSet<T>(
+  cells: T[],
+  opts: {
+    key: (c: T) => string
+    /** The unit the floor is measured in. Pass several when a cell can be thin
+     *  for more than one reason — every unit must clear the floor. */
+    weights: Array<(c: T) => number>
+    hidden: (c: T) => boolean
+    floor?: number
+  },
+): Set<string> | null {
+  const floor = opts.floor ?? MIN_CELL
+  const hidden = new Set(cells.filter(opts.hidden).map(opts.key))
+  if (hidden.size === 0) return hidden
+  const mass = (): number[] => {
+    const inSet = cells.filter((c) => hidden.has(opts.key(c)))
+    return opts.weights.map((w) => inSet.reduce((acc, c) => acc + w(c), 0))
+  }
+  const covered = (): boolean => mass().every((m) => m >= floor)
+  const spare = cells
+    .filter((c) => !hidden.has(opts.key(c)))
+    .filter((c) => opts.weights.some((w) => w(c) > 0))
+    .sort((a, b) => opts.weights[0](a) - opts.weights[0](b))
+  for (const c of spare) {
+    if (covered()) break
+    hidden.add(opts.key(c))
+  }
+  return covered() ? hidden : null
+}
+
 /** Is this cohort publishable at all? The one predicate every writer should ask. */
 export function cohortPublishable(testedCount: number | null | undefined): boolean {
   return testedCount !== null && testedCount !== undefined && testedCount >= MIN_CELL
@@ -1192,22 +1241,30 @@ export function gateGradebookSummary(input: GradebookSummaryInput): GradebookSum
     suppressed: !publishable(t.studentCount, t.scoredCount, t.average),
   }))
 
-  // THE COMPLEMENT, again. A school average of 87.0 over 11 marks beside a
-  // visible term of 10 marks averaging 88.0 gives up the eleventh mark exactly:
-  // 11 x 87.0 - 10 x 88.0 = 77. If the suppressed terms together hold fewer than
-  // MIN_CELL scored marks, the school-wide average is the thing that hands them
-  // over, so it comes down with them.
-  const hiddenScored = input.byTerm
-    .filter((t) => !publishable(t.studentCount, t.scoredCount, t.average))
-    .reduce((acc, t) => acc + t.scoredCount, 0)
-  const hiddenExposed = hiddenScored > 0 && hiddenScored < MIN_CELL
-  const overallOk = publishable(input.studentCount, input.scoredCount, input.average) && !hiddenExposed
+  // THE COMPLEMENT, through the shared rule — and measured in BOTH units.
+  //
+  // A school average of 87.0 over 11 marks beside a visible term of 10 marks
+  // averaging 88.0 gives up the eleventh mark exactly: 11 x 87.0 - 10 x 88.0 =
+  // 77. Counting the hidden mass only in MARKS missed the worse case: a term
+  // suppressed for having ONE CHILD but six marks cleared a marks-only test, and
+  // (36 x 86.17 - 30 x 85.0) / 6 returned that child's exact average.
+  const cover = coverHiddenSet(input.byTerm, {
+    key: (t) => t.term ?? '',
+    weights: [(t) => t.scoredCount, (t) => t.studentCount],
+    hidden: (t) => !publishable(t.studentCount, t.scoredCount, t.average),
+  })
+  const hiddenKeys = cover ?? new Set(input.byTerm.map((t) => t.term ?? ''))
+  const overallOk = cover !== null && publishable(input.studentCount, input.scoredCount, input.average)
 
   return {
     total: input.totalMarks,
     courses: input.courses,
     average: overallOk ? input.average : null,
     suppressed: !overallOk && input.totalMarks > 0,
-    byTerm: terms,
+    byTerm: terms.map((t, i) => {
+      const raw = input.byTerm[i]
+      const hide = hiddenKeys.has(raw.term ?? '')
+      return hide ? { ...t, average: null, suppressed: true } : t
+    }),
   }
 }

@@ -343,6 +343,7 @@ export {
   gateGradebookSummary,
   type GradebookSummaryOutput,
   type GradebookSummaryInput,
+  coverHiddenSet,
 } from './academics/assessments.js'
 export type {
   AssessmentRow,

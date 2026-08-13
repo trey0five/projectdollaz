@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { gateAggregates, cohortPublishable, MIN_CELL } from '../src/academics/assessments.js'
+import {
+  gateAggregates,
+  gateGradebookSummary,
+  coverHiddenSet,
+  cohortPublishable,
+  MIN_CELL,
+} from '../src/academics/assessments.js'
 
 /**
  * gateAggregates is the ONE door.
@@ -241,5 +247,72 @@ describe('cohortPublishable — the same floor, for callers holding only a count
       const gatePublishes = r.avgComposite !== null
       expect(gatePublishes, `count ${n}`).toBe(cohortPublishable(n))
     }
+  })
+})
+
+describe('gateGradebookSummary — the complement, in both units', () => {
+  const term = (t, scoredCount, studentCount, average) => ({ term: t, scoredCount, studentCount, average })
+  const summary = (byTerm, over = {}) =>
+    gateGradebookSummary({
+      totalMarks: byTerm.reduce((a, t) => a + t.scoredCount, 0),
+      courses: 4,
+      scoredCount: byTerm.reduce((a, t) => a + t.scoredCount, 0),
+      studentCount: 20,
+      average:
+        byTerm.reduce((a, t) => a + t.scoredCount * (t.average ?? 0), 0) /
+        Math.max(1, byTerm.reduce((a, t) => a + t.scoredCount, 0)),
+      byTerm,
+      ...over,
+    })
+
+  it('a term hidden for having ONE CHILD is not covered by its mark count', () => {
+    // The bug: hidden mass was measured in marks, so an independent study with
+    // six marks from one student cleared the floor and the school average stayed
+    // up — (36 x 86.17 − 30 x 85.0) / 6 = 92.0, that child's exact average.
+    const out = summary([term('Q1', 30, 15, 85), term('IS', 6, 1, 92)])
+    const byTerm = Object.fromEntries(out.byTerm.map((t) => [t.term, t]))
+    expect(byTerm.IS.average).toBeNull()
+    expect(byTerm.Q1.average, 'the big term is hidden to cover the small one').toBeNull()
+  })
+
+  it('two healthy terms publish everything', () => {
+    const out = summary([term('Q1', 30, 15, 85), term('Q2', 28, 15, 88)])
+    expect(out.average).not.toBeNull()
+    for (const t of out.byTerm) expect(t.average).not.toBeNull()
+  })
+
+  it('with nothing able to cover it, the school average comes down too', () => {
+    const out = summary([term('Q1', 3, 2, 85), term('IS', 2, 1, 92)])
+    expect(out.average).toBeNull()
+    for (const t of out.byTerm) expect(t.average).toBeNull()
+  })
+})
+
+describe('coverHiddenSet — the rule itself', () => {
+  const c = (key, n) => ({ key, n })
+  const opts = (hidden) => ({ key: (x) => x.key, weights: [(x) => x.n], hidden })
+
+  it('extends the hidden set with the smallest visible cells until it clears the floor', () => {
+    const out = coverHiddenSet([c('a', 1), c('b', 6), c('c', 40)], opts((x) => x.n < MIN_CELL))
+    expect(out).toEqual(new Set(['a', 'b']))
+  })
+
+  it('returns null when no combination can cover the hidden cells', () => {
+    expect(coverHiddenSet([c('a', 1), c('b', 2)], opts((x) => x.n < MIN_CELL))).toBeNull()
+  })
+
+  it('nothing hidden means nothing to cover', () => {
+    expect(coverHiddenSet([c('a', 10), c('b', 20)], opts((x) => x.n < MIN_CELL))).toEqual(new Set())
+  })
+
+  it('EVERY unit must clear the floor, not just the first', () => {
+    // One cell, six marks, one student: fine on marks, fails on students.
+    const cells = [{ key: 'x', marks: 6, kids: 1 }, { key: 'y', marks: 30, kids: 15 }]
+    const out = coverHiddenSet(cells, {
+      key: (v) => v.key,
+      weights: [(v) => v.marks, (v) => v.kids],
+      hidden: (v) => v.kids < MIN_CELL,
+    })
+    expect(out).toEqual(new Set(['x', 'y']))
   })
 })

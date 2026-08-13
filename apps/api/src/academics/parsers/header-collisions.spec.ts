@@ -166,6 +166,28 @@ describe('header collisions — the specific must beat the general', () => {
     expect(new Set(parsed.rows.map((r) => r.term))).toEqual(new Set(['Q1', 'Q2']))
   })
 
+  it('"Form ID" is not a student id', () => {
+    // It satisfies ID_HEADERS, so a file whose first id-ish column is the test
+    // form stamped every student with the form number — and the roster matcher
+    // then matched on it.
+    const csv = ['Form ID,Student ID,Last Name,First Name,Grade,Composite', 'F12,S1,Nguyen,Amy,11,27'].join('\n')
+    const parsed = parseAssessmentCsv(enc(csv), { defaultYear: 2026, testType: 'act' })
+    expect(parsed.students[0].externalId).toBe('S1')
+  })
+
+  it('a column of room codes is not a column of marks', () => {
+    // Number.parseFloat accepts a prefix: "5A" is 5, so a homeroom column passed
+    // the mark test and became a course.
+    const csv = [
+      'Student Name,Homeroom,Algebra II',
+      '"Nguyen, Amy",5A,A-',
+      '"Adams, Ryan",5B,B',
+      '"Kelly, Aiden",5A,C+',
+    ].join('\n')
+    const parsed = parseGradebookCsv(enc(csv), { schoolYear: 2026 })
+    expect(new Set(parsed.rows.map((r) => r.courseName)).has('Homeroom')).toBe(false)
+  })
+
   it('"School Name"/"School ID" do not make a summary file look student-level', () => {
     const csv = ['School Name,School ID,Grade,Total Battery,Tested', 'St. Mary,SCH-1,5,68,42'].join('\n')
     const parsed = parseAssessmentCsv(enc(csv), { defaultYear: 2026, testType: 'terranova' })

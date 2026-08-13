@@ -437,6 +437,13 @@ export function parseAssessmentGrid(grid: string[][], opts: ParseOptions = {}): 
   headers.forEach((h, col) => {
     if (matchHeader(h, NOT_A_STUDENT)) nonIdentity.add(col)
   })
+  // And the SAME disqualification has to reach idx.extId, not only the scope
+  // decision built from it: "Form ID" satisfies ID_HEADERS, so a file whose
+  // first id-ish column is the test form stamped every student with the form
+  // number as their external id — and the roster matcher then matched on it.
+  if (idx.extId >= 0 && nonIdentity.has(idx.extId)) {
+    idx.extId = headers.findIndex((h, i) => matchHeader(h, ID_HEADERS) && !nonIdentity.has(i))
+  }
   const identityCols = [idx.extId, idx.last, idx.name].filter((i) => i >= 0 && !nonIdentity.has(i))
   const hasIdentity = identityCols.length > 0
   const scope: ParsedScope = hasIdentity ? 'student' : 'school_aggregate'
