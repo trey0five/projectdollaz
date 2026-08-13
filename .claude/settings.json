@@ -1,6 +1,5 @@
 {
   "permissions": {
-    "defaultMode": "auto",
     "allow": [
       "Bash(git:*)",
       "Bash(npm test:*)",
@@ -38,7 +37,23 @@
       "Edit(//home/dream/.claude/projects/**)",
       "Write(//home/dream/.claude/projects/**)",
       "Edit(//home/dream/.config/systemd/user/**)",
-      "Write(//home/dream/.config/systemd/user/**)"
-    ]
+      "Write(//home/dream/.config/systemd/user/**)",
+      "Bash(cp /tmp/qe.bak apps/api/src/cashflow/qbo-events.service.ts)",
+      "Bash(cp /tmp/cs2.bak apps/api/src/cashflow/cashflow.service.ts)",
+      "Bash(sudo -n apt list --installed)",
+      "Bash(ffmpeg -h)",
+      "WebFetch(domain:freepd.com)",
+      "Bash(PGPASSWORD=finrep_dev_pw psql -h localhost -p 5434 -U finrep -d finrep -tAc \"SELECT id, role FROM memberships WHERE id='0102f4cb-c45a-4b50-a2b6-e9900737fab8'\")",
+      "Bash(PGPASSWORD=finrep_dev_pw psql -h localhost -p 5434 -U finrep -d finrep -tAc \"SELECT m.id, m.role, s.name FROM memberships m JOIN schools s ON s.id=m.school_id JOIN users u ON u.id=m.user_id WHERE u.email='trey0five@gmail.com'\")",
+      "Bash(PGPASSWORD=finrep_dev_pw psql -h localhost -p 5434 -U finrep -d finrep -tAc \"UPDATE memberships SET role='owner' WHERE id='0102f4cb-c45a-4b50-a2b6-e9900737fab8' RETURNING role\")",
+      "Bash(KYRO_DEMO_PW='Teero05m??' node /tmp/claude-1000/-home-dream-dollaz/5dc1331f-a273-4d81-9a5e-e3bc0ecbddf9/scratchpad/seed.mjs)",
+      "Bash(KYRO_DEMO_PW='Teero05m??' node capture.mjs s6_org)",
+      "Bash(KYRO_DEMO_PW=Teero05m?? node --input-type=module -e ' *)",
+      "Bash(~/bin/ffmpeg -y -v quiet -ss 22 -i out/kyro-demo.mp4 -frames:v 1 /tmp/claude-1000/-home-dream-dollaz/5dc1331f-a273-4d81-9a5e-e3bc0ecbddf9/scratchpad/chk-org.png)",
+      "Bash(~/bin/ffmpeg -y -v quiet -ss 122 -i out/kyro-demo.mp4 -frames:v 1 /tmp/claude-1000/-home-dream-dollaz/5dc1331f-a273-4d81-9a5e-e3bc0ecbddf9/scratchpad/chk-peers.png)",
+      "Bash(~/bin/ffmpeg -y -v quiet -sseof -1.5 -i out/clips/v_report.mp4 -frames:v 1 /tmp/claude-1000/-home-dream-dollaz/5dc1331f-a273-4d81-9a5e-e3bc0ecbddf9/scratchpad/rp-end.png)",
+      "Bash(~/bin/ffmpeg -y -v quiet -ss 24 -i out/clips/v_report.mp4 -frames:v 1 /tmp/claude-1000/-home-dream-dollaz/5dc1331f-a273-4d81-9a5e-e3bc0ecbddf9/scratchpad/rp-24.png)"
+    ],
+    "defaultMode": "auto"
   }
 }

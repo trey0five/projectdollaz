@@ -1,0 +1,111 @@
+{
+  "comment": "KYRO guided demo v2 — longer than a sizzle, paced like one. Voice: upbeat professional female (ElevenLabs Bella). KYRO is ALWAYS written 'Cairo' in vo text so TTS pronounces it like the city. Accounts: torrey.munroe profile (minted token) — org home, NMB (enrollment/statements/budget/accreditation), South Plantation (cash forecast + cash & collections), Sample High (analytics).",
+  "voice": {
+    "name": "Bella",
+    "style": "upbeat, warm, professional demo narrator"
+  },
+  "scenes": [
+    {
+      "id": "v_intro",
+      "shows": "Landing hero video only (the website showcase) — everything after this is in-app",
+      "vo": "Meet Cairo — the operating platform for independent schools. A hundred moving parts, one place.",
+      "minSec": 8
+    },
+    {
+      "id": "v_briefing",
+      "shows": "Org home → click Open Daily Briefing → the briefing reads the network's main concerns",
+      "vo": "Sign in as a superintendent, and every morning starts with the Daily Briefing. One click — and Cairo has already read all three schools, and walks you through what actually matters: the decisions waiting, the items going critical, prioritized across the network. You can even press play, and hear it read aloud.",
+      "minSec": 20
+    },
+    {
+      "id": "v_org",
+      "shows": "ANCHOR org detail: briefing hero, org KPIs, Schools tab, Needs attention tab, then CLICK North Miami Beach tile → inside the school",
+      "vo": "This home screen is the whole network. Organization K P Is roll up margin, days of cash and enrollment across every school. The Schools tab compares each campus side by side. Needs attention surfaces exactly what's slipping — and where. And when something deserves a closer look — click the school, and you're inside it.",
+      "minSec": 21
+    },
+    {
+      "id": "v_enroll_overview",
+      "shows": "NMB /enrollment — the 436-student gauge, grade chips, waitlist/new/flags/withdrawn",
+      "vo": "This is North Miami Beach. Enrollment intelligence opens with the live picture — four hundred thirty six students, grade by grade, with waitlist, new admits, support flags and withdrawals at a glance.",
+      "minSec": 13
+    },
+    {
+      "id": "v_enroll_roster",
+      "shows": "Scroll to Roster analytics; work the filters (grade select, IEP chip); mention CSV + SIS",
+      "vo": "Underneath sits the full roster. Filter by grade, status, race, gender or age band — or flags like I S P, five oh four, and E L L. Load it once from the C S V your S I S already exports — or connect the S I S directly, and the roster keeps itself current.",
+      "minSec": 17
+    },
+    {
+      "id": "v_statements",
+      "shows": "NMB /statements — Activities with PY + Audited comparatives; click through the four statement tabs",
+      "vo": "The finance module turns your books into audit-style statements — Activities, Financial Position, Cash Flows and Net Assets — generated from a trial balance or a QuickBooks sync, tied out against prior year and audit, and always current.",
+      "minSec": 17
+    },
+    {
+      "id": "v_budget",
+      "shows": "NMB /budget — the guided budget summary: money in, spending, net, cost per student",
+      "vo": "Budgets live right beside the actuals. Build one the guided way — answer a few questions — or import the spreadsheet you already have. Money in, spending by category, and net income, ready to compare against reality all year.",
+      "minSec": 15
+    },
+    {
+      "id": "v_consolidated",
+      "shows": "Budget workspace → Organizational roll-up tab → Consolidated statements tab",
+      "vo": "And for the network: one click rolls every school's budget up to the organization — and the consolidated statements read the whole system as a single set of financials.",
+      "minSec": 13
+    },
+    {
+      "id": "v_report",
+      "shows": "Board Report wizard on Sample High: period → 'Confirm the pulled financials' (from saved statements+budget) → variance table → Draft with AI writes the MD&A → Generate",
+      "vo": "And when the board meets, you don't build the packet — you assemble it. Pick the period, and Cairo pulls what already exists: your saved statements, your budget, your key indicators. Confirm the financials — the variance table is already filled in. Then the narrative: one click on Draft with A I, and the management discussion writes itself from the numbers. Review it, tweak a line if you like — and generate. Board-ready, without the weekend.",
+      "minSec": 32
+    },
+    {
+      "id": "v_analytics",
+      "shows": "Sample High /analytics — Overview story, Charts (mix donuts + trends), Scorecard, then Peers",
+      "vo": "Analytics tells the story three ways. An overview in plain English. Charts, for the money mix and the trends across saved years. And a scorecard that grades every metric against healthy bands. Then flip to Peers — and compare your school with schools like yours. Same size band. Same county. Same grade span.",
+      "minSec": 24
+    },
+    {
+      "id": "v_cashflow",
+      "shows": "South Plantation /cash-flow — accept the QuickBooks opening balance, projection builds, horizons, Workbook view",
+      "vo": "Now, cash. For QuickBooks-connected schools the forecast types itself — open invoices, bills due, and a year of history become a rolling projection. Five horizons, a chart that flags your low point before it arrives, and an Excel-style workbook when you want the grid.",
+      "minSec": 20
+    },
+    {
+      "id": "v_cash",
+      "shows": "South Plantation /cash — Cash & Collections: KPI tiles, aging profile, receivables register, needs-attention",
+      "vo": "Cash and Collections is the rear-view mirror. Where the forecast predicts what's coming, this maps what has already happened — receivables and payables, aging, and exactly who is overdue and by how long. It's exclusive to QuickBooks-connected schools, and it lights up on its own.",
+      "minSec": 18
+    },
+    {
+      "id": "v_accred",
+      "shows": "NMB /accreditation — projected index gauge, Frameworks modal (multiple adopted), fastest path, click a standard",
+      "vo": "Accreditation runs as an engine, not a binder. Adopt one framework — or several, side by side. Every standard carries a rating, evidence and next steps, the fastest path is computed for you, and the projected index climbs as you work — so you always know how far you are from accredited.",
+      "minSec": 20
+    },
+    {
+      "id": "v_penny",
+      "shows": "Penny Studio on Sample High: task ask → proposed change → Confirm → Applied; then 'explain our revenue mix and show me the chart' → breakdown + inline donut",
+      "vo": "And here's the feature that changes the job: Penny Studio. Penny is an A I chief of staff who can carry out any manual task on the site — file documents, create records, update plans. You just ask. Watch — we ask her to set up a contract review task. She drafts the change, and asks permission first — nothing happens without your confirm. One click... done. Logged, and undoable. And she's just as fluent in the numbers. Ask her to explain your revenue mix — and she breaks it down and draws the chart right in the chat. Eighty seven percent tuition, and what that concentration means. Any question. Any task. Penny does the clicking.",
+      "minSec": 42
+    },
+    {
+      "id": "v_breadth",
+      "shows": "Fast montage — governance, facilities, advancement, strategy",
+      "vo": "Governance. Facilities. Advancement. Strategy. Eight domains — one morning briefing.",
+      "minSec": 8
+    },
+    {
+      "id": "v_trust",
+      "shows": "Trust card: FERPA shield, end-to-end encryption lock, AWS logo — built HTML matching the endcard cinema",
+      "vo": "And beneath it all — trust. Cairo is FERPA compliant, with student privacy by design. Every record is encrypted end to end — in transit, and at rest. And the entire platform is hosted on Amazon Web Services — enterprise grade infrastructure, secured around the clock.",
+      "minSec": 17
+    },
+    {
+      "id": "v_endcard",
+      "shows": "Endcard — KYRO lockup, tagline, ourkyro.com",
+      "vo": "Cairo. The operating platform for independent schools. See it on your own books — at our Cairo dot com.",
+      "minSec": 9
+    }
+  ]
+}
