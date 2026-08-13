@@ -161,7 +161,7 @@ export type MetricIneligibility =
  * hard truth; each `basis` is the justification sentence, shipped in the payload
  * so the product can explain its own floor.
  *
- * 14 eligible, 7 not.
+ * 18 eligible, 7 not.
  */
 export const MIN_ANNUAL_MOVE: Readonly<Record<MetricKey, MoveFloor>> = {
   operating_margin: {
@@ -284,6 +284,33 @@ export const MIN_ANNUAL_MOVE: Readonly<Record<MetricKey, MoveFloor>> = {
     reason: 'coverage_not_performance',
     basis:
       'A 0 / one-third / two-thirds / 1 coverage counter with four reachable values. A median-slope fit over a four-level ordinal is not a rate of change.',
+  },
+  // ── Academics. Cohorts turn over completely every few years, so a trend line
+  // through a school's scores is a trend through different children; the floors
+  // below are set where a move is large enough to survive that churn.
+  act_composite: {
+    kind: 'absolute',
+    value: 0.5,
+    basis:
+      'Half a composite point a year. The ACT reports whole and half points, and a school-average move smaller than that is inside the noise of one cohort replacing another. Sector default.',
+  },
+  sat_total: {
+    kind: 'absolute',
+    value: 20,
+    basis:
+      'Twenty points a year on the 400–1600 scale. Section scores move in 10-point steps, so a total below two steps is not a distinguishable change in performance. Sector default.',
+  },
+  benchmark_attainment: {
+    kind: 'absolute',
+    value: 0.03,
+    basis:
+      'Three percentage points a year. In a graduating class of a hundred, that is three more students crossing the readiness line — the smallest move a principal can act on. Sector default.',
+  },
+  assessment_participation_rate: {
+    kind: 'absolute',
+    value: 0.05,
+    basis:
+      'Five percentage points a year. Participation swings with scheduling and fee waivers, so a smaller move says more about a test date than about access. Sector default.',
   },
 }
 

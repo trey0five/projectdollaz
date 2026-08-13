@@ -245,9 +245,9 @@ describe('fiscalYearOf — the repo FY is Jul-Jun', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('MIN_ANNUAL_MOVE', () => {
-  it('is exhaustive over the 21 registry metrics: 14 eligible, 7 not', () => {
+  it('is exhaustive over the 25 registry metrics: 18 eligible, 7 not', () => {
     const entries = Object.entries(MIN_ANNUAL_MOVE)
-    expect(entries).toHaveLength(21)
+    expect(entries).toHaveLength(25)
     const notEligible = entries.filter(([, f]) => f.kind === 'not_eligible')
     expect(notEligible).toHaveLength(7)
     expect(notEligible.map(([k]) => k).sort()).toEqual([

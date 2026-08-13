@@ -33,6 +33,7 @@ import { HrModule } from './hr/hr.module.js'
 import { AdvancementModule } from './advancement/advancement.module.js'
 import { KnowledgeModule } from './knowledge/knowledge.module.js'
 import { EnrollmentModule } from './enrollment/enrollment.module.js'
+import { AcademicsModule } from './academics/academics.module.js'
 import { StrategyModule } from './strategy/strategy.module.js'
 import { ImprovementModule } from './improvement/improvement.module.js'
 import { VisitModule } from './visit/visit.module.js'
@@ -94,6 +95,7 @@ import { InboxModule } from './inbox/inbox.module.js'
     AdvancementModule,
     KnowledgeModule,
     EnrollmentModule,
+    AcademicsModule,
     StrategyModule,
     // AIC Phase G — the Continuous Improvement Manager. Registered AFTER
     // StrategyModule and AccreditationModule because it imports both (for the
