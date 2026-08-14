@@ -415,75 +415,216 @@ function Heatmap({ cells, subjects, reduce }) {
 
 // ── Cohort tracker ───────────────────────────────────────────────────────────
 
-function CohortPanel({ cohort, reduce }) {
+/**
+ * THE LONGITUDINAL COHORT — the same children, one year apart.
+ *
+ * This is the view a diocese actually argues from, and it was the weakest thing
+ * on the page: rich data (prior grade and year, current grade and year, tested
+ * counts on both, the change, the direction) rendered as a flat list of bars.
+ *
+ * A SLOPEGRAPH is the right chart and almost nobody builds one. Two axes, one
+ * line per school, and the SLOPE is the finding — you read who rose, who fell,
+ * and who crossed whom, in a single glance, without a legend. A grouped bar
+ * chart of the same numbers makes you compare heights across a gap; the slope
+ * hands you the comparison directly.
+ *
+ * Three components, in the order the question is asked: where did the cohort
+ * land, how did each school move, and who moved most.
+ */
+function CohortPanel({ cohort, national, range, reduce }) {
   if (!cohort || cohort.movements.length === 0) return null
   const { summary, movements: moves, grade } = cohort
-  const max = Math.max(...moves.map((m) => Math.abs(m.change ?? 0)), 1)
+  const focusId = cohort.focusSchoolId ?? null
+
+  const pairs = moves.filter((m) => m.prior?.value !== null && m.current?.value !== null)
+  const priorYear = moves[0]?.prior?.schoolYear
+  const currentYear = moves[0]?.current?.schoolYear
+  const priorGrade = moves[0]?.prior?.gradeLevel
+  const worst = Math.max(...moves.map((m) => Math.abs(m.change ?? 0)), 3)
+
+  // ── The slopegraph ──
+  const W = 640
+  const H = 300
+  const PAD = { l: 92, r: 92, t: 28, b: 30 }
+  const uid = 'cohort'
+  const { lo, hi } = fitScale(
+    [...pairs.flatMap((m) => [m.prior.value, m.current.value]), national],
+    range,
+    { pad: 0.22 },
+  )
+  const y = (v) => PAD.t + (1 - (v - lo) / (hi - lo || 1)) * (H - PAD.t - PAD.b)
+  const xL = PAD.l
+  const xR = W - PAD.r
+
+  const left = spreadLabels(pairs.map((m) => ({ id: m.schoolId, y: y(m.prior.value) })), 14)
+  const right = spreadLabels(pairs.map((m) => ({ id: m.schoolId, y: y(m.current.value) })), 14)
+  const labelY = (side, id) => (side === 'l' ? left : right).find((p) => p.id === id)?.y ?? 0
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
+      {/* ── Where the cohort landed ── */}
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
         {[
-          { k: 'Prior year', v: fmt(summary.priorAverage.value) },
-          { k: 'This year', v: fmt(summary.currentAverage.value) },
+          { k: `${priorGradeLabel(grade)} · ${priorYear ?? ''}`, v: fmt(summary.priorAverage.value) },
+          { k: `Grade ${grade} · ${currentYear ?? ''}`, v: fmt(summary.currentAverage.value) },
           { k: 'Cohort change', v: signed(summary.change), accent: (summary.change ?? 0) >= 0 },
-          { k: 'Gained / declined', v: `${summary.gained} / ${summary.declined}` },
+          // NOT "gained / declined". These count only moves past the materiality
+          // floor, so a cohort that visibly rose 4 points is correctly counted
+          // as neither — which reads as a contradiction sitting next to a chart
+          // that plainly shows +4. The label now says what it counts.
+          {
+            k: 'Moved materially',
+            v: `${summary.gained} ↑ ${summary.declined} ↓`,
+            hint: `${moves.length - summary.gained - summary.declined} within the noise`,
+          },
         ].map((c, i) => (
           <motion.div
             key={c.k}
             initial={reduce ? false : { opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: reduce ? 0 : i * 0.06, duration: 0.4, ease: EASE }}
-            className="rounded-xl border border-navy/10 bg-white px-3 py-2.5"
+            className="relative isolate overflow-hidden rounded-xl bg-white px-3.5 py-3"
+            style={{ boxShadow: 'inset 0 0 0 1px rgba(16,28,61,0.07), 0 12px 30px -24px rgba(16,28,61,0.5)' }}
           >
-            <p className="font-mono text-[9px] font-bold uppercase tracking-wider text-muted">{c.k}</p>
+            <span
+              aria-hidden="true"
+              className="absolute inset-0 -z-10"
+              style={{ background: `radial-gradient(120% 100% at 100% 0%, ${HUE}16 0%, transparent 65%)` }}
+            />
+            <p className="font-mono text-[8.5px] font-bold uppercase tracking-[0.14em] text-muted">{c.k}</p>
             <p
-              className={`mt-0.5 font-serif text-[20px] font-semibold tabular-nums ${
+              className={`mt-1 font-serif text-[24px] font-semibold leading-none tabular-nums ${
                 c.accent === undefined ? 'text-navy' : c.accent ? 'text-emerald-700' : 'text-rose-700'
               }`}
             >
               {c.v}
             </p>
+            {c.hint ? <p className="mt-1 text-[10px] leading-snug text-muted">{c.hint}</p> : null}
           </motion.div>
         ))}
       </div>
 
-      <div className="space-y-1.5">
-        {moves.map((m, i) => {
-          const change = m.change ?? 0
-          const tone = m.direction === 'gained' ? '#059669' : m.direction === 'declined' ? '#e11d48' : '#94a3b8'
-          return (
-            <div key={m.schoolId} className="flex items-center gap-2.5">
-              <span className="w-[112px] shrink-0 truncate text-right text-[11.5px] text-muted" title={m.schoolName}>
-                {m.schoolName}
-              </span>
-              <span className="w-24 shrink-0 text-center font-mono text-[10.5px] tabular-nums text-navy/70">
-                {fmt(m.prior?.value, 0)} → {fmt(m.current?.value, 0)}
-              </span>
-              <div className="relative h-5 flex-1">
-                <div className="absolute inset-y-0 left-1/2 w-px bg-navy/15" />
-                <motion.div
-                  initial={reduce ? false : { width: 0 }}
-                  animate={{ width: `${(Math.abs(change) / max) * 46}%` }}
-                  transition={{ duration: 0.6, ease: EASE, delay: reduce ? 0 : i * 0.05 }}
-                  className="absolute inset-y-1 rounded"
-                  style={{
-                    background: tone,
-                    left: change >= 0 ? '50%' : undefined,
-                    right: change < 0 ? '50%' : undefined,
-                  }}
-                />
-              </div>
-              <span className="w-9 text-right text-[11.5px] font-bold tabular-nums" style={{ color: tone }}>
-                {signed(change, 0)}
-              </span>
-            </div>
-          )
-        })}
+      {/* ── The slopegraph ── */}
+      {pairs.length > 0 ? (
+        <div>
+          <svg viewBox={`0 0 ${W} ${H}`} className="block w-full" role="img" aria-label="Cohort trajectory by school">
+            <ChartDefs id={uid} />
+
+            <line x1={xL} x2={xL} y1={PAD.t} y2={H - PAD.b} stroke="rgba(16,28,61,0.14)" strokeWidth="1.5" />
+            <line x1={xR} x2={xR} y1={PAD.t} y2={H - PAD.b} stroke="rgba(16,28,61,0.14)" strokeWidth="1.5" />
+
+            {national !== null && national !== undefined && national >= lo && national <= hi ? (
+              <>
+                <line x1={xL} x2={xR} y1={y(national)} y2={y(national)} stroke={INK.national} strokeWidth="1.2" strokeDasharray="5 4" opacity="0.6" />
+                <text x={(xL + xR) / 2} y={y(national) - 5} fontSize="8.5" fontWeight="700" fill={INK.national} textAnchor="middle">
+                  National {national}
+                </text>
+              </>
+            ) : null}
+
+            <text x={xL} y={PAD.t - 12} fontSize="9" fontWeight="700" fill="#64748b" textAnchor="middle">
+              {priorGradeLabel(grade).toUpperCase()} · {priorYear}
+            </text>
+            <text x={xR} y={PAD.t - 12} fontSize="9" fontWeight="700" fill="#64748b" textAnchor="middle">
+              GRADE {grade} · {currentYear}
+            </text>
+
+            {pairs.map((m, i) => {
+              const isFocus = m.schoolId === focusId
+              const up = (m.change ?? 0) >= 0
+              const c = isFocus ? HUE : up ? 'rgba(5,150,105,0.5)' : 'rgba(225,29,72,0.45)'
+              const y1 = y(m.prior.value)
+              const y2 = y(m.current.value)
+              return (
+                <motion.g
+                  key={m.schoolId}
+                  initial={reduce ? false : { opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: reduce ? 0 : 0.15 + i * 0.1, duration: 0.5, ease: EASE }}
+                >
+                  <motion.line
+                    x1={xL}
+                    y1={y1}
+                    x2={xR}
+                    y2={y2}
+                    stroke={isFocus ? `url(#${uid}-focus)` : c}
+                    strokeWidth={isFocus ? 4 : 2}
+                    strokeLinecap="round"
+                    filter={isFocus ? `url(#${uid}-glow)` : undefined}
+                    initial={reduce ? { pathLength: 1 } : { pathLength: 0 }}
+                    animate={{ pathLength: 1 }}
+                    transition={{ delay: reduce ? 0 : 0.2 + i * 0.1, duration: 0.7, ease: EASE }}
+                  />
+                  <circle cx={xL} cy={y1} r={isFocus ? 5.5 : 4} fill={isFocus ? HUE : '#fff'} stroke={isFocus ? '#fff' : c} strokeWidth="2" />
+                  <circle cx={xR} cy={y2} r={isFocus ? 5.5 : 4} fill={isFocus ? HUE : '#fff'} stroke={isFocus ? '#fff' : c} strokeWidth="2" />
+
+                  <text x={xL - 10} y={labelY('l', m.schoolId) + 3} fontSize="9.5" textAnchor="end" fontWeight={isFocus ? '700' : '400'} fill={isFocus ? '#0f766e' : '#64748b'}>
+                    {shortName(m.schoolName, 12)} {fmt(m.prior.value, 0)}
+                  </text>
+                  <text x={xR + 10} y={labelY('r', m.schoolId) + 3} fontSize="9.5" textAnchor="start" fontWeight={isFocus ? '700' : '400'} fill={isFocus ? '#0f766e' : '#64748b'}>
+                    {fmt(m.current.value, 0)} {signed(m.change, 0)}
+                  </text>
+                </motion.g>
+              )
+            })}
+          </svg>
+          <p className="mt-1 text-center text-[11px] text-muted">
+            One line per school. The SLOPE is the finding — these are the same children, {priorGradeLabel(grade)} last
+            year and grade {grade} now.
+          </p>
+        </div>
+      ) : null}
+
+      {/* ── Who moved most ── */}
+      <div>
+        <p className="mb-2 font-mono text-[8.5px] font-bold uppercase tracking-[0.16em] text-muted">
+          Cohort growth, ranked
+        </p>
+        <div className="space-y-1.5">
+          {[...moves]
+            .sort((a, b) => (b.change ?? 0) - (a.change ?? 0))
+            .map((m, i) => {
+              const change = m.change ?? 0
+              const up = change >= 0
+              const w = (Math.abs(change) / worst) * 50
+              const isFocus = m.schoolId === focusId
+              return (
+                <div key={m.schoolId} className="flex items-center gap-3">
+                  <span
+                    className={`w-[116px] shrink-0 truncate text-right text-[11.5px] ${isFocus ? 'font-bold text-navy' : 'text-muted'}`}
+                    title={m.schoolName}
+                  >
+                    {m.schoolName}
+                  </span>
+                  <div className="relative h-5 flex-1">
+                    <span aria-hidden="true" className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2" style={{ background: 'rgba(16,28,61,0.2)' }} />
+                    <motion.div
+                      initial={reduce ? { width: `${w}%` } : { width: 0 }}
+                      animate={{ width: `${w}%` }}
+                      transition={{ duration: 0.6, ease: EASE, delay: reduce ? 0 : 0.05 + i * 0.06 }}
+                      className="absolute top-1/2 h-3.5 -translate-y-1/2 rounded"
+                      style={{
+                        [up ? 'left' : 'right']: '50%',
+                        background: up ? `linear-gradient(90deg, #34D399, ${INK.ahead})` : `linear-gradient(270deg, #FB7185, ${INK.behind})`,
+                        boxShadow: isFocus ? `0 0 14px -2px ${up ? INK.ahead : INK.behind}` : 'none',
+                      }}
+                    />
+                  </div>
+                  <span className="w-10 text-right font-mono text-[11.5px] font-bold tabular-nums" style={{ color: up ? INK.ahead : INK.behind }}>
+                    {signed(change, 0)}
+                  </span>
+                  <span className="w-16 text-right font-mono text-[10px] text-muted">
+                    {m.prior?.tested ?? '—'}→{m.current?.tested ?? '—'}
+                  </span>
+                </div>
+              )
+            })}
+        </div>
+        <p className="mt-2 text-[11px] text-muted">
+          The last column is how many children sat the test each year — a cohort that shrank or grew a lot is a
+          different group of children, and the change should be read with that in mind.
+        </p>
       </div>
-      <p className="text-[11.5px] text-muted">
-        The same students, one year apart — they were in {priorGradeLabel(grade)} last year.
-      </p>
     </div>
   )
 }
@@ -1276,7 +1417,12 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
             reduce={reduce}
             aside={<Users2 size={16} className="text-muted" />}
           >
-            <CohortPanel cohort={data.cohort} reduce={reduce} />
+            <CohortPanel
+              cohort={{ ...data.cohort, focusSchoolId: data?.school?.id }}
+              national={ctx?.nationalReference}
+              range={ctx?.scoreRange}
+              reduce={reduce}
+            />
           </Section>
         ) : (
           <Section eyebrow="Longitudinal cohort" title="Follow the same children forward" reduce={reduce}>
