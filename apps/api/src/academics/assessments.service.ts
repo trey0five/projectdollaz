@@ -57,6 +57,7 @@ import {
   type ObjectiveRow,
   getMetric,
   coverHiddenSet,
+  byGrade,
 } from '@finrep/analytics'
 import { PrismaService } from '../prisma/prisma.service.js'
 import {
@@ -627,7 +628,10 @@ export class AssessmentsService {
         family,
         scoreType,
         grade,
-        grades: [...new Set(inScope.map((a) => a.gradeLevel))].filter((g) => g !== 'all').sort(),
+        // byGrade, not the default lexicographic sort: with a real K-12 network
+        // on file, .sort() lists 1, 10, 11, 12, 2, 3 … K, so the grade picker
+        // reads as nonsense. Invisible while a school had three grades.
+        grades: [...new Set(inScope.map((a) => a.gradeLevel))].filter((g) => g !== 'all').sort(byGrade),
         subjects,
         // Echoed back so the subject control reflects what the SERVER used
         // rather than what the browser last remembered — the same rule the
@@ -784,7 +788,10 @@ export class AssessmentsService {
         family,
         scoreType,
         grade,
-        grades: [...new Set(inScope.map((a) => a.gradeLevel))].filter((g) => g !== 'all').sort(),
+        // byGrade, not the default lexicographic sort: with a real K-12 network
+        // on file, .sort() lists 1, 10, 11, 12, 2, 3 … K, so the grade picker
+        // reads as nonsense. Invisible while a school had three grades.
+        grades: [...new Set(inScope.map((a) => a.gradeLevel))].filter((g) => g !== 'all').sort(byGrade),
         subjects: [...SUBJECTS_FOR_FAMILY[family]],
         availableTestTypes,
         scoreRange: scoreRange(family, scoreType),
@@ -797,7 +804,7 @@ export class AssessmentsService {
       })),
       byGrade: [...new Set(inScope.filter((a) => a.schoolYear === year).map((a) => a.gradeLevel))]
         .filter((g) => g !== 'all')
-        .sort()
+        .sort(byGrade)
         .map((g) => ({
           grade: g,
           average: averageOf(inScope.filter((a) => a.schoolYear === year && a.gradeLevel === g)),
