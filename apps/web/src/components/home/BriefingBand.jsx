@@ -17,6 +17,7 @@ import { LENS_VERB, greeting } from './tileRegistry.jsx'
 import { useAuth } from '../../context/AuthContext.jsx'
 import AuroraFlow from './AuroraFlow.jsx'
 import BriefingPerformers from './BriefingPerformers.jsx'
+import SchoolCrest from './SchoolCrest.jsx'
 
 // The hero CTA gradient — echoes the aurora (blue → violet → coral). Kept off the
 // Penny-gold reserve on purpose: gold stays Penny's (the ▶ Play narrate button).
@@ -36,6 +37,12 @@ export default function BriefingBand({
   // in that colour with the name shown.
   hue = null,
   schoolTitle = null,
+  // The school's uploaded mark, when there is one. Absent → SchoolCrest draws a
+  // monogram from the name instead, so the slot is never empty.
+  logoBase64 = null,
+  // The whole school record — the panel reads its optional profile fields for a
+  // subtitle that is true of THIS school, and prints nothing when none are set.
+  school = null,
 }) {
   const reduce = useReducedMotion()
   const { user } = useAuth()
@@ -70,21 +77,36 @@ export default function BriefingBand({
       {/* The alive feature: flowing aurora ribbons (replaces dots/orbs/shimmer). */}
       <AuroraFlow />
 
+      {/* ── Header row: what this is, and whose it is ──────────────────────────
+          A real row rather than a floated box. Floating the crest pulled it out
+          of flow and the performer cards below reflowed around it into a narrow
+          column. Both branches hang under this, so the school's identity reads
+          identically whether the band is full or still onboarding — and the
+          onboarding state is exactly when a reader is most likely to be looking
+          at a school they just switched to. */}
+      {/* WHOSE briefing this is — the school's mark as the right-hand ground of
+          the card, divided from the content by a hairline, with the name set
+          over it. A badge with a caption said the same thing on all sixteen
+          schools; a bled mark makes each card look like its own school. */}
+      <SchoolCrest name={schoolTitle} logoBase64={logoBase64} hue={hue} school={school} />
+
+      <div className="relative mb-4">
+        <span className="inline-flex items-center gap-1.5 font-sans text-[12px] font-bold uppercase tracking-[0.18em] text-white/55">
+          <Sparkles size={13} className="text-white/70" /> Daily briefing
+        </span>
+      </div>
+
       {hasPeriod ? (
-        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between lg:gap-8">
+        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between lg:gap-6 lg:pr-[30%]">
           {/* ── LEFT: greeting + actions ── */}
           <div className="flex min-w-0 flex-col gap-4 lg:max-w-[46%]">
-            <div className="flex flex-wrap items-center gap-2.5">
-              <span className="inline-flex items-center gap-1.5 font-sans text-[12px] font-bold uppercase tracking-[0.18em] text-white/55">
-                <Sparkles size={13} className="text-white/70" /> Daily briefing
+            {/* Narrow screens hide the crest, so the name still needs saying. */}
+            {schoolTitle && (
+              <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[12.5px] font-semibold text-white sm:hidden">
+                <School size={13} className="text-white/70" />
+                {schoolTitle}
               </span>
-              {schoolTitle && (
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[12.5px] font-semibold text-white">
-                  <School size={13} className="text-white/70" />
-                  {schoolTitle}
-                </span>
-              )}
-            </div>
+            )}
 
             <div>
               <h1 className="font-serif text-[26px] font-semibold leading-tight text-white sm:text-[32px]">
@@ -152,10 +174,7 @@ export default function BriefingBand({
         </div>
       ) : (
         // ── Empty / onboarding: no saved period yet ──────────────────────────────
-        <div className="relative flex flex-col gap-4">
-          <span className="inline-flex w-fit items-center gap-1.5 font-sans text-[12px] font-bold uppercase tracking-[0.18em] text-white/55">
-            <Sparkles size={13} className="text-white/70" /> Daily briefing
-          </span>
+        <div className="relative flex flex-col gap-4 lg:pr-[30%]">
           <div>
             <h1 className="font-serif text-[26px] font-semibold leading-tight text-white sm:text-[32px]">
               {greeting()}

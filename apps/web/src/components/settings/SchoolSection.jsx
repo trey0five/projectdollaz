@@ -11,6 +11,9 @@ import { useAutosave } from '../../hooks/useAutosave.js'
 import { FormError } from '../auth/fields.jsx'
 import { AutosaveBar } from '../AutosaveIndicator.jsx'
 import SettingsCard from './SettingsCard.jsx'
+import { ImageUp, Trash2 } from 'lucide-react'
+import { LOGO_ACCEPT, prepareLogo } from '../../lib/schoolLogo.js'
+import { monogramOf } from '../home/SchoolCrest.jsx'
 import { SCHOOL_TYPES, GRADE_KEYS, sizeBandOf, sizeBandLabel, gradeOrdinal } from '../../lib/peerVocab.js'
 
 const labelCls =
@@ -82,6 +85,8 @@ export default function SchoolSection() {
 
   return (
     <>
+      <SchoolLogoCard activeSchool={activeSchool} isOwner={isOwner} />
+
       <SettingsCard
         title="School settings"
         description={
@@ -366,6 +371,122 @@ function SchoolProfileCard({ activeSchool, activeId, isOwner, reloadSchools }) {
           className="mt-3"
         />
       )}
+    </SettingsCard>
+  )
+}
+
+/**
+ * THE SCHOOL'S LOGO, WHERE A SCHOOL'S PROPERTIES LIVE.
+ *
+ * The uploader already existed — buried in step 4 of the board-report wizard.
+ * That is the wrong home for it twice over: the logo is school-wide rather than
+ * per-report, and nobody opens a report wizard to set up their school. It now
+ * appears in School settings and the wizard reads whatever is set here.
+ */
+function SchoolLogoCard({ activeSchool, isOwner }) {
+  const { updateSchool } = useSchools()
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const logo = activeSchool?.logoBase64 || null
+
+  const onFile = async (file) => {
+    setErr('')
+    const { dataUrl, error } = await prepareLogo(file)
+    if (error) {
+      setErr(error)
+      return
+    }
+    setBusy(true)
+    try {
+      await updateSchool(activeSchool.id, { logoBase64: dataUrl })
+    } catch {
+      setErr('Could not save that logo.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const remove = async () => {
+    setBusy(true)
+    setErr('')
+    try {
+      await updateSchool(activeSchool.id, { logoBase64: null })
+    } catch {
+      setErr('Could not remove the logo.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <SettingsCard
+      title="School logo"
+      description={
+        isOwner
+          ? 'Shown on the daily briefing and on every board report cover. PNG, JPG or SVG — large files are shrunk automatically.'
+          : 'Read-only — only an owner can change the logo.'
+      }
+    >
+      <div className="flex flex-wrap items-center gap-5">
+        <span
+          className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-2xl border border-navy/10 bg-white"
+          aria-hidden="true"
+        >
+          {logo ? (
+            <img src={logo} alt="" className="h-full w-full object-contain p-1.5" />
+          ) : (
+            <span className="font-serif text-[20px] font-semibold text-navy/45">
+              {monogramOf(activeSchool?.name)}
+            </span>
+          )}
+        </span>
+
+        <div className="min-w-0">
+          {/* Says what the reader sees when there is no logo, so the monogram
+              beside it reads as a deliberate stand-in rather than a failure. */}
+          <p className="text-[13.5px] text-muted">
+            {logo
+              ? 'This logo is in use across the app.'
+              : `No logo yet — the briefing shows “${monogramOf(activeSchool?.name)}”, built from the school name.`}
+          </p>
+
+          {isOwner ? (
+            <div className="mt-3 flex flex-wrap items-center gap-2.5">
+              <label
+                className={`inline-flex cursor-pointer items-center gap-2 rounded-xl border border-navy/15 px-3.5 py-2 text-[13px] font-semibold text-navy transition-colors hover:bg-navy/[0.04] ${
+                  busy ? 'pointer-events-none opacity-60' : ''
+                }`}
+              >
+                <ImageUp size={15} />
+                {logo ? 'Replace logo' : 'Upload a logo'}
+                <input
+                  type="file"
+                  accept={LOGO_ACCEPT}
+                  className="sr-only"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    e.target.value = ''
+                    if (f) onFile(f)
+                  }}
+                />
+              </label>
+              {logo ? (
+                <button
+                  type="button"
+                  onClick={remove}
+                  disabled={busy}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-navy/15 px-3 py-2 text-[13px] font-semibold text-muted transition-colors hover:text-danger disabled:opacity-60"
+                >
+                  <Trash2 size={14} /> Remove
+                </button>
+              ) : null}
+              {busy ? <span className="text-[12.5px] text-muted">Saving…</span> : null}
+            </div>
+          ) : null}
+
+          {err ? <p className="mt-2 text-[12.5px] font-semibold text-danger">{err}</p> : null}
+        </div>
+      </div>
     </SettingsCard>
   )
 }

@@ -182,6 +182,8 @@ export default function HomeTiles() {
         // identity colour (same as its org tile) and show the school name.
         hue={isMultiSchool ? schoolHue(activeSchool?.id) : null}
         schoolTitle={isMultiSchool ? activeSchool?.name : null}
+        logoBase64={activeSchool?.logoBase64 ?? null}
+        school={activeSchool ?? null}
       />
 
       <nav aria-label="Modules">
