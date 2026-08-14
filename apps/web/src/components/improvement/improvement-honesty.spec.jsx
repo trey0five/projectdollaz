@@ -577,15 +577,52 @@ describe('the nav gate mirrors the API guard, and mints no third SKU', () => {
   })
 
   it('the v2 rail row shows for either key and for neither school not at all', () => {
-    const visible = (has) =>
-      V2_NAV.filter((i) =>
-        i.modules ? i.modules.some(has) : !i.module || has(i.module),
-      ).map((i) => i.to)
+    // Mirrors AppShell's filter EXACTLY, orgOnly included. The rail grew
+    // organization-scope rows; a model that knows only the module predicate
+    // reports them as ungated core, which is how this assertion first broke.
+    const visible = (has, orgScope = false) =>
+      V2_NAV.filter((i) => {
+        if (i.orgOnly && !orgScope) return false
+        return i.modules ? i.modules.some(has) : !i.module || has(i.module)
+      }).map((i) => i.to)
     expect(visible((k) => k === 'accreditation')).toContain('/improvement')
     expect(visible((k) => k === 'strategy')).toContain('/improvement')
     expect(visible((k) => k === 'finance')).not.toContain('/improvement')
     // …and the ungated core destinations are unaffected by the new predicate.
     expect(visible(() => false)).toEqual(['/app', '/tasks', '/knowledge'])
+  })
+
+  // ── The organization rows ──────────────────────────────────────────────────
+  // Under v2 modules are reached from the home TILES, and the ORG home's tiles
+  // are the schools — so the network-wide analyses had exactly one door, a card
+  // on the org home, and navigating anywhere else stranded the reader. These
+  // rows are that missing route, and they must not leak into a single school's
+  // rail, where they answer a question that school cannot ask.
+  it('the network rows appear only in organization scope', () => {
+    const visible = (has, orgScope) =>
+      V2_NAV.filter((i) => {
+        if (i.orgOnly && !orgScope) return false
+        return i.modules ? i.modules.some(has) : !i.module || has(i.module)
+      }).map((i) => i.to)
+
+    const all = () => true
+    expect(visible(all, false)).not.toContain('/analytics?scope=org')
+    expect(visible(all, false)).not.toContain('/academics/network')
+    expect(visible(all, true)).toContain('/analytics?scope=org')
+    expect(visible(all, true)).toContain('/academics/network')
+  })
+
+  it('the academics network row still respects the academics licence', () => {
+    const row = V2_NAV.find((i) => i.to === '/academics/network')
+    expect(row.orgOnly).toBe(true)
+    // An org that never bought academics must not be offered its console.
+    expect(row.module).toBe('academics')
+    const visible = (has) =>
+      V2_NAV.filter((i) => {
+        if (i.orgOnly && false) return false
+        return i.modules ? i.modules.some(has) : !i.module || has(i.module)
+      }).map((i) => i.to)
+    expect(visible((k) => k === 'finance')).not.toContain('/academics/network')
   })
 })
 

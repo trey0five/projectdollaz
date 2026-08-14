@@ -42,7 +42,9 @@ import {
   HeartHandshake,
   Target,
   LineChart as PlanIcon,
+  BookOpen,
   LayoutGrid,
+  Network,
   ListChecks,
   Library,
   TrendingUp,
@@ -117,6 +119,18 @@ export const V2_NAV = [
   // via the Accreditation → Improvement tab. Carries NO V2_NAV_ID entry, so it
   // mints no id and cannot collide with the frozen Penny anchors.
   { to: '/improvement', label: 'Improvement', Icon: TrendingUp, modules: ['accreditation', 'strategy'] },
+
+  // ── ORG SCOPE ONLY ──────────────────────────────────────────────────────────
+  // Under ui.v2 modules are reached from the home TILES, and the org home's
+  // tiles are the schools. So in "Whole organization" the network-wide analyses
+  // had exactly one door — a card on the org home — and navigating anywhere
+  // else stranded you: nothing in the rail led back, and the module pages the
+  // rail does list are all school-scoped.
+  //
+  // `orgOnly` keeps them out of a single school's rail, where they would be
+  // two rows that answer a question that school cannot ask.
+  { to: '/analytics?scope=org', label: 'All schools', Icon: Network, orgOnly: true, match: (p2) => p2.startsWith('/analytics') },
+  { to: '/academics/network', label: 'Academics network', Icon: BookOpen, orgOnly: true, module: 'academics', match: (p2) => p2.startsWith('/academics/network') },
 ]
 
 // The frozen Penny target-registry ids for the ui.v2 rail's primary links. Put on
@@ -251,7 +265,9 @@ function AvatarMenu() {
 export default function AppShell({ children }) {
   const { user, logout } = useAuth()
   const { hasModule, entitled } = useBilling()
-  const { isMultiSchool, hasOrg } = useScope()
+  const { isMultiSchool, hasOrg, scope } = useScope()
+  // "Whole organization" — gates the orgOnly rail rows below.
+  const orgScope = scope === 'org' && hasOrg
   const { activeSchool } = useSchools()
   const { periods } = usePersistence()
   const uiV2 = useUiV2()
@@ -621,9 +637,12 @@ export default function AppShell({ children }) {
   // mirroring the one API entitlement guard). An ungated row has neither.
   const v2PrimaryNav = (withIds) => (
     <nav aria-label="Primary" className="flex flex-col gap-1 px-3 py-3">
-      {V2_NAV.filter((i) =>
-        i.modules ? i.modules.some(hasModule) : !i.module || hasModule(i.module),
-      ).map((item) =>
+      {V2_NAV.filter((i) => {
+        // orgOnly rows appear only in "Whole organization"; every other row is
+        // hidden there when it is school-scoped by module.
+        if (i.orgOnly && !orgScope) return false
+        return i.modules ? i.modules.some(hasModule) : !i.module || hasModule(i.module)
+      }).map((item) =>
         renderV2NavItem(item, withIds),
       )}
     </nav>

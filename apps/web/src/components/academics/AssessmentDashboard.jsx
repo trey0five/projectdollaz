@@ -41,6 +41,7 @@ import {
 import { useReducedMotion } from '../analytics/charts/useReducedMotion.js'
 import { subjectLabelOf } from '@finrep/analytics'
 import { ChartDefs, INK, divergingFill, fitScale, shortName, spreadLabels } from './chartKit.jsx'
+import { WhatThisMeasures, axisUnitOf, unitLabelOf } from './MeasureNote.jsx'
 import { Section } from '../module/SectionHeader.jsx'
 import AssessmentFilters from './AssessmentFilters.jsx'
 
@@ -152,7 +153,7 @@ function KpiCard({ title, value, sub, chip, delay = 0, reduce }) {
  * values present rather than pinned to the theoretical 1–99, because on the
  * theoretical scale a fifteen-point gap renders as a shrug.
  */
-function RankedSchools({ schools, focusId, national, peerAvg, range, reduce, anonymous }) {
+function RankedSchools({ schools, focusId, national, peerAvg, range, reduce, anonymous, unit }) {
   const rows = anonymous
     ? anonymous.map((p, i) => ({ key: `${p.label}-${i}`, name: p.label, value: p.value, isFocus: p.isFocus }))
     : schools.map((s) => ({
@@ -174,8 +175,23 @@ function RankedSchools({ schools, focusId, national, peerAvg, range, reduce, ano
   const GAP = 12
   const VALUE_W = 46
 
+  // THE AXIS, DISCLOSED. fitScale deliberately zooms to the values present, and
+  // that decision is invisible from the outside: a five-point spread fills the
+  // full width and reads as a rout. Saying so — and saying what a difference has
+  // to reach before it is a difference — is cheaper than the misread.
+  const zoomed = range ? lo > range.min || hi < range.max : false
+
   return (
-    <div className="relative pt-5">
+    <div>
+      {/* The number column carries its unit ONCE, here, so a bare 58 is never
+          left standing on its own. */}
+      {unit ? (
+        <div className="flex items-center justify-end pb-1">
+          <span className="font-mono text-[8.5px] font-bold uppercase tracking-[0.16em] text-muted">{unit.label}</span>
+        </div>
+      ) : null}
+
+      <div className="relative pt-5">
       <div className="pointer-events-none absolute inset-y-0 z-20" style={{ left: LABEL_W + GAP, right: VALUE_W + GAP }}>
         {[
           national !== null && national !== undefined
@@ -253,11 +269,26 @@ function RankedSchools({ schools, focusId, national, peerAvg, range, reduce, ano
               }`}
               style={{ width: VALUE_W }}
             >
-              {fmt(r.value, 0)}
+              {/* An ACT composite is not a whole number, and materiality on the
+                  ACT is 0.5 — rounding to zero decimals erased every difference
+                  this module considers worth reporting. */}
+              {fmt(r.value, unit?.decimals ?? 0)}
             </span>
           </div>
         ))}
+        </div>
       </div>
+
+      {unit ? (
+        <p className="mt-3 text-[11px] leading-snug text-muted">
+          {zoomed
+            ? `The axis is zoomed to the range in play (${fmt(lo, unit.decimals)}–${fmt(hi, unit.decimals)}), not the full ${unit.span ?? 'scale'}, so small gaps stay visible.`
+            : `The axis spans the full ${unit.span ?? 'scale'}.`}
+          {unit.gap
+            ? ` A difference under ${unit.gap} ${unit.points} is not a difference — read bar lengths with that in mind.`
+            : ''}
+        </p>
+      ) : null}
     </div>
   )
 }
@@ -1164,6 +1195,10 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
 
   const peerAvg = kpis?.average?.peer ?? null
   const rankText = kpis?.rank?.rank ? `${kpis.rank.rank} of ${kpis.rank.of}` : '—'
+  // What the numbers on this page ARE, in the family's own units — one lookup,
+  // shared by the KPI subtitle, the ranked chart's column header and every
+  // explainer below, so the page cannot call the same figure two things.
+  const unit = axisUnitOf(ctx)
 
   const objectives = data?.objectives ?? { strengths: [], opportunities: [] }
   const hasObjectives = objectives.strengths.length > 0 || objectives.opportunities.length > 0
@@ -1219,7 +1254,7 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
         <KpiCard
           title="Average score"
           value={fmt(kpis?.average?.value)}
-          sub={`Network ${fmt(peerAvg)} · ${ctx?.scoreType === 'percentile' ? 'national percentile' : 'scale score'}`}
+          sub={`Network ${fmt(peerAvg)} · ${unitLabelOf(ctx)}`}
           chip={<VarianceChip variance={kpis?.average?.variance} standing={kpis?.average?.standing} />}
           delay={0}
           reduce={reduce}
@@ -1316,6 +1351,14 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
           </span>
         }
       >
+        <WhatThisMeasures
+          chart="standing"
+          ctx={ctx}
+          example={kpis?.average?.value}
+          peerAvg={peerAvg}
+          refs={['national', 'network']}
+          reduce={reduce}
+        />
         <RankedSchools
           schools={data?.schools ?? []}
           anonymous={anonymous ? data?.peersAnonymous : null}
@@ -1324,12 +1367,14 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
           peerAvg={peerAvg}
           range={ctx?.scoreRange}
           reduce={reduce}
+          unit={unit}
         />
       </Section>
 
       {/* ── Subjects + heatmap ── */}
       <div className="grid gap-4 lg:grid-cols-2">
         <Section eyebrow="By subject" title="Where the gap actually is" icon={BookOpen} reduce={reduce}>
+          <WhatThisMeasures chart="subjects" ctx={ctx} reduce={reduce} />
           <SubjectDivergence subjects={data?.subjects} reduce={reduce} />
         </Section>
 
@@ -1372,10 +1417,12 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
       {view === 'classroom' ? (
       <>
         <Section eyebrow="The spread" title="Where students actually sit" icon={BarChart3} reduce={reduce}>
+          <WhatThisMeasures chart="distribution" ctx={ctx} reduce={reduce} />
           <Distribution slices={data?.distribution ?? []} reduce={reduce} />
         </Section>
 
         <Section eyebrow="Subgroups" title="Who the average is hiding" icon={Users2} reduce={reduce} delay={0.05}>
+          <WhatThisMeasures chart="subgroups" ctx={ctx} reduce={reduce} />
           <SubgroupBars groups={data?.subgroups} range={ctx?.scoreRange} reduce={reduce} />
         </Section>
 
@@ -1397,6 +1444,13 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
       <>
       <div className="grid gap-4">
         <Section eyebrow="Across the years" title="Are we moving?" icon={LineChart} reduce={reduce}>
+          <WhatThisMeasures
+            chart="trend"
+            ctx={ctx}
+            example={kpis?.average?.value}
+            refs={['national']}
+            reduce={reduce}
+          />
           <TrendChart
             points={data?.trend ?? []}
             national={ctx?.nationalReference}
@@ -1420,6 +1474,7 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
           takes a full row of its own. */}
       <div className="grid gap-4">
         <Section eyebrow="Behind and falling" title="Growth against achievement" icon={Crosshair} reduce={reduce} delay={0.05}>
+          <WhatThisMeasures chart="quadrant" ctx={ctx} peerAvg={peerAvg} refs={['network']} reduce={reduce} />
           <GrowthQuadrant
             movements={(data?.movements ?? []).map((m) => ({ ...m, isFocus: m.schoolId === data?.school?.id }))}
             peerAvg={peerAvg}
@@ -1481,6 +1536,13 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
             reduce={reduce}
             aside={<Users2 size={16} className="text-muted" />}
           >
+            <WhatThisMeasures
+              chart="cohort"
+              ctx={ctx}
+              refs={['national']}
+              gradeLabel={`grade ${data.cohort.grade}`}
+              reduce={reduce}
+            />
             <CohortPanel
               cohort={{ ...data.cohort, focusSchoolId: data?.school?.id }}
               national={ctx?.nationalReference}
@@ -1513,6 +1575,14 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
               </span>
             }
           >
+            <WhatThisMeasures
+              chart="network"
+              ctx={ctx}
+              example={kpis?.average?.value}
+              peerAvg={peerAvg}
+              refs={['national', 'network']}
+              reduce={reduce}
+            />
             <BoardReportBars
               rows={data.table}
               national={ctx?.nationalReference}
