@@ -11,15 +11,14 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { BookOpen, Sparkles, Upload, Users2 } from 'lucide-react'
+import { BookOpen } from 'lucide-react'
 import ModuleTabs, { ModuleAccent, useModuleTab } from '../components/module/ModuleTabs.jsx'
 import { moduleTabs } from '../components/module/moduleAnatomy.js'
-import { Link } from 'react-router-dom'
-import { ArrowRight, Building2 } from 'lucide-react'
 import { useScope } from '../context/ScopeContext.jsx'
 import ModuleHero from '../components/module/ModuleHero.jsx'
 import AddDataTab from '../components/wizard/AddDataTab.jsx'
 import AssessmentDashboard from '../components/academics/AssessmentDashboard.jsx'
+import AcademicsOverview from '../components/academics/AcademicsOverview.jsx'
 import LessonPlanRegister from '../components/academics/LessonPlanRegister.jsx'
 import GradesPanel from '../components/academics/GradesPanel.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
@@ -137,29 +136,15 @@ export default function AcademicsPage() {
                   </button>
                 </div>
               ) : (
-              <OverviewTab
+              <AcademicsOverview
                 dashboard={dashboard}
                 status={status}
                 loading={loading}
-                onGoAnalytics={() => setTab('analytics')}
+                isMultiSchool={isMultiSchool}
+                onOpenView={(view) => setTab('analytics', view)}
                 onGoAdd={() => setTab('add')}
               />
               )}
-              {/* THE NETWORK VIEW. The org endpoints existed with no caller at
-                  all — the diocesan dashboard, the thing this module was asked
-                  for, was reachable only as JSON. Same placement and phrasing as
-                  enrollment's diocesan-import link, which is where a
-                  superintendent has already learned to look. */}
-              {isMultiSchool ? (
-                <Link
-                  to="/academics/network"
-                  className="group mt-4 inline-flex items-center gap-1.5 self-start rounded-lg border px-3.5 py-2 text-[13.5px] font-semibold text-navy transition-all"
-                  style={{ borderColor: `${HUE}55`, background: `${HUE}0A` }}
-                >
-                  <Building2 size={15} style={{ color: HUE }} /> See every school in the network
-                  <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
-                </Link>
-              ) : null}
             </div>
           </Panel>
         }
@@ -268,91 +253,5 @@ function AcademicsHero({ schoolName, level, status, dashboard, loading }) {
       }
       stats={loading ? stats.map((st) => ({ ...st, v: '·' })) : stats}
     />
-  )
-}
-
-/** Overview — the short read, with a door into the full dashboard. */
-function OverviewTab({ dashboard, status, loading, onGoAnalytics, onGoAdd }) {
-  if (loading) return <p className="text-[13.5px] text-muted">Loading…</p>
-
-  if (!dashboard || dashboard.empty) {
-    return (
-      <div className="rounded-2xl border border-dashed border-navy/20 bg-white p-10 text-center">
-        <Upload size={22} className="mx-auto mb-2" style={{ color: HUE }} />
-        <p className="font-serif text-[19px] font-semibold text-navy">Start with a scores file</p>
-        <p className="mx-auto mt-1.5 max-w-md text-[13.5px] text-muted">
-          A diocesan summary, a publisher export, or a student-level file — the parser handles the title rows and
-          odd column names that come with them.
-        </p>
-        <button
-          type="button"
-          onClick={onGoAdd}
-          className="mt-4 rounded-xl px-4 py-2 text-[12.5px] font-bold uppercase tracking-[0.12em] text-white"
-          style={{ background: HUE }}
-        >
-          Add academic data
-        </button>
-      </div>
-    )
-  }
-
-  return (
-    <div className="space-y-4">
-      {dashboard.keyInsight ? (
-        <div
-          className="rounded-2xl px-5 py-4"
-          style={{ background: `${HUE}12`, border: `1px solid ${HUE}30` }}
-        >
-          <p className="flex items-start gap-2.5 font-serif text-[15.5px] leading-relaxed text-navy">
-            <Sparkles size={16} className="mt-0.5 shrink-0" style={{ color: HUE }} />
-            {dashboard.keyInsight}
-          </p>
-        </div>
-      ) : null}
-
-      <div className="grid gap-3 sm:grid-cols-3">
-        {[
-          {
-            k: 'Assessment results',
-            v: `${status?.assessments?.rows ?? 0} rows`,
-            s: `${status?.assessments?.years?.length ?? 0} year(s) on file`,
-          },
-          {
-            k: 'Lesson plans',
-            v: status?.lessonPlans?.total ?? 0,
-            s: `${status?.lessonPlans?.byStatus?.draft ?? 0} still in draft`,
-          },
-          {
-            k: 'Gradebook',
-            v: status?.gradebook?.total ?? 0,
-            s: `${status?.gradebook?.courses ?? 0} course(s)`,
-          },
-        ].map((c) => (
-          <div key={c.k} className="rounded-2xl border border-navy/10 bg-white p-4">
-            <p className="font-mono text-[9.5px] font-bold uppercase tracking-[0.16em] text-muted">{c.k}</p>
-            <p className="mt-1 font-serif text-[24px] font-semibold text-navy tabular-nums">{c.v}</p>
-            <p className="mt-0.5 text-[11.5px] text-muted">{c.s}</p>
-          </div>
-        ))}
-      </div>
-
-      <button
-        type="button"
-        onClick={onGoAnalytics}
-        className="flex w-full items-center justify-between rounded-2xl border border-navy/10 bg-white px-5 py-4 text-left transition-shadow hover:shadow-[0_18px_40px_-26px_rgba(16,28,61,0.45)]"
-      >
-        <span>
-          <span className="flex items-center gap-2 font-serif text-[17px] font-semibold text-navy">
-            <Users2 size={16} style={{ color: HUE }} /> Open the full comparison
-          </span>
-          <span className="mt-0.5 block text-[12.5px] text-muted">
-            Every school ranked, grade-by-grade heat map, cohort growth, strengths and opportunities.
-          </span>
-        </span>
-        <span className="rounded-lg px-3 py-1.5 text-[11.5px] font-bold text-white" style={{ background: HUE }}>
-          Analytics
-        </span>
-      </button>
-    </div>
   )
 }

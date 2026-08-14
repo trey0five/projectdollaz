@@ -29,13 +29,19 @@ export function useModuleTab(tabs) {
   const raw = params.get('tab')
   const active = tabs.includes(raw) ? raw : 'overview'
   const setTab = useCallback(
-    (key) => {
+    (key, view) => {
       const next = new URLSearchParams(params)
       if (key === 'overview') next.delete('tab')
       else next.set('tab', key)
       // `add` deep-link option (?add=…) belongs to the Add-data tab; leaving another
       // tab clears it so it can't leak onto an unrelated panel.
       if (key !== 'add') next.delete('add')
+      // `view` is the analysis sub-view (Standing, Cohorts…). It travels WITH the
+      // tab change so an overview card can open a named view in one navigation
+      // rather than landing on the default and re-routing. Always rewritten, so
+      // a stale view from a previous visit cannot survive into a new tab.
+      next.delete('view')
+      if (view && view !== 'standing') next.set('view', view)
       setParams(next)
     },
     [params, setParams],
@@ -55,10 +61,17 @@ export function ModuleAccent({ moduleKey, children }) {
 
 export default function ModuleTabs({ moduleKey, overview, addData, records, analytics, reports }) {
   const tabs = moduleTabs(moduleKey)
-  const [active] = useModuleTab(tabs)
+  const [active, setTab] = useModuleTab(tabs)
 
   const panels = { overview, add: addData, records, analytics, reports }
   const panel = panels[active] ?? overview
+
+  // A section deeper than Overview needs a way BACK to it. The only pill here
+  // was "Back to dashboard", which leaves the module entirely — so the way back
+  // from Analytics to the module's own front page was the browser button or the
+  // sidebar, and a reader who arrived by deep link had neither in mind. One
+  // step up the module, then one step out of it.
+  const deeper = active !== 'overview'
 
   return (
     // The accent-var override re-themes EVERY v2 accent inside this page (CTAs,
@@ -67,7 +80,12 @@ export default function ModuleTabs({ moduleKey, overview, addData, records, anal
     <div className="min-h-screen bg-section" style={moduleAccentVars(moduleKey)}>
       {/* Back to the tile dashboard. The module's section nav (Overview · Add
           data · Records · Reports) lives in the LEFT SIDEBAR now. */}
-      <div className="mx-auto max-w-page px-4 pt-4 sm:px-10">
+      <div className="mx-auto flex max-w-page flex-wrap items-center gap-2 px-4 pt-4 sm:px-10">
+        {deeper ? (
+          <button type="button" onClick={() => setTab('overview')} className={BACK_PILL}>
+            <BackPillBody label="Back to overview" />
+          </button>
+        ) : null}
         <Link to="/app" className={BACK_PILL}>
           <BackPillBody label="Back to dashboard" />
         </Link>

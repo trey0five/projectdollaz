@@ -233,6 +233,16 @@ describe('academics — longitudinal cohorts', () => {
     expect(cohort?.change).toBe(4) // 3rd '25 (82) → 4th '26 (86): the same children
     expect(yoy?.change).toBe(46) // 4th '25 (40) → 4th '26 (86): different children
   })
+
+  it('carries the cohort size on each movement, both years', () => {
+    // A change is not readable without the count behind it: +9 across eleven
+    // children and +9 across two hundred are different findings, and the chart
+    // that sizes a point by cohort cannot do it if the count stays server-side.
+    const gradeRows = [...rows, nrt('a', 2025, '4', 40, { testedCount: 30 })]
+    const yoy = movements(gradeRows, { currentYear: 2026, gradeLevel: '4' }).find((m) => m.schoolId === 'a')
+    expect(yoy?.priorTested).toBe(30)
+    expect(yoy?.tested).toBe(rows.find((r) => r.schoolId === 'a' && r.schoolYear === 2026 && r.gradeLevel === '4')?.testedCount ?? null)
+  })
 })
 
 describe('academics — peer anonymity', () => {

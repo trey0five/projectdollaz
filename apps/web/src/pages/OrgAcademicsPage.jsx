@@ -17,7 +17,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
-import { Award, BookOpenCheck, ChevronRight, TrendingDown, Upload } from 'lucide-react'
+import { Section } from '../components/module/SectionHeader.jsx'
+import { ArrowUpDown, Award, BookOpenCheck, ChevronRight, Grid3x3, Network, TrendingDown, Upload } from 'lucide-react'
 import { useScope } from '../context/ScopeContext.jsx'
 import { academicsApi } from '../lib/api.js'
 import { testTypeLabel } from '../lib/academicsVocab.js'
@@ -30,28 +31,6 @@ const EASE = [0.2, 0.8, 0.2, 1]
 
 const fmt = (v, d = 1) => (v === null || v === undefined ? '—' : Number(v).toFixed(d).replace(/\.0$/, ''))
 const signed = (v, d = 1) => (v === null || v === undefined ? '—' : `${v >= 0 ? '+' : ''}${fmt(v, d)}`)
-
-function Section({ eyebrow, title, aside, children, delay = 0, reduce }) {
-  return (
-    <motion.section
-      initial={reduce ? false : { opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, ease: EASE, delay }}
-      className="rounded-2xl border border-navy/10 bg-white p-5 shadow-[0_18px_44px_-30px_rgba(16,28,61,0.4)]"
-    >
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div>
-          <p className="font-mono text-[9.5px] font-bold uppercase tracking-[0.18em]" style={{ color: HUE }}>
-            {eyebrow}
-          </p>
-          <h3 className="mt-0.5 font-serif text-[19px] font-semibold text-navy">{title}</h3>
-        </div>
-        {aside}
-      </div>
-      {children}
-    </motion.section>
-  )
-}
 
 export default function OrgAcademicsPage() {
   // orgResolved gates the first fetch: SchoolContext lags on a scope swap, and
@@ -212,7 +191,7 @@ export default function OrgAcademicsPage() {
 
           {/* ── Every school ── */}
           <Section
-            eyebrow="The network"
+            eyebrow="The network" icon={Network}
             title={`Every school · ${ctx?.grade === 'all' ? 'all grades' : `grade ${ctx?.grade}`}`}
             reduce={reduce}
           >
@@ -262,7 +241,7 @@ export default function OrgAcademicsPage() {
 
           {/* ── Movement + grades ── */}
           <div className="grid gap-4 lg:grid-cols-2">
-            <Section eyebrow="Year over year" title="Who moved, and which way" reduce={reduce}>
+            <Section eyebrow="Year over year" title="Who moved, and which way" icon={ArrowUpDown} reduce={reduce}>
               {(data?.movements ?? []).length === 0 ? (
                 <p className="text-[12.5px] text-muted">A second year of results lights this up.</p>
               ) : (
@@ -287,7 +266,7 @@ export default function OrgAcademicsPage() {
               )}
             </Section>
 
-            <Section eyebrow="Across the network" title="Where each grade sits" reduce={reduce} delay={0.05}>
+            <Section eyebrow="Across the network" title="Where each grade sits" icon={Grid3x3} reduce={reduce} delay={0.05}>
               {(data?.byGrade ?? []).length === 0 ? (
                 <p className="text-[12.5px] text-muted">No grade-level rows on file yet.</p>
               ) : (
@@ -321,7 +300,7 @@ export default function OrgAcademicsPage() {
 
           {/* ── Top, bottom, spread ── */}
           {data?.insights?.top ? (
-            <Section eyebrow="At a glance" title="Top, bottom and the spread between" reduce={reduce}>
+            <Section eyebrow="At a glance" title="Top, bottom and the spread between" icon={Award} reduce={reduce}>
               <div className="grid gap-3 sm:grid-cols-3">
                 {[
                   { k: 'Highest', v: data.insights.top?.schoolName, n: data.insights.top?.value, Icon: Award, color: '#059669' },

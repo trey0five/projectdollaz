@@ -1130,6 +1130,11 @@ export interface Movement {
   change: number | null
   direction: 'improved' | 'declined' | 'stable' | 'unknown'
   belowNational: boolean
+  /** How many sat the test this year. A move of +9 across eleven children and
+   *  one across two hundred are different findings, and the reader cannot tell
+   *  them apart unless the cohort size travels with the change. */
+  tested: number | null
+  priorTested: number | null
 }
 
 /**
@@ -1168,6 +1173,8 @@ export function movements(
         change,
         direction,
         belowNational: national !== null && current !== null ? current < national : false,
+        tested: cur?.testedCount ?? null,
+        priorTested: prev?.testedCount ?? null,
       }
     })
     .sort((a, b) => (b.change ?? -Infinity) - (a.change ?? -Infinity))

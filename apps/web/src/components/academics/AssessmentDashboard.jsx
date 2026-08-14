@@ -12,12 +12,28 @@
 // printed underneath it, and the selected school is the one bar that is lit.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
+  Activity,
+  ArrowUpDown,
   Award,
+  BarChart3,
+  BookOpen,
   ChevronRight,
+  ClipboardList,
+  Coins,
+  Crosshair,
   Flag,
+  Footprints,
+  Gauge,
+  Grid3x3,
+  LineChart,
+  Network,
+  Scale,
   Sparkles,
+  Table2,
+  Target,
   TrendingDown,
   TrendingUp,
   Users2,
@@ -25,6 +41,7 @@ import {
 import { useReducedMotion } from '../analytics/charts/useReducedMotion.js'
 import { subjectLabelOf } from '@finrep/analytics'
 import { ChartDefs, INK, divergingFill, fitScale, shortName, spreadLabels } from './chartKit.jsx'
+import { Section } from '../module/SectionHeader.jsx'
 
 const EASE = [0.2, 0.8, 0.2, 1]
 const HUE = '#0D9488'
@@ -443,9 +460,12 @@ function CohortPanel({ cohort, national, range, reduce }) {
   const worst = Math.max(...moves.map((m) => Math.abs(m.change ?? 0)), 3)
 
   // ── The slopegraph ──
-  const W = 640
-  const H = 300
-  const PAD = { l: 92, r: 92, t: 28, b: 30 }
+  const W = 820
+  const H = 320
+  // Wide gutters on purpose: each end of a slope carries a school name, its
+  // score in a chip, and (on the right) the move — none of which fit in the
+  // 92px the first cut allowed, which is why every name arrived truncated.
+  const PAD = { l: 206, r: 152, t: 44, b: 34 }
   const uid = 'cohort'
   const { lo, hi } = fitScale(
     [...pairs.flatMap((m) => [m.prior.value, m.current.value]), national],
@@ -456,9 +476,15 @@ function CohortPanel({ cohort, national, range, reduce }) {
   const xL = PAD.l
   const xR = W - PAD.r
 
-  const left = spreadLabels(pairs.map((m) => ({ id: m.schoolId, y: y(m.prior.value) })), 14)
-  const right = spreadLabels(pairs.map((m) => ({ id: m.schoolId, y: y(m.current.value) })), 14)
+  const left = spreadLabels(pairs.map((m) => ({ id: m.schoolId, y: y(m.prior.value) })), 22)
+  const right = spreadLabels(pairs.map((m) => ({ id: m.schoolId, y: y(m.current.value) })), 22)
   const labelY = (side, id) => (side === 'l' ? left : right).find((p) => p.id === id)?.y ?? 0
+
+  // Rank by where the cohort ENDED, so the badge beside a name answers "and how
+  // does that place us?" without the reader counting lines.
+  const endRank = new Map(
+    [...pairs].sort((a, b) => (b.current.value ?? 0) - (a.current.value ?? 0)).map((m, i) => [m.schoolId, i + 1]),
+  )
 
   return (
     <div className="space-y-5">
@@ -510,24 +536,60 @@ function CohortPanel({ cohort, national, range, reduce }) {
           <svg viewBox={`0 0 ${W} ${H}`} className="block w-full" role="img" aria-label="Cohort trajectory by school">
             <ChartDefs id={uid} />
 
-            <line x1={xL} x2={xL} y1={PAD.t} y2={H - PAD.b} stroke="rgba(16,28,61,0.14)" strokeWidth="1.5" />
-            <line x1={xR} x2={xR} y1={PAD.t} y2={H - PAD.b} stroke="rgba(16,28,61,0.14)" strokeWidth="1.5" />
+            {/* Two columns, softly banded. A slopegraph is read as "this column,
+                then that one", and a bare hairline never said that. */}
+            {[xL, xR].map((cx, i) => (
+              <rect
+                key={cx}
+                x={cx - 26}
+                y={PAD.t - 6}
+                width="52"
+                height={H - PAD.t - PAD.b + 12}
+                rx="12"
+                fill={i === 0 ? 'rgba(16,28,61,0.035)' : `${HUE}0E`}
+              />
+            ))}
+            <line x1={xL} x2={xL} y1={PAD.t} y2={H - PAD.b} stroke="rgba(16,28,61,0.16)" strokeWidth="1.5" />
+            <line x1={xR} x2={xR} y1={PAD.t} y2={H - PAD.b} stroke={`${HUE}55`} strokeWidth="1.5" />
 
             {national !== null && national !== undefined && national >= lo && national <= hi ? (
               <>
-                <line x1={xL} x2={xR} y1={y(national)} y2={y(national)} stroke={INK.national} strokeWidth="1.2" strokeDasharray="5 4" opacity="0.6" />
-                <text x={(xL + xR) / 2} y={y(national) - 5} fontSize="8.5" fontWeight="700" fill={INK.national} textAnchor="middle">
-                  National {national}
+                <line x1={xL - 26} x2={xR + 26} y1={y(national)} y2={y(national)} stroke={INK.national} strokeWidth="1.2" strokeDasharray="5 4" opacity="0.55" />
+                {/* Pinned to the edge. Floating this label mid-chart put it
+                    straight through the slopes it was meant to reference. */}
+                <text x={xL - 32} y={y(national) + 3} fontSize="8.5" fontWeight="700" fill={INK.national} textAnchor="end">
+                  NATIONAL {national}
                 </text>
               </>
             ) : null}
 
-            <text x={xL} y={PAD.t - 12} fontSize="9" fontWeight="700" fill="#64748b" textAnchor="middle">
-              {priorGradeLabel(grade).toUpperCase()} · {priorYear}
-            </text>
-            <text x={xR} y={PAD.t - 12} fontSize="9" fontWeight="700" fill="#64748b" textAnchor="middle">
-              GRADE {grade} · {currentYear}
-            </text>
+            {/* Column headers as chips, so the two axes announce themselves. */}
+            {[
+              { cx: xL, text: `${priorGradeLabel(grade).toUpperCase()} · ${priorYear}`, dim: true },
+              { cx: xR, text: `GRADE ${grade} · ${currentYear}`, dim: false },
+            ].map((h) => (
+              <g key={h.text}>
+                <rect
+                  x={h.cx - 62}
+                  y={PAD.t - 36}
+                  width="124"
+                  height="22"
+                  rx="11"
+                  fill={h.dim ? 'rgba(16,28,61,0.06)' : HUE}
+                />
+                <text
+                  x={h.cx}
+                  y={PAD.t - 21}
+                  fontSize="9"
+                  fontWeight="700"
+                  fill={h.dim ? '#475569' : '#fff'}
+                  textAnchor="middle"
+                  style={{ letterSpacing: '0.06em' }}
+                >
+                  {h.text}
+                </text>
+              </g>
+            ))}
 
             {pairs.map((m, i) => {
               const isFocus = m.schoolId === focusId
@@ -555,15 +617,55 @@ function CohortPanel({ cohort, national, range, reduce }) {
                     animate={{ pathLength: 1 }}
                     transition={{ delay: reduce ? 0 : 0.2 + i * 0.1, duration: 0.7, ease: EASE }}
                   />
-                  <circle cx={xL} cy={y1} r={isFocus ? 5.5 : 4} fill={isFocus ? HUE : '#fff'} stroke={isFocus ? '#fff' : c} strokeWidth="2" />
-                  <circle cx={xR} cy={y2} r={isFocus ? 5.5 : 4} fill={isFocus ? HUE : '#fff'} stroke={isFocus ? '#fff' : c} strokeWidth="2" />
+                  <circle cx={xL} cy={y1} r={isFocus ? 6 : 4.5} fill={isFocus ? HUE : '#fff'} stroke={isFocus ? '#fff' : c} strokeWidth="2" />
+                  <circle cx={xR} cy={y2} r={isFocus ? 6 : 4.5} fill={isFocus ? HUE : '#fff'} stroke={isFocus ? '#fff' : c} strokeWidth="2" />
 
-                  <text x={xL - 10} y={labelY('l', m.schoolId) + 3} fontSize="9.5" textAnchor="end" fontWeight={isFocus ? '700' : '400'} fill={isFocus ? '#0f766e' : '#64748b'}>
-                    {shortName(m.schoolName, 12)} {fmt(m.prior.value, 0)}
-                  </text>
-                  <text x={xR + 10} y={labelY('r', m.schoolId) + 3} fontSize="9.5" textAnchor="start" fontWeight={isFocus ? '700' : '400'} fill={isFocus ? '#0f766e' : '#64748b'}>
-                    {fmt(m.current.value, 0)} {signed(m.change, 0)}
-                  </text>
+                  {/* ── Left gutter: rank badge, full name, starting score ──
+                      The score now sits in a CHIP rather than trailing the name
+                      as more text, so "which school" and "what did it score"
+                      stop competing for the same glance. */}
+                  <g transform={`translate(0, ${labelY('l', m.schoolId)})`}>
+                    <circle cx={PAD.l - 196} cy="-4" r="9" fill={isFocus ? HUE : 'rgba(16,28,61,0.07)'} />
+                    <text x={PAD.l - 196} y="-1" fontSize="9" fontWeight="700" textAnchor="middle" fill={isFocus ? '#fff' : '#64748b'}>
+                      {endRank.get(m.schoolId)}
+                    </text>
+                    <text x={PAD.l - 182} y="-7" fontSize="10.5" textAnchor="start" fontWeight={isFocus ? '700' : '500'} fill={isFocus ? '#0f766e' : '#334155'}>
+                      {shortName(m.schoolName, 17)}
+                    </text>
+                    <text x={PAD.l - 182} y="5" fontSize="8.5" textAnchor="start" fill="#94A3B8">
+                      {m.prior.tested ? `${m.prior.tested} tested` : 'cohort size n/a'}
+                    </text>
+                    <rect x={xL - 50} y="-13" width="34" height="19" rx="9.5" fill="rgba(16,28,61,0.06)" />
+                    <text x={xL - 33} y="0" fontSize="10.5" fontWeight="700" textAnchor="middle" fill="#475569" className="tabular-nums">
+                      {fmt(m.prior.value, 0)}
+                    </text>
+                  </g>
+
+                  {/* ── Right gutter: ending score, then the move ── */}
+                  <g transform={`translate(0, ${labelY('r', m.schoolId)})`}>
+                    <rect
+                      x={xR + 16}
+                      y="-13"
+                      width="36"
+                      height="19"
+                      rx="9.5"
+                      fill={isFocus ? HUE : 'rgba(16,28,61,0.06)'}
+                    />
+                    <text x={xR + 34} y="0" fontSize="10.5" fontWeight="700" textAnchor="middle" fill={isFocus ? '#fff' : '#475569'} className="tabular-nums">
+                      {fmt(m.current.value, 0)}
+                    </text>
+                    <text
+                      x={xR + 60}
+                      y="0"
+                      fontSize="11"
+                      fontWeight="700"
+                      textAnchor="start"
+                      fill={up ? INK.ahead : INK.behind}
+                      className="tabular-nums"
+                    >
+                      {up ? '▲' : '▼'} {signed(m.change, 0).replace(/^[+-]/, '')}
+                    </text>
+                  </g>
                 </motion.g>
               )
             })}
@@ -577,9 +679,23 @@ function CohortPanel({ cohort, national, range, reduce }) {
 
       {/* ── Who moved most ── */}
       <div>
-        <p className="mb-2 font-mono text-[8.5px] font-bold uppercase tracking-[0.16em] text-muted">
-          Cohort growth, ranked
-        </p>
+        {/* A named strip with COLUMN LABELS. The bare caption left three
+            unlabelled numeric columns to be guessed at — the reader could see
+            "41→38" without being told it was the cohort's size. */}
+        <div className="mb-2 flex items-end gap-3">
+          <span className="w-[196px] shrink-0 text-right font-mono text-[8.5px] font-bold uppercase tracking-[0.16em]" style={{ color: HUE }}>
+            Cohort growth, ranked
+          </span>
+          <span className="flex-1 text-center font-mono text-[8.5px] font-bold uppercase tracking-[0.14em] text-muted">
+            ← declined · gained →
+          </span>
+          <span className="w-10 text-right font-mono text-[8.5px] font-bold uppercase tracking-[0.14em] text-muted">
+            Move
+          </span>
+          <span className="w-16 text-right font-mono text-[8.5px] font-bold uppercase tracking-[0.14em] text-muted">
+            Tested
+          </span>
+        </div>
         <div className="space-y-1.5">
           {[...moves]
             .sort((a, b) => (b.change ?? 0) - (a.change ?? 0))
@@ -591,7 +707,7 @@ function CohortPanel({ cohort, national, range, reduce }) {
               return (
                 <div key={m.schoolId} className="flex items-center gap-3">
                   <span
-                    className={`w-[116px] shrink-0 truncate text-right text-[11.5px] ${isFocus ? 'font-bold text-navy' : 'text-muted'}`}
+                    className={`w-[160px] shrink-0 truncate text-right text-[11.5px] ${isFocus ? 'font-bold text-navy' : 'text-muted'}`}
                     title={m.schoolName}
                   >
                     {m.schoolName}
@@ -1021,30 +1137,6 @@ function priorGradeLabel(grade) {
 
 // ── Section shell ────────────────────────────────────────────────────────────
 
-function Section({ title, eyebrow, children, aside, delay = 0, reduce }) {
-  return (
-    <motion.section
-      initial={reduce ? false : { opacity: 0, y: 18 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, ease: EASE, delay }}
-      className="rounded-2xl border border-navy/10 bg-white p-5 shadow-[0_18px_44px_-30px_rgba(16,28,61,0.4)]"
-    >
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div>
-          {eyebrow ? (
-            <p className="font-mono text-[9.5px] font-bold uppercase tracking-[0.18em]" style={{ color: HUE }}>
-              {eyebrow}
-            </p>
-          ) : null}
-          <h3 className="mt-0.5 font-serif text-[19px] font-semibold text-navy">{title}</h3>
-        </div>
-        {aside}
-      </div>
-      {children}
-    </motion.section>
-  )
-}
-
 // ── The dashboard ────────────────────────────────────────────────────────────
 
 export default function AssessmentDashboard({ data, onQuery, loading }) {
@@ -1062,7 +1154,20 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
   const hasObjectives = objectives.strengths.length > 0 || objectives.opportunities.length > 0
 
   const select = (patch) => onQuery?.(patch)
-  const [view, setView] = useState('standing')
+
+  // The view lives in the URL so the Overview's cards can open a NAMED view
+  // ("show me the cohorts") rather than dropping every reader on Standing and
+  // making them hunt. It also survives a reload and a shared link, which a
+  // useState never did.
+  const [params, setParams] = useSearchParams()
+  const rawView = params.get('view')
+  const view = VIEWS.some((v) => v.key === rawView) ? rawView : 'standing'
+  const setView = (key) => {
+    const next = new URLSearchParams(params)
+    if (key === 'standing') next.delete('view')
+    else next.set('view', key)
+    setParams(next, { replace: true })
+  }
 
   const gradeOptions = useMemo(() => ['all', ...(ctx?.grades ?? [])], [ctx?.grades])
 
@@ -1273,7 +1378,7 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
       {view === 'standing' ? (
       <>
       <Section
-        eyebrow="Where this school stands"
+        eyebrow="Where this school stands" icon={Gauge}
         title={`Every school · ${ctx?.grade === 'all' ? 'all grades' : `grade ${ctx?.grade}`}`}
         reduce={reduce}
         aside={
@@ -1295,11 +1400,11 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
 
       {/* ── Subjects + heatmap ── */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <Section eyebrow="By subject" title="Where the gap actually is" reduce={reduce}>
+        <Section eyebrow="By subject" title="Where the gap actually is" icon={BookOpen} reduce={reduce}>
           <SubjectDivergence subjects={data?.subjects} reduce={reduce} />
         </Section>
 
-        <Section eyebrow="Grade by grade" title="Where instruction is landing" reduce={reduce} delay={0.05}>
+        <Section eyebrow="Grade by grade" title="Where instruction is landing" icon={Grid3x3} reduce={reduce} delay={0.05}>
           <Heatmap cells={data?.heatmap ?? []} subjects={subjects} reduce={reduce} />
           <p className="mt-2 text-[11px] text-muted">
             Each cell compares that grade with the SAME grade at other schools — the only comparison that means
@@ -1311,7 +1416,7 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
 
       {/* ── System insights ── */}
       {data?.insights?.top ? (
-        <Section eyebrow="The network" title="Top, bottom and the spread between" reduce={reduce}>
+        <Section eyebrow="The network" title="Top, bottom and the spread between" icon={Network} reduce={reduce}>
           <div className="grid gap-3 sm:grid-cols-3">
             {[
               { k: 'Highest', v: data.insights.top?.schoolName, n: data.insights.top?.value, Icon: Award, color: '#059669' },
@@ -1337,20 +1442,20 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
       {/* ── Classroom ── */}
       {view === 'classroom' ? (
       <>
-        <Section eyebrow="The spread" title="Where students actually sit" reduce={reduce}>
+        <Section eyebrow="The spread" title="Where students actually sit" icon={BarChart3} reduce={reduce}>
           <Distribution slices={data?.distribution ?? []} reduce={reduce} />
         </Section>
 
-        <Section eyebrow="Subgroups" title="Who the average is hiding" reduce={reduce} delay={0.05}>
-          <SubgroupBars groups={data?.subgroups} reduce={reduce} />
+        <Section eyebrow="Subgroups" title="Who the average is hiding" icon={Users2} reduce={reduce} delay={0.05}>
+          <SubgroupBars groups={data?.subgroups} range={ctx?.scoreRange} reduce={reduce} />
         </Section>
 
         {hasObjectives ? (
           <div className="grid gap-4 lg:grid-cols-2">
-            <Section eyebrow="Strengths" title="What this school does well" reduce={reduce}>
+            <Section eyebrow="Strengths" title="What this school does well" icon={Sparkles} reduce={reduce}>
               <ObjectiveList items={objectives.strengths} tone="strong" />
             </Section>
-            <Section eyebrow="Opportunities" title="Where to put the next hour" reduce={reduce} delay={0.05}>
+            <Section eyebrow="Opportunities" title="Where to put the next hour" icon={Target} reduce={reduce} delay={0.05}>
               <ObjectiveList items={objectives.opportunities} tone="below" />
             </Section>
           </div>
@@ -1361,8 +1466,8 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
       {/* ── Over time ── */}
       {view === 'time' ? (
       <>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Section eyebrow="Across the years" title="Are we moving?" reduce={reduce}>
+      <div className="grid gap-4">
+        <Section eyebrow="Across the years" title="Are we moving?" icon={LineChart} reduce={reduce}>
           <TrendChart
             points={data?.trend ?? []}
             national={ctx?.nationalReference}
@@ -1378,8 +1483,14 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
             </span>
           </p>
         </Section>
+      </div>
 
-        <Section eyebrow="Behind and falling" title="Growth against achievement" reduce={reduce} delay={0.05}>
+      {/* The quadrant is a MAP, not a panel: four named regions, a reference
+          cross and a bubble per school. At half width the regions collapsed to
+          about 180px each and every label landed on top of its own dot, so it
+          takes a full row of its own. */}
+      <div className="grid gap-4">
+        <Section eyebrow="Behind and falling" title="Growth against achievement" icon={Crosshair} reduce={reduce} delay={0.05}>
           <GrowthQuadrant
             movements={(data?.movements ?? []).map((m) => ({ ...m, isFocus: m.schoolId === data?.school?.id }))}
             peerAvg={peerAvg}
@@ -1391,13 +1502,13 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
 
       {/* ── Movement ── */}
       {(data?.movements ?? []).length > 0 ? (
-        <Section eyebrow="Trends & movement" title="What a board asks first" reduce={reduce}>
+        <Section eyebrow="Trends & movement" title="What a board asks first" icon={Activity} reduce={reduce}>
           <MovementHighlights movements={data.movements} national={ctx?.nationalReference} reduce={reduce} />
         </Section>
       ) : null}
 
       {(data?.movements ?? []).length > 0 ? (
-        <Section eyebrow="Year over year" title="Every school, ranked by movement" reduce={reduce}>
+        <Section eyebrow="Year over year" title="Every school, ranked by movement" icon={ArrowUpDown} reduce={reduce}>
           <div className="space-y-1.5">
             {data.movements.map((m, i) => {
               const tone = m.direction === 'improved' ? '#059669' : m.direction === 'declined' ? '#e11d48' : '#94a3b8'
@@ -1436,7 +1547,7 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
       {view === 'cohorts' ? (
         data?.cohort ? (
           <Section
-            eyebrow="Longitudinal cohort"
+            eyebrow="Longitudinal cohort" icon={Footprints}
             title={`The same students, followed into grade ${data.cohort.grade}`}
             reduce={reduce}
             aside={<Users2 size={16} className="text-muted" />}
@@ -1449,7 +1560,7 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
             />
           </Section>
         ) : (
-          <Section eyebrow="Longitudinal cohort" title="Follow the same children forward" reduce={reduce}>
+          <Section eyebrow="Longitudinal cohort" icon={Footprints} title="Follow the same children forward" reduce={reduce}>
             <p className="text-[12.5px] text-muted">
               {(data?.availableCohorts ?? []).length > 0
                 ? 'Choose a cohort above and this follows that same group of children across the years, rather than comparing this year’s fifth graders with last year’s different fifth graders.'
@@ -1464,7 +1575,7 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
       <>
         {(data?.table ?? []).length > 0 ? (
           <Section
-            eyebrow="Board-ready"
+            eyebrow="Board-ready" icon={ClipboardList}
             title="Every school, both years"
             reduce={reduce}
             aside={
@@ -1487,7 +1598,7 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
 
         {(data?.table ?? []).length > 0 ? (
           <Section
-            eyebrow="The same numbers, as a table"
+            eyebrow="The same numbers, as a table" icon={Table2}
             title="Sortable, for the packet"
             reduce={reduce}
             aside={
@@ -1501,17 +1612,17 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
         ) : null}
 
         <div className="grid gap-4 lg:grid-cols-2">
-          <Section eyebrow="Is the comparison fair?" title="Participation against score" reduce={reduce}>
-            <ParticipationScatter rows={data?.table ?? []} reduce={reduce} />
+          <Section eyebrow="Is the comparison fair?" title="Participation against score" icon={Scale} reduce={reduce}>
+            <ParticipationFairness rows={data?.table ?? []} reduce={reduce} />
           </Section>
 
           <Section
-            eyebrow="Outcomes and the ledger"
+            eyebrow="Outcomes and the ledger" icon={Coins}
             title="What this score cost"
             reduce={reduce}
             delay={0.05}
           >
-            <CrossDomainPanel rows={data?.crossDomain ?? []} scoreType={ctx?.scoreType} />
+            <CostChain rows={data?.crossDomain ?? []} scoreType={ctx?.scoreType} reduce={reduce} />
           </Section>
         </div>
       </>
@@ -1549,6 +1660,12 @@ function GrowthQuadrant({ movements, peerAvg, range, reduce }) {
   const y = (v) => PAD.t + (1 - (v + yMag) / (2 * yMag)) * (H - PAD.t - PAD.b)
   const midX = peerAvg === null || peerAvg === undefined ? null : x(peerAvg)
   const midY = y(0)
+
+  // Bubble size from the cohort behind each point, on a sqrt scale so AREA
+  // tracks the count — a linear radius would make a school of 200 look four
+  // times the school of 50 rather than twice.
+  const maxTested = Math.max(...pts.map((p) => p.tested ?? 0), 1)
+  const radius = (n) => (n ? 7 + Math.sqrt(n / maxTested) * 9 : 7)
 
   // Nudge labels off each other, then keep them inside the frame.
   const placed = spreadLabels(
@@ -1604,36 +1721,87 @@ function GrowthQuadrant({ movements, peerAvg, range, reduce }) {
         {placed.map((p, i) => {
           const up = p.change >= 0
           const c = up ? INK.ahead : INK.behind
+          const cy = y(p.change)
+          // SIZE CARRIES THE COHORT. A flat dot said only "a school is here";
+          // scaling it by how many children sat the exam adds the dimension the
+          // reader needs to weigh the point at all — a +9 built on eleven
+          // students is not the same finding as a +9 built on two hundred.
+          const r = radius(p.tested)
+          const rightSide = p.px > W - PAD.r - 96
+          const lx = p.px + (rightSide ? -(r + 10) : r + 10)
           return (
             <motion.g
               key={p.schoolId ?? p.schoolName ?? i}
-              initial={reduce ? false : { opacity: 0, scale: 0.4 }}
+              initial={reduce ? false : { opacity: 0, scale: 0.3 }}
               animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: reduce ? 0 : 0.15 + i * 0.1, duration: 0.45, ease: EASE }}
-              style={{ transformOrigin: `${p.px}px ${y(p.change)}px` }}
+              transition={{ delay: reduce ? 0 : 0.15 + i * 0.12, duration: 0.55, ease: EASE }}
+              style={{ transformOrigin: `${p.px}px ${cy}px` }}
             >
-              {p.isFocus ? (
-                <circle cx={p.px} cy={y(p.change)} r="13" fill="none" stroke={HUE} strokeWidth="1.5" opacity="0.4" />
+              {/* A slow halo on the focus school — the eye finds it without
+                  hunting, which is the whole job of a focus mark. */}
+              {p.isFocus && !reduce ? (
+                <motion.circle
+                  cx={p.px}
+                  cy={cy}
+                  fill="none"
+                  stroke={HUE}
+                  strokeWidth="2"
+                  initial={{ r, opacity: 0.5 }}
+                  animate={{ r: [r, r + 14], opacity: [0.5, 0] }}
+                  transition={{ duration: 2.6, repeat: Infinity, ease: 'easeOut' }}
+                />
               ) : null}
+              <circle cx={p.px} cy={cy} r={r + 3} fill={p.isFocus ? `${HUE}22` : `${c}18`} />
               <circle
                 cx={p.px}
-                cy={y(p.change)}
-                r={p.isFocus ? 8.5 : 6.5}
-                fill={p.isFocus ? HUE : c}
+                cy={cy}
+                r={r}
+                fill={p.isFocus ? `url(#${uid}-focus)` : c}
+                fillOpacity={p.isFocus ? 1 : 0.85}
                 stroke="#fff"
-                strokeWidth="2"
+                strokeWidth="2.5"
                 filter={p.isFocus ? `url(#${uid}-glow)` : undefined}
               />
-              <text
-                x={p.px + (p.px > W - PAD.r - 70 ? -12 : 12)}
-                y={p.y + 4}
-                fontSize="10"
-                fontWeight={p.isFocus ? '700' : '500'}
-                textAnchor={p.px > W - PAD.r - 70 ? 'end' : 'start'}
-                fill={p.isFocus ? '#0f766e' : '#475569'}
-              >
-                {shortName(p.schoolName)} {signed(p.change, 0)}
-              </text>
+
+              {/* A leader line, so a nudged label still points at its own dot. */}
+              <line x1={p.px + (rightSide ? -r : r)} y1={cy} x2={lx} y2={p.y} stroke={p.isFocus ? HUE : '#CBD5E1'} strokeWidth="1" opacity="0.6" />
+
+              <g transform={`translate(${lx}, ${p.y})`}>
+                {/* Haloed: a label that has to cross the network rule or a
+                    quadrant boundary stays legible instead of being sliced by
+                    it. Stroke first, fill over the top. */}
+                <text
+                  x={rightSide ? -6 : 6}
+                  y={4}
+                  fontSize="10.5"
+                  fontWeight={p.isFocus ? '700' : '500'}
+                  textAnchor={rightSide ? 'end' : 'start'}
+                  fill={p.isFocus ? '#0f766e' : '#475569'}
+                  stroke="#fff"
+                  strokeWidth="3.5"
+                  paintOrder="stroke"
+                  strokeLinejoin="round"
+                >
+                  {shortName(p.schoolName, 22)}
+                </text>
+                <text
+                  x={rightSide ? -6 : 6}
+                  y={16}
+                  fontSize="10"
+                  fontWeight="700"
+                  textAnchor={rightSide ? 'end' : 'start'}
+                  fill={c}
+                  stroke="#fff"
+                  strokeWidth="3.5"
+                  paintOrder="stroke"
+                  strokeLinejoin="round"
+                >
+                  {signed(p.change, 0)}
+                  <tspan fill="#94A3B8" fontWeight="400">
+                    {p.tested ? ` · ${p.tested} tested` : ''}
+                  </tspan>
+                </text>
+              </g>
             </motion.g>
           )
         })}
@@ -1875,115 +2043,243 @@ function MovementHighlights({ movements, national, reduce }) {
 // class can post a flattering average for reasons that have nothing to do with
 // teaching, so the two numbers belong on one pair of axes rather than in two
 // cards that never meet.
-function ParticipationScatter({ rows, reduce }) {
-  const pts = (rows ?? []).filter((r) => r.current !== null && r.participationRate !== null && r.participationRate !== undefined)
-  if (pts.length === 0) {
+/**
+ * IS THE COMPARISON FAIR? — answered per school, not plotted.
+ *
+ * This was a scatter, and a scatter was the wrong instrument. Participation
+ * clusters near 100% for almost every school, so the plot spent seventy percent
+ * of its canvas on a tinted "read with care" band that was always EMPTY, with
+ * three dots crushed against the right edge. The reader saw a big coloured box
+ * containing nothing and had to work out that the emptiness was the good news.
+ *
+ * The question is per school and nearly binary, so the answer is a row per
+ * school: how much of the eligible cohort actually sat the exam, against the
+ * threshold where a comparison stops being about teaching, with the verdict
+ * stated in words. It reads at a glance at three schools and still reads at
+ * thirty.
+ */
+function ParticipationFairness({ rows, reduce }) {
+  const data = (rows ?? []).filter(
+    (r) => r.participationRate !== null && r.participationRate !== undefined && r.current !== null,
+  )
+  if (data.length === 0) {
     return (
       <p className="text-[12.5px] text-muted">
-        No school on file reports how many students were eligible, so participation cannot be compared yet — a summary
-        file with an eligible or enrolled column fills this in.
+        No school on file reports how many students were eligible, so fairness cannot be judged yet — a summary file
+        with an eligible or enrolled column fills this in.
       </p>
     )
   }
-  const W = 640
-  const H = 260
-  const PAD = { l: 42, r: 16, t: 16, b: 34 }
-  const ys = pts.map((p) => p.current)
-  const yLo = Math.min(...ys) - 3
-  const yHi = Math.max(...ys) + 3
-  const x = (v) => PAD.l + Math.max(0, Math.min(1, v)) * (W - PAD.l - PAD.r)
-  const y = (v) => PAD.t + (1 - (v - yLo) / (yHi - yLo || 1)) * (H - PAD.t - PAD.b)
+
+  const THRESHOLD = 0.7
+  const sorted = [...data].sort((a, b) => (a.participationRate ?? 0) - (b.participationRate ?? 0))
+  const shaky = sorted.filter((r) => (r.participationRate ?? 0) < THRESHOLD).length
 
   return (
-    <div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="block w-full" role="img" aria-label="Participation rate against score, by school">
-        {/* Below ~70% a comparison is about who sat the exam, not how the school taught. */}
-        <rect x={PAD.l} y={PAD.t} width={Math.max(0, x(0.7) - PAD.l)} height={H - PAD.t - PAD.b} fill="#f59e0b" opacity="0.07" />
-        <line x1={x(0.7)} x2={x(0.7)} y1={PAD.t} y2={H - PAD.b} stroke="#f59e0b" strokeWidth="1" strokeDasharray="4 3" />
-        <text x={x(0.7) + 4} y={PAD.t + 9} fontSize="9" fontWeight="700" fill="#b45309">
-          70% — read with care
-        </text>
-        {pts.map((p, i) => (
-          <motion.g
-            key={p.schoolId ?? p.schoolName ?? i}
-            initial={reduce ? false : { opacity: 0, scale: 0.5 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: reduce ? 0 : 0.05 + i * 0.07, duration: 0.4, ease: EASE }}
-          >
-            <circle cx={x(p.participationRate)} cy={y(p.current)} r="6" fill={HUE} opacity="0.85" stroke="#fff" strokeWidth="1.6" />
-            <text
-              x={x(p.participationRate)}
-              y={y(p.current) + (i % 2 === 0 ? -10 : 17)}
-              fontSize="9.5"
-              textAnchor="middle"
-              fill="#334155"
-            >
-              {shortName(p.schoolName)}
-            </text>
-          </motion.g>
-        ))}
-        {[0, 0.5, 1].map((t) => (
-          <text key={t} x={x(t)} y={H - 6} fontSize="9" textAnchor="middle" fill="#64748b">
-            {Math.round(t * 100)}%
-          </text>
-        ))}
-        <text x={PAD.l - 5} y={PAD.t + 8} fontSize="9" textAnchor="end" fill="#94a3b8">
-          {Math.round(yHi)}
-        </text>
-        <text x={PAD.l - 5} y={H - PAD.b} fontSize="9" textAnchor="end" fill="#94a3b8">
-          {Math.round(yLo)}
-        </text>
-      </svg>
-      <p className="mt-1 text-[11px] text-muted">Students tested ÷ students eligible, against the score it produced.</p>
+    <div className="space-y-3">
+      <div
+        className="rounded-xl px-3.5 py-2.5 text-[12px]"
+        style={{
+          background: shaky === 0 ? 'rgba(5,150,105,0.08)' : 'rgba(245,158,11,0.1)',
+          color: shaky === 0 ? '#047857' : '#B45309',
+        }}
+      >
+        <b>{shaky === 0 ? 'Every comparison on this page is fair.' : `${shaky} school${shaky === 1 ? '' : 's'} to read with care.`}</b>{' '}
+        {shaky === 0
+          ? 'Every school tested enough of its eligible students that the scores describe teaching rather than who turned up.'
+          : 'Below about seventy percent, a score says more about which students sat the exam than about the school.'}
+      </div>
+
+      <div className="space-y-2">
+        {sorted.map((r, i) => {
+          const p = r.participationRate ?? 0
+          const ok = p >= THRESHOLD
+          const tone = ok ? INK.ahead : '#B45309'
+          return (
+            <div key={r.schoolId ?? r.schoolName ?? i} className="flex items-center gap-3">
+              <span className="w-[120px] shrink-0 truncate text-right text-[12px] text-muted" title={r.schoolName}>
+                {r.schoolName}
+              </span>
+
+              <div className="relative h-7 flex-1 overflow-hidden rounded-lg" style={{ background: 'rgba(16,28,61,0.05)' }}>
+                {/* The threshold, drawn ON the track so the bar is measured
+                    against it rather than against an axis somewhere else. */}
+                <span
+                  aria-hidden="true"
+                  className="absolute inset-y-0 z-10 border-l-2 border-dashed"
+                  style={{ left: `${THRESHOLD * 100}%`, borderColor: 'rgba(180,83,9,0.55)' }}
+                />
+                <motion.div
+                  initial={reduce ? { width: `${p * 100}%` } : { width: 0 }}
+                  animate={{ width: `${Math.min(100, p * 100)}%` }}
+                  transition={{ duration: 0.8, ease: EASE, delay: reduce ? 0 : 0.05 + i * 0.08 }}
+                  className="h-full rounded-lg"
+                  style={{
+                    background: ok
+                      ? `linear-gradient(90deg, ${HUE}, ${INK.focusLight})`
+                      : 'linear-gradient(90deg, #F59E0B, #FBBF24)',
+                    boxShadow: `0 0 18px -4px ${tone}`,
+                  }}
+                />
+                <span className="absolute inset-y-0 right-2.5 flex items-center text-[11.5px] font-bold tabular-nums text-navy">
+                  {Math.round(p * 100)}%
+                </span>
+              </div>
+
+              <span
+                className="w-[104px] shrink-0 rounded-full px-2 py-1 text-center font-mono text-[8.5px] font-bold uppercase tracking-wider"
+                style={{ background: `${tone}18`, color: tone }}
+              >
+                {ok ? 'comparison fair' : 'read with care'}
+              </span>
+              <span className="w-9 text-right text-[12.5px] font-bold tabular-nums text-navy">{fmt(r.current, 0)}</span>
+            </div>
+          )
+        })}
+      </div>
+      <p className="text-[11px] text-muted">
+        The bar is students tested ÷ students eligible; the dashed line is seventy percent. The number on the right is
+        the score that participation produced.
+      </p>
     </div>
   )
 }
 
-// ── Score against the money and the class size ───────────────────────────────
-//
-// The read a standalone score dashboard cannot do, because it has no ledger.
-// Only the school you are signed in to contributes its own enrolment, ratio and
-// cost-per-pupil — peers are anonymous scores, since membership at one school
-// proves nothing about the right to read another's finances.
-function CrossDomainPanel({ rows, scoreType }) {
+// ── What the score cost ──────────────────────────────────────────────────────
+
+/**
+ * THE CHAIN, NOT FOUR BOXES.
+ *
+ * These four numbers are the only thing on this page a standalone assessment
+ * product cannot draw, because they need the ledger sitting beside the roster —
+ * and they were rendered as four identical white cards that stated them without
+ * ever connecting them. The relationship IS the insight: this many children,
+ * taught at this ratio, for this much each, produced this score.
+ *
+ * So it is a flow on the ink ground the module banner already uses, with the
+ * outcome as the terminal node. The dark panel is deliberate: it is the one
+ * place on a page of white cards where KYRO says something no competitor can,
+ * and it should not look like everything around it.
+ */
+function CostChain({ rows, scoreType, reduce }) {
   const focus = (rows ?? []).find((r) => r.isFocus)
   const peers = (rows ?? []).filter((r) => !r.isFocus && r.score !== null)
   if (!focus) {
     return <p className="text-[12.5px] text-muted">Load a year of results to see outcomes beside the money that produced them.</p>
   }
+
   const money = (v) => (v === null || v === undefined ? '—' : `$${Math.round(v).toLocaleString()}`)
-  const cards = [
-    { k: 'Score', v: fmt(focus.score), sub: scoreType === 'percentile' ? 'national percentile' : 'scale score' },
-    { k: 'Enrolment', v: focus.enrollment ?? '—', sub: 'students on the roster' },
-    { k: 'Students per teacher', v: fmt(focus.studentTeacherRatio), sub: 'from the staffing figures' },
-    { k: 'Cost per pupil', v: money(focus.costPerPupil), sub: 'total expenses ÷ enrolment' },
+  const links = [
+    { k: 'Enrolment', v: focus.enrollment ?? '—', sub: 'children on the roster' },
+    { k: 'Per teacher', v: fmt(focus.studentTeacherRatio), sub: 'students each' },
+    { k: 'Cost per pupil', v: money(focus.costPerPupil), sub: 'expenses ÷ enrolment' },
   ]
+
   return (
-    <div className="space-y-3">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {cards.map((c) => (
-          <div key={c.k} className="rounded-xl border border-navy/10 px-3 py-2.5">
-            <p className="font-mono text-[9px] font-bold uppercase tracking-wider text-muted">{c.k}</p>
-            <p className="mt-0.5 font-serif text-[21px] font-semibold tabular-nums text-navy">{c.v}</p>
-            <p className="text-[10.5px] text-muted">{c.sub}</p>
-          </div>
+    <div
+      className="relative isolate overflow-hidden rounded-2xl px-5 py-5 text-white"
+      style={{ background: '#0A1628', boxShadow: `0 24px 60px -38px ${HUE}` }}
+    >
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 -z-10"
+        style={{
+          background: [
+            `radial-gradient(70% 130% at 92% -20%, ${HUE}D9 0%, ${HUE}4D 34%, transparent 72%)`,
+            `radial-gradient(60% 100% at 0% 120%, rgba(59,130,246,0.35) 0%, transparent 72%)`,
+            'linear-gradient(180deg, rgba(255,255,255,0.08) 0%, transparent 24%)',
+          ].join(', '),
+        }}
+      />
+
+      <div className="flex flex-wrap items-stretch gap-2.5">
+        {links.map((n, i) => (
+          <motion.div
+            key={n.k}
+            initial={reduce ? false : { opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45, ease: EASE, delay: reduce ? 0 : i * 0.1 }}
+            className="flex min-w-[7.5rem] flex-1 flex-col justify-center rounded-xl px-3.5 py-3"
+            style={{
+              background: 'rgba(255,255,255,0.07)',
+              boxShadow: 'inset 0 1px 0 0 rgba(255,255,255,0.14), inset 0 0 0 1px rgba(255,255,255,0.06)',
+            }}
+          >
+            <p className="font-mono text-[8px] font-bold uppercase tracking-[0.16em] text-white/55">{n.k}</p>
+            <p className="mt-1 font-serif text-[26px] font-semibold leading-none tabular-nums">{n.v}</p>
+            <p className="mt-1 text-[10px] leading-snug text-white/45">{n.sub}</p>
+          </motion.div>
         ))}
+
+        {/* The arrow into the outcome — the whole point is that the three feed
+            the fourth, which four separate cards never said. */}
+        <motion.div
+          initial={reduce ? false : { opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: reduce ? 0 : 0.34, duration: 0.4 }}
+          className="hidden items-center px-1 text-[20px] font-light text-white/35 sm:flex"
+          aria-hidden="true"
+        >
+          →
+        </motion.div>
+
+        <motion.div
+          initial={reduce ? false : { opacity: 0, scale: 0.94 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5, ease: EASE, delay: reduce ? 0 : 0.4 }}
+          className="relative flex min-w-[8.5rem] flex-1 flex-col justify-center overflow-hidden rounded-xl px-4 py-3"
+          style={{
+            background: `linear-gradient(135deg, ${HUE} 0%, #0f766e 100%)`,
+            boxShadow: `0 0 34px -6px ${HUE}, inset 0 1px 0 0 rgba(255,255,255,0.28)`,
+          }}
+        >
+          <p className="font-mono text-[8px] font-bold uppercase tracking-[0.16em] text-white/75">Produced</p>
+          <p className="mt-1 font-serif text-[34px] font-semibold leading-none tabular-nums">
+            {fmt(focus.score, scoreType === 'scale' ? 1 : 0)}
+          </p>
+          <p className="mt-1 text-[10px] text-white/70">
+            {scoreType === 'percentile' ? 'national percentile' : 'scale score'}
+          </p>
+        </motion.div>
       </div>
-      {peers.length > 0 ? (
-        <p className="text-[11.5px] text-muted">
-          {peers.length} peer school{peers.length === 1 ? '' : 's'} scored{' '}
-          {peers.map((p) => fmt(p.score, 0)).join(', ')}. Their staffing and spending stay with them — this view only
-          reads the ledger of the school you are signed in to.
-        </p>
-      ) : null}
+
+      <p className="mt-3.5 text-[11.5px] leading-relaxed text-white/55">
+        {peers.length > 0
+          ? `${peers.length} peer school${peers.length === 1 ? '' : 's'} scored ${peers.map((p) => fmt(p.score, 0)).join(', ')}. Their staffing and spending stay with them — this reads only the ledger of the school you are signed in to.`
+          : 'Outcomes beside the money and the class size that produced them — the read a standalone score dashboard cannot do, because it has no ledger.'}
+      </p>
     </div>
   )
 }
 
 // ── Subgroups ────────────────────────────────────────────────────────────────
-function SubgroupBars({ groups, reduce }) {
-  const rows = (groups ?? []).filter((g) => g.value !== null || g.suppressed)
-  if (rows.length === 0) {
+/**
+ * SUPPORT-FLAG SUBGROUPS, AS DUMBBELLS.
+ *
+ * This component used to call .filter() on `groups` and take a flat list of
+ * bars. The server has never sent that: subgroupBreakdown returns an OBJECT of
+ * paired buckets — { isp, plan504, ell, totalMatched } — because the FERPA rule
+ * here suppresses a PAIR rather than a row (publishing the thin side alone, or
+ * its complement, recovers the child by subtraction). So the component threw on
+ * an object with no .filter the moment a school actually had student-level
+ * results matched to its roster, which took the whole page white.
+ *
+ * Rendering the real shape is also the better chart. The finding is a GAP
+ * between two groups, and a dumbbell draws a gap directly — two dots, the span
+ * between them lit by direction, the number at the end. A pair of separate bars
+ * makes the reader subtract two lengths by eye to recover the one quantity the
+ * panel exists to report.
+ */
+const SUBGROUP_LABELS = [
+  { key: 'isp', label: 'Learning support', hint: 'ISP / IEP on the roster' },
+  { key: 'plan504', label: '504 plan', hint: 'Formal accommodation' },
+  { key: 'ell', label: 'English learners', hint: 'ELL flag on the roster' },
+]
+
+function SubgroupBars({ groups, range, reduce }) {
+  const buckets = SUBGROUP_LABELS.map((d) => ({ ...d, bucket: groups?.[d.key] })).filter((d) => d.bucket)
+
+  if (!groups || buckets.length === 0) {
     return (
       <p className="text-[12.5px] text-muted">
         Nothing to break out yet. These groups come from the support flags already on your roster, and only appear
@@ -1991,31 +2287,114 @@ function SubgroupBars({ groups, reduce }) {
       </p>
     )
   }
-  const max = Math.max(...rows.map((r) => r.value ?? 0), 1)
+
+  const values = buckets.flatMap((d) => [d.bucket.withFlag?.value, d.bucket.without?.value])
+  const { lo, hi } = fitScale(values, range, { pad: 0.3 })
+  const pct = (v) => ((v - lo) / (hi - lo || 1)) * 100
+
+  const shown = buckets.filter((d) => !d.bucket.withFlag?.suppressed)
+
   return (
-    <div className="space-y-2">
-      {rows.map((g, i) => (
-        <div key={g.key ?? g.label} className="flex items-center gap-2.5">
-          <span className="w-32 shrink-0 text-right text-[11.5px] text-muted">{g.label ?? g.key}</span>
-          <div className="h-6 flex-1 overflow-hidden rounded-md bg-navy/[0.05]">
-            {g.suppressed ? null : (
-              <motion.div
-                initial={reduce ? { width: `${((g.value ?? 0) / max) * 100}%` } : { width: 0 }}
-                animate={{ width: `${((g.value ?? 0) / max) * 100}%` }}
-                transition={{ duration: 0.6, ease: EASE, delay: reduce ? 0 : i * 0.06 }}
-                className="h-full rounded-md"
-                style={{ background: `linear-gradient(90deg, ${HUE}, #14b8a6)` }}
-              />
-            )}
-          </div>
-          <span className="w-12 text-right text-[12px] font-semibold tabular-nums text-navy">
-            {g.suppressed ? '<5' : fmt(g.value)}
-          </span>
-        </div>
-      ))}
+    <div className="space-y-3">
+      {/* A legend, because a dumbbell has two ends and the reader is owed a
+          key before the first row rather than a caption after the last. */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[10.5px] text-muted">
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full" style={{ background: HUE }} />
+          In the group
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full border-2 border-slate-400 bg-white" />
+          Everyone else
+        </span>
+      </div>
+
+      {buckets.map((d, i) => {
+        const b = d.bucket
+        const suppressed = b.withFlag?.suppressed || b.without?.suppressed
+        const a = b.withFlag?.value
+        const z = b.without?.value
+        const gap = b.gap
+        const behind = (gap ?? 0) < 0
+        const tone = behind ? INK.behind : INK.ahead
+
+        return (
+          <motion.div
+            key={d.key}
+            initial={reduce ? false : { opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, ease: EASE, delay: reduce ? 0 : i * 0.08 }}
+            className="rounded-xl px-3 py-2.5"
+            style={{ background: 'rgba(16,28,61,0.025)', boxShadow: 'inset 0 0 0 1px rgba(16,28,61,0.06)' }}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-[124px] shrink-0">
+                <p className="text-[12px] font-semibold leading-tight text-navy">{d.label}</p>
+                <p className="font-mono text-[8.5px] uppercase tracking-[0.1em] text-muted">{d.hint}</p>
+              </div>
+
+              {suppressed ? (
+                <div className="flex flex-1 items-center gap-2">
+                  <div className="h-[3px] flex-1 rounded-full bg-navy/[0.07]" />
+                  <span className="font-mono text-[10px] text-muted">Fewer than 5 on one side — not shown</span>
+                </div>
+              ) : (
+                <>
+                  {/* ── The dumbbell ── */}
+                  <div className="relative h-8 flex-1">
+                    <span aria-hidden="true" className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-navy/[0.08]" />
+                    {/* The span between the two groups IS the finding. */}
+                    <motion.span
+                      aria-hidden="true"
+                      className="absolute top-1/2 h-[5px] -translate-y-1/2 rounded-full"
+                      style={{
+                        left: `${Math.min(pct(a), pct(z))}%`,
+                        background: `linear-gradient(90deg, ${tone}55, ${tone})`,
+                        boxShadow: `0 0 12px -2px ${tone}`,
+                      }}
+                      initial={reduce ? { width: `${Math.abs(pct(a) - pct(z))}%` } : { width: 0 }}
+                      animate={{ width: `${Math.abs(pct(a) - pct(z))}%` }}
+                      transition={{ duration: 0.6, ease: EASE, delay: reduce ? 0 : 0.15 + i * 0.08 }}
+                    />
+                    {/* Everyone else: hollow, quiet. */}
+                    <span
+                      className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-slate-400 bg-white"
+                      style={{ left: `${pct(z)}%` }}
+                      title={`Everyone else: ${fmt(z)} (${b.without.count} students)`}
+                    />
+                    {/* The group in question: filled, lit. */}
+                    <motion.span
+                      className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white"
+                      style={{ left: `${pct(a)}%`, background: HUE, boxShadow: `0 0 14px -2px ${HUE}` }}
+                      initial={reduce ? false : { scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ duration: 0.4, ease: EASE, delay: reduce ? 0 : 0.3 + i * 0.08 }}
+                      title={`In the group: ${fmt(a)} (${b.withFlag.count} students)`}
+                    />
+                  </div>
+
+                  <div className="w-[86px] shrink-0 text-right">
+                    <p className="font-serif text-[17px] font-semibold leading-none tabular-nums" style={{ color: tone }}>
+                      {signed(gap)}
+                    </p>
+                    <p className="font-mono text-[8.5px] uppercase tracking-[0.1em] text-muted">
+                      {b.withFlag.count} vs {b.without.count}
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+          </motion.div>
+        )
+      })}
+
       <p className="text-[11px] text-muted">
+        {shown.length > 0
+          ? 'Each row compares students carrying that flag with everyone else who sat the same test. '
+          : ''}
         A group of fewer than five students is never shown — and neither is the group it would leave behind, because
         the rest of the school minus one group is that group.
+        {groups.totalMatched ? ` Based on ${groups.totalMatched} scored students matched to the roster.` : ''}
       </p>
     </div>
   )

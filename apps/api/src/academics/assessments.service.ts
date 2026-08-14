@@ -568,6 +568,8 @@ export class AssessmentsService {
     const level = schoolLevelFrom(school)
     const peerIds = await this.orgSchoolIds(school.organizationId)
     const all = await this.aggregates(peerIds, { testType: q.testType })
+    // Independent of q.testType on purpose — see testTypesFor.
+    const availableTestTypes = await this.testTypesFor(peerIds)
     if (all.length === 0) {
       return this.emptyDashboard(school, level)
     }
@@ -632,7 +634,7 @@ export class AssessmentsService {
         // grade and year selects already follow.
         subject: q.subject ?? null,
         offeredTestTypes: testTypesForLevel(level),
-        availableTestTypes: [...new Set(all.map((a) => a.testType))],
+        availableTestTypes,
         scoreRange: scoreRange(family, scoreType),
         nationalReference: nationalReference(scoreType),
         peerCount: peer.schools,
@@ -756,6 +758,7 @@ export class AssessmentsService {
   ) {
     const schoolIds = await this.orgSchoolIds(organizationId)
     const all = await this.aggregates(schoolIds, { testType: q.testType })
+    const availableTestTypes = await this.testTypesFor(schoolIds)
     if (all.length === 0) return { schools: [], context: null, empty: true }
 
     const years = [...new Set(all.map((a) => a.schoolYear))].sort((a, b) => b - a)
@@ -783,7 +786,7 @@ export class AssessmentsService {
         grade,
         grades: [...new Set(inScope.map((a) => a.gradeLevel))].filter((g) => g !== 'all').sort(),
         subjects: [...SUBJECTS_FOR_FAMILY[family]],
-        availableTestTypes: [...new Set(all.map((a) => a.testType))],
+        availableTestTypes,
         scoreRange: scoreRange(family, scoreType),
         nationalReference: nationalReference(scoreType),
       },
@@ -1540,6 +1543,27 @@ export class AssessmentsService {
    * 2 of review found five readers bypassing a service-local gate, which is what
    * a rule enforced by convention always eventually gets.
    */
+  /**
+   * Every test type these schools have ANY results for.
+   *
+   * Deliberately its own query rather than a projection of the dashboard's
+   * rows: those rows are already filtered to the selected test type, so
+   * deriving the picker's options from them collapsed the list to whatever was
+   * currently selected. Choosing ACT rewrote the menu to ['act'] and there was
+   * no longer a control anywhere on the page that could get back to TerraNova.
+   *
+   * A picker's options must never be a function of the picker's own value.
+   */
+  private async testTypesFor(schoolIds: string[]): Promise<string[]> {
+    if (schoolIds.length === 0) return []
+    const rows = await this.prisma.assessmentSchoolAggregate.findMany({
+      where: { schoolId: { in: schoolIds } },
+      select: { testType: true },
+      distinct: ['testType'],
+    })
+    return rows.map((r) => r.testType).sort()
+  }
+
   private async aggregates(schoolIds: string[], q: { schoolYear?: number; testType?: string } = {}): Promise<AssessmentRow[]> {
     if (schoolIds.length === 0) return []
     const rows = await this.prisma.assessmentSchoolAggregate.findMany({
