@@ -18,11 +18,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { Section } from '../components/module/SectionHeader.jsx'
+import ModuleBreadcrumb from '../components/module/ModuleBreadcrumb.jsx'
+import { ModuleAccent } from '../components/module/ModuleTabs.jsx'
 import { ArrowUpDown, Award, BookOpenCheck, ChevronRight, Grid3x3, Network, TrendingDown, Upload } from 'lucide-react'
 import { useScope } from '../context/ScopeContext.jsx'
 import { academicsApi } from '../lib/api.js'
 import { testTypeLabel } from '../lib/academicsVocab.js'
-import BackLink from '../components/ui/BackLink.jsx'
 import ModuleHero from '../components/module/ModuleHero.jsx'
 import OrgAssessmentUpload from '../components/academics/OrgAssessmentUpload.jsx'
 
@@ -91,12 +92,25 @@ export default function OrgAcademicsPage() {
   }
 
   return (
+    // Nested routes fall outside ModuleTabs, which is what normally sets
+    // --c-module — so without this the breadcrumb's arrow rendered navy on a
+    // teal module's own page. `display: contents` costs no layout.
+    <ModuleAccent moduleKey="academics">
     <div className="mx-auto max-w-page space-y-4 p-4 sm:p-6">
       {/* The sidebar's module section only grows on an EXACT module path, so a
           nested route like this one loses it — the same as
           /enrollment/diocesan-import, which is why that page carries a BackLink
           too. Without it there is no way back to Academics but the browser. */}
-      <BackLink fallback="/academics" fallbackLabel="Back to Academics" />
+      {/* The same trail the module pages carry, so a reader who arrives here
+          from the Overview's network card sees one continuous hierarchy rather
+          than a differently-shaped back control on every screen. */}
+      <ModuleBreadcrumb
+        crumbs={[
+          { label: 'Dashboard', to: '/app' },
+          { label: 'Academics', to: '/academics' },
+          { label: 'Network' },
+        ]}
+      />
 
       {/* ── Hero ── */}
       <ModuleHero
@@ -329,5 +343,6 @@ export default function OrgAcademicsPage() {
         </>
       )}
     </div>
+    </ModuleAccent>
   )
 }

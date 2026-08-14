@@ -10,6 +10,7 @@
 // layer; this page fetches one payload and paints it.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { BookOpen } from 'lucide-react'
 import ModuleTabs, { ModuleAccent, useModuleTab } from '../components/module/ModuleTabs.jsx'
@@ -17,7 +18,7 @@ import { moduleTabs } from '../components/module/moduleAnatomy.js'
 import { useScope } from '../context/ScopeContext.jsx'
 import ModuleHero from '../components/module/ModuleHero.jsx'
 import AddDataTab from '../components/wizard/AddDataTab.jsx'
-import AssessmentDashboard from '../components/academics/AssessmentDashboard.jsx'
+import AssessmentDashboard, { VIEWS } from '../components/academics/AssessmentDashboard.jsx'
 import AcademicsOverview from '../components/academics/AcademicsOverview.jsx'
 import LessonPlanRegister from '../components/academics/LessonPlanRegister.jsx'
 import GradesPanel from '../components/academics/GradesPanel.jsx'
@@ -32,7 +33,21 @@ export default function AcademicsPage() {
   const { activeId, activeSchool } = useSchools()
   // The sidebar drives ?tab= for every module; this page only reads it (and
   // writes it from the Overview's own door into the dashboard).
-  const [, setTab] = useModuleTab(moduleTabs('academics'))
+  const [activeTab, setTab] = useModuleTab(moduleTabs('academics'))
+
+  // The analysis sub-view is the deepest thing a reader can be looking at, so
+  // it belongs in the trail — "Analytics" alone does not distinguish the cohort
+  // slopegraph from the board table. Only meaningful on the analytics tab.
+  // Only for a view that is actually SELECTED. Defaulting this to 'Standing'
+  // appended a crumb on the bare Analytics tab, which pushed "Analytics" into
+  // the middle of the trail and made it the back arrow's target — so the arrow
+  // navigated to the page it was already on and the reader could not get out.
+  // Standing is where Analytics lands, not a place below it, and the dashboard
+  // clears ?view= for exactly that reason.
+  const [searchParams] = useSearchParams()
+  const rawView = searchParams.get('view')
+  const viewCrumb =
+    activeTab === 'analytics' && rawView ? (VIEWS.find((v) => v.key === rawView)?.label ?? null) : null
   const canEdit = activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'
 
   const [status, setStatus] = useState(null)
@@ -110,6 +125,7 @@ export default function AcademicsPage() {
     <ModuleAccent moduleKey="academics">
       <ModuleTabs
         moduleKey="academics"
+        trail={viewCrumb ? [viewCrumb] : []}
         overview={
           <Panel>
             <AcademicsHero

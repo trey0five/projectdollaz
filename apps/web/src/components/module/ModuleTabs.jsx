@@ -15,9 +15,9 @@
 // tile's bare route and Overview share one canonical URL.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
-import { moduleAccentVars, moduleTabs } from './moduleAnatomy.js'
-import { BACK_PILL, BackPillBody } from '../ui/BackLink.jsx'
+import { useSearchParams } from 'react-router-dom'
+import { moduleAccentVars, moduleLabel, moduleTabLabel, moduleTabs } from './moduleAnatomy.js'
+import ModuleBreadcrumb from './ModuleBreadcrumb.jsx'
 
 /**
  * The active-tab hook: reads/writes `?tab=`, validated against the module's present
@@ -59,19 +59,33 @@ export function ModuleAccent({ moduleKey, children }) {
   return <div style={{ display: 'contents', ...moduleAccentVars(moduleKey) }}>{children}</div>
 }
 
-export default function ModuleTabs({ moduleKey, overview, addData, records, analytics, reports }) {
+export default function ModuleTabs({ moduleKey, overview, addData, records, analytics, reports, trail = [] }) {
   const tabs = moduleTabs(moduleKey)
   const [active, setTab] = useModuleTab(tabs)
 
   const panels = { overview, add: addData, records, analytics, reports }
   const panel = panels[active] ?? overview
 
-  // A section deeper than Overview needs a way BACK to it. The only pill here
-  // was "Back to dashboard", which leaves the module entirely — so the way back
-  // from Analytics to the module's own front page was the browser button or the
-  // sidebar, and a reader who arrived by deep link had neither in mind. One
-  // step up the module, then one step out of it.
-  const deeper = active !== 'overview'
+  // ONE control, not two. A "Back to overview" pill beside "Back to dashboard"
+  // made the reader compare two identically-shaped affordances to work out
+  // which moved them one step and which left the module — and neither said
+  // where they currently were. The trail says it: Dashboard › Academics ›
+  // Analytics › Cohorts, with every ancestor a direct jump and the arrow bound
+  // to the immediate parent.
+  //
+  // `trail` lets a module append its own sub-position (the analysis view, say),
+  // which no generic chrome could know about.
+  const crumbs = [
+    { label: 'Dashboard', to: '/app' },
+    { label: moduleLabel(moduleKey), onClick: active === 'overview' ? undefined : () => setTab('overview') },
+    // Given a handler even when it is the CURRENT page: once a module appends a
+    // sub-view, this crumb stops being last and becomes both a jump target and
+    // the back arrow's destination. Without one, the arrow rendered as a live
+    // control that did nothing. The last crumb is drawn inert regardless, so
+    // the handler is simply unused while this is where you are.
+    active !== 'overview' ? { label: moduleTabLabel(moduleKey, active), onClick: () => setTab(active) } : null,
+    ...trail.map((t) => (typeof t === 'string' ? { label: t } : t)),
+  ].filter(Boolean)
 
   return (
     // The accent-var override re-themes EVERY v2 accent inside this page (CTAs,
@@ -80,15 +94,8 @@ export default function ModuleTabs({ moduleKey, overview, addData, records, anal
     <div className="min-h-screen bg-section" style={moduleAccentVars(moduleKey)}>
       {/* Back to the tile dashboard. The module's section nav (Overview · Add
           data · Records · Reports) lives in the LEFT SIDEBAR now. */}
-      <div className="mx-auto flex max-w-page flex-wrap items-center gap-2 px-4 pt-4 sm:px-10">
-        {deeper ? (
-          <button type="button" onClick={() => setTab('overview')} className={BACK_PILL}>
-            <BackPillBody label="Back to overview" />
-          </button>
-        ) : null}
-        <Link to="/app" className={BACK_PILL}>
-          <BackPillBody label="Back to dashboard" />
-        </Link>
+      <div className="mx-auto max-w-page px-4 pt-4 sm:px-10">
+        <ModuleBreadcrumb crumbs={crumbs} />
       </div>
 
       {/* ── Active panel (each panel brings its own max-width container) ───────── */}

@@ -66,7 +66,9 @@ const signed = (v, digits = 1) => {
  * happening in the classrooms, are we moving, are these the same children, and
  * how does the network compare.
  */
-const VIEWS = [
+// Exported so the page chrome can name the current view in the breadcrumb —
+// one list, so the tab strip and the trail can never disagree about a label.
+export const VIEWS = [
   { key: 'standing', label: 'Standing' },
   { key: 'classroom', label: 'Classroom' },
   { key: 'time', label: 'Over time' },
