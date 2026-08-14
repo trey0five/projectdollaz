@@ -464,7 +464,11 @@ function CohortPanel({ cohort, national, range, reduce }) {
 
   // ── The slopegraph ──
   const W = 820
-  const H = 320
+  // HEIGHT GROWS WITH THE ROSTER. At a fixed 320px the label spreader needs
+  // 22px a school and has ~240px to give, so a diocese of fourteen pushed names
+  // straight out of the frame and over the caption beneath it. The canvas now
+  // buys the room it needs rather than overflowing what it has.
+  const H = Math.max(320, pairs.length * 32 + 110)
   // Wide gutters on purpose: each end of a slope carries a school name, its
   // score in a chip, and (on the right) the move — none of which fit in the
   // 92px the first cut allowed, which is why every name arrived truncated.
@@ -479,8 +483,10 @@ function CohortPanel({ cohort, national, range, reduce }) {
   const xL = PAD.l
   const xR = W - PAD.r
 
-  const left = spreadLabels(pairs.map((m) => ({ id: m.schoolId, y: y(m.prior.value) })), 22)
-  const right = spreadLabels(pairs.map((m) => ({ id: m.schoolId, y: y(m.current.value) })), 22)
+  // 27 for the same reason as the quadrant: the left gutter's block is a name
+  // over a cohort count, which is taller than the 22 the spreader was given.
+  const left = spreadLabels(pairs.map((m) => ({ id: m.schoolId, y: y(m.prior.value) })), 27)
+  const right = spreadLabels(pairs.map((m) => ({ id: m.schoolId, y: y(m.current.value) })), 24)
   const labelY = (side, id) => (side === 'l' ? left : right).find((p) => p.id === id)?.y ?? 0
 
   // Rank by where the cohort ENDED, so the badge beside a name answers "and how
@@ -560,7 +566,10 @@ function CohortPanel({ cohort, national, range, reduce }) {
                 <line x1={xL - 26} x2={xR + 26} y1={y(national)} y2={y(national)} stroke={INK.national} strokeWidth="1.2" strokeDasharray="5 4" opacity="0.55" />
                 {/* Pinned to the edge. Floating this label mid-chart put it
                     straight through the slopes it was meant to reference. */}
-                <text x={xL - 32} y={y(national) + 3} fontSize="8.5" fontWeight="700" fill={INK.national} textAnchor="end">
+                {/* Above the rule, inside the plot. To the LEFT it sat in the
+                    same gutter as the school names and collided with whichever
+                    one happened to land at the national line. */}
+                <text x={xL + 8} y={y(national) - 5} fontSize="8.5" fontWeight="700" fill={INK.national} textAnchor="start">
                   NATIONAL {national}
                 </text>
               </>
@@ -597,7 +606,10 @@ function CohortPanel({ cohort, national, range, reduce }) {
             {pairs.map((m, i) => {
               const isFocus = m.schoolId === focusId
               const up = (m.change ?? 0) >= 0
-              const c = isFocus ? HUE : up ? 'rgba(5,150,105,0.5)' : 'rgba(225,29,72,0.45)'
+              // Peers fade as the network grows: fourteen lines at half opacity
+              // is a thicket, and the one line the reader came for has to win.
+              const dim = pairs.length > 8 ? 0.28 : 0.5
+              const c = isFocus ? HUE : up ? `rgba(5,150,105,${dim})` : `rgba(225,29,72,${dim - 0.05})`
               const y1 = y(m.prior.value)
               const y2 = y(m.current.value)
               return (
@@ -1584,11 +1596,46 @@ function GrowthQuadrant({ movements, peerAvg, range, reduce }) {
   const maxTested = Math.max(...pts.map((p) => p.tested ?? 0), 1)
   const radius = (n) => (n ? 7 + Math.sqrt(n / maxTested) * 9 : 7)
 
-  // Nudge labels off each other, then keep them inside the frame.
+  // LABEL WHAT MATTERS, NOT EVERYTHING.
+  //
+  // A scatter has no rows to grow into: every extra school competes for the same
+  // canvas. At fourteen, naming all of them turned the plot into a stack of
+  // overlapping text with the dots buried underneath — the labels destroyed the
+  // chart they were annotating.
+  //
+  // So above a threshold only the schools a reader came to find keep a label:
+  // the school they are signed in to, whoever moved furthest either way, and
+  // anyone sitting in the bottom-left — the corner this panel's own caption
+  // says is the one that matters. Everyone else stays a bubble, still plotted,
+  // still positioned, and still named on hover. Nothing is dropped from the
+  // chart; only the ink is rationed.
+  const LABEL_ALL_UPTO = 8
+  const notable = new Set()
+  if (pts.length > LABEL_ALL_UPTO) {
+    const byMove = [...pts].sort((a, b) => Math.abs(b.change) - Math.abs(a.change))
+    byMove.slice(0, 3).forEach((p) => notable.add(p.schoolId ?? p.schoolName))
+    pts
+      .filter((p) => p.isFocus || (peerAvg !== null && p.current < peerAvg && p.change < 0))
+      .slice(0, 4)
+      .forEach((p) => notable.add(p.schoolId ?? p.schoolName))
+    pts.filter((p) => p.isFocus).forEach((p) => notable.add(p.schoolId ?? p.schoolName))
+  }
+  const labelled = (p) => pts.length <= LABEL_ALL_UPTO || notable.has(p.schoolId ?? p.schoolName)
+
+  // Only the labelled points enter the spreader — nudging a point that carries
+  // no text just moves its leader line away from its own dot.
   const placed = spreadLabels(
-    pts.map((p, i) => ({ ...p, px: x(p.current), y: y(p.change) - 13, i })),
-    14,
+    pts.map((p, i) => ({ ...p, px: x(p.current), y: y(p.change) - 13, i, showLabel: labelled(p) })).filter((p) => p.showLabel),
+    // 26, not 14: each label is TWO lines (the name, then the move and the
+    // cohort). Spacing them by less than the height of the block they carry is
+    // why they still collided after the spreader had run.
+    26,
   ).map((p) => ({ ...p, y: Math.max(PAD.t + 8, Math.min(H - PAD.b - 4, p.y)) }))
+
+  // The rest still plot, at their true position, named on hover.
+  const quiet = pts
+    .map((p, i) => ({ ...p, px: x(p.current), y: y(p.change) - 13, i }))
+    .filter((p) => !labelled(p))
 
   const zones = midX
     ? [
@@ -1634,6 +1681,26 @@ function GrowthQuadrant({ movements, peerAvg, range, reduce }) {
             </text>
           </>
         ) : null}
+
+        {/* The unlabelled: plotted at their true position, quieter, and named
+            on hover. Rationing the LABELS is not the same as dropping schools —
+            the shape of the network still comes from all of them. */}
+        {quiet.map((p, i) => {
+          const cy = y(p.change)
+          const c = p.change >= 0 ? INK.ahead : INK.behind
+          return (
+            <motion.g
+              key={`q-${p.schoolId ?? p.schoolName ?? i}`}
+              initial={reduce ? false : { opacity: 0, scale: 0.4 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: reduce ? 0 : 0.15 + i * 0.05, duration: 0.45, ease: EASE }}
+              style={{ transformOrigin: `${p.px}px ${cy}px` }}
+            >
+              <title>{`${p.schoolName}: ${fmt(p.current, 0)}, ${signed(p.change, 0)}${p.tested ? ` · ${p.tested} tested` : ''}`}</title>
+              <circle cx={p.px} cy={cy} r={radius(p.tested)} fill={c} fillOpacity="0.4" stroke="#fff" strokeWidth="1.5" />
+            </motion.g>
+          )
+        })}
 
         {placed.map((p, i) => {
           const up = p.change >= 0
@@ -1757,9 +1824,16 @@ function BoardReportBars({ rows, national, peerAvg, range, focusId, scoreType, r
   const data = (rows ?? []).filter((r) => r.current !== null && r.current !== undefined)
   if (data.length === 0) return <p className="text-[12.5px] text-muted">No results to rank for this selection.</p>
 
-  const W = 680
+  // WIDTH GROWS WITH THE NETWORK. A fixed 680px canvas divided by school count
+  // is fine for three and unreadable for fourteen: the band collapses, the bars
+  // touch, and the rotated names below overlap into a grey smear. A diocese is
+  // exactly the customer this chart is for, so it gets a MINIMUM band per school
+  // and scrolls sideways past that instead of compressing — the reader can still
+  // read any single school, which a squeezed chart cannot offer at any width.
+  const MIN_BAND = 48
   const H = 300
   const PAD = { l: 34, r: 16, t: 26, b: 62 }
+  const W = Math.max(680, PAD.l + PAD.r + data.length * MIN_BAND)
   const uid = 'board'
   const { lo, hi } = fitScale(
     [...data.flatMap((r) => [r.current, r.prior]), national, peerAvg],
@@ -1775,7 +1849,14 @@ function BoardReportBars({ rows, national, peerAvg, range, focusId, scoreType, r
 
   return (
     <div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="block w-full" role="img" aria-label="Every school, both years, ranked">
+      <div className="overflow-x-auto">
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className="block"
+        style={{ width: '100%', minWidth: W > 680 ? `${W}px` : undefined }}
+        role="img"
+        aria-label="Every school, both years, ranked"
+      >
         <ChartDefs id={uid} />
 
         {[0, 0.25, 0.5, 0.75, 1].map((t) => (
@@ -1874,6 +1955,7 @@ function BoardReportBars({ rows, national, peerAvg, range, focusId, scoreType, r
         <text x={PAD.l - 6} y={PAD.t + 5} fontSize="9" textAnchor="end" fill="#94a3b8">{Math.round(hi)}</text>
         <text x={PAD.l - 6} y={floor} fontSize="9" textAnchor="end" fill="#94a3b8">{Math.round(lo)}</text>
       </svg>
+      </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-4 text-[11px] text-muted">
         <span className="inline-flex items-center gap-1.5">
