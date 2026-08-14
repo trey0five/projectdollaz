@@ -1148,6 +1148,24 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
             and the table two sections down still printed them. The round-3 API
             change added `hidePeerNames`; nothing ever sent it. Now the checkbox
             re-fetches, so the names genuinely do not leave the server. */}
+        {/* SUBJECT. The API has always accepted it and only the heat map and the
+            movement list consumed it silently — without a control, the reader
+            could not ask "show me Math" at all. */}
+        {(ctx?.subjects ?? []).length > 1 ? (
+          <select
+            aria-label="Subject"
+            value={ctx?.subject ?? ''}
+            onChange={(e) => select({ subject: e.target.value || null })}
+            className="rounded-lg border border-navy/15 bg-white px-2.5 py-1.5 text-[12.5px] text-navy"
+          >
+            <option value="">All subjects</option>
+            {ctx.subjects.map((sub) => (
+              <option key={sub} value={sub}>
+                {label(sub)}
+              </option>
+            ))}
+          </select>
+        ) : null}
         <label className="ml-auto flex items-center gap-1.5 text-[12px] text-muted">
           <input
             type="checkbox"
@@ -1373,7 +1391,13 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
 
       {/* ── Movement ── */}
       {(data?.movements ?? []).length > 0 ? (
-        <Section eyebrow="Year over year" title="Who moved, and which way" reduce={reduce}>
+        <Section eyebrow="Trends & movement" title="What a board asks first" reduce={reduce}>
+          <MovementHighlights movements={data.movements} national={ctx?.nationalReference} reduce={reduce} />
+        </Section>
+      ) : null}
+
+      {(data?.movements ?? []).length > 0 ? (
+        <Section eyebrow="Year over year" title="Every school, ranked by movement" reduce={reduce}>
           <div className="space-y-1.5">
             {data.movements.map((m, i) => {
               const tone = m.direction === 'improved' ? '#059669' : m.direction === 'declined' ? '#e11d48' : '#94a3b8'
@@ -1442,6 +1466,29 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
           <Section
             eyebrow="Board-ready"
             title="Every school, both years"
+            reduce={reduce}
+            aside={
+              <span className="font-mono text-[10px] uppercase tracking-wider text-muted">
+                {ctx?.grade === 'all' ? 'All grades' : `Grade ${ctx?.grade}`}
+              </span>
+            }
+          >
+            <BoardReportBars
+              rows={data.table}
+              national={ctx?.nationalReference}
+              peerAvg={peerAvg}
+              range={ctx?.scoreRange}
+              focusId={data?.school?.id}
+              scoreType={ctx?.scoreType}
+              reduce={reduce}
+            />
+          </Section>
+        ) : null}
+
+        {(data?.table ?? []).length > 0 ? (
+          <Section
+            eyebrow="The same numbers, as a table"
+            title="Sortable, for the packet"
             reduce={reduce}
             aside={
               <span className="font-mono text-[10px] uppercase tracking-wider text-muted">
@@ -1604,6 +1651,220 @@ function GrowthQuadrant({ movements, peerAvg, range, reduce }) {
       <p className="mt-1 text-[11px] text-muted">
         Bottom-left is the corner that matters: below the network average <em>and</em> falling.
       </p>
+    </div>
+  )
+}
+
+// ── The board-report grouped bars ───────────────────────────────────────────
+
+/**
+ * THE SIGNATURE DIOCESAN VIEW — the one a board already recognises from the
+ * printed reports: every school ranked left to right, both years side by side,
+ * with the national and network lines drawn across.
+ *
+ * The ranked chart elsewhere on this page shows the CURRENT year only, and the
+ * comparison table carries both years as numerals. Neither answers the question
+ * a board asks out loud — "which schools moved, and by how much, relative to
+ * everyone else" — because that is a question about the GAP between two bars,
+ * and a gap has to be seen rather than subtracted.
+ */
+function BoardReportBars({ rows, national, peerAvg, range, focusId, scoreType, reduce }) {
+  const data = (rows ?? []).filter((r) => r.current !== null && r.current !== undefined)
+  if (data.length === 0) return <p className="text-[12.5px] text-muted">No results to rank for this selection.</p>
+
+  const W = 680
+  const H = 300
+  const PAD = { l: 34, r: 16, t: 26, b: 62 }
+  const uid = 'board'
+  const { lo, hi } = fitScale(
+    [...data.flatMap((r) => [r.current, r.prior]), national, peerAvg],
+    range,
+    { pad: 0.16 },
+  )
+  const plotW = W - PAD.l - PAD.r
+  const plotH = H - PAD.t - PAD.b
+  const band = plotW / data.length
+  const barW = Math.min(26, (band - 10) / 2)
+  const y = (v) => PAD.t + (1 - (v - lo) / (hi - lo || 1)) * plotH
+  const floor = PAD.t + plotH
+
+  return (
+    <div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="block w-full" role="img" aria-label="Every school, both years, ranked">
+        <ChartDefs id={uid} />
+
+        {[0, 0.25, 0.5, 0.75, 1].map((t) => (
+          <line key={t} x1={PAD.l} x2={W - PAD.r} y1={PAD.t + t * plotH} y2={PAD.t + t * plotH} stroke={INK.grid} strokeWidth="1" />
+        ))}
+
+        {data.map((r, i) => {
+          const cx = PAD.l + band * i + band / 2
+          const isFocus = r.schoolId === focusId
+          const gap = 4
+          return (
+            <g key={r.schoolId ?? r.schoolName ?? i}>
+              {/* Prior year — quiet, behind. */}
+              {r.prior !== null && r.prior !== undefined ? (
+                <motion.rect
+                  x={cx - barW - gap / 2}
+                  width={barW}
+                  rx="3"
+                  fill="rgba(148,163,184,0.55)"
+                  initial={reduce ? { y: y(r.prior), height: floor - y(r.prior) } : { y: floor, height: 0 }}
+                  animate={{ y: y(r.prior), height: Math.max(0, floor - y(r.prior)) }}
+                  transition={{ duration: 0.7, ease: EASE, delay: reduce ? 0 : 0.05 + i * 0.06 }}
+                />
+              ) : null}
+
+              {/* This year — the one the eye should land on. */}
+              <motion.rect
+                x={cx + gap / 2}
+                width={barW}
+                rx="3"
+                fill={isFocus ? `url(#${uid}-focus)` : 'rgba(31,61,114,0.5)'}
+                filter={isFocus ? `url(#${uid}-glow)` : undefined}
+                initial={reduce ? { y: y(r.current), height: floor - y(r.current) } : { y: floor, height: 0 }}
+                animate={{ y: y(r.current), height: Math.max(0, floor - y(r.current)) }}
+                transition={{ duration: 0.7, ease: EASE, delay: reduce ? 0 : 0.12 + i * 0.06 }}
+              />
+
+              <motion.text
+                x={cx + gap / 2 + barW / 2}
+                y={y(r.current) - 6}
+                fontSize="11"
+                fontWeight="700"
+                textAnchor="middle"
+                fill={isFocus ? '#0f766e' : '#334155'}
+                initial={reduce ? false : { opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: reduce ? 0 : 0.5 + i * 0.06, duration: 0.4 }}
+              >
+                {fmt(r.current, scoreType === 'scale' ? 1 : 0)}
+              </motion.text>
+
+              <text
+                x={cx}
+                y={floor + 16}
+                fontSize="9"
+                textAnchor="middle"
+                fill={isFocus ? '#0f766e' : '#64748b'}
+                fontWeight={isFocus ? '700' : '400'}
+                transform={data.length > 6 ? `rotate(-32 ${cx} ${floor + 16})` : undefined}
+              >
+                {shortName(r.schoolName, 14)}
+              </text>
+              {r.change !== null && r.change !== undefined ? (
+                <text
+                  x={cx}
+                  y={floor + 30}
+                  fontSize="9"
+                  fontWeight="700"
+                  textAnchor="middle"
+                  fill={r.change >= 0 ? INK.ahead : INK.behind}
+                  opacity={data.length > 6 ? 0 : 1}
+                >
+                  {signed(r.change, 0)}
+                </text>
+              ) : null}
+            </g>
+          )
+        })}
+
+        {[
+          national !== null && national !== undefined ? { v: national, c: INK.national, t: `National ${fmt(national, 0)}` } : null,
+          peerAvg !== null && peerAvg !== undefined ? { v: peerAvg, c: INK.network, t: `Network ${fmt(peerAvg, 0)}` } : null,
+        ]
+          .filter(Boolean)
+          .filter((l) => l.v >= lo && l.v <= hi)
+          .map((l) => (
+            <g key={l.t}>
+              <line x1={PAD.l} x2={W - PAD.r} y1={y(l.v)} y2={y(l.v)} stroke={l.c} strokeWidth="1.6" strokeDasharray="6 4" opacity="0.9" />
+              <rect x={PAD.l + 4} y={y(l.v) - 13} width={l.t.length * 5.4 + 10} height="14" rx="7" fill={l.c} opacity="0.12" />
+              <text x={PAD.l + 9} y={y(l.v) - 3} fontSize="8.5" fontWeight="700" fill={l.c}>
+                {l.t}
+              </text>
+            </g>
+          ))}
+
+        <text x={PAD.l - 6} y={PAD.t + 5} fontSize="9" textAnchor="end" fill="#94a3b8">{Math.round(hi)}</text>
+        <text x={PAD.l - 6} y={floor} fontSize="9" textAnchor="end" fill="#94a3b8">{Math.round(lo)}</text>
+      </svg>
+
+      <div className="mt-2 flex flex-wrap items-center gap-4 text-[11px] text-muted">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-block h-3 w-3 rounded-sm" style={{ background: 'rgba(148,163,184,0.55)' }} /> Last year
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-block h-3 w-3 rounded-sm" style={{ background: HUE }} /> This year
+        </span>
+      </div>
+    </div>
+  )
+}
+
+// ── Trends & movement, curated ──────────────────────────────────────────────
+
+/**
+ * The list of every school's movement is data; THIS is the read.
+ *
+ * A board meeting does not open with twenty-nine rows — it opens with "who
+ * improved most, who slipped, and who is below the national line", and those
+ * three answers were buried in a list the reader had to scan and rank
+ * themselves. Surfacing them costs nothing: the numbers are already here.
+ */
+function MovementHighlights({ movements, national, reduce }) {
+  const rows = (movements ?? []).filter((m) => m.change !== null && m.change !== undefined)
+  if (rows.length === 0) return null
+
+  const byChange = [...rows].sort((a, b) => (b.change ?? 0) - (a.change ?? 0))
+  const best = byChange[0]
+  const worst = byChange[byChange.length - 1]
+  const below = rows.filter((m) => national !== null && national !== undefined && (m.current ?? 0) < national)
+
+  const cards = [
+    best && best.change > 0
+      ? { k: 'Most improved', name: best.schoolName, v: signed(best.change, 0), sub: `${fmt(best.prior, 0)} → ${fmt(best.current, 0)}`, tone: INK.ahead }
+      : null,
+    worst && worst.change < 0
+      ? { k: 'Steepest decline', name: worst.schoolName, v: signed(worst.change, 0), sub: `${fmt(worst.prior, 0)} → ${fmt(worst.current, 0)}`, tone: INK.behind }
+      : null,
+    national !== null && national !== undefined
+      ? {
+          k: 'Below the national line',
+          name: below.length === 0 ? 'None — every school is above it' : below.map((m) => shortName(m.schoolName, 18)).join(', '),
+          v: `${below.length}`,
+          sub: `of ${rows.length} schools`,
+          tone: below.length === 0 ? INK.ahead : INK.national,
+        }
+      : null,
+  ].filter(Boolean)
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-3">
+      {cards.map((c, i) => (
+        <motion.div
+          key={c.k}
+          initial={reduce ? false : { opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: reduce ? 0 : i * 0.08, duration: 0.45, ease: EASE }}
+          className="relative isolate overflow-hidden rounded-2xl bg-white p-4"
+          style={{ boxShadow: `inset 0 0 0 1px ${c.tone}22, 0 16px 40px -28px ${c.tone}` }}
+        >
+          <span
+            aria-hidden="true"
+            className="absolute inset-0 -z-10"
+            style={{ background: `radial-gradient(130% 100% at 0% 0%, ${c.tone}18 0%, transparent 62%)` }}
+          />
+          <p className="font-mono text-[8.5px] font-bold uppercase tracking-[0.16em]" style={{ color: c.tone }}>
+            {c.k}
+          </p>
+          <p className="mt-1.5 font-serif text-[30px] font-semibold leading-none tabular-nums" style={{ color: c.tone }}>
+            {c.v}
+          </p>
+          <p className="mt-1.5 text-[12.5px] font-semibold leading-snug text-navy">{c.name}</p>
+          <p className="text-[11px] text-muted">{c.sub}</p>
+        </motion.div>
+      ))}
     </div>
   )
 }

@@ -627,6 +627,10 @@ export class AssessmentsService {
         grade,
         grades: [...new Set(inScope.map((a) => a.gradeLevel))].filter((g) => g !== 'all').sort(),
         subjects,
+        // Echoed back so the subject control reflects what the SERVER used
+        // rather than what the browser last remembered — the same rule the
+        // grade and year selects already follow.
+        subject: q.subject ?? null,
         offeredTestTypes: testTypesForLevel(level),
         availableTestTypes: [...new Set(all.map((a) => a.testType))],
         scoreRange: scoreRange(family, scoreType),
