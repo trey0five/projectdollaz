@@ -18,6 +18,26 @@ import { ChevronDown, Check, Building2, Layers } from 'lucide-react'
 import { useSchools } from '../../context/SchoolContext.jsx'
 import { useScope } from '../../context/ScopeContext.jsx'
 
+/**
+ * The school's logo at nav scale, on a light chip.
+ *
+ * The sidebar sits on near-black and school logos are drawn for white paper, so
+ * the chip is doing the same job it does on the briefing band — without it half
+ * the marks in a diocese are a dark smudge. A school with no logo keeps the
+ * generic building glyph rather than inventing a mark at 16px, where two or
+ * three letters are illegible anyway.
+ */
+function SchoolMark({ school, fallbackClass = 'text-white/50' }) {
+  if (school?.logoBase64) {
+    return (
+      <span className="grid h-[18px] w-[18px] shrink-0 place-items-center overflow-hidden rounded-[5px] bg-white/95 p-[1.5px]">
+        <img src={school.logoBase64} alt="" className="h-full w-full object-contain" />
+      </span>
+    )
+  }
+  return <Building2 size={15} className={`shrink-0 ${fallbackClass}`} />
+}
+
 export default function ContextSwitcher() {
   const { schools, activeSchool, setActiveSchool } = useSchools()
   const { scope, setScope, hasOrg, orgName, orgSchoolCount } = useScope()
@@ -101,7 +121,7 @@ export default function ContextSwitcher() {
         {orgMode ? (
           <Layers size={15} className="shrink-0 text-gold-light" />
         ) : (
-          <Building2 size={15} className="shrink-0 text-gold-light" />
+          <SchoolMark school={activeSchool} fallbackClass="text-gold-light" />
         )}
         <span className="min-w-0 truncate">{label}</span>
         <ChevronDown
@@ -156,7 +176,7 @@ export default function ContextSwitcher() {
                   onClick={() => pickSchool(s.id)}
                   className={itemClass(active)}
                 >
-                  <Building2 size={15} className="shrink-0 text-white/50" />
+                  <SchoolMark school={s} />
                   <span className="min-w-0 flex-1 truncate">{s.name}</span>
                   {active && <Check size={16} className="shrink-0 text-gold-light" />}
                 </button>

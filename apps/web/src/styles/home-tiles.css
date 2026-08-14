@@ -511,3 +511,25 @@
     background: rgb(255 255 255 / 0.22);
   }
 }
+
+/* A LOGO IS NOT A GLYPH.
+   .tile-art is a 60px square, which is right for the module icons it was built
+   for. Real school logos are frequently WORDMARKS — "Cardinal Gibbons High
+   School" set on two lines, a crest beside a name — and squeezing one into a
+   square renders it as an unreadable smudge while the square sits mostly empty.
+   The logo variant is wider and drops the hue wash, because a logo brings its
+   own colour and a tint behind it just muddies whatever the school chose. */
+.tile-art--logo {
+  width: 96px;
+  height: 56px;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px rgba(16, 28, 61, 0.08);
+  padding: 6px;
+  overflow: hidden;
+}
+.tile-art--logo img {
+  height: 100%;
+  width: 100%;
+  object-fit: contain;
+}

@@ -8,6 +8,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion, useReducedMotion } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
+import { useSchools } from '../../context/SchoolContext.jsx'
+import { monogramOf } from './SchoolCrest.jsx'
 
 // Distinct, validated hues (dataviz categorical light set) — one per school,
 // cycled by index. Colour follows the school, so the grid stays legible.
@@ -32,14 +34,9 @@ export function schoolHue(schoolId) {
   return SCHOOL_HUES[h % SCHOOL_HUES.length]
 }
 
-function initials(name) {
-  const words = (name || '').split(/\s+/).filter((w) => /[a-zA-Z]/.test(w))
-  const letters = words
-    .slice(0, 2)
-    .map((w) => w[0].toUpperCase())
-    .join('')
-  return letters || (name || '?').slice(0, 2).toUpperCase()
-}
+// The local `initials` helper is gone: it took the first two words verbatim, so
+// a diocese rendered "ST", "ST", "ST", "ST" down the grid. monogramOf skips the
+// words schools share, which is the only version that tells them apart.
 
 // Attention chip from the org briefing's per-school summary {total,critical,warn,info}.
 function chipFor(school, ready) {
@@ -64,6 +61,13 @@ export default function SchoolTile({ school, index = 0, ready = true, onSelect }
   const hue = schoolHue(school.schoolId)
   const chip = chipFor(school, ready)
 
+  // The logo comes from the ROSTER, not from this tile's own payload. The org
+  // rollup that feeds these tiles is a briefing summary — putting a base64 logo
+  // for every school on it would bloat a request made on every org page load,
+  // for a picture the client already holds. SchoolContext has the roster.
+  const { schools: roster } = useSchools()
+  const logo = roster?.find((r) => r.id === school.schoolId)?.logoBase64 ?? null
+
   return (
     <motion.li {...ENTRANCE(reduce, index)} whileHover={reduce ? undefined : { y: -4 }} className="list-none">
       <button
@@ -75,7 +79,16 @@ export default function SchoolTile({ school, index = 0, ready = true, onSelect }
       >
         <div className="tile-body" aria-hidden="true">
           <div className="flex items-start justify-between gap-3">
-            <span className="tile-art font-serif text-[19px] font-bold">{initials(school.name)}</span>
+            {/* A school is recognised by its crest long before its name is read,
+                which is the whole point of a grid of sixteen. On a white tile a
+                logo needs no plate — it was drawn for exactly this ground. */}
+            {logo ? (
+              <span className="tile-art tile-art--logo">
+                <img src={logo} alt="" />
+              </span>
+            ) : (
+              <span className="tile-art font-serif text-[19px] font-bold">{monogramOf(school.name)}</span>
+            )}
             <span className="tile-arrow">
               <ArrowRight size={16} />
             </span>

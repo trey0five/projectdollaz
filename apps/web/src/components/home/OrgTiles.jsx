@@ -17,6 +17,8 @@
 // consolidation.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { ArrowRight, BookOpen, LineChart, Landmark } from 'lucide-react'
 import { useOrgBriefing, useOrgMetrics } from '../../hooks/useAnalytics.js'
 import { useSchools } from '../../context/SchoolContext.jsx'
 import { useScope } from '../../context/ScopeContext.jsx'
@@ -101,6 +103,15 @@ export default function OrgTiles({
         onOpenBrief={setBrief}
       />
 
+      {/* ── ACROSS THE NETWORK ───────────────────────────────────────────────
+          The org-wide analyses already existed and were reachable from nowhere
+          an org user would look: the academic console only from a link on ONE
+          school's academics overview, the consolidated financials only by
+          switching scope on another page. A superintendent lands here, and
+          "every school at once" is the question they came with — so the doors
+          belong on this page, above the per-school grid. */}
+      <NetworkAnalytics count={orgSchoolCount} />
+
       {/* Jump into a school — each tile swaps the whole app to that school's
           view (setActiveSchool + school scope). One colour per school. */}
       <section aria-labelledby="org-schools-heading">
@@ -166,5 +177,84 @@ export default function OrgTiles({
       </BriefingModal>
 
     </div>
+  )
+}
+
+/** The network-wide doors: one per analysis that spans every school. */
+function NetworkAnalytics({ count }) {
+  const cards = [
+    {
+      to: '/academics/network',
+      Icon: BookOpen,
+      hue: '#0D9488',
+      title: 'Academics across the network',
+      body: 'Every school ranked on one screen, grade by grade — with the national and network lines drawn on.',
+    },
+    {
+      to: '/analytics',
+      Icon: LineChart,
+      hue: '#2563EB',
+      title: 'Financial analytics across the network',
+      body: 'Margin, days cash and the rest, school by school, against the network they belong to.',
+    },
+    {
+      to: '/budget?tab=consolidated',
+      Icon: Landmark,
+      hue: '#7C3AED',
+      title: 'Consolidated statements',
+      body: 'The four statements rolled up across every school in the organization.',
+    },
+  ]
+
+  return (
+    <section aria-labelledby="org-network-heading">
+      <div className="mb-3 flex items-baseline justify-between gap-3">
+        <h2 id="org-network-heading" className="font-serif text-lg font-semibold text-navy">
+          Across the network
+        </h2>
+        <p className="text-[13px] text-muted">
+          All {count} school{count === 1 ? '' : 's'} at once — no switching
+        </p>
+      </div>
+
+      <ul role="list" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {cards.map((c) => (
+          <li key={c.to} className="list-none">
+            <Link
+              to={c.to}
+              className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-navy/10 bg-white p-4 transition-shadow hover:shadow-[0_22px_50px_-30px_rgba(16,28,61,0.5)]"
+            >
+              <span
+                aria-hidden="true"
+                className="absolute left-0 top-0 h-full w-[3px]"
+                style={{ background: `linear-gradient(180deg, ${c.hue} 0%, ${c.hue}00 100%)` }}
+              />
+              <span
+                aria-hidden="true"
+                className="absolute inset-0 opacity-0 transition-opacity group-hover:opacity-100"
+                style={{ background: `radial-gradient(120% 100% at 100% 0%, ${c.hue}12 0%, transparent 62%)` }}
+              />
+              <span className="relative flex items-start justify-between gap-2">
+                <span
+                  className="grid h-10 w-10 place-items-center rounded-xl"
+                  style={{ background: `${c.hue}1A`, color: c.hue, boxShadow: `inset 0 0 0 1px ${c.hue}2E` }}
+                >
+                  <c.Icon size={17} strokeWidth={2.2} />
+                </span>
+                <ArrowRight
+                  size={15}
+                  style={{ color: c.hue }}
+                  className="mt-1 transition-transform group-hover:translate-x-0.5"
+                />
+              </span>
+              <span className="relative mt-3 block font-serif text-[16.5px] font-semibold leading-tight text-navy">
+                {c.title}
+              </span>
+              <span className="relative mt-1 block text-[12.5px] leading-snug text-muted">{c.body}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }
