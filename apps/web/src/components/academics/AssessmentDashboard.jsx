@@ -42,6 +42,7 @@ import { useReducedMotion } from '../analytics/charts/useReducedMotion.js'
 import { subjectLabelOf } from '@finrep/analytics'
 import { ChartDefs, INK, divergingFill, fitScale, shortName, spreadLabels } from './chartKit.jsx'
 import { Section } from '../module/SectionHeader.jsx'
+import AssessmentFilters from './AssessmentFilters.jsx'
 
 const EASE = [0.2, 0.8, 0.2, 1]
 const HUE = '#0D9488'
@@ -1171,7 +1172,6 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
     setParams(next, { replace: true })
   }
 
-  const gradeOptions = useMemo(() => ['all', ...(ctx?.grades ?? [])], [ctx?.grades])
 
   if (data?.empty) {
     return (
@@ -1188,104 +1188,19 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
 
   return (
     <div className="space-y-4">
-      {/* ── Filters ── */}
-      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-navy/10 bg-white px-4 py-3">
-        <span className="font-mono text-[9.5px] font-bold uppercase tracking-[0.16em] text-muted">View</span>
-        <select
-          aria-label="Test"
-            value={ctx?.testType ?? ''}
-          // A NEW TEST IS A NEW QUESTION. Merging the patch carried the old
-          // test's year and grade across — a school with TerraNova grade 5 and
-          // an ACT in grade 11 switched to ACT, kept gradeLevel 5, got an empty
-          // dashboard, and had no grade 5 option left to click back out of.
-          onChange={(e) => select({ testType: e.target.value, schoolYear: null, gradeLevel: null, cohortGrade: null })}
-          className="rounded-lg border border-navy/15 bg-white px-2.5 py-1.5 text-[12.5px] text-navy"
-        >
-          {(ctx?.availableTestTypes ?? []).map((t) => (
-            <option key={t} value={t}>
-              {t.toUpperCase()}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="School year"
-          value={ctx?.year ?? ''}
-          onChange={(e) => select({ schoolYear: Number(e.target.value) })}
-          className="rounded-lg border border-navy/15 bg-white px-2.5 py-1.5 text-[12.5px] text-navy"
-        >
-          {(ctx?.years ?? []).map((y) => (
-            <option key={y} value={y}>
-              {y}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="Grade"
-            value={ctx?.grade ?? 'all'}
-          onChange={(e) => select({ gradeLevel: e.target.value })}
-          className="rounded-lg border border-navy/15 bg-white px-2.5 py-1.5 text-[12.5px] text-navy"
-        >
-          {gradeOptions.map((g) => (
-            <option key={g} value={g}>
-              {g === 'all' ? 'All grades' : `Grade ${g}`}
-            </option>
-          ))}
-        </select>
-        {(data?.availableCohorts ?? []).length > 0 ? (
-          <select
-            aria-label="Cohort"
-            value={data?.cohort?.grade ?? ''}
-            onChange={(e) => select({ cohortGrade: e.target.value || undefined })}
-            className="rounded-lg border border-navy/15 bg-white px-2.5 py-1.5 text-[12.5px] text-navy"
-          >
-            <option value="">Cohort…</option>
-            {/* The VALUE carries only the grade, so two cohorts differing by
-                year rendered as two identical options and picking either sent
-                the same request. Deduplicate to the most recent year per grade
-                and say which year it is. */}
-            {[...new Map(data.availableCohorts.map((c) => [c.currentGrade, c])).values()].map((c) => (
-              <option key={`${c.currentYear}-${c.currentGrade}`} value={c.currentGrade}>
-                Grade {c.currentGrade} cohort · {c.currentYear}
-              </option>
-            ))}
-          </select>
-        ) : null}
-        {/* THE SERVER DECIDES. This used to flip a local flag that re-labelled
-            one chart, while the payload still carried every peer school's name
-            and the table two sections down still printed them. The round-3 API
-            change added `hidePeerNames`; nothing ever sent it. Now the checkbox
-            re-fetches, so the names genuinely do not leave the server. */}
-        {/* SUBJECT. The API has always accepted it and only the heat map and the
-            movement list consumed it silently — without a control, the reader
-            could not ask "show me Math" at all. */}
-        {(ctx?.subjects ?? []).length > 1 ? (
-          <select
-            aria-label="Subject"
-            value={ctx?.subject ?? ''}
-            onChange={(e) => select({ subject: e.target.value || null })}
-            className="rounded-lg border border-navy/15 bg-white px-2.5 py-1.5 text-[12.5px] text-navy"
-          >
-            <option value="">All subjects</option>
-            {ctx.subjects.map((sub) => (
-              <option key={sub} value={sub}>
-                {label(sub)}
-              </option>
-            ))}
-          </select>
-        ) : null}
-        <label className="ml-auto flex items-center gap-1.5 text-[12px] text-muted">
-          <input
-            type="checkbox"
-            checked={Boolean(data?.hidePeerNames ?? anonymous)}
-            onChange={(e) => {
-              setAnonymous(e.target.checked)
-              select({ hidePeerNames: e.target.checked ? true : null })
-            }}
-          />
-          Hide peer names
-        </label>
-        {loading ? <span className="text-[11.5px] text-muted">Updating…</span> : null}
-      </div>
+      {/* ── Scope bar ── */}
+      <AssessmentFilters
+        ctx={ctx}
+        data={data}
+        view={view}
+        onSelect={select}
+        loading={loading}
+        anonymous={Boolean(data?.hidePeerNames ?? anonymous)}
+        onAnonymous={(on) => {
+          setAnonymous(on)
+          select({ hidePeerNames: on ? true : null })
+        }}
+      />
 
       {/* ── KPI strip ── */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
