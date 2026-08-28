@@ -18,8 +18,14 @@ export type TaskPriority = (typeof TASK_PRIORITIES)[number]
 
 /** The source-link discriminator (the "actionable pairing" — see the model).
  *  'strategy' links a task to a StrategyInitiative (sourceRef = initiative id) so the
- *  strategic-plan Initiatives tab / task-rollup goals can read its done/total. */
-export const TASK_SOURCE_TYPES = ['manual', 'policy', 'metric', 'compliance', 'strategy'] as const
+ *  strategic-plan Initiatives tab / task-rollup goals can read its done/total.
+ *  'accreditation' (WS3 F2) links a task to an AccreditationStandard (sourceRef =
+ *  standardId) — the "make it a task" hand-off from the standards register.
+ *  MIRRORED in assistant.service.ts's TASK_SOURCE_TYPES clamp; the two-copy
+ *  equality spec (task-source-types-sync.spec.ts) pins them equal, because the
+ *  clamp silently downgrades an unknown type to 'manual' (the live-caught
+ *  strategy-task gotcha, pre-empted). */
+export const TASK_SOURCE_TYPES = ['manual', 'policy', 'metric', 'compliance', 'strategy', 'accreditation'] as const
 export type TaskSourceType = (typeof TASK_SOURCE_TYPES)[number]
 
 /** Approval / sign-off lifecycle (Phase 3 v1). Co-located with TASK_STATUSES so the

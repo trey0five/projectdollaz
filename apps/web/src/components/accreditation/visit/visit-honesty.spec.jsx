@@ -221,6 +221,24 @@ describe('ACT 1 — the band is a PROJECTION and is never dressed as an outcome'
     expect(container.querySelector('[data-testid="arrival-unavailable"]')).not.toBeNull()
     expect(container.textContent).toContain('until a framework is adopted')
   })
+
+  it('B2 — the server-composed unbacked-risk line renders verbatim when present, and not at all when null', () => {
+    // visit.service composes this sentence off the readiness payload's
+    // unbackedIndexPoints; the arrival act is where the reader meets the risk.
+    const line = '31 of your projected index points rest on scores with no evidence attached.'
+    const { container, unmount } = wrap(
+      <ActArrival arrival={{ ...arrivalAct, unbackedRiskLine: line }} />,
+    )
+    const el = container.querySelector('[data-testid="arrival-unbacked-risk"]')
+    expect(el).not.toBeNull()
+    expect(el.textContent).toBe(line)
+    unmount()
+    // Null = zero or unmeasurable → NOTHING renders (suppressed is not zero).
+    const { container: bare } = wrap(
+      <ActArrival arrival={{ ...arrivalAct, unbackedRiskLine: null }} />,
+    )
+    expect(bare.querySelector('[data-testid="arrival-unbacked-risk"]')).toBeNull()
+  })
 })
 
 describe('ACT 4 — no dead affordance: a standard chip either navigates or is not a button', () => {

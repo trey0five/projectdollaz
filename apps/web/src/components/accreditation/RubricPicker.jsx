@@ -16,6 +16,10 @@ export default function RubricPicker({
   value = null, // 1..4 | null (unscored)
   labels = null, // framework rubricLabels: array[4], index i = label for score i+1
   activeLabel: activeLabelProp = null, // server-resolved label for the CURRENT score
+  // WS2 — the accreditor's long-form descriptor phrases (rubricDescriptors,
+  // array[4] mirroring `labels`). Null for frameworks that publish single-word
+  // labels only — nothing extra renders.
+  descriptors = null,
   onChange, // (nextScoreOrNull) => void
   disabled = false,
   dark = false,
@@ -25,6 +29,8 @@ export default function RubricPicker({
   // row belongs to a different framework than the page-level labels array).
   const activeLabel =
     activeLabelProp ?? (value != null && labels?.[value - 1] ? labels[value - 1] : null)
+  const activeDescriptor =
+    value != null && Array.isArray(descriptors) ? (descriptors[value - 1] ?? null) : null
   return (
     <span className="inline-flex items-center gap-2">
       <span
@@ -37,7 +43,8 @@ export default function RubricPicker({
         {SCORES.map((score) => {
           const filled = value != null && score <= value
           const isCurrent = value === score
-          const name = labels?.[score - 1] ? `${score} — ${labels[score - 1]}` : `Score ${score}`
+          const base = labels?.[score - 1] ? `${score} — ${labels[score - 1]}` : `Score ${score}`
+          const name = descriptors?.[score - 1] ? `${base}: ${descriptors[score - 1]}` : base
           const title = isCurrent ? `${name} (click to clear)` : name
           return (
             <button
@@ -68,16 +75,27 @@ export default function RubricPicker({
         })}
       </span>
       {showLabel ? (
-        <span
-          className={`text-[12px] font-semibold ${
-            activeLabel
-              ? 'text-[#F59E0B]'
-              : dark
-                ? 'text-white/45'
-                : 'text-muted/70'
-          }`}
-        >
-          {activeLabel ?? 'Unscored'}
+        <span className="inline-flex max-w-[420px] flex-col">
+          <span
+            className={`text-[12px] font-semibold ${
+              activeLabel
+                ? 'text-[#F59E0B]'
+                : dark
+                  ? 'text-white/45'
+                  : 'text-muted/70'
+            }`}
+          >
+            {activeLabel ?? 'Unscored'}
+          </span>
+          {/* The accreditor's own long-form phrase for the chosen tier —
+              rendered only when the framework publishes one. */}
+          {activeDescriptor ? (
+            <span
+              className={`text-[11px] leading-snug ${dark ? 'text-white/45' : 'text-muted/70'}`}
+            >
+              {activeDescriptor}
+            </span>
+          ) : null}
         </span>
       ) : null}
     </span>

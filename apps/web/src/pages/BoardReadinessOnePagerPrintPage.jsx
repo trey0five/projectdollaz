@@ -314,7 +314,11 @@ export default function BoardReadinessOnePagerPrintPage() {
               <Stat
                 label="As of"
                 value={visit.snapshotAsOf ? fmtDay(visit.snapshotAsOf) : '—'}
-                sub={visit.framework?.code ?? null}
+                // A board one-pager printing a database code (`cognia_2025`)
+                // reads wrong on paper: the seal line ("Accredited by NCA CASI,
+                // an accreditation division of Cognia") — else the framework's
+                // NAME — is what a board should see. Code stays the last resort.
+                sub={visit.framework?.sealLine ?? visit.framework?.name ?? visit.framework?.code ?? null}
               />
             </div>
             {arrival?.asOfLine ? (

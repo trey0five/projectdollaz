@@ -312,6 +312,12 @@ export const MIN_ANNUAL_MOVE: Readonly<Record<MetricKey, MoveFloor>> = {
     basis:
       'Five percentage points a year. Participation swings with scheduling and fee waivers, so a smaller move says more about a test date than about access. Sector default.',
   },
+  enrollment_headcount: {
+    kind: 'relative',
+    fractionOfBaseline: 0.02,
+    basis:
+      '2% of median headcount a year — the same argument as total staff FTE, and for the same reason a fixed floor is wrong: two students is a rounding error in a school of 800 and a whole section in a school of 60. Sector default.',
+  },
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -704,6 +710,11 @@ function formatValue(value: number, unit: MetricUnit): string {
       return `${trimNumber(value, 2)} months`
     case 'currency':
       return `$${groupThousands(trimNumber(Math.round(value), 0))}`
+    // A tally of whole things. Unit-less on purpose, like 'ratio': the metric's
+    // own label supplies the noun ("Enrollment (Headcount) 436"), so the copy
+    // does not have to guess between students, staff and seats.
+    case 'count':
+      return groupThousands(trimNumber(Math.round(value), 0))
     case 'ratio':
       return trimNumber(value, 2)
   }
@@ -721,6 +732,8 @@ function formatMagnitude(magnitude: number, unit: MetricUnit): string {
       return `${trimNumber(magnitude, 2)} months`
     case 'currency':
       return `$${groupThousands(trimNumber(Math.round(magnitude), 0))}`
+    case 'count':
+      return groupThousands(trimNumber(Math.round(magnitude), 0))
     case 'ratio':
       return trimNumber(magnitude, 2)
   }

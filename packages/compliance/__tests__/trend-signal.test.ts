@@ -245,9 +245,11 @@ describe('fiscalYearOf — the repo FY is Jul-Jun', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('MIN_ANNUAL_MOVE', () => {
-  it('is exhaustive over the 25 registry metrics: 18 eligible, 7 not', () => {
+  it('is exhaustive over the 26 registry metrics: 19 eligible, 7 not', () => {
     const entries = Object.entries(MIN_ANNUAL_MOVE)
-    expect(entries).toHaveLength(25)
+    // 26 since enrollment_headcount landed: a raw count IS trendable (relative
+    // floor), unlike enrollment_change_yoy which is already a delta.
+    expect(entries).toHaveLength(26)
     const notEligible = entries.filter(([, f]) => f.kind === 'not_eligible')
     expect(notEligible).toHaveLength(7)
     expect(notEligible.map(([k]) => k).sort()).toEqual([
@@ -273,6 +275,10 @@ describe('MIN_ANNUAL_MOVE', () => {
     expect(MIN_ANNUAL_MOVE.months_operating_reserve).toMatchObject({ kind: 'absolute', value: 0.25 })
     expect(MIN_ANNUAL_MOVE.student_teacher_ratio).toMatchObject({ kind: 'absolute', value: 0.5 })
     expect(MIN_ANNUAL_MOVE.cost_per_pupil).toMatchObject({ kind: 'relative', fractionOfBaseline: 0.02 })
+    expect(MIN_ANNUAL_MOVE.enrollment_headcount).toMatchObject({
+      kind: 'relative',
+      fractionOfBaseline: 0.02,
+    })
     expect(MIN_ANNUAL_MOVE.financial_aid_per_student).toMatchObject({ kind: 'relative', fractionOfBaseline: 0.03 })
   })
 })

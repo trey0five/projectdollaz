@@ -14,6 +14,7 @@ import {
 } from '@finrep/compliance'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { AuditService } from '../common/audit/audit.service.js'
+import { NotificationsService } from '../common/notifications/notifications.service.js'
 import { AccreditationSnapshotService } from './readiness-snapshot.service.js'
 import { readCatalogDomainRows } from './domain-map.js'
 import type { CreateStandardDto } from './dto/create-standard.dto.js'
@@ -43,6 +44,10 @@ export interface StandardPublic {
   rating: StandardRating
   reviewDate: string | null
   owner: string | null
+  // ── WS3 F2 delegation (additive) — the VALIDATED owner beside the legacy
+  // free text. `ownerName` is server-joined; render `ownerName ?? owner`.
+  ownerUserId: string | null
+  ownerName: string | null
   notes: string | null
   /** COMPUTED (never stored) — from @finrep/compliance. */
   evidenceCount: number
@@ -276,6 +281,11 @@ export class AccreditationService {
     // snapshotting is observability, and observability must never be able to
     // fail a user's save (it is also why every call below is unawaited).
     @Optional() private readonly snapshot?: AccreditationSnapshotService,
+    // WS3 F2 — assignment notifications ("you own this standard"), fired ONLY
+    // when the owner is SET or CHANGES (the observed house rule). @Optional +
+    // appended LAST so every existing positional-arg spec still constructs;
+    // notifyAssignment itself never throws (fail-soft by contract).
+    @Optional() private readonly notifications?: NotificationsService,
   ) {}
 
   /** Extra computed tree fields; when omitted (single-row create/update response), the
@@ -285,6 +295,7 @@ export class AccreditationService {
   private toStandardPublic(
     row: AccreditationStandard & {
       rubricScoredByUser?: { firstName: string | null; lastName: string | null } | null
+      ownerUser?: { firstName: string | null; lastName: string | null; email: string } | null
     },
     evidenceCount: number,
     now: Date,
@@ -307,6 +318,11 @@ export class AccreditationService {
       rating,
       reviewDate: toIsoDate(row.reviewDate),
       owner: row.owner,
+      ownerUserId: row.ownerUserId ?? null,
+      ownerName: row.ownerUser
+        ? [row.ownerUser.firstName, row.ownerUser.lastName].filter(Boolean).join(' ') ||
+          row.ownerUser.email
+        : null,
       notes: row.notes,
       evidenceCount,
       coverage: cov.coverage,
@@ -476,9 +492,13 @@ export class AccreditationService {
   }> {
     const rows = await this.prisma.accreditationStandard.findMany({
       where: { schoolId },
-      // The scorer's NAME for the provenance chip — the one place the join is
-      // needed; create/update return paths resolve through this tree anyway.
-      include: { rubricScoredByUser: { select: { firstName: true, lastName: true } } },
+      // The scorer's NAME for the provenance chip + the owner's for the Owner
+      // column — the one place the joins are needed; create/update return paths
+      // resolve through this tree anyway.
+      include: {
+        rubricScoredByUser: { select: { firstName: true, lastName: true } },
+        ownerUser: { select: { firstName: true, lastName: true, email: true } },
+      },
     })
     const counts = await this.prisma.accreditationEvidence.groupBy({
       by: ['standardId'],
@@ -639,6 +659,20 @@ export class AccreditationService {
   }
 
   /**
+   * WS3 F2 — the owner must be an ACTIVE membership of the PATH school (the
+   * tasks-service assignee rule, verbatim): querying by BOTH schoolId AND
+   * userId makes a cross-tenant assignment IMPOSSIBLE, and an inactive/invited
+   * membership is rejected. 400 (not 404) — a valid UUID, semantically not
+   * assignable.
+   */
+  private async assertOwnerIsMember(schoolId: string, ownerUserId: string): Promise<void> {
+    const m = await this.prisma.membership.findFirst({
+      where: { schoolId, userId: ownerUserId, status: 'active' },
+    })
+    if (!m) throw new BadRequestException('Owner must be an active member of this school.')
+  }
+
+  /**
    * Validate a proposed parentId for the hierarchy and return the resolved id (or null).
    * GUARDS: (1) parent must belong to the SAME school (a foreign/unknown id 400s);
    * (2) a node cannot be its OWN parent; (3) no CYCLES — walk UP the proposed parent's
@@ -727,6 +761,8 @@ export class AccreditationService {
       dto.strategySourceType,
       dto.strategySourceRef,
     )
+    // WS3 F2 — the validated owner: an ACTIVE member of the PATH school or 400.
+    if (dto.ownerUserId != null) await this.assertOwnerIsMember(schoolId, dto.ownerUserId)
     const row = await this.prisma.accreditationStandard.create({
       data: {
         schoolId,
@@ -737,6 +773,7 @@ export class AccreditationService {
         rating: normalizeRating(dto.rating),
         reviewDate,
         owner: dto.owner ?? null,
+        ownerUserId: dto.ownerUserId ?? null,
         notes: dto.notes ?? null,
         rubricScore: dto.rubricScore ?? null,
         strategySourceType: strategy?.type ?? null,
@@ -751,6 +788,19 @@ export class AccreditationService {
       targetType: 'accreditation_standards',
       targetId: row.id,
     })
+    // Being handed a standard is news — notify on SET only (never on unrelated
+    // edits); notifyAssignment itself is fail-soft and skips self-assignment.
+    if (row.ownerUserId) {
+      await this.notifications?.notifyAssignment({
+        userId: row.ownerUserId,
+        actorUserId: userId,
+        schoolId,
+        what: 'accreditation standard',
+        title: `${row.code} — ${row.title}`,
+        dueDate: row.reviewDate,
+        link: `/accreditation?center=standards&standard=${row.id}`,
+      })
+    }
     // Return the row placed in the (freshly recomputed) tree so depth/isLeaf/leafSummary
     // are correct; a fresh leaf falls back to a top-level self-rollup if the tree query
     // returns nothing (only happens under mocks — real DB always contains the new row).
@@ -789,6 +839,16 @@ export class AccreditationService {
       },
     )
 
+    // ── WS3 F2 — owner delegation: omitted keeps, explicit null clears, a
+    // UUID is validated as an ACTIVE member of the path school (400 otherwise).
+    // The notification fires ONLY when the owner is SET or CHANGES — renaming a
+    // standard must not re-notify its owner (the notify-on-change house rule).
+    const nextOwnerUserId = pick(dto.ownerUserId, existing.ownerUserId ?? null)
+    const ownerChanged = (existing.ownerUserId ?? null) !== nextOwnerUserId
+    if (ownerChanged && nextOwnerUserId != null) {
+      await this.assertOwnerIsMember(schoolId, nextOwnerUserId)
+    }
+
     // ── Phase A score PROVENANCE ────────────────────────────────────────────
     // A rubric self-score is an ASSERTION, so we record who asserted it and
     // when. Stamped ONLY when the score actually CHANGES: renaming a standard,
@@ -807,6 +867,7 @@ export class AccreditationService {
         rating: pick(dto.rating, normalizeRating(existing.rating)),
         reviewDate: pick(reviewDate, existing.reviewDate),
         owner: pick(dto.owner, existing.owner),
+        ownerUserId: nextOwnerUserId,
         notes: pick(dto.notes, existing.notes),
         // Explicit null clears the self-score; omitted keeps it.
         rubricScore: nextRubricScore,
@@ -834,6 +895,18 @@ export class AccreditationService {
     })
     // Readiness moved → record it today rather than waiting for the nightly run.
     if (rubricChanged) this.snapshot?.captureOnEvent(schoolId)
+    // Notify ONLY on set/change to a real owner (clearing notifies nobody).
+    if (ownerChanged && nextOwnerUserId) {
+      await this.notifications?.notifyAssignment({
+        userId: nextOwnerUserId,
+        actorUserId: userId,
+        schoolId,
+        what: 'accreditation standard',
+        title: `${row.code} — ${row.title}`,
+        dueDate: row.reviewDate,
+        link: `/accreditation?center=standards&standard=${row.id}`,
+      })
+    }
     const tree = await this.computeStandardsTree(schoolId, new Date())
     const count = await this.prisma.accreditationEvidence.count({ where: { schoolId, standardId: row.id } })
     return tree.byId.get(row.id) ?? this.toStandardPublic(row, count, new Date())

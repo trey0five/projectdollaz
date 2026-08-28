@@ -74,9 +74,15 @@ import type { DomainWeightIndex } from './fact-domains.js'
 // cycle the whole phase is arranged to avoid.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Frameworks the Phase-E rule catalog carries standard codes for. */
-const KNOWN_FRAMEWORK_CODES = new Set([
+/** Frameworks the Phase-E rule catalog carries standard codes for.
+ *  WS2 REGISTRY LOCKSTEP: this set, TWIN_FRAMEWORK_CODES, every rule's
+ *  standardCodes map and FRAMEWORK_REQUIREMENT_SEEDS move together — the
+ *  registries-move-together spec asserts it. A code missing here degrades
+ *  frameworkCodeFrom to null and the twin silently falls back to citing
+ *  cognia_2022 constants. */
+export const KNOWN_FRAMEWORK_CODES = new Set([
   'cognia_2022',
+  'cognia_2025',
   'msa_cess_2022',
   'nsbecs',
   'fcis_2023',

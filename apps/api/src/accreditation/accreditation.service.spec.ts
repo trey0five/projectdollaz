@@ -126,8 +126,12 @@ describe('AccreditationService — standards', () => {
     const res = await svc.listStandards('school-A', NOW)
     expect(standard.findMany).toHaveBeenCalledWith({
       where: { schoolId: 'school-A' },
-      // A5: the scorer's name for the provenance chip rides the same read.
-      include: { rubricScoredByUser: { select: { firstName: true, lastName: true } } },
+      // A5: the scorer's name for the provenance chip rides the same read;
+      // WS3 F2 adds the owner's name for the Owner column the same way.
+      include: {
+        rubricScoredByUser: { select: { firstName: true, lastName: true } },
+        ownerUser: { select: { firstName: true, lastName: true, email: true } },
+      },
     })
     expect(evidence.groupBy).toHaveBeenCalledWith(
       expect.objectContaining({ where: { schoolId: 'school-A' } }),

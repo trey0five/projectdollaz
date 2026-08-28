@@ -183,15 +183,17 @@ function makeStore() {
 const COGNIA = FRAMEWORK_SEEDS.find((f) => f.code === 'cognia_2022')!
 
 describe('AccreditationCatalogService — seed (idempotent)', () => {
-  it('first run seeds all 7 frameworks + full catalog trees with wired parents', async () => {
+  it('first run seeds all 9 frameworks + full catalog trees with wired parents', async () => {
     const { svc, frameworks, catalog } = makeStore()
     await svc.seedCatalog()
     expect([...frameworks.keys()].sort()).toEqual([
       'acs_wasc',
       'acsi_reach',
       'cognia_2022',
+      'cognia_2025',
       'fcis_2023',
       'msa_cess_2022',
+      'nipsa_academic',
       'nsbecs',
       'sais_2023',
     ])
@@ -271,7 +273,7 @@ describe('AccreditationCatalogService — seed (idempotent)', () => {
 
   // ── AIC Phase C — pass 3 ────────────────────────────────────────────────────
 
-  it('pass 3 seeds all 98 requirement rows, on BOTH the create and the update path', async () => {
+  it('pass 3 seeds all 128 requirement rows, on BOTH the create and the update path', async () => {
     // THE SELF-HEAL ASSERTION, repeated for Phase C. Production catalog rows
     // already exist; requirement rows reach them ONLY because the update path
     // carries the same reqData the create path does. If a field ever appears on
@@ -279,12 +281,15 @@ describe('AccreditationCatalogService — seed (idempotent)', () => {
     // forever and no migration exists to notice.
     const { svc, prisma, requirements } = makeStore()
     await svc.seedCatalog()
-    expect(requirements.size).toBe(98)
+    // 98 from the seven original frameworks + 20 for cognia_2025 (the SAME
+    // shared COGNIA_REQUIREMENTS list, applied to the second Cognia edition)
+    // + NIPSA's 10.
+    expect(requirements.size).toBe(128)
 
     const calls = prisma.accreditationCatalogRequirement.upsert.mock.calls as unknown as [
       { create: Record<string, unknown>; update: Record<string, unknown> },
     ][]
-    expect(calls).toHaveLength(98)
+    expect(calls).toHaveLength(128)
     for (const [args] of calls) {
       for (const shape of [args.create, args.update]) {
         expect(typeof shape.label).toBe('string')
@@ -320,7 +325,7 @@ describe('AccreditationCatalogService — seed (idempotent)', () => {
     prisma.accreditationCatalogRequirement.deleteMany.mockClear()
 
     await svc.seedCatalog()
-    expect(requirements.size).toBe(98)
+    expect(requirements.size).toBe(128)
     // Same physical rows — an upsert hit, never a duplicate insert.
     for (const r of requirements.values()) expect(ids.has(r.id)).toBe(true)
     for (const res of prisma.accreditationCatalogRequirement.deleteMany.mock.results) {
@@ -345,7 +350,9 @@ describe('AccreditationCatalogService — seed (idempotent)', () => {
     const removed = seeds.pop()!
     try {
       await svc.seedCatalog()
-      expect(requirements.size).toBe(before - 1)
+      // cognia_2025 shares the SAME requirement list by reference (the WS2
+      // lockstep), so retiring the row sweeps it from BOTH Cognia editions.
+      expect(requirements.size).toBe(before - 2)
       expect([...requirements.values()].some((r) => r.tag === 'accreditor_training')).toBe(false)
       expect(requirements.size).toBe(others)
     } finally {
@@ -367,7 +374,7 @@ describe('AccreditationCatalogService — seed (idempotent)', () => {
     })
     try {
       await expect(svc.seedCatalog()).resolves.toBeUndefined()
-      expect(requirements.size).toBe(98) // the ghost row is simply not written
+      expect(requirements.size).toBe(128) // the ghost row is simply not written
     } finally {
       seeds.pop()
     }
@@ -381,10 +388,13 @@ describe('AccreditationCatalogService — seed (idempotent)', () => {
 })
 
 describe('AccreditationCatalogService — adoption', () => {
-  it('adopt cognia_2022 copies the whole tree (42 rows), remaps parents, preserves order', async () => {
+  it('adopt cognia_2025 copies the whole tree (42 rows), remaps parents, preserves order', async () => {
+    // WS2: cognia_2022 is now superseded and CLOSED to new adopters (R12, its
+    // own spec) — the adoption mechanics are proven on the live 2025 edition,
+    // which shares the identical 42-code tree.
     const { svc, schoolStandards, audit } = makeStore()
     await svc.seedCatalog()
-    const res = await svc.adoptFramework('school-A', 'cognia_2022', 'user-1')
+    const res = await svc.adoptFramework('school-A', 'cognia_2025', 'user-1')
     expect(res.created).toBe(42)
     expect(res.skipped).toBe(0)
 
@@ -408,8 +418,8 @@ describe('AccreditationCatalogService — adoption', () => {
   it('re-adopt is idempotent: created 0, skipped 42, no dupes', async () => {
     const { svc, schoolStandards } = makeStore()
     await svc.seedCatalog()
-    await svc.adoptFramework('school-A', 'cognia_2022', 'user-1')
-    const res = await svc.adoptFramework('school-A', 'cognia_2022', 'user-1')
+    await svc.adoptFramework('school-A', 'cognia_2025', 'user-1')
+    const res = await svc.adoptFramework('school-A', 'cognia_2025', 'user-1')
     expect(res).toEqual(expect.objectContaining({ created: 0, skipped: 42 }))
     expect(schoolStandards).toHaveLength(42)
   })

@@ -56,6 +56,15 @@ export interface CatalogStandardSeed {
   domainWeights?: Partial<Record<DomainKey, number>>
   /** @finrep/analytics metric keys; ≤8, no mixes, no duplicates. */
   signalKeys?: MetricKey[]
+  // ── WS3 F3 — the authored PLAIN-LANGUAGE restatement ──
+  /**
+   * One product-voice sentence per standard: what a committee member is really
+   * being asked. Authored ONCE for Cognia (shared by the 2022 and 2025 rows via
+   * the shared-standards build); null/omitted on every framework not yet
+   * authored — and the UI renders NOTHING when null. Never a paraphrase of the
+   * statement; never a claim about what KYRO measures.
+   */
+  plainLanguage?: string
 }
 
 export interface FrameworkSeed {
@@ -72,6 +81,19 @@ export interface FrameworkSeed {
   indexMax: number | null
   defaultTarget: number | null
   standards: CatalogStandardSeed[]
+  // ── WS1/WS2 framework versioning (all optional; absent = cleared on boot) ──
+  /** Searchable alternate names ("NCA CASI" must find the one Cognia framework). */
+  aliases?: string[]
+  /** Code of the framework that replaces this one for NEW adoptions. */
+  supersededByCode?: string
+  /** array[4]: the long-form rubric descriptor phrase for score i+1 (verbatim). */
+  rubricDescriptors?: string[]
+  /** An accreditor-published reference point on the index scale. Display-only. */
+  indexReference?: { value: number; label: string }
+  /** Recognition-body codes (RECOGNITION_CODES in recognitions.ts) — accreditor
+   *  metadata, never adoptable. VERIFIED per body's live member list; [] means
+   *  verified ABSENCE, not "unknown" (Cognia is genuinely on neither list). */
+  recognitions?: string[]
 }
 
 // ── COGNIA (2022, incl. 2025 update): 4 Key Characteristics + Assurances ─────
@@ -153,6 +175,120 @@ const COGNIA_STANDARDS: CatalogStandardSeed[] = [
   { code: 'COG-A4', parentCode: 'COG-ASR', title: 'Institution complies with applicable legal requirements.', isAssurance: true, evidenceTags: ['policy_manual'], domainKey: 'governance' },
   { code: 'COG-A5', parentCode: 'COG-ASR', title: 'Marketing and communications are truthful and ethical.', isAssurance: true, evidenceTags: ['marketing'], domainKey: 'leadership' },
   { code: 'COG-A6', parentCode: 'COG-ASR', title: 'Required Cognia training is completed by staff/leadership.', isAssurance: true, evidenceTags: ['staff_credentials'], domainKey: 'hr' },
+]
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WS3 F3 — the PLAIN-LANGUAGE layer for the 31 Cognia standards, authored ONCE
+// and shared by BOTH Cognia editions (the codes are identical, and the plain
+// question a committee member is being asked did not change between revs).
+//
+// VOICE RULES: one honest question (occasionally two clauses) per standard —
+// what would you actually have to show a visitor? Never a paraphrase of the
+// statement (that is what the statement is for), never a claim about what KYRO
+// measures, never jargon. A standard with no entry renders NOTHING — a bad
+// translation is worse than none.
+// ─────────────────────────────────────────────────────────────────────────────
+const COGNIA_PLAIN_LANGUAGE: Record<string, string> = {
+  'COG-1': 'Does every learner get treated fairly here — and could you show a visitor how you make sure of it?',
+  'COG-2': "Your mission should put learners' well-being first — can you point to where it says so, and how that shows up day to day?",
+  'COG-3': 'Do families, staff, and the community actually get pulled into what the school is trying to do — not just told about it afterwards?',
+  'COG-4': 'Is there a deliberate structure — advisory, house, mentoring — that makes sure every learner is known well by an adult and by peers?',
+  'COG-5': 'Do your teachers genuinely work together on behalf of learners — shared planning, real collaboration — rather than teaching behind closed doors?',
+  'COG-6': 'When a teacher needs help getting better at the job, does the school actually provide it — coaching, time, resources?',
+  'COG-7': 'Is there a real improvement process running — led by leadership, focused on what learners experience — and could you walk a visitor through it?',
+  'COG-8': "Does your governing authority genuinely work with school leadership to uphold the school's priorities and push improvement forward — with minutes to show it?",
+  'COG-9': 'Are you growing leaders beyond the front office — teachers, parents, even students taking real responsibility for parts of the school?',
+  'COG-10': 'Can you show how you hire well, supervise fairly, and evaluate staff on a real cycle — not just when something goes wrong?',
+  'COG-11': 'When things change — enrollment, staffing, a crisis — do your structures hold up, and do learners and staff still get what they need?',
+  'COG-12': 'Is what gets taught in each classroom actually the curriculum you adopted, and does it work for every learner — not just most of them?',
+  'COG-13': 'Is every learner taught and supported by people qualified to do it, working in service of your mission?',
+  'COG-14': 'Do teachers and learners have reliable, current materials — books, databases, digital resources — and do they actually advance learning?',
+  'COG-15': "When you build the budget and assign people, can you show that learners' needs drove the decisions — not habit or history?",
+  'COG-16': 'Does your curriculum show learners the wider world — different cultures, backgrounds, and abilities — as something of value?',
+  'COG-17': 'Does every learner — not just the strongest — get the support and the chances they need to reach their potential?',
+  'COG-18': 'Do learners get to create, take risks, collaborate, and design — or is the day all about receiving content?',
+  'COG-19': 'Do learners have real say and real responsibility in their own learning — and does the school respect it when they use it?',
+  'COG-20': 'Are learners building confidence and an actual love of learning here — and what experiences do you point to as proof?',
+  'COG-21': 'Are expectations genuinely high in every classroom, with instruction built around learners rather than around the material?',
+  'COG-22': "When a learner isn't getting it, does instruction actually change — and how would you show that adjustment happening?",
+  'COG-23': 'Is technology in your classrooms deepening engagement and curiosity — or just digitizing worksheets?',
+  'COG-24': 'When leaders decide something that affects learners or staff, can you show the data and the voices that informed it?',
+  'COG-25': 'Do teachers get to study their own practice — try something, measure it, keep what works — with leadership backing them?',
+  'COG-26': 'Do you regularly step back and ask whether your programs are working — and change them when the answer is no?',
+  'COG-27': 'When a learner needs help — academic or not — does the school notice, intervene, and follow through?',
+  'COG-28': "Does each learner have goals of their own — academic and beyond — that matter for where they're headed after your school?",
+  'COG-29': "Is your staff's professional learning designed around what your learners need — and do you check whether it changed anything?",
+  'COG-30': 'Do you assess to help learning along the way, not just to grade it at the end — and is the system deliberately balanced between the two?',
+  'COG-31': 'Can you show, with assessments you trust, that your learners are actually growing year over year?',
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WS2 — the COGNIA 2025 TITLE OVERRIDES, transcribed VERBATIM from the official
+// Performance Standards PDF (Revised 03.05.2025). The seeded 2022 titles above
+// are KYRO's condensed renderings and are kept byte-identical for the schools
+// scored against them; the 2025 rows carry the accreditor's own full statements.
+// A standard absent from this map has a seeded title that already matches the
+// 2025 text verbatim (COG-5, 9, 13, 21, 22, 24, 26). NEVER paraphrase here —
+// the seed file's own provenance section documents what paraphrasing cost.
+// ─────────────────────────────────────────────────────────────────────────────
+const COGNIA_2025_TITLE_OVERRIDES: Record<string, string> = {
+  'COG-1': 'Leaders cultivate and sustain a culture that demonstrates respect and fairness for all learners and is free from bias.',
+  'COG-2': "Learners' well-being is at the heart of the institution's guiding principles, such as mission, purpose, and beliefs.",
+  'COG-3': "Leaders actively engage stakeholders to support the institution's priorities and guiding principles that promote learners' academic growth and well-being.",
+  'COG-4': 'Learners benefit from a formal structure that fosters positive relationships with peers and adults.',
+  'COG-6': 'Professional staff members receive the support they need to strengthen their professional practice.',
+  'COG-7': "Leaders guide professional staff members in the continuous improvement process focused on learners' experiences and needs.",
+  'COG-8': "The governing authority demonstrates a commitment to learners by collaborating with leaders to uphold the institution's priorities and to drive continuous improvement.",
+  'COG-10': 'Leaders demonstrate expertise in recruiting, supervising, and evaluating professional staff members to optimize learning.',
+  'COG-11': 'Leaders create and maintain institutional structures and processes that support learners and staff members in both stable and changing environments.',
+  'COG-12': 'Professional staff members implement curriculum and instruction that are aligned for relevancy and effectiveness for each and every learner.',
+  'COG-14': "Curriculum and instruction are augmented by reliable information resources and materials that advance learning and support learners' personal interests.",
+  'COG-15': "Learners' needs drive the allocation and management of human, material, digital, and fiscal resources.",
+  'COG-16': 'Learners experience curriculum and instruction that emphasize the value of different cultures, backgrounds, and abilities reflective of the global community.',
+  'COG-17': 'Learners have the support and opportunities to realize their learning potential.',
+  'COG-18': 'Learners are immersed in an environment that fosters lifelong skills including creativity, curiosity, risk taking, collaboration, and design thinking.',
+  'COG-19': 'Learners are immersed in an environment that promotes and respects student agency and responsibility for their learning.',
+  'COG-20': 'Learners engage in experiences that promote and develop their self-confidence and love of learning.',
+  'COG-23': "Professional staff members integrate digital resources that deepen and advance learners' engagement with instruction and stimulate their curiosity.",
+  'COG-25': 'Leaders promote action research by professional staff members to improve their practice and advance learning.',
+  'COG-27': "Learners' academic and non-academic needs are identified and effectively addressed through appropriate interventions.",
+  'COG-28': 'Learners pursue individual goals including the acquisition of academic and non-academic skills important for their educational futures and careers.',
+  'COG-29': "Understanding learners' needs and interests drives the design, delivery, application, and evaluation of professional learning.",
+  'COG-30': "Learners' progress is measured through a balanced system that includes assessment both for learning and of learning.",
+  'COG-31': 'Learners demonstrate growth in their academic performance based on valid and reliable assessments.',
+}
+
+/**
+ * The two Cognia editions are BUILT from ONE standards array, never duplicated:
+ * the Phase-B domain map (domainKey/domainWeights/signalKeys), evidenceTags and
+ * the plain-language layer are KYRO's product mapping and must stay in ONE
+ * place so a correction reaches both versions. The crosswalk is a CODE IDENTITY
+ * (same 42 codes, same tree, same assurances) — pinned by catalog-seed.spec,
+ * and the fact the whole upgrade flow rests on.
+ */
+const COGNIA_2022_STANDARDS: CatalogStandardSeed[] = COGNIA_STANDARDS.map((s) => ({
+  ...s,
+  plainLanguage: COGNIA_PLAIN_LANGUAGE[s.code],
+}))
+
+const COGNIA_2025_STANDARDS: CatalogStandardSeed[] = COGNIA_STANDARDS.map((s) => ({
+  ...s,
+  title: COGNIA_2025_TITLE_OVERRIDES[s.code] ?? s.title,
+  // COG-31's "2025 addition…" note is dropped on the 2025 row — it is not an
+  // addition there; it is simply standard 31.
+  description: s.code === 'COG-31' ? undefined : s.description,
+  plainLanguage: COGNIA_PLAIN_LANGUAGE[s.code],
+}))
+
+/** Shared by BOTH Cognia rows: a school searching any of these must find its framework. */
+const COGNIA_ALIASES = [
+  'NCA CASI',
+  'SACS CASI',
+  'NWAC',
+  'AdvancED',
+  'North Central Association',
+  'NCA',
+  'SACS',
 ]
 
 // ── MSA-CESS (2022): 5 root-level LEAF standards (no domain parents) ─────────
@@ -401,13 +537,64 @@ const SAIS_STANDARDS: CatalogStandardSeed[] = [
   { code: 'SAIS-6', title: 'Virtual Learning', description: 'Applies only to schools offering virtual or online instruction.', domainKey: 'technology' },
 ]
 
-/** The frozen framework rows. ONE Cognia framework contains all 31 standards. */
+// ── NIPSA — Accreditation Criteria (Academic Accreditation) ──────────────────
+// Transcribed VERBATIM from the live nipsa.org/accreditation/ page (2026-08-25):
+// the criterion NAMES are the titles, the statements ride in `description`, and
+// the page's own lead-in ("The school shall have…") explains the sentence
+// fragments. FLAT — the live page publishes a flat list of twelve; inventing a
+// domain tree would repeat the mistake the condensed-framework rewrite fixed.
+// The situational criteria (Dormitories/boarding, Early Childhood, Special
+// Needs) and the add-on programs (Therapeutic Certification, Autism
+// Endorsement) are NOT seeded as standards — the framework description names
+// them. The domainKey/evidenceTags/signalKeys mapping is KYRO's own product
+// decision, as it is for every framework here.
+const NIPSA_STANDARDS: CatalogStandardSeed[] = [
+  { code: 'NIPSA-1', title: 'General Data', description: 'Current statistical information', evidenceTags: ['enrollment_data'], domainKey: 'continuous_improvement' },
+  { code: 'NIPSA-2', title: 'Philosophy and Goals', description: 'A statement of philosophy by the governing body of the school. Goals and objectives consistent with that philosophy shall be systematically developed and reviewed by the administration and staff, and are to be shared often with the students and the parent community. There shall be a continual evaluation of progress toward these goals and objectives.', evidenceTags: ['strategic_plan'], domainKey: 'mission_identity', domainWeights: { mission_identity: 0.5, continuous_improvement: 0.5 }, signalKeys: ['plan_readiness'] },
+  { code: 'NIPSA-3', title: 'Organization', description: 'A clearly defined and demonstrably workable organizational structure whereby these goals and objectives are carried out. This structure should specify the functions of the administration, staff and students, the administrative relationship among these groups, and the limits of authority and responsibility.', evidenceTags: ['governance', 'policy_manual'], domainKey: 'governance' },
+  { code: 'NIPSA-4', title: 'Curriculum', description: "A curricular program with written course descriptions and objectives that provide all students with suitable courses of instruction consistent with the school's philosophy and goals, and the students' needs, abilities, and interests. There shall be adequate instructional resources to implement the curricular program. The curriculum should be the object of continual evaluation and development by the faculty, students, and administration.", domainKey: 'academic_excellence' },
+  { code: 'NIPSA-5', title: 'Instruction and Learning', description: 'An instructional program that addresses the needs of all students, emphasizes active learning, and provides teachers and students with ample material.', domainKey: 'academic_excellence' },
+  { code: 'NIPSA-6', title: 'Pupil Services', description: 'Pupil services that identify the needs, interests, aptitudes, and goals of all its students with adequate educational, personal, social, and career guidance.', evidenceTags: ['survey'], domainKey: 'student_services' },
+  { code: 'NIPSA-7', title: 'Pupil Activities', description: "Appropriate student activity offerings that supplement the formal instruction of the school. These should be responsive to the students' needs and interests and shall draw upon special skills and enthusiasm among students and faculty.", domainKey: 'student_services' },
+  { code: 'NIPSA-8', title: 'School Staff', description: 'A well-qualified staff that effectively fulfills its responsibilities.', evidenceTags: ['staff_credentials'], domainKey: 'hr', signalKeys: ['student_teacher_ratio', 'total_staff_fte', 'teaching_staff_share', 'fte_change_yoy'] },
+  { code: 'NIPSA-9', title: 'Parent Community', description: 'A supportive parent community that is encouraged to share its ideas and recommendations and, when invited to, actively participate in prescribed areas of the school program.', evidenceTags: ['survey', 'marketing'], domainKey: 'mission_identity' },
+  { code: 'NIPSA-10', title: 'School Plant', description: 'A school plant and physical facility that enables staff to implement effectively the school program.', evidenceTags: ['safety_plan'], domainKey: 'facilities' },
+  {
+    code: 'NIPSA-11',
+    title: 'Finance',
+    description: "Continuing financial support adequate to provide staff, physical facilities, instructional resources, and other support services necessary to operate effective educational programs. Budgetary planning should involve those who are responsible for implementing the school's programs and services.",
+    evidenceTags: ['budget', 'financial_audit', 'fiscal_resources'],
+    domainKey: 'finance',
+    signalKeys: [
+      'operating_margin',
+      'days_cash_on_hand',
+      'months_operating_reserve',
+      'tuition_dependency',
+      'cost_per_pupil',
+      'forecast_vs_budget_net',
+    ],
+  },
+  { code: 'NIPSA-12', title: 'School Improvement Plan', description: 'As part of the self-study the school will prepare a school improvement plan (SIP). The school improvement committee shall represent the school community and may employ a model that is appropriate for the school and its mission. The plan should analyze data from the self-study and other sources to determine the present state of the school and to develop objectives and action plans to improve student learning.', evidenceTags: ['strategic_plan'], domainKey: 'continuous_improvement', signalKeys: ['plan_readiness'] },
+]
+
+/**
+ * The frozen framework rows. TWO Cognia editions (2022 superseded by rev. 2025)
+ * share ONE standards build — identical codes, tree, tags, domain map and
+ * plain language; only titles, rubric vocabulary and metadata differ.
+ */
 export const FRAMEWORK_SEEDS: FrameworkSeed[] = [
   {
     code: 'cognia_2022',
     accreditor: 'Cognia',
-    name: 'Cognia Performance Standards (2022, incl. 2025 update)',
+    name: 'Cognia Performance Standards (2022)',
     version: '2022',
+    description:
+      'Superseded by the rev. 2025 standards for new adoptions. Retains the legacy i3 rubric vocabulary this edition was scored under.',
+    // ── WS2 R7: rubricLabels, statusBands and all 42 standards rows stay
+    // BYTE-IDENTICAL (spec-pinned). These four words are the scale schools
+    // already scored under; correcting them in place would misrepresent what a
+    // historical 1–4 meant on the day it was asserted. Only name/description/
+    // aliases/supersededByCode change on this row.
     rubricLabels: ['Insufficient', 'Initiating', 'Improving', 'Impacting'],
     statusBands: [
       { min: 240, label: 'Accredited Needing Improvement' },
@@ -418,13 +605,50 @@ export const FRAMEWORK_SEEDS: FrameworkSeed[] = [
     indexMin: 100,
     indexMax: 400,
     defaultTarget: 280,
-    standards: COGNIA_STANDARDS,
+    aliases: COGNIA_ALIASES,
+    supersededByCode: 'cognia_2025',
+    standards: COGNIA_2022_STANDARDS,
+  },
+  {
+    code: 'cognia_2025',
+    accreditor: 'Cognia',
+    name: 'Cognia Performance Standards (rev. 2025)',
+    version: '2025',
+    description:
+      'The 31 Cognia Performance Standards as revised 03.05.2025 (incl. Standard 31), with the current Level 1–4 rubric vocabulary and the 2025–26 status tiers. Statements are the accreditor’s own.',
+    // Reviewer shorthand, L1→L4 (verbatim single words from the 2025 rubric).
+    rubricLabels: ['Insufficient', 'Developing', 'Engaging', 'Demonstrating'],
+    // The long-form rubric point-value definitions, VERBATIM from the official
+    // Performance Standards and Rubrics PDF (L1→L4, positional like rubricLabels).
+    rubricDescriptors: [
+      'Reflecting areas with insufficient evidence and/or limited activity leading toward improvement',
+      'Developing or improving practices that provide evidence that effort approaches desired level of effectiveness',
+      'Engaging in practices that provide evidence of expected effectiveness that is reflected in the standard',
+      'Demonstrating noteworthy practices producing clear results that positively impact learners',
+    ],
+    statusBands: [
+      { min: 240, label: 'Accredited Needing Improvement' },
+      { min: 280, label: 'Accredited' },
+      { min: 320, label: 'Accredited with Merit' },
+      { min: 360, label: 'Accredited with Distinction' },
+    ],
+    indexMin: 100,
+    indexMax: 400,
+    defaultTarget: 280,
+    aliases: COGNIA_ALIASES,
+    indexReference: { value: 296, label: 'Cognia network average IEQ (2024–25)' },
+    standards: COGNIA_2025_STANDARDS,
   },
   {
     code: 'msa_cess_2022',
     accreditor: 'MSA-CESS',
-    name: 'MSA-CESS Standards for Accreditation (2022)',
-    version: '2022',
+    // WS2 R10 — the seeded content IS the School Edition 2021 five-standard set;
+    // only the name/version strings were misdated. `code` is an identity
+    // (seriesKey history, profile rows, audit rows) and is never renamed.
+    name: 'MSA-CESS Standards for Accreditation, School Edition (2021)',
+    version: 'School Edition 2021',
+    // NCPSA member (verified on the live ncpsa.org member list, 2026-08-25).
+    recognitions: ['ncpsa'],
     rubricLabels: ['Not Evident', 'Emerging', 'Meets Expectations', 'Exceeds Expectations'],
     statusBands: [],
     indexMin: null,
@@ -454,6 +678,9 @@ export const FRAMEWORK_SEEDS: FrameworkSeed[] = [
     version: '2023 Manual',
     description:
       'The 18 standards of the FCIS Manual for Evaluation and Accreditation (2023 revised). Standard titles and numbering are the accreditor\u2019s; indicators are not modelled \u2014 score at the standard level. Standards 8 and 13\u201318 apply only to schools running those programs.',
+    // ICAISA full member — NOT NCPSA (the NCPSA Florida member is AISF, a
+    // DIFFERENT body; the two are the ones the market guesses wrong).
+    recognitions: ['icaisa'],
     rubricLabels: ['Not Addressed', 'Developing', 'Meets Standard', 'Exceeds Standard'],
     statusBands: [],
     indexMin: null,
@@ -468,6 +695,8 @@ export const FRAMEWORK_SEEDS: FrameworkSeed[] = [
     version: 'REACH 2019',
     description:
       'The 8 standards of the ACSI REACH 2019 Edition Standards Manual. Standard titles and numbering are the accreditor\u2019s; indicators are not modelled \u2014 score at the standard level.',
+    // NCPSA full recognition, June 2024 (verified).
+    recognitions: ['ncpsa'],
     rubricLabels: ['Not Met', 'Partially Met', 'Met', 'Exemplary'],
     statusBands: [],
     indexMin: null,
@@ -482,6 +711,7 @@ export const FRAMEWORK_SEEDS: FrameworkSeed[] = [
     version: 'Focus on Learning',
     description:
       'The five Focus on Learning categories (A\u2013E) used by ACS WASC. Category letters and titles are the accreditor\u2019s; criteria and indicators are not modelled \u2014 score at the category level.',
+    recognitions: ['ncpsa'],
     rubricLabels: ['Little Evidence', 'Some Evidence', 'Consistent Evidence', 'Highly Effective'],
     statusBands: [],
     indexMin: null,
@@ -496,11 +726,33 @@ export const FRAMEWORK_SEEDS: FrameworkSeed[] = [
     version: '2022 Standards',
     description:
       'The 6 standards of the SAIS 2022 Accreditation Standards and Indicators. Standard titles and numbering are the accreditor\u2019s; indicators are not modelled \u2014 score at the standard level. Standard 6 applies only to schools offering virtual learning.',
+    // On BOTH lists (TN policy names SAIS under ICAISA explicitly).
+    recognitions: ['ncpsa', 'icaisa'],
     rubricLabels: ['Not Evident', 'Emerging', 'Meets Standard', 'Exceeds Standard'],
     statusBands: [],
     indexMin: null,
     indexMax: null,
     defaultTarget: null,
     standards: SAIS_STANDARDS,
+  },
+  {
+    code: 'nipsa_academic',
+    accreditor: 'NIPSA',
+    name: 'NIPSA Accreditation Criteria (Academic Accreditation)',
+    version: 'Academic',
+    description:
+      'The twelve NIPSA accreditation criteria, transcribed verbatim from the live nipsa.org accreditation page. NIPSA accredits on a 7-year term (candidacy up to 3 years \u2192 self-study \u2192 site visit \u2192 board decision, with a year-3 recommendations report); decisions are provisional accreditation, accreditation, warning, or probation \u2014 NIPSA publishes no numeric index and no per-standard rubric levels, so the four-level scale here is KYRO\u2019s generic self-scoring aid, not NIPSA\u2019s. Situational criteria (boarding/dormitories, early childhood, special needs) and the Therapeutic Certification / Autism Endorsement programs exist beyond these twelve and are not modelled \u2014 score at the criterion level.',
+    aliases: ['NIPSA', 'National Independent Private Schools Association'],
+    // NCPSA member since 1994 (verified); LA R.S. 17:4021's approved list names NIPSA.
+    recognitions: ['ncpsa'],
+    // NIPSA publishes NO per-standard scale \u2014 this is the same generic
+    // self-scoring vocabulary the other unscaled frameworks use, never
+    // attributed to NIPSA (the description says so out loud).
+    rubricLabels: ['Not Evident', 'Emerging', 'Meets Standard', 'Exceeds Standard'],
+    statusBands: [],
+    indexMin: null,
+    indexMax: null,
+    defaultTarget: null,
+    standards: NIPSA_STANDARDS,
   },
 ]

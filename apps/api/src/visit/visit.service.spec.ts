@@ -285,6 +285,10 @@ describe('SPEC-API-3 — acceptance 11: the visit quotes the twin, byte for byte
     expect(v.framework).toEqual({
       code: 'cognia_2022',
       name: 'the Cognia Performance Standards',
+      // WS1 additive: the seal line rides the framework object; null when the
+      // school has chosen no accreditor division.
+      division: null,
+      sealLine: null,
     })
   })
 

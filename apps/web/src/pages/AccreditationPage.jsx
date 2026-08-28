@@ -22,18 +22,22 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import {
   Award,
   BadgeCheck,
+  BookOpen,
+  CalendarClock,
   Check,
   ChevronDown,
   ChevronRight,
   FileText,
   Landmark,
   Link as LinkIcon,
+  ListChecks,
   Pencil,
   Plus,
   ShieldAlert,
   StickyNote,
   Trash2,
   TrendingDown,
+  User as UserIcon,
   X,
 } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
@@ -50,10 +54,14 @@ import AddDataTab from '../components/wizard/AddDataTab.jsx'
 import DatePicker from '../components/ui/DatePicker.jsx'
 import { formatShortDate } from '../lib/format.js'
 import { useSchools } from '../context/SchoolContext.jsx'
+import { useAuth } from '../context/AuthContext.jsx'
 import { useUiV2 } from '../context/UiFlagContext.jsx'
 import { useAccreditation } from '../hooks/useAccreditation.js'
+import { accreditationApi, schoolsApi } from '../lib/api.js'
+import { memberLabel } from '../lib/memberLabels.js'
 import {
   frameworkPillLabel,
+  frameworkPillLabels,
   buildRubricLabelsByFrameworkId,
   labelsForStandard,
 } from '../lib/frameworkLabels.js'
@@ -61,6 +69,13 @@ import { useReadinessTrend } from '../hooks/useReadinessTrend.js'
 import { useAccreditationSignals } from '../hooks/useAccreditationSignals.js'
 import { useEvidenceReadiness } from '../hooks/useEvidenceReadiness.js'
 import { useCommendations } from '../hooks/useCommendations.js'
+// ── F1 The Journey: the six-year cycle payload + the tab that paints it ───────
+import { useAccreditationCycle } from '../hooks/useAccreditationCycle.js'
+import JourneyTab from '../components/accreditation/JourneyTab.jsx'
+// ── F3: the plain-language explainer (the expanded row's second flip) ─────────
+import ExplainerDrawer from '../components/accreditation/ExplainerDrawer.jsx'
+// ── Accreditor-recognition badges (NCPSA / ICAISA) ────────────────────────────
+import RecognitionChips from '../components/accreditation/RecognitionChips.jsx'
 // ── Phase 3: framework catalog + rubric readiness + evidence warehouse ────────
 import ReadinessHero from '../components/accreditation/ReadinessHero.jsx'
 import AdoptFrameworkModal from '../components/accreditation/AdoptFrameworkModal.jsx'
@@ -281,9 +296,16 @@ const EMPTY_FORM = {
   parentId: '',
   rating: 'not_started',
   reviewDate: '',
+  // F2 delegation: a VALIDATED member (uuid) is the real owner; the legacy
+  // free-text `owner` survives as the "not a member" fallback (a diocesan
+  // consultant, a committee that isn't a login). The picker offers both.
+  ownerUserId: '',
   owner: '',
   notes: '',
 }
+
+// The Owner select's "someone who isn't a member" sentinel — never sent.
+const OWNER_FREE_TEXT = '__free_text__'
 
 function toStandardBody(form) {
   return {
@@ -293,7 +315,13 @@ function toStandardBody(form) {
     parentId: form.parentId ? form.parentId : null,
     rating: form.rating || 'not_started',
     reviewDate: form.reviewDate ? form.reviewDate : null,
-    owner: form.owner.trim() ? form.owner.trim() : null,
+    // Explicit null CLEARS (the API contract) — picking a member clears the
+    // free text and vice versa, so the register never shows two owners.
+    ownerUserId: form.ownerUserId && form.ownerUserId !== OWNER_FREE_TEXT ? form.ownerUserId : null,
+    owner:
+      (!form.ownerUserId || form.ownerUserId === OWNER_FREE_TEXT) && form.owner.trim()
+        ? form.owner.trim()
+        : null,
     notes: form.notes.trim() ? form.notes.trim() : null,
   }
 }
@@ -324,7 +352,18 @@ function parentOptions(standards, editingId) {
   return standards.filter((s) => !banned.has(s.id))
 }
 
-export function StandardFormModal({ open, initial, onClose, onSave, reduce, standards = [], editingId = null }) {
+export function StandardFormModal({
+  open,
+  initial,
+  onClose,
+  onSave,
+  reduce,
+  standards = [],
+  editingId = null,
+  // F2 — the members roster for the Owner picker (memberLabel'd). Empty for a
+  // viewer or while loading; the free-text fallback always remains.
+  members = [],
+}) {
   const [form, setForm] = useState(initial ?? EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
@@ -403,7 +442,43 @@ export function StandardFormModal({ open, initial, onClose, onSave, reduce, stan
         </Select>
       </Field>
       <Field label="Owner" index={5} reduce={reduce}>
-        <input value={form.owner} onChange={set('owner')} maxLength={200} className={fieldInput} />
+        {/* THE MEMBER PICKER (F2). The bare free-text input asked an owner to
+            remember a colleague's exact spelling; the roster + memberLabel
+            ("Jo Ruiz — Business Manager") is how every other assignment surface
+            already asks. Free text survives as the explicit "not a member" row
+            — a consultant or a committee is a legitimate owner with no login. */}
+        <Select
+          value={form.ownerUserId || (form.owner ? OWNER_FREE_TEXT : '')}
+          onChange={(e) => {
+            const v = e.target.value
+            setForm((f) => ({
+              ...f,
+              ownerUserId: v,
+              // Picking a member clears the free text; picking the fallback
+              // keeps whatever was typed.
+              owner: v === OWNER_FREE_TEXT ? f.owner : '',
+            }))
+          }}
+          aria-label="Standard owner"
+        >
+          <option value="">Unassigned</option>
+          {members.map((m) => (
+            <option key={m.id} value={m.id}>
+              {memberLabel(m)}
+            </option>
+          ))}
+          <option value={OWNER_FREE_TEXT}>Someone else (not a member)…</option>
+        </Select>
+        {form.ownerUserId === OWNER_FREE_TEXT || (!form.ownerUserId && form.owner) ? (
+          <input
+            value={form.owner}
+            onChange={set('owner')}
+            maxLength={200}
+            placeholder="Name of the owner"
+            aria-label="Owner name (free text)"
+            className={`${fieldInput} mt-1.5`}
+          />
+        ) : null}
       </Field>
       <Field label="Review date" index={6} reduce={reduce}>
         <DatePicker
@@ -498,6 +573,9 @@ export function EvidencePanel({
   schoolId = null,
   standard = null,
   rubricLabels = null,
+  // WS2 — the framework's long-form tier phrases (subtext under the active
+  // label word). Null for frameworks that publish single words only.
+  rubricDescriptors = null,
   onRubric = null,
   fetchSuggestions = null,
   linkStrategy = null,
@@ -750,6 +828,7 @@ export function EvidencePanel({
                   showLabel
                   value={standard.rubricScore ?? null}
                   labels={rubricLabels}
+                  descriptors={rubricDescriptors}
                   activeLabel={standard.rubricLabel ?? null}
                   disabled={!canEdit || !onRubric}
                   onChange={onRubric ? (v) => onRubric(standard.id, v) : undefined}
@@ -1215,6 +1294,27 @@ function SourcePicker({ sources, attaching, err, reduce, onAttach, onClose }) {
 
 // ═══════════════════════════ LIGHT STANDARDS TABLE ══════════════════════════
 
+/** The Owner cell — validated member name (server-joined) first, legacy free
+ *  text as fallback, an em-dash when nobody owns it. Initials chip + name. */
+function OwnerCell({ standard }) {
+  const name = standard.ownerName ?? standard.owner ?? null
+  if (!name) return <span className="text-[12px] text-muted/60">—</span>
+  const initials = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join('')
+  return (
+    <span className="inline-flex items-center gap-1.5" title={name}>
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-navy/20 bg-navy/5 text-[10px] font-bold text-navy">
+        {initials || <UserIcon size={11} aria-hidden />}
+      </span>
+      <span className="max-w-[120px] truncate text-[12.5px] font-medium text-navy/85">{name}</span>
+    </span>
+  )
+}
+
 function StandardsTable({
   standards,
   loading,
@@ -1226,6 +1326,11 @@ function StandardsTable({
   onEdit,
   onDelete,
   labelsFor = null, // (standard) => rubricLabels[4] | null — per-row framework labels
+  // WS2: (standard) => rubricDescriptors[4] | null — the read framework's
+  // long-form tier phrases, tooltip-only at register density.
+  descriptorsFor = null,
+  // F2: "make it a task" — navigates to /tasks with the standard prefilled.
+  onMakeTask = null,
   // frameworkId → pill label, passed ONLY when this school holds more than one
   // accreditation. Null for everyone else, and the register renders exactly as it
   // always did — a chip naming the only framework you have says nothing.
@@ -1275,6 +1380,7 @@ function StandardsTable({
           <Th>Rating</Th>
           <Th>Coverage</Th>
           <Th>Risk</Th>
+          <Th>Owner</Th>
           <Th>Review</Th>
           <Th right>{canEdit ? 'Actions' : ''}</Th>
         </>
@@ -1359,6 +1465,7 @@ function StandardsTable({
                       <RubricPicker
                         value={s.rubricScore ?? null}
                         labels={labelsFor ? labelsFor(s) : null}
+                        descriptors={descriptorsFor ? descriptorsFor(s) : null}
                         activeLabel={s.rubricLabel ?? null}
                         disabled={!canEdit || !onRubric}
                         onChange={onRubric ? (v) => onRubric(s.id, v) : undefined}
@@ -1389,6 +1496,15 @@ function StandardsTable({
                 <RiskChip entry={riskByStandard?.[s.id] ?? null} size="sm" />
               </td>
               <td className="px-4 py-3">
+                {/* F2 — whose standard to chase. Leaves only: a parent's "owner"
+                    would be ambiguous between "owns the domain" and a rollup. */}
+                {s.isLeaf === false ? (
+                  <span className="text-[12px] text-muted/60">—</span>
+                ) : (
+                  <OwnerCell standard={s} />
+                )}
+              </td>
+              <td className="px-4 py-3">
                 <ReviewBadge
                   status={s.reviewStatus}
                   reviewDate={s.reviewDate}
@@ -1405,6 +1521,17 @@ function StandardsTable({
                   />
                   {canEdit ? (
                     <span className="flex gap-1.5 opacity-60 transition group-hover:opacity-100">
+                      {/* F2 — "make it a task": lands on /tasks with this
+                          standard prefilled (the GovernancePage pattern), so the
+                          work flows into the briefing under workflow for free. */}
+                      {onMakeTask && s.isLeaf !== false ? (
+                        <IconAction
+                          Icon={ListChecks}
+                          onClick={() => onMakeTask(s)}
+                          label={`Make a task for ${s.code}`}
+                          title="Make it a task"
+                        />
+                      ) : null}
                       <IconAction Icon={Pencil} onClick={() => onEdit(s)} label={`Edit ${s.code}`} />
                       <IconAction
                         Icon={Trash2}
@@ -1456,8 +1583,17 @@ function StandardsTable({
 //
 // Records still hosts exactly ONE register, so it falls back to 'standards' for
 // any center-only tab.
+// F1 adds the SIXTH tab — Journey — placed FIRST. Phase E moved the default to
+// Domains arguing a head of school should first see WHERE they are exposed; the
+// same argument now says they should first see WHEN — exposure is one click
+// away. The default lands on `journey` ONLY when a cycle is configured (the
+// effect below flips it once the payload says so); unconfigured schools keep the
+// `domains` default and the Journey tab holds the setup card — never a dead
+// default landing. Deep links use `?center=journey` (the briefing's `?center=`
+// convention, never `?tab=` — ModuleTabs owns that one).
 const REGISTER_TABS = [{ key: 'standards', label: 'Standards' }]
 const CENTER_TABS = [
+  { key: 'journey', label: 'Journey' },
   { key: 'domains', label: 'Domains' },
   { key: 'standards', label: 'Standards' },
   { key: 'evidence', label: 'Evidence' },
@@ -1471,6 +1607,9 @@ function AccreditationWorkspace() {
   const canEdit = activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'
   const reduce = useReducedMotion()
   const uiV2 = useUiV2()
+  // F2 — who is looking (the Mine filter + "you own N standards" rail item).
+  const { user } = useAuth()
+  const currentUserId = user?.id ?? null
 
   const {
     standards,
@@ -1480,6 +1619,7 @@ function AccreditationWorkspace() {
     error,
     notLicensed,
     notEntitled,
+    refresh,
     createStandard,
     updateStandard,
     removeStandard,
@@ -1569,6 +1709,19 @@ function AccreditationWorkspace() {
     enabled: !loading && !notLicensed && !notEntitled,
   })
 
+  // F1: THE CYCLE — one payload for the Journey tab, the hero's countdown strip
+  // and the "Review due" KPI switch. Keyed off the page's ONE framework
+  // selection exactly like its siblings (the explicit choice; the server's
+  // dominance rule is the no-selection default), so the road and the hero can
+  // never describe different frameworks. Gated on the same already-made module
+  // check as every hook above.
+  const cycleHook = useAccreditationCycle(schoolId, {
+    enabled: !loading && !notLicensed && !notEntitled,
+    frameworkId,
+  })
+  const cycle = cycleHook.cycle
+  const cycleConfigured = cycleHook.configured
+
   // Phase E: Domains leads. See the CENTER_TABS header for why the default moved.
   //
   // DEEP LINK from the morning briefing. STEP 2.16 emits
@@ -1591,6 +1744,32 @@ function AccreditationWorkspace() {
       return 'domains'
     }
   })
+  // F1 — the default lands on Journey ONLY once the cycle payload says a cycle
+  // is configured, and only when nothing else has claimed the tab: not a
+  // `?center=` deep link (the reader was sent somewhere specific) and not the
+  // reader's own click. Tracked as refs so this can never fight navigation.
+  const centerParamAtMountRef = useRef(
+    (() => {
+      try {
+        const t = new URLSearchParams(window.location.search).get('center')
+        return CENTER_TABS.some((x) => x.key === t)
+      } catch {
+        return false
+      }
+    })(),
+  )
+  const tabTouchedRef = useRef(false)
+  useEffect(() => {
+    let cancelled = false
+    Promise.resolve().then(() => {
+      if (cancelled) return
+      if (!cycleConfigured || tabTouchedRef.current || centerParamAtMountRef.current) return
+      setTab('journey')
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [cycleConfigured])
   // The rule the reader was SENT to look at — it leads the rail and says so, so
   // "which of these did the brief mean?" has an answer on screen.
   const [focusRule, setFocusRule] = useState(() => {
@@ -1651,12 +1830,16 @@ function AccreditationWorkspace() {
   // severity order.
   const chooseTab = useCallback((key) => {
     setFocusRule(null)
+    tabTouchedRef.current = true
     setTab(key)
   }, [])
   const navigate = useNavigate()
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const [expanded, setExpanded] = useState(null) // the expanded standard id, or null
+  // F3 — which half of the expanded panel's flip is showing. Always lands back
+  // on Evidence when a different row opens.
+  const [expandedView, setExpandedView] = useState('evidence')
   const [adoptOpen, setAdoptOpen] = useState(false)
 
   // "+ Add" now launches the multi-step batch wizard (Add-data tab, deep-linked);
@@ -1666,7 +1849,10 @@ function AccreditationWorkspace() {
     setEditing(s)
     setModalOpen(true)
   }
-  const toggleExpanded = (id) => setExpanded((cur) => (cur === id ? null : id))
+  const toggleExpanded = (id) => {
+    setExpandedView('evidence')
+    setExpanded((cur) => (cur === id ? null : id))
+  }
 
   // ── Phase 3 derived state ──────────────────────────────────────────────────
   // A framework is "adopted" when any standard carries a frameworkId.
@@ -1683,15 +1869,188 @@ function AccreditationWorkspace() {
   // The catalog is normally fetched lazily, when the adopt modal opens. A
   // multi-framework school needs it up front for two things it cannot get from
   // the register rows: every framework's NAME (for the switcher) and its RUBRIC
-  // LABELS (for the rows below). Fetched only for that school — the single-
-  // accreditation case keeps the lazy behaviour exactly as it was.
+  // LABELS (for the rows below). WS1/WS2 widen this to EVERY adopted school —
+  // the catalog now also carries the division list (the seal selector), the
+  // supersession flag (the quiet upgrade banner) and the upgrade seam, none of
+  // which exist on the register rows. Unadopted schools keep the lazy fetch.
   useEffect(() => {
-    if (multiFramework && frameworks == null) loadFrameworks()
-  }, [multiFramework, frameworks, loadFrameworks])
+    if ((adopted || multiFramework) && frameworks == null) loadFrameworks()
+  }, [adopted, multiFramework, frameworks, loadFrameworks])
 
   const adoptedFrameworks = useMemo(
     () => (frameworks ?? []).filter((f) => f.adopted),
     [frameworks],
+  )
+
+  // The switcher's pills, collision-disambiguated the same way as the row chips.
+  const switcherLabels = useMemo(() => frameworkPillLabels(adoptedFrameworks), [adoptedFrameworks])
+
+  // ── F2: the members roster (Owner picker + Mine filter) ────────────────────
+  // Editors only — the endpoint is owner/accountant-gated; a viewer keeps an
+  // empty picker and the register still renders ownerName (server-joined).
+  const [members, setMembers] = useState([])
+  useEffect(() => {
+    let cancelled = false
+    Promise.resolve().then(async () => {
+      if (cancelled || !schoolId || !canEdit || notLicensed || notEntitled) {
+        if (!cancelled) setMembers([])
+        return
+      }
+      try {
+        const res = await schoolsApi.members(schoolId)
+        if (!cancelled) setMembers((res.data ?? []).filter((m) => m.status === 'active'))
+      } catch {
+        if (!cancelled) setMembers([])
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [schoolId, canEdit, notLicensed, notEntitled])
+
+  // ── F2/F4: the register's client-side lens ─────────────────────────────────
+  // 'mine' = standards whose validated owner is the reader (TasksPage's own
+  // pattern — no server filter needed at register scale); 'unbacked' = scored
+  // rows with no evidence (the hero risk chip's destination).
+  const [registerFilter, setRegisterFilter] = useState(null)
+
+  // The active framework's CATALOG row — divisions, supersession, upgrade seam.
+  const activeCatalogFw = useMemo(
+    () => (frameworks ?? []).find((f) => f.id === activeFrameworkId) ?? null,
+    [frameworks, activeFrameworkId],
+  )
+
+  // ── WS1: the division/seal choice (PATCH profile, owner/accountant) ────────
+  const [divisionBusy, setDivisionBusy] = useState(false)
+  const onSelectDivision = useCallback(
+    async (code, divisionValue) => {
+      if (!schoolId) return
+      setDivisionBusy(true)
+      try {
+        await accreditationApi.setFrameworkProfile(schoolId, code, {
+          division: divisionValue || null,
+        })
+        // The seal line lives on the readiness payload; the catalog carries the
+        // choice — both must repaint.
+        await Promise.all([loadFrameworks(), refresh()])
+      } catch {
+        /* fail-soft — the selector snaps back to the server's answer */
+      } finally {
+        setDivisionBusy(false)
+      }
+    },
+    [schoolId, loadFrameworks, refresh],
+  )
+
+  // ── WS2: the upgrade seam (read-only preflight, then the re-point) ─────────
+  const onUpgradeImpact = useCallback(
+    async (code) => {
+      if (!schoolId) return null
+      const res = await accreditationApi.getFrameworkUpgradeImpact(schoolId, code)
+      return res.data ?? null
+    },
+    [schoolId],
+  )
+  const onUpgradeFramework = useCallback(
+    async (code) => {
+      if (!schoolId) return null
+      const res = await accreditationApi.upgradeFramework(schoolId, code)
+      // Everything keyed by framework id just changed identity: hand the
+      // selection back to the server's dominance rule (which now resolves the
+      // successor), then repaint the register, the catalog and the cycle.
+      await selectFramework(null)
+      await Promise.all([refresh(), loadFrameworks()])
+      cycleHook.refresh()
+      return res.data ?? null
+    },
+    [schoolId, selectFramework, refresh, loadFrameworks, cycleHook],
+  )
+
+  // ── F1: writing the cycle anchor. The frameworkId travels in the body; the
+  // Journey tab supplies the rest. Configured payloads name their own
+  // framework; before that the page's selection (or the only adopted row)
+  // decides. ─────────────────────────────────────────────────────────────────
+  const saveCycle = useCallback(
+    async (body) => {
+      const fwId =
+        cycle?.framework?.id ??
+        activeFrameworkId ??
+        cycle?.frameworks?.[0]?.id ??
+        registerFrameworkIds[0] ??
+        null
+      if (!fwId) throw new Error('no framework')
+      await cycleHook.save({ frameworkId: fwId, ...body })
+    },
+    [cycle, activeFrameworkId, registerFrameworkIds, cycleHook],
+  )
+
+  // F4 — the target pill choice now ALSO persists server-side (the cycle PUT
+  // carries targetIndex), so Penny and the briefing can finally say "22 points
+  // from Merit" with a server-authored figure. localStorage stays the
+  // optimistic cache (setReadinessTarget writes it exactly as before); a
+  // viewer's click never attempts the write it is not allowed to make.
+  const onSelectTarget = useCallback(
+    async (target) => {
+      await setReadinessTarget(target)
+      if (canEdit) {
+        try {
+          await saveCycle({ targetIndex: target ?? null })
+        } catch {
+          /* the local cache still holds the choice; the server catches up next save */
+        }
+      }
+    },
+    [setReadinessTarget, canEdit, saveCycle],
+  )
+
+  // Milestone links ("/accreditation?center=evidence") stay INSIDE this page:
+  // the mount-only param consumption cannot re-run on a same-route navigate, so
+  // in-page links resolve their `?center=` directly and anything else navigates.
+  const openCenterLink = useCallback(
+    (path) => {
+      try {
+        const url = new URL(path, window.location.origin)
+        const center = url.searchParams.get('center')
+        if (url.pathname === '/accreditation' && CENTER_TABS.some((t) => t.key === center)) {
+          chooseTab(center)
+          return
+        }
+      } catch {
+        /* fall through to a plain navigate */
+      }
+      navigate(path)
+    },
+    [chooseTab, navigate],
+  )
+
+  // ── F2: "make it a task" — the GovernancePage location.state pattern. The
+  // due date defaults milestone-aware: the next milestone's own dueDate when a
+  // cycle is configured (a future server date), else blank. ──────────────────
+  const makeTaskFromStandard = useCallback(
+    (s) => {
+      const due = cycle?.configured ? (cycle.countdown?.dueDate ?? '') : ''
+      navigate('/tasks', {
+        state: {
+          prefill: {
+            title: `Work standard ${s.code} — ${s.title}`.slice(0, 200),
+            sourceType: 'accreditation',
+            sourceRef: s.id,
+            dueDate: due ? String(due).slice(0, 10) : '',
+          },
+        },
+      })
+    },
+    [navigate, cycle],
+  )
+
+  // ── F3: the explainer fetch (lazy, per opened drawer) ──────────────────────
+  const fetchExplainer = useCallback(
+    async (standardId) => {
+      if (!schoolId) return null
+      const res = await accreditationApi.getStandardExplainer(schoolId, standardId)
+      return res.data ?? null
+    },
+    [schoolId],
   )
 
   // PER-ROW RUBRIC LABELS, framework by framework.
@@ -1710,10 +2069,13 @@ function AccreditationWorkspace() {
   )
 
   // Only built for a multi-framework register — see StandardsTable's prop docs.
+  // WS2: labels come from frameworkPillLabels, which disambiguates ONLY on
+  // collision — a school holding both Cognia editions mid-transition reads
+  // "COGNIA 2022" beside "COGNIA 2025"; everyone else keeps the year-free pill.
   const frameworkChipById = useMemo(() => {
     if (!multiFramework) return null
     const map = {}
-    for (const f of frameworks ?? []) if (f?.id) map[f.id] = frameworkPillLabel(f)
+    for (const [id, label] of frameworkPillLabels(frameworks)) map[id] = label
     return map
   }, [multiFramework, frameworks])
 
@@ -1721,6 +2083,22 @@ function AccreditationWorkspace() {
   const labelsFor = useCallback(
     (s) => labelsForStandard(s, rubricLabelsByFrameworkId, rubricLabels),
     [rubricLabels, rubricLabelsByFrameworkId],
+  )
+
+  // WS2 — the read framework's long-form rubric descriptors, handed ONLY to
+  // rows that belong to it (or hand-made rows with no link): another
+  // framework's row must never wear Cognia's tier phrases. The readiness
+  // payload is the one place descriptors travel, so other frameworks' rows
+  // simply get none — words or nothing, never somebody else's.
+  const readFrameworkId = readiness?.framework?.id ?? null
+  const readDescriptors = readiness?.framework?.rubricDescriptors ?? null
+  const descriptorsFor = useCallback(
+    (s) => {
+      if (!Array.isArray(readDescriptors) || readDescriptors.length === 0) return null
+      if (s?.frameworkId && s.frameworkId !== readFrameworkId) return null
+      return readDescriptors
+    },
+    [readDescriptors, readFrameworkId],
   )
 
   // ── The switcher drives the TREND STRIP too ────────────────────────────────
@@ -1780,7 +2158,9 @@ function AccreditationWorkspace() {
   // scroll its register row into view.
   const scrollToStandard = useCallback(
     (standardId) => {
+      tabTouchedRef.current = true
       setTab('standards')
+      setExpandedView('evidence')
       setExpanded(standardId)
       window.setTimeout(() => {
         document
@@ -1893,6 +2273,7 @@ function AccreditationWorkspace() {
       parentId: editing.parentId ?? '',
       rating: editing.rating ?? 'not_started',
       reviewDate: editing.reviewDate ?? '',
+      ownerUserId: editing.ownerUserId ?? '',
       owner: editing.owner ?? '',
       notes: editing.notes ?? '',
     }
@@ -1965,21 +2346,43 @@ function AccreditationWorkspace() {
             : { icon: TrendingDown, text: `${metCount}/${leafCount} leaves met`, tone: ratingPct >= 50 ? 'neutral' : 'bad' },
     }
 
-    // 4) Review due (past-due or approaching, from reviewStatus).
+    // 4) Review due. F1 SWITCHES THIS CARD: once a cycle is configured it reads
+    //    the server's countdown — the next milestone of the six-year journey —
+    //    instead of the per-standard reviewDate fields nobody fills ("no review
+    //    dates set" was the tell that the school-level anchor did not exist).
+    //    Unconfigured schools keep the per-standard reading, verbatim.
+    const countdown = cycleConfigured ? (cycle?.countdown ?? null) : null
+    const milestoneStates = cycleConfigured
+      ? (cycle?.milestones ?? []).map((m) => m.state)
+      : []
     const reviewDue = standards.filter(
       (s) => s.reviewStatus === 'overdue' || s.reviewStatus === 'due-soon',
     ).length
     const hasReviewData = standards.some((s) => s.reviewStatus && s.reviewStatus !== 'unknown')
-    const reviewKpi = {
-      label: 'Review due',
-      value: !hasReviewData ? '—' : String(reviewDue),
-      status: !hasReviewData ? 'neutral' : reviewDue > 0 ? 'risk' : 'good',
-      sub: !hasReviewData
-        ? { icon: Check, text: 'no review dates set', tone: 'neutral' }
-        : reviewDue > 0
-          ? { icon: ShieldAlert, text: 'past review date', tone: 'bad' }
-          : { icon: Check, text: 'all current', tone: 'good' },
-    }
+    const reviewKpi = countdown
+      ? {
+          label: 'Next milestone',
+          value:
+            typeof countdown.daysRemaining === 'number' ? `${countdown.daysRemaining}d` : '—',
+          status: milestoneStates.includes('overdue')
+            ? 'risk'
+            : milestoneStates.includes('at_risk')
+              ? 'watch'
+              : 'good',
+          sub: milestoneStates.includes('overdue')
+            ? { icon: ShieldAlert, text: 'a milestone is overdue', tone: 'bad' }
+            : { icon: CalendarClock, text: countdown.label, tone: 'neutral' },
+        }
+      : {
+          label: 'Review due',
+          value: !hasReviewData ? '—' : String(reviewDue),
+          status: !hasReviewData ? 'neutral' : reviewDue > 0 ? 'risk' : 'good',
+          sub: !hasReviewData
+            ? { icon: Check, text: 'no review dates set', tone: 'neutral' }
+            : reviewDue > 0
+              ? { icon: ShieldAlert, text: 'past review date', tone: 'bad' }
+              : { icon: Check, text: 'all current', tone: 'good' },
+        }
 
     // 5) Documented / Defensible (Phase A) — once a framework is adopted. This
     //    slot deliberately does NOT carry the blended readiness percentage: a
@@ -2030,7 +2433,7 @@ function AccreditationWorkspace() {
     }
 
     return [coverageKpi, ratingKpi, gapsKpi, reviewKpi]
-  }, [summary, ratingSummary, standards, adopted, readiness])
+  }, [summary, ratingSummary, standards, adopted, readiness, cycle, cycleConfigured])
 
   // ── Phase E derived state ──────────────────────────────────────────────────
   // standardId → its TwinStandardRisk row, for the register's Risk column. Built
@@ -2324,6 +2727,36 @@ function AccreditationWorkspace() {
       })
     }
 
+    // 4) F2 — YOUR OWN QUEUE, one line: standards the reader owns that still
+    //    have no evidence. Client-composed like every rail item here, counted
+    //    over the validated ownerUserId only (free-text owners are display
+    //    names, not logins, and must never match by coincidence).
+    const mineNoEvidence = currentUserId
+      ? standards.filter(
+          (s) => s.ownerUserId && s.ownerUserId === currentUserId && s.coverage === 'no-evidence',
+        )
+      : []
+    if (mineNoEvidence.length > 0) {
+      items.push({
+        id: 'mine-gaps',
+        tone: 'watch',
+        severity: 'warn',
+        sortKey: 0.5,
+        title: `You own ${mineNoEvidence.length} standard${mineNoEvidence.length === 1 ? '' : 's'} with no evidence`,
+        why: 'Assigned to you and still waiting on a first artifact',
+        actions: [
+          {
+            label: 'See mine',
+            primary: true,
+            onClick: () => {
+              setRegisterFilter('mine')
+              chooseTab('standards')
+            },
+          },
+        ],
+      })
+    }
+
     // ONE LIST, ONE COMPARATOR — mergeAttentionRail (attentionRail.js), where
     // the ordering rules are documented and behaviourally tested. The shape it
     // replaces reserved four slots for the engine and concatenated two lists
@@ -2331,29 +2764,122 @@ function AccreditationWorkspace() {
     // by a watch-level "«code» is unscored" prompt — and viewers, who skipped
     // the concat, saw a strictly better list than editors.
     return mergeAttentionRail(earlyWarningItems, items)
-  }, [standards, canEdit, readiness, scrollToStandard, earlyWarningItems])
+  }, [standards, canEdit, readiness, scrollToStandard, earlyWarningItems, currentUserId, chooseTab])
+
+  // ── F2/F4: the register lens ───────────────────────────────────────────────
+  // Client-side slicing at register scale (TasksPage's own Mine pattern):
+  // 'mine' by validated ownerUserId, 'unbacked' = scored rows with nothing
+  // behind the score (the hero risk chip's destination). Null = everything.
+  const filteredStandards = useMemo(() => {
+    if (registerFilter === 'mine' && currentUserId) {
+      return standards.filter((s) => s.ownerUserId && s.ownerUserId === currentUserId)
+    }
+    if (registerFilter === 'unbacked') {
+      return standards.filter((s) => s.rubricScore != null && s.coverage === 'no-evidence')
+    }
+    return standards
+  }, [standards, registerFilter, currentUserId])
+  const mineCount = useMemo(
+    () =>
+      currentUserId
+        ? standards.filter((s) => s.ownerUserId && s.ownerUserId === currentUserId).length
+        : 0,
+    [standards, currentUserId],
+  )
 
   // ── Gate ───────────────────────────────────────────────────────────────────
   if (notLicensed || notEntitled) return <GatePanel notLicensed={notLicensed} />
 
+  // ── WS2: the quiet upgrade banner — over the standards center, informational
+  // and never blocking (the register keeps every path it ever had). ───────────
+  const upgradeBanner =
+    activeCatalogFw?.adopted && activeCatalogFw?.supersededBy ? (
+      <div
+        data-testid="upgrade-banner"
+        className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#F59E0B]/40 bg-amber-50 px-4 py-2.5"
+      >
+        <p className="text-[13px] leading-relaxed text-amber-800">
+          <span className="font-semibold">
+            Rev. {activeCatalogFw.supersededBy.version ?? activeCatalogFw.supersededBy.code}{' '}
+            available.
+          </span>{' '}
+          Your {activeCatalogFw.name} register keeps working exactly as it is — upgrading carries
+          every score and evidence link over.
+        </p>
+        {canEdit ? (
+          <button
+            type="button"
+            onClick={openAdoptModal}
+            className="shrink-0 rounded-full border border-[#F59E0B]/60 bg-white px-3 py-1 text-[12.5px] font-semibold text-amber-800 transition hover:bg-amber-100"
+          >
+            Review upgrade
+          </button>
+        ) : null}
+      </div>
+    ) : null
+
+  // The register lens bar — Mine (when anyone owns anything) + the transient
+  // "scored, no evidence" chip the hero risk chip lands on.
+  const filterBar =
+    mineCount > 0 || registerFilter ? (
+      <div className="flex flex-wrap items-center gap-2">
+        {mineCount > 0 ? (
+          <button
+            type="button"
+            data-testid="mine-filter-pill"
+            aria-pressed={registerFilter === 'mine'}
+            onClick={() => setRegisterFilter((cur) => (cur === 'mine' ? null : 'mine'))}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[12.5px] font-semibold transition ${
+              registerFilter === 'mine'
+                ? 'border-navy bg-navy text-white'
+                : 'border-rule/70 bg-white text-muted hover:text-navy'
+            }`}
+          >
+            <UserIcon size={13} aria-hidden /> Mine · {mineCount}
+          </button>
+        ) : null}
+        {registerFilter === 'unbacked' ? (
+          <button
+            type="button"
+            data-testid="unbacked-filter-chip"
+            onClick={() => setRegisterFilter(null)}
+            className="inline-flex items-center gap-1.5 rounded-full border border-[#F59E0B]/50 bg-amber-50 px-3 py-1 text-[12.5px] font-semibold text-amber-800"
+            title="Clear this filter"
+          >
+            Scored, no evidence · {filteredStandards.length}
+            <X size={13} aria-hidden />
+          </button>
+        ) : null}
+        {registerFilter === 'mine' && filteredStandards.length === 0 ? (
+          <span className="text-[12.5px] text-muted">Nothing is assigned to you yet.</span>
+        ) : null}
+      </div>
+    ) : null
+
   const registerTable = (
-    <StandardsTable
-      standards={standards}
-      loading={loading}
-      error={error}
-      canEdit={canEdit}
-      reduce={reduce}
-      expanded={expanded}
-      onToggle={toggleExpanded}
-      onEdit={openEdit}
-      onDelete={onDelete}
-      labelsFor={labelsFor}
-      frameworkChipById={frameworkChipById}
-      onImprove={setImproveStandard}
-      onRubric={canEdit ? setRubric : null}
-      currencyByStandard={evidence.byStandard}
-      riskByStandard={riskByStandard}
-    />
+    <div className="space-y-3">
+      {upgradeBanner}
+      {filterBar}
+      <StandardsTable
+        standards={filteredStandards}
+        loading={loading}
+        error={error}
+        canEdit={canEdit}
+        reduce={reduce}
+        expanded={expanded}
+        onToggle={toggleExpanded}
+        onEdit={openEdit}
+        onDelete={onDelete}
+        labelsFor={labelsFor}
+        descriptorsFor={descriptorsFor}
+        frameworkChipById={frameworkChipById}
+        onImprove={setImproveStandard}
+        onRubric={canEdit ? setRubric : null}
+        onMakeTask={canEdit ? makeTaskFromStandard : null}
+        currencyByStandard={evidence.byStandard}
+        riskByStandard={riskByStandard}
+      />
+    </div>
   )
 
   const expandedStandard = expanded ? standards.find((s) => s.id === expanded) : null
@@ -2491,6 +3017,21 @@ function AccreditationWorkspace() {
     <ImprovementPlaceholder findings={twin.findings} loading={twin.loading} />
   )
 
+  // ── F1: the Journey tab — WHERE the school is in its six-year cycle ────────
+  const journeyTab = (
+    <JourneyTab
+      cycle={cycle}
+      loading={cycleHook.loading}
+      error={cycleHook.error}
+      notLicensed={cycleHook.notLicensed}
+      canEdit={canEdit}
+      onSave={saveCycle}
+      history={history}
+      reduce={reduce}
+      onNavigate={openCenterLink}
+    />
+  )
+
   // ── Phase B: the open standard's signal slice ──────────────────────────────
   // byStandard is the server's catalog-derived index; the row's own signalKeys
   // (StandardPublic) carry the same catalog truth and are the fallback when the
@@ -2511,10 +3052,16 @@ function AccreditationWorkspace() {
       adopted={adopted}
       canEdit={canEdit}
       onAdopt={openAdoptModal}
-      onSelectTarget={setReadinessTarget}
+      onSelectTarget={onSelectTarget}
       onGapClick={scrollToStandard}
       reduce={reduce}
       history={history}
+      cycle={cycle}
+      onOpenJourney={() => chooseTab('journey')}
+      onUnbackedClick={() => {
+        setRegisterFilter('unbacked')
+        chooseTab('standards')
+      }}
     />
   )
 
@@ -2532,15 +3079,17 @@ function AccreditationWorkspace() {
       onTabChange={chooseTab}
       onNew={canEdit ? openAdd : null}
       registerTable={
-        tab === 'domains'
-          ? domainGrid
-          : tab === 'evidence'
-            ? evidenceTab
-            : tab === 'signals'
-              ? signalsTab
-              : tab === 'improvement'
-                ? improvementTab
-                : registerTable
+        tab === 'journey'
+          ? journeyTab
+          : tab === 'domains'
+            ? domainGrid
+            : tab === 'evidence'
+              ? evidenceTab
+              : tab === 'signals'
+                ? signalsTab
+                : tab === 'improvement'
+                  ? improvementTab
+                  : registerTable
       }
       attentionItems={attentionItems.list}
       attentionMoreCount={attentionItems.more}
@@ -2593,12 +3142,41 @@ function AccreditationWorkspace() {
                         : 'rounded-full px-3 py-1 text-[12.5px] font-semibold text-muted transition hover:text-navy'
                     }
                   >
-                    {frameworkPillLabel(f)}
+                    {switcherLabels.get(f.id) ?? frameworkPillLabel(f)}
                   </button>
                 )
               })}
             </div>
           ) : null}
+          {/* WS1 — the DIVISION/SEAL selector: only for a framework that has
+              divisions (Cognia's NCA CASI / SACS CASI / NWAC), owner/accountant
+              only (it writes the profile). The seal LINE it produces renders in
+              the hero, server-composed. */}
+          {canEdit && activeCatalogFw?.divisions?.length ? (
+            <label
+              data-testid="division-selector"
+              className="inline-flex items-center gap-1.5 rounded-full border border-rule/70 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-muted"
+            >
+              Division:
+              <select
+                value={activeCatalogFw.division ?? ''}
+                disabled={divisionBusy}
+                onChange={(e) => onSelectDivision(activeCatalogFw.code, e.target.value)}
+                aria-label="Accreditor division held"
+                className="bg-transparent text-[12.5px] font-semibold text-navy outline-none"
+              >
+                <option value="">None</option>
+                {activeCatalogFw.divisions.map((d) => (
+                  <option key={d.code} value={d.code} title={d.fullName}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          {/* Accreditor-recognition badges (NCPSA / ICAISA) for the framework
+              this page reads — absent for most, Cognia included. */}
+          <RecognitionChips recognitions={activeCatalogFw?.recognitions} light />
           {canEdit && adopted ? (
             <button
               type="button"
@@ -2642,6 +3220,7 @@ function AccreditationWorkspace() {
                 schoolId={schoolId}
                 standard={improveStandard}
                 rubricLabels={labelsFor(improveStandard)}
+                rubricDescriptors={descriptorsFor(improveStandard)}
                 // The rubric has its own step above; a second picker here would
                 // be two controls for one value.
                 onRubric={null}
@@ -2681,43 +3260,104 @@ function AccreditationWorkspace() {
                   {expandedStandard.title}
                 </span>
               </div>
-              <button
-                type="button"
-                onClick={() => setExpanded(null)}
-                aria-label="Close evidence panel"
-                className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-gold/60 hover:text-white"
-              >
-                <X size={16} />
-              </button>
+              <div className="flex shrink-0 items-center gap-2">
+                {/* F3 — the two-tab FLIP: Evidence | What this means. The
+                    explainer exists only for catalog-linked standards (there is
+                    no authored layer behind a hand-made row). */}
+                {expandedStandard.catalogStandardId ? (
+                  <div
+                    role="tablist"
+                    aria-label="Evidence or explanation"
+                    className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/5 p-0.5"
+                  >
+                    {[
+                      { key: 'evidence', label: 'Evidence', Icon: FileText },
+                      { key: 'explain', label: 'What this means', Icon: BookOpen },
+                    ].map(({ key, label, Icon: TabIcon }) => {
+                      const on = expandedView === key
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          role="tab"
+                          aria-selected={on}
+                          data-testid={`expanded-flip-${key}`}
+                          onClick={() => setExpandedView(key)}
+                          className={
+                            on
+                              ? 'inline-flex items-center gap-1.5 rounded-full bg-[#F59E0B]/25 px-3 py-1 text-[12px] font-semibold text-[#fde68a]'
+                              : 'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-semibold text-white/55 transition hover:text-white'
+                          }
+                        >
+                          <TabIcon size={12} aria-hidden /> {label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setExpanded(null)}
+                  aria-label="Close evidence panel"
+                  className="rounded-lg border-2 border-white/20 p-1.5 text-white/70 hover:border-gold/60 hover:text-white"
+                >
+                  <X size={16} />
+                </button>
+              </div>
             </div>
-            <EvidencePanel
-              key={expandedStandard.id}
-              standardId={expandedStandard.id}
-              canEdit={canEdit}
-              reduce={reduce}
-              listEvidenceSources={listEvidenceSources}
-              listEvidence={listEvidence}
-              createEvidence={createEvidenceAndRefresh}
-              updateEvidence={updateEvidenceAndRefresh}
-              removeEvidence={removeEvidenceAndRefresh}
-              schoolId={schoolId}
-              standard={expandedStandard}
-              rubricLabels={labelsFor(expandedStandard)}
-              onRubric={canEdit ? setRubric : null}
-              fetchSuggestions={fetchSuggestions}
-              linkStrategy={linkStrategy}
-              clearStrategy={clearStrategy}
-              signalPanel={
-                <SignalPanel
-                  rows={expandedSignalRows}
-                  boundKeys={expandedBoundKeys}
-                  period={signals.period}
-                  loading={signals.loading}
-                  error={signals.error}
-                  notLicensed={signals.notLicensed}
+            {expandedView === 'explain' && expandedStandard.catalogStandardId ? (
+              <div className="border-t border-white/10 bg-navy/40 px-6 py-4">
+                <ExplainerDrawer
+                  key={expandedStandard.id}
+                  standardId={expandedStandard.id}
+                  fetchExplainer={fetchExplainer}
+                  canEdit={canEdit}
+                  onAttachSuggestion={async (sug) => {
+                    const body = { sourceType: sug.sourceType }
+                    if (sug.sourceRef) body.sourceRef = sug.sourceRef
+                    if (sug.tag) body.tag = sug.tag
+                    await createEvidenceAndRefresh(expandedStandard.id, body)
+                  }}
+                  onLinkPlan={
+                    canEdit
+                      ? async (sug) => {
+                          await linkStrategy(expandedStandard.id, 'strategic_plan', sug.sourceRef)
+                        }
+                      : null
+                  }
                 />
-              }
-            />
+              </div>
+            ) : (
+              <EvidencePanel
+                key={expandedStandard.id}
+                standardId={expandedStandard.id}
+                canEdit={canEdit}
+                reduce={reduce}
+                listEvidenceSources={listEvidenceSources}
+                listEvidence={listEvidence}
+                createEvidence={createEvidenceAndRefresh}
+                updateEvidence={updateEvidenceAndRefresh}
+                removeEvidence={removeEvidenceAndRefresh}
+                schoolId={schoolId}
+                standard={expandedStandard}
+                rubricLabels={labelsFor(expandedStandard)}
+                rubricDescriptors={descriptorsFor(expandedStandard)}
+                onRubric={canEdit ? setRubric : null}
+                fetchSuggestions={fetchSuggestions}
+                linkStrategy={linkStrategy}
+                clearStrategy={clearStrategy}
+                signalPanel={
+                  <SignalPanel
+                    rows={expandedSignalRows}
+                    boundKeys={expandedBoundKeys}
+                    period={signals.period}
+                    loading={signals.loading}
+                    error={signals.error}
+                    notLicensed={signals.notLicensed}
+                  />
+                }
+              />
+            )}
           </motion.div>
         </div>
       ) : null}
@@ -2731,6 +3371,7 @@ function AccreditationWorkspace() {
         reduce={reduce}
         standards={standards}
         editingId={editing ? editing.id : null}
+        members={members}
       />
 
       <AdoptFrameworkModal
@@ -2740,6 +3381,9 @@ function AccreditationWorkspace() {
         onAdopt={adoptFramework}
         onRemovalImpact={frameworkRemovalImpact}
         onRemove={removeFramework}
+        onUpgradeImpact={onUpgradeImpact}
+        onUpgrade={onUpgradeFramework}
+        onSaveCycleDate={(body) => cycleHook.save(body)}
         reduce={reduce}
       />
     </>

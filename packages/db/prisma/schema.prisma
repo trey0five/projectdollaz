@@ -144,6 +144,7 @@ model School {
   accreditationStandards    AccreditationStandard[]
   accreditationEvidence     AccreditationEvidence[]
   readinessSnapshots        AccreditationReadinessSnapshot[]
+  accreditationFrameworkProfiles AccreditationFrameworkProfile[]
   accreditationFindings     AccreditationFinding[]
   maintenanceItems          MaintenanceItem[]
   vendors                   Vendor[]
@@ -298,6 +299,8 @@ model User {
   tasksDecided                     Task[]                     @relation("TaskDecidedBy")
   accreditationStandardUpdates     AccreditationStandard[]    @relation("AccreditationStandardUpdatedBy")
   accreditationRubricScored        AccreditationStandard[]    @relation("AccreditationRubricScoredBy")
+  accreditationStandardsOwned      AccreditationStandard[]    @relation("AccreditationStandardOwner")
+  accreditationFrameworkProfileUpdates AccreditationFrameworkProfile[] @relation("AccreditationFrameworkProfileUpdatedBy")
   accreditationEvidenceCreated     AccreditationEvidence[]    @relation("AccreditationEvidenceCreatedBy")
   maintenanceItemsCreated          MaintenanceItem[]          @relation("MaintenanceItemCreatedBy")
   maintenanceItemsDecided          MaintenanceItem[]          @relation("MaintenanceDecidedBy")
@@ -1459,6 +1462,28 @@ model AccreditationFramework {
   indexMax      Int?     @map("index_max") // 400 for Cognia
   defaultTarget Int?     @map("default_target") // 280 for Cognia ('Accredited')
   active        Boolean  @default(true)
+  // ── WS1/WS2 — framework versioning + division metadata (all additive) ──────
+  // aliases: searchable alternate names ("NCA CASI" must find the one Cognia
+  // framework). Seeded, self-heals on boot like every other framework field.
+  aliases           String[] @default([])
+  // Code (TEXT, not FK) of the framework that replaces this one for NEW
+  // adoptions. Read-time resolution; a dangling code reads as "not superseded"
+  // (fail-soft). `active` stays reserved for full retirement — every adopt/
+  // removal/list path filters active:true and must keep working for holders.
+  supersededByCode  String?  @map("superseded_by_code")
+  // array[4]: index i = the long-form descriptor phrase for rubric score i+1
+  // (Cognia 2025: "Reflecting areas with insufficient evidence…" …
+  // "Demonstrating noteworthy systematic and systemic practices…").
+  // Null = the accreditor publishes single-word labels only.
+  rubricDescriptors Json?    @map("rubric_descriptors")
+  // { value: Int, label: String } — an accreditor-published reference point on
+  // the index scale (Cognia: { value: 296, label: "Cognia network average IEQ
+  // (2024–25)" }). Display-only; never enters readiness math.
+  indexReference    Json?    @map("index_reference")
+  // Accreditor-level RECOGNITION badges (NCPSA/ICAISA) — codes from the closed
+  // RECOGNITION_BODIES constant. A school cannot adopt a recognition body; this
+  // is metadata about the ACCREDITOR, seeded and self-healing like aliases.
+  recognitions      String[] @default([])
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
@@ -1468,8 +1493,66 @@ model AccreditationFramework {
   // ── AIC Phase F (additive) — prior-visit findings, SetNull on delete: visit
   // history outlives a catalog row.
   priorVisitFindings PriorVisitFinding[]
+  // ── WS1/WS2/WS3 — the per-(school, framework) metadata rows ──
+  profiles             AccreditationFrameworkProfile[]
+  upgradedFromProfiles AccreditationFrameworkProfile[] @relation("ProfileUpgradedFrom")
 
   @@map("accreditation_frameworks")
+}
+
+// ── WS1/WS2/WS3 — the per-(school, framework) METADATA row ───────────────────
+// The FIRST per-school-per-framework table in the program, and deliberately a
+// LANDING ZONE: WS1 stores the division/seal choice here, WS2 stamps the
+// upgrade provenance here, WS3 keeps the six-year-cycle anchor + target here.
+//
+// INVARIANT (spec-pinned): this row is OPTIONAL METADATA. "Adopted" remains
+// derived from AccreditationStandard rows (catalog.service.ts groupBy
+// frameworkId) — a profile with no standards is a harmless remnant, never
+// evidence of adoption, and no read path may treat it as such. removeFramework
+// deletes the school's profile for that framework in the same transaction.
+model AccreditationFrameworkProfile {
+  id          String  @id @default(uuid()) @db.Uuid
+  schoolId    String  @map("school_id") @db.Uuid
+  frameworkId String  @map("framework_id") @db.Uuid
+  // Accreditor-division/seal the school holds, from the closed TS constant for
+  // this framework (COGNIA_DIVISIONS): 'nca_casi' | 'sacs_casi' | 'nwac'.
+  // TEXT + @IsIn at the DTO (house rule, never a PG enum). Null = plain
+  // accreditor branding, and the only legal value for frameworks with no
+  // division set.
+  division    String?
+
+  // ── WS2 upgrade provenance (stamped once by the upgrade transaction) ──
+  // Which framework this school's register was re-pointed FROM, and when.
+  // upgradedAt is the trend-bridge boundary and the durable marker that
+  // rubric scores with rubricScoredAt < upgradedAt were asserted under the
+  // predecessor's rubric labels.
+  upgradedFromFrameworkId String?   @map("upgraded_from_framework_id") @db.Uuid
+  upgradedAt              DateTime? @map("upgraded_at")
+
+  // ── WS3 cycle anchor (merged here per the one-profile-table ruling) ──
+  // lastReviewDate = the school's last Engagement Review (civil date);
+  // nextReviewDate null → derived = lastReviewDate + termYears. targetIndex is
+  // the server-persisted hero target (F4); validated against the framework's
+  // index scale at the DTO/service, never here.
+  lastReviewDate DateTime? @map("last_review_date") @db.Date
+  nextReviewDate DateTime? @map("next_review_date") @db.Date
+  termYears      Int       @default(6) @map("term_years")
+  targetIndex    Int?      @map("target_index")
+
+  updatedByUserId String?  @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  school                School                  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  framework             AccreditationFramework  @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
+  // SetNull: deleting a retired framework row must never erase the fact that
+  // the school upgraded — only the pointer's target.
+  upgradedFromFramework AccreditationFramework? @relation("ProfileUpgradedFrom", fields: [upgradedFromFrameworkId], references: [id], onDelete: SetNull)
+  updatedByUser         User?                   @relation("AccreditationFrameworkProfileUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([schoolId, frameworkId])
+  @@index([schoolId])
+  @@map("accreditation_framework_profiles")
 }
 
 // One node of a framework's catalog tree: domain rows are parents, standards are
@@ -1497,6 +1580,12 @@ model AccreditationCatalogStandard {
   domainKey     String?  @map("domain_key")
   domainWeights Json?    @map("domain_weights")
   signalKeys    String[] @default([]) @map("signal_keys")
+
+  // ── WS3 F3 — the authored PLAIN-LANGUAGE restatement (seed-only, nullable).
+  // One careful product-voice sentence per Cognia standard; null on every
+  // framework not yet authored, and the UI renders NOTHING when null — no
+  // lorem, no LLM paraphrase (suppression honesty applies to prose too).
+  plainLanguage String?  @map("plain_language")
 
   framework       AccreditationFramework            @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
   parent          AccreditationCatalogStandard?     @relation("CatalogTree", fields: [parentId], references: [id], onDelete: SetNull)
@@ -1611,6 +1700,10 @@ model AccreditationStandard {
   scoreProvenance      String    @default("self") @map("score_provenance") // 'self'|'peer_reviewed'|'externally_validated'
   rubricScoredAt       DateTime? @map("rubric_scored_at")
   rubricScoredByUserId String?   @map("rubric_scored_by_user_id") @db.Uuid
+  // ── WS3 F2 delegation — the VALIDATED owner (StrategyGoal.ownerUserId
+  // precedent). Membership-validated at write; notify only on set/change.
+  // Legacy free-text `owner` is KEPT as the display fallback — no backfill.
+  ownerUserId          String?   @map("owner_user_id") @db.Uuid
   updatedByUserId      String?   @map("updated_by_user_id") @db.Uuid
   createdAt            DateTime  @default(now()) @map("created_at")
   updatedAt            DateTime  @updatedAt @map("updated_at")
@@ -1626,6 +1719,8 @@ model AccreditationStandard {
   // Phase A provenance: WHO asserted the current rubric score. SetNull so deleting
   // a user never erases the score itself — only its attribution.
   rubricScoredByUser User?                         @relation("AccreditationRubricScoredBy", fields: [rubricScoredByUserId], references: [id], onDelete: SetNull)
+  // WS3 F2 — deleting a user never orphans the standard; only its ownership.
+  ownerUser          User?                         @relation("AccreditationStandardOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
   evidence           AccreditationEvidence[]
 
   // Adopt idempotency backstop: a school holds each catalog node at most once.

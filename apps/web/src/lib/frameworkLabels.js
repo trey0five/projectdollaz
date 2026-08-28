@@ -34,6 +34,40 @@ export function frameworkPillLabel(f) {
 }
 
 /**
+ * Pill labels for a SET of frameworks — the collision fix.
+ *
+ * Stripping the edition year is right for the ordinary case (an accreditor, not
+ * a revision) and wrong for exactly one: a school holding BOTH Cognia editions
+ * mid-upgrade would see two identical COGNIA pills naming two different
+ * registers. So the year comes back ONLY on collision — "COGNIA 2022" beside
+ * "COGNIA 2025" — and every non-colliding framework keeps its plain label. The
+ * year is read off the code's own trailing `_2022`; a colliding framework whose
+ * code carries no year keeps the bare label (there is nothing honest to append).
+ *
+ * @param frameworks the frameworks in the rendered set (any shape with id+code)
+ * @returns Map<frameworkId, pillLabel>
+ */
+export function frameworkPillLabels(frameworks) {
+  const rows = (frameworks ?? []).filter((f) => f?.id)
+  const byLabel = new Map()
+  for (const f of rows) {
+    const label = frameworkPillLabel(f)
+    byLabel.set(label, (byLabel.get(label) ?? 0) + 1)
+  }
+  const out = new Map()
+  for (const f of rows) {
+    const label = frameworkPillLabel(f)
+    if ((byLabel.get(label) ?? 0) > 1) {
+      const year = /_((?:19|20)\d{2})$/.exec(f.code ?? '')?.[1] ?? null
+      out.set(f.id, year ? `${label} ${year}` : label)
+    } else {
+      out.set(f.id, label)
+    }
+  }
+  return out
+}
+
+/**
  * frameworkId → that framework's own 1–4 rubric labels.
  *
  * @param frameworks         the catalog list (may be null — not yet fetched)

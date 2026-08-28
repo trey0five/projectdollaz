@@ -53,6 +53,11 @@ export interface ReadinessSeriesEntry {
   firstPointAt: string | null
   lastPointAt: string | null
   indexComparable: boolean
+  /** WS2 bridge (additive) — the successor framework CODE when a recorded
+   *  upgrade continues this series' history on a new seriesKey; null otherwise.
+   *  The picker hides continuedBy series by default (their past now rides the
+   *  successor's stitched trend). */
+  continuedBy: string | null
 }
 
 export interface ReadinessSeriesResponse {
@@ -195,15 +200,48 @@ export class AccreditationReadinessHistoryService {
 
     // RAW daily rows in the window. Breaks are detected on these, never on the
     // downsampled series — a month rollup must not be able to hide a scope change.
-    const rows = (await this.prisma.accreditationReadinessSnapshot.findMany({
+    const successorRows = (await this.prisma.accreditationReadinessSnapshot.findMany({
       where: { schoolId, seriesKey, snapshotDate: { gte: from, lte: to } },
       orderBy: { snapshotDate: 'asc' },
       select: POINT_SELECT,
     })) as PointRow[]
 
+    // ── WS2 — THE SERIES BRIDGE (read side only; snapshot rows NEVER rewritten).
+    // When this series' framework records an upgrade (profile.upgradedFrom*) and
+    // the requested window reaches back past the upgrade date, the predecessor
+    // series' points are stitched in front and ONE synthetic `framework_changed`
+    // break is emitted at the upgrade date. Everything downstream is existing
+    // behaviour: direction is blocked with the break's own sentence while the
+    // break is in-window, the chart draws the gap, and once the window no longer
+    // reaches back the stitch (and the block) disappear naturally.
+    const stitch = await this.stitchPredecessor(schoolId, framework, from, to)
+    const rows =
+      stitch !== null ? [...stitch.rows, ...successorRows] : successorRows
+
     if (rows.length === 0) return empty
 
-    const breaks = this.detectBreaks(rows)
+    let breaks = this.detectBreaks(rows)
+    if (stitch !== null && stitch.rows.length > 0) {
+      // The boundary's own generic detections are replaced by the ONE named
+      // break: the raw frameworkId flip at the first successor point would
+      // otherwise double-report the same event with a worse sentence.
+      const firstSuccessorDate =
+        successorRows.length > 0 ? isoDay(successorRows[0].snapshotDate) : null
+      breaks = breaks.filter(
+        (b) => !(b.kind === 'framework_changed' && b.date === firstSuccessorDate),
+      )
+      // A8 — the synthetic break belongs on the chart ONLY when the upgrade day
+      // is inside the requested window. An entirely-pre-upgrade window (from <
+      // to < upgradedAt) still stitches the predecessor's points, but pushing a
+      // break dated past `to` would hand the chart a marker outside its own
+      // axis. (from ≤ upgradeDay always holds here — the stitch is gated on
+      // from < upgradedAt — so only the upper bound can exclude it.)
+      const upgradeDay = stitch.breakMarker.date
+      if (upgradeDay >= isoDay(from) && upgradeDay <= isoDay(to)) {
+        breaks.push(stitch.breakMarker)
+        breaks.sort((a, b) => a.date.localeCompare(b.date))
+      }
+    }
     const rawPoints = rows.map((r) => this.toPoint(r))
     const points = granularity === 'month' ? downsampleMonthly(rawPoints) : rawPoints
     const change = summarizeObservedChange(points, breaks)
@@ -303,6 +341,56 @@ export class AccreditationReadinessHistoryService {
   }
 
   /**
+   * WS2 — the predecessor points + the synthetic break for a stitched trend
+   * read, or null when no stitch applies (no upgrade recorded, or the window
+   * starts at/after the upgrade date). Fail-soft: a pre-migration image (no
+   * profile table) reads exactly as before.
+   */
+  private async stitchPredecessor(
+    schoolId: string,
+    framework: AccreditationFramework | null,
+    from: Date,
+    to: Date,
+  ): Promise<{ rows: PointRow[]; breakMarker: SeriesBreak } | null> {
+    if (!framework) return null
+    const profile = await Promise.resolve()
+      .then(() =>
+        this.prisma.accreditationFrameworkProfile.findFirst({
+          where: { schoolId, frameworkId: framework.id },
+          select: { upgradedFromFrameworkId: true, upgradedAt: true },
+        }),
+      )
+      .catch(() => null)
+    if (!profile?.upgradedFromFrameworkId || !profile.upgradedAt) return null
+    if (from.getTime() >= profile.upgradedAt.getTime()) return null
+
+    const predecessor = await this.prisma.accreditationFramework.findFirst({
+      where: { id: profile.upgradedFromFrameworkId },
+      select: { code: true },
+    })
+    if (!predecessor) return null
+
+    const rows = (await this.prisma.accreditationReadinessSnapshot.findMany({
+      where: {
+        schoolId,
+        seriesKey: predecessor.code,
+        snapshotDate: { gte: from, lte: to, lt: profile.upgradedAt },
+      },
+      orderBy: { snapshotDate: 'asc' },
+      select: POINT_SELECT,
+    })) as PointRow[]
+
+    return {
+      rows,
+      breakMarker: {
+        date: isoDay(profile.upgradedAt),
+        kind: 'framework_changed',
+        detail: `Upgraded to ${framework.name}`,
+      },
+    }
+  }
+
+  /**
    * Every series this school has RECORDED history for, with its latest leaf
    * count. Note this is derived from the snapshots themselves, not from the live
    * register — a series that stopped being captured still has a readable past.
@@ -336,6 +424,26 @@ export class AccreditationReadinessHistoryService {
         : await this.prisma.accreditationFramework.findMany({ where: { id: { in: frameworkIds } } })
     const fwById = new Map(frameworks.map((f) => [f.id, f]))
 
+    // WS2 — which of these frameworks a recorded upgrade CONTINUES: the
+    // successor's profile row carries upgradedFromFrameworkId, so the map is
+    // old-framework-id → successor CODE. Fail-soft (pre-migration image → none).
+    const continuedByOldFw = new Map<string, string>()
+    if (frameworkIds.length > 0) {
+      const upgradeProfiles = await Promise.resolve()
+        .then(() =>
+          this.prisma.accreditationFrameworkProfile.findMany({
+            where: { schoolId, upgradedFromFrameworkId: { in: frameworkIds } },
+            select: { upgradedFromFrameworkId: true, framework: { select: { code: true } } },
+          }),
+        )
+        .catch(() => [])
+      for (const p of upgradeProfiles) {
+        if (p.upgradedFromFrameworkId) {
+          continuedByOldFw.set(p.upgradedFromFrameworkId, p.framework.code)
+        }
+      }
+    }
+
     const entries = groups.map((g, i) => {
       const latest = latestBySeries[i]
       const fw = latest?.frameworkId ? (fwById.get(latest.frameworkId) ?? null) : null
@@ -350,6 +458,7 @@ export class AccreditationReadinessHistoryService {
         firstPointAt: g._min.snapshotDate ? isoDay(g._min.snapshotDate) : null,
         lastPointAt: g._max.snapshotDate ? isoDay(g._max.snapshotDate) : null,
         indexComparable: fw?.indexMax != null,
+        continuedBy: fw ? (continuedByOldFw.get(fw.id) ?? null) : null,
       }
     })
     entries.sort((a, b) => a.seriesKey.localeCompare(b.seriesKey))

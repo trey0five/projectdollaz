@@ -520,6 +520,7 @@ export type TwinRuleKind = 'register' | 'trend' | 'comparison' | 'standard' | 'e
  */
 export type TwinFrameworkCode =
   | 'cognia_2022'
+  | 'cognia_2025'
   | 'msa_cess_2022'
   | 'nsbecs'
   | 'fcis_2023'
@@ -529,6 +530,7 @@ export type TwinFrameworkCode =
 
 export const TWIN_FRAMEWORK_CODES = [
   'cognia_2022',
+  'cognia_2025',
   'msa_cess_2022',
   'nsbecs',
   'fcis_2023',
@@ -536,6 +538,23 @@ export const TWIN_FRAMEWORK_CODES = [
   'acs_wasc',
   'sais_2023',
 ] as const
+
+/**
+ * WS2 REGISTRY LOCKSTEP — the ONE way a citation map gains its `cognia_2025`
+ * entry. The 2022→2025 crosswalk is a CODE IDENTITY (COG-1..31, COG-A1..A6 and
+ * the KC parents all exist in both editions, pinned by catalog-seed.spec), so
+ * every rule cites the SAME standard codes against either edition. Building the
+ * 2025 entry BY REFERENCE from the 2022 array makes drift impossible: there is
+ * no second array to edit, and the registries-move-together spec asserts the
+ * reference equality. If a future Cognia edition ever renumbers, delete this
+ * helper and the compiler walks you through every rule — which is the tripwire
+ * working as designed.
+ */
+function cogniaPair(
+  map: Readonly<Record<Exclude<TwinFrameworkCode, 'cognia_2025'>, readonly string[]>>,
+): Readonly<Record<TwinFrameworkCode, readonly string[]>> {
+  return { ...map, cognia_2025: map.cognia_2022 }
+}
 
 export interface TwinRuleUnlock {
   moduleKey: string | null
@@ -1127,7 +1146,7 @@ function num(v: unknown): number | null {
 
 const TH = TWIN_THRESHOLDS
 
-const GOV_CODES: Readonly<Record<TwinFrameworkCode, readonly string[]>> = {
+const GOV_CODES: Readonly<Record<TwinFrameworkCode, readonly string[]>> = cogniaPair({
   cognia_2022: ['COG-8', 'COG-A1'],
   msa_cess_2022: ['MSA-2'],
   nsbecs: ['NSBECS-5'],
@@ -1135,9 +1154,9 @@ const GOV_CODES: Readonly<Record<TwinFrameworkCode, readonly string[]>> = {
   acsi_reach: ['ACSI-2'],
   acs_wasc: ['WASC-A'],
   sais_2023: ['SAIS-2'],
-}
+})
 
-const FIN_CODES: Readonly<Record<TwinFrameworkCode, readonly string[]>> = {
+const FIN_CODES: Readonly<Record<TwinFrameworkCode, readonly string[]>> = cogniaPair({
   cognia_2022: ['COG-15'],
   msa_cess_2022: ['MSA-4'],
   nsbecs: ['NSBECS-10'],
@@ -1145,9 +1164,9 @@ const FIN_CODES: Readonly<Record<TwinFrameworkCode, readonly string[]>> = {
   acsi_reach: ['ACSI-8'],
   acs_wasc: ['WASC-A'],
   sais_2023: ['SAIS-5'],
-}
+})
 
-const NO_CODES: Readonly<Record<TwinFrameworkCode, readonly string[]>> = {
+const NO_CODES: Readonly<Record<TwinFrameworkCode, readonly string[]>> = cogniaPair({
   cognia_2022: [],
   msa_cess_2022: [],
   nsbecs: [],
@@ -1155,7 +1174,7 @@ const NO_CODES: Readonly<Record<TwinFrameworkCode, readonly string[]>> = {
   acsi_reach: [],
   acs_wasc: [],
   sais_2023: [],
-}
+})
 
 // ── 2.1 GOVERNANCE ───────────────────────────────────────────────────────────
 
@@ -1295,7 +1314,7 @@ const GOV_POLICY_OVERDUE: TwinRuleDef = {
   needsRegister: false,
   domainKeys: ['governance'],
   defaultDomainKey: 'governance',
-  standardCodes: {
+  standardCodes: cogniaPair({
     cognia_2022: ['COG-8', 'COG-11', 'COG-A1', 'COG-A4'],
     msa_cess_2022: ['MSA-2'],
     nsbecs: ['NSBECS-5', 'NSBECS-11'],
@@ -1303,7 +1322,7 @@ const GOV_POLICY_OVERDUE: TwinRuleDef = {
     acsi_reach: ['ACSI-2', 'ACSI-4'],
     acs_wasc: ['WASC-A'],
     sais_2023: ['SAIS-2', 'SAIS-5'],
-  },
+  }),
   rationaleTemplate: '{{overdueCount}} policies are past their own scheduled review date.',
   unlock: null,
   evaluate(c) {
@@ -1377,7 +1396,7 @@ const GOV_COMMITTEE_NO_CHAIR: TwinRuleDef = {
   needsRegister: false,
   domainKeys: ['governance'],
   defaultDomainKey: 'governance',
-  standardCodes: {
+  standardCodes: cogniaPair({
     cognia_2022: ['COG-8', 'COG-9'],
     msa_cess_2022: ['MSA-2'],
     nsbecs: ['NSBECS-5'],
@@ -1385,7 +1404,7 @@ const GOV_COMMITTEE_NO_CHAIR: TwinRuleDef = {
     acsi_reach: ['ACSI-2'],
     acs_wasc: ['WASC-A'],
     sais_2023: ['SAIS-2'],
-  },
+  }),
   rationaleTemplate: '{{committeeCount}} active committees have no chair recorded.',
   unlock: null,
   evaluate(c) {
@@ -1488,7 +1507,7 @@ const FIN_RESERVE_THIN: TwinRuleDef = {
   needsRegister: false,
   domainKeys: ['finance'],
   defaultDomainKey: 'finance',
-  standardCodes: {
+  standardCodes: cogniaPair({
     cognia_2022: ['COG-15'],
     msa_cess_2022: ['MSA-4'],
     nsbecs: ['NSBECS-10'],
@@ -1496,7 +1515,7 @@ const FIN_RESERVE_THIN: TwinRuleDef = {
     acsi_reach: ['ACSI-8'],
     acs_wasc: ['WASC-A'],
     sais_2023: ['SAIS-5'],
-  },
+  }),
   rationaleTemplate:
     'Operating reserve stands at {{reserveMonths}} months at {{asOf}}, below the {{riskThreshold}}-month level the sector treats as the risk line.',
   unlock: null,
@@ -1685,7 +1704,7 @@ const FIN_AR_AGING_WORSENING: TwinRuleDef = {
 
 // ── 2.3 STRATEGY ─────────────────────────────────────────────────────────────
 
-const STRAT_CODES: Readonly<Record<TwinFrameworkCode, readonly string[]>> = {
+const STRAT_CODES: Readonly<Record<TwinFrameworkCode, readonly string[]>> = cogniaPair({
   cognia_2022: ['COG-7', 'COG-26'],
   msa_cess_2022: ['MSA-1'],
   nsbecs: ['NSBECS-10', 'NSBECS-1'],
@@ -1693,7 +1712,7 @@ const STRAT_CODES: Readonly<Record<TwinFrameworkCode, readonly string[]>> = {
   acsi_reach: ['ACSI-8', 'ACSI-1'],
   acs_wasc: ['WASC-D', 'WASC-A'],
   sais_2023: ['SAIS-1'],
-}
+})
 
 const PLAN_VALUE_NOT_USABLE =
   'Your adopted plan records a fiscal end year but no end date, so we cannot count days to it.'
@@ -1806,7 +1825,7 @@ const ENR_DECLINE: TwinRuleDef = {
   needsRegister: false,
   domainKeys: ['finance', 'leadership'],
   defaultDomainKey: 'finance',
-  standardCodes: {
+  standardCodes: cogniaPair({
     cognia_2022: ['COG-15', 'COG-24'],
     msa_cess_2022: ['MSA-4'],
     nsbecs: ['NSBECS-13', 'NSBECS-10'],
@@ -1814,7 +1833,7 @@ const ENR_DECLINE: TwinRuleDef = {
     acsi_reach: ['ACSI-8'],
     acs_wasc: ['WASC-A', 'WASC-D'],
     sais_2023: ['SAIS-5', 'SAIS-4'],
-  },
+  }),
   rationaleTemplate:
     'Enrollment fell from {{headcountPrior}} at {{priorAsOf}} to {{headcountNow}} at {{asOf}} — a decline of {{declinePct}}.',
   unlock: null,
@@ -1881,7 +1900,7 @@ const ENR_FEEDER_EROSION: TwinRuleDef = {
   needsRegister: false,
   domainKeys: ['finance', 'leadership'],
   defaultDomainKey: 'finance',
-  standardCodes: {
+  standardCodes: cogniaPair({
     cognia_2022: ['COG-24', 'COG-15'],
     msa_cess_2022: ['MSA-4'],
     nsbecs: ['NSBECS-13'],
@@ -1889,7 +1908,7 @@ const ENR_FEEDER_EROSION: TwinRuleDef = {
     acsi_reach: ['ACSI-8'],
     acs_wasc: ['WASC-D', 'WASC-A'],
     sais_2023: ['SAIS-4', 'SAIS-5'],
-  },
+  }),
   rationaleTemplate:
     'Entry-grade enrollment ({{grades}}) fell from {{entryPrior}} at {{priorAsOf}} to {{entryNow}} at {{asOf}} — a decline of {{declinePct}}, while the headline total may still look flat.',
   unlock: null,
@@ -2196,7 +2215,7 @@ const FAC_BACKLOG: TwinRuleDef = {
   needsRegister: false,
   domainKeys: ['facilities'],
   defaultDomainKey: 'facilities',
-  standardCodes: {
+  standardCodes: cogniaPair({
     cognia_2022: ['COG-A3', 'COG-15'],
     msa_cess_2022: ['MSA-4'],
     nsbecs: ['NSBECS-12'],
@@ -2204,7 +2223,7 @@ const FAC_BACKLOG: TwinRuleDef = {
     acsi_reach: ['ACSI-6', 'ACSI-8'],
     acs_wasc: ['WASC-E', 'WASC-A'],
     sais_2023: ['SAIS-5'],
-  },
+  }),
   rationaleTemplate:
     // "FEWER THAN" for the same reason as HR-EVAL-OVERDUE below: the gate is
     // `open < WARN_COUNT` -> silent, so this fires AT the threshold. Shipped in
@@ -2251,7 +2270,7 @@ const HR_RATIO_DRIFT: TwinRuleDef = {
   needsRegister: false,
   domainKeys: ['hr'],
   defaultDomainKey: 'hr',
-  standardCodes: {
+  standardCodes: cogniaPair({
     cognia_2022: ['COG-13', 'COG-15'],
     msa_cess_2022: ['MSA-4', 'MSA-5'],
     nsbecs: ['NSBECS-11'],
@@ -2259,7 +2278,7 @@ const HR_RATIO_DRIFT: TwinRuleDef = {
     acsi_reach: ['ACSI-4', 'ACSI-8'],
     acs_wasc: ['WASC-A'],
     sais_2023: ['SAIS-3', 'SAIS-5'],
-  },
+  }),
   rationaleTemplate:
     'The student-teacher ratio has risen across {{readings}} readings, {{fyFirst}} to {{fyLast}} — from {{firstValue}} to {{lastValue}}, about {{slopePerYear}} a year (Mann-Kendall p = {{pValue}}).',
   // Direction-only for the same reason as FIN-BUDGET-DETERIORATING above: the
@@ -2300,7 +2319,7 @@ const SCHOOL_NOT_REPORTING: TwinRuleDef = {
   needsRegister: false,
   domainKeys: ['continuous_improvement'],
   defaultDomainKey: 'continuous_improvement',
-  standardCodes: {
+  standardCodes: cogniaPair({
     cognia_2022: ['COG-24'],
     msa_cess_2022: ['MSA-1'],
     nsbecs: ['NSBECS-10'],
@@ -2308,7 +2327,7 @@ const SCHOOL_NOT_REPORTING: TwinRuleDef = {
     acsi_reach: ['ACSI-8'],
     acs_wasc: ['WASC-D'],
     sais_2023: ['SAIS-1'],
-  },
+  }),
   rationaleTemplate:
     '{{staleSignalCount}} operating signals have gone quiet past their own expected cadence; the oldest was last observed {{oldestAgeDays}} days ago.',
   unlock: null,
@@ -2371,7 +2390,7 @@ const HR_PD_LOW: TwinRuleDef = {
   needsRegister: false,
   domainKeys: ['hr'],
   defaultDomainKey: 'hr',
-  standardCodes: {
+  standardCodes: cogniaPair({
     cognia_2022: ['COG-6', 'COG-29'],
     msa_cess_2022: ['MSA-5'],
     nsbecs: ['NSBECS-11'],
@@ -2379,7 +2398,7 @@ const HR_PD_LOW: TwinRuleDef = {
     acsi_reach: ['ACSI-4'],
     acs_wasc: ['WASC-A'],
     sais_2023: ['SAIS-5'],
-  },
+  }),
   rationaleTemplate:
     '{{participationPct}} of staff have a professional-development record in the last twelve months.',
   // CLOSED BY AIC PHASE K. `unlock` is null because the intake it named now
@@ -2445,7 +2464,7 @@ const SAFE_ENV_GAP: TwinRuleDef = {
   needsRegister: false,
   domainKeys: ['governance', 'student_services'],
   defaultDomainKey: 'governance',
-  standardCodes: {
+  standardCodes: cogniaPair({
     cognia_2022: ['COG-A3', 'COG-A4'],
     msa_cess_2022: ['MSA-3'],
     nsbecs: ['NSBECS-5'],
@@ -2453,7 +2472,7 @@ const SAFE_ENV_GAP: TwinRuleDef = {
     acsi_reach: ['ACSI-3'],
     acs_wasc: ['WASC-E'],
     sais_2023: ['SAIS-5'],
-  },
+  }),
   // REWRITTEN BY PHASE K. The Phase-E template — "{{cleared" + "Count}} of
   // {{staff" + "Count}} staff have a current clearance" — described the PASSING
   // state, which is not what a finding is. This rule fires on what has LAPSED, so
@@ -2531,7 +2550,7 @@ const CURR_DOC_AGING: TwinRuleDef = {
   needsRegister: false,
   domainKeys: ['academic_excellence'],
   defaultDomainKey: 'academic_excellence',
-  standardCodes: {
+  standardCodes: cogniaPair({
     cognia_2022: ['COG-12', 'COG-14'],
     msa_cess_2022: ['MSA-5'],
     nsbecs: ['NSBECS-7'],
@@ -2539,7 +2558,7 @@ const CURR_DOC_AGING: TwinRuleDef = {
     acsi_reach: ['ACSI-5'],
     acs_wasc: ['WASC-B'],
     sais_2023: ['SAIS-3'],
-  },
+  }),
   rationaleTemplate:
     '{{overdueCount}} curriculum documents are past their own scheduled review date.',
   unlock: {
@@ -2582,7 +2601,7 @@ const ACAD_GROWTH_FLAT: TwinRuleDef = {
   needsRegister: false,
   domainKeys: ['academic_excellence'],
   defaultDomainKey: 'academic_excellence',
-  standardCodes: {
+  standardCodes: cogniaPair({
     cognia_2022: ['COG-30', 'COG-31'],
     msa_cess_2022: ['MSA-5'],
     nsbecs: ['NSBECS-8'],
@@ -2590,7 +2609,7 @@ const ACAD_GROWTH_FLAT: TwinRuleDef = {
     acsi_reach: ['ACSI-5'],
     acs_wasc: ['WASC-D'],
     sais_2023: ['SAIS-3'],
-  },
+  }),
   rationaleTemplate: 'Measured growth has been flat across {{readings}} readings.',
   unlock: {
     moduleKey: null,
@@ -2626,7 +2645,7 @@ const HR_EVAL_OVERDUE: TwinRuleDef = {
   needsRegister: true,
   domainKeys: ['hr'],
   defaultDomainKey: 'hr',
-  standardCodes: {
+  standardCodes: cogniaPair({
     // COG-10 names "recruiting, supervising, and EVALUATING professional staff"
     // verbatim; COG-13 is the qualified-personnel standard the same files evidence.
     cognia_2022: ['COG-10', 'COG-13'],
@@ -2636,7 +2655,7 @@ const HR_EVAL_OVERDUE: TwinRuleDef = {
     acsi_reach: ['ACSI-4'],
     acs_wasc: ['WASC-A'],
     sais_2023: ['SAIS-5'],
-  },
+  }),
   // ONE template. There is no `rationaleTemplateLow`: the rule does not fire below
   // STAFF_EVAL_OVERDUE_WARN_COUNT (3), so the plural is always correct and no
   // singular variant is reachable.
@@ -2724,7 +2743,7 @@ const FAC_INSPECTION_DUE: TwinRuleDef = {
   needsRegister: true,
   domainKeys: ['facilities'],
   defaultDomainKey: 'facilities',
-  standardCodes: {
+  standardCodes: cogniaPair({
     cognia_2022: ['COG-A3'],
     msa_cess_2022: ['MSA-3'],
     nsbecs: ['NSBECS-12'],
@@ -2732,7 +2751,7 @@ const FAC_INSPECTION_DUE: TwinRuleDef = {
     acsi_reach: ['ACSI-6'],
     acs_wasc: ['WASC-E'],
     sais_2023: ['SAIS-5'],
-  },
+  }),
   // Both templates take the day figure WITH its noun (`fmtDays`): an inspection
   // one day past its target date is the most common way this rule first fires,
   // and "by 1 days" is a sentence this product will not say.

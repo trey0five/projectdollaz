@@ -1,4 +1,4 @@
-import { Controller, Delete, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, UseGuards } from '@nestjs/common'
 import type { User } from '@finrep/db'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js'
 import { RolesGuard } from '../common/guards/roles.guard.js'
@@ -7,6 +7,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator.js'
 import { EntitlementGuard } from '../billing/entitlement.guard.js'
 import { RequiresModule } from '../billing/requires-module.decorator.js'
 import { AccreditationCatalogService } from './catalog.service.js'
+import { SetFrameworkProfileDto } from './dto/set-framework-profile.dto.js'
 
 /**
  * Accreditation Phase 3 — the FRAMEWORK CATALOG routes. GET lists the seeded
@@ -67,5 +68,46 @@ export class AccreditationCatalogController {
     @CurrentUser() user: User,
   ) {
     return this.catalog.removeFramework(schoolId, code, user.id)
+  }
+
+  /**
+   * WS1 — set/clear this school's accreditor-division choice for a framework.
+   * Metadata write (never touches the register) → owner/accountant, like adopt.
+   */
+  @Patch(':code/profile')
+  @Roles('owner', 'accountant')
+  setProfile(
+    @Param('schoolId', ParseUUIDPipe) schoolId: string,
+    @Param('code') code: string,
+    @Body() dto: SetFrameworkProfileDto,
+    @CurrentUser() user: User,
+  ) {
+    return this.catalog.setProfile(schoolId, code, dto.division ?? null, user.id)
+  }
+
+  /**
+   * WS2, READ-ONLY — what upgrading off this superseded framework would carry,
+   * in the school's own numbers. The removal-impact pattern: safe to call
+   * speculatively; every role that can read the register may read the cost.
+   */
+  @Get(':code/upgrade-impact')
+  @Roles('owner', 'accountant', 'viewer')
+  upgradeImpact(@Param('schoolId', ParseUUIDPipe) schoolId: string, @Param('code') code: string) {
+    return this.catalog.upgradeImpact(schoolId, code)
+  }
+
+  /**
+   * WS2 — perform the upgrade. `:code` is the OLD framework (the thing being
+   * upgraded FROM); the target comes from its supersededByCode — never
+   * client-supplied. WRITES the register → owner/accountant only.
+   */
+  @Post(':code/upgrade')
+  @Roles('owner', 'accountant')
+  upgrade(
+    @Param('schoolId', ParseUUIDPipe) schoolId: string,
+    @Param('code') code: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.catalog.upgradeFramework(schoolId, code, user.id)
   }
 }

@@ -460,6 +460,9 @@ describe('AIC Phase F — the requirement seed is inert for a zero-row school', 
       'acsi_reach/ACSI-4/staff_evaluation',
       'cognia_2022/COG-10/staff_evaluation',
       'cognia_2022/COG-A3/inspection',
+      // WS2 — cognia_2025 shares cognia_2022's requirement list by reference.
+      'cognia_2025/COG-10/staff_evaluation',
+      'cognia_2025/COG-A3/inspection',
       'fcis_2023/FCIS-11/staff_evaluation',
       'fcis_2023/FCIS-12/inspection',
       'nsbecs/NSBECS-12/inspection',
@@ -480,14 +483,18 @@ describe('AIC Phase F — the requirement seed is inert for a zero-row school', 
   })
 
   it('no OTHER row changed its dataAvailability', () => {
-    // 98 rows, and the only intake row left is STILL COG-29/pd_records (Phase K).
+    // 118 rows, and the only intake row left is STILL COG-29/pd_records (Phase
+    // K) — counted twice because both Cognia editions share ONE list (WS2).
     // Four added frameworks did not conjure a PD register, so none of them asks
-    // for PD participation — an `intake` row is a promise, and four more copies of
-    // a promise we have not kept would just be four more holes.
+    // for PD participation — an `intake` row is a promise, and more copies of
+    // a promise we have not kept would just be more holes.
     const intake = Object.values(FRAMEWORK_REQUIREMENT_SEEDS)
       .flat()
       .filter((r) => r.dataAvailability === 'intake')
-    expect(intake.map((r) => `${r.standardCode}/${r.tag}`)).toEqual(['COG-29/pd_records'])
+    expect(intake.map((r) => `${r.standardCode}/${r.tag}`)).toEqual([
+      'COG-29/pd_records',
+      'COG-29/pd_records',
+    ])
   })
 })
 

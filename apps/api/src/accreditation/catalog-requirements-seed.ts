@@ -259,22 +259,46 @@ const SAIS_REQUIREMENTS: CatalogRequirementSeed[] = [
   { standardCode: 'SAIS-5', tag: 'safety_plan', label: 'Safety and crisis plan', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
 ]
 
+const NIPSA_REQUIREMENTS: CatalogRequirementSeed[] = [
+  // The same small pile of documents every accreditor asks for, hung on NIPSA's
+  // own criteria. Sparse-by-default: curriculum/instruction/activities carry no
+  // rows, and no gated register (staff_evaluation/inspection) is claimed — the
+  // criteria statements don't name those artifacts.
+  { standardCode: 'NIPSA-1', tag: 'enrollment_data', label: 'Current enrollment record', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'enrollment_snapshot' },
+  { standardCode: 'NIPSA-2', tag: 'strategic_plan', label: 'Statement of philosophy, goals and objectives', windowKind: 'source_interval', dataAvailability: 'platform', sourceRegister: 'strategic_plan' },
+  { standardCode: 'NIPSA-2', tag: 'self_study', label: 'NIPSA self-study', windowKind: 'fixed', windowMonths: 84, dataAvailability: 'external', sourceRegister: 'portal', notTrackedReason: WHY.portal },
+  { standardCode: 'NIPSA-3', tag: 'policy_manual', label: 'Organizational / board policy manual', windowKind: 'source_interval', dataAvailability: 'platform', sourceRegister: 'policy' },
+  { standardCode: 'NIPSA-3', tag: 'board_minutes', label: 'Approved board minutes', windowKind: 'fixed', windowMonths: 6, dataAvailability: 'platform', sourceRegister: 'meeting' },
+  { standardCode: 'NIPSA-8', tag: 'staff_credentials', label: 'Staff credential / certification records', windowKind: 'fixed', windowMonths: 24, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
+  { standardCode: 'NIPSA-10', tag: 'safety_plan', label: 'Safety and crisis plan', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
+  { standardCode: 'NIPSA-11', tag: 'budget', label: 'Board-approved operating budget', windowKind: 'fixed', windowMonths: 12, dataAvailability: 'platform', sourceRegister: 'period_budget' },
+  { standardCode: 'NIPSA-11', tag: 'financial_audit', label: 'Annual external financial audit', windowKind: 'fixed', windowMonths: 18, dataAvailability: 'platform', sourceRegister: 'knowledge_document' },
+  { standardCode: 'NIPSA-12', tag: 'strategic_plan', label: 'School improvement plan (SIP)', windowKind: 'source_interval', dataAvailability: 'platform', sourceRegister: 'strategic_plan' },
+]
+
 /**
  * frameworkCode → its requirement rows.
  *
  * Counts: 20 / 11 / 14 for the three originally transcribed frameworks, plus
- * 16 / 13 / 12 / 12 for FCIS / ACSI / WASC / SAIS = 98. The spec pins each number
- * so a row added or dropped by accident is a failing build, not a quiet change to
- * what every school on that framework is asked for.
+ * 16 / 13 / 12 / 12 for FCIS / ACSI / WASC / SAIS, plus cognia_2025's shared 20
+ * and NIPSA's 10 = 128. The spec pins each number so a row added or dropped by
+ * accident is a failing build, not a quiet change to what every school on that
+ * framework is asked for.
  */
 export const FRAMEWORK_REQUIREMENT_SEEDS: Record<string, CatalogRequirementSeed[]> = {
   cognia_2022: COGNIA_REQUIREMENTS,
+  // WS2 REGISTRY LOCKSTEP — the SAME array by reference, never a copy: the two
+  // Cognia editions share every standard code, so the same artifacts hang on
+  // the same standards. One list means a requirement correction reaches both
+  // editions, and the seed spec asserts the reference equality.
+  cognia_2025: COGNIA_REQUIREMENTS,
   msa_cess_2022: MSA_REQUIREMENTS,
   nsbecs: NSBECS_REQUIREMENTS,
   fcis_2023: FCIS_REQUIREMENTS,
   acsi_reach: ACSI_REQUIREMENTS,
   acs_wasc: WASC_REQUIREMENTS,
   sais_2023: SAIS_REQUIREMENTS,
+  nipsa_academic: NIPSA_REQUIREMENTS,
 }
 
 /**

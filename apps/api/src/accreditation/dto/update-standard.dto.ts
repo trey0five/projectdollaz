@@ -56,6 +56,11 @@ export class UpdateStandardDto {
   @MaxLength(200)
   owner?: string | null
 
+  /** WS3 F2 — validated owner; explicit null clears, omitted keeps. */
+  @IsOptional()
+  @IsUUID()
+  ownerUserId?: string | null
+
   @IsOptional()
   @IsString()
   @MaxLength(4000)

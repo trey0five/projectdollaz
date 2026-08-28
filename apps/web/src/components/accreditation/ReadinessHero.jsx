@@ -115,6 +115,14 @@ export default function ReadinessHero({
   // Phase A: the readiness HISTORY (useReadinessTrend's value) — optional, so the
   // hero still renders exactly as before if it is not wired.
   history = null,
+  // F1: the CYCLE payload (useAccreditationCycle's value.cycle) — optional. The
+  // countdown strip renders ONLY when a cycle is configured; a school that never
+  // set its anchor sees the hero exactly as before.
+  cycle = null,
+  onOpenJourney = null,
+  // F4: the register filtered to scored-but-unevidenced rows — the risk chip's
+  // destination.
+  onUnbackedClick = null,
 }) {
   if (!adopted) return <AdoptPrompt canEdit={canEdit} onAdopt={onAdopt} />
   if (!readiness) {
@@ -157,6 +165,35 @@ export default function ReadinessHero({
   const gaps = (readiness.gaps ?? []).slice(0, 5)
   const assurances = readiness.assurances ?? []
   const pointGap = readiness.target?.pointGap ?? null
+
+  // ── F4: the next-band two-sided sentence + the unbacked-points risk ────────
+  // Both are SERVER-COMPUTED additions to the readiness payload (top-level —
+  // the real payload has no `summary` object, B7). Absent → the hero keeps its
+  // existing phrasing; nothing here is derived client-side.
+  const nextBand = readiness.nextBand ?? null
+  const unbackedPoints = readiness.unbackedIndexPoints ?? null
+  // B1 — below the lowest band the server's `band` is the SENTINEL STRING
+  // "Below accreditation threshold" (never null), so a truthy-band check alone
+  // would print "You'd land Below accreditation threshold today". The payload's
+  // belowThreshold boolean is the gate; the two-sided phrasing only renders for
+  // a real landing.
+  const belowThreshold = readiness.belowThreshold === true
+  const landsInBand = Boolean(readiness.band) && !belowThreshold
+
+  // ── WS1: the seal line, composed server-side, rendered verbatim ────────────
+  const sealLine = readiness.framework?.division?.sealLine ?? null
+
+  // ── The accreditor-published reference point (display-only, never in math) ──
+  const indexRef = fw?.indexReference ?? null
+  const indexRefFrac =
+    hasIndex && indexRef && typeof indexRef.value === 'number'
+      ? Math.min(Math.max((indexRef.value - fw.indexMin) / span, 0), 1)
+      : null
+
+  // ── F1: the countdown strip — one line, only when a cycle is configured ────
+  const countdown = cycle?.configured ? (cycle.countdown ?? null) : null
+  const cyclePhase = cycle?.configured ? (cycle.phase ?? null) : null
+  const cycleTermYears = cycle?.configured ? (cycle.anchor?.termYears ?? null) : null
 
   // ── Phase A: the pair + the recorded past ──────────────────────────────────
   // Documented / Defensible come from the LIVE readiness payload — the same
@@ -310,6 +347,46 @@ export default function ReadinessHero({
                 )
               })}
 
+              {/* the accreditor-published reference point (e.g. Cognia's 296
+                  network-average IEQ) — a FAINT labelled tick, display-only,
+                  never entering the sweep or any readiness math */}
+              {indexRefFrac != null ? (
+                <g data-testid="index-reference-tick">
+                  {(() => {
+                    const [x1, y1] = polar(indexRefFrac, R - 22)
+                    const [x2, y2] = polar(indexRefFrac, R + 8)
+                    const [lx, ly] = polar(indexRefFrac, R - 34)
+                    return (
+                      <>
+                        <line
+                          x1={x1}
+                          y1={y1}
+                          x2={x2}
+                          y2={y2}
+                          stroke="#ffffff"
+                          strokeOpacity={0.35}
+                          strokeWidth={1.5}
+                          strokeDasharray="2 3"
+                        />
+                        <text
+                          x={lx}
+                          y={ly}
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          fontSize={10.5}
+                          fontWeight={600}
+                          fill="#ffffff"
+                          fillOpacity={0.4}
+                        >
+                          {indexRef.value}
+                        </text>
+                      </>
+                    )
+                  })()}
+                  <title>{indexRef.label ?? `Reference · ${indexRef.value}`}</title>
+                </g>
+              ) : null}
+
               {/* scale endpoints */}
               {(() => {
                 const [sx, sy] = polar(0, R + 30)
@@ -361,15 +438,35 @@ export default function ReadinessHero({
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#fbbf24]/90">
             {fw ? `${fw.name}` : 'Accreditation readiness'}
           </p>
+          {/* WS1 — the seal line, server-composed, verbatim ("Accredited by NCA
+              CASI, an accreditation division of Cognia"). Absent → nothing. */}
+          {sealLine ? (
+            <p data-testid="seal-line" className="mt-0.5 text-[12px] font-medium text-white/55">
+              {sealLine}
+            </p>
+          ) : null}
+          {/* F4 — BAND-AWARE AND TWO-SIDED. When the projected index lands in a
+              band (belowThreshold false), the headline says where you'd land
+              TODAY and the sub-line names the distance to the NEXT tier (both
+              server-computed). Below the bottom band — belowThreshold true, and
+              `band` carrying the floor sentinel, not a landing — the original
+              target phrasing stands. */}
           <h2 className="mt-1 font-serif text-[24px] font-semibold leading-tight text-white sm:text-[27px]">
-            {hasIndex
-              ? pointGap != null && pointGap > 0
-                ? `${pointGap} points from ${readiness.target?.bandLabel ?? 'your target'}`
-                : readiness.target
-                  ? `Target reached — ${readiness.target.bandLabel}`
-                  : 'Your readiness picture'
-              : 'Your readiness picture'}
+            {hasIndex && landsInBand
+              ? `You'd land ${readiness.band} today`
+              : hasIndex
+                ? pointGap != null && pointGap > 0
+                  ? `${pointGap} points from ${readiness.target?.bandLabel ?? 'your target'}`
+                  : readiness.target
+                    ? `Target reached — ${readiness.target.bandLabel}`
+                    : 'Your readiness picture'
+                : 'Your readiness picture'}
           </h2>
+          {hasIndex && landsInBand && nextBand ? (
+            <p data-testid="next-band-line" className="mt-1 text-[14px] font-medium text-white/70">
+              {nextBand.pointGap} point{nextBand.pointGap === 1 ? '' : 's'} from {nextBand.label}
+            </p>
+          ) : null}
 
           <div className="mt-4">
             <ProvenancePair
@@ -393,6 +490,22 @@ export default function ReadinessHero({
             <div className="mt-3">
               <ConfidenceChip confidence={readiness.confidence} reduce={reduce} />
             </div>
+          ) : null}
+
+          {/* F4 — THE REVIEW-DAY RISK, named. Server-computed: index points
+              contributed by scores with no evidence behind them. Zero or absent
+              → no chip (suppressed is not zero). Clicks to the register
+              filtered to exactly those rows. */}
+          {typeof unbackedPoints === 'number' && unbackedPoints > 0 ? (
+            <button
+              type="button"
+              data-testid="unbacked-risk-chip"
+              onClick={onUnbackedClick ?? undefined}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-[#F59E0B]/50 bg-[#F59E0B]/10 px-3 py-1.5 text-[12.5px] font-semibold text-[#fde68a] transition hover:bg-[#F59E0B]/20"
+            >
+              <ShieldAlert size={13} aria-hidden />
+              {unbackedPoints} of your projected points rest on scores with no evidence
+            </button>
           ) : null}
 
           {/* ── In-flight work: the ADVISORY projection, and what it left out ──
@@ -470,6 +583,41 @@ export default function ReadinessHero({
                 </span>
               ) : null}
             </div>
+          ) : null}
+
+          {/* F1 — THE COUNTDOWN STRIP: one line, rendered only when a cycle is
+              configured (unconfigured schools see the hero exactly as before).
+              Every figure is the cycle payload's own; the click lands on the
+              Journey tab, where the whole road lives. */}
+          {countdown ? (
+            <button
+              type="button"
+              data-testid="cycle-countdown-strip"
+              onClick={onOpenJourney ?? undefined}
+              className="mt-4 flex w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-left text-[13px] text-white/75 transition hover:border-[#F59E0B]/50 hover:text-white"
+            >
+              {cyclePhase?.yearOfCycle != null && cycleTermYears != null ? (
+                <span className="font-semibold text-[#fde68a]">
+                  Year {cyclePhase.yearOfCycle} of {cycleTermYears}
+                </span>
+              ) : null}
+              {cyclePhase?.yearOfCycle != null && cycleTermYears != null ? (
+                <span className="text-white/30">·</span>
+              ) : null}
+              <span>
+                {countdown.label}
+                {countdown.dueDate ? ` due ${fmtDate(countdown.dueDate) ?? countdown.dueDate}` : ''}
+              </span>
+              {typeof countdown.daysRemaining === 'number' ? (
+                <>
+                  <span className="text-white/30">·</span>
+                  <span className="font-semibold text-[#fbbf24]">
+                    {countdown.daysRemaining} day{countdown.daysRemaining === 1 ? '' : 's'}
+                  </span>
+                </>
+              ) : null}
+              <ChevronRight size={14} className="ml-auto shrink-0 text-white/35" aria-hidden />
+            </button>
           ) : null}
 
           {/* Fastest path — the gap list */}

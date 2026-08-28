@@ -101,6 +101,20 @@ export default function ActArrival({ arrival = null, demoData = false }) {
         </p>
       ) : null}
 
+      {/* B2 — THE REVIEW-DAY RISK, server-composed (visit.service attaches it
+          off the readiness payload's unbackedIndexPoints): how many projected
+          index points rest on scores with no evidence attached. The same fact
+          the hero's risk chip names, printed verbatim in the opening frame —
+          null (zero/unmeasurable) renders nothing, suppressed is not zero. */}
+      {arrival.unbackedRiskLine ? (
+        <p
+          data-testid="arrival-unbacked-risk"
+          className="rounded-xl border border-[#F59E0B]/30 bg-[#F59E0B]/[0.06] px-3 py-2 text-[12.5px] leading-relaxed text-muted"
+        >
+          {arrival.unbackedRiskLine}
+        </p>
+      ) : null}
+
       {/* The readiness read FAILED. Its own frozen sentence, verbatim — never an
           em dash pretending to be "nothing scored yet". */}
       {arrival.unavailableReason ? (

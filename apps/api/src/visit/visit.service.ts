@@ -53,6 +53,26 @@ import type { VisitQueryDto } from './dto/visit-query.dto.js'
 /** The composed payload, with the API's own `EvidenceGroup` carried through Act 4. */
 export type VisitResponse = VisitResult<EvidenceGroup>
 
+/**
+ * WS1/WS3-F4 (additive) — the seal line and the unbacked-points risk sentence,
+ * attached by THIS service AFTER the pure composer runs. Both are relayed from
+ * the readiness payload's own server-composed fields (divisions.ts owns the seal
+ * words; the readiness engine owns the unbacked figure) — the composer stays
+ * byte-identical and the pure package never learns division branding.
+ */
+export type VisitResponsePublic = Omit<VisitResponse, 'framework' | 'acts'> & {
+  framework: VisitResponse['framework'] & {
+    division: { code: string; name: string; sealLine: string } | null
+    sealLine: string | null
+  }
+  acts: Omit<VisitResponse['acts'], 'arrival'> & {
+    arrival: VisitResponse['acts']['arrival'] & {
+      /** Null when zero/unmeasurable — suppressed is not zero. */
+      unbackedRiskLine: string | null
+    }
+  }
+}
+
 @Injectable()
 export class VisitService {
   private readonly logger = new Logger(VisitService.name)
@@ -69,7 +89,7 @@ export class VisitService {
     schoolId: string,
     query: VisitQueryDto = {},
     at: Date = new Date(),
-  ): Promise<VisitResponse> {
+  ): Promise<VisitResponsePublic> {
     // FAIL-CLOSED, AND BEFORE ANY READ. See the header: the controller's guard is
     // not the only way into this method. The body matches EntitlementGuard's
     // (`code` + `module`) so every existing client parser reads it unchanged; it
@@ -152,6 +172,29 @@ export class VisitService {
       adoptedKeys: recommendations?.adoptedKeys ?? [],
     }
 
-    return composeMockVisit(input)
+    const composed = composeMockVisit(input)
+
+    // ── WS1 — the seal line rides the framework object (visit print header +
+    // Penny's get_visit_readiness relay), composed ONLY by divisions.ts and
+    // carried here via the readiness payload. Null when no division is set.
+    const division = readiness?.framework?.division ?? null
+
+    // ── WS3 F4 — the review-day risk sentence, SAME words as the hero's risk
+    // chip: index points resting on scored-but-unevidenced standards. Absent
+    // (null) when zero or unmeasurable — suppressed is not zero.
+    const unbacked = readiness?.unbackedIndexPoints ?? null
+    const unbackedRiskLine =
+      unbacked !== null && unbacked > 0
+        ? `${unbacked} of your projected index points rest on scores with no evidence attached.`
+        : null
+
+    return {
+      ...composed,
+      framework: { ...composed.framework, division, sealLine: division?.sealLine ?? null },
+      acts: {
+        ...composed.acts,
+        arrival: { ...composed.acts.arrival, unbackedRiskLine },
+      },
+    }
   }
 }

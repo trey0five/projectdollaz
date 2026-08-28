@@ -170,7 +170,18 @@ function Chart({ points, breaks, boardMarker, reduce }) {
     }
     if (current.length) segments.push(current)
 
-    return { rows, X, Y, lo, hi, xMin, xMax, segments, cuts }
+    // WS2 — the framework-upgrade boundary. Readings BEFORE a
+    // `framework_changed` break belong to the predecessor framework's scale
+    // vocabulary: they stay on the chart (the stitch is what makes the history
+    // kind) but draw dimmed and dashed, so the eye reads "an earlier era" and
+    // the break marker's own sentence explains why.
+    const fwCut = (breaks ?? [])
+      .filter((b) => b.kind === 'framework_changed')
+      .map((b) => dayNumber(b.date))
+      .filter((d) => d != null)
+      .reduce((a, d) => (a == null || d > a ? d : a), null)
+
+    return { rows, X, Y, lo, hi, xMin, xMax, segments, cuts, fwCut }
   }, [points, breaks])
 
   if (!geo) return null
@@ -278,6 +289,9 @@ function Chart({ points, breaks, boardMarker, reduce }) {
 
       {/* the readings, one path per comparable segment */}
       {segments.map((seg, i) => {
+        // Pre-upgrade segments (before the framework_changed boundary) draw
+        // dimmed + dashed — history kept, era named.
+        const preUpgrade = geo.fwCut != null && seg[seg.length - 1].x < geo.fwCut
         if (seg.length === 1) {
           return (
             <circle
@@ -286,6 +300,7 @@ function Chart({ points, breaks, boardMarker, reduce }) {
               cy={Y(seg[0].readinessPct)}
               r={3}
               fill={AMBER}
+              fillOpacity={preUpgrade ? 0.5 : 1}
             />
           )
         }
@@ -304,15 +319,22 @@ function Chart({ points, breaks, boardMarker, reduce }) {
           .join(' ')
         const areaD = `${d} L ${X(seg[seg.length - 1].x)} ${VB_H - PAD_B} L ${X(seg[0].x)} ${VB_H - PAD_B} Z`
         return (
-          <g key={`seg-${i}`}>
-            <path d={areaD} fill={`url(#${uid}-fill)`} stroke="none" />
+          <g key={`seg-${i}`} data-pre-upgrade={preUpgrade || undefined}>
+            <path
+              d={areaD}
+              fill={`url(#${uid}-fill)`}
+              fillOpacity={preUpgrade ? 0.45 : 1}
+              stroke="none"
+            />
             <motion.path
               d={d}
               fill="none"
               stroke={AMBER}
+              strokeOpacity={preUpgrade ? 0.55 : 1}
               strokeWidth={2.25}
               strokeLinecap="round"
               strokeLinejoin="round"
+              strokeDasharray={preUpgrade ? '4 4' : undefined}
               initial={reduce ? false : { pathLength: 0 }}
               animate={{ pathLength: 1 }}
               transition={reduce ? { duration: 0 } : { duration: 0.9, ease: 'easeOut' }}
@@ -473,11 +495,21 @@ export default function ReadinessTrendStrip({
   // scoped, so it is what tells us whether readings exist outside the window.
   const entry = list.find((s) => s.seriesKey === (trend?.seriesKey ?? seriesKey)) ?? null
 
+  // WS2 — a series marked `continuedBy` was superseded by an upgrade: its
+  // history now rides the successor's stitched trend, so the picker hides it by
+  // default. Unless it is the one currently selected — a viewer already looking
+  // at it must never be stranded on a pill that no longer exists.
+  const pickerList = list.filter((s) => !s.continuedBy || s.seriesKey === seriesKey)
+
   const aside = (
     <div className="flex flex-wrap items-center gap-2">
       {demo ? <DemoChip /> : null}
-      {requiresSelection && list.length > 1 ? (
-        <SeriesSelector series={list} seriesKey={seriesKey} onSeriesKeyChange={onSeriesKeyChange} />
+      {requiresSelection && pickerList.length > 1 ? (
+        <SeriesSelector
+          series={pickerList}
+          seriesKey={seriesKey}
+          onSeriesKeyChange={onSeriesKeyChange}
+        />
       ) : null}
     </div>
   )

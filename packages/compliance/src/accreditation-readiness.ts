@@ -73,6 +73,14 @@ export interface SchoolReadiness {
   projectedIndex: number | null
   /** Status-band label at projectedIndex; null when projectedIndex is null. */
   band: string | null
+  /**
+   * True when projectedIndex sits BELOW the lowest status band — in which case
+   * `band` carries the BELOW_THRESHOLD_LABEL sentinel, which is a floor
+   * statement and NOT an accreditor-awarded band. Callers deciding "did we land
+   * in a band?" must consult this flag, never string-compare the label.
+   * False whenever band is null (no index scale — there is no floor to be below).
+   */
+  belowThreshold: boolean
 }
 
 export interface ReadinessGap {
@@ -177,14 +185,19 @@ export function schoolReadiness(
 
   let projectedIndex: number | null = null
   let band: string | null = null
+  let belowThreshold = false
   if (framework && framework.indexMax != null && leafCount > 0) {
     const raw = Math.round((scoreSum / leafCount) * 100)
     const lo = framework.indexMin ?? raw
     const hi = framework.indexMax
     projectedIndex = Math.min(hi, Math.max(lo, raw))
     band = bandForIndex(framework.statusBands, projectedIndex)
+    // The engine's own floor fact (B1): below every band, bandForIndex returns
+    // the BELOW_THRESHOLD_LABEL sentinel — derived here from the bands
+    // themselves so no caller ever has to string-compare the label.
+    belowThreshold = !framework.statusBands.some((b) => b.min <= (projectedIndex as number))
   }
-  return { readinessPct, leafCount, scoredCount, coveredCount, projectedIndex, band }
+  return { readinessPct, leafCount, scoredCount, coveredCount, projectedIndex, band, belowThreshold }
 }
 
 /**
@@ -256,6 +269,55 @@ export function computeTargetGap(
   const stepsToTarget =
     leafCount === 0 ? 0 : Math.min(Math.ceil((pointGap * leafCount) / 100), availableSteps)
   return { pointGap, stepsToTarget }
+}
+
+// ── WS3 F4 — projected-tier polish (pure additions; nothing above changes) ──
+
+export interface NextBandGap {
+  /** The NEXT band up's label ("Accredited with Merit"). */
+  label: string
+  /** That band's floor on the index scale. */
+  min: number
+  /** Points between the projected index and that floor (always ≥ 1). */
+  pointGap: number
+}
+
+/**
+ * The band ABOVE the projected index, or null at the top band / off the scale.
+ * Bands need not be pre-sorted (bandForIndex's own discipline).
+ */
+export function nextBandGap(
+  statusBands: readonly StatusBand[],
+  projectedIndex: number,
+): NextBandGap | null {
+  let next: StatusBand | null = null
+  for (const b of statusBands) {
+    if (b.min > projectedIndex && (next === null || b.min < next.min)) next = b
+  }
+  if (next === null) return null
+  return { label: next.label, min: next.min, pointGap: next.min - projectedIndex }
+}
+
+/**
+ * Index points contributed ABOVE the floor by leaves that carry a rubric score
+ * but NO evidence — the "review-day risk" number: a reviewer discounts a score
+ * nothing backs. An UNSCORED leaf contributes 0 (it already sits at the honest
+ * floor of 1), so this can never exceed the projected index's own lift.
+ * Returns null when the framework has no index scale or there are no leaves.
+ */
+export function unbackedIndexPoints(
+  leaves: readonly ReadinessLeafInput[],
+  hasIndex: boolean,
+): number | null {
+  if (!hasIndex || leaves.length === 0) return null
+  const perStep = 100 / leaves.length
+  let points = 0
+  for (const l of leaves) {
+    const score = normalizeRubricScore(l.rubricScore)
+    if (score === null || l.evidenceCount > 0) continue
+    points += (score - RUBRIC_MIN) * perStep
+  }
+  return Math.round(points)
 }
 
 /** Binary assurance gates: satisfied = the leaf has ≥1 evidence artifact. */

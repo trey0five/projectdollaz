@@ -76,6 +76,7 @@ describe('schoolReadiness — the worked Cognia example (frozen)', () => {
       coveredCount: 30,
       projectedIndex: 300,
       band: 'Accredited',
+      belowThreshold: false,
     })
   })
   it('target 320 → pointGap 20, stepsToTarget 6', () => {
@@ -92,6 +93,7 @@ describe('schoolReadiness — edges', () => {
       coveredCount: 0,
       projectedIndex: null,
       band: null,
+      belowThreshold: false, // no index → there is no floor to be below
     })
   })
   it('no framework / no index scale → index+band null, readiness still computed', () => {
@@ -106,6 +108,9 @@ describe('schoolReadiness — edges', () => {
     const r = schoolReadiness(leaves, COGNIA_FW)
     expect(r.projectedIndex).toBe(100) // mean(1,1)·100, clamped to indexMin 100
     expect(r.band).toBe(BELOW_THRESHOLD_LABEL)
+    // B1 — the engine's own floor flag: band is the SENTINEL here, not a
+    // landing, and belowThreshold is how a caller knows without string-comparing.
+    expect(r.belowThreshold).toBe(true)
     expect(r.scoredCount).toBe(0)
   })
   it('index clamps to indexMax', () => {

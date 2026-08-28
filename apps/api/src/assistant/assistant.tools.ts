@@ -1259,6 +1259,19 @@ export const TOOL_SCHEMAS = [
   {
     type: 'function',
     function: {
+      name: 'get_accreditation_cycle',
+      description:
+        "The school's SIX-YEAR ACCREDITATION CYCLE (the journey) — where it stands on the road to its next Engagement Review, composed from its own anchor date and live registers. Returns the anchor (last/next review, term length), the current phase with its year-of-cycle, a countdown to the next dated milestone, and SIX milestones (findings shared, implement & gather, year-4 Progress Report, Self-Assessment, evidence freeze ~4 weeks out, the review itself) each with a state (done/on_track/at_risk/overdue/upcoming/not_measurable) and a measured sentence. Use for \"when is our next accreditation review?\", \"what accreditation deadline is next?\", \"are we behind on our cycle?\", \"what year of the cycle are we in?\". Read-only; requires the accreditation module. If it returns not_configured, ask the user for their last Engagement Review date (offer the suggestion when present) and point them to the Journey tab — NEVER invent or estimate a review date. State ONLY the milestones, states and sentences this tool returns; a not_measurable milestone's reason is the whole truth about it. For readiness scores use get_visit_readiness; this tool is about TIME.",
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'get_early_warnings',
       description:
         "The school's ACCREDITATION EARLY WARNINGS \u2014 what a visiting team would likely find, derived from live operating data by deterministic rules. Returns findings (each with the standard codes it would be cited under, an ordinal likelihood, the evidence chain behind it, and a horizon when one can honestly be given), notEvaluated (rules that could NOT be evaluated, each naming the blocking signal and the module or intake that would unlock it), coverage, and ordinal domain bands. Use for \"what would they find?\", \"what are we at risk on?\", \"what can't you tell me?\", \"which standards are exposed?\". Read-only. STATE ONLY WHAT THIS TOOL RETURNS. Never invent a finding, a standard, a date, or a number. `likelihood` is the word 'possible' or 'likely' \u2014 NEVER convert it to a percentage. Never predict an accreditation decision or whether the school will pass. Never use the word \"trend\" unless a finding's `confidence` is exactly 'trend'. Never describe a staffing change as turnover. If `thin` is true, say exactly what `message` says and stop.",
@@ -1698,6 +1711,7 @@ export const TOOL_LABELS: Record<string, string> = {
   get_plan_status: 'Reading the strategic plan…',
   get_improvement_status: 'Reading the improvement plan…',
   get_visit_readiness: 'Running a mock visit…',
+  get_accreditation_cycle: 'Reading the accreditation journey…',
   get_roster_summary: 'Counting the student roster…',
   get_assessment_summary: 'Reading the test results…',
   get_lesson_plan_status: 'Counting lesson plans…',

@@ -47,6 +47,9 @@ function makeService(over: {
   const deleted = { evidence: [] as string[][], standards: [] as string[][] }
 
   const tx = {
+    // A1 — removeFramework now takes the same pg_advisory_xact_lock as
+    // adopt/upgrade before reading the row-id set.
+    $executeRaw: vi.fn(async () => 0),
     accreditationStandard: {
       findMany: vi.fn(async () => rows.map((r) => ({ id: r.id }))),
       deleteMany: vi.fn(async ({ where }: { where: { id: { in: string[] } } }) => {

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common'
 import { AuthModule } from '../auth/auth.module.js'
 import { BillingModule } from '../billing/billing.module.js'
 import { AuditModule } from '../common/audit/audit.module.js'
+import { NotificationsModule } from '../common/notifications/notifications.module.js'
 import { StandardsController } from './standards.controller.js'
 import { EvidenceController } from './evidence.controller.js'
 import { EvidenceSourcesController } from './evidence-sources.controller.js'
@@ -17,6 +18,9 @@ import { AccreditationSnapshotService } from './readiness-snapshot.service.js'
 import { AccreditationEvidenceReadinessService } from './evidence-readiness.service.js'
 import { PriorVisitController } from './prior-visit.controller.js'
 import { PriorVisitService } from './prior-visit.service.js'
+import { AccreditationCycleController } from './accreditation-cycle.controller.js'
+import { AccreditationCycleService } from './accreditation-cycle.service.js'
+import { AccreditationExplainerService } from './accreditation-explainer.service.js'
 
 /**
  * Phase 4 Accreditation v1 — the Standards + Evidence register module. The first
@@ -43,7 +47,9 @@ import { PriorVisitService } from './prior-visit.service.js'
  * service would create a second, wider read path to the same rows for no gain.
  */
 @Module({
-  imports: [AuthModule, BillingModule, AuditModule],
+  // WS3 F2 adds NotificationsModule for the owner-assignment notice — a leaf
+  // module (prisma + mailer only), so the graph stays acyclic.
+  imports: [AuthModule, BillingModule, AuditModule, NotificationsModule],
   controllers: [
     StandardsController,
     EvidenceController,
@@ -53,6 +59,8 @@ import { PriorVisitService } from './prior-visit.service.js'
     AccreditationReadinessHistoryController,
     AccreditationEvidenceReadinessController,
     PriorVisitController,
+    // WS3 F1 — the six-year cycle (journey) routes.
+    AccreditationCycleController,
   ],
   providers: [
     AccreditationService,
@@ -62,6 +70,9 @@ import { PriorVisitService } from './prior-visit.service.js'
     AccreditationSnapshotService,
     AccreditationEvidenceReadinessService,
     PriorVisitService,
+    // WS3 — the cycle engine wrapper + the standard explainer composer.
+    AccreditationCycleService,
+    AccreditationExplainerService,
   ],
   // AIC Phase C: the commendations endpoint (in AccreditationSignalsModule)
   // needs BOTH the signal panel and the currency service. The edge stays
@@ -77,11 +88,17 @@ import { PriorVisitService } from './prior-visit.service.js'
   // is how a spoken explanation and the chart it explains come to disagree. It is
   // an EXPORT, not an import — this module still imports neither assistant nor
   // analytics, so the graph stays acyclic in the same direction.
+  // WS3: AccreditationCycleService joins the exported set for the SAME reason
+  // the Phase-J exports did — Penny's read tool and the briefing's cycle step
+  // read the SAME composed payload the journey tab renders, or a spoken
+  // milestone and the rail it describes come to disagree. An EXPORT, not an
+  // import — the graph stays acyclic in the same direction.
   exports: [
     AccreditationService,
     AccreditationEvidenceReadinessService,
     AccreditationReadinessService,
     AccreditationReadinessHistoryService,
+    AccreditationCycleService,
   ],
 })
 export class AccreditationModule {}

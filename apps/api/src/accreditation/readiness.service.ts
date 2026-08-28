@@ -7,13 +7,16 @@ import {
   computeDomainReadiness,
   computeGaps,
   computeTargetGap,
+  nextBandGap,
   schoolReadiness,
   selfScoredPct,
+  unbackedIndexPoints,
   verifiedPctCurrent,
   type AssuranceStatus,
   type DomainConfidence,
   type DomainReadiness,
   type ReadinessGap,
+  type NextBandGap,
   type ReadinessLeafInput,
   type StatusBand,
 } from '@finrep/compliance'
@@ -32,6 +35,7 @@ import {
   type CurrencyCountsPrisma,
   type CurrencyEvidenceRow,
 } from './evidence-anchors.js'
+import { divisionFor } from './divisions.js'
 
 /** The framework facts echoed on the readiness payload (null = framework-less mode). */
 export interface ReadinessFrameworkPublic {
@@ -43,6 +47,16 @@ export interface ReadinessFrameworkPublic {
   indexMin: number | null
   indexMax: number | null
   defaultTarget: number | null
+  // ── WS1/WS2 (additive) — the hero, the visit print view and Penny all
+  // narrate from this ONE server-composed truth. ──
+  /** The school's accreditor-division choice, or null. sealLine is composed
+   *  server-side ONLY (divisions.ts) and rendered verbatim everywhere. */
+  division: { code: string; name: string; sealLine: string } | null
+  /** Long-form rubric descriptor phrases (positional with rubricLabels); null
+   *  when the accreditor publishes single-word labels only. */
+  rubricDescriptors: string[] | null
+  /** Accreditor-published reference point on the index scale (display-only). */
+  indexReference: { value: number; label: string } | null
 }
 
 export interface ReadinessTargetPublic {
@@ -131,7 +145,21 @@ export interface ReadinessResponse {
   coveredCount: number
   projectedIndex: number | null
   band: string | null
+  /**
+   * B1 — true when projectedIndex sits BELOW the lowest status band. `band` is
+   * then the engine's BELOW_THRESHOLD_LABEL sentinel ("Below accreditation
+   * threshold"), NOT an accreditor-awarded band, and the hero must not phrase
+   * it as a landing ("You'd land … today"). Derived by the engine, relayed here.
+   */
+  belowThreshold: boolean
   target: ReadinessTargetPublic | null
+  // ── WS3 F4 (additive) ──
+  /** The band ABOVE the projected index (label/min/pointGap); null at the top
+   *  band or in no-index mode. The hero's two-sided headline reads this. */
+  nextBand: NextBandGap | null
+  /** Index points resting on scored-but-UNEVIDENCED leaves — the review-day
+   *  risk figure. Null in no-index mode; 0 means every scored point is backed. */
+  unbackedIndexPoints: number | null
   gaps: ReadinessGapPublic[]
   assurances: AssuranceStatus[]
   /**
@@ -241,9 +269,21 @@ export class AccreditationReadinessService {
     // catalog states read a millisecond apart.
     // The catalog read and the Phase-C requirement read ride together: the hero
     // and the currency rules must describe catalog state read at one instant.
-    const [catalogRows, requirementRows] = await Promise.all([
+    const [catalogRows, requirementRows, profile] = await Promise.all([
       this.catalogRowsFor(framework, leaves),
       this.requirementRowsFor(leaves),
+      // WS1/WS3 — the school's profile row for THIS framework: the division
+      // choice (seal line) and the server-persisted target. OPTIONAL METADATA;
+      // fail-soft so a pre-migration image reads exactly as before.
+      framework
+        ? Promise.resolve()
+            .then(() =>
+              this.prisma.accreditationFrameworkProfile.findFirst({
+                where: { schoolId, frameworkId: framework.id },
+              }),
+            )
+            .catch(() => null)
+        : Promise.resolve(null),
     ])
     const assuranceCatalogIds = assuranceIdsFrom(catalogRows)
     const isAssurance = (r: AccreditationStandard): boolean =>
@@ -376,7 +416,11 @@ export class AccreditationReadinessService {
     // the projected array.
     let target: ReadinessTargetPublic | null = null
     if (framework && hasIndex && summary.projectedIndex != null) {
-      const targetIndex = opts.target ?? framework.defaultTarget
+      // WS3 F4 — the PERSISTED target (profile row, written by PUT …/cycle)
+      // slots between the explicit ?target= and the framework default, so Penny
+      // and the briefing can finally say "22 points from Merit" with a
+      // server-authored figure. localStorage stays the web's optimistic cache.
+      const targetIndex = opts.target ?? profile?.targetIndex ?? framework.defaultTarget
       if (targetIndex != null) {
         const gap = computeTargetGap(scoredLeaves, summary.projectedIndex, targetIndex)
         target = {
@@ -413,6 +457,20 @@ export class AccreditationReadinessService {
             indexMin: framework.indexMin,
             indexMax: framework.indexMax,
             defaultTarget: framework.defaultTarget,
+            division: (() => {
+              const d = divisionFor(framework.code, profile?.division ?? null)
+              return d ? { code: d.code, name: d.name, sealLine: d.sealLine } : null
+            })(),
+            rubricDescriptors:
+              ((framework as { rubricDescriptors?: unknown }).rubricDescriptors as
+                | string[]
+                | null
+                | undefined) ?? null,
+            indexReference:
+              ((framework as { indexReference?: unknown }).indexReference as
+                | { value: number; label: string }
+                | null
+                | undefined) ?? null,
           }
         : null,
       readinessPct: summary.readinessPct,
@@ -426,7 +484,14 @@ export class AccreditationReadinessService {
       coveredCount: summary.coveredCount,
       projectedIndex: summary.projectedIndex,
       band: summary.band,
+      belowThreshold: summary.belowThreshold,
       target,
+      // WS3 F4 — both computed from the ACTUAL leaves (never the projection).
+      nextBand:
+        framework && summary.projectedIndex != null
+          ? nextBandGap(this.bandsOf(framework), summary.projectedIndex)
+          : null,
+      unbackedIndexPoints: unbackedIndexPoints(scoredLeaves, hasIndex),
       gaps,
       assurances: framework ? computeAssurances(assuranceLeaves) : [],
       domains,

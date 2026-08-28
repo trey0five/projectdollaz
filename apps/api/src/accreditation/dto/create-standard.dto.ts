@@ -62,6 +62,12 @@ export class CreateStandardDto {
   @MaxLength(200)
   owner?: string | null
 
+  /** WS3 F2 — the VALIDATED owner (active member of the path school; service
+   *  400s otherwise). Legacy free-text `owner` stays the display fallback. */
+  @IsOptional()
+  @IsUUID()
+  ownerUserId?: string | null
+
   @IsOptional()
   @IsString()
   @MaxLength(4000)

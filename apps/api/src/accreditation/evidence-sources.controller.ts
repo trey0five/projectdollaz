@@ -5,6 +5,7 @@ import { Roles } from '../common/decorators/roles.decorator.js'
 import { EntitlementGuard } from '../billing/entitlement.guard.js'
 import { RequiresModule } from '../billing/requires-module.decorator.js'
 import { AccreditationService } from './accreditation.service.js'
+import { AccreditationExplainerService } from './accreditation-explainer.service.js'
 
 /**
  * Phase 4 Accreditation — the "attach from operations" DISCOVERY routes. The
@@ -28,7 +29,10 @@ import { AccreditationService } from './accreditation.service.js'
 @UseGuards(JwtAuthGuard, RolesGuard, EntitlementGuard)
 @RequiresModule('accreditation')
 export class EvidenceSourcesController {
-  constructor(private readonly accreditation: AccreditationService) {}
+  constructor(
+    private readonly accreditation: AccreditationService,
+    private readonly explainer: AccreditationExplainerService,
+  ) {}
 
   @Get('evidence-sources')
   @Roles('owner', 'accountant', 'viewer')
@@ -43,5 +47,20 @@ export class EvidenceSourcesController {
     @Param('standardId', ParseUUIDPipe) standardId: string,
   ) {
     return this.accreditation.listSuggestions(schoolId, standardId)
+  }
+
+  /**
+   * WS3 F3 — one standard's whole story: verbatim statement, authored plain
+   * language (null renders nothing), live evidence checklist, rubric position,
+   * bound signals, attach suggestions. All roles — committee members are
+   * viewers, and this drawer exists for them. Foreign id 404s in the service.
+   */
+  @Get('standards/:standardId/explainer')
+  @Roles('owner', 'accountant', 'viewer')
+  explain(
+    @Param('schoolId', ParseUUIDPipe) schoolId: string,
+    @Param('standardId', ParseUUIDPipe) standardId: string,
+  ) {
+    return this.explainer.getExplainer(schoolId, standardId)
   }
 }

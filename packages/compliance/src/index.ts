@@ -155,6 +155,7 @@ export type {
   TargetGap,
   AssuranceLeafInput,
   AssuranceStatus,
+  NextBandGap,
 } from './accreditation-readiness.js'
 export {
   RUBRIC_MIN,
@@ -170,7 +171,30 @@ export {
   computeGaps,
   computeTargetGap,
   computeAssurances,
+  // WS3 F4 — projected-tier polish (pure additions)
+  nextBandGap,
+  unbackedIndexPoints,
 } from './accreditation-readiness.js'
+
+// WS3 F1 — the six-year accreditation CYCLE engine (pure; `now` injected)
+export type {
+  CycleMilestoneKey,
+  CycleMilestoneState,
+  CycleMeasure,
+  CycleMilestone,
+  CyclePhase,
+  CycleCountdown,
+  CycleAnchor,
+  CycleEngineInput,
+  ComposedCycle,
+} from './accreditation-cycle.js'
+export {
+  CYCLE_MILESTONE_KEYS,
+  EVIDENCE_FREEZE_LEAD_DAYS,
+  PROGRESS_REPORT_RISK_WINDOW_DAYS,
+  EVIDENCE_FREEZE_RISK_WINDOW_DAYS,
+  composeCycle,
+} from './accreditation-cycle.js'
 
 // Accreditation Intelligence Phase A — pure readiness HISTORY (observed change +
 // the exact four-way delta decomposition). Never a forecast, never a projection.

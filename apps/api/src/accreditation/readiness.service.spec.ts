@@ -171,6 +171,28 @@ describe('AccreditationReadinessService — Cognia (index) mode', () => {
     })
   })
 
+  it('B1 — belowThreshold rides beside band: false inside a band, TRUE below the floor (where band is the sentinel, not a landing)', async () => {
+    // In a band (index 300 → 'Accredited') → belowThreshold false.
+    const inBand = await makeService({ standards: rows, groupBy, assuranceCatalog }).svc.getReadiness(
+      'school-A',
+    )
+    expect(inBand.band).toBe('Accredited')
+    expect(inBand.belowThreshold).toBe(false)
+
+    // All leaves unscored → projected index 100, below the 240 floor. The band
+    // field carries the engine's sentinel STRING — never null — which is why
+    // the payload must also say belowThreshold:true (the hero gates on it; a
+    // truthy-band check alone printed "You'd land Below accreditation threshold
+    // today").
+    const floorRows = rows.map((r) => ({ ...(r as object), rubricScore: null }))
+    const below = await makeService({ standards: floorRows, assuranceCatalog }).svc.getReadiness(
+      'school-A',
+    )
+    expect(below.projectedIndex).toBe(100)
+    expect(below.band).toBe('Below accreditation threshold')
+    expect(below.belowThreshold).toBe(true)
+  })
+
   it('explicit ?target overrides defaultTarget (320 → gap 20, 1 step for 3 leaves)', async () => {
     const { svc } = makeService({ standards: rows, groupBy, assuranceCatalog })
     const res = await svc.getReadiness('school-A', { target: 320 })
