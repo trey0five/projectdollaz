@@ -41,7 +41,7 @@ describe('enrollment_change_yoy — registry wiring', () => {
     // hr/planning keys were appended after enrollment_change_yoy (see registry),
     // so it is now ninth-to-last.
     expect(METRIC_KEYS[12]).toBe('enrollment_change_yoy')
-    expect(METRIC_KEYS).toHaveLength(25)
+    expect(METRIC_KEYS).toHaveLength(26)
     // The first 12 are unchanged.
     expect(METRIC_KEYS.slice(0, 12)).toEqual([
       'operating_margin', 'days_cash_on_hand', 'months_operating_reserve',
@@ -231,7 +231,7 @@ describe('enrollment_change_yoy — org scope recomputes from summed enrollment'
       schoolWithPrior('B', 40, 40),
     ])
     expect(org.find((x) => x.key === 'operating_margin')!.available).toBe(true)
-    expect(org).toHaveLength(25)
+    expect(org).toHaveLength(26)
   })
 })
 

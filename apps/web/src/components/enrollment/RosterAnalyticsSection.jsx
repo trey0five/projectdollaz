@@ -12,7 +12,9 @@
 // grade grid; flags are a stat strip, not a chart; the headcount trend is the
 // The '<5' min-cell rule (formatMinCell) masks every CATEGORICAL cell —
 // masked cells also drop their % gutter so the pair can't be re-derived at a
-// glance. Headline totals stay true counts (frozen spec).
+// glance. The whole-roster headline total stays a true count (frozen spec);
+// the FILTERED total is server-suppressed under attribute filters and renders
+// '<5' like any other cell.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
@@ -32,9 +34,9 @@ import {
   AGE_BAND_LABELS,
   STUDENT_FLAG_LABELS,
   formatMinCell,
+  isSuppressedCell,
 } from '../../lib/demographicVocab.js'
 import { moduleHue } from '../module/moduleAnatomy.js'
-import EnrollmentTrend from './EnrollmentTrend.jsx'
 import { demographicColor } from '../../lib/demographicColor.js'
 import StudentFilterBar, {
   EMPTY_STUDENT_FILTERS,
@@ -46,24 +48,33 @@ const ENROLL_HUE = moduleHue('enrollment')
 
 // counts map + FIXED key order → BarList rows. value = true count (bar length);
 // formatted = the min-cell-masked count; % gutter only on unmasked cells.
+// A SERVER-suppressed cell (`{ suppressed: true }`, no value — the API now
+// floors small attribute cells before they leave) keeps its row, labelled '<5'
+// with a zero-length bar: the value never reached the browser to draw.
 function toRows(counts, keys, labels, colorFor) {
   const src = counts ?? {}
   const total = keys.reduce((s, k) => s + (Number(src[k]) || 0), 0)
   return keys
     .map((k, i) => {
-      const n = Number(src[k]) || 0
-      const masked = n > 0 && n < 5
+      // `n` may be a number OR a server-suppressed marker; formatMinCell renders
+      // both ('<5' for the marker). `count` is the numeric view for bar length
+      // and shares — 0 for a suppressed cell, whose value never reached us.
+      const n = src[k] ?? 0
+      const suppressed = isSuppressedCell(n)
+      const count = suppressed ? 0 : Number(n) || 0
+      const masked = suppressed || (count > 0 && count < 5)
       return {
         id: k,
         label: labels[k] ?? k,
         color: colorFor(i),
-        value: n,
+        value: count,
         formatted: formatMinCell(n),
-        share: !masked && total > 0 ? `${Math.round((100 * n) / total)}%` : undefined,
-        raw: n,
+        share: !masked && total > 0 ? `${Math.round((100 * count) / total)}%` : undefined,
+        raw: count,
+        suppressed,
       }
     })
-    .filter((r) => r.raw > 0)
+    .filter((r) => r.raw > 0 || r.suppressed)
 }
 
 function MixCard({ title, rows, sortDesc = true }) {
@@ -83,7 +94,13 @@ function MixCard({ title, rows, sortDesc = true }) {
   )
 }
 
-export default function RosterAnalyticsSection({ schoolId, planTotal = null }) {
+// NOTE (Analytics tab): this block MOVED off the Overview into the module's
+// Analytics tab, and its own headcount trend went with it — the tab draws that
+// series as E1 from the server-deduped `trend.points`, and the same line twice
+// on one page is noise. Everything else here is unchanged: this answers "who is
+// on my register", filterable, which is a different question from "how is
+// enrollment doing".
+export default function RosterAnalyticsSection({ schoolId }) {
   const [filters, setFilters] = useState(EMPTY_STUDENT_FILTERS)
   const [agg, setAgg] = useState(null)
   // UNFILTERED facet counts for the picker vocabulary. The `agg` above is the
@@ -91,7 +108,6 @@ export default function RosterAnalyticsSection({ schoolId, planTotal = null }) {
   // each option the moment you selected it — narrowing to Grade 12 would leave
   // "Grade 12" as the only grade on offer and no way back.
   const [facets, setFacets] = useState(null)
-  const [snapshots, setSnapshots] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -140,29 +156,6 @@ export default function RosterAnalyticsSection({ schoolId, planTotal = null }) {
     }
   }, [schoolId, params])
 
-  // Headcount trend — the roster's daily snapshots + any older series, oldest→latest.
-  useEffect(() => {
-    if (!schoolId) return undefined
-    let cancelled = false
-    Promise.resolve().then(() => {
-      if (cancelled) return
-      enrollmentApi
-        .snapshots(schoolId)
-        .then((res) => {
-          if (cancelled) return
-          // RAW rows — EnrollmentTrend owns the per-day dedupe and the date
-          // axis; pre-mapping here is how the flat line got its shape.
-          setSnapshots(res.data ?? [])
-        })
-        .catch(() => {
-          if (!cancelled) setSnapshots([])
-        })
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [schoolId])
-
   const counts = agg?.counts ?? {}
   // ONE COLOUR PER VALUE, EVERYWHERE: the same demographicColor the register
   // pills and the hero ring use, keyed by CANONICAL position — never by which
@@ -195,8 +188,12 @@ export default function RosterAnalyticsSection({ schoolId, planTotal = null }) {
     ['any', 'Any flag', Flag],
   ]
 
-  
-  const filtered = agg?.filteredTotal ?? null
+  // `filteredTotal` is now SERVER-suppressed under attribute filters (an exact
+  // "how many IEP students" is a cell like any other): it may arrive as
+  // `{ suppressed: true }` with no value. Render it '<5' like every other cell —
+  // never NaN, 0, or "[object Object]" — and never mistake it for "no matches".
+  const filteredSuppressed = isSuppressedCell(agg?.filteredTotal)
+  const filtered = filteredSuppressed ? null : agg?.filteredTotal ?? null
   const total = agg?.total ?? null
 
   return (
@@ -221,12 +218,13 @@ export default function RosterAnalyticsSection({ schoolId, planTotal = null }) {
             </p>
           </div>
         </div>
-        {filtered != null && total != null && (
+        {(filtered != null || filteredSuppressed) && total != null && (
           <span
             className="rounded-full border px-3 py-1 text-[12.5px] font-bold"
             style={{ borderColor: `${ENROLL_HUE}55`, backgroundColor: `${ENROLL_HUE}12`, color: '#0369A1' }}
           >
-            {filtered.toLocaleString('en-US')} of {total.toLocaleString('en-US')} students
+            {filteredSuppressed ? formatMinCell(agg.filteredTotal) : filtered.toLocaleString('en-US')} of{' '}
+            {total.toLocaleString('en-US')} students
           </span>
         )}
       </div>
@@ -241,7 +239,7 @@ export default function RosterAnalyticsSection({ schoolId, planTotal = null }) {
         </p>
       ) : loading && !agg ? (
         <div className="h-44 animate-pulse rounded-xl border border-rule/40 bg-section/60" />
-      ) : (filtered ?? 0) === 0 ? (
+      ) : !filteredSuppressed && (filtered ?? 0) === 0 ? (
         <p className="rounded-xl border-2 border-dashed border-rule/60 bg-cream/50 px-6 py-10 text-center font-serif text-[15px] italic text-muted">
           No students match these filters.
         </p>
@@ -263,7 +261,9 @@ export default function RosterAnalyticsSection({ schoolId, planTotal = null }) {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {flagStrip.map(([k, label, FlagIcon]) => {
               const n = flags[k] ?? 0
-              const lit = n > 0
+              // A server-suppressed flag (`{ suppressed: true }`) is a present-
+              // but-small group: lit, shown as '<5' by formatMinCell.
+              const lit = isSuppressedCell(n) || Number(n) > 0
               return (
                 <div
                   key={k}
@@ -295,9 +295,6 @@ export default function RosterAnalyticsSection({ schoolId, planTotal = null }) {
             })}
           </div>
 
-          {/* Headcount trend — real dates, one reading per day, honest states.
-              EnrollmentTrend owns the dedupe and the axis; see its header. */}
-          <EnrollmentTrend snapshots={snapshots} planTotal={planTotal} />
         </div>
       )}
     </motion.section>

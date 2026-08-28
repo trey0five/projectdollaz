@@ -20,7 +20,7 @@ import { PrismaService } from '../prisma/prisma.service.js'
 import { BillingService } from '../billing/billing.service.js'
 import { AssessmentsService } from './assessments.service.js'
 import { NameMatchService } from '../enrollment/diocesan/name-match.service.js'
-import { AssessmentQueryDto, AssessmentUploadDto } from './dto/academics.dto.js'
+import { AssessmentQueryDto, AssessmentUploadDto, CohortQueryDto } from './dto/academics.dto.js'
 
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 
@@ -70,6 +70,26 @@ export class AcademicsOrgController {
     await this.assertMember(user, orgId)
     await this.readableSchools(user, orgId)
     return this.assessments.orgDashboard(orgId, q)
+  }
+
+  /**
+   * The diocesan cohort read. Same floor as the console above — membership to
+   * enter, a licensed school in the org to read anything — and the same
+   * aggregate-only surface, so no per-school role gate is needed here either.
+   *
+   * The panels are cut for ONE school (`focusSchoolId`, else the school with
+   * the most results on file): a cohort span is a property of a school's own
+   * grades, so a network-wide panel set would describe nobody.
+   */
+  @Get('academics/cohorts')
+  async cohorts(
+    @CurrentUser() user: User,
+    @Param('orgId', ParseUUIDPipe) orgId: string,
+    @Query() q: CohortQueryDto,
+  ) {
+    await this.assertMember(user, orgId)
+    await this.readableSchools(user, orgId)
+    return this.assessments.orgCohorts(orgId, q)
   }
 
   /**

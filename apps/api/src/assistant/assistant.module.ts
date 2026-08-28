@@ -22,6 +22,7 @@ import { AlertModule } from '../alerts/alert.module.js'
 import { SchoolsModule } from '../schools/schools.module.js'
 import { IntegrationsModule } from '../integrations/integrations.module.js'
 import { EnrollmentModule } from '../enrollment/enrollment.module.js'
+import { CashFlowModule } from '../cashflow/cashflow.module.js'
 import { VisitModule } from '../visit/visit.module.js'
 import { AuditModule } from '../common/audit/audit.module.js'
 import { TwinModule } from '../twin/twin.module.js'
@@ -114,6 +115,15 @@ import { CoverageService } from './coverage.service.js'
     // Auth/Billing/Twin/Accreditation/AccreditationSignals/Improvement — every one
     // of which the assistant already imports, and none of which reaches back here.
     VisitModule,
+    // Penny coverage Phase 1 — exports CashFlowService for the FORWARD cash
+    // projection (get_cash_forecast) and its two confirm-then-apply writes. The
+    // module was never imported here at all, which is why Penny would answer
+    // "when do we run low on cash?" with get_cash_flow — the QuickBooks
+    // STATEMENT, a different object, which returns nothing without QuickBooks.
+    // ACYCLIC: CashFlowModule imports only Auth, Prisma and Billing (it provides
+    // QboClient directly rather than importing IntegrationsModule), none of which
+    // reaches the assistant.
+    CashFlowModule,
   ],
   // OrgNarrationController is a SECOND @Controller('organizations/:orgId') alongside
   // OrgBriefingController — valid in Nest because the sub-paths differ (briefing vs

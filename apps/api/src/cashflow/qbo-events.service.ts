@@ -420,7 +420,10 @@ function endOfMonthOf(iso: string): string | null {
   return next ? addDays(next, -1) : null
 }
 
-function categoryTitle(category: string): string {
+// EXPORTED (behaviour unchanged): the briefing's STEP 2.18 narration speaks the
+// same category labels these events carry, through this one function — a local
+// re-titler there would drift the day either copy changes.
+export function categoryTitle(category: string): string {
   const s = String(category).replace(/_/g, ' ')
   return s.charAt(0).toUpperCase() + s.slice(1)
 }

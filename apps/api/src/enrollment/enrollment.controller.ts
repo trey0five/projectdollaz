@@ -22,6 +22,8 @@ import { EntitlementGuard } from '../billing/entitlement.guard.js'
 import { RequiresModule } from '../billing/requires-module.decorator.js'
 import { EnrollmentService, type UploadedRosterFile } from './enrollment.service.js'
 import { RosterUploadService } from './roster-upload.service.js'
+import { EnrollmentAnalyticsService } from './analytics/enrollment-analytics.service.js'
+import { EnrollmentAnalyticsQueryDto } from './analytics/dto/enrollment-analytics.dto.js'
 import {
   EnrollmentCallbackDto,
   EnrollmentConnectKeyDto,
@@ -47,6 +49,7 @@ export class EnrollmentController {
   constructor(
     private readonly enrollment: EnrollmentService,
     private readonly rosterUpload: RosterUploadService,
+    private readonly enrollmentAnalytics: EnrollmentAnalyticsService,
   ) {}
 
   @Get('status')
@@ -182,6 +185,26 @@ export class EnrollmentController {
     @Query('periodId') periodId?: string,
   ) {
     return this.enrollment.summary(schoolId, periodId)
+  }
+
+  /**
+   * Everything the Enrollment ANALYTICS tab draws, in one server-computed read:
+   * registry tiles, the dated headcount trend, the grade × year grid, cohort size
+   * progression, actual-vs-plan by grade, demographics and the register mix —
+   * plus the honesty lines and the named list of what we will not fake.
+   *
+   * A SUB-ROUTE, not an extension of /summary: EnrollmentSummary has four in-tree
+   * consumers and a frozen shape. It inherits the class-level guard chain
+   * (Jwt + Roles + Entitlement @RequiresModule('enrollment')) exactly as it
+   * stands, so there is no new guard surface to get wrong — only the role split.
+   */
+  @Get('analytics')
+  @Roles('owner', 'accountant', 'viewer')
+  analytics(
+    @Param('schoolId', ParseUUIDPipe) schoolId: string,
+    @Query() query: EnrollmentAnalyticsQueryDto,
+  ) {
+    return this.enrollmentAnalytics.analytics(schoolId, query)
   }
 
   /** Latest-snapshot demographic + grade mix (shares + diversity). Read-open. */

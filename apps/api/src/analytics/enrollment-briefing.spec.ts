@@ -60,6 +60,14 @@ function makeService(over: {
   licensed?: boolean | (() => Promise<boolean>)
   signal?: EnrollmentSignalInputs | (() => Promise<EnrollmentSignalInputs>) | 'absent'
   metrics?: unknown[]
+  /** F6: a period WITH a periodEndDate, so the FY-bounded reading can resolve. */
+  period?: Record<string, unknown>
+  /** F6: register snapshots served through a FILTERING enrollmentSnapshot mock —
+   *  it honors the observedOn gte/lte bounds the F3 query sends, so a cross-FY
+   *  snapshot genuinely disappears rather than being returned regardless. */
+  snapshots?: { observedOn: string; totalEnrolled: number; byGrade: Record<string, number> }[]
+  /** F6: period_operational_data.enrollment for STEP 2.19 (null = no row). */
+  promoted?: number | null
 }) {
   const billing = {
     isEntitledForModule: async () =>
@@ -74,7 +82,7 @@ function makeService(over: {
         ? undefined
         : async () => (typeof over.signal === 'function' ? over.signal() : (over.signal ?? signal({}))),
   }
-  const periods = { getOwnedPeriod: async () => PERIOD }
+  const periods = { getOwnedPeriod: async () => over.period ?? PERIOD }
   const compliance = { evaluateForPeriod: async () => null }
   const reconciliation = { reconcileForPeriod: async () => null }
   const checklist = { getChecklist: async () => null }
@@ -96,6 +104,32 @@ function makeService(over: {
     }),
   }
 
+  const prisma: Record<string, unknown> = { arApAgingSnapshot: { findFirst: async () => null } }
+  if (over.snapshots) {
+    prisma.enrollmentSnapshot = {
+      findFirst: async (q: {
+        where: { observedOn?: { gte: Date; lte: Date } }
+      }) => {
+        const rows = over
+          .snapshots!.map((s) => ({ ...s, observedOn: new Date(s.observedOn) }))
+          .filter((s) => {
+            const w = q.where.observedOn
+            // A query with NO bounds returns everything — which is exactly how a
+            // regression to the unbounded read would surface in case (c) below.
+            if (!w?.gte || !w?.lte) return true
+            return s.observedOn >= w.gte && s.observedOn <= w.lte
+          })
+          .sort((a, b) => b.observedOn.getTime() - a.observedOn.getTime())
+        return rows[0] ?? null
+      },
+    }
+  }
+  if (over.promoted !== undefined) {
+    prisma.periodOperationalData = {
+      findUnique: async () => (over.promoted === null ? null : { enrollment: over.promoted }),
+    }
+  }
+
   return new BriefingService(
     periods as never,
     analytics as never,
@@ -111,11 +145,22 @@ function makeService(over: {
     facilities as never,
     advancement as never,
     { getActivePlanComputed: async () => ({ hasPlan: false }) } as never, // strategy
-    { arApAgingSnapshot: { findFirst: async () => null } } as never, // prisma (LAST)
+    prisma as never, // prisma (LAST)
   )
 }
 
-const plan = (planTotal: number, netRate: number | null) => ({ planTotal, planByGrade: {}, netRate })
+// `source` is part of the resolved-plan contract (which store the plan came
+// from), so the double declares it too rather than drifting from the real shape.
+const plan = (
+  planTotal: number,
+  netRate: number | null,
+  planByGrade: Record<string, number> = {},
+) => ({
+  planTotal,
+  planByGrade,
+  netRate,
+  source: 'driver_budget' as const,
+})
 
 describe('briefing — enrollment STEP (cross-domain)', () => {
   it('MODULE GATE: not licensed → ZERO enrollment items', async () => {
@@ -268,5 +313,141 @@ describe('briefing — enrollment STEP (cross-domain)', () => {
     const res = await svc.getBriefing('school-1', PERIOD.id, 'viewer')
     expect(res.lens).toBe('viewer')
     expect(res.items.some((i) => i.id === 'enrollment:below-plan')).toBe(true)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// F6 — STEP 2.19 (the headcount reconciliation item) and the STEP 2.10 grade
+// clause, end to end through getBriefing. The period carries a periodEndDate so
+// the F3 FY-bound reading can resolve; the enrollmentSnapshot mock FILTERS on
+// the observedOn bounds the query sends, so a cross-FY snapshot genuinely
+// disappears — the unbounded-read regression would fail case (c), not slip by.
+// FY (Jul–Jun) for this period: 2025-07-01 .. 2026-06-30.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const FY_PERIOD = { id: 'period-1', label: 'FY 2026', periodEndDate: '2026-06-30' }
+
+describe('F6 — STEP 2.19: two headcounts on file', () => {
+  it('(a) diverged, same-FY snapshot → the info item fires with BOTH figures', async () => {
+    const svc = makeService({
+      licensed: true,
+      period: FY_PERIOD,
+      snapshots: [{ observedOn: '2026-05-01', totalEnrolled: 436, byGrade: {} }],
+      promoted: 435,
+    })
+    const res = await svc.getBriefing('school-1', FY_PERIOD.id, 'owner')
+    const item = res.items.find((i) => i.id === 'enrollment:reconciliation-divergence')
+    expect(item).toBeDefined()
+    expect(item!.severity).toBe('info')
+    expect(item!.source).toBe('enrollment')
+    // BOTH figures, through the item's own why — the model may phrase the
+    // disagreement but there is no third number to reach for and no winner.
+    expect(item!.why).toContain('435')
+    expect(item!.why).toContain('436')
+    expect(item!.why).toContain(FY_PERIOD.label)
+    expect(item!.metricKey).toBeNull()
+    expect(item!.value).toBeNull()
+  })
+
+  it('(b) the two AGREE → no item', async () => {
+    const svc = makeService({
+      licensed: true,
+      period: FY_PERIOD,
+      snapshots: [{ observedOn: '2026-05-01', totalEnrolled: 435, byGrade: {} }],
+      promoted: 435,
+    })
+    const res = await svc.getBriefing('school-1', FY_PERIOD.id, 'owner')
+    expect(res.items.find((i) => i.id === 'enrollment:reconciliation-divergence')).toBeUndefined()
+  })
+
+  it('(c) ★ a CROSS-FY snapshot only → NO item (pins F3: the FY bound is real)', async () => {
+    // The only snapshot on file predates this period's fiscal year. Unbounded,
+    // the old read returned it, compared it to this period's promote and fired a
+    // PERMANENTLY false "two headcounts on file" on every historical briefing.
+    const svc = makeService({
+      licensed: true,
+      period: FY_PERIOD,
+      snapshots: [{ observedOn: '2024-09-15', totalEnrolled: 512, byGrade: {} }],
+      promoted: 435,
+    })
+    const res = await svc.getBriefing('school-1', FY_PERIOD.id, 'owner')
+    expect(res.items.find((i) => i.id === 'enrollment:reconciliation-divergence')).toBeUndefined()
+  })
+
+  it('a period with NO end date resolvable → no reading → silent (fail-soft)', async () => {
+    const svc = makeService({
+      licensed: true,
+      period: { id: 'period-1', label: 'FY 2026' }, // older mock shape, no endDate
+      snapshots: [{ observedOn: '2026-05-01', totalEnrolled: 436, byGrade: {} }],
+      promoted: 435,
+    })
+    const res = await svc.getBriefing('school-1', 'period-1', 'owner')
+    expect(res.items.find((i) => i.id === 'enrollment:reconciliation-divergence')).toBeUndefined()
+  })
+})
+
+describe('F6 — the STEP 2.10 grade clause rides only a coherent pair', () => {
+  // Below plan: promoted actual 90 against a plan of 100 (−10% → the item fires
+  // in every case; only the CLAUSE is at stake).
+  const PLAN_BY_GRADE = { '3': 25, '9': 45, '5': 31, K: 24, '4': 15 }
+  const BY_GRADE = { '3': 18, '9': 40, '5': 30, K: 22, '4': 3 }
+
+  it('(d) ★ below plan + DIVERGED → the headline stands ALONE, no grade clause', async () => {
+    const svc = makeService({
+      licensed: true,
+      period: FY_PERIOD,
+      signal: signal({ actual: 90, plan: plan(100, null, PLAN_BY_GRADE) }),
+      // The register counts 91 — the clause's per-grade store disagrees with the
+      // promoted store the headline used, so splitting one across the other
+      // would be incoherent. STEP 2.19 carries the discrepancy instead.
+      snapshots: [{ observedOn: '2026-05-01', totalEnrolled: 91, byGrade: BY_GRADE }],
+      promoted: 90,
+    })
+    const res = await svc.getBriefing('school-1', FY_PERIOD.id, 'owner')
+    const item = res.items.find((i) => i.id === 'enrollment:below-plan')
+    expect(item).toBeDefined()
+    expect(item!.why).not.toMatch(/largest gaps/)
+    expect(item!.why).not.toMatch(/fewer than planned/)
+    // The discrepancy is not swallowed — STEP 2.19 states it.
+    expect(res.items.some((i) => i.id === 'enrollment:reconciliation-divergence')).toBe(true)
+  })
+
+  it('(e) below plan + AGREE → the clause names ≤2 grades, largest first, suppressed never', async () => {
+    const svc = makeService({
+      licensed: true,
+      period: FY_PERIOD,
+      signal: signal({ actual: 90, plan: plan(100, null, PLAN_BY_GRADE) }),
+      snapshots: [{ observedOn: '2026-05-01', totalEnrolled: 90, byGrade: BY_GRADE }],
+      promoted: 90,
+    })
+    const res = await svc.getBriefing('school-1', FY_PERIOD.id, 'owner')
+    const item = res.items.find((i) => i.id === 'enrollment:below-plan')
+    expect(item).toBeDefined()
+    // Grade 4 is 12 short — the LARGEST gap — but holds three children, under
+    // the cell floor: it must never be named on the surface that gets read
+    // aloud. The two largest UNSUPPRESSED gaps follow, biggest first, phrased
+    // as a person says them (n2: "Grade 3", never a bare "3").
+    expect(item!.why).toMatch(
+      /The largest gaps are in Grade 3 \(7 fewer than planned\) and Grade 9 \(5 fewer than planned\)\./,
+    )
+    expect(item!.why).not.toMatch(/Grade 4/)
+    // …and the coherent pair emits no reconciliation item.
+    expect(res.items.some((i) => i.id === 'enrollment:reconciliation-divergence')).toBe(false)
+  })
+
+  it('(e′) n2 — Kindergarten is named as a word, not a bare letter', async () => {
+    const svc = makeService({
+      licensed: true,
+      period: FY_PERIOD,
+      signal: signal({ actual: 90, plan: plan(100, null, { K: 30, '1': 26 }) }),
+      snapshots: [
+        { observedOn: '2026-05-01', totalEnrolled: 90, byGrade: { K: 21, '1': 25 } },
+      ],
+      promoted: 90,
+    })
+    const res = await svc.getBriefing('school-1', FY_PERIOD.id, 'owner')
+    const item = res.items.find((i) => i.id === 'enrollment:below-plan')
+    expect(item!.why).toMatch(/Kindergarten \(9 fewer than planned\)/)
+    expect(item!.why).not.toMatch(/in K \(/)
   })
 })

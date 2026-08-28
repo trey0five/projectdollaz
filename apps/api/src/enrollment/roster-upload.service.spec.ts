@@ -730,7 +730,7 @@ describe('acceptance 8 — a viewer cannot create student records through this p
 
   it('the upload route delegates to the orchestrator, file field and all', async () => {
     const rosterUpload = { upload: vi.fn(async () => ({ records: null })) }
-    const c = new EnrollmentController({} as never, rosterUpload as never)
+    const c = new EnrollmentController({} as never, rosterUpload as never, {} as never)
     const f = file(usersCsv(roster(1)))
     await c.upload(SCHOOL, f, { observedOn: '2026-06-15', mode: 'replace' }, USER)
     expect(rosterUpload.upload).toHaveBeenCalledWith(USER, SCHOOL, f, {

@@ -15,9 +15,13 @@
 // Withdrawn ride as stat pips under the ring (Withdrawn from `counts.status`,
 // which the API returned and nothing rendered). Their honesty rules are kept
 // verbatim: no roster ⇒ an em-dash and "needs the student roster", never a zero
-// we didn't count. Headline numbers here are the same unmasked byGrade totals
-// ByGradeChart showed — the frozen-spec masking exemption; `<5` masking governs
-// the demographic BarLists below, not headline totals.
+// we didn't count. The WHOLE-SCHOOL headline stays unmasked (a school total
+// identifies nobody), but a per-grade pill under MIN_CELL prints `<5` — the old
+// frozen-spec exemption let a 3-student grade show here while Analytics, the
+// grade table and the export all withheld it, and suppression that one screen
+// undoes is not suppression. The arc SPAN still uses the true count: the ring
+// is composition, which is not a disclosure. `<5` masking also governs the
+// demographic BarLists below.
 //
 // vs plan: a band-tinted delta chip (healthStatus over the SAME bands the
 // analytics cards use), or the honest "No plan set → set one" link. NEVER a
@@ -30,7 +34,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
 import { GraduationCap, Hourglass, LifeBuoy, Sparkles, Target, UserRoundMinus } from 'lucide-react'
-import { bandsFor, healthStatus } from '@finrep/analytics'
+import { MIN_CELL, bandsFor, healthStatus } from '@finrep/analytics'
 import { CountUp } from '../ui/briefingFx.jsx'
 import { GRADE_KEYS } from '../../lib/demographicVocab.js'
 import { demographicColor } from '../../lib/demographicColor.js'
@@ -103,6 +107,12 @@ function StatPip({ Icon, label, value, needsRoster, reduce }) {
             <span className="text-[10px] text-white/40">needs the student roster</span>
           ) : null}
         </>
+      ) : typeof value === 'object' && value.suppressed ? (
+        // Server-suppressed small cell (privacy floor): the count never reached
+        // the browser — render the same '<5' vocabulary the roster charts use.
+        <span className="font-serif text-[24px] font-semibold leading-tight text-white tabular-nums sm:text-[27px]">
+          &lt;5
+        </span>
       ) : (
         <span className="font-serif text-[24px] font-semibold leading-tight text-white tabular-nums sm:text-[27px]">
           <CountUp value={value} duration={reduce ? 0 : 800} />
@@ -141,6 +151,12 @@ export default function EnrollmentHero({
       return {
         grade: g,
         count: n,
+        // A grade under the floor keeps its true SPAN — the ring is composition
+        // and must stay exact — but its printed COUNT is withheld. Masking one
+        // surface and not another is theatre: an observer just reads the other
+        // screen, so this pill now agrees with Analytics, the grade table and
+        // the export. The ring geometry is not a disclosure; the number is.
+        masked: n > 0 && n < MIN_CELL,
         share: span,
         f0: f0 + (entries.length > 1 ? pad / 2 : 0),
         f1: acc - (entries.length > 1 ? pad / 2 : 0),
@@ -337,7 +353,12 @@ export default function EnrollmentHero({
                 >
                   <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: seg.color }} />
                   {GRADE_SHORT[seg.grade]}
-                  <span className="text-white/50 tabular-nums">{seg.count.toLocaleString('en-US')}</span>
+                  <span
+                    className="text-white/50 tabular-nums"
+                    title={seg.masked ? `Fewer than ${MIN_CELL} students — withheld so no child is identifiable` : undefined}
+                  >
+                    {seg.masked ? `<${MIN_CELL}` : seg.count.toLocaleString('en-US')}
+                  </span>
                 </button>
               ))}
             </div>

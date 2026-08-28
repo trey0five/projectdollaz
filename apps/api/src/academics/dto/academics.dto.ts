@@ -75,6 +75,75 @@ export class AssessmentQueryDto {
   hidePeerNames?: boolean
 }
 
+/**
+ * The longitudinal cohort read — its own query, not an extension of the
+ * dashboard's.
+ *
+ * `series` rather than `subject`: on AssessmentQueryDto a null `subject` means
+ * "the headline score" implicitly, which is fine for a chart with one line and
+ * useless for a matrix whose Total column has to be a NAMED column beside the
+ * subjects. 'total' is a first-class value here. The legacy routes keep their
+ * `subject` and its implicit null.
+ *
+ * `window` is hard-capped at 4 by the validator, so a request for a six-grade
+ * span is a 400 rather than a silently-clamped panel the client believes is six
+ * grades wide. Below the cap the SERVER still clamps to what the school's
+ * grades support and echoes the result back in `context.window`.
+ */
+export class CohortQueryDto {
+  /** The END year every cohort finishes in — the anchor, not a filter. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1990)
+  @Max(2100)
+  schoolYear?: number
+
+  @IsOptional()
+  @IsIn(TEST_TYPE_KEYS as unknown as string[])
+  testType?: string
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(2)
+  @Max(4)
+  window?: number
+
+  @IsOptional()
+  @IsIn(['school', 'org'])
+  scope?: string
+
+  /** 'total' or a subject key; validated against the FAMILY in the service,
+   *  which is the only place the family is known. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  series?: string
+
+  /** Narrow to one cohort by the grade it ends in. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(8)
+  endGrade?: string
+
+  @IsOptional()
+  @Transform(queryBoolean)
+  @IsBoolean()
+  hidePeerNames?: boolean
+
+  @IsOptional()
+  @Transform(queryBoolean)
+  @IsBoolean()
+  includeMatrix?: boolean
+
+  /** ORG ROUTE ONLY — which school the panels are cut for. Ignored on the
+   *  per-school route, where the path already says. */
+  @IsOptional()
+  @IsUUID()
+  focusSchoolId?: string
+}
+
 /** Multipart upload fields (the file itself rides outside the DTO). */
 export class AssessmentUploadDto {
   @IsOptional()

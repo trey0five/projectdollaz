@@ -167,6 +167,21 @@ function measureSentence(chart, ctx, { example } = {}) {
           {gap ? ` — a move smaller than ${gap} ${u.points} counts as neither up nor down` : ''}.
         </>
       )
+    // A SIBLING OF 'cohort', NOT AN EDIT OF IT. That one describes a two-point
+    // slope between adjacent grades and is still drawn by CohortPanel; this one
+    // describes a grid of multi-year trajectories on one shared axis. Rewriting
+    // the older sentence to cover both would have made it false about the chart
+    // it is actually printed under.
+    case 'cohortTrajectory':
+      return (
+        <>
+          Each panel follows ONE group of children across consecutive grades, every point their average{' '}
+          <Unit>{u.noun}</Unit> — {def}. Every panel shares <Unit>one axis</Unit>, so a line sitting lower is a
+          genuinely lower group and not a panel drawn to its own scale
+          {gap ? `; a move smaller than ${gap} ${u.points} counts as neither up nor down` : ''}. A year that was
+          suppressed or never filed breaks the line rather than being drawn through.
+        </>
+      )
     case 'network':
       return (
         <>

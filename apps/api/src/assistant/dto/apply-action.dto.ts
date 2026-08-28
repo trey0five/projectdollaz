@@ -47,6 +47,16 @@ export const APPLY_KINDS = [
   // enumeration of the type.
   'draft_improvement_plan',
   'attach_evidence',
+  // Penny coverage Phase 1 — the TWO cash-forecast writes. Added here in the SAME
+  // change as the ProposedAction['kind'] union, REFRESH, REVERSIBLE_KINDS,
+  // CONFIRM_TOOLS and TOOL_LABELS; advisory-apply-chain.spec.ts (PHASE_CASH_KINDS)
+  // pins all six. `create_cash_commitment` creates one CashCommitment row and is
+  // reversed by the same soft delete the UI's own remove button performs.
+  // `save_cash_line_adjustment` UPSERTS by (school, sourceRef) — it is reversible
+  // only when it created a fresh row, which dispatchApply decides at apply time by
+  // reading the existing adjustments FIRST (see the upsert-undo note there).
+  'create_cash_commitment',
+  'save_cash_line_adjustment',
 ] as const
 
 /** A user-confirmed assistant proposal to apply. Mirrors ProposedAction. */

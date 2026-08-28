@@ -38,7 +38,7 @@ describe('student_teacher_ratio — registry wiring', () => {
     // enrollment_vs_plan (Phase 2) + the six Phase-6 hr/planning keys were
     // appended AFTER student_teacher_ratio, so STR is now the eighth-to-last key.
     expect(METRIC_KEYS[13]).toBe('student_teacher_ratio')
-    expect(METRIC_KEYS).toHaveLength(25)
+    expect(METRIC_KEYS).toHaveLength(26)
     expect(METRIC_KEYS.slice(0, 12)).toEqual([
       'operating_margin', 'days_cash_on_hand', 'months_operating_reserve',
       'tuition_dependency', 'revenue_mix', 'expense_mix', 'cost_per_pupil',

@@ -15,13 +15,23 @@ import { IsIn, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min } fr
  * "optional", so the iff itself is enforced in the service where both fields
  * are visible together.
  */
+/**
+ * THE ONE COPY of that boundary, exported so a second caller cannot write a
+ * second one. The assistant re-validates a proposed sourceRef against THIS regex
+ * at build time, so a `commitment:*` ref is refused before the user is asked to
+ * confirm rather than after they have — a 400 from /apply on an action the user
+ * already approved is the worst place to discover the rule.
+ */
+export const ADJUSTABLE_SOURCE_REF_RE = /^(qbo:(ar|ap|history):|budget:|driver:)/
+
+/** The frozen refusal, so both validation hops explain the boundary identically. */
+export const ADJUSTABLE_SOURCE_REF_MESSAGE =
+  'sourceRef must target a derived line (qbo:ar:*, qbo:ap:*, qbo:history:*, budget:* or driver:*) — commitments are edited directly.'
+
 export class SaveLineAdjustmentDto {
   @IsString()
   @MaxLength(160)
-  @Matches(/^(qbo:(ar|ap|history):|budget:|driver:)/, {
-    message:
-      'sourceRef must target a derived line (qbo:ar:*, qbo:ap:*, qbo:history:*, budget:* or driver:*) — commitments are edited directly.',
-  })
+  @Matches(ADJUSTABLE_SOURCE_REF_RE, { message: ADJUSTABLE_SOURCE_REF_MESSAGE })
   sourceRef!: string
 
   @IsIn(['exclude', 'override'])

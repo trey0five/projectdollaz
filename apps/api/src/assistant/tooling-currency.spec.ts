@@ -16,7 +16,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { TOOL_SCHEMAS, TOOL_LABELS } from './assistant.tools.js'
+import { TOOL_SCHEMAS, TOOL_LABELS, WALKTHROUGH_TARGET_KEYS } from './assistant.tools.js'
 
 const HERE = fileURLToPath(new URL('.', import.meta.url))
 const tools = readFileSync(HERE + 'assistant.tools.ts', 'utf8')
@@ -45,6 +45,15 @@ describe('every shipped module has a way in', () => {
     ['superintendent portfolio (AIC I)', 'get_org_readiness_portfolio'],
     ['student roster', 'get_roster_summary'],
     ['HR registers (AIC F/K)', 'check_kyro_collects'],
+    // Penny coverage Phase 1 — the three surfaces that shipped with no way in at
+    // all. /cash-flow was the worst of them: a mounted route Penny could not
+    // reach, whose question ("when do we run low?") she would answer from
+    // get_cash_flow — the QuickBooks statement, a different object entirely.
+    ['cash forecast (the FORWARD projection)', 'get_cash_forecast'],
+    ['enrollment analytics', 'get_enrollment_analytics'],
+    ['academic cohort trajectories', 'get_academic_cohorts'],
+    // WS3 F1 — the six-year accreditation journey (cycle anchor + milestones).
+    ['accreditation cycle (WS3 journey)', 'get_accreditation_cycle'],
   ]
 
   it.each(MODULE_TOOLS)('%s is reachable via %s', (_module, tool) => {
@@ -53,9 +62,38 @@ describe('every shipped module has a way in', () => {
   })
 
   it('each new read tool has a dispatch case — a schema with no handler is a dead tool', () => {
-    for (const tool of ['get_improvement_status', 'get_visit_readiness', 'get_roster_summary']) {
+    for (const tool of [
+      'get_improvement_status',
+      'get_visit_readiness',
+      'get_roster_summary',
+      'get_cash_forecast',
+      'get_enrollment_analytics',
+      'get_academic_cohorts',
+      'get_accreditation_cycle',
+    ]) {
       expect(service, `${tool} has no case in execute()`).toContain(`case '${tool}':`)
     }
+  })
+
+  it('the two cash tools each NAME the other — the wrong-tool answer this pair prevents', () => {
+    // "When do we run low on cash?" answered from get_cash_flow is the most
+    // likely confident-wrong answer in the product: that tool is the QuickBooks
+    // STATEMENT of what already happened and returns {connected:false} for every
+    // school without QuickBooks. Each description has to disown the other, or the
+    // model picks on name similarity alone.
+    const forecast = TOOL_SCHEMAS.find((t) => t.function.name === 'get_cash_forecast')
+    expect(forecast?.function.description).toContain('get_cash_flow')
+    expect(forecast?.function.description).toMatch(/NOT THE SAME TOOL/)
+    const statement = TOOL_SCHEMAS.find((t) => t.function.name === 'get_cash_flow')
+    expect(statement, 'get_cash_flow disappeared').toBeTruthy()
+  })
+
+  it('the adjustment tool tells the model where a sourceRef comes from', () => {
+    // A ref the model INVENTED is refused at build, which is correct but reads to
+    // the user as Penny failing. Telling her to read one first is what makes the
+    // refusal rare rather than routine.
+    const t = TOOL_SCHEMAS.find((x) => x.function.name === 'adjust_cash_forecast_line')
+    expect(t?.function.description).toMatch(/get_cash_forecast WITH lines:true FIRST/)
   })
 
   it('the roster tool goes through the SERVICE, never the table', () => {
@@ -136,6 +174,9 @@ describe('the system prompt teaches the tools that exist', () => {
     'get_early_warnings',
     'get_visit_readiness',
     'get_roster_summary',
+    'get_cash_forecast',
+    'get_enrollment_analytics',
+    'get_academic_cohorts',
   ])('names %s', (tool) => {
     expect(prompt, `the prompt never mentions ${tool}`).toContain(tool)
   })
@@ -198,5 +239,106 @@ describe('a person can be named the way people name each other', () => {
     // Assigning accreditation work to the wrong colleague is the failure this
     // path exists to avoid; two people named Sam means we ask.
     expect(service).toMatch(/More than one active member of this school matches/)
+  })
+})
+
+describe('the walkthrough registry lives in two files and must agree', () => {
+  // WALKTHROUGH_TARGET_KEYS (backend schema enum + runtime validator) and
+  // TARGET_REGISTRY (the frontend key → domId + page map) are two copies of one
+  // vocabulary, and the shipped comment in each file says they "MUST stay
+  // byte-identical". Nothing checked it. A key added to one side alone is
+  // silent in both directions: an enum key with no registry row resolves to
+  // nothing and parks the coin, and a registry row with no enum key is a target
+  // the model can never name.
+  const registrySrc = readFileSync(
+    fileURLToPath(new URL('../../../web/src/components/penny/guide/targetRegistry.js', import.meta.url)),
+    'utf8',
+  )
+
+  /** The keys of the BASE registry object — not the v2 override map below it. */
+  function registryKeys(): string[] {
+    const start = registrySrc.indexOf('export const TARGET_REGISTRY = {')
+    const end = registrySrc.indexOf('export const TARGET_KEYS')
+    const block = registrySrc.slice(start, end)
+    return [...block.matchAll(/^\s*'([^']+)':\s*\{/gm)].map((m) => m[1])
+  }
+
+  it('names exactly the same key set, in both directions', () => {
+    const backend = new Set<string>(WALKTHROUGH_TARGET_KEYS)
+    const web = new Set(registryKeys())
+    expect([...backend].filter((k) => !web.has(k)), 'enum keys with no registry row (the coin parks)').toEqual([])
+    expect([...web].filter((k) => !backend.has(k)), 'registry rows the model can never name').toEqual([])
+    expect(backend.size).toBeGreaterThan(40)
+  })
+
+  it('the Phase-1 anchors are present in both', () => {
+    const web = new Set(registryKeys())
+    for (const key of [
+      'cashFlow.headline',
+      'cashFlow.linesTable',
+      'cashFlow.addCommitment',
+      'enrollment.vsPlanTable',
+      'academics.cohortPanels',
+    ]) {
+      expect(WALKTHROUGH_TARGET_KEYS as readonly string[], `${key} missing from the backend enum`).toContain(key)
+      expect(web, `${key} missing from targetRegistry.js`).toContain(key)
+    }
+  })
+
+  it('F5 — the REGISTRY page outranks the LLM step page hint in runAgentGuide', () => {
+    // The registry rows are tab-precise client vocabulary ('cash-flow-inputs',
+    // 'enrollment-grades'); the model only knows the coarse backend page enum
+    // ('cash-flow', 'enrollment-analytics'). With the step's hint winning, three
+    // of the five Phase-1 anchors landed on a tab where the target dom id never
+    // mounts and the coin parked. Pin the precedence in the ONE line that merges
+    // them (apps/web/src/context/PennyContext.jsx).
+    const pennyContext = readFileSync(
+      fileURLToPath(new URL('../../../web/src/context/PennyContext.jsx', import.meta.url)),
+      'utf8',
+    )
+    expect(pennyContext).toMatch(/page:\s*t\.page\s*\?\?\s*s\.page/)
+    expect(pennyContext, 'the old model-wins precedence is back').not.toMatch(
+      /page:\s*s\.page\s*\?\?\s*t\.page/,
+    )
+  })
+
+  it('every Phase-1 anchor points at an id the web actually renders', () => {
+    // A row pointing at an id nobody rendered RESOLVES FINE and then glides to
+    // nothing — the failure mode that had Penny offering nine tours she could
+    // not give. The registry cannot catch it; only reading the components can.
+    const WEB = fileURLToPath(new URL('../../../web/src/', import.meta.url))
+    const ANCHORS: [string, string][] = [
+      ['cf-hero', 'pages/CashFlowPage.jsx'],
+      ['cf-lines', 'components/cashflow/CashInputsRail.jsx'],
+      ['cf-add-item', 'components/cashflow/CashInputsRail.jsx'],
+      ['enr-vs-plan', 'components/enrollment/EnrollmentAnalytics.jsx'],
+      ['academics-cohort-panels', 'components/academics/CohortLongitudinal.jsx'],
+    ]
+    for (const [domId, file] of ANCHORS) {
+      const src = readFileSync(WEB + file, 'utf8')
+      expect(src, `${file} renders no id="${domId}"`).toMatch(
+        new RegExp(`id=(["'\`])${domId}\\1`),
+      )
+    }
+  })
+
+  it('the deep-link pages every anchor names are routable', () => {
+    // A registry row's `page` is resolved by PennyAgentBridge.pageToPath, and an
+    // unknown key lands on `default: null` — Penny says she navigated and nothing
+    // moves. The client-only keys are the easy ones to forget, because the
+    // backend enum never mentions them.
+    const bridge = readFileSync(
+      fileURLToPath(new URL('../../../web/src/components/penny/PennyAgentBridge.jsx', import.meta.url)),
+      'utf8',
+    )
+    for (const page of [
+      'cash-flow',
+      'cash-flow-inputs',
+      'enrollment-analytics',
+      'enrollment-grades',
+      'academics-cohorts',
+    ]) {
+      expect(bridge, `pageToPath has no case for '${page}'`).toContain(`case '${page}':`)
+    }
   })
 })

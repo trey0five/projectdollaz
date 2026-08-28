@@ -50,7 +50,7 @@ describe('Phase 6 planning — registry wiring', () => {
       'forecast_operating_margin',
       'plan_readiness',
     ])
-    expect(METRIC_KEYS).toHaveLength(25)
+    expect(METRIC_KEYS).toHaveLength(26)
   })
 
   it('metadata: planning domain, directions, units, rollup rules, bands', () => {

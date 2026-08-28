@@ -90,6 +90,23 @@ function pageToPath(page, section, uiV2 = false) {
       return '/tasks'
     case 'portfolio':
       return '/portfolio'
+    // Penny coverage Phase 1. /cash-flow is a mounted route that this map — and
+    // the backend enum, and the target registry — all missed, so Penny could
+    // discuss a forecast at length and had no way to take anyone to it.
+    case 'cash-flow':
+      return '/cash-flow'
+    // The deep links. `enrollment-analytics` and `academics-cohorts` are backend
+    // vocabulary (the model may name them); `cash-flow-inputs` and
+    // `enrollment-grades` are CLIENT-ONLY, emitted by the target registry so a
+    // walkthrough anchor lands on the tab its element is actually mounted in.
+    case 'cash-flow-inputs':
+      return '/cash-flow?tab=inputs'
+    case 'enrollment-analytics':
+      return '/enrollment?tab=analytics'
+    case 'enrollment-grades':
+      return '/enrollment?tab=analytics&view=grades'
+    case 'academics-cohorts':
+      return '/academics?tab=analytics&view=cohorts'
     default:
       return null
   }

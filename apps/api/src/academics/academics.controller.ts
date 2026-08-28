@@ -28,6 +28,7 @@ import {
   AssessmentQueryDto,
   AssessmentUploadDto,
   AttachResultDto,
+  CohortQueryDto,
   CreateLessonPlanDto,
   GradebookQueryDto,
   GradebookUploadDto,
@@ -116,6 +117,21 @@ export class AcademicsController {
   @Roles('owner', 'accountant', 'viewer')
   dashboard(@Param('schoolId', ParseUUIDPipe) schoolId: string, @Query() q: AssessmentQueryDto) {
     return this.assessments.dashboard(schoolId, q)
+  }
+
+  /**
+   * LONGITUDINAL COHORTS — the same children across up to four grades.
+   *
+   * Its own read rather than four more query params on /dashboard: this view's
+   * controls would otherwise re-fetch the payload seven other tabs share on
+   * every toggle. Same guard stack as every other aggregate read on this
+   * controller (owner/accountant/viewer + the academics licence); like them it
+   * returns aggregates only and can never name a child.
+   */
+  @Get('assessments/cohorts')
+  @Roles('owner', 'accountant', 'viewer')
+  cohorts(@Param('schoolId', ParseUUIDPipe) schoolId: string, @Query() q: CohortQueryDto) {
+    return this.assessments.cohorts(schoolId, q)
   }
 
   /** REGISTER — the only assessment route that returns a student's name. */

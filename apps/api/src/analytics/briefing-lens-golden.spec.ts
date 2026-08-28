@@ -98,7 +98,10 @@ describe('briefing-lens — the Phase-E additions are ADDITIVE', () => {
     // matters — CONTIGUITY, and the block's two neighbours — is what is pinned.
     const EARLY_WARNING_BLOCK = 16
     const start = COMPLIANCE_ORDER.indexOf('earlywarning:acc-assurance-gap')
-    expect(COMPLIANCE_ORDER[start - 1]).toBe('accreditation:review-approaching')
+    // WS3 F1 (A2) widened the accreditation neighbourhood: the three
+    // cycle-milestone ids now close the accreditation block, so the block's
+    // upper neighbour is the last of them. Contiguity is unchanged.
+    expect(COMPLIANCE_ORDER[start - 1]).toBe('accreditation:cycle-evidence_freeze')
     const block = COMPLIANCE_ORDER.slice(start, start + EARLY_WARNING_BLOCK)
     expect(block.every((id) => id.startsWith('earlywarning:'))).toBe(true)
     expect(COMPLIANCE_ORDER[start + EARLY_WARNING_BLOCK]).toBe('facilities:maintenance-backlog')

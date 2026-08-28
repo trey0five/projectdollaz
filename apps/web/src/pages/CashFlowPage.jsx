@@ -514,6 +514,10 @@ export default function CashFlowPage() {
   // ── The hero band — figures when there is a forecast, the SETUP when not ───
   const hero = (
     <motion.section
+      // Penny walkthrough anchor 'cashFlow.headline' (see
+      // apps/web/src/components/penny/guide/targetRegistry.js). The id is the
+      // contract; the class list is not.
+      id="cf-hero"
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.45 }}

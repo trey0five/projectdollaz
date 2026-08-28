@@ -33,6 +33,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator.js'
 import { EntitlementGuard } from '../../billing/entitlement.guard.js'
 import { RequiresModule } from '../../billing/requires-module.decorator.js'
 import { StudentsService } from './students.service.js'
+import { hasAttributeFilter, suppressStudentAggregate } from './aggregate-suppression.js'
 import {
   BatchCreateStudentsDto,
   ClearRosterDto,
@@ -61,11 +62,27 @@ export class StudentsController {
 
   // ── Static routes FIRST (declaration order beats :id) ────────────────────────
 
-  /** FERPA-safe aggregation — same filter params as the register, counts only. */
+  /** FERPA-safe aggregation — same filter params as the register, counts only.
+   *
+   *  SUPPRESSED AT THE DOOR (privacy F1): the raw service aggregate is true
+   *  counts for its self-gating internal consumers; THIS route is viewer-readable
+   *  JSON, so every attribute-coupled small cell (status, demographics, support
+   *  flags, small KPIs) leaves as `{ suppressed: true }` with no value key.
+   *  Grade-level headcounts stay raw — directory-style info the enrollment page
+   *  (grade ring, facet pickers) depends on; see aggregate-suppression.ts.
+   *
+   *  FILTERS ARE PART OF THE ATTACK SURFACE (reviewer's MAJOR): `?flags=iep`
+   *  makes `filteredTotal` the exact IEP headcount — even 1 — and `?grade=5`
+   *  on top cross-tabs it. So when the query carries any ATTRIBUTE filter
+   *  (status/demographics/flags/ageBand, or the name search `q` — grade alone
+   *  does not count, the documented raw-grade line), `filteredTotal` and the
+   *  grade cells go through the same floor as every other cell. */
   @Get('aggregate')
   @Roles('owner', 'accountant', 'viewer')
-  aggregate(@Param('schoolId', ParseUUIDPipe) schoolId: string, @Query() query: StudentFilterQueryDto) {
-    return this.students.aggregate(schoolId, query)
+  async aggregate(@Param('schoolId', ParseUUIDPipe) schoolId: string, @Query() query: StudentFilterQueryDto) {
+    return suppressStudentAggregate(await this.students.aggregate(schoolId, query), {
+      attributeFiltered: hasAttributeFilter(query),
+    })
   }
 
   /** All-or-nothing batch create (the Add-students wizard basket, ≤200). */

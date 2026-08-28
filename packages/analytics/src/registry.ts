@@ -26,6 +26,7 @@ import { tuitionDiscountRate } from './metrics/tuitionDiscountRate.js'
 import { pctStudentsOnAid } from './metrics/pctStudentsOnAid.js'
 import { enrollmentChangeYoy } from './metrics/enrollmentChangeYoy.js'
 import { enrollmentVsPlan } from './metrics/enrollmentVsPlan.js'
+import { enrollmentHeadcount } from './metrics/enrollmentHeadcount.js'
 import { studentTeacherRatio } from './metrics/studentTeacherRatio.js'
 import { totalStaffFte } from './metrics/totalStaffFte.js'
 import { fteChangeYoy } from './metrics/fteChangeYoy.js'
@@ -56,6 +57,9 @@ export const METRIC_REGISTRY: Record<MetricKey, MetricDef> = {
   enrollment_change_yoy: enrollmentChangeYoy,
   // Phase 2 Enrollment Intelligence — actual-vs-plan (same enrollment domain gate).
   enrollment_vs_plan: enrollmentVsPlan,
+  // Enrollment analytics — the plain headcount the other two are built ON, given
+  // the same one-definition treatment (same enrollment domain gate).
+  enrollment_headcount: enrollmentHeadcount,
   // Tier-2 hr domain (banded staffing-load metric; reuses staff-FTE data).
   student_teacher_ratio: studentTeacherRatio,
   // Phase 6 — HR & Staffing as a real module (same 'hr' gate; same FTE fields).
@@ -107,6 +111,9 @@ export const METRIC_KEYS: MetricKey[] = [
   'sat_total',
   'benchmark_attainment',
   'assessment_participation_rate',
+  // Enrollment analytics — appended LAST (keeps every prior key's order, and so
+  // every saved dashboard layout, byte-identical).
+  'enrollment_headcount',
 ]
 
 /** All metric defs in default-layout order. */

@@ -6,6 +6,7 @@
 import {
   BadRequestException,
   ForbiddenException,
+  HttpException,
   Injectable,
   Logger,
   NotFoundException,
@@ -65,6 +66,25 @@ import {
   type DocumentSourceType,
 } from '../knowledge/dto/create-document.dto.js'
 import { GradebookService } from '../academics/gradebook.service.js'
+// Penny coverage Phase 1 — the three services behind the new read tools. Each is
+// the SAME service the REST route calls, so a tool answer and a screen cannot
+// disagree; the handlers project and format and never compute.
+import { AssessmentsService } from '../academics/assessments.service.js'
+import { CashFlowService } from '../cashflow/cashflow.service.js'
+// n3: the SAME human category labels QBO events carry ("debt_service" → "Debt
+// service"), so Penny's spoken answer never quotes a snake_case key.
+import { categoryTitle } from '../cashflow/qbo-events.service.js'
+import { EnrollmentAnalyticsService } from '../enrollment/analytics/enrollment-analytics.service.js'
+// The commitment DTO's enum arrays, IMPORTED and never retyped — a proposal must
+// clamp to exactly what the DTO accepts, or a stray value rides through and 400s
+// /apply under the global forbidNonWhitelisted pipe (the IMPROVEMENT_ORIGIN_TYPES
+// precedent below). Same argument for the adjustment's sourceRef pattern, which is
+// re-validated at BUILD so a commitment:* ref is refused before the user confirms.
+import { CONFIDENCE_VALUES, RECURRENCE_VALUES } from '../cashflow/dto/save-commitment.dto.js'
+import {
+  ADJUSTABLE_SOURCE_REF_MESSAGE,
+  ADJUSTABLE_SOURCE_REF_RE,
+} from '../cashflow/dto/save-line-adjustment.dto.js'
 import { PoliciesService } from '../governance/policies.service.js'
 import { CommitteesService } from '../governance/committees.service.js'
 import { MeetingsService } from '../governance/meetings.service.js'
@@ -82,6 +102,7 @@ import {
 } from '../accreditation/readiness-history.service.js'
 import { AccreditationReadinessService } from '../accreditation/readiness.service.js'
 import { AccreditationEvidenceReadinessService } from '../accreditation/evidence-readiness.service.js'
+import { AccreditationCycleService } from '../accreditation/accreditation-cycle.service.js'
 import { PortfolioService, MIN_PEERS_FOR_PERCENTILE } from '../portfolio/portfolio.service.js'
 import type { CreateEvidenceDto, EvidenceSourceType } from '../accreditation/dto/create-evidence.dto.js'
 import { FacilitiesService } from '../facilities/facilities.service.js'
@@ -95,6 +116,7 @@ import { INITIATIVE_STATUSES, MIX_METRIC_KEYS } from '../strategy/strategy.const
 import { ImprovementService } from '../improvement/improvement.service.js'
 import { VisitService } from '../visit/visit.service.js'
 import { StudentsService } from '../enrollment/students/students.service.js'
+import { suppressStudentAggregate } from '../enrollment/students/aggregate-suppression.js'
 import {
   ImprovementPlanDrafterService,
   emptyDraftReason,
@@ -176,6 +198,13 @@ const PAGE_KEYS = new Set<string>([
   'advancement',
   'tasks',
   'portfolio',
+  // Penny coverage Phase 1. The RUNTIME allow-list, kept in step with the tool
+  // schema: a page the model may name but this set rejects throws inside
+  // runToolCall, and the model — seeing its own tool fail — tells the user the
+  // page "isn't available" while the route sits mounted. Live-caught before.
+  'cash-flow',
+  'enrollment-analytics',
+  'academics-cohorts',
 ])
 const SETTINGS_SECTIONS = new Set<string>([
   'account',
@@ -257,12 +286,30 @@ export const REFRESH: Record<ProposedAction['kind'], RefreshKey[]> = {
   // covered by advisory-apply-chain.spec.ts (AC-1).
   draft_improvement_plan: ['strategy', 'accreditation'],
   attach_evidence: ['accreditation'],
+  // Penny coverage Phase 1. Both writes change the FORWARD projection, so the
+  // cash-flow surface refetches. There is no FE listener for 'cashflow' yet — an
+  // HONEST no-op, exactly like invite_member's empty list, rather than a key
+  // borrowed from a surface that would refetch the wrong thing. This Record is
+  // TOTAL over ProposedAction['kind'], which is the one touchpoint of the six the
+  // compiler enforces.
+  create_cash_commitment: ['cashflow'],
+  save_cash_line_adjustment: ['cashflow'],
 }
 
 // Penny action-log stamps. Every applied action is written to the AuditLog under
 // this action string (source:'assistant') so /assistant/activity can read the log
 // back; an undo writes the paired marker so the log reflects it + double-undo no-ops.
 const AUDIT_APPLIED = 'assistant.action.applied'
+
+/**
+ * F2 — how much later than the audit entry's own timestamp an adjustment row's
+ * updatedAt may be before undo treats the row as re-saved by someone else. The
+ * row write and the audit write happen inside one request a few ms apart, on
+ * clocks that may differ (Prisma @updatedAt is client-side, AuditLog createdAt
+ * is a DB default) — five seconds is far beyond that skew and far below any
+ * human round-trip back to the cash-flow page.
+ */
+const CASH_UNDO_STALENESS_GRACE_MS = 5_000
 const AUDIT_UNDONE = 'assistant.action.undone'
 
 // Action kinds we can UNDO by deleting the single row we captured at apply time. An
@@ -305,6 +352,18 @@ export const REVERSIBLE_KINDS = new Set<ProposedAction['kind']>([
   // AccreditationService.removeEvidence.
   'draft_improvement_plan',
   'attach_evidence',
+  // Penny coverage Phase 1. `create_cash_commitment`'s undo is
+  // CashFlowService.removeCommitment — the SAME tenant-scoped soft delete the UI's
+  // own remove button performs, so a foreign id no-ops rather than 500ing.
+  //
+  // `save_cash_line_adjustment` is here but is reversible only PER INSTANCE:
+  // saveAdjustment UPSERTS by (school, sourceRef), so an apply that REPLACED an
+  // existing adjustment captures no createdId, and `reversible = REVERSIBLE_KINDS
+  // .has(kind) && createdId != null` is therefore false for exactly that instance.
+  // Deleting a replacement would restore the DERIVED line rather than the
+  // adjustment the school had before — silently wrong state, offered as an Undo.
+  'create_cash_commitment',
+  'save_cash_line_adjustment',
 ])
 
 // Tools that perform a write. Membership UNCHANGED — but the meaning flips from
@@ -367,6 +426,14 @@ export const CONFIRM_TOOLS = new Set([
   // characters of this literal, and a comment is text like any other.)
   'draft_improvement_plan',
   'attach_evidence',
+  // Penny coverage Phase 1 — CONFIRM, never WRITE_TOOLS. Committing a school's
+  // forecast to a $180,000 recurring payroll, or quietly excluding the line that
+  // was drawing its trough, are both larger acts than creating a task, and
+  // create_task is already on this side of the line. owner/accountant via the
+  // default canPropose branch; the module entitlement is re-checked at BUILD and
+  // again at APPLY (a forged /apply reaches dispatchApply directly).
+  'add_cash_forecast_item',
+  'adjust_cash_forecast_line',
 ])
 
 // Role-gate the tools OFFERED to the model. A viewer (Board) is read-only: every
@@ -411,6 +478,45 @@ const INVITE_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 // uploader (no JSON body limit). Enforced at BUILD and re-checked at APPLY.
 const FILE_DOCUMENT_MAX_RAW_BYTES = 5 * 1024 * 1024
 
+/**
+ * How many forecast lines get_cash_forecast will return.
+ *
+ * execute() truncates a tool result at 8000 characters, and a truncated JSON
+ * payload is one the model reads two-thirds of and answers from — silently, with
+ * no error anywhere. CashFlowService already caps its own list at 200 for the
+ * screen; twenty is the largest count that leaves room for the headline, the
+ * confidence block and the omissions beside it. The lines are sorted largest
+ * first, so twenty is also the twenty a reader would scan.
+ */
+const CASH_FORECAST_MAX_LINES = 20
+
+/**
+ * f10 — the BYTE budget under the row cap. Twenty PLAIN lines serialize to
+ * ~6,000 characters and fit beside the headline/confidence/omissions blocks with
+ * headroom; twenty ADJUSTED lines each carrying a person's note do not — the
+ * live shape measured ~12,000 characters, sailing past the 8,000-character
+ * truncation and leaving the model to answer from the readable two-thirds. A
+ * row cap alone cannot bound a payload whose rows vary 5× in size, so the lines
+ * list is additionally cut where its serialized weight crosses this budget
+ * (largest-first order means what survives is what a reader would scan first),
+ * and `linesTruncated` says so. Chosen so the full twenty plain lines still
+ * ship untouched.
+ */
+const CASH_FORECAST_LINE_BYTE_BUDGET = 6_000
+
+/** The confidence/recurrence vocabularies Penny may propose — IMPORTED from the
+ *  DTO's own @IsIn arrays, never retyped, so a value she clamps to is a value the
+ *  DTO will accept. Out-of-set values are DROPPED at build rather than riding
+ *  through to a 400 at /apply the user has already confirmed. */
+const CASH_CONFIDENCE_SET = new Set<string>(CONFIDENCE_VALUES)
+const CASH_RECURRENCE_SET = new Set<string>(RECURRENCE_VALUES)
+/** Mirrors SaveCommitmentDto's own bounds so a proposal cannot be built that the
+ *  DTO would reject on length. */
+const CASH_LABEL_MAX = 120
+const CASH_CATEGORY_MAX = 60
+const CASH_NOTES_MAX = 500
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+
 export interface ProposedAction {
   kind:
     | 'set_budget'
@@ -448,6 +554,9 @@ export interface ProposedAction {
     // AIC Phase J — Penny Advisory's two writes. Same five-way sync rule as above.
     | 'draft_improvement_plan'
     | 'attach_evidence'
+    // Penny coverage Phase 1 — the cash-forecast writes. Same six-way sync rule.
+    | 'create_cash_commitment'
+    | 'save_cash_line_adjustment'
   periodId: string
   summary: string
   payload: Record<string, unknown>
@@ -468,7 +577,7 @@ const DRIVER_FIELDS = [
 // item.source can also be 'governance'/'workflow', which are NOT valid here — those
 // must be clamped to 'manual' (or the caller maps governance→policy) before create,
 // or the CreateTaskDto @IsIn/forbidNonWhitelisted pipe would 400.
-const TASK_SOURCE_TYPES = ['manual', 'policy', 'metric', 'compliance', 'strategy'] as const
+const TASK_SOURCE_TYPES = ['manual', 'policy', 'metric', 'compliance', 'strategy', 'accreditation'] as const
 type TaskSourceType = (typeof TASK_SOURCE_TYPES)[number]
 
 function clampTaskSourceType(v: unknown): TaskSourceType {
@@ -519,6 +628,17 @@ function normalizeKnowledgeMime(kind: string, mime: string, fileName: string): s
   if (KNOWLEDGE_MIME_ALLOWLIST.has(m)) return m
   const ext = (fileName.split('.').pop() ?? '').toLowerCase()
   return EXT_MIME[ext] ?? m
+}
+
+/** Mirror of AssistantFilesService.safeName for filenames surfaced in tool
+ *  results: strip newline/quote/angle characters (prompt-structure risks) and
+ *  clip. Emails/SSNs inside the name are additionally masked by the request
+ *  redactor (fileName is a FREETEXT_KEY); an arbitrary person's name in a
+ *  filename is NOT detectable here — that honesty note lives in the docs. */
+function safeToolFileName(name: string | null | undefined): string | null {
+  if (name == null) return null
+  const cleaned = String(name).replace(/[\r\n"<>]/g, ' ')
+  return cleaned.length > 200 ? `${cleaned.slice(0, 200)}…` : cleaned
 }
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -574,6 +694,9 @@ type PageKey =
   | 'advancement'
   | 'tasks'
   | 'portfolio'
+  | 'cash-flow'
+  | 'enrollment-analytics'
+  | 'academics-cohorts'
 type SettingsSection =
   | 'account'
   | 'members'
@@ -609,6 +732,11 @@ type RefreshKey =
   | 'advancement'
   | 'alerts'
   | 'strategy'
+  // Penny coverage Phase 1. No frontend listener exists for either yet — they ride
+  // out on the `applied` event as an honest no-op (the invite_member precedent) so
+  // the day a listener is added the events are already correct.
+  | 'cashflow'
+  | 'enrollment'
 
 /** A flat label/value row on the "what I changed" card. */
 export interface AppliedDetail {
@@ -1003,6 +1131,33 @@ export class AssistantService {
     // child's name in a chat transcript.
     @Optional() private readonly visit?: VisitService,
     @Optional() private readonly students?: StudentsService,
+    // ── Penny coverage Phase 1 — the three surfaces she was blind to ──────────
+    //
+    // INSERTED HERE, AHEAD OF THE TAIL, for the same reason every previous batch
+    // was: `create-initiative.spec` derives `improvement` as `arity - 4` and
+    // `get-early-warnings.spec` derives its pair as `arity - 3` / `arity - 2`,
+    // with `gradebook` last at `arity - 1`. Appending would shift all four and
+    // redden eight unrelated specs. `strategy` is additionally pinned at the
+    // LITERAL index 33, so nothing may be inserted ahead of it either — this
+    // position is the only one that disturbs neither.
+    //
+    // `cashForecast`, not `cashFlow`: the name is already taken by
+    // QboCashFlowService above, and the two are genuinely different objects (the
+    // QuickBooks STATEMENT versus this forward PROJECTION). Letting them share a
+    // field name is how a handler ends up calling the wrong one, which is the
+    // exact confusion the tool descriptions are written to prevent.
+    // WS3 F1 — the accreditation CYCLE read (get_accreditation_cycle + the
+    // narrative's journey segment). INSERTED HERE, AHEAD of the Phase-1 trio
+    // AND the tail: cash-forecast/enrollment-cohort specs derive the trio at
+    // arity-7/-6/-5 and the older specs pin improvement/earlyWarning/billing/
+    // gradebook at arity-4…-1, while `strategy` is pinned at LITERAL index 33 —
+    // this is the one slot that disturbs none of them. Same composed payload
+    // the journey tab renders (the exported AccreditationCycleService), never
+    // a re-derivation.
+    @Optional() private readonly cycle?: AccreditationCycleService,
+    @Optional() private readonly cashForecast?: CashFlowService,
+    @Optional() private readonly enrollmentAnalytics?: EnrollmentAnalyticsService,
+    @Optional() private readonly assessments?: AssessmentsService,
     @Optional() private readonly improvement?: ImprovementService,
     @Optional() private readonly earlyWarning?: EarlyWarningService,
     @Optional() private readonly billing?: BillingService,
@@ -1056,7 +1211,16 @@ export class AssistantService {
       role,
     }
     const system = await this.systemPrompt(ctx)
-    const messages: unknown[] = [{ role: 'system', content: system }, ...history]
+    // FERPA: tokenize PII in tool results before they enter the prompt; restore
+    // the final answer for the authenticated caller (who may see the real names).
+    // ALSO redacts the client-supplied history (privacy F2): a chat transcript is
+    // free text the user typed — emails/SSNs in it must not reach the provider
+    // verbatim. (redactText is not name-detection; the system prompt says so.)
+    const redactor = new Redactor(this.ferpaMode)
+    const messages: unknown[] = [
+      { role: 'system', content: system },
+      ...history.map((m) => ({ ...m, content: redactor.redactText(m.content) })),
+    ]
     const charts: ChartSpec[] = []
     const proposals: ProposedAction[] = []
     // Only the streaming path renders navigate/applied/guide; ignore them here.
@@ -1070,10 +1234,6 @@ export class AssistantService {
       onApplied: () => {},
       onGuide: () => {},
     }
-
-    // FERPA: tokenize PII in tool results before they enter the prompt; restore
-    // the final answer for the authenticated caller (who may see the real names).
-    const redactor = new Redactor(this.ferpaMode)
 
     const tools = toolsForRole(role)
     for (let turn = 0; turn < MAX_TURNS; turn++) {
@@ -1126,11 +1286,17 @@ export class AssistantService {
       role,
     }
     const system = await this.systemPrompt(ctx)
-    const messages: unknown[] = [{ role: 'system', content: system }, ...history]
 
     // FERPA: one redactor per request — tokenizes PII in tool results + the
-    // attachment digest, restores identities in the streamed answer.
+    // attachment digest, restores identities in the streamed answer. ALSO
+    // redacts the client-supplied history (privacy F2): emails/SSNs typed into
+    // the transcript must not reach the provider verbatim. (Not name-detection —
+    // the system prompt carries that honesty note.)
     const redactor = new Redactor(this.ferpaMode)
+    const messages: unknown[] = [
+      { role: 'system', content: system },
+      ...history.map((m) => ({ ...m, content: redactor.redactText(m.content) })),
+    ]
 
     // Attachments ride the LATEST user turn only. Prepare (validate + parse) BEFORE
     // any LLM call so a bad file emits error+done without burning a request.
@@ -1807,7 +1973,15 @@ export class AssistantService {
       // naming the framework reads as "across everything you are accredited
       // against". Both halves are named, or neither is.
       const others = readiness.otherFrameworks ?? []
-      const scope = readiness.framework?.name ? ` against ${readiness.framework.name}` : ''
+      // WS1 — the division/seal clause rides ONLY on a named framework (the
+      // both-halves-or-neither rule): the payload's server-composed division
+      // is relayed, never assembled by the model.
+      const division = readiness.framework?.division ?? null
+      const scope = readiness.framework?.name
+        ? division
+          ? ` against ${readiness.framework.name}, held through ${division.name} (an accreditation division of Cognia)`
+          : ` against ${readiness.framework.name}`
+        : ''
       const alsoHolds =
         others.length > 0
           ? ` This school also holds ${others.map((f) => f.name).join(' and ')}, ` +
@@ -1868,7 +2042,28 @@ export class AssistantService {
       specs.push({ id: 'evidence', templateText: text, sourceStrings: [text, h.basis] })
     }
 
-    // ⑤ WHAT WE COULD NOT EVALUATE — THE PHASE-H ACT-5 RULE: NEVER DROPPED. A
+    // ⑤ WHERE THE SCHOOL SITS IN ITS CYCLE — WS3's journey segment. GUARDED
+    //    like every other: the sentence is composed from the cycle payload's own
+    //    server-authored strings (guardSegment + origination screen apply), the
+    //    template fallback is the payload's phase narrative verbatim, and an
+    //    unconfigured or unreadable cycle contributes NO segment — a narrative
+    //    must never invent a review date.
+    const cycle = this.cycle
+      ? await this.cycle.getCycle(ctx.schoolId).catch(() => null)
+      : null
+    if (cycle && cycle.configured === true) {
+      const countdownClause = cycle.countdown
+        ? ` Next up: ${cycle.countdown.label}, ${cycle.countdown.daysRemaining} days out.`
+        : ''
+      const journeyText = `${cycle.phase.narrative}${countdownClause}`
+      specs.push({
+        id: 'journey',
+        templateText: journeyText,
+        sourceStrings: [journeyText, cycle.phase.narrative],
+      })
+    }
+
+    // ⑥ WHAT WE COULD NOT EVALUATE — THE PHASE-H ACT-5 RULE: NEVER DROPPED. A
     //    narrative that silently omits its own coverage hole reads as completeness,
     //    which is the most expensive sentence this product could imply.
     const cov = twin.coverage
@@ -1888,7 +2083,7 @@ export class AssistantService {
       composed?.segments ??
       specs.map((s) => ({ id: s.id, text: s.templateText, source: 'template' as const }))
 
-    // ⑥ THE DISCLAIMER is NOT a segment. It rides as its own first-class field and
+    // ⑦ THE DISCLAIMER is NOT a segment. It rides as its own first-class field and
     //    AdvisoryCard renders it in its own always-visible slot. Pushing it into
     //    `segments` after the composer put it on screen TWICE, gave it a provenance
     //    chip as though it were a finding, and — worse — inflated the denominator of
@@ -2451,11 +2646,253 @@ export class AssistantService {
   }
 
   /** Validate a write tool's args into a confirmable ProposedAction (no mutation). */
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PENNY COVERAGE PHASE 1 — THE TWO CASH-FORECAST WRITES.
+  //
+  // Both are CONFIRM tools, never autonomous writes. Committing a school's
+  // forecast to a recurring $180,000 payroll, or quietly excluding the line that
+  // was drawing its trough, are larger acts than creating a task — and create_task
+  // is already on the confirm side of that line.
+  //
+  // The entitlement is checked TWICE and the payload is re-validated TWICE, at
+  // build and again at apply, because /apply can be reached directly with a forged
+  // body that never passed through a proposal.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * The finance-OR-planning gate, mirroring CashFlowController's
+   * `@RequiresModule('finance', 'planning')`. Fail-CLOSED on an unreadable billing
+   * row, the same shape and the same `.catch(() => false)` as every other gate.
+   */
+  private async cashModuleLicensed(schoolId: string): Promise<boolean> {
+    const [finance, planning] = await Promise.all([
+      (this.billing?.isEntitledForModule(schoolId, 'finance') ?? Promise.resolve(false)).catch(
+        () => false,
+      ),
+      (this.billing?.isEntitledForModule(schoolId, 'planning') ?? Promise.resolve(false)).catch(
+        () => false,
+      ),
+    ])
+    return finance || planning
+  }
+
+  /**
+   * Build a confirmable create_cash_commitment proposal (NO mutation).
+   *
+   * Cash commitments are SCHOOL-scoped, not period-scoped, so periodId is the same
+   * non-semantic placeholder buildTaskProposal carries.
+   *
+   * Every enum is clamped against the DTO's OWN imported arrays and an
+   * out-of-set value is DROPPED rather than passed through — a stray enum that
+   * reached /apply would 400 under the global forbidNonWhitelisted pipe, on an
+   * action the user had already confirmed. That is the IMPROVEMENT_ORIGIN_TYPES
+   * precedent and the reason those constants are imported instead of retyped.
+   */
+  private async buildCashCommitmentProposal(
+    args: Record<string, unknown>,
+    ctx: Ctx,
+  ): Promise<ProposedAction> {
+    if (!(await this.cashModuleLicensed(ctx.schoolId))) {
+      throw new Error(
+        'The cash-flow forecast needs the finance or planning module, which is not licensed for this school.',
+      )
+    }
+    const label = typeof args.label === 'string' ? args.label.trim().slice(0, CASH_LABEL_MAX) : ''
+    if (!label) throw new Error('add_cash_forecast_item needs a label — what is this payment or receipt?')
+    const category =
+      typeof args.category === 'string' ? args.category.trim().slice(0, CASH_CATEGORY_MAX) : ''
+    if (!category) throw new Error('add_cash_forecast_item needs a category (e.g. payroll, insurance).')
+    const direction = args.direction === 'in' ? 'in' : args.direction === 'out' ? 'out' : ''
+    if (!direction) throw new Error('add_cash_forecast_item needs a direction of "in" or "out".')
+    // A POSITIVE MAGNITUDE — `direction` carries the sign, exactly as the DTO's
+    // @Min(0) requires. A negative "outflow" would otherwise sail through here and
+    // 400 at the boundary after the user confirmed it.
+    if (typeof args.amount !== 'number' || !Number.isFinite(args.amount) || args.amount < 0) {
+      throw new Error('add_cash_forecast_item needs a positive amount — the direction carries the sign.')
+    }
+    const amount = args.amount
+    const confidence = typeof args.confidence === 'string' ? args.confidence.trim() : ''
+    if (!CASH_CONFIDENCE_SET.has(confidence)) {
+      throw new Error(
+        `add_cash_forecast_item needs a confidence of ${[...CASH_CONFIDENCE_SET].join(', ')}.`,
+      )
+    }
+    const recurrence = typeof args.recurrence === 'string' ? args.recurrence.trim() : ''
+    if (!CASH_RECURRENCE_SET.has(recurrence)) {
+      throw new Error(
+        `add_cash_forecast_item needs a recurrence of ${[...CASH_RECURRENCE_SET].join(', ')}.`,
+      )
+    }
+    const startDate = typeof args.startDate === 'string' ? args.startDate.trim() : ''
+    if (!ISO_DATE_RE.test(startDate)) {
+      throw new Error('add_cash_forecast_item needs a startDate as yyyy-mm-dd. Ask the user; never invent one.')
+    }
+    const endDate =
+      typeof args.endDate === 'string' && ISO_DATE_RE.test(args.endDate.trim())
+        ? args.endDate.trim()
+        : undefined
+    // Semi-monthly only, 1..31 (31 = the month's last day) — the DTO's own bounds.
+    const dayRule = Array.isArray(args.dayRule)
+      ? args.dayRule
+          .filter((d): d is number => typeof d === 'number' && Number.isInteger(d) && d >= 1 && d <= 31)
+          .slice(0, 4)
+      : undefined
+    const notes =
+      typeof args.notes === 'string' && args.notes.trim()
+        ? args.notes.trim().slice(0, CASH_NOTES_MAX)
+        : undefined
+
+    const every = recurrence === 'once' ? 'once' : recurrence
+    const way = direction === 'in' ? 'coming in' : 'going out'
+    return {
+      kind: 'create_cash_commitment',
+      periodId: ctx.periodId ?? '',
+      summary:
+        `Add “${label}” to the cash forecast: $${Math.round(amount).toLocaleString('en-US')} ${way}, ` +
+        `${every}, from ${startDate}${endDate ? ` to ${endDate}` : ''} (${confidence}).`,
+      payload: {
+        label,
+        category,
+        direction,
+        amount,
+        confidence,
+        recurrence,
+        startDate,
+        ...(endDate ? { endDate } : {}),
+        ...(dayRule && dayRule.length > 0 ? { dayRule } : {}),
+        ...(notes ? { notes } : {}),
+      },
+    }
+  }
+
+  /**
+   * Build a confirmable save_cash_line_adjustment proposal (NO mutation).
+   *
+   * TWO rules are enforced HERE, before the user is asked to confirm, rather than
+   * left to the DTO:
+   *
+   *   • THE SOURCE-REF BOUNDARY, against the DTO's OWN exported regex. A
+   *     `commitment:*` ref is a real mistake the model will make — commitments
+   *     appear in the same lines list — and refusing it here means the user is
+   *     told "that one is edited directly" instead of confirming an action that
+   *     then 400s.
+   *   • THE override/exclude IFF, which the DTO structurally cannot express
+   *     (it can only say "optional"). An override with no amount has nothing to
+   *     apply; an exclude WITH an amount is a caller confused about which of the
+   *     two they asked for.
+   */
+  private async buildCashAdjustmentProposal(
+    args: Record<string, unknown>,
+    ctx: Ctx,
+  ): Promise<ProposedAction> {
+    if (!(await this.cashModuleLicensed(ctx.schoolId))) {
+      throw new Error(
+        'The cash-flow forecast needs the finance or planning module, which is not licensed for this school.',
+      )
+    }
+    const sourceRef = typeof args.sourceRef === 'string' ? args.sourceRef.trim().slice(0, 160) : ''
+    if (!sourceRef) {
+      throw new Error(
+        'adjust_cash_forecast_line needs a sourceRef. Call get_cash_forecast with lines:true first and copy one from its lines.',
+      )
+    }
+    if (!ADJUSTABLE_SOURCE_REF_RE.test(sourceRef)) {
+      // Named rather than generic: a commitment ref is the predictable miss, and
+      // "use the commitment editor" is a different and answerable request.
+      throw new Error(
+        sourceRef.startsWith('commitment:')
+          ? 'That line is a commitment the school entered itself, so it is edited directly rather than adjusted — adjustments only apply to derived lines (QuickBooks, budget phasing, the tuition driver).'
+          : ADJUSTABLE_SOURCE_REF_MESSAGE,
+      )
+    }
+    const kind = args.kind === 'exclude' ? 'exclude' : args.kind === 'override' ? 'override' : ''
+    if (!kind) throw new Error('adjust_cash_forecast_line needs a kind of "exclude" or "override".')
+    const overrideAmount =
+      typeof args.overrideAmount === 'number' && Number.isFinite(args.overrideAmount)
+        ? args.overrideAmount
+        : null
+    if (kind === 'override' && (overrideAmount === null || overrideAmount < 0)) {
+      throw new Error('An override needs a non-negative overrideAmount — the line’s new total.')
+    }
+    if (kind === 'exclude' && overrideAmount !== null) {
+      throw new Error('overrideAmount only applies to an override. To drop the line entirely, send kind "exclude" alone.')
+    }
+    const note =
+      typeof args.note === 'string' && args.note.trim()
+        ? args.note.trim().slice(0, CASH_NOTES_MAX)
+        : undefined
+
+    // ── f12: THE REF MUST EXIST BEFORE THE USER IS ASKED TO CONFIRM ─────────
+    // A well-FORMED ref the model invented ("budget:salaries" from memory of
+    // another school's lines) passes the regex, survives /apply, and lands as a
+    // silently INERT adjustment — saveAdjustment upserts it and composeFlows
+    // matches it against nothing. The user confirmed a change that changed
+    // nothing. So the ref is checked against the same forecast read the tool
+    // path performs (persist:false — a proposal is not a decision either) plus
+    // the school's existing adjustments (a ref adjusted before is real even if
+    // today's window no longer contains its line).
+    if (!(await this.cashAdjustableRefExists(ctx.schoolId, sourceRef))) {
+      throw new Error(
+        `No forecast line matches the sourceRef “${sourceRef}”. Call get_cash_forecast with lines:true and copy a sourceRef from its lines — refs are derived from the current forecast and cannot be guessed.`,
+      )
+    }
+
+    return {
+      kind: 'save_cash_line_adjustment',
+      periodId: ctx.periodId ?? '',
+      summary:
+        kind === 'exclude'
+          ? `Leave the forecast line “${sourceRef}” out of the cash forecast. The underlying invoice or budget row is not changed.`
+          : `Re-total the forecast line “${sourceRef}” to $${Math.round(overrideAmount as number).toLocaleString('en-US')}. Its timing is preserved and the underlying source is not changed.`,
+      payload: {
+        sourceRef,
+        kind,
+        ...(kind === 'override' ? { overrideAmount } : {}),
+        ...(note ? { note } : {}),
+      },
+    }
+  }
+
+  /**
+   * f12 — does this adjustable sourceRef name anything real? True when the ref
+   * appears among the CURRENT forecast's flow lines (the same read the tool path
+   * performs, persist:false) OR among the school's existing adjustments. Errs
+   * toward `false`: no forecast service, no stated opening balance, or a thrown
+   * read all mean there is nothing the ref could match, so the proposal is
+   * refused with a corrective message rather than confirmed into inertness.
+   */
+  private async cashAdjustableRefExists(schoolId: string, sourceRef: string): Promise<boolean> {
+    if (!this.cashForecast) return false
+    try {
+      const existing = await this.cashForecast.listAdjustments(schoolId)
+      if (existing.adjustments.some((a) => a.sourceRef === sourceRef)) return true
+      const opening = await this.cashForecast.getOpening(schoolId, this.todayIso())
+      if (opening.openingCash === null || !opening.asOfDate) return false
+      const proj = await this.cashForecast.project(schoolId, null, {
+        openingCash: opening.openingCash,
+        asOfDate: opening.asOfDate,
+        openingSource: opening.source ?? 'keyed',
+        horizon: '13w',
+        // A proposal is a question, not a decision — never freeze a run for it.
+        persist: false,
+      })
+      return (proj.flows ?? []).some((f) => f.sourceRef === sourceRef)
+    } catch {
+      return false
+    }
+  }
+
   private async buildProposal(
     name: string,
     args: Record<string, unknown>,
     ctx: Ctx,
   ): Promise<ProposedAction> {
+    if (name === 'add_cash_forecast_item') {
+      return this.buildCashCommitmentProposal(args, ctx)
+    }
+    if (name === 'adjust_cash_forecast_line') {
+      return this.buildCashAdjustmentProposal(args, ctx)
+    }
     if (name === 'propose_import_trial_balance') {
       return this.buildImportProposal(args, ctx)
     }
@@ -3918,7 +4355,11 @@ export class AssistantService {
    * `applied` + `summary` are unchanged; the extra fields are purely additive.
    */
   async applyAction(schoolId: string, user: User, action: ProposedAction): Promise<ApplyResult> {
-    const { summary, createdId, existingId } = await this.dispatchApply(schoolId, user, action)
+    const { summary, createdId, existingId, auditMetadata } = await this.dispatchApply(
+      schoolId,
+      user,
+      action,
+    )
     const reversible = REVERSIBLE_KINDS.has(action.kind) && createdId != null
     const metadata: Record<string, unknown> = {
       tool: action.kind,
@@ -3927,6 +4368,10 @@ export class AssistantService {
       reversible,
       createdId: createdId ?? null,
       periodId: action.periodId || null,
+      // F2: dispatch-supplied extras — today only the fresh cash-adjustment's
+      // `appliedContent` snapshot, which the undo path compares against. Branches
+      // must add NEW keys only, never reuse a core key name above.
+      ...(auditMetadata ?? {}),
     }
     // An idempotent no-op that OPENED an existing row rather than creating one. It
     // is logged under its own key precisely because nothing reverses it: `createdId`
@@ -4030,6 +4475,21 @@ export class AssistantService {
     if (existing) return { undone: true, alreadyUndone: true }
 
     const tool = typeof md.tool === 'string' ? md.tool : (row.targetType ?? '')
+    // ── F2: THE STALE-TARGETID TRAP (fresh-path complement of the upsert trap) ─
+    // Penny's fresh adjustment created row X; saveAdjustment UPSERTS by (school,
+    // sourceRef), so the UI re-saving that same line later REUSES row X with the
+    // person's newer content. This audit entry still says reversible→X, and
+    // deleting X now would remove THEIR adjustment while reporting a clean undo.
+    // So the row is re-read and compared against what apply actually stored —
+    // refused with 422 when it has since changed.
+    if (tool === 'save_cash_line_adjustment') {
+      await this.assertCashAdjustmentUnchangedSinceApply(
+        schoolId,
+        row.targetId,
+        md,
+        (row as { createdAt?: Date | string | null }).createdAt ?? null,
+      )
+    }
     let alreadyGone = false
     try {
       await this.reverseApplied(user, schoolId, tool, row.targetId)
@@ -4047,6 +4507,63 @@ export class AssistantService {
       metadata: { tool, source: 'assistant', undoneOf: auditId, alreadyGone },
     })
     return alreadyGone ? { undone: true, alreadyUndone: true } : { undone: true }
+  }
+
+  /**
+   * F2 — refuse (422) an adjustment undo when the row Penny created has since
+   * been re-saved with someone else's content (the upsert reuses the row id, so
+   * the audit targetId goes stale in place). Two independent tells, either
+   * refuses:
+   *   • the row's content no longer matches the `appliedContent` snapshot the
+   *     apply stored in the audit metadata (deterministic, clock-free);
+   *   • the row's updatedAt is meaningfully later than the audit entry's own
+   *     createdAt (catches a same-content re-save, where deleting would still
+   *     discard the person's explicit decision).
+   * Fail-open ONLY where there is nothing to compare: an absent prisma model
+   * (older unit mocks) or a row already gone/inactive — the reverse then no-ops
+   * through the existing already-undone path. The benign race with a write that
+   * lands between this read and the delete is accepted (same one-line note as
+   * the fresh-vs-replaced read in dispatchApply).
+   */
+  private async assertCashAdjustmentUnchangedSinceApply(
+    schoolId: string,
+    adjustmentId: string,
+    md: Record<string, unknown>,
+    appliedAt: Date | string | null,
+  ): Promise<void> {
+    const model = this.prisma?.cashFlowLineAdjustment
+    if (!model?.findFirst) return
+    const rowNow = await model
+      .findFirst({ where: { id: adjustmentId, schoolId } })
+      .catch(() => null)
+    if (!rowNow || rowNow.active === false) return
+    const refuse = (): never => {
+      throw new UnprocessableEntityException(
+        'This line was changed after Penny’s edit; undo would remove the newer change. Adjust the line directly on the cash-flow page instead.',
+      )
+    }
+    const snap = md.appliedContent as
+      | { kind?: unknown; overrideAmount?: unknown; note?: unknown }
+      | undefined
+    if (snap && typeof snap === 'object') {
+      const nowAmount = rowNow.overrideAmount == null ? null : Number(rowNow.overrideAmount)
+      const snapAmount = typeof snap.overrideAmount === 'number' ? snap.overrideAmount : null
+      const noteNow = rowNow.note ?? null
+      const noteSnap = typeof snap.note === 'string' ? snap.note : null
+      if (String(rowNow.kind) !== String(snap.kind) || nowAmount !== snapAmount || noteNow !== noteSnap) {
+        refuse()
+      }
+    }
+    const appliedMs = appliedAt == null ? NaN : new Date(appliedAt as string).getTime()
+    const updatedMs =
+      rowNow.updatedAt == null ? NaN : new Date(rowNow.updatedAt as unknown as string).getTime()
+    if (
+      Number.isFinite(appliedMs) &&
+      Number.isFinite(updatedMs) &&
+      updatedMs > appliedMs + CASH_UNDO_STALENESS_GRACE_MS
+    ) {
+      refuse()
+    }
   }
 
   /**
@@ -4146,6 +4663,28 @@ export class AssistantService {
         await this.accreditation.removeEvidence(schoolId, ev.standardId, targetId, user.id)
         return
       }
+      // Penny coverage Phase 1. The SAME tenant-scoped soft delete the cash-flow
+      // page's own remove button performs — a foreign id updates nothing rather
+      // than 500ing, and a soft delete keeps the row visible to any frozen
+      // projection run that referenced it.
+      case 'create_cash_commitment':
+        if (!this.cashForecast) {
+          throw new UnprocessableEntityException('That action can’t be undone here.')
+        }
+        await this.cashForecast.removeCommitment(schoolId, targetId)
+        return
+      // Penny coverage Phase 1. Reached ONLY for an adjustment this apply actually
+      // CREATED — a replacement captured no createdId, so `reversible` is false and
+      // undoActivity 422s before it ever gets here. Clearing an adjustment restores
+      // the derived line exactly, which is the right reversal for a fresh one and
+      // the WRONG one for a replacement; that distinction is made in dispatchApply,
+      // not here, because only dispatchApply can see what was there before.
+      case 'save_cash_line_adjustment':
+        if (!this.cashForecast) {
+          throw new UnprocessableEntityException('That action can’t be undone here.')
+        }
+        await this.cashForecast.removeAdjustment(schoolId, targetId)
+        return
       case 'file_document':
         await this.documents.deleteDocument(schoolId, targetId, user.id)
         return
@@ -4168,7 +4707,15 @@ export class AssistantService {
     schoolId: string,
     user: User,
     action: ProposedAction,
-  ): Promise<{ summary: string; createdId: string | null; existingId?: string | null }> {
+  ): Promise<{
+    summary: string
+    createdId: string | null
+    existingId?: string | null
+    // F2: extra keys for the audit entry's metadata — today only the fresh
+    // cash-adjustment path uses it, to snapshot WHAT was applied so undo can
+    // tell Penny's row from a person's later re-save of the same line.
+    auditMetadata?: Record<string, unknown>
+  }> {
     const userId = user.id
     const periodId = action.periodId
     const p = action.payload ?? {}
@@ -4247,6 +4794,156 @@ export class AssistantService {
       )
       return { summary: action.summary, createdId: null }
     }
+    // ── Penny coverage Phase 1 — the two cash-forecast writes ────────────────
+    //
+    // Validation failures below throw BadRequestException, not Error: this is
+    // the APPLY path, reachable directly by a forged /apply, and a bad payload
+    // is the caller's fault — live-caught as a 500 on a forged commitment:* ref
+    // before the upgrade. (The BUILD-path helpers keep plain Error: runToolCall
+    // catches those and returns {error} to the model.)
+    if (action.kind === 'create_cash_commitment' || action.kind === 'save_cash_line_adjustment') {
+      // ENTITLEMENT RE-CHECKED AT APPLY. buildProposal already checked it, and a
+      // forged /apply never went through buildProposal — this is the hop that
+      // actually protects an unlicensed school's data.
+      if (!(await this.cashModuleLicensed(schoolId))) {
+        // f11: 402 MODULE_NOT_LICENSED, mirroring EntitlementGuard's own emission
+        // for a @RequiresModule('finance', 'planning') route — `module` names the
+        // primary key (the web's single-key parser) and `modules` carries the OR
+        // set, exactly as the guard does on multi-key routes. A 403 here read as
+        // a PERMISSION problem to a client that already knows how to render 402
+        // as the subscribe/unlock state.
+        throw new HttpException(
+          {
+            code: 'MODULE_NOT_LICENSED',
+            module: 'finance',
+            modules: ['finance', 'planning'],
+            message:
+              'The cash-flow forecast needs the finance or planning module, which is not licensed for this school.',
+          },
+          402,
+        )
+      }
+      if (!this.cashForecast) {
+        throw new ServiceUnavailableException(
+          'The cash forecast isn’t available on this server, so I can’t save that.',
+        )
+      }
+
+      if (action.kind === 'create_cash_commitment') {
+        // UNTRUSTED payload — re-derive and re-validate EVERY field exactly as
+        // buildCashCommitmentProposal did, against the DTO's own imported enums.
+        const label = typeof p.label === 'string' ? p.label.trim().slice(0, CASH_LABEL_MAX) : ''
+        if (!label) throw new BadRequestException('A forecast item needs a label.')
+        const category =
+          typeof p.category === 'string' ? p.category.trim().slice(0, CASH_CATEGORY_MAX) : ''
+        if (!category) throw new BadRequestException('A forecast item needs a category.')
+        const direction = p.direction === 'in' ? 'in' : p.direction === 'out' ? 'out' : ''
+        if (!direction) throw new BadRequestException('A forecast item needs a direction of "in" or "out".')
+        if (typeof p.amount !== 'number' || !Number.isFinite(p.amount) || p.amount < 0) {
+          throw new BadRequestException('A forecast item needs a positive amount.')
+        }
+        const confidence = typeof p.confidence === 'string' ? p.confidence.trim() : ''
+        if (!CASH_CONFIDENCE_SET.has(confidence)) throw new BadRequestException('Invalid confidence.')
+        const recurrence = typeof p.recurrence === 'string' ? p.recurrence.trim() : ''
+        if (!CASH_RECURRENCE_SET.has(recurrence)) throw new BadRequestException('Invalid recurrence.')
+        const startDate = typeof p.startDate === 'string' ? p.startDate.trim() : ''
+        if (!ISO_DATE_RE.test(startDate)) throw new BadRequestException('A forecast item needs a startDate as yyyy-mm-dd.')
+        const endDate =
+          typeof p.endDate === 'string' && ISO_DATE_RE.test(p.endDate.trim()) ? p.endDate.trim() : null
+        const dayRule = Array.isArray(p.dayRule)
+          ? p.dayRule.filter(
+              (d): d is number => typeof d === 'number' && Number.isInteger(d) && d >= 1 && d <= 31,
+            )
+          : undefined
+        const notes =
+          typeof p.notes === 'string' && p.notes.trim() ? p.notes.trim().slice(0, CASH_NOTES_MAX) : null
+
+        const created = await this.cashForecast.createCommitment(schoolId, userId, {
+          label,
+          category,
+          direction,
+          amount: p.amount,
+          confidence,
+          recurrence,
+          startDate,
+          endDate,
+          ...(dayRule && dayRule.length > 0 ? { dayRule } : {}),
+          notes,
+        })
+        // A real created row → a real Undo, which is CashFlowService.removeCommitment:
+        // the SAME tenant-scoped soft delete the page's own remove button performs.
+        return { summary: action.summary, createdId: created?.id ?? null }
+      }
+
+      // ── save_cash_line_adjustment ──────────────────────────────────────────
+      const sourceRef = typeof p.sourceRef === 'string' ? p.sourceRef.trim().slice(0, 160) : ''
+      if (!ADJUSTABLE_SOURCE_REF_RE.test(sourceRef)) {
+        throw new BadRequestException(ADJUSTABLE_SOURCE_REF_MESSAGE)
+      }
+      const kind = p.kind === 'exclude' ? 'exclude' : p.kind === 'override' ? 'override' : ''
+      if (!kind) throw new BadRequestException('An adjustment needs a kind of "exclude" or "override".')
+      const overrideAmount =
+        typeof p.overrideAmount === 'number' && Number.isFinite(p.overrideAmount)
+          ? p.overrideAmount
+          : null
+      if (kind === 'override' && (overrideAmount === null || overrideAmount < 0)) {
+        throw new BadRequestException('An override needs a non-negative overrideAmount.')
+      }
+      if (kind === 'exclude' && overrideAmount !== null) {
+        throw new BadRequestException('overrideAmount only applies when kind is "override".')
+      }
+      const note = typeof p.note === 'string' && p.note.trim() ? p.note.trim().slice(0, CASH_NOTES_MAX) : null
+
+      // ★ THE UPSERT-UNDO TRAP, CLOSED HERE.
+      //
+      // saveAdjustment UPSERTS by (school, sourceRef): one adjustment per line,
+      // latest wins. So an apply that REPLACED an existing adjustment did not
+      // create a row — it overwrote one — and undoing it by DELETING that row
+      // would restore the DERIVED line rather than the adjustment the school had
+      // before. Silently wrong state, offered to the user as an Undo button.
+      //
+      // Reading the existing adjustments FIRST is what makes the two cases
+      // distinguishable at all. A fresh line yields `createdId`, so
+      // `reversible = REVERSIBLE_KINDS.has(kind) && createdId != null` is true; a
+      // replacement yields `createdId: null` plus `existingId`, which makes that
+      // same expression false for exactly that instance. `existingId` was
+      // introduced for precisely this shape — an idempotent apply that OPENED an
+      // existing row rather than creating one, logged under its own key because
+      // nothing reverses it.
+      // (Benign race, accepted: this read and the upsert below are not one
+      // transaction, so a concurrent save on the same line can slip between them
+      // — worst case a replacement is mislabelled fresh, and the F2 undo-time
+      // content check still refuses to delete anything that has since changed.)
+      const before = await this.cashForecast.listAdjustments(schoolId).catch(() => ({ adjustments: [] }))
+      const prior = before.adjustments.find((a) => a.sourceRef === sourceRef) ?? null
+
+      const row = await this.cashForecast.saveAdjustment(schoolId, userId, {
+        sourceRef,
+        kind,
+        ...(kind === 'override' ? { overrideAmount } : {}),
+        note,
+      })
+      if (prior) {
+        return {
+          summary: `${action.summary} (This replaced an adjustment already on that line, so it can’t be undone from here — set it back explicitly if you need the previous one.)`,
+          createdId: null,
+          existingId: prior.id,
+        }
+      }
+      // F2: SNAPSHOT WHAT WAS APPLIED, into the audit metadata. The undo path
+      // deletes the row by id — but saveAdjustment UPSERTS by (school, sourceRef),
+      // so the UI re-saving this same line later REUSES row `createdId` with the
+      // person's newer content. Without this snapshot, Penny's Undo cannot tell
+      // her own adjustment from the one that replaced it in place, and "undo"
+      // would delete THEIR work. undoActivity compares the row against this
+      // before reversing.
+      return {
+        summary: action.summary,
+        createdId: row?.id ?? null,
+        auditMetadata: { appliedContent: { kind, overrideAmount, note } },
+      }
+    }
+
     if (action.kind === 'create_task') {
       // Untrusted payload (a forged /apply can hit this directly) — re-derive and
       // re-validate every field, resolve the assignee to an active member (or null),
@@ -5490,6 +6187,47 @@ export class AssistantService {
       'professional development are answered through check_kyro_collects with the matching topic; it ' +
       'returns COUNTS for the register asked about and never a person. ORGANIZATION — list_schools_status, ' +
       'get_org_readiness_portfolio and compare_accreditation_peers. ' +
+      // ── THE TWO CASH TOOLS ARE DIFFERENT OBJECTS ───────────────────────────
+      // The single most likely wrong-tool answer in the product: "when do we run
+      // low on cash?" answered from get_cash_flow, which is the QuickBooks
+      // STATEMENT of what already happened and returns {connected:false} for every
+      // school without QuickBooks. Naming the distinction here is what gets the
+      // right tool CALLED; the descriptions repeat it for when it is not.
+      'CASH — TWO DIFFERENT TOOLS, DO NOT CONFUSE THEM. get_cash_forecast is the FORWARD ' +
+      'PROJECTION built from the school’s own opening balance, commitments and budget: it ' +
+      'answers "when do we run low on cash", "will we make payroll", "what is our low point", ' +
+      '"how much notice do we have", and it works with NO accounting system connected. ' +
+      'get_cash_flow is the QuickBooks cash-flow STATEMENT of what ALREADY HAPPENED plus the ' +
+      'reconciliation trust check, and it returns nothing at all when QuickBooks is not ' +
+      'connected — never answer a forward "when do we run out" question from it. ' +
+      'WHEN get_cash_forecast RETURNS AN `omissions` ENTRY NAMING A MISSING RECEIPT (tuition, ' +
+      'a budget), SAY SO BEFORE STATING ANY LOW POINT and relay the entry’s message: the ' +
+      'trough is then an artefact of absent data and is deeper than reality. add_cash_forecast_item ' +
+      'and adjust_cash_forecast_line PROPOSE changes to that forecast (confirm-then-apply); the ' +
+      'adjustment one needs a sourceRef you have actually READ from get_cash_forecast with ' +
+      'lines:true, and it cannot touch a commitment (those are edited directly). ' +
+      // ── ENROLLMENT & COHORT ANALYTICS ──────────────────────────────────────
+      'ENROLLMENT ANALYTICS — get_enrollment_analytics (actual versus plan BY GRADE, ' +
+      'year-over-year, the grade ladder, class sizes over time, status and support mix). ' +
+      'A cell marked suppressed carries NO value at all: say it is below the reporting floor ' +
+      'and withheld, and never estimate it from a total. ' +
+      // Honesty note (privacy F2): redactText masks emails/SSNs + REGISTERED
+      // identities, but a name typed free-form by the user is NOT registered and
+      // passes through — so the model itself is told never to propagate one.
+      'USER-TYPED IDENTITIES: emails and known identities in this conversation are masked before ' +
+      'you see them, but a person’s name the user typed free-form may still appear. Never echo ' +
+      'such a name into tool arguments, task titles, filenames, or any record you create, and ' +
+      'never volunteer it back in an answer about aggregate data. ' +
+      'When reconciliation.diverged is true, ' +
+      'report BOTH headcounts and say they need re-syncing — do NOT pick one, and note that no ' +
+      'single headcount is published in that state precisely because there is not one answer. ' +
+      'When yoy.comparable is false, relay alignmentNote and state NO change. ' +
+      'ACADEMIC COHORTS — get_academic_cohorts follows one class up the grades. USE THE SERVER’S ' +
+      '`direction` FIELD AND NEVER SUBTRACT THE LEGS YOURSELF: direction is decided against ' +
+      'context.materialGap, the smallest move that counts in that test’s own units, so a 0.4-point ' +
+      'fall on an ACT composite is "held steady" and calling it a slight decline is wrong. When ' +
+      'asked what a number MEANS, quote context.measures verbatim rather than describing the ' +
+      'scale yourself. ' +
       // ── AIC Phase J — ACCREDITATION ADVISORY ───────────────────────────────
       // ADVICE ON TOP OF THE GUARANTEES, NEVER INSTEAD OF THEM. Everything below
       // is already enforced in the payloads: a refusing tool returns nothing to
@@ -5808,6 +6546,588 @@ export class AssistantService {
           },
         }
       }
+      // ── Penny coverage Phase 1 — R1: THE FORWARD CASH PROJECTION ───────────
+      //
+      // The handler calls the SAME service the REST route calls and then only
+      // projects and formats. It computes nothing: `get_briefing` above is the
+      // model (verbatim pass-through), not `get_assessment_summary` (which
+      // weights inside the assistant and therefore owns a second copy of an
+      // arithmetic rule).
+      case 'get_cash_forecast': {
+        // Entitlement FIRST, fail-closed, mirroring the controller's
+        // @RequiresModule('finance', 'planning') — OR semantics: the data sources
+        // are finance, the feature is a forward look, and a school licensed for
+        // either gets it rather than being asked to buy both for one screen.
+        const licensedCash = await Promise.all([
+          (this.billing?.isEntitledForModule(ctx.schoolId, 'finance') ?? Promise.resolve(false)).catch(
+            () => false,
+          ),
+          (this.billing?.isEntitledForModule(ctx.schoolId, 'planning') ?? Promise.resolve(false)).catch(
+            () => false,
+          ),
+        ])
+        if (!licensedCash.some(Boolean)) return this.refuseNotLicensed('finance or planning')
+        if (!this.cashForecast) {
+          return { available: false, note: 'The cash forecast is not available on this server.' }
+        }
+
+        const today = this.todayIso()
+        const opening = await this.cashForecast.getOpening(ctx.schoolId, today)
+        // THE OPENING BALANCE IS THE WHOLE FOUNDATION and KYRO cannot derive it:
+        // there is no bank feed, and the trial-balance cash total is NOT available
+        // operating cash (a school can hold $600,000 on the balance sheet with
+        // $125,000 operations may actually spend). Substituting `tbCash` here
+        // would overstate the start and therefore every week after it — so the
+        // tool refuses and says what is needed. The TB figure rides along as the
+        // cross-check it is, never as the answer.
+        if (opening.openingCash === null || !opening.asOfDate) {
+          return {
+            available: false,
+            reason: 'no_opening_balance',
+            wouldRequire: 'input',
+            ...(opening.tbCash !== null ? { trialBalanceCashForReference: opening.tbCash } : {}),
+            message:
+              'No forecast has been built yet: nobody has stated the school’s available operating cash and the date it is true as of. That figure cannot be derived from the books — the balance-sheet cash total includes restricted and committed money — so it has to be entered on the cash-flow page before anything can be projected.',
+          }
+        }
+
+        const horizon =
+          typeof args.horizon === 'string' &&
+          (['13w', '1m', '3m', '6m', '12m'] as const).includes(args.horizon as '13w')
+            ? (args.horizon as '13w' | '1m' | '3m' | '6m' | '12m')
+            : '13w'
+
+        // ★ persist:false IS LOAD-BEARING AND IS HARDCODED HERE.
+        //
+        // project() FREEZES a CashProjectionRun by default — the archive that
+        // forecast-vs-actual back-testing will be built from, which is a record of
+        // what the school was TOLD and WHEN. A question is not a decision. Letting
+        // Penny write to that archive would fill it with runs nobody made, and
+        // back-testing cannot be repaired retroactively.
+        //
+        // The value is never read from `args`: an LLM that could pass persist:true
+        // would be one prompt away from polluting the archive, and there is no
+        // question whose answer improves by freezing a run.
+        const proj = await this.cashForecast.project(ctx.schoolId, ctx.userId ?? null, {
+          openingCash: opening.openingCash,
+          asOfDate: opening.asOfDate,
+          openingSource: opening.source ?? 'keyed',
+          horizon,
+          persist: false,
+        })
+
+        const money = (v: number | null | undefined): string | null =>
+          v == null || !Number.isFinite(v)
+            ? null
+            : `${v < 0 ? '-' : ''}$${Math.abs(Math.round(v)).toLocaleString('en-US')}`
+
+        const p = proj.projection
+        const wantLines = args.lines === true
+        // The lines list is capped HARD at 20. `flows` is capped at 200 by the
+        // service for the screen, and 200 rows of ten fields is multiples of the
+        // 8000-character truncation execute() applies — a truncated JSON payload is
+        // a payload the model reads the first two-thirds of and answers from.
+        const allLines = proj.flows
+        const shown = wantLines ? allLines.slice(0, CASH_FORECAST_MAX_LINES) : []
+
+        return {
+          available: true,
+          opening: {
+            openingCash: opening.openingCash,
+            openingCashFormatted: money(opening.openingCash),
+            asOfDate: opening.asOfDate,
+            source: opening.source,
+            ageDays: opening.ageDays,
+            // An opening balance keyed a long time ago is a silently compounding
+            // error: every week after it inherits the drift. The flag ships so
+            // Penny can say so rather than quoting a stale trough as current.
+            stale: opening.stale,
+            trialBalanceCashForReference: opening.tbCash,
+          },
+          blockedReason: proj.blockedReason,
+          headline:
+            p === null
+              ? null
+              : {
+                  horizon,
+                  horizonEnd: p.horizonEnd,
+                  lowestBalance: p.lowestBalance,
+                  lowestBalanceFormatted: money(p.lowestBalance),
+                  lowestDate: p.lowestDate,
+                  endingBalance: p.endingBalance,
+                  endingBalanceFormatted: money(p.endingBalance),
+                  // Null when the school set NO reserve threshold, or set one and
+                  // never breaches it. Both are real answers and neither is a zero.
+                  firstShortfallDate: p.firstShortfallDate,
+                  shortfallAmount: p.shortfallAmount,
+                  shortfallAmountFormatted: money(p.shortfallAmount),
+                  daysOfNotice: p.daysOfNotice,
+                  monthsCashAtLowPoint: p.monthsCashAtLowPoint,
+                  totalReceipts: p.totalReceipts,
+                  totalReceiptsFormatted: money(p.totalReceipts),
+                  totalDisbursements: p.totalDisbursements,
+                  totalDisbursementsFormatted: money(p.totalDisbursements),
+                  receiptsBeforeLowPoint: p.receiptsBeforeLowPoint,
+                },
+          // WHAT DUG THE HOLE, and what the school is waiting for — the two halves
+          // of any honest explanation of a trough. Copied, never re-derived.
+          driversToLowPoint:
+            p?.driversToLowPoint?.slice(0, 5).map((d) => ({
+              category: d.category,
+              // n3: the speakable form, through the SAME mapping QBO events use —
+              // the model quotes `label`, never the snake_case key.
+              label: categoryTitle(d.category),
+              amount: d.amount,
+              amountFormatted: money(d.amount),
+            })) ?? [],
+          nextReceiptAfterLow: p?.nextReceiptAfterLow ?? null,
+          confidence: {
+            // VERBATIM. `dataTier` is how good the INPUTS are, never how healthy
+            // the school is, and the disclaimer that says so is frozen text.
+            dataTier: proj.dataTier,
+            dataTierReason: proj.dataTierReason,
+            committedShare: proj.committedShare,
+            disclaimer: proj.disclaimer,
+          },
+          // ★ VERBATIM, AND THE MOST IMPORTANT FIELD IN THIS PAYLOAD. A school
+          // with commitments recorded and no budget on file gets a projection
+          // containing every outflow and NONE of its tuition — a catastrophic
+          // trough that is an artefact of absent data. Each entry names the
+          // missing input and what to do about it. Capped at 6 entries (f10) —
+          // each message is a full sentence, and an unbounded list is truncation
+          // headroom spent on repetition; the flag says when the cap bit.
+          omissions: proj.omissions.slice(0, 6),
+          omissionsTruncated: proj.omissions.length > 6,
+          ...(wantLines
+            ? (() => {
+                const mapped = shown.map((f) => ({
+                  // The adjustment HANDLE. Publishing it is what makes "exclude
+                  // that bill" resolvable in one more round trip instead of a
+                  // conversation about which bill.
+                  sourceRef: f.sourceRef,
+                  label: f.label,
+                  category: f.category,
+                  origin: f.origin,
+                  provenance: f.provenance,
+                  direction: f.direction,
+                  confidence: f.confidence,
+                  // FORMATTED ONLY, and that is a size decision with a reason:
+                  // twenty lines carrying both a raw number and its rendered
+                  // twin overran the 8000-character truncation by 700 characters
+                  // in the spec that pins this. Penny quotes the formatted string
+                  // — the raw number was only ever a second way to say it.
+                  derivedTotalFormatted: money(f.derivedTotal),
+                  appliedTotalFormatted: money(f.appliedTotal),
+                  firstDate: f.firstDate,
+                  lastDate: f.lastDate,
+                  // Which write tool applies: 'direct' means it is a commitment
+                  // with its own editor and adjust_cash_forecast_line will refuse
+                  // it; 'adjustable' means the adjustment path is the right one.
+                  editable: f.editable,
+                  // Both omitted when absent rather than shipped as null — on a
+                  // twenty-row list a repeated `"adjustment":null` is real budget,
+                  // and their ABSENCE says the same thing their null did.
+                  ...(f.commitmentId ? { commitmentId: f.commitmentId } : {}),
+                  // f10: TRIMMED, not verbatim. The line already carries the
+                  // sourceRef (the duplicate inside `adjustment` was pure bytes),
+                  // and a note is a person's free text — twenty lines each
+                  // carrying a long note is exactly how a payload overruns the
+                  // 8000-character truncation and gets answered from its readable
+                  // two-thirds. 120 chars keeps the "who decided what" signal.
+                  ...(f.adjustment
+                    ? {
+                        adjustment: {
+                          id: f.adjustment.id,
+                          kind: f.adjustment.kind,
+                          overrideAmount: f.adjustment.overrideAmount,
+                          note:
+                            f.adjustment.note && f.adjustment.note.length > 120
+                              ? `${f.adjustment.note.slice(0, 120)}…`
+                              : f.adjustment.note,
+                        },
+                      }
+                    : {}),
+                }))
+                // f10: the BYTE budget under the row cap (see the constant's
+                // header). At least one line always ships; largest-first order
+                // means what survives is what a reader would scan first.
+                const kept: typeof mapped = []
+                let used = 0
+                for (const line of mapped) {
+                  const cost = JSON.stringify(line).length + 1
+                  if (kept.length > 0 && used + cost > CASH_FORECAST_LINE_BYTE_BUDGET) break
+                  kept.push(line)
+                  used += cost
+                }
+                return {
+                  lines: kept,
+                  linesShown: kept.length,
+                  linesTotal: allLines.length,
+                  // THREE truncations can be in play and they mean different
+                  // things: the service's own 200-line cap on a pathological
+                  // roster, this tool's 20-row cap, and the byte budget on
+                  // heavy (adjusted, noted) rows. All are stated, never silent.
+                  linesTruncated: kept.length < allLines.length,
+                  flowsTruncatedUpstream: proj.flowsTruncated,
+                }
+              })()
+            : {
+                linesTotal: allLines.length,
+                note: 'Call again with lines:true to see the individual forecast lines and their sourceRefs.',
+              }),
+        }
+      }
+
+      // ── Penny coverage Phase 1 — R2: ENROLLMENT ANALYTICS ──────────────────
+      case 'get_enrollment_analytics': {
+        const licensedEnrollment = await (
+          this.billing?.isEntitledForModule(ctx.schoolId, 'enrollment') ?? Promise.resolve(false)
+        ).catch(() => false)
+        if (!licensedEnrollment) return this.refuseNotLicensed('enrollment')
+        if (!this.enrollmentAnalytics) {
+          return { available: false, note: 'Enrollment analytics is not available on this server.' }
+        }
+
+        const section =
+          typeof args.section === 'string' &&
+          (['summary', 'plan', 'cohorts', 'trend', 'mix'] as const).includes(args.section as 'summary')
+            ? (args.section as 'summary' | 'plan' | 'cohorts' | 'trend' | 'mix')
+            : null
+        const view = await this.enrollmentAnalytics.analytics(ctx.schoolId, {
+          ...(typeof args.periodId === 'string' && args.periodId ? { periodId: args.periodId } : {}),
+          ...(typeof args.asOf === 'string' && args.asOf ? { asOf: args.asOf } : {}),
+          // `years` is a STRING on the DTO ('1'..'5') because it arrives on a
+          // query string; the model naturally passes a number. Coerced and
+          // clamped to the DTO's own vocabulary here rather than widened there —
+          // the REST contract is not ours to change for a tool's convenience.
+          ...(typeof args.years === 'number' &&
+          ['1', '2', '3', '4', '5'].includes(String(Math.trunc(args.years)))
+            ? { years: String(Math.trunc(args.years)) as '1' | '2' | '3' | '4' | '5' }
+            : {}),
+          ...(typeof args.cohortWindow === 'number' ? { cohortWindow: args.cohortWindow } : {}),
+        })
+
+        // ★ THE SUPPRESSION PROJECTION. A withheld cell loses the `value` KEY
+        // ENTIRELY rather than carrying `value: null` beside `suppressed: true`.
+        // The difference is the whole point: there is no field for the model to
+        // quote, mis-read as a zero, or "helpfully" fill in. A cell that was never
+        // filed keeps `value: null` — missing and withheld are different absences
+        // and stay distinguishable.
+        const cell = (c: { value: number | null; suppressed: boolean } | null | undefined) =>
+          c == null ? null : c.suppressed ? { suppressed: true } : { value: c.value }
+
+        // ★ THE DIVERGENCE RULE. When the promoted headcount and the reading on
+        // the page disagree, the payload carries NO single school-total headcount
+        // — not the tile, not the ladder total, not the vs-plan actual. Penny
+        // cannot pick the wrong one because there is nothing to pick from; she is
+        // left with the PAIR and the school's own reconciliation note, which is
+        // the correct answer to "how many students do we have" in that state.
+        const diverged = view.reconciliation?.diverged === true
+
+        const tiles = view.tiles
+          .filter((t) => !(diverged && t.key === 'enrollment_headcount'))
+          .map((t) => ({
+            key: t.key,
+            label: t.label,
+            value: t.value,
+            valueFormatted: formatMetricValueLong(t.value, resolveDisplayUnit(t.key, t.unit)),
+            unit: t.unit,
+            status: t.status,
+          }))
+
+        const summaryPart = {
+          period: view.period,
+          asOf: view.asOf,
+          tiles,
+          // VERBATIM, both figures, always — this is the field that makes the
+          // divergence answerable instead of guessable.
+          reconciliation: view.reconciliation,
+          // Server-authored honesty lines. Penny relays them; she does not compose
+          // them, and the divergence note is already among them when it applies.
+          notes: view.notes,
+          // The charts this product deliberately does not have, each with its own
+          // reason. Ships VERBATIM and there is no key for any of them anywhere
+          // else in the payload — "percent full" has an invented denominator or it
+          // has nothing, and nothing is the honest answer.
+          unavailable: view.unavailable,
+          // The cell floor itself, so the explainer and the server cannot disagree.
+          minCell: view.minCell,
+          planFailed: view.planFailed,
+        }
+
+        const planPart = {
+          vsPlan:
+            view.vsPlan === null
+              ? null
+              : {
+                  rows: view.vsPlan.rows.map((r) => ({
+                    grade: r.grade,
+                    actual: cell(r.actual),
+                    plan: cell(r.plan),
+                    gap: cell(r.gap),
+                    gapPct: cell(r.gapPct),
+                  })),
+                  totals: diverged
+                    ? {
+                        // The actual/gap/gapPct triple is derived from the
+                        // CONTESTED reading, so it is withheld with it. `plan`
+                        // stays (it is the target, not a headcount) and the tile
+                        // pair stays because it restates `reconciliation.promoted`,
+                        // which is already published — nothing new is recoverable.
+                        plan: view.vsPlan.totals.plan,
+                        tileGapPct: view.vsPlan.totals.tileGapPct,
+                        agreesWithTile: view.vsPlan.totals.agreesWithTile,
+                        withheld: 'headcount_reconciliation',
+                      }
+                    : view.vsPlan.totals,
+                  planSource: view.vsPlan.planSource,
+                },
+        }
+
+        const cohortsPart = {
+          cohortSize:
+            view.cohortSize === null
+              ? null
+              : {
+                  window: view.cohortSize.window,
+                  requestedWindow: view.cohortSize.requestedWindow,
+                  availableWindows: view.cohortSize.availableWindows,
+                  endYear: view.cohortSize.endYear,
+                  gradeSpan: view.cohortSize.gradeSpan,
+                  panelsAvailable: view.cohortSize.panelsAvailable,
+                  truncated: view.cohortSize.truncated,
+                  reason: view.cohortSize.reason,
+                  // REDUCED, not re-derived: label, ends, the net change and the
+                  // SERVER's direction. The legs are dropped (window × panels is
+                  // most of the payload) but `direction` is what a reader needs,
+                  // and it was decided against the movement floor rather than by
+                  // subtracting two numbers — which is exactly why the floor is
+                  // published beside it instead of the raw legs.
+                  moveFloorNote:
+                    'Direction is decided by the server against a movement floor; a smaller move is reported as holding steady. See notes for the floor itself.',
+                  cohorts: view.cohortSize.cohorts.map((c) => ({
+                    label: c.label,
+                    startGrade: c.startGrade,
+                    endGrade: c.endGrade,
+                    startYear: c.startYear,
+                    endYear: c.endYear,
+                    // `direction` ALWAYS accompanies `netChange`. A bare delta
+                    // invites the reader to call 24 → 25 "growth"; the pair does
+                    // not, because 'held' is right there beside the 1.
+                    netChange: c.netChange,
+                    direction: c.direction,
+                    observedLegs: c.legs.filter((l) => l.count.value !== null || l.count.suppressed)
+                      .length,
+                  })),
+                },
+        }
+
+        const trendPart = {
+          trend: {
+            // The latest reading IS the contested one when the register has moved
+            // since the last promote, so it loses its total with everything else.
+            points: view.trend.points.map((pt, i) => ({
+              observedOn: pt.observedOn,
+              provider: pt.provider,
+              ...(diverged && i === view.trend.points.length - 1 ? {} : { total: pt.total }),
+            })),
+            planTotal: view.trend.planTotal,
+          },
+          yoy:
+            view.yoy === null
+              ? null
+              : {
+                  basis: view.yoy.basis,
+                  current: view.yoy.current,
+                  prior: view.yoy.prior,
+                  alignedWithinDays: view.yoy.alignedWithinDays,
+                  comparable: view.yoy.comparable,
+                  alignmentNote: view.yoy.alignmentNote,
+                  // ★ comparable:false DROPS delta AND deltaPct entirely. The two
+                  // readings are still both here and the note says why subtracting
+                  // them would describe the calendar rather than the school — but
+                  // there is no computed change for Penny to relay as one.
+                  ...(view.yoy.comparable
+                    ? { delta: view.yoy.delta, deltaPct: view.yoy.deltaPct }
+                    : {}),
+                },
+          ladder:
+            view.ladder === null
+              ? null
+              : {
+                  observedOn: view.ladder.observedOn,
+                  ...(diverged ? {} : { total: view.ladder.total }),
+                  rows: view.ladder.rows.map((r) => ({
+                    grade: r.grade,
+                    count: cell(r.count),
+                    share: cell(r.share),
+                  })),
+                  // Null whenever ANY rung is withheld: the narrowest VISIBLE rung
+                  // is not the narrowest rung, and the reason says so.
+                  narrowestRung: view.ladder.narrowestRung,
+                  narrowestRungWithheldReason: view.ladder.narrowestRungWithheldReason,
+                },
+        }
+
+        const mixPart = {
+          mix:
+            view.mix === null
+              ? null
+              : {
+                  // ★ F1 — THE DIVERGENCE RULE APPLIES HERE TOO. `status.enrolled`
+                  // IS the contested register count and `datedCoverage.total`
+                  // (and its withStartDate numerator, which equals the total on
+                  // complete coverage) restates it — shipping them verbatim under
+                  // section:'mix' was the one door left open after the tile, the
+                  // ladder total and the vs-plan actual were all closed. The
+                  // non-headcount statuses, the flag cells and the coverage
+                  // COMPLETENESS survive; the reconciliation PAIR (published in
+                  // summaryPart) remains the only place either figure appears.
+                  status: diverged
+                    ? {
+                        waitlist: view.mix.status.waitlist,
+                        withdrawn: view.mix.status.withdrawn,
+                        graduated: view.mix.status.graduated,
+                        withheld: 'headcount_reconciliation',
+                      }
+                    : view.mix.status,
+                  flags: {
+                    iep: cell(view.mix.flags.iep),
+                    plan504: cell(view.mix.flags.plan504),
+                    ell: cell(view.mix.flags.ell),
+                    any: cell(view.mix.flags.any),
+                  },
+                  datedCoverage: diverged
+                    ? {
+                        complete: view.mix.datedCoverage.complete,
+                        withheld: 'headcount_reconciliation',
+                      }
+                    : view.mix.datedCoverage,
+                  newThisYear: cell(view.mix.newThisYear),
+                },
+        }
+
+        // THE SIZE VALVE. The full view is several times the 8000-character
+        // truncation execute() applies, and a truncated payload is one the model
+        // answers from the readable two-thirds of. The default is the pair a
+        // question almost always wants; anything else is asked for by name.
+        return {
+          available: true,
+          section: section ?? 'summary+plan',
+          ...summaryPart,
+          // n1: 'summary' is tiles + reconciliation + notes ONLY — the schema says
+          // so, and shipping the vs-plan table with it made 'summary' and 'plan'
+          // identical payloads (the section valve exists to keep answers small).
+          ...(section === null || section === 'plan' ? planPart : {}),
+          ...(section === 'cohorts' ? cohortsPart : {}),
+          ...(section === 'trend' ? trendPart : {}),
+          ...(section === 'mix' ? mixPart : {}),
+          ...(section === null
+            ? { moreSections: 'Call again with section: cohorts | trend | mix for those views.' }
+            : {}),
+        }
+      }
+
+      // ── Penny coverage Phase 1 — R3: ACADEMIC COHORT TRAJECTORIES ──────────
+      case 'get_academic_cohorts': {
+        const licensedCohorts = await (
+          this.billing?.isEntitledForModule(ctx.schoolId, 'academics') ?? Promise.resolve(false)
+        ).catch(() => false)
+        if (!licensedCohorts) return this.refuseNotLicensed('academics')
+        if (!this.assessments) {
+          return { available: false, note: 'Academics is not available on this server.' }
+        }
+
+        const scope = args.scope === 'org' ? 'org' : 'school'
+        const q: Record<string, unknown> = {
+          scope,
+          // The matrix is a second, wider projection of the same panels and is
+          // pure payload weight in a chat answer.
+          includeMatrix: false,
+          // ★ FORCED BY THE HANDLER, never taken from args. Hiding peer names is a
+          // SERVER decision or it is not a decision at all — the dashboard's own
+          // rule. A superintendent's console may name schools; a chat transcript
+          // that can be pasted anywhere may not.
+          hidePeerNames: true,
+        }
+        if (typeof args.testType === 'string' && args.testType) q.testType = args.testType
+        if (typeof args.window === 'number') q.window = args.window
+        if (typeof args.series === 'string' && args.series) q.series = args.series
+        if (typeof args.endGrade === 'string' && args.endGrade) q.endGrade = args.endGrade
+
+        const res = (await this.assessments.cohorts(ctx.schoolId, q as never)) as {
+          empty: boolean
+          school: { id: string; name: string; level: string }
+          context: Record<string, unknown> | null
+          panels: Record<string, unknown>[]
+          hidePeerNames: boolean
+        }
+
+        const focusOf = (panel: Record<string, unknown>) => {
+          const f = panel.focus as {
+            startGrade: string
+            endGrade: string
+            startYear: number
+            endYear: number
+            legs: { gradeLevel: string; schoolYear: number; value: number | null; tested: number | null; state: string }[]
+            observedLegs: number
+            complete: boolean
+            netChange: number | null
+            netChangeUnavailable: unknown
+            direction: string
+          }
+          return {
+            label: panel.label,
+            startGrade: f.startGrade,
+            endGrade: f.endGrade,
+            startYear: f.startYear,
+            endYear: f.endYear,
+            legs: f.legs.map((l) => ({
+              grade: l.gradeLevel,
+              schoolYear: l.schoolYear,
+              value: l.value,
+              tested: l.tested,
+              // 'observed' vs anything else is what separates a real reading from
+              // a slot the ladder kept so its length stays honest.
+              state: l.state,
+            })),
+            observedLegs: f.observedLegs,
+            complete: f.complete,
+            netChange: f.netChange,
+            // Present when the net change could NOT be computed. When it is here
+            // there is no direction to report, and `direction` will say 'unknown'.
+            netChangeUnavailable: f.netChangeUnavailable,
+            // ★ THE SERVER'S DIRECTION, decided against context.materialGap. It
+            // ships with netChange for the same reason the enrollment cohorts do:
+            // a 0.4-point fall on an ACT composite is 'held', and the pair is what
+            // stops that being narrated as a slight decline.
+            direction: f.direction,
+          }
+        }
+
+        return {
+          available: true,
+          empty: res.empty,
+          school: { name: res.school.name, level: res.school.level },
+          // VERBATIM — including materialGap, the reason a grid is empty, the
+          // window actually used against the one requested, the grade span, the
+          // seriesBasis, and `measures` (the server-authored sentence saying what
+          // these numbers ARE, so Penny quotes it rather than describing the scale
+          // from her own knowledge of the test).
+          context: res.context,
+          // FOCUS LINE ONLY. Peer trajectories are the bulk of an org payload and
+          // are anonymised anyway; the focus school is what the question is about.
+          panels: res.panels.map(focusOf),
+          hidePeerNames: res.hidePeerNames,
+          ...(scope === 'org'
+            ? {
+                peersNote:
+                  'Peer schools are compared anonymously; their names are withheld and cannot be recovered.',
+              }
+            : {}),
+        }
+      }
+
       case 'get_improvement_status': {
         // THE OTHER HALF OF PHASE G. Penny could CREATE initiatives and draft whole
         // plans, and could not list one back — so "how is our improvement plan
@@ -5904,6 +7224,42 @@ export class AssistantService {
           if (code === 'MODULE_NOT_LICENSED') return this.refuseNotLicensed('accreditation')
           throw e
         }
+      }
+      case 'get_accreditation_cycle': {
+        // WS3 F1 — the six-year journey. LICENSED FIRST (fail closed), the
+        // academics-tool gate shape: the REST route carries
+        // @RequiresModule('accreditation') and Penny must not be the way around it.
+        if (!this.cycle) {
+          return { available: false, note: 'The accreditation cycle is not available on this server.' }
+        }
+        {
+          const licensedAccreditation = await (
+            this.billing?.isEntitledForModule(ctx.schoolId, 'accreditation') ??
+            Promise.resolve(false)
+          ).catch(() => false)
+          if (!licensedAccreditation) return this.refuseNotLicensed('accreditation')
+        }
+        const c = await this.cycle.getCycle(ctx.schoolId)
+        if (c.configured !== true) {
+          // STRUCTURED REFUSAL, never an invented anchor: Penny says "tell me
+          // your last review date" (offering the server-computed suggestion when
+          // one exists) instead of narrating a cycle nobody configured.
+          return {
+            available: false,
+            reason: 'not_configured',
+            suggestion: c.suggestion,
+            frameworks: c.frameworks,
+            message:
+              'No accreditation cycle is configured for this school yet. Ask for the date of the last Engagement Review' +
+              (c.suggestion
+                ? ` — the prior-visit ledger suggests ${c.suggestion.lastReviewDate} — `
+                : ' ') +
+              'and have them set it on the Journey tab (/accreditation?center=journey). Never invent a review date.',
+          }
+        }
+        // The COMPOSED payload, relayed whole: phase, countdown and the six
+        // milestones are server-authored sentences — state ONLY what is here.
+        return { available: true, ...c }
       }
       case 'get_assessment_summary': {
         // LICENSED FIRST. Every academics REST route carries
@@ -6139,7 +7495,13 @@ export class AssistantService {
         // numbers come from" is a provenance question, and provenance is what the
         // upload receipts were added to record.
         if (!this.students) return { available: false, note: 'The student roster is not available on this server.' }
-        const agg = await this.students.aggregate(ctx.schoolId, {} as never)
+        // SUPPRESSED BEFORE IT CAN REACH A PROMPT (privacy F1): the raw service
+        // aggregate carries true counts; a supportFlags of { iep: 1 } spoken by
+        // Penny is a findable child. The one shared gate floors every attribute-
+        // coupled cell at MIN_CELL (suppressed cells carry NO value key — the
+        // same structural-honesty shape every other Penny read uses) and leaves
+        // grade headcounts raw (directory-style, see aggregate-suppression.ts).
+        const agg = suppressStudentAggregate(await this.students.aggregate(ctx.schoolId, {} as never))
         const lastImport = await this.prisma.enrollmentImport.findFirst({
           where: { schoolId: ctx.schoolId },
           orderBy: { createdAt: 'desc' },
@@ -6162,11 +7524,15 @@ export class AssistantService {
           byGrade: agg.counts.grade,
           byStatus: agg.counts.status,
           supportFlags: agg.counts.flags,
+          minCell: agg.minCell,
           lastImport: lastImport
             ? {
                 kind: lastImport.kind,
                 provider: lastImport.provider,
-                fileName: lastImport.fileName,
+                // A filename is user-supplied text and can itself carry a child's
+                // identity ("smith-iep-list.csv"). Sanitized here; the request
+                // redactor additionally masks emails/SSNs via FREETEXT_KEYS.
+                fileName: safeToolFileName(lastImport.fileName),
                 observedOn: lastImport.observedOn ? lastImport.observedOn.toISOString().slice(0, 10) : null,
                 totalCounted: lastImport.totalCounted,
                 recordsCreated: lastImport.recordsCreated,
@@ -6178,7 +7544,7 @@ export class AssistantService {
           note:
             agg.total === 0
               ? 'The student register is empty. A roster import that counted a headcount but created no student records leaves this at zero — lastImport says whether that happened and why.'
-              : 'Counts only. This register holds students; this tool never returns one.',
+              : `Counts only. This register holds students; this tool never returns one. A cell marked suppressed is a group smaller than ${agg.minCell} — say it is below the reporting floor; never guess or bound the number.`,
         }
       }
       case 'get_plan_status': {

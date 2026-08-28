@@ -1044,6 +1044,688 @@ export function availableCohorts(rows: AssessmentRow[]): Array<{ currentYear: nu
   return out.sort((a, b) => b.currentYear - a.currentYear || (gradeRankOf(a.currentGrade) ?? 0) - (gradeRankOf(b.currentGrade) ?? 0))
 }
 
+// ═══ LONGITUDINAL COHORT TRAJECTORIES ════════════════════════════════════════
+//
+// `cohortMovements` above follows a cohort for exactly two legs — a slope. Two
+// points cannot show a recovery, a plateau or a slide, and they cannot answer
+// the question a school actually asks about the children it has taught since
+// kindergarten: what happened over the WHOLE time we have had them.
+//
+// This block follows one cohort across a span of 2, 3 or 4 grades. It is
+// ADDITIVE: the two-leg functions above and every caller of them are untouched.
+//
+// THREE RULES THAT THE UI CANNOT RECOVER FROM IF THEY ARE BROKEN HERE.
+//
+//  1. A trajectory ALWAYS carries exactly `opts.window` legs, in ascending
+//     grade-rank order. A year with no result keeps its slot and reports WHY it
+//     is empty. Dropping the slot would slide the remaining points left and
+//     draw a line through years that were never measured.
+//  2. A gap is NEVER interpolated and never zero. Four states, all distinct:
+//     observed / suppressed (a thin cell, held back deliberately) /
+//     not-reported (the school reported the grade but not this series) /
+//     missing (no row at all). A reader must be able to tell "we protected
+//     these children's privacy" from "nobody uploaded that year".
+//  3. Net change is STRICTLY last-leg minus first-leg. When either ENDPOINT is
+//     empty the change is null, the direction is 'unknown', and
+//     `netChangeUnavailable` names which end failed and why. The tempting
+//     substitute — first non-null to last non-null — silently relabels a
+//     two-grade change as a four-grade claim. That figure is still useful, so
+//     it ships as `observedChange`, carrying its OWN grade labels and span so
+//     it can never be mistaken for the headline number.
+//
+// Direction is decided here, against `materialGap`, exactly as the two-leg
+// version decides it. A +3 percentile move is not "growth"; a caller reading
+// `netChange > 0` would paint it green, which is why the sign never leaves this
+// file unaccompanied.
+
+/**
+ * Which series a trajectory follows: `'total'` for the publisher's REPORTED
+ * composite, or a subject key from the family's own vocabulary.
+ */
+export type CohortSeries = string
+
+/**
+ * The reported-composite series.
+ *
+ * TOTAL BATTERY IS NOT THE MEAN OF THE SUBJECT COLUMNS. It is the composite the
+ * publisher printed (`avgComposite`), computed by them over each student's own
+ * total; averaging the section columns produces a different, unpublished
+ * number. Payloads say `seriesBasis:'reported-composite'` so a matrix's Total
+ * column can never be read as a row average of the columns beside it.
+ */
+export const COHORT_TOTAL_SERIES = 'total'
+
+/**
+ * WHAT THE COMPOSITE IS CALLED, PER FAMILY — never one hardcoded string.
+ *
+ * "Total Battery" is a norm-referenced publisher's word. On an ACT school the
+ * same column is the Composite and on an SAT school it is the Total, and
+ * printing the TerraNova word over either is the same class of error as an
+ * axis captioned "TerraNova Scale Score" on a 1–36 chart. Every label the web
+ * shows for the composite comes from here, through `availableSeries`.
+ */
+export function compositeSeriesLabel(family: TestFamily | string | null | undefined): string {
+  if (family === 'act') return 'ACT Composite'
+  if (family === 'sat') return 'SAT Total'
+  if (family === 'nrt') return 'Total Battery'
+  return 'Composite'
+}
+
+/** Why a leg has no value — never collapsed into a single "no data". */
+export type LegState = 'observed' | 'suppressed' | 'not-reported' | 'missing'
+
+export interface TrajectoryLeg {
+  schoolYear: number
+  /** The grade as the school itself wrote it when a row exists, else the
+   *  canonical key for the rank — so a school storing 'PK' keeps 'PK'. */
+  gradeLevel: string
+  gradeRank: number
+  value: number | null
+  /** Null whenever `value` is null: a count without a score is a disclosure
+   *  with no reporting value. */
+  tested: number | null
+  state: LegState
+}
+
+export type NetChangeUnavailable =
+  | 'start-missing'
+  | 'start-suppressed'
+  | 'start-not-reported'
+  | 'end-missing'
+  | 'end-suppressed'
+  | 'end-not-reported'
+
+/** The first→last-observed figure, kept explicitly separate from netChange. */
+export interface ObservedChange {
+  value: number
+  fromGrade: string
+  toGrade: string
+  /** How many grades that change actually spans — 2 is not 4. */
+  spanGrades: number
+}
+
+export interface CohortTrajectory {
+  cohortId: number
+  /**
+   * schoolId/schoolName/label sit at the TOP LEVEL of this object on purpose:
+   * the payload anonymiser keys on sibling properties, so a trajectory nested
+   * under `school: {}` would sail through it with the name attached. `label`
+   * is the school's display name and is rewritten alongside schoolName, which
+   * is why a peer line must be keyed on `label` and never on schoolId (that is
+   * nulled for peers).
+   */
+  schoolId: string
+  schoolName?: string
+  label: string
+  isFocus: boolean
+  startGrade: string
+  endGrade: string
+  startYear: number
+  endYear: number
+  /** ALWAYS `window` entries, ascending by grade rank. */
+  legs: TrajectoryLeg[]
+  observedLegs: number
+  complete: boolean
+  /** STRICTLY last − first, or null. */
+  netChange: number | null
+  netChangeUnavailable: NetChangeUnavailable | null
+  direction: 'gained' | 'declined' | 'held' | 'unknown'
+  observedChange: ObservedChange | null
+}
+
+export interface CohortSpan {
+  low: number | null
+  high: number | null
+  lowGrade: string | null
+  highGrade: string | null
+  gradesOnFile: string[]
+  gradeDepth: number
+  yearDepth: number
+  /** The longest span this school's own grades can support; 0 when none can. */
+  maxWindow: 0 | 2 | 3 | 4
+  windows: number[]
+}
+
+export interface CohortPanelPlan {
+  /** End ranks to draw, ascending. */
+  endRanks: number[]
+  /** How many the span supports before the cap — the honest denominator. */
+  panelsAvailable: number
+  truncated: boolean
+}
+
+export interface CohortTrajectoryOptions {
+  window: number
+  /** END-year anchored: every trajectory finishes in this year, so the panels
+   *  are comparable with each other rather than each ending somewhere else. */
+  endYear: number
+  schoolIds?: string[]
+  endGrades?: string[]
+  gradeSpan?: { low: number | null; high: number | null }
+  series?: CohortSeries
+  family?: TestFamily
+  scoreType?: ScoreType
+  /** Below this many observed legs a trajectory is not drawn at all, rather
+   *  than rendering an empty plot with a title. */
+  minObservedLegs?: number
+  focusSchoolId?: string
+  maxPanels?: number
+}
+
+/**
+ * The canonical grade key for a rank — the inverse of `gradeRankOf`.
+ *
+ * MATCHING IS ALWAYS BY RANK, never by string. 'PK' and 'PK4' are the same
+ * grade (gradeRankOf maps both to −1) and schools use both spellings, so a
+ * label-based join would lose a whole year of pre-K for half the network. This
+ * returns 'PK4' for −1 and is used only to LABEL a slot that has no row.
+ */
+export function gradeKeyOfRank(rank: number): string | null {
+  if (rank === -2) return 'PK3'
+  if (rank === -1) return 'PK4'
+  if (rank === 0) return 'K'
+  return rank >= 1 && rank <= 12 ? `${rank}` : null
+}
+
+/**
+ * The grades a school actually has results for.
+ *
+ * DERIVED FROM THE ROWS, NOT THE PROFILE — the same argument `schoolLevelFrom`
+ * makes: the rows are a fact, the profile field is a label someone typed. A
+ * high school whose rows run 9–12 can then never be offered a "grades 2 → 5"
+ * panel, whatever its profile says, and a K-8 school inside a K-12 diocese does
+ * not inherit the diocese's high-school grades.
+ *
+ * The span is read from the COMPOSITE column even when a subject series is
+ * being drawn, so the set of panels does not reshape when the reader switches
+ * series. Rows whose values were suppressed AND emptied contribute nothing: a
+ * panel that could only ever be blank is not a panel.
+ */
+export function cohortSpanOf(rows: AssessmentRow[], schoolIds?: string[]): CohortSpan {
+  const only = schoolIds ? new Set(schoolIds) : null
+  const ranks: number[] = []
+  const gradeByRank = new Map<number, string>()
+  const years = new Set<number>()
+  for (const r of rows) {
+    if (only && !only.has(r.schoolId)) continue
+    const rank = gradeRankOf(r.gradeLevel)
+    if (rank === null) continue
+    if (r.avgComposite === null && r.suppressed) continue
+    ranks.push(rank)
+    if (!gradeByRank.has(rank)) gradeByRank.set(rank, r.gradeLevel)
+    years.add(r.schoolYear)
+  }
+  if (ranks.length === 0) {
+    return {
+      low: null,
+      high: null,
+      lowGrade: null,
+      highGrade: null,
+      gradesOnFile: [],
+      gradeDepth: 0,
+      yearDepth: 0,
+      maxWindow: 0,
+      windows: [],
+    }
+  }
+  let low = ranks[0]
+  let high = ranks[0]
+  for (const r of ranks) {
+    if (r < low) low = r
+    if (r > high) high = r
+  }
+  const gradeDepth = high - low + 1
+  const maxWindow: CohortSpan['maxWindow'] = gradeDepth >= 4 ? 4 : gradeDepth === 3 ? 3 : gradeDepth === 2 ? 2 : 0
+  const windows: number[] = []
+  for (let w = 2; w <= maxWindow; w += 1) windows.push(w)
+  return {
+    low,
+    high,
+    lowGrade: gradeByRank.get(low) ?? gradeKeyOfRank(low),
+    highGrade: gradeByRank.get(high) ?? gradeKeyOfRank(high),
+    gradesOnFile: [...gradeByRank.entries()].sort((a, b) => a[0] - b[0]).map(([, g]) => g),
+    gradeDepth,
+    // Reported, deliberately NOT used to clamp the span: a school missing a
+    // year in the middle still has a real 4-grade cohort, and that year shows
+    // up honestly as a missing leg rather than shortening everyone's panel.
+    yearDepth: years.size,
+    maxWindow,
+    windows,
+  }
+}
+
+/**
+ * Which panels a span supports at a given span length — the ONE enumeration,
+ * shared by the trajectories, the matrix and the payload's own count, so the
+ * table and the charts can never disagree about how many cohorts exist.
+ *
+ * A span shorter than the requested length yields NO panels rather than an
+ * error: an 11-12 school asking for four grades is a legitimate question with
+ * the answer "not with these grades".
+ */
+export function cohortPanelPlan(
+  span: { low: number | null; high: number | null },
+  opts: { window: number; endGrades?: string[]; maxPanels?: number },
+): CohortPanelPlan {
+  if (span.low === null || span.high === null || opts.window < 2) {
+    return { endRanks: [], panelsAvailable: 0, truncated: false }
+  }
+  const wanted =
+    opts.endGrades && opts.endGrades.length > 0
+      ? new Set(opts.endGrades.map((g) => gradeRankOf(g)).filter((r): r is number => r !== null))
+      : null
+  const all: number[] = []
+  for (let rank = span.low + opts.window - 1; rank <= span.high; rank += 1) {
+    if (wanted && !wanted.has(rank)) continue
+    all.push(rank)
+  }
+  const cap = opts.maxPanels ?? 12
+  const truncated = all.length > cap
+  // Keep the HIGHEST end grades: the most recent thing that happened to the
+  // oldest children on file is the reading a head of school opens this for.
+  return { endRanks: truncated ? all.slice(all.length - cap) : all, panelsAvailable: all.length, truncated }
+}
+
+/** The picker for a series — `'total'` (or nothing) reads the reported composite. */
+function seriesPicker(series?: CohortSeries): (r: AssessmentRow) => number | null {
+  if (!series || series === COHORT_TOTAL_SERIES) return (r) => r.avgComposite
+  return (r) => r.sectionAverages?.[series] ?? null
+}
+
+/**
+ * One row per school/year/grade, built once and reused by every series.
+ *
+ * Rows whose grade is not a real grade ('all') are dropped here, which is what
+ * structurally prevents a whole-school row from becoming a cohort leg.
+ */
+function indexTrajectoryRows(rows: AssessmentRow[], schoolIds?: string[]): Map<string, AssessmentRow> {
+  const only = schoolIds ? new Set(schoolIds) : null
+  const index = new Map<string, AssessmentRow>()
+  for (const r of rows) {
+    if (only && !only.has(r.schoolId)) continue
+    const rank = gradeRankOf(r.gradeLevel)
+    if (rank === null) continue
+    const key = `${r.schoolId}|${r.schoolYear}|${rank}`
+    const held = index.get(key)
+    if (held === undefined || preferTrajectoryRow(r, held)) index.set(key, r)
+  }
+  return index
+}
+
+/** A total order over duplicate rows, so a shuffled input cannot change a
+ *  chart: a reported value beats a blank, then the larger cohort, then the
+ *  lower test-type key. */
+function preferTrajectoryRow(next: AssessmentRow, held: AssessmentRow): boolean {
+  const nextHas = next.avgComposite !== null
+  const heldHas = held.avgComposite !== null
+  if (nextHas !== heldHas) return nextHas
+  const nextTested = next.testedCount ?? -1
+  const heldTested = held.testedCount ?? -1
+  if (nextTested !== heldTested) return nextTested > heldTested
+  return next.testType < held.testType
+}
+
+/** Schools with at least one gradeable row, focus first then a stable order. */
+function trajectorySchools(
+  rows: AssessmentRow[],
+  schoolIds?: string[],
+  focusSchoolId?: string,
+): Array<{ id: string; name?: string }> {
+  const only = schoolIds ? new Set(schoolIds) : null
+  const seen = new Map<string, { id: string; name?: string }>()
+  for (const r of rows) {
+    if (only && !only.has(r.schoolId)) continue
+    if (gradeRankOf(r.gradeLevel) === null) continue
+    const held = seen.get(r.schoolId)
+    if (held === undefined) seen.set(r.schoolId, { id: r.schoolId, name: r.schoolName })
+    else if (held.name === undefined && r.schoolName !== undefined) held.name = r.schoolName
+  }
+  return [...seen.values()].sort((a, b) => {
+    if (focusSchoolId) {
+      if (a.id === focusSchoolId) return -1
+      if (b.id === focusSchoolId) return 1
+    }
+    const an = a.name ?? ''
+    const bn = b.name ?? ''
+    if (an !== bn) return an < bn ? -1 : 1
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+  })
+}
+
+function buildTrajectory(
+  index: Map<string, AssessmentRow>,
+  school: { id: string; name?: string },
+  endRank: number,
+  endYear: number,
+  span: number,
+  pick: (r: AssessmentRow) => number | null,
+  gap: number,
+  focusSchoolId?: string,
+): CohortTrajectory {
+  const legs: TrajectoryLeg[] = []
+  for (let i = 0; i < span; i += 1) {
+    const back = span - 1 - i
+    const schoolYear = endYear - back
+    const gradeRank = endRank - back
+    const row = index.get(`${school.id}|${schoolYear}|${gradeRank}`)
+    const gradeLevel = row?.gradeLevel ?? gradeKeyOfRank(gradeRank) ?? `${gradeRank}`
+    if (row === undefined) {
+      legs.push({ schoolYear, gradeLevel, gradeRank, value: null, tested: null, state: 'missing' })
+      continue
+    }
+    if (row.suppressed) {
+      // Belt AND braces: the gate already emptied this row, and we empty it
+      // again here, so a future caller that hands us ungated rows still cannot
+      // publish a thin cell through this door.
+      legs.push({ schoolYear, gradeLevel, gradeRank, value: null, tested: null, state: 'suppressed' })
+      continue
+    }
+    const value = pick(row)
+    legs.push({
+      schoolYear,
+      gradeLevel,
+      gradeRank,
+      value,
+      tested: value === null ? null : (row.testedCount ?? null),
+      // An INGESTED row's subject columns carry no per-subject count, so a
+      // subject the publisher withheld and a subject suppressed upstream both
+      // arrive as a blank. We report the weaker claim ('not-reported') rather
+      // than assert a suppression we cannot evidence.
+      state: value === null ? 'not-reported' : 'observed',
+    })
+  }
+
+  const first = legs[0]
+  const last = legs[legs.length - 1]
+  const netChange = first.value !== null && last.value !== null ? last.value - first.value : null
+  const netChangeUnavailable: NetChangeUnavailable | null =
+    first.value === null
+      ? (`start-${first.state}` as NetChangeUnavailable)
+      : last.value === null
+        ? (`end-${last.state}` as NetChangeUnavailable)
+        : null
+  const direction: CohortTrajectory['direction'] =
+    netChange === null ? 'unknown' : netChange >= gap ? 'gained' : netChange <= -gap ? 'declined' : 'held'
+
+  const observedIdx = legs.map((l, i) => (l.value === null ? -1 : i)).filter((i) => i >= 0)
+  const observedChange: ObservedChange | null =
+    observedIdx.length >= 2
+      ? {
+          value: (legs[observedIdx[observedIdx.length - 1]].value as number) - (legs[observedIdx[0]].value as number),
+          fromGrade: legs[observedIdx[0]].gradeLevel,
+          toGrade: legs[observedIdx[observedIdx.length - 1]].gradeLevel,
+          spanGrades: legs[observedIdx[observedIdx.length - 1]].gradeRank - legs[observedIdx[0]].gradeRank,
+        }
+      : null
+
+  const label = school.name ?? school.id
+  return {
+    cohortId: endYear - endRank,
+    schoolId: school.id,
+    schoolName: school.name,
+    label,
+    isFocus: focusSchoolId !== undefined && school.id === focusSchoolId,
+    startGrade: first.gradeLevel,
+    endGrade: last.gradeLevel,
+    startYear: first.schoolYear,
+    endYear: last.schoolYear,
+    legs,
+    observedLegs: observedIdx.length,
+    complete: observedIdx.length === legs.length,
+    netChange,
+    netChangeUnavailable,
+    direction,
+    observedChange,
+  }
+}
+
+/**
+ * Every cohort a set of schools can be followed through, END-YEAR ANCHORED.
+ *
+ * Anchoring on the end year is what makes a screen of panels readable: they all
+ * finish in the same year, so the reader compares cohorts rather than comparing
+ * different vintages of the calendar. Leg i of a span of `w` is
+ * `endYear − (w−1−i)` at rank `endRank − (w−1−i)` — one subtraction, no cohort
+ * table, exactly as `cohortIdOf` intends.
+ */
+export function cohortTrajectories(rows: AssessmentRow[], opts: CohortTrajectoryOptions): CohortTrajectory[] {
+  if (opts.window < 2 || opts.window > 4) return []
+  const span = opts.gradeSpan ?? cohortSpanOf(rows, opts.focusSchoolId ? [opts.focusSchoolId] : opts.schoolIds)
+  const plan = cohortPanelPlan(span, {
+    window: opts.window,
+    endGrades: opts.endGrades,
+    maxPanels: opts.maxPanels,
+  })
+  if (plan.endRanks.length === 0) return []
+
+  const index = indexTrajectoryRows(rows, opts.schoolIds)
+  const schools = trajectorySchools(rows, opts.schoolIds, opts.focusSchoolId)
+  const family = opts.family ?? rows[0]?.family ?? 'nrt'
+  const scoreType = opts.scoreType ?? rows[0]?.scoreType ?? 'percentile'
+  const gap = materialGap(family, scoreType)
+  const pick = seriesPicker(opts.series)
+  const minObserved = opts.minObservedLegs ?? 2
+
+  const out: CohortTrajectory[] = []
+  for (const endRank of plan.endRanks) {
+    for (const school of schools) {
+      const t = buildTrajectory(index, school, endRank, opts.endYear, opts.window, pick, gap, opts.focusSchoolId)
+      if (t.observedLegs < minObserved) continue
+      out.push(t)
+    }
+  }
+  return out
+}
+
+export interface CohortMatrixCohort {
+  key: string
+  cohortId: number
+  label: string
+  startGrade: string
+  endGrade: string
+  startYear: number
+  endYear: number
+}
+
+export interface CohortMatrixCell {
+  cohortKey: string
+  series: CohortSeries
+  netChange: number | null
+  netChangeUnavailable: NetChangeUnavailable | null
+  direction: CohortTrajectory['direction']
+  startValue: number | null
+  endValue: number | null
+  startTested: number | null
+  endTested: number | null
+  startState: LegState
+  endState: LegState
+  observedChange: ObservedChange | null
+}
+
+export interface CohortMatrixResult {
+  cohorts: CohortMatrixCohort[]
+  series: Array<{ key: CohortSeries; label: string }>
+  cells: CohortMatrixCell[]
+  /** The Total column is the publisher's composite, not a mean of the columns
+   *  beside it — see COHORT_TOTAL_SERIES. */
+  seriesBasis: 'reported-composite'
+}
+
+export interface CohortMatrixOptions extends Omit<CohortTrajectoryOptions, 'series' | 'schoolIds' | 'focusSchoolId'> {
+  /** The matrix is FOCUS-SCHOOL-ONLY, always: a grid of every school's every
+   *  subject is not a reading, it is a spreadsheet. */
+  schoolId: string
+  series: CohortSeries[]
+}
+
+/**
+ * The whole cohort table in ONE pass: the row index is built and the panels
+ * enumerated once, then each series is a different pick over the SAME legs.
+ * Six series over twelve cohorts is one traversal and 72 picks, not six
+ * traversals and never six round trips.
+ */
+export function cohortMatrix(rows: AssessmentRow[], opts: CohortMatrixOptions): CohortMatrixResult {
+  const seriesKeys = opts.series.length > 0 ? opts.series : [COHORT_TOTAL_SERIES]
+  // Resolved BEFORE the labels, not after: the composite's name is a property
+  // of the family, so an ACT matrix must never be headed "Total Battery".
+  const labelFamily = opts.family ?? rows[0]?.family ?? 'nrt'
+  const seriesDefs = seriesKeys.map((key) => ({
+    key,
+    label: key === COHORT_TOTAL_SERIES ? compositeSeriesLabel(labelFamily) : subjectLabelOf(key),
+  }))
+  const empty: CohortMatrixResult = { cohorts: [], series: seriesDefs, cells: [], seriesBasis: 'reported-composite' }
+  if (opts.window < 2 || opts.window > 4) return empty
+
+  const span = opts.gradeSpan ?? cohortSpanOf(rows, [opts.schoolId])
+  const plan = cohortPanelPlan(span, { window: opts.window, endGrades: opts.endGrades, maxPanels: opts.maxPanels })
+  if (plan.endRanks.length === 0) return empty
+
+  const index = indexTrajectoryRows(rows, [opts.schoolId])
+  const school = trajectorySchools(rows, [opts.schoolId], opts.schoolId)[0] ?? { id: opts.schoolId }
+  const family = opts.family ?? rows[0]?.family ?? 'nrt'
+  const scoreType = opts.scoreType ?? rows[0]?.scoreType ?? 'percentile'
+  const gap = materialGap(family, scoreType)
+  const pickers = seriesDefs.map((s) => ({ key: s.key, pick: seriesPicker(s.key) }))
+
+  const cohorts: CohortMatrixCohort[] = []
+  const cells: CohortMatrixCell[] = []
+  for (const endRank of plan.endRanks) {
+    const built = pickers.map((p) => ({
+      key: p.key,
+      trajectory: buildTrajectory(index, school, endRank, opts.endYear, opts.window, p.pick, gap, opts.schoolId),
+    }))
+    // A row where NOTHING was observed in any series is a row of dashes; the
+    // row set stays series-independent otherwise, so switching the panel series
+    // never reshapes the table underneath it.
+    // Admit a matrix row on the SAME test the panels use, or the table can
+    // outnumber the charts and the web's cohortKey join finds an orphan row
+    // (review-caught: `> 0` here vs `>= minObserved` for panels).
+    if (!built.some((b) => b.trajectory.observedLegs >= (opts.minObservedLegs ?? 2))) continue
+    const shape = built[0].trajectory
+    const cohortKey = cohortPanelKey(shape.cohortId, shape.legs[0].gradeRank, endRank)
+    cohorts.push({
+      key: cohortKey,
+      cohortId: shape.cohortId,
+      label: cohortPanelLabel(shape.startGrade, shape.endGrade),
+      startGrade: shape.startGrade,
+      endGrade: shape.endGrade,
+      startYear: shape.startYear,
+      endYear: shape.endYear,
+    })
+    for (const b of built) {
+      const first = b.trajectory.legs[0]
+      const last = b.trajectory.legs[b.trajectory.legs.length - 1]
+      cells.push({
+        cohortKey,
+        series: b.key,
+        netChange: b.trajectory.netChange,
+        netChangeUnavailable: b.trajectory.netChangeUnavailable,
+        direction: b.trajectory.direction,
+        startValue: first.value,
+        endValue: last.value,
+        startTested: first.tested,
+        endTested: last.tested,
+        startState: first.state,
+        endState: last.state,
+        observedChange: b.trajectory.observedChange,
+      })
+    }
+  }
+  return { cohorts, series: seriesDefs, cells, seriesBasis: 'reported-composite' }
+}
+
+/** The join key between a panel and its matrix row — one spelling, both sides. */
+export function cohortPanelKey(cohortId: number, startRank: number, endRank: number): string {
+  return `c${cohortId}.g${startRank}_${endRank}`
+}
+
+/** "Grades 2 → 5" / "Grades K → 3". */
+export function cohortPanelLabel(startGrade: string, endGrade: string): string {
+  return `Grades ${startGrade} → ${endGrade}`
+}
+
+export interface CohortTrajectorySummaryLeg extends AverageResult {
+  schoolYear: number
+  gradeLevel: string
+  gradeRank: number
+}
+
+export interface CohortTrajectorySummary {
+  legs: CohortTrajectorySummaryLeg[]
+  /** Last leg minus first — ONLY when both ends are the same statistic. */
+  change: number | null
+  /** The weighting both ends share when `change` is published; else null. */
+  changeWeighting: 'tester-weighted' | 'simple' | null
+  /** False when the ends are different statistics — distinct from absent data. */
+  changeComparable: boolean
+  gained: number
+  declined: number
+  held: number
+  schools: number
+}
+
+/**
+ * The network's read on one cohort: a tester-weighted average PER LEG.
+ *
+ * Per leg, and never one blended "trajectory average". Each leg reports its own
+ * `weighting`, so a year whose files carried no tester counts is labelled
+ * 'simple' rather than being folded into a weighted number and presented under
+ * the same name — the rule this whole file is organised around.
+ */
+export function cohortTrajectorySummary(
+  trajectories: CohortTrajectory[],
+  opts: { family?: TestFamily; scoreType?: ScoreType } = {},
+): CohortTrajectorySummary {
+  const family = opts.family ?? 'nrt'
+  const scoreType = opts.scoreType ?? 'percentile'
+  const width = trajectories.reduce((acc, t) => Math.max(acc, t.legs.length), 0)
+  const legs: CohortTrajectorySummaryLeg[] = []
+  for (let i = 0; i < width; i += 1) {
+    const at = trajectories.map((t) => t.legs[i]).filter((l): l is TrajectoryLeg => l !== undefined)
+    const asRows: AssessmentRow[] = at
+      .filter((l) => l.value !== null)
+      .map((l) => ({
+        schoolId: '',
+        schoolYear: l.schoolYear,
+        testType: '',
+        family,
+        scoreType,
+        gradeLevel: l.gradeLevel,
+        avgComposite: l.value,
+        testedCount: l.tested ?? null,
+      }))
+    const shape = at[0]
+    legs.push({
+      ...averageOf(asRows),
+      schoolYear: shape?.schoolYear ?? 0,
+      gradeLevel: shape?.gradeLevel ?? '',
+      gradeRank: shape?.gradeRank ?? 0,
+    })
+  }
+  const first = legs[0]
+  const last = legs[legs.length - 1]
+  // SUBTRACT LIKE FROM LIKE. Each leg reports its own `weighting`, and a leg
+  // whose rows are missing a tested count falls back to a simple mean. Taking
+  // the difference of a simple mean and a tester-weighted one is not a change —
+  // it is two different statistics subtracted, and it can flip the sign of the
+  // headline number (review-caught: a fixture read −16.5 where the comparable
+  // figure was +2.0). When the ends disagree we publish no change and say why.
+  const comparable =
+    !!first && !!last && first.value !== null && last.value !== null && first.weighting === last.weighting
+  return {
+    legs,
+    change: comparable ? last!.value! - first!.value! : null,
+    /** The statistic both ends share, when they share one — else null. */
+    changeWeighting: comparable ? (first!.weighting ?? null) : null,
+    /** False when the ends are different statistics (not when data is absent). */
+    changeComparable: comparable,
+    gained: trajectories.filter((t) => t.direction === 'gained').length,
+    declined: trajectories.filter((t) => t.direction === 'declined').length,
+    held: trajectories.filter((t) => t.direction === 'held').length,
+    schools: trajectories.length,
+  }
+}
+
 // ═══ PEER ANONYMITY ══════════════════════════════════════════════════════════
 
 export interface AnonymousPeer {

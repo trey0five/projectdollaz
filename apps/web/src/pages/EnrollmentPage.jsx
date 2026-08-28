@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { GraduationCap, RotateCcw, Building2, ArrowRight } from 'lucide-react'
+import { GraduationCap, RotateCcw, Building2, ArrowRight, BarChart3 } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
 import ModuleTabs, { ModuleAccent } from '../components/module/ModuleTabs.jsx'
 import { AddDataCta, RecordsCta } from '../components/module/ModuleCtas.jsx'
@@ -30,10 +30,9 @@ import {
 } from '../lib/api.js'
 import VsPlanKpi from '../components/enrollment/VsPlanKpi.jsx'
 import EnrollmentConnectCard from '../components/enrollment/EnrollmentConnectCard.jsx'
-import DemographicMixCard from '../components/analytics/v2/DemographicMixCard.jsx'
 import EnrollmentHero from '../components/enrollment/EnrollmentHero.jsx'
 import RosterSourceCard from '../components/enrollment/RosterSourceCard.jsx'
-import RosterAnalyticsSection from '../components/enrollment/RosterAnalyticsSection.jsx'
+import EnrollmentAnalytics from '../components/enrollment/EnrollmentAnalytics.jsx'
 import StudentRegister from '../components/enrollment/StudentRegister.jsx'
 
 function GatePanel({ notLicensed }) {
@@ -78,7 +77,6 @@ function EnrollmentWorkspace() {
 
   const [status, setStatus] = useState(null)
   const [summary, setSummary] = useState(null)
-  const [demographics, setDemographics] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [notLicensed, setNotLicensed] = useState(false)
@@ -108,16 +106,10 @@ function EnrollmentWorkspace() {
         } catch {
           setSummary(null)
         }
-        // Demographic / grade-mix read surface (aggregate; same 'enrollment' gate).
-        try {
-          const demRes = await enrollmentApi.getDemographics(activeId, periodId)
-          setDemographics(demRes.data ?? demRes)
-        } catch {
-          setDemographics(null)
-        }
+        // The demographic read MOVED to the Analytics tab, which fetches it as
+        // part of its one analytics call — the Overview no longer draws a mix.
       } else {
         setSummary(null)
-        setDemographics(null)
       }
       try {
         const aggRes = await enrollmentApi.students.aggregate(activeId)
@@ -225,17 +217,6 @@ function EnrollmentWorkspace() {
     <EnrollmentConnectCard schoolId={activeId} canEdit={canEdit} status={status} onChanged={load} />
   )
 
-  // ── Granular reads (unwrap the demographics contract) ────────────────────────
-  // GET …/enrollment/demographics returns each dimension as { counts, shares }
-  // (race also carries diversityIndex) and gradeMix as { counts, shares }. The mix
-  // cards want FLAT count maps, so unwrap `.counts` (tolerating a flat shape too).
-  const demSrc = demographics || {}
-  const gender = demSrc.gender?.counts ?? demSrc.gender ?? null
-  const ethnicity = demSrc.ethnicity?.counts ?? demSrc.ethnicity ?? null
-  const race = demSrc.race?.counts ?? demSrc.race ?? null
-  const byDemographics = gender || ethnicity || race ? { gender, ethnicity, race } : null
-  const dvIndex = demSrc.race?.diversityIndex ?? demSrc.diversityIndex
-
   // Manual-supersede state (Decision C): summary.supersededManual is { value, fte, at }
   // (the backed-up hand-entered figure a diocesan import replaced), or null. Reversible
   // via revertManual.
@@ -327,20 +308,36 @@ function EnrollmentWorkspace() {
     />
   )
 
+  // ── THE MOVE ────────────────────────────────────────────────────────────────
+  // The Overview used to carry the headcount trend AND the whole mix block
+  // (RosterAnalyticsSection in roster mode, DemographicMixCard otherwise). Both
+  // now live on the Analytics tab, which is a whole dashboard built for them.
+  //
+  // The Overview keeps the question it is actually good at: IS MY DATA FLOWING,
+  // AND WHAT IS THE HEADLINE — the source card, the vs-plan KPI, the attention
+  // banner. Moved, not duplicated: there is no second copy of any of it here, or
+  // the two would drift and a reader would have to pick.
+  //
+  // What replaces it is one line telling you where the analysis went. A section
+  // that vanishes without a forwarding address reads as a regression.
+  const analysisPointer = (
+    <Link
+      to="/enrollment?tab=analytics"
+      className="group flex items-center gap-2.5 self-start rounded-xl border border-rule/60 bg-white px-4 py-2.5 text-[13.5px] text-muted transition-all hover:border-sky-400/60 hover:text-navy"
+    >
+      <BarChart3 size={16} className="text-sky-600" />
+      <span>
+        Trends, grade mix and cohorts <span className="font-semibold text-navy">→ Analytics</span>
+      </span>
+      <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
+    </Link>
+  )
+
   // Shared overview extras (both the v2 tab and the flat page render these).
   const mixSection = (
     <>
       {supersedeBanner}
-      {rosterMode ? (
-        <RosterAnalyticsSection schoolId={activeId} planTotal={summary?.vsPlan?.planTotal ?? null} />
-      ) : (
-        <>
-          {byDemographics && (
-            <DemographicMixCard byDemographics={byDemographics} diversityIndex={dvIndex} />
-          )}
-          
-        </>
-      )}
+      {analysisPointer}
       {diocesanLink}
     </>
   )
@@ -373,6 +370,17 @@ function EnrollmentWorkspace() {
           }
           addData={
             <AddDataTab module="enrollment" schoolId={activeId} canEdit={canEdit} onDone={load} />
+          }
+          // The analysis that used to crowd the Overview, given the room it
+          // needed: hero tiles, the bento of charts, what the gap costs, every
+          // grade in figures, and what the data cannot honestly show yet.
+          analytics={
+            <EnrollmentAnalytics
+              schoolId={activeId}
+              periodId={periodId}
+              rosterMode={rosterMode}
+              onGoToAddData={goAddData}
+            />
           }
           records={
             <ModuleRegister

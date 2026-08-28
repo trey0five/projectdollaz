@@ -8,6 +8,7 @@ import {
   resolveDisplayUnit,
   gateAggregates,
   materialGap,
+  suppressSmallCell,
 } from '@finrep/analytics'
 import { SCORE_TYPE_FOR_FAMILY, TEST_FAMILY, type MembershipRole, type TestTypeKey } from '@finrep/db'
 import { PrismaService } from '../prisma/prisma.service.js'
@@ -22,6 +23,7 @@ import { PoliciesService } from '../governance/policies.service.js'
 import { MeetingsService } from '../governance/meetings.service.js'
 import { TasksService } from '../workflow/tasks.service.js'
 import { AccreditationService } from '../accreditation/accreditation.service.js'
+import { AccreditationCycleService } from '../accreditation/accreditation-cycle.service.js'
 import { FacilitiesService } from '../facilities/facilities.service.js'
 import { AdvancementService } from '../advancement/advancement.service.js'
 import { StrategyService } from '../strategy/strategy.service.js'
@@ -44,6 +46,15 @@ import {
 } from './briefing-lens.js'
 import { buildAgingAttentionItems } from './briefing-aging.js'
 import { buildReconciliationItems } from './briefing-reconciliation.js'
+import { CashFlowService, type ProjectionResponse } from '../cashflow/cashflow.service.js'
+// The SAME human label QBO events put on a category ("debt_service" → "Debt
+// service"), so the briefing never speaks a snake_case key aloud. Already in the
+// module graph via CashFlowService → QboEventsService; no new edge.
+import { categoryTitle } from '../cashflow/qbo-events.service.js'
+// THE FY BUCKETING RULE (Jul–Jun), imported rather than copied: a second copy of
+// this function would put a September reading in one fiscal year on the way in
+// and a different one on the way out. Pure function; no DI/module edge.
+import { fyEndForObservedOn } from '../enrollment/enrollment.service.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Phase 1 (slice 1) — the prioritised attention briefing. A READ-ONLY synthesis
@@ -97,6 +108,27 @@ export type AttentionSource =
  * and the briefing owns the severity decision.
  */
 const WORKFLOW_BADLY_OVERDUE_DAYS = 14
+
+/**
+ * The cash-forecast omission keys that describe an OUTFLOW ONLY — the complete
+ * list, and it is deliberately tiny.
+ *
+ * STEP 2.18 refuses to narrate a projected shortfall whenever any RECEIPT-side
+ * input is missing, because a forecast holding every outflow and none of a
+ * school's tuition draws a catastrophic trough that is an artefact of absent
+ * data. Classifying by exclusion — everything not named here counts as a revenue
+ * omission — is what makes that safe over time: an omission key added later by
+ * somebody who never read this file suppresses the item rather than silently
+ * re-enabling a warning the data cannot support.
+ *
+ * `no_commitments` is the one genuine exception: it says payroll, debt service
+ * and insurance are absent, which makes a trough SHALLOWER than reality, never
+ * deeper — the direction that cannot produce a false alarm.
+ */
+const CASH_OUTFLOW_ONLY_OMISSIONS = new Set<string>(['no_commitments'])
+
+/** How long one school's briefing forecast read is reused (see readCashForecast). */
+const BRIEFING_FORECAST_TTL_MS = 10 * 60 * 1000
 
 // ── AIC Phase E — STEP 2.16's cap and its suppression table ──────────────────
 //
@@ -397,7 +429,152 @@ export class BriefingService {
     // response, so a licensed school with missing FTEs is detected value-safely.)
     private readonly planningSignals?: PlanningSignalsService,
     private readonly enrollmentPlanSvc?: EnrollmentPlanService,
+    // Penny coverage Phase 1 — STEP 2.18's forward cash projection. Appended
+    // positional-LAST and `?.`-guarded, so every existing positional-arg briefing
+    // spec still constructs and an absent service simply yields no cash-forecast
+    // item (fail-soft) rather than throwing.
+    //
+    // Injected rather than read through Prisma, unlike STEP 2.11/2.12: those read
+    // a PERSISTED SNAPSHOT, while a projection is a computation over commitments,
+    // budget phasing and assumptions. Re-implementing it here would be a second
+    // copy of the forecast, and the whole point is that the briefing states the
+    // same low point the cash-flow page draws. ACYCLIC: CashFlowModule imports
+    // only Auth, Prisma and Billing, none of which reaches analytics.
+    private readonly cashForecast?: CashFlowService,
+    // WS3 F1 — STEP 2.20's cycle-milestone read. Appended positional-LAST and
+    // `?.`-guarded like its neighbours, so every existing positional-arg
+    // briefing spec still constructs and an absent service simply yields no
+    // cycle item. Injected (the exported AccreditationCycleService) rather than
+    // recomputed: the briefing must state the SAME milestone states the journey
+    // tab renders, or the two disagree on the school's own road.
+    private readonly accreditationCycle?: AccreditationCycleService,
   ) {}
+
+  /** F7 — the briefing-only forecast cache (see readCashForecast). Instance-level,
+   *  so unit specs constructing fresh services never share state. */
+  private readonly briefingForecastCache = new Map<
+    string,
+    { at: number; value: ProjectionResponse | null }
+  >()
+
+  /**
+   * THE FORWARD CASH PROJECTION for STEP 2.18, or null.
+   *
+   * Fail-soft in every direction — an absent service (older positional-arg mocks),
+   * an unlicensed school, no stated opening balance, or a thrown read all yield
+   * null, so this step can never 500 the briefing.
+   *
+   * ★ `persist: false`. project() FREEZES a CashProjectionRun by default, and that
+   * archive is the record of what a school was TOLD and WHEN — the basis of
+   * forecast-vs-actual back-testing. A briefing is generated on every page load;
+   * letting it write there would bury every real decision under thousands of
+   * page views, and the archive cannot be repaired retroactively.
+   */
+  private async readCashForecast(schoolId: string): Promise<ProjectionResponse | null> {
+    // ── A SHORT TTL CACHE, FOR THE BRIEFING READ ONLY ────────────────────────
+    //
+    // project() reaches QBO LIVE (invoices/bills via qboEvents), and a briefing
+    // is generated on every Home render — OrgHome multiplies that by the school
+    // count. Ten minutes of staleness on a *projection* is invisible (its inputs
+    // move on human timescales: a keyed opening balance, commitments, a budget
+    // spread), while N live Intuit reads per page load is rate-limit and latency
+    // budget spent on re-deriving the same answer.
+    //
+    // TRADE-OFF, stated: a school that fixes its forecast inputs may wait up to
+    // ten minutes for the briefing item to notice. The assistant tool path
+    // (get_cash_forecast) stays LIVE and uncached — a person asking Penny a
+    // direct question gets the current projection, not this cache.
+    const hit = this.briefingForecastCache.get(schoolId)
+    if (hit && Date.now() - hit.at < BRIEFING_FORECAST_TTL_MS) return hit.value
+    const value = await this.readCashForecastUncached(schoolId)
+    // Bounded: evict expired entries once the map grows past a sane tenancy size.
+    if (this.briefingForecastCache.size > 512) {
+      for (const [k, v] of this.briefingForecastCache) {
+        if (Date.now() - v.at >= BRIEFING_FORECAST_TTL_MS) this.briefingForecastCache.delete(k)
+      }
+    }
+    this.briefingForecastCache.set(schoolId, { at: Date.now(), value })
+    return value
+  }
+
+  private async readCashForecastUncached(schoolId: string): Promise<ProjectionResponse | null> {
+    if (!this.cashForecast) return null
+    try {
+      // The controller's own gate, mirrored: @RequiresModule('finance','planning')
+      // with OR semantics. Fail CLOSED — a billing hiccup hides the item.
+      const [finance, planning] = await Promise.all([
+        this.billing.isEntitledForModule(schoolId, 'finance').catch(() => false),
+        this.billing.isEntitledForModule(schoolId, 'planning').catch(() => false),
+      ])
+      if (!finance && !planning) return null
+      const today = new Date().toISOString().slice(0, 10)
+      const opening = await this.cashForecast.getOpening(schoolId, today)
+      // No stated opening balance means no forecast has ever been built. The
+      // trial-balance cash total is NOT available operating cash and substituting
+      // it would overstate every week that followed, so the honest output is no
+      // item at all rather than a shortfall measured from an invented start.
+      if (opening.openingCash === null || !opening.asOfDate) return null
+      return await this.cashForecast.project(schoolId, null, {
+        openingCash: opening.openingCash,
+        asOfDate: opening.asOfDate,
+        openingSource: opening.source ?? 'keyed',
+        horizon: '13w',
+        persist: false,
+      })
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * The latest filed enrollment reading, by grade — STEP 2.10's grade clause and
+   * STEP 2.19's reconciliation pair. Read DIRECTLY via the global PrismaService
+   * inside the STEP-2 fan-out, the module rule STEP 2.11/2.12/2.17 already
+   * follow: EnrollmentModule imports AnalyticsModule, so injecting its services
+   * here would be a genuine cycle. Fail-soft to null.
+   */
+  private async readEnrollmentReading(schoolId: string, periodEndDate: unknown) {
+    if (!this.prisma?.enrollmentSnapshot) return null
+    // ── F3: BOUNDED TO THE BRIEFING PERIOD'S FISCAL YEAR ─────────────────────
+    // The reading is compared against PERIOD-scoped promoted data (STEP 2.10's
+    // grade clause, STEP 2.19's reconciliation pair). Unbounded, a briefing
+    // opened on a historical period would compare last year's promote against
+    // TODAY'S register and fire a permanently false "two headcounts on file".
+    // The FY window comes from the SAME Jul–Jun bucketing rule the intake
+    // pipeline files snapshots with (fyEndForObservedOn) — no second copy.
+    // No snapshot inside the period's FY → no reading → both steps stay silent.
+    const endIso =
+      typeof periodEndDate === 'string'
+        ? periodEndDate.slice(0, 10)
+        : periodEndDate instanceof Date
+          ? periodEndDate.toISOString().slice(0, 10)
+          : null
+    if (!endIso || !/^\d{4}-\d{2}-\d{2}$/.test(endIso)) return null
+    const fyEnd = fyEndForObservedOn(endIso)
+    const fyStart = `${Number(fyEnd.slice(0, 4)) - 1}-07-01`
+    return this.prisma.enrollmentSnapshot
+      .findFirst({
+        where: { schoolId, observedOn: { gte: new Date(fyStart), lte: new Date(fyEnd) } },
+        orderBy: { observedOn: 'desc' },
+        select: { observedOn: true, totalEnrolled: true, byGrade: true },
+      })
+      .catch(() => null)
+  }
+
+  /**
+   * The promoted headcount for THIS period (period_operational_data) — STEP
+   * 2.19's other half. Read in the STEP-2 fan-out (n5: it used to be a duplicate
+   * sequential await inside the step). Fail-soft to null in both directions.
+   */
+  private async readPromotedEnrollment(schoolId: string, fiscalPeriodId: string) {
+    if (!this.prisma?.periodOperationalData) return null
+    return this.prisma.periodOperationalData
+      .findUnique({
+        where: { schoolId_fiscalPeriodId: { schoolId, fiscalPeriodId } },
+        select: { enrollment: true },
+      })
+      .catch(() => null)
+  }
 
   /**
    * The latest persisted aging snapshot for the school (by capturedAt). Fail-soft in
@@ -619,6 +796,9 @@ export class BriefingService {
       earlyWarnings,
       academicsLicensed,
       academicRows,
+      cashForecast,
+      enrollmentReading,
+      promotedEnrollment,
     ] = await Promise.all([
       this.compliance.evaluateForPeriod(schoolId, period.id).catch(() => null),
       this.reconciliation.reconcileForPeriod(schoolId, period.id).catch(() => null),
@@ -675,6 +855,17 @@ export class BriefingService {
       // ONLY: this table has no identity column, so no briefing line can name a
       // student even by accident. Fail-soft to null.
       this.readAcademicRows(schoolId),
+      // Penny coverage Phase 1 — STEP 2.18's forward projection and STEP
+      // 2.10/2.19's enrollment reading, both inside this SAME fan-out so latency
+      // stays slowest-not-sum. Each is gated and fail-soft inside its own reader.
+      // Appended LAST so every prior position in this destructuring is unmoved.
+      this.readCashForecast(schoolId),
+      // F3: the reading is bounded to THIS period's fiscal year — an unbounded
+      // read compared a historical period against today's register.
+      this.readEnrollmentReading(schoolId, (period as { periodEndDate?: unknown }).periodEndDate),
+      // n5: STEP 2.19's promoted headcount, moved out of the step's own
+      // sequential await and into this SAME fan-out (latency slowest-not-sum).
+      this.readPromotedEnrollment(schoolId, period.id),
     ])
 
     // 2a — open 2A findings (material -> critical, reportable -> warn).
@@ -1086,6 +1277,95 @@ export class BriefingService {
       }
     }
 
+    // ── STEP 2.20: accreditation CYCLE milestones (source 'accreditation') ────
+    // WS3 F1 — the six-year journey's overdue/at-risk milestones ONLY (on-track
+    // roads are not attention items). Rides the SAME accreditation gate as STEP
+    // 2.7 (fail CLOSED); the cycle read is fail-soft to null so an unconfigured
+    // cycle, a pre-migration image, or an absent service yields NO items and
+    // never a 500. VALUE-SAFE: every figure and every state word is copied from
+    // the cycle payload's own server-authored sentences — nothing is recomputed
+    // here. No ISO date ever enters `why` (house rule) — the milestone's own
+    // dueDate field carries the date.
+    if (accreditationLicensed && this.accreditationCycle) {
+      const cycle = await this.accreditationCycle.getCycle(schoolId).catch(() => null)
+      if (cycle && cycle.configured === true) {
+        for (const m of cycle.milestones) {
+          if (m.state !== 'overdue' && m.state !== 'at_risk') continue
+          items.push({
+            id: `accreditation:cycle-${m.key}`,
+            severity: m.state === 'overdue' ? 'critical' : 'warn',
+            source: 'accreditation',
+            title:
+              m.state === 'overdue'
+                ? `${m.label} is overdue in your accreditation cycle`
+                : `${m.label} is at risk in your accreditation cycle`,
+            why: (() => {
+              const lead = m.measure?.text ?? m.reason ?? 'This milestone needs attention'
+              return `${lead}${lead.endsWith('.') ? '' : '.'} Open the journey to see the road to your review.`
+            })(),
+            metricKey: null,
+            value: null,
+            link: '/accreditation?center=journey',
+            dueDate: m.dueDate ?? m.window?.end ?? null,
+          })
+        }
+      }
+    }
+
+    // ── STEP 2.21: superseded-framework notice (source 'accreditation') ───────
+    // WS2 — ONE quiet info line for a school still holding a superseded
+    // framework whose successor is seeded: "the rev. 2025 standards are
+    // available". Informational, never nagging (info severity, no dueDate).
+    // Read DIRECTLY via Prisma inside the same gate (the module rule); BOTH
+    // reads fail-soft, so a pre-migration image emits nothing.
+    if (accreditationLicensed) {
+      const supersededItems = await Promise.resolve()
+        .then(async () => {
+          const held = await this.prisma.accreditationStandard.groupBy({
+            by: ['frameworkId'],
+            where: { schoolId, frameworkId: { not: null } },
+          })
+          const heldIds = held
+            .map((h) => h.frameworkId)
+            .filter((id): id is string => id !== null)
+          if (heldIds.length === 0) return []
+          const frameworks = await this.prisma.accreditationFramework.findMany({
+            where: { id: { in: heldIds }, supersededByCode: { not: null } },
+            select: { id: true, code: true, name: true, accreditor: true, supersededByCode: true },
+          })
+          if (frameworks.length === 0) return []
+          const successors = await this.prisma.accreditationFramework.findMany({
+            where: {
+              code: { in: frameworks.map((f) => f.supersededByCode as string) },
+              active: true,
+            },
+            select: { code: true, name: true },
+          })
+          const successorByCode = new Map(successors.map((f) => [f.code, f]))
+          return frameworks.flatMap((fw) => {
+            const successor = fw.supersededByCode
+              ? successorByCode.get(fw.supersededByCode)
+              : undefined
+            if (!successor) return [] // dangling successor reads as not superseded
+            return [
+              {
+                id: `accreditation:framework-superseded:${fw.code}`,
+                severity: 'info' as const,
+                source: 'accreditation' as const,
+                title: `A newer edition of your ${fw.accreditor} standards is available`,
+                why: `Your register uses ${fw.name}; ${successor.name} is available. Upgrading carries your scores and evidence across in one confirmed step — schools that stay put lose nothing.`,
+                metricKey: null,
+                value: null,
+                link: '/accreditation?center=standards',
+                dueDate: null,
+              },
+            ]
+          })
+        })
+        .catch(() => [])
+      for (const item of supersededItems) items.push(item)
+    }
+
     // ── STEP 2.8: facilities deferred-maintenance signals (source 'facilities') ─
     // The THIRD licensable module's briefing source — the deferred-maintenance
     // backlog surfaced as a board/capital signal. School-scoped (NOT period-bound),
@@ -1469,6 +1749,47 @@ export class BriefingService {
           if (cashClause) why += `; ${cashClause}`
           why += '.'
 
+          // ── Penny coverage Phase 1 — WHICH GRADES CARRY THE MISS ────────────
+          //
+          // An EXTENSION of this item's `why`, never a second item: this one
+          // already suppresses the plain metric item below, and adding a third
+          // enrollment line would make the same fact appear twice under a lens
+          // that emphasises enrollment.
+          //
+          // ONLY UNSUPPRESSED ROWS ARE NAMEABLE. A grade with a handful of
+          // children is withheld everywhere else in the product, and naming it
+          // here — in the one surface that gets emailed and read aloud — would
+          // undo that everywhere at once. suppressSmallCell is the same helper the
+          // enrollment page's own cells go through, so the floor cannot drift.
+          //
+          // Magnitudes with DIRECTION IN WORDS, never a signed figure: canon is
+          // sign-aware, so "-7" in this string would allow only '-7' and the
+          // model saying "7 fewer" would be rejected and the whole segment would
+          // silently drop to the template.
+          // ── F4: THE TWO STORES MUST AGREE BEFORE THEY SHARE A SENTENCE ─────
+          //
+          // The headline above is computed from PROMOTED period data (`actual` =
+          // period_operational_data.enrollment via enrollmentSignalInputs); the
+          // per-grade reading comes from the register SNAPSHOT. When the two
+          // totals diverge — the exact condition STEP 2.19 exists to flag — a
+          // clause that splits the promoted total across the register's grades
+          // would be incoherent in the one paragraph that gets read aloud. So
+          // the clause is appended ONLY when the (already period-FY-bounded,
+          // see readEnrollmentReading) reading's total equals the promoted
+          // total; when they diverge the headline stands alone and STEP 2.19
+          // carries the discrepancy.
+          const readingAgreesWithPromoted =
+            enrollmentReading != null && enrollmentReading.totalEnrolled === actual
+          const gradeGaps = readingAgreesWithPromoted
+            ? namedGradeGaps(enrollmentReading?.byGrade, plan.planByGrade)
+            : []
+          if (gradeGaps.length > 0) {
+            const phrase = gradeGaps
+              .map((g) => `${gradeDisplayName(g.grade)} (${g.short} fewer than planned)`)
+              .join(' and ')
+            why += ` The largest gaps are in ${phrase}.`
+          }
+
           items.push({
             id: 'enrollment:below-plan',
             severity,
@@ -1486,6 +1807,229 @@ export class BriefingService {
           const dupIdx = items.findIndex((i) => i.id === 'metric:enrollment_vs_plan')
           if (dupIdx !== -1) items.splice(dupIdx, 1)
         }
+      }
+    }
+
+    // ── STEP 2.18: the FORWARD cash projection (source 'cash') ───────────────
+    //
+    // "When do we run low on cash?" — the one finance question a head of school
+    // asks unprompted, and the one the briefing had no line for. STEP 2.11 and
+    // 2.12 read backwards (what is owed, what reconciles); this reads forward.
+    //
+    // NO NEW AttentionSource. 'cash' already exists and a fourth cash-shaped
+    // source would fragment lens ranking for no gain.
+    //
+    // ★★ THE REVENUE-OMISSION GATE IS THE MOST IMPORTANT LINE IN THIS STEP. ★★
+    //
+    // cashflow.service.ts records the live incident in its own header: a school
+    // with commitments recorded and NO budget on file produced a projection
+    // containing every outflow and none of its tuition — "a catastrophic-looking
+    // trough that was an artefact of absent data, with nothing on screen to say
+    // so". Narrating that trough as a shortfall would be the worst thing this
+    // product could say to a school: a confident, dated, dollar-precise warning
+    // about a crisis that does not exist, at the top of its morning briefing.
+    //
+    // So when ANY receipt-side omission is present the shortfall item is not
+    // emitted at all. A DIFFERENT, info-severity item goes out instead, whose
+    // `why` is the omission's OWN message verbatim — the fix, not the fiction.
+    //
+    // The classification errs toward suppression: only `no_commitments` is known
+    // to be outflow-only, and every other omission key — including one added
+    // later that nobody classified — counts as a revenue omission. A new omission
+    // must not silently re-enable the shortfall narration.
+    if (cashForecast && cashForecast.blockedReason === null) {
+      const revenueOmission =
+        cashForecast.omissions.find((o) => !CASH_OUTFLOW_ONLY_OMISSIONS.has(o.key)) ?? null
+      const proj = cashForecast.projection
+
+      // f9(a): BOTH branches now hang off the same would-have-fired condition.
+      // The incomplete item is an EXPLANATION of a suppressed alarm; with no
+      // breach to suppress there is nothing to explain, and an evergreen "your
+      // forecast is missing data" line on every briefing of every school with a
+      // partial forecast is exactly the noise a briefing exists to remove.
+      if (proj && proj.firstShortfallDate) {
+        // A firstShortfallDate exists ONLY when the school itself set a reserve
+        // threshold and the projection breaches it. No threshold means no
+        // shortfall is reported at all, rather than one measured against a floor
+        // KYRO invented — the assumptions DTO keeps null reachable for exactly
+        // this reason.
+        //
+        // SEVERITY COMES FROM A REGISTRY BAND, never from the sign of a number.
+        // Months of cash at the low point is the honest severity axis (a school
+        // that dips $2,000 under a $500,000 threshold is not in crisis), and
+        // reading it through healthStatus/bandsFor means re-tuning the band
+        // propagates here automatically.
+        const reserveStatus = healthStatus(
+          proj.monthsCashAtLowPoint,
+          bandsFor('months_operating_reserve'),
+          proj.monthsCashAtLowPoint !== null,
+        )
+        const daysGood = bandsFor('days_cash_on_hand')?.good ?? 60
+        let severity: AttentionSeverity | null = null
+        if (reserveStatus === 'risk') severity = 'critical'
+        else if (reserveStatus === 'watch') severity = 'warn'
+        else if (reserveStatus === 'good') severity = null
+        else {
+          // No annual operating expense on file, so no months-of-cash figure and
+          // no band to read. Fall back to how much NOTICE the school has, against
+          // the days-cash 'good' threshold from the same registry.
+          severity =
+            proj.daysOfNotice !== null && proj.daysOfNotice < daysGood ? 'warn' : null
+        }
+
+        if (severity && revenueOmission) {
+          // ── f9: A BREACH THE DATA CANNOT SUPPORT ─────────────────────────────
+          //
+          // The shortfall item would have fired, but a RECEIPT-side input is
+          // missing, so the trough is deeper than reality (see the STEP header:
+          // narrating it would be a confident alarm about a crisis that may not
+          // exist). The replacement item explains the suppression.
+          //
+          // NOT the omission's verbatim message: those are operator-voiced
+          // imperatives ("Import or enter a budget…") written for the cash-flow
+          // page, and a briefing is emailed, printed into board packs and read
+          // aloud under the governance voice — whose guard rejects sentences
+          // opening with Import/Update/Fix/…. The paraphrase is neutral,
+          // board-safe and carries NO digits (an incomplete forecast has no
+          // figure worth allow-listing). The omission KEY still decides the
+          // wording, and the KEY-based gate above is untouched.
+          const isBudgetSpread = revenueOmission.key === 'no_budget_spread'
+          items.push({
+            id: 'cash:forecast-incomplete',
+            severity: 'info',
+            source: 'cash',
+            // f9(c): `no_budget_spread` means the monthly budget phasing is
+            // absent — day-to-day SPEND and receipts alike — so its title must
+            // not claim a missing source of income specifically.
+            title: isBudgetSpread
+              ? 'The cash forecast is missing the operating budget'
+              : 'The cash forecast is missing a source of income',
+            why: isBudgetSpread
+              ? 'Only recorded commitments are in the forecast — day-to-day operating spend and receipts are not — so the projected low point may not reflect the full picture.'
+              : revenueOmission.key.startsWith('tuition_')
+                ? 'The forecast is missing tuition revenue, so the projected low point overstates the risk.'
+                : 'The forecast is missing an expected source of receipts, so the projected low point overstates the risk.',
+            metricKey: null,
+            value: null,
+            link: '/cash-flow',
+            // No date on this one: nothing is due, something is absent.
+            dueDate: null,
+          })
+        } else if (severity) {
+          // ── THE THREE VALUE-GUARD THREADING RULES ────────────────────────────
+          //
+          // Every speakable number must appear in THIS ITEM'S OWN title/why, or
+          // guardSegment rejects the model's sentence and silently falls back to
+          // the template. That is why the composition below is fussy:
+          //
+          //  1. fmtMoney and NOTHING ELSE. canon('$18,400') is '18400$' while
+          //     canon('$18.4k') is '18.4$k' — two renderers on one item means
+          //     every LLM segment about it dies.
+          //  2. NO RAW ISO DATE IN `why`. FIGURE_RE captures the leading '-', so
+          //     '2026-03-14' tokenises as {2026, -3, -14} while the model saying
+          //     "March 14, 2026" emits {14, 2026} — rejected. The date goes in
+          //     `dueDate`, which renderDueDateHuman handles and the template
+          //     speaks as "Due Mar 14, 2026."
+          //  3. MAGNITUDES, WITH DIRECTION IN WORDS. canon is sign-aware, so a
+          //     `why` containing '-$18,400' allows only '-18400$' and the model
+          //     saying "18,400 below" is rejected. Same fix the enrollment step
+          //     above already carries.
+          const lowest = proj.lowestBalance
+          const lowWords =
+            lowest < 0
+              ? `overdrawn by ${fmtMoney(Math.abs(lowest))}`
+              : `down to ${fmtMoney(lowest)}`
+          const shortBy =
+            proj.shortfallAmount === null
+              ? null
+              : fmtMoney(Math.abs(proj.shortfallAmount))
+
+          let why = `Projected cash goes ${lowWords} at its low point`
+          if (shortBy) why += `, which is ${shortBy} below the reserve floor this school set`
+          if (proj.daysOfNotice !== null) {
+            why += ` — about ${proj.daysOfNotice} day${proj.daysOfNotice === 1 ? '' : 's'} from the balance it was projected from`
+          }
+          why += '.'
+          if (proj.monthsCashAtLowPoint !== null) {
+            const months = Math.round(proj.monthsCashAtLowPoint * 10) / 10
+            why += ` That is about ${months} month${months === 1 ? '' : 's'} of operating cash at that point.`
+          }
+          // WHAT DUG THE HOLE — the top outflow categories between now and the low
+          // point, computed by the engine and copied, never re-derived here. n3:
+          // the category goes through the SAME categoryTitle QBO events use, so
+          // the narration says "Debt service", never the key `debt_service`.
+          const top = proj.driversToLowPoint?.slice(0, 2) ?? []
+          if (top.length > 0) {
+            why += ` The largest outflows before then are ${top
+              .map((d) => `${categoryTitle(d.category)} (${fmtMoney(Math.abs(d.amount))})`)
+              .join(' and ')}.`
+          }
+          // The other half of an honest trough: what the school is waiting for.
+          // Silence here is itself the finding, so it is stated as silence.
+          if (!proj.nextReceiptAfterLow) {
+            why += ' No further receipt is expected inside this window.'
+          }
+          // A LIMITED-DATA school must never read like a high-data one. The tier
+          // reason is appended in the service's own words, and the severity is
+          // CAPPED at warn: a critical, dollar-precise alarm resting on a keyed
+          // opening balance and a calendar is more certainty than the inputs earn.
+          if (cashForecast.dataTier === 'limited') {
+            severity = severity === 'critical' ? 'warn' : severity
+            why += ` ${cashForecast.dataTierReason}`
+          }
+
+          items.push({
+            id: 'cash:projected-shortfall',
+            severity,
+            source: 'cash',
+            title: 'Projected cash falls below your reserve floor',
+            why,
+            // NOT a registry metric — this is a projection, not a banded KPI, and
+            // giving it a metricKey would make it link to an analytics tile that
+            // shows something else.
+            metricKey: null,
+            value: null,
+            link: '/cash-flow',
+            // Rule 2: the date lives HERE, never in `why`.
+            dueDate: proj.firstShortfallDate,
+          })
+        }
+      }
+    }
+
+    // ── STEP 2.19: the enrollment headcount RECONCILIATION (source 'enrollment') ─
+    //
+    // The promoted headcount (period_operational_data — what the briefing, the
+    // scorecard and the org roll-up all quote) against the most recent enrollment
+    // reading on file. Normally identical; they drift when the register moves
+    // after the last promote, and a live call against real data found exactly that
+    // — 435 promoted against 436 on the register.
+    //
+    // INFO severity, and the `why` carries BOTH figures. That is the whole design:
+    // both numbers are in the item's own allowed-token set, so the model may
+    // PHRASE the disagreement but cannot pick a winner — there is no third number
+    // it could reach for, and neither of the two is presented as the answer.
+    // The reading is period-FY-bounded (F3, readEnrollmentReading), so this
+    // comparison is promoted-vs-register WITHIN one fiscal year — a historical
+    // period's briefing no longer compares last year's promote against today's
+    // register. The promoted row was read in the fan-out (n5).
+    if (enrollmentLicensed && enrollmentReading) {
+      const promotedCount = promotedEnrollment?.enrollment ?? null
+      const reading = enrollmentReading.totalEnrolled
+      if (promotedCount !== null && promotedCount !== reading) {
+        items.push({
+          id: 'enrollment:reconciliation-divergence',
+          severity: 'info',
+          source: 'enrollment',
+          title: 'Two different headcounts are on file',
+          why:
+            `The headcount promoted to ${period.label} is ${promotedCount}, but the most recent enrollment reading counts ${reading}. ` +
+            'The register has moved since the last promote, so the tiles, the board pack and the enrollment page are quoting different numbers — re-sync so they quote one.',
+          metricKey: null,
+          value: null,
+          link: '/enrollment?tab=analytics',
+          dueDate: null,
+        })
       }
     }
 
@@ -1668,4 +2212,68 @@ function summarise(items: AttentionItem[]): BriefingSummary {
     warn: items.filter((i) => i.severity === 'warn').length,
     info: items.filter((i) => i.severity === 'info').length,
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STEP 2.10's grade clause — WHICH grades carry an enrollment miss.
+//
+// Pure, so it is unit-testable without a briefing, and deliberately narrow: it
+// answers "name the two worst grades" and nothing else.
+//
+// THE SUPPRESSION IS THE POINT. A grade under the cell floor is withheld on
+// every enrollment surface in the product; the briefing is the one surface that
+// gets emailed, printed into a board pack and read aloud by an assistant, so a
+// grade named here is a grade named everywhere. `suppressSmallCell` is the same
+// helper those surfaces use — a local size check would be a second floor, and
+// the day one moves the two disagree about which children are identifiable.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** How many grades the clause may name. Two is a finding; five is a table. */
+const NAMED_GRADE_GAP_LIMIT = 2
+
+/**
+ * n2 — a grade key the way a person says it: "Grade 3", "Kindergarten", never a
+ * bare "3" or "K" that reads as a count beside the real counts in the sentence.
+ * Value-guard safe: the digits still land in the item's own token set and the
+ * added words ("Grade", "Kindergarten") are words, not figures.
+ */
+export function gradeDisplayName(grade: string): string {
+  const g = String(grade).trim()
+  if (/^\d+$/.test(g)) return `Grade ${g}`
+  const up = g.toUpperCase()
+  if (up === 'K' || up === 'KG') return 'Kindergarten'
+  if (up === 'PK' || up === 'PREK' || up === 'PRE-K') return 'Pre-K'
+  return g
+}
+
+/**
+ * The largest UNSUPPRESSED per-grade shortfalls, biggest first.
+ *
+ * `short` is a POSITIVE magnitude — the caller states the direction in words,
+ * because the narration guard is sign-aware and a signed figure in a `why`
+ * forbids the model from saying "fewer" about it.
+ */
+export function namedGradeGaps(
+  actualByGrade: unknown,
+  planByGrade: Record<string, number> | null | undefined,
+): { grade: string; short: number }[] {
+  if (!planByGrade || !actualByGrade || typeof actualByGrade !== 'object') return []
+  const actual = actualByGrade as Record<string, unknown>
+  const out: { grade: string; short: number }[] = []
+  for (const [grade, planned] of Object.entries(planByGrade)) {
+    const a = actual[grade]
+    if (typeof a !== 'number' || !Number.isFinite(a)) continue
+    if (typeof planned !== 'number' || !Number.isFinite(planned)) continue
+    const short = planned - a
+    // Only genuine shortfalls. A grade AT or OVER plan is not a gap, and naming
+    // it as one under a heading about being below plan would be false.
+    if (short <= 0) continue
+    // A count is both the value and the cohort behind it, so the count suppresses
+    // itself — exactly as the enrollment page's own cells do.
+    if (suppressSmallCell(a, a).suppressed) continue
+    out.push({ grade, short })
+  }
+  return out
+    .sort((x, y) => y.short - x.short || x.grade.localeCompare(y.grade))
+    .slice(0, NAMED_GRADE_GAP_LIMIT)
 }

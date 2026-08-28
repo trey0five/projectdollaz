@@ -54,6 +54,10 @@ export function formatMetricValue(value: number | null, unit: MetricUnit): strin
       })
     case 'currency':
       return `$${value.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+    // A tally of whole things (students, staff): thousands separators, no
+    // decimals. Falling through to 'ratio' printed "436.00" students.
+    case 'count':
+      return value.toLocaleString('en-US', { maximumFractionDigits: 0 })
     case 'ratio':
     default:
       return value.toLocaleString('en-US', {
@@ -83,6 +87,8 @@ export function formatMetricDelta(delta: number | null, unit: MetricUnit): strin
       return `${sign}${abs.toFixed(1)}`
     case 'currency':
       return `${sign}$${abs.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+    case 'count':
+      return `${sign}${abs.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
     case 'ratio':
     default:
       return `${sign}${abs.toFixed(2)}`
@@ -108,6 +114,8 @@ export function formatMetricValueLong(value: number | null, unit: MetricUnit): s
       return `${value.toFixed(1)} months`
     case 'currency':
       return `$${Math.round(value).toLocaleString('en-US')}`
+    case 'count':
+      return Math.round(value).toLocaleString('en-US')
     case 'ratio':
     default:
       return value.toFixed(2)

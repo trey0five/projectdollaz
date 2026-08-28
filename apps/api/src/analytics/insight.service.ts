@@ -205,6 +205,13 @@ export class InsightService {
         model,
         max_tokens: 200,
         messages: [{ role: 'user', content: prompt }],
+        // Privacy F3 — same per-request zero-data-retention flags AssistantClient
+        // sends (verified field names: provider.data_collection / provider.zdr).
+        // A routing failure under these flags is a config error to surface (the
+        // dashboard falls back to the rule-based insight); never retried bare.
+        ...((this.config.get<boolean>('assistant.llmZdr') ?? true)
+          ? { provider: { data_collection: 'deny', zdr: true } }
+          : {}),
       }),
       signal,
     })

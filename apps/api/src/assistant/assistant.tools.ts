@@ -47,6 +47,17 @@ export const WALKTHROUGH_TARGET_KEYS = [
   'metric.aid_per_aided_student',
   'metric.tuition_discount_rate',
   'metric.pct_students_on_aid',
+  // Penny coverage Phase 1 — the three surfaces she could discuss and never point
+  // at. /cash-flow in particular is a MOUNTED ROUTE she had no way to reach at all:
+  // no page key, no anchor, no tool. Each key below has a matching row in
+  // apps/web/src/components/penny/guide/targetRegistry.js and the two files must
+  // stay BYTE-IDENTICAL (a key here with no row there resolves to nothing and
+  // parks the coin; a row there with no key here is unreachable).
+  'cashFlow.headline',
+  'cashFlow.linesTable',
+  'cashFlow.addCommitment',
+  'enrollment.vsPlanTable',
+  'academics.cohortPanels',
 ] as const
 
 export const TOOL_SCHEMAS = [
@@ -885,6 +896,15 @@ export const TOOL_SCHEMAS = [
               'advancement',
               'tasks',
               'portfolio',
+              // Penny coverage Phase 1. /cash-flow is a MOUNTED ROUTE that was
+              // absent from this enum entirely — Penny could discuss a forecast
+              // at length and had no way to take anyone to it. The two deep-link
+              // keys open a specific tab/view rather than the page's default,
+              // because "are we below plan and in which grades" lands on the
+              // analytics tab or it lands nowhere useful.
+              'cash-flow',
+              'enrollment-analytics',
+              'academics-cohorts',
             ],
             description: 'Which page to open.',
           },
@@ -973,6 +993,11 @@ export const TOOL_SCHEMAS = [
                     'advancement',
                     'tasks',
                     'portfolio',
+                    // Byte-identical in MEANING to navigate_to_page's list above —
+                    // tooling-currency.spec asserts the two sorted enums are equal.
+                    'cash-flow',
+                    'enrollment-analytics',
+                    'academics-cohorts',
                   ],
                   description: 'Optional: navigate to this page before this step.',
                 },
@@ -1086,6 +1111,150 @@ export const TOOL_SCHEMAS = [
         type: 'object',
         properties: {},
         required: [],
+      },
+    },
+  },
+  // ── Penny coverage Phase 1 — the FORWARD cash view ────────────────────────
+  //
+  // get_cash_forecast and get_cash_flow (directly above) are DIFFERENT OBJECTS and
+  // each description says so explicitly. get_cash_flow is the QuickBooks statement
+  // — what already happened, and `{connected:false}` without QuickBooks. This is
+  // the school's own forward projection, which works with no accounting system
+  // connected at all. Answering "when do we run low on cash?" with the statement
+  // is the confident-wrong-tool failure this pair of sentences exists to prevent.
+  {
+    type: 'function',
+    function: {
+      name: 'get_cash_forecast',
+      description:
+        'THE FORWARD CASH PROJECTION — "when do we run low on cash?", "will we make payroll?", "what is our low point?", "how much notice do we have?", "what is dragging cash down?". This is the school\'s OWN projection built from its opening balance, commitments, budget phasing and (if connected) QuickBooks invoices and bills; it works WITHOUT QuickBooks. NOT THE SAME TOOL as get_cash_flow, which is the QuickBooks cash-flow STATEMENT of what already happened and returns nothing at all when QuickBooks is not connected — never answer a forward "when do we run out" question from that one. Returns the opening balance and its age, the lowest projected balance and its date, the first date the balance falls below the school\'s OWN reserve threshold (with how many days of notice and how far below), months of cash at the low point, total receipts and disbursements, which categories dug the hole, the next receipt after the low point, a data-confidence tier with its reason and disclaimer, and — most importantly — an `omissions` list naming what is MISSING from the forecast. IF `omissions` NAMES A MISSING RECEIPT (tuition, a budget), SAY SO BEFORE ANY LOW POINT: the trough is then an artefact of absent data and is deeper than reality. Also returns the forecast\'s LINES, each with a `sourceRef` (the handle adjust_cash_forecast_line needs), `editable` ("direct" = it is a commitment, edit it directly; "adjustable" = use adjust_cash_forecast_line) and any adjustment already on it. Read-only; state ONLY the figures this tool returns.',
+      parameters: {
+        type: 'object',
+        properties: {
+          horizon: {
+            type: 'string',
+            enum: ['13w', '1m', '3m', '6m', '12m'],
+            description: 'How far ahead to project. Defaults to 13 weeks (the treasury convention).',
+          },
+          lines: {
+            type: 'boolean',
+            description:
+              'Include the forecast\'s individual lines (largest first, capped). Set true when the user asks WHAT is in the forecast or wants to exclude/override a line — the sourceRef only comes back with the lines.',
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_enrollment_analytics',
+      description:
+        'ENROLLMENT ANALYTICS — headcount, actual-versus-plan BY GRADE, the year-over-year change, the grade ladder, cohort class sizes over time, and the status/support mix. Use for "are we below enrollment plan, and in which grades?", "which grades are shrinking?", "how does this year compare with last?", "what is our smallest grade?", "how many students are new this year?". Cells covering fewer than a handful of students are WITHHELD (they carry `suppressed: true` and NO value at all) — say "fewer than the reporting floor, withheld" and never estimate or infer one from a total. When `reconciliation.diverged` is true the promoted headcount and the on-screen reading disagree: report BOTH figures and say they need re-syncing — do NOT pick one. When `yoy.comparable` is false the two readings are too far apart in the school calendar to subtract: relay `alignmentNote` and state NO change. The `unavailable` list names charts this product deliberately does not have (percent full, class size, attendance, faith participation, teacher retention) each with a reason — relay the reason AS-IS and do NOT supply the figure from memory or estimate it. Read-only; requires the enrollment module.',
+      parameters: {
+        type: 'object',
+        properties: {
+          periodId: { type: 'string', description: 'Fiscal period id; omit to use the current year.' },
+          asOf: { type: 'string', description: 'ISO date to read as of; omit for today.' },
+          years: { type: 'number', description: 'How many school years of history (1..5, default 5).' },
+          cohortWindow: { type: 'number', description: 'How many consecutive grades a cohort panel follows (2..5).' },
+          section: {
+            type: 'string',
+            enum: ['summary', 'plan', 'cohorts', 'trend', 'mix'],
+            description:
+              'Narrow the answer to one part: summary (tiles + reconciliation + notes ONLY — no plan table), plan (actual vs plan by grade), cohorts (class sizes up the grades), trend (the readings over time + year-over-year), mix (status and support flags). Omit for summary + plan together. Use this rather than asking for everything — the full payload is large.',
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_academic_cohorts',
+      description:
+        'ACADEMIC COHORT TRAJECTORIES — one class followed up the grades on its test scores ("which cohort is declining?", "how did the class of 2030 do as it moved up?", "did that grade recover?"). Returns each panel\'s grade span, its legs (grade, year, score, tester count and whether the leg was OBSERVED or is missing), the net change, and a `direction` decided by the SERVER against `context.materialGap` — the smallest change that counts as a move in this test\'s own units. USE `direction` AND NEVER SUBTRACT THE LEGS YOURSELF: a 0.4-point fall on an ACT composite is "held steady", and calling it a slight decline is exactly the error the material gap exists to prevent. `context.measures` is the server-authored sentence saying what the numbers ARE (the unit and its full range) — quote it when asked what a number means; do not describe the scale from your own knowledge. When `netChangeUnavailable` is present the net change could not be computed and there is no direction to report. Peer school lines are returned only in organization scope and are ALWAYS anonymised. AGGREGATES ONLY — never name, describe or speculate about an individual student. Read-only; requires the academics module.',
+      parameters: {
+        type: 'object',
+        properties: {
+          testType: { type: 'string', description: 'Which test to read (e.g. act, sat, terranova); defaults to the first on file.' },
+          window: { type: 'number', description: 'How many consecutive grades a cohort is followed for (2..4).' },
+          series: { type: 'string', description: "'total' (the composite) or a subject key; falls back to the composite." },
+          endGrade: { type: 'string', description: 'Narrow to the one cohort finishing in this grade.' },
+          scope: {
+            type: 'string',
+            enum: ['school', 'org'],
+            description: "'org' adds anonymised peer lines from the school's organization. Defaults to school.",
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'add_cash_forecast_item',
+      description:
+        'PROPOSE adding a dated obligation or receipt to the cash forecast — payroll, debt service, an insurance premium, a grant instalment — for the user to CONFIRM (this does NOT write it; the user must confirm). Use when the user says something like "add our $180,000 semi-monthly payroll" or "we have a $40,000 insurance premium due in March". Every field comes from what the user SAID: never invent an amount, a date or a recurrence, and ask rather than assume. `amount` is a POSITIVE magnitude — `direction` carries the sign. Requires the finance or planning module and edit access.',
+      parameters: {
+        type: 'object',
+        properties: {
+          label: { type: 'string', description: 'What it is, in the school\'s own words (e.g. "Faculty payroll").' },
+          category: { type: 'string', description: 'A short grouping (e.g. payroll, debt_service, insurance, grants).' },
+          direction: { type: 'string', enum: ['in', 'out'], description: 'Money coming in or going out.' },
+          amount: { type: 'number', description: 'Positive magnitude per occurrence.' },
+          confidence: {
+            type: 'string',
+            enum: ['committed', 'scheduled', 'modelled', 'assumption'],
+            description: 'How certain the date AND amount are. Use "committed" only when the user says it is contractually fixed.',
+          },
+          recurrence: {
+            type: 'string',
+            enum: ['once', 'weekly', 'biweekly', 'semimonthly', 'monthly', 'quarterly', 'annual'],
+            description: 'How often it repeats.',
+          },
+          startDate: { type: 'string', description: 'First occurrence, yyyy-mm-dd. Required.' },
+          endDate: { type: 'string', description: 'Last occurrence, yyyy-mm-dd. Omit when it does not stop.' },
+          dayRule: {
+            type: 'array',
+            items: { type: 'integer' },
+            description: 'Semi-monthly only: the days of the month (31 means the last day).',
+          },
+          notes: { type: 'string', description: 'Anything the user said about it that the label does not carry.' },
+        },
+        required: ['label', 'category', 'direction', 'amount', 'confidence', 'recurrence', 'startDate'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'adjust_cash_forecast_line',
+      description:
+        'PROPOSE excluding or re-totalling ONE DERIVED line of the cash forecast, for the user to CONFIRM (this does NOT write it). Use for "that bill is already paid, take it out" or "budget that at $60,000 instead". YOU MUST CALL get_cash_forecast WITH lines:true FIRST and pass a `sourceRef` it returned — a ref you did not read from that tool is refused. ONLY DERIVED LINES may be adjusted (QuickBooks invoices/bills/history, budget phasing, the tuition driver). A line whose `editable` is "direct" is a COMMITMENT with its own editor: it cannot be adjusted here, and asking to remove one is a different request. `kind: "exclude"` drops the line (no amount); `kind: "override"` re-totals it and REQUIRES overrideAmount. Excluding a line does not delete any source data — the underlying invoice or budget row is untouched. Requires the finance or planning module and edit access.',
+      parameters: {
+        type: 'object',
+        properties: {
+          sourceRef: {
+            type: 'string',
+            description:
+              'The line handle, copied EXACTLY from a get_cash_forecast line. Starts with qbo:ar:, qbo:ap:, qbo:history:, budget: or driver:.',
+          },
+          kind: {
+            type: 'string',
+            enum: ['exclude', 'override'],
+            description: 'exclude = leave it out entirely; override = replace its total.',
+          },
+          overrideAmount: {
+            type: 'number',
+            description: 'The line\'s new total. REQUIRED with kind "override"; must be omitted with "exclude".',
+          },
+          note: { type: 'string', description: 'Why, in the user\'s own words.' },
+        },
+        required: ['sourceRef', 'kind'],
       },
     },
   },
@@ -1707,6 +1876,14 @@ export const TOOL_LABELS: Record<string, string> = {
   get_account_transactions: 'Pulling the transactions behind that number…',
   get_cash_collections: 'Checking receivables & payables…',
   get_cash_flow: 'Reading cash flow & reconciliation…',
+  // Penny coverage Phase 1. The two WRITE labels here are added in the SAME change
+  // as ProposedAction['kind'], APPLY_KINDS, REFRESH, REVERSIBLE_KINDS and
+  // CONFIRM_TOOLS — the six-way sync whose desync 400s /apply, twice shipped.
+  get_cash_forecast: 'Projecting cash forward…',
+  get_enrollment_analytics: 'Reading enrollment analytics…',
+  get_academic_cohorts: 'Following the cohorts up the grades…',
+  add_cash_forecast_item: 'Adding it to the forecast…',
+  adjust_cash_forecast_line: 'Adjusting that forecast line…',
   get_value_history: 'Tracing how that number changed…',
   get_plan_status: 'Reading the strategic plan…',
   get_improvement_status: 'Reading the improvement plan…',

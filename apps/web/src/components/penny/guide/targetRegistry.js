@@ -65,6 +65,28 @@ export const TARGET_REGISTRY = {
   'metric.aid_per_aided_student': { domId: 'metric-aid_per_aided_student', page: 'analytics' },
   'metric.tuition_discount_rate': { domId: 'metric-tuition_discount_rate', page: 'analytics' },
   'metric.pct_students_on_aid': { domId: 'metric-pct_students_on_aid', page: 'analytics' },
+
+  // ── Penny coverage Phase 1 ──────────────────────────────────────────────────
+  // The three surfaces Penny could discuss and never point at. /cash-flow was the
+  // worst of them: a mounted route with no page key, no anchor and no tool.
+  //
+  // The KEY strings are byte-identical to WALKTHROUGH_TARGET_KEYS in
+  // apps/api/src/assistant/assistant.tools.ts — a key here with no entry there is
+  // unreachable, and one there with no row here resolves to nothing and parks the
+  // coin without saying why.
+  //
+  // Some `page` values below are CLIENT-ONLY vocabulary (see the header note on
+  // the *-add keys): 'cash-flow-inputs' and 'enrollment-grades' deep-link to a
+  // specific tab/sub-view rather than a page default, and the LLM never sends
+  // them — it only ever names the three keys the backend enum offers.
+  'cashFlow.headline': { domId: 'cf-hero', page: 'cash-flow' },
+  'cashFlow.linesTable': { domId: 'cf-lines', page: 'cash-flow-inputs' },
+  'cashFlow.addCommitment': { domId: 'cf-add-item', page: 'cash-flow-inputs' },
+  // The vs-plan card lives on the GRADES sub-view, not the analytics default —
+  // anchoring it to '/enrollment?tab=analytics' alone would glide to an element
+  // that is not mounted.
+  'enrollment.vsPlanTable': { domId: 'enr-vs-plan', page: 'enrollment-grades' },
+  'academics.cohortPanels': { domId: 'academics-cohort-panels', page: 'academics-cohorts' },
 }
 
 export const TARGET_KEYS = Object.keys(TARGET_REGISTRY)

@@ -70,6 +70,10 @@ describe('metric metadata', () => {
     const withAlias = METRIC_META.filter((m) => m.boardLabel)
     expect(withAlias.map((m) => m.key).sort()).toEqual([
       'cost_per_pupil',
+      // Enrollment analytics — 'Enrollment (Headcount)' is the catalog label
+      // (unambiguous next to enrollment_vs_plan / _change_yoy); a board packet
+      // has the surrounding context and just says 'Enrollment'.
+      'enrollment_headcount',
       // Phase 2 — enrollment_vs_plan carries a board alias (== its label).
       'enrollment_vs_plan',
       // Phase 6 — the hr/planning metrics all declare a board alias (== label).

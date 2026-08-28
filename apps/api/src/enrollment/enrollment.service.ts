@@ -153,8 +153,13 @@ const iso = (d: Date): string => d.toISOString().slice(0, 10)
  * convention: Jul–Dec belongs to NEXT June; Jan–Jun to THIS June. The resolved
  * period is then found-or-created via PeriodsService.resolveForImport (which reuses
  * an existing FY period regardless of its historical periodType).
+ *
+ * EXPORTED (behaviour unchanged) so the analytics sub-service buckets a snapshot
+ * into a school YEAR through the SAME function the intake pipeline used to file
+ * it — a second copy of this rule would put a September reading in one year on
+ * the way in and a different year on the way out.
  */
-function fyEndForObservedOn(observedOn: string): string {
+export function fyEndForObservedOn(observedOn: string): string {
   const [y, m] = observedOn.split('-').map(Number)
   const endYear = (m ?? 1) >= 7 ? (y ?? 0) + 1 : y ?? 0
   return `${endYear}-06-30`

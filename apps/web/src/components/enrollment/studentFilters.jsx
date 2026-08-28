@@ -11,7 +11,7 @@
 // chips, ISP/504/ELL flag toggles, and the active-chip row with per-chip ✕ and
 // "Clear all". Sky-hued via the `hue` prop (enrollment #0EA5E9).
 // ─────────────────────────────────────────────────────────────────────────────
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Search, X, SlidersHorizontal } from 'lucide-react'
 import {
   GRADE_KEYS,
@@ -121,9 +121,35 @@ function Chip({ label, hue, onRemove }) {
  */
 function availableKeys(dim, facets) {
   if (!facets) return dim.keys
-  const counts = facets[dim.key]
-  if (!counts || typeof counts !== 'object') return []
+  const raw = facets[dim.key]
+  if (!raw || typeof raw !== 'object') return []
+  // A '<5' facet (a server-suppressed small cell, normalized by the bar) still
+  // means the value EXISTS in the register — positive for availability.
+  const counts = Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, v === '<5' ? 1 : v]))
   return dim.keys.filter((k) => Number(counts[k] ?? 0) > 0)
+}
+
+/**
+ * The students/aggregate API now suppresses small attribute cells SERVER-side:
+ * they arrive as `{ suppressed: true }` with NO value key. For the picker
+ * vocabulary that means exists-but-small, shown with the same '<5' string the
+ * roster charts use — never a number that isn't real.
+ */
+function normalizeFacets(facets) {
+  if (!facets) return facets
+  const out = {}
+  for (const [dim, counts] of Object.entries(facets)) {
+    out[dim] =
+      counts && typeof counts === 'object'
+        ? Object.fromEntries(
+            Object.entries(counts).map(([k, v]) => [
+              k,
+              v && typeof v === 'object' && v.suppressed === true ? '<5' : v,
+            ]),
+          )
+        : counts
+  }
+  return out
 }
 
 export default function StudentFilterBar({
@@ -133,9 +159,12 @@ export default function StudentFilterBar({
   showSearch = true,
   // Unfiltered facet counts from GET …/students/aggregate. Optional: callers that
   // do not pass it keep the previous full-vocabulary behaviour.
-  facets = null,
+  facets: rawFacets = null,
 }) {
   const f = filters ?? EMPTY_STUDENT_FILTERS
+  // Server-suppressed cells → '<5' once, here, so every read below (labels,
+  // availability) speaks one vocabulary.
+  const facets = useMemo(() => normalizeFacets(rawFacets), [rawFacets])
 
   // Debounced search — local echo state, 300ms push to the caller. The
   // lastQ/setState-during-render pair re-syncs the draft when the caller's q

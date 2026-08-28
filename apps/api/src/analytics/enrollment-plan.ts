@@ -12,6 +12,15 @@ export interface ResolvedEnrollmentPlan {
   planTotal: number
   planByGrade: Record<string, number>
   netRate: number | null
+  /**
+   * WHICH of the two stores the plan came from. Additive: existing consumers read
+   * planTotal/planByGrade/netRate and are unaffected. It exists because "you are
+   * 14 students under plan" is a different sentence depending on whether the plan
+   * is the board-approved driver budget or a target somebody typed into the
+   * operational form — and the alternative was for a reader to re-walk the same
+   * priority ladder to guess, which is how the ladder gets a second, drifting copy.
+   */
+  source: 'driver_budget' | 'planned_by_grade'
 }
 
 /**
@@ -90,7 +99,12 @@ export class EnrollmentPlanService {
       const netRate =
         typeof kpis?.netTuitionPerStudent === 'number' ? kpis.netTuitionPerStudent : null
       return {
-        plan: { planTotal: driverGrade.total, planByGrade: driverGrade.map, netRate },
+        plan: {
+          planTotal: driverGrade.total,
+          planByGrade: driverGrade.map,
+          netRate,
+          source: 'driver_budget',
+        },
         failed: false,
       }
     }
@@ -108,7 +122,15 @@ export class EnrollmentPlanService {
       (op as { plannedEnrollmentByGrade?: unknown } | null)?.plannedEnrollmentByGrade,
     )
     if (planned) {
-      return { plan: { planTotal: planned.total, planByGrade: planned.map, netRate: null }, failed: false }
+      return {
+        plan: {
+          planTotal: planned.total,
+          planByGrade: planned.map,
+          netRate: null,
+          source: 'planned_by_grade',
+        },
+        failed: false,
+      }
     }
 
     // (3) no plan anywhere — `failed` records whether that's a fact or a read error.

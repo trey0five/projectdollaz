@@ -320,3 +320,66 @@ describe('applyLens — accreditation (Phase 4)', () => {
     expect(out.voice).toBe('governance')
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A2 — the WS2/WS3 accreditation ids are IN the curated block. The comparator
+// gives an unlisted id index -1, which sorts it AHEAD of every curated entry —
+// so a new id left out of COMPLIANCE_ORDER silently jumps the whole block.
+// These specs pin (1) the three cycle-milestone ids in their deliberate order
+// (progress_report first: it is the artifact the accreditor is owed) and
+// (2) the per-framework `accreditation:framework-superseded:<code>` family
+// resolving to its family slot via the complianceOrderIndex prefix rule.
+// All items share one source + severity so ONLY the curated order decides —
+// identical on every lens.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('applyLens — WS2/WS3 accreditation ids (cycle milestones + superseded notices)', () => {
+  const acc = (id: string): AttentionItem => ({
+    id,
+    severity: 'info',
+    source: 'accreditation',
+    title: `title for ${id}`,
+    why: `why for ${id}`,
+    metricKey: null,
+    value: null,
+    link: '/accreditation?center=journey',
+    dueDate: null,
+  })
+
+  it('the three cycle ids rank in the curated order, after the Phase-4 items, on every lens', () => {
+    const items = [
+      acc('accreditation:cycle-evidence_freeze'),
+      acc('accreditation:cycle-self_assessment'),
+      acc('accreditation:review-approaching'),
+      acc('accreditation:cycle-progress_report'),
+      acc('accreditation:coverage-gap'),
+    ]
+    for (const lens of ['owner', 'accountant', 'viewer'] as Lens[]) {
+      expect(applyLens(items, lens).map((i) => i.id), lens).toEqual([
+        'accreditation:coverage-gap',
+        'accreditation:review-approaching',
+        'accreditation:cycle-progress_report',
+        'accreditation:cycle-self_assessment',
+        'accreditation:cycle-evidence_freeze',
+      ])
+    }
+  })
+
+  it('a per-framework superseded id ranks at the family slot (the info tail), instances by id', () => {
+    const items = [
+      acc('accreditation:framework-superseded:msa_cess_2022'),
+      acc('accreditation:cycle-progress_report'),
+      acc('accreditation:framework-superseded:cognia_2022'),
+      acc('accreditation:coverage-gap'),
+    ]
+    for (const lens of ['owner', 'accountant', 'viewer'] as Lens[]) {
+      expect(applyLens(items, lens).map((i) => i.id), lens).toEqual([
+        'accreditation:coverage-gap',
+        'accreditation:cycle-progress_report',
+        // The family slot sits LOW (with the info tail); the two instances tie
+        // there and fall to the final id tiebreak.
+        'accreditation:framework-superseded:cognia_2022',
+        'accreditation:framework-superseded:msa_cess_2022',
+      ])
+    }
+  })
+})

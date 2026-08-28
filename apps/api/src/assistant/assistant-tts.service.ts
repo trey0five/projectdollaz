@@ -16,6 +16,33 @@ import {
   type Engine,
   type VoiceId,
 } from '@aws-sdk/client-polly'
+import { Redactor } from './redaction.js'
+
+/**
+ * Privacy F4 — scrub spoken text before it leaves for the EXTERNAL TTS provider
+ * (ElevenLabs). Masks emails and SSN-shaped runs via a fresh Redactor, then
+ * strips any residual `[[…]]` placeholder token so a mask is never spoken
+ * aloud. HONEST LIMIT: this is not name detection — a name Penny was asked to
+ * speak still reaches the provider; the mitigations for that are the
+ * account-level ElevenLabs no-training opt-out (an ops setting, see
+ * .env.example) and the no-penny-pii gate keeping names out of Penny's own
+ * answers in the first place. The in-account Polly path is deliberately
+ * unscrubbed — it leaves no third party to scrub for.
+ */
+export function scrubSpokenText(text: string): string {
+  let out = new Redactor(true).redactText(text)
+  // Strip INNERMOST-first and loop until stable: a single greedy-ish pass over
+  // nested tokens ("[[a [[b]] c]]") eats up to the first "]]" and leaves a
+  // " c]]" residue to be spoken aloud. Bounded by the nesting depth.
+  for (let prev = ''; prev !== out; ) {
+    prev = out
+    out = out.replace(/\[\[[^[\]]*\]\]/g, '')
+  }
+  return out
+    .replace(/\[\[[^\]]*\]\]/g, '') // stray single brackets inside a token
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim()
+}
 
 const TIMEOUT_MS = 30000
 const ELEVENLABS_BASE = 'https://api.elevenlabs.io/v1/text-to-speech'
@@ -86,6 +113,8 @@ export class AssistantTtsService {
       this.config.get<string>('elevenlabs.voiceId') ||
       'cgSgspJ2msm6clMCkdW9'
     const model = this.config.get<string>('elevenlabs.model') || 'eleven_turbo_v2_5'
+    // External egress only — Polly (in-account) returned above, unscrubbed.
+    const spoken = scrubSpokenText(text)
 
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
@@ -100,7 +129,7 @@ export class AssistantTtsService {
             accept: 'audio/mpeg',
           },
           body: JSON.stringify({
-            text,
+            text: spoken,
             model_id: model,
             voice_settings: { stability: 0.5, similarity_boost: 0.75 },
           }),

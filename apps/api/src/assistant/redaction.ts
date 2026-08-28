@@ -125,6 +125,9 @@ const FREETEXT_KEYS = new Set([
   'memo',
   'note',
   'notes',
+  // A user-chosen upload name is free text like any memo — an email address or
+  // SSN typed into a filename must not ride a tool result into the prompt.
+  'fileName',
 ])
 
 /**

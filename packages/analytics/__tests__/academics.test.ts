@@ -401,7 +401,9 @@ describe('academics — registry wiring', () => {
       'benchmark_attainment',
       'assessment_participation_rate',
     ])
-    expect(METRIC_KEYS).toHaveLength(25)
+    // 26 since enrollment_headcount was appended at 25 — these four keep
+    // their absolute positions 21..24, which is what this test guards.
+    expect(METRIC_KEYS).toHaveLength(26)
   })
 
   it('every academics metric declares the domain and recomputes from components', () => {

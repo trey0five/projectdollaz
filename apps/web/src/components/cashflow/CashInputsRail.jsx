@@ -173,7 +173,9 @@ export default function CashInputsRail({
   return (
     <div className="space-y-5">
       {/* ── GROUP A · From QuickBooks ─────────────────────────────────────── */}
-      <section className="rounded-2xl border border-rule/60 bg-white p-5">
+      {/* id: Penny walkthrough anchor 'cashFlow.linesTable' — the derived lines
+          she can propose excluding or re-totalling. */}
+      <section id="cf-lines" className="rounded-2xl border border-rule/60 bg-white p-5">
         <div className="mb-3 flex items-center justify-between gap-3">
           <h2 className="flex items-center gap-2 text-[13px] font-semibold uppercase tracking-[0.1em] text-muted">
             <Zap size={14} className="text-gold" /> From QuickBooks
@@ -291,6 +293,12 @@ export default function CashInputsRail({
             Your expected items
           </h2>
           <button
+            // Penny walkthrough anchor 'cashFlow.addCommitment'. THE CANONICAL
+            // one of the three "Add expected item" buttons — the other two (the
+            // hero pill and the overview summary card) open the same flow and
+            // deliberately carry no id, because two elements answering to one
+            // anchor key is a coin that glides somewhere different each time.
+            id="cf-add-item"
             type="button"
             onClick={() => onAddItem()}
             className="inline-flex items-center gap-1.5 rounded-lg btn-cta px-3.5 py-1.5 text-[12.5px] font-semibold"

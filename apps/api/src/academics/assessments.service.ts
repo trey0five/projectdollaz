@@ -28,12 +28,26 @@ import {
   anonymizePeers,
   availableCohorts,
   benchmarksFor,
+  gradeRankOf,
   cohortPublishable,
   gateAggregates,
   averageOf,
   buildAssessmentInsight,
   cohortMovements,
   cohortSummary,
+  cohortMatrix,
+  cohortPanelKey,
+  cohortPanelLabel,
+  cohortPanelPlan,
+  cohortSpanOf,
+  cohortTrajectories,
+  cohortTrajectorySummary,
+  materialGap,
+  subjectLabelOf,
+  COHORT_TOTAL_SERIES,
+  compositeSeriesLabel,
+  type CohortSpan,
+  type CohortTrajectory,
   compareToPeer,
   distributionOf,
   gradeHeatmap,
@@ -74,6 +88,28 @@ import { matchAll, type MatchCandidate, type RosterStudent } from './matching/st
 const REGISTER_PAGE = 500
 
 const ACHIEVEMENT_BANDS = ['q1', 'q2', 'q3', 'q4'] as const
+
+/**
+ * How many cohort panels one payload may carry. A K-12 school at a two-grade
+ * span has fourteen; times six series times every peer school it is a payload
+ * nobody reads and a screen nobody can scan. The cap keeps the HIGHEST end
+ * grades and the payload reports `panelsAvailable` beside it, so the number
+ * dropped is visible rather than implied.
+ */
+const MAX_COHORT_PANELS = 12
+
+/** The longitudinal cohort query, as the DTO delivers it. */
+interface CohortQuery {
+  schoolYear?: number
+  testType?: string
+  window?: number
+  scope?: string
+  series?: string
+  endGrade?: string
+  hidePeerNames?: boolean
+  includeMatrix?: boolean
+  focusSchoolId?: string
+}
 
 export interface UploadPreview {
   scope: 'student' | 'school_aggregate'
@@ -603,20 +639,21 @@ export class AssessmentsService {
     )
 
     const cohortGrade = q.cohortGrade ?? null
+    // ONE call, read twice. This was two identical cohortMovements() calls —
+    // the same traversal of every school-year row run a second time to feed the
+    // summary its own input, which is also one more place for the two to drift
+    // apart if either argument list is ever edited alone.
+    const cohortMoves = cohortGrade
+      ? cohortMovements(inScope, {
+          currentYear: year,
+          currentGrade: cohortGrade,
+          subject: q.subject,
+          family,
+          scoreType,
+        })
+      : []
     const cohort = cohortGrade
-      ? {
-          grade: cohortGrade,
-          movements: cohortMovements(inScope, {
-            currentYear: year,
-            currentGrade: cohortGrade,
-            subject: q.subject,
-            family,
-            scoreType,
-          }),
-          summary: cohortSummary(
-            cohortMovements(inScope, { currentYear: year, currentGrade: cohortGrade, subject: q.subject, family, scoreType }),
-          ),
-        }
+      ? { grade: cohortGrade, movements: cohortMoves, summary: cohortSummary(cohortMoves) }
       : null
 
     const payload = {
@@ -633,6 +670,12 @@ export class AssessmentsService {
         // reads as nonsense. Invisible while a school had three grades.
         grades: [...new Set(inScope.map((a) => a.gradeLevel))].filter((g) => g !== 'all').sort(byGrade),
         subjects,
+        // The scope bar's Measure chip labels the composite from THIS, so the
+        // browser never types 'Total Battery' over an ACT school.
+        availableSeries: [
+          { key: COHORT_TOTAL_SERIES, label: compositeSeriesLabel(family) },
+          ...subjects.map((s) => ({ key: s, label: subjectLabelOf(s) })),
+        ],
         // Echoed back so the subject control reflects what the SERVER used
         // rather than what the browser last remembered — the same rule the
         // grade and year selects already follow.
@@ -819,6 +862,313 @@ export class AssessmentsService {
       availableCohorts: availableCohorts(inScope),
       insights: systemInsights(thisYear),
     }
+  }
+
+  // ── Longitudinal cohorts ──────────────────────────────────────────────────
+
+  /**
+   * The same children, followed across up to four grades — its OWN read, not an
+   * extension of `/dashboard`.
+   *
+   * The view owns four controls (span, series, peers, cohort). Threading them
+   * through the dashboard would re-fetch the ~200KB payload that seven other
+   * tabs share every time one of them moves; this route answers in ~5KB and
+   * costs one extra indexed findMany, paid only while the tab is open. It also
+   * REPLACES a full dashboard refetch per toggle rather than adding to it.
+   *
+   * `data.cohort` on /dashboard is untouched, and so is every caller of it.
+   */
+  async cohorts(schoolId: string, q: CohortQuery = {}) {
+    const school = await this.prisma.school.findUnique({
+      where: { id: schoolId },
+      select: { id: true, name: true, organizationId: true, schoolType: true, gradeLow: true, gradeHigh: true },
+    })
+    if (!school) throw new NotFoundException('School not found.')
+    const peerIds = await this.orgSchoolIds(school.organizationId)
+    const all = await this.aggregates(peerIds, { testType: q.testType })
+    return this.buildCohorts(school, peerIds, all, q, 'school')
+  }
+
+  /**
+   * The diocesan twin. The panels are still cut for ONE school — the superin-
+   * tendent picks which — because a cohort span is a property of a school's own
+   * grades, and a network-wide panel set would mean nothing to any school in it.
+   * Peers default ON here: that is the whole point of the console.
+   */
+  async orgCohorts(organizationId: string, q: CohortQuery = {}) {
+    const peerIds = await this.orgSchoolIds(organizationId)
+    const all = await this.aggregates(peerIds, { testType: q.testType })
+    const focusId = this.resolveCohortFocus(peerIds, all, q.focusSchoolId)
+    if (!focusId) throw new NotFoundException('No schools in this organization.')
+    const school = await this.prisma.school.findUnique({
+      where: { id: focusId },
+      select: { id: true, name: true, organizationId: true, schoolType: true, gradeLow: true, gradeHigh: true },
+    })
+    if (!school) throw new NotFoundException('School not found.')
+    return this.buildCohorts(school, peerIds, all, q, 'org')
+  }
+
+  /**
+   * Which school the org console cuts its panels for: the caller's pick when it
+   * belongs to this org, else the school with the most gradeable rows on file
+   * (ties broken by id, so the console does not change shape between two
+   * identical requests).
+   */
+  private resolveCohortFocus(peerIds: string[], all: AssessmentRow[], asked?: string): string | null {
+    if (asked) {
+      if (!peerIds.includes(asked)) throw new BadRequestException('That school is not in this organization.')
+      return asked
+    }
+    const counts = new Map<string, number>()
+    for (const r of all) {
+      if (gradeRankOf(r.gradeLevel) === null || r.avgComposite === null) continue
+      counts.set(r.schoolId, (counts.get(r.schoolId) ?? 0) + 1)
+    }
+    const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
+    return ranked[0]?.[0] ?? peerIds.slice().sort()[0] ?? null
+  }
+
+  /**
+   * The latest year this school actually REPORTED a grade-level score.
+   *
+   * Not `max(schoolYear)`: mid-year, the current year's rows exist with null
+   * values (or only a whole-school row), and anchoring there would end every
+   * cohort on a blank and print a screen of dashes for a school with four good
+   * years on file. The focus school's own reporting wins over the network's,
+   * because the panels are cut for the focus school.
+   */
+  private latestCohortYear(rows: AssessmentRow[], focusSchoolId: string, scopeIds: string[]): number | null {
+    const scope = new Set(scopeIds)
+    let focusBest: number | null = null
+    let scopeBest: number | null = null
+    for (const r of rows) {
+      if (r.avgComposite === null) continue
+      if (gradeRankOf(r.gradeLevel) === null) continue
+      if (r.schoolId === focusSchoolId && (focusBest === null || r.schoolYear > focusBest)) focusBest = r.schoolYear
+      if (scope.has(r.schoolId) && (scopeBest === null || r.schoolYear > scopeBest)) scopeBest = r.schoolYear
+    }
+    return focusBest ?? scopeBest
+  }
+
+  private buildCohorts(
+    school: { id: string; name: string; schoolType: string | null; gradeLow: string | null; gradeHigh: string | null },
+    peerIds: string[],
+    all: AssessmentRow[],
+    q: CohortQuery,
+    defaultScope: 'school' | 'org',
+  ) {
+    const level = schoolLevelFrom(school)
+    const scope: 'school' | 'org' = q.scope === 'org' || q.scope === 'school' ? q.scope : defaultScope
+    const testType = (q.testType ?? this.defaultTestType(all)) as TestTypeKey
+    const family = TEST_FAMILY[testType] ?? 'nrt'
+    const scoreType = SCORE_TYPE_FOR_FAMILY[family]
+    const subjects = [...SUBJECTS_FOR_FAMILY[family]]
+
+    // A series the family does not have is NOT a 400 — the reader switched test
+    // type with 'reading' still selected. Fall back to the composite and echo
+    // what the server used, the same discipline the grade and year selects
+    // already follow.
+    const availableSeries = [
+      // The composite's NAME comes from the family — 'ACT Composite' on an ACT
+      // school, 'SAT Total' on an SAT one. The web reads this label and never
+      // types one of its own.
+      { key: COHORT_TOTAL_SERIES, label: compositeSeriesLabel(family) },
+      ...subjects.map((s) => ({ key: s, label: subjectLabelOf(s) })),
+    ]
+    const series =
+      q.series && (q.series === COHORT_TOTAL_SERIES || subjects.includes(q.series)) ? q.series : COHORT_TOTAL_SERIES
+
+    const inScope = all.filter((a) => a.testType === testType)
+    const years = [...new Set(inScope.map((a) => a.schoolYear))].sort((a, b) => b - a)
+    const schoolIds = scope === 'org' ? peerIds : [school.id]
+
+    // THE SPAN IS ALWAYS THE FOCUS SCHOOL'S OWN. In org scope this keeps the
+    // panel set identical when the peer toggle flips — otherwise the screen
+    // reshapes under the reader — and it stops a K-8 principal's page from
+    // advertising the diocese's high-school grades.
+    const span = cohortSpanOf(inScope, [school.id])
+    // The DEFAULT must be fillable: a school with two years on file asked for a
+    // 4-year window gets four panels whose first two legs are all `missing` and
+    // whose netChange is null across the board. The SPAN stays unclamped (a
+    // missing middle year is a real gap, not a shorter cohort) — only the
+    // unrequested default bends to the history actually on file.
+    const requestedWindow = q.window ?? Math.min(4, Math.max(2, span.yearDepth))
+    const windowUsed = span.maxWindow > 0 ? Math.min(requestedWindow, span.maxWindow) : requestedWindow
+    const endYear = q.schoolYear ?? this.latestCohortYear(inScope, school.id, schoolIds) ?? years[0] ?? null
+    const endGrades = q.endGrade && q.endGrade !== 'all' ? [q.endGrade] : undefined
+
+    const plan = cohortPanelPlan(span, { window: windowUsed, endGrades, maxPanels: MAX_COHORT_PANELS })
+    const trajectories =
+      endYear === null
+        ? []
+        : cohortTrajectories(inScope, {
+            window: windowUsed,
+            endYear,
+            schoolIds,
+            endGrades,
+            gradeSpan: { low: span.low, high: span.high },
+            series,
+            family,
+            scoreType,
+            focusSchoolId: school.id,
+            maxPanels: MAX_COHORT_PANELS,
+          })
+
+    const byCohort = new Map<number, CohortTrajectory[]>()
+    for (const t of trajectories) {
+      const held = byCohort.get(t.cohortId)
+      if (held) held.push(t)
+      else byCohort.set(t.cohortId, [t])
+    }
+
+    const panels: Array<Record<string, unknown>> = []
+    const peerSchools = new Set<string>()
+    for (const endRank of plan.endRanks) {
+      const cohortId = (endYear as number) - endRank
+      const group = byCohort.get(cohortId) ?? []
+      const focus = group.find((t) => t.isFocus)
+      // No focus line, no panel: an empty plot with a title reads as "these
+      // children scored nothing", which is never what it means.
+      if (!focus) continue
+      const peers = group.filter((t) => !t.isFocus)
+      for (const p of peers) peerSchools.add(p.schoolId)
+      panels.push({
+        key: cohortPanelKey(cohortId, endRank - windowUsed + 1, endRank),
+        cohortId,
+        label: cohortPanelLabel(focus.startGrade, focus.endGrade),
+        startGrade: focus.startGrade,
+        endGrade: focus.endGrade,
+        startYear: focus.startYear,
+        endYear: focus.endYear,
+        grades: focus.legs.map((l) => l.gradeLevel),
+        years: focus.legs.map((l) => l.schoolYear),
+        focus,
+        peers,
+        summary: peers.length > 0 ? cohortTrajectorySummary([focus, ...peers], { family, scoreType }) : null,
+      })
+    }
+
+    const matrix =
+      q.includeMatrix === false || endYear === null
+        ? null
+        : cohortMatrix(inScope, {
+            schoolId: school.id,
+            window: windowUsed,
+            endYear,
+            endGrades,
+            gradeSpan: { low: span.low, high: span.high },
+            series: [COHORT_TOTAL_SERIES, ...subjects],
+            family,
+            scoreType,
+            maxPanels: MAX_COHORT_PANELS,
+          })
+
+    const payload = {
+      empty: all.length === 0,
+      school: { id: school.id, name: school.name, level },
+      context: {
+        endYear,
+        years,
+        testType,
+        family,
+        scoreType,
+        scoreRange: scoreRange(family, scoreType),
+        nationalReference: nationalReference(scoreType),
+        // Direction is decided against this on the server. It ships anyway so
+        // the legend can say what "held" means in the family's own units.
+        materialGap: materialGap(family, scoreType),
+        // WHAT THESE NUMBERS ARE, in one server-authored sentence.
+        //
+        // Ported from `unitOf()` / `measureSentence('cohortTrajectory')` in
+        // apps/web/src/components/academics/MeasureNote.jsx, where it lived only
+        // as JSX. That was fine while a human was the only reader; it is not fine
+        // now that the assistant answers "what does that number mean?", because
+        // the alternative to publishing this is Penny ORIGINATING it from her own
+        // knowledge of the ACT — and the same page serves a TerraNova grade school
+        // (national percentiles, 1–99) and an ACT high school (a composite, 1–36),
+        // so a remembered sentence is a lie on half the tenancy.
+        //
+        // The web keeps reading its own copy for now; a follow-up switches it to
+        // this field, after which the two cannot disagree by construction.
+        measures: cohortMeasuresSentence(family, scoreType),
+        seriesBasis: 'reported-composite',
+        weighting: this.cohortWeighting(panels),
+        // What the SERVER used, and what it would accept — a control cannot
+        // offer a span this school's grades cannot support.
+        window: windowUsed,
+        // What the caller ASKED for, so the view can say "narrowed" only when
+        // the server actually narrowed it — a reader who deliberately picked
+        // two years is not being told their choice was a compromise.
+        requestedWindow,
+        availableWindows: span.windows,
+        scope,
+        peerCount: peerSchools.size,
+        // SCOPE-INDEPENDENT, unlike peerCount. peerCount counts the peers whose
+        // trajectories were actually BUILT, which in the default school scope is
+        // always zero — gating the compare toggle on it hid the toggle from
+        // every school that had somebody to compare with. This counts the other
+        // readable schools in the organisation, whether or not they were drawn.
+        peersAvailable: peerIds.filter((id) => id !== school.id).length,
+        series,
+        availableSeries,
+        gradeSpan: {
+          ...span,
+          fromProfile: { gradeLow: school.gradeLow ?? null, gradeHigh: school.gradeHigh ?? null },
+        },
+        truncated: plan.truncated,
+        panelsAvailable: plan.panelsAvailable,
+        reason: this.cohortReason(all.length, span, requestedWindow, plan.panelsAvailable, panels.length),
+      },
+      panels,
+      matrix,
+      // The legacy list, unchanged, so the existing cohort chip keeps working.
+      availableCohorts: availableCohorts(inScope),
+    }
+
+    // Same rule as the dashboard: hiding peer names is a SERVER decision or it
+    // is not a decision at all. Trajectories carry schoolId/schoolName/label at
+    // their top level precisely so this walk reaches them.
+    return q.hidePeerNames
+      ? { ...this.anonymizePayload(payload, school.id), hidePeerNames: true }
+      : { ...payload, hidePeerNames: false }
+  }
+
+  /**
+   * What the payload's numbers actually are. A leg whose tester count never
+   * arrived makes any average over it a simple mean, and the reader is told
+   * that rather than shown a weighted label over an unweighted number.
+   */
+  private cohortWeighting(panels: Array<Record<string, unknown>>): 'tester-weighted' | 'simple' {
+    for (const p of panels) {
+      const lines = [p.focus as CohortTrajectory, ...((p.peers as CohortTrajectory[]) ?? [])]
+      for (const t of lines) {
+        for (const leg of t.legs) {
+          if (leg.state === 'observed' && (leg.tested === null || leg.tested <= 0)) return 'simple'
+        }
+      }
+    }
+    return 'tester-weighted'
+  }
+
+  /** Why the screen is empty, in words, so the view never has to guess. */
+  private cohortReason(
+    rowCount: number,
+    span: CohortSpan,
+    requestedWindow: number,
+    panelsAvailable: number,
+    panels: number,
+  ): string | null {
+    if (panels > 0) return null
+    if (rowCount === 0) return 'No assessment results loaded yet — upload a scores file to follow a cohort.'
+    if (span.maxWindow === 0) {
+      return span.gradeDepth === 1
+        ? `Only one grade (${span.lowGrade}) has results on file, and a cohort needs at least two.`
+        : 'No grade-level results on file yet — a cohort is followed grade by grade.'
+    }
+    if (panelsAvailable === 0) {
+      return `Grades ${span.lowGrade}–${span.highGrade} are on file, which is not enough for a ${requestedWindow}-grade cohort.`
+    }
+    return 'These grades are on file, but no cohort has results in two of its years yet.'
   }
 
   // ── Objective summaries (the instructional grain) ──────────────────────────
@@ -1979,4 +2329,66 @@ export class AssessmentsService {
       keyInsight: 'No assessment results loaded yet — upload a scores file to see this school against its peers.',
     }
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WHAT THIS MEASURES — the unit, named ONCE, on the SERVER.
+//
+// A PORT, not an invention: `unitOf()` and `measureSentence('cohortTrajectory')`
+// in apps/web/src/components/academics/MeasureNote.jsx are the originals, and
+// every clause below traces to one of them. It moves here because the assistant
+// now answers "what does that number mean?" from the cohorts payload, and a
+// sentence that exists only in JSX is a sentence Penny would have to write
+// herself — the class of origination `value-safety.ts` exists to catch.
+//
+// NO ARITHMETIC. `scoreRange` and `materialGap` are the canonical functions the
+// payload already publishes; this only puts words around what they returned.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** The unit's display name, its "points" plural, and the span the axis is clamped to. */
+function unitOfFamily(
+  family: string,
+  scoreType: string,
+): { kind: string; noun: string; points: string; span: string | null } {
+  const r = scoreRange(family as never, scoreType as never)
+  const span =
+    r && Number.isFinite(r.min) && Number.isFinite(r.max) ? `${r.min}–${r.max}` : null
+  if (scoreType === 'percentile')
+    return { kind: 'percentile', noun: 'national percentile', points: 'percentile points', span: span ?? '1–99' }
+  if (scoreType === 'nce')
+    return { kind: 'nce', noun: 'NCE score', points: 'NCE points', span: span ?? '1–99' }
+  if (family === 'act')
+    return { kind: 'act', noun: 'ACT composite', points: 'ACT composite points', span: span ?? '1–36' }
+  if (family === 'sat')
+    return { kind: 'sat', noun: 'SAT total', points: 'SAT points', span: span ?? '400–1600' }
+  return { kind: 'scale', noun: 'scale score', points: 'points', span }
+}
+
+/** The unit definition in plain words. The web's `definitionOf` with no example. */
+function unitDefinition(family: string, scoreType: string): string {
+  const u = unitOfFamily(family, scoreType)
+  if (u.kind === 'percentile')
+    return "the share of students nationwide that a school’s typical student outscored"
+  if (u.kind === 'nce')
+    return `a percentile-like ${u.span} scale, built so gaps can be averaged and compared, on which 50 is the national average`
+  if (u.kind === 'act') return `the average composite across the students tested, on the ${u.span} scale`
+  if (u.kind === 'sat') return `the average total across the students tested, on the ${u.span} scale`
+  return u.span ? `the exam’s own scale score, which runs ${u.span}` : "the exam’s own scale score"
+}
+
+/**
+ * The cohort grid's own sentence — the web's `measureSentence('cohortTrajectory')`
+ * in plain text. The material-gap clause is the load-bearing half: it is what
+ * stops a 0.4-point fall on an ACT composite being read as a decline.
+ */
+export function cohortMeasuresSentence(family: string, scoreType: string): string {
+  const u = unitOfFamily(family, scoreType)
+  const gap = materialGap(family as never, scoreType as never)
+  return (
+    `Each panel follows ONE group of children across consecutive grades, every point their average ${u.noun} — ` +
+    `${unitDefinition(family, scoreType)}. Every panel shares one axis, so a line sitting lower is a genuinely ` +
+    `lower group and not a panel drawn to its own scale` +
+    (gap ? `; a move smaller than ${gap} ${u.points} counts as neither up nor down` : '') +
+    '. A year that was suppressed or never filed breaks the line rather than being drawn through.'
+  )
 }

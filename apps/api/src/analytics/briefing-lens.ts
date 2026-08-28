@@ -114,6 +114,12 @@ export const COMPLIANCE_ORDER = [
   // never actually ties with another source on the weight step, so this index is
   // only ever consulted defensively — enrollment has a unique source weight).
   'enrollment:below-plan',
+  // Penny coverage Phase 1 — the FORWARD cash projection (STEP 2.18). Leads the
+  // cash block: a dated reserve-floor breach ahead is more actionable than aging
+  // receivables behind. Listed DELIBERATELY (f8): an id absent from this array
+  // gets index -1 from the comparator and sorts AHEAD of the whole curated
+  // block — accidental ranking, the exact thing the block exists to prevent.
+  'cash:projected-shortfall',
   // AR/AP aging (Cash & Collections). Grouped with the financial-health block, right
   // after enrollment; AR overdue leads AP past-due so a same-severity tie is curated,
   // not id-arbitrary. KEPT for the viewer lens (aggregate, board-legible cash matter).
@@ -145,6 +151,17 @@ export const COMPLIANCE_ORDER = [
   // KEPT for the viewer lens (board-relevant) — see keepForViewer.
   'accreditation:coverage-gap',
   'accreditation:review-approaching',
+  // WS3 F1 — the cycle-milestone items (STEP 2.20), grouped with the two items
+  // above by the same sign-preserving insertion argument as the early-warning
+  // block below. The order is CURATED, not alphabetical: the Progress Report
+  // leads because it is the artifact the ACCREDITOR is owed (the year-4
+  // deliverable); the self-assessment is the school's own run-up; the evidence
+  // freeze is the last gate before the visit. (The other three milestone keys
+  // never reach the briefing — only overdue/at_risk milestones are pushed, and
+  // findings_shared/implementing/review_year cannot take those states.)
+  'accreditation:cycle-progress_report',
+  'accreditation:cycle-self_assessment',
+  'accreditation:cycle-evidence_freeze',
   // AIC Phase E — the briefable early-warning ids (STEP 2.16), eleven at Phase E
   // and FOURTEEN after Phase F. Inserted as
   // one block right after the accreditation items, before facilities: an early
@@ -230,9 +247,39 @@ export const COMPLIANCE_ORDER = [
   'workflow:my-approvals-pending',
   'workflow:approvals-pending',
   'workflow:tasks-due-soon',
+  // Penny coverage Phase 1 — the two INFO explainers (f8), placed low ON
+  // PURPOSE: each is a statement about the DATA (a forecast missing a receipt
+  // side, two headcounts that drifted apart), not about the school, and both
+  // rank with the data-hygiene tail rather than ahead of real findings. Same
+  // sign-preserving appending argument as the early-warning block above.
+  'cash:forecast-incomplete',
+  'enrollment:reconciliation-divergence',
+  // WS2 — the "rev. 2025 available" notice (STEP 2.21). An id FAMILY, not one
+  // id: the service emits `accreditation:framework-superseded:<code>` per held
+  // superseded framework, and the comparator ranks any of them at THIS slot via
+  // the prefix rule in complianceOrderIndex (instances then order by the final
+  // id tiebreak). Placed LOW with the info tail on purpose — it is a statement
+  // about the catalog edition, not about the school, and it must never outrank
+  // a real finding.
+  'accreditation:framework-superseded',
   'data:no-snapshot',
   'data:unmapped',
 ]
+
+/**
+ * COMPLIANCE_ORDER index for an item id. Exact match first; a per-instance id
+ * (`family:suffix`, e.g. `accreditation:framework-superseded:cognia_2022`)
+ * falls back to its family's curated slot so a fan-out family ranks where it
+ * was placed instead of accidentally sorting ahead of the whole curated block
+ * (the -1 trap the block's own comments warn about). Ids with no entry and no
+ * listed family keep the historic -1.
+ */
+export function complianceOrderIndex(id: string): number {
+  const exact = COMPLIANCE_ORDER.indexOf(id)
+  if (exact !== -1) return exact
+  const sep = id.lastIndexOf(':')
+  return sep > 0 ? COMPLIANCE_ORDER.indexOf(id.slice(0, sep)) : -1
+}
 
 // ── EMPHASIS: per-lens source weighting ──────────────────────────────────────
 // Leadership (owner) and governance (viewer) lead with the FINANCIAL SIGNAL
@@ -516,7 +563,7 @@ export function applyLens(items: readonly AttentionItem[], lens: Lens): Attentio
         METRIC_KEYS.indexOf(a.metricKey as never) - METRIC_KEYS.indexOf(b.metricKey as never)
       if (mi !== 0) return mi
     } else {
-      const ci = COMPLIANCE_ORDER.indexOf(a.id) - COMPLIANCE_ORDER.indexOf(b.id)
+      const ci = complianceOrderIndex(a.id) - complianceOrderIndex(b.id)
       if (ci !== 0) return ci
     }
     return a.id.localeCompare(b.id)

@@ -35,22 +35,42 @@ import { subjectLabelOf } from '@finrep/analytics'
 const HUE = '#0D9488'
 const EASE = [0.2, 0.8, 0.2, 1]
 
+// THE SELECTED PILL IS DARKER THAN THE BRAND TEAL, ON PURPOSE. White on
+// teal-600 (#0D9488) is 3.7:1 and on teal-500 it is 2.5:1 — the selected
+// option, the one thing on the bar that must be readable at a glance, was the
+// only text on it below AA. teal-700 → teal-800 carries the same hue and puts
+// the label at 5.5:1 at the light end of the gradient. The glow keeps it lit.
+const THUMB = 'linear-gradient(135deg, #0F766E, #115E59)'
+
 /**
  * Which controls BITE on which view. Derived by tracing each view's payload:
  *   standing  → subjects · heatmap · schools · insights
  *   classroom → distribution · subgroups · objectives
  *   time      → movements · trend
- *   cohorts   → cohort
+ *   cohorts   → the dedicated /assessments/cohorts payload
  *   network   → table · crossDomain
  * against the query each of those is computed from. Keep this in step with the
  * view blocks; a filter listed here that does not reach the data is exactly the
  * lie this component was built to remove.
+ *
+ * COHORTS, since it is the one that changed. The view now draws a grid of
+ * multi-year cohorts from its own route, and three of the old five controls
+ * mean something different there:
+ *   · the single-cohort select is GONE. It picked one current grade out of a
+ *     two-point payload; the view now enumerates every cohort the school's
+ *     grades support, and picks between them in its own control bar.
+ *   · GRADE is deliberately absent. A cohort SPANS grades — "grade 4" is a
+ *     category error on a chart whose subject is a group of children crossing
+ *     four of them.
+ *   · SUBJECT is the series selector. Empty means the publisher's reported
+ *     Total Battery rather than "all subjects", so the chip says so on this
+ *     view and only on this view.
  */
 export const FILTERS_FOR_VIEW = {
   standing: ['grade'],
   classroom: ['grade'],
   time: ['grade', 'subject'],
-  cohorts: ['cohort', 'subject'],
+  cohorts: ['subject'],
   network: ['grade'],
 }
 
@@ -67,8 +87,33 @@ const testLabel = (t) => TEST_LABEL[t] ?? String(t ?? '').toUpperCase()
 
 // ── Segmented control ────────────────────────────────────────────────────────
 
-/** All options visible, one click, and a thumb that slides between them. */
-function Segmented({ options, value, onChange, ariaLabel, uid }) {
+/**
+ * All options visible, one click, and a thumb that slides between them.
+ *
+ * Exported because the cohort view needs the same control for its own window
+ * picker. `uid` MUST be unique per instance: the thumb is a shared `layoutId`,
+ * and two instances with the same uid fling one thumb between two bars.
+ *
+ * An option may be `disabled` — a school with three grades on file has no
+ * four-grade cohort, and greying that option out with a reason says so, where
+ * hiding it would leave the reader wondering where the choice went.
+ *
+ * ── WHY THE THUMB IS NOT `-z-10` ANY MORE ───────────────────────────────────
+ * It was, and the selected option was consequently INVISIBLE: white text on
+ * white. `z-index: -10` does not mean "behind my label", it means "behind
+ * everything in the nearest ancestor STACKING CONTEXT" — and neither the
+ * button nor the group is one (`position: relative` with `z-index: auto`
+ * creates none). So the thumb sank past the group's own tinted track, past the
+ * bar's `bg-white`, and painted against the first real stacking context up the
+ * page. The label kept `color:#fff` and landed on the white card behind it, at
+ * about 1.05:1. The selected option — the only one that has to be legible —
+ * was the least legible thing in the control.
+ *
+ * The fix is the ordinary one: the thumb stays in flow at z-auto, and the
+ * LABEL is lifted above it with `relative z-10`. A painted-on-top thumb needs
+ * nothing from the ancestors, so no future wrapper can sink it again.
+ */
+export function Segmented({ options, value, onChange, ariaLabel, uid }) {
   const reduce = useReducedMotion()
   return (
     <div
@@ -79,30 +124,50 @@ function Segmented({ options, value, onChange, ariaLabel, uid }) {
     >
       {options.map((o) => {
         const on = String(o.value) === String(value)
+        const off = Boolean(o.disabled)
         return (
-          <button
-            key={o.value}
-            type="button"
-            role="radio"
-            aria-checked={on}
-            onClick={() => onChange(o.value)}
-            className="relative rounded-lg px-3 py-1.5 text-[12.5px] font-semibold transition-colors"
-            style={{ color: on ? '#fff' : '#475569' }}
-          >
-            {on ? (
-              <motion.span
-                aria-hidden="true"
-                layoutId={`${uid}-thumb`}
-                className="absolute inset-0 -z-10 rounded-lg"
-                style={{
-                  background: `linear-gradient(135deg, ${HUE}, #14B8A6)`,
-                  boxShadow: `0 6px 18px -8px ${HUE}`,
-                }}
-                transition={reduce ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 34 }}
-              />
-            ) : null}
-            {o.label}
-          </button>
+          // THE REASON HAS TO LIVE ON A WRAPPER. A `disabled` button swallows
+          // every pointer event, so the browser never fires the hover that
+          // would show its own `title` — the explanation for why the option is
+          // greyed out was unreachable by exactly the reader who needed it.
+          // `aria-disabled` keeps it announced-and-focusable, the span carries
+          // the tooltip, and the click handler still refuses.
+          <span key={o.value} title={off ? o.title : undefined} className="inline-flex">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={on}
+              aria-disabled={off || undefined}
+              title={off ? undefined : o.title}
+              onClick={() => !off && onChange(o.value)}
+              className={`relative rounded-lg px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${
+                off && !on ? 'cursor-not-allowed' : ''
+              }`}
+              // NOT `opacity-40` for the disabled state. Fading the whole
+              // button also faded the thumb, so a disabled-but-selected option
+              // washed out to nothing; and an opacity is invisible to a
+              // contrast check, which reads the colour and not the layer. A
+              // lighter slate says "not available here" in the colour itself,
+              // still above AA, and plainly distinct from the live options.
+              style={{ color: on ? '#FFFFFF' : off ? '#94A3B8' : '#475569' }}
+            >
+              {on ? (
+                <motion.span
+                  aria-hidden="true"
+                  layoutId={`${uid}-thumb`}
+                  className="absolute inset-0 rounded-lg"
+                  style={{
+                    background: THUMB,
+                    boxShadow: `0 6px 18px -8px ${HUE}`,
+                  }}
+                  transition={reduce ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 34 }}
+                />
+              ) : null}
+              {/* Above the thumb, which now paints on top of the button's own
+                  inline content. Without this the label is under the pill. */}
+              <span className="relative z-10">{o.label}</span>
+            </button>
+          </span>
         )
       })}
     </div>
@@ -114,8 +179,11 @@ function Segmented({ options, value, onChange, ariaLabel, uid }) {
 /**
  * Quiet when it is set to "all", lit when it is narrowing something — so a
  * glance at the bar tells you whether you are looking at everything or a slice.
+ *
+ * Exported for the same reason as Segmented: the cohort view's span picker is
+ * this control, and a second dropdown built to look like it would drift.
  */
-function FilterChip({ label, value, options, onChange, allLabel }) {
+export function FilterChip({ label, value, options, onChange, allLabel }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
   const active = value !== null && value !== undefined && value !== '' && value !== 'all'
@@ -197,16 +265,24 @@ function FilterChip({ label, value, options, onChange, allLabel }) {
 
 // ── The bar ──────────────────────────────────────────────────────────────────
 
-export default function AssessmentFilters({ ctx, data, view, onSelect, loading, anonymous, onAnonymous }) {
+// `data` is gone from the signature: the only thing it fed was the retired
+// single-cohort select, and a prop nothing reads is the next reader's dead end.
+export default function AssessmentFilters({ ctx, view, onSelect, loading, anonymous, onAnonymous }) {
   const shown = FILTERS_FOR_VIEW[view] ?? []
   const grade = ctx?.grade ?? 'all'
   const subject = ctx?.subject ?? ''
-  const cohort = data?.cohort?.grade ?? ''
 
   const years = ctx?.years ?? []
   const tests = ctx?.availableTestTypes ?? []
   const subjects = ctx?.subjects ?? []
-  const cohorts = [...new Map((data?.availableCohorts ?? []).map((c) => [c.currentGrade, c])).values()]
+
+  // On the cohort view an empty subject is not "all subjects" — it is the
+  // publisher's own reported composite, which is a NAMED measure and not a
+  // mean of the columns beside it. The chip says which one it is, in the NAME
+  // that family uses: the server labels it, because an ACT school's composite
+  // is not called what a TerraNova school's is.
+  const totalIsDefault = view === 'cohorts'
+  const totalLabel = (ctx?.availableSeries ?? []).find((s) => s.key === 'total')?.label ?? 'Composite'
 
   // Only count what is actually biting on this view — a subject left set from
   // another view is not narrowing anything here, and claiming it is would send
@@ -214,7 +290,6 @@ export default function AssessmentFilters({ ctx, data, view, onSelect, loading, 
   const narrowed = [
     shown.includes('grade') && grade !== 'all' ? `grade ${grade}` : null,
     shown.includes('subject') && subject ? subjectLabelOf(subject).toLowerCase() : null,
-    shown.includes('cohort') && cohort ? `grade ${cohort} cohort` : null,
   ].filter(Boolean)
 
   const clear = () => onSelect({ gradeLevel: null, subject: null, cohortGrade: null })
@@ -294,27 +369,14 @@ export default function AssessmentFilters({ ctx, data, view, onSelect, loading, 
 
         {shown.includes('subject') && subjects.length > 1 ? (
           <FilterChip
-            label="Subject"
+            label={totalIsDefault ? 'Measure' : 'Subject'}
             value={subject}
-            allLabel="All subjects"
+            allLabel={totalIsDefault ? totalLabel : 'All subjects'}
             options={[
-              { value: '', label: 'All subjects' },
+              { value: '', label: totalIsDefault ? totalLabel : 'All subjects' },
               ...subjects.map((s) => ({ value: s, label: subjectLabelOf(s) })),
             ]}
             onChange={(s) => onSelect({ subject: s || null })}
-          />
-        ) : null}
-
-        {shown.includes('cohort') && cohorts.length > 0 ? (
-          <FilterChip
-            label="Cohort"
-            value={cohort}
-            allLabel="Choose a cohort"
-            options={cohorts.map((c) => ({
-              value: c.currentGrade,
-              label: `Grade ${c.currentGrade} · ${c.currentYear}`,
-            }))}
-            onChange={(g) => onSelect({ cohortGrade: g || undefined })}
           />
         ) : null}
 

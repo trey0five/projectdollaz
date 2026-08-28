@@ -58,6 +58,19 @@ export default function AcademicsPage() {
   const [notLicensed, setNotLicensed] = useState(false)
   const [error, setError] = useState('')
 
+  // ── The longitudinal cohort grid, on its own route ────────────────────────
+  //
+  // Fetched only when the reader is actually on that view, and only with the
+  // params it uses. The FRAME (test type, end year, peer anonymity) is shared
+  // with the dashboard's own query so the two screens cannot disagree about
+  // which dataset is on show; the window is the view's own; and PEERS live in
+  // the URL, which is what keeps them genuinely opt-in — nothing asks the
+  // server for another school's lines until `?peers=1` is on the address bar.
+  const [cohorts, setCohorts] = useState(null)
+  const [cohortQuery, setCohortQuery] = useState({})
+  const [cohortsBusy, setCohortsBusy] = useState(false)
+  const [cohortsError, setCohortsError] = useState('')
+
   const load = useCallback(
     async (q = {}) => {
       if (!activeId) return
@@ -86,9 +99,14 @@ export default function AcademicsPage() {
   // almost certainly do not exist at the next one, so carrying them over asks
   // the API for a slice that is empty and shows "no data" for a school that has
   // plenty. `load` is keyed on activeId, so this fires exactly on a swap.
+  // The cohort payload rides along for the same reason: a different school is a
+  // different set of grades and therefore a different set of cohorts, so the
+  // window picked against the last one cannot survive the swap.
   useEffect(() => {
     setLoading(true)
     setQuery({})
+    setCohorts(null)
+    setCohortQuery({})
     load({})
   }, [load]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -105,6 +123,65 @@ export default function AcademicsPage() {
     },
     [query, load],
   )
+
+  const onCohorts = activeTab === 'analytics' && rawView === 'cohorts'
+  const peersOn = searchParams.get('peers') === '1'
+
+  const cohortParams = useMemo(() => {
+    const p = {
+      testType: query.testType,
+      // The year control is the END-YEAR ANCHOR here: every panel finishes in
+      // the same year, which is what makes them comparable side by side.
+      schoolYear: query.schoolYear,
+      // The scope bar's Subject chip IS the series selector on this view;
+      // absent means the publisher's reported Total Battery.
+      series: query.subject,
+      hidePeerNames: query.hidePeerNames,
+      window: cohortQuery.window,
+      endGrade: cohortQuery.endGrade,
+      scope: peersOn ? 'org' : undefined,
+    }
+    for (const k of Object.keys(p)) {
+      if (p[k] === undefined || p[k] === '' || p[k] === null) delete p[k]
+    }
+    return p
+  }, [query, cohortQuery, peersOn])
+
+  // Serialised, so a fresh-but-equal params object cannot spin the effect.
+  const cohortKey = JSON.stringify(cohortParams)
+
+  useEffect(() => {
+    if (!onCohorts || !activeId) return undefined
+    let cancelled = false
+    setCohortsBusy(true)
+    academicsApi
+      .cohorts(activeId, JSON.parse(cohortKey))
+      .then((res) => {
+        if (cancelled) return
+        setCohorts(res.data ?? res)
+        setCohortsError('')
+      })
+      .catch((e) => {
+        if (cancelled) return
+        setCohortsError(e?.response?.data?.message ?? 'Could not load the cohorts.')
+      })
+      .finally(() => {
+        if (!cancelled) setCohortsBusy(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [onCohorts, activeId, cohortKey])
+
+  const onCohortQuery = useCallback((patch) => {
+    setCohortQuery((prev) => {
+      const next = { ...prev, ...patch }
+      for (const k of Object.keys(next)) {
+        if (next[k] === undefined || next[k] === '' || next[k] === null) delete next[k]
+      }
+      return next
+    })
+  }, [])
 
   const level = dashboard?.school?.level
 
@@ -191,7 +268,15 @@ export default function AcademicsPage() {
               ) : loading && !dashboard ? (
                 <p className="text-[13px] text-muted">Loading the comparison…</p>
               ) : (
-                <AssessmentDashboard data={dashboard} onQuery={onQuery} loading={busy} />
+                <AssessmentDashboard
+                  data={dashboard}
+                  onQuery={onQuery}
+                  loading={busy}
+                  cohorts={cohorts}
+                  cohortsLoading={cohortsBusy}
+                  cohortsError={cohortsError}
+                  onCohortQuery={onCohortQuery}
+                />
               )}
             </div>
           </Panel>

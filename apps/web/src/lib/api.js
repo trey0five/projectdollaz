@@ -703,6 +703,43 @@ export const accreditationApi = {
   // only 402 is the 'accreditation' module gate itself.
   getVisit: (schoolId, params = {}) =>
     api.get(`/schools/${schoolId}/accreditation/visit`, { params }),
+  // ── Framework versioning + divisions (WS1/WS2) ──────────────────────────────
+  // The school's division/seal choice for ONE framework (NCA CASI / SACS CASI /
+  // NWAC on Cognia). PATCH upserts the profile row; explicit null clears back to
+  // plain accreditor branding. The seal LINE itself is composed server-side and
+  // arrives on the readiness payload (framework.division.sealLine) — the web
+  // renders it verbatim, never assembles it.
+  setFrameworkProfile: (schoolId, code, body) =>
+    api.patch(`/schools/${schoolId}/accreditation/frameworks/${code}/profile`, body),
+  // Upgrading to a successor framework (e.g. cognia_2022 → cognia_2025) is TWO
+  // calls on purpose, exactly like removal: the read-only preflight counts what
+  // carries over, the school reads it, and only then does the re-point run.
+  // `:code` is always the OLD framework — the target comes from the server's own
+  // supersededByCode, never from the client.
+  getFrameworkUpgradeImpact: (schoolId, code) =>
+    api.get(`/schools/${schoolId}/accreditation/frameworks/${code}/upgrade-impact`),
+  upgradeFramework: (schoolId, code) =>
+    api.post(`/schools/${schoolId}/accreditation/frameworks/${code}/upgrade`, {}),
+  // ── The accreditation CYCLE (the six-year journey) ──────────────────────────
+  // Server-computed milestone schedule anchored on the school's last Engagement
+  // Review. Every figure, state word, threshold and not-measurable reason in the
+  // payload is server-authored; the web paints it and computes nothing. Framework
+  // resolved like readiness: explicit ?frameworkId= → dominant. Omit absent
+  // params (forbidNonWhitelisted-style hygiene).
+  getCycle: (schoolId, { frameworkId } = {}) =>
+    api.get(`/schools/${schoolId}/accreditation/cycle`, {
+      params: { ...(frameworkId ? { frameworkId } : {}) },
+    }),
+  // PUT writes the anchor (owner/accountant). Explicit nulls clear; targetIndex
+  // is validated against the framework's bands server-side.
+  putCycle: (schoolId, body) => api.put(`/schools/${schoolId}/accreditation/cycle`, body),
+  // ── The standard EXPLAINER (plain-language layer) ───────────────────────────
+  // One standard's whole story for a committee member: verbatim statement, the
+  // authored plain-language line (null → the drawer renders NOTHING invented),
+  // the evidence checklist with live state, rubric position, bound signals.
+  // All roles read it; a foreign id 404s.
+  getStandardExplainer: (schoolId, standardId) =>
+    api.get(`/schools/${schoolId}/accreditation/standards/${standardId}/explainer`),
 }
 
 // ── Phase 4 Knowledge document store: CORE (always included, NOT a licensed module).
@@ -880,6 +917,14 @@ export const academicsApi = {
     api.get(`/schools/${schoolId}/academics/assessments/dashboard`, { params }),
   summary: (schoolId, params = {}) =>
     api.get(`/schools/${schoolId}/academics/assessments/summary`, { params }),
+  // The longitudinal cohort grid reads its OWN route rather than growing the
+  // dashboard payload: the view carries four controls of its own, and each one
+  // would otherwise refetch the ~200KB payload the other seven tabs share.
+  // params: schoolYear (the END-year anchor) · testType · window (2|3|4) ·
+  // scope ('school'|'org' — peers are opt-in) · series ('total' | subject key) ·
+  // endGrade · hidePeerNames · includeMatrix.
+  cohorts: (schoolId, params = {}) =>
+    api.get(`/schools/${schoolId}/academics/assessments/cohorts`, { params }),
   preview: (schoolId, formData) =>
     api.post(`/schools/${schoolId}/academics/assessments/upload`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -1170,6 +1215,26 @@ export const enrollmentApi = {
   getDemographics: (schoolId, periodId) =>
     api.get(`/schools/${schoolId}/enrollment/demographics`, {
       params: periodId ? { periodId } : {},
+    }),
+  // ── Enrollment ANALYTICS (the module's `analytics` tab) ─────────────────────
+  // ONE read for the whole dashboard: tiles (MetricResult[]), the dated trend,
+  // grade × year, the ladder, cohort SIZE progression, actual-vs-plan by grade,
+  // demographics, roster mix, the promoted-vs-reading reconciliation, the
+  // server-authored honesty `notes`, and the `unavailable` charts with reasons.
+  // Every figure arrives computed — the web formats and lays out, nothing more.
+  // Params are whitelisted server-side (forbidNonWhitelisted), so only the ones
+  // actually set are sent, and `years` MUST be a STRING ('1'…'5' — @IsIn).
+  // `cohortWindow` is the ONE knob that is a NUMBER (2..5, @IsInt after @Type) —
+  // the ladder length the cohort panels are drawn at. Out of range is a 400, so
+  // it is only sent when it is one of the values the server said it would take.
+  analytics: (schoolId, { periodId, asOf, years, cohortWindow } = {}) =>
+    api.get(`/schools/${schoolId}/enrollment/analytics`, {
+      params: {
+        ...(periodId ? { periodId } : {}),
+        ...(asOf ? { asOf } : {}),
+        ...(years ? { years: String(years) } : {}),
+        ...(cohortWindow ? { cohortWindow: Number(cohortWindow) } : {}),
+      },
     }),
   // Reverse a diocesan-import supersede: restore the backed-up MANUAL enrollment
   // figure into operational data, clearing the import stamp + snapshot flags

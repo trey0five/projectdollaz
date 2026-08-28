@@ -23,6 +23,7 @@ import { LENS_LABEL, type Lens } from '../analytics/briefing-lens.js'
 import type { AttentionItem } from '../analytics/briefing.service.js'
 import type { OrgAttentionItem } from '../analytics/org-briefing.service.js'
 import { AssistantClient } from './assistant.client.js'
+import { Redactor } from './redaction.js'
 import {
   NARRATE_CAP,
   assembleSegments,
@@ -210,7 +211,16 @@ export class BriefingNarrationService {
 
     let parsed: ParsedNarration | null = null
     try {
-      const messages = buildNarrationPrompt(payload, dayPart)
+      // Privacy F5 — belt-and-suspenders on the outbound payload: briefing items
+      // are metric-derived (low risk), but every string that leaves for the
+      // provider passes redactText anyway (masks emails/SSN-shaped runs). Done
+      // HERE, not in narration.compose — the compose/validation module and its
+      // spec are guaranteed byte-unchanged.
+      const scrub = new Redactor(true)
+      const messages = buildNarrationPrompt(payload, dayPart).map((m) => {
+        const msg = m as { role?: unknown; content?: unknown }
+        return typeof msg.content === 'string' ? { ...msg, content: scrub.redactText(msg.content) } : m
+      })
       const msg = await this.race(this.client.chat(messages, []), LLM_TIMEOUT_MS)
       parsed = parseNarrationJson(msg.content ?? '')
     } catch (e) {

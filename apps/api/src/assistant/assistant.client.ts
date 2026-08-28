@@ -29,6 +29,32 @@ export class AssistantClient {
     return this.config.get<string>('assistant.provider') ?? 'openrouter'
   }
 
+  /** Zero-data-retention on by default; only an explicit config 'false' opts out. */
+  private get llmZdr(): boolean {
+    return this.config.get<boolean>('assistant.llmZdr') ?? true
+  }
+
+  /**
+   * Privacy F3 — per-request retention controls, verified against OpenRouter's
+   * provider-routing docs (2026-08): `provider.data_collection: 'deny'` routes
+   * only to endpoints that do not collect/store prompts, and `provider.zdr: true`
+   * restricts routing to Zero-Data-Retention endpoints (ORs with the account-wide
+   * ZDR setting — the account-level enforcement is still an ops requirement, see
+   * .env.example). FAIL CLOSED: when no eligible endpoint exists the request
+   * errors and the error names the flags — we never retry without them.
+   */
+  private zdrFields(): Record<string, unknown> {
+    return this.llmZdr ? { provider: { data_collection: 'deny', zdr: true } } : {}
+  }
+
+  private describeError(status: number): string {
+    return `assistant LLM error ${status}${
+      this.llmZdr
+        ? ' (zero-data-retention flags are enforced on this request; if no provider matches, fix the model/provider configuration rather than disabling ZDR)'
+        : ''
+    }`
+  }
+
   /**
    * Bedrock (in-account) needs no key — creds come from the task role. OpenRouter
    * (dev) needs an API key.
@@ -61,11 +87,12 @@ export class AssistantClient {
           tool_choice: 'auto',
           max_tokens: 1200,
           temperature: 0.2,
+          ...this.zdrFields(),
         }),
         signal: controller.signal,
       })
       if (!res.ok) {
-        throw new Error(`assistant LLM error ${res.status}`)
+        throw new Error(this.describeError(res.status))
       }
       const data = (await res.json()) as {
         choices?: Array<{ message?: AssistantMessage }>
@@ -110,10 +137,11 @@ export class AssistantClient {
           max_tokens: 1200,
           temperature: 0.2,
           stream: true,
+          ...this.zdrFields(),
         }),
         signal: controller.signal,
       })
-      if (!res.ok || !res.body) throw new Error(`assistant LLM error ${res.status}`)
+      if (!res.ok || !res.body) throw new Error(this.describeError(res.status))
 
       const reader = (res.body as ReadableStream<Uint8Array>).getReader()
       const decoder = new TextDecoder()

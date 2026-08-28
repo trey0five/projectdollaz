@@ -7,7 +7,15 @@
 // ─────────────────────────────────────────────────────────────
 
 /** A metric's unit, drives UI formatting. */
-export type MetricUnit = 'percent' | 'days' | 'months' | 'ratio' | 'currency' | 'share'
+/**
+ * 'count' (added with enrollment_headcount) is a WHOLE-THING tally — students,
+ * staff, seats. It formats with thousands separators and no decimals, because
+ * "436.00 students" claims a precision that children do not have. It is
+ * deliberately distinct from 'ratio', which is the two-decimal catch-all: a count
+ * that fell through to 'ratio' printed "436.00", and one that fell through to
+ * 'percent' would have printed "43,600%".
+ */
+export type MetricUnit = 'percent' | 'days' | 'months' | 'ratio' | 'currency' | 'share' | 'count'
 
 /**
  * Coarse business domain a metric belongs to — for catalog grouping/filtering.
@@ -137,6 +145,11 @@ export type MetricKey =
   | 'sat_total'
   | 'benchmark_attainment'
   | 'assessment_participation_rate'
+  // Enrollment analytics — the plain total headcount, promoted to a registry
+  // metric so the tile, the leaderboard, the briefing and Penny all print ONE
+  // number from ONE definition. Appended LAST so every prior key's order (and
+  // therefore every saved dashboard layout) stays byte-identical.
+  | 'enrollment_headcount'
 
 /**
  * Operational reference data for a period — enrollment + financial aid figures

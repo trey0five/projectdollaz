@@ -44,6 +44,7 @@ import { ChartDefs, INK, divergingFill, fitScale, shortName, spreadLabels } from
 import { WhatThisMeasures, axisUnitOf, unitLabelOf } from './MeasureNote.jsx'
 import { Section } from '../module/SectionHeader.jsx'
 import AssessmentFilters from './AssessmentFilters.jsx'
+import CohortLongitudinal from './CohortLongitudinal.jsx'
 
 const EASE = [0.2, 0.8, 0.2, 1]
 const HUE = '#0D9488'
@@ -186,8 +187,15 @@ function RankedSchools({ schools, focusId, national, peerAvg, range, reduce, ano
       {/* The number column carries its unit ONCE, here, so a bare 58 is never
           left standing on its own. */}
       {unit ? (
-        <div className="flex items-center justify-end pb-1">
-          <span className="font-mono text-[8.5px] font-bold uppercase tracking-[0.16em] text-muted">{unit.label}</span>
+        // ANCHORED, NOT ALIGNED. `text-align: right` does nothing for a line
+        // wider than its box — the overflow still runs off the right-hand side,
+        // where the card's overflow-hidden ate the last three letters of
+        // "national percentile". Pinned to right-0 the label grows LEFTWARDS
+        // over the bar track and its right edge lands on the value column.
+        <div className="relative h-3 pb-1">
+          <span className="absolute right-0 top-0 whitespace-nowrap font-mono text-[8.5px] font-bold uppercase tracking-[0.16em] text-muted">
+            {unit.label}
+          </span>
         </div>
       ) : null}
 
@@ -1185,7 +1193,18 @@ function priorGradeLabel(grade) {
 
 // ── The dashboard ────────────────────────────────────────────────────────────
 
-export default function AssessmentDashboard({ data, onQuery, loading }) {
+export default function AssessmentDashboard({
+  data,
+  onQuery,
+  loading,
+  // The cohort view reads its own route, so its payload arrives beside the
+  // dashboard's rather than inside it: four view-local controls would otherwise
+  // refetch the whole ~200KB payload that seven other tabs share.
+  cohorts = null,
+  cohortsLoading = false,
+  cohortsError = '',
+  onCohortQuery,
+}) {
   const reduce = useReducedMotion()
   const [anonymous, setAnonymous] = useState(false)
 
@@ -1238,7 +1257,6 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
       {/* ── Scope bar ── */}
       <AssessmentFilters
         ctx={ctx}
-        data={data}
         view={view}
         onSelect={select}
         loading={loading}
@@ -1527,38 +1545,19 @@ export default function AssessmentDashboard({ data, onQuery, loading }) {
       </>
       ) : null}
 
-      {/* ── Cohorts ── */}
+      {/* ── Cohorts ────────────────────────────────────────────────────────
+          The v2 view, on its OWN payload. `data.cohort` (the two-point,
+          every-school-in-the-diocese slopegraph) and `CohortPanel` below are
+          untouched and still served by /dashboard — retiring them is a separate
+          change, made once this has been read against the old one. */}
       {view === 'cohorts' ? (
-        data?.cohort ? (
-          <Section
-            eyebrow="Longitudinal cohort" icon={Footprints}
-            title={`The same students, followed into grade ${data.cohort.grade}`}
-            reduce={reduce}
-            aside={<Users2 size={16} className="text-muted" />}
-          >
-            <WhatThisMeasures
-              chart="cohort"
-              ctx={ctx}
-              refs={['national']}
-              gradeLabel={`grade ${data.cohort.grade}`}
-              reduce={reduce}
-            />
-            <CohortPanel
-              cohort={{ ...data.cohort, focusSchoolId: data?.school?.id }}
-              national={ctx?.nationalReference}
-              range={ctx?.scoreRange}
-              reduce={reduce}
-            />
-          </Section>
-        ) : (
-          <Section eyebrow="Longitudinal cohort" icon={Footprints} title="Follow the same children forward" reduce={reduce}>
-            <p className="text-[12.5px] text-muted">
-              {(data?.availableCohorts ?? []).length > 0
-                ? 'Choose a cohort above and this follows that same group of children across the years, rather than comparing this year’s fifth graders with last year’s different fifth graders.'
-                : 'Two consecutive years of results for consecutive grades lets us follow one group of children forward. Load a second year and this fills in.'}
-            </p>
-          </Section>
-        )
+        <CohortLongitudinal
+          payload={cohorts}
+          loading={cohortsLoading}
+          error={cohortsError}
+          onQuery={onCohortQuery}
+          reduce={reduce}
+        />
       ) : null}
 
       {/* ── Network ── */}

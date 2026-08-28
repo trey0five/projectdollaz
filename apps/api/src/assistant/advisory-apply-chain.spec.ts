@@ -40,6 +40,16 @@ const UNION_KINDS = Object.keys(REFRESH) as ProposedAction['kind'][]
 /** The two kinds AIC Phase J added. Spelled out so this file names its subject. */
 const PHASE_J_KINDS = ['draft_improvement_plan', 'attach_evidence'] as const
 
+/**
+ * The two kinds Penny coverage Phase 1 added — the cash-forecast writes.
+ *
+ * Spelled out for the same reason PHASE_J_KINDS is: the generic set-equality
+ * assertions above catch a desync, but they cannot say WHICH change caused it.
+ * Naming the batch means a reviewer who deletes one of these from APPLY_KINDS
+ * gets a failure that names the kind, not a diff of two large sets.
+ */
+const PHASE_CASH_KINDS = ['create_cash_commitment', 'save_cash_line_adjustment'] as const
+
 describe('AC-1 — a ProposedAction kind reaches every touchpoint', () => {
   it('AC-1.1 APPLY_KINDS and ProposedAction[kind] name the SAME set', () => {
     const inDto = new Set<string>(APPLY_KINDS)
@@ -59,6 +69,37 @@ describe('AC-1 — a ProposedAction kind reaches every touchpoint', () => {
       expect(APPLY_KINDS as readonly string[], `${kind} missing from APPLY_KINDS`).toContain(kind)
       expect(Object.keys(REFRESH), `${kind} missing from REFRESH`).toContain(kind)
       expect(UNION_KINDS as readonly string[]).toContain(kind)
+    }
+  })
+
+  it('AC-1.2b both cash kinds reach all six touchpoints', () => {
+    const schemaNames = new Set(TOOL_SCHEMAS.map((t) => t.function.name))
+    // The kind ↔ tool mapping: the tool the model calls, and the kind the
+    // resulting proposal carries. They are deliberately different strings.
+    const TOOL_FOR_KIND: Record<string, string> = {
+      create_cash_commitment: 'add_cash_forecast_item',
+      save_cash_line_adjustment: 'adjust_cash_forecast_line',
+    }
+    for (const kind of PHASE_CASH_KINDS) {
+      // 1 the union (via the total Record), 2 the DTO, 3 REFRESH, 4 reversible.
+      expect(UNION_KINDS as readonly string[], `${kind} missing from ProposedAction`).toContain(kind)
+      expect(APPLY_KINDS as readonly string[], `${kind} missing from APPLY_KINDS — this 400s /apply`).toContain(kind)
+      expect(Object.keys(REFRESH), `${kind} missing from REFRESH`).toContain(kind)
+      expect([...REVERSIBLE_KINDS], `${kind} missing from REVERSIBLE_KINDS`).toContain(kind)
+      // 5 confirm-then-apply, 6 a status label — both keyed by the TOOL name.
+      const tool = TOOL_FOR_KIND[kind]
+      expect([...CONFIRM_TOOLS], `${tool} is not confirm-then-apply`).toContain(tool)
+      expect(schemaNames, `${tool} is not a registered tool`).toContain(tool)
+      expect(TOOL_LABELS[tool as keyof typeof TOOL_LABELS], `no TOOL_LABELS entry for ${tool}`).toBeTruthy()
+    }
+  })
+
+  it('AC-1.2c neither cash write is an AUTONOMOUS write', () => {
+    // Committing a school's forecast to a recurring obligation, or excluding the
+    // line that was drawing its trough, must be confirmed. If either ever appears
+    // in WRITE_TOOLS it executes the moment the model decides to call it.
+    for (const tool of ['add_cash_forecast_item', 'adjust_cash_forecast_line']) {
+      expect([...WRITE_TOOLS], `${tool} became an autonomous write`).not.toContain(tool)
     }
   })
 

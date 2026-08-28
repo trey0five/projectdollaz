@@ -23,6 +23,9 @@ function standard(over: Partial<StandardPublic>): StandardPublic {
     rating,
     reviewDate: over.reviewDate ?? null,
     owner: over.owner ?? null,
+    // WS3 F2 additive delegation fields (typecheck-only here).
+    ownerUserId: over.ownerUserId ?? null,
+    ownerName: over.ownerName ?? null,
     notes: over.notes ?? null,
     evidenceCount: over.evidenceCount ?? 0,
     coverage: over.coverage ?? 'no-evidence',

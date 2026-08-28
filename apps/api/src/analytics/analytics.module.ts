@@ -33,6 +33,7 @@ import { OrgBriefingService } from './org-briefing.service.js'
 import { DashboardController } from './dashboard.controller.js'
 import { DashboardService } from './dashboard.service.js'
 import { AssistantClient } from '../assistant/assistant.client.js'
+import { CashFlowModule } from '../cashflow/cashflow.module.js'
 
 /**
  * Phase 4A Analytics & Insights. Reads existing statement_snapshots (no new DB
@@ -70,6 +71,16 @@ import { AssistantClient } from '../assistant/assistant.client.js'
     // Edge is analytics → strategy ONLY (StrategyModule does NOT import analytics) —
     // acyclic. StrategyProgressService injects Prisma-only, so no service cycle either.
     StrategyModule,
+    // Penny coverage Phase 1 — exports CashFlowService for BriefingService's
+    // FORWARD cash STEP (2.18). "When do we run low on cash?" is the one finance
+    // question a head of school asks unprompted and the briefing had no line for
+    // it. Injected rather than read via Prisma (the STEP 2.11/2.12 pattern)
+    // because a projection is a COMPUTATION, not a stored snapshot, and a second
+    // copy of it here would let the briefing and the cash-flow page disagree
+    // about the same school's low point. Edge is analytics → cashflow ONLY:
+    // CashFlowModule imports Auth, Prisma and Billing, none of which reaches
+    // analytics — acyclic, same argument as every module above.
+    CashFlowModule,
   ],
   controllers: [
     AnalyticsController,
@@ -104,6 +115,12 @@ import { AssistantClient } from '../assistant/assistant.client.js'
     // be a circular import. A second AssistantClient instance is harmless.
     AssistantClient,
   ],
-  exports: [InsightService, AnalyticsService, OperationalService, BudgetService, BudgetRollupService, StatementsRollupService, OrgMetricsService, BriefingService, OrgBriefingService],
+  // EnrollmentPlanService is EXPORTED (additive) so EnrollmentModule's analytics
+  // tab can read the per-grade plan through the service that owns the resolve
+  // CONTRACT (driver grid > plannedEnrollmentByGrade > none, with the read-error
+  // distinction) instead of growing a fourth copy of that priority ladder. It is
+  // PrismaService-only by design, so the edge stays acyclic: enrollment →
+  // analytics only, and nothing analytics imports reaches EnrollmentModule.
+  exports: [InsightService, AnalyticsService, OperationalService, BudgetService, BudgetRollupService, StatementsRollupService, OrgMetricsService, BriefingService, OrgBriefingService, EnrollmentPlanService],
 })
 export class AnalyticsModule {}

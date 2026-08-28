@@ -56,8 +56,13 @@ export const MODULE_ANATOMY = {
     // and deep links are frozen on it); only the human label differs.
     tabLabels: { records: 'Workspaces' },
   },
+  // Enrollment earns the analytics door on the same rule Academics did: its
+  // analysis is a whole dashboard (trend, grade × year, cohort size, vs plan,
+  // demographics) rather than a KPI strip, and the Overview was already full.
+  // The trend and the roster mix MOVED there — Overview keeps "is my data
+  // flowing, and what is the headline".
   enrollment: {
-    tabs: ['overview', 'add', 'records'],
+    tabs: ['overview', 'add', 'records', 'analytics'],
     Icon: GraduationCap,
     eyebrow: 'Enrollment intelligence',
   },
