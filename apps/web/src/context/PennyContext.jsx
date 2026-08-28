@@ -154,7 +154,16 @@ export function PennyProvider({ children }) {
         return {
           targetId: t.domId,
           message: s.message,
-          nav: { page: s.page ?? t.page, openModal: s.openModal ?? t.openModal },
+          // THE REGISTRY'S PAGE WINS over the LLM step's page hint. The registry
+          // row is tab-precise CLIENT vocabulary ('cash-flow-inputs',
+          // 'enrollment-grades' — sub-views where the anchor actually mounts),
+          // while the model only knows the backend's coarse page enum
+          // ('cash-flow', 'enrollment-analytics'); letting the model's hint win
+          // landed the coin on a tab where the target dom id never mounts.
+          // Every registry row carries a page, so s.page is only a fallback for
+          // a hypothetical page-less row; openModal stays step-first (the model
+          // legitimately decides whether a step opens the modal).
+          nav: { page: t.page ?? s.page, openModal: s.openModal ?? t.openModal },
           ctaLabel: s.cta?.label,
         }
       })

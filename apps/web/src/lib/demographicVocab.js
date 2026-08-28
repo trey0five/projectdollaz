@@ -80,10 +80,19 @@ export function ageFromBirthDate(birthDate, asOf) {
   return age >= 0 && age < 130 ? age : null
 }
 
-/** FERPA min-cell display rule (CLIENT display-only — the API returns true counts):
- *  categorical breakdown cells between 1 and 4 render as '<5'. Never applied to
- *  headline KPI totals. */
+/** True when the API suppressed this cell server-side: `{ suppressed: true }`
+ *  with NO value key (the students/aggregate route now floors small
+ *  attribute-coupled cells before they leave the server). */
+export function isSuppressedCell(n) {
+  return !!n && typeof n === 'object' && n.suppressed === true
+}
+
+/** FERPA min-cell display rule. The students/aggregate API now suppresses small
+ *  attribute cells SERVER-side (they arrive as `{ suppressed: true }`, no value)
+ *  — those render '<5'. The numeric branch stays as the client display rule for
+ *  surfaces still receiving true counts. Never applied to headline KPI totals. */
 export function formatMinCell(n) {
+  if (isSuppressedCell(n)) return '<5'
   const v = Number(n) || 0
   return v > 0 && v < 5 ? '<5' : String(v)
 }

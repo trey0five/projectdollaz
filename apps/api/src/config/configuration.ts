@@ -171,6 +171,13 @@ export interface AppConfig {
   assistant: {
     ferpaMode: boolean
     provider: string
+    // Per-request zero-data-retention on every OpenRouter call (default ON):
+    // sends `provider: { data_collection: 'deny', zdr: true }` so requests only
+    // route to endpoints that neither retain nor train on prompts. If no
+    // eligible provider exists for the configured model the request FAILS —
+    // that is a configuration error to fix (pick a ZDR-capable model/provider
+    // or set ASSISTANT_LLM_ZDR=false deliberately), never silently dropped.
+    llmZdr: boolean
     bedrock: {
       region: string
       modelId: string
@@ -364,6 +371,8 @@ export function configuration(): AppConfig {
       provider:
         process.env.ASSISTANT_LLM_PROVIDER ??
         (process.env.BEDROCK_MODEL_ID ? 'bedrock' : 'openrouter'),
+      // Zero-data-retention flags ON by default; only an explicit 'false' opts out.
+      llmZdr: (process.env.ASSISTANT_LLM_ZDR ?? 'true') !== 'false',
       bedrock: {
         region: process.env.AWS_REGION ?? 'us-east-1',
         // Cross-region INFERENCE PROFILE id (the `us.` form) — current Claude

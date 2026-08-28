@@ -109,6 +109,10 @@ function epsFor(unit: MetricUnit): number {
       return 0.5
     case 'months':
       return 0.05
+    // A headcount only ever moves in whole students; anything under half a
+    // student is float noise from a roll-up, not a change worth a version.
+    case 'count':
+      return 0.5
     default:
       return 5e-5
   }

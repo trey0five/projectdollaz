@@ -85,6 +85,9 @@ into testable modules. Pure functions in `calc.js` can be imported and run headl
 
 ## Notes
 
+- `sample-roster-facts-users.csv` (repo root) is **entirely synthetic test data** — all 449
+  student rows and every name in them are generated fakes; no row is a real person. See
+  `docs/SAMPLE_DATA.md`.
 - ExcelJS (~500 KB) is dynamically imported only when exporting, keeping the initial bundle small.
 - Net assets on the Statement of Financial Position are derived from the SOA roll-forward
   (configured beginning balance + period change), matching the source engine.

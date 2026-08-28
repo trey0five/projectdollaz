@@ -218,7 +218,9 @@ export const ORG_COMMAND = {
 export const TRUST = {
   heading: 'Built for the trust schools require',
   items: [
-    { icon: 'shield', label: 'FERPA-compliant', to: '/privacy' },
+    // "FERPA-aligned", deliberately — there is no FERPA certification, and the
+    // privacy page this badge opens explains the honest posture (§5 truth rule).
+    { icon: 'shield', label: 'FERPA-aligned', to: '/privacy' },
     { icon: 'lock', label: 'End-to-end encrypted' },
     { icon: 'server', label: 'Hosted on AWS · US' },
   ],

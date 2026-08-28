@@ -95,6 +95,9 @@ export const EXPORT_TABLES: ExportTable[] = [
 
   // ── Accreditation ─────────────────────────────────────────────────────────
   { model: 'accreditationStandard', folder: 'accreditation', file: 'standards' },
+  // WS1/WS3 — the per-framework profile: division/seal choice, upgrade
+  // provenance, and the six-year-cycle anchor. School-entered metadata → export.
+  { model: 'accreditationFrameworkProfile', folder: 'accreditation', file: 'framework-profiles' },
   { model: 'accreditationEvidence', folder: 'accreditation', file: 'evidence' },
   { model: 'accreditationFinding', folder: 'accreditation', file: 'findings' },
   { model: 'accreditationReadinessSnapshot', folder: 'accreditation', file: 'readiness-snapshots' },
