@@ -31,7 +31,10 @@ locals {
 
   ecr_arn     = "arn:aws:ecr:${local.region}:${local.account}:repository/${var.prefix}-api"
   cluster_arn = "arn:aws:ecs:${local.region}:${local.account}:cluster/${var.prefix}-cluster"
-  service_arn = "arn:aws:ecs:${local.region}:${local.account}:service/${var.prefix}-cluster/${var.prefix}-api"
+  # -api* (not -api): the service was renamed -api-svc for the tunnel cutover,
+  # and an exact-name scope silently breaks CD on any future rename. Still
+  # cluster-scoped, still prefix-scoped.
+  service_arn = "arn:aws:ecs:${local.region}:${local.account}:service/${var.prefix}-cluster/${var.prefix}-api*"
   spa_arn     = "arn:aws:s3:::${var.prefix}-spa"
 
   oidc_arn = var.existing_oidc_provider_arn != "" ? var.existing_oidc_provider_arn : aws_iam_openid_connect_provider.github[0].arn
