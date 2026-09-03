@@ -31,7 +31,7 @@ env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: ourkyro-prod-api
   ECS_CLUSTER: ourkyro-prod-cluster
-  ECS_SERVICE: ourkyro-prod-api
+  ECS_SERVICE: ourkyro-prod-api-svc
   SPA_BUCKET: ourkyro-prod-spa
   DOMAIN: ourkyro.com
   CLOUDFRONT_DISTRIBUTION_ID: EAV9IL3VN9XXE

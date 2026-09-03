@@ -3,6 +3,9 @@
 # ─────────────────────────────────────────────────────────────────────────────
 locals {
   prefix = "${var.project}-${var.environment}"
+  # Cloudflare Tunnel "ourkyro-api": created out-of-band with `cloudflared
+  # tunnel create`; referenced by the edge DNS record AND the compute sidecar.
+  cloudflared_tunnel_id = "400c2550-c2df-4eeb-9f1c-53ffa012f8af"
 }
 
 module "network" {
@@ -58,24 +61,29 @@ module "edge" {
   prefix                     = local.prefix
   domain_name                = var.domain_name
   cloudflare_zone_id         = var.cloudflare_zone_id
-  vpc_id                     = module.network.vpc_id
-  public_subnet_ids          = module.network.public_subnet_ids
-  alb_sg_id                  = module.network.alb_sg_id
+  cloudflared_tunnel_id      = local.cloudflared_tunnel_id
   spa_bucket_id              = module.storage.spa_bucket_id
   spa_bucket_regional_domain = module.storage.spa_bucket_regional_domain
-  api_container_port         = var.api_container_port
+}
+
+# Cloudflare Tunnel ingress: created out-of-band (`cloudflared tunnel create
+# ourkyro-api`), credentials JSON stored in Secrets Manager by hand — the
+# secret VALUE never touches terraform state.
+data "aws_secretsmanager_secret" "cloudflared" {
+  name = "ourkyro-prod-cloudflared-tunnel-cred"
 }
 
 module "compute" {
   source                  = "../../modules/compute"
   prefix                  = local.prefix
-  # Tasks live in the PUBLIC subnets (with assign_public_ip) so the VPC needs
-  # no NAT gateway; the app SG still only admits the ALB. See modules/compute.
+  cloudflared_tunnel_id   = local.cloudflared_tunnel_id
+  cloudflared_secret_arn  = data.aws_secretsmanager_secret.cloudflared.arn
+  # Tasks live in the PUBLIC subnets (assign_public_ip) — no NAT; ingress is
+  # the cloudflared sidecar's outbound tunnel. See modules/compute.
   app_subnet_ids          = module.network.public_subnet_ids
   app_sg_id               = module.network.app_sg_id
   task_execution_role_arn = module.security.task_execution_role_arn
   task_role_arn           = module.security.task_role_arn
-  target_group_arn        = module.edge.target_group_arn
 
   api_cpu            = var.api_cpu
   api_memory         = var.api_memory
@@ -93,8 +101,6 @@ module "compute" {
   bedrock_model_id     = var.bedrock_model_ids[0]
   brevo_smtp_user      = var.brevo_smtp_user
 
-  # Ensure the ALB listener exists before the service registers with the TG.
-  depends_on = [module.edge]
 }
 
 module "audit" {

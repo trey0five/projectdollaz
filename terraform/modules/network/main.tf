@@ -1,9 +1,9 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # network — VPC across az_count AZs with three tiers of subnets:
-#   public (ALB + the single NAT), private-app (Fargate), private-db (RDS).
-# ONE shared NAT gateway (lean); every private-app subnet routes egress through
-# it. The private-db tier has NO internet route at all. A free S3 gateway
-# endpoint keeps document traffic off the NAT.
+#   public (Fargate tasks w/ public-IP egress), private-app (kept, unused),
+# private-db (RDS, no internet route). No NAT, no ALB: ingress is the
+# cloudflared sidecar's outbound tunnel; a free S3 gateway endpoint serves the
+# private tiers.
 # ─────────────────────────────────────────────────────────────────────────────
 variable "prefix" { type = string }
 variable "vpc_cidr" { type = string }
@@ -117,44 +117,16 @@ resource "aws_vpc_endpoint" "s3" {
 data "aws_region" "current" {}
 
 # ── Security groups ──
-# ALB accepts 443 only from CloudFront's origin-facing ranges.
-data "aws_ec2_managed_prefix_list" "cloudfront" {
-  name = "com.amazonaws.global.cloudfront.origin-facing"
-}
-
-resource "aws_security_group" "alb" {
-  name        = "${var.prefix}-alb-sg"
-  description = "ALB ingress from CloudFront only"
-  vpc_id      = aws_vpc.this.id
-
-  ingress {
-    description     = "HTTPS from CloudFront"
-    from_port       = 443
-    to_port         = 443
-    protocol        = "tcp"
-    prefix_list_ids = [data.aws_ec2_managed_prefix_list.cloudfront.id]
-  }
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  tags = { Name = "${var.prefix}-alb-sg" }
-}
+# No ALB security group: ingress arrives via the cloudflared sidecar's
+# OUTBOUND tunnel, so the app tier needs no inbound rules at all.
 
 resource "aws_security_group" "app" {
   name        = "${var.prefix}-app-sg"
   description = "Fargate task ingress from ALB only"
   vpc_id      = aws_vpc.this.id
 
-  ingress {
-    description     = "App port from ALB"
-    from_port       = var.api_container_port
-    to_port         = var.api_container_port
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
-  }
+  # NO ingress rules — the task is reached only through the cloudflared
+  # sidecar's outbound tunnel; nothing on the internet can connect in.
   egress {
     from_port   = 0
     to_port     = 0
@@ -183,6 +155,5 @@ output "vpc_id" { value = aws_vpc.this.id }
 output "public_subnet_ids" { value = aws_subnet.public[*].id }
 output "app_subnet_ids" { value = aws_subnet.app[*].id }
 output "db_subnet_ids" { value = aws_subnet.db[*].id }
-output "alb_sg_id" { value = aws_security_group.alb.id }
 output "app_sg_id" { value = aws_security_group.app.id }
 output "db_sg_id" { value = aws_security_group.db.id }

@@ -1,15 +1,25 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# compute — ECR + ECS Fargate. One API service in the private-app subnets (no
-# public IP; egress via the shared NAT). Secrets are injected at runtime from
-# Secrets Manager (app secret) and the RDS-managed master secret. Autoscaling
-# 1→2 on CPU. Logs to CloudWatch.
+# compute — ECR + ECS Fargate. One API service in the PUBLIC subnets with a
+# public IP for egress (no NAT). Ingress arrives OUTBOUND-ONLY via the
+# cloudflared sidecar (Cloudflare Tunnel → localhost) — CloudFront's /api/*
+# origin is the tunnel hostname; there is no ALB. Secrets are injected at
+# runtime from Secrets Manager (app secret, RDS master secret, tunnel cred).
+# Autoscaling 1→2 on CPU. Logs to CloudWatch.
 # ─────────────────────────────────────────────────────────────────────────────
 variable "prefix" { type = string }
 variable "app_subnet_ids" { type = list(string) }
 variable "app_sg_id" { type = string }
 variable "task_execution_role_arn" { type = string }
 variable "task_role_arn" { type = string }
-variable "target_group_arn" { type = string }
+
+# Cloudflare Tunnel ingress (replaces the ALB). The sidecar dials OUT to
+# Cloudflare; credentials JSON is read from Secrets Manager at task start.
+variable "cloudflared_tunnel_id" { type = string }
+variable "cloudflared_secret_arn" { type = string }
+variable "cloudflared_image" {
+  type    = string
+  default = "cloudflare/cloudflared:2026.8.3" # pin; bump deliberately
+}
 
 variable "api_cpu" { type = number }
 variable "api_memory" { type = number }
@@ -77,8 +87,6 @@ resource "aws_ecs_task_definition" "api" {
   execution_role_arn       = var.task_execution_role_arn
   task_role_arn            = var.task_role_arn
   runtime_platform {
-    # X86_64 for a fast native image build on an x86 host. Switch back to ARM64
-    # (Graviton, ~20% cheaper) once you have an arm64 build in CI.
     # Graviton: ~20% cheaper Fargate. CD builds the image multi-arch
     # (amd64+arm64), so flipping back to X86_64 is a safe rollback.
     cpu_architecture        = "ARM64"
@@ -90,6 +98,20 @@ resource "aws_ecs_task_definition" "api" {
     image        = "${aws_ecr_repository.api.repository_url}:${var.api_image_tag}"
     essential    = true
     portMappings = [{ containerPort = var.api_container_port, protocol = "tcp" }]
+
+    # With no ALB there is no target-group health check — this container check
+    # is ECS's only health signal, and it gates the cloudflared sidecar
+    # (dependsOn HEALTHY) so the tunnel never advertises a booting API.
+    # startPeriod covers `prisma migrate deploy` on boot.
+    healthCheck = {
+      # -k: the app serves HTTPS with a boot-generated self-signed cert
+      # (ENABLE_TLS below) — same reason the ALB target group was HTTPS.
+      command     = ["CMD-SHELL", "curl -fsSk https://localhost:${var.api_container_port}/health || exit 1"]
+      interval    = 15
+      timeout     = 5
+      retries     = 3
+      startPeriod = 90
+    }
 
     environment = [
       { name = "NODE_ENV", value = "production" },
@@ -159,37 +181,68 @@ resource "aws_ecs_task_definition" "api" {
         "awslogs-stream-prefix" = "api"
       }
     }
+    }, {
+    # ── cloudflared ingress sidecar ─────────────────────────────────────────
+    # Dials OUT to Cloudflare and forwards to the api container over the task-
+    # local loopback (awsvpc: containers share a network namespace). Locally-
+    # managed tunnel: credentials arrive as TUNNEL_CRED_CONTENTS (no file, no
+    # custom image), ingress is the single --url origin. essential — if the
+    # tunnel dies the task has no ingress, so let ECS replace the whole task.
+    name      = "cloudflared"
+    image     = var.cloudflared_image
+    essential = true
+    command = [
+      "tunnel", "--no-autoupdate", "run",
+      # https + no-tls-verify: the api serves a self-signed cert (ENABLE_TLS);
+      # the hop never leaves the task's loopback, so verification adds nothing.
+      "--url", "https://localhost:${var.api_container_port}",
+      "--no-tls-verify",
+      var.cloudflared_tunnel_id,
+    ]
+    secrets = [
+      { name = "TUNNEL_CRED_CONTENTS", valueFrom = var.cloudflared_secret_arn },
+    ]
+    dependsOn = [{ containerName = "api", condition = "HEALTHY" }]
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        "awslogs-group"         = aws_cloudwatch_log_group.api.name
+        "awslogs-region"        = data.aws_region.current.name
+        "awslogs-stream-prefix" = "cloudflared"
+      }
+    }
   }])
 }
 
+# NOTE the name: "-api-svc", not "-api". Removing the load_balancer block
+# forces service replacement, and a replacement under the SAME name would tear
+# the old service down first (ingress gap). The new name lets
+# create_before_destroy run both side by side — two cloudflared connectors on
+# one tunnel load-balance cleanly — then retire the old one. cd.yml's
+# ECS_SERVICE must match this name.
 resource "aws_ecs_service" "api" {
-  name            = "${var.prefix}-api"
+  name            = "${var.prefix}-api-svc"
   cluster         = aws_ecs_cluster.this.id
   task_definition = aws_ecs_task_definition.api.arn
   desired_count   = var.api_desired_count
   launch_type     = "FARGATE"
 
   network_configuration {
-    # Public subnets + a public IP for EGRESS (ECR pulls, Bedrock, QBO, SES) —
-    # this is what lets the VPC run with NO NAT gateway (~$37/mo). Ingress is
-    # still ALB-only: the app SG accepts the container port from the ALB SG and
-    # nothing else, so the public IP exposes no listener to the internet.
+    # Public subnets + a public IP for EGRESS only (ECR pulls, Bedrock, QBO,
+    # SES, Cloudflare) — the VPC has no NAT. INGRESS arrives through the
+    # cloudflared sidecar's outbound tunnel; the app SG has no ingress rules
+    # at all, so nothing on the internet can reach the task directly.
     subnets          = var.app_subnet_ids
     security_groups  = [var.app_sg_id]
     assign_public_ip = true
-  }
-
-  load_balancer {
-    target_group_arn = var.target_group_arn
-    container_name   = "api"
-    container_port   = var.api_container_port
   }
 
   deployment_minimum_healthy_percent = 100
   deployment_maximum_percent         = 200
 
   lifecycle {
-    ignore_changes = [task_definition] # CI updates the task def / image out-of-band
+    create_before_destroy = true
+    ignore_changes        = [task_definition] # CI updates the task def / image out-of-band
   }
 }
 

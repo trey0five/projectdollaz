@@ -3,7 +3,6 @@ output "cloudfront_domain" {
   value       = module.edge.cloudfront_domain
 }
 
-output "alb_dns_name" { value = module.edge.alb_dns_name }
 
 output "ecr_repository_url" {
   description = "Push the API image here (tag = var.api_image_tag)."

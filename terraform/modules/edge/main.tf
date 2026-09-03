@@ -1,8 +1,8 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# edge — the internet-facing tier. ACM TLS cert (apex + www + origin), an
-# internet-facing ALB (reachable only from CloudFront), CloudFront serving the
-# SPA from S3 (OAC) and proxying /api/* to the ALB over HTTPS, AWS WAF on the
-# distribution, and the Cloudflare DNS records. AWS pieces live in us-east-1
+# edge — the internet-facing tier. ACM TLS cert (apex + www), CloudFront
+# serving the SPA from S3 (OAC) and proxying /api/* to the Cloudflare Tunnel
+# origin (no ALB — the cloudflared sidecar provides outbound-only ingress),
+# AWS WAF on the distribution, and the Cloudflare DNS records. AWS pieces live in us-east-1
 # (required for CloudFront's cert + CLOUDFRONT-scoped WAF); DNS is at Cloudflare.
 # ─────────────────────────────────────────────────────────────────────────────
 terraform {
@@ -14,13 +14,10 @@ terraform {
 
 variable "prefix" { type = string }
 variable "domain_name" { type = string }
+variable "cloudflared_tunnel_id" { type = string }
 variable "cloudflare_zone_id" { type = string }
-variable "vpc_id" { type = string }
-variable "public_subnet_ids" { type = list(string) }
-variable "alb_sg_id" { type = string }
 variable "spa_bucket_id" { type = string }
 variable "spa_bucket_regional_domain" { type = string }
-variable "api_container_port" { type = number }
 
 locals {
   origin_host = "origin.${var.domain_name}"
@@ -56,49 +53,19 @@ resource "aws_acm_certificate_validation" "this" {
   validation_record_fqdns = [for r in cloudflare_record.cert_validation : r.hostname]
 }
 
-# ── ALB + target group + HTTPS listener ──
-resource "aws_lb" "this" {
-  name                       = "${var.prefix}-alb"
-  load_balancer_type         = "application"
-  internal                   = false
-  security_groups            = [var.alb_sg_id]
-  subnets                    = var.public_subnet_ids
-  drop_invalid_header_fields = true
-}
-
-resource "aws_lb_target_group" "api" {
-  # name_prefix + create_before_destroy so a protocol change (which forces a new
-  # target group) can be swapped in before the old is torn down.
-  name_prefix = "oky-tg"
-  port        = var.api_container_port
-  protocol    = "HTTPS" # end-to-end TLS: the ALB reaches the task over HTTPS
-  target_type = "ip"    # Fargate awsvpc
-  vpc_id      = var.vpc_id
-
-  health_check {
-    path                = "/health"
-    protocol            = "HTTPS"
-    matcher             = "200"
-    interval            = 30
-    healthy_threshold   = 2
-    unhealthy_threshold = 3
-  }
-  deregistration_delay = 30
-
-  lifecycle { create_before_destroy = true }
-}
-
-resource "aws_lb_listener" "https" {
-  load_balancer_arn = aws_lb.this.arn
-  port              = 443
-  protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-  certificate_arn   = aws_acm_certificate_validation.this.certificate_arn
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.api.arn
-  }
+# ── Ingress: Cloudflare Tunnel (no ALB) ──
+# The cloudflared sidecar in the Fargate task dials OUT to Cloudflare; this
+# proxied CNAME is how CloudFront's /api origin reaches it. The tunnel itself
+# (ourkyro-api) was created with `cloudflared tunnel create`; its credentials
+# live in Secrets Manager (see modules/compute).
+resource "cloudflare_record" "api_tunnel" {
+  zone_id = var.cloudflare_zone_id
+  name    = "api-tunnel"
+  type    = "CNAME"
+  content = "${var.cloudflared_tunnel_id}.cfargotunnel.com"
+  proxied = true
+  ttl     = 1
+  comment = "KYRO prod API via cloudflared sidecar (replaces ALB)"
 }
 
 # ── WAF (CLOUDFRONT scope) ──
@@ -288,6 +255,9 @@ resource "aws_cloudfront_origin_access_control" "spa" {
 data "aws_cloudfront_cache_policy" "optimized" { name = "Managed-CachingOptimized" }
 data "aws_cloudfront_cache_policy" "disabled" { name = "Managed-CachingDisabled" }
 data "aws_cloudfront_origin_request_policy" "all_viewer" { name = "Managed-AllViewer" }
+# For the tunnel origin: Cloudflare routes by Host, so CloudFront must send the
+# ORIGIN hostname (api-tunnel.…), never the viewer's — AllViewer would loop.
+data "aws_cloudfront_origin_request_policy" "all_viewer_except_host" { name = "Managed-AllViewerExceptHostHeader" }
 
 resource "aws_cloudfront_distribution" "this" {
   enabled             = true
@@ -303,10 +273,12 @@ resource "aws_cloudfront_distribution" "this" {
     origin_access_control_id = aws_cloudfront_origin_access_control.spa.id
   }
 
-  # API origin (ALB over HTTPS via origin.<domain>)
+  # API origin: the Cloudflare Tunnel hostname (cloudflared sidecar in the
+  # Fargate task). Replaced the ALB (origin.<domain>) — the tunnel is
+  # outbound-only ingress, so the task needs no reachable listener at all.
   origin {
     origin_id   = "api"
-    domain_name = local.origin_host
+    domain_name = "api-tunnel.${var.domain_name}"
     custom_origin_config {
       http_port              = 80
       https_port             = 443
@@ -336,7 +308,7 @@ resource "aws_cloudfront_distribution" "this" {
     allowed_methods          = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
     cached_methods           = ["GET", "HEAD"]
     cache_policy_id          = data.aws_cloudfront_cache_policy.disabled.id
-    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer.id
+    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
     compress                 = true
 
     function_association {
@@ -400,18 +372,7 @@ resource "cloudflare_record" "www" {
   ttl     = 1
   proxied = false
 }
-# origin.<domain> → ALB (the CloudFront /api origin). MUST stay DNS-only so
-# CloudFront reaches the ALB directly.
-resource "cloudflare_record" "origin" {
-  zone_id = var.cloudflare_zone_id
-  name    = "origin"
-  type    = "CNAME"
-  content = aws_lb.this.dns_name
-  ttl     = 1
-  proxied = false
-}
+
 
 output "cloudfront_domain" { value = aws_cloudfront_distribution.this.domain_name }
 output "cloudfront_distribution_arn" { value = aws_cloudfront_distribution.this.arn }
-output "alb_dns_name" { value = aws_lb.this.dns_name }
-output "target_group_arn" { value = aws_lb_target_group.api.arn }
