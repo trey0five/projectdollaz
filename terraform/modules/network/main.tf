@@ -7,6 +7,28 @@
 # ─────────────────────────────────────────────────────────────────────────────
 variable "prefix" { type = string }
 variable "vpc_cidr" { type = string }
+
+# ── Village Finders (VF) serverless dependency ──────────────────────────────
+# VF's serverless tier (CDK stacks VF-prod-*, /home/dream/village-finder/
+# infra-cdk, branch serverless-migration) shares this VPC + RDS instance:
+#   - VF lambdas live in the private-app subnets and egress through a VF-owned
+#     fck-nat t4g.nano whose STATIC ENI (tag Name=vf-prod-fcknat-eni) becomes
+#     this module's app-subnet default route. Strictly an improvement for KYRO
+#     too: anything KYRO later launches in the app subnets gets egress again
+#     (the old NAT gateway was deleted; this replaces it at ~1/5 the cost).
+#   - VF's lambda/fargate SGs get Postgres into the db SG (second logical
+#     database `village_finders_prod`, dedicated role, no cross-grants —
+#     KYRO's database, role and app SG are untouched).
+# Both values are REQUIRED so a plan without the VF resources fails loudly
+# instead of silently stripping the route (see the route = [] note below).
+variable "vf_nat_eni_id" {
+  type        = string
+  description = "ENI id of the VF fck-nat instance (CDK-created, tag Name=vf-prod-fcknat-eni)"
+}
+variable "vf_db_ingress_sg_ids" {
+  type        = list(string)
+  description = "VF security groups allowed to reach Postgres (vf-prod-lambda-sg, vf-prod-fargate-sg)"
+}
 variable "az_count" { type = number }
 variable "api_container_port" { type = number }
 
@@ -77,14 +99,18 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
-# Private-app subnets: local-only now (no NAT). Kept for the S3 endpoint and
-# any future private workload that brings its own egress.
+# Private-app subnets: default route via Village Finders' fck-nat instance
+# (was `route = []` after the NAT gateway was deleted — that explicit empty
+# list existed to strip the old NAT route; it MUST NOT come back, or terraform
+# would silently remove the fck-nat route and cut VF's egress: OAuth
+# code-exchange, SMTP, Nominatim, OpenAI all die quietly).
 resource "aws_route_table" "app" {
   vpc_id = aws_vpc.this.id
-  # Explicitly EMPTY (not merely absent): an omitted inline route block would
-  # leave the old NAT route behind as a blackhole after the NAT is destroyed.
-  route  = []
-  tags   = { Name = "${var.prefix}-app-rt" }
+  route {
+    cidr_block           = "0.0.0.0/0"
+    network_interface_id = var.vf_nat_eni_id
+  }
+  tags = { Name = "${var.prefix}-app-rt" }
 }
 
 resource "aws_route_table_association" "app" {
@@ -147,6 +173,19 @@ resource "aws_security_group" "db" {
     to_port         = 5432
     protocol        = "tcp"
     security_groups = [aws_security_group.app.id]
+  }
+
+  # Village Finders serverless tier (see the vf_* variable header above):
+  # web/task lambdas + the Fargate scraper/telehealth-bridge identity reach the
+  # SHARED instance's second logical database `village_finders_prod` only —
+  # role-level isolation (dedicated village_finders_app role, REVOKE CONNECT
+  # both ways) is enforced by VF's db-bootstrap one-off.
+  ingress {
+    description     = "Postgres from Village Finders serverless tier"
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = var.vf_db_ingress_sg_ids
   }
   tags = { Name = "${var.prefix}-db-sg" }
 }
