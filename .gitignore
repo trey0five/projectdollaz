@@ -28,3 +28,8 @@ homepagevid.mp4
 
 # Large logo source (processed assets live in apps/web/public/)
 kyro logo-Photoroom.png
+
+# Playwright browser state for demo filming — carries LOCAL-stack JWTs; regenerated
+# on each capture run. Was committed once (d4a7361, local-only tokens, allowlisted
+# in .gitleaks.toml); must never be committed again.
+demo-video/assets/auth-state.json

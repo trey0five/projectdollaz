@@ -25,4 +25,13 @@ paths = [
   # the exception this narrow and re-check it if either file grows.
   '''apps/api/src/auth/totp\.spec\.ts$''',
   '''apps/api/src/auth/mfa\.service\.spec\.ts$''',
+  # demo-video/assets/auth-state.json — a Playwright storage-state file committed
+  # once by accident (d4a7361). The JWTs inside are for http://localhost:5173,
+  # signed with the LOCAL dev JWT_SECRET — they cannot authenticate against prod
+  # (different signing key in Secrets Manager) and expire days after capture.
+  # The file is deleted and gitignored; this entry only quiets the HISTORY hit,
+  # which is not worth a main-branch rewrite for local-only tokens. If a real
+  # prod credential ever lands in git, rewrite history and rotate — do not
+  # widen this allowlist.
+  '''demo-video/assets/auth-state\.json$''',
 ]

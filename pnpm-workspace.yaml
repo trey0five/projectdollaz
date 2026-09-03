@@ -33,8 +33,9 @@ overrides:
   'brace-expansion@<1.1.18': '1.1.18'
   'brace-expansion@>=2.0.0 <2.1.4': '2.1.4'
   'brace-expansion@>=3.0.0 <5.0.9': '5.0.9'
-  # GHSA-4c8g-83qw-93j6 + GHSA-v2hh-gcrm-f6hx — host confusion. Transitive via ajv.
-  'fast-uri@<3.1.5': '3.1.5'
+  # GHSA-4c8g-83qw-93j6 + GHSA-v2hh-gcrm-f6hx — host confusion; then four more
+  # advisories against <3.1.6 (incl. GHSA-5jgf-p345-68v8) — re-raised to 3.1.6.
+  'fast-uri@<3.1.6': '3.1.6'
   # GHSA-52cp-r559-cp3m — quadratic blow-up on merge-key chains. Transitive.
   # THEN GHSA-5p4m-2wfm-xmqj (CVE-2026-59870) — the same quadratic shape again, in
   # !!omap resolution this time, and 4.3.0 was itself vulnerable to it. Third
@@ -46,10 +47,14 @@ overrides:
   'postcss@<=8.5.17': '8.5.18'
   # Two advisories landed together: a non-secure generator that loops forever on a
   # negative size, and a custom generator that loops forever on zero. The second
-  # patch supersedes the first, so ONE pin at 3.3.17 covers both. DEV-ONLY — the
-  # path is vitest → vite → postcss → nanoid, so this was a hang in our own test
-  # runner, not anything a school could be hit with.
-  'nanoid@<3.3.17': '3.3.17'
+  # patch supersedes the first, so ONE pin covers both. THEN a third advisory
+  # (custom generators loop on size zero) landed and 3.3.17 was itself in range —
+  # re-raised to 3.3.18. DEV-ONLY — the path is vitest → vite → postcss → nanoid,
+  # a hang in our own test runner, not anything a school could be hit with.
+  'nanoid@<3.3.18': '3.3.18'
+  # browserslist ReDoS (GHSA advisory 2026) — DEV-ONLY via @nestjs/cli's build
+  # toolchain; in-range patch.
+  'browserslist@<=4.28.6': '4.28.7'
   # GHSA-mwp4-54f8-5fhr — transitive via the SSH/socks chain.
   'ip-address@<10.3.1': '10.3.1'
   # GHSA-gcfj-64vw-6mp9 — the Node adapter can inherit a proxy from the
