@@ -79,7 +79,9 @@ resource "aws_ecs_task_definition" "api" {
   runtime_platform {
     # X86_64 for a fast native image build on an x86 host. Switch back to ARM64
     # (Graviton, ~20% cheaper) once you have an arm64 build in CI.
-    cpu_architecture        = "X86_64"
+    # Graviton: ~20% cheaper Fargate. CD builds the image multi-arch
+    # (amd64+arm64), so flipping back to X86_64 is a safe rollback.
+    cpu_architecture        = "ARM64"
     operating_system_family = "LINUX"
   }
 
