@@ -53,18 +53,13 @@ resource "aws_subnet" "db" {
   tags              = { Name = "${var.prefix}-db-${count.index}", Tier = "private-db" }
 }
 
-# ── Single shared NAT in the first public subnet ──
-resource "aws_eip" "nat" {
-  domain = "vpc"
-  tags   = { Name = "${var.prefix}-nat-eip" }
-}
-
-resource "aws_nat_gateway" "this" {
-  allocation_id = aws_eip.nat.id
-  subnet_id     = aws_subnet.public[0].id
-  tags          = { Name = "${var.prefix}-nat" }
-  depends_on    = [aws_internet_gateway.this]
-}
+# ── No NAT gateway ──
+# The Fargate service runs in the PUBLIC subnets with assign_public_ip and an
+# ALB-only security group, so nothing needs private-subnet egress any more.
+# The NAT (+ its EIP) was ~$37/mo of pure plumbing. If a private-egress need
+# ever returns (e.g. the bastion), prefer a temporary NAT or fck-nat instance.
+# NOTE: the private-app subnets are kept but have NO default route now — a
+# bastion launched there (var.enable_bastion) has no internet egress.
 
 # ── Route tables ──
 resource "aws_route_table" "public" {
@@ -82,14 +77,14 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
-# All private-app subnets share ONE route table → the single NAT.
+# Private-app subnets: local-only now (no NAT). Kept for the S3 endpoint and
+# any future private workload that brings its own egress.
 resource "aws_route_table" "app" {
   vpc_id = aws_vpc.this.id
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.this.id
-  }
-  tags = { Name = "${var.prefix}-app-rt" }
+  # Explicitly EMPTY (not merely absent): an omitted inline route block would
+  # leave the old NAT route behind as a blackhole after the NAT is destroyed.
+  route  = []
+  tags   = { Name = "${var.prefix}-app-rt" }
 }
 
 resource "aws_route_table_association" "app" {

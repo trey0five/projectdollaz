@@ -168,9 +168,13 @@ resource "aws_ecs_service" "api" {
   launch_type     = "FARGATE"
 
   network_configuration {
+    # Public subnets + a public IP for EGRESS (ECR pulls, Bedrock, QBO, SES) —
+    # this is what lets the VPC run with NO NAT gateway (~$37/mo). Ingress is
+    # still ALB-only: the app SG accepts the container port from the ALB SG and
+    # nothing else, so the public IP exposes no listener to the internet.
     subnets          = var.app_subnet_ids
     security_groups  = [var.app_sg_id]
-    assign_public_ip = false
+    assign_public_ip = true
   }
 
   load_balancer {

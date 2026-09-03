@@ -69,7 +69,9 @@ module "edge" {
 module "compute" {
   source                  = "../../modules/compute"
   prefix                  = local.prefix
-  app_subnet_ids          = module.network.app_subnet_ids
+  # Tasks live in the PUBLIC subnets (with assign_public_ip) so the VPC needs
+  # no NAT gateway; the app SG still only admits the ALB. See modules/compute.
+  app_subnet_ids          = module.network.public_subnet_ids
   app_sg_id               = module.network.app_sg_id
   task_execution_role_arn = module.security.task_execution_role_arn
   task_role_arn           = module.security.task_role_arn
