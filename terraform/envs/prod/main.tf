@@ -8,12 +8,44 @@ locals {
   cloudflared_tunnel_id = "400c2550-c2df-4eeb-9f1c-53ffa012f8af"
 }
 
+# ── Village Finders serverless dependency (branch vf-shared-infra) ──────────
+# VF's CDK stacks (VF-prod-*, deployed from /home/dream/village-finder/
+# infra-cdk on branch serverless-migration) create these resources INSIDE the
+# ourkyro VPC; terraform only *references* them, so apply ordering is:
+#   1. deploy VF-prod-Net (creates the fck-nat ENI + the two vf SGs)  ← done
+#   2. terraform apply here (routes app subnets via the ENI; admits the vf SGs
+#      into the db SG)
+# Nothing about KYRO's own service, tunnel, RDS settings or SGs changes; the
+# app subnets simply regain a default route (deleted along with the old NAT
+# gateway) and the db SG gains one scoped 5432 ingress pair.
+data "aws_network_interface" "vf_fcknat" {
+  filter {
+    name   = "tag:Name"
+    values = ["vf-prod-fcknat-eni"]
+  }
+}
+
+data "aws_security_group" "vf_lambda" {
+  name = "vf-prod-lambda-sg"
+}
+
+data "aws_security_group" "vf_fargate" {
+  name = "vf-prod-fargate-sg"
+}
+
 module "network" {
   source             = "../../modules/network"
   prefix             = local.prefix
   vpc_cidr           = var.vpc_cidr
   az_count           = var.az_count
   api_container_port = var.api_container_port
+
+  # Village Finders (see comment block above; variables documented in the module)
+  vf_nat_eni_id = data.aws_network_interface.vf_fcknat.id
+  vf_db_ingress_sg_ids = [
+    data.aws_security_group.vf_lambda.id,
+    data.aws_security_group.vf_fargate.id,
+  ]
 }
 
 module "security" {
