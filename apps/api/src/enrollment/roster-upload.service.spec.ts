@@ -17,7 +17,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import 'reflect-metadata'
 import { describe, expect, it, vi } from 'vitest'
-import { BadRequestException, NotFoundException } from '@nestjs/common'
+import { BadGatewayException, BadRequestException, NotFoundException } from '@nestjs/common'
 import type { User } from '@finrep/db'
 import { EnrollmentService } from './enrollment.service.js'
 import { StudentsService } from './students/students.service.js'
@@ -892,23 +892,41 @@ describe('acceptance 10 — the receipts list is grouped-ready (server computes,
   })
 })
 
-describe('acceptance 11 — removal takes the retained file WITH the receipt', () => {
-  it('deletes every retained doc for the receipt through the doc store (S3 + row + audit)', async () => {
+describe('acceptance 11 — removal takes the retained file WITH the receipt, doc FIRST, fail CLOSED', () => {
+  it('deletes every retained doc for the receipt through the doc store (S3 + row + audit), THEN the receipt', async () => {
     const { svc, receipts, knowledgeDocument, documents } = makeHarness()
     receipts.push({ id: 'imp-a', uploadedByUserId: 'u1', createdAt: new Date() })
+    // Ordering proof: when deleteDocument runs, the receipt must still exist.
+    documents.deleteDocument.mockImplementationOnce(async () => {
+      expect(receipts).toHaveLength(1)
+      return { id: 'doc-1' }
+    })
     knowledgeDocument.findMany.mockResolvedValueOnce([{ id: 'doc-1' }])
     await svc.removeImport(SCHOOL, 'imp-a', 'u-remover')
     expect(documents.deleteDocument).toHaveBeenCalledWith(SCHOOL, 'doc-1', 'u-remover')
     expect(receipts).toHaveLength(0)
   })
 
-  it('doc cleanup failure never blocks the removal the user asked for', async () => {
-    const { svc, receipts, knowledgeDocument } = makeHarness()
+  it('a doc-cleanup failure ABORTS the removal — the receipt survives, the user retries (no orphaned CSV)', async () => {
+    const { svc, receipts, knowledgeDocument, documents } = makeHarness()
     receipts.push({ id: 'imp-a', createdAt: new Date() })
-    knowledgeDocument.findMany.mockRejectedValueOnce(new Error('s3 down'))
-    const res = await svc.removeImport(SCHOOL, 'imp-a', 'u-remover')
-    expect(res).toEqual({ deleted: true })
-    expect(receipts).toHaveLength(0)
+    knowledgeDocument.findMany.mockResolvedValueOnce([{ id: 'doc-1' }])
+    documents.deleteDocument.mockRejectedValueOnce(new Error('s3 down'))
+    await expect(svc.removeImport(SCHOOL, 'imp-a', 'u-remover')).rejects.toBeInstanceOf(
+      BadGatewayException,
+    )
+    // The receipt was NOT deleted: the retained name-bearing file keeps its anchor.
+    expect(receipts).toHaveLength(1)
+  })
+
+  it("the doc store's own HTTP error (fail-closed 502 from deleteDocument) propagates unchanged", async () => {
+    const { svc, receipts, knowledgeDocument, documents } = makeHarness()
+    receipts.push({ id: 'imp-a', createdAt: new Date() })
+    knowledgeDocument.findMany.mockResolvedValueOnce([{ id: 'doc-1' }])
+    const original = new BadGatewayException('The stored roster file could not be deleted just now.')
+    documents.deleteDocument.mockRejectedValueOnce(original)
+    await expect(svc.removeImport(SCHOOL, 'imp-a', 'u-remover')).rejects.toBe(original)
+    expect(receipts).toHaveLength(1)
   })
 })
 
@@ -938,5 +956,30 @@ describe('acceptance 12 — the ONE download door for roster bytes', () => {
     await expect(svc.originalDownloadUrl(SCHOOL, 'imp-old', 'u1')).rejects.toBeInstanceOf(
       NotFoundException,
     )
+  })
+
+  it('resolves the ORIGINAL deterministically: createdAt ASC, pinned to sourceType roster_import — a later doc with the same sourceRef can never shadow it', async () => {
+    const { svc, receipts, knowledgeDocument } = makeHarness()
+    receipts.push({ id: 'imp-a', createdAt: new Date() })
+    knowledgeDocument.findFirst.mockResolvedValueOnce({ id: 'doc-genuine' })
+    await svc.originalDownloadUrl(SCHOOL, 'imp-a', 'u1')
+    const args = (knowledgeDocument.findFirst.mock.calls as unknown[][])[0]![0] as {
+      where: Record<string, unknown>
+      orderBy: Record<string, unknown>
+    }
+    expect(args.where).toMatchObject({ schoolId: SCHOOL, sourceType: 'roster_import', sourceRef: 'imp-a' })
+    expect(args.orderBy).toEqual({ createdAt: 'asc' })
+  })
+
+  it('listImports decorates with the SAME first-wins pick (oldest doc per receipt)', async () => {
+    const { svc, receipts, knowledgeDocument } = makeHarness()
+    receipts.push({ id: 'imp-a', observedOn: null, createdAt: new Date('2026-03-01T00:00:00.000Z') })
+    // The query orders createdAt asc; the first row for a receipt is the original.
+    knowledgeDocument.findMany.mockResolvedValueOnce([
+      { id: 'doc-genuine', sourceRef: 'imp-a', createdAt: new Date('2026-03-01T00:00:01.000Z') },
+      { id: 'doc-shadow', sourceRef: 'imp-a', createdAt: new Date('2026-04-01T00:00:00.000Z') },
+    ])
+    const out = await svc.listImports(SCHOOL)
+    expect((out[0] as { originalDocumentId: string | null }).originalDocumentId).toBe('doc-genuine')
   })
 })

@@ -41,7 +41,13 @@
 // FERPA: this service reads names only to hand them to StudentsService, and its
 // response — like every warning it emits — carries counts and grade buckets only.
 // ─────────────────────────────────────────────────────────────────────────────
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
+import {
+  BadGatewayException,
+  BadRequestException,
+  HttpException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common'
 import type { NormalizedEnrollmentSnapshot, User } from '@finrep/db'
 import type { GradeKey } from '@finrep/analytics'
 import {
@@ -302,8 +308,10 @@ export class RosterUploadService {
         select: { id: true, sourceRef: true, createdAt: true },
         orderBy: { createdAt: 'asc' },
       })
-      // asc + overwrite ⇒ the LATEST retained file wins for a receipt.
-      for (const d of docs) if (d.sourceRef) docByReceipt.set(d.sourceRef, d.id)
+      // asc + first-wins ⇒ the OLDEST retained file is the one decorated — the
+      // same deterministic pick originalDownloadUrl serves, so the row's
+      // download action and the bytes behind it can never name two different docs.
+      for (const d of docs) if (d.sourceRef && !docByReceipt.has(d.sourceRef)) docByReceipt.set(d.sourceRef, d.id)
     } catch {
       /* decoration only */
     }
@@ -328,11 +336,13 @@ export class RosterUploadService {
       where: { id: importId, schoolId },
     })
     if (!existing) throw new NotFoundException('Import not found.')
-    // The retained original goes WITH its receipt — a name-bearing CSV whose
-    // anchor row is gone would be reachable by nothing and deletable by no one.
-    // Best-effort (S3 + row via the doc store's own delete, which audits it);
-    // the receipt delete below is the operation the user asked for and it runs
-    // regardless.
+    // The retained original goes WITH its receipt — and it goes FIRST, and it
+    // FAILS CLOSED. A name-bearing CSV whose anchor row is gone would be
+    // reachable by nothing and deletable by no one, so if the doc cleanup
+    // throws, the removal is ABORTED (the receipt survives, the user retries)
+    // rather than the old swallow-and-proceed, which orphaned the file. The doc
+    // store's own delete audits each file and itself fails closed on the S3
+    // object for roster docs.
     try {
       const docs = await this.prisma.knowledgeDocument.findMany({
         where: { schoolId, sourceType: 'roster_import', sourceRef: existing.id },
@@ -341,9 +351,14 @@ export class RosterUploadService {
       for (const d of docs) {
         await this.documents.deleteDocument(schoolId, d.id, userId ?? existing.uploadedByUserId ?? '')
       }
-    } catch {
-      /* the receipt removal must not fail on evidence cleanup */
+    } catch (err) {
+      if (err instanceof HttpException) throw err
+      throw new BadGatewayException(
+        'The retained roster file for this import could not be deleted just now, so the entry was kept. ' +
+          'Try again in a moment.',
+      )
     }
+    // Only now, with no retained file left to orphan, does the receipt go.
     await this.prisma.enrollmentImport.delete({ where: { id: existing.id } })
     return { deleted: true }
   }
@@ -367,10 +382,16 @@ export class RosterUploadService {
       select: { id: true },
     })
     if (!receipt) throw new NotFoundException('Import not found.')
+    // createdAt ASC, deterministically: the genuine retained file is written in
+    // the same breath as its receipt, so the OLDEST roster_import doc for this
+    // receipt is the original. A later doc with the same sourceRef (every write
+    // door now refuses 'roster_import', but defence-in-depth is the point) can
+    // therefore never SHADOW the file this import actually read. The where
+    // clause pins sourceType === 'roster_import' — never any other doc kind.
     const doc = await this.prisma.knowledgeDocument.findFirst({
       where: { schoolId, sourceType: 'roster_import', sourceRef: receipt.id },
       select: { id: true },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: 'asc' },
     })
     if (!doc) throw new NotFoundException('No original file is stored for this import.')
     return this.documents.getDownloadUrl(schoolId, doc.id, userId, { allowRosterImport: true })
