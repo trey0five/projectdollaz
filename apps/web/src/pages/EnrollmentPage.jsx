@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { GraduationCap, RotateCcw, Building2, ArrowRight, BarChart3 } from 'lucide-react'
+import { GraduationCap, RotateCcw, Building2, ArrowRight } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
 import ModuleTabs, { ModuleAccent } from '../components/module/ModuleTabs.jsx'
 import { AddDataCta, RecordsCta } from '../components/module/ModuleCtas.jsx'
@@ -33,6 +33,7 @@ import EnrollmentConnectCard from '../components/enrollment/EnrollmentConnectCar
 import EnrollmentHero from '../components/enrollment/EnrollmentHero.jsx'
 import RosterSourceCard from '../components/enrollment/RosterSourceCard.jsx'
 import EnrollmentAnalytics from '../components/enrollment/EnrollmentAnalytics.jsx'
+import EnrollmentAnalyticsPreview from '../components/enrollment/EnrollmentAnalyticsPreview.jsx'
 import StudentRegister from '../components/enrollment/StudentRegister.jsx'
 
 function GatePanel({ notLicensed }) {
@@ -318,20 +319,13 @@ function EnrollmentWorkspace() {
   // banner. Moved, not duplicated: there is no second copy of any of it here, or
   // the two would drift and a reader would have to pick.
   //
-  // What replaces it is one line telling you where the analysis went. A section
-  // that vanishes without a forwarding address reads as a regression.
-  const analysisPointer = (
-    <Link
-      to="/enrollment?tab=analytics"
-      className="group flex items-center gap-2.5 self-start rounded-xl border border-rule/60 bg-white px-4 py-2.5 text-[13.5px] text-muted transition-all hover:border-sky-400/60 hover:text-navy"
-    >
-      <BarChart3 size={16} className="text-sky-600" />
-      <span>
-        Trends, grade mix and cohorts <span className="font-semibold text-navy">→ Analytics</span>
-      </span>
-      <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
-    </Link>
-  )
+  // The forwarding address grew up: the one-line text pointer read as a footnote
+  // and hid a whole dashboard, so it is now a strip of LIVE preview tiles — a
+  // real sparkline, the vs-plan headline, the cohort pulse — each deep-linking
+  // to its analytics view. Same payload as the tab (same hook), so the preview
+  // and the destination cannot disagree; if the read fails, the strip degrades
+  // back to the plain pointer rather than vanishing.
+  const analysisPointer = <EnrollmentAnalyticsPreview schoolId={activeId} periodId={periodId} />
 
   // Shared overview extras (both the v2 tab and the flat page render these).
   const mixSection = (
