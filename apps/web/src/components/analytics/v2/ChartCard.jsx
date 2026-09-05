@@ -12,8 +12,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion, useReducedMotion } from 'framer-motion'
 import { Table2 } from 'lucide-react'
+import InfoPopover from '../../ui/InfoPopover.jsx'
 
-export default function ChartCard({ id, metricKey, title, sub, asOf, onViewAsTable, delay = 0, className = '', children }) {
+// `info` (optional, additive): methodology content rendered behind an ⓘ popover
+// in the header — the progressive-disclosure home for a chart's full "what this
+// measures" text once the body leads with a one-line caption instead. Cards that
+// don't pass it render byte-identically to before the prop existed.
+export default function ChartCard({ id, metricKey, title, sub, asOf, info, infoLabel, onViewAsTable, delay = 0, className = '', children }) {
   const reduce = useReducedMotion()
   return (
     <motion.div
@@ -36,6 +41,7 @@ export default function ChartCard({ id, metricKey, title, sub, asOf, onViewAsTab
         </div>
         <div className="flex shrink-0 items-center gap-2.5">
           {asOf && <span className="whitespace-nowrap text-[11px] font-medium text-slate-400 tabular-nums">{asOf}</span>}
+          {info && <InfoPopover label={infoLabel ?? 'How to read this chart'}>{info}</InfoPopover>}
           {metricKey && onViewAsTable && (
             <button
               type="button"

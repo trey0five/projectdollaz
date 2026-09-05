@@ -73,6 +73,7 @@ import EnrollmentAnalyticsTabs, {
 } from './EnrollmentAnalyticsTabs.jsx'
 import {
   AsOfChip,
+  ChartCaption,
   ENROLL_HUE,
   PLAN_INK,
   RefChip,
@@ -317,42 +318,61 @@ export default function EnrollmentAnalytics({ schoolId, periodId, rosterMode = f
       {/* ── TREND — the whole school, over time, and what the gap costs ── */}
       {view === 'trend' ? (
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {/* E1 */}
+        {/* E1.
+            ── PROSE → PROGRESSIVE DISCLOSURE (this card and every chart card
+            below): the full WhatThisMeasures paragraph moves VERBATIM into the
+            card's ⓘ popover — every honesty sentence survives, none is read as a
+            wall — and the body leads with ONE short caption plus the scope stamp
+            and any reference-line key, which are data and stay in view. */}
         <ChartCard
           id="enr-trend"
           sub="E1 · Over time"
           title="Headcount over time"
           asOf={asOfChip}
           className="lg:col-span-2"
+          info={
+            <WhatThisMeasures
+              scope={sourceScope}
+              reduce={reduce}
+              refs={
+                trend?.planTotal != null ? (
+                  <RefChip
+                    color={PLAN_INK}
+                    name="Plan"
+                    value={fmtCount(trend.planTotal)}
+                    gloss="the headcount you planned for — intended, never counted"
+                  />
+                ) : null
+              }
+              note="The vertical axis starts at zero and is not truncated, so the height of a rise on this chart is the size of the rise."
+            >
+              {live ? (
+                <>
+                  Each point is one day&apos;s headcount <strong className="font-semibold text-navy">counted from your
+                  live student register</strong> — one reading per day, on the day it changed.
+                </>
+              ) : (
+                <>
+                  Each point is one <strong className="font-semibold text-navy">enrollment reading you filed</strong>,
+                  placed on the day it describes rather than in the order it arrived — so a year&apos;s gap looks like a
+                  year.
+                </>
+              )}
+            </WhatThisMeasures>
+          }
         >
-          <WhatThisMeasures
+          <ChartCaption
             scope={sourceScope}
-            reduce={reduce}
             refs={
               trend?.planTotal != null ? (
-                <RefChip
-                  color={PLAN_INK}
-                  name="Plan"
-                  value={fmtCount(trend.planTotal)}
-                  gloss="the headcount you planned for — intended, never counted"
-                />
+                <RefChip color={PLAN_INK} name="Plan" value={fmtCount(trend.planTotal)} />
               ) : null
             }
-            note="The vertical axis starts at zero and is not truncated, so the height of a rise on this chart is the size of the rise."
           >
-            {live ? (
-              <>
-                Each point is one day&apos;s headcount <strong className="font-semibold text-navy">counted from your
-                live student register</strong> — one reading per day, on the day it changed.
-              </>
-            ) : (
-              <>
-                Each point is one <strong className="font-semibold text-navy">enrollment reading you filed</strong>,
-                placed on the day it describes rather than in the order it arrived — so a year&apos;s gap looks like a
-                year.
-              </>
-            )}
-          </WhatThisMeasures>
+            {live
+              ? 'One reading per day from your live register — the axis starts at zero.'
+              : 'Each filed reading, placed on the day it describes — the axis starts at zero.'}
+          </ChartCaption>
           <EnrollmentHeadcountTrend points={trend?.points ?? []} planTotal={trend?.planTotal ?? null} reduce={reduce} />
         </ChartCard>
 
@@ -378,18 +398,23 @@ export default function EnrollmentAnalytics({ schoolId, periodId, rosterMode = f
           title="Which grades carry the miss"
           asOf={asOfChip}
           className="lg:col-span-2"
+          info={
+            <WhatThisMeasures
+              scope={sourceScope}
+              reduce={reduce}
+              note="Colour sits on the GAP, not on the bar: a grade under plan is not a red grade, it is a grade with a red gap."
+            >
+              Two marks per grade, and they are deliberately different kinds of mark. The{' '}
+              <strong className="font-semibold text-navy">solid bar is the actual</strong> — children somebody counted{' '}
+              {live ? 'on your register' : 'in the reading you filed'}. The{' '}
+              <strong className="font-semibold text-navy">dashed outline is the plan</strong> — a figure typed into a
+              budget that nobody ever counted. The whole-school number tells you that you missed; this tells you where.
+            </WhatThisMeasures>
+          }
         >
-          <WhatThisMeasures
-            scope={sourceScope}
-            reduce={reduce}
-            note="Colour sits on the GAP, not on the bar: a grade under plan is not a red grade, it is a grade with a red gap."
-          >
-            Two marks per grade, and they are deliberately different kinds of mark. The{' '}
-            <strong className="font-semibold text-navy">solid bar is the actual</strong> — children somebody counted{' '}
-            {live ? 'on your register' : 'in the reading you filed'}. The{' '}
-            <strong className="font-semibold text-navy">dashed outline is the plan</strong> — a figure typed into a
-            budget that nobody ever counted. The whole-school number tells you that you missed; this tells you where.
-          </WhatThisMeasures>
+          <ChartCaption scope={sourceScope}>
+            Solid bar = counted actual · dashed outline = the plan nobody counted.
+          </ChartCaption>
           <EnrollmentVsPlanChart
             vsPlan={vsPlan}
             planFailed={planFailed}
@@ -406,14 +431,19 @@ export default function EnrollmentAnalytics({ schoolId, periodId, rosterMode = f
           title="Every grade, every year"
           asOf={asOfChip}
           className="lg:col-span-2"
+          info={
+            <WhatThisMeasures scope={yearSpan ? `${sourceScope} · ${yearSpan}` : sourceScope} reduce={reduce}>
+              Every cell is the headcount in <strong className="font-semibold text-navy">one grade in one school
+              year</strong>, shaded on a single scale that starts at zero — so a cell here is comparable to any other
+              cell, in any row or column. Read <strong className="font-semibold text-navy">across a row</strong> for how
+              one grade has moved, and <strong className="font-semibold text-navy">down a column</strong> for the shape
+              of the school that year. Each column is dated with the reading it came from.
+            </WhatThisMeasures>
+          }
         >
-          <WhatThisMeasures scope={yearSpan ? `${sourceScope} · ${yearSpan}` : sourceScope} reduce={reduce}>
-            Every cell is the headcount in <strong className="font-semibold text-navy">one grade in one school
-            year</strong>, shaded on a single scale that starts at zero — so a cell here is comparable to any other
-            cell, in any row or column. Read <strong className="font-semibold text-navy">across a row</strong> for how
-            one grade has moved, and <strong className="font-semibold text-navy">down a column</strong> for the shape
-            of the school that year. Each column is dated with the reading it came from.
-          </WhatThisMeasures>
+          <ChartCaption scope={yearSpan ? `${sourceScope} · ${yearSpan}` : sourceScope}>
+            One cell = one grade in one school year, all shaded on one zero-based scale.
+          </ChartCaption>
           <EnrollmentGradeHeatmap gradeByYear={gradeByYear} minCell={minCell} reduce={reduce} />
         </ChartCard>
 
@@ -443,21 +473,26 @@ export default function EnrollmentAnalytics({ schoolId, periodId, rosterMode = f
           title="Cohort size progression"
           asOf={asOfChip}
           className="lg:col-span-2"
+          info={
+            <WhatThisMeasures
+              scope={yearSpan ? `${sourceScope} · ${yearSpan}` : sourceScope}
+              reduce={reduce}
+              note="A year that was hidden or never filed BREAKS the line rather than being drawn through — a dashed connector spans the gap so the eye is not left to invent one."
+            >
+              Each panel follows <strong className="font-semibold text-navy">one class as it moves up the
+              grades</strong>, every point that class&apos;s headcount on that rung. Every panel shares{' '}
+              <strong className="font-semibold text-navy">one axis starting at zero</strong>, so a line sitting lower is
+              a genuinely smaller class and not a panel drawn to its own scale.{' '}
+              <strong className="font-semibold text-navy">This is class SIZE, not retention.</strong> A rung holding 95%
+              as many bodies as last year is not 95% of the same children — students transfer in and out, and this data
+              cannot tell them apart, because a student&apos;s grade is overwritten on every import and last year&apos;s
+              is gone.
+            </WhatThisMeasures>
+          }
         >
-          <WhatThisMeasures
-            scope={yearSpan ? `${sourceScope} · ${yearSpan}` : sourceScope}
-            reduce={reduce}
-            note="A year that was hidden or never filed BREAKS the line rather than being drawn through — a dashed connector spans the gap so the eye is not left to invent one."
-          >
-            Each panel follows <strong className="font-semibold text-navy">one class as it moves up the
-            grades</strong>, every point that class&apos;s headcount on that rung. Every panel shares{' '}
-            <strong className="font-semibold text-navy">one axis starting at zero</strong>, so a line sitting lower is
-            a genuinely smaller class and not a panel drawn to its own scale.{' '}
-            <strong className="font-semibold text-navy">This is class SIZE, not retention.</strong> A rung holding 95%
-            as many bodies as last year is not 95% of the same children — students transfer in and out, and this data
-            cannot tell them apart, because a student&apos;s grade is overwritten on every import and last year&apos;s
-            is gone.
-          </WhatThisMeasures>
+          <ChartCaption scope={yearSpan ? `${sourceScope} · ${yearSpan}` : sourceScope}>
+            One panel = one class followed up the grades, all on one zero-based axis — class size, not retention.
+          </ChartCaption>
           <EnrollmentCohortSize
             cohortSize={cohortSize}
             moveFloor={COHORT_MOVE_FLOOR}
@@ -478,32 +513,52 @@ export default function EnrollmentAnalytics({ schoolId, periodId, rosterMode = f
       {view === 'who' ? (
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* E5 */}
-        <ChartCard id="enr-demographics" sub="E5 · Who is here" title="Demographic mix" asOf={asOfChip}>
-          <WhatThisMeasures
-            scope={sourceScope}
-            reduce={reduce}
-            note="Nothing here is read off an angle: the ring carries the SHAPE of the mix, and every figure is printed at full size in the key beneath it. A category under five students is listed but not drawn — sizing a slice for it would put the withheld count back on the page as geometry."
-          >
-            One ring per breakdown, with the{' '}
-            <strong className="font-semibold text-navy">counted student total in the centre</strong> and every category
-            below it as a <strong className="font-semibold text-navy">count of students</strong> and its share of that
-            total — counts first, because three per cent of a hundred students is three children. Colour marks the
-            category and carries no judgement.
-          </WhatThisMeasures>
+        <ChartCard
+          id="enr-demographics"
+          sub="E5 · Who is here"
+          title="Demographic mix"
+          asOf={asOfChip}
+          info={
+            <WhatThisMeasures
+              scope={sourceScope}
+              reduce={reduce}
+              note="Nothing here is read off an angle: the ring carries the SHAPE of the mix, and every figure is printed at full size in the key beneath it. A category under five students is listed but not drawn — sizing a slice for it would put the withheld count back on the page as geometry."
+            >
+              One ring per breakdown, with the{' '}
+              <strong className="font-semibold text-navy">counted student total in the centre</strong> and every category
+              below it as a <strong className="font-semibold text-navy">count of students</strong> and its share of that
+              total — counts first, because three per cent of a hundred students is three children. Colour marks the
+              category and carries no judgement.
+            </WhatThisMeasures>
+          }
+        >
+          <ChartCaption scope={sourceScope}>
+            Counts first — every figure is printed in the key, nothing is read off an angle.
+          </ChartCaption>
           <EnrollmentDemographicsCard demographics={demographics} />
         </ChartCard>
 
         {/* E7 */}
-        <ChartCard id="enr-support" sub="E7 · Support needs" title="Support needs and register status" asOf={asOfChip}>
-          <WhatThisMeasures
-            scope={sourceScope}
-            reduce={reduce}
-            note={`Support flags are hidden hard: with fewer than ${minCell} students a flag identifies a child by name to anyone who knows the school.`}
-          >
-            Counts of students carrying each support flag on{' '}
-            <strong className="font-semibold text-navy">your own register</strong>, and how that register breaks down
-            by status. Counts, not percentages — a share would round real children away.
-          </WhatThisMeasures>
+        <ChartCard
+          id="enr-support"
+          sub="E7 · Support needs"
+          title="Support needs and register status"
+          asOf={asOfChip}
+          info={
+            <WhatThisMeasures
+              scope={sourceScope}
+              reduce={reduce}
+              note={`Support flags are hidden hard: with fewer than ${minCell} students a flag identifies a child by name to anyone who knows the school.`}
+            >
+              Counts of students carrying each support flag on{' '}
+              <strong className="font-semibold text-navy">your own register</strong>, and how that register breaks down
+              by status. Counts, not percentages — a share would round real children away.
+            </WhatThisMeasures>
+          }
+        >
+          <ChartCaption scope={sourceScope}>
+            Counts of support flags on your register — under-{minCell} cells stay hidden, never zero.
+          </ChartCaption>
           <EnrollmentSupportNeedsCard mix={mix} />
         </ChartCard>
 

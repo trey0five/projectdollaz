@@ -30,7 +30,7 @@
 // being invented out of an enrollment total and a guess.
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion } from 'framer-motion'
-import { AlertTriangle, Info, RefreshCcw } from 'lucide-react'
+import { AlertTriangle, ChevronRight, Info, RefreshCcw } from 'lucide-react'
 import { EASE, fmtCount } from './enrollmentAnalyticsKit.jsx'
 
 /**
@@ -80,7 +80,13 @@ export function ReconciliationStrip({ reconciliation, periodLabel = null, onResy
 }
 
 /** The server-authored honesty lines, printed verbatim — the web does not
- *  compose them, and must not paraphrase them into something weaker. */
+ *  compose them, and must not paraphrase them into something weaker.
+ *
+ *  COLLAPSED BY DEFAULT, DELETED NEVER. The block used to open as a bullet wall
+ *  on every view; it is now a native <details> disclosure ("About these
+ *  figures ▸") that expands to the same bullets, verbatim. Native details:
+ *  keyboard toggling, sane semantics and no JS for free — and the notes count is
+ *  printed on the summary so a reader knows the fold is not empty. */
 export function EnrollmentNotes({ notes = [], reduce = false }) {
   if (!notes.length) return null
   return (
@@ -92,17 +98,27 @@ export function EnrollmentNotes({ notes = [], reduce = false }) {
       aria-label="What to know about these figures"
       className="av2-card p-4 sm:p-5"
     >
-      <h4 className="mb-2 flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-[0.14em] text-muted">
-        <Info size={12} /> What to know about these figures
-      </h4>
-      <ul className="space-y-1.5">
-        {notes.map((n) => (
-          <li key={n} className="flex gap-2 text-[12.5px] leading-relaxed text-navy/75">
-            <span aria-hidden="true" className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-navy/25" />
-            <span>{n}</span>
-          </li>
-        ))}
-      </ul>
+      <details className="group">
+        <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-md text-[10.5px] font-bold uppercase tracking-[0.14em] text-muted outline-none transition-colors hover:text-navy focus-visible:ring-2 focus-visible:ring-sky-500/50 [&::-webkit-details-marker]:hidden">
+          <Info size={12} /> About these figures
+          <span className="font-medium normal-case tracking-normal text-muted/80">
+            · {notes.length} {notes.length === 1 ? 'note' : 'notes'}
+          </span>
+          <ChevronRight
+            size={13}
+            aria-hidden="true"
+            className="transition-transform duration-200 group-open:rotate-90 motion-reduce:transition-none"
+          />
+        </summary>
+        <ul className="mt-2.5 space-y-1.5">
+          {notes.map((n) => (
+            <li key={n} className="flex gap-2 text-[12.5px] leading-relaxed text-navy/75">
+              <span aria-hidden="true" className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-navy/25" />
+              <span>{n}</span>
+            </li>
+          ))}
+        </ul>
+      </details>
     </motion.aside>
   )
 }
