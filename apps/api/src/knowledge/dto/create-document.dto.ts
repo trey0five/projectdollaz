@@ -28,6 +28,13 @@ export const DOCUMENT_SOURCE_TYPES = [
   // Governance Phase 2 — credential/CV docs attached to a GovernancePerson
   // (sourceRef = personId; tag convention cv|license|degree|background_check).
   'governance_person',
+  // Enrollment — the ORIGINAL roster file retained at import time (sourceRef =
+  // the EnrollmentImport receipt id). FERPA: these files carry student NAMES, so
+  // they are deliberately kept OFF every generic surface — excluded from the
+  // knowledge list, from search, and from the viewer-open download route. The
+  // one door to their bytes is the enrollment controller's
+  // imports/:importId/original-url, gated owner/accountant like the upload.
+  'roster_import',
 ] as const
 export type DocumentSourceType = (typeof DOCUMENT_SOURCE_TYPES)[number]
 

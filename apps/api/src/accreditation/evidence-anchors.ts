@@ -420,6 +420,9 @@ export function createAnchorResolver(prisma: AnchorPrisma, schoolId: string, now
       prisma.knowledgeDocument.findMany({
         where: {
           schoolId,
+          // Retained roster files are enrollment-import evidence, not accreditation
+          // evidence — never suggest one (FERPA: their bytes are name-bearing).
+          sourceType: { not: 'roster_import' },
           OR: patterns.map((p) => ({ title: { contains: p, mode: 'insensitive' as const } })),
         },
         select: { id: true, title: true, createdAt: true },

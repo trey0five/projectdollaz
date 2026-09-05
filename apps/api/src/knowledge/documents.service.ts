@@ -142,6 +142,9 @@ export class DocumentsService {
       case 'governance_person':
         found = await this.prisma.governancePerson.findFirst({ where, select: { id: true } })
         break
+      case 'roster_import':
+        found = await this.prisma.enrollmentImport.findFirst({ where, select: { id: true } })
+        break
       default:
         throw new BadRequestException(`Unsupported sourceType: ${String(sourceType)}.`)
     }
@@ -212,11 +215,95 @@ export class DocumentsService {
     return this.toPublic(row)
   }
 
+  /**
+   * INTERNAL retention door — server-authored, never HTTP-reachable. Stores the
+   * original bytes of a file another service ingested (today: the roster CSV an
+   * enrollment import consumed), linked to the internal artifact that consumed it.
+   *
+   * Differs from createDocument in exactly one rule: NO MIME allowlist. The
+   * calling service already accepted and parsed these bytes (a OneRoster upload
+   * may legitimately be a ZIP, which the manual-upload allowlist refuses); what
+   * was good enough to build the roster from is what we retain. Everything else —
+   * the size cap on the REAL buffer, the school-scoped link validation, the
+   * S3-first orphan safety, the audit row — is the same discipline.
+   */
+  async retainSourceFile(
+    schoolId: string,
+    file: UploadedDocumentFile,
+    meta: {
+      title: string
+      description?: string
+      tags?: string[]
+      sourceType: DocumentSourceType
+      sourceRef: string
+    },
+    userId: string | null,
+  ): Promise<DocumentPublic> {
+    if (!file.buffer) throw new BadRequestException('A file is required.')
+    const sizeBytes = file.buffer.length
+    if (sizeBytes > MAX_SIZE_BYTES) {
+      throw new BadRequestException('File exceeds the 25MB limit.')
+    }
+    if (!this.storage.isConfigured()) {
+      throw new ServiceUnavailableException('Document storage is not configured.')
+    }
+    await this.resolveLink(schoolId, meta.sourceType, meta.sourceRef) // 404 on a cross-tenant ref
+
+    const documentId = randomUUID()
+    const key = this.storage.buildKey(schoolId, documentId, file.originalname)
+
+    // S3 FIRST — if this throws, NO row is written (nothing to clean up).
+    await this.storage.putObject(file.buffer, key, file.mimetype)
+
+    let row: KnowledgeDocument
+    try {
+      row = await this.prisma.knowledgeDocument.create({
+        data: {
+          id: documentId,
+          schoolId,
+          title: meta.title.trim().slice(0, 200),
+          description: meta.description ?? null,
+          fileName: file.originalname,
+          mimeType: file.mimetype,
+          sizeBytes,
+          s3Key: key,
+          tags: meta.tags ?? [],
+          sourceType: meta.sourceType,
+          sourceRef: meta.sourceRef,
+          uploadedByUserId: userId,
+        },
+      })
+    } catch (err) {
+      // ORPHAN PREVENTION: the object is in S3 but the row failed → remove the object.
+      await this.storage.deleteObject(key)
+      throw err
+    }
+
+    await this.audit.write({
+      schoolId,
+      userId,
+      action: 'document.uploaded',
+      targetType: 'knowledge_documents',
+      targetId: row.id,
+      metadata: {
+        fileName: row.fileName,
+        sizeBytes: row.sizeBytes,
+        mimeType: row.mimeType,
+        sourceType: meta.sourceType,
+      },
+    })
+    return this.toPublic(row)
+  }
+
   async listDocuments(schoolId: string, query: ListDocumentsQueryDto): Promise<DocumentListResponse> {
+    // FERPA: retained roster files (student NAMES inside) never appear on this
+    // viewer-open list — not even when asked for by sourceType. Their one home is
+    // the Enrollment page's import history, through the role-gated enrollment route.
+    if (query.sourceType === 'roster_import') return { documents: [], total: 0 }
     const rows = await this.prisma.knowledgeDocument.findMany({
       where: {
         schoolId,
-        ...(query.sourceType ? { sourceType: query.sourceType } : {}),
+        sourceType: query.sourceType ?? { not: 'roster_import' },
         ...(query.sourceRef ? { sourceRef: query.sourceRef } : {}),
       },
       orderBy: { createdAt: 'desc' },
@@ -234,6 +321,7 @@ export class DocumentsService {
     schoolId: string,
     documentId: string,
     userId?: string,
+    opts: { allowRosterImport?: boolean } = {},
   ): Promise<{ url: string; expiresIn: number }> {
     if (!this.storage.isConfigured()) {
       throw new ServiceUnavailableException('Document storage is not configured.')
@@ -241,6 +329,12 @@ export class DocumentsService {
     // TENANT CHECK: a school-B user requesting a school-A id gets 404 — the presign
     // never runs for a foreign key.
     const row = await this.resolve(schoolId, documentId)
+    // FERPA: a retained roster file is name-bearing, and this method backs a
+    // viewer-open route. Only the enrollment controller's owner/accountant door
+    // passes the flag; everyone else gets the same 404 a nonexistent id gets.
+    if (row.sourceType === 'roster_import' && !opts.allowRosterImport) {
+      throw new NotFoundException('Document not found.')
+    }
     const ttl = this.storage.ttlSeconds()
     const url = await this.storage.presignGetUrl(row.s3Key, ttl)
     // FERPA access log (§99.32): record WHO accessed this document (a possible

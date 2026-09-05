@@ -96,6 +96,7 @@ function makeService(
     accreditationStandard: linkTable(opts.linkTables?.standard),
     advancementCampaign: linkTable(opts.linkTables?.campaign),
     maintenanceItem: linkTable(opts.linkTables?.maintenance),
+    enrollmentImport: linkTable(opts.linkTables?.roster_import),
   }
   const audit = { write: vi.fn(async () => undefined) }
   const svc = new DocumentsService(prisma as never, storage as never, audit as never)
@@ -295,5 +296,102 @@ describe('DocumentsService — listDocuments', () => {
       sourceType: 'policy',
       sourceRef: REF,
     })
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Retained roster files (sourceType 'roster_import') — FERPA one-door. The FILE
+// carries student names, so the doc store keeps it OFF every generic surface:
+// off this viewer-open list, off the viewer-open download route, out of search
+// (search.service.spec pins that side). The one door is the enrollment
+// controller's owner/accountant original-url route, which passes the flag.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('DocumentsService — roster_import stays off the generic surfaces', () => {
+  it('the default list EXCLUDES roster_import rows at the query', async () => {
+    const { svc, prisma } = makeService()
+    await svc.listDocuments(SCHOOL, {})
+    expect(firstArg(prisma.knowledgeDocument.findMany).where).toMatchObject({
+      schoolId: SCHOOL,
+      sourceType: { not: 'roster_import' },
+    })
+  })
+
+  it('asking the list FOR roster_import returns empty without touching the DB', async () => {
+    const { svc, prisma } = makeService()
+    const res = await svc.listDocuments(SCHOOL, { sourceType: 'roster_import' })
+    expect(res).toEqual({ documents: [], total: 0 })
+    expect(prisma.knowledgeDocument.findMany).not.toHaveBeenCalled()
+  })
+
+  it('the generic download 404s a roster_import doc — same as a nonexistent id', async () => {
+    const { svc, storage } = makeService({
+      findFirstImpl: async () => dbRow({ sourceType: 'roster_import', sourceRef: REF }),
+    })
+    await expect(svc.getDownloadUrl(SCHOOL, DOC, USER)).rejects.toBeInstanceOf(NotFoundException)
+    expect(storage.presignGetUrl).not.toHaveBeenCalled()
+  })
+
+  it('the flagged door (enrollment route only) presigns and writes the §99.32 access log', async () => {
+    const { svc, storage, audit } = makeService({
+      findFirstImpl: async () => dbRow({ sourceType: 'roster_import', sourceRef: REF }),
+    })
+    const res = await svc.getDownloadUrl(SCHOOL, DOC, USER, { allowRosterImport: true })
+    expect(res.url).toBe('https://s3.example/presigned')
+    expect(firstArg(audit.write)).toMatchObject({ action: 'document.downloaded', userId: USER })
+  })
+})
+
+describe('DocumentsService — retainSourceFile (the internal retention door)', () => {
+  const zip = (): UploadedDocumentFile => ({
+    originalname: 'roster-2026.zip',
+    // The manual-upload allowlist refuses zips; retention deliberately does not —
+    // what was good enough to build the roster from is what we retain.
+    mimetype: 'application/zip',
+    buffer: Buffer.from('PK-not-really'),
+  })
+  const meta = {
+    title: 'roster-2026.zip',
+    sourceType: 'roster_import' as const,
+    sourceRef: REF,
+    tags: ['roster'],
+  }
+
+  it('stores S3-first and links sourceRef to the receipt — no MIME allowlist', async () => {
+    const { svc, prisma, storage } = makeService({ linkTables: { roster_import: { id: REF } } })
+    await svc.retainSourceFile(SCHOOL, zip(), meta, USER)
+    expect(storage.putObject).toHaveBeenCalledOnce()
+    expect(firstArg(prisma.knowledgeDocument.create).data).toMatchObject({
+      schoolId: SCHOOL,
+      sourceType: 'roster_import',
+      sourceRef: REF,
+      tags: ['roster'],
+      mimeType: 'application/zip',
+    })
+  })
+
+  it('a cross-tenant/forged receipt id 404s BEFORE any S3 write', async () => {
+    const { svc, storage } = makeService({ linkTables: { roster_import: null } })
+    await expect(svc.retainSourceFile(SCHOOL, zip(), meta, USER)).rejects.toBeInstanceOf(
+      NotFoundException,
+    )
+    expect(storage.putObject).not.toHaveBeenCalled()
+  })
+
+  it('a row failure after the S3 put deletes the object (no orphan)', async () => {
+    const { svc, storage } = makeService({
+      linkTables: { roster_import: { id: REF } },
+      createImpl: async () => {
+        throw new Error('db down')
+      },
+    })
+    await expect(svc.retainSourceFile(SCHOOL, zip(), meta, USER)).rejects.toThrow('db down')
+    expect(storage.deleteObject).toHaveBeenCalledOnce()
+  })
+
+  it('refuses when storage is unconfigured (503) — the caller degrades to no retention', async () => {
+    const { svc } = makeService({ configured: false, linkTables: { roster_import: { id: REF } } })
+    await expect(svc.retainSourceFile(SCHOOL, zip(), meta, USER)).rejects.toBeInstanceOf(
+      ServiceUnavailableException,
+    )
   })
 })

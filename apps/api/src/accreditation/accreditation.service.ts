@@ -1146,7 +1146,9 @@ export class AccreditationService {
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.knowledgeDocument.findMany({
-        where: { schoolId },
+        // Retained roster files stay off the evidence-link picker (FERPA: their
+        // bytes carry student names; they are enrollment-import evidence only).
+        where: { schoolId, sourceType: { not: 'roster_import' } },
         select: { id: true, title: true, createdAt: true },
         orderBy: { createdAt: 'desc' },
         take: 50,
@@ -1231,6 +1233,8 @@ export class AccreditationService {
       const docs = await this.prisma.knowledgeDocument.findMany({
         where: {
           schoolId,
+          // Same rule as the anchors: a retained roster file is never evidence.
+          sourceType: { not: 'roster_import' },
           OR: patterns.map((p) => ({ title: { contains: p, mode: 'insensitive' as const } })),
         },
         select: { id: true, title: true, createdAt: true },

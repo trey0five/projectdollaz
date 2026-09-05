@@ -276,6 +276,11 @@ export class SearchService {
     const rows = await this.prisma.knowledgeDocument.findMany({
       where: {
         schoolId,
+        // FERPA: retained roster files (sourceType 'roster_import') carry student
+        // names in their BYTES and exist only as enrollment-import evidence. Search
+        // is viewer-open and CORE, so they are excluded here outright — a roster
+        // file must never surface a result (or a presign path) to a broader role.
+        sourceType: { not: 'roster_import' },
         OR: [
           { title: this.contains(q) },
           { description: this.contains(q) },

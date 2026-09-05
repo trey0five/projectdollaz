@@ -136,6 +136,17 @@ describe('SearchService — module gating (gate BEFORE query)', () => {
     expect(prisma.knowledgeDocument.findMany).toHaveBeenCalledOnce()
   })
 
+  it('the document query EXCLUDES retained roster files (FERPA — name-bearing bytes)', async () => {
+    const { svc, prisma } = makeService()
+    await svc.search(SCHOOL, 'roster')
+    const arg = (prisma.knowledgeDocument.findMany as ReturnType<typeof vi.fn>).mock
+      .calls[0]![0] as { where: Record<string, unknown> }
+    // Search is viewer-open and CORE; a roster_import doc must never surface a
+    // result (or a presign path) here — the filter lives IN the query, so a new
+    // roster doc can't leak by ranking.
+    expect(arg.where.sourceType).toEqual({ not: 'roster_import' })
+  })
+
   it('trial school (all gates true) queries all entities incl. documents', async () => {
     const { svc, prisma } = makeService()
     await svc.search(SCHOOL, 'boiler')
