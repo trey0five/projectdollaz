@@ -1,10 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
+import { plainToInstance } from 'class-transformer'
+import { validateSync } from 'class-validator'
 import {
+  BadGatewayException,
   BadRequestException,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common'
 import { DocumentsService, type UploadedDocumentFile } from './documents.service.js'
+import { CreateDocumentDto, HTTP_DOCUMENT_SOURCE_TYPES } from './dto/create-document.dto.js'
+import { UpdateDocumentDto } from './dto/update-document.dto.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Phase 4 Knowledge document store — the DocumentsService. Verified WITHOUT booting
@@ -81,6 +86,7 @@ function makeService(
     putObject: vi.fn(async () => undefined),
     presignGetUrl: vi.fn(async () => 'https://s3.example/presigned'),
     deleteObject: vi.fn(async () => undefined),
+    deleteObjectStrict: vi.fn(async () => undefined),
   }
   const linkTable = (rows: unknown) => ({ findFirst: vi.fn(async () => rows ?? null) })
   const prisma = {
@@ -393,5 +399,89 @@ describe('DocumentsService — retainSourceFile (the internal retention door)', 
     await expect(svc.retainSourceFile(SCHOOL, zip(), meta, USER)).rejects.toBeInstanceOf(
       ServiceUnavailableException,
     )
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The WRITE-path seal. Every read-path exclusion above is keyed on the
+// sourceType string — so the write paths must make that string unforgeable:
+// no HTTP create may mint 'roster_import' (a fake doc with sourceRef = a
+// receipt id would shadow the genuine original), and no PATCH may move a doc
+// onto or off it (off = unsealing a name-bearing file onto the open surfaces).
+// ─────────────────────────────────────────────────────────────────────────────
+describe('DocumentsService — the roster_import seal holds at the WRITE paths', () => {
+  it('createDocument refuses sourceType roster_import with 400, before any S3 write', async () => {
+    const { svc, storage, prisma } = makeService()
+    await expect(
+      svc.createDocument(SCHOOL, pdf(), { title: 'fake roster', sourceType: 'roster_import', sourceRef: REF } as never, USER),
+    ).rejects.toBeInstanceOf(BadRequestException)
+    expect(storage.putObject).not.toHaveBeenCalled()
+    expect(prisma.knowledgeDocument.create).not.toHaveBeenCalled()
+  })
+
+  it('the HTTP CreateDocumentDto @IsIn refuses roster_import (the DTO door)', () => {
+    const dto = plainToInstance(CreateDocumentDto, { title: 'x', sourceType: 'roster_import' })
+    const errs = validateSync(dto)
+    expect(errs.some((e) => e.property === 'sourceType')).toBe(true)
+    // …while every HTTP-writable value passes.
+    for (const st of HTTP_DOCUMENT_SOURCE_TYPES) {
+      const ok = plainToInstance(CreateDocumentDto, { title: 'x', sourceType: st })
+      expect(validateSync(ok).some((e) => e.property === 'sourceType')).toBe(false)
+    }
+  })
+
+  it('the UpdateDocumentDto @IsIn refuses roster_import too', () => {
+    const dto = plainToInstance(UpdateDocumentDto, { sourceType: 'roster_import' })
+    expect(validateSync(dto).some((e) => e.property === 'sourceType')).toBe(true)
+  })
+
+  it('PATCHing a RETAINED roster doc (any field, incl. sourceType→manual) 400s — never unsealed', async () => {
+    const { svc, prisma } = makeService({
+      findFirstImpl: async () => dbRow({ sourceType: 'roster_import', sourceRef: REF }),
+    })
+    await expect(
+      svc.updateDocument(SCHOOL, DOC, { sourceType: 'manual' } as never, USER),
+    ).rejects.toBeInstanceOf(BadRequestException)
+    await expect(svc.updateDocument(SCHOOL, DOC, { title: 'renamed' } as never, USER)).rejects.toBeInstanceOf(
+      BadRequestException,
+    )
+    expect(prisma.knowledgeDocument.update).not.toHaveBeenCalled()
+  })
+
+  it('PATCHing a manual doc TO roster_import 400s (the other direction)', async () => {
+    const { svc, prisma } = makeService()
+    await expect(
+      svc.updateDocument(SCHOOL, DOC, { sourceType: 'roster_import', sourceRef: REF } as never, USER),
+    ).rejects.toBeInstanceOf(BadRequestException)
+    expect(prisma.knowledgeDocument.update).not.toHaveBeenCalled()
+  })
+})
+
+describe('DocumentsService — roster doc delete FAILS CLOSED on the S3 object', () => {
+  it('a roster_import doc uses the STRICT delete; an S3 failure keeps the row (502-class)', async () => {
+    const { svc, prisma, storage } = makeService({
+      findFirstImpl: async () => dbRow({ sourceType: 'roster_import', sourceRef: REF }),
+    })
+    storage.deleteObjectStrict.mockRejectedValueOnce(new Error('s3 down'))
+    await expect(svc.deleteDocument(SCHOOL, DOC, USER)).rejects.toBeInstanceOf(BadGatewayException)
+    expect(prisma.knowledgeDocument.delete).not.toHaveBeenCalled()
+  })
+
+  it('a roster_import doc whose object delete SUCCEEDS removes the row and audits', async () => {
+    const { svc, prisma, storage, audit } = makeService({
+      findFirstImpl: async () => dbRow({ sourceType: 'roster_import', sourceRef: REF }),
+    })
+    await svc.deleteDocument(SCHOOL, DOC, USER)
+    expect(storage.deleteObjectStrict).toHaveBeenCalledWith(dbRow().s3Key)
+    expect(prisma.knowledgeDocument.delete).toHaveBeenCalledOnce()
+    expect(audit.write).toHaveBeenCalledOnce()
+  })
+
+  it('a manual doc keeps the best-effort shape (row removed regardless)', async () => {
+    const { svc, prisma, storage } = makeService()
+    await svc.deleteDocument(SCHOOL, DOC, USER)
+    expect(storage.deleteObject).toHaveBeenCalledWith(dbRow().s3Key)
+    expect(storage.deleteObjectStrict).not.toHaveBeenCalled()
+    expect(prisma.knowledgeDocument.delete).toHaveBeenCalledOnce()
   })
 })

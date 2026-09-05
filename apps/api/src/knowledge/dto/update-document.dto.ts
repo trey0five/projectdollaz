@@ -9,7 +9,7 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator'
-import { DOCUMENT_SOURCE_TYPES, normalizeTags, type DocumentSourceType } from './create-document.dto.js'
+import { HTTP_DOCUMENT_SOURCE_TYPES, normalizeTags, type DocumentSourceType } from './create-document.dto.js'
 
 /**
  * Patch a document's METADATA only (JSON body). DELIBERATELY has NO fileName / s3Key /
@@ -37,7 +37,9 @@ export class UpdateDocumentDto {
   tags?: string[]
 
   @IsOptional()
-  @IsIn(DOCUMENT_SOURCE_TYPES)
+  // The HTTP list — a PATCH can never write 'roster_import' (the service also
+  // refuses it on the EXISTING side of a transition, with a clearer message).
+  @IsIn(HTTP_DOCUMENT_SOURCE_TYPES)
   sourceType?: DocumentSourceType
 
   @IsOptional()

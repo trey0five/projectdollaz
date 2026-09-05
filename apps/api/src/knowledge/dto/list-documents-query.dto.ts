@@ -8,6 +8,9 @@ import { DOCUMENT_SOURCE_TYPES, type DocumentSourceType } from './create-documen
  */
 export class ListDocumentsQueryDto {
   @IsOptional()
+  // Deliberately the FULL set (not the HTTP write list): this is a READ filter,
+  // and asking for 'roster_import' is answered with an empty list in the service
+  // — the seal is silence, not a 400 that confirms the register exists.
   @IsIn(DOCUMENT_SOURCE_TYPES)
   sourceType?: DocumentSourceType
 

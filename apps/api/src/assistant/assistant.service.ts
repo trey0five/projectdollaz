@@ -61,7 +61,7 @@ import {
 } from '../knowledge/documents.service.js'
 import { DocumentStorageService } from '../knowledge/document-storage.service.js'
 import {
-  DOCUMENT_SOURCE_TYPES,
+  HTTP_DOCUMENT_SOURCE_TYPES,
   type CreateDocumentDto,
   type DocumentSourceType,
 } from '../knowledge/dto/create-document.dto.js'
@@ -586,9 +586,16 @@ function clampTaskSourceType(v: unknown): TaskSourceType {
     : 'manual'
 }
 
-/** Clamp arbitrary input to a valid Knowledge DocumentSourceType (default 'manual'). */
+/**
+ * Clamp arbitrary input to a Knowledge DocumentSourceType Penny may WRITE
+ * (default 'manual'). The HTTP list, NOT the full set: 'roster_import' is the
+ * server-authored FERPA seal on retained roster originals, and a forged /apply
+ * naming it (with sourceRef = a receipt id) would plant a fake doc behind the
+ * enrollment download door. It clamps to 'manual' here; the DocumentsService
+ * belt would 400 it anyway.
+ */
 function clampDocumentSourceType(v: unknown): DocumentSourceType {
-  return typeof v === 'string' && (DOCUMENT_SOURCE_TYPES as readonly string[]).includes(v)
+  return typeof v === 'string' && (HTTP_DOCUMENT_SOURCE_TYPES as readonly string[]).includes(v)
     ? (v as DocumentSourceType)
     : 'manual'
 }

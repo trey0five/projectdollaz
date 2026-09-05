@@ -15,7 +15,14 @@ import {
  * 'manual' = a standalone document (the default). The rest link an EXISTING internal
  * artifact (validated ∈ the path school in the service — mirror AccreditationEvidence).
  */
-export const DOCUMENT_SOURCE_TYPES = [
+/**
+ * The source types an HTTP client may WRITE (create or PATCH). Deliberately
+ * excludes 'roster_import': that value is the FERPA seal on retained roster
+ * originals, and letting any HTTP surface write it (or write it AWAY) would let
+ * a client seal an arbitrary doc into the enrollment-only door — or unseal a
+ * name-bearing roster file onto the open list/search/download surfaces.
+ */
+export const HTTP_DOCUMENT_SOURCE_TYPES = [
   'manual',
   'policy',
   'board_report',
@@ -28,12 +35,24 @@ export const DOCUMENT_SOURCE_TYPES = [
   // Governance Phase 2 — credential/CV docs attached to a GovernancePerson
   // (sourceRef = personId; tag convention cv|license|degree|background_check).
   'governance_person',
+] as const
+
+/**
+ * The FULL set, including the one server-only value. Used by the internal
+ * retention door (retainSourceFile) and by read-side plumbing (toPublic, the
+ * list query) — never by a write DTO's @IsIn.
+ */
+export const DOCUMENT_SOURCE_TYPES = [
+  ...HTTP_DOCUMENT_SOURCE_TYPES,
   // Enrollment — the ORIGINAL roster file retained at import time (sourceRef =
   // the EnrollmentImport receipt id). FERPA: these files carry student NAMES, so
   // they are deliberately kept OFF every generic surface — excluded from the
   // knowledge list, from search, and from the viewer-open download route. The
   // one door to their bytes is the enrollment controller's
   // imports/:importId/original-url, gated owner/accountant like the upload.
+  // SERVER-AUTHORED ONLY: no HTTP DTO accepts this value (see
+  // HTTP_DOCUMENT_SOURCE_TYPES above), and updateDocument refuses it on either
+  // side of a sourceType transition.
   'roster_import',
 ] as const
 export type DocumentSourceType = (typeof DOCUMENT_SOURCE_TYPES)[number]
@@ -95,7 +114,8 @@ export class CreateDocumentDto {
   tags?: string[]
 
   @IsOptional()
-  @IsIn(DOCUMENT_SOURCE_TYPES)
+  // The HTTP list — 'roster_import' 400s here; only retainSourceFile writes it.
+  @IsIn(HTTP_DOCUMENT_SOURCE_TYPES)
   sourceType?: DocumentSourceType
 
   @IsOptional()

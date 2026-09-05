@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import {
+  BadGatewayException,
   BadRequestException,
   Injectable,
   NotFoundException,
@@ -75,7 +76,9 @@ export interface DocumentListResponse {
  *
  * ORPHAN/LEAK SAFETY (guard #4): createDocument puts to S3 FIRST, then creates the
  * DB row inside a try/catch that deletes the object on failure; deleteDocument does a
- * best-effort object delete but ALWAYS removes the row.
+ * best-effort object delete but ALWAYS removes the row — EXCEPT for a retained
+ * roster original ('roster_import'), where a failed object delete keeps the row
+ * (fail closed): a name-bearing CSV must never survive with its only anchor gone.
  */
 @Injectable()
 export class DocumentsService {
@@ -172,6 +175,17 @@ export class DocumentsService {
     }
 
     const sourceType: DocumentSourceType = dto.sourceType ?? 'manual'
+    // FERPA SEAL: 'roster_import' is server-authored (retainSourceFile only).
+    // The HTTP DTO's @IsIn already 400s it; this belt covers every direct caller
+    // (Penny's apply path reaches this service without the DTO pipe). Without
+    // it, a fake doc with sourceRef = a receipt id could SHADOW the genuine
+    // retained original behind the enrollment download door.
+    if ((sourceType as string) === 'roster_import') {
+      throw new BadRequestException(
+        'Documents cannot be created as roster imports — roster originals are retained ' +
+          'automatically when an import runs, and live behind the Enrollment page’s import history.',
+      )
+    }
     await this.resolveLink(schoolId, sourceType, dto.sourceRef) // 404 on a cross-tenant ref
 
     const documentId = randomUUID()
@@ -358,6 +372,19 @@ export class DocumentsService {
   ): Promise<DocumentPublic> {
     const existing = await this.resolve(schoolId, documentId)
 
+    // FERPA SEAL — enforced at the WRITE path, not only the read paths. A
+    // retained roster original must never be PATCHed to another sourceType
+    // (that would unseal a name-bearing file onto the open list/search/download
+    // surfaces), and no document may be PATCHed INTO 'roster_import' (the DTO's
+    // @IsIn already 400s that; this is the belt for non-HTTP callers). Either
+    // side of the transition refuses.
+    if (existing.sourceType === 'roster_import' || dto.sourceType === 'roster_import') {
+      throw new BadRequestException(
+        'Retained roster originals are managed from the Enrollment page’s import history, ' +
+          'not from Documents — their link to the import they came from cannot be edited.',
+      )
+    }
+
     // Determine the effective link after the patch, and re-validate if it changed.
     const nextSourceType = (dto.sourceType ?? existing.sourceType) as DocumentSourceType
     const nextSourceRef =
@@ -396,8 +423,23 @@ export class DocumentsService {
     userId: string,
   ): Promise<{ id: string }> {
     const existing = await this.resolve(schoolId, documentId)
-    // Best-effort object delete (swallows S3 errors); the ROW is ALWAYS removed.
-    await this.storage.deleteObject(existing.s3Key)
+    if (existing.sourceType === 'roster_import') {
+      // FAIL CLOSED for a retained roster original: if the S3 object cannot be
+      // deleted, keep the ROW. Deleting the row while the bytes survive would
+      // orphan a name-bearing CSV reachable by no door and deletable by no one.
+      // (Manual docs below keep the best-effort shape: a leaked empty object is
+      // an S3 hygiene problem, not a FERPA one.)
+      try {
+        await this.storage.deleteObjectStrict(existing.s3Key)
+      } catch {
+        throw new BadGatewayException(
+          'The stored roster file could not be deleted just now, so the record was kept. Try again in a moment.',
+        )
+      }
+    } else {
+      // Best-effort object delete (swallows S3 errors); the ROW is ALWAYS removed.
+      await this.storage.deleteObject(existing.s3Key)
+    }
     await this.prisma.knowledgeDocument.delete({ where: { id: existing.id } })
     await this.audit.write({
       schoolId,

@@ -136,10 +136,19 @@ export class DocumentStorageService {
   // Best-effort: log + swallow so a delete of the DB row is never blocked by S3.
   async deleteObject(key: string): Promise<void> {
     try {
-      await this.getClient().send(new DeleteObjectCommand({ Bucket: this.cfg.bucket, Key: key }))
+      await this.deleteObjectStrict(key)
     } catch (err) {
       this.logger.warn(`S3 deleteObject failed (best-effort): ${String(err)}`)
     }
+  }
+
+  /**
+   * THROWING delete — for callers that must FAIL CLOSED (a retained roster
+   * original: deleting its row while the name-bearing bytes survive would
+   * orphan them beyond every door). The caller decides what a failure means.
+   */
+  async deleteObjectStrict(key: string): Promise<void> {
+    await this.getClient().send(new DeleteObjectCommand({ Bucket: this.cfg.bucket, Key: key }))
   }
 
   /** The object-key prefix under which ALL of a school's documents live. */
