@@ -265,7 +265,12 @@ export default function EnrollmentAnalytics({ schoolId, periodId, rosterMode = f
         : null
 
   return (
-    <div className="mx-auto max-w-page space-y-4 px-4 py-8 sm:px-10">
+    // pb-28 below lg: the floating Penny coin is fixed bottom-right, and at
+    // narrow widths this data-dense page's last rows (E4's school total, E5's
+    // donut) could never scroll clear of it — the coin sat ON the figures.
+    // Clearance beats repositioning the coin: everything stays reachable and
+    // the coin behaves like every other page's.
+    <div className="mx-auto max-w-page space-y-4 px-4 py-8 pb-28 sm:px-10 lg:pb-8">
       {/* ── HERO: the registry tiles, and ONLY the ones the server sent. A tile
           the server could not compute is absent, never a card of em-dashes. ── */}
       <HeroBand eyebrow="Enrollment vitals" right={asOfChip} reduce={reduce}>
@@ -365,7 +370,14 @@ export default function EnrollmentAnalytics({ schoolId, periodId, rosterMode = f
             scope={sourceScope}
             refs={
               trend?.planTotal != null ? (
-                <RefChip color={PLAN_INK} name="Plan" value={fmtCount(trend.planTotal)} />
+                <RefChip
+                  color={PLAN_INK}
+                  name="Plan"
+                  value={fmtCount(trend.planTotal)}
+                  // The IN-VIEW key keeps the class distinction visible without
+                  // opening the ⓘ: plan is an intention, not an observation.
+                  gloss="intended, never counted"
+                />
               ) : null
             }
           >

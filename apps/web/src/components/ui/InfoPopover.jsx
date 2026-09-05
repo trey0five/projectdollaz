@@ -35,7 +35,9 @@ export default function InfoPopover({
     if (!open) return undefined
     const onKey = (e) => {
       if (e.key === 'Escape') {
-        e.stopPropagation()
+        // No stopPropagation: an outer Escape handler (a modal this popover sits
+        // in, say) may also close — swallowing the event trapped the user a
+        // keypress behind where they expected to be.
         setOpen(false)
         buttonRef.current?.focus()
       }

@@ -17,10 +17,16 @@
 //      merely behind disclosure — the deletion of any of them is a regression
 //      this file exists to catch.
 // ─────────────────────────────────────────────────────────────────────────────
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { separateLabels } from './enrollmentAnalyticsKit.jsx'
+
+// The diverged-tile mount (§5 below) swaps the analytics hook per fixture.
+const hookMock = vi.hoisted(() => ({ useEnrollmentAnalytics: vi.fn() }))
+vi.mock('../../hooks/useEnrollmentAnalytics.js', () => ({
+  useEnrollmentAnalytics: (...a) => hookMock.useEnrollmentAnalytics(...a),
+}))
 
 const read = (rel) => readFileSync(resolve(process.cwd(), 'src', rel), 'utf8')
 const page = read('pages/EnrollmentPage.jsx')
@@ -199,5 +205,100 @@ describe('"what to know" is a collapsed disclosure, bullets verbatim', () => {
   it('the server-authored notes still print verbatim inside the fold', () => {
     expect(honesty).toMatch(/\{notes\.map\(\(n\) => \(/)
     expect(honesty).toMatch(/<span>\{n\}<\/span>/)
+  })
+})
+
+// ── 4 · Degenerate band: compress, never escape past hi ──────────────────────
+
+describe('separateLabels — a band too small for the stack COMPRESSES, never escapes', () => {
+  it('a tiny band keeps every label inside [lo, hi], in order', () => {
+    const out = separateLabels(
+      [
+        { key: 'a', y: 10 },
+        { key: 'b', y: 11 },
+        { key: 'c', y: 12 },
+      ],
+      { gap: 14, lo: 0, hi: 20 }, // room for 20px, stack wants 28px of gap
+    )
+    const ys = ['a', 'b', 'c'].map((k) => out.get(k))
+    for (const y of ys) {
+      expect(y).toBeGreaterThanOrEqual(0)
+      expect(y).toBeLessThanOrEqual(20)
+    }
+    // Order survives the compression (leader lines still cannot cross).
+    expect(ys[0]).toBeLessThanOrEqual(ys[1])
+    expect(ys[1]).toBeLessThanOrEqual(ys[2])
+  })
+
+  it('a band with generous room is untouched by the compression branch', () => {
+    const out = separateLabels(
+      [
+        { key: 'a', y: 40 },
+        { key: 'b', y: 160 },
+      ],
+      { gap: 14, lo: 0, hi: 200 },
+    )
+    expect(out.get('a')).toBe(40)
+    expect(out.get('b')).toBe(160)
+  })
+})
+
+// ── 5 · The Overview vs-plan tile is honest about divergence ─────────────────
+//
+// The server can say the vs-plan totals and the promoted headline headcount are
+// two DIFFERENT observations (totals.agreesWithTile === false). The full chart
+// already prints an amber note; the Overview's preview tile used to print
+// totals.gapPct with no note — two different percentages on one screen, no
+// explanation. Rendered here against a diverged fixture.
+
+describe('the Overview preview tile names a diverged vs-plan figure', () => {
+  it('renders the divergence note when agreesWithTile === false, and not otherwise (source pin)', () => {
+    // The tile must read agreesWithTile and carry the honest one-liner…
+    expect(preview).toMatch(/agreesWithTile === false/)
+    expect(preview).toMatch(/differs from the headline figure — see Analytics/)
+    // …and must never average the two figures into a third number.
+    expect(preview).not.toMatch(/\(totals\.gapPct \+/)
+  })
+
+  it('mounted against a diverged fixture, the note is visible; agreeing fixture hides it', async () => {
+    // framer-motion's whileInView needs an IntersectionObserver jsdom lacks.
+    globalThis.IntersectionObserver ??= class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    const { render, screen, cleanup } = await import('@testing-library/react')
+    const { MemoryRouter } = await import('react-router-dom')
+    const React = (await import('react')).default
+    const { default: Preview } = await import('./EnrollmentAnalyticsPreview.jsx')
+
+    const fixture = (agrees) => ({
+      data: {
+        trend: { points: [{ total: 430 }, { total: 436 }], planTotal: 450 },
+        vsPlan: {
+          totals: { actual: 420, plan: 450, gap: -30, gapPct: -0.066, agreesWithTile: agrees, tileGapPct: -0.031 },
+        },
+        gradeByYear: { grades: [], years: [] },
+        cohortSize: { cohorts: [] },
+      },
+      loading: false,
+      error: null,
+      notLicensed: false,
+      notEntitled: false,
+    })
+
+    hookMock.useEnrollmentAnalytics.mockReturnValue(fixture(false))
+    render(
+      React.createElement(MemoryRouter, null, React.createElement(Preview, { schoolId: 's1', periodId: 'p1' })),
+    )
+    expect(screen.getByText(/differs from the headline figure — see Analytics/)).toBeTruthy()
+    cleanup()
+
+    hookMock.useEnrollmentAnalytics.mockReturnValue(fixture(true))
+    render(
+      React.createElement(MemoryRouter, null, React.createElement(Preview, { schoolId: 's1', periodId: 'p1' })),
+    )
+    expect(screen.queryByText(/differs from the headline figure/)).toBeNull()
+    cleanup()
   })
 })

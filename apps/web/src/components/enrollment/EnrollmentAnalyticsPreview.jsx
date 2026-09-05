@@ -229,6 +229,16 @@ export default function EnrollmentAnalyticsPreview({ schoolId, periodId }) {
                 </span>
                 <span className="ml-1.5 text-[10.5px] text-muted">vs plan — by grade inside</span>
               </span>
+              {/* DIVERGENCE, said out loud (mirrors EnrollmentVsPlanChart's note,
+                  in its smallest honest form): when the server says this vs-plan
+                  total and the promoted headline headcount are two different
+                  observations, this tile and the hero tile print two different
+                  percentages side by side — never average them, name it. */}
+              {totals.agreesWithTile === false ? (
+                <span className="mt-0.5 rounded-md bg-amber-500/[0.09] px-1.5 py-0.5 text-[10px] leading-snug text-amber-800 ring-1 ring-amber-500/20">
+                  differs from the headline figure — see Analytics
+                </span>
+              ) : null}
             </span>
           ) : yearsOnFile ? (
             <span className="text-[12px] leading-snug text-muted">

@@ -275,7 +275,10 @@ export function EnrollmentSupportNeedsCard({ mix }) {
                 <Icon size={15} />
               </span>
               <div className="min-w-0">
-                <p className="truncate text-[10px] font-bold uppercase tracking-[0.1em] text-muted">{label}</p>
+                {/* WRAPS, never truncates: at 768 the two-up grid clipped
+                    "ENGLISH LEARNER" to "ENGLISH LE…" — a label that cannot be
+                    read is a tile that cannot be trusted. */}
+                <p className="text-[10px] font-bold uppercase leading-[1.3] tracking-[0.1em] text-muted">{label}</p>
                 <p
                   className={`font-serif text-[19px] font-bold tabular-nums ${
                     masked ? 'text-amber-700' : lit ? 'text-navy' : 'text-muted'

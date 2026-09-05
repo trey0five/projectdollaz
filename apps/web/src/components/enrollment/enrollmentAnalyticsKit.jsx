@@ -234,11 +234,19 @@ export function separateLabels(items, { gap = 14, lo = -Infinity, hi = Infinity 
   // Clamp the bottom of the stack into the band, pushing UP as needed…
   sorted[sorted.length - 1].y = Math.min(sorted[sorted.length - 1].y, hi)
   for (let k = sorted.length - 2; k >= 0; k--) sorted[k].y = Math.min(sorted[k].y, sorted[k + 1].y - gap)
-  // …and the top back down. (If the band is too small for every label at full
-  // gap, the bottom clamp deliberately loses: labels compress rather than
-  // escape the plot.)
+  // …and the top back down.
   sorted[0].y = Math.max(sorted[0].y, lo)
   for (let k = 1; k < sorted.length; k++) sorted[k].y = Math.max(sorted[k].y, sorted[k - 1].y + gap)
+  // DEGENERATE BAND: when [lo, hi] cannot hold every label at full gap, the
+  // forward pass above has pushed the bottom of the stack past hi — the one
+  // escape the contract forbids. Compress instead: spread the stack evenly
+  // inside the band (order kept, gaps shrunk equally), never past hi.
+  if (Number.isFinite(hi) && sorted[sorted.length - 1].y > hi) {
+    const top = Number.isFinite(lo) ? lo : Math.min(sorted[0].y, hi)
+    const span = Math.max(hi - top, 0)
+    const step = sorted.length > 1 ? span / (sorted.length - 1) : 0
+    for (let k = 0; k < sorted.length; k++) sorted[k].y = top + step * k
+  }
   return new Map(sorted.map((s) => [s.key, s.y]))
 }
 
