@@ -175,6 +175,7 @@ export default function RosterSourceCard({
   const [busyId, setBusyId] = useState(null)
   const [downloadId, setDownloadId] = useState(null)
   const [expandedYears, setExpandedYears] = useState(() => new Set())
+  const [historyOpen, setHistoryOpen] = useState(false)
 
   const load = useCallback(() => {
     if (!schoolId) return undefined
@@ -293,11 +294,31 @@ export default function RosterSourceCard({
 
       {imports != null && imports.length > 0 ? (
         <>
-          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-            <h3 className="font-serif text-[17px] font-semibold text-navy">Where this came from</h3>
-            <p className="text-[12.5px] text-muted">Newest school year first</p>
-          </div>
-          <div className="space-y-3.5">
+          {/* Collapsed by default: provenance is metadata, not a primary surface.
+              One summary line; the grouped history renders only on request. */}
+          <button
+            type="button"
+            onClick={() => setHistoryOpen((v) => !v)}
+            aria-expanded={historyOpen}
+            className="flex w-full flex-wrap items-baseline justify-between gap-2 rounded-xl px-1 py-1 text-left transition-colors hover:bg-navy/[0.03]"
+          >
+            <span className="flex items-baseline gap-2.5">
+              <h3 className="font-serif text-[17px] font-semibold text-navy">Where this came from</h3>
+              <span className="text-[12.5px] text-muted">
+                {imports.length} import{imports.length === 1 ? '' : 's'} across {groups.length} school
+                year{groups.length === 1 ? '' : 's'}
+              </span>
+            </span>
+            <span className="inline-flex items-center gap-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-navy/70">
+              {historyOpen ? 'Hide history' : 'View history'}
+              <ChevronRight
+                size={13}
+                className={`transition-transform ${historyOpen ? 'rotate-90' : ''}`}
+              />
+            </span>
+          </button>
+          {historyOpen ? (
+          <div className="mt-3 space-y-3.5">
             {groups.map(({ year, latest, earlier }) => {
               const expanded = expandedYears.has(year)
               return (
@@ -357,12 +378,15 @@ export default function RosterSourceCard({
               )
             })}
           </div>
+          ) : null}
+          {historyOpen ? (
           <p className="mt-2.5 break-words text-[12px] leading-snug text-muted">
             Removing an entry clears it from this list and deletes its retained original file — it
             never deletes students. Students are edited and removed in{' '}
             <span className="font-semibold text-navy">Records</span>. Past files keep the names they
             were imported with, even after a student is later deleted from the register.
           </p>
+          ) : null}
         </>
       ) : null}
 

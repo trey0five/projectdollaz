@@ -96,6 +96,15 @@ describe('receipts are GROUPED by school year, not a wall of duplicate cards', (
     expect(card).toMatch(/latest: sorted\[0\], earlier: sorted\.slice\(1\)/)
   })
 
+
+  it('history is collapsed by default — one summary line, grouped rows only on request', () => {
+    expect(card).toMatch(/useState\(false\)[\s\S]{0,40}historyOpen|historyOpen[\s\S]{0,60}useState\(false\)/)
+    expect(card).toMatch(/View history/)
+    expect(card).toMatch(/across \{groups\.length\} school/)
+    // the grouped list and the footnote both render only when historyOpen
+    expect((card.match(/historyOpen \? \(/g) || []).length).toBeGreaterThanOrEqual(2)
+  })
+
   it('earlier imports sit behind an expandable toggle and render dimmed as superseded', () => {
     expect(card).toMatch(/earlier import/)
     expect(card).toMatch(/aria-expanded=\{expanded\}/)
