@@ -1252,6 +1252,12 @@ export const enrollmentApi = {
   // Removes the RECORD of an import — never the students it created.
   removeImport: (schoolId, importId) =>
     api.delete(`/schools/${schoolId}/enrollment/imports/${importId}`),
+  // Presigned URL for the RETAINED ORIGINAL roster file of one receipt. FERPA:
+  // the file carries student names, so this is owner/accountant ONLY (the same
+  // roles that can run the import) — a viewer's history rows show no download
+  // action and the server 403s them here regardless.
+  importOriginalUrl: (schoolId, importId) =>
+    api.get(`/schools/${schoolId}/enrollment/imports/${importId}/original-url`),
   students: {
     // params: { q, grade, status, race, gender, ethnicity, flags, ageBand, sort,
     // dir, page, pageSize } — multi-value params are comma-joined strings; omit

@@ -84,6 +84,48 @@ describe('the receipts answer "which file made these numbers"', () => {
   })
 })
 
+describe('receipts are GROUPED by school year, not a wall of duplicate cards', () => {
+  // Five seed years of near-identical filenames used to print as one undifferentiated
+  // stack, newest-first with the years shuffled together. The grouping rules:
+  it('groups on the SERVER-computed schoolYear (client derivation is fallback only)', () => {
+    expect(card).toMatch(/imp\.schoolYear \?\? fallbackSchoolYear\(imp\.observedOn \?\? imp\.createdAt\)/)
+  })
+
+  it('newest year first; the LATEST import is the year’s row, the rest are history', () => {
+    expect(card).toMatch(/\.sort\(\(a, b\) => b\[0\] - a\[0\]\)/)
+    expect(card).toMatch(/latest: sorted\[0\], earlier: sorted\.slice\(1\)/)
+  })
+
+  it('earlier imports sit behind an expandable toggle and render dimmed as superseded', () => {
+    expect(card).toMatch(/earlier import/)
+    expect(card).toMatch(/aria-expanded=\{expanded\}/)
+    expect(card).toMatch(/superseded/)
+  })
+
+  it('year headers use the shared school-year vocabulary (2025–26), not a bare number', () => {
+    expect(card).toMatch(/schoolYearLabel\(year\)/)
+  })
+})
+
+describe('the original file: retained, downloadable by import-capable roles only', () => {
+  it('the download action requires BOTH canEdit and a retained doc id — no fake links', () => {
+    // Pre-retention receipts have originalDocumentId: null and must render with
+    // no download affordance; a viewer must see none at all (FERPA — the FILE
+    // carries student names even though the receipt does not).
+    expect(card).toMatch(/canEdit && imp\.originalDocumentId \?/)
+  })
+
+  it('the endpoint points at the enrollment-scoped original-url route', () => {
+    expect(api).toMatch(
+      /importOriginalUrl: \(schoolId, importId\) =>\s*api\.get\(`\/schools\/\$\{schoolId\}\/enrollment\/imports\/\$\{importId\}\/original-url`\)/,
+    )
+  })
+
+  it('opens the presigned URL rather than proxying bytes through the app', () => {
+    expect(card).toMatch(/window\.open\(url, '_blank', 'noopener,noreferrer'\)/)
+  })
+})
+
 describe('the register empty state explains the gap', () => {
   it('says a headcount does not create student records', () => {
     // The old copy — "Add students from the Add data tab" — was true and useless
