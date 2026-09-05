@@ -1033,6 +1033,12 @@ export class AccreditationService {
           where: { id: dto.sourceRef, schoolId: std.schoolId },
         })
         if (!doc) throw new NotFoundException('Linked document not found.')
+        // FERPA: a retained roster original is a name-bearing student file, and
+        // attaching it as evidence would surface it to every board/viewer lens
+        // that reads the standard — roster files are never evidence.
+        if (doc.sourceType === 'roster_import') {
+          throw new BadRequestException('Roster files are never evidence — they carry student names.')
+        }
         sourceRef = doc.id
         if (!title) title = doc.title
         if (!reference) reference = SOURCE_META.knowledge_document.link
@@ -1491,6 +1497,10 @@ export class AccreditationService {
           // nextType === 'knowledge_document' (the only remaining @IsIn value)
           const doc = await this.prisma.knowledgeDocument.findFirst({ where: { id: ref, schoolId } })
           if (!doc) throw new NotFoundException('Linked document not found.')
+          // FERPA: same rule as create — roster files are never evidence.
+          if (doc.sourceType === 'roster_import') {
+            throw new BadRequestException('Roster files are never evidence — they carry student names.')
+          }
           sourceRef = doc.id
           if (dto.reference === undefined) reference = SOURCE_META.knowledge_document.link
         }

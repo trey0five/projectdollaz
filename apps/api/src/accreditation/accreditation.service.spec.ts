@@ -856,3 +856,63 @@ describe('AccreditationService — listSuggestions after the KNOWLEDGE_TAG_PATTE
     expect(call[0].where.OR.map((o) => o.title.contains)).toEqual(['budget'])
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FERPA seal — a retained roster original ('roster_import') is a name-bearing
+// student file. It must never become accreditation evidence, on EITHER write
+// path: both the create and the update link-validators refuse it with a 400
+// that says why, before any row is written.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('AccreditationService — roster files are never evidence', () => {
+  const rosterDoc = { id: 'doc-r', schoolId: 'school-A', title: 'roster.csv', sourceType: 'roster_import' }
+  const manualDoc = { id: 'doc-m', schoolId: 'school-A', title: 'Handbook', sourceType: 'manual' }
+
+  it('createEvidence: linking a roster_import doc → 400, no row written', async () => {
+    const harness = makeService({
+      standard: { findFirst: vi.fn(async () => stdRow({ id: 's1', schoolId: 'school-A' })) },
+    })
+    harness.prisma.knowledgeDocument.findFirst = vi.fn(async () => rosterDoc) as never
+    await expect(
+      harness.svc.createEvidence(
+        'school-A',
+        's1',
+        { sourceType: 'knowledge_document', sourceRef: 'doc-r' },
+        'user-1',
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException)
+    expect(harness.evidence.create).not.toHaveBeenCalled()
+  })
+
+  it('createEvidence: a manual doc still links fine (the guard is roster-specific)', async () => {
+    const harness = makeService({
+      standard: { findFirst: vi.fn(async () => stdRow({ id: 's1', schoolId: 'school-A' })) },
+    })
+    harness.prisma.knowledgeDocument.findFirst = vi.fn(async () => manualDoc) as never
+    await harness.svc.createEvidence(
+      'school-A',
+      's1',
+      { sourceType: 'knowledge_document', sourceRef: 'doc-m' },
+      'user-1',
+    )
+    expect(harness.evidence.create).toHaveBeenCalled()
+  })
+
+  it('updateEvidence: re-pointing evidence AT a roster_import doc → 400, no update', async () => {
+    const harness = makeService({
+      standard: { findFirst: vi.fn(async () => stdRow({ id: 's1', schoolId: 'school-A' })) },
+      evidence: { findFirst: vi.fn(async () => evRow({ id: 'e1', title: 'Old' })) },
+    })
+    harness.prisma.knowledgeDocument.findFirst = vi.fn(async () => rosterDoc) as never
+    await expect(
+      harness.svc.updateEvidence(
+        'school-A',
+        's1',
+        'e1',
+        { sourceType: 'knowledge_document', sourceRef: 'doc-r' },
+        'user-1',
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException)
+    expect(harness.evidence.update).not.toHaveBeenCalled()
+  })
+})
