@@ -143,6 +143,25 @@ export class EnrollmentController {
   }
 
   /**
+   * Presigned URL for the RETAINED ORIGINAL roster file of one receipt — the ONE
+   * download door for roster bytes. Owner/accountant ONLY, deliberately narrower
+   * than the viewer-open receipts list above: the receipt is a filename and
+   * counts, but the FILE carries student names, so its download is gated to the
+   * same roles that could have run the import. The knowledge store's generic
+   * (viewer-open) routes refuse these docs; 404 when no file was retained (every
+   * pre-retention receipt).
+   */
+  @Get('imports/:importId/original-url')
+  @Roles('owner', 'accountant')
+  importOriginalUrl(
+    @Param('schoolId', ParseUUIDPipe) schoolId: string,
+    @Param('importId', ParseUUIDPipe) importId: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.rosterUpload.originalDownloadUrl(schoolId, importId, user.id)
+  }
+
+  /**
    * Delete ONE receipt. Removes the RECORD OF an import, never the students it
    * created — those are removed in the register. The UI says so out loud, because
    * "delete import" read as "delete the students" is how a school loses a roster.
@@ -152,8 +171,9 @@ export class EnrollmentController {
   removeImport(
     @Param('schoolId', ParseUUIDPipe) schoolId: string,
     @Param('importId', ParseUUIDPipe) importId: string,
+    @CurrentUser() user: User,
   ) {
-    return this.rosterUpload.removeImport(schoolId, importId)
+    return this.rosterUpload.removeImport(schoolId, importId, user.id)
   }
 
   /** Save a hand-entered roster snapshot (byGrade). */

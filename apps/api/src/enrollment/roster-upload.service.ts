@@ -54,10 +54,12 @@ import type { EnrollmentIntakeResult } from './enrollment.service.js'
 import { PrismaService } from '../prisma/prisma.service.js'
 import {
   EnrollmentService,
+  fyEndForObservedOn,
   looksLikeZip,
   wrapCsvAsZip,
   type UploadedRosterFile,
 } from './enrollment.service.js'
+import { DocumentsService } from '../knowledge/documents.service.js'
 import { StudentsService } from './students/students.service.js'
 import { ROSTER_UPLOAD_HARD_CAP, type CreateStudentDto } from './students/students.dto.js'
 
@@ -153,6 +155,11 @@ export class RosterUploadService {
     private readonly prisma: PrismaService,
     private readonly enrollment: EnrollmentService,
     private readonly students: StudentsService,
+    // The knowledge doc-store, for RETAINING the original roster file (the CSV was
+    // previously parsed and dropped — "which file made these numbers" had a receipt
+    // but no evidence). Dep direction: enrollment → knowledge, acyclic (Knowledge
+    // reads prisma-direct and imports no domain module).
+    private readonly documents: DocumentsService,
   ) {}
 
   /**
@@ -195,9 +202,9 @@ export class RosterUploadService {
       recordsNote: string | null
       warnings: string[]
     },
-  ): Promise<void> {
+  ): Promise<string | null> {
     try {
-      await this.prisma.enrollmentImport.create({
+      const row = await this.prisma.enrollmentImport.create({
         data: {
           schoolId,
           kind: data.kind,
@@ -213,17 +220,100 @@ export class RosterUploadService {
           uploadedByUserId: actorId,
         },
       })
+      return row.id
     } catch {
       /* the intake succeeded; the receipt is not worth failing it for */
+      return null
     }
   }
 
-  /** The intake receipts for a school, newest first. FERPA: counts only. */
-  async listImports(schoolId: string, limit = 10) {
-    return this.prisma.enrollmentImport.findMany({
+  /**
+   * RETAIN THE ORIGINAL FILE — best-effort, like the receipt itself. The bytes go
+   * to the S3 knowledge store as sourceType 'roster_import' with sourceRef = the
+   * receipt id, so each history row can serve its own evidence back. A storage
+   * failure (or an unconfigured store, or a >25MB file) must never fail an intake
+   * that already happened — the receipt then simply has no stored file, which is
+   * exactly the state every pre-feature receipt is in, and the UI renders it the
+   * same way (no download action).
+   *
+   * FERPA: the FILE carries student names; the doc-store metadata stored here
+   * carries only the filename. The store keeps these docs off its generic list,
+   * off search, and off the viewer-open download route — the one download door is
+   * this controller's owner/accountant-gated imports/:importId/original-url.
+   */
+  private async retainOriginal(
+    schoolId: string,
+    actorId: string | null,
+    receiptId: string | null,
+    file: UploadedRosterFile,
+  ): Promise<void> {
+    if (!receiptId) return
+    try {
+      await this.documents.retainSourceFile(
+        schoolId,
+        {
+          originalname: file.originalname ?? 'roster.csv',
+          mimetype: file.mimetype || 'text/csv',
+          buffer: file.buffer,
+        },
+        {
+          title: file.originalname ?? 'Roster file',
+          description: 'Original roster file, retained when it was imported.',
+          tags: ['roster'],
+          sourceType: 'roster_import',
+          sourceRef: receiptId,
+        },
+        actorId,
+      )
+    } catch {
+      /* the intake succeeded; retention is evidence, not a precondition */
+    }
+  }
+
+  /**
+   * The intake receipts for a school, newest first. FERPA: counts only.
+   *
+   * Each row is decorated with two SERVER-COMPUTED fields the panel paints:
+   *   schoolYear — the FY END year the receipt's roster describes (2025-09-15 →
+   *     2026), from observedOn through the SAME fyEndForObservedOn that filed the
+   *     snapshot, falling back to the upload date. This is what lets the panel
+   *     group five seed years of near-identical filenames instead of printing a
+   *     wall of duplicate cards.
+   *   originalDocumentId — the retained original file's doc id, or null. Null for
+   *     every pre-retention receipt, and the panel renders those with no download
+   *     action (no fake links).
+   */
+  async listImports(schoolId: string, limit = 50) {
+    const rows = await this.prisma.enrollmentImport.findMany({
       where: { schoolId },
       orderBy: { createdAt: 'desc' },
       take: limit,
+    })
+    // Best-effort decoration: the receipts list must render even when the doc
+    // lookup fails — a missing decoration degrades to "no download action".
+    const docByReceipt = new Map<string, string>()
+    try {
+      const docs = await this.prisma.knowledgeDocument.findMany({
+        where: {
+          schoolId,
+          sourceType: 'roster_import',
+          sourceRef: { in: rows.map((r) => r.id) },
+        },
+        select: { id: true, sourceRef: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+      })
+      // asc + overwrite ⇒ the LATEST retained file wins for a receipt.
+      for (const d of docs) if (d.sourceRef) docByReceipt.set(d.sourceRef, d.id)
+    } catch {
+      /* decoration only */
+    }
+    return rows.map((r) => {
+      const basis = r.observedOn ?? r.createdAt
+      return {
+        ...r,
+        schoolYear: Number(fyEndForObservedOn(basis.toISOString().slice(0, 10)).slice(0, 4)),
+        originalDocumentId: docByReceipt.get(r.id) ?? null,
+      }
     })
   }
 
@@ -233,13 +323,57 @@ export class RosterUploadService {
    * the UI, because "delete import" reading as "delete the students" is exactly
    * the kind of ambiguity that loses a school's roster.
    */
-  async removeImport(schoolId: string, importId: string): Promise<{ deleted: boolean }> {
+  async removeImport(schoolId: string, importId: string, userId?: string): Promise<{ deleted: boolean }> {
     const existing = await this.prisma.enrollmentImport.findFirst({
       where: { id: importId, schoolId },
     })
     if (!existing) throw new NotFoundException('Import not found.')
+    // The retained original goes WITH its receipt — a name-bearing CSV whose
+    // anchor row is gone would be reachable by nothing and deletable by no one.
+    // Best-effort (S3 + row via the doc store's own delete, which audits it);
+    // the receipt delete below is the operation the user asked for and it runs
+    // regardless.
+    try {
+      const docs = await this.prisma.knowledgeDocument.findMany({
+        where: { schoolId, sourceType: 'roster_import', sourceRef: existing.id },
+        select: { id: true },
+      })
+      for (const d of docs) {
+        await this.documents.deleteDocument(schoolId, d.id, userId ?? existing.uploadedByUserId ?? '')
+      }
+    } catch {
+      /* the receipt removal must not fail on evidence cleanup */
+    }
     await this.prisma.enrollmentImport.delete({ where: { id: existing.id } })
     return { deleted: true }
+  }
+
+  /**
+   * Presign the RETAINED ORIGINAL for one receipt — the single door to a roster
+   * file's bytes. The route above this is owner/accountant-gated (same roles that
+   * can run the import; a viewer's UI shows no download action and this route
+   * 403s them), and the doc store refuses these docs on its viewer-open routes.
+   * Resolution is receipt-first so a foreign importId 404s before any doc lookup.
+   * Delegating to the doc store keeps the FERPA §99.32 access log and the short
+   * TTL in the ONE place they are enforced.
+   */
+  async originalDownloadUrl(
+    schoolId: string,
+    importId: string,
+    userId: string,
+  ): Promise<{ url: string; expiresIn: number }> {
+    const receipt = await this.prisma.enrollmentImport.findFirst({
+      where: { id: importId, schoolId },
+      select: { id: true },
+    })
+    if (!receipt) throw new NotFoundException('Import not found.')
+    const doc = await this.prisma.knowledgeDocument.findFirst({
+      where: { schoolId, sourceType: 'roster_import', sourceRef: receipt.id },
+      select: { id: true },
+      orderBy: { createdAt: 'desc' },
+    })
+    if (!doc) throw new NotFoundException('No original file is stored for this import.')
+    return this.documents.getDownloadUrl(schoolId, doc.id, userId, { allowRosterImport: true })
   }
 
   /**
@@ -645,7 +779,7 @@ export class RosterUploadService {
         : 'No students in this file were counted as enrolled, so this period’s enrollment was left exactly as it was. ' +
           'The file and its grade breakdown were saved. Check the grade codes and the status column, then upload again.'
 
-    await this.recordIntake(schoolId, actor.id, {
+    const receiptId = await this.recordIntake(schoolId, actor.id, {
       kind: 'upload',
       fileName: file.originalname ?? null,
       observedOn: intake.snapshot?.observedOn ?? null,
@@ -654,6 +788,10 @@ export class RosterUploadService {
       recordsNote: records ? null : recordsNote,
       warnings,
     })
+    // The file itself — retained so "Download original" on the history row can
+    // serve back the exact bytes this intake read. Best-effort, after the receipt:
+    // no receipt ⇒ no anchor ⇒ nothing stored (never an unreachable orphan).
+    await this.retainOriginal(schoolId, actor.id, receiptId, file)
 
     return {
       snapshot: intake.snapshot,

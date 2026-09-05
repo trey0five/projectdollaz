@@ -131,7 +131,9 @@ function makeHarness(op: Record<string, unknown> | null = null, source: Record<s
     {} as never,
   )
   const students = new StudentsService(prisma as never, audit as never, enrollment)
-  return { svc: new RosterUploadService(prisma as never, enrollment, students), opUpsert }
+  // Doc-store stub: retention is best-effort and not under test here.
+  const documents = { retainSourceFile: vi.fn(async () => ({ id: 'doc-1' })) } as never
+  return { svc: new RosterUploadService(prisma as never, enrollment, students, documents), opUpsert }
 }
 
 /** Every key set the upload pushed at period_operational_data, create + update. */

@@ -4,6 +4,7 @@ import { PeriodsModule } from '../periods/periods.module.js'
 import { BillingModule } from '../billing/billing.module.js'
 import { AuditModule } from '../common/audit/audit.module.js'
 import { AnalyticsModule } from '../analytics/analytics.module.js'
+import { KnowledgeModule } from '../knowledge/knowledge.module.js'
 import { EnrollmentController } from './enrollment.controller.js'
 import { EnrollmentService } from './enrollment.service.js'
 import { RosterUploadService } from './roster-upload.service.js'
@@ -35,7 +36,11 @@ import { EnrollmentAnalyticsService } from './analytics/enrollment-analytics.ser
   // importers of EnrollmentModule, and analytics imports none of them), so it is
   // acyclic. The plan service itself is PrismaService-only, which is what makes
   // this safe rather than merely currently-true.
-  imports: [AuthModule, PeriodsModule, BillingModule, AuditModule, AnalyticsModule],
+  // KnowledgeModule supplies DocumentsService so RosterUploadService can RETAIN
+  // the original roster file (sourceType 'roster_import'). Acyclic: Knowledge
+  // reads prisma-direct and imports no domain module, so enrollment → knowledge
+  // is a one-way edge.
+  imports: [AuthModule, PeriodsModule, BillingModule, AuditModule, AnalyticsModule, KnowledgeModule],
   controllers: [EnrollmentController, DiocesanEnrollmentController, StudentsController],
   providers: [
     EnrollmentService,

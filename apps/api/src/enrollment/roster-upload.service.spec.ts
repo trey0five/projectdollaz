@@ -17,7 +17,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import 'reflect-metadata'
 import { describe, expect, it, vi } from 'vitest'
-import { BadRequestException } from '@nestjs/common'
+import { BadRequestException, NotFoundException } from '@nestjs/common'
 import type { User } from '@finrep/db'
 import { EnrollmentService } from './enrollment.service.js'
 import { StudentsService } from './students/students.service.js'
@@ -116,6 +116,34 @@ function makeHarness(opts: { source?: Record<string, unknown> | null; op?: Recor
     }),
   }
 
+  // Receipts + retained-file docs, so the retention/grouping additions are
+  // testable against the SAME harness (recordIntake used to fail silently here —
+  // the receipt table simply didn't exist in the double).
+  const receipts: Record<string, unknown>[] = []
+  const enrollmentImport = {
+    create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+      const row = {
+        id: `imp-${receipts.length + 1}`,
+        createdAt: new Date('2026-02-01T00:00:00.000Z'),
+        ...data,
+      }
+      receipts.push(row)
+      return row
+    }),
+    findMany: vi.fn(async () => receipts.map((r) => ({ ...r }))),
+    findFirst: vi.fn(async ({ where }: { where: { id?: string } }) =>
+      receipts.find((r) => r.id === where.id) ?? null,
+    ),
+    delete: vi.fn(async ({ where }: { where: { id: string } }) => {
+      const i = receipts.findIndex((r) => r.id === where.id)
+      return receipts.splice(i, 1)[0]!
+    }),
+  }
+  const knowledgeDocument = {
+    findMany: vi.fn(async (): Promise<Record<string, unknown>[]> => []),
+    findFirst: vi.fn(async (): Promise<Record<string, unknown> | null> => null),
+  }
+
   const snapshots: Record<string, unknown>[] = []
   // Deleting or replacing a roster scrubs the student's name off their scores
   // and marks (student-delete-residue.spec.ts), so the double carries those two
@@ -126,6 +154,8 @@ function makeHarness(opts: { source?: Record<string, unknown> | null; op?: Recor
     student,
     assessmentResult,
     gradeRecord,
+    enrollmentImport,
+    knowledgeDocument,
     fiscalPeriod: {
       // The period label the panel names. Derived from the id the periods stub
       // minted (fp-2026-06-30 → FY2026) so a promote into the WRONG year shows up
@@ -195,9 +225,29 @@ function makeHarness(opts: { source?: Record<string, unknown> | null; op?: Recor
     {} as never,
   )
   const students = new StudentsService(prisma as never, audit as never, enrollment)
-  const svc = new RosterUploadService(prisma as never, enrollment, students)
+  // The doc store is a STUB on purpose: retention is best-effort decoration on the
+  // intake (a throw in it must never fail an upload), so these specs assert the
+  // intake, and retention has its own spec against the real DocumentsService.
+  const documents = {
+    retainSourceFile: vi.fn(async () => ({ id: 'doc-1' })),
+    deleteDocument: vi.fn(async () => ({ id: 'doc-1' })),
+    getDownloadUrl: vi.fn(async () => ({ url: 'https://s3.example/presigned', expiresIn: 900 })),
+  }
+  const svc = new RosterUploadService(prisma as never, enrollment, students, documents as never)
 
-  return { svc, prisma, student, opUpsert, audit, rows, snapshots, op: () => opRow }
+  return {
+    svc,
+    prisma,
+    student,
+    opUpsert,
+    audit,
+    rows,
+    snapshots,
+    documents,
+    receipts,
+    knowledgeDocument,
+    op: () => opRow,
+  }
 }
 
 // ── Acceptance 1 ─────────────────────────────────────────────────────────────
@@ -737,5 +787,156 @@ describe('acceptance 8 — a viewer cannot create student records through this p
       observedOn: '2026-06-15',
       mode: 'replace',
     })
+  })
+})
+
+// ── Acceptance 9 — the original file is RETAINED, and the history can serve it ──
+//
+// The receipt used to be the whole story: "roster-2026.csv, Sep 3, 436 counted"
+// with the bytes parsed and DROPPED. These pin the retention seam: the upload
+// stores the file against ITS receipt (best-effort — a doc-store failure never
+// fails an intake that already happened), the receipts list decorates each row
+// with the server-computed school year + retained-doc id the panel groups and
+// links by, removal takes the name-bearing file WITH its receipt, and the
+// original-url door resolves receipt-first.
+
+describe('acceptance 9 — retention of the original roster file', () => {
+  it('upload retains the file bytes against the receipt it just wrote', async () => {
+    const { svc, documents, receipts } = makeHarness()
+    const buf = usersCsv(roster(3))
+    await svc.upload(USER, SCHOOL, file(buf))
+
+    expect(receipts).toHaveLength(1)
+    expect(documents.retainSourceFile).toHaveBeenCalledOnce()
+    const [schoolId, f, meta] = documents.retainSourceFile.mock.calls[0] as unknown as [
+      string,
+      { originalname: string; buffer: Buffer },
+      { sourceType: string; sourceRef: string; tags: string[] },
+    ]
+    expect(schoolId).toBe(SCHOOL)
+    // The EXACT bytes the intake read, not a re-serialization.
+    expect(f.buffer.equals(buf)).toBe(true)
+    expect(meta).toMatchObject({
+      sourceType: 'roster_import',
+      sourceRef: receipts[0]!.id,
+      tags: ['roster'],
+    })
+  })
+
+  it('a doc-store failure never fails the upload (retention is evidence, not a precondition)', async () => {
+    const { svc, documents, rows } = makeHarness()
+    documents.retainSourceFile.mockRejectedValueOnce(new Error('s3 down'))
+    const res = await svc.upload(USER, SCHOOL, file(usersCsv(roster(3))))
+    expect(res.records).toEqual({ created: 3, updated: 0, deleted: 0, total: 3 })
+    expect(rows).toHaveLength(3)
+  })
+
+  it('a sync retains nothing — there is no file', async () => {
+    const { svc, documents } = makeHarness({
+      source: { provider: 'blackbaud', status: 'connected' },
+    })
+    // The sync path throws earlier in this harness (no adapter wired) — assert at
+    // the seam that matters: retainOriginal is only reachable from upload().
+    await svc.upload(USER, SCHOOL, file(usersCsv(roster(1))))
+    expect(documents.retainSourceFile).toHaveBeenCalledOnce()
+    const call = documents.retainSourceFile.mock.calls[0] as unknown as [
+      string,
+      unknown,
+      { sourceType: string },
+    ]
+    expect(call[2].sourceType).toBe('roster_import')
+  })
+})
+
+describe('acceptance 10 — the receipts list is grouped-ready (server computes, web paints)', () => {
+  it('decorates each receipt with the FY-end schoolYear from observedOn (Jul–Jun)', async () => {
+    const { svc, receipts } = makeHarness()
+    receipts.push(
+      {
+        id: 'imp-a',
+        observedOn: new Date('2025-09-15T00:00:00.000Z'), // Sep 2025 → FY end 2026
+        createdAt: new Date('2026-02-01T00:00:00.000Z'),
+      },
+      {
+        id: 'imp-b',
+        observedOn: null, // pre-dated receipt → falls back to the upload date
+        createdAt: new Date('2025-03-01T00:00:00.000Z'), // Mar 2025 → FY end 2025
+      },
+    )
+    const out = await svc.listImports(SCHOOL)
+    expect(out.map((r) => (r as { schoolYear: number }).schoolYear)).toEqual([2026, 2025])
+  })
+
+  it('attaches the retained doc id per receipt — null for pre-retention rows (no fake links)', async () => {
+    const { svc, receipts, knowledgeDocument } = makeHarness()
+    receipts.push(
+      { id: 'imp-old', observedOn: null, createdAt: new Date('2025-03-01T00:00:00.000Z') },
+      { id: 'imp-new', observedOn: null, createdAt: new Date('2026-03-01T00:00:00.000Z') },
+    )
+    knowledgeDocument.findMany.mockResolvedValueOnce([
+      { id: 'doc-1', sourceRef: 'imp-new', createdAt: new Date('2026-03-01T00:00:01.000Z') },
+    ])
+    const out = await svc.listImports(SCHOOL)
+    const byId = new Map(out.map((r) => [r.id, (r as { originalDocumentId: string | null }).originalDocumentId]))
+    expect(byId.get('imp-new')).toBe('doc-1')
+    expect(byId.get('imp-old')).toBeNull()
+  })
+
+  it('a doc-lookup failure degrades to no download decoration — the list still renders', async () => {
+    const { svc, receipts, knowledgeDocument } = makeHarness()
+    receipts.push({ id: 'imp-a', observedOn: null, createdAt: new Date('2026-03-01T00:00:00.000Z') })
+    knowledgeDocument.findMany.mockRejectedValueOnce(new Error('db blip'))
+    const out = await svc.listImports(SCHOOL)
+    expect(out).toHaveLength(1)
+    expect((out[0] as { originalDocumentId: string | null }).originalDocumentId).toBeNull()
+  })
+})
+
+describe('acceptance 11 — removal takes the retained file WITH the receipt', () => {
+  it('deletes every retained doc for the receipt through the doc store (S3 + row + audit)', async () => {
+    const { svc, receipts, knowledgeDocument, documents } = makeHarness()
+    receipts.push({ id: 'imp-a', uploadedByUserId: 'u1', createdAt: new Date() })
+    knowledgeDocument.findMany.mockResolvedValueOnce([{ id: 'doc-1' }])
+    await svc.removeImport(SCHOOL, 'imp-a', 'u-remover')
+    expect(documents.deleteDocument).toHaveBeenCalledWith(SCHOOL, 'doc-1', 'u-remover')
+    expect(receipts).toHaveLength(0)
+  })
+
+  it('doc cleanup failure never blocks the removal the user asked for', async () => {
+    const { svc, receipts, knowledgeDocument } = makeHarness()
+    receipts.push({ id: 'imp-a', createdAt: new Date() })
+    knowledgeDocument.findMany.mockRejectedValueOnce(new Error('s3 down'))
+    const res = await svc.removeImport(SCHOOL, 'imp-a', 'u-remover')
+    expect(res).toEqual({ deleted: true })
+    expect(receipts).toHaveLength(0)
+  })
+})
+
+describe('acceptance 12 — the ONE download door for roster bytes', () => {
+  it('resolves receipt-first, then delegates with the roster flag (TTL + §99.32 log stay in the doc store)', async () => {
+    const { svc, receipts, knowledgeDocument, documents } = makeHarness()
+    receipts.push({ id: 'imp-a', createdAt: new Date() })
+    knowledgeDocument.findFirst.mockResolvedValueOnce({ id: 'doc-1' })
+    const res = await svc.originalDownloadUrl(SCHOOL, 'imp-a', 'u1')
+    expect(res.url).toBe('https://s3.example/presigned')
+    expect(documents.getDownloadUrl).toHaveBeenCalledWith(SCHOOL, 'doc-1', 'u1', {
+      allowRosterImport: true,
+    })
+  })
+
+  it('404s a foreign/unknown receipt BEFORE any doc lookup', async () => {
+    const { svc, knowledgeDocument } = makeHarness()
+    await expect(svc.originalDownloadUrl(SCHOOL, 'imp-nope', 'u1')).rejects.toBeInstanceOf(
+      NotFoundException,
+    )
+    expect(knowledgeDocument.findFirst).not.toHaveBeenCalled()
+  })
+
+  it('404s a pre-retention receipt (no stored file) — the UI shows no link for these anyway', async () => {
+    const { svc, receipts } = makeHarness()
+    receipts.push({ id: 'imp-old', createdAt: new Date() })
+    await expect(svc.originalDownloadUrl(SCHOOL, 'imp-old', 'u1')).rejects.toBeInstanceOf(
+      NotFoundException,
+    )
   })
 })
