@@ -358,8 +358,10 @@ export default function RosterSourceCard({
             })}
           </div>
           <p className="mt-2.5 break-words text-[12px] leading-snug text-muted">
-            Removing an entry clears it from this list only — it never deletes students. Students
-            are edited and removed in <span className="font-semibold text-navy">Records</span>.
+            Removing an entry clears it from this list and deletes its retained original file — it
+            never deletes students. Students are edited and removed in{' '}
+            <span className="font-semibold text-navy">Records</span>. Past files keep the names they
+            were imported with, even after a student is later deleted from the register.
           </p>
         </>
       ) : null}

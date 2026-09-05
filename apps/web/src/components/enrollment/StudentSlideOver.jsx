@@ -281,7 +281,9 @@ export default function StudentSlideOver({
                 Delete {fullName} from the roster?
               </p>
               <p className="mt-0.5 text-[12.5px] text-muted">
-                This is a hard delete — the record is removed for good.
+                This is a hard delete — the record is removed for good. Roster files imported before
+                today still contain this student&apos;s name; remove those under Import history if
+                they need to go too.
               </p>
               <div className="mt-2.5 flex items-center gap-2">
                 <button
