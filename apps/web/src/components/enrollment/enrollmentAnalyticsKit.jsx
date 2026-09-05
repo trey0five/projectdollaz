@@ -199,6 +199,49 @@ export function zeroBasedDomain(top, count = 4) {
   return { lo: 0, hi, ticks: ticks.length >= 2 ? ticks : [0, hi] }
 }
 
+// ── Label collision resolution (geometry, shared) ────────────────────────────
+
+/**
+ * ONE-DIMENSIONAL LABEL SEPARATION for callouts that share an edge.
+ *
+ * The recurring bug family this kills: two value labels anchored to the same
+ * x-gutter (an endpoint callout and a "plan" label, say) land within a text
+ * height of each other whenever the two values are close — which for a school
+ * NEAR its plan is most of the time — and print through each other into an
+ * unreadable pileup. Seen live on E1's right edge: "298", "plan 305" and the
+ * plan value stacked into one smudge.
+ *
+ * Input: [{ key, y }] — each label's PREFERRED centre-y (usually its anchor's
+ * own y). Output: Map key → resolved centre-y such that
+ *   • labels keep their vertical ORDER (a label never jumps past its neighbour,
+ *     so a leader line can never cross another),
+ *   • consecutive labels sit at least `gap` apart,
+ *   • everything stays inside [lo, hi] (the plot band).
+ * A label whose resolved y differs from its preferred y should be tethered to
+ * its anchor with a small leader line by the caller — the label moved, the
+ * datum did not.
+ *
+ * Pure geometry: y-positions in, y-positions out. No value is touched.
+ */
+export function separateLabels(items, { gap = 14, lo = -Infinity, hi = Infinity } = {}) {
+  const sorted = items
+    .map((it, i) => ({ key: it.key, y: Number(it.y), i }))
+    .filter((it) => Number.isFinite(it.y))
+    .sort((a, b) => a.y - b.y || a.i - b.i)
+  if (sorted.length === 0) return new Map()
+  // Forward pass: push each label DOWN until it clears the one above it.
+  for (let k = 1; k < sorted.length; k++) sorted[k].y = Math.max(sorted[k].y, sorted[k - 1].y + gap)
+  // Clamp the bottom of the stack into the band, pushing UP as needed…
+  sorted[sorted.length - 1].y = Math.min(sorted[sorted.length - 1].y, hi)
+  for (let k = sorted.length - 2; k >= 0; k--) sorted[k].y = Math.min(sorted[k].y, sorted[k + 1].y - gap)
+  // …and the top back down. (If the band is too small for every label at full
+  // gap, the bottom clamp deliberately loses: labels compress rather than
+  // escape the plot.)
+  sorted[0].y = Math.max(sorted[0].y, lo)
+  for (let k = 1; k < sorted.length; k++) sorted[k].y = Math.max(sorted[k].y, sorted[k - 1].y + gap)
+  return new Map(sorted.map((s) => [s.key, s.y]))
+}
+
 // ── The sequential ramp (E2's heatmap, and the ladder's weight) ──────────────
 
 /**
@@ -261,6 +304,27 @@ export function WhatThisMeasures({ children, scope = null, refs = null, note = n
         {note ? <p className="text-[11px] leading-snug text-muted">{note}</p> : null}
       </div>
     </motion.div>
+  )
+}
+
+/**
+ * ChartCaption — the ONE short line a chart leads with.
+ *
+ * The full WhatThisMeasures methodology paragraph now lives behind the card's ⓘ
+ * popover; this is the piece of it a reader must not have to open anything to
+ * see: one plain sentence fragment, plus the scope stamp and any reference-line
+ * key (which are DATA, not prose, and stay in view). Nothing was deleted to make
+ * this line — the popover carries every sentence the old box carried.
+ */
+export function ChartCaption({ children, scope = null, refs = null }) {
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-x-3.5 gap-y-1">
+      <p className="text-[12px] leading-snug text-muted">{children}</p>
+      {scope ? (
+        <span className="font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-muted/80">{scope}</span>
+      ) : null}
+      {refs}
+    </div>
   )
 }
 

@@ -38,6 +38,7 @@ import {
   fmtDate,
   fmtDateShort,
   providerLabel,
+  separateLabels,
   zeroBasedDomain,
 } from './enrollmentAnalyticsKit.jsx'
 
@@ -117,6 +118,30 @@ export default function EnrollmentHeadcountTrend({ points = [], planTotal = null
     lo && lo.total < Math.min(series[0].total, latest.total) ? { p: lo, label: 'low', dy: 16 } : null,
   ].filter(Boolean)
 
+  // ── THE RIGHT EDGE, COLLISION-AWARE ─────────────────────────────────────────
+  // The endpoint callout and the plan label share the right gutter, and whenever
+  // the school sits NEAR its plan — the most common state there is — their
+  // y-positions coincide and the two printed through each other (seen live:
+  // "298" and "plan 305" in one smudge). The labels are separated by the kit's
+  // shared 1-D pass; a label that had to move is tethered back to its anchor
+  // with a small leader line, so the DATUM never moves, only its name.
+  const planVisible = planTotal != null && planTotal <= yHi
+  const planText = planVisible ? `plan ${fmtCount(planTotal)}` : null
+  // A wide plan figure would run off the viewBox's right edge (the gutter is
+  // PAD.r wide); rather than clip it, it moves INSIDE the plot to the line's
+  // left end. ~5.6px per glyph at fontSize 10.
+  const planFitsRight = planVisible && planText.length * 5.6 <= PAD.r - 7
+  const rightLabelY = separateLabels(
+    [
+      { key: 'end', y: Y(latest.total) },
+      ...(planVisible && planFitsRight ? [{ key: 'plan', y: Y(planTotal) }] : []),
+    ],
+    { gap: 15, lo: PAD.t + 5, hi: plotBottom - 4 },
+  )
+  const yEndLabel = rightLabelY.get('end') ?? Y(latest.total)
+  const yPlanLabel = rightLabelY.get('plan') ?? (planVisible ? Y(planTotal) : null)
+  const movedFrom = (fromY, toY) => Math.abs(fromY - toY) > 2
+
   const showTip = (p, ev) =>
     tip.show(
       {
@@ -177,8 +202,11 @@ export default function EnrollmentHeadcountTrend({ points = [], planTotal = null
         ))}
 
         {/* THE PLAN — dashed, in its own ink, and labelled in words. It is a
-            different class of fact from the line below it. */}
-        {planTotal != null && planTotal <= yHi ? (
+            different class of fact from the line below it. The label sits in the
+            right gutter at its COLLISION-RESOLVED y (tethered by a leader when
+            it had to move off the line), or at the line's left end inside the
+            plot when the figure is too wide for the gutter. */}
+        {planVisible ? (
           <g>
             <line
               x1={PAD.l}
@@ -189,16 +217,42 @@ export default function EnrollmentHeadcountTrend({ points = [], planTotal = null
               strokeWidth="1.5"
               strokeDasharray="6 4"
             />
-            <text
-              x={VB.w - PAD.r + 5}
-              y={Y(planTotal) + 3.5}
-              fontSize="10"
-              fontWeight="700"
-              fill={PLAN_INK}
-              className="tabular-nums"
-            >
-              plan {fmtCount(planTotal)}
-            </text>
+            {planFitsRight ? (
+              <>
+                {movedFrom(Y(planTotal), yPlanLabel) ? (
+                  <line
+                    x1={VB.w - PAD.r}
+                    y1={Y(planTotal)}
+                    x2={VB.w - PAD.r + 4}
+                    y2={yPlanLabel}
+                    stroke={PLAN_INK}
+                    strokeWidth="1"
+                    opacity="0.55"
+                  />
+                ) : null}
+                <text
+                  x={VB.w - PAD.r + 5}
+                  y={yPlanLabel + 3.5}
+                  fontSize="10"
+                  fontWeight="700"
+                  fill={PLAN_INK}
+                  className="tabular-nums"
+                >
+                  {planText}
+                </text>
+              </>
+            ) : (
+              <text
+                x={PAD.l + 4}
+                y={Y(planTotal) - 5}
+                fontSize="10"
+                fontWeight="700"
+                fill={PLAN_INK}
+                className="tabular-nums"
+              >
+                {planText}
+              </text>
+            )}
           </g>
         ) : null}
 
@@ -251,10 +305,23 @@ export default function EnrollmentHeadcountTrend({ points = [], planTotal = null
           )
         })}
 
-        {/* The latest value, printed — never gated behind a hover. */}
+        {/* The latest value, printed — never gated behind a hover. Its y is the
+            collision-resolved slot; when that differs from the endpoint's own y
+            (the plan label wanted the same spot), a leader ties it to its dot. */}
+        {movedFrom(Y(latest.total), yEndLabel) ? (
+          <line
+            x1={X(t1) + 6}
+            y1={Y(latest.total)}
+            x2={X(t1) + 10}
+            y2={yEndLabel}
+            stroke="#94A3B8"
+            strokeWidth="1"
+            opacity="0.7"
+          />
+        ) : null}
         <text
           x={X(t1) + 8}
-          y={Y(latest.total) + 4}
+          y={yEndLabel + 4}
           fontSize="12"
           fontWeight="700"
           fill="#0F2A4A"
