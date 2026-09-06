@@ -1,49 +1,83 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Penny — ONE global floating gold coin (mounted once in AuthedLayout), replacing
+// Penny — ONE global floating mascot (mounted once in AuthedLayout), replacing
 // the old bottom-right "Ask FinRep" launcher AND the data-hub-only guide mascot.
-// Penny plays two roles:
-//   • GUIDE: when usePenny() has an active guide, Penny measures the target element
-//     by id, scrolls it into view if off-screen, GLIDES from her home corner
-//     (bottom-LEFT) to just beside the card, and shows a speech bubble (message +
-//     optional CTA + tour Step n/m + Next/Done + dismiss). A gold chevron points at
-//     the card.
-//   • AI: clicking the coin opens "Penny AI" (the streaming PennyChat) and clears
-//     any active guide — Penny IS the assistant now.
+// "Penny" is the internal codename; what the user sees is KYRO the dove
+// (KyroDove via PennyAvatar). KYRO plays two roles:
+//   • GUIDE: when usePenny() has an active guide, KYRO measures the target element
+//     by id, scrolls it into view if off-screen, FLIES from its home corner
+//     (bottom-right) in an arc to just beside the card (flying → gliding for the
+//     last ~200ms → perched with a settle bounce), and shows a speech bubble
+//     (message + optional CTA + tour Step n/m + Next/Done + dismiss). A gold
+//     chevron points at the card. KYRO faces its direction of travel while
+//     flying, faces the card once perched, and faces LEFT into the page at home.
+//   • AI: clicking the dove opens "KYRO AI" (the streaming PennyChat) and clears
+//     any active guide — KYRO IS the assistant.
 //
-// HOOKS DISCIPLINE: the ONLY setState-in-effect are `box` (genuine DOM measurement,
-// mirroring the old GuideMascot) and `blink` (timer). Everything else — the active
-// step, travel offset, chevron position, glance — is derived during render via
-// const/useMemo, never stored in state. All hooks run unconditionally; Penny ALWAYS
-// renders (no !activeId early return here — that guard lives only in PennyChat).
+// HOOKS DISCIPLINE: the ONLY setState-in-effect are `box` (genuine DOM
+// measurement, mirroring the old GuideMascot), `flight` (the flying → gliding →
+// perched phase machine, keyed on the travel target) and `bob` (timer). Everything
+// else — the active step, travel offset, flight duration/arc/facing, chevron
+// position — is derived during render via const/useMemo, never stored in state.
+// All hooks run unconditionally; Penny ALWAYS renders (no !activeId early return
+// here — that guard lives only in PennyChat).
 //
-// ACCESSIBILITY: the bubble is role=status aria-live=polite; the coin is a real
+// GEOMETRY: the dove is a BOX (height doveH, width doveH × aspect) whose three
+// sprite states share one anchor point inside it, so the box position is all the
+// travel math needs: bubble/chevron alignment matches the old coin behaviour.
+//
+// ACCESSIBILITY: the bubble is role=status aria-live=polite; the dove is a real
 // <button> with aria-label + aria-expanded; the avatar/chevron are aria-hidden.
-// Full reduced-motion support: no travel/bob/blink/chevron/scroll-hijack — the
-// bubble simply appears at the home corner so guidance is still fully available.
+// Reduced motion: no flight/bob/sprite/smooth-scroll — the target is jumped into
+// view instantly and the dove is placed beside it, perched, so guidance is still
+// fully available. Small re-targets while perched (a scroll nudging the measured
+// rect by less than one dove-height) tween in place without a take-off.
 // PRINT: everything is wrapped in .no-print.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { useLocation } from 'react-router-dom'
 import { X, ChevronRight, ChevronLeft } from 'lucide-react'
 import { usePenny } from '../../context/PennyContext.jsx'
 import PennyAvatar from './PennyAvatar.jsx'
+import { useKyroGeometry } from './KyroDove.jsx'
 import PennyChat from './PennyChat.jsx'
 
 const MARGIN = 12 // viewport edge clamp
 const HOME_X = 20 // home corner inset (matches bottom-5 right-5, ~20px)
 const HOME_Y = 20
+const SPEED = 900 // px/s cruising speed → duration = clamp(dist/SPEED, 0.6, 1.4)
+const GLIDE_S = 0.2 // the last 200ms of every flight are a glide
+
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
+const flightFor = (dx, dy) => {
+  const dist = Math.hypot(dx, dy)
+  return {
+    dist,
+    dur: clamp(dist / SPEED, 0.6, 1.4),
+    lift: clamp(dist * 0.12, 24, 80),
+  }
+}
 
 export default function Penny() {
   const reduce = useReducedMotion()
   const { pathname } = useLocation()
   const { chatOpen, toggleChat, closeChat, guide, advance, dismissGuide } = usePenny()
+  const geom = useKyroGeometry()
 
-  // The two sanctioned setState-in-effect writes: measured target rect + blink.
+  // The sanctioned setState-in-effect writes: measured target rect, flight phase, bob.
   const [box, setBox] = useState(null)
-  const [blink, setBlink] = useState(false)
+  const [flight, setFlight] = useState({
+    phase: 'perched',
+    fromX: 0,
+    fromY: 0,
+    toX: 0,
+    toY: 0,
+    moved: false,
+    hop: false, // small perched re-target: tween without a wingbeat/arc
+  })
+  const [bob, setBob] = useState(false)
 
-  // Penny renders smaller on phones (the 64px coin overlapped cards on mobile).
+  // KYRO renders smaller on phones (the 64px mascot overlapped cards on mobile).
   const [compact, setCompact] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches,
   )
@@ -53,8 +87,9 @@ export default function Penny() {
     mq.addEventListener('change', on)
     return () => mq.removeEventListener('change', on)
   }, [])
-  const coinPx = compact ? 46 : 64
-  const COIN = coinPx / 2 // half the rendered coin size, used for travel geometry
+  const doveH = compact ? 46 : 64
+  const H = doveH
+  const W = Math.round(doveH * geom.aspect)
 
   // DERIVED (never stored in state via effect).
   const step = guide ? guide.steps[guide.index] : null
@@ -81,11 +116,13 @@ export default function Penny() {
       const r = el.getBoundingClientRect()
       // A zero-area rect means the target is present in the DOM but not visible in
       // this layout (e.g. the desktop nav is `hidden lg:flex` on mobile). Treat it
-      // like a not-yet-mounted target: leave Penny parked rather than glide to (0,0).
+      // like a not-yet-mounted target: leave KYRO parked rather than fly to (0,0).
       if (r.width === 0 && r.height === 0) return
       const onScreen = r.top >= 0 && r.bottom <= window.innerHeight
-      if (allowScroll && !onScreen && !reduce) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      if (allowScroll && !onScreen) {
+        // An instant jump is not motion — reduced-motion users still get the
+        // target on screen (otherwise the dove would perch beside a clamped edge).
+        el.scrollIntoView({ behavior: reduce ? 'instant' : 'smooth', block: 'center' })
       }
       if (cancelled) return
       setBox({
@@ -113,68 +150,124 @@ export default function Penny() {
     }
   }, [step, chatOpen, reduce])
 
-  // ── Idle blink (randomized; skipped in reduced-motion). ───────────────────────
-  useEffect(() => {
-    if (reduce) return undefined
-    let timer
-    const loop = () => {
-      timer = window.setTimeout(() => {
-        setBlink(true)
-        window.setTimeout(() => setBlink(false), 140)
-        loop()
-      }, 4000 + Math.random() * 3000)
-    }
-    loop()
-    return () => window.clearTimeout(timer)
-  }, [reduce])
-
-  // ── Travel geometry (pure; derived from box). Returns the coin's offset from its
-  // home corner so the travelling wrapper can animate x/y. ──────────────────────
+  // ── Travel geometry (pure; derived from box). Returns the dove BOX's offset from
+  // its home corner so the travelling wrapper can animate x/y. ──────────────────
   const travel = useMemo(() => {
-    if (!box || reduce || typeof window === 'undefined') {
+    if (!box || typeof window === 'undefined') {
       return { x: 0, y: 0, parked: true, placeRight: false }
     }
     const vw = window.innerWidth
     const vh = window.innerHeight
     let placeRight = false
-    // Desired coin CENTER just LEFT of the card.
-    let cx = box.left - 18 - COIN
+    // Desired box just LEFT of the card, vertically centred on it.
+    let bl = box.left - 18 - W
     const cy0 = box.top + box.height / 2
-    if (cx - COIN < 16) {
+    let bt = cy0 - H / 2
+    if (bl < 16) {
       placeRight = true
-      cx = box.right + 18 + COIN
+      bl = box.right + 18
     }
-    cx = Math.max(MARGIN + COIN, Math.min(vw - MARGIN - COIN, cx))
-    const cy = Math.max(MARGIN + 150, Math.min(vh - MARGIN - COIN, cy0)) // reserve 150px for bubble
-    // Home corner is bottom-RIGHT (the coin sits HOME_X in from the right edge),
-    // so its resting center-x is measured from the right: vw − HOME_X − COIN. The
-    // glide transform (cx − homeCx) then carries her to a target — including nav
-    // items in the LEFT sidebar — and back home to the right.
-    const homeCx = vw - HOME_X - COIN
-    const homeCy = vh - HOME_Y - COIN
-    return { x: cx - homeCx, y: cy - homeCy, parked: false, placeRight }
-  }, [box, reduce, COIN])
+    bl = clamp(bl, MARGIN, vw - MARGIN - W)
+    bt = clamp(bt, MARGIN + 150, vh - MARGIN - H) // reserve 150px for the bubble
+    // Home corner is bottom-RIGHT (the box sits HOME_X in from the right edge).
+    // The flight transform (bl − homeL) then carries KYRO to a target — including
+    // nav items in the LEFT sidebar — and back home to the right.
+    const homeL = vw - HOME_X - W
+    const homeT = vh - HOME_Y - H
+    return { x: bl - homeL, y: bt - homeT, parked: false, placeRight }
+  }, [box, W, H])
 
-  // Glance toward the card (or straight ahead when parked).
-  const glance = box ? (travel.placeRight ? -1 : 1) : 0
+  // ── Flight phase machine (sanctioned setState-in-effect, keyed on the travel
+  // target): flying → gliding (last GLIDE_S) → perched. `lastRef` remembers the
+  // previous target so the effect is a no-op when nothing moved (mount, re-measure
+  // to the same spot). Under reduced motion the dove is placed instantly, perched.
+  const lastRef = useRef({ x: 0, y: 0 })
+  const phaseRef = useRef('perched')
+  useEffect(() => {
+    phaseRef.current = flight.phase
+  }, [flight.phase])
+  useEffect(() => {
+    const prev = lastRef.current
+    if (prev.x === travel.x && prev.y === travel.y) return undefined
+    lastRef.current = { x: travel.x, y: travel.y }
+    const dx = travel.x - prev.x
+    const dy = travel.y - prev.y
+    const next = { fromX: prev.x, fromY: prev.y, toX: travel.x, toY: travel.y, moved: true }
+    // Intentional setState-in-effect (see header): the target and phase must change
+    // in the same commit so framer never starts a flight with a stale duration.
+    if (reduce) {
+      setFlight({ ...next, phase: 'perched', hop: false })
+      return undefined
+    }
+    // Small re-target while perched (scroll/resize nudged the rect): tween in
+    // place, no wingbeat, no arc.
+    if (phaseRef.current === 'perched' && Math.hypot(dx, dy) < H) {
+      setFlight({ ...next, phase: 'perched', hop: true })
+      return undefined
+    }
+    setFlight({ ...next, phase: 'flying', hop: false })
+    const { dur } = flightFor(dx, dy)
+    const t1 = window.setTimeout(
+      () => setFlight((f) => ({ ...f, phase: 'gliding' })),
+      (dur - GLIDE_S) * 1000,
+    )
+    const t2 = window.setTimeout(() => setFlight((f) => ({ ...f, phase: 'perched' })), dur * 1000)
+    return () => {
+      window.clearTimeout(t1)
+      window.clearTimeout(t2)
+    }
+  }, [travel.x, travel.y, reduce, H])
 
-  const spring = reduce
-    ? { duration: 0 }
-    : { type: 'spring', stiffness: 220, damping: 26, mass: 0.9 }
+  // ── Idle head-bob: a 260ms burst every 5–9s while perched (skipped in reduce). ─
+  useEffect(() => {
+    if (reduce || flight.phase !== 'perched') return undefined
+    let timer
+    let off
+    const loop = () => {
+      timer = window.setTimeout(() => {
+        setBob(true)
+        off = window.setTimeout(() => setBob(false), 260)
+        loop()
+      }, 5000 + Math.random() * 4000)
+    }
+    loop()
+    return () => {
+      window.clearTimeout(timer)
+      window.clearTimeout(off)
+    }
+  }, [reduce, flight.phase])
+
+  // Derived flight numbers for THIS leg (from → to).
+  const dx = flight.toX - flight.fromX
+  const dy = flight.toY - flight.fromY
+  const { dur, lift } = flightFor(dx, dy)
+  const phase = reduce ? 'perched' : flight.phase
+  // Facing: direction of travel while airborne; once perched, toward the card
+  // (or LEFT into the page when parked at home).
+  const facing =
+    phase !== 'perched' && dx !== 0
+      ? dx < 0
+        ? 'left'
+        : 'right'
+      : box
+        ? travel.placeRight
+          ? 'left'
+          : 'right'
+        : 'left'
 
   const showBubble = step && !chatOpen
   const lastIndex = guide ? guide.steps.length - 1 : 0
   const isLast = guide ? guide.index >= lastIndex : true
 
-  // On the full-page Penny Studio (/penny) the page mounts its OWN usePennyChat
-  // engine instance. Suppress the floating coin here (AFTER all hooks, so hook
+  // On the full-page KYRO Studio (/penny) the page mounts its OWN usePennyChat
+  // engine instance. Suppress the floating dove here (AFTER all hooks, so hook
   // order is stable) so there's exactly one engine + one `penny:ai-ask` listener.
   if (pathname.startsWith('/penny')) return null
 
   return (
     <div className="no-print">
-      {/* (i) Chevron — anchored to the card edge, pointing at it. */}
-      {!reduce && box && step && (
+      {/* (i) Chevron — anchored to the card edge, pointing at it (static in reduce). */}
+      {box && step && (
         <motion.div
           aria-hidden="true"
           className="pointer-events-none fixed z-[54] text-penny drop-shadow"
@@ -183,8 +276,14 @@ export default function Penny() {
             top: box.top + box.height / 2 - 14,
           }}
           initial={{ opacity: 0 }}
-          animate={{ opacity: [0, 1, 1], x: travel.placeRight ? [0, 6, 0] : [0, -6, 0] }}
-          transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
+          animate={
+            reduce
+              ? { opacity: 1 }
+              : { opacity: [0, 1, 1], x: travel.placeRight ? [0, 6, 0] : [0, -6, 0] }
+          }
+          transition={
+            reduce ? { duration: 0 } : { duration: 1.4, repeat: Infinity, ease: 'easeInOut' }
+          }
         >
           {travel.placeRight ? (
             <ChevronLeft size={28} strokeWidth={3} />
@@ -194,11 +293,28 @@ export default function Penny() {
         </motion.div>
       )}
 
-      {/* (ii) Travelling wrapper — glides from the home corner to beside the card. */}
+      {/* (ii) Travelling wrapper — flies in an arc from the home corner to beside
+          the card. `[null, …]` starts y from wherever the dove is NOW, so
+          home↔card↔card all arc; the mid keyframe is the lift. */}
       <motion.div
         className="pointer-events-none fixed bottom-5 right-5 z-[55]"
-        animate={reduce ? { x: 0, y: 0 } : { x: travel.x, y: travel.y }}
-        transition={spring}
+        animate={
+          reduce
+            ? { x: travel.x, y: travel.y }
+            : flight.hop
+              ? { x: flight.toX, y: flight.toY }
+              : { x: flight.toX, y: [null, Math.min(flight.fromY, flight.toY) - lift, flight.toY] }
+        }
+        transition={
+          reduce
+            ? { duration: 0 }
+            : flight.hop
+              ? { duration: 0.3, ease: 'easeOut' }
+              : {
+                  x: { duration: dur, ease: 'easeInOut' },
+                  y: { duration: dur, times: [0, 0.45, 1], ease: ['easeOut', 'easeIn'] },
+                }
+        }
       >
         {/* Speech bubble. */}
         <AnimatePresence>
@@ -210,14 +326,15 @@ export default function Penny() {
               initial={reduce ? false : { opacity: 0, y: 8, scale: 0.96 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={reduce ? undefined : { opacity: 0, y: 8, scale: 0.96 }}
-              className={`pointer-events-auto absolute bottom-[72px] w-[min(19rem,calc(100vw-3rem))] rounded-2xl border-2 border-penny/40 bg-white px-4 py-3 shadow-card ${
-                travel.placeRight ? 'right-0 rounded-br-md' : 'left-0 rounded-bl-md'
+              style={{ bottom: H + 8 }}
+              className={`pointer-events-auto absolute w-[min(19rem,calc(100vw-3rem))] rounded-2xl border-2 border-penny/40 bg-white px-4 py-3 shadow-card ${
+                travel.placeRight || travel.parked ? 'right-0 rounded-br-md' : 'left-0 rounded-bl-md'
               }`}
             >
               <button
                 type="button"
                 onClick={dismissGuide}
-                aria-label="Dismiss Penny"
+                aria-label="Dismiss KYRO"
                 className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full border border-rule bg-white text-muted shadow-sm transition-colors hover:text-navy"
               >
                 <X size={13} />
@@ -255,31 +372,48 @@ export default function Penny() {
           )}
         </AnimatePresence>
 
-        {/* Inner bob (composes with travel) — stops while travelling and at reduce. */}
-        <motion.div
-          animate={reduce || !travel.parked ? { y: 0 } : { y: [0, -5, 0] }}
-          transition={
-            reduce || !travel.parked
-              ? { duration: 0 }
-              : { duration: 3, repeat: Infinity, ease: 'easeInOut' }
+        {/* Landing settle (one-shot CSS keyframe when a flight ends), then the
+            parked 3s bob loop + the randomized head-bob — all composed, all off
+            in reduce. */}
+        <div
+          className={
+            !reduce && phase === 'perched' && flight.moved
+              ? 'motion-safe:animate-[kyro-settle_280ms_ease-out_1]'
+              : ''
           }
         >
-          <button
-            type="button"
-            onClick={() => {
-              dismissGuide()
-              toggleChat()
-            }}
-            aria-label={chatOpen ? 'Close Penny AI' : 'Open Penny AI'}
-            aria-expanded={chatOpen}
-            className="pointer-events-auto relative block rounded-full transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-penny/60"
+          <motion.div
+            animate={reduce || !travel.parked || phase !== 'perched' ? { y: 0 } : { y: [0, -5, 0] }}
+            transition={
+              reduce || !travel.parked || phase !== 'perched'
+                ? { duration: 0 }
+                : { duration: 3, repeat: Infinity, ease: 'easeInOut' }
+            }
           >
-            <PennyAvatar size={coinPx} glance={glance} blink={blink} active={chatOpen} />
-          </button>
-        </motion.div>
+            <motion.div
+              animate={bob && !reduce ? { y: [0, -2, 0], rotate: [0, -3, 0] } : { y: 0, rotate: 0 }}
+              transition={{ duration: 0.26, ease: 'easeInOut' }}
+              style={{ transformOrigin: '60% 90%' }}
+            >
+              <button
+                type="button"
+                data-testid="kyro-dove"
+                onClick={() => {
+                  dismissGuide()
+                  toggleChat()
+                }}
+                aria-label={chatOpen ? 'Close KYRO AI' : 'Open KYRO AI'}
+                aria-expanded={chatOpen}
+                className="pointer-events-auto relative block rounded-2xl transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-penny/60"
+              >
+                <PennyAvatar size={doveH} state={phase} facing={facing} active={chatOpen} />
+              </button>
+            </motion.div>
+          </motion.div>
+        </div>
       </motion.div>
 
-      {/* (iii) Penny AI chat — controlled, anchored bottom-right above the coin. */}
+      {/* (iii) KYRO AI chat — controlled, anchored bottom-right above the dove. */}
       <PennyChat open={chatOpen} onClose={closeChat} />
     </div>
   )

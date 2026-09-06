@@ -26,14 +26,14 @@ export default function WizardConfirm({
   const isExternal = !!option?.external
 
   const title = isHandoff
-    ? 'Handed to Penny'
+    ? 'Handed to KYRO'
     : isExternal
       ? 'Connection started'
       : 'That’s saved'
 
   const body = isHandoff
     ? option?.handoffNote ||
-      'Penny is drafting for you — review it in the chat and apply what you like.'
+      'KYRO is drafting for you — review it in the chat and apply what you like.'
     : isExternal
       ? 'Finish in the window that opened. Once you’re back, your connection shows here and your data syncs automatically.'
       : `Your ${moduleLabel.toLowerCase()} record is in. Add another, or head back to review it.`

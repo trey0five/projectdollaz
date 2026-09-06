@@ -419,13 +419,13 @@ export const wizardConfigs = {
         key: 'penny-draft',
         kind: 'handoff',
         Icon: Sparkles,
-        label: 'Let Penny draft it',
+        label: 'Let KYRO draft it',
         blurb:
-          'Hand it to Penny — she reads your live numbers and drafts a full plan with pillars and measurable goals for you to review.',
-        cta: 'Draft with Penny',
+          'Hand it to KYRO — it reads your live numbers and drafts a full plan with pillars and measurable goals for you to review.',
+        cta: 'Draft with KYRO',
         onHandoff: handoffDraftPlan,
         handoffNote:
-          "Penny is drafting your plan — review it in the chat and apply what you like. You can add or edit goals here anytime.",
+          "KYRO is drafting your plan — review it in the chat and apply what you like. You can add or edit goals here anytime.",
       },
       {
         key: 'manual-goal',

@@ -3,7 +3,7 @@
 //
 // A month of shipping — AIC Phases A–K, enrollment intelligence, strategy,
 // governance, continuous improvement — reached the app and never reached the
-// assistant. Whole phases were invisible to her: she could CREATE improvement
+// assistant. Whole phases were invisible to it: it could CREATE improvement
 // initiatives and not list one back, the entire Mock Visit had no tool at all,
 // the student roster was unreachable, and `navigate_to_page` still offered the
 // nine finance-era pages while ten more routes mounted around it.
@@ -34,7 +34,7 @@ function navPages(): string[] {
 
 describe('every shipped module has a way in', () => {
   // Phase → the tool that answers it. A module with no row here is a module
-  // Penny cannot discuss; a row whose tool is missing is a module she was told
+  // Penny cannot discuss; a row whose tool is missing is a module it was told
   // about and cannot reach.
   const MODULE_TOOLS: [string, string][] = [
     ['strategic planning', 'get_plan_status'],
@@ -47,7 +47,7 @@ describe('every shipped module has a way in', () => {
     ['HR registers (AIC F/K)', 'check_kyro_collects'],
     // Penny coverage Phase 1 — the three surfaces that shipped with no way in at
     // all. /cash-flow was the worst of them: a mounted route Penny could not
-    // reach, whose question ("when do we run low?") she would answer from
+    // reach, whose question ("when do we run low?") it would answer from
     // get_cash_flow — the QuickBooks statement, a different object entirely.
     ['cash forecast (the FORWARD projection)', 'get_cash_forecast'],
     ['enrollment analytics', 'get_enrollment_analytics'],
@@ -90,7 +90,7 @@ describe('every shipped module has a way in', () => {
 
   it('the adjustment tool tells the model where a sourceRef comes from', () => {
     // A ref the model INVENTED is refused at build, which is correct but reads to
-    // the user as Penny failing. Telling her to read one first is what makes the
+    // the user as Penny failing. Telling it to read one first is what makes the
     // refusal rare rather than routine.
     const t = TOOL_SCHEMAS.find((x) => x.function.name === 'adjust_cash_forecast_line')
     expect(t?.function.description).toMatch(/get_cash_forecast WITH lines:true FIRST/)
@@ -304,7 +304,7 @@ describe('the walkthrough registry lives in two files and must agree', () => {
 
   it('every Phase-1 anchor points at an id the web actually renders', () => {
     // A row pointing at an id nobody rendered RESOLVES FINE and then glides to
-    // nothing — the failure mode that had Penny offering nine tours she could
+    // nothing — the failure mode that had Penny offering nine tours it could
     // not give. The registry cannot catch it; only reading the components can.
     const WEB = fileURLToPath(new URL('../../../web/src/', import.meta.url))
     const ANCHORS: [string, string][] = [
@@ -324,7 +324,7 @@ describe('the walkthrough registry lives in two files and must agree', () => {
 
   it('the deep-link pages every anchor names are routable', () => {
     // A registry row's `page` is resolved by PennyAgentBridge.pageToPath, and an
-    // unknown key lands on `default: null` — Penny says she navigated and nothing
+    // unknown key lands on `default: null` — Penny says it navigated and nothing
     // moves. The client-only keys are the easy ones to forget, because the
     // backend enum never mentions them.
     const bridge = readFileSync(

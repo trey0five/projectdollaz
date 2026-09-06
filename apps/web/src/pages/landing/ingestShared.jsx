@@ -92,7 +92,7 @@ export function Press({ gearRotate, gearRotateCcw, lampOn, inkWidth, faceTextOpa
     <div className="ui-v1 relative h-52 w-60 sm:h-60 sm:w-72">
       <div className="absolute inset-x-6 top-0 flex h-9 items-center justify-center rounded-t-2xl border border-b-0 border-gold/50 bg-navy-deep">
         <span className="text-[9px] font-bold uppercase tracking-[0.3em] text-gold-light/90">
-          Penny AI
+          KYRO AI
         </span>
       </div>
       <div className="absolute inset-x-0 bottom-0 top-8 overflow-hidden rounded-2xl border-2 border-gold/50 bg-navy-gradient shadow-navy-glow">

@@ -19,7 +19,7 @@ export default function TermsPage() {
       <H2>1. The Service &amp; license</H2>
       <P>
         KYRO provides a financial and operational intelligence platform for schools, including financial reporting,
-        analytics, benchmarking, enrollment intelligence, and the Penny AI assistant. Features may be added, changed,
+        analytics, benchmarking, enrollment intelligence, and the KYRO AI assistant. Features may be added, changed,
         or removed over time. Access to certain modules may require a paid subscription.
       </P>
       <P>

@@ -104,7 +104,7 @@ export default function BentoWall() {
 
           {/* 4 · Ask Penny */}
           <Cell i={1} span="col-span-1 sm:col-span-2">
-            <h5 className={HEAD}><Bot size={13} /> Ask Penny</h5>
+            <h5 className={HEAD}><Bot size={13} /> Ask KYRO</h5>
             <div aria-hidden="true" className="bw-type flex gap-1.5 py-2.5">
               <i className="h-2 w-2 rounded-full bg-penny" /><i className="h-2 w-2 rounded-full bg-penny" /><i className="h-2 w-2 rounded-full bg-penny" />
             </div>
@@ -161,7 +161,7 @@ export default function BentoWall() {
           <Cell i={1} span="col-span-2 sm:col-span-2">
             <h5 className={HEAD}><Library size={13} /> Knowledge</h5>
             <b className="font-serif text-[34px] leading-none text-navy">∞<span className="text-[16px] text-navy/50"> memory</span></b>
-            <p className="mt-1.5 text-[12px] text-muted">Drop any document — Penny files it to the right module and it's searchable forever.</p>
+            <p className="mt-1.5 text-[12px] text-muted">Drop any document — KYRO files it to the right module and it's searchable forever.</p>
           </Cell>
         </div>
       </div>

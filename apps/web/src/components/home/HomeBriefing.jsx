@@ -56,7 +56,7 @@ function BriefMeButton() {
     <button
       type="button"
       onClick={askPennyToBrief}
-      aria-label="Play Penny's brief of what needs my attention"
+      aria-label="Play KYRO's brief of what needs my attention"
       className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gold-gradient px-3.5 py-1.5 text-[13px] font-semibold text-white shadow-glow transition-transform hover:-translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
     >
       <Sparkles size={14} />
@@ -164,7 +164,7 @@ function BriefingItemCard({ item, index, reduce, canEdit, onDismiss, active = fa
   const DomainIcon = domain.Icon
   const navigate = useNavigate()
   // When Penny narrates this item we ring it gold (below) so the board visibly follows
-  // her voice — but we deliberately do NOT scrollIntoView. During morning-brief playback
+  // its voice — but we deliberately do NOT scrollIntoView. During morning-brief playback
   // that yanked the whole page DOWN past the brief card the user is watching; the gold
   // ring alone tracks the active item without hijacking the scroll position.
 

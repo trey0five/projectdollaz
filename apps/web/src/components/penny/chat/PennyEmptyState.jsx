@@ -75,7 +75,7 @@ export default function PennyEmptyState({ onPick }) {
           <PennyAvatar size={56} active />
         </div>
       </div>
-      <h2 className="penny-text text-[18px] font-bold tracking-tight">Hi! I’m Penny</h2>
+      <h2 className="penny-text text-[18px] font-bold tracking-tight">Hi! I’m KYRO</h2>
       <p className="mt-1 max-w-[16rem] text-[13px] leading-snug text-muted">
         Pick a topic to see what I can do, or just type your question.
       </p>

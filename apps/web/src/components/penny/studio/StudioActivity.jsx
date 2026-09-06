@@ -80,7 +80,7 @@ export default function StudioActivity({ schoolId, canEdit }) {
       setError(null)
     } catch (e) {
       if (activeRef.current !== schoolId) return
-      setError(apiErrorMessage(e, 'Couldn’t load Penny’s activity.'))
+      setError(apiErrorMessage(e, 'Couldn’t load KYRO’s activity.'))
     } finally {
       if (activeRef.current === schoolId) setLoading(false)
     }
@@ -135,7 +135,7 @@ export default function StudioActivity({ schoolId, canEdit }) {
         <span className="grid h-[26px] w-[26px] place-items-center rounded-lg bg-penny-gradient text-navy">
           <History size={14} aria-hidden />
         </span>
-        What Penny did lately
+        What KYRO did lately
       </h2>
 
       {loading ? (
@@ -143,7 +143,7 @@ export default function StudioActivity({ schoolId, canEdit }) {
       ) : error ? (
         <p className="px-0.5 text-[13px] text-danger">{error}</p>
       ) : items.length === 0 ? (
-        <p className="px-0.5 text-[13px] text-muted">Penny hasn’t made any changes yet.</p>
+        <p className="px-0.5 text-[13px] text-muted">KYRO hasn’t made any changes yet.</p>
       ) : (
         <ul className="space-y-1">
           {items.map((it) => {

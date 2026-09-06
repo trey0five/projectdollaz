@@ -108,7 +108,7 @@ export default function DraftImprovementPlanCard({ payload }) {
   return (
     <div data-testid="draft-improvement-plan" data-mode="A">
       <p className="flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-[0.1em] text-penny">
-        <ClipboardList size={13} aria-hidden /> Penny drafted an improvement plan
+        <ClipboardList size={13} aria-hidden /> KYRO drafted an improvement plan
         {plan.demoData ? (
           <span
             data-testid="draft-demo"

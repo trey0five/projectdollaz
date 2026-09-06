@@ -93,7 +93,7 @@ export default function PennyChat({ open, onClose }) {
           <motion.div
             {...entrance}
             role="dialog"
-            aria-label="Penny AI assistant"
+            aria-label="KYRO AI assistant"
             onDragOver={(e) => {
               if (Array.from(e.dataTransfer.types || []).includes('Files')) {
                 e.preventDefault()
@@ -117,7 +117,7 @@ export default function PennyChat({ open, onClose }) {
               lg:h-[760px] lg:w-[500px]"
           >
             {/* ── Header — navy→gold gradient banner with a motion-safe sheen
-                sweep + gold corner bloom, an animated Penny avatar, an online
+                sweep + gold corner bloom, the animated KYRO dove, an online
                 pulse, the voice toggle, history menu, and close. ── */}
             {/* NOTE: the header is NOT overflow-hidden — that would clip the recent-
                 chats dropdown (which opens below the header). The decorations are
@@ -137,17 +137,20 @@ export default function PennyChat({ open, onClose }) {
                 <span className="absolute -right-6 -top-8 h-32 w-32 rounded-full bg-penny/25 blur-2xl" />
               </span>
 
-              {/* Animated Penny avatar with online pulse dot. */}
+              {/* Animated KYRO dove with online pulse dot. */}
               <div className="relative shrink-0">
                 <PennyAvatar size={30} active speaking={tts.speaking} />
+                {/* The dove sits in the upper-left ~70%×81% of its box (the box is the
+                    fly-cell aspect), so the badge is inset onto the bird's lower-right
+                    body rather than pinned to the box corner, where it floated free. */}
                 <span
                   aria-hidden
-                  className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-navy bg-emerald-400 motion-safe:animate-pulse"
+                  className="absolute bottom-[5px] right-[8px] h-2.5 w-2.5 rounded-full border-2 border-navy bg-emerald-400 motion-safe:animate-pulse"
                 />
               </div>
 
               <div className="relative min-w-0 flex-1">
-                <p className="truncate text-[15px] font-semibold text-white">Penny AI</p>
+                <p className="truncate text-[15px] font-semibold text-white">KYRO AI</p>
                 <p className="flex items-center gap-1 truncate text-[11px] text-white/55">
                   <span
                     aria-hidden
@@ -210,7 +213,7 @@ export default function PennyChat({ open, onClose }) {
               <button
                 type="button"
                 onClick={onClose}
-                aria-label="Close Penny AI"
+                aria-label="Close KYRO AI"
                 className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white/70 transition hover:bg-white/10 hover:text-white"
               >
                 <X size={16} aria-hidden />
@@ -241,7 +244,7 @@ export default function PennyChat({ open, onClose }) {
                 className="pointer-events-none absolute inset-0 z-[60] flex items-center justify-center border-4 border-dashed border-penny/80 bg-penny/10"
               >
                 <div className="rounded-xl border border-penny/60 bg-white/95 px-4 py-2 text-[14px] font-semibold text-[#7a5e00] shadow-card">
-                  Drop a file for Penny to analyze
+                  Drop a file for KYRO to analyze
                 </div>
               </div>
             )}

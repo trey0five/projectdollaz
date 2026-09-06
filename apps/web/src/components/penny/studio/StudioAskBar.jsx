@@ -18,7 +18,7 @@ import { ACCEPT, MAX_FILES } from '../chat/stageAttachments.js'
 import PennyAttachmentChip from '../chat/PennyAttachmentChip.jsx'
 
 const PLACEHOLDERS = [
-  'Ask Penny anything, or drop a file to get started…',
+  'Ask KYRO anything, or drop a file to get started…',
   'Turn my June trial balance into statements…',
   'Draft the treasurer’s narrative for Thursday…',
   'How does our cash compare to last year?',
@@ -153,7 +153,7 @@ export default function StudioAskBar({ variant = 'hero', chat, staging, value, o
         }`}
       >
         <label htmlFor={`studio-ask-${variant}`} className="sr-only">
-          Ask Penny anything
+          Ask KYRO anything
         </label>
 
         <input
@@ -183,7 +183,7 @@ export default function StudioAskBar({ variant = 'hero', chat, staging, value, o
               submit()
             }
           }}
-          placeholder={chat.busy ? 'Penny is thinking…' : speech.listening ? 'Listening…' : PLACEHOLDERS[placeIdx]}
+          placeholder={chat.busy ? 'KYRO is thinking…' : speech.listening ? 'Listening…' : PLACEHOLDERS[placeIdx]}
           aria-busy={chat.busy}
           className={`max-h-[120px] min-h-[40px] flex-1 resize-none bg-transparent py-2 text-[#16233d] outline-none placeholder:text-[#8a93a6] ${
             isHero ? 'text-[16.5px]' : 'text-[15px]'

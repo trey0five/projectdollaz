@@ -38,7 +38,7 @@ import DraftImprovementPlanCard from './DraftImprovementPlanCard.jsx'
 // string can land in a permanent record. The card says that out loud, and offers
 // no field in which a person could add one either.
 export const ATTACH_EVIDENCE_PROVENANCE =
-  'KYRO links an artifact that already exists in your platform. Nothing is uploaded, and no file name, title or citation is written by Penny.'
+  'This links an artifact that already exists in your platform. Nothing is uploaded, and KYRO writes no file name, title or citation.'
 
 // The four auto-file destinations (label + icon), mirroring the API's closed set.
 // 'knowledge' is labelled "Knowledge only" to signal it does NOT create a module

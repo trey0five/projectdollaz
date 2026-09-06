@@ -25,7 +25,7 @@ export default function PennyTile({ index = 0 }) {
       <Link
         id="tile-penny"
         to="/penny"
-        aria-label="Penny Studio — your AI chief of staff"
+        aria-label="KYRO Studio — your AI chief of staff"
         className="module-tile"
         style={{ '--tile-hue': PENNY_GOLD }}
       >
@@ -35,10 +35,10 @@ export default function PennyTile({ index = 0 }) {
           </span>
           <div>
             <h3 className="tile-title font-serif text-[17px] font-semibold leading-snug text-navy">
-              Penny Studio
+              KYRO Studio
             </h3>
             <p className="tile-sub mt-1 text-[13.5px] leading-relaxed text-muted">
-              Ask anything — Penny reads your files, drafts reports, and updates the platform.
+              Ask anything — KYRO reads your files, drafts reports, and updates the platform.
             </p>
           </div>
           <div className="mt-auto flex items-center justify-between gap-3 pt-1">

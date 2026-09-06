@@ -2,24 +2,31 @@
 // PennyLottieScene — a Duolingo-style scroll-ACTIVATED character vignette,
 // hand-built in SVG + framer-motion (our free "Lottie"): the same mechanics a
 // Lottie file gives you — keyframed vector groups played when the section
-// scrolls into view — authored in code instead of After Effects.
+// scrolls into view — authored in code instead of After Effects. ("Penny" is the
+// internal codename; the character is KYRO the dove.)
 //
 // The scene (plays on every viewport entry, ~2.2s, then settles into idle):
-//   1. Penny DROPS in with a spring + squash-and-stretch landing
-//   2. gold sparkle-stars pop around her (staggered)
-//   3. two mini coins arc out of the landing bounce
-//   4. a sparkline DRAWS itself beneath her (pathLength) and its end-dot glows
-//   5. idle: a gentle bob + periodic blinks while she stays in view
+//   1. KYRO FLIES in from off-left (wingbeat sprite), glides for the last beat,
+//      then lands with a squash-and-stretch touchdown
+//   2. gold sparkle-stars pop around the landing spot (staggered)
+//   3. two loose feathers drift down out of the touchdown
+//   4. a sparkline DRAWS itself beneath the dove (pathLength) and its end-dot glows
+//   5. idle: a gentle bob while the dove stays in view (the perched sprite breathes)
 //
 // Trigger = framer's useInView (IntersectionObserver under the hood — exactly
 // Duolingo's mechanism; they use rootMargin for their fixed header, we use a
-// -80px bottom margin so the play starts once she's genuinely on screen).
-// Reduced motion: the composed final frame renders statically. Decorative only
-// (aria-hidden); no new dependencies.
+// -80px bottom margin so the play starts once the scene is genuinely on screen).
+// The flight phase (flying → gliding → perched) is a small timer-driven state
+// keyed on `inView`. Reduced motion: the composed final frame renders statically
+// (perched, no sprite). Decorative only (aria-hidden); no new dependencies.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useRef, useState } from 'react'
 import { motion, useInView, useReducedMotion } from 'framer-motion'
 import PennyAvatar from '../../components/penny/PennyAvatar.jsx'
+import { FALLBACK_GEOMETRY } from '../../components/penny/kyroDoveManifest.js'
+
+// The touchdown squash pivots on the bird's FEET (a fraction of the dove box).
+const FEET_ORIGIN = `${(FALLBACK_GEOMETRY.feet.x / FALLBACK_GEOMETRY.aspect * 100).toFixed(1)}% ${(FALLBACK_GEOMETRY.feet.y * 100).toFixed(1)}%`
 
 // Four-point sparkle path (cx, cy, r) — the classic glint.
 const star = (cx, cy, r) => {
@@ -36,11 +43,15 @@ const SPARKLES = [
   { x: 226, y: 156, r: 4.5, delay: 1.05 },
 ]
 
-// Mini coins that arc out of the landing bounce: horizontal drift + peak height.
-const COINS = [
-  { dx: -74, peak: -66, delay: 0.5 },
-  { dx: 78, peak: -54, delay: 0.56 },
+// Loose feathers shed on touchdown: start point, horizontal drift, fall, delay.
+const FEATHERS = [
+  { x: 128, y: 96, dx: -58, dy: 62, delay: 0.72, tilt: -35 },
+  { x: 196, y: 104, dx: 52, dy: 56, delay: 0.8, tilt: 30 },
 ]
+
+// Flight timing (seconds after `inView`): wingbeat → glide → touchdown.
+const GLIDE_AT = 0.65
+const LAND_AT = 0.85
 
 export default function PennyLottieScene() {
   const reduce = useReducedMotion()
@@ -48,18 +59,20 @@ export default function PennyLottieScene() {
   // Duolingo's trigger: IntersectionObserver. amount 0.6 + bottom margin so the
   // scene starts once it's properly on screen, and RE-ARMS after leaving.
   const inView = useInView(ref, { amount: 0.6, margin: '0px 0px -80px 0px' })
-  const [blink, setBlink] = useState(false)
+  const [phase, setPhase] = useState('flying')
 
-  // Periodic double-blink while on screen (the "alive at idle" beat).
+  // Flight phase machine: timer-driven (not setState-for-derived-state), re-armed
+  // on every viewport entry so the fly-in replays with the rest of the scene.
   useEffect(() => {
-    if (!inView || reduce) return undefined
-    let t2
-    const t = setInterval(() => {
-      setBlink(true)
-      t2 = setTimeout(() => setBlink(false), 160)
-    }, 3400)
+    if (reduce) return undefined
+    if (!inView) {
+      const t = setTimeout(() => setPhase('flying'), 0)
+      return () => clearTimeout(t)
+    }
+    const t1 = setTimeout(() => setPhase('gliding'), GLIDE_AT * 1000)
+    const t2 = setTimeout(() => setPhase('perched'), LAND_AT * 1000)
     return () => {
-      clearInterval(t)
+      clearTimeout(t1)
       clearTimeout(t2)
     }
   }, [inView, reduce])
@@ -68,7 +81,7 @@ export default function PennyLottieScene() {
   if (reduce) {
     return (
       <div aria-hidden="true" className="mx-auto mb-2 flex h-[150px] w-[320px] items-end justify-center">
-        <PennyAvatar size={96} />
+        <PennyAvatar size={96} state="perched" facing="right" />
       </div>
     )
   }
@@ -100,7 +113,7 @@ export default function PennyLottieScene() {
           style={{ transformOrigin: '272px 132px', filter: 'drop-shadow(0 0 8px rgba(244,221,139,0.9))' }}
         />
 
-        {/* ── Sparkle-stars popping around Penny ── */}
+        {/* ── Sparkle-stars popping around the landing spot ── */}
         {SPARKLES.map((s, i) => (
           <motion.path
             key={i}
@@ -117,71 +130,91 @@ export default function PennyLottieScene() {
           />
         ))}
 
-        {/* ── Mini coins arcing out of the landing bounce ── */}
-        {COINS.map((c, i) => (
-          <motion.g key={i} initial={false}>
-            <motion.circle
-              cx="160"
-              cy="150"
-              r="9"
-              fill="url(#penny-mini-coin)"
-              stroke="#9a781b"
-              strokeWidth="1.5"
-              initial={false}
-              animate={
-                inView
-                  ? { x: [0, c.dx * 0.6, c.dx], y: [0, c.peak, 6], opacity: [0, 1, 0], scale: [0.4, 1, 0.85] }
-                  : { x: 0, y: 0, opacity: 0, scale: 0.4 }
-              }
-              transition={{ duration: 1.05, delay: c.delay, ease: 'easeOut' }}
-            />
-          </motion.g>
+        {/* ── Loose feathers drifting down out of the touchdown ── */}
+        {FEATHERS.map((f, i) => (
+          <motion.ellipse
+            key={i}
+            cx={f.x}
+            cy={f.y}
+            rx="7"
+            ry="2.6"
+            fill="#ffffff"
+            stroke="rgba(148,163,184,0.55)"
+            strokeWidth="0.8"
+            initial={false}
+            animate={
+              inView
+                ? {
+                    x: [0, f.dx * 0.4, f.dx * 0.7, f.dx],
+                    y: [0, f.dy * 0.3, f.dy * 0.65, f.dy],
+                    rotate: [f.tilt, -f.tilt, f.tilt, -f.tilt * 0.6],
+                    opacity: [0, 0.95, 0.8, 0],
+                  }
+                : { x: 0, y: 0, rotate: f.tilt, opacity: 0 }
+            }
+            transition={{ duration: 1.5, delay: f.delay, ease: 'easeInOut' }}
+            style={{ transformOrigin: `${f.x}px ${f.y}px` }}
+          />
         ))}
-        <defs>
-          <radialGradient id="penny-mini-coin" cx="35%" cy="30%" r="75%">
-            <stop offset="0%" stopColor="#fff7da" />
-            <stop offset="55%" stopColor="#e2be55" />
-            <stop offset="100%" stopColor="#c6982a" />
-          </radialGradient>
-        </defs>
       </svg>
 
-      {/* ── Penny: drop in → squash-and-stretch landing → idle bob ── */}
+      {/* ── KYRO: fly in from off-left → glide → squash-and-stretch touchdown → idle bob ── */}
       <motion.div
         className="absolute bottom-2 left-1/2 -ml-12"
         initial={false}
         animate={
           inView
             ? {
-                y: [-130, 0, -16, 0],
-                scaleY: [1, 0.82, 1.06, 1],
-                scaleX: [1, 1.14, 0.96, 1],
-                opacity: 1,
+                x: [-180, -60, 0],
+                y: [-90, -20, 0],
+                opacity: [0, 1, 1],
               }
-            : { y: -130, scaleY: 1, scaleX: 1, opacity: 0 }
+            : { x: -180, y: -90, opacity: 0 }
         }
         transition={
           inView
-            ? { duration: 0.85, times: [0, 0.55, 0.8, 1], ease: ['easeIn', 'easeOut', 'easeIn', 'easeOut'] }
+            ? { duration: LAND_AT, times: [0, 0.6, 1], ease: ['easeOut', 'easeIn'] }
             : { duration: 0.2 }
         }
-        style={{ transformOrigin: '50% 100%' }}
       >
-        {/* Idle bob rides ON TOP of the entry (separate wrapper so transforms compose). */}
+        {/* Touchdown squash rides ON TOP of the flight path (separate wrapper so
+            transforms compose); starts the moment the dove perches. */}
         <motion.div
-          animate={inView ? { y: [0, -5, 0] } : { y: 0 }}
-          transition={inView ? { duration: 2.6, delay: 1.1, repeat: Infinity, ease: 'easeInOut' } : undefined}
+          initial={false}
+          animate={
+            inView && phase === 'perched'
+              ? { scaleY: [0.82, 1.06, 1], scaleX: [1.14, 0.96, 1] }
+              : { scaleY: 1, scaleX: 1 }
+          }
+          transition={inView && phase === 'perched' ? { duration: 0.4, times: [0, 0.55, 1] } : { duration: 0 }}
+          style={{ transformOrigin: FEET_ORIGIN }}
         >
-          <PennyAvatar size={96} blink={blink} />
+          {/* Idle bob once perched. */}
+          <motion.div
+            animate={inView && phase === 'perched' ? { y: [0, -5, 0] } : { y: 0 }}
+            transition={
+              inView && phase === 'perched'
+                ? { duration: 2.6, delay: 0.4, repeat: Infinity, ease: 'easeInOut' }
+                : undefined
+            }
+          >
+            <PennyAvatar size={96} state={inView ? phase : 'flying'} facing="right" paused={!inView} />
+          </motion.div>
         </motion.div>
       </motion.div>
 
-      {/* Landing shadow: squashes when she lands, breathes with the bob. */}
+      {/* Landing shadow: squashes on touchdown, breathes with the bob. */}
       <motion.div
         className="absolute bottom-0 left-1/2 h-2.5 w-20 -translate-x-1/2 rounded-full bg-black/30 blur-[3px]"
         initial={false}
-        animate={inView ? { scaleX: [0.3, 1.25, 0.95, 1], opacity: [0, 0.8, 0.6, 0.65] } : { scaleX: 0.3, opacity: 0 }}
-        transition={{ duration: 0.85, times: [0, 0.55, 0.8, 1] }}
+        animate={
+          inView
+            ? phase === 'perched'
+              ? { scaleX: [1.25, 0.95, 1], opacity: [0.8, 0.6, 0.65] }
+              : { scaleX: 0.3, opacity: 0.15 }
+            : { scaleX: 0.3, opacity: 0 }
+        }
+        transition={phase === 'perched' ? { duration: 0.4, times: [0, 0.55, 1] } : { duration: LAND_AT }}
       />
     </div>
   )

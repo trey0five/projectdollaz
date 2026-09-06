@@ -125,7 +125,7 @@ export default function IngestScrolly({ act }) {
         transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
       />
       <p className="sr-only">
-        Drop a trial balance on Penny and it becomes your four statements, then tomorrow’s
+        Drop a trial balance in and KYRO turns it into your four statements, then tomorrow’s
         briefing — no re-keying, no formatting.
       </p>
       {/* Track height sets the SCRUB SPEED: progress runs over (height − 100vh)

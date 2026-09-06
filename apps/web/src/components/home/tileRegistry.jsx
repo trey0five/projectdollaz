@@ -201,7 +201,7 @@ export const MODULE_PITCH = {
       'Pace that knows direction: ahead, on track, or behind',
       'A Horizon view of every pillar and goal',
       'Plan check-ins in your morning briefing',
-      'Ask Penny how the plan is going — she answers with real figures',
+      'Ask KYRO how the plan is going — it answers with real figures',
     ],
   },
   hr: {

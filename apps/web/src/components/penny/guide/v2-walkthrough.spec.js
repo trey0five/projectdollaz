@@ -2,7 +2,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // PENNY'S WALKTHROUGHS WORK UNDER ui.v2. Hand-off: the nine dataHub.* targets
 // silently no-oped there — DataHubPage never mounts, the modal event has no
-// listener, every datahub-* dom id is absent — so Penny OFFERED tours she could
+// listener, every datahub-* dom id is absent — so Penny OFFERED tours it could
 // not give, and runAgentGuide dropped the steps without a word.
 //
 // Behavioural where it can be (resolveTarget is pure), source-pinned where the

@@ -127,9 +127,9 @@ export default function LandingHero({ onIntroOpen }) {
           page background (no navy slab) — mirroring how it floats on desktop. The
           top padding clears the straddling hero card's -mb overlap. */}
       {!desktop && (
-        <section aria-label="Penny in action" className="px-5 pb-14 pt-32">
+        <section aria-label="KYRO in action" className="px-5 pb-14 pt-32">
           <p className="mb-4 text-center text-[12px] font-bold uppercase tracking-[0.22em] text-[#7a5e00]">
-            See Penny work
+            See KYRO work
           </p>
           <div className="mx-auto max-w-md rounded-2xl border border-gold/30 bg-white p-1.5 shadow-[0_26px_60px_-24px_rgba(16,28,61,0.3)]">
             <div className="overflow-hidden rounded-xl bg-cream">

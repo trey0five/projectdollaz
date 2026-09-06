@@ -118,7 +118,7 @@ export class AssistantController {
     return this.assistant.applyAction(schoolId, user, dto)
   }
 
-  /** Penny's action log — the recent changes she made in this school. */
+  /** Penny's action log — the recent changes it made in this school. */
   @Get('activity')
   @Roles('owner', 'accountant')
   activity(@Param('schoolId') schoolId: string) {

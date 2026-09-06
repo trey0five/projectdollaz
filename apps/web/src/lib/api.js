@@ -1159,7 +1159,7 @@ export const assistantApi = {
     api.post(`/schools/${schoolId}/assistant/briefing-narration`, body),
   // Apply a user-confirmed proposal (write — owner/accountant).
   apply: (schoolId, action) => api.post(`/schools/${schoolId}/assistant/apply`, action),
-  // Penny action log: the recent changes she made (owner/accountant).
+  // Penny action log: the recent changes it made (owner/accountant).
   getActivity: (schoolId) => api.get(`/schools/${schoolId}/assistant/activity`),
   // Undo one logged action by its audit-log id (owner/accountant).
   undoActivity: (schoolId, auditId) =>

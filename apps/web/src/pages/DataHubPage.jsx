@@ -276,7 +276,7 @@ export default function DataHubPage() {
   }, [])
 
   // Penny agent: a `navigate` event with openModal dispatches this CustomEvent so
-  // the hub opens the requested embed panel (e.g. she walks the user to the budget
+  // the hub opens the requested embed panel (e.g. it walks the user to the budget
   // setup). 'none' is the no-op sentinel. Pure side-effect listener with cleanup.
   useEffect(() => {
     const onOpenModal = (e) => {
@@ -371,7 +371,7 @@ export default function DataHubPage() {
             <h1 className="mt-1 font-serif text-2xl font-semibold text-navy sm:text-3xl">Get your numbers in</h1>
             <p className="mt-1.5 text-[16px] leading-relaxed text-muted">
               This is the one place to bring your school&apos;s data into KYRO. Add what you have —
-              we&apos;ll turn it into your statements, board reports, and readiness checks. Penny will
+              we&apos;ll turn it into your statements, board reports, and readiness checks. KYRO AI will
               walk you through it. Most schools finish the essentials in a few minutes.
             </p>
           </div>

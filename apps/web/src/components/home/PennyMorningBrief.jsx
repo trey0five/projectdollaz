@@ -151,7 +151,7 @@ function ComposingCard({ reduce }) {
       data-testid="penny-morning-brief"
       data-playing="false"
       role="status"
-      aria-label="Penny is preparing your brief"
+      aria-label="KYRO is preparing your brief"
       className="no-print relative overflow-hidden rounded-2xl bg-navy-gradient p-5 shadow-navy-glow sm:p-7"
     >
       <div className="flex items-center gap-4">
@@ -164,7 +164,7 @@ function ComposingCard({ reduce }) {
         </span>
         <div className="min-w-0 flex-1">
           <p className="font-serif text-[18px] font-semibold leading-snug text-white sm:text-[20px]">
-            Penny is putting your brief together
+            KYRO is putting your brief together
             {!reduce && (
               <span aria-hidden className="inline-flex w-6 justify-start">
                 <motion.span
@@ -331,7 +331,7 @@ export default function PennyMorningBrief({
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-[0.16em] text-penny/85">
                   <Sparkles size={13} className="text-penny" />
-                  Penny&rsquo;s morning brief
+                  KYRO&rsquo;s morning brief
                 </span>
                 {periodChip && (
                   <span className="rounded-full border border-white/15 bg-white/[0.06] px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-white/70">
@@ -455,7 +455,7 @@ export default function PennyMorningBrief({
             className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-penny-light transition-colors hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/50"
           >
             <MessagesSquare size={15} />
-            Discuss with Penny
+            Discuss with KYRO
             <ArrowUpRight size={14} />
           </button>
         </div>

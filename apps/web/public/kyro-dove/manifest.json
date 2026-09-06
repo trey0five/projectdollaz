@@ -1,0 +1,96 @@
+{
+  "fly": {
+    "file": "fly.webp",
+    "frames": 40,
+    "cols": 8,
+    "rows": 5,
+    "cellW": 256,
+    "cellH": 205,
+    "sheetW": 2048,
+    "sheetH": 1025,
+    "fps": 24,
+    "anchor": {
+      "x": 0.5187,
+      "y": 0.7724
+    },
+    "facing": "right",
+    "loop": "forward",
+    "note": "one wingbeat, ping-pong baked in (top of stroke -> spread downstroke -> back up); play cells 0..frames-1 forward and repeat",
+    "sourceFrames": [
+      236,
+      238,
+      240,
+      242,
+      244,
+      246,
+      248,
+      250,
+      252,
+      254,
+      256,
+      258,
+      260,
+      262,
+      264,
+      266,
+      268,
+      270,
+      272,
+      274,
+      276,
+      274,
+      272,
+      270,
+      268,
+      266,
+      264,
+      262,
+      260,
+      258,
+      256,
+      254,
+      252,
+      250,
+      248,
+      246,
+      244,
+      242,
+      240,
+      238
+    ],
+    "sourceCropBox": [
+      219,
+      72,
+      792,
+      531
+    ]
+  },
+  "perched": {
+    "file": "perched.webp",
+    "w": 450,
+    "h": 512,
+    "anchor": {
+      "x": 0.681,
+      "y": 0.959
+    },
+    "facing": "right",
+    "variants": {
+      "256": {
+        "file": "perched@256.webp",
+        "w": 225,
+        "h": 256
+      }
+    }
+  },
+  "glide": {
+    "file": "glide.webp",
+    "w": 256,
+    "h": 205,
+    "anchor": {
+      "x": 0.5187,
+      "y": 0.7724
+    },
+    "facing": "right",
+    "sourceFrame": 258
+  }
+}

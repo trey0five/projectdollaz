@@ -47,8 +47,8 @@ export const WALKTHROUGH_TARGET_KEYS = [
   'metric.aid_per_aided_student',
   'metric.tuition_discount_rate',
   'metric.pct_students_on_aid',
-  // Penny coverage Phase 1 — the three surfaces she could discuss and never point
-  // at. /cash-flow in particular is a MOUNTED ROUTE she had no way to reach at all:
+  // Penny coverage Phase 1 — the three surfaces it could discuss and never point
+  // at. /cash-flow in particular is a MOUNTED ROUTE it had no way to reach at all:
   // no page key, no anchor, no tool. Each key below has a matching row in
   // apps/web/src/components/penny/guide/targetRegistry.js and the two files must
   // stay BYTE-IDENTICAL (a key here with no row there resolves to nothing and
@@ -865,7 +865,7 @@ export const TOOL_SCHEMAS = [
     function: {
       name: 'navigate_to_page',
       description:
-        'Move the user to a whole PAGE, Add-data flow, or Settings section (no pointing). Read-only — changes no data. Use this ONLY when the destination is a page in general, NOT a specific control. If the user asks WHERE a specific metric/button/field is, or to SHOW / POINT OUT / GO TO a specific item that has a target key, use start_walkthrough instead (it both navigates AND glides Penny to the exact element). Do not use navigate_to_page to "show" a specific metric.',
+        'Move the user to a whole PAGE, Add-data flow, or Settings section (no pointing). Read-only — changes no data. Use this ONLY when the destination is a page in general, NOT a specific control. If the user asks WHERE a specific metric/button/field is, or to SHOW / POINT OUT / GO TO a specific item that has a target key, use start_walkthrough instead (it both navigates AND flies KYRO, the on-screen dove, to the exact element). Do not use navigate_to_page to "show" a specific metric.',
       parameters: {
         type: 'object',
         properties: {
@@ -946,7 +946,7 @@ export const TOOL_SCHEMAS = [
     function: {
       name: 'start_walkthrough',
       description:
-        'Make Penny physically glide to a specific on-screen control and point it out. THIS IS THE TOOL for "where is X?", "show me X", "point out X", "take me to the X metric/button" — give it a SINGLE step targeting that element (it auto-navigates to the right page/modal first, then glides). Also use it for multi-step "walk me through …" processes (an ORDERED list of steps). Each step: a target key (allowed keys only — incl. metric.* for analytics KPIs like metric.net_tuition_per_student), a short message, and optionally a page / Add-data flow to open first. Prefer this over navigate_to_page whenever a matching target key exists.',
+        'Make your on-screen dove fly to a specific on-screen control and point it out. THIS IS THE TOOL for "where is X?", "show me X", "point out X", "take me to the X metric/button" — give it a SINGLE step targeting that element (it auto-navigates to the right page/modal first, then flies). Also use it for multi-step "walk me through …" processes (an ORDERED list of steps). Each step: a target key (allowed keys only — incl. metric.* for analytics KPIs like metric.net_tuition_per_student), a short message, and optionally a page / Add-data flow to open first. Prefer this over navigate_to_page whenever a matching target key exists.',
       parameters: {
         type: 'object',
         properties: {
@@ -954,7 +954,7 @@ export const TOOL_SCHEMAS = [
             type: 'array',
             minItems: 1,
             maxItems: 8,
-            description: 'Ordered walkthrough steps; Penny glides to each target in turn.',
+            description: 'Ordered walkthrough steps; KYRO flies to each target in turn.',
             items: {
               type: 'object',
               properties: {
@@ -962,11 +962,11 @@ export const TOOL_SCHEMAS = [
                   type: 'string',
                   enum: WALKTHROUGH_TARGET_KEYS,
                   description:
-                    'The control Penny glides to. Use only these provided keys. The metric.* keys point at a specific analytics KPI tile on the Analytics page.',
+                    'The control KYRO flies to. Use only these provided keys. The metric.* keys point at a specific analytics KPI tile on the Analytics page.',
                 },
                 message: {
                   type: 'string',
-                  description: 'What Penny says at this step (one or two short sentences).',
+                  description: 'What KYRO says at this step (one or two short sentences).',
                 },
                 page: {
                   type: 'string',
@@ -1353,7 +1353,7 @@ export const TOOL_SCHEMAS = [
     function: {
       name: 'get_visit_readiness',
       description:
-        "The MOCK VISIT — what an accreditation visiting team would find today, composed from the school's own registers. Returns the executive summary, the framework and whether one has been adopted, self-scored vs. verified coverage, the findings a team would raise (with severity), the strengths worth citing, the evidence a team asks for first, and the improvement work already under way. Use for \"are we ready for our visit?\", \"what would a visiting team say?\", \"run a mock visit\", \"what would they flag?\". Read-only and requires the accreditation module. NEVER state or imply a pass/fail likelihood, a probability, or a percentage chance of any outcome — KYRO holds no accreditation outcome data. State ONLY what this tool returns.",
+        "The MOCK VISIT — what an accreditation visiting team would find today, composed from the school's own registers. Returns the executive summary, the framework and whether one has been adopted, self-scored vs. verified coverage, the findings a team would raise (with severity), the strengths worth citing, the evidence a team asks for first, and the improvement work already under way. Use for \"are we ready for our visit?\", \"what would a visiting team say?\", \"run a mock visit\", \"what would they flag?\". Read-only and requires the accreditation module. NEVER state or imply a pass/fail likelihood, a probability, or a percentage chance of any outcome — the platform holds no accreditation outcome data. State ONLY what this tool returns.",
       parameters: {
         type: 'object',
         properties: {},
@@ -1463,7 +1463,7 @@ export const TOOL_SCHEMAS = [
     function: {
       name: 'draft_strategy_plan',
       description:
-        'GENERATE a full draft strategic plan (pillars + metric-bound goals with targets computed from THIS school’s live metrics) for the user to CONFIRM before anything is created. This does NOT create it; the user must confirm, then the whole tree is created at once. Use when the user asks Penny to "draft us a strategic plan", "build a plan", "start a strategic plan", etc. Every goal target is DERIVED from the school’s live numbers (the healthy sector threshold for each off-track metric) — never invented. Optional args only steer the framing; Penny can draft from live metrics with no args. FY runs Jul–Jun.',
+        'GENERATE a full draft strategic plan (pillars + metric-bound goals with targets computed from THIS school’s live metrics) for the user to CONFIRM before anything is created. This does NOT create it; the user must confirm, then the whole tree is created at once. Use when the user asks you (KYRO) to "draft us a strategic plan", "build a plan", "start a strategic plan", etc. Every goal target is DERIVED from the school’s live numbers (the healthy sector threshold for each off-track metric) — never invented. Optional args only steer the framing; KYRO can draft from live metrics with no args. FY runs Jul–Jun.',
       parameters: {
         type: 'object',
         properties: {
@@ -1482,7 +1482,7 @@ export const TOOL_SCHEMAS = [
     function: {
       name: 'create_strategy_plan',
       description:
-        'PROPOSE a new (empty) strategic plan for the user to CONFIRM before it is created (this does NOT create it; the user must confirm). Use when the user wants to start a plan by hand rather than have Penny draft one — for a Penny-generated plan use draft_strategy_plan instead. FY runs Jul–Jun; the plan is created in draft status. Plan, not period-scoped.',
+        'PROPOSE a new (empty) strategic plan for the user to CONFIRM before it is created (this does NOT create it; the user must confirm). Use when the user wants to start a plan by hand rather than have KYRO draft one — for a KYRO-generated plan use draft_strategy_plan instead. FY runs Jul–Jun; the plan is created in draft status. Plan, not period-scoped.',
       parameters: {
         type: 'object',
         properties: {
@@ -1644,7 +1644,7 @@ export const TOOL_SCHEMAS = [
     function: {
       name: 'check_kyro_collects',
       description:
-        'READ-ONLY. Ask whether KYRO holds data on a topic at all, and what it says. CALL THIS FIRST whenever the user asks about something you are not certain this product records — professional development, safe-environment or background clearances, test scores, LMS or assessment data, student achievement, teacher evaluations, facility inspections — and whenever they ask whether the school will PASS its accreditation. It answers from the product\'s own capability registry, never from your memory. When it returns available:false you must relay its message and its wouldRequire as-is and MUST NOT supply the missing capability from memory, invent a figure, or say what the answer probably is. When it returns available:true, report the COUNTS it gives you and never name a person — the register holds people, this tool does not return them. Never state or imply a probability, percentage, likelihood or "on track" judgement about an accreditation outcome.',
+        'READ-ONLY. Ask whether the platform holds data on a topic at all, and what it says. CALL THIS FIRST whenever the user asks about something you are not certain this product records — professional development, safe-environment or background clearances, test scores, LMS or assessment data, student achievement, teacher evaluations, facility inspections — and whenever they ask whether the school will PASS its accreditation. It answers from the product\'s own capability registry, never from your memory. When it returns available:false you must relay its message and its wouldRequire as-is and MUST NOT supply the missing capability from memory, invent a figure, or say what the answer probably is. When it returns available:true, report the COUNTS it gives you and never name a person — the register holds people, this tool does not return them. Never state or imply a probability, percentage, likelihood or "on track" judgement about an accreditation outcome.',
       parameters: {
         type: 'object',
         properties: {

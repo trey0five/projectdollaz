@@ -77,6 +77,9 @@ const clamp = (v, a, b) => Math.min(b, Math.max(a, v))
 const seg = (p, a, b) => clamp((p - a) / (b - a), 0, 1)
 const backOut = (t) => { const c = 1.70158; return 1 + (--t) * t * ((c + 1) * t + c) }
 const smooth = (t) => t * t * (3 - 2 * t)
+// Seconds the dove's fly-in arc takes (shared by the framer keyframes and the
+// flying→gliding→perched sprite timers so the handoff lands with touchdown).
+const ENTRANCE_S = 1.15
 
 // ── Per-domain payload visualizations — each dock deals in its OWN chart type
 // (area, bars, gauge, stacked status, thermometer, milestones, pictogram), hue-
@@ -335,23 +338,25 @@ export default function OrbitScrolly() {
   const [shockKey, setShockKey] = useState(0)
   const activeRef = useRef(0)
 
-  // Penny's Lottie-style entrance: drop-in with squash-and-stretch the first
-  // time the orbit scrolls into view, then periodic blinks while it's on screen.
+  // KYRO's entrance: the first time the orbit scrolls into view the dove FLIES
+  // in on an arc from the top-left (sprite flapping), glides for the last
+  // stretch, and perches at the core facing right. `phase` drives the sprite
+  // state; the arc itself is the framer keyframe on the inner wrapper below.
+  // The timings mirror the arc's duration (ENTRANCE_S) so the glide→perch
+  // handoff lands with the touchdown.
   const pennyIn = useInView(stageRef, { once: true, amount: 0.55 })
-  const blinkOn = useInView(stageRef, { amount: 0.3 })
-  const [blink, setBlink] = useState(false)
+  const [phase, setPhase] = useState('perched')
   useEffect(() => {
-    if (!blinkOn || reduce) return undefined
-    let t2
-    const t = setInterval(() => {
-      setBlink(true)
-      t2 = setTimeout(() => setBlink(false), 160)
-    }, 3400)
+    if (!pennyIn || reduce) return undefined
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: the sprite must switch to 'flying' on the SAME frame the framer arc starts (a deferred set would show one perched frame mid-air); the later phases are timer-driven.
+    setPhase('flying')
+    const t1 = setTimeout(() => setPhase('gliding'), (ENTRANCE_S - 0.25) * 1000)
+    const t2 = setTimeout(() => setPhase('perched'), ENTRANCE_S * 1000)
     return () => {
-      clearInterval(t)
+      clearTimeout(t1)
       clearTimeout(t2)
     }
-  }, [blinkOn, reduce])
+  }, [pennyIn, reduce])
 
   useMotionValueEvent(p, 'change', (v) => {
     const sys = sysRef.current
@@ -377,8 +382,8 @@ export default function OrbitScrolly() {
       const sc = (0.62 + 0.55 * depth) * (form < 1 ? 0.5 + 0.5 * form : 1) * (1 - collapse * 0.7)
       el.style.transform = `translate(${x}px, ${y}px) scale(${sc})`
       // Gathered near the core (formation start / collapse end) the planets sit
-      // BEHIND Penny (z < core's 60) and branch out from her; only once the
-      // orbit is formed do front-half passes layer above the coin.
+      // BEHIND KYRO (z < core's 60) and branch out from it; only once the
+      // orbit is formed do front-half passes layer above the dove.
       el.style.zIndex = String(rf < 0.85 ? 10 + Math.round(depth * 20) : 30 + Math.round(depth * 40))
       el.style.opacity = String((0.45 + 0.55 * depth) * (1 - collapse))
       el.style.filter = depth < 0.35 ? 'blur(1.2px)' : 'none'
@@ -423,7 +428,7 @@ export default function OrbitScrolly() {
     if (flankLRef.current) flankLRef.current.style.opacity = flankO
     if (flankRRef.current) flankRRef.current.style.opacity = flankO
     // The backdrop photograph rides the FORMATION: it fades in as the planets
-    // erupt from behind Penny (the same 0→0.1 window `form` runs on), so the
+    // erupt from behind KYRO (the same 0→0.1 window `form` runs on), so the
     // room fills with Finance while the system is assembling — not a beat after
     // it. Stays through the finale (the briefing floats over the last scene).
     if (photoWrapRef.current) photoWrapRef.current.style.opacity = String(seg(v, 0.02, 0.1))
@@ -443,10 +448,10 @@ export default function OrbitScrolly() {
         <div className="mx-auto max-w-4xl px-5 text-center sm:px-8">
           <p className="text-[12px] font-bold uppercase tracking-[0.22em] text-[#7a5e00]">One AI · Eight domains</p>
           <h2 id="orbit-h2" className="mt-3 font-serif text-[32px] font-semibold leading-tight text-navy sm:text-[42px]">
-            Everything orbits Penny.
+            Everything orbits KYRO.
           </h2>
           <div className="mx-auto mt-10 flex max-w-2xl flex-wrap items-center justify-center gap-3">
-            <PennyAvatar size={72} />
+            <PennyAvatar size={72} state="perched" facing="right" />
             {DOMAINS.map(({ key, label, hue, Icon }) => (
               <span key={key} className="inline-flex items-center gap-2 rounded-full border border-navy/20 px-3 py-1.5 text-[13px] font-semibold text-navy/80">
                 <Icon size={14} style={{ color: hue }} /> {label}
@@ -480,7 +485,7 @@ export default function OrbitScrolly() {
               tints the room. The stage keeps its plain gradient underneath as
               the first-paint fallback while a photo streams in. */}
           {/* STARTS INVISIBLE (opacity 0, handler-written): the very first frame
-              belongs to Penny alone — the photograph fades in WITH the planets'
+              belongs to KYRO alone — the photograph fades in WITH the planets'
               eruption, so the room fills with Finance as the system assembles. */}
           <div ref={photoWrapRef} aria-hidden="true" className="absolute inset-0 z-0 overflow-hidden" style={{ opacity: 0 }}>
             <AnimatePresence initial={false}>
@@ -508,18 +513,18 @@ export default function OrbitScrolly() {
             />
           </div>
           {/* The heading, lowered INTO the scene: overlays the stage top during
-              Penny's entrance + formation, fades as the first dock lands. */}
+              KYRO's entrance + formation, fades as the first dock lands. */}
           <div
             ref={introRef}
             className="pointer-events-none absolute inset-x-0 top-[7%] z-[80] px-5 text-center"
           >
             <p className="text-[12px] font-bold uppercase tracking-[0.22em] text-[#7a5e00]">One AI · Eight domains</p>
             <h2 id="orbit-h2" className="mt-2.5 font-serif text-[30px] font-semibold leading-tight text-navy sm:text-[42px]">
-              Everything orbits Penny.
+              Everything orbits KYRO.
             </h2>
             <p className="mx-auto mt-3 max-w-xl text-[15px] leading-relaxed text-muted">
               Eight domains, one AI at the center. Scroll — every one of them docks, hands its
-              numbers to Penny, and lands in a single morning briefing.
+              numbers to KYRO, and lands in a single morning briefing.
             </p>
           </div>
           {/* Domain watermark behind the system — a refined treatment (was a
@@ -533,8 +538,8 @@ export default function OrbitScrolly() {
           <div
             ref={typeRef}
             aria-hidden="true"
-            // Raised from 30% so the word clears Penny instead of running through her
-            // — the coin was covering the middle letters at most window heights.
+            // Raised from 30% so the word clears KYRO instead of running through it
+            // — the dove was covering the middle letters at most window heights.
             className="pointer-events-none absolute inset-x-0 top-[21%] z-0"
             style={{ opacity: 0 }}
           >
@@ -575,9 +580,10 @@ export default function OrbitScrolly() {
               <line ref={beamFlowRef} className="orbit-beam-flow" stroke="#fff" strokeWidth="3" strokeLinecap="round" style={{ transition: 'opacity .3s', opacity: 0 }} />
             </svg>
 
-            {/* Core: Penny (bigger) + hue flare + dock shockwave. The Lottie-style
-                drop-in lives on an INNER wrapper so it composes with the outer
-                handler-driven collapse transform. */}
+            {/* Core: KYRO (bigger) + hue flare + dock shockwave. The fly-in arc
+                lives on an INNER wrapper so it composes with the outer
+                handler-driven collapse transform: in from the top-left, a
+                little lift mid-flight, then a soft settle on touchdown. */}
             <div className="absolute left-1/2 top-1/2 z-[60] -translate-x-1/2 -translate-y-1/2">
               <div
                 ref={coreRef}
@@ -585,21 +591,25 @@ export default function OrbitScrolly() {
                 style={{ boxShadow: pennyIn ? `0 0 80px ${d.hue}, 0 0 150px ${d.hue}66` : 'none' }}
               >
                 <motion.div
-                  initial={{ y: -150, opacity: 0 }}
+                  initial={{ x: -260, y: -170, opacity: 0 }}
                   animate={
                     pennyIn
                       ? {
-                          y: [-150, 0, -18, 0],
-                          scaleY: [1, 0.82, 1.06, 1],
-                          scaleX: [1, 1.12, 0.97, 1],
-                          opacity: 1,
+                          x: [-260, -120, 0, 0],
+                          y: [-170, -210, 4, 0],
+                          scaleY: [1, 1, 0.96, 1],
+                          opacity: [0, 1, 1, 1],
                         }
                       : {}
                   }
-                  transition={{ duration: 0.9, times: [0, 0.55, 0.8, 1], ease: ['easeIn', 'easeOut', 'easeIn', 'easeOut'] }}
+                  transition={{
+                    duration: ENTRANCE_S,
+                    times: [0, 0.4, 0.92, 1],
+                    ease: ['easeOut', 'easeIn', 'easeOut', 'easeOut'],
+                  }}
                   style={{ transformOrigin: '50% 100%' }}
                 >
-                  <PennyAvatar size={128} blink={blink} />
+                  <PennyAvatar size={128} state={phase} facing="right" />
                 </motion.div>
                 <span
                   key={shockKey}
@@ -739,7 +749,7 @@ export default function OrbitScrolly() {
                   </p>
                 </div>
                   <p className="mt-2.5 text-[12px] leading-snug text-navy/55">
-                    Penny reads this domain every morning and says only what needs saying.
+                    KYRO reads this domain every morning and says only what needs saying.
                   </p>
                 </motion.div>
               </motion.div>

@@ -45,7 +45,7 @@ export default function WizardStrategyGoal({ schoolId, reduce, onClose, markSave
           Let’s stand up your plan first
         </h3>
         <p className="mx-auto mt-1.5 max-w-md text-[15px] leading-relaxed text-muted">
-          Goals hang off a pillar in your strategic plan. Penny can draft the whole plan — pillars and
+          Goals hang off a pillar in your strategic plan. KYRO can draft the whole plan — pillars and
           measurable goals — from your live numbers in a few seconds.
         </p>
         <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
@@ -57,7 +57,7 @@ export default function WizardStrategyGoal({ schoolId, reduce, onClose, markSave
             }}
             className="inline-flex items-center gap-1.5 rounded-lg btn-cta px-4 py-2.5 text-[14px] font-bold uppercase tracking-[0.06em] transition-transform"
           >
-            <Sparkles size={15} /> Draft with Penny
+            <Sparkles size={15} /> Draft with KYRO
           </button>
           <button
             type="button"

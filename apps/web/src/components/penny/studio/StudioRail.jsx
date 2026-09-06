@@ -35,7 +35,7 @@ export default function StudioRail({ chat, onPick }) {
       <h2 className="mb-3 px-0.5 font-serif text-[16px] font-semibold text-navy">Recent conversations</h2>
 
       {sessions.length === 0 ? (
-        <p className="px-0.5 text-[13px] text-muted">No conversations yet — ask Penny anything to start one.</p>
+        <p className="px-0.5 text-[13px] text-muted">No conversations yet — ask KYRO anything to start one.</p>
       ) : (
         <div className="space-y-0.5">
           {sessions.map((s) => (

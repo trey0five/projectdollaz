@@ -27,7 +27,7 @@ const SPRING = { type: 'spring', stiffness: 200, damping: 24 }
 const BEATS = [
   { key: 'sync', ms: 1400, minute: 12, label: 'Sync or drop the month', Icon: RefreshCw },
   { key: 'statements', ms: 2100, minute: 13, label: 'Statements tie out', Icon: FileStack },
-  { key: 'penny', ms: 2300, minute: 15, label: 'Penny drafts the story', Icon: Sparkles },
+  { key: 'penny', ms: 2300, minute: 15, label: 'KYRO drafts the story', Icon: Sparkles },
   { key: 'bind', ms: 1500, minute: 18, label: 'Packet binds', Icon: FileBarChart2 },
 ]
 const DONE_MINUTE = 19
@@ -411,7 +411,7 @@ export default function BoardReadyShow() {
                   >
                     <div className="flex items-center gap-2.5">
                       <PennyAvatar size={40} />
-                      <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-navy/50">Penny drafts the story</span>
+                      <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-navy/50">KYRO drafts the story</span>
                     </div>
                     <div className="mt-3 space-y-2">
                       {NARRATIVE.map((t, k) => (

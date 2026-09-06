@@ -48,7 +48,7 @@ import type { VISIBLE_HOLE_RULE_IDS } from '@finrep/compliance'
 export type VisibleHoleRuleId = (typeof VISIBLE_HOLE_RULE_IDS)[number]
 
 export type RefusalReason =
-  | 'not_collected' // KYRO has no register/field for this at all
+  | 'not_collected' // the platform has no register/field for this at all
   | 'not_licensed' // the module exists; this school has not licensed it
   | 'no_data' // the register exists and is licensed, and is empty
   | 'insufficient_history' // fewer than 2 comparable snapshots
@@ -137,7 +137,7 @@ export type CoverageTopicEntry = CollectedTopic | NotCollectedTopic | NotAKyroQu
  * hold. The sentence keeps its meaning and drops the word.
  */
 export const ACCREDITATION_OUTCOME_MESSAGE =
-  'I can’t tell you whether you’ll pass — KYRO holds no accreditation outcome data for any ' +
+  'I can’t tell you whether you’ll pass — the platform holds no accreditation outcome data for any ' +
   'school, so any number I gave you would be invented. What I can show you is where your ' +
   'readiness stands, what changed, and what a visiting team asks for first.'
 
@@ -191,7 +191,7 @@ export const COVERAGE_REGISTRY: Readonly<Record<CoverageTopic, CoverageTopicEntr
     wouldRequire: 'integration',
     wouldEnable: 'ACAD-GROWTH-FLAT',
     message:
-      'KYRO doesn’t hold learning-management or assessment data — nothing in this product reads ' +
+      'The platform doesn’t hold learning-management or assessment data — nothing in this product reads ' +
       'your LMS. What we’d need is an integration with the system that already holds it; until ' +
       'then ACAD-GROWTH-FLAT is reported as not evaluated rather than as clear.',
   },
@@ -203,7 +203,7 @@ export const COVERAGE_REGISTRY: Readonly<Record<CoverageTopic, CoverageTopicEntr
     wouldRequire: 'integration',
     wouldEnable: 'ACAD-GROWTH-FLAT',
     message:
-      'KYRO doesn’t hold student achievement results — there is no academic-outcome data in this ' +
+      'The platform doesn’t hold student achievement results — there is no academic-outcome data in this ' +
       'product for any school. What we’d need is an integration with the assessment system that ' +
       'already holds it; until then ACAD-GROWTH-FLAT is reported as not evaluated rather than as clear.',
   },
@@ -215,7 +215,7 @@ export const COVERAGE_REGISTRY: Readonly<Record<CoverageTopic, CoverageTopicEntr
     wouldRequire: 'integration',
     wouldEnable: 'ACAD-GROWTH-FLAT',
     message:
-      'KYRO doesn’t hold test scores — no standardized-assessment results are stored in this ' +
+      'The platform doesn’t hold test scores — no standardized-assessment results are stored in this ' +
       'product. What we’d need is an integration with the assessment system that already holds ' +
       'them; until then ACAD-GROWTH-FLAT is reported as not evaluated rather than as clear.',
   },
@@ -246,7 +246,7 @@ export const UNKNOWN_TOPIC_ENTRY: NotCollectedTopic = {
   wouldRequire: 'integration',
   wouldEnable: null,
   message:
-    'KYRO doesn’t collect that — it isn’t in any register in this product, so I have nothing to ' +
+    'The platform doesn’t collect that — it isn’t in any register in this product, so I have nothing to ' +
     'read and I won’t guess. If you tell me which system already holds it, that is the integration ' +
     'we’d need to answer it here.',
 }

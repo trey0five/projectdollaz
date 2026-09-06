@@ -132,7 +132,7 @@ function ConnectNudge({ onGoToData }) {
         Connect QuickBooks to see your cash
       </h2>
       <p className="max-w-md text-[15px] text-muted">
-        Once QuickBooks is connected, Penny shows who owes the school and what it owes — aged into
+        Once QuickBooks is connected, KYRO shows who owes the school and what the school owes — aged into
         buckets, with a one-click jump into each invoice and bill.
       </p>
       <button

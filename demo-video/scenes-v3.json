@@ -1,0 +1,248 @@
+{
+  "comment": "KYRO guided demo v3 — unhurried, one module at a time; cold open (pain → dove past the competitors → perch → website → briefing), four focus chapters (Enrollment, Academics, Accreditation, Finance), a short everything-else montage, close. Voice: upbeat professional female (ElevenLabs Bella). KYRO is ALWAYS written 'Cairo' in vo text so TTS pronounces it like the city; numbers and acronyms are spelled for speech (K P Is, A I, S I S, I S P). The VO never speaks a data number — the picture carries the numbers. Storyboard: scratchpad/demo-v3-storyboard.md. Cast: torrey.munroe token → NMB (home/enrollment/academics/statements/budget), Sample High (analytics/board report/penny), South Plantation (cash forecast), org scope = Sample High School Org (16 schools); owner f399720d… token → DEMO — Holy Trinity School (accreditation) and St. Cecilia Academy (governance/facilities/advancement/hr montage). Act 0 scenes are deterministic HTML renders (dove-candidates rig), not screen recordings.",
+  "voice": {
+    "name": "Bella",
+    "style": "upbeat, warm, professional demo narrator — slower and more deliberate than v2; let the pictures breathe"
+  },
+  "music": {
+    "act0": "cinematic swell — low drone under the pain, strings rising through the dove, one hit on the perch",
+    "chapters": "confident mid-tempo underscore (assets/track-759.mp3 as in v2), hard sidechain duck under VO",
+    "close": "lift, resolve on the last word"
+  },
+  "scenes": [
+    {
+      "id": "c0_pain",
+      "act": "0 · cold open",
+      "shows": "Landing hero video (the paper-buried office), pushed in and desaturated; six mismatched-typeface words fade up along the bottom third: Finance · Enrollment · Academics · Accreditation · Governance · Facilities; the words blow apart into the navy atmosphere",
+      "vo": "Running a school means running eight businesses at once. Finance. Enrollment. Academics. Accreditation. Each with its own system, its own login — and none of them talking to each other.",
+      "music": "low drone, no pulse",
+      "transition": "particles → navy atmosphere",
+      "minSec": 12
+    },
+    {
+      "id": "c0_dove",
+      "act": "0 · cold open",
+      "shows": "Built HTML render: the white dove (enhanced-goswami / Sora soar) flies left→right through six frosted-glass tiles — Blackbaud, FACTS · Nelnet, Veracross, PowerSchool, Sage Intacct, BoardEffect — each a plain-type wordmark with a one-line caption; as the dove passes, each tile dims and fractures into a lone cracked card",
+      "vo": "Blackbaud sells you a suite of separate products. FACTS handles tuition — and stops there. Veracross knows your students, not your balance sheet. PowerSchool was built for districts. Sage Intacct is a ledger, not a leader. BoardEffect is a binder for the board. Six tools. Six versions of the truth. And nobody whose job is to read them all.",
+      "music": "strings build under the list; one bar of silence after 'read them all'",
+      "transition": "continuous — the dove flies on toward the mark",
+      "minSec": 22
+    },
+    {
+      "id": "c0_perch",
+      "act": "0 · cold open",
+      "shows": "The KYRO mark fades up on a blue bloom; the animated dove flares and, on the touchdown frame, cross-dissolves to the photoreal perched still on the mark; wordmark + tagline 'Institutional intelligence for schools' type on",
+      "vo": "Until now. Meet Cairo.",
+      "music": "the single hit lands on the touchdown frame; the bed opens",
+      "transition": "bloom white-out, six frames",
+      "minSec": 7
+    },
+    {
+      "id": "c0_site",
+      "act": "0 · cold open",
+      "shows": "Public landing page '/' — hero 'A hundred moving parts. One platform.' with the 'KYRO · AI Chief of Staff' chat card typing (the dove perched in its header); drift to 'Everything orbits KYRO.'; click Sign in → login page",
+      "vo": "Cairo doesn't replace your accounting system or your S I S. It sits above them, reads all of them — and turns them into one prioritized picture.",
+      "music": "confident mid-tempo starts",
+      "transition": "match-cut on the KYRO mark into the app",
+      "minSec": 9
+    },
+    {
+      "id": "c0_briefing",
+      "act": "0 · cold open",
+      "shows": "/app in org scope — BriefingBand 'Good morning, Jon. Here are N things that need a decision · N critical', click Open Daily Briefing → 'KYRO is putting your brief together' → the 'KYRO's morning brief' modal (Leadership view chip, prioritized items with per-school attribution) → in-brief Play (karaoke highlight + equalizer)",
+      "vo": "Sign in, and every morning starts here: the Daily Briefing. Cairo, the A I chief of staff, has already read the books, the roster and the standards register — and tells you what needs a decision today, most urgent first. Your school's digital chief operating officer.",
+      "music": "steady",
+      "transition": "hue-band title card '01 · Enrollment'",
+      "minSec": 17
+    },
+    {
+      "id": "e1_hero",
+      "act": "1 · Enrollment",
+      "shows": "NMB /enrollment — the grade-segmented 240° dome with the CountUp headcount, 'Live from your roster' chip, grade legend pills, stat pips Waitlist · New this year · Support flags · Withdrawn; drift to 'Where this came from' + the Analytics preview strip; last beat: ?tab=add 'Connect your SIS' card (Blackbaud SKY · OneRoster API · FACTS SIS · Veracross)",
+      "vo": "Module by module, then — starting with Enrollment. The live headcount, grade by grade, with waitlist, new admits, support flags and withdrawals at a glance. Fed from your roster file — or synced straight from Blackbaud, FACTS, Veracross or OneRoster.",
+      "music": "steady",
+      "transition": "click Open analytics",
+      "minSec": 15
+    },
+    {
+      "id": "e2_trend_grades",
+      "act": "1 · Enrollment",
+      "shows": "/enrollment?tab=analytics&view=trend — Enrollment vitals tiles, the four tabs (Trend · Grades · Cohorts · Who's here), 'Headcount over time' line 2022→2026; click Grades → 'Which grades carry the miss' paired bars (solid actual / dashed plan) + 'Every grade, every year' heatmap + 'Every grade, in figures' table",
+      "vo": "Open Analytics. Trend draws headcount across every school year on file. Grades sets what you counted against the plan — solid bars actual, dashed outlines the plan — so you see exactly which grades carry the miss. And the heat map: every grade, every year, one scale.",
+      "music": "steady",
+      "transition": "click Cohorts",
+      "minSec": 17
+    },
+    {
+      "id": "e3_cohorts_who",
+      "act": "1 · Enrollment",
+      "shows": "Cohorts view — 'Cohort size progression' ladders, Cohort length 5/4/3/2 years (click 3 years, 'Redrawing…'); click Who's here → 'Demographic mix' ring with Race · Gender · Ethnicity chips (click Gender, Ethnicity), 'Support needs' tiles ISP/IEP · 504 plan · English learner · Any support flag, Register status chips",
+      "vo": "Cohorts follows one class up the grades — pick the window, two to five years — and you know whether a class is growing or quietly shrinking. Who's here shows the mix: race, gender, ethnicity, support needs — with any cell under five students withheld.",
+      "music": "steady",
+      "transition": "drift to Explore the register",
+      "minSec": 16
+    },
+    {
+      "id": "e4_filters",
+      "act": "1 · Enrollment",
+      "shows": "'Explore the register' → Roster analytics: Grade select → Grade 9; Race select → Hispanic or Latino; toggle ISP chip; every bar list and the 'N of N students' pill re-count; Clear all",
+      "vo": "And the register is fully filterable. Grade nine. Add a race. Toggle I S P — and every chart on the page responds. Aggregates only, never a child identified — FERPA-aligned by contract.",
+      "music": "steady",
+      "transition": "hue-band title card '02 · Academics'",
+      "minSec": 13
+    },
+    {
+      "id": "a1_overview",
+      "act": "2 · Academics",
+      "shows": "NMB /academics — hero 'North Miami Beach Sr High, measured against its peers.' with Average · Rank · Years on file · Lesson plans chips; the dark VerdictPanel ('The read': ordinal rank of N schools, verdict chip, rank track, Measure · Widest gap · Trend · Participation); drift to the five 'Open the analysis' door cards",
+      "vo": "Academics puts every test in one engine — A C T, S A T and TerraNova — and measures your school against its peers. The verdict is on the first screen: rank in the network, the widest gap, the trend, and whether participation makes the comparison fair.",
+      "music": "steady",
+      "transition": "click 'Where this school stands'",
+      "minSec": 15
+    },
+    {
+      "id": "a2_standing",
+      "act": "2 · Academics",
+      "shows": "/academics?tab=analytics (Standing) — scope bar Test ACT · TerraNova (toggle to TerraNova and back), Year, Grade, Hide peer names; KPI strip + Key insight; 'Every school · all grades' ranked bars with national + network lines → 'Where the gap actually is' by-subject divergence → 'Where instruction is landing' grade heatmap",
+      "vo": "Standing ranks every school on one chart against the national and network lines. By subject, it shows where the gap actually is. And grade by grade — a heat map of where instruction is landing, each cell against the same grade elsewhere.",
+      "music": "steady",
+      "transition": "click Over time",
+      "minSec": 15
+    },
+    {
+      "id": "a3_time_cohorts",
+      "act": "2 · Academics",
+      "shows": "Over time — 'Are we moving?' line (This school solid vs Network dashed), Subject chip, 'Growth against achievement' quadrant; click Cohorts → Cohort length 4/3/2 years (click 3), toggle 'Compare with the other schools' (?peers=1), 'The same students, 2023 through 2026' slopegraph panels, 'Net change by cohort and subject' matrix",
+      "vo": "Over time asks the board's first question: are we moving? Your line against the network's, and growth plotted against achievement. Then Cohorts — the same students followed forward, year over year. Set the window, compare with the other schools, and the story is right there.",
+      "music": "steady",
+      "transition": "sidebar 'Academics network'",
+      "minSec": 18
+    },
+    {
+      "id": "a4_network",
+      "act": "2 · Academics",
+      "shows": "/academics/network — 'Sample High School Org, school by school.' (Network average · Schools · Students tested), View selects Test / School year / Grade (pick Grade 11), 'Every school · all grades' ranked bars for 16 schools with the dashed national line, 'Who moved, and which way'",
+      "vo": "For a diocese, the network view puts every school on one screen — ranked, filtered by test, year and grade — with every average weighted by the students who actually tested.",
+      "music": "steady",
+      "transition": "hue-band title card '03 · Accreditation'",
+      "minSec": 10
+    },
+    {
+      "id": "r1_hero",
+      "act": "3 · Accreditation",
+      "shows": "DEMO — Holy Trinity /accreditation — ReadinessHero: the 100→400 dome with 240/280/320/360 ticks and the 296 network-average tick, the amber projected index, band chip; right rail: seal line 'Accredited by NCA CASI…', 'N points from Accredited', Documented / Defensible pair, Domain coverage, risk chip, Target pills (click Accredited with Merit · 320 — the path recomputes), Fastest path rows; drift to Recorded readiness trend + Assurances chips",
+      "vo": "Accreditation runs as an engine, not a binder. Adopt your accreditor's framework and your projected index lands on the arc — with the exact distance to Accredited. Documented is what you've scored. Defensible is what your evidence backs. Pick a target, and the fastest path is computed for you, standard by standard.",
+      "music": "steady, a touch warmer",
+      "transition": "click Frameworks",
+      "minSec": 18
+    },
+    {
+      "id": "r2_frameworks",
+      "act": "3 · Accreditation",
+      "shows": "'Adopt a framework' modal — scroll the catalog: Cognia · 2025 (Adopted, 'Also known as: NCA CASI · SACS CASI · NWAC · AdvancED…'), Cognia · 2022 (Superseded — rev. 2025 available, Upgrade), MSA-CESS, NSBECS/WCEA, FCIS (ICAISA), ACSI REACH, ACS WASC, SAIS, NIPSA · Academic (NCPSA); hover the NCPSA chip tooltip; Escape",
+      "vo": "Cognia's twenty twenty-five standards, with your N C A CASI division. NIPSA. M S A. F C I S. A C S I — recognitions flagged. Hold more than one accreditation? Adopt both, and switch between them.",
+      "music": "steady",
+      "transition": "click the Journey tab",
+      "minSec": 12
+    },
+    {
+      "id": "r3_journey",
+      "act": "3 · Accreditation",
+      "shows": "/accreditation?center=journey — setup card 'When was your last Engagement Review?' → type the last review date → Map my journey → 'Your 6-year cycle · Cognia Performance Standards (rev. 2025)': the CycleRail from Review '22 to Review '28 with the amber 'You are here', rail captions Findings shared · Implement · Progress report · Self-assessment · Evidence freeze · Review with state words, the phase sentence, the 'Next up' day count, the six Milestones with their CTAs",
+      "vo": "Then, the Journey. Enter the date of your last Engagement Review — one date — and Cairo maps the whole six year Cognia cycle: findings shared, evidence of impact, the year four progress report, the self assessment window, the evidence freeze, the review. You are here — next milestone, counted in days.",
+      "music": "steady",
+      "transition": "click the Standards tab",
+      "minSec": 18
+    },
+    {
+      "id": "r4_standard",
+      "act": "3 · Accreditation",
+      "shows": "/accreditation?center=standards — the register (Code · Standard · Rating · Coverage · Risk · Owner · Review · Actions), 'Scored, no evidence · N' pill; click a standard title → StandardImprovePanel 'What raises this standard': Score it against the rubric / Attach evidence / Plan the work; close; chevron → expanded panel, flip to 'What this means' (explainer, 'What good evidence looks like', 'Your rubric position' pills); last beat: Mock visit → 'The mock visit' six acts",
+      "vo": "Every standard knows how to improve itself. Score it against the rubric — that moves the index. Attach evidence — that moves defensible. Plan the work — that gives it an owner and a date. Plain-language explainers say what good evidence looks like. And before the team arrives, run the mock visit.",
+      "music": "steady",
+      "transition": "hue-band title card '04 · Finance'",
+      "minSec": 19
+    },
+    {
+      "id": "f1_statements",
+      "act": "4 · Finance",
+      "shows": "NMB /finance command center (Statements · Analytics · Budget · Cash Forecast · Reports · Readiness cards) → View statements → /statements: Saved periods rail, the four pill tabs (Statement of Activities · Statement of Financial Position · Statement of Cash Flows · Net Assets), columns Jun 30 2026 · Prior Year · Audited FY End; click Financial Position, Cash Flows; cut to /budget: Budget · Budget vs. Actual · Organizational Roll-up · Consolidated Statements — click Budget vs. Actual, then Organizational Roll-up",
+      "vo": "Now, finance. A trial balance or a QuickBooks sync becomes audit-style statements — Activities, Financial Position, Cash Flows, Net Assets — tied out against prior year and audit. The budget sits beside the actuals, and rolls up across the organization.",
+      "music": "steady",
+      "transition": "sidebar Analytics",
+      "minSec": 15
+    },
+    {
+      "id": "f2_analytics",
+      "act": "4 · Finance",
+      "shows": "Sample /analytics — scope pills My school · Compare · All schools · Peers, School year select, view tabs Overview · Charts · Scorecard; Overview → Charts ('How's the money?' revenue/expense FancyDonuts, Operating margin + Days cash lines, Students on aid arc) → Scorecard (band rails, On track / Watch / At risk pills) → All schools (system tiles, 'Who drives the system's revenue' BarList, 'Days cash on hand — the race' BarRace running) → Peers (Benchmark chips, Match on: Size · County · District · Type · Grade)",
+      "vo": "Analytics tells the story three ways: an overview in plain English; the charts — revenue and expense mix, operating margin, days cash across every saved year; and a scorecard grading each metric against a healthy band. Flip to All schools and watch every campus race across the years — or to Peers, matched on size, county, type and grade span.",
+      "music": "steady, lift on the race",
+      "transition": "Finance tile board → Cash Forecast → Open forecast",
+      "minSec": 22
+    },
+    {
+      "id": "f3_cash",
+      "act": "4 · Finance",
+      "shows": "South Plantation /cash-flow — Build forecast (QuickBooks balance pre-filled) → 'When does cash run low?' hero (Live from QuickBooks · High confidence), tiles Available operating cash · Lowest projected · Covered through · Ending balance, horizons 1M · 3M · 6M · 12M · 13W (click 3M, 12M), the Why section, the chart with the Low $N flag, Money in vs money out; click Workbook",
+      "vo": "Cash forecast — for QuickBooks-connected schools it types itself. Open invoices, bills due, a year of history: five horizons, the low point flagged before it arrives, and the why written underneath.",
+      "music": "steady",
+      "transition": "sidebar Reports",
+      "minSec": 13
+    },
+    {
+      "id": "f4_board",
+      "act": "4 · Finance",
+      "shows": "Sample /reports → Board Report (Build report) — rail Period · Confirm · Variance & MD&A · Branding · Generate: Confirm financials → the pulled statements + budget → Review variance & MD&A → the filled variance table → drift to the MD&A editor → Draft with AI (Drafting… cut by the build) → the narrative streams in → Branding → Generate → 'Generate the packet' checklist",
+      "vo": "When the board meets, you assemble the packet instead of building it. Pick the period — Cairo pulls the saved statements and budget. Confirm the financials, review the variance table, and Draft with A I writes the management discussion from the numbers. Generate. Board-ready.",
+      "music": "steady",
+      "transition": "hue-band title card 'And everything else'",
+      "minSec": 17
+    },
+    {
+      "id": "x1_montage",
+      "act": "5 · everything else",
+      "shows": "Capture at 1.0×, build at ~1.6×: St. Cecilia /app tile grid (ten module tiles with All clear / N need attention chips, lock badge + '+ Add' on unlicensed) → /governance → /facilities → /advancement → /hr → /strategy (Horizon-arc hero), ~3 s each — the same command-center anatomy on every page",
+      "vo": "And the rest of the school lives here too. Governance — policies, committees, meetings. Facilities — recurring maintenance, cost variance watched. Advancement — campaigns, gifts and pledges. H R and staffing. And strategic planning, with goals that measure themselves against the live numbers.",
+      "music": "lift begins",
+      "transition": "straight cut",
+      "minSec": 15
+    },
+    {
+      "id": "x2_penny",
+      "act": "5 · everything else",
+      "shows": "Sample /penny — landing (KYRO Studio · your AI chief of staff, 'What should we knock out today?', the 172px dove on the right, Get something done tiles, Guided workflows, Your action inbox, Hands-free pill) → type 'Explain our revenue mix and show me the chart' → Enter → 'KYRO is thinking…' → streamed answer with the inline Revenue Mix pie (optionally preceded by the task ask → Proposed change → Confirm → Applied · Undo)",
+      "vo": "Every module answers to Cairo. Ask a question — you get the chart. Ask for a change — it proposes it, waits for your confirm, and logs it. Undoable.",
+      "music": "lift",
+      "transition": "straight cut",
+      "minSec": 11
+    },
+    {
+      "id": "x3_org",
+      "act": "5 · everything else",
+      "shows": "/app — ContextSwitcher (school name) → 'Whole organization · Sample High School Org · 16 schools' → org home: Across the network cards, 'Jump into a school' sixteen tiles, ORGANIZATION · CONSOLIDATED card with Organization KPIs → click Schools (Schools in your organization table) → Needs attention (Critical / Warning / To review lanes) → click a school tile to drill down",
+      "vo": "And for a diocese or a network — one login, every school. K P Is roll up, the briefing reads the whole system, and every number drills back to the campus that produced it.",
+      "music": "lift",
+      "transition": "slow fade to black",
+      "minSec": 11
+    },
+    {
+      "id": "z1_trust",
+      "act": "close",
+      "shows": "assets/trust.html re-labelled: FERPA-aligned by contract (shield) · Encrypted in transit and at rest (lock) · Hosted on AWS · US — the v2 card's 'FERPA compliant' copy must change",
+      "vo": "FERPA-aligned by contract. Encrypted in transit and at rest. Hosted on A W S.",
+      "music": "held chord",
+      "transition": "cross-dissolve",
+      "minSec": 6
+    },
+    {
+      "id": "z2_end",
+      "act": "close",
+      "shows": "assets/endcard.html — KYRO lockup with the perched dove resting on the mark (the visual bookend), tagline 'Institutional intelligence for schools', ourkyro.com",
+      "vo": "Cairo. Your school's digital chief operating officer. See it on your own books — at our Cairo dot com.",
+      "music": "resolves on the last word; 0.9 s fade",
+      "transition": "fade out",
+      "minSec": 9
+    }
+  ]
+}

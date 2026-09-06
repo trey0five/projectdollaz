@@ -1,4 +1,4 @@
-// AppliedCard — the "here's what I changed" receipt Penny shows AFTER she has
+// AppliedCard — the "here's what I changed" receipt Penny shows AFTER it has
 // already executed a validated write autonomously (the backend ran applyAction
 // in-process before emitting the SSE `applied` event). There are NO confirm /
 // cancel buttons — the change is done and terminal; it's reversible via the

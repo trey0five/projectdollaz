@@ -12,7 +12,7 @@ export default function StudioCapabilityTiles({ onSelect, canEdit = false }) {
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <h2 className="font-serif text-[22px] font-semibold text-navy">Get something done</h2>
         <span className="text-[13.5px] text-muted">
-          One tap — Penny does the work and shows you the result to approve.
+          One tap — KYRO does the work and shows you the result to approve.
         </span>
       </div>
 

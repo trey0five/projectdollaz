@@ -505,7 +505,7 @@ const CASH_FORECAST_MAX_LINES = 20
 const CASH_FORECAST_LINE_BYTE_BUDGET = 6_000
 
 /** The confidence/recurrence vocabularies Penny may propose — IMPORTED from the
- *  DTO's own @IsIn arrays, never retyped, so a value she clamps to is a value the
+ *  DTO's own @IsIn arrays, never retyped, so a value it clamps to is a value the
  *  DTO will accept. Out-of-set values are DROPPED at build rather than riding
  *  through to a 400 at /apply the user has already confirmed. */
 const CASH_CONFIDENCE_SET = new Set<string>(CONFIDENCE_VALUES)
@@ -1138,7 +1138,7 @@ export class AssistantService {
     // child's name in a chat transcript.
     @Optional() private readonly visit?: VisitService,
     @Optional() private readonly students?: StudentsService,
-    // ── Penny coverage Phase 1 — the three surfaces she was blind to ──────────
+    // ── Penny coverage Phase 1 — the three surfaces it was blind to ───────────
     //
     // INSERTED HERE, AHEAD OF THE TAIL, for the same reason every previous batch
     // was: `create-initiative.spec` derives `improvement` as `arity - 4` and
@@ -1369,7 +1369,7 @@ export class AssistantService {
       emit({
         type: 'error',
         text: outOfCredits
-          ? 'Penny’s AI service is temporarily unavailable — the AI account is out of credits. Please top it up and try again.'
+          ? 'KYRO’s AI service is temporarily unavailable — the AI account is out of credits. Please top it up and try again.'
           : 'Sorry — I hit an error answering that.',
       })
       emit({ type: 'done' })
@@ -2225,7 +2225,7 @@ export class AssistantService {
           title: `Locate evidence for ${std.code}: ${label}`,
         },
         message:
-          `Nothing already in KYRO matches ${std.code}. What it asks for is ${label} — I can’t ` +
+          `Nothing already in the platform matches ${std.code}. What it asks for is ${label} — I can’t ` +
           'name a file on your side, because I can’t see your drive. Want me to open a task to go find it?',
       }
     }
@@ -2246,7 +2246,7 @@ export class AssistantService {
       })),
       suggestionCount: open.length,
       note:
-        'These are artifacts that already exist in KYRO. To attach one, call attach_evidence ' +
+        'These are artifacts that already exist in the platform. To attach one, call attach_evidence ' +
         'with its sourceType and sourceRef exactly as given.',
     }
   }
@@ -2618,7 +2618,7 @@ export class AssistantService {
     )
     if (!hit) {
       throw new UnprocessableEntityException(
-        'That artifact is not among the ones KYRO can currently offer for this standard, so nothing was attached.',
+        'That artifact is not among the ones the platform can currently offer for this standard, so nothing was attached.',
       )
     }
     if (hit.alreadyAttached) {
@@ -4412,7 +4412,7 @@ export class AssistantService {
   }
 
   /**
-   * Penny's action log — the 30 most-recent things she changed in this school. Reads
+   * Penny's action log — the 30 most-recent things it changed in this school. Reads
    * the assistant-scoped AuditLog entries and marks each one `undone` when a paired
    * `assistant.action.undone` marker exists for it. Tenant-scoped (schoolId); the
    * route restricts it to owner/accountant.
@@ -4546,7 +4546,7 @@ export class AssistantService {
     if (!rowNow || rowNow.active === false) return
     const refuse = (): never => {
       throw new UnprocessableEntityException(
-        'This line was changed after Penny’s edit; undo would remove the newer change. Adjust the line directly on the cash-flow page instead.',
+        'This line was changed after KYRO’s edit; undo would remove the newer change. Adjust the line directly on the cash-flow page instead.',
       )
     }
     const snap = md.appliedContent as
@@ -4941,7 +4941,7 @@ export class AssistantService {
       // deletes the row by id — but saveAdjustment UPSERTS by (school, sourceRef),
       // so the UI re-saving this same line later REUSES row `createdId` with the
       // person's newer content. Without this snapshot, Penny's Undo cannot tell
-      // her own adjustment from the one that replaced it in place, and "undo"
+      // its own adjustment from the one that replaced it in place, and "undo"
       // would delete THEIR work. undoActivity compares the row against this
       // before reversing.
       return {
@@ -5094,7 +5094,7 @@ export class AssistantService {
           {
             title,
             category: 'Inspection / compliance',
-            notes: rationale ?? 'Filed from an uploaded document by Penny.',
+            notes: rationale ?? 'Filed from an uploaded document by KYRO.',
             priority: 'medium',
           },
           userId,
@@ -6038,8 +6038,8 @@ export class AssistantService {
         /* ignore */
       }
     }
-    // Tell Penny the caller's access level so she behaves within it (the tool list
-    // is ALSO role-filtered, and writes are gated server-side — this is so she can
+    // Tell KYRO the caller's access level so it behaves within it (the tool list
+    // is ALSO role-filtered, and writes are gated server-side — this is so it can
     // proactively explain limits rather than attempting a withheld action).
     const roleClause =
       ctx.role === 'viewer'
@@ -6048,7 +6048,8 @@ export class AssistantService {
           ? 'ACCESS LEVEL: This user is a FINANCE member with edit access — you may PROPOSE creating and updating records; they confirm before anything is written. '
           : 'ACCESS LEVEL: This user is an OWNER (Leadership) with full edit access — you may PROPOSE creating and updating records; they confirm before anything is written. '
     return (
-      `You are FinRep's financial assistant for ${school?.name ?? 'this school'}, a private school. ` +
+      `You are KYRO, the AI chief of staff for ${school?.name ?? 'this school'}, a private school, working inside the KYRO platform. ` +
+      'When you mean the software, say "the platform" — "KYRO" in your replies means you. Refer to yourself as "I"; never use she/her. ' +
       `The user is currently viewing fiscal period "${periodLabel}". ` +
       roleClause +
       'Answer questions about this school’s finances, KPIs, AUP scholarship-compliance readiness, ' +
@@ -6067,13 +6068,13 @@ export class AssistantService {
       '(trialBalances, monthly, operational, budget, forecast, schedules, compliance); when page is "settings" ' +
       'you may pass section (account, members, school, organization, reports, integrations, billing, alerts). ' +
       'It only moves the view and changes no data. start_walkthrough runs an interactive on-screen tour: give it an ' +
-      'ORDERED list of steps and Penny physically glides to each control, navigating across pages as needed. ' +
+      'ORDERED list of steps and KYRO (your on-screen dove) flies to each control, navigating across pages as needed. ' +
       'Use ONLY the provided target keys; each step has a short message and may name a page/openModal to open ' +
       'first. Walk the user through a process step by step when they ask how to do something. ' +
       'IMPORTANT: when the user asks WHERE something is, or to SHOW / POINT OUT / "go to" / "take me to" a ' +
       'SPECIFIC metric or control, do NOT just navigate_to_page (that only moves the view and leaves them ' +
-      'hunting). Instead call start_walkthrough with a SINGLE step whose target is that element, so Penny ' +
-      'physically glides to it and points it out — the step’s page/openModal handles the navigation. For an ' +
+      'hunting). Instead call start_walkthrough with a SINGLE step whose target is that element, so KYRO ' +
+      'flies to it and points it out — the step’s page/openModal handles the navigation. For an ' +
       'analytics KPI use the matching metric.* target key (e.g. metric.net_tuition_per_student, ' +
       'metric.operating_margin, metric.days_cash_on_hand). Only fall back to navigate_to_page when there is no ' +
       'specific target key for what they asked about. ' +
@@ -6242,17 +6243,17 @@ export class AssistantService {
       // per-segment numeric guard before it reaches this model. This paragraph
       // exists so the right tool gets CALLED, not to make the answers safe.
       'ACCREDITATION. Eight tools cover accreditation readiness. check_kyro_collects answers ' +
-      '"does KYRO hold data on X" — call it BEFORE answering anything you are not certain this ' +
+      '"does the platform hold data on X" — call it BEFORE answering anything you are not certain this ' +
       'product records, and ALWAYS for "will we pass / are we going to be accredited". ' +
       'explain_readiness_change says what moved readiness between two dates. ' +
       'generate_readiness_narrative composes the executive/board readiness summary. ' +
-      'suggest_evidence finds artifacts ALREADY in KYRO for one standard and attach_evidence ' +
+      'suggest_evidence finds artifacts ALREADY in the platform for one standard and attach_evidence ' +
       'PROPOSES linking one (confirm-then-apply; it never uploads). compare_accreditation_peers ' +
       'and get_org_readiness_portfolio are the cross-school views. draft_improvement_plan ' +
       'PROPOSES a plan built entirely from the school’s own recommendation rail. ' +
       'WHEN A TOOL RETURNS available:false, relay its message and its wouldRequire AS-IS and do ' +
       'NOT supply the missing capability from memory, name a document we do not have, or say what ' +
-      'the answer probably is — "KYRO doesn’t collect that yet, and here is what we’d need" is a ' +
+      'the answer probably is — "The platform doesn’t collect that yet, and here is what we’d need" is a ' +
       'complete and correct answer. NEVER state a probability, percentage, likelihood or "on ' +
       'track" judgement about an accreditation outcome: there is no outcome data in this product ' +
       'to calibrate one against. When a result carries mode "B" or "C" segments, those segments ' +
@@ -6826,7 +6827,7 @@ export class AssistantService {
         // ★ THE DIVERGENCE RULE. When the promoted headcount and the reading on
         // the page disagree, the payload carries NO single school-total headcount
         // — not the tile, not the ladder total, not the vs-plan actual. Penny
-        // cannot pick the wrong one because there is nothing to pick from; she is
+        // cannot pick the wrong one because there is nothing to pick from; it is
         // left with the PAIR and the school's own reconciliation note, which is
         // the correct answer to "how many students do we have" in that state.
         const diverged = view.reconciliation?.diverged === true
@@ -6849,7 +6850,7 @@ export class AssistantService {
           // VERBATIM, both figures, always — this is the field that makes the
           // divergence answerable instead of guessable.
           reconciliation: view.reconciliation,
-          // Server-authored honesty lines. Penny relays them; she does not compose
+          // Server-authored honesty lines. Penny relays them; it does not compose
           // them, and the divergence note is already among them when it applies.
           notes: view.notes,
           // The charts this product deliberately does not have, each with its own
@@ -7120,7 +7121,7 @@ export class AssistantService {
           // window actually used against the one requested, the grade span, the
           // seriesBasis, and `measures` (the server-authored sentence saying what
           // these numbers ARE, so Penny quotes it rather than describing the scale
-          // from her own knowledge of the test).
+          // from its own knowledge of the test).
           context: res.context,
           // FOCUS LINE ONLY. Peer trajectories are the bulk of an org payload and
           // are anonymised anyway; the focus school is what the question is about.
@@ -7138,7 +7139,7 @@ export class AssistantService {
       case 'get_improvement_status': {
         // THE OTHER HALF OF PHASE G. Penny could CREATE initiatives and draft whole
         // plans, and could not list one back — so "how is our improvement plan
-        // going?" had no answer except the plan she was about to write. Read-only,
+        // going?" had no answer except the plan it was about to write. Read-only,
         // no entitlement branch of its own: getImprovement reads the school's OWN
         // initiative rows (getRecommendations is the accreditation-gated half, and
         // it degrades on its own).
@@ -7185,7 +7186,7 @@ export class AssistantService {
           // A COMPACT projection, not the whole composed visit: the full payload
           // carries six acts of rendered prose and would blow the tool-result cap,
           // and the screen is where a visitor reads it. What Penny needs is the
-          // executive summary the composer already wrote (verbatim — she must not
+          // executive summary the composer already wrote (verbatim — it must not
           // re-narrate it) and the counts behind it.
           return {
             available: true,
@@ -7494,7 +7495,7 @@ export class AssistantService {
 
       case 'get_roster_summary': {
         // COUNTS ONLY, VIA THE SERVICE. Penny had the enrollment SNAPSHOT and no
-        // sight of the roster the school actually uploaded — so she could not
+        // sight of the roster the school actually uploaded — so it could not
         // answer "how many students by grade?" or diagnose the state the roster
         // panel was built for (a connected SIS, a headcount, and no students).
         //
@@ -7662,8 +7663,8 @@ export class AssistantService {
         // The projection is COMPACT and FROZEN. Penny gets the engine's own
         // server-composed sentences (title / rationale / consequence), the evidence
         // chain behind every numeral, the ORDINAL likelihood word, and the holes
-        // WITH the module or intake that would close each one. She gets no
-        // probability, no percentage, and nothing she could turn into a prediction
+        // WITH the module or intake that would close each one. It gets no
+        // probability, no percentage, and nothing it could turn into a prediction
         // of an accreditation decision.
         const licensed = await (this.billing?.isEntitledForModule(
           ctx.schoolId,

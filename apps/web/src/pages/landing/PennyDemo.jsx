@@ -44,18 +44,20 @@ export default function PennyDemo() {
         inert
         className="flex h-[480px] flex-col rounded-xl bg-cream"
       >
-        {/* Header — the real avatar, driven by the script. */}
+        {/* Header — the real dove, driven by the script. It stays perched in the
+            header (no flight in a chat header); the script's glance becomes the
+            facing direction, and its blink loop is ignored by the dove. */}
         <div className="flex items-center gap-3 border-b border-rule/60 px-4 py-3">
           <PennyAvatar
             size={44}
             active
-            glance={state.glance}
-            blink={state.blink}
+            state="perched"
+            facing={state.glance < 0 ? 'left' : 'right'}
             celebrate={state.celebrate}
             speaking={state.speaking}
           />
           <p className="flex items-center gap-2 font-serif text-[15px] font-semibold text-navy">
-            Penny · AI Chief of Staff
+            KYRO · AI Chief of Staff
             <span className="h-2 w-2 rounded-full bg-gold shadow-glow motion-safe:animate-pulse" />
           </p>
         </div>
@@ -102,7 +104,7 @@ export default function PennyDemo() {
         {/* Faux composer strip — pure decoration. */}
         <div className="flex items-center gap-2 border-t border-rule/60 px-3 py-2.5">
           <span className="flex-1 select-none rounded-full border border-rule/70 bg-white px-3.5 py-2 text-[13px] text-muted">
-            Ask Penny anything…
+            Ask KYRO anything…
           </span>
           <Mic size={16} className="shrink-0 text-muted" />
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gold-gradient text-navy">

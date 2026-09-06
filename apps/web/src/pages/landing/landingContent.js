@@ -30,11 +30,11 @@ export const HERO = {
   ctaGhost: { label: 'Sign in', to: '/login' },
   trustLine: 'Built for heads of school, business officers, and diocese finance teams.',
   scrollHint: 'Follow the day',
-  // The top-left mascot lockup the coin flies into at the end of the intro.
-  brandName: 'Penny',
+  // The top-left mascot lockup the dove flies into at the end of the intro.
+  brandName: 'KYRO',
   brandTag: 'Your AI Chief of Staff',
   demoSrSummary:
-    'Demo: Penny imports a trial balance, generates statements, files a document, and answers a multi-school question.',
+    'Demo: KYRO imports a trial balance, generates statements, files a document, and answers a multi-school question.',
 }
 
 // The six timestamped acts of the school day. `visual` names the slot rendered
@@ -47,7 +47,7 @@ export const ACTS = [
     bg: 'bg-cream',
     kicker: '7:02 AM — Before your first meeting',
     h2: 'You don’t check eight systems. The briefing checks them for you.',
-    body: 'One prioritized daily briefing across all eight areas of the school — finance, governance, accreditation, facilities, advancement, enrollment, tasks, and knowledge. Penny watches the metrics, surfaces what changed, and tells you what needs a decision today, most urgent first.',
+    body: 'One prioritized daily briefing across all eight areas of the school — finance, governance, accreditation, facilities, advancement, enrollment, tasks, and knowledge. KYRO watches the metrics, surfaces what changed, and tells you what needs a decision today, most urgent first.',
     visual: 'briefing',
     flip: false,
   },
@@ -57,7 +57,7 @@ export const ACTS = [
     bg: 'bg-section',
     kicker: '8:40 AM — Someone hands you a file',
     h2: 'Trial balances, contracts, minutes — drop them and they land where they belong.',
-    body: 'KYRO takes whatever your day produces: a trial balance export, a QuickBooks sync, monthly actuals, five years of history at once. Drop a document on Penny and she reads it, tells you where it should be filed — with her confidence — and waits for your yes.',
+    body: 'Whatever your day produces — a trial balance export, a QuickBooks sync, monthly actuals, five years of history at once — drop it in. KYRO reads it, tells you where it should be filed and how confident it is, and waits for your yes.',
     chips: ['Trial balance import', 'QuickBooks sync', 'Bulk multi-year upload'],
     visual: 'destinations',
     flip: true,
@@ -68,7 +68,7 @@ export const ACTS = [
     bg: 'bg-cream',
     kicker: '10:15 AM — A board member emails a question',
     h2: '“How’s cash versus last year?” is a sentence, not a project.',
-    body: 'Penny answers in plain language with the chart to prove it — typed, or entirely hands-free by voice. Streamed answers, inline charts, and the same confirm-then-apply discipline when an answer turns into an action.',
+    body: 'KYRO answers in plain language with the chart to prove it — typed, or entirely hands-free by voice. Streamed answers, inline charts, and the same confirm-then-apply discipline when an answer turns into an action.',
     visual: 'spark',
     flip: false,
   },
@@ -96,7 +96,7 @@ export const ACTS = [
     bg: 'bg-cream',
     kicker: '5:15 PM — You’re still accountable for all of it',
     h2: 'An AI that proposes, shows its work, and can undo it.',
-    body: 'Every change Penny makes is confirm-then-apply: she shows you exactly what will change, you approve it, and it lands in an action log you can reverse — one-click undo, every time. Proactive alerts watch your thresholds (“tell me if days-cash drops below 30”) and standing digests arrive on your schedule.',
+    body: 'Every change KYRO makes is confirm-then-apply: it shows you exactly what will change, you approve it, and it lands in an action log you can reverse — one-click undo, every time. Proactive alerts watch your thresholds (“tell me if days-cash drops below 30”) and standing digests arrive on your schedule.',
     visual: 'trust',
     flip: false,
   },
@@ -139,14 +139,14 @@ export const DOMAINS = [
   {
     icon: 'Library',
     title: 'Knowledge',
-    body: 'Every document filed, searchable, and cited when Penny answers.',
+    body: 'Every document filed, searchable, and cited when KYRO answers.',
   },
 ]
 
 export const DIOCESE = {
   kicker: 'For networks & multi-school organizations',
   h2: 'Every campus, one view.',
-  body: 'Consolidate finances and operations across every campus in a network, system, or diocese. Ask Penny “which schools are behind on their June close?” — and get a board-ready rollup in return.',
+  body: 'Consolidate finances and operations across every campus in a network, system, or diocese. Ask KYRO “which schools are behind on their June close?” — and get a board-ready rollup in return.',
   cta: { label: 'Get started', to: '/register' },
   // Illustrative rollup: generic campus nodes with a live status each — the
   // center one is flagged (ties to the "behind on their June close?" copy).
@@ -160,7 +160,7 @@ export const DIOCESE = {
 export const LICENSING = {
   kicker: 'Licensed per module',
   h3: 'Start with finance. Add the rest when you’re ready.',
-  body: 'KYRO is licensed per module — every school gets the core platform, the briefing, and Penny; Finance, Governance, Accreditation, Facilities, and Advancement are added as your office grows into them.',
+  body: 'Licensing is per module — every school gets the core platform, the briefing, and KYRO AI; Finance, Governance, Accreditation, Facilities, and Advancement are added as your office grows into them.',
 }
 
 export const FINALE = {

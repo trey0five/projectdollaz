@@ -1,4 +1,4 @@
-// Penny voice replies — server-side ElevenLabs text-to-speech proxy. The key
+// KYRO voice replies — server-side ElevenLabs text-to-speech proxy. The key
 // stays here (never shipped to the browser). When ELEVENLABS_API_KEY is unset the
 // controller answers 503 and the frontend falls back to the browser's
 // SpeechSynthesis API, so spoken replies work out-of-the-box and auto-upgrade if
@@ -22,10 +22,10 @@ import { Redactor } from './redaction.js'
  * Privacy F4 — scrub spoken text before it leaves for the EXTERNAL TTS provider
  * (ElevenLabs). Masks emails and SSN-shaped runs via a fresh Redactor, then
  * strips any residual `[[…]]` placeholder token so a mask is never spoken
- * aloud. HONEST LIMIT: this is not name detection — a name Penny was asked to
+ * aloud. HONEST LIMIT: this is not name detection — a name KYRO was asked to
  * speak still reaches the provider; the mitigations for that are the
  * account-level ElevenLabs no-training opt-out (an ops setting, see
- * .env.example) and the no-penny-pii gate keeping names out of Penny's own
+ * .env.example) and the no-penny-pii gate keeping names out of KYRO's own
  * answers in the first place. The in-account Polly path is deliberately
  * unscrubbed — it leaves no third party to scrub for.
  */
@@ -42,6 +42,19 @@ export function scrubSpokenText(text: string): string {
     .replace(/\[\[[^\]]*\]\]/g, '') // stray single brackets inside a token
     .replace(/[ \t]{2,}/g, ' ')
     .trim()
+}
+
+/**
+ * Pronunciation for SPOKEN text only — never applied to displayed text. Every
+ * voice we route to (Polly, ElevenLabs, the browser fallback) mangles "KYRO"
+ * (letters, or "kee-ro"); the demo-VO convention spells it "Cairo", so the
+ * assistant's own name is spoken the same way everywhere. Carries no digits,
+ * so the narration value guard (value-safety.ts) is unaffected. Applied to
+ * BOTH egress paths — the in-account Polly return and the scrubbed external
+ * (ElevenLabs) payload.
+ */
+export function pronounceForSpeech(text: string): string {
+  return text.replace(/\bKYRO\b/g, 'Cairo')
 }
 
 const TIMEOUT_MS = 30000
@@ -101,7 +114,9 @@ export class AssistantTtsService {
   }
 
   /** Synthesize one text chunk to MP3 bytes. Callers must check isConfigured() first. */
-  async synthesize(text: string, voiceId?: string): Promise<Buffer> {
+  async synthesize(rawText: string, voiceId?: string): Promise<Buffer> {
+    // Speech-only name pronunciation (KYRO → Cairo) on both paths.
+    const text = pronounceForSpeech(rawText)
     if (this.usePolly) return this.pollySynthesize(text, voiceId)
     const apiKey = this.config.get<string>('elevenlabs.apiKey') ?? ''
     if (!apiKey) {

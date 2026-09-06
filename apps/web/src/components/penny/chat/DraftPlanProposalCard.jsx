@@ -86,7 +86,7 @@ export default function DraftPlanProposalCard({ payload }) {
   return (
     <div>
       <p className="flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-[0.1em] text-penny">
-        <Sparkles size={13} aria-hidden /> Penny drafted a strategic plan
+        <Sparkles size={13} aria-hidden /> KYRO drafted a strategic plan
       </p>
 
       <h4 className="mt-1 font-serif text-[19px] font-semibold leading-tight text-navy">

@@ -213,7 +213,7 @@ export default function PennyInputBar({ busy, onSubmit, inputRef, tts }) {
       }`}
     >
       <label htmlFor="penny-chat-input" className="sr-only">
-        Message Penny
+        Message KYRO
       </label>
 
       {/* Staged attachment chips */}

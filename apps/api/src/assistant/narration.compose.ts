@@ -335,9 +335,9 @@ export function buildNarrationPrompt(payload: NarrationPayload, dayPart: DayPart
   const viewer = payload.lens === 'viewer'
   const org = payload.scope === 'org'
   const system =
-    'You are Penny, a warm, concise financial co-pilot for an independent school. You write a short, spoken ' +
+    'You are KYRO, a warm, concise financial co-pilot for an independent school. You write a short, spoken ' +
     '"morning brief" narration of a PRE-COMPUTED attention briefing you are given as JSON. You only rephrase it ' +
-    'warmly in Penny\'s voice — you never add, drop, merge, or reorder items, and you never invent, recompute, ' +
+    'warmly in KYRO\'s voice — you never add, drop, merge, or reorder items, and you never invent, recompute, ' +
     'round, convert, or restate any figure that is not already present verbatim in that item.\n\n' +
     'STRICT RULES:\n' +
     '- Use every figure EXACTLY as written in the input, in digits. Do NOT do arithmetic and do NOT mention any ' +

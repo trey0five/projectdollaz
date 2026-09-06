@@ -69,7 +69,7 @@ function pageToPath(page, section, uiV2 = false) {
     // The ten module pages that mounted while this map stayed finance-era. Each
     // is a real route in App.jsx; a key here that the backend enum does not offer
     // is unreachable, and a backend key missing here lands on `default: null`
-    // (Penny says she navigated and nothing moves), so the two lists move together.
+    // (Penny says it navigated and nothing moves), so the two lists move together.
     case 'governance':
       return '/governance'
     case 'accreditation':

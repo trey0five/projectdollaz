@@ -172,7 +172,7 @@ export default function StudioHero({ compact, name, chat, askBar, onNewChat }) {
           <div className="flex items-center gap-3 px-4 pt-3.5 sm:px-6">
             <PennyAvatar size={30} active speaking={chat.tts.speaking} />
             <div className="min-w-0">
-              <p className="font-serif text-[16px] font-semibold leading-tight text-white">Penny Studio</p>
+              <p className="font-serif text-[16px] font-semibold leading-tight text-white">KYRO Studio</p>
               <p className="truncate text-[11.5px] text-white/55">
                 {chat.busy ? chat.status || 'Working…' : 'Your AI chief of staff'}
               </p>
@@ -195,7 +195,7 @@ export default function StudioHero({ compact, name, chat, askBar, onNewChat }) {
                 <span className="absolute inline-flex h-full w-full rounded-full bg-penny-light opacity-70 motion-safe:animate-ping motion-reduce:hidden" />
                 <span className="relative inline-flex h-[7px] w-[7px] rounded-full bg-penny-light" />
               </span>
-              Penny Studio · your AI chief of staff
+              KYRO Studio · your AI chief of staff
             </p>
             <div className="flex items-center justify-between gap-5 sm:gap-10">
               <div className="min-w-0">
@@ -205,11 +205,12 @@ export default function StudioHero({ compact, name, chat, askBar, onNewChat }) {
                   <em className="italic text-penny-light">What should we knock out today?</em>
                 </h1>
                 <p className="mt-3 max-w-[52ch] text-[15px] leading-relaxed text-white/75 sm:text-[17px]">
-                  Upload anything, ask anything. Penny reads your files, drafts your reports, updates
+                  Upload anything, ask anything. KYRO reads your files, drafts your reports, updates
                   every part of the platform, and tells you what needs a decision — you just approve.
                 </p>
               </div>
-              {/* Large Penny mascot on the right — soft gold glow + gentle float. */}
+              {/* Large KYRO dove on the right — soft gold glow + gentle float. Sized
+                  via --kyro-size (the dove root is a span, not an svg). */}
               <motion.div
                 className="relative shrink-0"
                 animate={reduce ? undefined : { y: [0, -9, 0] }}
@@ -219,7 +220,7 @@ export default function StudioHero({ compact, name, chat, askBar, onNewChat }) {
                   aria-hidden
                   className="pointer-events-none absolute left-1/2 top-1/2 h-[85%] w-[85%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-penny/30 blur-2xl"
                 />
-                <span className="relative block [&>svg]:h-[92px] [&>svg]:w-[92px] [&>svg]:drop-shadow-[0_16px_36px_rgba(184,150,80,0.55)] sm:[&>svg]:h-[172px] sm:[&>svg]:w-[172px]">
+                <span className="relative block drop-shadow-[0_16px_36px_rgba(184,150,80,0.55)] [--kyro-size:92px] sm:[--kyro-size:172px]">
                   <PennyAvatar size={172} active speaking={chat.tts.speaking} />
                 </span>
               </motion.div>
@@ -236,7 +237,7 @@ export default function StudioHero({ compact, name, chat, askBar, onNewChat }) {
           <div className={compact ? 'hidden' : 'flex flex-wrap items-center gap-x-5 gap-y-2 text-[12.5px] text-white/55'}>
             <span className="inline-flex items-center gap-1.5">🎤 Speak or type</span>
             <span className="inline-flex items-center gap-1.5">📎 Drop a trial balance, budget, invoice, policy, or minutes</span>
-            <span className="inline-flex items-center gap-1.5">⚡ Penny files it to the right place automatically</span>
+            <span className="inline-flex items-center gap-1.5">⚡ KYRO files it to the right place automatically</span>
           </div>
           <HandsFree chat={chat} />
         </div>

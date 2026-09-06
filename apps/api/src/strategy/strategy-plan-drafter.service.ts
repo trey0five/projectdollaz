@@ -343,7 +343,7 @@ export class StrategyPlanDrafterService {
             milestones: [
               { label: 'Connect QuickBooks or import a trial balance' },
               { label: 'Add enrollment & staffing figures' },
-              { label: "Review Penny's computed goal targets" },
+              { label: "Review KYRO's computed goal targets" },
             ],
             rationale: null,
             orderIndex: 0,

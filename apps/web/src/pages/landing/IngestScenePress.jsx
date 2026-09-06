@@ -2,13 +2,14 @@
 // IngestScenePress — Act-II scene "THE LEDGER PRESS" (the default). The folder
 // and the machine stand level in the visual column (clear of the ledger
 // spine); the sheet rises, aligns with the glowing intake, and feeds in
-// perfectly horizontally; Penny lands ON TOP of the press to wake it (gears
-// scrub with the scroll); the finished window DEVELOPS out of the machine's
-// face with a gold flash, then takes the spotlight the folder vacated.
-// Occlusion does the hiding: sheet z10 < folder z15 < press z30 < window z35
-// < Penny z40.
+// perfectly horizontally; KYRO (the dove) flies in and lands ON TOP of the press
+// to wake it (gears scrub with the scroll); the finished window DEVELOPS out of
+// the machine's face with a gold flash, then takes the spotlight the folder
+// vacated. Occlusion does the hiding: sheet z10 < folder z15 < press z30 <
+// window z35 < the dove z40.
 // ─────────────────────────────────────────────────────────────────────────────
-import { motion, useTransform } from 'framer-motion'
+import { useState } from 'react'
+import { motion, useMotionValueEvent, useTransform } from 'framer-motion'
 import PennyAvatar from '../../components/penny/PennyAvatar.jsx'
 import { AppWindow, FolderBack, FolderFront, Press, SheetCard, WindowScreen } from './ingestShared.jsx'
 
@@ -25,8 +26,8 @@ export const BEATS = [
   },
   {
     at: 0.4,
-    title: 'Penny runs the press.',
-    line: 'She reads every account, maps it to your chart of accounts, and shows her work.',
+    title: 'KYRO runs the press.',
+    line: 'It reads every account, maps it to your chart of accounts, and shows its work.',
   },
   {
     at: 0.62,
@@ -54,12 +55,23 @@ export function Stage({ p, beat }) {
   const sheetScale = useTransform(p, [0, 0.14, 0.26, 0.34, 0.48], [0.9, 0.9, 1, 1, 0.88])
   const sheetFade = useTransform(p, [0.5, 0.56], [1, 0])
   const intakeGlow = useTransform(p, [0.32, 0.38, 0.46, 0.52], [0, 1, 1, 0])
-  // Penny: swoops in and lands ON TOP of the press (no button — the machine
-  // wakes when she touches down, with a little dip), then hops to the window.
+  // The dove: flies in and lands ON TOP of the press (no button — the machine
+  // wakes when it touches down, with a little dip), then flies to the window.
   const pennyLeft = useTransform(p, [0.3, 0.4, 0.86, 0.95], ['-6%', '72%', '72%', '20%'])
   const pennyTop = useTransform(p, [0.3, 0.4, 0.86, 0.95], ['-14%', '2%', '2%', '56%'])
   const pennyFade = useTransform(p, [0.28, 0.36], [0, 1])
-  // Press internals — everything keys off Penny's touchdown at 0.4.
+  // Flight state derived from the SAME scroll progress the position rides on:
+  // the sprite flaps exactly while the position tweens (0.3→0.4 in, 0.86→0.95
+  // over to the window) and perches in between; it faces the direction of
+  // travel — right toward the press, left when it heads back to the window.
+  // Written from the motion-value listener (not an effect) and only on change.
+  const [flight, setFlight] = useState({ state: 'perched', facing: 'right' })
+  useMotionValueEvent(p, 'change', (v) => {
+    const state = (v > 0.3 && v < 0.4) || (v > 0.86 && v < 0.95) ? 'flying' : 'perched'
+    const facing = v < 0.86 ? 'right' : 'left'
+    setFlight((cur) => (cur.state === state && cur.facing === facing ? cur : { state, facing }))
+  })
+  // Press internals — everything keys off the dove's touchdown at 0.4.
   const pressDip = useTransform(p, [0.4, 0.43, 0.46], [1, 0.98, 1])
   const gearRotate = useTransform(p, [0.42, 0.74], [0, 420])
   const gearRotateCcw = useTransform(p, [0.42, 0.74], [0, -420])
@@ -135,12 +147,12 @@ export function Stage({ p, beat }) {
         </div>
       </motion.div>
 
-      {/* Penny the operator (z 40 — always on top) */}
+      {/* KYRO the operator (z 40 — always on top) */}
       <motion.div
         style={{ left: pennyLeft, top: pennyTop, opacity: pennyFade }}
         className="absolute z-40 drop-shadow-[0_10px_18px_rgba(184,150,80,0.35)]"
       >
-        <PennyAvatar size={60} glance={beat >= 4 ? 0 : 1} celebrate={beat === 4} active />
+        <PennyAvatar size={60} state={flight.state} facing={flight.facing} celebrate={beat === 4} active />
       </motion.div>
     </>
   )

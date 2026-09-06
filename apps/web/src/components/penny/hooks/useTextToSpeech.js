@@ -1,5 +1,5 @@
 /**
- * useTextToSpeech — speak Penny AI responses aloud.
+ * useTextToSpeech — speak KYRO AI responses aloud.
  *
  * PRIMARY path: the browser fetches MP3 bytes from our
  * `POST /api/schools/:id/assistant/tts` proxy (keeps the ElevenLabs key on
@@ -44,6 +44,14 @@ const SILENT_WAV =
 // A fresh page load resets to 'unknown', so adding a key later auto-upgrades.
 let proxyAvailable = 'unknown'
 
+// Pronunciation for the SPOKEN text only (never the displayed text): browser
+// voices read "KYRO" as letters or "kee-ro"; the demo-VO convention spells it
+// "Cairo". Applied right before the SpeechSynthesisUtterance is built. The
+// ElevenLabs/Polly path applies the same substitution server-side.
+export function pronounceForSpeech(text) {
+  return String(text ?? '').replace(/\bKYRO\b/g, 'Cairo')
+}
+
 function hasBrowserSpeech() {
   return typeof window !== 'undefined' && 'speechSynthesis' in window &&
     typeof window.SpeechSynthesisUtterance !== 'undefined'
@@ -81,9 +89,9 @@ export function useTextToSpeech(schoolId, owner = 'chat') {
   const enabledRef = useRef(enabled)
   // Keep the latest schoolId for the proxy URL without re-creating callbacks.
   const schoolIdRef = useRef(schoolId)
-  // This instance's voice "owner" ('chat' for Penny chat, 'brief' for the morning
+  // This instance's voice "owner" ('chat' for KYRO chat, 'brief' for the morning
   // narration). Used for mutual-exclusion: whoever starts playing claims the voice
-  // and every OTHER owner stops itself — no double-Penny audio.
+  // and every OTHER owner stops itself — no doubled KYRO audio.
   const ownerRef = useRef(owner)
   useEffect(() => {
     enabledRef.current = enabled
@@ -241,7 +249,7 @@ export function useTextToSpeech(schoolId, owner = 'chat') {
         resolve()
       }
       try {
-        const u = new window.SpeechSynthesisUtterance(text)
+        const u = new window.SpeechSynthesisUtterance(pronounceForSpeech(text))
         u.lang = (typeof navigator !== 'undefined' && navigator.language) || 'en-US'
         u.onend = finish
         u.onerror = finish

@@ -156,7 +156,7 @@ export default function BriefingBand({
               <button
                 type="button"
                 onClick={() => onOpenBrief?.('narrate')}
-                aria-label="Play — Penny reads the briefing aloud"
+                aria-label="Play — KYRO reads the briefing aloud"
                 className="inline-flex items-center gap-1.5 rounded-full border border-penny/40 bg-penny/10 px-3.5 py-2 text-[13px] font-semibold text-penny-light transition-colors hover:border-penny/70 hover:bg-penny/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60"
               >
                 <Sparkles size={13} /> Play

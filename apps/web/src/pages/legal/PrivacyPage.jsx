@@ -91,7 +91,7 @@ export default function PrivacyPage() {
 
       <H2>5. Artificial intelligence</H2>
       <P>
-        In production, the Penny assistant and AI insights run by default on models hosted{' '}
+        In production, the KYRO assistant and AI insights run by default on models hosted{' '}
         <strong>within KYRO&rsquo;s own cloud account</strong> (Amazon Bedrock): prompts are processed in-account and
         are not used for model training. The Service also supports external model routing (OpenRouter to Anthropic
         Claude, or the Anthropic API); when those paths are used, every request carries{' '}
@@ -133,7 +133,7 @@ export default function PrivacyPage() {
           rest, inside KYRO&rsquo;s own account.
         </li>
         <li>
-          <strong>Anthropic</strong> (United States) &mdash; the language model behind Penny and written insights when
+          <strong>Anthropic</strong> (United States) &mdash; the language model behind the KYRO assistant and written insights when
           the external path is used. Receives redacted, tokenized prompts and aggregate figures only — no documents,
           no student register rows. Anthropic does not train on data submitted through its API.
         </li>

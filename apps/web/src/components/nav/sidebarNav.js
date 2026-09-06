@@ -4,8 +4,8 @@
 // One row per GROUP. A group renders iff `module === null` (always: Core) OR
 // hasModule(group.module) === true (the licensed-group rule). Items map 1:1 to
 // the former flat TopBar NAV so behavior is byte-preserved — including each
-// item's `navId`, which is the STABLE DOM id Penny's target registry anchors her
-// glide to (targetRegistry.js). DO NOT rename/drop a navId.
+// item's `navId`, which is the STABLE DOM id the KYRO assistant's target registry
+// anchors its flight to (targetRegistry.js). DO NOT rename/drop a navId.
 //
 // `match(path)` ports TopBar's exact active-route predicates (Home is exact;
 // Statements also lights on /history for the /history→/statements redirect;
@@ -54,10 +54,10 @@ export const NAV_GROUPS = [
     items: [
       // `hero` marks the prioritised briefing — the AI-chief-of-staff surface. AppShell
       // pulls it OUT of the list and renders it as the elevated top entry. navId
-      // stays nav-home (Penny's target registry anchors to it); the route is
+      // stays nav-home (the assistant's target registry anchors to it); the route is
       // '/app' ('/' is now the public marketing landing).
       { to: '/app', navId: 'nav-home', label: 'Daily Briefing', Icon: Sparkles, hero: true, match: (p) => p === '/app' },
-      { to: '/penny', navId: 'nav-penny', label: 'Ask Penny', Icon: Bot, match: (p) => p.startsWith('/penny') },
+      { to: '/penny', navId: 'nav-penny', label: 'Ask KYRO', Icon: Bot, match: (p) => p.startsWith('/penny') },
       { to: '/data', navId: 'nav-data', label: 'Data', Icon: Database, match: (p) => p.startsWith('/data') },
       { to: '/tasks', navId: 'nav-tasks', label: 'Tasks', Icon: ListChecks, match: (p) => p.startsWith('/tasks') },
       { to: '/knowledge', navId: 'nav-knowledge', label: 'Knowledge', Icon: Library, match: (p) => p.startsWith('/knowledge') },

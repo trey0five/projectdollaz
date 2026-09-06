@@ -258,7 +258,7 @@ export default function PennyStudio() {
       onDrop={onRootDrop}
     >
       {/* Ambient drifting-particle field behind a conversation so the light page
-          doesn't read as flat while Penny works. Landing has its own hero backdrop. */}
+          doesn't read as flat while KYRO works. Landing has its own hero backdrop. */}
       {inConversation && <StudioParticles />}
       {inConversation ? (
         /* Conversation: a FIXED-HEIGHT flex column (viewport minus the app-shell's
@@ -317,7 +317,7 @@ export default function PennyStudio() {
                 <UploadCloud size={22} aria-hidden />
               </span>
               <p className="max-w-[38ch] text-[14px] font-semibold text-navy">
-                Drop a trial balance, budget, invoice, policy, or minutes — Penny files it automatically.
+                Drop a trial balance, budget, invoice, policy, or minutes — KYRO files it automatically.
               </p>
             </div>
           </motion.div>

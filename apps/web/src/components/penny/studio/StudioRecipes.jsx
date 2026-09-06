@@ -1,5 +1,5 @@
 // StudioRecipes — the "Guided workflows" landing section. Curated multi-step
-// routines Penny runs end to end via her existing tools. Reuses the light
+// routines Penny runs end to end via its existing tools. Reuses the light
 // StudioCapabilityTiles card idiom (card-soft, gold-gradient icon chip, hover lift
 // + gold sheen, focus-visible gold ring) and adds a subtle numbered step list.
 // Clicking a card (or its CTA) calls onRun(recipe.prompt), which enters a
@@ -13,7 +13,7 @@ export default function StudioRecipes({ onRun }) {
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <h2 className="font-serif text-[22px] font-semibold text-navy">Guided workflows</h2>
         <span className="text-[13.5px] text-muted">
-          Multi-step routines Penny runs for you, start to finish.
+          Multi-step routines KYRO runs for you, start to finish.
         </span>
       </div>
 

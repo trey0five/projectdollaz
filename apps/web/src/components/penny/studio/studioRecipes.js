@@ -1,6 +1,6 @@
 // studioRecipes — curated multi-step "guided workflows" for the Penny Studio
 // landing. Each recipe is one tap that sends a rich, STRUCTURED directive through
-// the normal chat.send path; Penny performs the steps in order with her existing
+// the normal chat.send path; Penny performs the steps in order with its existing
 // tools, pausing to show results for approval (confirm-then-apply keeps writes
 // safe). `steps` are the short human labels shown on the card; `prompt` is what
 // Penny actually receives. Shape mirrors studioTiles.js.
