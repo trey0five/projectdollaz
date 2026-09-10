@@ -865,7 +865,7 @@ export const TOOL_SCHEMAS = [
     function: {
       name: 'navigate_to_page',
       description:
-        'Move the user to a whole PAGE, Add-data flow, or Settings section (no pointing). Read-only — changes no data. Use this ONLY when the destination is a page in general, NOT a specific control. If the user asks WHERE a specific metric/button/field is, or to SHOW / POINT OUT / GO TO a specific item that has a target key, use start_walkthrough instead (it both navigates AND flies KYRO, the on-screen dove, to the exact element). Do not use navigate_to_page to "show" a specific metric.',
+        'Move the user to a whole PAGE, Add-data flow, or Settings section (no pointing). Read-only — changes no data. Use this ONLY when the destination is a page in general, NOT a specific control. If the user asks WHERE a specific metric/button/field is, or to SHOW / POINT OUT / GO TO a specific item that has a target key, use start_walkthrough instead (it both navigates AND flies KYRO, the on-screen owl, to the exact element). Do not use navigate_to_page to "show" a specific metric.',
       parameters: {
         type: 'object',
         properties: {
@@ -946,7 +946,7 @@ export const TOOL_SCHEMAS = [
     function: {
       name: 'start_walkthrough',
       description:
-        'Make your on-screen dove fly to a specific on-screen control and point it out. THIS IS THE TOOL for "where is X?", "show me X", "point out X", "take me to the X metric/button" — give it a SINGLE step targeting that element (it auto-navigates to the right page/modal first, then flies). Also use it for multi-step "walk me through …" processes (an ORDERED list of steps). Each step: a target key (allowed keys only — incl. metric.* for analytics KPIs like metric.net_tuition_per_student), a short message, and optionally a page / Add-data flow to open first. Prefer this over navigate_to_page whenever a matching target key exists.',
+        'Make your on-screen owl fly to a specific on-screen control and point it out. THIS IS THE TOOL for "where is X?", "show me X", "point out X", "take me to the X metric/button" — give it a SINGLE step targeting that element (it auto-navigates to the right page/modal first, then flies). Also use it for multi-step "walk me through …" processes (an ORDERED list of steps). Each step: a target key (allowed keys only — incl. metric.* for analytics KPIs like metric.net_tuition_per_student), a short message, and optionally a page / Add-data flow to open first. Prefer this over navigate_to_page whenever a matching target key exists.',
       parameters: {
         type: 'object',
         properties: {

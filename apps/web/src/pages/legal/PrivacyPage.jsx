@@ -16,6 +16,24 @@ export default function PrivacyPage() {
         disclosure under state student-privacy laws such as the Illinois Student Online Personal Protection Act.
       </P>
 
+      {/* At a glance — the approved-language summary a reviewer can quote.
+          Every bullet is a claim the sections below substantiate; "compliant"
+          is deliberately never one of the words (no-compliant-claim.spec.js). */}
+      <aside
+        data-testid="privacy-at-a-glance"
+        aria-label="Privacy at a glance"
+        className="my-6 rounded-2xl border border-gold/40 bg-white px-5 py-4 shadow-[0_10px_30px_-18px_rgba(16,28,61,0.35)]"
+      >
+        <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#7a5e00]">At a glance</p>
+        <ul className="mt-2 grid gap-1.5 text-[14.5px] leading-relaxed text-ink/90 sm:grid-cols-2">
+          <li><strong>Built to FERPA standards</strong> — FERPA-aligned by contract (§3).</li>
+          <li><strong>COPPA does not apply</strong> — KYRO has no student-facing surfaces; students never log in (§3).</li>
+          <li><strong>Encrypted in transit and at rest</strong> (§4).</li>
+          <li><strong>Hosted on Amazon Web Services in the United States</strong> (§4, §7).</li>
+          <li className="sm:col-span-2"><strong>AI: no training, zero data retention</strong> — providers run under no-training, zero-data-retention terms; conversations are not stored (§5).</li>
+        </ul>
+      </aside>
+
       <H2>1. Information we process</H2>
       <UL>
         <li><strong>Account information</strong> — names, work email, and role of the users a Customer invites.</li>
@@ -83,6 +101,7 @@ export default function PrivacyPage() {
       <UL>
         <li><strong>Encryption in transit</strong> — TLS end-to-end, from the browser through every internal hop to the database.</li>
         <li><strong>Encryption at rest</strong> — databases, document storage, and secrets are encrypted with managed keys.</li>
+        <li><strong>Hosted on Amazon Web Services in the United States</strong> — hosting, database, document storage and encryption keys all live inside KYRO&rsquo;s own AWS account (sub-processors in §7).</li>
         <li><strong>Tenant isolation</strong> — every request is scoped to the Customer; cross-tenant access is denied.</li>
         <li><strong>Least-privilege access &amp; audit logging</strong> — administrative and application access is separated and logged; roster audit entries record counts, never names.</li>
         <li><strong>Private network &amp; firewall</strong> — the application runs in a private network behind a web application firewall; the database is not internet-accessible.</li>

@@ -19,7 +19,7 @@ import { TrendingDown, TrendingUp } from 'lucide-react'
 import { formatMetricValue, deltaTone } from '../../../lib/metricMeta.js'
 import { schoolColor } from './chartPalette.js'
 import LineChart from '../charts/LineChart.jsx'
-import BarList from '../charts/BarList.jsx'
+import ColumnChart from '../charts/ColumnChart.jsx'
 import FancyDonut from '../charts/FancyDonut.jsx'
 import Legend from '../charts/Legend.jsx'
 import ChartCard from './ChartCard.jsx'
@@ -263,8 +263,8 @@ function OrgOverview({ org }) {
   const om = org.orgMetrics
   const orgByKey = {}
   for (const mm of om?.metrics ?? []) orgByKey[mm.key] = mm
-  // One row per reporting school — magnitude form. Color follows the ENTITY
-  // (roster seriesIndex), never rank; BarList sorts desc without repainting.
+  // One column per reporting school — magnitude form, largest first. Color
+  // follows the ENTITY (roster seriesIndex), never rank; sorting never repaints.
   const contribRows = org.schools
     .map((s, i) => {
       const cell = s.metrics?.revenue_mix
@@ -280,10 +280,12 @@ function OrgOverview({ org }) {
     })
     .filter(Boolean)
   const contribTotal = contribRows.reduce((a, r) => a + r.value, 0)
-  const rows = contribRows.map((r) => ({
-    ...r,
-    share: contribTotal > 0 ? `${Math.round((100 * r.value) / contribTotal)}%` : null,
-  }))
+  const rows = [...contribRows]
+    .sort((a, b) => b.value - a.value)
+    .map((r) => ({
+      ...r,
+      meta: contribTotal > 0 ? [{ label: 'Share of system', value: `${Math.round((100 * r.value) / contribTotal)}%` }] : [],
+    }))
   return (
     <div className="space-y-6">
       <HeroBand eyebrow="System vitals" asOf={org.asOf}>
@@ -306,7 +308,7 @@ function OrgOverview({ org }) {
       </HeroBand>
       <ChartCard title="Who drives the system's revenue" sub="Every reporting school, largest first" asOf={org.asOf} delay={0.06}>
         {rows.length ? (
-          <BarList rows={rows} formatter={money} />
+          <ColumnChart rows={rows} formatter={money} ariaLabel="Revenue by school, largest first" showValues="selective" />
         ) : (
           <p className="py-8 text-center text-[13px] italic text-muted">No revenue reported yet.</p>
         )}

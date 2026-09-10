@@ -81,6 +81,21 @@ export function ensureChartStyles() {
   .fr-replay:hover{background:#DBEAFE}
   .fr-legend-btn{background:none;border:0;cursor:pointer;font:inherit;padding:2px 6px;margin:-2px -6px;
     border-radius:8px;transition:background .15s}
-  .fr-legend-btn:hover{background:#F2F5FC}`
+  .fr-legend-btn:hover{background:#F2F5FC}
+  /* column chart (the ONE vertical bar primitive) */
+  @keyframes fr-growy{from{transform:scaleY(.001)}to{transform:scaleY(1)}}
+  .fr-col{position:relative;min-width:0}
+  .fr-col-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px}
+  .fr-col-legend{display:flex;flex-wrap:wrap;align-items:center;gap:4px 14px;font-size:12px;font-weight:600}
+  .fr-col-legend-item{display:inline-flex;align-items:center;gap:7px}
+  .fr-col-legend-item i{display:inline-block;width:14px;height:9px;border-radius:3px 3px 0 0;flex-shrink:0;box-sizing:border-box}
+  .fr-col-unit{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:8.5px;font-weight:700;
+    letter-spacing:.16em;text-transform:uppercase;white-space:nowrap;margin-left:auto}
+  .fr-col-scroll{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;max-width:100%}
+  .fr-col-grow{transform-box:fill-box;transform-origin:center bottom;animation:fr-growy .7s cubic-bezier(.22,1,.36,1) backwards}
+  .fr-col-grow-down{transform-box:fill-box;transform-origin:center top;animation:fr-growy .7s cubic-bezier(.22,1,.36,1) backwards}
+  .fr-col-hit{cursor:default;outline:none}
+  .fr-col-hit:focus{outline:none}
+  .fr-col-note{margin-top:10px;font-size:11px;line-height:1.4}`
   document.head.appendChild(s)
 }

@@ -20,6 +20,8 @@
 //    All of it collapses to a static frame under prefers-reduced-motion.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { stripFiller } from '../analytics/charts/labelText.js'
+
 export const HUE = '#0D9488'
 export const EASE = [0.2, 0.8, 0.2, 1]
 
@@ -159,10 +161,6 @@ export function spreadLabels(points, minGap = 13) {
 
 /** Trim a school name to something that fits beside a dot. */
 export function shortName(name, max = 16) {
-  const n = String(name ?? '')
-    .replace(/\b(High School|School|Academy|Catholic|Senior|Sr)\b/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-  const s = n || String(name ?? '')
+  const s = stripFiller(name)
   return s.length > max ? `${s.slice(0, max - 1)}…` : s
 }

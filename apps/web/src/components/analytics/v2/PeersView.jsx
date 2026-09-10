@@ -22,7 +22,7 @@ import { healthStatus } from '@finrep/analytics'
 import { schoolColor } from './chartPalette.js'
 import { lightStatus } from './statusStyle.js'
 import { formatMetric } from './helpers.js'
-import BarList from '../charts/BarList.jsx'
+import ColumnChart from '../charts/ColumnChart.jsx'
 import HealthRail from '../charts/HealthRail.jsx'
 import { peerCaption } from './peerCaption.js'
 import { TargetBandBar } from '../MetricDrawer.jsx'
@@ -291,8 +291,12 @@ function PeerCharts({ data }) {
           label: p.name + (p.isFocus ? ' (you)' : ''),
           value: p.value,
           formatted: p.formatted,
-          color: p.isFocus ? 'rgb(var(--c-coral))' : schoolColor(i + 1),
-        })),
+          // The focus school is owned by `emphasis` (gradient + glow); giving it a
+          // second hue as well painted a two-colour column that read as diverging.
+          ...(p.isFocus ? { emphasis: true } : { color: schoolColor(i + 1) }),
+        }))
+        // Largest first — the rank is the reading; colour stays with the school.
+        .sort((a, b) => b.value - a.value),
     [data],
   )
   const prof = data.focus.profile || {}
@@ -320,7 +324,7 @@ function PeerCharts({ data }) {
           <div className="av2-card p-4">
             <p className="mb-2 text-[13px] font-semibold text-navy">Enrollment across the peer group</p>
             {enrollRows.length ? (
-              <BarList rows={enrollRows} formatter={intFmt} />
+              <ColumnChart rows={enrollRows} formatter={intFmt} ariaLabel="Enrollment across the peer group" />
             ) : (
               <p className="py-8 text-center text-[13px] italic text-muted">No enrollment reported yet.</p>
             )}

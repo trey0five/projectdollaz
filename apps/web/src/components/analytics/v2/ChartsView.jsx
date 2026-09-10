@@ -16,7 +16,7 @@ import { schoolColor, CHROME } from './chartPalette.js'
 import LineChart from '../charts/LineChart.jsx'
 import TrendSpark from './TrendSpark.jsx'
 import FancyDonut from '../charts/FancyDonut.jsx'
-import GroupedBars from '../charts/GroupedBars.jsx'
+import ColumnChart from '../charts/ColumnChart.jsx'
 import DimensionRows from '../charts/DimensionRows.jsx'
 import BarRace from '../charts/BarRace.jsx'
 import ArcGauge from '../charts/ArcGauge.jsx'
@@ -288,20 +288,17 @@ function SchoolCharts({ school, onCrossToTable }) {
                   </p>
                   {budgetNet != null && forecastNet != null ? (
                     budgetNet >= 0 && forecastNet >= 0 ? (
-                      <>
-                        <Legend
-                          items={[
-                            { id: 'budget', label: 'Budget net', color: schoolColor(1) },
-                            { id: 'forecast', label: 'Forecast net', color: schoolColor(0) },
-                          ]}
-                        />
-                        <GroupedBars
-                          rows={[{ label: 'Net result', dot: schoolColor(0), vals: [budgetNet, forecastNet] }]}
-                          colors={[schoolColor(1), schoolColor(0)]}
-                          names={['Budget net', 'Forecast net']}
-                          formatter={money}
-                        />
-                      </>
+                      <ColumnChart
+                        rows={[{ id: 'net', label: 'Net result', vals: [budgetNet, forecastNet] }]}
+                        series={[
+                          { id: 'budget', label: 'Budget net', color: schoolColor(1) },
+                          { id: 'forecast', label: 'Forecast net', color: schoolColor(0) },
+                        ]}
+                        formatter={money}
+                        showValues="all"
+                        height={200}
+                        ariaLabel="Budget net beside forecast net"
+                      />
                     ) : (
                       /* A deficit net would draw as a ~1% "positive" sliver on the
                          positive-only bars (and TWO deficits as identical slivers,
@@ -384,8 +381,8 @@ function CompareCharts({ compare }) {
   const cost = byMetric(schools, 'cost_per_pupil')
   const net = byMetric(schools, 'net_tuition_per_student')
   const rows = schools.map((s, i) => ({
+    id: s.schoolId ?? i,
     label: s.schoolName,
-    dot: schoolColor(s.seriesIndex ?? i),
     vals: [cost[i]?.cell?.value ?? 0, net[i]?.cell?.value ?? 0],
   }))
   const dims = fingerprintDims(schools.slice(0, 5))
@@ -401,16 +398,18 @@ function CompareCharts({ compare }) {
   )
   return (
     <QuestionGroup title="How do we compare?">
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start">
         <ChartCard id="chart-ppc" metricKey="cost_per_pupil" title="Per-pupil economics" sub="Cost per pupil vs. net tuition per student" asOf={compare.asOf}>
-          <Legend
-            items={[
-              { id: 'cost', label: 'Cost per pupil', color: schoolColor(0) },
-              { id: 'net', label: 'Net tuition/student', color: schoolColor(1) },
-            ]}
-          />
           {rows.length ? (
-            <GroupedBars rows={rows} colors={[schoolColor(0), schoolColor(1)]} names={['Cost per pupil', 'Net tuition/student']} formatter={money} />
+            <ColumnChart
+              rows={rows}
+              series={[
+                { id: 'cost', label: 'Cost per pupil', color: schoolColor(0) },
+                { id: 'net', label: 'Net tuition/student', color: schoolColor(1) },
+              ]}
+              formatter={money}
+              ariaLabel="Cost per pupil beside net tuition per student, by school"
+            />
           ) : (
             <p className="py-8 text-center text-[13px] italic text-muted">Select schools to compare.</p>
           )}

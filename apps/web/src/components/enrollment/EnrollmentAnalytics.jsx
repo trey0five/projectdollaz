@@ -414,10 +414,10 @@ export default function EnrollmentAnalytics({ schoolId, periodId, rosterMode = f
             <WhatThisMeasures
               scope={sourceScope}
               reduce={reduce}
-              note="Colour sits on the GAP, not on the bar: a grade under plan is not a red grade, it is a grade with a red gap."
+              note="Colour sits on the GAP, not on the column: a grade under plan is not a red grade, it is a grade with a red gap."
             >
               Two marks per grade, and they are deliberately different kinds of mark. The{' '}
-              <strong className="font-semibold text-navy">solid bar is the actual</strong> — children somebody counted{' '}
+              <strong className="font-semibold text-navy">solid column is the actual</strong> — children somebody counted{' '}
               {live ? 'on your register' : 'in the reading you filed'}. The{' '}
               <strong className="font-semibold text-navy">dashed outline is the plan</strong> — a figure typed into a
               budget that nobody ever counted. The whole-school number tells you that you missed; this tells you where.
@@ -425,7 +425,7 @@ export default function EnrollmentAnalytics({ schoolId, periodId, rosterMode = f
           }
         >
           <ChartCaption scope={sourceScope}>
-            Solid bar = counted actual · dashed outline = the plan nobody counted.
+            Solid column = counted actual · dashed outline = the plan nobody counted.
           </ChartCaption>
           <EnrollmentVsPlanChart
             vsPlan={vsPlan}

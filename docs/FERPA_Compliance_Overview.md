@@ -9,7 +9,7 @@
 
 This document describes the technical and organizational safeguards KYRO implements for student data, and states honestly which privacy laws bind KYRO's service to its customers and how KYRO meets them. It is intended for school administrators, business officers, boards, diocesan offices, and IT/security reviewers evaluating KYRO.
 
-> KYRO is **FERPA-aligned by design and FERPA-equivalent by contract** (Section 2). There is no government "FERPA certification" and no vendor can truthfully claim to be "FERPA-certified" or "FERPA-compliant" as a legal status; this document describes KYRO's actual controls. It is a good-faith description, not a legal opinion.
+> **Built to FERPA standards:** KYRO is **FERPA-aligned by design and FERPA-equivalent by contract** (Section 2). There is no government "FERPA certification" and no vendor can truthfully claim to be "FERPA-certified" or "FERPA-compliant" as a legal status; this document describes KYRO's actual controls. It is a good-faith description, not a legal opinion.
 
 ## 2. FERPA — the honest framing
 

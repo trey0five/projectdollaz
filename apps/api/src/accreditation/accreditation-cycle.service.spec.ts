@@ -28,6 +28,13 @@ const MSA = {
   active: true,
 }
 
+const FCC = {
+  ...MSA,
+  id: 'fw-fcc',
+  code: 'fccap',
+  name: 'Florida Catholic Conference Accreditation Program (NSBECS rubrics)',
+}
+
 function makeService(opts: {
   profile?: Record<string, unknown> | null
   standards?: { frameworkId: string | null }[]
@@ -40,10 +47,10 @@ function makeService(opts: {
     },
     accreditationFramework: {
       findFirst: vi.fn(async ({ where }: { where: { id?: string } }) =>
-        [FW, MSA].find((f) => f.id === where.id) ?? null,
+        [FW, MSA, FCC].find((f) => f.id === where.id) ?? null,
       ),
       findMany: vi.fn(async ({ where }: { where: { id: { in: string[] } } }) =>
-        [FW, MSA].filter((f) => where.id.in.includes(f.id)),
+        [FW, MSA, FCC].filter((f) => where.id.in.includes(f.id)),
       ),
     },
     accreditationFrameworkProfile: {
@@ -290,5 +297,32 @@ describe('PUT cycle — validation + write', () => {
     const res = await svc.setCycle('school-A', { frameworkId: FW.id, lastReviewDate: null }, 'user-1')
     expect(profiles[0].lastReviewDate).toBeNull()
     expect(res.configured).toBe(false)
+  })
+})
+
+// ── The term defaults to the accreditor's PUBLISHED cycle ────────────────────
+describe('termYears defaults to the framework’s published cycle, never a hard-coded 6', () => {
+  it('the payload exposes defaultTermYears per framework (Cognia 2025 → 6, FCC → 7)', async () => {
+    const { svc } = makeService({ profile: null, standards: [{ frameworkId: FW.id }, { frameworkId: FCC.id }] })
+    const res = await svc.getCycle('school-1', { frameworkId: FCC.id })
+    expect(res.configured).toBe(false)
+    expect(res.framework).toMatchObject({ code: 'fccap', defaultTermYears: 7 })
+    const list = (res as { frameworks: { code: string; defaultTermYears: number }[] }).frameworks
+    expect(list.find((f) => f.code === 'cognia_2025')?.defaultTermYears).toBe(6)
+    expect(list.find((f) => f.code === 'fccap')?.defaultTermYears).toBe(7)
+  })
+
+  it('writing an FCC anchor without termYears lands a 7-year cycle', async () => {
+    const { svc, prisma } = makeService({ profile: null, standards: [{ frameworkId: FCC.id }] })
+    await svc.setCycle('school-1', { frameworkId: FCC.id, lastReviewDate: '2022-04-12' } as never, 'user-1')
+    const create = (prisma.accreditationFrameworkProfile.upsert.mock.calls[0][0] as { create: { termYears: number } }).create
+    expect(create.termYears).toBe(7)
+  })
+
+  it('…and a Cognia anchor without termYears still lands 6', async () => {
+    const { svc, prisma } = makeService({ profile: null })
+    await svc.setCycle('school-1', { frameworkId: FW.id, lastReviewDate: '2022-04-12' } as never, 'user-1')
+    const create = (prisma.accreditationFrameworkProfile.upsert.mock.calls[0][0] as { create: { termYears: number } }).create
+    expect(create.termYears).toBe(6)
   })
 })

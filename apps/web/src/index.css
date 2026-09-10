@@ -660,7 +660,7 @@
   50% { opacity: 0.9; transform: scale(1.06); }
 }
 
-/* ── KYRO the dove (KyroDove.jsx) — decorative sprite-state keyframes ─────── */
+/* ── KYRO the owl (KyroDove.jsx) — decorative sprite-state keyframes ─────── */
 /* Every consumer gates on motion-safe: and the reduced-motion block below kills
    all `kyro-*` loops as the belt-and-braces. Transform-origin is set inline to
    the bird's FEET so breathe/flutter/settle move it about where it stands. */

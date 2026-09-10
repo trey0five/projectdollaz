@@ -44,9 +44,9 @@ export default function PennyDemo() {
         inert
         className="flex h-[480px] flex-col rounded-xl bg-cream"
       >
-        {/* Header — the real dove, driven by the script. It stays perched in the
+        {/* Header — the real owl, driven by the script. It stays perched in the
             header (no flight in a chat header); the script's glance becomes the
-            facing direction, and its blink loop is ignored by the dove. */}
+            facing direction, and its blink loop is ignored by the owl. */}
         <div className="flex items-center gap-3 border-b border-rule/60 px-4 py-3">
           <PennyAvatar
             size={44}

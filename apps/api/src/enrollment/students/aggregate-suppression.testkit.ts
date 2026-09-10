@@ -196,3 +196,30 @@ export function suppressedCellsCarryNoValue(pub: PublishedRoster): string[] {
   walk('', pub)
   return bad
 }
+
+/**
+ * The dimension rule on its own, for aggregate payloads that are not the
+ * roster shape (the grade × year heatmap, and anything else that publishes a
+ * set of cells beside their group total). Hidden = any cell that is not a plain
+ * number (`{suppressed:true}` or `{value:null, suppressed:true}`).
+ *   · a published (numeric) total with EXACTLY ONE hidden cell → that cell is
+ *     total − visible cells;
+ *   · a hidden cell is never LONE even without a total, when `requirePair` —
+ *     the pair-sum alone may be derivable elsewhere, the individual cell not.
+ */
+export function loneHiddenCellViolations(
+  name: string,
+  cells: Record<string, unknown>,
+  total: number | null | undefined,
+  opts: { requirePair?: boolean } = {},
+): string[] {
+  const out: string[] = []
+  const hidden = Object.keys(cells).filter((k) => typeof cells[k] !== 'number')
+  if (hidden.length === 1 && typeof total === 'number') {
+    out.push(`${name}.${hidden[0]} is the ONLY hidden cell beside a published total ${total} — it equals total − visible cells`)
+  }
+  if (hidden.length === 1 && opts.requirePair) {
+    out.push(`${name}.${hidden[0]} is a LONE hidden cell — it needs a companion`)
+  }
+  return out
+}

@@ -67,6 +67,28 @@ describe('WS2 registry lockstep — cognia_2025 lands everywhere or nowhere', ()
     expect(FRAMEWORK_REQUIREMENT_SEEDS.cognia_2025).toBe(FRAMEWORK_REQUIREMENT_SEEDS.cognia_2022)
   })
 
+  // ── fccap rides the SAME mechanism: an accreditor whose standards are the
+  //    NSBECS rows, so its citations and requirements are nsbecs's by reference.
+  it('fccap lands in every registry — seed, twin union, register set, requirements', () => {
+    expect(SEED_CODES).toContain('fccap')
+    expect(TWIN_FRAMEWORK_CODES).toContain('fccap')
+    expect(KNOWN_FRAMEWORK_CODES.has('fccap')).toBe(true)
+    expect(Object.keys(FRAMEWORK_REQUIREMENT_SEEDS)).toContain('fccap')
+  })
+
+  it("every rule's fccap citation array IS its nsbecs array (reference-equal)", () => {
+    for (const rule of TWIN_RULE_DEFS) {
+      expect(rule.standardCodes.fccap, rule.id).toBe(rule.standardCodes.nsbecs)
+    }
+  })
+
+  it('fccap requirements and catalog standards ARE nsbecs’s, by reference', () => {
+    expect(FRAMEWORK_REQUIREMENT_SEEDS.fccap).toBe(FRAMEWORK_REQUIREMENT_SEEDS.nsbecs)
+    const fcc = FRAMEWORK_SEEDS.find((f) => f.code === 'fccap')!
+    const nsbecs = FRAMEWORK_SEEDS.find((f) => f.code === 'nsbecs')!
+    expect(fcc.standards).toBe(nsbecs.standards)
+  })
+
   it("frameworkOf()'s degrade fallback stays pinned at 'cognia_2022'", () => {
     // Deliberate: the fallback is a last-resort constant for schools with NO
     // framework on the register (where citing nothing real is exactly right).

@@ -209,8 +209,8 @@ export default function StudioHero({ compact, name, chat, askBar, onNewChat }) {
                   every part of the platform, and tells you what needs a decision — you just approve.
                 </p>
               </div>
-              {/* Large KYRO dove on the right — soft gold glow + gentle float. Sized
-                  via --kyro-size (the dove root is a span, not an svg). */}
+              {/* Large KYRO owl on the right — soft gold glow + gentle float. Sized
+                  via --kyro-size (the owl root is a span, not an svg). */}
               <motion.div
                 className="relative shrink-0"
                 animate={reduce ? undefined : { y: [0, -9, 0] }}

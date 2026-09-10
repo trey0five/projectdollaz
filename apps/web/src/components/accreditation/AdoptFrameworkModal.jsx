@@ -100,6 +100,17 @@ function FrameworkCard({ fw, selected, onSelect, onRemove, onUpgrade, steerToUpg
               Also known as: {fw.aliases.join(' · ')}
             </p>
           ) : null}
+          {/* The accreditor's own portal, when it has one (FCC → Accreditrac):
+              the server's sentence verbatim — it says KYRO does not submit. */}
+          {fw.evidencePlatform?.name ? (
+            <p
+              data-testid="framework-evidence-platform"
+              className={`mt-1.5 text-[11.5px] ${v2 ? 'text-muted/80' : 'text-white/45'}`}
+            >
+              Evidence platform: {fw.evidencePlatform.name}
+              {fw.evidencePlatform.line ? ` — ${fw.evidencePlatform.line}` : ''}
+            </p>
+          ) : null}
           {steerToUpgrade ? (
             <p className={`mt-2 text-[12.5px] font-medium ${v2 ? 'text-[#b45309]' : 'text-[#fde68a]'}`}>
               You hold the {steerToUpgrade.version} register — use Upgrade on it to move here with
@@ -576,7 +587,7 @@ export default function AdoptFrameworkModal({
       )}
 
       {/* F1 — ONE optional field, not a wizard step: the date that anchors the
-          six-year journey, offered at the moment of adoption because that is
+          accreditation journey, offered at the moment of adoption because that is
           when a school is thinking about its accreditor. Skippable forever —
           the Journey tab's setup card asks the same question later. */}
       {!loading && list.length > 0 ? (

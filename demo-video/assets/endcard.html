@@ -9,7 +9,17 @@
   @keyframes spin { to { transform: rotate(360deg) } }
   .card { position:relative; text-align:center; animation: rise 1.4s cubic-bezier(.2,.8,.2,1) both }
   @keyframes rise { from { opacity:0; transform: translateY(46px) scale(.94) } }
-  img  { height:280px; filter: drop-shadow(0 24px 60px rgba(0,0,0,.5)); animation: pop 1.2s .2s cubic-bezier(.2,.8,.2,1) both }
+  .mark { position:relative; display:inline-block }
+  .mark img.lockup { height:280px; filter: drop-shadow(0 24px 60px rgba(0,0,0,.5)); animation: pop 1.2s .2s cubic-bezier(.2,.8,.2,1) both }
+  /* KYRO the owl settles onto the petal tip of the mark. The lockup is 280px tall (370x320 source): the
+     SOLID tip of the centre petal (alpha > 200, ignoring the sparkle dots above it) is source row 54,
+     cols 179-189 → (161.0px, 47.2px) from the mark's top-left, i.e. ~1px left of centre. The owl still
+     (507x512) has its feet at (0.6549, 0.962) of the image, so at height 130px (w 128.7px) the claws land
+     on the tip with: margin-left = -1 - 0.6549*128.7 ≈ -85px, top = 48.5 - 0.962*130 ≈ -77px (claws
+     overlap the tip by ~1px). */
+  .mark img.mascot { position:absolute; left:50%; top:-77px; height:130px; margin-left:-85px;
+                     filter: drop-shadow(0 10px 22px rgba(0,0,0,.45)); animation: land 1.1s 1.0s cubic-bezier(.2,.8,.2,1) both }
+  @keyframes land { from { opacity:0; transform: translate(-140px,-90px) rotate(-8deg) scale(1.08) } 70% { opacity:1; transform: translate(0,6px) } to { opacity:1; transform: translate(0,0) } }
   @keyframes pop { from { opacity:0; transform: scale(.7) } }
   h1 { margin-top:40px; color:#fff; font-size:54px; font-weight:600; letter-spacing:.5px; animation: rise 1s .7s both }
   p  { margin-top:22px; color:#d4b47a; font-size:30px; font-weight:700; letter-spacing:.35em; text-transform:uppercase; animation: rise 1s 1.1s both }
@@ -17,8 +27,11 @@
 </style></head><body>
   <div class="halo"></div>
   <div class="card">
-    <img src="kyro-lockup.png" alt="KYRO">
-    <h1>The operating platform for independent schools.</h1>
+    <div class="mark">
+      <img class="lockup" src="kyro-lockup.png" alt="KYRO">
+      <img class="mascot" src="kyro-owl-perched.webp" alt="">
+    </div>
+    <h1>Institutional intelligence for schools.</h1>
     <div class="rule"></div>
     <p>ourkyro.com</p>
   </div>

@@ -117,7 +117,7 @@ export default function PennyChat({ open, onClose }) {
               lg:h-[760px] lg:w-[500px]"
           >
             {/* ── Header — navy→gold gradient banner with a motion-safe sheen
-                sweep + gold corner bloom, the animated KYRO dove, an online
+                sweep + gold corner bloom, the animated KYRO owl, an online
                 pulse, the voice toggle, history menu, and close. ── */}
             {/* NOTE: the header is NOT overflow-hidden — that would clip the recent-
                 chats dropdown (which opens below the header). The decorations are
@@ -137,12 +137,12 @@ export default function PennyChat({ open, onClose }) {
                 <span className="absolute -right-6 -top-8 h-32 w-32 rounded-full bg-penny/25 blur-2xl" />
               </span>
 
-              {/* Animated KYRO dove with online pulse dot. */}
+              {/* Animated KYRO owl with online pulse dot. */}
               <div className="relative shrink-0">
                 <PennyAvatar size={30} active speaking={tts.speaking} />
-                {/* The dove sits in the upper-left ~70%×81% of its box (the box is the
-                    fly-cell aspect), so the badge is inset onto the bird's lower-right
-                    body rather than pinned to the box corner, where it floated free. */}
+                {/* The owl fills its box (the box IS the perched still), so the badge
+                    is inset a few px onto the bird's lower-right body rather than
+                    pinned to the box corner. */}
                 <span
                   aria-hidden
                   className="absolute bottom-[5px] right-[8px] h-2.5 w-2.5 rounded-full border-2 border-navy bg-emerald-400 motion-safe:animate-pulse"

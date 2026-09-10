@@ -9,11 +9,17 @@
 //
 // TWO RULES IT EXISTS TO KEEP.
 //
-// 1. TONE FROM DIRECTION, NEVER SIGN. See `cohortFill` in cohortKit.
+// 1. TONE FROM DIRECTION, NEVER SIGN. See `cohortStep` in cohortKit.
 // 2. A SUPPRESSED CELL IS NEVER A ZERO. `<5` and `—` are different marks for
 //    different facts: a number withheld to protect fewer than five children,
 //    and a number nobody ever filed. A zero in either place would be the table
 //    asserting "no change", which is a claim about a figure we do not have.
+//
+// The cells are the shared HeatCell on the shared diverging scale (blue ↔ red
+// through grey, stepped by the family's material gap), so this grid, the
+// grade × subject map and the enrollment grid all read the same way: a legend
+// with real thresholds, a 2px surface gap and no ring, keyboard-reachable
+// tooltips, and the amber hatch for "<5".
 //
 // Total Battery is the publisher's OWN reported composite, not the mean of the
 // subject columns beside it, so the column sits first behind a hairline and the
@@ -21,7 +27,9 @@
 // layout can invite.
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion } from 'framer-motion'
-import { COH_EASE, cohortFill, fmtScore, legTitle, signed } from './cohortKit.js'
+import HeatCell, { HeatScaleLegend, HeatStateKeys } from '../analytics/charts/HeatCell.jsx'
+import { DIVERGING_INK } from '../analytics/charts/heatScales.js'
+import { COH_EASE, COH_HUE, cohortScale, cohortStep, fmtScore, legTitle, signed } from './cohortKit.js'
 
 const TOTAL = 'total'
 
@@ -29,11 +37,11 @@ const ARROW = { gained: '▲', declined: '▼', held: '•' }
 
 /** The mark a cell wears when there is no number to print. */
 function blankOf(cell) {
-  if (!cell) return { token: '—', title: 'No result on file' }
+  if (!cell) return { token: '—', state: 'absent', title: 'No result on file' }
   if (cell.startState === 'suppressed' || cell.endState === 'suppressed')
-    return { token: '<5', title: legTitle('suppressed') }
-  if (cell.startState !== 'observed') return { token: '—', title: legTitle(cell.startState) }
-  if (cell.endState !== 'observed') return { token: '—', title: legTitle(cell.endState) }
+    return { token: '<5', state: 'suppressed', title: legTitle('suppressed') }
+  if (cell.startState !== 'observed') return { token: '—', state: 'absent', title: legTitle(cell.startState) }
+  if (cell.endState !== 'observed') return { token: '—', state: 'absent', title: legTitle(cell.endState) }
   return null
 }
 
@@ -45,19 +53,22 @@ export default function CohortMatrix({ matrix, onlyKeys = null, unit, gap, schoo
   if (cohorts.length === 0 || series.length === 0) return null
 
   const byCell = new Map(cells.map((c) => [`${c.cohortKey}|${c.series}`, c]))
-  // The scaling reference for the intensity ramp — the largest move actually
-  // rendered, so both sections' colours agree. A max is a selection, not
-  // arithmetic on scores.
-  const worst = Math.max(3, ...cells.map((c) => Math.abs(c.netChange ?? 0)))
+  // The scale is built from the family's material gap — the same number the
+  // server ruled `direction` against — never from the largest move on screen.
+  const scale = cohortScale(gap)
+  const decimals = unit?.decimals ?? 0
+  const tick = (v) => signed(v, decimals)
 
-  const cols = series.length
   // The composite's NAME comes from the server, per family — this file must
   // never type 'Total Battery' over an ACT or SAT school.
   const totalLabel = series.find((s) => s.key === TOTAL)?.label ?? 'Composite'
 
   return (
     <div>
-      <div
+      <motion.div
+        initial={reduce ? false : { opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: COH_EASE }}
         className="coh-matrix-scroll -mx-1 overflow-x-auto px-1"
         // A scroll container that only a mouse can reach is a column of numbers
         // a keyboard reader cannot get to. Focusable + named, so it is announced
@@ -66,9 +77,10 @@ export default function CohortMatrix({ matrix, onlyKeys = null, unit, gap, schoo
         role="region"
         aria-label={`Net change by cohort and subject at ${schoolName ?? 'this school'}, scrollable`}
       >
-        <table className="w-full min-w-[520px] border-separate" style={{ borderSpacing: '3px' }}>
+        <table className="w-full min-w-[520px] border-separate" style={{ borderSpacing: '2px' }}>
           <caption className="sr-only">
-            Net change by cohort and subject at {schoolName ?? 'this school'}
+            Net change by cohort and subject at {schoolName ?? 'this school'}, shaded in steps of {scale.gap}{' '}
+            {unit.points}
           </caption>
           <thead>
             <tr>
@@ -95,7 +107,7 @@ export default function CohortMatrix({ matrix, onlyKeys = null, unit, gap, schoo
             </tr>
           </thead>
           <tbody>
-            {cohorts.map((c, row) => (
+            {cohorts.map((c) => (
               <tr key={c.key}>
                 <th
                   scope="row"
@@ -106,17 +118,32 @@ export default function CohortMatrix({ matrix, onlyKeys = null, unit, gap, schoo
                 {series.map((s, col) => {
                   const cell = byCell.get(`${c.key}|${s.key}`)
                   const blank = blankOf(cell)
-                  const paint = blank
-                    ? cohortFill('unknown', null, worst)
-                    : cohortFill(cell.direction, cell.netChange, worst)
-                  const title = blank
-                    ? `${c.label} · ${s.label} — ${blank.title}`
-                    : `${c.label} · ${s.label}: ${fmtScore(cell.startValue, unit.decimals)} → ${fmtScore(
-                        cell.endValue,
-                        unit.decimals,
-                      )} (${signed(cell.netChange, unit.decimals)} ${unit.points}${
-                        cell.direction === 'held' ? `, smaller than ${gap} — within the noise` : ''
-                      })`
+                  const step = blank ? null : cohortStep(scale, cell.direction, cell.netChange)
+                  const state = blank ? blank.state : step ? 'value' : 'absent'
+                  const title = `${c.label} · ${s.label}`
+                  const held = !blank && cell.direction === 'held'
+                  const tip = blank
+                    ? { title, rows: [{ color: blank.state === 'suppressed' ? '#B45309' : '#94A3B8', label: 'Result', value: blank.title }] }
+                    : {
+                        title,
+                        rows: [
+                          {
+                            color: COH_HUE,
+                            label: 'Start → end',
+                            value: `${fmtScore(cell.startValue, decimals)} → ${fmtScore(cell.endValue, decimals)}`,
+                          },
+                          {
+                            color: step?.fill ?? '#94A3B8',
+                            label: 'Net change',
+                            value: `${tick(cell.netChange)} ${unit.points}${held ? ' · within the noise' : ''}`,
+                          },
+                        ],
+                      }
+                  const aria = blank
+                    ? `${title}: ${blank.title}`
+                    : `${title}: ${fmtScore(cell.startValue, decimals)} to ${fmtScore(cell.endValue, decimals)}, ${tick(
+                        cell.netChange,
+                      )} ${unit.points}${held ? `, smaller than ${scale.gap} — within the noise` : ''}`
                   return (
                     <td
                       key={s.key}
@@ -127,37 +154,16 @@ export default function CohortMatrix({ matrix, onlyKeys = null, unit, gap, schoo
                           : undefined
                       }
                     >
-                      <motion.div
-                        initial={reduce ? false : { opacity: 0, scale: 0.88 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{
-                          duration: 0.32,
-                          ease: COH_EASE,
-                          delay: reduce ? 0 : Math.min(0.4, 0.025 * (row * cols + col)),
-                        }}
-                        title={title}
-                        className="flex h-[46px] cursor-default items-center justify-center gap-1 rounded-xl"
-                        style={{
-                          background: blank ? 'rgba(16,28,61,0.03)' : paint.bg,
-                          boxShadow: `inset 0 0 0 1px ${blank ? 'rgba(16,28,61,0.06)' : paint.ring}`,
-                        }}
-                      >
+                      <HeatCell state={state} step={step} label={aria} tip={tip} height={46} focusColor={COH_HUE}>
                         {blank ? (
-                          <span className="font-mono text-[9px] font-bold text-muted">{blank.token}</span>
+                          <span className="font-mono text-[11px] font-bold">{blank.token}</span>
                         ) : (
-                          <>
-                            <span className="text-[11px] leading-none" style={{ color: paint.fg }}>
-                              {ARROW[cell.direction] ?? '•'}
-                            </span>
-                            <span
-                              className="text-[15px] font-bold leading-none tabular-nums"
-                              style={{ color: paint.fg }}
-                            >
-                              {signed(cell.netChange, unit.decimals)}
-                            </span>
-                          </>
+                          <span className="inline-flex items-center gap-1 leading-none">
+                            <span className="text-[11px]">{ARROW[cell.direction] ?? '•'}</span>
+                            <span className="text-[15px] font-bold tabular-nums">{tick(cell.netChange)}</span>
+                          </span>
                         )}
-                      </motion.div>
+                      </HeatCell>
                     </td>
                   )
                 })}
@@ -165,40 +171,44 @@ export default function CohortMatrix({ matrix, onlyKeys = null, unit, gap, schoo
             ))}
           </tbody>
         </table>
-      </div>
+      </motion.div>
 
-      <MatrixLegend unit={unit} gap={gap} schoolName={schoolName} totalLabel={totalLabel} />
+      <MatrixLegend unit={unit} scale={scale} tick={tick} schoolName={schoolName} totalLabel={totalLabel} />
     </div>
   )
 }
 
 /** Every word of it derived from the live unit — never typed. */
-function MatrixLegend({ unit, gap, schoolName, totalLabel }) {
+function MatrixLegend({ unit, scale, tick, schoolName, totalLabel }) {
+  const gap = scale.gap
   return (
-    <div className="mt-3 space-y-1.5">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[10.5px] text-muted">
-        <span className="inline-flex items-center gap-1">
-          <span className="text-emerald-700">▲</span> Gained — {gap ?? '—'} {unit.points} or more
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="text-navy/50">•</span> Within the noise — smaller than {gap ?? '—'} {unit.points}
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="text-rose-700">▼</span> Declined
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="font-mono font-bold">&lt;5</span> Suppressed
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="font-mono font-bold">—</span> Not on file
-        </span>
-      </div>
+    <div className="space-y-1.5">
+      <HeatScaleLegend
+        title={`Net change · ${unit.points}`}
+        steps={scale.steps}
+        ticks={['', ...scale.ticks.map(tick), '']}
+        extras={
+          <>
+            <span className="inline-flex items-center gap-1 pb-3.5 text-[10.5px] text-muted">
+              <span style={{ color: DIVERGING_INK.pos }}>▲</span> Gained — {gap} {unit.points} or more
+            </span>
+            <span className="inline-flex items-center gap-1 pb-3.5 text-[10.5px] text-muted">
+              <span style={{ color: DIVERGING_INK.mid }}>•</span> Within the noise — smaller than {gap} {unit.points}
+            </span>
+            <span className="inline-flex items-center gap-1 pb-3.5 text-[10.5px] text-muted">
+              <span style={{ color: DIVERGING_INK.neg }}>▼</span> Declined
+            </span>
+            <HeatStateKeys suppressedLabel="suppressed" absentLabel="not on file" />
+          </>
+        }
+      />
       {/* Each row spans DIFFERENT grades, so the sentence names the rule rather
           than one row's grades — naming grade 3 here would be false on row two. */}
       <p className="text-[11px] leading-snug text-muted">
         Every row is one group of children at {schoolName ?? 'this school'}, and its net change is that row&rsquo;s
-        end-grade score minus its start-grade score. {totalLabel} is the publisher&rsquo;s own reported composite —
-        not an average of the subject columns beside it.
+        end-grade score minus its start-grade score. Every further {gap} {unit.points} is one shade darker, blue for
+        gained and red for declined; the steps are fixed, not re-scaled to the largest move shown. {totalLabel} is the
+        publisher&rsquo;s own reported composite — not an average of the subject columns beside it.
       </p>
     </div>
   )

@@ -3,6 +3,7 @@ import { BadRequestException, ValidationPipe } from '@nestjs/common'
 import { getMetric, type PeriodOperational } from '@finrep/analytics'
 import { EnrollmentAnalyticsService } from './enrollment-analytics.service.js'
 import { EnrollmentAnalyticsQueryDto } from './dto/enrollment-analytics.dto.js'
+import { loneHiddenCellViolations } from '../students/aggregate-suppression.testkit.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EnrollmentAnalyticsService — asserted against the codebase's own canonical
@@ -925,5 +926,70 @@ describe('the live register and the filed snapshot cannot disagree on one page',
       diverged: false,
     })
     expect(res.notes.some((n) => n.includes('register has changed'))).toBe(false)
+  })
+})
+
+// ── COMPLEMENTARY suppression on the grade × year grid ───────────────────────
+// The privacy page promises complementary suppression everywhere outside the
+// register. The heatmap tooltip prints each column's "School total", so a year
+// with exactly ONE <5 grade was total − visible cells: the hidden count, exactly.
+// Now each column runs the roster aggregate's own suppressDimension (a
+// companion hides with a lone small cell) AND a column with any hidden cell
+// publishes NO total.
+describe('grade × year grid — complementary suppression per column', () => {
+  const YEAR_OK = { '9': 110, '10': 110, '11': 100, '12': 90 } // 410, nothing small
+  const YEAR_LEAKY = { '9': 118, '10': 112, '11': 108, '12': 3 } // one <5 grade
+  const leaky = () =>
+    run(
+      {
+        snapshots: [snap('2024-09-15', YEAR_OK), snap('2025-09-15', YEAR_LEAKY)],
+        operational: seedOperational(341),
+        plan: null,
+      },
+      { asOf: '2025-09-15' },
+    )
+  const column = (res: Awaited<ReturnType<typeof leaky>>, year: number) =>
+    Object.fromEntries(
+      res.gradeByYear!.cells.filter((c) => c.schoolYear === year).map((c) => [c.grade, c.count.suppressed ? c.count : c.count.value]),
+    )
+  const totalOf = (res: Awaited<ReturnType<typeof leaky>>, year: number) =>
+    res.gradeByYear!.observedByYear.find((o) => o.schoolYear === year)!.total
+
+  it('a lone <5 grade takes a COMPANION with it (the smallest visible grade)', async () => {
+    const res = await leaky()
+    const col = column(res, 2026)
+    expect(col['12']).toEqual({ value: null, suppressed: true })
+    expect(col['11']).toEqual({ value: null, suppressed: true }) // 108 — smallest visible
+    expect(col['9']).toBe(118)
+    expect(col['10']).toBe(112)
+  })
+
+  it('that column publishes NO school total; the clean column keeps its total', async () => {
+    const res = await leaky()
+    expect(totalOf(res, 2026)).toBeNull()
+    expect(totalOf(res, 2025)).toBe(410)
+    // The clean column is untouched — every grade visible.
+    expect(Object.values(column(res, 2025)).every((v) => typeof v === 'number')).toBe(true)
+  })
+
+  it('the raw 3 appears nowhere in the body, and no column is subtractable (testkit rule)', async () => {
+    const res = await leaky()
+    // The body-wide detector cannot tell a small COUNT from a small tally
+    // (`cohortSize.gradeSpan.gradeDepth` is 4 grades, `panelsAvailable` is 3
+    // panels), so the leak check is scoped to the surfaces that carry grade
+    // counts: the grid and the ladder.
+    expect(leaksCount(res.gradeByYear, 118)).toBe(true)
+    expect(leaksCount(res.gradeByYear, 3)).toBe(false)
+    expect(leaksCount(res.ladder, 3)).toBe(false)
+    for (const y of res.gradeByYear!.years) {
+      expect(loneHiddenCellViolations(`gradeByYear.${y}`, column(res, y), totalOf(res, y), { requirePair: true })).toEqual([])
+    }
+  })
+
+  it('the testkit rule itself sees the leak the old payload had (proves the check is live)', () => {
+    expect(
+      loneHiddenCellViolations('y', { '9': 118, '10': 112, '11': 108, '12': { value: null, suppressed: true } }, 341),
+    ).toHaveLength(1)
+    expect(loneHiddenCellViolations('y', { '9': 118, '12': { value: null, suppressed: true } }, null)).toEqual([])
   })
 })

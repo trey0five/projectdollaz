@@ -207,4 +207,22 @@ describe('WS1 — PATCH framework profile (setProfile)', () => {
     expect(nipsa.recognitions.map((r) => r.code)).toEqual(['ncpsa'])
     expect(nipsa.divisions).toEqual([])
   })
+
+  it('FrameworkPublic carries the evidence platform — Accreditrac for FCC, null everywhere else', async () => {
+    const { svc } = makeProfileStore()
+    await svc.seedCatalog()
+    const { frameworks } = await svc.listFrameworks('school-A')
+    const fcc = frameworks.find((f) => f.code === 'fccap')!
+    // The vendor's own spelling (no k), and a line that says KYRO does NOT submit.
+    expect(fcc.evidencePlatform).toEqual({
+      name: 'Accreditrac',
+      line: expect.stringMatching(/Accreditrac portal/),
+    })
+    expect(fcc.evidencePlatform!.line).toMatch(/does not submit/)
+    // A badge is never inferred: no verified NCPSA listing → no recognition rows.
+    expect(fcc.recognitions).toEqual([])
+    for (const f of frameworks) {
+      if (f.code !== 'fccap') expect(f.evidencePlatform, f.code).toBeNull()
+    }
+  })
 })

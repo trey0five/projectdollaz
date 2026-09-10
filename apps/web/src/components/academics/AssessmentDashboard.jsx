@@ -39,8 +39,11 @@ import {
   Users2,
 } from 'lucide-react'
 import { useReducedMotion } from '../analytics/charts/useReducedMotion.js'
+import ColumnChart from '../analytics/charts/ColumnChart.jsx'
+import AcademicsHeatmap from './AcademicsHeatmap.jsx'
+import { DIVERGING_INK } from '../analytics/charts/heatScales.js'
 import { subjectLabelOf } from '@finrep/analytics'
-import { ChartDefs, INK, divergingFill, fitScale, shortName, spreadLabels } from './chartKit.jsx'
+import { ChartDefs, INK, fitScale, shortName, spreadLabels } from './chartKit.jsx'
 import { WhatThisMeasures, axisUnitOf, unitLabelOf } from './MeasureNote.jsx'
 import { Section } from '../module/SectionHeader.jsx'
 import AssessmentFilters from './AssessmentFilters.jsx'
@@ -154,150 +157,39 @@ function KpiCard({ title, value, sub, chip, delay = 0, reduce }) {
  * values present rather than pinned to the theoretical 1–99, because on the
  * theoretical scale a fifteen-point gap renders as a shrug.
  */
-function RankedSchools({ schools, focusId, national, peerAvg, range, reduce, anonymous, unit }) {
+function RankedSchools({ schools, focusId, national, peerAvg, range, anonymous, unit }) {
   const rows = anonymous
-    ? anonymous.map((p, i) => ({ key: `${p.label}-${i}`, name: p.label, value: p.value, isFocus: p.isFocus }))
+    ? anonymous.map((p, i) => ({ id: `${p.label}-${i}`, label: p.label, value: p.value, emphasis: !!p.isFocus }))
     : schools.map((s) => ({
-        key: s.schoolId,
-        name: s.schoolName ?? 'School',
+        id: s.schoolId,
+        label: s.schoolName ?? 'School',
         value: s.value,
-        isFocus: s.schoolId === focusId,
-        forthcoming: s.forthcoming,
+        emphasis: s.schoolId === focusId,
+        forthcoming: !!s.forthcoming,
       }))
+  const n = rows.length
+  const ranked = rows.map((r, i) => ({ ...r, meta: [{ label: 'Rank', value: `${i + 1} of ${n}` }] }))
 
-  const { lo, hi } = fitScale(
-    [...rows.map((r) => r.value), national, peerAvg],
-    range,
-    { pad: 0.12 },
-  )
-  const pct = (v) => Math.max(0, Math.min(100, ((v - lo) / (hi - lo || 1)) * 100))
+  const refs = [
+    national !== null && national !== undefined ? { value: national, label: `National ${fmt(national, 0)}`, color: INK.national } : null,
+    peerAvg !== null && peerAvg !== undefined ? { value: peerAvg, label: `Network ${fmt(peerAvg)}`, color: INK.network } : null,
+  ].filter(Boolean)
 
-  const LABEL_W = 118
-  const GAP = 12
-  const VALUE_W = 46
-
-  // THE AXIS, DISCLOSED. fitScale deliberately zooms to the values present, and
-  // that decision is invisible from the outside: a five-point spread fills the
-  // full width and reads as a rout. Saying so — and saying what a difference has
-  // to reach before it is a difference — is cheaper than the misread.
-  const zoomed = range ? lo > range.min || hi < range.max : false
-
+  // THE AXIS, DISCLOSED. The chart zooms to the values present (fitScale's
+  // rule), draws an axis-break glyph on the baseline whenever it does, and
+  // prints the range in play under the plot — so a five-point spread filling
+  // the height is never mistaken for a rout.
   return (
-    <div>
-      {/* The number column carries its unit ONCE, here, so a bare 58 is never
-          left standing on its own. */}
-      {unit ? (
-        // ANCHORED, NOT ALIGNED. `text-align: right` does nothing for a line
-        // wider than its box — the overflow still runs off the right-hand side,
-        // where the card's overflow-hidden ate the last three letters of
-        // "national percentile". Pinned to right-0 the label grows LEFTWARDS
-        // over the bar track and its right edge lands on the value column.
-        <div className="relative h-3 pb-1">
-          <span className="absolute right-0 top-0 whitespace-nowrap font-mono text-[8.5px] font-bold uppercase tracking-[0.16em] text-muted">
-            {unit.label}
-          </span>
-        </div>
-      ) : null}
-
-      <div className="relative pt-5">
-      <div className="pointer-events-none absolute inset-y-0 z-20" style={{ left: LABEL_W + GAP, right: VALUE_W + GAP }}>
-        {[
-          national !== null && national !== undefined
-            ? { v: national, color: INK.national, text: `National ${fmt(national, 0)}` }
-            : null,
-          peerAvg !== null && peerAvg !== undefined
-            ? { v: peerAvg, color: INK.network, text: `Network ${fmt(peerAvg)}` }
-            : null,
-        ]
-          .filter(Boolean)
-          .map((line) => (
-            <div
-              key={line.text}
-              className="absolute inset-y-0 border-l-2 border-dashed"
-              style={{ left: `${pct(line.v)}%`, borderColor: line.color, opacity: 0.75 }}
-            >
-              <span
-                className="absolute -top-5 left-1.5 whitespace-nowrap rounded-full px-2 py-[3px] font-mono text-[8.5px] font-bold uppercase tracking-wider"
-                style={{ color: line.color, background: `${line.color}14` }}
-              >
-                {line.text}
-              </span>
-            </div>
-          ))}
-      </div>
-
-      <div className="space-y-2">
-        {rows.map((r, i) => (
-          <div key={r.key} className="group flex items-center gap-3">
-            <span
-              className={`shrink-0 truncate text-right text-[12px] ${r.isFocus ? 'font-bold text-navy' : 'text-muted'}`}
-              style={{ width: LABEL_W }}
-              title={r.name}
-            >
-              {r.name}
-            </span>
-
-            <div
-              className="relative flex-1 overflow-visible rounded-lg"
-              style={{ height: r.isFocus ? 30 : 22, background: 'rgba(16,28,61,0.045)' }}
-            >
-              {r.value === null || r.value === undefined ? (
-                <span className="absolute inset-y-0 left-2.5 flex items-center font-mono text-[10px] italic text-muted">
-                  {r.forthcoming ? 'forthcoming' : 'no data'}
-                </span>
-              ) : (
-                <motion.div
-                  initial={reduce ? { width: `${pct(r.value)}%` } : { width: 0 }}
-                  animate={{ width: `${pct(r.value)}%` }}
-                  transition={{ duration: 0.85, ease: EASE, delay: reduce ? 0 : 0.08 + i * 0.09 }}
-                  className="relative h-full rounded-lg"
-                  style={{
-                    background: r.isFocus
-                      ? `linear-gradient(90deg, ${HUE} 0%, ${INK.focusLight} 100%)`
-                      : 'linear-gradient(90deg, rgba(148,163,184,0.55), rgba(148,163,184,0.32))',
-                    boxShadow: r.isFocus ? `0 0 24px -2px ${HUE}80, inset 0 1px 0 0 rgba(255,255,255,0.35)` : 'none',
-                  }}
-                >
-                  {/* A bright cap on the focus bar — the eye lands on the end of
-                      the bar, which is where the value actually is. */}
-                  {r.isFocus ? (
-                    <span
-                      aria-hidden="true"
-                      className="absolute right-0 top-1/2 h-[calc(100%+6px)] w-[3px] -translate-y-1/2 rounded-full"
-                      style={{ background: '#fff', boxShadow: `0 0 12px 2px ${INK.focusLight}` }}
-                    />
-                  ) : null}
-                </motion.div>
-              )}
-            </div>
-
-            <span
-              className={`text-right tabular-nums ${
-                r.isFocus ? 'font-serif text-[20px] font-semibold text-navy' : 'text-[12.5px] text-muted'
-              }`}
-              style={{ width: VALUE_W }}
-            >
-              {/* An ACT composite is not a whole number, and materiality on the
-                  ACT is 0.5 — rounding to zero decimals erased every difference
-                  this module considers worth reporting. */}
-              {fmt(r.value, unit?.decimals ?? 0)}
-            </span>
-          </div>
-        ))}
-        </div>
-      </div>
-
-      {unit ? (
-        <p className="mt-3 text-[11px] leading-snug text-muted">
-          {zoomed
-            ? `The axis is zoomed to the range in play (${fmt(lo, unit.decimals)}–${fmt(hi, unit.decimals)}), not the full ${unit.span ?? 'scale'}, so small gaps stay visible.`
-            : `The axis spans the full ${unit.span ?? 'scale'}.`}
-          {unit.gap
-            ? ` A difference under ${unit.gap} ${unit.points} is not a difference — read bar lengths with that in mind.`
-            : ''}
-        </p>
-      ) : null}
-    </div>
+    <ColumnChart
+      rows={ranked}
+      color={HUE}
+      fit={{ range, pad: 0.12, includeZero: false }}
+      refs={refs}
+      unit={unit}
+      height={260}
+      showValues="selective"
+      ariaLabel="Every school, ranked by average score"
+    />
   )
 }
 
@@ -313,161 +205,39 @@ function RankedSchools({ schools, focusId, national, peerAvg, range, reduce, ano
  * right when it is ahead, from a centre line that is the network. One glance
  * gives the answer and the ranking of the answers.
  */
-function SubjectDivergence({ subjects, reduce }) {
+function SubjectDivergence({ subjects }) {
   const rows = (subjects ?? []).filter((s) => s.value !== null && s.variance !== null && s.variance !== undefined)
   if (rows.length === 0) {
     return <p className="text-[12.5px] text-muted">No subject breakdown for this selection.</p>
   }
-  const worst = Math.max(...rows.map((r) => Math.abs(r.variance)), 5)
-  const anyAhead = rows.some((r) => r.variance >= 0)
-
   return (
-    <div className="space-y-2.5">
-      {/* The header aligns with the BAR TRACK, not the row — otherwise the two
-          arrows point at the edges of the label and value columns, which is
-          nowhere near the axis they describe. */}
-      <div className="flex items-center gap-3">
-        <span className="w-24 shrink-0" />
-        <div className="flex flex-1 items-center justify-between font-mono text-[8.5px] font-bold uppercase tracking-[0.16em]">
-          <span style={{ color: INK.behind }}>← behind</span>
-          <span className="text-muted">network average</span>
-          <span style={{ color: anyAhead ? INK.ahead : 'rgba(100,116,139,0.45)' }}>ahead →</span>
-        </div>
-        <span className="w-12 shrink-0" />
-        <span className="w-8 shrink-0" />
-      </div>
-
-      {rows.map((r, i) => {
-        const ahead = r.variance >= 0
-        const w = (Math.abs(r.variance) / worst) * 50
-        return (
-          <div key={r.subject} className="flex items-center gap-3">
-            <span className="w-24 shrink-0 text-right text-[12px] text-muted">{label(r.subject)}</span>
-
-            <div className="relative h-7 flex-1">
-              {/* The centre line is the network average — the thing every bar
-                  is measured from, so it is drawn as a real axis, not a hint. */}
-              {/* Faint zones, so a one-sided chart reads as "nothing is ahead"
-                  rather than as half a chart that failed to draw. */}
-              <span
-                aria-hidden="true"
-                className="absolute inset-y-1 left-0 w-1/2 rounded-l-md"
-                style={{ background: 'rgba(225,29,72,0.045)' }}
-              />
-              <span
-                aria-hidden="true"
-                className="absolute inset-y-1 right-0 w-1/2 rounded-r-md"
-                style={{ background: 'rgba(5,150,105,0.045)' }}
-              />
-              <span
-                aria-hidden="true"
-                className="absolute inset-y-0 left-1/2 w-[1.5px] -translate-x-1/2"
-                style={{ background: 'rgba(16,28,61,0.28)' }}
-              />
-              <motion.div
-                initial={reduce ? { width: `${w}%` } : { width: 0 }}
-                animate={{ width: `${w}%` }}
-                transition={{ duration: 0.7, ease: EASE, delay: reduce ? 0 : 0.06 + i * 0.08 }}
-                className="absolute top-1/2 h-[18px] -translate-y-1/2 rounded-md"
-                style={{
-                  [ahead ? 'left' : 'right']: '50%',
-                  background: ahead
-                    ? `linear-gradient(90deg, #34D399, ${INK.ahead})`
-                    : `linear-gradient(270deg, #FB7185, ${INK.behind})`,
-                  boxShadow: `0 0 16px -4px ${ahead ? INK.ahead : INK.behind}`,
-                }}
-              />
-            </div>
-
-            <span
-              className="w-12 text-right font-mono text-[12px] font-bold tabular-nums"
-              style={{ color: ahead ? INK.ahead : INK.behind }}
-            >
-              {signed(r.variance, 0)}
-            </span>
-            <span className="w-8 text-right text-[11.5px] tabular-nums text-muted">{fmt(r.value, 0)}</span>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-// ── Grade × subject heat map ─────────────────────────────────────────────────
-
-function Heatmap({ cells, subjects, reduce }) {
-  const grades = [...new Set(cells.map((c) => c.grade))]
-  if (grades.length === 0) return null
-  const shown = subjects.filter((s) => cells.some((c) => c.subject === s && c.value !== null))
-  if (shown.length === 0) return null
-  // The scale is set by the worst cell actually on screen, so the map always
-  // uses its full range instead of washing out on a school that is close.
-  const worst = Math.max(
-    ...cells.map((c) => Math.abs(c.variance ?? 0)).filter((v) => Number.isFinite(v)),
-    6,
-  )
-
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[420px] border-separate border-spacing-1">
-        <thead>
-          <tr>
-            <th className="w-14" />
-            {shown.map((s) => (
-              <th key={s} className="pb-1 text-center font-mono text-[9.5px] font-bold uppercase tracking-wider text-muted">
-                {label(s)}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {grades.map((g, gi) => (
-            <tr key={g}>
-              <td className="pr-1 text-right font-mono text-[10.5px] font-bold text-muted">Gr {g}</td>
-              {shown.map((s, si) => {
-                const cell = cells.find((c) => c.grade === g && c.subject === s)
-                // A DIVERGING SCALE WITH REAL INTENSITY. The old map painted
-                // every negative cell the same red, so a grade nineteen points
-                // behind looked exactly like one seven points behind — the one
-                // job a heat map has, discriminating between them, was the job
-                // it did not do. Colour now tracks magnitude against the worst
-                // cell present, and passes through neutral at par so "level
-                // with everyone else" reads as its own state.
-                const paint = cell?.suppressed ? divergingFill(null) : divergingFill(cell?.variance ?? null, worst)
-                return (
-                  <td key={s} className="p-0">
-                    <motion.div
-                      initial={reduce ? false : { opacity: 0, scale: 0.85 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      whileHover={reduce ? undefined : { scale: 1.06, zIndex: 1 }}
-                      transition={{ duration: 0.35, ease: EASE, delay: reduce ? 0 : 0.03 * (gi * shown.length + si) }}
-                      className="flex h-[52px] cursor-default flex-col items-center justify-center rounded-xl"
-                      style={{ background: paint.bg, boxShadow: `inset 0 0 0 1px ${paint.ring}` }}
-                      title={
-                        cell?.suppressed
-                          ? 'Fewer than 5 students — suppressed'
-                          : `${label(s)} grade ${g}: ${fmt(cell?.value, 0)} (${signed(cell?.variance)} vs same grade elsewhere)`
-                      }
-                    >
-                      <span className="text-[17px] font-bold leading-none tabular-nums" style={{ color: paint.fg }}>
-                        {cell?.suppressed ? '<5' : fmt(cell?.value, 0)}
-                      </span>
-                      {cell?.variance !== null && cell?.variance !== undefined && !cell?.suppressed ? (
-                        <span
-                          className="mt-1 font-mono text-[9px] font-bold tabular-nums opacity-90"
-                          style={{ color: paint.fg }}
-                        >
-                          {signed(cell.variance, 0)}
-                        </span>
-                      ) : null}
-                    </motion.div>
-                  </td>
-                )
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div>
+      <ColumnChart
+        diverging
+        rows={rows.map((r) => ({
+          id: r.subject,
+          label: label(r.subject),
+          value: r.variance,
+          // Within half a point of the network is level: neutral grey, so a
+          // −0.4 never shows as a red column labelled "0".
+          color: Math.abs(r.variance) < 0.5 ? DIVERGING_INK.mid : undefined,
+          formatted: Math.abs(r.variance) < 0.5 ? '0' : signed(r.variance, 0),
+          meta: [{ label: 'Score', value: fmt(r.value, 0) }],
+        }))}
+        // The same blue↔red pair the heat map beside this chart uses — one
+        // page, one diverging encoding.
+        color={DIVERGING_INK.pos}
+        negativeColor={DIVERGING_INK.neg}
+        tickFormatter={(v) => signed(v, 0)}
+        showValues="all"
+        height={200}
+        ariaLabel="Gap from the network average, by subject"
+      />
+      {/* The zero line is the network average — the thing every column is
+          measured from, so it is named, not left as an unlabelled axis. */}
+      <p className="mt-2 text-[11px] text-muted">
+        The baseline is each subject&apos;s own network average: a column above it is ahead, one below it is behind.
+      </p>
     </div>
   )
 }
@@ -1384,7 +1154,6 @@ export default function AssessmentDashboard({
           national={ctx?.nationalReference}
           peerAvg={peerAvg}
           range={ctx?.scoreRange}
-          reduce={reduce}
           unit={unit}
         />
       </Section>
@@ -1393,15 +1162,15 @@ export default function AssessmentDashboard({
       <div className="grid gap-4 lg:grid-cols-2">
         <Section eyebrow="By subject" title="Where the gap actually is" icon={BookOpen} reduce={reduce}>
           <WhatThisMeasures chart="subjects" ctx={ctx} reduce={reduce} />
-          <SubjectDivergence subjects={data?.subjects} reduce={reduce} />
+          <SubjectDivergence subjects={data?.subjects} />
         </Section>
 
         <Section eyebrow="Grade by grade" title="Where instruction is landing" icon={Grid3x3} reduce={reduce} delay={0.05}>
-          <Heatmap cells={data?.heatmap ?? []} subjects={subjects} reduce={reduce} />
+          <AcademicsHeatmap cells={data?.heatmap ?? []} subjects={subjects} unit={unit} reduce={reduce} />
           <p className="mt-2 text-[11px] text-muted">
             Each cell compares that grade with the SAME grade at other schools — the only comparison that means
-            anything. A grade with fewer than five scored students is left blank: the gate nulls its values before
-            they reach this chart, so there is no number here to shade.
+            anything. A grade with fewer than five scored students shows a hatched cell — hidden, not zero: the gate
+            nulls its values before they reach this chart, so there is no number here to shade.
           </p>
         </Section>
       </div>
@@ -1611,7 +1380,7 @@ export default function AssessmentDashboard({
 
         <div className="grid gap-4 lg:grid-cols-2">
           <Section eyebrow="Is the comparison fair?" title="Participation against score" icon={Scale} reduce={reduce}>
-            <ParticipationFairness rows={data?.table ?? []} reduce={reduce} />
+            <ParticipationFairness rows={data?.table ?? []} />
           </Section>
 
           <Section
@@ -2126,7 +1895,7 @@ function MovementHighlights({ movements, national, reduce }) {
  * stated in words. It reads at a glance at three schools and still reads at
  * thirty.
  */
-function ParticipationFairness({ rows, reduce }) {
+function ParticipationFairness({ rows }) {
   const data = (rows ?? []).filter(
     (r) => r.participationRate !== null && r.participationRate !== undefined && r.current !== null,
   )
@@ -2158,56 +1927,36 @@ function ParticipationFairness({ rows, reduce }) {
           : 'Below about seventy percent, a score says more about which students sat the exam than about the school.'}
       </div>
 
-      <div className="space-y-2">
-        {sorted.map((r, i) => {
-          const p = r.participationRate ?? 0
-          const ok = p >= THRESHOLD
-          const tone = ok ? INK.ahead : '#B45309'
-          return (
-            <div key={r.schoolId ?? r.schoolName ?? i} className="flex items-center gap-3">
-              <span className="w-[120px] shrink-0 truncate text-right text-[12px] text-muted" title={r.schoolName}>
-                {r.schoolName}
-              </span>
-
-              <div className="relative h-7 flex-1 overflow-hidden rounded-lg" style={{ background: 'rgba(16,28,61,0.05)' }}>
-                {/* The threshold, drawn ON the track so the bar is measured
-                    against it rather than against an axis somewhere else. */}
-                <span
-                  aria-hidden="true"
-                  className="absolute inset-y-0 z-10 border-l-2 border-dashed"
-                  style={{ left: `${THRESHOLD * 100}%`, borderColor: 'rgba(180,83,9,0.55)' }}
-                />
-                <motion.div
-                  initial={reduce ? { width: `${p * 100}%` } : { width: 0 }}
-                  animate={{ width: `${Math.min(100, p * 100)}%` }}
-                  transition={{ duration: 0.8, ease: EASE, delay: reduce ? 0 : 0.05 + i * 0.08 }}
-                  className="h-full rounded-lg"
-                  style={{
-                    background: ok
-                      ? `linear-gradient(90deg, ${HUE}, ${INK.focusLight})`
-                      : 'linear-gradient(90deg, #F59E0B, #FBBF24)',
-                    boxShadow: `0 0 18px -4px ${tone}`,
-                  }}
-                />
-                <span className="absolute inset-y-0 right-2.5 flex items-center text-[11.5px] font-bold tabular-nums text-navy">
-                  {Math.round(p * 100)}%
-                </span>
-              </div>
-
-              <span
-                className="w-[104px] shrink-0 rounded-full px-2 py-1 text-center font-mono text-[8.5px] font-bold uppercase tracking-wider"
-                style={{ background: `${tone}18`, color: tone }}
-              >
-                {ok ? 'comparison fair' : 'read with care'}
-              </span>
-              <span className="w-9 text-right text-[12.5px] font-bold tabular-nums text-navy">{fmt(r.current, 0)}</span>
-            </div>
-          )
+      <ColumnChart
+        rows={sorted.map((r, i) => {
+          const p = Math.min(100, Math.round((r.participationRate ?? 0) * 100))
+          const ok = (r.participationRate ?? 0) >= THRESHOLD
+          return {
+            id: r.schoolId ?? r.schoolName ?? i,
+            label: r.schoolName ?? 'School',
+            value: p,
+            // Amber is a STATUS, not a series: it ships with the verdict in
+            // the tooltip and the count in the banner, never colour alone.
+            color: ok ? HUE : '#F59E0B',
+            formatted: `${p}%`,
+            meta: [
+              { label: 'Score', value: fmt(r.current, 0) },
+              { label: 'Verdict', value: ok ? 'comparison fair' : 'read with care' },
+            ],
+          }
         })}
-      </div>
+        domain={{ lo: 0, hi: 100 }}
+        refs={[{ value: THRESHOLD * 100, label: '70% · read with care below', color: '#B45309' }]}
+        tickFormatter={(v) => `${v}%`}
+        showValues="selective"
+        minBand={30}
+        rotateChars={18}
+        height={220}
+        ariaLabel="Share of eligible students tested, by school"
+      />
       <p className="text-[11px] text-muted">
-        The bar is students tested ÷ students eligible; the dashed line is seventy percent. The number on the right is
-        the score that participation produced.
+        Each column is students tested ÷ students eligible; the dashed line is seventy percent. Hover or tab to a
+        school for the score that participation produced.
       </p>
     </div>
   )

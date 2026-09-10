@@ -94,6 +94,19 @@ export interface FrameworkSeed {
    *  metadata, never adoptable. VERIFIED per body's live member list; [] means
    *  verified ABSENCE, not "unknown" (Cognia is genuinely on neither list). */
   recognitions?: string[]
+  /** The accreditor's PUBLISHED term of accreditation in years — the Journey
+   *  setup card's default and the cycle service's fallback when a school has
+   *  not set its own. Display/default metadata only (no column); absent = 6.
+   *  Set ONLY from the accreditor's own documents; where the term varies by
+   *  school (MSA-CESS grants 5- or 10-year terms) it is left unset. */
+  defaultTermYears?: number
+}
+
+/** The cycle-length default for a framework code (6 when unknown/unset). */
+export const DEFAULT_TERM_YEARS = 6
+export function defaultTermYearsFor(code: string | null | undefined): number {
+  if (!code) return DEFAULT_TERM_YEARS
+  return FRAMEWORK_SEEDS.find((f) => f.code === code)?.defaultTermYears ?? DEFAULT_TERM_YEARS
 }
 
 // ── COGNIA (2022, incl. 2025 update): 4 Key Characteristics + Assurances ─────
@@ -586,6 +599,8 @@ export const FRAMEWORK_SEEDS: FrameworkSeed[] = [
   {
     code: 'cognia_2022',
     accreditor: 'Cognia',
+    // Six-year term: the Engagement Review cadence the cycle engine is built on.
+    defaultTermYears: 6,
     name: 'Cognia Performance Standards (2022)',
     version: '2022',
     description:
@@ -611,6 +626,7 @@ export const FRAMEWORK_SEEDS: FrameworkSeed[] = [
   },
   {
     code: 'cognia_2025',
+    defaultTermYears: 6,
     accreditor: 'Cognia',
     name: 'Cognia Performance Standards (rev. 2025)',
     version: '2025',
@@ -642,6 +658,8 @@ export const FRAMEWORK_SEEDS: FrameworkSeed[] = [
   {
     code: 'msa_cess_2022',
     accreditor: 'MSA-CESS',
+    // NO defaultTermYears: msa-cess.org publishes 5- and 10-year terms per
+    // school, so there is no one honest default — the school sets its own.
     // WS2 R10 — the seeded content IS the School Edition 2021 five-standard set;
     // only the name/version strings were misdated. `code` is an identity
     // (seriesKey history, profile rows, audit rows) and is never renamed.
@@ -668,12 +686,66 @@ export const FRAMEWORK_SEEDS: FrameworkSeed[] = [
     defaultTarget: null,
     standards: NSBECS_STANDARDS,
   },
+  {
+    // ── FCCAP — an ACCREDITOR whose standards are the NSBECS. Verified in a
+    //    browser 2026-09-10 against the program's own site (eas-ed.org —
+    //    fcconline.org is an unrelated Wisconsin agency), its Accreditrac
+    //    portal login page, and two accredited schools' pages:
+    //    · eas-ed.org: "Accrediting Catholic schools in Florida since 1969";
+    //      "The current standards use The National Standards and Benchmarks
+    //      for Effective Catholic and Secondary Schools, as well as Florida
+    //      Department of Education and Florida Department of Children and
+    //      Families requirements"; housed within the Florida Conference of
+    //      Catholic Bishops, Tallahassee; "Accreditrac, LLC created a dynamic
+    //      platform that is used by schools' faculty and staff,
+    //      superintendents, visiting teams, and the FCC accreditation staff at
+    //      every level of the process."
+    //    · shcs.ptdiocese.org + stjcs.com (accredited schools): "approved for
+    //      use in the Catholic schools by the Florida Bishops"; "Each school is
+    //      accredited on a seven-year rotation"; a multi-year improvement plan
+    //      approved by an FCC visiting team.
+    //    SINGLE-SOURCE (eas-ed.org only, so kept OUT of the description): housed
+    //    within the Florida Conference of Catholic Bishops (Tallahassee); FL DOE
+    //    and DCF requirements layered on the NSBECS.
+    //    NOT verified (and therefore NOT in the UI): the four-domain split of
+    //    the FCC rubric, the "over 180 schools" count, and NCPSA membership —
+    //    eas-ed.org links to ncpsa.org, but ncpsa.org publishes no member list
+    //    we could read, so `recognitions` stays [] (a badge is never inferred).
+    //    Standards are NSBECS_STANDARDS BY REFERENCE (the cognia_2025 trick,
+    //    spec-pinned) — one catalog, never a duplicate; the FL DOE/DCF
+    //    requirements FCC layers on top are not modelled.
+    code: 'fccap',
+    accreditor: 'Florida Catholic Conference',
+    // "Each school is accredited on a seven-year rotation" (verified above).
+    defaultTermYears: 7,
+    name: 'Florida Catholic Conference Accreditation Program (NSBECS rubrics)',
+    version: '7-year cycle',
+    description:
+      'The Florida Catholic Conference Accreditation Program has accredited Catholic schools in Florida since 1969. Its standards are based on the National Standards and Benchmarks for Effective Catholic Elementary and Secondary Schools, and each school is accredited on a seven-year rotation with a visiting team. The annual report, self-study, evidence and visitation are filed in the program\u2019s Accreditrac portal \u2014 KYRO organises what you will upload there; it does not submit on your behalf.',
+    aliases: [
+      'FCC',
+      'FCCAP',
+      'Florida Catholic Conference Accreditation Program',
+      'Accreditrac',
+    ],
+    // eas-ed.org links to NCPSA but no member list could be read — an
+    // UNVERIFIED membership is an empty array, never a badge.
+    recognitions: [],
+    rubricLabels: ['Does Not Meet', 'Partially Meets', 'Fully Meets', 'Exceeds'],
+    statusBands: [],
+    indexMin: null,
+    indexMax: null,
+    defaultTarget: null,
+    standards: NSBECS_STANDARDS,
+  },
   // ── The four below are KYRO CONDENSED SUMMARIES, not transcriptions. See the
   //    provenance note above their standards; the version string carries the same
   //    warning onto every screen a school reads them on.
   {
     code: 'fcis_2023',
     accreditor: 'FCIS',
+    // FCIS Manual for Evaluation and Accreditation: periodic evaluation every five years.
+    defaultTermYears: 5,
     name: 'Florida Council of Independent Schools Accreditation Standards',
     version: '2023 Manual',
     description:
@@ -691,6 +763,8 @@ export const FRAMEWORK_SEEDS: FrameworkSeed[] = [
   {
     code: 'acsi_reach',
     accreditor: 'ACSI',
+    // REACH Standards Manual: accreditation for a maximum of five years.
+    defaultTermYears: 5,
     name: 'ACSI REACH Accreditation Standards',
     version: 'REACH 2019',
     description:
@@ -707,6 +781,8 @@ export const FRAMEWORK_SEEDS: FrameworkSeed[] = [
   {
     code: 'acs_wasc',
     accreditor: 'ACS WASC',
+    // acswasc.org: "an ongoing six-year cycle of quality".
+    defaultTermYears: 6,
     name: 'ACS WASC Focus on Learning Criteria',
     version: 'Focus on Learning',
     description:
@@ -721,6 +797,8 @@ export const FRAMEWORK_SEEDS: FrameworkSeed[] = [
   },
   {
     code: 'sais_2023',
+    // sais.org Accreditation Policies: terms are generally for five years.
+    defaultTermYears: 5,
     accreditor: 'SAIS',
     name: 'Southern Association of Independent Schools Accreditation Standards',
     version: '2022 Standards',
@@ -738,6 +816,8 @@ export const FRAMEWORK_SEEDS: FrameworkSeed[] = [
   {
     code: 'nipsa_academic',
     accreditor: 'NIPSA',
+    // NIPSA accredits on a 7-year term (nipsa.org, transcribed in the description).
+    defaultTermYears: 7,
     name: 'NIPSA Accreditation Criteria (Academic Accreditation)',
     version: 'Academic',
     description:

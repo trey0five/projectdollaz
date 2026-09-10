@@ -2,11 +2,11 @@
 // IngestScenePress — Act-II scene "THE LEDGER PRESS" (the default). The folder
 // and the machine stand level in the visual column (clear of the ledger
 // spine); the sheet rises, aligns with the glowing intake, and feeds in
-// perfectly horizontally; KYRO (the dove) flies in and lands ON TOP of the press
+// perfectly horizontally; KYRO (the owl) flies in and lands ON TOP of the press
 // to wake it (gears scrub with the scroll); the finished window DEVELOPS out of
 // the machine's face with a gold flash, then takes the spotlight the folder
 // vacated. Occlusion does the hiding: sheet z10 < folder z15 < press z30 <
-// window z35 < the dove z40.
+// window z35 < the owl z40.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState } from 'react'
 import { motion, useMotionValueEvent, useTransform } from 'framer-motion'
@@ -55,7 +55,7 @@ export function Stage({ p, beat }) {
   const sheetScale = useTransform(p, [0, 0.14, 0.26, 0.34, 0.48], [0.9, 0.9, 1, 1, 0.88])
   const sheetFade = useTransform(p, [0.5, 0.56], [1, 0])
   const intakeGlow = useTransform(p, [0.32, 0.38, 0.46, 0.52], [0, 1, 1, 0])
-  // The dove: flies in and lands ON TOP of the press (no button — the machine
+  // The owl: flies in and lands ON TOP of the press (no button — the machine
   // wakes when it touches down, with a little dip), then flies to the window.
   const pennyLeft = useTransform(p, [0.3, 0.4, 0.86, 0.95], ['-6%', '72%', '72%', '20%'])
   const pennyTop = useTransform(p, [0.3, 0.4, 0.86, 0.95], ['-14%', '2%', '2%', '56%'])
@@ -71,7 +71,7 @@ export function Stage({ p, beat }) {
     const facing = v < 0.86 ? 'right' : 'left'
     setFlight((cur) => (cur.state === state && cur.facing === facing ? cur : { state, facing }))
   })
-  // Press internals — everything keys off the dove's touchdown at 0.4.
+  // Press internals — everything keys off the owl's touchdown at 0.4.
   const pressDip = useTransform(p, [0.4, 0.43, 0.46], [1, 0.98, 1])
   const gearRotate = useTransform(p, [0.42, 0.74], [0, 420])
   const gearRotateCcw = useTransform(p, [0.42, 0.74], [0, -420])

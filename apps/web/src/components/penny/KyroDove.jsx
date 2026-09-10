@@ -1,6 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// KyroDove — KYRO, the photoreal white dove mascot (replaces the gold coin).
-// Sprite assets live in /public/kyro-dove/ (see kyroDoveManifest.js).
+// KyroDove — KYRO, the photoreal snowy-OWL mascot (component name kept from the
+// dove era; it is an internal identifier). Sprite assets live in
+// /public/kyro-owl/ (see kyroDoveManifest.js).
 //
 // Prop surface is a SUPERSET of the old PennyAvatar so every call site compiles
 // untouched (`PennyAvatar.jsx` is now a thin wrapper over this component):
@@ -14,15 +15,21 @@
 //   listening   pulsing ring only (0.6)     celebrate green check badge
 //   paused      freezes the sprite frame (offscreen / deterministic tests)
 //
-// GEOMETRY: the root is a `span` box sized by height. The three state layers are
-// absolutely positioned INSIDE that one box so their manifest anchors (body
-// centroid for fly/glide, feet for perched) all land on the same point P —
-// switching state never moves the body. Flipping is scaleX(-1) about P.x, so the
-// anchor is invariant under `facing` too. Every length is a fraction of the box
-// height, expressed as calc(var(--kyro-h) × f), so a CSS-var size just works.
-// The box is slightly asymmetric about P.x, so the FLIPPED fly/glide layer
-// overflows the box by ~0.046H on the right — harmless unless a parent clips
-// (overflow:hidden) the dove while it faces left.
+// GEOMETRY: the root is a `span` box sized by height — the box IS the perched
+// owl (plus the sliver the downstroke reaches below its feet). The three state
+// layers are absolutely positioned about one common point P (body centroid for
+// fly/glide, the centroid-matched placement point for perched — see
+// kyroDoveManifest.js) so switching state never moves the body. Flipping is
+// scaleX(-1) about P.x, so the anchor is invariant under `facing` too. Every
+// length is a fraction of the box height, expressed as calc(var(--kyro-h) × f),
+// so a CSS-var size just works.
+// The owl's wingspan is ~6 body-heights, so the fly/glide layers OVERFLOW the
+// box sideways (≈0.66H left / 1.1H right facing right; mirrored facing left)
+// while airborne — only Penny.jsx and the landing scenes fly, and none of them
+// clip. Inactive fly/glide layers are collapsed to scale(0) (not just hidden):
+// a visibility:hidden box still counts toward an ancestor's scrollable
+// overflow, and a 2.7H-wide invisible layer would put a horizontal scrollbar on
+// any overflow:auto host (chat message list, Studio page).
 //
 // MOTION: the wingbeat is driven by rAF through a ref (useSpriteFrame) — no
 // per-frame React state. Idle breathe / speaking flutter / landing settle are
@@ -154,7 +161,9 @@ export default function KyroDove({
           transformOrigin: `${hx(g.ax)} 50%`,
         }}
       >
-        {/* Flying: the 8×5 wingbeat sheet; frame written by useSpriteFrame. */}
+        {/* Flying: the 7×6 wingbeat sheet; frame written by useSpriteFrame.
+            Inactive → collapsed (see header) but kept mounted so the sheet stays
+            decoded for an instant take-off. */}
         <span
           ref={flyRef}
           data-kyro-layer="fly"
@@ -163,6 +172,7 @@ export default function KyroDove({
             backgroundSize: `${g.fly.cols * 100}% ${g.fly.rows * 100}%`,
             backgroundPosition: '0% 0%',
             visibility: flying ? 'visible' : 'hidden',
+            transform: flying ? 'none' : 'scale(0)',
           })}
         />
         {/* Gliding: one wings-spread still (the last ~200ms before landing). */}
@@ -172,6 +182,7 @@ export default function KyroDove({
             backgroundImage: `url(${g.glide.file})`,
             backgroundSize: '100% 100%',
             visibility: gliding ? 'visible' : 'hidden',
+            transform: gliding ? 'none' : 'scale(0)',
           })}
         />
         {/* Perched: the resting still; breathes about the feet. */}

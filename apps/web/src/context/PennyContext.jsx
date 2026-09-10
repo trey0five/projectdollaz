@@ -1,16 +1,16 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Penny = internal codename for the KYRO assistant (the dove). User-visible name
+// Penny = internal codename for the KYRO assistant (the owl). User-visible name
 // is KYRO; identifiers stay "penny" (files, hooks, penny:* events, finrep:penny:*
 // storage keys, data-testids, tokens, the /penny route).
 //
-// Penny — the unified guide + AI character. ONE dove lives globally (mounted once
+// Penny — the unified guide + AI character. ONE owl lives globally (mounted once
 // in AuthedLayout) and plays two roles:
 //   • GUIDE: any page can ask Penny to travel to an on-screen element and deliver a
 //     contextual bubble — e.g. the Data hub sending a first-time user to the trial
 //     balance card ("start here"). A guide can be a single pointer (guideTo) or a
 //     multi-step walkthrough (runTour).
-//   • AI: clicking the dove opens "KYRO AI" (the streaming assistant) — there is no
-//     separate Ask button anymore; the dove IS the assistant.
+//   • AI: clicking the owl opens "KYRO AI" (the streaming assistant) — there is no
+//     separate Ask button anymore; the owl IS the assistant.
 //
 // This context holds only the INTENT (which element + message, and whether the chat
 // is open). The <Penny/> component owns the motion (measuring the target, gliding

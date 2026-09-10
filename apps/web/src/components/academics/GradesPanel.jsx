@@ -9,6 +9,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
+import ColumnChart from '../analytics/charts/ColumnChart.jsx'
 import { GraduationCap, Link2, Lock, ScrollText, UserRoundX } from 'lucide-react'
 import { academicsApi } from '../../lib/api.js'
 
@@ -18,11 +19,12 @@ const EASE = [0.2, 0.8, 0.2, 1]
 const fmt = (v, d = 1) => (v === null || v === undefined ? '—' : Number(v).toFixed(d).replace(/\.0$/, ''))
 
 /** Bar width for a term average, inferring the mark scale from the data. */
-function termBarPct(value, terms) {
-  if (value === null || value === undefined) return 0
+// The top of the axis is the scale the marks are ACTUALLY on: a 0–4 GPA
+// gradebook drawn on a percentage axis renders 3.6 as a sliver.
+function termCeiling(terms) {
   const peak = Math.max(...(terms ?? []).map((t) => t.average ?? 0), 0)
   const ceiling = peak <= 5 ? 4 : peak <= 20 ? 20 : 100 // GPA · points · percent
-  return Math.max(0, Math.min(100, (Number(value) / ceiling) * 100))
+  return Math.max(ceiling, peak)
 }
 
 function Card({ title, eyebrow, children, aside }) {
@@ -147,27 +149,20 @@ export default function GradesPanel({ schoolId, canEdit }) {
               ))}
             </div>
             {(gradebook.byTerm ?? []).length > 0 ? (
-              <div className="space-y-1.5">
-                {/* Scale to the scale the marks are ACTUALLY on. A 0–4 GPA
-                    gradebook drawn as a percentage renders 3.6 as a 3.6%-wide
-                    sliver; anything at or under 5 is a points scale. */}
-                {gradebook.byTerm.map((t) => (
-                  <div key={t.term} className="flex items-center gap-3">
-                    <span className="w-20 shrink-0 text-right text-[11.5px] text-muted">{t.term}</span>
-                    <div className="h-5 flex-1 overflow-hidden rounded bg-navy/[0.05]">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${termBarPct(t.average, gradebook.byTerm)}%` }}
-                        transition={{ duration: 0.6, ease: EASE }}
-                        className="h-full rounded"
-                        style={{ background: `linear-gradient(90deg, ${HUE}, #14b8a6)` }}
-                      />
-                    </div>
-                    <span className="w-12 text-right text-[12px] font-semibold tabular-nums text-navy">{fmt(t.average)}</span>
-                    <span className="w-14 text-right font-mono text-[10.5px] text-muted">{t.count} marks</span>
-                  </div>
-                ))}
-              </div>
+              <ColumnChart
+                rows={gradebook.byTerm.map((t) => ({
+                  id: t.term,
+                  label: t.term,
+                  value: t.average,
+                  formatted: fmt(t.average),
+                  meta: [{ label: 'Marks', value: `${t.count}` }],
+                }))}
+                color={HUE}
+                domain={{ lo: 0, hi: termCeiling(gradebook.byTerm) }}
+                showValues="all"
+                height={180}
+                ariaLabel="Average mark by term"
+              />
             ) : null}
           </div>
         ) : (

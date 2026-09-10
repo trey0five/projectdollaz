@@ -112,7 +112,7 @@ describe('requirement seed — shape rules the engine relies on', () => {
 })
 
 describe('requirement seed — the frozen inventory', () => {
-  it('20 + 20 / 11 / 14 + 16 / 13 / 12 / 12 + 10 = 128 rows across nine frameworks', () => {
+  it('20 + 20 / 11 / 14 + 14 + 16 / 13 / 12 / 12 + 10 = 142 rows across ten frameworks', () => {
     // The three transcribed frameworks are UNCHANGED — that is the point of
     // listing them separately. FCIS, ACSI, ACS WASC and SAIS were added for the
     // schools that hold a second accreditation alongside Cognia, and each asks for
@@ -123,12 +123,14 @@ describe('requirement seed — the frozen inventory', () => {
     expect(FRAMEWORK_REQUIREMENT_SEEDS.cognia_2025).toHaveLength(20)
     expect(FRAMEWORK_REQUIREMENT_SEEDS.msa_cess_2022).toHaveLength(11)
     expect(FRAMEWORK_REQUIREMENT_SEEDS.nsbecs).toHaveLength(14)
+    // fccap shares nsbecs's list (reference-equality assertion below).
+    expect(FRAMEWORK_REQUIREMENT_SEEDS.fccap).toHaveLength(14)
     expect(FRAMEWORK_REQUIREMENT_SEEDS.fcis_2023).toHaveLength(16)
     expect(FRAMEWORK_REQUIREMENT_SEEDS.acsi_reach).toHaveLength(13)
     expect(FRAMEWORK_REQUIREMENT_SEEDS.acs_wasc).toHaveLength(12)
     expect(FRAMEWORK_REQUIREMENT_SEEDS.sais_2023).toHaveLength(12)
     expect(FRAMEWORK_REQUIREMENT_SEEDS.nipsa_academic).toHaveLength(10)
-    expect(EVERY_ROW).toHaveLength(128)
+    expect(EVERY_ROW).toHaveLength(142)
   })
 
   it('WS2 lockstep: cognia_2025 requirements ARE cognia_2022\'s — one list, by reference', () => {
@@ -136,6 +138,12 @@ describe('requirement seed — the frozen inventory', () => {
     // hang on the same standards. Reference equality (not a copy) is what makes
     // drift impossible: there is no second list to edit.
     expect(FRAMEWORK_REQUIREMENT_SEEDS.cognia_2025).toBe(FRAMEWORK_REQUIREMENT_SEEDS.cognia_2022)
+  })
+
+  it('lockstep: fccap requirements ARE nsbecs\'s — the FCC program scores the NSBECS rows', () => {
+    // Same mechanism, same reason: fccap's catalog standards are NSBECS_STANDARDS
+    // by reference, so the artifacts hang on identical codes.
+    expect(FRAMEWORK_REQUIREMENT_SEEDS.fccap).toBe(FRAMEWORK_REQUIREMENT_SEEDS.nsbecs)
   })
 
   it('every seeded framework has a catalog to hang its requirements on', () => {
@@ -147,7 +155,7 @@ describe('requirement seed — the frozen inventory', () => {
     }
   })
 
-  it('106 platform, 2 intake, 8 integration, 12 external', () => {
+  it('119 platform, 2 intake, 9 integration, 12 external', () => {
     // AIC Phase F moved THREE rows intake → platform (COG-10/staff_evaluation,
     // COG-A3 and NSBECS-12/inspection) and added none. `integration` and `external`
     // did not move: an LMS we are not connected to and an accreditor portal we do
@@ -160,12 +168,14 @@ describe('requirement seed — the frozen inventory', () => {
     // `intake` stays at ONE distinct row (COG-29/pd_records), counted TWICE
     // because both Cognia editions share the list: the PD register does not
     // exist, and a second edition asking for PD would not conjure it.
+    // fccap counts NSBECS's 14 a second time (shared list): 13 platform,
+    // 0 intake, 1 integration, 0 external — nothing new claimed.
     const by = (v: string) => EVERY_ROW.filter(([, r]) => r.dataAvailability === v).length
-    expect(by('platform')).toBe(106)
+    expect(by('platform')).toBe(119)
     expect(by('intake')).toBe(2)
-    expect(by('integration')).toBe(8)
+    expect(by('integration')).toBe(9)
     expect(by('external')).toBe(12)
-    expect(by('platform') + by('intake') + by('integration') + by('external')).toBe(128)
+    expect(by('platform') + by('intake') + by('integration') + by('external')).toBe(142)
   })
 
   it('the module-gated registers are named only where they resolve', () => {
@@ -183,6 +193,7 @@ describe('requirement seed — the frozen inventory', () => {
       'cognia_2022/COG-A3/inspection',
       'cognia_2025/COG-10/staff_evaluation',
       'cognia_2025/COG-A3/inspection',
+      'fccap/NSBECS-12/inspection',
       'fcis_2023/FCIS-11/staff_evaluation',
       'fcis_2023/FCIS-12/inspection',
       'nsbecs/NSBECS-12/inspection',
@@ -272,12 +283,12 @@ describe('requirement seed — the frozen inventory', () => {
 
   it('the curriculum convention ships as a POLICY delegation, not a curriculum feature', () => {
     const curriculum = EVERY_ROW.filter(([, r]) => r.tag === 'curriculum_review')
-    // COG-12 (×2 — both Cognia editions share the list), MSA-5, NSBECS-7,
-    // FCIS-9, ACSI-5, WASC-B, SAIS-3. Every framework asks about curriculum;
-    // none of them gets a curriculum feature out of us. The Policy row whose
-    // category names curriculum carries the review cycle, and
-    // computeReviewStatus does the rest.
-    expect(curriculum.length).toBe(8)
+    // COG-12 (×2 — both Cognia editions share the list), MSA-5, NSBECS-7 (×2 —
+    // fccap shares the NSBECS list), FCIS-9, ACSI-5, WASC-B, SAIS-3. Every
+    // framework asks about curriculum; none of them gets a curriculum feature
+    // out of us. The Policy row whose category names curriculum carries the
+    // review cycle, and computeReviewStatus does the rest.
+    expect(curriculum.length).toBe(9)
     for (const [, r] of curriculum) {
       expect(r.sourceRegister).toBe('policy')
       expect(r.windowKind).toBe('source_interval')

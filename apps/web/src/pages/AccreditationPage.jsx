@@ -76,6 +76,7 @@ import JourneyTab from '../components/accreditation/JourneyTab.jsx'
 import ExplainerDrawer from '../components/accreditation/ExplainerDrawer.jsx'
 // ── Accreditor-recognition badges (NCPSA / ICAISA) ────────────────────────────
 import RecognitionChips from '../components/accreditation/RecognitionChips.jsx'
+import EvidencePlatformChip from '../components/accreditation/EvidencePlatformChip.jsx'
 // ── Phase 3: framework catalog + rubric readiness + evidence warehouse ────────
 import ReadinessHero from '../components/accreditation/ReadinessHero.jsx'
 import AdoptFrameworkModal from '../components/accreditation/AdoptFrameworkModal.jsx'
@@ -3177,6 +3178,9 @@ function AccreditationWorkspace() {
           {/* Accreditor-recognition badges (NCPSA / ICAISA) for the framework
               this page reads — absent for most, Cognia included. */}
           <RecognitionChips recognitions={activeCatalogFw?.recognitions} light />
+          {/* The accreditor's evidence portal (FCC → "Filed in Accreditrac") —
+              nothing for the (many) frameworks without one. */}
+          <EvidencePlatformChip platform={activeCatalogFw?.evidencePlatform} light />
           {canEdit && adopted ? (
             <button
               type="button"

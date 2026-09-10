@@ -22,15 +22,16 @@ export const NAV = {
 
 export const HERO = {
   kicker: 'The operating platform for independent schools',
-  h1Line1: 'A hundred moving parts.',
+  h1Line1: 'Many moving parts.',
   h1Line2: 'One platform.',
   subhead:
-    'Finance, enrollment, governance, facilities, advancement, and board-ready reporting — every part of the school in one place, prioritized for you each morning.',
+    'Finance, enrollment, governance, facilities, advancement, and board-ready reporting — the parts of the school that matter, in one place, prioritized for you each morning.',
   ctaPrimary: { label: 'Get started', to: '/register' },
   ctaGhost: { label: 'Sign in', to: '/login' },
-  trustLine: 'Built for heads of school, business officers, and diocese finance teams.',
+  trustLine:
+    'Built for heads of school, business officers, and diocese finance teams · Built to FERPA standards. No student logins.',
   scrollHint: 'Follow the day',
-  // The top-left mascot lockup the dove flies into at the end of the intro.
+  // The top-left mascot lockup the owl flies into at the end of the intro.
   brandName: 'KYRO',
   brandTag: 'Your AI Chief of Staff',
   demoSrSummary:
@@ -217,12 +218,18 @@ export const ORG_COMMAND = {
 
 export const TRUST = {
   heading: 'Built for the trust schools require',
+  // APPROVED LANGUAGE ONLY (docs/FERPA_Compliance_Overview.md §2–3): "built to
+  // FERPA standards" / "FERPA-aligned by contract" and "no student-facing
+  // surfaces, so COPPA does not apply". There is no FERPA certification and
+  // COPPA keys to data collected online FROM a child, so the word "compliant"
+  // next to either law is a claim we never make — no-compliant-claim.spec.js
+  // fails the build on it. The privacy page explains the posture in full.
+  sub: 'Built to FERPA standards — FERPA-aligned by contract. KYRO has no student-facing surfaces, so COPPA does not apply. Every record is encrypted in transit and at rest, hosted on AWS in the United States, and AI providers run under no-training, zero-data-retention terms.',
   items: [
-    // "FERPA-aligned", deliberately — there is no FERPA certification, and the
-    // privacy page this badge opens explains the honest posture (§5 truth rule).
-    { icon: 'shield', label: 'FERPA-aligned', to: '/privacy' },
-    { icon: 'lock', label: 'End-to-end encrypted' },
+    { icon: 'shield', label: 'Built to FERPA standards', to: '/privacy' },
+    { icon: 'lock', label: 'Encrypted in transit & at rest' },
     { icon: 'server', label: 'Hosted on AWS · US' },
+    { icon: 'sparkles', label: 'AI: no training · zero retention', to: '/privacy' },
   ],
 }
 

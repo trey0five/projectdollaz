@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // WhatThisMeasures — the sentence every chart on this page was missing.
 //
-// A bar of 63 beside a chip reading "NATIONAL 50" is not a finding, it is a
+// A column of 63 beside a chip reading "NATIONAL 50" is not a finding, it is a
 // riddle: nothing on screen said what unit 63 was in, what the dashed lines
 // were, or which slice of the data was being drawn. The reader had to already
 // know the answer to read the chart that was supposed to give it to them.
@@ -115,15 +115,15 @@ function measureSentence(chart, ctx, { example } = {}) {
     case 'standing':
       return (
         <>
-          Each bar is one school's average <Unit>{u.noun}</Unit> — {def}.
+          Each column is one school's average <Unit>{u.noun}</Unit> — {def}.
         </>
       )
     case 'subjects':
       return (
         <>
-          Each bar is a <Unit>gap</Unit>, not a score: how far this school sits from the network average in that
-          subject, in {u.points}. The centre line is that subject's own network average, so right is ahead and left is
-          behind.
+          Each column is a <Unit>gap</Unit>, not a score: how far this school sits from the network average in that
+          subject, in {u.points}. The baseline is that subject's own network average, so above the line is ahead and
+          below it is behind.
         </>
       )
     case 'distribution':
@@ -270,7 +270,7 @@ function refChipsFor(refs, ctx, peerAvg) {
         value={num(peerAvg, 1)}
         // The peer average deliberately EXCLUDES this school — including
         // yourself in the line you are measured against damps every gap — and a
-        // reader comparing the bar to the line is owed that.
+        // reader comparing the column to the line is owed that.
         gloss={n ? `the average of the other ${n} school${n === 1 ? '' : 's'}, this one excluded` : 'the network average, this school excluded'}
       />,
     )

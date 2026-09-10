@@ -85,6 +85,7 @@ export const KNOWN_FRAMEWORK_CODES = new Set([
   'cognia_2025',
   'msa_cess_2022',
   'nsbecs',
+  'fccap',
   'fcis_2023',
   'acsi_reach',
   'acs_wasc',

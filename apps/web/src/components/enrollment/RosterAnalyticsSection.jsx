@@ -6,8 +6,8 @@
 // so filtering here and filtering the roster speak one language.
 //
 // Dataviz (skill-checked): identity mixes (race/gender/ethnicity/age band) are
-// BarLists with the validated CATEGORICAL_LIGHT palette assigned in FIXED key
-// order (color follows the entity — a filter never repaints survivors); the
+// column charts with the validated CATEGORICAL_LIGHT palette assigned in FIXED
+// key order (color follows the entity — a filter never repaints survivors); the
 // grade distribution is a magnitude read → ONE hue (sky) across the ordered
 // grade grid; flags are a stat strip, not a chart; the headcount trend is the
 // The '<5' min-cell rule (formatMinCell) masks every CATEGORICAL cell —
@@ -20,7 +20,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { BarChart3, LifeBuoy, FileCheck2, Languages, Flag } from 'lucide-react'
 import { enrollmentApi, apiErrorMessage } from '../../lib/api.js'
-import BarList from '../analytics/charts/BarList.jsx'
+import ColumnChart from '../analytics/charts/ColumnChart.jsx'
 import { CATEGORICAL_LIGHT } from '../analytics/v2/chartPalette.js'
 import {
   GRADE_KEYS,
@@ -72,17 +72,40 @@ function toRows(counts, keys, labels, colorFor) {
         share: !masked && total > 0 ? `${Math.round((100 * count) / total)}%` : undefined,
         raw: count,
         suppressed,
+        // A masked cell (<5, or server-suppressed) draws as a hatched stub,
+        // never as a column whose height would print the withheld count.
+        masked,
       }
     })
     .filter((r) => r.raw > 0 || r.suppressed)
 }
 
 function MixCard({ title, rows, sortDesc = true }) {
+  // Sorting re-orders the columns only — every row keeps the colour it was
+  // assigned by key order, so a re-sort never repaints a survivor.
+  // Masked cells sort as ZERO: ordering two '<5' cells by their true counts
+  // would leak which of them is larger.
+  const rank = (x) => (x.masked ? 0 : x.value)
+  const list = sortDesc ? [...rows].sort((a, b) => rank(b) - rank(a)) : rows
   return (
     <div className="card-soft min-w-0 p-4 sm:p-5">
       <h4 className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-muted">{title}</h4>
       {rows.length ? (
-        <BarList rows={rows} sortDesc={sortDesc} formatter={(v) => formatMinCell(v)} />
+        <ColumnChart
+          rows={list.map((r) => ({
+            id: r.id,
+            label: r.label,
+            value: r.masked ? null : r.value,
+            color: r.color,
+            suppressed: r.masked,
+            formatted: r.formatted,
+            meta: r.share ? [{ label: 'Share', value: r.share }] : [],
+          }))}
+          formatter={(v) => formatMinCell(v)}
+          showValues="all"
+          height={150}
+          ariaLabel={title}
+        />
       ) : (
         // An ALL-EMPTY dimension collapses to one honest sentence instead of a
         // near-empty chart — the same vocabulary the filter pickers use.
@@ -159,7 +182,7 @@ export default function RosterAnalyticsSection({ schoolId }) {
   const counts = agg?.counts ?? {}
   // ONE COLOUR PER VALUE, EVERYWHERE: the same demographicColor the register
   // pills and the hero ring use, keyed by CANONICAL position — never by which
-  // values happen to be present, and never by rank. BarList's own contract
+  // values happen to be present, and never by rank. The column chart's contract
   // ("colour follows the entity") makes a filter or re-sort repaint nothing.
   const dimColor = (dimension, keys) => (i) =>
     demographicColor(dimension, keys[i]) ?? CATEGORICAL_LIGHT[i % CATEGORICAL_LIGHT.length]

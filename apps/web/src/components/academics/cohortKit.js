@@ -6,11 +6,11 @@
 // server's pure assessment layer, and a second implementation in the browser is
 // exactly the thing that would eventually disagree with the print packet.
 //
-// The one judgement call in this file is `cohortFill`, and it is the single
+// The one judgement call in this file is `cohortStep`, and it is the single
 // most load-bearing line in the whole view — see the comment on it.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useRef, useState } from 'react'
-import { divergingFill } from './chartKit.jsx'
+import { divergingScale } from '../analytics/charts/heatScales.js'
 
 export const COH_HUE = '#0D9488'
 export const COH_EASE = [0.2, 0.8, 0.2, 1]
@@ -63,25 +63,26 @@ export const legToken = (state) => (state === 'suppressed' ? '<5' : '—')
  * matrix read.
  *
  * `direction` is decided on the SERVER against the family's material gap: a +2
- * on a percentile scale whose gap is 5 is 'held', and painting it green would
+ * on a percentile scale whose gap is 5 is 'held', and painting it blue would
  * be the view inventing a finding the analysis explicitly refused to make.
  *
- * `divergingFill` cannot be trusted to make that call on its own. Its neutral
- * band is a hardcoded |delta| < 1.5 in raw points, which knows nothing about
- * the family — it would paint that +2 percentile move green, and it would grey
- * out a +0.8 ACT move that IS material on a 0.5-point gap. So the branch is
- * chosen here from `direction`, and divergingFill is then handed a magnitude
- * that clears its band, so the branch we chose is the branch it paints. The
- * floor only ever affects INTENSITY, never hue, and only for moves so small
- * that the intensity is near the bottom of the ramp anyway.
+ * The shared diverging scale (heatScales) steps by multiples of that same gap,
+ * so the matrix's colour steps and the server's verdict agree by construction:
+ * `held` lands on the neutral grey whatever the sign, and a gained/declined
+ * ruling picks the arm while the magnitude only sets the intensity. The scale
+ * is built ONCE per matrix from the family's gap (`cohortScale`), never from
+ * the largest move on screen — a cell keeps its shade whatever else is shown.
  */
-const DIVERGING_BAND = 1.5
+export function cohortScale(gap) {
+  return divergingScale(gap)
+}
 
-export function cohortFill(direction, netChange, worst = 20) {
-  if (netChange === null || netChange === undefined || direction === 'unknown') return divergingFill(null)
-  if (direction === 'held') return divergingFill(0)
-  const mag = Math.max(Math.abs(Number(netChange)), DIVERGING_BAND + 0.01)
-  return divergingFill(direction === 'gained' ? mag : -mag, Math.max(worst, mag))
+/** The step a cell wears — null when there is no number to place. */
+export function cohortStep(scale, direction, netChange) {
+  if (direction === 'unknown') return null
+  if (direction === 'held') return scale.mid
+  if (netChange === null || netChange === undefined) return null
+  return scale.stepFor(netChange, direction)
 }
 
 /**

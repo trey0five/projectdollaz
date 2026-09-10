@@ -96,7 +96,7 @@ export const TARGET_KEYS = Object.keys(TARGET_REGISTRY)
 // redirect, the modal listener does not exist, and every datahub-* dom id is
 // absent — so each dataHub.* step used to resolve to a target that silently
 // no-oped (runAgentGuide drops unresolvable steps, and a resolvable-but-absent
-// id just parks the dove). Penny OFFERED nine tours it could not give.
+// id just parks the owl). Penny OFFERED nine tours it could not give.
 //
 // The keys are FROZEN (the backend schema enum and this file must stay
 // byte-identical, and v1 must keep working), so the split lives here, at

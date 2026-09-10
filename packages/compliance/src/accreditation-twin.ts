@@ -523,6 +523,7 @@ export type TwinFrameworkCode =
   | 'cognia_2025'
   | 'msa_cess_2022'
   | 'nsbecs'
+  | 'fccap'
   | 'fcis_2023'
   | 'acsi_reach'
   | 'acs_wasc'
@@ -533,6 +534,7 @@ export const TWIN_FRAMEWORK_CODES = [
   'cognia_2025',
   'msa_cess_2022',
   'nsbecs',
+  'fccap',
   'fcis_2023',
   'acsi_reach',
   'acs_wasc',
@@ -550,10 +552,16 @@ export const TWIN_FRAMEWORK_CODES = [
  * helper and the compiler walks you through every rule — which is the tripwire
  * working as designed.
  */
+/**
+ * The SAME mechanism carries `fccap`: the Florida Catholic Conference
+ * Accreditation Program's standards ARE the NSBECS rows (catalog-seed shares the
+ * array by reference), so every rule cites its `nsbecs` codes against fccap —
+ * again by reference, again spec-pinned, again no second array to drift.
+ */
 function cogniaPair(
-  map: Readonly<Record<Exclude<TwinFrameworkCode, 'cognia_2025'>, readonly string[]>>,
+  map: Readonly<Record<Exclude<TwinFrameworkCode, 'cognia_2025' | 'fccap'>, readonly string[]>>,
 ): Readonly<Record<TwinFrameworkCode, readonly string[]>> {
-  return { ...map, cognia_2025: map.cognia_2022 }
+  return { ...map, cognia_2025: map.cognia_2022, fccap: map.nsbecs }
 }
 
 export interface TwinRuleUnlock {

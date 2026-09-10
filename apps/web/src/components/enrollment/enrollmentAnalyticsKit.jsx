@@ -30,6 +30,7 @@ import { niceTicks } from '../academics/cohortKit.js'
 import { formatMetricValue } from '../../lib/metricMeta.js'
 import { moduleHue } from '../module/moduleAnatomy.js'
 import { GRADE_LABELS } from './studentFilters.jsx'
+import { SEQUENTIAL_STEPS } from '../analytics/charts/heatScales.js'
 
 /** The module's locked brand hue — magnitude ink for every chart on this tab. */
 export const ENROLL_HUE = moduleHue('enrollment')
@@ -257,17 +258,25 @@ export function separateLabels(items, { gap = 14, lo = -Infinity, hi = Infinity 
  *
  * Headcount has no midpoint and no good/bad axis, so a diverging or categorical
  * scheme would invent a meaning the number does not carry. `t` is the value's
- * position in the SHARED domain (0 at the floor, 1 at the largest cell on the
- * whole grid), so cells are comparable across rows and columns — the entire
- * point of a heatmap and the thing their 75-bar grouped chart could not do.
+ * position in the SHARED domain (0 at the floor, 1 at the top of the grid's
+ * nice-rounded scale), so cells are comparable across rows and columns — the
+ * entire point of a heatmap and the thing their 75-bar grouped chart could not do.
+ *
+ * STEPPED, NOT CONTINUOUS. The old alpha ramp (sky at 7%→92%) flipped its ink
+ * from navy to white at t≈0.55 — the one band where NEITHER ink cleared 3:1.
+ * The fill now snaps to one of six validated steps (heatScales.SEQUENTIAL_STEPS)
+ * and the ink is the step's own, chosen so the printed count clears AA on that
+ * exact fill. Both functions read the same step, so they can never disagree.
  */
-export function rampFill(t) {
+const stepAt = (t) => {
   const c = Math.max(0, Math.min(1, Number.isFinite(t) ? t : 0))
-  return `rgba(14, 165, 233, ${(0.07 + c * 0.85).toFixed(3)})`
+  const n = SEQUENTIAL_STEPS.length
+  return SEQUENTIAL_STEPS[Math.min(n - 1, Math.floor(c * n))]
 }
+export const rampFill = (t) => stepAt(t).fill
 
-/** Ink that stays legible as the ramp darkens under it. */
-export const rampInk = (t) => (t > 0.55 ? '#F8FAFC' : '#0F2A4A')
+/** Ink that stays legible as the ramp darkens under it — the step's own. */
+export const rampInk = (t) => stepAt(t).ink
 
 // ── The explainer strip ──────────────────────────────────────────────────────
 

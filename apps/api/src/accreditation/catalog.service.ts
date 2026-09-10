@@ -15,6 +15,7 @@ import { FRAMEWORK_REQUIREMENT_SEEDS } from './catalog-requirements-seed.js'
 import { AccreditationSnapshotService } from './readiness-snapshot.service.js'
 import { divisionsFor, sealLineFor } from './divisions.js'
 import { recognitionsFor } from './recognitions.js'
+import { evidencePlatformFor } from './evidence-platforms.js'
 
 /** One framework row as returned to the client (with per-school adoption facts). */
 export interface FrameworkPublic {
@@ -51,6 +52,11 @@ export interface FrameworkPublic {
   /** Recognition-body badges (NCPSA/ICAISA) — resolved from the closed
    *  constant; [] for accreditors on neither list (a verified absence). */
   recognitions: { code: string; name: string; line: string }[]
+  /** The accreditor's own evidence/self-study portal (e.g. FCC → Accreditrac),
+   *  resolved from the closed constant in evidence-platforms.ts; null for the
+   *  (many) accreditors without a separate portal we have verified. Display
+   *  metadata only — KYRO never submits there. */
+  evidencePlatform: { name: string; line: string } | null
   /** Resolved at read time from supersededByCode; a dangling code reads null. */
   supersededBy: { code: string; name: string; version: string } | null
   /** Present only when supersededBy != null AND the school holds rows here. */
@@ -347,6 +353,7 @@ export class AccreditationCatalogService implements OnModuleInit {
         const adoptedCount = adoptedBy.get(fw.id) ?? 0
         const profile = profileByFw.get(fw.id) ?? null
         const successor = fw.supersededByCode ? (byCode.get(fw.supersededByCode) ?? null) : null
+        const evidencePlatform = evidencePlatformFor(fw.code)
         return {
           id: fw.id,
           code: fw.code,
@@ -377,6 +384,9 @@ export class AccreditationCatalogService implements OnModuleInit {
             name: r.name,
             line: r.line,
           })),
+          evidencePlatform: evidencePlatform
+            ? { name: evidencePlatform.name, line: evidencePlatform.line }
+            : null,
           supersededBy: successor
             ? { code: successor.code, name: successor.name, version: successor.version }
             : null,

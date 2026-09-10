@@ -3,15 +3,15 @@
 // hand-built in SVG + framer-motion (our free "Lottie"): the same mechanics a
 // Lottie file gives you — keyframed vector groups played when the section
 // scrolls into view — authored in code instead of After Effects. ("Penny" is the
-// internal codename; the character is KYRO the dove.)
+// internal codename; the character is KYRO the owl.)
 //
 // The scene (plays on every viewport entry, ~2.2s, then settles into idle):
 //   1. KYRO FLIES in from off-left (wingbeat sprite), glides for the last beat,
 //      then lands with a squash-and-stretch touchdown
 //   2. gold sparkle-stars pop around the landing spot (staggered)
 //   3. two loose feathers drift down out of the touchdown
-//   4. a sparkline DRAWS itself beneath the dove (pathLength) and its end-dot glows
-//   5. idle: a gentle bob while the dove stays in view (the perched sprite breathes)
+//   4. a sparkline DRAWS itself beneath the owl (pathLength) and its end-dot glows
+//   5. idle: a gentle bob while the owl stays in view (the perched sprite breathes)
 //
 // Trigger = framer's useInView (IntersectionObserver under the hood — exactly
 // Duolingo's mechanism; they use rootMargin for their fixed header, we use a
@@ -25,7 +25,7 @@ import { motion, useInView, useReducedMotion } from 'framer-motion'
 import PennyAvatar from '../../components/penny/PennyAvatar.jsx'
 import { FALLBACK_GEOMETRY } from '../../components/penny/kyroDoveManifest.js'
 
-// The touchdown squash pivots on the bird's FEET (a fraction of the dove box).
+// The touchdown squash pivots on the bird's FEET (a fraction of the owl box).
 const FEET_ORIGIN = `${(FALLBACK_GEOMETRY.feet.x / FALLBACK_GEOMETRY.aspect * 100).toFixed(1)}% ${(FALLBACK_GEOMETRY.feet.y * 100).toFixed(1)}%`
 
 // Four-point sparkle path (cx, cy, r) — the classic glint.
@@ -178,7 +178,7 @@ export default function PennyLottieScene() {
         }
       >
         {/* Touchdown squash rides ON TOP of the flight path (separate wrapper so
-            transforms compose); starts the moment the dove perches. */}
+            transforms compose); starts the moment the owl perches. */}
         <motion.div
           initial={false}
           animate={

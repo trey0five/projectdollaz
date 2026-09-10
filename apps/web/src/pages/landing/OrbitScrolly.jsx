@@ -77,7 +77,7 @@ const clamp = (v, a, b) => Math.min(b, Math.max(a, v))
 const seg = (p, a, b) => clamp((p - a) / (b - a), 0, 1)
 const backOut = (t) => { const c = 1.70158; return 1 + (--t) * t * ((c + 1) * t + c) }
 const smooth = (t) => t * t * (3 - 2 * t)
-// Seconds the dove's fly-in arc takes (shared by the framer keyframes and the
+// Seconds the owl's fly-in arc takes (shared by the framer keyframes and the
 // flying→gliding→perched sprite timers so the handoff lands with touchdown).
 const ENTRANCE_S = 1.15
 
@@ -338,7 +338,7 @@ export default function OrbitScrolly() {
   const [shockKey, setShockKey] = useState(0)
   const activeRef = useRef(0)
 
-  // KYRO's entrance: the first time the orbit scrolls into view the dove FLIES
+  // KYRO's entrance: the first time the orbit scrolls into view the owl FLIES
   // in on an arc from the top-left (sprite flapping), glides for the last
   // stretch, and perches at the core facing right. `phase` drives the sprite
   // state; the arc itself is the framer keyframe on the inner wrapper below.
@@ -383,7 +383,7 @@ export default function OrbitScrolly() {
       el.style.transform = `translate(${x}px, ${y}px) scale(${sc})`
       // Gathered near the core (formation start / collapse end) the planets sit
       // BEHIND KYRO (z < core's 60) and branch out from it; only once the
-      // orbit is formed do front-half passes layer above the dove.
+      // orbit is formed do front-half passes layer above the owl.
       el.style.zIndex = String(rf < 0.85 ? 10 + Math.round(depth * 20) : 30 + Math.round(depth * 40))
       el.style.opacity = String((0.45 + 0.55 * depth) * (1 - collapse))
       el.style.filter = depth < 0.35 ? 'blur(1.2px)' : 'none'
@@ -539,7 +539,7 @@ export default function OrbitScrolly() {
             ref={typeRef}
             aria-hidden="true"
             // Raised from 30% so the word clears KYRO instead of running through it
-            // — the dove was covering the middle letters at most window heights.
+            // — the owl was covering the middle letters at most window heights.
             className="pointer-events-none absolute inset-x-0 top-[21%] z-0"
             style={{ opacity: 0 }}
           >

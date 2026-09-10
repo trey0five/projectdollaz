@@ -6068,7 +6068,7 @@ export class AssistantService {
       '(trialBalances, monthly, operational, budget, forecast, schedules, compliance); when page is "settings" ' +
       'you may pass section (account, members, school, organization, reports, integrations, billing, alerts). ' +
       'It only moves the view and changes no data. start_walkthrough runs an interactive on-screen tour: give it an ' +
-      'ORDERED list of steps and KYRO (your on-screen dove) flies to each control, navigating across pages as needed. ' +
+      'ORDERED list of steps and KYRO (your on-screen owl) flies to each control, navigating across pages as needed. ' +
       'Use ONLY the provided target keys; each step has a short message and may name a page/openModal to open ' +
       'first. Walk the user through a process step by step when they ask how to do something. ' +
       'IMPORTANT: when the user asks WHERE something is, or to SHOW / POINT OUT / "go to" / "take me to" a ' +

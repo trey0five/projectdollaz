@@ -5,11 +5,11 @@
 // explains the shared-responsibility model honestly.
 import { Link } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
-import { ShieldCheck, Lock, Server } from 'lucide-react'
+import { ShieldCheck, Lock, Server, Sparkles } from 'lucide-react'
 import Reveal, { EASE } from './Reveal.jsx'
 import { TRUST } from './landingContent.js'
 
-const ICONS = { shield: ShieldCheck, lock: Lock, server: Server }
+const ICONS = { shield: ShieldCheck, lock: Lock, server: Server, sparkles: Sparkles }
 const FOCUS_RING = 'outline-none focus-visible:ring-2 focus-visible:ring-gold/60'
 
 function Badge({ icon, label, to, index }) {
@@ -67,9 +67,19 @@ export default function TrustBar() {
           <p className="text-[12px] font-bold uppercase tracking-[0.22em] text-[#7a5e00]">
             {TRUST.heading}
           </p>
+          {/* The privacy statement in the approved words — the one place on the
+              public site that says the posture out loud, above the badges. */}
+          {TRUST.sub ? (
+            <p
+              data-testid="trust-statement"
+              className="mx-auto mt-3 max-w-2xl text-[14.5px] leading-relaxed text-navy/75"
+            >
+              {TRUST.sub}
+            </p>
+          ) : null}
         </Reveal>
 
-        <ul className="mx-auto mt-7 grid max-w-md grid-cols-3 items-stretch gap-2.5 sm:mt-8 sm:flex sm:max-w-none sm:flex-wrap sm:items-center sm:justify-center sm:gap-5">
+        <ul className="mx-auto mt-7 grid max-w-md grid-cols-2 items-stretch gap-2.5 sm:mt-8 sm:flex sm:max-w-none sm:flex-wrap sm:items-center sm:justify-center sm:gap-5">
           {TRUST.items.map((item, i) => (
             <li key={item.label} className="sm:flex">
               <Badge {...item} index={i} />

@@ -1,9 +1,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// ByGradeChart — a simple, dependency-free horizontal bar chart of the latest
-// roster's headcount by grade (the /summary or /snapshot byGrade map). Pure SVG-
-// free CSS bars so it never pulls a chart lib into the bundle. Grades render in the
-// canonical GRADE_KEYS order; grades with no students are omitted. Navy/gold theme.
+// ByGradeChart — the latest roster's headcount by grade (the /summary or
+// /snapshot byGrade map) as columns on the shared ColumnChart primitive, in the
+// enrollment module hue. Grades render in the canonical GRADE_KEYS order; grades
+// with no students are omitted.
 // ─────────────────────────────────────────────────────────────────────────────
+import ColumnChart from '../analytics/charts/ColumnChart.jsx'
+import { moduleHue } from '../module/moduleAnatomy.js'
+
+const ENROLL_HUE = moduleHue('enrollment')
 
 // The canonical enrollment grid order (mirrors @finrep/analytics GRADE_KEYS). Kept
 // local so the web bundle never imports the analytics package just for a label list.
@@ -26,7 +30,6 @@ export default function ByGradeChart({ byGrade }) {
     )
   }
 
-  const max = Math.max(...rows.map((r) => r.count))
   const total = rows.reduce((s, r) => s + r.count, 0)
 
   return (
@@ -35,24 +38,13 @@ export default function ByGradeChart({ byGrade }) {
         <h3 className="font-serif text-lg font-bold text-navy">Enrollment by grade</h3>
         <span className="text-[13px] text-muted">{total.toLocaleString('en-US')} students</span>
       </div>
-      <ul className="space-y-1.5">
-        {rows.map((r) => (
-          <li key={r.grade} className="flex items-center gap-3">
-            <span className="w-9 shrink-0 text-right text-[12.5px] font-semibold text-muted">
-              {GRADE_LABEL[r.grade] ?? r.grade}
-            </span>
-            <div className="relative h-5 flex-1 overflow-hidden rounded-md bg-section">
-              <div
-                className="h-full rounded-md bg-gold-gradient"
-                style={{ width: `${Math.max(4, (r.count / max) * 100)}%` }}
-              />
-            </div>
-            <span className="w-10 shrink-0 text-right text-[13px] font-semibold text-navy">
-              {r.count}
-            </span>
-          </li>
-        ))}
-      </ul>
+      <ColumnChart
+        rows={rows.map((r) => ({ id: r.grade, label: GRADE_LABEL[r.grade] ?? r.grade, value: r.count }))}
+        color={ENROLL_HUE}
+        showValues="all"
+        height={180}
+        ariaLabel="Enrollment by grade"
+      />
     </div>
   )
 }

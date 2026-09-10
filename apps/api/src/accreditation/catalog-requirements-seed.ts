@@ -280,8 +280,8 @@ const NIPSA_REQUIREMENTS: CatalogRequirementSeed[] = [
  * frameworkCode → its requirement rows.
  *
  * Counts: 20 / 11 / 14 for the three originally transcribed frameworks, plus
- * 16 / 13 / 12 / 12 for FCIS / ACSI / WASC / SAIS, plus cognia_2025's shared 20
- * and NIPSA's 10 = 128. The spec pins each number so a row added or dropped by
+ * 16 / 13 / 12 / 12 for FCIS / ACSI / WASC / SAIS, plus cognia_2025's shared 20,
+ * NIPSA's 10 and fccap's shared 14 = 142. The spec pins each number so a row added or dropped by
  * accident is a failing build, not a quiet change to what every school on that
  * framework is asked for.
  */
@@ -294,6 +294,10 @@ export const FRAMEWORK_REQUIREMENT_SEEDS: Record<string, CatalogRequirementSeed[
   cognia_2025: COGNIA_REQUIREMENTS,
   msa_cess_2022: MSA_REQUIREMENTS,
   nsbecs: NSBECS_REQUIREMENTS,
+  // fccap's standards ARE the NSBECS rows (catalog-seed shares the array by
+  // reference), so the same artifacts hang on the same standards — the SAME
+  // list, never a copy; the seed spec asserts the reference equality.
+  fccap: NSBECS_REQUIREMENTS,
   fcis_2023: FCIS_REQUIREMENTS,
   acsi_reach: ACSI_REQUIREMENTS,
   acs_wasc: WASC_REQUIREMENTS,

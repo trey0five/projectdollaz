@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Penny — ONE global floating mascot (mounted once in AuthedLayout), replacing
 // the old bottom-right "Ask FinRep" launcher AND the data-hub-only guide mascot.
-// "Penny" is the internal codename; what the user sees is KYRO the dove
+// "Penny" is the internal codename; what the user sees is KYRO the owl
 // (KyroDove via PennyAvatar). KYRO plays two roles:
 //   • GUIDE: when usePenny() has an active guide, KYRO measures the target element
 //     by id, scrolls it into view if off-screen, FLIES from its home corner
@@ -10,7 +10,7 @@
 //     (message + optional CTA + tour Step n/m + Next/Done + dismiss). A gold
 //     chevron points at the card. KYRO faces its direction of travel while
 //     flying, faces the card once perched, and faces LEFT into the page at home.
-//   • AI: clicking the dove opens "KYRO AI" (the streaming PennyChat) and clears
+//   • AI: clicking the owl opens "KYRO AI" (the streaming PennyChat) and clears
 //     any active guide — KYRO IS the assistant.
 //
 // HOOKS DISCIPLINE: the ONLY setState-in-effect are `box` (genuine DOM
@@ -21,16 +21,16 @@
 // All hooks run unconditionally; Penny ALWAYS renders (no !activeId early return
 // here — that guard lives only in PennyChat).
 //
-// GEOMETRY: the dove is a BOX (height doveH, width doveH × aspect) whose three
+// GEOMETRY: the owl is a BOX (height doveH, width doveH × aspect) whose three
 // sprite states share one anchor point inside it, so the box position is all the
 // travel math needs: bubble/chevron alignment matches the old coin behaviour.
 //
-// ACCESSIBILITY: the bubble is role=status aria-live=polite; the dove is a real
+// ACCESSIBILITY: the bubble is role=status aria-live=polite; the owl is a real
 // <button> with aria-label + aria-expanded; the avatar/chevron are aria-hidden.
 // Reduced motion: no flight/bob/sprite/smooth-scroll — the target is jumped into
-// view instantly and the dove is placed beside it, perched, so guidance is still
+// view instantly and the owl is placed beside it, perched, so guidance is still
 // fully available. Small re-targets while perched (a scroll nudging the measured
-// rect by less than one dove-height) tween in place without a take-off.
+// rect by less than one owl-height) tween in place without a take-off.
 // PRINT: everything is wrapped in .no-print.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect, useMemo, useRef } from 'react'
@@ -121,7 +121,7 @@ export default function Penny() {
       const onScreen = r.top >= 0 && r.bottom <= window.innerHeight
       if (allowScroll && !onScreen) {
         // An instant jump is not motion — reduced-motion users still get the
-        // target on screen (otherwise the dove would perch beside a clamped edge).
+        // target on screen (otherwise the owl would perch beside a clamped edge).
         el.scrollIntoView({ behavior: reduce ? 'instant' : 'smooth', block: 'center' })
       }
       if (cancelled) return
@@ -150,7 +150,7 @@ export default function Penny() {
     }
   }, [step, chatOpen, reduce])
 
-  // ── Travel geometry (pure; derived from box). Returns the dove BOX's offset from
+  // ── Travel geometry (pure; derived from box). Returns the owl BOX's offset from
   // its home corner so the travelling wrapper can animate x/y. ──────────────────
   const travel = useMemo(() => {
     if (!box || typeof window === 'undefined') {
@@ -180,7 +180,7 @@ export default function Penny() {
   // ── Flight phase machine (sanctioned setState-in-effect, keyed on the travel
   // target): flying → gliding (last GLIDE_S) → perched. `lastRef` remembers the
   // previous target so the effect is a no-op when nothing moved (mount, re-measure
-  // to the same spot). Under reduced motion the dove is placed instantly, perched.
+  // to the same spot). Under reduced motion the owl is placed instantly, perched.
   const lastRef = useRef({ x: 0, y: 0 })
   const phaseRef = useRef('perched')
   useEffect(() => {
@@ -260,7 +260,7 @@ export default function Penny() {
   const isLast = guide ? guide.index >= lastIndex : true
 
   // On the full-page KYRO Studio (/penny) the page mounts its OWN usePennyChat
-  // engine instance. Suppress the floating dove here (AFTER all hooks, so hook
+  // engine instance. Suppress the floating owl here (AFTER all hooks, so hook
   // order is stable) so there's exactly one engine + one `penny:ai-ask` listener.
   if (pathname.startsWith('/penny')) return null
 
@@ -294,7 +294,7 @@ export default function Penny() {
       )}
 
       {/* (ii) Travelling wrapper — flies in an arc from the home corner to beside
-          the card. `[null, …]` starts y from wherever the dove is NOW, so
+          the card. `[null, …]` starts y from wherever the owl is NOW, so
           home↔card↔card all arc; the mid keyframe is the lift. */}
       <motion.div
         className="pointer-events-none fixed bottom-5 right-5 z-[55]"
@@ -316,7 +316,9 @@ export default function Penny() {
                 }
         }
       >
-        {/* Speech bubble. */}
+        {/* Speech bubble. z-[1]: the owl's wings overflow its box sideways and
+            upward-ish while airborne, so the bubble (an earlier sibling) must
+            paint above them — a wingtip passes BEHIND the bubble, never over it. */}
         <AnimatePresence>
           {showBubble && (
             <motion.div
@@ -327,7 +329,7 @@ export default function Penny() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={reduce ? undefined : { opacity: 0, y: 8, scale: 0.96 }}
               style={{ bottom: H + 8 }}
-              className={`pointer-events-auto absolute w-[min(19rem,calc(100vw-3rem))] rounded-2xl border-2 border-penny/40 bg-white px-4 py-3 shadow-card ${
+              className={`pointer-events-auto absolute z-[1] w-[min(19rem,calc(100vw-3rem))] rounded-2xl border-2 border-penny/40 bg-white px-4 py-3 shadow-card ${
                 travel.placeRight || travel.parked ? 'right-0 rounded-br-md' : 'left-0 rounded-bl-md'
               }`}
             >
@@ -413,7 +415,7 @@ export default function Penny() {
         </div>
       </motion.div>
 
-      {/* (iii) KYRO AI chat — controlled, anchored bottom-right above the dove. */}
+      {/* (iii) KYRO AI chat — controlled, anchored bottom-right above the owl. */}
       <PennyChat open={chatOpen} onClose={closeChat} />
     </div>
   )

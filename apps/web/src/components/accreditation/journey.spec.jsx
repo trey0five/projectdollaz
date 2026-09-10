@@ -160,10 +160,188 @@ describe('JourneyTab — configured', () => {
     )
   })
 
+  it('headline is the CYCLE ("Your 6-year accreditation cycle"), the accreditor a chip — never "Cognia" in the eyebrow', () => {
+    render(
+      <JourneyTab
+        cycle={{
+          ...CONFIGURED,
+          framework: { ...CONFIGURED.framework, accreditor: 'Cognia', version: '2022' },
+        }}
+        canEdit
+        onSave={async () => {}}
+        reduce
+      />,
+    )
+    const title = screen.getByTestId('journey-title')
+    expect(title.textContent.replace(/\s+/g, ' ').trim()).toBe('Your 6-year accreditation cycle')
+    expect(title.textContent).not.toMatch(/Cognia/i)
+    expect(screen.getByTestId('journey-framework-chip').textContent).toBe('Cognia · 2022')
+  })
+
+  it('the term is the school’s own — a 7-year FCC anchor reads "Your 7-year accreditation cycle"', () => {
+    render(
+      <JourneyTab
+        cycle={{
+          ...CONFIGURED,
+          framework: {
+            id: 'fw-2',
+            code: 'fccap',
+            name: 'Florida Catholic Conference Accreditation Program (NSBECS rubrics)',
+            accreditor: 'Florida Catholic Conference',
+            version: '7-year cycle',
+          },
+          anchor: { ...CONFIGURED.anchor, termYears: 7 },
+        }}
+        canEdit
+        onSave={async () => {}}
+        reduce
+      />,
+    )
+    expect(screen.getByTestId('journey-title').textContent.replace(/\s+/g, ' ').trim()).toBe(
+      'Your 7-year accreditation cycle',
+    )
+    expect(screen.getByTestId('journey-framework-chip').textContent).toBe(
+      'Florida Catholic Conference · 7-year cycle',
+    )
+  })
+
+  it('a payload without accreditor/version (older API) falls back to the framework name in the chip', () => {
+    render(<JourneyTab cycle={CONFIGURED} canEdit onSave={async () => {}} reduce />)
+    expect(screen.getByTestId('journey-framework-chip').textContent).toBe(
+      'Cognia Performance Standards (2022)',
+    )
+  })
+
+  it('the setup card’s term defaults to the framework’s PUBLISHED cycle — 7 for FCC, never a hard-coded 6', () => {
+    render(
+      <JourneyTab
+        cycle={{
+          ...UNCONFIGURED,
+          framework: {
+            id: 'fw-2',
+            code: 'fccap',
+            name: 'Florida Catholic Conference Accreditation Program (NSBECS rubrics)',
+            accreditor: 'Florida Catholic Conference',
+            version: '7-year cycle',
+            defaultTermYears: 7,
+          },
+        }}
+        canEdit
+        onSave={async () => {}}
+        reduce
+      />,
+    )
+    expect(screen.getByLabelText('Term (years)').value).toBe('7')
+  })
+
+  it('…and 6 for a Cognia framework, or when an older payload carries no default', () => {
+    const { unmount } = render(
+      <JourneyTab
+        cycle={{ ...UNCONFIGURED, framework: { id: 'fw-1', code: 'cognia_2022', name: 'Cognia', defaultTermYears: 6 } }}
+        canEdit
+        onSave={async () => {}}
+        reduce
+      />,
+    )
+    expect(screen.getByLabelText('Term (years)').value).toBe('6')
+    unmount()
+    render(<JourneyTab cycle={UNCONFIGURED} canEdit onSave={async () => {}} reduce />)
+    expect(screen.getByLabelText('Term (years)').value).toBe('6')
+  })
+
+  it('an existing anchor wins over the framework default (editing keeps the school’s own term)', () => {
+    render(
+      <JourneyTab
+        cycle={{
+          ...CONFIGURED,
+          framework: { ...CONFIGURED.framework, defaultTermYears: 7 },
+          anchor: { ...CONFIGURED.anchor, termYears: 5 },
+        }}
+        canEdit
+        onSave={async () => {}}
+        reduce
+      />,
+    )
+    fireEvent.click(screen.getByTestId('journey-edit-dates'))
+    expect(screen.getByLabelText('Term (years)').value).toBe('5')
+  })
+
+  it('the setup card asks about the last accreditation VISIT, with Engagement Review as the Cognia hint', () => {
+    render(<JourneyTab cycle={UNCONFIGURED} canEdit onSave={async () => {}} reduce />)
+    expect(screen.getByText('When was your last accreditation visit?')).toBeTruthy()
+    expect(screen.getByLabelText('Last accreditation visit date')).toBeTruthy()
+    expect(screen.getByText(/Engagement Review/).textContent).toMatch(/For Cognia schools/)
+  })
+
   it('Edit dates flips back to the setup card, prefilled — no second form', () => {
     render(<JourneyTab cycle={CONFIGURED} canEdit onSave={async () => {}} reduce />)
     fireEvent.click(screen.getByTestId('journey-edit-dates'))
     expect(screen.getByTestId('journey-setup-card')).toBeTruthy()
+  })
+})
+
+// ── The road tiles line up: one skeleton, equal rows, no cut labels ─────────
+describe('JourneyTab — the measure tiles share one skeleton', () => {
+  const journeySrc = read('components/accreditation/JourneyTab.jsx')
+  const tileSrc = read('components/analytics/v2/V2StatTile.jsx')
+
+  it('both tile kinds carry h-full and a 2-line clamped label box, never truncate', () => {
+    // The misalignment: a fraction tile (32px value) was taller than a
+    // sentence tile, `truncate` cut "Implement & gather evidence of i…", and the
+    // stretched Next-up tile left dead space under its date. Pin the fix at
+    // the source: both tiles fill their grid cell and clamp to two lines.
+    const measureTile = journeySrc.slice(
+      journeySrc.indexOf('function MeasureTextTile'),
+      journeySrc.indexOf('function Shell'),
+    )
+    expect(measureTile).toMatch(/flex h-full min-w-0 flex-col/)
+    expect(measureTile).toMatch(/line-clamp-2 min-h-\[2\.6em\]/)
+    expect(measureTile).not.toMatch(/\btruncate\b/)
+    expect(tileSrc).toMatch(/flex h-full min-w-0 flex-col/)
+    expect(tileSrc).toMatch(/line-clamp-2 min-h-\[2\.6em\]/)
+    // V2StatTile's LABEL is never truncated (the sub line, one context string, may be).
+    const labelLine = tileSrc.split('\n').find((l) => l.includes('{label}') || l.includes('line-clamp-2'))
+    expect(labelLine).not.toMatch(/truncate/)
+  })
+
+  it('the inner grid uses equal fractional rows; the Next-up tile fills its stretched cell', () => {
+    render(<JourneyTab cycle={CONFIGURED} canEdit onSave={async () => {}} reduce />)
+    const grid = screen.getByTestId('journey-measure-grid')
+    expect(grid.className).toMatch(/auto-rows-fr/)
+    expect(grid.className).toMatch(/items-stretch/)
+    const nextUp = screen.getByTestId('journey-next-up')
+    expect(nextUp.className).toMatch(/flex h-full flex-col/)
+    // Every tile in the grid is an h-full flex column — same skeleton.
+    for (const tile of grid.children) {
+      expect(tile.className, tile.textContent).toMatch(/\bh-full\b/)
+    }
+  })
+
+  it('a long milestone label is rendered in full (clamped by CSS, never cut in the DOM)', () => {
+    const long = 'Implement & gather evidence of impact across every standard'
+    render(
+      <JourneyTab
+        cycle={{
+          ...CONFIGURED,
+          milestones: [
+            {
+              key: 'implement',
+              label: long,
+              window: { start: '2023-04-12', end: '2025-04-12' },
+              state: 'done',
+              measure: { kind: 'evidence_currency', num: 0, den: 100, text: '0% of rated evidence is current' },
+              link: '/accreditation?center=evidence',
+            },
+          ],
+        }}
+        canEdit
+        onSave={async () => {}}
+        reduce
+      />,
+    )
+    const tile = screen.getByTestId('journey-measure-text-tile')
+    expect(tile.textContent).toContain(long)
+    expect(tile.textContent).not.toContain('…')
   })
 })
 

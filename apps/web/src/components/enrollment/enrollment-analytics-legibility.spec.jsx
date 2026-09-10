@@ -302,3 +302,50 @@ describe('the Overview preview tile names a diverged vs-plan figure', () => {
     cleanup()
   })
 })
+
+// ── 6 · The grade × year heat map reads on the shared stepped scale ──────────
+//
+// "take a look at the heat map as well": the continuous alpha ramp flipped its
+// ink at t≈0.55 where neither ink cleared 3:1, cells were separated by a 3px
+// gap instead of the 2px surface gap, and per-cell whileInView left the rows
+// below the fold unpainted in a full-page capture. Pinned as source shape.
+
+describe('the grade × year heat map is one stepped, legend-stated scale', () => {
+  const heat = read('components/enrollment/EnrollmentGradeHeatmap.jsx')
+
+  it('renders the shared HeatCell primitive with the shared sequential scale and legend', () => {
+    expect(heat).toMatch(/import HeatCell, \{ HeatScaleLegend, HeatStateKeys \} from '\.\.\/analytics\/charts\/HeatCell\.jsx'/)
+    expect(heat).toMatch(/sequentialScale\(max\)/)
+    expect(heat).toMatch(/<HeatScaleLegend/)
+  })
+
+  it('separates cells with a 2px surface gap, never a ring or a 3px gutter', () => {
+    expect(heat).toMatch(/borderSpacing: '2px'/)
+    expect(heat).not.toMatch(/borderSpacing: '3px'/)
+    expect(heat).not.toMatch(/boxShadow: 'inset 0 0 0 1px/)
+  })
+
+  it('reveals once — no per-cell whileInView, no native title tooltips', () => {
+    expect(heat).not.toMatch(/whileInView/)
+    expect(heat).not.toMatch(/\btitle=\{/)
+  })
+
+  it('states that shade is size, not change', () => {
+    expect(heat).toMatch(/Shade is size, not change/)
+  })
+})
+
+describe('rampFill / rampInk are STEPPED, and agree with each other', () => {
+  it('two values inside one step share a fill, and the ink is the step\'s own', async () => {
+    const { rampFill, rampInk } = await import('./enrollmentAnalyticsKit.jsx')
+    const { SEQUENTIAL_STEPS } = await import('../analytics/charts/heatScales.js')
+    expect(rampFill(0.05)).toBe(rampFill(0.15))
+    expect(rampFill(0)).toBe(SEQUENTIAL_STEPS[0].fill)
+    expect(rampFill(1)).toBe(SEQUENTIAL_STEPS[SEQUENTIAL_STEPS.length - 1].fill)
+    for (const t of [0, 0.2, 0.4, 0.55, 0.6, 0.8, 1]) {
+      const step = SEQUENTIAL_STEPS.find((s) => s.fill === rampFill(t))
+      expect(step).toBeTruthy()
+      expect(rampInk(t)).toBe(step.ink)
+    }
+  })
+})

@@ -16,7 +16,7 @@
 // because a school-level viewer is NOT this reader.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { motion, useReducedMotion } from 'framer-motion'
+import { useReducedMotion } from 'framer-motion'
 import { Section } from '../components/module/SectionHeader.jsx'
 import ModuleBreadcrumb from '../components/module/ModuleBreadcrumb.jsx'
 import { ModuleAccent } from '../components/module/ModuleTabs.jsx'
@@ -26,9 +26,11 @@ import { academicsApi } from '../lib/api.js'
 import { testTypeLabel } from '../lib/academicsVocab.js'
 import ModuleHero from '../components/module/ModuleHero.jsx'
 import OrgAssessmentUpload from '../components/academics/OrgAssessmentUpload.jsx'
+import ColumnChart from '../components/analytics/charts/ColumnChart.jsx'
+import { INK } from '../components/academics/chartKit.jsx'
+import { axisUnitOf } from '../components/academics/MeasureNote.jsx'
 
 const HUE = '#0D9488'
-const EASE = [0.2, 0.8, 0.2, 1]
 
 const fmt = (v, d = 1) => (v === null || v === undefined ? '—' : Number(v).toFixed(d).replace(/\.0$/, ''))
 const signed = (v, d = 1) => (v === null || v === undefined ? '—' : `${v >= 0 ? '+' : ''}${fmt(v, d)}`)
@@ -76,6 +78,17 @@ export default function OrgAcademicsPage() {
 
   const ctx = data?.context
   const ranked = useMemo(() => data?.schools ?? [], [data])
+  // The same two rules the school page draws, so the two consoles agree.
+  const networkAvg = data?.average?.value
+  const refs = [
+    ctx?.nationalReference !== null && ctx?.nationalReference !== undefined
+      ? { value: ctx.nationalReference, label: `National ${fmt(ctx.nationalReference, 0)}`, color: INK.national }
+      : null,
+    networkAvg !== null && networkAvg !== undefined
+      ? { value: networkAvg, label: `Network ${fmt(networkAvg)}`, color: INK.network }
+      : null,
+  ].filter(Boolean)
+  const unit = ctx ? axisUnitOf(ctx) : undefined
 
   if (!orgResolved) {
     return <div className="mx-auto max-w-page p-6 text-[13px] text-muted">Loading…</div>
@@ -209,44 +222,22 @@ export default function OrgAcademicsPage() {
             title={`Every school · ${ctx?.grade === 'all' ? 'all grades' : `grade ${ctx?.grade}`}`}
             reduce={reduce}
           >
-            <div className="space-y-1.5">
-              {ranked.map((sc, i) => {
-                const pct =
-                  sc.value === null || sc.value === undefined
-                    ? 0
-                    : Math.max(
-                        0,
-                        Math.min(100, ((sc.value - (ctx?.scoreRange?.min ?? 0)) / ((ctx?.scoreRange?.max ?? 100) - (ctx?.scoreRange?.min ?? 0))) * 100),
-                      )
-                return (
-                  <div key={sc.schoolId} className="flex items-center gap-3">
-                    <span className="w-6 shrink-0 text-right font-mono text-[11px] text-muted">{sc.rank ?? '—'}</span>
-                    <span className="w-48 shrink-0 truncate text-[12.5px] text-navy">{sc.schoolName}</span>
-                    <div className="relative h-6 flex-1 overflow-hidden rounded-md bg-navy/[0.05]">
-                      {ctx?.nationalReference !== null && ctx?.nationalReference !== undefined ? (
-                        <div
-                          className="absolute inset-y-0 z-10 border-l-2 border-dashed border-rose-500"
-                          style={{
-                            left: `${((ctx.nationalReference - (ctx.scoreRange?.min ?? 0)) / ((ctx.scoreRange?.max ?? 100) - (ctx.scoreRange?.min ?? 0))) * 100}%`,
-                          }}
-                          title={`National ${ctx.nationalReference}`}
-                        />
-                      ) : null}
-                      <motion.div
-                        initial={reduce ? { width: `${pct}%` } : { width: 0 }}
-                        animate={{ width: `${pct}%` }}
-                        transition={{ duration: 0.7, ease: EASE, delay: reduce ? 0 : i * 0.05 }}
-                        className="h-full rounded-md"
-                        style={{ background: `linear-gradient(90deg, ${HUE}, #14b8a6)` }}
-                      />
-                    </div>
-                    <span className="w-12 text-right text-[12.5px] font-bold tabular-nums text-navy">
-                      {sc.value === null || sc.value === undefined ? (sc.forthcoming ? 'due' : '—') : fmt(sc.value)}
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
+            <ColumnChart
+              rows={ranked.map((sc) => ({
+                id: sc.schoolId,
+                label: sc.schoolName ?? 'School',
+                value: sc.value,
+                forthcoming: !!sc.forthcoming,
+                meta: [{ label: 'Rank', value: sc.rank ? `${sc.rank} of ${ranked.length}` : '—' }],
+              }))}
+              color={HUE}
+              fit={{ range: ctx?.scoreRange, pad: 0.12, includeZero: false }}
+              refs={refs}
+              unit={unit}
+              height={260}
+              showValues="selective"
+              ariaLabel="Every school in the network, ranked"
+            />
             <p className="mt-2 text-[11px] text-muted">
               A school with fewer than five scored students shows no figure — its cohort is small enough that the
               average would describe the children in it.
@@ -284,30 +275,22 @@ export default function OrgAcademicsPage() {
               {(data?.byGrade ?? []).length === 0 ? (
                 <p className="text-[12.5px] text-muted">No grade-level rows on file yet.</p>
               ) : (
-                <div className="space-y-2">
-                  {data.byGrade.map((g) => {
-                    const v = g.average?.value ?? null
-                    const max = ctx?.scoreRange?.max ?? 100
-                    return (
-                      <div key={g.grade} className="flex items-center gap-2.5">
-                        <span className="w-16 shrink-0 text-right text-[11.5px] text-muted">Grade {g.grade}</span>
-                        <div className="h-6 flex-1 overflow-hidden rounded-md bg-navy/[0.05]">
-                          <motion.div
-                            initial={reduce ? { width: `${((v ?? 0) / max) * 100}%` } : { width: 0 }}
-                            animate={{ width: `${((v ?? 0) / max) * 100}%` }}
-                            transition={{ duration: 0.6, ease: EASE }}
-                            className="h-full rounded-md"
-                            style={{ background: `linear-gradient(90deg, ${HUE}, #14b8a6)` }}
-                          />
-                        </div>
-                        <span className="w-10 text-right text-[12px] font-semibold tabular-nums text-navy">{fmt(v, 0)}</span>
-                        <span className="w-16 text-right font-mono text-[10.5px] text-muted">
-                          {g.average?.tested ?? 0} tested
-                        </span>
-                      </div>
-                    )
-                  })}
-                </div>
+                <ColumnChart
+                  rows={data.byGrade.map((g) => ({
+                    id: String(g.grade),
+                    label: `Grade ${g.grade}`,
+                    value: g.average?.value ?? null,
+                    formatted: fmt(g.average?.value, 0),
+                    meta: [{ label: 'Tested', value: `${g.average?.tested ?? 0}` }],
+                  }))}
+                  color={HUE}
+                  fit={{ range: ctx?.scoreRange, pad: 0.12, includeZero: false }}
+                  refs={refs}
+                  unit={unit}
+                  showValues="all"
+                  height={220}
+                  ariaLabel="Network average by grade"
+                />
               )}
             </Section>
           </div>

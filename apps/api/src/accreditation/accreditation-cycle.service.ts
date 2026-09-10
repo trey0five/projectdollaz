@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common'
+import { defaultTermYearsFor } from './catalog-seed.js'
 import type { AccreditationFramework } from '@finrep/db'
 import { composeCycle, type ComposedCycle } from '@finrep/compliance'
 import { PrismaService } from '../prisma/prisma.service.js'
@@ -25,6 +26,16 @@ export interface CycleFrameworkPublic {
   id: string
   code: string
   name: string
+  /** Accreditor + edition for the Journey header chip ("Cognia · 2022",
+   *  "Florida Catholic Conference · 7-year cycle") — additive; the cycle is the
+   *  headline there and the accreditor a chip, so the same surface serves a
+   *  6-year Cognia school and a 7-year FCC or NIPSA school. */
+  accreditor: string
+  version: string
+  /** The accreditor's published term (catalog-seed `defaultTermYears`, 6 when
+   *  unset) — the setup card's default and the write fallback, so a 7-year FCC
+   *  school never reads "Your 6-year accreditation cycle" beside its chip. */
+  defaultTermYears: number
 }
 
 export interface CycleSuggestion {
@@ -45,6 +56,23 @@ export interface CycleUnconfiguredResponse {
   suggestion: CycleSuggestion | null
   /** The school's adopted frameworks, so the setup card can offer a choice. */
   frameworks: CycleFrameworkPublic[]
+}
+
+function fwPublic(f: {
+  id: string
+  code: string
+  name: string
+  accreditor: string
+  version: string
+}): CycleFrameworkPublic {
+  return {
+    id: f.id,
+    code: f.code,
+    name: f.name,
+    accreditor: f.accreditor,
+    version: f.version,
+    defaultTermYears: defaultTermYearsFor(f.code),
+  }
 }
 
 function isoDay(d: Date): string {
@@ -90,7 +118,7 @@ export class AccreditationCycleService {
     if (!profile || profile.lastReviewDate === null) {
       return {
         configured: false,
-        framework: { id: framework.id, code: framework.code, name: framework.name },
+        framework: fwPublic(framework),
         suggestion: await this.suggest(schoolId, framework.id),
         frameworks: adopted,
       }
@@ -163,7 +191,7 @@ export class AccreditationCycleService {
 
     return {
       configured: true,
-      framework: { id: framework.id, code: framework.code, name: framework.name },
+      framework: fwPublic(framework),
       suggestion: null,
       ...composed,
       targetIndex: profile.targetIndex ?? framework.defaultTarget ?? null,
@@ -218,14 +246,16 @@ export class AccreditationCycleService {
         frameworkId: framework.id,
         lastReviewDate: lastReviewDate ?? null,
         nextReviewDate: nextReviewDate ?? null,
-        termYears: dto.termYears ?? 6,
+        termYears: dto.termYears ?? defaultTermYearsFor(framework.code),
         targetIndex: dto.targetIndex ?? null,
         updatedByUserId: userId,
       },
       update: {
         lastReviewDate: pick(lastReviewDate, existing?.lastReviewDate ?? null),
         nextReviewDate: pick(nextReviewDate, existing?.nextReviewDate ?? null),
-        termYears: pick(dto.termYears ?? undefined, existing?.termYears ?? 6) ?? 6,
+        termYears:
+          pick(dto.termYears ?? undefined, existing?.termYears ?? defaultTermYearsFor(framework.code)) ??
+          defaultTermYearsFor(framework.code),
         targetIndex: pick(dto.targetIndex, existing?.targetIndex ?? null),
         updatedByUserId: userId,
       },
@@ -262,11 +292,9 @@ export class AccreditationCycleService {
     if (ids.length === 0) return []
     const frameworks = await this.prisma.accreditationFramework.findMany({
       where: { id: { in: ids } },
-      select: { id: true, code: true, name: true },
+      select: { id: true, code: true, name: true, accreditor: true, version: true },
     })
-    return frameworks
-      .sort((a, b) => a.code.localeCompare(b.code))
-      .map((f) => ({ id: f.id, code: f.code, name: f.name }))
+    return frameworks.sort((a, b) => a.code.localeCompare(b.code)).map(fwPublic)
   }
 
   /** Explicit frameworkId → dominant (most linked rows; tie → code asc) → null. */

@@ -1,6 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// JourneyTab — F1 THE JOURNEY: where the school is in its six-year cycle and
-// what is due next. The sixth center tab, placed FIRST, because a head of school
+// JourneyTab — F1 THE JOURNEY: where the school is in its accreditation cycle
+// (six years for Cognia, seven for FCC/NIPSA — `anchor.termYears` is per school)
+// and what is due next. The sixth center tab, placed FIRST, because a head of school
 // opening this page should first see WHEN — exposure (Domains) is one click away.
 //
 // Everything factual on this surface is the CYCLE PAYLOAD's: the phase
@@ -9,8 +10,8 @@
 // the trend strip), formats them, and computes nothing else.
 //
 // UNCONFIGURED is a first-class state, not an error: one setup card asking the
-// one question the whole feature hangs on — "when was your last Engagement
-// Review?" — with the server's prior-visit suggestion offered as a chip
+// one question the whole feature hangs on — "when was your last accreditation
+// visit?" — with the server's prior-visit suggestion offered as a chip
 // (human-confirmed, never silently adopted; PriorVisitPanel's own discipline).
 //
 // Flashy-on-theme: the /strategy Horizon-arc family (navy glass, amber accents,
@@ -48,9 +49,12 @@ function MeasureTextTile({ label, text, status = 'neutral', index = 0 }) {
       animate={{ opacity: 1 }}
       transition={{ duration: 0.4, delay: index * 0.06, ease: 'easeOut' }}
       data-testid="journey-measure-text-tile"
-      className={`relative flex min-w-0 flex-col gap-1.5 rounded-2xl p-4 ${ds.tile} ${ds.ring}`}
+      className={`relative flex h-full min-w-0 flex-col gap-1.5 rounded-2xl p-4 ${ds.tile} ${ds.ring}`}
     >
-      <span className="truncate text-[11px] font-bold uppercase tracking-[0.14em] text-white/60">
+      {/* ONE skeleton with V2StatTile: h-full (fills the auto-rows-fr cell),
+          a 2-line clamped label box, then the body. Same label box → the two
+          tile kinds share a baseline in a row; h-full → same height. */}
+      <span className="line-clamp-2 min-h-[2.6em] text-[11px] font-bold uppercase leading-[1.3] tracking-[0.14em] text-white/60">
         {label}
       </span>
       <span className="text-[14px] font-medium leading-snug text-white/85">{text}</span>
@@ -72,7 +76,13 @@ function SetupCard({ cycle, canEdit, saving, error, onSubmit, onCancel = null, r
   const anchor = cycle?.anchor ?? null
   const [lastReviewDate, setLastReviewDate] = useState(iso(anchor?.lastReviewDate))
   const [nextReviewDate, setNextReviewDate] = useState(iso(anchor?.nextReviewDate))
-  const [termYears, setTermYears] = useState(String(anchor?.termYears ?? 6))
+  // The term defaults to the accreditor's PUBLISHED cycle (7 for FCC/NIPSA, 5
+  // for FCIS/ACSI/SAIS, 6 for Cognia/WASC) — never a hard-coded six, which
+  // would read "Your 6-year accreditation cycle" beside a 7-year chip. Server-
+  // resolved (`framework.defaultTermYears`); 6 only when the payload has none.
+  const fwDefault =
+    cycle?.framework?.defaultTermYears ?? cycle?.frameworks?.[0]?.defaultTermYears ?? 6
+  const [termYears, setTermYears] = useState(String(anchor?.termYears ?? fwDefault))
   const suggestion = cycle?.suggestion ?? null
 
   const submit = (e) => {
@@ -105,12 +115,13 @@ function SetupCard({ cycle, canEdit, saving, error, onSubmit, onCancel = null, r
             Your accreditation journey
           </p>
           <h3 className="mt-1 font-serif text-[22px] font-semibold leading-tight text-white">
-            When was your last Engagement Review?
+            When was your last accreditation visit?
           </h3>
           <p className="mt-1.5 text-[13.5px] leading-relaxed text-white/65">
-            One date back-plans your whole cycle — the year-4 progress report, the
-            self-assessment window, the evidence freeze and the review itself, each measured
-            against what you&apos;ve actually recorded here.
+            One date back-plans your whole cycle — the progress report, the self-assessment
+            window, the evidence deadline and the visit itself, each measured against what
+            you&apos;ve actually recorded here. (For Cognia schools, this is your last
+            Engagement Review.)
           </p>
         </div>
         {onCancel ? (
@@ -146,7 +157,7 @@ function SetupCard({ cycle, canEdit, saving, error, onSubmit, onCancel = null, r
               <DatePicker
                 value={lastReviewDate}
                 onChange={setLastReviewDate}
-                aria-label="Last Engagement Review date"
+                aria-label="Last accreditation visit date"
                 className="mt-1 w-full rounded-lg border-2 border-white/20 bg-navy/40 px-3 py-2 text-[13px] text-white outline-none focus:border-gold/60"
               />
             </label>
@@ -192,7 +203,7 @@ function SetupCard({ cycle, canEdit, saving, error, onSubmit, onCancel = null, r
         </form>
       ) : (
         <p className="mt-4 text-[13px] text-white/50">
-          Ask an owner to set your last Engagement Review date — one date lights this whole tab.
+          Ask an owner to set your last accreditation visit date — one date lights this whole tab.
         </p>
       )}
     </motion.div>
@@ -279,10 +290,29 @@ export default function JourneyTab({
     <Shell>
       {/* ── header ─────────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#fbbf24]/90">
-          Your {anchor?.termYears ? `${anchor.termYears}-year` : ''} cycle
-          {fw?.name ? ` · ${fw.name}` : ''}
-        </p>
+        {/* The cycle is the subject ("Your 6-year accreditation cycle"); the
+            accreditor is a chip, not the headline — the same surface serves a
+            7-year FCC or NIPSA school, and the term is the school's own
+            (anchor.termYears), never a hard-coded six. */}
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <p
+            data-testid="journey-title"
+            className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#fbbf24]/90"
+          >
+            Your {anchor?.termYears ? `${anchor.termYears}-year ` : ''}accreditation cycle
+          </p>
+          {fw ? (
+            <span
+              data-testid="journey-framework-chip"
+              title={fw.name ?? undefined}
+              className="inline-flex max-w-full items-center truncate rounded-full border border-white/20 bg-white/[0.06] px-2.5 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-white/70"
+            >
+              {fw.accreditor
+                ? `${fw.accreditor}${fw.version ? ` · ${fw.version}` : ''}`
+                : (fw.name ?? '')}
+            </span>
+          ) : null}
+        </div>
         {canEdit ? (
           <button
             type="button"
@@ -306,11 +336,18 @@ export default function JourneyTab({
       ) : null}
 
       {/* ── NEXT UP + the road to review ───────────────────────────────────── */}
+      {/* Outer grid stretches its cells (the default), so the Next-up tile is
+          exactly as tall as the 2×2 block beside it — and is a flex column so
+          the date line sits at its foot instead of leaving dead space under
+          the count. The inner 2×2 uses auto-rows-fr + items-stretch so a
+          fraction tile ("25/31", 32px value) and a sentence tile share one
+          row height; every box edge lines up. Equal rows only from sm: up —
+          a single mobile column takes natural heights. */}
       <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
         {countdown ? (
           <div
             data-testid="journey-next-up"
-            className="rounded-2xl border border-[#F59E0B]/35 bg-[#F59E0B]/[0.07] p-4"
+            className="flex h-full flex-col rounded-2xl border border-[#F59E0B]/35 bg-[#F59E0B]/[0.07] p-4"
           >
             <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#fbbf24]/90">
               <CalendarClock size={12} aria-hidden /> Next up
@@ -327,14 +364,17 @@ export default function JourneyTab({
               </span>
             </div>
             {countdown.dueDate ? (
-              <p className="mt-1 text-[12.5px] text-white/55">
+              <p className="mt-auto pt-2 text-[12.5px] text-white/55">
                 {formatShortDate(iso(countdown.dueDate))}
               </p>
             ) : null}
           </div>
         ) : null}
         {measured.length ? (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:col-span-2">
+          <div
+            data-testid="journey-measure-grid"
+            className="grid grid-cols-1 items-stretch gap-3 sm:auto-rows-fr sm:grid-cols-2 lg:col-span-2"
+          >
             {measured.slice(0, 4).map((m, i) =>
               COUNT_MEASURE_KINDS.includes(m.measure.kind) && m.measure.den != null ? (
                 <V2StatTile

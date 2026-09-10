@@ -463,6 +463,8 @@ describe('AIC Phase F — the requirement seed is inert for a zero-row school', 
       // WS2 — cognia_2025 shares cognia_2022's requirement list by reference.
       'cognia_2025/COG-10/staff_evaluation',
       'cognia_2025/COG-A3/inspection',
+      // fccap shares nsbecs's requirement list by reference (the same mechanism).
+      'fccap/NSBECS-12/inspection',
       'fcis_2023/FCIS-11/staff_evaluation',
       'fcis_2023/FCIS-12/inspection',
       'nsbecs/NSBECS-12/inspection',

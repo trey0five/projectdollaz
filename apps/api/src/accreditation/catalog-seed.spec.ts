@@ -449,6 +449,9 @@ describe('catalog seed — recognition badges (the VERIFIED mapping)', () => {
     expect(recog('acs_wasc')).toEqual(['ncpsa'])
     expect(recog('sais_2023')).toEqual(['ncpsa', 'icaisa'])
     expect(recog('nipsa_academic')).toEqual(['ncpsa'])
+    // FCC: eas-ed.org links to NCPSA but no member list could be read — an
+    // unverified membership is an EMPTY array, never a badge.
+    expect(recog('fccap')).toEqual([])
   })
 
   it('every recognition code is in the closed RECOGNITION_BODIES constant', async () => {
@@ -465,5 +468,42 @@ describe('catalog seed — recognition badges (the VERIFIED mapping)', () => {
       expect(fw.aliases ?? [], fw.code).not.toContain('NCPSA')
       expect(fw.aliases ?? [], fw.code).not.toContain('ICAISA')
     }
+  })
+})
+
+describe('catalog seed — fccap (Florida Catholic Conference Accreditation Program)', () => {
+  const fcc = FRAMEWORK_SEEDS.find((f) => f.code === 'fccap')!
+  const nsbecs = FRAMEWORK_SEEDS.find((f) => f.code === 'nsbecs')!
+
+  it('is an ACCREDITOR row over the NSBECS catalog — the same standards array by reference', () => {
+    // The Cognia-divisions lesson: an accreditor whose rubric is another
+    // body's standards is a second framework ROW, never a second catalog. One
+    // array means a NSBECS correction reaches FCC schools too.
+    expect(fcc).toBeDefined()
+    expect(fcc.standards).toBe(nsbecs.standards)
+    expect(fcc.rubricLabels).toEqual(nsbecs.rubricLabels)
+    expect(fcc.accreditor).toBe('Florida Catholic Conference')
+  })
+
+  it('states only what was verified: seven-year rotation, since 1969, Accreditrac portal', () => {
+    expect(fcc.version).toBe('7-year cycle')
+    expect(fcc.description ?? '').toMatch(/seven-year rotation/)
+    expect(fcc.description ?? '').toMatch(/1969/)
+    // The vendor's own spelling ("Accreditrac") everywhere. The common "AccrediTrack"
+    // misspelling is NOT shown as an alias (two spellings on one card read as a typo).
+    expect(fcc.description ?? '').toMatch(/Accreditrac portal/)
+    expect(fcc.description ?? '').not.toMatch(/AccrediTrack/)
+    expect(fcc.description ?? '').toMatch(/does not submit/)
+    expect(fcc.aliases ?? []).toEqual(
+      expect.arrayContaining(['FCC', 'FCCAP', 'Florida Catholic Conference Accreditation Program', 'Accreditrac']),
+    )
+  })
+
+  it('invents no numeric index and is not superseded', () => {
+    expect(fcc.statusBands).toEqual([])
+    expect(fcc.indexMin).toBeNull()
+    expect(fcc.indexMax).toBeNull()
+    expect(fcc.defaultTarget).toBeNull()
+    expect(fcc.supersededByCode).toBeUndefined()
   })
 })

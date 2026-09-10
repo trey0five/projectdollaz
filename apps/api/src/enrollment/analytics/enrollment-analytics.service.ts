@@ -28,6 +28,7 @@ import {
 import { entitledModulesForSchool, filterMetricsByEntitlement } from '../../analytics/metric-gating.js'
 import { EnrollmentService, fyEndForObservedOn } from '../enrollment.service.js'
 import { StudentsService } from '../students/students.service.js'
+import { suppressDimension } from '../students/aggregate-suppression.js'
 import type { EnrollmentAnalyticsQueryDto } from './dto/enrollment-analytics.dto.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -189,7 +190,7 @@ export interface GradeByYear {
   grades: GradeKey[]
   cells: GradeYearCell[]
   /** The observation each column was taken from, so the header can date itself. */
-  observedByYear: { schoolYear: number; observedOn: string; total: number }[]
+  observedByYear: { schoolYear: number; observedOn: string; total: number | null }[]
 }
 
 export interface LadderRow {
@@ -1028,15 +1029,34 @@ function buildGradeByYear(
   // invite the question "why did preschool collapse".
   const grades = GRADE_KEYS.filter((g) => years.some((y) => (perYear.get(y)?.byGrade[g] ?? 0) > 0))
   const cells: GradeYearCell[] = []
+  // Years whose column carries ANY hidden cell: their "School total" is dropped
+  // (null), because total − visible cells is a subtraction the privacy page
+  // promises we never leave open.
+  const withheldTotals = new Set<number>()
   for (const schoolYear of years) {
     const row = perYear.get(schoolYear)
     if (!row) continue
+    // A grade missing from THIS year's reading gets no cell at all: blank means
+    // "no reading", which is different from a zero and must not be interpolated.
+    const present: Partial<Record<string, number>> = {}
     for (const grade of grades) {
       const n = row.byGrade[grade]
-      // A grade missing from THIS year's reading gets no cell at all: blank means
-      // "no reading", which is different from a zero and must not be interpolated.
-      if (n === undefined) continue
-      cells.push({ grade, schoolYear, count: cell(n) })
+      if (n !== undefined) present[grade] = n
+    }
+    // COMPLEMENTARY suppression per column (the roster aggregate's own gate):
+    // a lone <5 grade beside a published year total is exactly total − the
+    // visible grades, so suppressDimension hides a companion with it. The
+    // hidden cell keeps this payload's `{value:null, suppressed:true}` shape.
+    const gated = suppressDimension(present)
+    for (const grade of grades) {
+      if (present[grade] === undefined) continue
+      const g = gated[grade]
+      if (typeof g === 'number') {
+        cells.push({ grade, schoolYear, count: cell(g) })
+      } else {
+        withheldTotals.add(schoolYear)
+        cells.push({ grade, schoolYear, count: { value: null, suppressed: true } })
+      }
     }
   }
   return {
@@ -1047,7 +1067,11 @@ function buildGradeByYear(
       .filter((y) => perYear.has(y))
       .map((y) => {
         const r = perYear.get(y)!
-        return { schoolYear: y, observedOn: r.observedOn, total: r.totalEnrolled }
+        return {
+          schoolYear: y,
+          observedOn: r.observedOn,
+          total: withheldTotals.has(y) ? null : r.totalEnrolled,
+        }
       }),
   }
 }

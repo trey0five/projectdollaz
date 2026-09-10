@@ -8,8 +8,8 @@
 //
 // ── OBSERVED AND PLANNED ARE DIFFERENT CLASSES OF FACT, SO THEY ARE DIFFERENT
 //    CLASSES OF MARK ────────────────────────────────────────────────────────
-// The actual is a SOLID FILL: somebody counted those children. The plan is a
-// DASHED OUTLINE in its own ink: nobody counted it, it is an intention typed
+// The actual is a SOLID column: somebody counted those children. The plan is a
+// DASHED OUTLINE column in its own ink: nobody counted it, it is an intention typed
 // into a budget. Two solid bars side by side — the default of every charting
 // library and of the deck we are replacing — assert that both were observed, and
 // one of them never was. The reader must be able to tell which number is a
@@ -18,20 +18,18 @@
 // GRADES STAY IN CANONICAL ORDER, never sorted by size or by gap. The grades are
 // a ladder; re-ordering them by value destroys the only axis the chart has.
 //
-// COLOUR SITS ON THE GAP READOUT, NOT ON THE BAR. A grade under plan is not a
-// red grade — it is a grade with a red gap. Painting the whole bar red would
+// COLOUR SITS ON THE GAP READOUT, NOT ON THE COLUMN. A grade under plan is not a
+// red grade — it is a grade with a red gap. Painting the whole column red would
 // mark the children in it as a problem.
 //
-// Bars are zero-based by construction (width is a fraction of the largest value
-// on the chart), so no grade's shortfall can be exaggerated by a truncated axis.
+// Columns are zero-based by construction (ColumnChart keeps a zero baseline
+// for counts), so no grade's shortfall can be exaggerated by a truncated axis.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo } from 'react'
-import { motion } from 'framer-motion'
-import { useTooltip } from '../analytics/charts/Tooltip.jsx'
+import ColumnChart from '../analytics/charts/ColumnChart.jsx'
 import {
   CELL_MASKED,
   CardEmpty,
-  EASE,
   ENROLL_HUE,
   PLAN_INK,
   cellState,
@@ -43,9 +41,6 @@ import {
   signedCount,
   signedShare,
 } from './enrollmentAnalyticsKit.jsx'
-
-const MASK_HATCH =
-  'repeating-linear-gradient(135deg, rgba(180,83,9,0.14) 0 5px, rgba(180,83,9,0.04) 5px 10px)'
 
 function GapReadout({ gap, gapPct }) {
   if (cellState(gap) === CELL_MASKED) {
@@ -66,21 +61,9 @@ function GapReadout({ gap, gapPct }) {
   )
 }
 
-export default function EnrollmentVsPlanChart({ vsPlan, planFailed = false, periodLabel = null, minCell = 5, reduce = false }) {
-  const tip = useTooltip()
-
-  // Memoised so the domain below is keyed on something stable — a fresh `[]`
-  // every render would re-run the scan on every render.
+export default function EnrollmentVsPlanChart({ vsPlan, planFailed = false, periodLabel = null, minCell = 5 }) {
+  // Memoised so the rows are keyed on something stable.
   const rows = useMemo(() => vsPlan?.rows ?? [], [vsPlan])
-  // The shared bar domain — geometry over the values already on the chart.
-  const max = useMemo(() => {
-    let m = 0
-    for (const r of rows) {
-      if (hasValue(r.actual)) m = Math.max(m, r.actual.value)
-      if (hasValue(r.plan)) m = Math.max(m, r.plan.value)
-    }
-    return Math.max(m, 1)
-  }, [rows])
 
   if (!vsPlan) {
     // Two different absences, two different sentences. "We could not read your
@@ -102,93 +85,45 @@ export default function EnrollmentVsPlanChart({ vsPlan, planFailed = false, peri
 
   return (
     <div>
-      <div role="list">
-        {rows.map((r, i) => {
+      <ColumnChart
+        rows={rows.map((r) => {
           const masked = cellState(r.actual) === CELL_MASKED
-          const aw = hasValue(r.actual) ? Math.max(1, (100 * r.actual.value) / max) : 0
-          const pw = hasValue(r.plan) ? Math.max(1, (100 * r.plan.value) / max) : 0
-          const tipRows = masked
-            ? [{ color: '#B45309', label: 'Hidden', value: cellTitle(r.actual, { minCell }) }]
-            : [
-                { color: ENROLL_HUE, label: 'Actual (counted)', value: cellToken(r.actual) },
-                { color: PLAN_INK, label: 'Plan (intended)', value: cellToken(r.plan) },
-                { color: '#94A3B8', label: 'Gap', value: hasValue(r.gap) ? signedCount(r.gap.value) : '—' },
-              ]
-          return (
-            <div
-              key={r.grade}
-              role="listitem"
-              className="grid items-center gap-x-3 border-b border-navy/[0.05] py-2 last:border-b-0"
-              style={{ gridTemplateColumns: 'minmax(64px, 84px) 1fr minmax(96px, auto)' }}
-              onMouseMove={(ev) => tip.show({ title: gradeLabelOf(r.grade), rows: tipRows }, ev.clientX, ev.clientY)}
-              onMouseLeave={() => tip.hide()}
-            >
-              <span className="truncate text-[12px] font-semibold text-navy">{gradeLabelOf(r.grade)}</span>
-
-              <span className="grid min-w-0 gap-[3px]">
-                {masked ? (
-                  // A masked grade shows the SLOT and the reason — never a bar of
-                  // zero, which would say the grade is empty.
-                  <span
-                    className="flex h-[26px] items-center rounded-md px-2 text-[10.5px] font-bold text-amber-700"
-                    style={{ background: MASK_HATCH, boxShadow: 'inset 0 0 0 1px rgba(180,83,9,0.28)' }}
-                    title={cellTitle(r.actual, { minCell }) ?? undefined}
-                  >
-                    &lt;5 — hidden so no child is identifiable
-                  </span>
-                ) : (
-                  <>
-                    {/* ACTUAL — solid. Somebody counted this.
-                        The WIDTH is the datum and lives on the bar itself; the
-                        scaleX is only the entrance. (An earlier cut put the
-                        width on a child of the coloured element, which drew
-                        every grade as a full-width bar — identical bars for
-                        different counts, the one failure this chart cannot
-                        have.) */}
-                    <motion.span
-                      data-enr-bar="actual"
-                      className="block h-3 rounded-r-[3px]"
-                      style={{ background: ENROLL_HUE, width: `${aw}%`, transformOrigin: 'left' }}
-                      initial={reduce ? false : { scaleX: 0 }}
-                      whileInView={{ scaleX: 1 }}
-                      viewport={{ once: true, margin: '-30px' }}
-                      transition={{ duration: 0.5, ease: EASE, delay: reduce ? 0 : i * 0.06 }}
-                      aria-hidden="true"
-                    />
-                    {/* PLAN — dashed outline, barely filled. Nobody counted this. */}
-                    <motion.span
-                      data-enr-bar="plan"
-                      className="block h-3 rounded-r-[3px] border-y border-r border-dashed"
-                      style={{
-                        width: `${pw}%`,
-                        borderColor: PLAN_INK,
-                        background: `${PLAN_INK}0F`,
-                        transformOrigin: 'left',
-                      }}
-                      initial={reduce ? false : { scaleX: 0 }}
-                      whileInView={{ scaleX: 1 }}
-                      viewport={{ once: true, margin: '-30px' }}
-                      transition={{ duration: 0.5, ease: EASE, delay: reduce ? 0 : i * 0.06 + 0.08 }}
-                      aria-hidden="true"
-                    />
-                  </>
-                )}
-              </span>
-
-              <span
-                className="flex items-center justify-end gap-2"
-                aria-label={`${gradeLabelOf(r.grade)}: actual ${cellToken(r.actual)}, plan ${cellToken(
-                  r.plan,
-                )}, gap ${hasValue(r.gap) ? signedCount(r.gap.value) : 'withheld'}`}
-              >
-                <span className="text-[12px] font-bold tabular-nums text-navy">{cellToken(r.actual)}</span>
-                <span className="text-[11px] tabular-nums text-muted">/ {cellToken(r.plan)}</span>
-                <GapReadout gap={r.gap} gapPct={r.gapPct} />
-              </span>
-            </div>
-          )
+          const under = hasValue(r.gap) && r.gap.value < 0
+          const even = hasValue(r.gap) && r.gap.value === 0
+          return {
+            id: String(r.grade),
+            label: gradeLabelOf(r.grade),
+            // A masked grade shows a hatched stub and the reason — never a
+            // column of zero, which would say the grade is empty.
+            vals: masked ? [null, null] : [hasValue(r.actual) ? r.actual.value : null, hasValue(r.plan) ? r.plan.value : null],
+            suppressed: masked,
+            formatted: masked ? [cellTitle(r.actual, { minCell }) ?? '<5', cellToken(r.plan)] : [cellToken(r.actual), cellToken(r.plan)],
+            meta: [
+              {
+                label: 'Gap',
+                value: masked ? 'withheld' : hasValue(r.gap) ? `${signedCount(r.gap.value)}${hasValue(r.gapPct) ? ` · ${signedShare(r.gapPct.value)}` : ''}` : '—',
+              },
+            ],
+            // COLOUR SITS ON THE GAP READOUT, NOT ON THE COLUMN.
+            capLabel:
+              !masked && hasValue(r.gap)
+                ? {
+                    text: `${signedCount(r.gap.value)}${hasValue(r.gapPct) ? ` · ${signedShare(r.gapPct.value)}` : ''}`,
+                    color: even ? '#64748B' : under ? '#DC2626' : '#047857',
+                    bg: even ? 'rgba(100,116,139,0.12)' : under ? 'rgba(239,68,68,0.1)' : 'rgba(16,185,129,0.12)',
+                  }
+                : undefined,
+          }
         })}
-      </div>
+        series={[
+          { id: 'actual', label: 'Actual — counted', color: ENROLL_HUE },
+          { id: 'plan', label: 'Plan — intended, never counted', color: PLAN_INK, style: 'dashed' },
+        ]}
+        legend={false}
+        showValues="all"
+        height={220}
+        ariaLabel="Actual against plan, by grade"
+      />
 
       {/* The whole-school line. Server-summed, never suppressed — a school-wide
           figure identifies nobody — and printed here so the rows have a total to

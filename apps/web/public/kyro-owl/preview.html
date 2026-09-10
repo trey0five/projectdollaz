@@ -1,0 +1,30 @@
+<!doctype html>
+<meta charset="utf-8"><title>KYRO owl sprite preview</title>
+<style>
+  body{margin:0;font:13px/1.4 system-ui,sans-serif;color:#1f3d72;background:#fff}
+  .row{display:flex;gap:40px;align-items:flex-end;padding:28px 32px;flex-wrap:wrap}
+  .light{background:#f6f7fb} .navy{background:#1f3d72;color:#fff}
+  .fly{width:384px;height:139px;background:url(fly.webp) 0 0/2688px 834px no-repeat;
+       animation:fx 0.29167s steps(7) infinite, fy 1.75000s steps(6) infinite}
+  @keyframes fx{to{background-position-x:-2688px}}
+  @keyframes fy{to{background-position-y:-834px}}
+  .mirror{transform:scaleX(-1)}
+  .box{position:relative;display:inline-block}
+  .anchor{position:absolute;width:9px;height:9px;margin:-5px 0 0 -5px;border-radius:50%;background:#ff5a5f;box-shadow:0 0 0 2px #fff;pointer-events:none}
+  .label{display:block;margin-top:6px;opacity:.7}
+  img{display:block}
+</style>
+<div class="row light">
+  <div><span class="box"><div class="fly"></div><i class="anchor" style="left:33.42%;top:40.01%"></i></span><span class="label">fly.webp 42 cells @ 24 fps (facing right)</span></div>
+  <div><span class="box"><div class="fly mirror"></div></span><span class="label">scaleX(-1)</span></div>
+  <div><span class="box"><img src="glide.webp" width="384" height="139"><i class="anchor" style="left:33.42%;top:40.01%"></i></span><span class="label">glide.webp</span></div>
+  <div><span class="box"><img src="perched@256.webp" width="254" height="256"><i class="anchor" style="left:65.49%;top:96.20%"></i></span><span class="label">perched@256.webp</span></div>
+  <div><span class="box"><img src="perched.webp" width="253" height="256"></span><span class="label">perched.webp shown at 50%</span></div>
+</div>
+<div class="row navy">
+  <div><span class="box"><div class="fly"></div></span><span class="label">fly.webp</span></div>
+  <div><span class="box"><div class="fly mirror"></div></span><span class="label">scaleX(-1)</span></div>
+  <div><span class="box"><img src="glide.webp" width="384" height="139"></span><span class="label">glide.webp</span></div>
+  <div><span class="box"><img src="perched@256.webp" width="254" height="256"></span><span class="label">perched@256.webp</span></div>
+</div>
+<div class="row light" style="padding-top:8px"><span>Red dots = manifest anchors (fly/glide: body centroid; perched: feet).</span></div>
