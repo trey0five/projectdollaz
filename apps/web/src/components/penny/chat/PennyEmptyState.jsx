@@ -1,5 +1,5 @@
 // PennyEmptyState — the flashy welcome shown before the first message. A
-// gold-haloed Penny hero over a 2×2 capability bento (Insights / Compliance /
+// KYRO hero over a 2×2 capability bento (Insights / Compliance /
 // Budget / Reports). Tapping a tile expands its suggestion pills; tapping a pill
 // fires onPick(text) → send. The "Insights" set reuses the original SUGGESTIONS
 // strings so the default prompts are preserved. Tip line mentions attach + mic.
@@ -61,19 +61,10 @@ export default function PennyEmptyState({ onPick }) {
 
   return (
     <div className="flex flex-col items-center px-2 py-4 text-center motion-safe:animate-[penny-pop_360ms_ease-out]">
-      {/* Hero — Penny coin behind a soft pulsing gold halo. */}
-      <div className="relative mb-3">
-        <span
-          aria-hidden
-          className="absolute -inset-4 rounded-full bg-penny/30 blur-2xl motion-safe:animate-[penny-pulse-glow_3.6s_ease-in-out_infinite] motion-reduce:hidden"
-        />
-        <span
-          aria-hidden
-          className="absolute -inset-2 rounded-full bg-penny/40 blur-lg motion-safe:animate-[penny-pulse-glow_4.8s_ease-in-out_infinite] motion-reduce:hidden"
-        />
-        <div className="relative">
-          <PennyAvatar size={56} active />
-        </div>
+      {/* Hero — KYRO on a soft drop shadow (the coin-era pulsing halo discs are
+          gone: nothing circular behind the owl). */}
+      <div className="relative mb-3 drop-shadow-[0_8px_16px_rgba(184,150,80,0.35)]">
+        <PennyAvatar size={56} active />
       </div>
       <h2 className="penny-text text-[18px] font-bold tracking-tight">Hi! I’m KYRO</h2>
       <p className="mt-1 max-w-[16rem] text-[13px] leading-snug text-muted">

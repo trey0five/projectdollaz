@@ -585,11 +585,10 @@ export default function OrbitScrolly() {
                 handler-driven collapse transform: in from the top-left, a
                 little lift mid-flight, then a soft settle on touchdown. */}
             <div className="absolute left-1/2 top-1/2 z-[60] -translate-x-1/2 -translate-y-1/2">
-              <div
-                ref={coreRef}
-                className="relative rounded-full transition-shadow duration-700 will-change-transform"
-                style={{ boxShadow: pennyIn ? `0 0 80px ${d.hue}, 0 0 150px ${d.hue}66` : 'none' }}
-              >
+              {/* No disc behind the owl: the coin-era hue glow (a rounded-full
+                  box-shadow on this wrapper) is gone — KYRO sits on the gradient
+                  alone. The dock shockwave below is the transient beat, kept. */}
+              <div ref={coreRef} className="relative will-change-transform">
                 <motion.div
                   initial={{ x: -260, y: -170, opacity: 0 }}
                   animate={

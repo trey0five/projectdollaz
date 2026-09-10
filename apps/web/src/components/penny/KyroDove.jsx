@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// KyroDove — KYRO, the photoreal snowy-OWL mascot (component name kept from the
-// dove era; it is an internal identifier). Sprite assets live in
+// KyroDove — KYRO, the photoreal LITTLE-OWL mascot (component name kept from
+// the dove era; it is an internal identifier). Sprite assets live in
 // /public/kyro-owl/ (see kyroDoveManifest.js).
 //
 // Prop surface is a SUPERSET of the old PennyAvatar so every call site compiles
@@ -11,8 +11,12 @@
 //   facing      'right' | 'left' — sprites are authored facing right → scaleX(-1)
 //   glance      -1 | 0 | 1 — legacy; non-zero overrides `facing`
 //   blink       accepted, ignored (old call sites)
-//   active      static ring (chat open)     speaking  pulsing ring + wing flutter
-//   listening   pulsing ring only (0.6)     celebrate green check badge
+//   active      accepted, NO visual (the open chat is the affordance — the old
+//               coin's static halo ring is gone; nothing circular sits behind
+//               the owl anywhere, by rule)
+//   speaking    wing flutter + a subtle scale pulse about the feet
+//   listening   the scale pulse only
+//   celebrate   green check badge
 //   paused      freezes the sprite frame (offscreen / deterministic tests)
 //
 // GEOMETRY: the root is a `span` box sized by height — the box IS the perched
@@ -23,13 +27,15 @@
 // scaleX(-1) about P.x, so the anchor is invariant under `facing` too. Every
 // length is a fraction of the box height, expressed as calc(var(--kyro-h) × f),
 // so a CSS-var size just works.
-// The owl's wingspan is ~6 body-heights, so the fly/glide layers OVERFLOW the
-// box sideways (≈0.66H left / 1.1H right facing right; mirrored facing left)
+// The fly/glide layers are exactly ONE sheet cell scaled to FLY_SCALE perched
+// heights (kyroDoveManifest.js), so they OVERFLOW the box a little on every side
 // while airborne — only Penny.jsx and the landing scenes fly, and none of them
-// clip. Inactive fly/glide layers are collapsed to scale(0) (not just hidden):
-// a visibility:hidden box still counts toward an ancestor's scrollable
-// overflow, and a 2.7H-wide invisible layer would put a horizontal scrollbar on
-// any overflow:auto host (chat message list, Studio page).
+// clip. The wingbeat frame is selected with PERCENTAGE background-size/position
+// (cols×100% by rows×100%, column c at c/(cols−1)), which is size-independent
+// ONLY because the layer's aspect equals the cell's — geometry and pixels are
+// keyed together in the manifest loader for exactly that reason. Inactive
+// fly/glide layers are collapsed to scale(0) (not just hidden): a
+// visibility:hidden box still counts toward an ancestor's scrollable overflow.
 //
 // MOTION: the wingbeat is driven by rAF through a ref (useSpriteFrame) — no
 // per-frame React state. Idle breathe / speaking flutter / landing settle are
@@ -90,8 +96,13 @@ export default function KyroDove({
     resetKey: effState,
   })
 
-  const pulsing = speaking || listening
-  const ringOn = pulsing || active
+  // Speaking/listening: a subtle scale pulse of the WHOLE bird about its feet
+  // (root transform is otherwise unused; the flip lives one level down). Under
+  // reduced motion the class is inert (index.css belt) and omitted here anyway.
+  const pulseAnim =
+    (speaking || listening) && !reduce && !paused
+      ? 'motion-safe:animate-[kyro-pulse_1.6s_ease-in-out_infinite]'
+      : ''
   const perchedFile = size > 128 ? g.perched.file : g.perched.file256
 
   // Idle motion on the perched layer: breathe normally, flutter while speaking.
@@ -119,39 +130,18 @@ export default function KyroDove({
       focusable="false"
       data-kyro-state={effState}
       data-kyro-facing={faceLeft ? 'left' : 'right'}
-      className={className}
+      data-kyro-active={active ? 'true' : undefined}
+      className={[className, pulseAnim].filter(Boolean).join(' ')}
       style={{
         '--kyro-h': `var(--kyro-size, ${size}px)`,
         display: 'block',
         position: 'relative',
         width: hx(g.aspect),
         height: 'var(--kyro-h)',
+        transformOrigin: `${hx(g.feet.x)} ${hx(g.feet.y)}`,
         ...style,
       }}
     >
-      {/* Soft ring behind the body: pulses while speaking/listening, static when
-          active (the old coin's halo). Decorative; CSS kills the loop under
-          reduced motion. */}
-      {ringOn && (
-        <span
-          className={
-            pulsing && !reduce ? 'motion-safe:animate-[kyro-ring_1.5s_ease-in-out_infinite]' : ''
-          }
-          style={{
-            position: 'absolute',
-            left: hx(g.aspect * 0.15),
-            top: hx(0.2),
-            width: hx(g.aspect * 0.7),
-            height: hx(0.66),
-            borderRadius: '50%',
-            background: 'rgb(var(--c-penny) / 0.45)',
-            filter: `blur(${hx(0.12)})`,
-            opacity: listening && !speaking ? 0.6 : active && !pulsing ? 0.5 : 0.8,
-            pointerEvents: 'none',
-          }}
-        />
-      )}
-
       {/* Flip wrapper — mirrors about the common anchor P.x. */}
       <span
         style={{
@@ -161,7 +151,7 @@ export default function KyroDove({
           transformOrigin: `${hx(g.ax)} 50%`,
         }}
       >
-        {/* Flying: the 7×6 wingbeat sheet; frame written by useSpriteFrame.
+        {/* Flying: the cols×rows wingbeat sheet; frame written by useSpriteFrame.
             Inactive → collapsed (see header) but kept mounted so the sheet stays
             decoded for an instant take-off. */}
         <span

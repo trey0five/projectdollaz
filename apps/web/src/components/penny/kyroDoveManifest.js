@@ -10,6 +10,24 @@
 // the JSON once (module-cached) and preloads the three webp files, and the
 // hook swaps the manifest in if the served one differs (it normally doesn't).
 //
+// GEOMETRY IS KEYED TO THE PIXELS (the "two giant cells" bug, 2026-09-10): the
+// sprite math only works if the manifest that sizes the fly layer describes the
+// sheet the browser actually decodes. Every mascot swap so far (dove → snowy
+// owl → little owl) changed cols/rows/cell aspect at the SAME URLs, and prod
+// serves everything under /public with a one-year `immutable` cache, so a user
+// could hold the snowy owl's manifest (7×6, 2.76:1 cells) next to the little
+// owl's sheet (6×6, ~1:1) — the fly layer then came out 2.8× too wide with
+// `700% 600%` background-size over a 6×6 sheet: two partial cells side by side,
+// head in one, wing in the other. `force-cache` on the manifest fetch made that
+// the DEFAULT outcome even in dev (it never revalidated). Three belts now:
+//   1. asset URLs carry `?v=<w>x<h>` from the manifest's own dimensions, so a
+//      manifest that describes a different sheet asks for a different URL
+//      (an old cached sheet can never be paired with a new manifest);
+//   2. the manifest is fetched with `cache: 'no-cache'` (always revalidated);
+//   3. the served manifest is only ADOPTED after the fly sheet has decoded and
+//      its natural size equals the manifest's sheetW×sheetH — otherwise the
+//      FALLBACK (shipped in the same bundle as the assets) stays in force.
+//
 // Anchors are FRACTIONS of the cell/image (already ratios — no /cellW needed):
 //   fly / glide → body centroid (the pixels opaque in every frame: body+head+tail)
 //   perched     → the feet (x = centroid of the talon pixels, y = lowest claw)
@@ -17,6 +35,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const ASSET_BASE = '/kyro-owl/'
+
+/** Asset URL keyed to the dimensions the manifest declares for it (belt 1). */
+export const assetUrl = (file, w, h) => `${ASSET_BASE}${file}?v=${w}x${h}`
 
 export const FALLBACK = {
   fly: {
@@ -170,17 +191,19 @@ export function deriveGeometry(manifest = FALLBACK) {
     ay,
     fly: {
       ...place(layers[0]),
-      file: ASSET_BASE + fly.file,
+      file: assetUrl(fly.file, fly.sheetW, fly.sheetH),
       frames: fly.frames,
       cols: fly.cols,
       rows: fly.rows,
       fps: fly.fps,
     },
-    glide: { ...place(layers[1]), file: ASSET_BASE + glide.file },
+    glide: { ...place(layers[1]), file: assetUrl(glide.file, glide.w, glide.h) },
     perched: {
       ...perchedBox,
-      file: ASSET_BASE + perched.file,
-      file256: ASSET_BASE + (perched.variants?.[256]?.file || perched.file),
+      file: assetUrl(perched.file, perched.w, perched.h),
+      file256: perched.variants?.[256]
+        ? assetUrl(perched.variants[256].file, perched.variants[256].w, perched.variants[256].h)
+        : assetUrl(perched.file, perched.w, perched.h),
       // Feet position INSIDE the perched layer (for transform-origin of the
       // breathe/settle so the bird moves about its feet, not its center).
       originX: perched.anchor.x,
@@ -209,24 +232,87 @@ const preload = (src) =>
     img.src = src
   })
 
-/** Fetch + cache the manifest once; preload the images. Never rejects. */
+/** Shape + internal consistency: the sheet must really be cols×rows cells. */
+export function isWellFormedManifest(m) {
+  const f = m?.fly
+  return !!(
+    f &&
+    m.perched &&
+    m.glide &&
+    Number.isFinite(f.cols) &&
+    Number.isFinite(f.rows) &&
+    f.cols >= 1 &&
+    f.rows >= 1 &&
+    f.frames >= 1 &&
+    f.frames <= f.cols * f.rows &&
+    f.cellW > 0 &&
+    f.cellH > 0 &&
+    f.cols * f.cellW === f.sheetW &&
+    f.rows * f.cellH === f.sheetH
+  )
+}
+
+/** Belt 3: does this manifest describe a sheet of the given decoded size? */
+export const manifestMatchesSheet = (m, naturalW, naturalH) =>
+  !!m?.fly && m.fly.sheetW === naturalW && m.fly.sheetH === naturalH
+
+/**
+ * Decode the fly sheet the manifest points at and report its natural size.
+ * Resolves null where it cannot be measured (no DOM, image failed) so the
+ * caller falls back to the manifest shipped in the bundle rather than trusting
+ * an unverified one.
+ */
+const measureSheet = (src) =>
+  new Promise((resolve) => {
+    if (typeof Image === 'undefined') return resolve(null)
+    const img = new Image()
+    img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight })
+    img.onerror = () => resolve(null)
+    img.src = src
+  })
+
+/**
+ * Fetch + cache the manifest once; adopt it only if it is well-formed AND the
+ * fly sheet that decodes is the one it describes; preload the images. Never
+ * rejects.
+ */
 export function loadManifest() {
   if (manifestPromise) return manifestPromise
   if (typeof fetch === 'undefined') return Promise.resolve(FALLBACK)
-  manifestPromise = fetch(ASSET_BASE + 'manifest.json', { cache: 'force-cache' })
+  manifestPromise = fetch(ASSET_BASE + 'manifest.json', { cache: 'no-cache' })
     .then((r) => (r.ok ? r.json() : FALLBACK))
-    .then((m) => (m && m.fly && m.perched && m.glide ? m : FALLBACK))
+    .then((m) => (isWellFormedManifest(m) ? m : FALLBACK))
     .catch(() => FALLBACK)
+    .then(async (m) => {
+      if (m === FALLBACK) return m
+      const dims = await measureSheet(deriveGeometry(m).fly.file)
+      if (dims && manifestMatchesSheet(m, dims.w, dims.h)) return m
+      if (typeof console !== 'undefined' && console.warn) {
+        console.warn(
+          '[KyroDove] served manifest does not describe the fly sheet that decoded ' +
+            `(${m.fly.sheetW}x${m.fly.sheetH} vs ${dims ? `${dims.w}x${dims.h}` : 'unmeasurable'}); ` +
+            'keeping the bundled manifest.',
+        )
+      }
+      return FALLBACK
+    })
     .then((m) => {
       loaded = m
       const g = deriveGeometry(m)
       // Fire-and-forget; the swap in never waits on these.
       preload(g.perched.file)
+      preload(g.perched.file256)
       preload(g.fly.file)
       preload(g.glide.file)
       return m
     })
   return manifestPromise
+}
+
+/** Test seam: forget the cached fetch (module-scoped promise). */
+export function __resetManifestCache() {
+  manifestPromise = null
+  loaded = null
 }
 
 export const getManifest = () => loaded || FALLBACK

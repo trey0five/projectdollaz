@@ -209,17 +209,14 @@ export default function StudioHero({ compact, name, chat, askBar, onNewChat }) {
                   every part of the platform, and tells you what needs a decision — you just approve.
                 </p>
               </div>
-              {/* Large KYRO owl on the right — soft gold glow + gentle float. Sized
-                  via --kyro-size (the owl root is a span, not an svg). */}
+              {/* Large KYRO owl on the right — soft drop shadow + gentle float (no
+                  disc/halo behind the bird, by rule). Sized via --kyro-size (the
+                  owl root is a span, not an svg). */}
               <motion.div
                 className="relative shrink-0"
                 animate={reduce ? undefined : { y: [0, -9, 0] }}
                 transition={reduce ? undefined : { duration: 4.5, repeat: Infinity, ease: 'easeInOut' }}
               >
-                <span
-                  aria-hidden
-                  className="pointer-events-none absolute left-1/2 top-1/2 h-[85%] w-[85%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-penny/30 blur-2xl"
-                />
                 <span className="relative block drop-shadow-[0_16px_36px_rgba(184,150,80,0.55)] [--kyro-size:92px] sm:[--kyro-size:172px]">
                   <PennyAvatar size={172} active speaking={chat.tts.speaking} />
                 </span>

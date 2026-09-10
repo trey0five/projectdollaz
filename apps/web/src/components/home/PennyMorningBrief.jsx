@@ -155,11 +155,7 @@ function ComposingCard({ reduce }) {
       className="no-print relative overflow-hidden rounded-2xl bg-navy-gradient p-5 shadow-navy-glow sm:p-7"
     >
       <div className="flex items-center gap-4">
-        <span className="relative shrink-0">
-          <span
-            aria-hidden
-            className="pointer-events-none absolute left-1/2 top-1/2 h-[130%] w-[130%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-penny/25 blur-xl"
-          />
+        <span className="relative shrink-0 drop-shadow-[0_8px_16px_rgba(0,0,0,0.35)]">
           <PennyAvatar size={56} active listening={!reduce} />
         </span>
         <div className="min-w-0 flex-1">
