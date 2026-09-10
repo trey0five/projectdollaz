@@ -1,98 +1,94 @@
 {
   "fly": {
     "file": "fly.webp",
-    "frames": 42,
-    "cols": 7,
+    "frames": 36,
+    "cols": 6,
     "rows": 6,
-    "cellW": 384,
-    "cellH": 139,
-    "sheetW": 2688,
-    "sheetH": 834,
+    "cellW": 249,
+    "cellH": 256,
+    "sheetW": 1494,
+    "sheetH": 1536,
     "fps": 24,
     "anchor": {
-      "x": 0.3342,
-      "y": 0.4001
+      "x": 0.5674,
+      "y": 0.4613
     },
     "facing": "right",
     "loop": "forward",
-    "note": "one wingbeat, natural order (bottom of downstroke -> upstroke -> downstroke); play cells 0..frames-1 forward and repeat",
+    "note": "one wingbeat, natural order (9 frames before wing-up -> wings up -> downstroke -> wings down -> upstroke); play cells 0..frames-1 forward and repeat",
     "sourceFrames": [
-      61,
-      63,
-      65,
-      67,
-      69,
-      71,
-      73,
-      75,
-      77,
-      79,
-      81,
-      83,
-      85,
-      87,
-      89,
-      91,
-      93,
-      95,
-      97,
-      99,
-      101,
-      103,
-      105,
-      107,
+      106,
       109,
-      111,
-      113,
+      112,
       115,
-      117,
-      119,
+      118,
       121,
-      123,
-      125,
-      127,
-      129,
+      124,
+      128,
       131,
-      133,
-      135,
+      134,
       137,
-      139,
-      141,
-      143
+      140,
+      143,
+      146,
+      149,
+      152,
+      155,
+      158,
+      162,
+      165,
+      168,
+      171,
+      174,
+      177,
+      180,
+      183,
+      186,
+      189,
+      192,
+      195,
+      198,
+      202,
+      205,
+      208,
+      211,
+      214
     ],
     "sourceCropBox": [
-      214,
-      244,
-      1225,
-      610
-    ]
+      278,
+      45,
+      906,
+      691
+    ],
+    "sourceFlippedX": true
   },
   "perched": {
     "file": "perched.webp",
-    "w": 507,
-    "h": 512,
+    "w": 512,
+    "h": 505,
     "anchor": {
-      "x": 0.6549,
-      "y": 0.962
+      "x": 0.6311,
+      "y": 0.9744
     },
     "facing": "right",
     "variants": {
       "256": {
         "file": "perched@256.webp",
-        "w": 254,
-        "h": 256
+        "w": 256,
+        "h": 252
       }
     }
   },
   "glide": {
     "file": "glide.webp",
-    "w": 384,
-    "h": 139,
+    "w": 249,
+    "h": 256,
     "anchor": {
-      "x": 0.3342,
-      "y": 0.4001
+      "x": 0.5674,
+      "y": 0.4613
     },
     "facing": "right",
-    "sourceFrame": 61
+    "sourceFrame": 209,
+    "sourceFlippedX": true
   }
 }

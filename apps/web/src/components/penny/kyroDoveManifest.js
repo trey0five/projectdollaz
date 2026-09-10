@@ -1,7 +1,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // KYRO the owl — asset contract for the sprite assets in /public/kyro-owl/.
 // (File name kept from the dove era: it is an internal identifier, like
-// KyroDove.jsx — the bird is now a snowy owl, owner decision 2026-09-10.)
+// KyroDove.jsx — the bird is now a LITTLE OWL, Athene noctua, Athena's owl of
+// knowledge; owner decision 2026-09-10, replacing the snowy owl the same day.)
 //
 // FALLBACK below is a verbatim copy of `public/kyro-owl/manifest.json` (the
 // numbers the build script wrote), so the FIRST paint never waits on a fetch:
@@ -20,37 +21,37 @@ export const ASSET_BASE = '/kyro-owl/'
 export const FALLBACK = {
   fly: {
     file: 'fly.webp',
-    frames: 42,
-    cols: 7,
+    frames: 36,
+    cols: 6,
     rows: 6,
-    cellW: 384,
-    cellH: 139,
-    sheetW: 2688,
-    sheetH: 834,
+    cellW: 249,
+    cellH: 256,
+    sheetW: 1494,
+    sheetH: 1536,
     fps: 24,
-    anchor: { x: 0.3342, y: 0.4001 },
+    anchor: { x: 0.5674, y: 0.4613 },
     facing: 'right',
     loop: 'forward',
   },
   perched: {
     file: 'perched.webp',
-    w: 507,
-    h: 512,
-    anchor: { x: 0.6549, y: 0.962 },
+    w: 512,
+    h: 505,
+    anchor: { x: 0.6311, y: 0.9744 },
     facing: 'right',
-    variants: { 256: { file: 'perched@256.webp', w: 254, h: 256 } },
+    variants: { 256: { file: 'perched@256.webp', w: 256, h: 252 } },
   },
   glide: {
     file: 'glide.webp',
-    w: 384,
-    h: 139,
-    anchor: { x: 0.3342, y: 0.4001 },
+    w: 249,
+    h: 256,
+    anchor: { x: 0.5674, y: 0.4613 },
     facing: 'right',
   },
 }
 
 // Alpha-silhouette CENTROIDS measured by the asset build
-// (demo-video/owl-candidates/sora/measurements.json), as fractions of the glide
+// (demo-video/owl-candidates/little/sora/measurements.json), as fractions of the glide
 // cell / perched image. THESE are the common point P every layer is placed by —
 // not the manifest anchors. The manifest's fly/glide anchor is the torso (the
 // always-opaque pixels) and its perched anchor is the feet; neither is what the
@@ -61,18 +62,22 @@ export const FALLBACK = {
 // 2·(centroid − P). Anchoring on the centroids makes both cuts and both
 // facings invariant by construction. The fly sheet shares the glide's crop and
 // anchor, so the torso still holds still through the wingbeat.
-export const GLIDE_CENTROID = { x: 0.4515, y: 0.4945 }
-export const PERCHED_CENTROID = { x: 0.5733, y: 0.5274 }
+export const GLIDE_CENTROID = { x: 0.5057, y: 0.4105 }
+export const PERCHED_CENTROID = { x: 0.5664, y: 0.483 }
 
-// The flying/gliding layers render this many times the perched layer's HEIGHT
-// (a fly cell is 384×139, so the flying owl is FLY_SCALE × 2.76 perched-heights
-// wide). 1.0 is the size at which the owl reads as the SAME bird across the cut:
-// the head/eye and torso mass of the wings-spread frame match the perched still
-// (checked by overlaying glide on perched at 0.9 / 1.2 / 1.5 / 2.07 — at 2.07,
-// the value that equates the horizontal flight torso's THICKNESS to the standing
-// bird's HEIGHT, the flying owl is plainly a much bigger bird). The dove used
-// 1.22 because its perched still was drawn at a larger scale than its cells.
-export const FLY_SCALE = 1.0
+// The flying/gliding layers render this many times the perched layer's HEIGHT.
+// The little owl's fly cell is ~1:1 (249×256): unlike the snowy owl's 2.76:1
+// cell, the wings here sweep from 0.41u ABOVE the body centroid to 0.59u BELOW
+// it, so the torso is only ~0.23 of the cell and "same bird" is a HEAD match,
+// not a cell-height match. Overlaying glide on perched, centroid-aligned, at
+// 1.0/1.4/1.7/2.0/2.4/2.8 (demo-video/owl-candidates/little/sora/
+// fly-scale-overlay.png): the head/eye masses coincide at ~2.0 (the stricter
+// eye-diameter measurement says 1.9); at 1.4 the flying bird is plainly
+// smaller, at 2.4 plainly bigger. 1.6 is the deliberate compromise: the flying
+// head is ~80 % of the perched head (reads as the same bird a little further
+// off) while the airborne layers stay ~1.6u tall — see the box rule below for
+// why that number, not 2.0, is the one that costs nothing in the perched state.
+export const FLY_SCALE = 1.6
 
 // PLACEMENT anchor for the perched layer relative to the manifest's feet anchor:
 // the perched still is placed by its alpha centroid (= P), the feet stay the
@@ -90,17 +95,28 @@ export const PERCHED_PLACEMENT_OFFSET = placementOffset()
  * box height H, so the same numbers work for a `size` prop or a CSS var.
  *
  * All three layers are placed so their anchor lands on ONE common point P, so
- * switching state never moves the body. The BOX is:
- *   • vertically, the union of all three layers (so a parent's `bottom: H + 8`
- *     bubble clears the bird in every state, wings up or down);
- *   • horizontally, the PERCHED still only (symmetric about P.x). The owl's fly cell is 2.76:1 — its
- *     wingspan is ~6 body-heights — so a box that contained the wings would be
- *     three times wider than the bird you see 99% of the time, and every layout
- *     that sizes/places the mascot by its box (corner inset, beside-the-card
- *     placement, the clickable button, badges) would drift far off the bird.
- *     The fly/glide layers therefore OVERFLOW the box sideways while airborne
- *     (`fly.left` is negative); nothing that hosts a flight clips, and inactive
+ * switching state never moves the body. The BOX is the PERCHED still, both
+ * ways (horizontally symmetric about P.x):
+ *   • horizontally that was already the rule for the snowy owl (wingspan ~6
+ *     body-heights): a box that contained the wings would be several times
+ *     wider than the bird you see 99% of the time, and every layout that
+ *     sizes/places the mascot by its box (corner inset, beside-the-card
+ *     placement, the clickable button, badges) would drift far off the bird;
+ *   • vertically it USED to be the union of all three layers. The snowy owl's
+ *     2.76:1 cell made that free (the wings barely left the body's height).
+ *     The little owl's ~1:1 cell does not: its wings sweep 0.41u above and
+ *     0.59u below P, so a union box at FLY_SCALE 1.6 would be 1.6u tall and
+ *     the perched bird — the one every `size` prop is written for — would
+ *     shrink to 62% of its box on every surface (parked, chat header, the
+ *     172px Studio hero). So the airborne layers now overflow vertically too,
+ *     by (0.41·FLY_SCALE − 0.48)u ≈ 0.17u above and (0.59·FLY_SCALE − 0.52)u ≈
+ *     0.43u below the box (≈ 11px / 28px at Penny's 64px box) — only while
+ *     flying/gliding. The bubble sits `bottom: H + 8` above the box, so a
+ *     wing-up tip can brush its underside mid-flight (cosmetic; the bubble is
+ *     for the perched bird). Nothing that hosts a flight clips, and inactive
  *     layers are collapsed (KyroDove) so they never add scrollable overflow.
+ *     Callers that want the old envelope can read fly.top/fly.h from the
+ *     geometry — it is still derived, just no longer folded into the box.
  */
 export function deriveGeometry(manifest = FALLBACK) {
   const fly = manifest.fly || FALLBACK.fly
@@ -124,17 +140,15 @@ export function deriveGeometry(manifest = FALLBACK) {
       anchor: { x: perched.anchor.x + offset.x, y: perched.anchor.y + offset.y },
     },
   ]
-  let above = 0
-  let below = 0
-  for (const l of layers) {
-    above = Math.max(above, l.anchor.y * l.h)
-    below = Math.max(below, (1 - l.anchor.y) * l.h)
-  }
+  // Vertical: the perched still only (see the box rule above); the airborne
+  // layers overflow above/below while flying.
+  const perchedLayer = layers[2]
+  const above = perchedLayer.anchor.y * perchedLayer.h
+  const below = (1 - perchedLayer.anchor.y) * perchedLayer.h
   // Horizontal: the perched still, made SYMMETRIC about P.x so the flipped
   // (facing-left) still stays inside the box too — costs ~0.07u of slack on one
   // side, and means the box, the button hit-area and any badge inset track the
   // bird in both facings.
-  const perchedLayer = layers[2]
   const half = Math.max(perchedLayer.anchor.x, 1 - perchedLayer.anchor.x) * perchedAspect
   const left = half
   const right = half

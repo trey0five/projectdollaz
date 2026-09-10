@@ -1,101 +1,114 @@
 # KYRO the owl — in-app mascot assets
 
-Photoreal **snowy owl** sprites for the app mascot (owner decision 2026-09-10: move away from the dove; this
-directory replaces `/kyro-dove/` with the SAME manifest schema and file names). Everything here has alpha,
-faces **right**, and is our own generated output. Mirror with `transform: scaleX(-1)`.
+Photoreal **little owl** (*Athene noctua* — Athena's owl, the classic emblem of knowledge: small, round-headed,
+grey-brown with white speckling, pale facial disc, yellow eyes, short tail) sprites for the app mascot. Owner
+decision 2026-09-10: "instead of the snowy owl, i'd rather use the little owl that is associated with knowledge."
+Same manifest schema and file names as the snowy owl (and the dove before it). Everything here has alpha, faces
+**right**, and is our own generated output. Mirror with `transform: scaleX(-1)`.
 
 | File | What | Size |
 |---|---|---|
-| `fly.webp` | sprite sheet, one wingbeat, 42 cells of 384x139 in a 7x6 grid (2688x834), lossless | 1,141 KB |
-| `glide.webp` | one wings-spread frame (source frame 61, bottom of the downstroke), same crop/scale as a fly cell, 384x139 | 33 KB |
-| `perched.webp` | perched still, branch removed, alpha-trimmed + 4 % padding, 507x512 | 160 KB |
-| `perched@256.webp` | same at 254x256 | 41 KB |
-| `manifest.json` | frames/grid/fps/anchors for the app (same schema as kyro-dove) | |
+| `fly.webp` | sprite sheet, one wingbeat, 36 cells of 249x256 in a 6x6 grid (1494x1536), lossless | 1,012 KB |
+| `glide.webp` | one wings-spread frame (source frame 209, wings spread and slightly raised), same crop/scale as a fly cell, 249x256 | 25 KB |
+| `perched.webp` | perched still, alpha-trimmed + 4 % padding, 512x505 | 199 KB |
+| `perched@256.webp` | same at 256x252 | 51 KB |
+| `manifest.json` | frames/grid/fps/anchors for the app (same schema as before) | |
 | `preview.html` / `preview.png` | self-check: plays the sheet with CSS `steps()` on the light app ground and on navy | |
+| `owl-sky-proof.mp4` | temp, untracked: the sheet looping over the sky plates (1536x1024, 30 fps, 4 s) | |
 
 ## Playing `fly.webp`
 
-42 cells, 24 fps = 1.75 s per wingbeat. Cell `k` is at column `k % 7`, row `k / 7`. Play 0..41 forward and
-repeat. Unlike the dove this is a NATURAL cycle (no ping-pong): bottom of the downstroke -> upstroke (wings
-level, thin but visible, cells ~18-24) -> downstroke -> bottom. The seam (cell 41 = frame 143 -> cell 0 = frame 61)
-is a 2-source-frame step like every other cell (silhouette diff 0.073 vs mean step 0.080).
+36 cells, 24 fps = 1.5 s per wingbeat. Cell `k` is at column `k % 6`, row `k / 6`. Play 0..35 forward and
+repeat — a NATURAL cycle (no ping-pong): 9 frames before the wing-up peak -> wings up -> downstroke -> wings
+down (bottom of the downstroke ~cell 22) -> upstroke -> back. The seam (cell 35 = source 214 -> cell 0 =
+source 106) is 1.5x an average cell step (silhouette diff 0.146 vs mean step 0.096).
 
 ```css
-.fly { width:384px; height:139px; background:url(fly.webp) 0 0/2688px 834px;
-       animation: fx .29167s steps(7) infinite, fy 1.75s steps(6) infinite; }
-@keyframes fx { to { background-position-x:-2688px } }
-@keyframes fy { to { background-position-y:-834px } }
+.fly { width:249px; height:256px; background:url(fly.webp) 0 0/1494px 1536px;
+       animation: fx .25s steps(6) infinite, fy 1.5s steps(6) infinite; }
+@keyframes fx { to { background-position-x:-1494px } }
+@keyframes fy { to { background-position-y:-1536px } }
 ```
 
 Anchors (fraction of the cell, from the alpha): `fly`/`glide` = centroid of the body (pixels opaque in every
-frame of the cycle = body+head+tail, not wings) = (0.3342, 0.4001); `perched` = feet (x = centroid of the
-black talon pixels, y = lowest claw pixel) = (0.6549, 0.962).
+frame of the cycle = torso+head) = (0.5674, 0.4613); `perched` = feet (x = centroid of the black talon
+pixels, y = lowest claw pixel) = (0.6311, 0.9744).
 
 ## Numbers for `kyroDoveManifest.js` (measured by the build, see `measurements.json` next to the build script)
 
-The owl's side profile is much wider than the dove's (cell aspect 2.76 vs 1.25) and the body sits low-left in
-the cell, so BOTH app constants need re-deriving — do not reuse the dove values:
-
 | | value |
 |---|---|
-| glide alpha centroid, fraction of cell | (0.4515, 0.4945) |
-| perched alpha centroid, fraction of image | (0.5733, 0.5274) |
-| body height in a fly cell (always-opaque pixels) | 0.445 of cell height (62 px) |
-| body height in the perched image | 0.924 of image height |
-| `FLY_SCALE` if the flying body should match the perched body height | **2.07** (dove: 1.22) |
-| `PERCHED_PLACEMENT_OFFSET` at FLY_SCALE 1.22 | (-0.4806, -0.5497) |
-| `PERCHED_PLACEMENT_OFFSET` at FLY_SCALE 2.07 | (-0.760, -0.6303) |
+| glide alpha centroid, fraction of cell | (0.5057, 0.4105) |
+| perched alpha centroid, fraction of image | (0.5664, 0.4830) |
+| body (torso) height in a fly cell (always-opaque pixels) | 0.231 of cell height |
+| body height in the perched image | 0.935 of image height |
+| `FLY_SCALE` chosen | **1.6** (head-match overlay says ~2.0; see below) |
 
-Offset formula (same one the dove comment describes): place the perched still so its alpha centroid lands on
-the glide centroid: `A.x = pc.x - (gc.x - fly.anchor.x) * FLY_SCALE * glideAspect / perchedAspect`,
-`A.y = pc.y - (gc.y - fly.anchor.y) * FLY_SCALE`, offset = A - perched.anchor. Note that at FLY_SCALE 2.07 the
-fly layer is 2.07 x 2.76 = 5.7 perched-heights WIDE (a real owl's wingspan is ~3.5x its body length), which
-makes the mascot box very wide; 1.22 keeps the flying owl's body ~60 % of the perched size (reads as
-"further away"). Engineer's call — both offsets are given.
+The fly cell is ~1:1 (the snowy owl's was 2.76:1): the wings sweep from 0.41 of the cell above the body
+centroid to 0.59 below it, so the torso is only 0.23 of the cell and the torso-thickness formula
+(`FLY_SCALE_suggested` 4.08 in measurements.json) is meaningless here. "Same bird" is a HEAD match:
+`demo-video/owl-candidates/little/sora/fly-scale-overlay.png` overlays glide on perched, centroid-aligned, at
+1.0/1.4/1.7/2.0/2.4/2.8 — the head/eye masses coincide at ~2.0 (eye-diameter ratio 1.9). 1.6 is the deliberate
+compromise (flying head ~80 % of the perched head, reads as the same bird a little further off) because the app
+box is now the PERCHED still both ways and the airborne layers overflow it: at 1.6 the wings overflow ~0.17u
+above / ~0.43u below the box only while flying (≈11/28 px at Penny's 64 px box). With the old "vertical
+union" box rule the perched mascot would have shrunk to 62 % of its box on every surface. Placement offset is
+derived in the JS from the centroids (perched centroid - feet anchor = (-0.0647, -0.4914)).
 
 ## Sources and licence
 
-* Flight: `demo-video/owl-candidates/sora/sprite/frames/` — Sora (sora-2-pro) 12 s clip `keyable-owl.mp4`
-  (job in `jobs.json`), keyed by `key_owl.py` (silhouette key, LO=8 HI=90, 2 px luma ring) into 360 RGBA
-  PNGs. `sprite/audit.json` = edge-contact + loop audit; `sprite-luma/` = the plain `key.sh` luma key kept for
-  comparison (it turns the barring semi-transparent — do not use).
-* Perched: `demo-video/owl-candidates/still/perched-owl-1.png` — gpt-image-1 (high, 1536x1024, transparent).
-  `perched-owl-2.png` is the alternate (branch runs diagonally behind the toes; unused).
+* Flight: `demo-video/owl-candidates/little/sora/sprite/frames/` — Sora (sora-2-pro, 1280x720, 12 s) clip
+  `keyable-owl.mp4` (job in `jobs.json`; $3.60), CHROMA-keyed by `key_green.py` (greenness ramp 14..56,
+  2 px ring un-premultiplied against the measured screen colour + despill) into 360 RGBA PNGs. `audit.json`
+  = 4 px edge-contact + loop audit; `phase.json` = wing phase per frame.
+* Perched: `demo-video/owl-candidates/little/still/perched-owl-2.png` — gpt-image-1 (high, 1536x1024,
+  transparent; two generated for ~$0.50, #2 chosen for its truer grey-brown plumage; #1 is the warmer
+  alternate). No branch or ground was drawn, so nothing had to be removed.
 * Both are our own generated output (OpenAI Sora / gpt-image-1, generated under our account). No third-party
   stock or licensed imagery.
 
-## Why these frames
+## What Sora did and did not honour
 
-Sora honoured the framing (zero frames with alpha within 4 px of an edge across all 360; bird bbox
-x 250-1198, y 173-613) and the black background (corner luma 1-3), but NOT "wingbeats about once per
-second": there is one crisp full flap (top ~12 -> bottom ~54 -> top ~96 -> bottom ~146, ~2.8 s) and then the
-amplitude decays into a bobbing glide (frames ~186-359, wings never rise above the body). Scale is stable
-(wings-down area 137k px @54 vs 135k px @264 — no drift toward camera). `audit.py`'s best loop is 61 -> 145/146
-(score 2.16x the consecutive-frame diff — the same tier as the dove's 2.2x), so the sheet is frames 61..143
-every 2nd frame. The head is turned slightly toward camera throughout (3/4 face, both eyes visible) — that is
-the source, not the key.
+* The green screen: yes, but MUTED — a flat (79,142,68), greenness ~64 rather than #00FF00's 255. Still
+  perfectly keyable (feather greenness p99 = 10, screen p1 = 60; background drift ±2 over 12 s).
+* "Flying from left to right in strict side profile": profile yes, but the owl FACES LEFT in every frame
+  (beak on the left). The build flips every cell horizontally (`FLIP = True`, `sourceFlippedX` in the
+  manifest) so the sheet honours the facing-right contract; anchors are measured on the flipped cells.
+* "Wingbeats about once per second": no — slow motion as also prompted, one beat ~111 frames (3.7 s). Wing-up
+  peaks at source 115/226/306, wing-down at 43/174/274. Played at 24 fps from 36 evenly spaced cells the
+  beat is 1.5 s.
+* "Wings never approach any frame edge": no — the downstroke bottoms out BELOW the frame on three beats
+  (contact frames 29-58, 267-282, 340-359). The clean run is 59..266 and the one full beat inside it,
+  106 -> 217, is also the audit's best loop (score 1.38x the consecutive-frame diff).
+* Position drift: at the same wing phase the beak tip moves (+18, +15) px over the beat. The build removes that
+  linear drift per frame (`DRIFT`), which took the seam from 3.5x to 1.5x an average step.
+* Scale is stable across the beat; both eyes/yellow iris visible in every cell (checked per cell).
 
-## Edge fix / key (why the cells are not a straight crop)
+## Edge / key
 
-A pure luma key (key.sh) is wrong for a barred owl: the black barring (source luma 8-40) becomes
-semi-transparent and un-premultiplies to washed-out brown. `key_owl.py` keys on the SILHOUETTE instead:
-sil = luma > 8, closed 1 px, enclosed holes filled, specks < 60 px dropped; the interior (sil eroded 2 px) is
-fully opaque with the untouched source colour; only the 2 px ring uses the luma ramp + un-premultiply so
-feather tips stay soft and bright. The build's `refine_keyed` (unchanged from the dove) then re-derives
-coverage in a 4 px ring so the render's soft edge does not read as a dark outline on `#f6f7fb`. Mean
-luminance of semi-transparent sheet pixels: 157/255 (dove: 170; the owl's edge pixels include real barring).
-Perched: the gpt-image-1 still had a thin perch stick under the feet running to the canvas bottom; the build
-keeps only talon pixels inside the stick's columns and zeroes everything below the lowest claw. A ~12 px
-(at 512) dark remnant of the stick's shadowed side survives under the front claw and reads as a claw tip.
+`key_green.py`: sil = greenness < 35 (closed 1 px, holes filled, specks < 60 px dropped); interior (sil eroded
+2 px) fully opaque with source colour; the 2 px ring gets alpha from the greenness ramp and its colour
+un-premultiplied against the screen colour (`fg = (src - (1-a)·bg)/a`), then despilled (G := max(R,B) in the
+ring + 3 px inside, the freed green returned as luminance). The build's `refine_keyed` (chroma version — the
+snowy owl's luma-coverage maths assumed bird-over-black) recolours a 4 px band inside the silhouette from the
+nearest opaque feathers so no screen tint survives, and clamps G on near-zero-alpha pixels after the
+premultiplied LANCZOS resize (those came out green-noise; invisible, but now never green). Result: at
+alpha >= 32 the greenness p99 of edge pixels is 4; no cell has alpha within 2 px of a cell edge.
 
 ## Regenerate
 
 ```
-python3 demo-video/owl-candidates/sora/key_owl.py raw sprite/frames 8 90   # from raw/ (ffmpeg png dump of the clip)
-python3 demo-video/owl-candidates/sora/build_kyro_owl.py                   # Pillow + numpy + scipy; ~10 s
-node demo-video/owl-candidates/sora/preview_kyro_owl.mjs                   # preview.png via village-finder's playwright
+cd demo-video/owl-candidates/little/sora
+python3 gen.py                          # ONE sora-2-pro clip -> keyable-owl.mp4 ($3.60)  (python3 ../gen_stills.py for the stills)
+ffmpeg -i keyable-owl.mp4 -start_number 0 raw/r%04d.png
+python3 key_green.py raw sprite/frames 14 56
+python3 audit.py sprite/frames 4 20
+python3 build_kyro_owl.py              # Pillow + numpy + scipy; writes ../../../../apps/web/public/kyro-owl/*
+node preview_kyro_owl.mjs              # preview.png via village-finder's playwright
+python3 sky_proof.py                   # sky-proof/ + owl-sky-proof.mp4 here
+node verify_app.mjs                    # live app check (screens + landing centroid delta) -> verify/
 ```
 
-Knobs at the top of the build script: `FWD`/`SEQ`/`RANGE` (source frames), `GLIDE`, `FPS`, `COLS`, `PAD`,
-`CELL_LONG` (384 here, not 256: a 256-wide cell would be only ~97 px tall for this aspect, under-sampled at
-the app's 56 px x 1.22 box on 2x DPR). Sky proof of the loop: `demo-video/owl-candidates/sora/sky-proof/`.
+Knobs at the top of the build script: `N_CELLS`/`LOOP_FROM`/`LOOP_TO` (one beat, evenly sampled), `GLIDE`,
+`FPS`, `COLS`, `PAD`, `CELL_LONG` (256: the cell is ~1:1, so the head stays ~1.4x oversampled at the app's
+2x-DPR box), `DRIFT`, `FLIP`.
