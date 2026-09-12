@@ -5,6 +5,7 @@ import { framePosition } from './hooks/useSpriteFrame.js'
 import {
   FALLBACK,
   FLY_SCALE,
+  PERCH_SCALE,
   deriveGeometry,
   isWellFormedManifest,
   manifestMatchesSheet,
@@ -33,7 +34,7 @@ const STALE_SNOWY = {
 }
 
 const calcFactor = (s) => {
-  const m = /^calc\(var\(--kyro-h\) \* ([\d.]+)\)$/.exec(s)
+  const m = /^calc\(var\(--kyro-h\) \* (-?[\d.]+)\)$/.exec(s) // negative = overflows the box (the perch)
   if (!m) throw new Error(`not a --kyro-h calc: ${s}`)
   return Number(m[1])
 }
@@ -85,6 +86,15 @@ describe('manifest ↔ sheet guard (the stale-cache root cause)', () => {
     expect(isWellFormedManifest({ ...FALLBACK, fly: { ...FALLBACK.fly, cols: 7 } })).toBe(false)
     expect(isWellFormedManifest({ ...FALLBACK, fly: { ...FALLBACK.fly, frames: 37 } })).toBe(false)
     expect(isWellFormedManifest(null)).toBe(false)
+  })
+
+  it('the perch block is optional but, when present, must be sized and anchored', () => {
+    expect(FALLBACK.perch).toBeTruthy() // the bundled manifest ships the olive branch
+    expect(isWellFormedManifest(STALE_SNOWY)).toBe(true) // no perch block at all is fine
+    expect(isWellFormedManifest({ ...FALLBACK, perch: { ...FALLBACK.perch, w: 0 } })).toBe(false)
+    expect(isWellFormedManifest({ ...FALLBACK, perch: { ...FALLBACK.perch, anchor: { x: 0.5 } } })).toBe(false)
+    expect(deriveGeometry(STALE_SNOWY).perch).toBeTruthy() // falls back to the bundled branch
+    expect(deriveGeometry({ ...FALLBACK, perch: null }).perch).toBeTruthy()
   })
 
   it('asset URLs are versioned by the dimensions the manifest declares', () => {
@@ -146,6 +156,76 @@ describe('manifest ↔ sheet guard (the stale-cache root cause)', () => {
       const m = await mod.loadManifest()
       expect(m).toBe(served)
     })
+  })
+})
+
+describe('the perch — the owl lands ON the olive branch', () => {
+  const perchEl = (c) => c.querySelector('[data-kyro-layer="perch"]')
+  const perchedEl = (c) => c.querySelector('[data-kyro-layer="perched"]')
+
+  it('deriveGeometry puts the perch anchor exactly on the feet, PERCH_SCALE× the perched width', () => {
+    const g = deriveGeometry(FALLBACK)
+    expect(g.perch.w).toBeCloseTo(g.perched.w * PERCH_SCALE, 6)
+    expect(g.perch.w / g.perch.h).toBeCloseTo(FALLBACK.perch.w / FALLBACK.perch.h, 6)
+    expect(g.perch.left + FALLBACK.perch.anchor.x * g.perch.w).toBeCloseTo(g.feet.x, 6)
+    expect(g.perch.top + FALLBACK.perch.anchor.y * g.perch.h).toBeCloseTo(g.feet.y, 6)
+    expect(g.perch.file).toBe('/kyro-owl/perch.webp?v=512x325')
+    expect(g.perch.file256).toBe('/kyro-owl/perch@256.webp?v=256x163')
+    // The branch never reaches past the box on the BEAK side (it must not
+    // cross the card the guide points at); it overflows on the tail side.
+    expect(g.perch.left + g.perch.w).toBeLessThan(g.aspect)
+    expect(g.perch.left).toBeLessThan(0)
+  })
+
+  it('is present (visible) in perched and anchored at the feet within 1px at 64px', () => {
+    const { container } = render(<KyroDove size={64} state="perched" />)
+    const el = perchEl(container)
+    expect(el).toBeTruthy()
+    expect(el.style.opacity).toBe('1')
+    expect(el.style.visibility).toBe('visible')
+    expect(el.dataset.kyroPerch).toBe('on')
+    const g = deriveGeometry(FALLBACK)
+    const left = calcFactor(el.style.left)
+    const top = calcFactor(el.style.top)
+    const w = calcFactor(el.style.width)
+    const h = calcFactor(el.style.height)
+    const H = 64
+    expect(Math.abs((left + FALLBACK.perch.anchor.x * w - g.feet.x) * H)).toBeLessThan(1)
+    expect(Math.abs((top + FALLBACK.perch.anchor.y * h - g.feet.y) * H)).toBeLessThan(1)
+    expect(el.style.backgroundImage).toContain('perch@256.webp?v=256x163')
+    expect(el.style.transformOrigin).toBe('76.0% 87.0%')
+  })
+
+  it('paints BELOW the perched still, inside the same flip wrapper', () => {
+    const { container } = render(<KyroDove size={64} state="perched" facing="left" />)
+    const a = perchEl(container)
+    const b = perchedEl(container)
+    expect(a.parentElement).toBe(b.parentElement)
+    expect(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(a.parentElement.style.transform).toBe('scaleX(-1)')
+  })
+
+  it('is hidden (faded + collapsed) while flying, fading in during a glide', () => {
+    const { container } = render(<KyroDove size={64} state="flying" paused />)
+    const el = perchEl(container)
+    expect(el.style.opacity).toBe('0')
+    expect(el.style.visibility).toBe('hidden')
+    expect(el.style.transform).toBe('scale(0)')
+    expect(el.dataset.kyroPerch).toBe('off')
+    const glide = render(<KyroDove size={64} state="gliding" />).container
+    expect(perchEl(glide).style.opacity).toBe('1')
+    expect(perchEl(glide).style.transition).toContain('40ms')
+  })
+
+  it('perch={false} renders no branch at all', () => {
+    const { container } = render(<KyroDove size={64} state="perched" perch={false} />)
+    expect(perchEl(container)).toBeNull()
+    expect(perchedEl(container)).toBeTruthy()
+  })
+
+  it('uses the full-size branch above 128px', () => {
+    const { container } = render(<KyroDove size={172} />)
+    expect(perchEl(container).style.backgroundImage).toContain('perch.webp?v=512x325')
   })
 })
 

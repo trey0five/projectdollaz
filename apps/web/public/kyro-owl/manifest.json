@@ -90,5 +90,23 @@
     "facing": "right",
     "sourceFrame": 209,
     "sourceFlippedX": true
+  },
+  "perch": {
+    "file": "perch.webp",
+    "w": 512,
+    "h": 325,
+    "anchor": {
+      "x": 0.76,
+      "y": 0.87
+    },
+    "facing": "right",
+    "variants": {
+      "256": {
+        "file": "perch@256.webp",
+        "w": 256,
+        "h": 163
+      }
+    },
+    "note": "olive branch (Athena's owl); anchor = where the perched owl's feet anchor (lowest claw) sits on the bare wood right of the leaf junction, ~0.055 into the wood so the toes read as gripping. Wood top edge 0.828@x0.72 -> 0.782@x0.91."
   }
 }

@@ -31,6 +31,7 @@
 // Anchors are FRACTIONS of the cell/image (already ratios — no /cellW needed):
 //   fly / glide → body centroid (the pixels opaque in every frame: body+head+tail)
 //   perched     → the feet (x = centroid of the talon pixels, y = lowest claw)
+//   perch       → the spot on the branch's top edge those feet rest on
 // Every sprite is authored facing RIGHT; mirror with scaleX(-1).
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -69,6 +70,20 @@ export const FALLBACK = {
     anchor: { x: 0.5674, y: 0.4613 },
     facing: 'right',
   },
+  // The olive branch the owl lands on (owner 2026-09-12: "the owl should land
+  // on something … instead of floating in the air"; Athena's owl + olive
+  // branch). anchor = the spot on the bare wood, right of the leaf junction,
+  // where the perched still's FEET anchor (lowest claw) sits — ~0.055 of the
+  // image into the 0.10-thick wood so the toes read as gripping it, with the
+  // wood painting BEHIND the claw tips (the perch layer is z-below perched).
+  perch: {
+    file: 'perch.webp',
+    w: 512,
+    h: 325,
+    anchor: { x: 0.76, y: 0.87 },
+    facing: 'right',
+    variants: { 256: { file: 'perch@256.webp', w: 256, h: 163 } },
+  },
 }
 
 // Alpha-silhouette CENTROIDS measured by the asset build
@@ -99,6 +114,23 @@ export const PERCHED_CENTROID = { x: 0.5664, y: 0.483 }
 // off) while the airborne layers stay ~1.6u tall — see the box rule below for
 // why that number, not 2.0, is the one that costs nothing in the perched state.
 export const FLY_SCALE = 1.6
+
+// The perch renders this many times the perched still's WIDTH (the branch
+// should read as something the bird sits ON, longer than the bird, but not a
+// scene). Its anchor is pinned to the perched still's feet anchor, so the
+// branch is placed by the same feet the breathe/flutter keyframes pivot on.
+//
+// The perch OVERFLOWS the box, like the airborne layers do (see the box rule
+// below): the box stays the perched still so every `size` prop, the bubble
+// (`bottom: H + 8` in Penny.jsx), the chevron and every corner inset are
+// untouched. With the manifest anchor at (0.76, 0.87) and aspect 1.575 the
+// branch is 1.166u wide × 0.740u tall and reaches ≈ 0.25u past the box on the
+// TAIL side (the olive end; left when facing right, right when facing left)
+// and ≈ 0.09u below it (≈ 16px / 6px at Penny's 64px box; 42px / 15px at the
+// 172px Studio hero) — never past the box on the BEAK side, so a branch never
+// crosses the card the guide points at. Every host surface was checked to
+// have that much padding (or no clipping ancestor) at its size.
+export const PERCH_SCALE = 1.15
 
 // PLACEMENT anchor for the perched layer relative to the manifest's feet anchor:
 // the perched still is placed by its alpha centroid (= P), the feet stay the
@@ -185,6 +217,34 @@ export function deriveGeometry(manifest = FALLBACK) {
     return { h, w, left: ax - l.anchor.x * w, top: ay - l.anchor.y * h }
   }
   const perchedBox = place(perchedLayer)
+  // The perched bird's feet as a fraction of the BOX (x, y).
+  const feet = {
+    x: perchedBox.left + perched.anchor.x * perchedBox.w,
+    y: perchedBox.top + perched.anchor.y * perchedBox.h,
+  }
+  // Perch: PERCH_SCALE × the perched width, its anchor ON the feet (overflows
+  // the box — see PERCH_SCALE). `null` when the manifest has no perch block.
+  const perchSrc = manifest.perch || FALLBACK.perch
+  const perch = perchSrc
+    ? (() => {
+        const w = perchedBox.w * PERCH_SCALE
+        const h = w / (perchSrc.w / perchSrc.h)
+        return {
+          w,
+          h,
+          left: feet.x - perchSrc.anchor.x * w,
+          top: feet.y - perchSrc.anchor.y * h,
+          file: assetUrl(perchSrc.file, perchSrc.w, perchSrc.h),
+          file256: perchSrc.variants?.[256]
+            ? assetUrl(perchSrc.variants[256].file, perchSrc.variants[256].w, perchSrc.variants[256].h)
+            : assetUrl(perchSrc.file, perchSrc.w, perchSrc.h),
+          // The contact point inside the perch layer (transform-origin, so a
+          // collapse/scale about it keeps the branch under the feet).
+          originX: perchSrc.anchor.x,
+          originY: perchSrc.anchor.y,
+        }
+      })()
+    : null
   return {
     aspect,
     ax,
@@ -209,12 +269,11 @@ export function deriveGeometry(manifest = FALLBACK) {
       originX: perched.anchor.x,
       originY: perched.anchor.y,
     },
+    perch,
     // The perched bird's feet as a fraction of the BOX (x, y) — for parents that
-    // squash/pivot the whole bird (e.g. the landing-scene touchdown).
-    feet: {
-      x: perchedBox.left + perched.anchor.x * perchedBox.w,
-      y: perchedBox.top + perched.anchor.y * perchedBox.h,
-    },
+    // squash/pivot the whole bird (e.g. the landing-scene touchdown). The perch
+    // anchor sits exactly here.
+    feet,
   }
 }
 
@@ -232,6 +291,11 @@ const preload = (src) =>
     img.src = src
   })
 
+/** An optional still block (perch): if present it must be sized and anchored. */
+const isWellFormedStill = (s) =>
+  s == null ||
+  !!(s.file && s.w > 0 && s.h > 0 && Number.isFinite(s.anchor?.x) && Number.isFinite(s.anchor?.y))
+
 /** Shape + internal consistency: the sheet must really be cols×rows cells. */
 export function isWellFormedManifest(m) {
   const f = m?.fly
@@ -239,6 +303,7 @@ export function isWellFormedManifest(m) {
     f &&
     m.perched &&
     m.glide &&
+    isWellFormedStill(m.perch) &&
     Number.isFinite(f.cols) &&
     Number.isFinite(f.rows) &&
     f.cols >= 1 &&
@@ -304,6 +369,10 @@ export function loadManifest() {
       preload(g.perched.file256)
       preload(g.fly.file)
       preload(g.glide.file)
+      if (g.perch) {
+        preload(g.perch.file)
+        preload(g.perch.file256)
+      }
       return m
     })
   return manifestPromise

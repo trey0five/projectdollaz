@@ -12,7 +12,9 @@ Same manifest schema and file names as the snowy owl (and the dove before it). E
 | `glide.webp` | one wings-spread frame (source frame 209, wings spread and slightly raised), same crop/scale as a fly cell, 249x256 | 25 KB |
 | `perched.webp` | perched still, alpha-trimmed + 4 % padding, 512x505 | 199 KB |
 | `perched@256.webp` | same at 256x252 | 51 KB |
-| `manifest.json` | frames/grid/fps/anchors for the app (same schema as before) | |
+| `perch.webp` | the olive branch the owl lands on, alpha-trimmed + ~4 % padding, 512x325 | 54 KB |
+| `perch@256.webp` | same at 256x163 | 18 KB |
+| `manifest.json` | frames/grid/fps/anchors for the app (same schema as before, plus `perch`) | |
 | `preview.html` / `preview.png` | self-check: plays the sheet with CSS `steps()` on the light app ground and on navy | |
 | `owl-sky-proof.mp4` | temp, untracked: the sheet looping over the sky plates (1536x1024, 30 fps, 4 s) | |
 
@@ -55,6 +57,29 @@ above / ~0.43u below the box only while flying (≈11/28 px at Penny's 64 px box
 union" box rule the perched mascot would have shrunk to 62 % of its box on every surface. Placement offset is
 derived in the JS from the centroids (perched centroid - feet anchor = (-0.0647, -0.4914)).
 
+## The perch (`perch.webp`)
+
+Owner, 2026-09-12: "maybe the owl should land on something. like perch onto something instead of floating in
+the air." Athena's owl gets an **olive branch** (leaves + three olives at the left, bare wood at the right).
+Same rules as the bird: alpha, authored for the owl facing RIGHT (the bare wood is on the beak side, the
+olives trail behind the tail), mirrored with the bird by the same `scaleX(-1)`. Copy for the demo rig:
+`demo-video/assets/kyro-owl-perch.webp`.
+
+`manifest.perch.anchor` = **(0.76, 0.87)** — the point on the branch where the perched still's FEET anchor
+(the lowest claw, (0.6311, 0.9744) of `perched.webp`) sits. The wood's top edge (measured on the brown
+pixels) runs 0.828 @ x 0.72 -> 0.809 @ 0.78 -> 0.782 @ 0.91 and the wood is ~0.10 thick; 0.76 is on the bare
+wood right of the leaf junction (x ~0.55-0.68) and 0.87 is ~0.055 into it, so the claw tips overlap the wood
+(which paints BEHIND them — the perch layer is z-below the bird) and the toes read as gripping rather than
+resting on a line. Anchor candidates were judged on composites at the app's 1.15x ratio
+(`preview_*.png` / `feet_*.png` while building).
+
+In the app (`KyroDove.jsx`): a fourth layer, first in the flip wrapper, `PERCH_SCALE` (1.15) x the perched
+still's WIDTH (=> 1.166u x 0.740u), anchor pinned to the feet. The box does NOT grow: the branch overflows it
+~0.25u on the tail side and ~0.09u below (16 / 6 px at the 64 px guide, 42 / 15 px at the 172 px Studio
+hero) so every `size`, the bubble (`bottom: H + 8`), the chevron and the corner insets are untouched; it
+never reaches past the box on the beak side. Fades in over the glide's last ~150 ms (or the settle), fades
+out on take-off, collapsed while airborne; simply present under reduced motion. `perch={false}` hides it.
+
 ## Sources and licence
 
 * Flight: `demo-video/owl-candidates/little/sora/sprite/frames/` — Sora (sora-2-pro, 1280x720, 12 s) clip
@@ -64,7 +89,10 @@ derived in the JS from the centroids (perched centroid - feet anchor = (-0.0647,
 * Perched: `demo-video/owl-candidates/little/still/perched-owl-2.png` — gpt-image-1 (high, 1536x1024,
   transparent; two generated for ~$0.50, #2 chosen for its truer grey-brown plumage; #1 is the warmer
   alternate). No branch or ground was drawn, so nothing had to be removed.
-* Both are our own generated output (OpenAI Sora / gpt-image-1, generated under our account). No third-party
+* Perch: `demo-video/owl-candidates/little/perch/perch-2.png` — gpt-image-1 (high, 1536x1024, transparent;
+  `gen_perch.py`, two generated for ~$0.50, #2 chosen), MIRRORED so the bare wood is on the beak side, trimmed
+  + 4 % pad and resized by `perch/compose.py --write`.
+* All are our own generated output (OpenAI Sora / gpt-image-1, generated under our account). No third-party
   stock or licensed imagery.
 
 ## What Sora did and did not honour

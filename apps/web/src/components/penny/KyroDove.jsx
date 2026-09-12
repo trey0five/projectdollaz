@@ -18,6 +18,20 @@
 //   listening   the scale pulse only
 //   celebrate   green check badge
 //   paused      freezes the sprite frame (offscreen / deterministic tests)
+//   perch       true (default) renders the olive branch under the perched owl;
+//               false hides it (a host that draws its own ground)
+//
+// PERCH: the owl lands ON something (owner, 2026-09-12). A fourth layer, the
+// olive branch, sits z-BELOW the perched still (first in DOM order) so the
+// toes overlap the wood, anchored so its manifest anchor is exactly on the
+// perched still's feet anchor, PERCH_SCALE × the perched width, inside the flip
+// wrapper so `facing` mirrors bird and branch about the same origin. It fades
+// in over the glide's last ~150ms (or over the landing settle when a caller
+// cuts straight to perched), fades out on take-off and is then collapsed to
+// scale(0) like the other inactive layers; under reduced motion it is simply
+// present (the state is forced to perched there). It OVERFLOWS the box on the
+// tail side and below (see PERCH_SCALE in kyroDoveManifest.js for the numbers
+// and why the box does not grow).
 //
 // GEOMETRY: the root is a `span` box sized by height — the box IS the perched
 // owl (plus the sliver the downstroke reaches below its feet). The three state
@@ -74,6 +88,7 @@ export default function KyroDove({
   speaking = false,
   listening = false,
   paused = false,
+  perch = true,
   className = '',
   style,
 }) {
@@ -104,6 +119,21 @@ export default function KyroDove({
       ? 'motion-safe:animate-[kyro-pulse_1.6s_ease-in-out_infinite]'
       : ''
   const perchedFile = size > 128 ? g.perched.file : g.perched.file256
+
+  // Perch (olive branch): shown while perched; during a glide it is already
+  // fading in so it is fully there at touchdown (Penny's glide is 200ms: 40ms
+  // delay + 160ms). Take-off: 120ms fade, then visibility/scale collapse it
+  // (a 0s transition delayed by the fade — transform is NOT animated, it only
+  // flips after the fade so the branch never shrinks visibly). Reduced motion:
+  // no transitions; the state is perched there anyway.
+  const perchOn = perch && !!g.perch
+  const perchVisible = effState === 'perched' || gliding
+  const perchFile = perchOn ? (size > 128 ? g.perch.file : g.perch.file256) : null
+  const perchTransition = reduce
+    ? 'none'
+    : perchVisible
+      ? `opacity 160ms ease-out ${gliding ? 40 : 0}ms, visibility 0s linear 0s, transform 0s linear 0s`
+      : 'opacity 120ms ease-in, visibility 0s linear 120ms, transform 0s linear 120ms'
 
   // Idle motion on the perched layer: breathe normally, flutter while speaking.
   const perchedAnim =
@@ -151,6 +181,23 @@ export default function KyroDove({
           transformOrigin: `${hx(g.ax)} 50%`,
         }}
       >
+        {/* Perch: the olive branch, FIRST so every bird layer paints over it
+            (the toes overlap the wood); anchored on the feet. */}
+        {perchOn && (
+          <span
+            data-kyro-layer="perch"
+            data-kyro-perch={perchVisible ? 'on' : 'off'}
+            style={layer(g.perch, {
+              backgroundImage: `url(${perchFile})`,
+              backgroundSize: '100% 100%',
+              transformOrigin: `${(g.perch.originX * 100).toFixed(1)}% ${(g.perch.originY * 100).toFixed(1)}%`,
+              opacity: perchVisible ? 1 : 0,
+              visibility: perchVisible ? 'visible' : 'hidden',
+              transform: perchVisible ? 'none' : 'scale(0)',
+              transition: perchTransition,
+            })}
+          />
+        )}
         {/* Flying: the cols×rows wingbeat sheet; frame written by useSpriteFrame.
             Inactive → collapsed (see header) but kept mounted so the sheet stays
             decoded for an instant take-off. */}
