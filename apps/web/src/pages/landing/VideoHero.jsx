@@ -43,7 +43,7 @@ export default function VideoHero({ onShown }) {
           loop
           playsInline
           preload="metadata"
-          className="h-[72svh] min-h-[420px] w-full object-cover"
+          className="h-[72svh] min-h-[420px] w-full object-cover object-bottom"
         >
           <source src="/homepage-hero-v3-av1.webm" type='video/webm; codecs="av01.0.05M.08"' />
           <source src="/homepage-hero-v3.webm" type='video/webm; codecs="vp9"' />

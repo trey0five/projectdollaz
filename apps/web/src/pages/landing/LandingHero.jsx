@@ -46,9 +46,13 @@ export default function LandingHero({ onIntroOpen }) {
     <>
       {/* Transparent straddle block: -mt lifts it over the video; -mb pulls the
           cream act section up under its lower half. No background of its own. */}
+      {/* Desktop overlap is 144px (lg:-mt-36), not deeper: the hero video ends on the
+          KYRO wordmark + "Knowledge Yielding Resource Optimizer" in the bottom quarter
+          of its frame, and the video is anchored object-bottom so the crop trims the top.
+          A deeper overlap hides the tagline on every desktop size. */}
       <div
         aria-labelledby="hero-title"
-        className="relative z-20 mx-auto -mb-24 -mt-24 grid max-w-6xl items-center gap-10 px-5 sm:-mb-32 sm:-mt-36 sm:px-8 lg:-mb-40 lg:-mt-56 lg:grid-cols-[1fr_minmax(380px,460px)]"
+        className="relative z-20 mx-auto -mb-24 -mt-24 grid max-w-6xl items-center gap-10 px-5 sm:-mb-32 sm:-mt-36 sm:px-8 lg:-mb-40 lg:-mt-36 lg:grid-cols-[1fr_minmax(380px,460px)]"
       >
         {/* ── The frosted glass card (dark glass — readable over video AND cream) ── */}
         <motion.div
