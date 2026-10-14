@@ -41,6 +41,29 @@ export interface RoleClassification {
 export interface ClassifyInput {
   fileName: string
   metadata?: SheetMetadata
+  /** "Today" for the statement-export current-FY rule (tests inject it). Default: new Date(). */
+  now?: Date
+}
+
+/** Jul–Jun fiscal year a date belongs to (FY2026 = Jul 2025 – Jun 2026). */
+function fiscalYearOf(year: number, month1to12: number): number {
+  return month1to12 >= 7 ? year + 1 : year
+}
+
+/**
+ * Issue #31: a QuickBooks statement EXPORT (Statement of Activity / Profit and
+ * Loss / Budget vs Actuals / Balance Sheet) dated in the CURRENT fiscal year —
+ * or the one just closed, which is what a school is reporting on for months
+ * after June 30 — is the current-year file. Returns true when that applies.
+ * Keyword signals (prior / audited / current) still take precedence.
+ */
+function statementIsCurrentYear(metadata: SheetMetadata | undefined, now: Date): boolean {
+  if (!metadata?.statement || !metadata.periodEndDate) return false
+  const m = metadata.periodEndDate.match(/^(\d{4})-(\d{2})-\d{2}$/)
+  if (!m) return false
+  const fy = fiscalYearOf(parseInt(m[1]!, 10), parseInt(m[2]!, 10))
+  const fyNow = fiscalYearOf(now.getFullYear(), now.getMonth() + 1)
+  return fy === fyNow || fy === fyNow - 1
 }
 
 // ── Keyword scoring helpers ───────────────────────────────────
@@ -68,9 +91,10 @@ function baseName(fileName: string): string {
  * Per-file only — batch-relative resolution (collisions, highest-FY=CY)
  * is handled by resolveRoles.
  */
-export function classifyRole({ fileName, metadata }: ClassifyInput): RoleClassification {
+export function classifyRole({ fileName, metadata, now }: ClassifyInput): RoleClassification {
   const reasons: string[] = []
   const base = baseName(fileName)
+  const statementCurrent = statementIsCurrentYear(metadata, now ?? new Date())
 
   const fromFileName = roleFromText(base)
   if (fromFileName) reasons.push(`filename "${base}" suggests ${fromFileName}`)
@@ -114,6 +138,15 @@ export function classifyRole({ fileName, metadata }: ClassifyInput): RoleClassif
   } else if (fromFileName) {
     role = fromFileName
     confidence = 0.6
+  } else if (statementCurrent) {
+    // A QuickBooks statement export (Statement of Activity / P&L / Budget vs
+    // Actuals / Balance Sheet) dated in the current (or just-closed) fiscal
+    // year IS the current-year file — the card must not say "Needs a role".
+    role = 'cy'
+    confidence = 0.7
+    reasons.push(
+      `QuickBooks ${metadata!.statement!.title} for period ending ${periodEndDate} is the current fiscal year`
+    )
   } else if (periodEndDate) {
     // No role keyword anywhere, but we DO have an in-sheet period-end date. The
     // batch resolver will use that date to pick cy/py; per-file we stay

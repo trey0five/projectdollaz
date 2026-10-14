@@ -7,6 +7,7 @@ import { ConfigService } from '@nestjs/config'
 // Type-only (erased at runtime, so no import cycle): the synth module owns the
 // summarized-report JSON shapes because it is the one that parses them.
 import type { QboSummarizedReport } from './qbo-company.synth.js'
+import { BS_ENGINE_ACCT, QBO_EXPENSE_BASE, QBO_REVENUE_BASE } from '@finrep/ingestion'
 
 const AUTHORIZE_URL = 'https://appcenter.intuit.com/connect/oauth2'
 const TOKEN_URL = 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer'
@@ -61,8 +62,10 @@ export interface QboDimensionEntity {
 // the QBO account type. Balance-sheet types collapse onto the engine's fixed SFP
 // numbers (multiple rows sharing one acct simply sum); P&L accounts get a UNIQUE
 // stable number (block + QBO account id) so each stays individually re-mappable.
-export const QBO_REVENUE_BASE = 40000
-export const QBO_EXPENSE_BASE = 60000
+// The blocks and the fixed BS numbers LIVE in @finrep/ingestion
+// (statements/tbConventions.ts) so the statement-export adapter (issue #31)
+// numbers accounts identically; re-exported here for existing importers.
+export { QBO_REVENUE_BASE, QBO_EXPENSE_BASE }
 
 /**
  * Which P&L section an ENGINE account number belongs to, per the QBO blocks
@@ -109,25 +112,28 @@ export function deriveAcct(meta: QboAccountMeta): { acct: number; category: 'oth
   const sub = meta.accountSubType
   switch (t) {
     case 'Bank':
-      return { acct: 100, category: null } // cash
+      return { acct: BS_ENGINE_ACCT.bank, category: null } // cash
     case 'Accounts Receivable':
-      return { acct: 120, category: null } // → tuitionRec via the acct-120 desc reclass
+      return { acct: BS_ENGINE_ACCT.receivable, category: null } // → tuitionRec via the acct-120 desc reclass
     case 'Other Current Asset':
-      if (sub === 'PrepaidExpenses') return { acct: 125, category: null }
-      if (sub === 'UndepositedFunds') return { acct: 100, category: null } // cash-equivalent
-      return { acct: 120, category: null }
+      if (sub === 'PrepaidExpenses') return { acct: BS_ENGINE_ACCT.prepaid, category: null }
+      if (sub === 'UndepositedFunds') return { acct: BS_ENGINE_ACCT.undepositedFunds, category: null } // cash-equivalent
+      return { acct: BS_ENGINE_ACCT.otherCurrentAsset, category: null }
     case 'Fixed Asset':
-      return { acct: sub === 'AccumulatedDepreciation' ? 170 : 150, category: null } // ppNet
+      return {
+        acct: sub === 'AccumulatedDepreciation' ? BS_ENGINE_ACCT.accumulatedDepreciation : BS_ENGINE_ACCT.fixedAsset,
+        category: null,
+      } // ppNet
     case 'Other Asset':
-      return { acct: 140, category: null } // ppNet
+      return { acct: BS_ENGINE_ACCT.otherAsset, category: null } // ppNet
     case 'Accounts Payable':
     case 'Credit Card':
     case 'Other Current Liability':
-      return { acct: 200, category: null } // apAccrued (lease-named rows split out)
+      return { acct: BS_ENGINE_ACCT.currentLiability, category: null } // apAccrued (lease-named rows split out)
     case 'Long Term Liability':
-      return { acct: 260, category: null }
+      return { acct: BS_ENGINE_ACCT.longTermLiability, category: null }
     case 'Equity':
-      return { acct: 300, category: null } // feeds opening net assets
+      return { acct: BS_ENGINE_ACCT.equity, category: null } // feeds opening net assets
     case 'Income':
     case 'Other Income':
       return { acct: QBO_REVENUE_BASE + meta.id, category: 'other' }
@@ -138,9 +144,9 @@ export function deriveAcct(meta: QboAccountMeta): { acct: number; category: 'oth
     default: {
       // Fall back on the coarse classification when the type is unrecognized.
       const c = meta.classification
-      if (c === 'Asset') return { acct: 120, category: null }
-      if (c === 'Liability') return { acct: 200, category: null }
-      if (c === 'Equity') return { acct: 300, category: null }
+      if (c === 'Asset') return { acct: BS_ENGINE_ACCT.otherCurrentAsset, category: null }
+      if (c === 'Liability') return { acct: BS_ENGINE_ACCT.currentLiability, category: null }
+      if (c === 'Equity') return { acct: BS_ENGINE_ACCT.equity, category: null }
       if (c === 'Revenue') return { acct: QBO_REVENUE_BASE + meta.id, category: 'other' }
       if (c === 'Expense') return { acct: QBO_EXPENSE_BASE + meta.id, category: 'fixedOther' }
       return { acct: -1, category: null } // unknown → caller's synthetic fallback
