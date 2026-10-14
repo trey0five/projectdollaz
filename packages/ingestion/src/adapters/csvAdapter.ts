@@ -4,6 +4,7 @@
 // start-row detection heuristic, emitting identical NormalizedRow[].
 // Lib-light: hand-rolled CSV parsing (handles quoted fields/commas).
 // ─────────────────────────────────────────────────────────────
+import { ACCT_MAX, isPlausibleAcct } from './excelAdapter.js'
 import type { IngestionAdapter, IngestionResult, NormalizedRow } from '../types.js'
 import { extractSheetMetadata } from '../metadata.js'
 
@@ -80,7 +81,7 @@ function detectStartRow(raw: string[][]): number {
       return i + 1
     }
     const num = parseInt(c0, 10)
-    if (!isNaN(num) && num >= 100 && num <= 9999) {
+    if (!isNaN(num) && num >= 100 && num <= ACCT_MAX) {
       return i
     }
   }
@@ -103,7 +104,7 @@ export function parseTrialBalanceCsv(bytes: ArrayBuffer): IngestionResult {
     if (!r || r[0] == null || r[0] === '') continue
 
     const acct = parseInt(r[0].toString().trim(), 10)
-    if (isNaN(acct) || acct <= 0 || acct > 9999) continue
+    if (!isPlausibleAcct(acct)) continue
 
     const desc = r[1] != null ? r[1].toString().trim() : ''
     if (!desc || desc === 'null' || desc === 'undefined') continue
@@ -124,7 +125,7 @@ export function parseTrialBalanceCsv(bytes: ArrayBuffer): IngestionResult {
   if (rows.length === 0) {
     throw new Error(
       `No account rows found (start row detected: ${startRow}). ` +
-        'Ensure account numbers are in column A starting around row 4.'
+        'Ensure account numbers (1–999999) are in column A with the description in column B.'
     )
   }
 

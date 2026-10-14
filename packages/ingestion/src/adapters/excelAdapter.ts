@@ -1,7 +1,8 @@
 // ─────────────────────────────────────────────────────────────
 // Excel trial-balance adapter. Ports the legacy parseTrialBalance
 // semantics (start-row detection, Total-column-wins-else-debit-minus-credit,
-// acct 100-9999 range filter) but now (a) maps columns by HEADER NAME so a
+// acct range filter — now 1…999 999, QuickBooks-style 5-digit charts included)
+// but now (a) maps columns by HEADER NAME so a
 // re-ordered sheet still parses, and (b) enumerates EVERY sheet in a workbook
 // (listTrialBalanceSheets) so a multi-sheet monthly workbook fans out to one
 // candidate per sheet. Single-sheet behaviour is byte-identical.
@@ -27,6 +28,38 @@ interface ColumnMap {
 }
 
 const FIXED_COLUMNS: ColumnMap = { acct: 0, desc: 1, debit: 2, credit: 3, total: 4 }
+
+/**
+ * Account-number range the engine accepts from FILES. 4-digit charts (1000…9999)
+ * and 5-digit QuickBooks-style charts (40000-series revenue, 60000-series expense —
+ * the SAME blocks the live QBO sync synthesises in qbo.client.ts) both pass.
+ * Six digits is the ceiling so years/phone numbers/ZIPs in column A don't read as
+ * accounts. (2026-10-14 customer file: every row was 40000+ and got dropped.)
+ */
+export const ACCT_MIN = 1
+export const ACCT_MAX = 999_999
+export const isPlausibleAcct = (n: number): boolean =>
+  Number.isInteger(n) && n >= ACCT_MIN && n <= ACCT_MAX
+/** Start-row scan: a cell "looks like" an account number from 100 up. */
+const looksLikeAcctCell = (v: unknown): boolean => {
+  const n = parseInt((v ?? '').toString().trim(), 10)
+  return !isNaN(n) && n >= 100 && n <= ACCT_MAX
+}
+
+/**
+ * Header → signed-TOTAL column. Order = preference when several amount columns
+ * exist (a QuickBooks "Budget vs Actuals" export carries Actual | Budget |
+ * over Budget | % of Budget): the ACTUAL / period balance wins; budget, variance
+ * and percentage columns are never treated as the balance.
+ */
+const TOTAL_HEADER_PATTERNS: RegExp[] = [
+  /\bactuals?\b/,
+  /\b(ytd|year[\s-]*to[\s-]*date)\b/,
+  /\b(ending|closing)\s*balance\b|\bbalance\b/,
+  /\b(total|net|amount)\b/,
+  /\b(current|this)\s*(year|period|fy)\b/,
+]
+const NEVER_TOTAL = /budget|variance|over\s*budget|under\s*budget|%|percent|prior|last\s*year|py\b/
 
 /** Flatten the banner/title cells above the data header into strings. */
 function headerCells(raw: RawGrid, startRow: number): string[] {
@@ -72,10 +105,7 @@ function detectStartRow(raw: RawGrid): number {
     // re-ordered sheet (Total first, etc.) still anchors on its header.
     if (rowLooksLikeHeader(r)) return i + 1
     // First row whose column A looks like an account number
-    const num = parseInt((r[0] || '').toString().trim(), 10)
-    if (!isNaN(num) && num >= 100 && num <= 9999) {
-      return i
-    }
+    if (looksLikeAcctCell(r[0])) return i
   }
   return startRow
 }
@@ -90,8 +120,8 @@ function detectColumns(raw: RawGrid, startRow: number): ColumnMap {
   const headerRow = startRow > 0 ? raw[startRow - 1] : undefined
   if (!headerRow || !Array.isArray(headerRow)) return FIXED_COLUMNS
   const map: ColumnMap = { acct: -1, desc: -1, debit: -1, credit: -1, total: -1 }
-  headerRow.forEach((cell, idx) => {
-    const h = (cell ?? '').toString().trim().toLowerCase()
+  const headers = headerRow.map((cell) => (cell ?? '').toString().trim().toLowerCase())
+  headers.forEach((h, idx) => {
     if (!h) return
     if (map.acct < 0 && /^(number|account|acct|acc|gl|no\.?|#)\b|account\s*(number|no)/.test(h)) {
       map.acct = idx
@@ -101,10 +131,16 @@ function detectColumns(raw: RawGrid, startRow: number): ColumnMap {
       map.debit = idx
     } else if (map.credit < 0 && /^credit|\bcredit\b|\bcr\b/.test(h)) {
       map.credit = idx
-    } else if (map.total < 0 && /\b(total|net|amount|balance|ending)\b/.test(h)) {
-      map.total = idx
     }
   })
+  // Total column: best-preference match across the WHOLE header row (not first
+  // match wins), skipping budget / variance / percentage columns outright.
+  for (const pat of TOTAL_HEADER_PATTERNS) {
+    const idx = headers.findIndex(
+      (h, i) => h && i !== map.acct && i !== map.desc && i !== map.debit && i !== map.credit && pat.test(h) && !NEVER_TOTAL.test(h),
+    )
+    if (idx >= 0) { map.total = idx; break }
+  }
   // Need at least account + description recognized to trust name-mapping.
   if (map.acct < 0 || map.desc < 0) return FIXED_COLUMNS
   return map
@@ -143,7 +179,7 @@ function parseSheetGrid(raw: RawGrid, sheetName: string): IngestionResult | null
     if (acctCell == null) continue
 
     const acct = parseInt(acctCell.toString().trim(), 10)
-    if (isNaN(acct) || acct <= 0 || acct > 9999) continue
+    if (!isPlausibleAcct(acct)) continue
 
     const descCell = r[cols.desc]
     const desc = descCell != null ? descCell.toString().trim() : ''
@@ -153,6 +189,17 @@ function parseSheetGrid(raw: RawGrid, sheetName: string): IngestionResult | null
   }
 
   if (rows.length === 0) return null
+  // Every parsed total is zero AND no amount column was recognised → the sheet
+  // has balances we could not find (e.g. an unlabeled column). Refuse rather
+  // than import a chart of zeros that looks like success.
+  if (cols.total < 0 && cols.debit < 0 && cols.credit < 0 && rows.every((r) => r.total === 0)) {
+    const hdr = (startRow > 0 ? raw[startRow - 1] ?? [] : []).map((c: unknown) => (c ?? '').toString().trim()).filter(Boolean)
+    throw new Error(
+      `Found ${rows.length} account rows but no amount column. ` +
+        `Header cells seen: ${hdr.length ? hdr.join(' | ') : '(none)'}. ` +
+        'Name the balance column "Actual", "Total", "Balance", "Debit"/"Credit", or "YTD".',
+    )
+  }
 
   const net = rows.reduce((s, r) => s + (Number.isFinite(r.total) ? r.total : 0), 0)
   const metadata = extractSheetMetadata(
@@ -209,7 +256,7 @@ export function parseTrialBalance(
     const startRow = detectStartRow(raw)
     throw new Error(
       `No account rows found (start row detected: ${startRow}). ` +
-        'Ensure account numbers are in column A starting around row 4.',
+        'Ensure account numbers (1–999999) are in an "Account"/"Acct" column with a "Description"/"Desc" column beside it.',
     )
   }
   return result

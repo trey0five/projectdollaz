@@ -351,7 +351,7 @@ export class AssistantFilesService {
 
   /**
    * Heuristic: a trial balance has many account rows with plausible account
-   * numbers (100–9999) and a non-trivial spread of totals (not all-zero / a single
+   * numbers (100–999999; 5-digit QuickBooks charts included) and a non-trivial spread of totals (not all-zero / a single
    * value). Conservative on purpose — false positives propose a real import.
    */
   private looksLikeTrialBalance(rows: NormalizedRow[]): boolean {
@@ -361,7 +361,7 @@ export class AssistantFilesService {
         r &&
         Number.isInteger(r.acct) &&
         r.acct >= 100 &&
-        r.acct <= 9999 &&
+        r.acct <= 999_999 &&
         Number.isFinite(r.total),
     )
     if (accty.length < MIN_TB_ROWS) return false

@@ -50,10 +50,11 @@ function IsNumberOrNullArray(max: number, options?: ValidationOptions) {
 export class BudgetSpreadAccountDto {
   // acct MAY be 0 for label-only sheets (account NAMES, no GL numbers): the
   // label is the identity and the server maps it via labelToCategory. Numeric
-  // GL accounts stay in [100,9999]; @Min(0) lets the acct=0 sentinel through.
+  // GL accounts stay in [1,999999] (5-digit QuickBooks charts included); @Min(0)
+  // lets the acct=0 sentinel through.
   @IsInt()
   @Min(0)
-  @Max(9999)
+  @Max(999_999)
   acct!: number
 
   @IsString()
