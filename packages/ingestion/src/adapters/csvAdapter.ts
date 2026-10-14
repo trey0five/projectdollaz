@@ -4,7 +4,7 @@
 // start-row detection heuristic, emitting identical NormalizedRow[].
 // Lib-light: hand-rolled CSV parsing (handles quoted fields/commas).
 // ─────────────────────────────────────────────────────────────
-import { ACCT_MAX, isPlausibleAcct } from './excelAdapter.js'
+import { ACCT_MAX, isPlausibleAcct, detectColumns, rowTotalFor } from './excelAdapter.js'
 import type { IngestionAdapter, IngestionResult, NormalizedRow } from '../types.js'
 import { extractSheetMetadata } from '../metadata.js'
 
@@ -97,29 +97,25 @@ export function parseTrialBalanceCsv(bytes: ArrayBuffer): IngestionResult {
   }
 
   const startRow = detectStartRow(raw)
+  // Header-aware column mapping shared with the Excel adapter (falls back to the
+  // fixed A/B/C/D/E positions when the header is unrecognisable), so a CSV with
+  // "Acct,Desc,Budget,Actual" imports the Actual column, not Budget.
+  const cols = detectColumns(raw, startRow)
   const rows: NormalizedRow[] = []
 
   for (let i = startRow; i < raw.length; i++) {
     const r = raw[i]
-    if (!r || r[0] == null || r[0] === '') continue
+    if (!r) continue
+    const acctCell = r[cols.acct]
+    if (acctCell == null || acctCell === '') continue
 
-    const acct = parseInt(r[0].toString().trim(), 10)
+    const acct = parseInt(acctCell.toString().trim(), 10)
     if (!isPlausibleAcct(acct)) continue
 
-    const desc = r[1] != null ? r[1].toString().trim() : ''
+    const desc = r[cols.desc] != null ? r[cols.desc].toString().trim() : ''
     if (!desc || desc === 'null' || desc === 'undefined') continue
 
-    let total = 0
-    if (r[4] != null && r[4] !== '') {
-      const p = parseFloat(clean(r[4]))
-      if (!isNaN(p)) total = p
-    } else {
-      const deb = parseFloat(clean(r[2] ?? '0')) || 0
-      const crd = parseFloat(clean(r[3] ?? '0')) || 0
-      total = deb - crd
-    }
-
-    rows.push({ acct, desc, total })
+    rows.push({ acct, desc, total: rowTotalFor(r, cols) })
   }
 
   if (rows.length === 0) {

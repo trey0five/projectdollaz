@@ -78,13 +78,16 @@ export function detectExplicitDate(text: string): string | undefined {
       if (day >= 1 && day <= 31) return `${named[3]}-${pad2(mo)}-${pad2(day)}`
     }
   }
-  // "6/30/2026" or "06-30-2026"
-  const numeric = text.match(/\b(\d{1,2})[/\-](\d{1,2})[/\-](20\d{2})\b/)
+  // "6/30/2026", "06-30-2026" — or the 2-digit-year form QuickBooks puts in
+  // export filenames, "6-30-26" (customer file 2026-10-14). 2-digit years are
+  // read as 20YY; a bare day-month-year ambiguity is resolved US-style (M-D).
+  const numeric = text.match(/\b(\d{1,2})[/\-](\d{1,2})[/\-](20\d{2}|\d{2})\b/)
   if (numeric) {
     const mo = parseInt(numeric[1]!, 10)
     const day = parseInt(numeric[2]!, 10)
+    const year = numeric[3]!.length === 2 ? `20${numeric[3]}` : numeric[3]!
     if (mo >= 1 && mo <= 12 && day >= 1 && day <= 31) {
-      return `${numeric[3]}-${pad2(mo)}-${pad2(day)}`
+      return `${year}-${pad2(mo)}-${pad2(day)}`
     }
   }
   // Bare "Month YYYY" (no day) → that month's END date. Used for an ANNUAL sheet

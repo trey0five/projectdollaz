@@ -5,6 +5,7 @@ import { describe, it, expect } from 'vitest'
 import * as XLSX from 'xlsx'
 import { parseTrialBalance, listTrialBalanceSheets } from '../src/adapters/excelAdapter.js'
 import { parseTrialBalanceCsv } from '../src/adapters/csvAdapter.js'
+import { detectExplicitDate } from '../src/metadata.js'
 
 function wb(rows: any[][], name = 'Sheet1'): ArrayBuffer {
   const b = XLSX.utils.book_new()
@@ -22,6 +23,25 @@ const CUSTOMER: any[][] = [
   [41010, '41010 Contributions with Donor Restriction', 169414.99],
 ]
 
+describe('the customer file EXACTLY: "Actual" stacked on the row above Acct | Desc', () => {
+  it('parses all rows with the amounts (stacked header)', () => {
+    const r = parseTrialBalance(wb(CUSTOMER))
+    expect(r.rows).toHaveLength(5)
+    expect(r.rows.find((x) => x.acct === 40200)!.total).toBeCloseTo(488257.5, 2)
+    expect(r.rows.find((x) => x.acct === 40000)!.total).toBeCloseTo(-26301.61, 2)
+    expect(listTrialBalanceSheets(wb(CUSTOMER))).toHaveLength(1)
+  })
+  it('a banner title in A1 is never mistaken for a column header', () => {
+    const rows: any[][] = [['Statement of Activity'], [null, null, 'Actual'], ['Acct', 'Desc', null], [40200, 'Tuition', 5]]
+    const r = parseTrialBalance(wb(rows))
+    expect(r.rows[0]).toEqual({ acct: 40200, desc: 'Tuition', total: 5 })
+  })
+  it('the export filename date "6-30-26" is read as 2026-06-30', () => {
+    expect(detectExplicitDate('CMA Statement of Activity Budget vs Actuals 6-30-26.xlsx')).toBe('2026-06-30')
+    expect(detectExplicitDate('TB 06/30/2026')).toBe('2026-06-30')
+  })
+})
+
 describe('5-digit QuickBooks-style accounts (#29)', () => {
   it('parses the customer sheet shape: header row Acct | Desc, amounts under "Actual"', () => {
     // The customer's header split "Actual" onto the row above; a one-row header
@@ -32,6 +52,11 @@ describe('5-digit QuickBooks-style accounts (#29)', () => {
     expect(r.rows.find((x) => x.acct === 40200)!.total).toBeCloseTo(488257.5, 2)
     expect(r.rows.find((x) => x.acct === 40000)!.total).toBeCloseTo(-26301.61, 2)
     expect(listTrialBalanceSheets(wb(rows))).toHaveLength(1)
+  })
+  it('CSV is header-aware: Acct,Desc,Budget,Actual imports Actual, not Budget', () => {
+    const csv = 'Budget vs Actuals\nAcct,Desc,Budget,Actual\n40200,Monthly Tuition,500000,488257.50\n60100,Salaries,118000,120000\n'
+    const r = parseTrialBalanceCsv(new TextEncoder().encode(csv).buffer as ArrayBuffer)
+    expect(r.rows).toEqual([{ acct: 40200, desc: 'Monthly Tuition', total: 488257.5 }, { acct: 60100, desc: 'Salaries', total: 120000 }])
   })
   it('CSV: 5-digit accounts with a Total column', () => {
     const csv = 'Account,Description,Debit,Credit,Total\n40200,Monthly Tuition,,,488257.50\n60100,Salaries,120000,,\n'

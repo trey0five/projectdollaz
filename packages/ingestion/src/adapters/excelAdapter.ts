@@ -19,7 +19,7 @@ import { extractSheetMetadata } from '../metadata.js'
 type RawGrid = any[][]
 
 /** Column indices for the trial-balance fields (-1 = column absent). */
-interface ColumnMap {
+export interface ColumnMap {
   acct: number
   desc: number
   debit: number
@@ -116,11 +116,31 @@ function detectStartRow(raw: RawGrid): number {
  * header text is unrecognizable (or there is no header row — data detected by
  * account-number). Robustness for the "interpret ALL files" goal.
  */
-function detectColumns(raw: RawGrid, startRow: number): ColumnMap {
+/**
+ * Map columns by HEADER NAME. Exported so the CSV adapter uses the SAME rules.
+ *
+ * STACKED HEADERS: QuickBooks (and hand-built sheets) often put the amount
+ * header on the row ABOVE the account/description header — the 2026-10-14
+ * customer export was literally `row 2: _ | _ | Actual` over `row 3: Acct |
+ * Desc | _`. So after reading the detected header row, any column still
+ * unmapped is looked up in the two rows above it (nearest first). Only
+ * cells that sit in an otherwise-unlabeled column are taken, so a banner
+ * title in A1 can never be mistaken for a column header.
+ */
+export function detectColumns(raw: RawGrid, startRow: number): ColumnMap {
   const headerRow = startRow > 0 ? raw[startRow - 1] : undefined
   if (!headerRow || !Array.isArray(headerRow)) return FIXED_COLUMNS
+  const norm = (row: any[] | undefined): string[] =>
+    (row ?? []).map((cell) => (cell ?? '').toString().trim().toLowerCase())
+  const headers = norm(headerRow)
+  // Fill blanks in the header row from up to two rows above (stacked headers).
+  for (let up = 2; up <= 3; up++) {
+    const above = startRow - up >= 0 ? norm(raw[startRow - up]) : []
+    above.forEach((h, i) => {
+      if (h && !headers[i]) headers[i] = h
+    })
+  }
   const map: ColumnMap = { acct: -1, desc: -1, debit: -1, credit: -1, total: -1 }
-  const headers = headerRow.map((cell) => (cell ?? '').toString().trim().toLowerCase())
   headers.forEach((h, idx) => {
     if (!h) return
     if (map.acct < 0 && /^(number|account|acct|acc|gl|no\.?|#)\b|account\s*(number|no)/.test(h)) {
@@ -146,6 +166,10 @@ function detectColumns(raw: RawGrid, startRow: number): ColumnMap {
   return map
 }
 
+/** Shared by the CSV adapter: the signed total of one row under a column map. */
+export function rowTotalFor(r: any[], cols: ColumnMap): number {
+  return rowTotal(r, cols)
+}
 /** Compute a single row's signed total: Total column wins, else Debit − Credit. */
 function rowTotal(r: any[], cols: ColumnMap): number {
   if (cols.total >= 0) {
