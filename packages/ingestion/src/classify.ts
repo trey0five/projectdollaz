@@ -32,7 +32,7 @@ export interface RoleClassification {
     fiscalYear?: number
     /** In-sheet period-end date (YYYY-MM-DD), explicit or FY-derived. */
     periodEndDate?: string
-    periodEndSource?: 'explicit' | 'fiscal-year-end'
+    periodEndSource?: 'explicit' | 'fiscal-year-end' | 'filename'
     auditStatus?: 'audited' | 'unaudited'
     reasons: string[]
   }

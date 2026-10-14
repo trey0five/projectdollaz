@@ -97,3 +97,18 @@ describe('amount-column recognition (#30)', () => {
     expect(r.rows.map((x) => x.total)).toEqual([500, -500])
   })
 })
+
+describe('ingest facade: period end from the FILENAME when the sheet has none', () => {
+  it('stamps 2026-06-30 from "…6-30-26.xlsx" with source "filename"', async () => {
+    const { ingest } = await import('../src/registry.js')
+    const r = ingest('CMA Statement of Activity Budget vs Actuals 6-30-26.xlsx', wb(CUSTOMER))
+    expect(r.metadata?.periodEndDate).toBe('2026-06-30')
+    expect(r.metadata?.periodEndSource).toBe('filename')
+  })
+  it('an in-sheet date still wins over the filename', async () => {
+    const { ingest } = await import('../src/registry.js')
+    const rows: any[][] = [['Trial Balance as of March 31, 2026'], ['Acct', 'Desc', 'Total'], [40200, 'Tuition', 5]]
+    const r = ingest('TB 6-30-26.xlsx', wb(rows))
+    expect(r.metadata?.periodEndDate).toBe('2026-03-31')
+  })
+})

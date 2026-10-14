@@ -1,6 +1,7 @@
 // ─────────────────────────────────────────────────────────────
 // Adapter registry + selection + ingest facade.
 // ─────────────────────────────────────────────────────────────
+import { detectExplicitDate } from './metadata.js'
 import type { IngestionAdapter, IngestionResult } from './types.js'
 import { excelAdapter } from './adapters/excelAdapter.js'
 import { csvAdapter } from './adapters/csvAdapter.js'
@@ -27,8 +28,18 @@ export function ingest(
 ): IngestionResult {
   const result = getAdapter(fileName, bytes).parse(bytes, opts)
   const sourceName = result.sourceName ?? fileName
-  const metadata = result.metadata
+  let metadata = result.metadata
     ? { ...result.metadata, sourceName: result.metadata.sourceName || fileName }
     : undefined
+  // The adapters compute metadata before they know the file name, so a sheet
+  // with no in-band date (QuickBooks exports print none) would leave the
+  // period blank even when the FILENAME carries it ("…6-30-26.xlsx"). Fall
+  // back to the filename here, once, and say so in the source.
+  if (metadata && !metadata.periodEndDate) {
+    const fromName = detectExplicitDate(fileName)
+    if (fromName) {
+      metadata = { ...metadata, periodEndDate: fromName, periodEndSource: 'filename' }
+    }
+  }
   return { ...result, sourceName, metadata }
 }

@@ -27,7 +27,7 @@ export interface SheetMetadata {
    * (e.g. "For the Year Ended June 30, 2025"); 'fiscal-year-end' = derived
    * from a detected FY token (FL June-30). An explicit date is preferred.
    */
-  periodEndSource?: 'explicit' | 'fiscal-year-end'
+  periodEndSource?: 'explicit' | 'fiscal-year-end' | 'filename'
   /** Parsed from in-sheet header text (e.g. "— Audited" / "— Unaudited"). */
   auditStatus?: 'audited' | 'unaudited'
   /** First non-empty banner/title row text. */
