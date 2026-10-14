@@ -257,9 +257,24 @@ describe('S1 — zero-value leaves are kept (the customer file keeps its full ch
   })
 
   it('a balance-sheet account inside a P&L-typed flat export is skipped WITH a warning (never silently)', () => {
+    // One stray 2xxxx row does NOT make the flat export a trial balance — its values do not tie (S-A).
     const withBs = [...CUSTOMER, [24100, '24100 Deferred Income - Fall', 5000]]
     const r = ingest(CUSTOMER_NAME, workbook({ Sheet1: withBs }))
+    expect(r.metadata?.statement?.type).toBe('bva')
     expect(r.rows.some((x) => x.acct === 24100)).toBe(false)
+    expect(r.rows.find((x) => x.acct === 40200)!.total).toBe(-488257.5)
+    expect(r.warnings?.some((w) => /skipped: 24100 Deferred Income/.test(w))).toBe(true)
+  })
+
+  it('a balance-sheet account inside a SECTIONED P&L export (outside any section) is skipped WITH a warning (never silently)', () => {
+    const rows: unknown[][] = [
+      ['Statement of Activity'], ['July 2025 - June 2026'], [], ['Acct', 'Desc', 'Actual'],
+      [24100, '24100 Deferred Income - Fall', 5000],
+      [null, 'Income'], [40000, '40000 Tuition', 1000], [null, 'Total Income', 1000], [null, 'Net Income', 1000],
+    ]
+    const r = ingest('SoA.xlsx', workbook({ Sheet1: rows }))
+    expect(r.metadata?.statement?.type).toBe('pl')
+    expect(r.rows).toEqual([{ acct: 40000, desc: '40000 Tuition', total: -1000 }])
     expect(r.warnings?.some((w) => /skipped: 24100 Deferred Income/.test(w))).toBe(true)
   })
 })
@@ -498,5 +513,170 @@ describe('S10 — unparseable text in the value column is a bad leaf, not a sect
     )!
     expect(r.rows).toEqual([{ acct: rev('Fees'), desc: 'Fees', total: 1234 }]) // −1234 revenue → +1234 debit
     expect(r.warnings).toEqual([expect.stringMatching(/1 row\(s\) had text instead of an amount.*Tuition = "N\/A"/)])
+  })
+})
+
+// ── Second review (1d4e2b3): try to BREAK the guards ─────────────────────────
+
+describe('F1 — a refused sibling tab never fails a workbook whose trial balance parsed', () => {
+  const tb: unknown[][] = [['Trial Balance'], ['Account', 'Description', 'Debit', 'Credit'], [1010, 'Cash', 500, 0], [4000, 'Tuition', 0, 500]]
+  const budget: unknown[][] = [
+    ['Sample School'], ['Budget Overview: FY2026 Budget - FY26 P&L'], ['July 2025 - June 2026'], [], [null, 'Jul 2025', 'Total'],
+    ['Income'], ['   Tuition', 100, 300], ['Total Income', 100, 300], ['Net Income', 100, 300],
+  ]
+
+  it('the TB imports with TB signs and the refusal becomes a warning', () => {
+    const r = ingest('FY26 workbook.xlsx', workbook({ TB: tb, Budget: budget }))
+    expect(r.metadata?.statement).toBeUndefined()
+    expect(r.rows).toEqual([
+      { acct: 1010, desc: 'Cash', total: 500 },
+      { acct: 4000, desc: 'Tuition', total: -500 },
+    ])
+    expect(r.warnings).toEqual([expect.stringMatching(/Budget vs Actuals export has no Actual column/)])
+  })
+
+  it('…but a workbook holding ONLY the budget tab still fails with that message', () => {
+    expect(() => ingest('Budget Overview.xlsx', workbook({ Budget: budget }))).toThrow(/no Actual column/)
+  })
+})
+
+describe('F2 — every Debit/Credit header spelling the plain adapter maps is a trial balance here', () => {
+  it.each([
+    ['Dr', 'Cr'],
+    ['Debit Amount', 'Credit Amount'],
+    ['Debit (USD)', 'Credit (USD)'],
+    ['Debits', 'Credits'],
+  ])('%s | %s under a statement file name keeps TB signs and no statement metadata', (d, c) => {
+    const rows: unknown[][] = [['TB'], ['Account', 'Description', d, c], [1010, 'Cash', 500, 0], [4000, 'Tuition', 0, 500]]
+    expect(hasDebitCreditHeader(gridOf(rows))).toBe(true)
+    for (const name of ['Balance Sheet 6-30-26.xlsx', 'Income Statement.xlsx']) {
+      const r = ingest(name, workbook({ S: rows }))
+      expect(r.metadata?.statement).toBeUndefined()
+      expect(r.rows).toEqual([
+        { acct: 1010, desc: 'Cash', total: 500 },
+        { acct: 4000, desc: 'Tuition', total: -500 },
+      ])
+    }
+  })
+
+  it('account NAMES "Debit Card Clearing" / "Credit Card Payable" on different rows never trip the guard', () => {
+    const rows: unknown[][] = [
+      ['Sample School'], ['Balance Sheet'], ['As of June 30, 2026'], [], [null, 'Total'],
+      ['ASSETS'], ['   Bank Accounts'], ['      Debit Card Clearing', 100], ['      Checking', 900], ['   Total Bank Accounts', 1000], ['TOTAL ASSETS', 1000],
+      ['LIABILITIES AND EQUITY'], ['   Liabilities'], ['      Credit Cards'], ['         Credit Card Payable', 400], ['      Total Credit Cards', 400],
+      ['   Total Liabilities', 400], ['   Equity'], ['      Net Income', 600], ['   Total Equity', 600], ['TOTAL LIABILITIES AND EQUITY', 1000],
+    ]
+    const g = gridOf(rows)
+    expect(hasDebitCreditHeader(g)).toBe(false)
+    const r = parseStatementGrid(g, 'Balance Sheet')!
+    expect(r.rows.map((x) => [x.desc, x.total])).toEqual([
+      ['Debit Card Clearing', 100], ['Checking', 900], ['Credit Card Payable', -400], ['Net Income', -600],
+    ])
+    expect(sum(r.rows)).toBe(0)
+    // Both words in separate cells of ONE row is the header of a TB.
+    expect(hasDebitCreditHeader(gridOf([['Acct', 'Desc', 'Debit', 'Credit'], [1, 'x', 1, 0]]))).toBe(true)
+  })
+})
+
+describe('S-A — a FLAT grid spanning both balance-sheet and activity blocks is a trial balance', () => {
+  it('a Total-only TB under a "Balance Sheet" banner keeps its credits', () => {
+    const rows: unknown[][] = [
+      ['Sample School'], ['Balance Sheet'], ['As of June 30, 2026'], [],
+      ['Account', 'Description', 'Total'],
+      [1010, 'Cash', 500], [2000, 'Accounts Payable', -300], [3000, 'Opening Equity', -700], [4000, 'Tuition', -500], [5000, 'Salaries', 1000],
+    ]
+    expect(parseStatementGrid(gridOf(rows), 'Balance Sheet')).toBeNull()
+    expect(parseStatementGrid(gridOf(rows), 'Sheet1', { typeHint: 'pl', force: true })).toBeNull()
+    const r = ingest('TB.xlsx', workbook({ Sheet1: rows }))
+    expect(r.metadata?.statement).toBeUndefined()
+    expect(r.rows.map((x) => x.total)).toEqual([500, -300, -700, -500, 1000])
+    expect(sum(r.rows)).toBe(0)
+  })
+
+  it('a flat grid spanning both blocks that does NOT tie is a statement with stray rows, not a TB', () => {
+    const rows: unknown[][] = [
+      ['Sample School'], ['Statement of Activity'], ['July 2025 - June 2026'], [],
+      ['Account', 'Description', 'Total'],
+      [24100, 'Deferred Income - Fall', 0], [40000, 'Tuition', 500], [60100, 'Salaries', 300],
+    ]
+    const r = ingest('SoA.xlsx', workbook({ Sheet1: rows }))
+    expect(r.metadata?.statement?.type).toBe('pl')
+    expect(r.rows).toEqual([
+      { acct: 40000, desc: 'Tuition', total: -500 },
+      { acct: 60100, desc: 'Salaries', total: 300 },
+    ])
+    expect(r.warnings?.some((w) => /skipped: Deferred Income - Fall/.test(w))).toBe(true)
+  })
+
+  it('the customer’s flat SoA (all 4xxxx–7xxxx) is unaffected — still 31-style rows, signed by block', () => {
+    const r = ingest(CUSTOMER_NAME, workbook({ Sheet1: CUSTOMER }))
+    expect(r.metadata?.statement?.type).toBe('bva')
+    expect(r.rows).toHaveLength(CUSTOMER.length - 3)
+    expect(r.rows.find((x) => x.acct === 40200)!.total).toBe(-488257.5)
+    expect(r.rows.find((x) => x.acct === 60100)!.total).toBe(300000)
+  })
+
+  it('a SECTIONED export is never mistaken for a TB by this rule (groups present)', () => {
+    const rows: unknown[][] = [
+      ['Statement of Activity'], ['July 2025 - June 2026'], [], ['Acct', 'Desc', 'Total'],
+      [null, 'Income'], [4000, 'Tuition', 500], [null, 'Total Income', 500],
+      [null, 'Expenses'], [1500, 'Oddly numbered expense', 200], [null, 'Total Expenses', 200], [null, 'Net Income', 300],
+    ]
+    const r = parseStatementGrid(gridOf(rows), 'SoA')!
+    expect(r.rows).toEqual([
+      { acct: 4000, desc: 'Tuition', total: -500 },
+      { acct: 1500, desc: 'Oddly numbered expense', total: 200 },
+    ])
+  })
+})
+
+describe('S-B(a) — synthetic-number collisions are warned, naming both accounts', () => {
+  /** A name that hashes onto Tuition's slot (found by search; pinned so the test is deterministic). */
+  const collider = ((): string => {
+    const target = syntheticOffset('Tuition')
+    for (let i = 0; i < 2_000_000; i++) {
+      const n = `Acct ${i}`
+      if (syntheticOffset(n) === target) return n
+    }
+    throw new Error('no collider found')
+  })()
+  const pl = (names: string[]): unknown[][] => [
+    ['Profit and Loss'], ['July 2025 - June 2026'], [], [null, 'Total'], ['Income'],
+    ...names.map((n) => [`   ${n}`, 10]), ['Total Income', 10 * names.length], ['Net Income', 10 * names.length],
+  ]
+
+  it('two different names on one hash: distinct numbers, the second skips +1, and a warning names both', () => {
+    const both = parseStatementGrid(gridOf(pl(['Tuition', collider])), 'P&L')!
+    const alone = parseStatementGrid(gridOf(pl([collider])), 'P&L')!
+    const reversed = parseStatementGrid(gridOf(pl([collider, 'Tuition'])), 'P&L')!
+    expect(both.rows.map((r) => r.acct)).toEqual([rev('Tuition'), rev('Tuition') + 1])
+    expect(alone.rows[0]!.acct).toBe(rev('Tuition')) // alone, the collider takes its own hash…
+    expect(reversed.rows.map((r) => r.acct)).toEqual([rev('Tuition'), rev('Tuition') + 1]) // …so order decides who skips
+    expect(both.warnings).toEqual([expect.stringMatching(new RegExp(`collision: "${collider}" hashed to ${rev('Tuition')}, already used by "Tuition"; it was numbered ${rev('Tuition') + 1}`))])
+    expect(alone.warnings).toBeUndefined()
+  })
+
+  it('same-named sub-accounts under two parents both survive, distinct numbers, with a duplicate-name warning', () => {
+    const rows: unknown[][] = [
+      ['Profit and Loss'], ['July 2025 - June 2026'], [], [null, 'Total'], ['Income'],
+      ['   Tuition'], ['      Other', 1], ['   Total Tuition', 1], ['   Fees'], ['      Other', 2], ['   Total Fees', 2],
+      ['Total Income', 3], ['Net Income', 3],
+    ]
+    const r = parseStatementGrid(gridOf(rows), 'P&L')!
+    expect(r.rows).toEqual([
+      { acct: rev('Other'), desc: 'Other', total: -1 },
+      { acct: rev('Other') + 1, desc: 'Other', total: -2 },
+    ])
+    expect(r.warnings).toEqual([expect.stringMatching(/"Other" appears more than once .* numbered \d+ after \d+/)])
+  })
+
+  it('synthetic numbers stay inside 41000–48999 / 61000–68999 and never take an explicit number', () => {
+    const rows: unknown[][] = [['Profit and Loss'], [], [null, 'Total'], ['Income'], ['   41010 Contributions', 5], ['   Tuition', 1], ['Total Income', 6], ['Net Income', 6]]
+    const r = parseStatementGrid(gridOf(rows), 'P&L')!
+    expect(r.rows.map((x) => x.acct)).toEqual([41010, rev('Tuition')])
+    for (const row of r.metadata.statement.synthesized) {
+      expect(row.acct).toBeGreaterThanOrEqual(QBO_REVENUE_BASE + 1000)
+      expect(row.acct).toBeLessThan(QBO_REVENUE_BASE + 9000)
+    }
   })
 })

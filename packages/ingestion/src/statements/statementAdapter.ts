@@ -216,8 +216,12 @@ function bannerCells(grid: RawGrid, limit = 10): string[] {
   return out
 }
 
-const DEBIT_HEADER = /^(debits?|dr\.?)$/i
-const CREDIT_HEADER = /^(credits?|cr\.?)$/i
+// The plain adapter's own header regexes (excelAdapter detectColumns), so every
+// Debit/Credit spelling IT would map — "Debit Amount", "Debit (USD)", "Dr" —
+// is a TB here too. Tested per CELL, and only a row with BOTH counts, so an
+// account NAMED "Credit Card Payable" or "Debit Card Clearing" never trips it.
+const DEBIT_HEADER = /^debits?\b|\bdebit\b|\bdr\b/i
+const CREDIT_HEADER = /^credits?\b|\bcredit\b|\bcr\b/i
 
 /**
  * THE trial-balance tell: a header row (top 20 rows) carrying BOTH a Debit and
@@ -783,6 +787,26 @@ export function parseStatementGrid(
   const walk = walkLeaves(grid, plan, walkType)
   const leaves = walk.leaves
   const warnings: string[] = [...walk.warnings]
+  // A FLAT grid (no section rows at all) whose explicit numbers span BOTH the
+  // balance-sheet blocks (1/2/3xxx) AND the activity blocks (4–9xxx), and
+  // whose printed values TIE (Σ ≈ 0), is a trial balance with a single Total
+  // column, whatever its banner or file name says — its values are already
+  // TB-signed. A statement is one half or the other and never ties (the
+  // customer's flat SoA is all 4xxxx–7xxxx; a P&L that prints one stray
+  // 2xxxx deferred-income row does not tie, is walked, and that row is
+  // skipped with a warning).
+  if (leaves.length > 0 && leaves.every((l) => l.groups.length === 0)) {
+    let bs = false
+    let pl = false
+    let sum = 0
+    for (const l of leaves) {
+      const s = l.explicitAcct != null ? sectionFromAcct(l.explicitAcct) : undefined
+      if (s === 'asset' || s === 'liability' || s === 'equity') bs = true
+      else if (s === 'revenue' || s === 'expense') pl = true
+      sum += l.value
+    }
+    if (bs && pl && Math.abs(round2(sum)) <= 0.01) return null
+  }
   const taken = new Set<number>()
   for (const l of leaves) if (l.explicitAcct != null) taken.add(l.explicitAcct)
 
@@ -809,12 +833,23 @@ export function parseStatementGrid(
       const base = section === 'revenue' ? QBO_REVENUE_BASE : QBO_EXPENSE_BASE
       const lo = base + QBO_SYNTHETIC_OFFSET
       let off = syntheticOffset(leaf.name) - QBO_SYNTHETIC_OFFSET
-      acct = lo + off
+      const wanted = lo + off
+      acct = wanted
       while (taken.has(acct)) {
         off = (off + 1) % QBO_SYNTHETIC_SPAN
         acct = lo + off
       }
       taken.add(acct)
+      if (acct !== wanted) {
+        // The skipped-to number depends on row ORDER, so a re-export that
+        // reorders these two could swap them — say so, naming both sides.
+        const holder = synthesized.find((s) => s.acct === wanted)?.name ?? rows.find((r) => r.acct === wanted)?.desc ?? `account ${wanted}`
+        warnings.push(
+          holder === leaf.name
+            ? `"${leaf.name}" appears more than once (same-named sub-accounts under different parents); the second copy was numbered ${acct} after ${wanted} — map both, the order could change between exports.`
+            : `Synthetic account-number collision: "${leaf.name}" hashed to ${wanted}, already used by "${holder}"; it was numbered ${acct} instead — this depends on row order, so re-key it in the mapping.`,
+        )
+      }
       synthesized.push({ acct, name: leaf.name, section })
     } else {
       acct = bsEngineAcct(leaf, section)

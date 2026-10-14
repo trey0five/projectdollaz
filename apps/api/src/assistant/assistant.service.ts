@@ -150,6 +150,7 @@ import { AssistantClient } from './assistant.client.js'
 import { Redactor, redactToolResult, makeStreamRestorer } from './redaction.js'
 import {
   AssistantFilesService,
+  partialStatementNotice,
   AttachmentError,
   type AttachmentInput,
   type PreparedAttachments,
@@ -3100,6 +3101,17 @@ export class AssistantService {
     if (!parsed.isTrialBalanceCandidate) {
       throw new Error('That attachment did not look like a trial balance, so it can’t be imported.')
     }
+    // HARD GATE — a QuickBooks statement export that is only HALF a trial balance
+    // (P&L only / BS only) is never auto-applied as the school's trial balance.
+    // This runs BEFORE applyAction on the autonomous WRITE_TOOLS path (and is
+    // what every /apply payload is built from), so the model cannot overwrite the
+    // real current-year TB with an income statement. Only an explicit
+    // importPartial: true — which the digest tells the model to pass ONLY after
+    // the user asked for the half anyway — lets it through.
+    const partial = partialStatementNotice(parsed.metadata)
+    if (partial && args.importPartial !== true) {
+      throw new Error(`${partial} (Not imported. If the user explicitly asks for this half anyway, call again with importPartial: true.)`)
+    }
     const rows: NormalizedRow[] = (parsed.rows ?? [])
       .filter(
         (r) => r && Number.isInteger(r.acct) && Number.isFinite(r.total) && typeof r.desc === 'string',
@@ -3130,11 +3142,12 @@ export class AssistantService {
       typeof args.label === 'string' && args.label.trim() ? args.label.trim().slice(0, 120) : undefined
     const total = rows.reduce((s, r) => s + (Number(r.total) || 0), 0)
     const roleLabel = role === 'py' ? 'prior-year' : role === 'audit' ? 'audited' : 'current-year'
+    const halfLabel = partial ? (md?.statement?.partial === 'bs' ? ' (balance sheet only — no activity accounts)' : ' (income statement only — no balance-sheet accounts)') : ''
     return {
       kind: 'import_trial_balance',
       periodId,
       summary:
-        `Import the ${roleLabel} trial balance “${parsed.sourceName}” (${rows.length} accounts, ` +
+        `Import the ${roleLabel} trial balance “${parsed.sourceName}”${halfLabel} (${rows.length} accounts, ` +
         `net $${Math.round(total).toLocaleString('en-US')}) for period ending ${periodEndDate}.`,
       payload: {
         rows,

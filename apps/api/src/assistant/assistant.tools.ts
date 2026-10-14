@@ -454,13 +454,18 @@ export const TOOL_SCHEMAS = [
     function: {
       name: 'propose_import_trial_balance',
       description:
-        'IMPORT the attached trial balance now; summarize the parsed rows (period, account count, net) for the user. Pass the attachmentId shown in the attachment digest. The server already holds the fully parsed account rows — NEVER retype or fabricate them. Optionally set the role (cy = current year, py = prior year, audit = audited) and a label. If the digest shows the period is INFERRED/unconfirmed (or the import reports it could not determine the period), ASK the user for the period-ending date and pass it as periodEndDate — do not guess.',
+        'IMPORT the attached trial balance now; summarize the parsed rows (period, account count, net) for the user. Pass the attachmentId shown in the attachment digest. The server already holds the fully parsed account rows — NEVER retype or fabricate them. Optionally set the role (cy = current year, py = prior year, audit = audited) and a label. If the digest shows the period is INFERRED/unconfirmed (or the import reports it could not determine the period), ASK the user for the period-ending date and pass it as periodEndDate — do not guess. If the digest marks the file PARTIAL STATEMENT (a QuickBooks income statement or balance sheet export — only half a trial balance), do NOT call this on your own: relay the digest’s message to the user; the server refuses the import unless importPartial is true, which you pass ONLY after the user explicitly asks to import that half anyway.',
       parameters: {
         type: 'object',
         properties: {
           attachmentId: {
             type: 'string',
             description: 'The attachmentId from the attachment digest for the spreadsheet to import.',
+          },
+          importPartial: {
+            type: 'boolean',
+            description:
+              'ONLY after the user explicitly asked to import a PARTIAL statement (income statement only / balance sheet only) anyway. Never set it on your own initiative.',
           },
           role: {
             type: 'string',

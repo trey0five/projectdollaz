@@ -71,8 +71,16 @@ export function ingest(
 
   let result: IngestionResult
   if (plain && plain.rows.length > 0) {
-    const statement = tryStatement(fileName, bytes, opts, false)
-    result = statement ?? plain
+    // A refused statement (a sibling "Budget Overview" tab) must not fail a
+    // workbook whose trial balance parsed: keep the plain result and carry the
+    // refusal as a warning. The refusal is only FATAL when nothing else parsed.
+    try {
+      const statement = tryStatement(fileName, bytes, opts, false)
+      result = statement ?? plain
+    } catch (e) {
+      if (!(e instanceof StatementExportError)) throw e
+      result = { ...plain, warnings: [...(plain.warnings ?? []), e.message] }
+    }
   } else {
     const statement = tryStatement(fileName, bytes, opts, true)
     if (statement) result = statement

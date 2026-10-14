@@ -71,7 +71,15 @@ export function toCandidate(sourceName, rows, metadata, sheet) {
  * into ONE full trial balance instead of two half-candidates.
  */
 export function workbookSheetCandidates(fileName, bytes) {
-  const statements = listStatementSheets(bytes, { typeHint: statementTypeFromFileName(fileName) })
+  // A refused sheet (a "Budget Overview" tab) is reported by the adapter via
+  // onWarning and never thrown from listStatementSheets; the try is belt and
+  // braces so a sibling tab can never fail the TB sheets beside it.
+  let statements = []
+  try {
+    statements = listStatementSheets(bytes, { typeHint: statementTypeFromFileName(fileName) })
+  } catch {
+    statements = []
+  }
   if (statements.length > 0) {
     if (isStatementPair(statements)) return []
     return statements.map((s) => ({ sheet: s.metadata.sheet, rows: s.rows, metadata: s.metadata }))

@@ -92,6 +92,32 @@ export interface PreparedAttachments {
 /** Thrown on a validation failure; chatStream catches it and emits error+done. */
 export class AttachmentError extends Error {}
 
+/**
+ * The guard text for a QuickBooks statement export that is only HALF a trial
+ * balance (metadata.statement.partial 'pl' = income statement only, 'bs' =
+ * balance sheet only). Returns null for a full TB (plain, or a merged P&L + BS
+ * pair). Used in TWO places that must agree: the attachment digest (so KYRO
+ * tells the user instead of importing) and buildImportProposal (the hard
+ * server-side gate — the autonomous import_trial_balance write never applies
+ * a half unless the caller passes importPartial: true after the user said so).
+ */
+export function partialStatementNotice(metadata: SheetMetadata | undefined): string | null {
+  const stmt = metadata?.statement
+  if (!stmt || stmt.partial === 'full') return null
+  if (stmt.partial === 'bs') {
+    return (
+      'This is a balance sheet only — it has no income or expense accounts. Importing it as the current-year ' +
+      'trial balance would leave the Statement of Activities empty. Add the Profit and Loss / Statement of ' +
+      'Activity export and I’ll merge them, or tell me to import the balance-sheet half anyway.'
+    )
+  }
+  return (
+    'This is an income statement only — it has no balance-sheet accounts. Importing it as the current-year ' +
+    'trial balance would leave the Statement of Financial Position empty. Add the Balance Sheet export and ' +
+    'I’ll merge them, or tell me to import the income half anyway.'
+  )
+}
+
 function randomId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `att_${Math.random().toString(36).slice(2, 12)}`
 }
@@ -280,10 +306,19 @@ export class AssistantFilesService {
    * apps/web/src/lib/trendIntake.js workbookSheetCandidates.
    */
   private workbookSheetCandidates(fileName: string, ab: ArrayBuffer): SheetCandidate[] {
-    const statements = listStatementSheets(ab, {
-      typeHint: statementTypeFromFileName(fileName),
-      onWarning: (w) => this.logger.warn(`attachment statement sheet: ${w}`),
-    })
+    // A refused sheet (a "Budget Overview" tab) arrives through onWarning and is
+    // never thrown from listStatementSheets; the try is belt and braces so a
+    // sibling tab can never fail the TB sheets beside it.
+    let statements: ReturnType<typeof listStatementSheets> = []
+    try {
+      statements = listStatementSheets(ab, {
+        typeHint: statementTypeFromFileName(fileName),
+        onWarning: (w) => this.logger.warn(`attachment statement sheet: ${w}`),
+      })
+    } catch (e) {
+      this.logger.warn(`attachment statement enumeration failed: ${e instanceof Error ? e.message : 'error'}`)
+      statements = []
+    }
     if (statements.length > 0) {
       if (isStatementPair(statements)) return []
       return statements.map((s) => ({ sheet: s.metadata.sheet ?? '', rows: s.rows, metadata: s.metadata }))
@@ -372,6 +407,13 @@ export class AssistantFilesService {
         lines.push(
           `    QuickBooks ${this.safeName(md.statement.title)} export (${md.statement.partial === 'bs' ? 'balance sheet only' : md.statement.partial === 'pl' ? 'activity only — no balance-sheet accounts' : 'P&L + balance sheet'}), already signed like a trial balance`,
         )
+        const partial = partialStatementNotice(md)
+        if (partial) {
+          lines.push(
+            `    PARTIAL STATEMENT — do NOT import this sheet on your own. Tell the user: "${partial}" ` +
+              `Only if the user then explicitly asks to import this half anyway, call propose_import_trial_balance with importPartial: true.`,
+          )
+        }
       }
     }
     lines.push(``, `To FILE the whole workbook to Knowledge as-is, call file_document with attachmentId "${baseAttachmentId}".`)
@@ -410,6 +452,7 @@ export class AssistantFilesService {
     candidate: boolean,
     redactor: Redactor,
   ): string {
+    const partial = partialStatementNotice(metadata)
     const top = [...rows]
       .filter((r) => r && Number.isFinite(r.total))
       .sort((a, b) => Math.abs(b.total) - Math.abs(a.total))
@@ -437,10 +480,15 @@ export class AssistantFilesService {
         ? `period: UNDETERMINED — ask the user for the period-ending date and pass it as periodEndDate; do NOT guess`
         : null,
       metadata?.auditStatus ? `auditStatus: ${metadata.auditStatus}` : null,
+      metadata?.statement
+        ? `quickbooksStatement: ${this.safeName(metadata.statement.title)} (${metadata.statement.partial === 'full' ? 'P&L + balance sheet, merged' : metadata.statement.partial === 'bs' ? 'balance sheet only' : 'income statement only'}), already signed like a trial balance`
+        : null,
       `looksLikeTrialBalance: ${candidate ? 'yes' : 'no'}`,
-      candidate
-        ? `If the user wants to import this, call propose_import_trial_balance with attachmentId "${attachmentId}". NEVER fabricate or retype the account rows — the server holds the full parsed rows.`
-        : `This did not look like a standard trial balance; do not propose importing it.`,
+      candidate && partial
+        ? `PARTIAL STATEMENT — do NOT import this on your own. Tell the user: "${partial}" Only if the user then explicitly asks to import this half anyway, call propose_import_trial_balance with attachmentId "${attachmentId}" and importPartial: true. NEVER fabricate or retype the account rows — the server holds the full parsed rows.`
+        : candidate
+          ? `If the user wants to import this, call propose_import_trial_balance with attachmentId "${attachmentId}". NEVER fabricate or retype the account rows — the server holds the full parsed rows.`
+          : `This did not look like a standard trial balance; do not propose importing it.`,
       `To FILE this file to Knowledge, call file_document with attachmentId "${attachmentId}".`,
       `Top ${Math.min(MAX_DIGEST_ROWS, rows.length)} rows by |amount| (acct  desc  total):`,
       top || '  (no rows)',
