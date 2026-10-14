@@ -68,6 +68,40 @@
   /* ── New v2-era accents (theme-stable; unused by v1 components) ─────────── */
   --c-coral: 255 107 94; /* #FF6B5E — needs-attention chips/rails only */
   --c-sky: 56 189 248; /* #38BDF8 — highlight/gradient stop */
+
+  /* ── Surface geometry (Premium UI P1 — docs/Premium_UI_Plan.md §2.6) ──────
+     Every Tailwind radius/shadow step in tailwind.config.js resolves through
+     these vars. HERE (v1 / .ui-v1 / print) they carry the LEGACY literal values
+     Tailwind shipped, so the flag-off app and every printed document are
+     computed-identical to before; the v2 block below is where the CLAMP lives
+     (lg/xl/2xl/3xl → one panel radius, card/paper/glow → one contact shadow). */
+  --r-ctl: 2px; /* rounded-sm (legacy 0.125rem) */
+  --r-base: 4px; /* rounded (legacy 0.25rem) */
+  --r-md: 6px; /* rounded-md */
+  --r-lg: 8px; /* rounded-lg */
+  --r-xl: 12px; /* rounded-xl */
+  --r-2xl: 16px; /* rounded-2xl */
+  --r-3xl: 24px; /* rounded-3xl */
+  --r-panel: 8px; /* the ONE panel radius (surface.css) */
+  --r-pill: 9999px; /* rounded-full */
+  --hair: 16 28 61; /* hairline channel — rgb(var(--hair) / .10) is THE rule colour */
+  --sh-panel: 0 1px 2px rgb(16 28 61 / 0.06); /* the only resting elevation */
+  --sh-float: 0 12px 32px -12px rgb(16 28 61 / 0.28); /* popovers + modals only */
+  --sh-card: 0 4px 24px rgba(0, 0, 0, 0.06);
+  --sh-paper: 0 10px 40px rgb(var(--c-shade) / 0.08);
+  --sh-lift: 0 22px 60px rgb(var(--c-shade) / 0.22);
+  --sh-login: 0 30px 90px rgba(0, 0, 0, 0.45);
+  --sh-glow: 0 0 0 1px rgb(var(--c-glow) / 0.45), 0 10px 34px rgb(var(--c-glow) / 0.28);
+  --sh-glow-lg: 0 0 0 1px rgb(var(--c-glow) / 0.5), 0 14px 50px rgb(var(--c-glow) / 0.4);
+  --sh-navy-glow: 0 12px 36px rgb(var(--c-shade) / 0.4);
+  --c-ground: 246 247 250; /* #F6F7FA page ground */
+  --c-ink-2: 68 80 110; /* #44506E secondary ink */
+  --c-good: 21 128 61; /* #15803D */
+  --c-watch: 180 83 9; /* #B45309 */
+  --c-risk: 185 28 28; /* #B91C1C */
+  --sp-section: 32px;
+  --sp-panel: 20px;
+  --row-h: 36px;
 }
 
 /* ── ui.v2: Bright blue & coral (UX_Redesign_Plan.md §4) ───────────────────── */
@@ -96,8 +130,30 @@ html[data-ui='v2'] {
   --grad-cta-1: #3b82f6;
   --grad-cta-2: #2563eb;
 
-  --font-display: 'Montserrat', system-ui, sans-serif;
+  /* Display face: EB Garamond is RESTORED under v2 (Premium UI P1 §2.2) — it had
+     been remapped to Montserrat, which made every `font-serif` a lie. Page
+     titles, the Home greeting and Stat-strip numbers wear it; never below 22px. */
+  --font-display: 'EB Garamond', Georgia, serif;
   /* --font-body is unchanged; the penny tokens NEVER remap (mascot gold). */
+
+  /* ── THE CLAMP (Premium UI P1 §2.6): one radius family, one elevation ──────
+     842 existing rounded-lg/xl/2xl/3xl classes collapse to the panel radius and
+     the card/paper/glow shadows to the 1px contact shadow — without a page edit.
+     Pills (rounded-full) and Penny's halo (shadow-penny-glow) are untouched. */
+  --r-ctl: 4px;
+  --r-base: 6px;
+  --r-md: 6px;
+  --r-lg: var(--r-panel);
+  --r-xl: var(--r-panel);
+  --r-2xl: var(--r-panel);
+  --r-3xl: var(--r-panel);
+  --sh-card: var(--sh-panel);
+  --sh-paper: var(--sh-panel);
+  --sh-glow: var(--sh-panel);
+  --sh-glow-lg: var(--sh-float);
+  --sh-lift: var(--sh-float);
+  --sh-login: var(--sh-float);
+  --sh-navy-glow: 0 0 #0000; /* `none` would invalidate the ring/shadow list */
 }
 
 /* Penny-gold gradient text — the mascot-chrome twin of `.gold-text` (identical
@@ -165,5 +221,22 @@ html[data-ui='v2'] .ui-v1.font-serif {
     --grad-penny-0: #e8d4a8;
     --grad-penny-1: #d4b47a;
     --grad-penny-2: #b89650;
+    /* Surface geometry: the legacy Tailwind literals, so a printed document's
+       rounded-xl/2xl boxes and shadows are exactly what they were pre-clamp. */
+    --r-ctl: 2px;
+    --r-base: 4px;
+    --r-md: 6px;
+    --r-lg: 8px;
+    --r-xl: 12px;
+    --r-2xl: 16px;
+    --r-3xl: 24px;
+    --r-panel: 8px;
+    --sh-card: 0 4px 24px rgba(0, 0, 0, 0.06);
+    --sh-paper: 0 10px 40px rgb(var(--c-shade) / 0.08);
+    --sh-lift: 0 22px 60px rgb(var(--c-shade) / 0.22);
+    --sh-login: 0 30px 90px rgba(0, 0, 0, 0.45);
+    --sh-glow: 0 0 0 1px rgb(var(--c-glow) / 0.45), 0 10px 34px rgb(var(--c-glow) / 0.28);
+    --sh-glow-lg: 0 0 0 1px rgb(var(--c-glow) / 0.5), 0 14px 50px rgb(var(--c-glow) / 0.4);
+    --sh-navy-glow: 0 12px 36px rgb(var(--c-shade) / 0.4);
   }
 }

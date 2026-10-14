@@ -33,3 +33,6 @@ kyro logo-Photoroom.png
 # on each capture run. Was committed once (d4a7361, local-only tokens, allowlisted
 # in .gitleaks.toml); must never be committed again.
 demo-video/assets/auth-state.json
+
+# UI audit output (apps/web/scripts/ui-audit.mjs) — screenshots + census, regenerated per run
+apps/web/.ui-audit/

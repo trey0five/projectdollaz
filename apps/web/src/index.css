@@ -1,6 +1,10 @@
 /* Design tokens FIRST: every theme color/font below resolves through these vars
    (ui.v2 remap + .ui-v1 re-scope + print reset live there). */
 @import './styles/tokens.css';
+/* Surface primitives (Premium UI P1): .pg / .pg-head / .stats / .sec / .panel /
+   .dt / .pill / .toolbar / .tile / .btn. Plain CSS inlined BEFORE the Tailwind
+   layers so every utility still outranks a primitive on the same element. */
+@import './styles/surface.css';
 
 @tailwind base;
 @tailwind components;
@@ -32,21 +36,15 @@
   /* ── Soft elevated card (Phase 4D lighter language) ──────
      Replaces the heavy border-2 boxes: a hairline rule + soft shadow, larger
      radius. .card-soft-hover adds a restrained gold ring + lift on hover. */
+  /* Premium UI P1: .card-soft is now an ALIAS of the .panel primitive
+     (surface.css) — hairline border, --r-panel radius, the 1px contact shadow —
+     so all 177 consumers calm down at this one definition. P4 migrates each
+     consumer to <Panel> (forms/uploads/actions) or unwraps it to a <Section>. */
   .card-soft {
-    @apply rounded-2xl border border-rule/50 bg-white;
-    /* Card contract §5: real cushion depth — a glass top light + a tight contact
-       shadow + a soft ambient drop, replacing the flat shadow-card at this ONE
-       definition so every card-soft page inherits it. Plain CSS declarations on
-       purpose: comma'd Tailwind arbitrary values drop out of the dev JIT.
-       .card-soft-hover's hover:shadow-paper still outranks this on hover
-       (class + :hover specificity), so the existing lift is preserved. */
-    box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 0.9),
-      0 1px 2px rgb(16 28 61 / 0.05),
-      0 10px 24px -12px rgb(16 28 61 / 0.16);
+    @apply panel;
   }
   .card-soft-hover {
-    @apply transition-all duration-300 hover:-translate-y-0.5 hover:border-gold/40 hover:shadow-paper;
+    @apply transition-colors duration-200 hover:border-hair/30;
   }
 
   /* Flashy showcase card: a gold→navy gradient ring (masked to the border) with a
@@ -107,7 +105,7 @@
     -webkit-mask-composite: xor;
     mask-composite: exclude;
     pointer-events: none;
-    animation: cf-rotate 7s linear infinite;
+    /* Premium UI P1: the 7s rotation loop is gone (§2.5) — the ring is static. */
     transition: padding 0.3s ease, filter 0.3s ease;
   }
   .card-flashy:hover {
@@ -155,7 +153,7 @@
     -webkit-mask-composite: xor;
     mask-composite: exclude;
     pointer-events: none;
-    animation: cf-flow 5.5s ease-in-out infinite;
+    /* Premium UI P1: the 5.5s flow loop is gone (§2.5) — the ring is static. */
     transition: padding 0.3s ease, filter 0.3s ease;
     z-index: 1;
   }
@@ -255,7 +253,8 @@
       0 0 24px -6px var(--attn-c);
   }
   .card-attn:hover::before {
-    animation: cf-flow 2.6s ease-in-out infinite;
+    /* ONE-SHOT on hover (Premium UI P1 §2.5): the ring flows across once. */
+    animation: cf-flow 1.4s ease-in-out 1;
     filter: brightness(1.15);
   }
   .card-attn:hover::after {
@@ -317,7 +316,7 @@
     -webkit-mask-composite: xor;
     mask-composite: exclude;
     pointer-events: none;
-    animation: cf-flow 6s ease-in-out infinite;
+    /* Premium UI P1: no 6s flow loop (§2.5) — the ring is static. */
     z-index: 1;
   }
   /* A diagonal glass glint that sweeps across the pane once as it opens. */
@@ -707,19 +706,15 @@
   @apply animate-shimmer rounded;
 }
 
-/* Animated angle for the .card-flashy rotating gradient border. Registered so it
-   can be transitioned/animated; falls back to a static gradient ring if a browser
-   doesn't support @property. */
+/* Angle of the .card-flashy gradient ring. It no longer animates (Premium UI
+   P1 deleted the cf-rotate loop) but the ring still reads the var. */
 @property --cf-angle {
   syntax: '<angle>';
   initial-value: 0deg;
   inherits: false;
 }
-@keyframes cf-rotate {
-  to {
-    --cf-angle: 360deg;
-  }
-}
+/* cf-flow is the ONE surviving flow keyframe: played once, on hover, by
+   .card-attn (never `infinite`). */
 @keyframes cf-flow {
   0%,
   100% {
@@ -738,8 +733,7 @@
   .animate-spin,
   .animate-shimmer,
   .shimmer-bar,
-  .card-flashy::before,
-  .card-vital::before {
+  .card-attn:hover::before {
     animation: none !important;
   }
   /* No hover glint sweep under reduced motion. */
@@ -1494,18 +1488,16 @@
 }
 
 /* ── ui.v2 typography (the ONE scoped rule) ──────────────────────────────────
-   Display face swaps via --font-display in tokens.css; this adds the v2 display
-   tracking + the roomier 17px/1.65 body. @media screen so print self-exempts
-   (print keeps the classic 16px/1.5 + normal tracking); explicit text-[Npx]
-   classes and the mobile down-scale block are untouched. The .ui-v1 re-scope
-   (report preview) is counter-overridden in tokens.css. */
+   Premium UI P1 (§2.2): the app body is 15px/1.5 — the 17px/1.65 "blog measure"
+   is gone, and so is the -0.02em display tracking that was tuned for Montserrat
+   (the display face is EB Garamond again, via --font-display in tokens.css).
+   @media screen so print self-exempts (print keeps the classic 16px/1.5);
+   explicit text-[Npx] classes and the mobile down-scale block are untouched.
+   The .ui-v1 re-scope (report preview) is counter-overridden in tokens.css. */
 @media screen {
   html[data-ui='v2'] body {
-    font-size: 17px;
-    line-height: 1.65;
-  }
-  html[data-ui='v2'] .font-serif {
-    letter-spacing: -0.02em;
+    font-size: 15px;
+    line-height: 1.5;
   }
 }
 

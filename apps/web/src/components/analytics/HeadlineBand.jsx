@@ -1,4 +1,3 @@
-import { useReducedMotion } from 'framer-motion'
 import AnimatedMetricValue from './AnimatedMetricValue.jsx'
 import DeltaChip from './DeltaChip.jsx'
 import PeriodSelector from './PeriodSelector.jsx'
@@ -11,7 +10,7 @@ const HERO_KEYS = ['operating_margin', 'days_cash_on_hand', 'months_operating_re
 /**
  * Premium navy-gradient masthead: active period label + 2-3 hero KPIs in
  * gold-text serif with count-up + delta chips, and the period selector top-right.
- * Slow gradient-pan + radial overlay so it feels alive (reduced-motion-gated).
+ * Static gradient + radial overlay (Premium UI P1 deleted the gradient-pan loop).
  */
 export default function HeadlineBand({
   periodLabel,
@@ -22,12 +21,9 @@ export default function HeadlineBand({
   activePeriodId,
   onSelectPeriod,
 }) {
-  const reduce = useReducedMotion()
   return (
     <div
-      className={`relative overflow-hidden rounded-2xl border-b-2 border-gold/30 bg-navy-gradient p-6 shadow-navy-glow sm:p-8 ${
-        reduce ? '' : 'animate-gradient-pan'
-      }`}
+      className="relative overflow-hidden rounded-2xl border-b-2 border-gold/30 bg-navy-gradient p-6 shadow-navy-glow sm:p-8"
       style={{ backgroundSize: '200% 200%' }}
     >
       <div className="pointer-events-none absolute inset-0 bg-navy-radial" />

@@ -1,9 +1,9 @@
 // StudioBackdrop — the living navy hero backdrop for Penny Studio. Reuses the
 // HomeCommandCenter LivingBackdrop language (gold top hairline + drifting glow
-// orbs + a slow diagonal gold light-sweep) and layers ~12 gold motes drifting up
-// via the CSS `studio-mote` keyframe. Purely decorative (aria-hidden); every loop
-// is motion-safe: and the whole mote layer is hidden under reduced motion. NO
-// <canvas> — all CSS/framer so it degrades cleanly.
+// orbs + a slow diagonal gold light-sweep) and layers ~26 gold motes that rise
+// ONCE on mount (framer one-shot — Premium UI P1 deleted the looping CSS
+// `studio-mote` keyframe). Purely decorative (aria-hidden); the whole mote layer
+// is skipped under reduced motion. NO <canvas> — all framer so it degrades cleanly.
 import { motion, useReducedMotion } from 'framer-motion'
 
 const MOTE_COUNT = 26
@@ -63,20 +63,19 @@ export default function StudioBackdrop({ sweep = true }) {
             />
           )}
 
-          {/* Gold motes drifting up (CSS keyframe; hidden under reduced motion). */}
+          {/* Gold motes: each rises once (no repeat) — the welcome, not a loop. */}
           {MOTES.map((m, i) => (
-            <span
+            <motion.span
               key={i}
-              className="absolute h-[3px] w-[3px] rounded-full bg-penny-light shadow-[0_0_10px_rgba(212,180,122,0.95)] motion-safe:animate-studio-mote motion-reduce:hidden"
-              style={{
-                left: `${m.left}%`,
-                bottom: `${m.bottom}%`,
-                animationDelay: `${m.delay}s`,
-                animationDuration: `${m.duration}s`,
-                // backwards → the 0% frame (opacity 0) applies DURING the delay,
-                // so motes stay invisible until they start rising (no stale dots
-                // parked at their start positions on load).
-                animationFillMode: 'backwards',
+              className="absolute h-[3px] w-[3px] rounded-full bg-penny-light shadow-[0_0_10px_rgba(212,180,122,0.95)]"
+              style={{ left: `${m.left}%`, bottom: `${m.bottom}%` }}
+              initial={{ y: 0, opacity: 0 }}
+              animate={{ y: -380, opacity: [0, 0.7, 0.7, 0] }}
+              transition={{
+                duration: m.duration,
+                delay: m.delay,
+                ease: 'linear',
+                opacity: { duration: m.duration, delay: m.delay, times: [0, 0.1, 0.9, 1] },
               }}
             />
           ))}

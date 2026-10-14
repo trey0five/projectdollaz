@@ -17,7 +17,7 @@
 // panel of this size looks like a hole in the page.
 //
 // The watermark bleeds off the right edge — see ModuleWatermark for why that
-// matters — and drifts, slowly, unless the reader asked for less motion.
+// matters — it fades and settles once; nothing loops (Premium UI P1 §2.5).
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion, useReducedMotion } from 'framer-motion'
 import ModuleWatermark from './ModuleWatermark.jsx'
@@ -110,20 +110,8 @@ export default function ModuleHero({ module, hue, eyebrow, title, subtitle, stat
         aria-hidden="true"
         className="pointer-events-none absolute -right-16 -top-10 -z-10 w-[26rem] sm:-right-10 sm:w-[34rem]"
         initial={reduce ? false : { opacity: 0, scale: 1.06 }}
-        animate={
-          reduce
-            ? { opacity: 1 }
-            : { opacity: 1, scale: 1, y: [0, -8, 0] }
-        }
-        transition={
-          reduce
-            ? { duration: 0 }
-            : {
-                opacity: { duration: 0.9, ease: EASE },
-                scale: { duration: 0.9, ease: EASE },
-                y: { duration: 11, repeat: Infinity, ease: 'easeInOut' },
-              }
-        }
+        animate={reduce ? { opacity: 1 } : { opacity: 1, scale: 1 }}
+        transition={reduce ? { duration: 0 } : { duration: 0.9, ease: EASE }}
         style={{ color: lift(hue, 0.62) }}
       >
         <ModuleWatermark module={module} opacity={0.3} className="h-auto w-full" />

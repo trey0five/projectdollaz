@@ -1,0 +1,585 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   Surface primitives — "the ledger" (docs/Premium_UI_Plan.md §2.4).
+
+   The page is a document: data sits ON THE GROUND, divided by hairlines and
+   whitespace; the only raised surface is a .panel (something you can act on).
+   One radius family (--r-ctl / --r-panel / pill), one elevation (--sh-panel),
+   colour = ground + ink + primary + a 2px module-hue rule + semantic marks.
+
+   Plain CSS on purpose (no @apply, no @layer): index.css inlines this file
+   BEFORE the Tailwind layers, so any utility on the same element still wins.
+   Consumed by src/components/ui/surface/*.jsx — change the primitive, not the
+   page. Print is untouched: nothing here targets .ui-v1 / @media print, and the
+   two element-level rules at the bottom are screen-only and exclude .ui-v1.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/* ── Page ─────────────────────────────────────────────────────────────────── */
+.pg {
+  max-width: var(--page-width);
+  margin-inline: auto;
+  padding-inline: 2rem;
+  padding-bottom: 3rem;
+}
+
+/* ── PageHeader ───────────────────────────────────────────────────────────── */
+.pg-head {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem 2rem;
+  padding: 1.25rem 0 1rem;
+  border-bottom: 1px solid rgb(var(--hair) / 0.1);
+}
+/* The 2px rule in the module hue, drawn once (scaleX 0→1) by PageHeader. */
+.pg-head-rule {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: rgb(var(--c-module, var(--c-navy-soft)));
+  transform-origin: left center;
+}
+.pg-head-main {
+  min-width: 0;
+  flex: 1 1 24rem;
+}
+.pg-eyebrow {
+  margin: 0 0 0.375rem;
+  font-family: var(--font-body);
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgb(var(--c-ink-2));
+}
+.pg-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 30px;
+  line-height: 36px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: rgb(var(--c-ink));
+  text-wrap: balance;
+}
+.pg-meta {
+  margin: 0.375rem 0 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: rgb(var(--c-ink-2));
+}
+.pg-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* ── StatStrip + Stat ─────────────────────────────────────────────────────── */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(var(--stats-cols, 4), minmax(0, 1fr));
+  border-bottom: 1px solid rgb(var(--hair) / 0.1);
+}
+.stat {
+  min-width: 0;
+  padding: 1rem 1.25rem 1rem 0;
+  font-variant-numeric: tabular-nums;
+}
+.stat + .stat {
+  padding-left: 1.25rem;
+  border-left: 1px solid rgb(var(--hair) / 0.1);
+}
+.stat-label {
+  margin: 0;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgb(var(--c-ink-2));
+  overflow-wrap: anywhere;
+}
+.stat-value {
+  display: block;
+  margin-top: 0.25rem;
+  font-family: var(--font-display);
+  font-size: 30px;
+  line-height: 36px;
+  font-weight: 500;
+  color: rgb(var(--c-ink));
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.stat-unit {
+  margin-left: 0.125rem;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  color: rgb(var(--c-ink-2));
+}
+/* The 2px status mark under the value — the ONLY colour a Stat carries. */
+.stat-mark {
+  display: block;
+  width: 2rem;
+  height: 2px;
+  margin-top: 0.5rem;
+  background: currentColor;
+}
+.stat-foot {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  font-size: 13px;
+  line-height: 18px;
+  color: rgb(var(--c-ink-2));
+}
+
+/* ── Section ──────────────────────────────────────────────────────────────── */
+.sec {
+  margin-top: var(--sp-section);
+}
+.sec-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  min-height: 1.5rem;
+}
+.sec-label {
+  margin: 0;
+  flex: none;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgb(var(--c-ink-2));
+}
+.sec-rule {
+  flex: 1 1 auto;
+  height: 1px;
+  background: rgb(var(--hair) / 0.1);
+}
+.sec-aside {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 13px;
+  line-height: 18px;
+  color: rgb(var(--c-ink-2));
+}
+
+/* ── Panel — the ONE raised surface ──────────────────────────────────────── */
+.panel {
+  background: #ffffff;
+  border: 1px solid rgb(var(--hair) / 0.1);
+  border-radius: var(--r-panel);
+  box-shadow: var(--sh-panel);
+  transition: border-color 0.2s ease;
+}
+.panel:hover {
+  border-color: rgb(var(--hair) / 0.18);
+}
+.panel-attention {
+  border-left: 2px solid rgb(var(--c-risk));
+}
+.panel-body {
+  padding: var(--sp-panel);
+}
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem var(--sp-panel);
+  border-bottom: 1px solid rgb(var(--hair) / 0.1);
+}
+.panel-title {
+  margin: 0;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 600;
+  color: rgb(var(--c-ink));
+}
+.panel-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.75rem var(--sp-panel);
+  border-top: 1px solid rgb(var(--hair) / 0.1);
+}
+
+/* ── DataTable ────────────────────────────────────────────────────────────── */
+.dt-wrap {
+  position: relative;
+  width: 100%;
+  overflow: auto;
+}
+.dt {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: rgb(var(--c-ink));
+  font-variant-numeric: tabular-nums;
+}
+.dt thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: var(--row-h);
+  padding: 0 0.75rem;
+  background: rgb(var(--c-ground));
+  border-bottom: 1px solid rgb(var(--hair) / 0.1);
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: left;
+  color: rgb(var(--c-ink-2));
+  white-space: nowrap;
+}
+.dt thead th:first-child,
+.dt tbody td:first-child {
+  padding-left: 0.25rem;
+}
+.dt thead th:last-child,
+.dt tbody td:last-child {
+  padding-right: 0.25rem;
+}
+.dt tbody td {
+  height: var(--row-h);
+  padding: 0 0.75rem;
+  border-bottom: 1px solid rgb(var(--hair) / 0.1);
+  vertical-align: middle;
+}
+.dt tbody tr:hover > td {
+  background: rgb(var(--c-ink) / 0.03);
+}
+.dt-row-link {
+  cursor: pointer;
+}
+.dt-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+/* The 2px status-mark column: a coloured bar, no pill. */
+.dt-mark {
+  width: 2px;
+  padding: 0 !important;
+}
+.dt-mark > i {
+  display: block;
+  width: 2px;
+  height: 1.25rem;
+  background: currentColor;
+}
+.dt-sort {
+  cursor: pointer;
+  user-select: none;
+}
+.dt-sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.dt-sort-btn:focus-visible {
+  outline: 2px solid rgb(37 99 235 / 0.5);
+  outline-offset: 2px;
+  border-radius: var(--r-ctl);
+}
+.dt-chev {
+  width: 10px;
+  height: 10px;
+  opacity: 0.35;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.dt-sort-active .dt-chev {
+  opacity: 1;
+}
+.dt-sort-desc .dt-chev {
+  transform: rotate(180deg);
+}
+/* Row-level actions fade in on hover (never a button wall at rest). */
+.dt-actions {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.dt tbody tr:hover .dt-actions,
+.dt tbody tr:focus-within .dt-actions {
+  opacity: 1;
+}
+/* Empty state = a ruled row, not a dashed card. */
+.dt-empty > td {
+  height: 3.5rem;
+  text-align: center;
+  color: rgb(var(--c-ink-2));
+  font-size: 13px;
+}
+
+/* ── Pill ─────────────────────────────────────────────────────────────────── */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  height: 20px;
+  padding: 0 0.5rem;
+  border: 1px solid rgb(var(--hair) / 0.1);
+  border-radius: var(--r-ctl);
+  background: #ffffff;
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgb(var(--c-ink));
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.pill-mark {
+  display: inline-block;
+  width: 2px;
+  height: 10px;
+  background: currentColor;
+}
+.pill-count {
+  font-variant-numeric: tabular-nums;
+}
+/* Only the mark takes the semantic colour; the text stays ink. */
+.pill-status .pill-mark {
+  color: inherit;
+}
+.pill-status.tone-good .pill-mark { color: rgb(var(--c-good)); }
+.pill-status.tone-watch .pill-mark { color: rgb(var(--c-watch)); }
+.pill-status.tone-risk .pill-mark { color: rgb(var(--c-risk)); }
+.pill-status.tone-neutral .pill-mark { color: rgb(var(--c-ink-2)); }
+.pill-status { color: rgb(var(--c-ink)); }
+
+/* ── Toolbar ──────────────────────────────────────────────────────────────── */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 40px;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid rgb(var(--hair) / 0.1);
+}
+.toolbar-aside {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* ── Tile — the ONE card family that stays (Home modules, wizard choose) ──── */
+.tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: var(--sp-panel);
+  background: #ffffff;
+  border: 1px solid rgb(var(--hair) / 0.1);
+  border-bottom: 2px solid rgb(var(--c-module, var(--c-navy-soft)));
+  border-radius: var(--r-panel);
+  box-shadow: var(--sh-panel);
+  color: rgb(var(--c-ink));
+  text-align: left;
+  text-decoration: none;
+  overflow: hidden;
+  isolation: isolate;
+  transition: border-color 0.2s ease;
+}
+/* The flood: a hue wash rises once on hover (one-shot CSS transition). */
+.tile::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: rgb(var(--c-module, var(--c-navy-soft)) / 0.06);
+  transform: translateY(101%);
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.tile:hover::before,
+.tile:focus-visible::before {
+  transform: translateY(0);
+}
+.tile:hover {
+  border-color: rgb(var(--hair) / 0.18);
+  border-bottom-color: rgb(var(--c-module, var(--c-navy-soft)));
+}
+.tile:focus-visible {
+  outline: 2px solid rgb(37 99 235 / 0.5);
+  outline-offset: 2px;
+}
+.tile-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.tile-icon {
+  display: inline-flex;
+  color: rgb(var(--c-module, var(--c-navy-soft)));
+}
+.tile-title {
+  margin: 0;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 600;
+  color: rgb(var(--c-ink));
+}
+.tile-body {
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: rgb(var(--c-ink-2));
+}
+.tile-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: auto;
+  padding-top: 0.5rem;
+}
+.tile-arrow {
+  display: inline-flex;
+  color: rgb(var(--c-module, var(--c-navy-soft)));
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.tile:hover .tile-arrow {
+  transform: translateX(4px);
+}
+
+/* ── Button ───────────────────────────────────────────────────────────────── */
+/* `.btn` is the base; `.btn.btn-primary` (two classes) deliberately out-ranks the
+   legacy `.btn-primary` gradient button in index.css so the two coexist until P4
+   deletes the old one. No bevel, no sheen, no uppercase. */
+.btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  height: 36px;
+  padding: 0 0.875rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.btn:disabled,
+.btn[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn:focus-visible {
+  outline: 2px solid rgb(37 99 235 / 0.5);
+  outline-offset: 2px;
+}
+.btn.btn-primary {
+  min-height: 36px;
+  padding: 0 0.875rem;
+  border-radius: 6px;
+  background: #2563eb;
+  background-image: none;
+  color: #ffffff;
+  box-shadow: inset 0 0 0 1px #1d4ed8;
+  transform: none;
+}
+.btn.btn-primary::before {
+  content: none;
+}
+.btn.btn-primary:hover:not(:disabled) {
+  background: #1d4ed8;
+  box-shadow: inset 0 0 0 1px #1e40af;
+  transform: none;
+}
+.btn.btn-primary:active:not(:disabled) {
+  background: #1e40af;
+  transform: none;
+}
+.btn.btn-primary:disabled {
+  background: #2563eb;
+  color: #ffffff;
+  box-shadow: inset 0 0 0 1px #1d4ed8;
+}
+.btn.btn-secondary {
+  background: #ffffff;
+  border-color: rgb(var(--hair) / 0.18);
+  color: rgb(var(--c-ink));
+}
+.btn.btn-secondary:hover:not(:disabled) {
+  background: rgb(var(--c-ground));
+  border-color: rgb(var(--hair) / 0.3);
+}
+.btn.btn-quiet {
+  color: rgb(var(--c-ink-2));
+}
+.btn.btn-quiet:hover:not(:disabled) {
+  color: rgb(var(--c-ink));
+  background: rgb(var(--c-ink) / 0.04);
+}
+.btn-sm {
+  height: 28px;
+  padding: 0 0.625rem;
+  font-size: 12px;
+}
+
+/* ── Semantic tones (text colour; marks read currentColor) ────────────────── */
+.tone-good { color: rgb(var(--c-good)); }
+.tone-watch { color: rgb(var(--c-watch)); }
+.tone-risk { color: rgb(var(--c-risk)); }
+.tone-neutral { color: rgb(var(--c-ink-2)); }
+.tone-hue { color: rgb(var(--c-module, var(--c-navy-soft))); }
+
+/* ── Numerals + headings (§2.2) — screen only, never inside a .ui-v1 document ─ */
+@media screen {
+  html[data-ui='v2'] :where(table, .stat, .num):where(:not(.ui-v1 *)) {
+    font-variant-numeric: tabular-nums;
+  }
+  html[data-ui='v2'] :where(h1, h2, h3):where(:not(.ui-v1 *)) {
+    text-wrap: balance;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile::before,
+  .tile-arrow,
+  .dt-actions,
+  .panel,
+  .btn {
+    transition: none;
+  }
+}

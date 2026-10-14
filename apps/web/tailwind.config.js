@@ -63,19 +63,65 @@ export default {
         muted: 'rgb(var(--c-muted) / <alpha-value>)',
         ink: 'rgb(var(--c-ink) / <alpha-value>)',
         danger: 'rgb(var(--c-danger) / <alpha-value>)',
+        // ── Premium UI P1 (docs/Premium_UI_Plan.md §2.3/§2.6) ──────────────────
+        ground: 'rgb(var(--c-ground) / <alpha-value>)',
+        // The hairline. `border-hair` with NO modifier is the 10% rule itself (the
+        // one colour every divider in the system uses); `border-hair/30` etc. scale
+        // the same ink channel. A function is the only way Tailwind 3 lets a colour
+        // default to an alpha other than 1 (a plain `<alpha-value>` string would
+        // turn the nine pre-existing `border-hair` classes into solid ink borders).
+        hair: ({ opacityValue }) =>
+          opacityValue === undefined || String(opacityValue).startsWith('var(')
+            ? 'rgb(var(--hair) / 0.10)'
+            : `rgb(var(--hair) / ${opacityValue})`,
+        ink2: 'rgb(var(--c-ink-2) / <alpha-value>)',
+        good: 'rgb(var(--c-good) / <alpha-value>)',
+        watch: 'rgb(var(--c-watch) / <alpha-value>)',
+        risk: 'rgb(var(--c-risk) / <alpha-value>)',
       },
       fontFamily: {
         serif: 'var(--font-display)',
         sans: 'var(--font-body)',
       },
+      // The type scale (§2.2). Arbitrary text-[Npx] classes keep working; these
+      // are the names new work uses so a page stops needing fourteen sizes.
+      fontSize: {
+        'display-xl': ['40px', { lineHeight: '44px' }],
+        display: ['30px', { lineHeight: '36px' }],
+        title: ['22px', { lineHeight: '28px' }],
+        heading: ['17px', { lineHeight: '24px' }],
+        body: ['15px', { lineHeight: '22px' }],
+        small: ['13px', { lineHeight: '18px' }],
+        micro: ['11px', { lineHeight: '16px', letterSpacing: '.08em' }],
+      },
+      // ONE radius family. Every step is a token (tokens.css): under ui.v2
+      // lg/xl/2xl/3xl all resolve to --r-panel (8px) — the clamp that collapses
+      // 842 competing corner radii — while v1, `.ui-v1` subtrees and @media print
+      // resolve the legacy literals, so printed documents never move.
+      borderRadius: {
+        none: '0',
+        sm: 'var(--r-ctl)',
+        DEFAULT: 'var(--r-base)',
+        md: 'var(--r-md)',
+        lg: 'var(--r-lg)',
+        xl: 'var(--r-xl)',
+        '2xl': 'var(--r-2xl)',
+        '3xl': 'var(--r-3xl)',
+        full: 'var(--r-pill)',
+      },
+      // One elevation. Under v2 card/paper/glow collapse to the 1px contact shadow
+      // (--sh-panel) and lift/login/glow-lg to the popover float; navy-glow is
+      // gone. Legacy values live in tokens.css for v1/print. penny-glow is KEPT.
       boxShadow: {
-        card: '0 4px 24px rgba(0,0,0,0.06)',
-        paper: '0 10px 40px rgb(var(--c-shade) / 0.08)',
-        lift: '0 22px 60px rgb(var(--c-shade) / 0.22)',
-        login: '0 30px 90px rgba(0,0,0,0.45)',
-        glow: '0 0 0 1px rgb(var(--c-glow) / 0.45), 0 10px 34px rgb(var(--c-glow) / 0.28)',
-        'glow-lg': '0 0 0 1px rgb(var(--c-glow) / 0.5), 0 14px 50px rgb(var(--c-glow) / 0.4)',
-        'navy-glow': '0 12px 36px rgb(var(--c-shade) / 0.4)',
+        card: 'var(--sh-card)',
+        paper: 'var(--sh-paper)',
+        lift: 'var(--sh-lift)',
+        login: 'var(--sh-login)',
+        glow: 'var(--sh-glow)',
+        'glow-lg': 'var(--sh-glow-lg)',
+        'navy-glow': 'var(--sh-navy-glow)',
+        panel: 'var(--sh-panel)',
+        float: 'var(--sh-float)',
         // Penny's gold halo — the mascot-chrome twin of shadow-glow (never remaps).
         'penny-glow':
           '0 0 0 1px rgb(var(--c-penny) / 0.45), 0 10px 34px rgb(var(--c-penny) / 0.28)',
@@ -111,33 +157,20 @@ export default {
           '0%': { backgroundPosition: '-200% 0' },
           '100%': { backgroundPosition: '200% 0' },
         },
+        // Kept as a keyframe: LedgerSpine plays it once (`animate-[pulse-ring_…_1]`).
         'pulse-ring': {
           '0%': { boxShadow: '0 0 0 0 rgb(var(--c-glow) / 0.5)' },
           '70%': { boxShadow: '0 0 0 14px rgb(var(--c-glow) / 0)' },
           '100%': { boxShadow: '0 0 0 0 rgb(var(--c-glow) / 0)' },
         },
-        float: {
-          '0%, 100%': { transform: 'translateY(0)' },
-          '50%': { transform: 'translateY(-16px)' },
-        },
-        'gradient-pan': {
-          '0%, 100%': { backgroundPosition: '0% 50%' },
-          '50%': { backgroundPosition: '100% 50%' },
-        },
-        // Gold mote drifting up through the Penny Studio hero backdrop.
-        'studio-mote': {
-          '0%': { transform: 'translateY(0)', opacity: '0' },
-          '10%, 90%': { opacity: '.7' },
-          '100%': { transform: 'translateY(-380px)', opacity: '0' },
-        },
+        // `float`, `gradient-pan` and `studio-mote` were deleted in Premium UI P1
+        // (§2.5: no infinite loops in app chrome). Spinners + shimmer stay.
       },
       animation: {
         'fade-up': 'fade-up 0.5s ease both',
         shimmer: 'shimmer 2.5s linear infinite',
-        'pulse-ring': 'pulse-ring 2s ease-out infinite',
-        float: 'float 7s ease-in-out infinite',
-        'gradient-pan': 'gradient-pan 6s ease infinite',
-        'studio-mote': 'studio-mote 12s linear infinite',
+        // ONE-SHOT: a status dot pulses once on mount, never loops (§2.5).
+        'pulse-ring': 'pulse-ring 1.8s ease-out 1 both',
       },
     },
   },
