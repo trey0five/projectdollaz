@@ -13,6 +13,21 @@
 // to balance (interlocation due-to/due-from entries often aren't tagged), so a
 // small acct-399 plug row absorbs the residual — see applyBalancePlug.
 import { deriveAcct, type QboAccountMeta, type QboTrialBalanceRow } from './qbo.client.js'
+// The TB conventions (sign rule, cent rounding, the acct-399 plug) LIVE in
+// @finrep/ingestion/statements/tbConventions.ts so the file-export adapter
+// (issue #31) applies exactly the same rules. Re-exported here so every
+// existing importer of this module (service, specs, cashflow) is untouched.
+import {
+  applyBalancePlug,
+  bsGroupSign,
+  pnlGroupSign,
+  PLUG_ACCT,
+  PLUG_DESC,
+  round2,
+  type PlugResult,
+} from '@finrep/ingestion'
+
+export { applyBalancePlug, PLUG_ACCT, PLUG_DESC, type PlugResult }
 
 // ── Raw report JSON shapes (loose — QBO omits almost everything sometimes) ────
 
@@ -236,15 +251,6 @@ export interface SchoolRowsBuild {
   plEntries: Record<string, string>
 }
 
-/** Round to cents — report cells are 2dp; float summing must not leak dust. */
-function round2(n: number): number {
-  return Math.round(n * 100) / 100
-}
-
-/** Section-group fallbacks when an account has no metadata row. */
-const PNL_REVENUE_GROUPS = new Set(['income', 'otherincome'])
-const PNL_EXPENSE_GROUPS = new Set(['expenses', 'otherexpenses', 'cogs'])
-
 function resolveMeta(row: FlatRow, meta: AccountMetaMaps): QboAccountMeta | undefined {
   if (row.accountId != null) {
     const m = meta.byId.get(Number(row.accountId))
@@ -266,20 +272,10 @@ function signFor(report: 'pnl' | 'bs', meta: QboAccountMeta | undefined, groups:
   if (c === 'Asset') return 1
   if (c === 'Liability' || c === 'Equity') return -1
 
-  // Innermost group wins (an 'Equity' subsection inside 'TotalLiabilitiesAndEquity').
-  const lower = groups.map((g) => g.toLowerCase()).reverse()
-  if (report === 'pnl') {
-    for (const g of lower) {
-      if (PNL_REVENUE_GROUPS.has(g)) return -1
-      if (PNL_EXPENSE_GROUPS.has(g)) return 1
-    }
-    return 1 // unknown P&L section — treat as expense (natural-positive debit)
-  }
-  for (const g of lower) {
-    if (g.includes('equity') || g.includes('liabilit')) return -1
-    if (g.includes('asset')) return 1
-  }
-  return 1
+  // Section-group fallback (shared with the export adapter): innermost group
+  // wins (an 'Equity' subsection inside 'TotalLiabilitiesAndEquity'); an
+  // unknown P&L section is treated as expense, an unknown BS section as asset.
+  return report === 'pnl' ? pnlGroupSign(groups) : bsGroupSign(groups)
 }
 
 /**
@@ -325,34 +321,10 @@ export function buildSchoolRows(
 }
 
 // ── The acct-399 balancing plug ───────────────────────────────────────────────
-
-export const PLUG_ACCT = 399
-export const PLUG_DESC = 'Interlocation balance (organization QuickBooks)'
-
-export interface PlugResult {
-  rows: QboTrialBalanceRow[]
-  /** The plug row's total when one was appended (−imbalance), else null. */
-  balancePlug: number | null
-  /** Σ of the pre-plug totals — how far off balance this location's books were. */
-  imbalance: number
-}
-
-/**
- * A single location's P&L+BS rarely balances on its own (untagged interlocation
- * due-to/due-from entries). Absorb the residual into one explicit acct-399 row
- * so the engine's SFP ties — visible and labeled, never silently spread. Within
- * a cent (|Σ| ≤ 0.01) the rows pass through untouched.
- */
-export function applyBalancePlug(rows: QboTrialBalanceRow[]): PlugResult {
-  const diff = round2(rows.reduce((sum, r) => sum + r.total, 0))
-  if (Math.abs(diff) <= 0.01) return { rows, balancePlug: null, imbalance: diff }
-  const plug = round2(-diff)
-  return {
-    rows: [...rows, { acct: PLUG_ACCT, desc: PLUG_DESC, total: plug }],
-    balancePlug: plug,
-    imbalance: diff,
-  }
-}
+// applyBalancePlug / PLUG_ACCT / PLUG_DESC / PlugResult are re-exported above
+// from @finrep/ingestion (statements/tbConventions.ts) — the single home of
+// the rule: |Σ| ≤ 0.01 passes through untouched, otherwise one explicit
+// acct-399 row absorbs −Σ, visible and labeled, never silently spread.
 
 // ── Small column helpers for the service ─────────────────────────────────────
 

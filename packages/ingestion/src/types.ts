@@ -47,6 +47,44 @@ export interface SheetMetadata {
   accountCount?: number
   /** The workbook sheet this metadata came from (multi-sheet fan-out). */
   sheet?: string
+  /**
+   * NEW (issue #31). Present ONLY when the rows came from a QuickBooks report
+   * EXPORT (P&L / Statement of Activity, Balance Sheet, Budget vs Actuals)
+   * rather than a plain trial balance — see statements/statementAdapter.ts.
+   */
+  statement?: StatementMetadata
+}
+
+/** 'pl' = Profit and Loss / Statement of Activity · 'bs' = Balance Sheet · 'bva' = Budget vs Actuals (P&L shaped). */
+export type StatementType = 'pl' | 'bs' | 'bva'
+
+export interface StatementMetadata {
+  type: StatementType
+  /** The banner title the type was detected from (or the sheet name). */
+  title: string
+  /**
+   * Which half of a trial balance the rows are: 'pl' = activity only (no
+   * balance-sheet accounts), 'bs' = balances only (no activity), 'full' = a
+   * P&L merged with a Balance Sheet (+ a plug row when they did not tie).
+   */
+  partial: 'pl' | 'bs' | 'full'
+  /** Printed accounting basis, when the banner says. */
+  basis?: 'accrual' | 'cash'
+  /** YYYY-MM-DD start of a "July 2025 - June 2026" range (periodEndDate holds the end). */
+  periodStart?: string
+  /** Header text of the value column that was read (e.g. "Actual", "Total", "Jan 2026"). */
+  column?: string
+  /**
+   * Engine account numbers that were SYNTHESISED for unnumbered rows, with the
+   * row name and section, so a mapping UI can re-key them. P&L: block base +
+   * 1-based order within the section. BS: the engine's fixed default-chart
+   * number for the section family (several rows may share one).
+   */
+  synthesized: Array<{ acct: number; name: string; section: 'revenue' | 'expense' | 'asset' | 'liability' | 'equity' }>
+  /** 'full' only: the acct-399 plug total appended (null when the pair tied). */
+  balancePlug?: number | null
+  /** 'full' only: Σ of the pre-plug totals. */
+  imbalance?: number
 }
 
 /**
