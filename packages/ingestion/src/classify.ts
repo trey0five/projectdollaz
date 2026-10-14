@@ -145,7 +145,7 @@ export function classifyRole({ fileName, metadata, now }: ClassifyInput): RoleCl
     role = 'cy'
     confidence = 0.7
     reasons.push(
-      `QuickBooks ${metadata!.statement!.title} for period ending ${periodEndDate} is the current fiscal year`
+      `QuickBooks ${metadata!.statement!.title || metadata!.statement!.type.toUpperCase()} for period ending ${periodEndDate} is the current fiscal year`
     )
   } else if (periodEndDate) {
     // No role keyword anywhere, but we DO have an in-sheet period-end date. The
