@@ -2,6 +2,7 @@
 // Adapter registry + selection + ingest facade.
 // ─────────────────────────────────────────────────────────────
 import { detectExplicitDate } from './metadata.js'
+import { detectStatementType } from './statements/statementAdapter.js'
 import type { IngestionAdapter, IngestionResult } from './types.js'
 import { excelAdapter } from './adapters/excelAdapter.js'
 import { csvAdapter } from './adapters/csvAdapter.js'
@@ -92,7 +93,11 @@ function tryStatement(
   force: boolean,
 ): IngestionResult | null {
   try {
-    return parseStatementExport(fileName, bytes, { sheet: opts?.sheet, column: opts?.column, force })
+    // The file NAME is part of detection: QuickBooks names its exports after the
+    // report ("… Statement of Activity Budget vs Actuals 6-30-26.xlsx"), and a
+    // banner-less export is otherwise indistinguishable from a trial balance.
+    const typeHint = detectStatementType(fileName.replace(/[_.\-]+/g, ' '))
+    return parseStatementExport(fileName, bytes, { sheet: opts?.sheet, column: opts?.column, force, typeHint })
   } catch {
     return null
   }

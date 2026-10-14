@@ -112,3 +112,21 @@ describe('ingest facade: period end from the FILENAME when the sheet has none', 
     expect(r.metadata?.periodEndDate).toBe('2026-03-31')
   })
 })
+
+describe('the customer file through the FACADE: statement detected from the file NAME', () => {
+  it('imports a banner-less "Statement of Activity" export with trial-balance signs', async () => {
+    const { ingest } = await import('../src/registry.js')
+    const r = ingest('CMA Statement of Activity Budget vs Actuals 6-30-26.xlsx', wb(CUSTOMER))
+    expect(r.metadata?.statement?.type).toBe('bva')
+    // P&L prints income natural-positive; the engine carries revenue as a credit (negative).
+    expect(r.rows.find((x) => x.acct === 40200)!.total).toBeCloseTo(-488257.5, 2)
+    expect(r.rows.find((x) => x.acct === 40000)!.total).toBeCloseTo(26301.61, 2)
+    expect(r.metadata?.periodEndDate).toBe('2026-06-30')
+  })
+  it('a plain trial balance named like a TB is untouched', async () => {
+    const { ingest } = await import('../src/registry.js')
+    const r = ingest('TB_CurrentYear_FY26.xlsx', wb([['Trial Balance'], ['Account', 'Description', 'Debit', 'Credit'], [1010, 'Cash', 500, 0], [4000, 'Tuition', 0, 500]]))
+    expect(r.metadata?.statement).toBeUndefined()
+    expect(r.rows.map((x) => x.total)).toEqual([500, -500])
+  })
+})

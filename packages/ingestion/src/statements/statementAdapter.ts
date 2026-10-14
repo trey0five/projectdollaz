@@ -68,6 +68,14 @@ export interface StatementParseOptions {
    * or account number to get a sign, so an unrecognisable file yields null.
    */
   force?: boolean
+  /**
+   * Statement type known from OUTSIDE the grid — the registry derives it from
+   * the FILE NAME ("CMA Statement of Activity Budget vs Actuals 6-30-26.xlsx").
+   * Exports trimmed of their banner (the 2026-10-14 customer file: no title row,
+   * no section rows, just `Acct | Desc | Actual`) are undetectable from the
+   * cells alone, yet the name says exactly what they are.
+   */
+  typeHint?: StatementType
 }
 
 // ── Cell helpers ──────────────────────────────────────────────────────────────
@@ -277,6 +285,16 @@ function planColumns(grid: RawGrid, column?: string): ColumnPlan {
 
   if (headerRow >= 0) {
     const headers = (grid[headerRow] ?? []).map((c) => text(c))
+    // STACKED HEADERS: QuickBooks puts the amount label on the row ABOVE the
+    // "Acct | Desc" row (customer file 2026-10-14: `_ | _ | Actual` over
+    // `Acct | Desc | _`). Fill blank header cells from up to two rows above,
+    // nearest first, so "Actual" is found where it was printed.
+    for (let up = 1; up <= 2; up++) {
+      const above = headerRow - up >= 0 ? (grid[headerRow - up] ?? []).map((c) => text(c)) : []
+      above.forEach((h, idx) => {
+        if (h !== '' && (headers[idx] ?? '') === '') headers[idx] = h
+      })
+    }
     headers.forEach((h, idx) => {
       if (h === '') return
       if (plan.acct < 0 && isAcctHeader(h)) plan.acct = idx
@@ -304,8 +322,14 @@ function planColumns(grid: RawGrid, column?: string): ColumnPlan {
     if (value < 0) value = pick((h) => /^total$/.test(h) || (/\btotal\b/.test(h) && !isBudgetish(h)))
     if (value < 0) value = pick((h) => /^(amount|balance|net|ytd|year to date)$/.test(h))
     if (value < 0) {
-      // Single-value exports label the money column with the date range or nothing at all.
-      const d = densest()
+      // Single-value exports label the money column with the date range or
+      // nothing at all: the densest money column that is NOT the account /
+      // description column (a numbered chart makes column A all-numeric too).
+      let d = -1
+      let dN = 0
+      density.forEach((n, idx) => {
+        if (idx !== plan.acct && idx !== plan.desc && n > dN) { d = idx; dN = n }
+      })
       if (d >= 0 && !isBudgetish(lower[d] ?? '')) value = d
     }
     if (value < 0) value = pick((h) => !isBudgetish(h) && (density[lower.indexOf(h)] ?? 0) > 0)
@@ -535,7 +559,7 @@ export function parseStatementGrid(
   opts: StatementParseOptions = {},
 ): StatementSheetResult | null {
   if (!grid || grid.length < 3) return null
-  let type = detectStatementType(`${bannerCells(grid).join(' ')} ${sheetName}`)
+  let type = detectStatementType(`${bannerCells(grid).join(' ')} ${sheetName}`) ?? opts.typeHint
   const detected = type !== undefined || isStatementExport(grid)
   if (!detected && !opts.force) return null
 
