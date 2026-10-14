@@ -46,6 +46,8 @@ import { subjectLabelOf } from '@finrep/analytics'
 import { ChartDefs, INK, fitScale, shortName, spreadLabels } from './chartKit.jsx'
 import { WhatThisMeasures, axisUnitOf, unitLabelOf } from './MeasureNote.jsx'
 import { Section } from '../module/SectionHeader.jsx'
+import { StatStrip, Stat, Pill } from '../ui/surface/index.js'
+import useDtOverflow from '../ui/surface/useDtOverflow.js'
 import AssessmentFilters from './AssessmentFilters.jsx'
 import CohortLongitudinal from './CohortLongitudinal.jsx'
 
@@ -89,59 +91,31 @@ const STANDING_TONE = {
   unknown: { text: 'text-muted', bg: 'bg-navy/[0.04]', ring: 'ring-navy/10', dot: '#cbd5e1' },
 }
 
-/** A variance chip — the "-45 points vs network" the whole deck hangs on. */
+/** A variance chip — the "-45 points vs network" the whole deck hangs on. A
+ *  status Pill: the mark carries the standing, the text stays ink. */
 function VarianceChip({ variance, standing, unit = '' }) {
-  const tone = STANDING_TONE[standing] ?? STANDING_TONE.unknown
+  const tone = standing === 'strong' ? 'good' : standing === 'below' ? 'risk' : 'neutral'
   const Icon = standing === 'strong' ? TrendingUp : standing === 'below' ? TrendingDown : null
   return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11.5px] font-bold ring-1 ${tone.bg} ${tone.text} ${tone.ring}`}
-    >
-      {Icon ? <Icon size={12} /> : null}
+    <Pill variant="status" tone={tone}>
+      {Icon ? <Icon size={11} aria-hidden="true" /> : null}
       {signed(variance)}
       {unit} vs peers
-    </span>
+    </Pill>
   )
 }
 
 // ── KPI strip ────────────────────────────────────────────────────────────────
 
 /**
- * A metric card.
- *
- * The 3px accent bar across the top went: it is a 2015 Material tic, it draws
- * the eye to the frame rather than the number, and four of them in a row read as
- * a striped table. The hue now arrives as a soft bloom from the top-right corner
- * — present, unmistakable, and behind the content instead of in front of it —
- * with a hairline ring doing the work the border used to.
- *
- * The card lifts on hover because these are the numbers people point at.
+ * A metric Stat (Premium UI P4): label / Garamond value / the context line /
+ * the variance Pill — on the ground, in a StatStrip, no card, no bloom.
  */
-function KpiCard({ title, value, sub, chip, delay = 0, reduce }) {
+function KpiCard({ title, value, sub, chip }) {
   return (
-    <motion.div
-      initial={reduce ? false : { opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, ease: EASE, delay }}
-      whileHover={reduce ? undefined : { y: -3 }}
-      className="group relative isolate overflow-hidden rounded-2xl bg-white p-4 transition-shadow duration-300"
-      style={{
-        boxShadow:
-          'inset 0 0 0 1px rgba(16,28,61,0.07), 0 16px 40px -26px rgba(16,28,61,0.45)',
-      }}
-    >
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 -z-10 opacity-70 transition-opacity duration-300 group-hover:opacity-100"
-        style={{
-          background: `radial-gradient(120% 100% at 100% 0%, ${HUE}1F 0%, ${HUE}08 38%, transparent 68%)`,
-        }}
-      />
-      <p className="font-mono text-[9.5px] font-bold uppercase tracking-[0.16em] text-muted">{title}</p>
-      <p className="mt-1.5 font-serif text-[32px] font-semibold leading-none text-navy tabular-nums">{value}</p>
-      {sub ? <p className="mt-1.5 text-[11.5px] leading-snug text-muted">{sub}</p> : null}
+    <Stat label={title} value={value} note={sub} className={typeof value === 'string' && /[a-z]/i.test(value) ? 'stat-text' : ''}>
       {chip ? <div className="mt-2">{chip}</div> : null}
-    </motion.div>
+    </Stat>
   )
 }
 
@@ -307,46 +281,25 @@ function CohortPanel({ cohort, national, range, reduce }) {
   return (
     <div className="space-y-5">
       {/* ── Where the cohort landed ── */}
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-        {[
-          { k: `${priorGradeLabel(grade)} · ${priorYear ?? ''}`, v: fmt(summary.priorAverage.value) },
-          { k: `Grade ${grade} · ${currentYear ?? ''}`, v: fmt(summary.currentAverage.value) },
-          { k: 'Cohort change', v: signed(summary.change), accent: (summary.change ?? 0) >= 0 },
-          // NOT "gained / declined". These count only moves past the materiality
-          // floor, so a cohort that visibly rose 4 points is correctly counted
-          // as neither — which reads as a contradiction sitting next to a chart
-          // that plainly shows +4. The label now says what it counts.
-          {
-            k: 'Moved materially',
-            v: `${summary.gained} ↑ ${summary.declined} ↓`,
-            hint: `${moves.length - summary.gained - summary.declined} within the noise`,
-          },
-        ].map((c, i) => (
-          <motion.div
-            key={c.k}
-            initial={reduce ? false : { opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: reduce ? 0 : i * 0.06, duration: 0.4, ease: EASE }}
-            className="relative isolate overflow-hidden rounded-xl bg-white px-3.5 py-3"
-            style={{ boxShadow: 'inset 0 0 0 1px rgba(16,28,61,0.07), 0 12px 30px -24px rgba(16,28,61,0.5)' }}
-          >
-            <span
-              aria-hidden="true"
-              className="absolute inset-0 -z-10"
-              style={{ background: `radial-gradient(120% 100% at 100% 0%, ${HUE}16 0%, transparent 65%)` }}
-            />
-            <p className="font-mono text-[8.5px] font-bold uppercase tracking-[0.14em] text-muted">{c.k}</p>
-            <p
-              className={`mt-1 font-serif text-[24px] font-semibold leading-none tabular-nums ${
-                c.accent === undefined ? 'text-navy' : c.accent ? 'text-emerald-700' : 'text-rose-700'
-              }`}
-            >
-              {c.v}
-            </p>
-            {c.hint ? <p className="mt-1 text-[10px] leading-snug text-muted">{c.hint}</p> : null}
-          </motion.div>
-        ))}
-      </div>
+      <StatStrip cols={4} className="stats-wrap grid-cols-2 sm:grid-cols-4">
+        <Stat label={`${priorGradeLabel(grade)} · ${priorYear ?? ''}`} value={fmt(summary.priorAverage.value)} />
+        <Stat label={`Grade ${grade} · ${currentYear ?? ''}`} value={fmt(summary.currentAverage.value)} />
+        <Stat
+          label="Cohort change"
+          value={signed(summary.change)}
+          status={summary.change == null ? null : (summary.change ?? 0) >= 0 ? 'good' : 'risk'}
+        />
+        {/* NOT "gained / declined". These count only moves past the materiality
+            floor, so a cohort that visibly rose 4 points is correctly counted
+            as neither — which reads as a contradiction sitting next to a chart
+            that plainly shows +4. The label says what it counts. */}
+        <Stat
+          label="Moved materially"
+          value={`${summary.gained} ↑ ${summary.declined} ↓`}
+          note={`${moves.length - summary.gained - summary.declined} within the noise`}
+          className="stat-text"
+        />
+      </StatStrip>
 
       {/* ── The slopegraph ── */}
       {pairs.length > 0 ? (
@@ -507,16 +460,16 @@ function CohortPanel({ cohort, national, range, reduce }) {
             unlabelled numeric columns to be guessed at — the reader could see
             "41→38" without being told it was the cohort's size. */}
         <div className="mb-2 flex items-end gap-3">
-          <span className="w-[196px] shrink-0 text-right font-mono text-[8.5px] font-bold uppercase tracking-[0.16em]" style={{ color: HUE }}>
+          <span className="w-[196px] shrink-0 text-right text-[8.5px] font-bold uppercase tracking-[0.16em]" style={{ color: HUE }}>
             Cohort growth, ranked
           </span>
-          <span className="flex-1 text-center font-mono text-[8.5px] font-bold uppercase tracking-[0.14em] text-muted">
+          <span className="flex-1 text-center text-[8.5px] font-bold uppercase tracking-[0.14em] text-muted">
             ← declined · gained →
           </span>
-          <span className="w-10 text-right font-mono text-[8.5px] font-bold uppercase tracking-[0.14em] text-muted">
+          <span className="w-10 text-right text-[8.5px] font-bold uppercase tracking-[0.14em] text-muted">
             Move
           </span>
-          <span className="w-16 text-right font-mono text-[8.5px] font-bold uppercase tracking-[0.14em] text-muted">
+          <span className="w-16 text-right text-[8.5px] font-bold uppercase tracking-[0.14em] text-muted">
             Tested
           </span>
         </div>
@@ -550,10 +503,10 @@ function CohortPanel({ cohort, national, range, reduce }) {
                       }}
                     />
                   </div>
-                  <span className="w-10 text-right font-mono text-[11.5px] font-bold tabular-nums" style={{ color: up ? INK.ahead : INK.behind }}>
+                  <span className="w-10 text-right text-[11.5px] font-bold tabular-nums" style={{ color: up ? INK.ahead : INK.behind }}>
                     {signed(change, 0)}
                   </span>
-                  <span className="w-16 text-right font-mono text-[10px] text-muted">
+                  <span className="w-16 text-right text-[10px] text-muted">
                     {m.prior?.tested ?? '—'}→{m.current?.tested ?? '—'}
                   </span>
                 </div>
@@ -854,72 +807,63 @@ function ComparisonTable({ rows, scoreType }) {
     if (sort === 'change') return copy.sort((a, b) => (b.change ?? -Infinity) - (a.change ?? -Infinity))
     return copy.sort((a, b) => (b.current ?? -Infinity) - (a.current ?? -Infinity))
   }, [rows, sort])
-
-  const th = 'px-2 py-1.5 text-right font-mono text-[9px] font-bold uppercase tracking-wider text-muted'
-  const td = 'px-2 py-2 text-right text-[12.5px] tabular-nums'
+  const wrapRef = useDtOverflow([sorted])
 
   return (
-    <div className="overflow-x-auto">
+    <div>
       {/* A toggle group, not three unrelated buttons: without the role and the
           pressed state a screen reader announces "Score, Change, A to Z" and
           never says which one the table is currently sorted by. */}
-      <div className="mb-2 flex gap-1.5" role="group" aria-label="Sort schools by">
+      <div className="seg mb-2" role="group" aria-label="Sort schools by">
         {[
           ['current', 'Score'],
           ['change', 'Change'],
           ['name', 'A–Z'],
         ].map(([k, l]) => (
-          <button
-            key={k}
-            type="button"
-            aria-pressed={sort === k}
-            onClick={() => setSort(k)}
-            className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${
-              sort === k ? 'text-white' : 'text-muted hover:text-navy'
-            }`}
-            style={sort === k ? { background: HUE } : { background: 'rgba(16,28,61,0.05)' }}
-          >
+          <button key={k} type="button" aria-pressed={sort === k} onClick={() => setSort(k)} className="seg-btn">
             {l}
           </button>
         ))}
       </div>
-      <table className="w-full min-w-[560px] border-collapse">
+      <div ref={wrapRef} className="dt-wrap">
+      <table className="dt min-w-[560px]">
         <thead>
-          <tr className="border-b border-navy/12">
-            <th className={`${th} text-left`}>School</th>
-            <th className={th}>This year</th>
-            <th className={th}>Last year</th>
-            <th className={th}>Change</th>
-            <th className={th}>vs network</th>
-            <th className={th}>vs national</th>
-            <th className={th}>Tested</th>
+          <tr>
+            <th scope="col">School</th>
+            <th scope="col" className="dt-num">This year</th>
+            <th scope="col" className="dt-num">Last year</th>
+            <th scope="col" className="dt-num">Change</th>
+            <th scope="col" className="dt-num">vs network</th>
+            <th scope="col" className="dt-num">vs national</th>
+            <th scope="col" className="dt-num">Tested</th>
           </tr>
         </thead>
         <tbody>
           {sorted.map((r) => (
-            <tr key={r.schoolId} className="border-b border-navy/[0.07] hover:bg-navy/[0.02]">
-              <td className="px-2 py-2 text-left text-[12.5px] text-navy">
-                {r.rank ? <span className="mr-1.5 font-mono text-[10px] text-muted">{r.rank}</span> : null}
+            <tr key={r.schoolId}>
+              <td className="text-ink">
+                {r.rank ? <span className="mr-1.5 text-ink2 tabular-nums">{r.rank}</span> : null}
                 {r.schoolName}
               </td>
-              <td className={`${td} font-bold text-navy`}>
-                {r.forthcoming ? <span className="font-mono text-[10px] italic text-muted">forthcoming</span> : fmt(r.current, dp)}
+              <td className="dt-num font-semibold text-ink">
+                {r.forthcoming ? <span className="italic text-ink2">forthcoming</span> : fmt(r.current, dp)}
               </td>
-              <td className={`${td} text-muted`}>{fmt(r.prior, dp)}</td>
-              <td className={td}>
+              <td className="dt-num text-ink2">{fmt(r.prior, dp)}</td>
+              <td className="dt-num">
                 <ChangeBadge value={r.change} />
               </td>
-              <td className={`${td} ${gapTone(r.vsNetwork)}`}>{signed(r.vsNetwork, dp)}</td>
-              <td className={`${td} ${gapTone(r.vsNational)}`}>
+              <td className={`dt-num ${gapTone(r.vsNetwork)}`}>{signed(r.vsNetwork, dp)}</td>
+              <td className={`dt-num ${gapTone(r.vsNational)}`}>
                 {scoreType === 'scale' ? '—' : signed(r.vsNational, dp)}
               </td>
-              <td className={`${td} text-muted`}>
+              <td className="dt-num text-ink2">
                 {r.tested === null || r.tested === undefined ? '—' : r.tested < 5 ? '<5' : r.tested}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   )
 }
@@ -932,21 +876,19 @@ function subjectMax(ctx) {
   return ctx?.scoreRange?.max ?? 100
 }
 
-const gapTone = (v) => (v === null || v === undefined ? 'text-muted' : v > 0 ? 'text-emerald-700' : v < 0 ? 'text-rose-700' : 'text-muted')
+// Ink text, always: the gap's sign is the figure's own; the Change column
+// carries the semantic mark (Pill) so the table is never colour-alone.
+const gapTone = (v) => (v === null || v === undefined || v === 0 ? 'text-ink2' : 'text-ink')
 
 function ChangeBadge({ value }) {
-  if (value === null || value === undefined) return <span className="text-muted">—</span>
+  if (value === null || value === undefined) return <span className="text-ink2">—</span>
   const up = value > 0
   const flat = Math.abs(value) < 0.05
   return (
-    <span
-      className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[11px] font-bold ${
-        flat ? 'bg-navy/[0.06] text-navy/60' : up ? 'bg-emerald-500/12 text-emerald-700' : 'bg-rose-500/12 text-rose-700'
-      }`}
-    >
-      {flat ? null : up ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+    <Pill variant="status" tone={flat ? 'neutral' : up ? 'good' : 'risk'}>
+      {flat ? null : up ? <TrendingUp size={10} aria-hidden="true" /> : <TrendingDown size={10} aria-hidden="true" />}
       {signed(value, 0)}
-    </span>
+    </Pill>
   )
 }
 
@@ -1011,10 +953,10 @@ export default function AssessmentDashboard({
 
   if (data?.empty) {
     return (
-      <div className="rounded-2xl border border-dashed border-navy/20 bg-white p-10 text-center">
-        <Sparkles size={22} className="mx-auto mb-2" style={{ color: HUE }} />
-        <p className="font-serif text-[19px] font-semibold text-navy">No assessment results yet</p>
-        <p className="mx-auto mt-1.5 max-w-md text-[13.5px] text-muted">
+      <div className="border-y border-hair py-10 text-center">
+        <Sparkles size={20} className="mx-auto mb-2 text-ink2" aria-hidden="true" />
+        <p className="font-serif text-title font-medium text-ink">No assessment results yet</p>
+        <p className="mx-auto mt-1.5 max-w-md text-small text-ink2">
           Upload a scores file — a diocesan summary or a student-level export — and this school appears
           beside its peers, grade by grade and subject by subject.
         </p>
@@ -1038,28 +980,22 @@ export default function AssessmentDashboard({
       />
 
       {/* ── KPI strip ── */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <StatStrip cols={4} className="stats-wrap grid-cols-2 lg:grid-cols-4">
         <KpiCard
           title="Average score"
           value={fmt(kpis?.average?.value)}
           sub={`Network ${fmt(peerAvg)} · ${unitLabelOf(ctx)}`}
           chip={<VarianceChip variance={kpis?.average?.variance} standing={kpis?.average?.standing} />}
-          delay={0}
-          reduce={reduce}
         />
         <KpiCard
           title="Rank in network"
           value={rankText}
           sub={`${ctx?.peerCount ?? 0} peer school${ctx?.peerCount === 1 ? '' : 's'}`}
-          delay={0.06}
-          reduce={reduce}
         />
         <KpiCard
           title="Year over year"
           value={signed(kpis?.yoy)}
           sub={data?.trendDirection ? `Trend: ${data.trendDirection}` : null}
-          delay={0.12}
-          reduce={reduce}
         />
         <KpiCard
           title="Participation"
@@ -1071,25 +1007,20 @@ export default function AssessmentDashboard({
                 ? `Peers ${Math.round(kpis.participation.peerRate * 100)}% — read with care`
                 : null
           }
-          delay={0.18}
-          reduce={reduce}
         />
-      </div>
+      </StatStrip>
 
-      {/* ── Key insight ── */}
+      {/* ── Key insight — the one sentence, as prose on the ground ── */}
       {data?.keyInsight ? (
-        <motion.div
-          initial={reduce ? false : { opacity: 0, y: 12 }}
+        <motion.p
+          initial={reduce ? false : { opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: EASE, delay: 0.22 }}
-          className="relative overflow-hidden rounded-2xl px-5 py-4"
-          style={{ background: `linear-gradient(135deg, ${HUE}14, rgba(37,99,235,0.06))`, border: `1px solid ${HUE}33` }}
+          className="flex max-w-[72ch] gap-2.5 font-serif text-heading leading-relaxed text-ink"
         >
-          <div className="flex gap-3">
-            <Sparkles size={17} className="mt-0.5 shrink-0" style={{ color: HUE }} />
-            <p className="font-serif text-[15.5px] leading-relaxed text-navy">{data.keyInsight}</p>
-          </div>
-        </motion.div>
+          <Sparkles size={15} className="mt-1 shrink-0 text-ink2" aria-hidden="true" />
+          <span>{data.keyInsight}</span>
+        </motion.p>
       ) : null}
 
       {/* ── The five reads ──────────────────────────────────────────────────
@@ -1099,28 +1030,13 @@ export default function AssessmentDashboard({
           of one, so each gets its own door — and the KPI strip and the insight
           stay above them, because those answer "how are we doing" regardless of
           which question you came for. */}
-      <div className="flex flex-wrap gap-1.5 border-b border-navy/10 pb-px" role="tablist" aria-label="Analysis">
+      <div className="tabs-ink overflow-x-auto" role="tablist" aria-label="Analysis">
         {VIEWS.map((v) => {
           const on = view === v.key
           return (
-            <button
-              key={v.key}
-              type="button"
-              role="tab"
-              aria-selected={on}
-              onClick={() => setView(v.key)}
-              className={`relative rounded-t-lg px-3.5 py-2 text-[12.5px] font-semibold transition-colors ${
-                on ? 'text-navy' : 'text-muted hover:text-navy'
-              }`}
-            >
+            <button key={v.key} type="button" role="tab" aria-selected={on} onClick={() => setView(v.key)} className="tab-ink">
               {v.label}
-              {on ? (
-                <motion.span
-                  layoutId="academics-view-underline"
-                  className="absolute inset-x-2 -bottom-px h-0.5 rounded-full"
-                  style={{ background: HUE }}
-                />
-              ) : null}
+              {on ? <motion.span layoutId="academics-view-underline" className="tab-ink-rule" aria-hidden="true" /> : null}
             </button>
           )
         })}
@@ -1134,9 +1050,7 @@ export default function AssessmentDashboard({
         title={`Every school · ${ctx?.grade === 'all' ? 'all grades' : `grade ${ctx?.grade}`}`}
         reduce={reduce}
         aside={
-          <span className="rounded-full px-2.5 py-1 text-[11px] font-bold" style={{ background: `${HUE}18`, color: HUE }}>
-            Rank {rankText}
-          </span>
+          <Pill variant="count">Rank {rankText}</Pill>
         }
       >
         <WhatThisMeasures
@@ -1178,23 +1092,11 @@ export default function AssessmentDashboard({
       {/* ── System insights ── */}
       {data?.insights?.top ? (
         <Section eyebrow="The network" title="Top, bottom and the spread between" icon={Network} reduce={reduce}>
-          <div className="grid gap-3 sm:grid-cols-3">
-            {[
-              { k: 'Highest', v: data.insights.top?.schoolName, n: data.insights.top?.value, Icon: Award, color: '#059669' },
-              { k: 'Lowest', v: data.insights.bottom?.schoolName, n: data.insights.bottom?.value, Icon: TrendingDown, color: '#e11d48' },
-              { k: 'Spread', v: 'Top to bottom', n: data.insights.spread, Icon: ChevronRight, color: '#64748b' },
-            ].map((c) => (
-              <div key={c.k} className="rounded-xl border border-navy/10 px-3 py-2.5">
-                <p className="flex items-center gap-1.5 font-mono text-[9px] font-bold uppercase tracking-wider text-muted">
-                  <c.Icon size={11} style={{ color: c.color }} /> {c.k}
-                </p>
-                <p className="mt-0.5 truncate text-[13px] font-semibold text-navy">{c.v ?? '—'}</p>
-                <p className="font-serif text-[18px] tabular-nums" style={{ color: c.color }}>
-                  {fmt(c.n)}
-                </p>
-              </div>
-            ))}
-          </div>
+          <StatStrip cols={3} className="stats-wrap !grid-cols-1 sm:!grid-cols-3">
+            <Stat label="Highest" value={fmt(data.insights.top?.value)} status="good" note={data.insights.top?.schoolName ?? '—'} />
+            <Stat label="Lowest" value={fmt(data.insights.bottom?.value)} status="risk" note={data.insights.bottom?.schoolName ?? '—'} />
+            <Stat label="Spread" value={fmt(data.insights.spread)} note="top to bottom" />
+          </StatStrip>
         </Section>
       ) : null}
       </>
@@ -1274,7 +1176,7 @@ export default function AssessmentDashboard({
       {/* ── Movement ── */}
       {(data?.movements ?? []).length > 0 ? (
         <Section eyebrow="Trends & movement" title="What a board asks first" icon={Activity} reduce={reduce}>
-          <MovementHighlights movements={data.movements} national={ctx?.nationalReference} reduce={reduce} />
+          <MovementHighlights movements={data.movements} national={ctx?.nationalReference} />
         </Section>
       ) : null}
 
@@ -1293,7 +1195,7 @@ export default function AssessmentDashboard({
                 >
                   <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: tone }} />
                   <span className="flex-1 truncate text-[12.5px] text-navy">{m.schoolName}</span>
-                  <span className="font-mono text-[11px] tabular-nums text-muted">
+                  <span className="text-[11px] tabular-nums text-muted">
                     {fmt(m.prior, 0)} → {fmt(m.current, 0)}
                   </span>
                   <span className="w-10 text-right text-[12px] font-bold tabular-nums" style={{ color: tone }}>
@@ -1338,9 +1240,7 @@ export default function AssessmentDashboard({
             title="Every school, both years"
             reduce={reduce}
             aside={
-              <span className="font-mono text-[10px] uppercase tracking-wider text-muted">
-                {ctx?.grade === 'all' ? 'All grades' : `Grade ${ctx?.grade}`}
-              </span>
+              <span>{ctx?.grade === 'all' ? 'All grades' : `Grade ${ctx?.grade}`}</span>
             }
           >
             <WhatThisMeasures
@@ -1369,9 +1269,7 @@ export default function AssessmentDashboard({
             title="Sortable, for the packet"
             reduce={reduce}
             aside={
-              <span className="font-mono text-[10px] uppercase tracking-wider text-muted">
-                {ctx?.grade === 'all' ? 'All grades' : `Grade ${ctx?.grade}`}
-              </span>
+              <span>{ctx?.grade === 'all' ? 'All grades' : `Grade ${ctx?.grade}`}</span>
             }
           >
             <ComparisonTable rows={data.table} scoreType={ctx?.scoreType} />
@@ -1389,7 +1287,7 @@ export default function AssessmentDashboard({
             reduce={reduce}
             delay={0.05}
           >
-            <CostChain rows={data?.crossDomain ?? []} scoreType={ctx?.scoreType} reduce={reduce} />
+            <CostChain rows={data?.crossDomain ?? []} scoreType={ctx?.scoreType} />
           </Section>
         </div>
       </>
@@ -1817,7 +1715,7 @@ function BoardReportBars({ rows, national, peerAvg, range, focusId, scoreType, r
  * three answers were buried in a list the reader had to scan and rank
  * themselves. Surfacing them costs nothing: the numbers are already here.
  */
-function MovementHighlights({ movements, national, reduce }) {
+function MovementHighlights({ movements, national }) {
   const rows = (movements ?? []).filter((m) => m.change !== null && m.change !== undefined)
   if (rows.length === 0) return null
 
@@ -1845,32 +1743,19 @@ function MovementHighlights({ movements, national, reduce }) {
   ].filter(Boolean)
 
   return (
-    <div className="grid gap-3 sm:grid-cols-3">
-      {cards.map((c, i) => (
-        <motion.div
+    <StatStrip cols={cards.length} className="stats-wrap !grid-cols-1 sm:!grid-cols-3">
+      {cards.map((c) => (
+        <Stat
           key={c.k}
-          initial={reduce ? false : { opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: reduce ? 0 : i * 0.08, duration: 0.45, ease: EASE }}
-          className="relative isolate overflow-hidden rounded-2xl bg-white p-4"
-          style={{ boxShadow: `inset 0 0 0 1px ${c.tone}22, 0 16px 40px -28px ${c.tone}` }}
+          label={c.k}
+          value={c.v}
+          status={c.tone === INK.ahead ? 'good' : c.tone === INK.behind ? 'risk' : 'watch'}
+          note={c.sub}
         >
-          <span
-            aria-hidden="true"
-            className="absolute inset-0 -z-10"
-            style={{ background: `radial-gradient(130% 100% at 0% 0%, ${c.tone}18 0%, transparent 62%)` }}
-          />
-          <p className="font-mono text-[8.5px] font-bold uppercase tracking-[0.16em]" style={{ color: c.tone }}>
-            {c.k}
-          </p>
-          <p className="mt-1.5 font-serif text-[30px] font-semibold leading-none tabular-nums" style={{ color: c.tone }}>
-            {c.v}
-          </p>
-          <p className="mt-1.5 text-[12.5px] font-semibold leading-snug text-navy">{c.name}</p>
-          <p className="text-[11px] text-muted">{c.sub}</p>
-        </motion.div>
+          <p className="mt-1 text-small font-semibold leading-snug text-ink">{c.name}</p>
+        </Stat>
       ))}
-    </div>
+    </StatStrip>
   )
 }
 
@@ -1978,89 +1863,32 @@ function ParticipationFairness({ rows }) {
  * place on a page of white cards where KYRO says something no competitor can,
  * and it should not look like everything around it.
  */
-function CostChain({ rows, scoreType, reduce }) {
+function CostChain({ rows, scoreType }) {
   const focus = (rows ?? []).find((r) => r.isFocus)
   const peers = (rows ?? []).filter((r) => !r.isFocus && r.score !== null)
   if (!focus) {
-    return <p className="text-[12.5px] text-muted">Load a year of results to see outcomes beside the money that produced them.</p>
+    return <p className="text-small text-ink2">Load a year of results to see outcomes beside the money that produced them.</p>
   }
 
   const money = (v) => (v === null || v === undefined ? '—' : `$${Math.round(v).toLocaleString()}`)
-  const links = [
-    { k: 'Enrolment', v: focus.enrollment ?? '—', sub: 'children on the roster' },
-    { k: 'Per teacher', v: fmt(focus.studentTeacherRatio), sub: 'students each' },
-    { k: 'Cost per pupil', v: money(focus.costPerPupil), sub: 'expenses ÷ enrolment' },
-  ]
 
   return (
-    <div
-      className="relative isolate overflow-hidden rounded-2xl px-5 py-5 text-white"
-      style={{ background: '#0A1628', boxShadow: `0 24px 60px -38px ${HUE}` }}
-    >
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 -z-10"
-        style={{
-          background: [
-            `radial-gradient(70% 130% at 92% -20%, ${HUE}D9 0%, ${HUE}4D 34%, transparent 72%)`,
-            `radial-gradient(60% 100% at 0% 120%, rgba(59,130,246,0.35) 0%, transparent 72%)`,
-            'linear-gradient(180deg, rgba(255,255,255,0.08) 0%, transparent 24%)',
-          ].join(', '),
-        }}
-      />
+    <div>
+      {/* Three inputs, then the outcome they produced — one strip, read left to
+          right; the arrow is in the label ("→ Produced"), not a dark stage. */}
+      <StatStrip cols={4} className="stats-wrap grid-cols-2 sm:grid-cols-4">
+        <Stat label="Enrolment" value={focus.enrollment ?? '—'} note="children on the roster" />
+        <Stat label="Per teacher" value={fmt(focus.studentTeacherRatio)} note="students each" />
+        <Stat label="Cost per pupil" value={money(focus.costPerPupil)} note="expenses ÷ enrolment" />
+        <Stat
+          label="→ Produced"
+          value={fmt(focus.score, scoreType === 'scale' ? 1 : 0)}
+          status="hue"
+          note={scoreType === 'percentile' ? 'national percentile' : 'scale score'}
+        />
+      </StatStrip>
 
-      <div className="flex flex-wrap items-stretch gap-2.5">
-        {links.map((n, i) => (
-          <motion.div
-            key={n.k}
-            initial={reduce ? false : { opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45, ease: EASE, delay: reduce ? 0 : i * 0.1 }}
-            className="flex min-w-[7.5rem] flex-1 flex-col justify-center rounded-xl px-3.5 py-3"
-            style={{
-              background: 'rgba(255,255,255,0.07)',
-              boxShadow: 'inset 0 1px 0 0 rgba(255,255,255,0.14), inset 0 0 0 1px rgba(255,255,255,0.06)',
-            }}
-          >
-            <p className="font-mono text-[8px] font-bold uppercase tracking-[0.16em] text-white/55">{n.k}</p>
-            <p className="mt-1 font-serif text-[26px] font-semibold leading-none tabular-nums">{n.v}</p>
-            <p className="mt-1 text-[10px] leading-snug text-white/45">{n.sub}</p>
-          </motion.div>
-        ))}
-
-        {/* The arrow into the outcome — the whole point is that the three feed
-            the fourth, which four separate cards never said. */}
-        <motion.div
-          initial={reduce ? false : { opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: reduce ? 0 : 0.34, duration: 0.4 }}
-          className="hidden items-center px-1 text-[20px] font-light text-white/35 sm:flex"
-          aria-hidden="true"
-        >
-          →
-        </motion.div>
-
-        <motion.div
-          initial={reduce ? false : { opacity: 0, scale: 0.94 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5, ease: EASE, delay: reduce ? 0 : 0.4 }}
-          className="relative flex min-w-[8.5rem] flex-1 flex-col justify-center overflow-hidden rounded-xl px-4 py-3"
-          style={{
-            background: `linear-gradient(135deg, ${HUE} 0%, #0f766e 100%)`,
-            boxShadow: `0 0 34px -6px ${HUE}, inset 0 1px 0 0 rgba(255,255,255,0.28)`,
-          }}
-        >
-          <p className="font-mono text-[8px] font-bold uppercase tracking-[0.16em] text-white/75">Produced</p>
-          <p className="mt-1 font-serif text-[34px] font-semibold leading-none tabular-nums">
-            {fmt(focus.score, scoreType === 'scale' ? 1 : 0)}
-          </p>
-          <p className="mt-1 text-[10px] text-white/70">
-            {scoreType === 'percentile' ? 'national percentile' : 'scale score'}
-          </p>
-        </motion.div>
-      </div>
-
-      <p className="mt-3.5 text-[11.5px] leading-relaxed text-white/55">
+      <p className="sec-note">
         {peers.length > 0
           ? `${peers.length} peer school${peers.length === 1 ? '' : 's'} scored ${peers.map((p) => fmt(p.score, 0)).join(', ')}. Their staffing and spending stay with them — this reads only the ledger of the school you are signed in to.`
           : 'Outcomes beside the money and the class size that produced them — the read a standalone score dashboard cannot do, because it has no ledger.'}
@@ -2069,24 +1897,6 @@ function CostChain({ rows, scoreType, reduce }) {
   )
 }
 
-// ── Subgroups ────────────────────────────────────────────────────────────────
-/**
- * SUPPORT-FLAG SUBGROUPS, AS DUMBBELLS.
- *
- * This component used to call .filter() on `groups` and take a flat list of
- * bars. The server has never sent that: subgroupBreakdown returns an OBJECT of
- * paired buckets — { isp, plan504, ell, totalMatched } — because the FERPA rule
- * here suppresses a PAIR rather than a row (publishing the thin side alone, or
- * its complement, recovers the child by subtraction). So the component threw on
- * an object with no .filter the moment a school actually had student-level
- * results matched to its roster, which took the whole page white.
- *
- * Rendering the real shape is also the better chart. The finding is a GAP
- * between two groups, and a dumbbell draws a gap directly — two dots, the span
- * between them lit by direction, the number at the end. A pair of separate bars
- * makes the reader subtract two lengths by eye to recover the one quantity the
- * panel exists to report.
- */
 const SUBGROUP_LABELS = [
   { key: 'isp', label: 'Learning support', hint: 'ISP / IEP on the roster' },
   { key: 'plan504', label: '504 plan', hint: 'Formal accommodation' },
@@ -2147,13 +1957,13 @@ function SubgroupBars({ groups, range, reduce }) {
             <div className="flex items-center gap-3">
               <div className="w-[124px] shrink-0">
                 <p className="text-[12px] font-semibold leading-tight text-navy">{d.label}</p>
-                <p className="font-mono text-[8.5px] uppercase tracking-[0.1em] text-muted">{d.hint}</p>
+                <p className="text-[8.5px] uppercase tracking-[0.1em] text-muted">{d.hint}</p>
               </div>
 
               {suppressed ? (
                 <div className="flex flex-1 items-center gap-2">
                   <div className="h-[3px] flex-1 rounded-full bg-navy/[0.07]" />
-                  <span className="font-mono text-[10px] text-muted">Fewer than 5 on one side — not shown</span>
+                  <span className="text-[10px] text-muted">Fewer than 5 on one side — not shown</span>
                 </div>
               ) : (
                 <>
@@ -2194,7 +2004,7 @@ function SubgroupBars({ groups, range, reduce }) {
                     <p className="font-serif text-[17px] font-semibold leading-none tabular-nums" style={{ color: tone }}>
                       {signed(gap)}
                     </p>
-                    <p className="font-mono text-[8.5px] uppercase tracking-[0.1em] text-muted">
+                    <p className="text-[8.5px] uppercase tracking-[0.1em] text-muted">
                       {b.withFlag.count} vs {b.without.count}
                     </p>
                   </div>
@@ -2228,11 +2038,11 @@ function ObjectiveList({ items, tone }) {
           <span className="flex-1 truncate text-[12.5px] text-navy" title={o.objectiveLabel}>
             {o.objectiveLabel}
           </span>
-          <span className="font-mono text-[10px] text-muted">
+          <span className="text-[10px] text-muted">
             {label(o.subject)} · gr {o.grade}
           </span>
           <span className={`w-9 text-right text-[12px] font-bold tabular-nums ${t.text}`}>{fmt(o.opi, 0)}</span>
-          <span className={`w-10 text-right font-mono text-[10px] ${t.text}`}>{signed(o.variance, 0)}</span>
+          <span className={`w-10 text-right text-[10px] ${t.text}`}>{signed(o.variance, 0)}</span>
         </div>
       ))}
     </div>

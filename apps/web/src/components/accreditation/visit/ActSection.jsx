@@ -47,33 +47,24 @@ export default function ActSection({
       initial={reduce ? false : { opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={reduce ? { duration: 0 } : { duration: 0.4, ease: 'easeOut' }}
-      className="scroll-mt-24 rounded-3xl border border-rule/60 bg-white p-4 shadow-sm sm:p-5"
+      // PREMIUM UI P4: a Section on the ground — the act number as the label
+      // row (with the act's icon as a stroke in the hue), the title in Garamond,
+      // the kicker as prose. No card.
+      className="sec scroll-mt-24"
     >
-      <header className="flex flex-wrap items-start gap-3 border-b border-rule/50 pb-3">
-        <span
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-[13px] font-bold text-white"
-          style={{ background: hue }}
-          aria-hidden
-        >
-          {Icon ? <Icon size={18} /> : index}
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
-            Act {index}
-          </p>
-          <h2
-            id={id ? `${id}-title` : undefined}
-            className="font-serif text-[19px] font-semibold leading-tight text-navy"
-          >
-            {title}
-          </h2>
-          {kicker ? (
-            <p className="mt-1 max-w-[70ch] text-[12.5px] leading-relaxed text-muted">{kicker}</p>
-          ) : null}
+      <header className="sec-head-block">
+        <div className="sec-head">
+          {Icon ? <Icon size={13} aria-hidden style={{ color: hue }} className="shrink-0" /> : null}
+          <h2 className="sec-label">Act {index}</h2>
+          <span className="sec-rule" aria-hidden="true" />
+          {aside ? <div className="sec-aside">{aside}</div> : null}
         </div>
-        {aside ? <div className="flex shrink-0 flex-wrap items-center gap-2">{aside}</div> : null}
+        <h3 id={id ? `${id}-title` : undefined} className="sec-title !mb-1">
+          {title}
+        </h3>
+        {kicker ? <p className="mb-3 max-w-[70ch] text-small leading-relaxed text-ink2">{kicker}</p> : null}
       </header>
-      <div className="pt-3.5">{children}</div>
+      <div>{children}</div>
     </motion.section>
   )
 }

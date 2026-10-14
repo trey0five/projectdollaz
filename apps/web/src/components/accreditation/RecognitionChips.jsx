@@ -18,11 +18,11 @@ export default function RecognitionChips({ recognitions, light = false }) {
           key={r.code}
           title={r.line ?? r.name}
           aria-label={r.line ?? r.name}
-          className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10.5px] font-semibold ${
+          className={
             light
-              ? 'border-rule/70 bg-section text-muted'
-              : 'border-white/20 bg-white/5 text-white/60'
-          }`}
+              ? 'pill'
+              : 'inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/5 px-1.5 py-0.5 text-[10.5px] font-semibold text-white/60'
+          }
         >
           <BadgeCheck size={10.5} aria-hidden />
           {r.name}

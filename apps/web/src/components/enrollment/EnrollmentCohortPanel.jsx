@@ -485,7 +485,7 @@ function CohortExpanded({ cohort, points, scale, ticks, moveFloor, minCell, redu
       <motion.div
         aria-hidden="true"
         onClick={onClose}
-        className="absolute inset-0 bg-navy/50 backdrop-blur-sm"
+        className="absolute inset-0 bg-ink/40"
         initial={reduce ? false : { opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: reduce ? 0 : 0.2, ease: EASE }}
@@ -670,7 +670,7 @@ export default function EnrollmentCohortPanel({
 
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute bottom-1.5 right-1.5 z-10 inline-flex items-center gap-1 rounded-lg bg-white/85 px-1.5 py-1 text-[10px] font-bold text-sky-700 opacity-0 shadow-sm ring-1 ring-navy/10 backdrop-blur-sm transition-opacity duration-200 group-hover:opacity-100 group-focus-visible:opacity-100"
+          className="pointer-events-none absolute bottom-1.5 right-1.5 z-10 inline-flex items-center gap-1 rounded-lg bg-white/85 px-1.5 py-1 text-[10px] font-bold text-sky-700 opacity-0 ring-1 ring-navy/10 transition-opacity duration-200 group-hover:opacity-100 group-focus-visible:opacity-100"
         >
           <Maximize2 size={11} strokeWidth={2.6} />
         </span>

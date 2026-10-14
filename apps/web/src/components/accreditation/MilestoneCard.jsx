@@ -10,53 +10,26 @@
 //   · a not-measurable milestone shows the server's `reason` verbatim and no
 //     invented figure — suppressed is not zero, in prose too.
 //
+// PREMIUM UI P4: a ruled ROW on the ground (no card) — the state as a status
+// Pill (2px mark + word + icon), the label and dates as ink, the measure
+// sentence under it, and a quiet Button for the link.
+//
 // Chronological order is the payload's own; the list is never re-sorted
 // worst-first (a cycle is a road — you read it in the order you will drive it).
 // ─────────────────────────────────────────────────────────────────────────────
-import {
-  AlertTriangle,
-  ArrowRight,
-  CalendarClock,
-  CheckCircle2,
-  CircleDashed,
-  CircleDot,
-  Clock,
-} from 'lucide-react'
+import { AlertTriangle, ArrowRight, CalendarClock, CheckCircle2, CircleDashed, CircleDot, Clock } from 'lucide-react'
 import { formatShortDate } from '../../lib/format.js'
+import { Pill, Button } from '../ui/surface/index.js'
 
-// The server's closed state enum → icon + word + tone. Word and icon always
-// travel together; the tint is reinforcement, never the message.
+// The server's closed state enum → icon + word + the Pill's mark tone. Word and
+// icon always travel together; the mark is reinforcement, never the message.
 export const MILESTONE_STATE = {
-  done: {
-    word: 'Done',
-    Icon: CheckCircle2,
-    cls: 'border-emerald-400/40 bg-emerald-400/10 text-emerald-300',
-  },
-  on_track: {
-    word: 'On track',
-    Icon: CircleDot,
-    cls: 'border-sky-400/40 bg-sky-400/10 text-sky-300',
-  },
-  at_risk: {
-    word: 'At risk',
-    Icon: AlertTriangle,
-    cls: 'border-[#F59E0B]/50 bg-[#F59E0B]/10 text-[#fde68a]',
-  },
-  overdue: {
-    word: 'Overdue',
-    Icon: AlertTriangle,
-    cls: 'border-red-400/50 bg-red-400/10 text-red-300',
-  },
-  upcoming: {
-    word: 'Upcoming',
-    Icon: Clock,
-    cls: 'border-white/20 bg-white/5 text-white/60',
-  },
-  not_measurable: {
-    word: 'Not measurable',
-    Icon: CircleDashed,
-    cls: 'border-white/20 border-dashed bg-transparent text-white/50',
-  },
+  done: { word: 'Done', Icon: CheckCircle2, tone: 'good' },
+  on_track: { word: 'On track', Icon: CircleDot, tone: 'hue' },
+  at_risk: { word: 'At risk', Icon: AlertTriangle, tone: 'watch' },
+  overdue: { word: 'Overdue', Icon: AlertTriangle, tone: 'risk' },
+  upcoming: { word: 'Upcoming', Icon: Clock, tone: 'neutral' },
+  not_measurable: { word: 'Not measurable', Icon: CircleDashed, tone: 'neutral' },
 }
 
 // Navigation labels per milestone key — UI chrome for the payload's own `link`,
@@ -74,12 +47,10 @@ export function MilestoneStateChip({ state }) {
   const s = MILESTONE_STATE[state] ?? MILESTONE_STATE.upcoming
   const Icon = s.Icon
   return (
-    <span
-      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.08em] ${s.cls}`}
-    >
-      <Icon size={12} aria-hidden />
+    <Pill variant="status" tone={s.tone} className="shrink-0">
+      <Icon size={11} aria-hidden />
       {s.word}
-    </span>
+    </Pill>
   )
 }
 
@@ -101,16 +72,15 @@ export default function MilestoneCard({ milestone, onNavigate = null }) {
   const when = whenLine(m)
   const cta = m.link && onNavigate ? (CTA_LABEL[m.key] ?? 'Open') : null
   return (
-    <li
-      data-testid={`milestone-${m.key}`}
-      className="flex flex-wrap items-start gap-3 rounded-xl border border-white/10 bg-navy/40 px-4 py-3"
-    >
+    <li data-testid={`milestone-${m.key}`} className="flex flex-wrap items-start gap-3 border-b border-hair py-3">
       <MilestoneStateChip state={m.state} />
-      <div className="min-w-0 flex-1">
-        <p className="text-[14px] font-semibold leading-snug text-white">
+      {/* basis-[16rem]: below that the content WRAPS to its own line instead
+          of shrinking beside the CTA (at 390 it collapsed to ~90px). */}
+      <div className="min-w-0 flex-1 basis-[16rem]">
+        <p className="text-small font-semibold leading-snug text-ink">
           {m.label}
           {when ? (
-            <span className="ml-2 inline-flex items-center gap-1 align-middle text-[12px] font-medium text-white/50">
+            <span className="ml-2 inline-flex items-center gap-1 align-middle text-[12px] font-medium text-ink2">
               <CalendarClock size={12} aria-hidden />
               {when}
             </span>
@@ -119,19 +89,15 @@ export default function MilestoneCard({ milestone, onNavigate = null }) {
         {/* The measure sentence, verbatim — or the not-measurable reason,
             verbatim. Never both, never neither invented. */}
         {m.measure?.text ? (
-          <p className="mt-1 text-[12.5px] leading-relaxed text-white/70">{m.measure.text}</p>
+          <p className="mt-1 text-small leading-relaxed text-ink2">{m.measure.text}</p>
         ) : m.reason ? (
-          <p className="mt-1 text-[12.5px] italic leading-relaxed text-white/55">{m.reason}</p>
+          <p className="mt-1 text-small italic leading-relaxed text-ink2">{m.reason}</p>
         ) : null}
       </div>
       {cta ? (
-        <button
-          type="button"
-          onClick={() => onNavigate(m.link)}
-          className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-white/20 px-2.5 py-1.5 text-[12.5px] font-semibold text-white/75 transition hover:border-[#F59E0B]/60 hover:text-[#fde68a]"
-        >
+        <Button variant="quiet" size="sm" onClick={() => onNavigate(m.link)} className="shrink-0">
           {cta} <ArrowRight size={13} aria-hidden />
-        </button>
+        </Button>
       ) : null}
     </li>
   )

@@ -52,8 +52,8 @@
 // fact — the server publishes the coverage instead and the card says so.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo, useState } from 'react'
-import { Flag, FileCheck2, Languages, LifeBuoy } from 'lucide-react'
 import FancyDonut from '../analytics/charts/FancyDonut.jsx'
+import { Pill, StatStrip, Stat } from '../ui/surface/index.js'
 import { CATEGORICAL_LIGHT } from '../analytics/v2/chartPalette.js'
 import { demographicColor } from '../../lib/demographicColor.js'
 import {
@@ -66,7 +66,6 @@ import {
 import {
   CELL_MASKED,
   CardEmpty,
-  ENROLL_HUE,
   cellState,
   cellTitle,
   cellToken,
@@ -126,28 +125,16 @@ function toParts(dimension, cells) {
   })
 }
 
-/** The dimension switch — one part-to-whole question at a time. */
+/** The dimension switch — one part-to-whole question at a time (a `.seg`). */
 function DimensionSwitch({ dims, active, onPick }) {
   if (dims.length < 2) return null
   return (
-    <div className="flex flex-wrap gap-1.5" role="group" aria-label="Demographic dimension">
-      {dims.map(([key, title]) => {
-        const on = key === active
-        return (
-          <button
-            key={key}
-            type="button"
-            aria-pressed={on}
-            onClick={() => onPick(key)}
-            className={`rounded-full px-3 py-1 text-[12px] font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-sky-500/50 ${
-              on ? 'text-white' : 'border border-rule/60 bg-white text-muted hover:text-navy'
-            }`}
-            style={on ? { background: ENROLL_HUE } : undefined}
-          >
-            {title}
-          </button>
-        )
-      })}
+    <div className="seg" role="group" aria-label="Demographic dimension">
+      {dims.map(([key, title]) => (
+        <button key={key} type="button" aria-pressed={key === active} onClick={() => onPick(key)} className="seg-btn">
+          {title}
+        </button>
+      ))}
     </div>
   )
 }
@@ -188,13 +175,12 @@ export function EnrollmentDemographicsCard({ demographics }) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <DimensionSwitch dims={dims} active={activeKey} onPick={setPicked} />
         {dim.diversityIndex != null ? (
-          <span
-            className="rounded-full px-2 py-0.5 text-[10.5px] font-bold tabular-nums"
-            style={{ background: `${ENROLL_HUE}14`, color: '#0369A1' }}
+          <Pill
+            variant="count"
             title="Blau/Simpson diversity index: the chance that two students picked at random report different races. 0 means everyone reports the same; 1 means maximally mixed."
           >
             diversity {dim.diversityIndex.toFixed(2)}
-          </span>
+          </Pill>
         ) : null}
       </div>
 
@@ -209,10 +195,10 @@ export function EnrollmentDemographicsCard({ demographics }) {
         formatter={(v) => fmtCount(v)}
       />
 
-      <p className="text-[11px] leading-snug text-muted">
+      <p className="sec-note">
         Of {fmtCount(demographics.totalEnrolled)} students — the same total every share on this card is a share of.
         Categories with fewer than five students show{' '}
-        <span className="font-mono font-bold text-amber-700">&lt;5</span> and drop their share, so the hidden count
+        <span className="font-semibold text-ink">&lt;5</span> and drop their share, so the hidden count
         cannot be recovered by multiplying back.
         {anyMasked
           ? ' Those categories are listed but not drawn: sizing a wedge for them would put the withheld count back on the page as geometry.'
@@ -223,10 +209,10 @@ export function EnrollmentDemographicsCard({ demographics }) {
 }
 
 const FLAGS = [
-  ['iep', 'ISP / IEP', LifeBuoy],
-  ['plan504', '504 plan', FileCheck2],
-  ['ell', 'English learner', Languages],
-  ['any', 'Any support flag', Flag],
+  ['iep', 'ISP / IEP'],
+  ['plan504', '504 plan'],
+  ['ell', 'English learner'],
+  ['any', 'Any support flag'],
 ]
 
 export function EnrollmentSupportNeedsCard({ mix }) {
@@ -246,81 +232,52 @@ export function EnrollmentSupportNeedsCard({ mix }) {
 
   return (
     <div className="space-y-4">
-      {/* Counts first — a flag strip, not a chart. Three per cent of a hundred
-          students is three children, and a percentage would hide that. */}
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-        {FLAGS.map(([k, label, Icon]) => {
+      {/* Counts first — a Stat strip, not a chart. Three per cent of a hundred
+          students is three children, and a percentage would hide that. A masked
+          cell prints the `<5` token with the reason as its note; never a zero. */}
+      <StatStrip cols={4} className="stats-wrap grid-cols-2 sm:grid-cols-4">
+        {FLAGS.map(([k, label]) => {
           const c = mix.flags?.[k]
           const masked = cellState(c) === 'masked'
-          const lit = hasValue(c) && c.value > 0
           return (
-            <div
+            <Stat
               key={k}
+              label={label}
+              value={cellToken(c)}
+              status={hasValue(c) && c.value > 0 ? 'hue' : null}
+              note={masked ? 'fewer than 5 — withheld' : null}
               title={cellTitle(c) ?? undefined}
-              className={`flex items-center gap-2.5 rounded-xl border px-3 py-2.5 ${
-                masked ? 'border-amber-500/30 bg-amber-500/[0.06]' : lit ? 'bg-white' : 'border-rule/50 bg-cream/40'
-              }`}
-              style={lit && !masked ? { borderColor: `${ENROLL_HUE}55` } : undefined}
-            >
-              <span
-                className="grid h-8 w-8 shrink-0 place-items-center rounded-lg"
-                style={
-                  masked
-                    ? { background: 'rgba(180,83,9,0.12)', color: '#B45309' }
-                    : lit
-                      ? { background: `${ENROLL_HUE}18`, color: ENROLL_HUE }
-                      : { background: 'rgba(0,0,0,0.04)', color: '#9aa4b2' }
-                }
-              >
-                <Icon size={15} />
-              </span>
-              <div className="min-w-0">
-                {/* WRAPS, never truncates: at 768 the two-up grid clipped
-                    "ENGLISH LEARNER" to "ENGLISH LE…" — a label that cannot be
-                    read is a tile that cannot be trusted. */}
-                <p className="text-[10px] font-bold uppercase leading-[1.3] tracking-[0.1em] text-muted">{label}</p>
-                <p
-                  className={`font-serif text-[19px] font-bold tabular-nums ${
-                    masked ? 'text-amber-700' : lit ? 'text-navy' : 'text-muted'
-                  }`}
-                >
-                  {cellToken(c)}
-                </p>
-              </div>
-            </div>
+            />
           )
         })}
-      </div>
+      </StatStrip>
 
       {/* Register status — counts, straight from the roster. */}
       <div>
-        <h5 className="mb-1.5 text-[10.5px] font-bold uppercase tracking-[0.14em] text-muted">Register status</h5>
-        <div className="flex flex-wrap gap-2">
+        <h5 className="mb-1.5 text-micro font-semibold uppercase text-ink2">Register status</h5>
+        <div className="flex flex-wrap gap-1.5">
           {statusRows.map(([k, label, n]) => (
-            <span
-              key={k}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-rule/50 bg-white px-2.5 py-1 text-[12px]"
-            >
-              <span className="font-semibold text-muted">{label}</span>
-              <span className="font-bold tabular-nums text-navy">{fmtCount(n)}</span>
-            </span>
+            <Pill key={k} variant="count">
+              <span className="font-medium text-ink2">{label}</span>
+              <span className="font-semibold text-ink tabular-nums">{fmtCount(n)}</span>
+            </Pill>
           ))}
         </div>
       </div>
 
       {/* "New this year" — withheld with the reason rather than printed as a
           zero nobody counted. */}
-      <div className="rounded-xl bg-navy/[0.03] px-3.5 py-2.5 ring-1 ring-navy/[0.06]">
-        <p className="text-[12px] leading-snug text-navy/80">
-          <span className="font-bold">New this year:</span>{' '}
+      <div className="border-l-2 border-hair pl-3">
+        <p className="text-small text-ink">
+          <span className="font-semibold">New this year:</span>{' '}
           {newHidden ? (
-            <span className="font-semibold text-amber-700">withheld</span>
+            <span className="font-semibold text-ink2">withheld</span>
           ) : (
-            <span className="font-bold tabular-nums text-navy">{cellToken(mix.newThisYear)}</span>
+            <span className="font-semibold tabular-nums">{cellToken(mix.newThisYear)}</span>
           )}
         </p>
         {coverage ? (
-          <p className="mt-1 text-[11px] leading-snug text-muted">
+          <p className="mt-1 text-[12px] leading-snug text-ink2">
             {coverage.complete
               ? `Every one of the ${fmtCount(coverage.total)} enrolled students carries a start date, so this count is complete.`
               : `Start dates are recorded for ${fmtCount(coverage.withStartDate)} of ${fmtCount(

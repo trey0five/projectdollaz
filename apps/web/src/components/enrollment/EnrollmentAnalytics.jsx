@@ -1,9 +1,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // ENROLLMENT ANALYTICS — the module's Analytics tab.
 //
-// One read (`GET …/enrollment/analytics`) behind a whole dashboard: a dark hero
-// band of registry tiles, a bento of charts, what the gap costs, every grade in
-// figures, and the two surfaces that report on the data rather than from it.
+// One read (`GET …/enrollment/analytics`) behind a whole dashboard: a Stat strip
+// of registry vitals, the charts in Sections on the ground, what the gap costs,
+// every grade in figures, and the two surfaces that report on the data rather
+// than from it. PREMIUM UI P4: no dark band, no tiles — Stats, rules, ground.
 //
 // ── THE PAGE IS FOUR VIEWS, NOT ONE COLUMN ──────────────────────────────────
 // All of that used to be a single ~4,500px scroll, which meant most of it was
@@ -50,12 +51,14 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
-import { ArrowRight, BarChart3, Coins } from 'lucide-react'
+import { ArrowRight, BarChart3 } from 'lucide-react'
 import '../../styles/analytics-v2.css'
 import ChartCard from '../analytics/v2/ChartCard.jsx'
-import V2StatTile from '../analytics/v2/V2StatTile.jsx'
+import Sparkline from '../analytics/charts/Sparkline.jsx'
 import { formatMetric, formatMetricDeltaOf } from '../analytics/v2/helpers.js'
+import { DELTA_TONE, MARK } from '../analytics/v2/statusStyle.js'
 import { deltaTone } from '../../lib/metricMeta.js'
+import { Section, StatStrip, Stat, Button, Panel } from '../ui/surface/index.js'
 import { useEnrollmentAnalytics } from '../../hooks/useEnrollmentAnalytics.js'
 import { useBriefing } from '../../hooks/useBriefing.js'
 import EnrollmentHeadcountTrend from './EnrollmentHeadcountTrend.jsx'
@@ -86,33 +89,44 @@ import {
 
 const COHORT_MOVE_FLOOR = 3
 
-/** The navy band the tiles sit on — the BriefingBand's sibling idiom. */
-function HeroBand({ eyebrow, right, children, reduce }) {
+/** The vitals — a Section label row (with the as-of stamp as the aside) over a
+ *  StatStrip. Each Stat is ONE registry tile: the pre-formatted value, a 2px
+ *  status mark, the delta Pill, and the headcount's sparkline under it. */
+function VitalsStrip({ tiles, asOf, sparkFor }) {
   return (
-    <motion.section
-      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-      aria-label={eyebrow}
-      className="relative overflow-hidden rounded-2xl bg-navy-gradient p-5 shadow-navy-glow sm:p-6"
-    >
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-sky-400/10 blur-3xl"
-      />
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-px"
-        style={{ background: 'linear-gradient(90deg, transparent, rgba(56,189,248,0.5), transparent)' }}
-      />
-      <div className="relative">
-        <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3">
-          <span className="text-[12px] font-bold uppercase tracking-[0.18em] text-sky-300/80">{eyebrow}</span>
-          {right}
-        </div>
-        {children}
-      </div>
-    </motion.section>
+    <Section label="Enrollment vitals" aside={asOf} className="!mt-0" aria-label="Enrollment vitals">
+      {tiles.length ? (
+        <StatStrip cols={Math.min(tiles.length, 4)} className="stats-wrap grid-cols-2 lg:grid-cols-4">
+          {tiles.map((t) => {
+            const spark = (sparkFor(t.key) ?? []).filter((v) => Number.isFinite(v))
+            const dt = formatMetricDeltaOf(t)
+            const tone = t.periodOverPeriodDelta == null || t.periodOverPeriodDelta === 0 ? 'neutral' : DELTA_TONE[deltaTone(t.periodOverPeriodDelta, t.goodDirection)] ?? 'neutral'
+            return (
+              <Stat
+                key={t.key}
+                label={t.boardLabel ?? t.label}
+                // PRE-FORMATTED by the canonical formatter, so a Stat here and
+                // the same metric on the scorecard print the same string.
+                value={formatMetric(t)}
+                status={MARK[t.status] ?? null}
+                delta={dt != null ? { text: dt, tone } : null}
+              >
+                {spark.length >= 2 ? (
+                  <div className="mt-2 h-8">
+                    <Sparkline vals={spark} color={ENROLL_HUE} h={32} fill stretch />
+                  </div>
+                ) : null}
+              </Stat>
+            )
+          })}
+        </StatStrip>
+      ) : (
+        <p className="text-small leading-relaxed text-ink2">
+          No period-anchored figures yet. Once a fiscal year holds an enrollment headcount, the vitals appear here —
+          the same numbers your briefing and board pack quote.
+        </p>
+      )}
+    </Section>
   )
 }
 
@@ -130,37 +144,28 @@ function HeroBand({ eyebrow, right, children, reduce }) {
 function ImpactStrip({ items, reduce }) {
   if (!items.length) return null
   return (
-    <motion.section
+    <Section
+      as={motion.section}
+      label="What this means for the budget"
       initial={reduce ? { opacity: 0 } : { opacity: 0, y: 10 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: '-40px' }}
+      animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
       aria-label="What this means for the budget"
-      className="panel overflow-hidden p-0"
     >
-      <div className="flex items-center gap-2 border-b border-navy/[0.07] px-4 py-2.5 sm:px-5">
-        <span className="grid h-6 w-6 place-items-center rounded-lg bg-emerald-500/12 text-emerald-700">
-          <Coins size={13} />
-        </span>
-        <h3 className="font-serif text-[15px] font-semibold text-navy">What this means for the budget</h3>
-      </div>
-      <ul className="divide-y divide-navy/[0.06]">
+      <ul className="divide-y divide-hair border-y border-hair">
         {items.map((it) => (
-          <li key={it.id} className="px-4 py-3 sm:px-5">
-            <p className="text-[13.5px] font-semibold leading-snug text-navy">{it.title}</p>
-            {it.why ? <p className="mt-1 text-[12.5px] leading-relaxed text-muted">{it.why}</p> : null}
+          <li key={it.id} className="py-3">
+            <p className="text-small font-semibold leading-snug text-ink">{it.title}</p>
+            {it.why ? <p className="mt-1 text-small leading-relaxed text-ink2">{it.why}</p> : null}
             {it.link ? (
-              <Link
-                to={it.link}
-                className="mt-1.5 inline-flex items-center gap-1 text-[12px] font-semibold text-sky-700 hover:underline"
-              >
-                Take a look <ArrowRight size={12} />
+              <Link to={it.link} className="sec-more">
+                Take a look <ArrowRight size={12} aria-hidden="true" />
               </Link>
             ) : null}
           </li>
         ))}
       </ul>
-    </motion.section>
+    </Section>
   )
 }
 
@@ -185,11 +190,8 @@ export default function EnrollmentAnalytics({ schoolId, periodId, rosterMode = f
   if (loading && !data) {
     return (
       <div className="mx-auto max-w-page space-y-4 px-4 py-8 sm:px-10">
-        <div className="h-40 animate-pulse rounded-2xl bg-navy/[0.06]" />
-        <div className="grid gap-4 lg:grid-cols-2">
-          <div className="h-64 animate-pulse rounded-2xl border border-rule/40 bg-white/60" />
-          <div className="h-64 animate-pulse rounded-2xl border border-rule/40 bg-white/60" />
-        </div>
+        <div className="h-28 animate-pulse rounded-lg bg-ink/[.04]" />
+        <div className="h-64 animate-pulse rounded-lg bg-ink/[.04]" />
       </div>
     )
   }
@@ -197,13 +199,13 @@ export default function EnrollmentAnalytics({ schoolId, periodId, rosterMode = f
   if (notLicensed || notEntitled) {
     return (
       <div className="mx-auto max-w-page px-4 py-10 sm:px-10">
-        <div className="card-soft px-6 py-12 text-center">
-          <p className="text-[15px] text-muted">
+        <Panel className="text-center">
+          <p className="text-body text-ink2">
             {notLicensed
               ? 'Enrollment analytics come with the Enrollment module.'
               : 'Your subscription is paused, so this analysis is unavailable.'}
           </p>
-        </div>
+        </Panel>
       </div>
     )
   }
@@ -211,15 +213,12 @@ export default function EnrollmentAnalytics({ schoolId, periodId, rosterMode = f
   if (error) {
     return (
       <div className="mx-auto max-w-page px-4 py-10 sm:px-10">
-        <div className="rounded-2xl border border-danger/30 bg-danger/[0.06] px-6 py-10 text-center">
-          <p className="text-[15px] text-danger">{error}</p>
-          <button
-            onClick={reload}
-            className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-gold/60 bg-gold/10 px-4 py-2 text-[15px] font-semibold text-navy transition-all hover:bg-gold/20"
-          >
+        <Panel tone="attention" className="text-center">
+          <p className="text-body text-risk">{error}</p>
+          <Button variant="secondary" onClick={reload} className="mt-4">
             Try again
-          </button>
-        </div>
+          </Button>
+        </Panel>
       </div>
     )
   }
@@ -271,34 +270,10 @@ export default function EnrollmentAnalytics({ schoolId, periodId, rosterMode = f
     // Clearance beats repositioning the coin: everything stays reachable and
     // the coin behaves like every other page's.
     <div className="mx-auto max-w-page space-y-4 px-4 py-8 pb-28 sm:px-10 lg:pb-8">
-      {/* ── HERO: the registry tiles, and ONLY the ones the server sent. A tile
-          the server could not compute is absent, never a card of em-dashes. ── */}
-      <HeroBand eyebrow="Enrollment vitals" right={asOfChip} reduce={reduce}>
-        {tiles.length ? (
-          <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
-            {tiles.map((t, i) => (
-              <V2StatTile
-                key={t.key}
-                index={i}
-                label={t.boardLabel ?? t.label}
-                // PRE-FORMATTED by the canonical formatter, so a tile here and
-                // the same metric on the scorecard print the same string.
-                value={formatMetric(t)}
-                delta={t.periodOverPeriodDelta}
-                deltaText={formatMetricDeltaOf(t)}
-                deltaTone={deltaTone(t.periodOverPeriodDelta, t.goodDirection)}
-                status={t.status}
-                sparkVals={sparkFor(t.key)}
-              />
-            ))}
-          </div>
-        ) : (
-          <p className="text-[13.5px] leading-relaxed text-white/70">
-            No period-anchored figures yet. Once a fiscal year holds an enrollment headcount, the vitals appear here —
-            the same numbers your briefing and board pack quote.
-          </p>
-        )}
-      </HeroBand>
+      {/* ── VITALS: the registry Stats, and ONLY the ones the server sent. A
+          Stat the server could not compute is absent, never a column of
+          em-dashes. ── */}
+      <VitalsStrip tiles={tiles} asOf={asOfChip} sparkFor={sparkFor} />
 
       {/* HONESTY SURFACE 1 — PINNED, not filed under a view. It exists because
           the TILES (promoted headcount) and the GRADE CHARTS (current reading)
@@ -580,14 +555,18 @@ export default function EnrollmentAnalytics({ schoolId, periodId, rosterMode = f
             chart, and the same line twice on one page is noise. It lands on THIS
             view because it asks E5's and E7's question with the filters live. */}
         {rosterMode ? (
-          <section aria-label="Explore the register" className="lg:col-span-2">
-            <div className="mb-2 flex items-center gap-2">
-              <BarChart3 size={15} style={{ color: ENROLL_HUE }} />
-              <h3 className="font-serif text-[16px] font-semibold text-navy">Explore the register</h3>
-              <span className="text-[12px] text-muted">— filter your roster and watch every mix respond</span>
-            </div>
+          <Section
+            aria-label="Explore the register"
+            className="lg:col-span-2"
+            label={
+              <span className="inline-flex items-center gap-1.5">
+                <BarChart3 size={13} aria-hidden="true" /> Explore the register
+              </span>
+            }
+            aside="filter your roster and watch every mix respond"
+          >
             <RosterAnalyticsSection schoolId={schoolId} />
-          </section>
+          </Section>
         ) : null}
       </div>
       ) : null}

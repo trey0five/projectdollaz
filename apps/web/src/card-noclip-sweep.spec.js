@@ -71,15 +71,20 @@ describe('card no-clip sweep — the §5.5 verification set names nothing in a s
     })
   }
 
-  it('VsPlanKpi wears the SHARED card vocabulary, not a per-page fork', () => {
+  it('VsPlanKpi wears the SHARED surface vocabulary, not a per-page fork', () => {
     const code = stripComments(read('components/enrollment/VsPlanKpi.jsx'))
-    // index.css documents .card-soft as the replacement for "the heavy border-2
-    // boxes". A surviving fork is why /enrollment read flat beside /facilities.
-    expect(code, 'VsPlanKpi no longer uses the shared .card-soft shell').toMatch(/card-soft/)
+    // Premium UI P4: the three vs-plan figures are `Stat`s in a `StatStrip` from
+    // the shared surface primitives — the ONE vocabulary every module's figures
+    // wear. (`.card-soft` was the P1–P3 interim shell; it is retired here.) A
+    // surviving per-page fork is why /enrollment once read flat beside
+    // /facilities.
+    expect(code, 'VsPlanKpi no longer uses the shared Stat/StatStrip primitives').toMatch(
+      /import \{[^}]*\bStatStrip\b[^}]*\} from '\.\.\/ui\/surface\/index\.js'/,
+    )
     expect(
       code,
-      'the retired flat vocabulary is back on /enrollment (border-2 / shadow-card) — do not fork per-page card styles (card contract §5)',
-    ).not.toMatch(/border-2|shadow-card/)
+      'the retired flat vocabulary is back on /enrollment (card-soft / border-2 / shadow-card) — do not fork per-page card styles (card contract §5)',
+    ).not.toMatch(/card-soft|border-2|shadow-card/)
   })
 
   it('sanity: the roster really read the files (guard against a silent empty read)', () => {
@@ -88,43 +93,42 @@ describe('card no-clip sweep — the §5.5 verification set names nothing in a s
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FLEX-WRAP DOES NOT WRAP WITHOUT A BASIS — and the failure looks absurd.
+// A DOMAIN NAME IS A TABLE CELL THAT WRAPS — never a stub.
 //
-// Found by screenshotting /accreditation at 1280 AFTER the card sweep "fixed"
-// this. The header row had `flex-wrap` and the title had `min-w-0 flex-1`, which
-// reads as safe — but a flex child SHRINKS before its row wraps, so the pill kept
-// its full width and the title collapsed to ~4px, rendering "Mission & Catholic
-// Identity" as ONE LETTER PER LINE down the card. A pixel probe caught it that a
-// class-name reading could not: the element was 4px wide and 206px tall.
-//
-// The basis is what converts "shrink" into "wrap". Without it, `flex-wrap` on
-// this row is decoration.
+// The first cut of this sweep found "Mission & Catholic Identity" rendering as
+// ONE LETTER PER LINE down a card: a flex child shrinks before its row wraps, so
+// the pill kept its width and the title collapsed to ~4px. Premium UI P4
+// retired the ten cards for ONE `DataTable` (plan sketch 6), and a table cell
+// has no competing sibling to shrink against — the only remaining way to lose a
+// domain name is `truncate` or a `nowrap` on the name cell. Pinned here.
 // ─────────────────────────────────────────────────────────────────────────────
-describe('a wrapping card header gives its title a basis, not just flex-1', () => {
-  const grid = read('components/accreditation/DomainGrid.jsx')
+describe('DomainGrid is a DataTable whose domain cell wraps', () => {
+  const grid = stripComments(read('components/accreditation/DomainGrid.jsx'))
 
-  it('DomainGrid: the title block declares a flex-basis so the pill wraps below it', () => {
-    expect(grid, 'flex-1 alone SHRINKS the title to nothing next to a pill').toMatch(
-      /flex min-w-0 flex-1 basis-\[[^\]]+\] items-start/,
-    )
+  it('renders the shared DataTable primitive, not ten cards', () => {
+    expect(grid).toMatch(/<DataTable/)
+    expect(grid, 'the card shell is back').not.toMatch(/kpi-3d|card-soft/)
   })
 
-  it('…and the header row still allows wrapping at all', () => {
-    expect(grid).toMatch(/flex flex-wrap items-start justify-between/)
+  it('the domain name wraps (whitespace-normal + break-words) and is never nowrap', () => {
+    expect(grid).toMatch(/whitespace-normal break-words font-semibold/)
+    expect(grid).not.toMatch(/className="[^"]*\bwhitespace-nowrap\b[^"]*"[^\n]*\{d\.label\}/)
   })
 })
 
-// The band strip lives in the page's NARROW column (~571px at 1280), not the
-// full width — so a 4-up grid gave each cell ~127px and `break-words` shattered
-// "GOVERNANCE" into "GOVERNA/NCE". Density is the fix; whole words beat more
-// cards. If someone raises the density again, this is the tripwire.
-describe('DomainBandStrip stays readable in the narrow column', () => {
-  const strip = read('components/accreditation/DomainBandStrip.jsx')
+// The band strip used to be a 5-up card grid in the page's NARROW column — at
+// 1280 each cell gave the domain name ~53px and the strip read as stubs
+// ("MISSI…", "GOVE…"), then as broken words ("GOVERNA/NCE") once the density
+// dropped. It is now a `DataTable` under its own Section: the name is a cell
+// that wraps and hyphenates. If someone turns it back into a card grid, this is
+// the tripwire.
+describe('DomainBandStrip stays readable: a table, not a card grid', () => {
+  const strip = stripComments(read('components/accreditation/DomainBandStrip.jsx'))
 
-  it('is at most 3-up until 2xl', () => {
-    expect(strip).toMatch(/lg:grid-cols-3/)
-    expect(strip, 'lg:grid-cols-4 breaks GOVERNANCE mid-word at 1280').not.toMatch(
-      /lg:grid-cols-[45]/,
+  it('renders the shared DataTable primitive, not a card grid', () => {
+    expect(strip).toMatch(/<DataTable/)
+    expect(strip, 'a 4-up / 5-up card grid breaks GOVERNANCE mid-word at 1280').not.toMatch(
+      /grid-cols-[2-5]/,
     )
   })
 

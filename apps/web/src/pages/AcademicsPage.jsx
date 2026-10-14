@@ -24,6 +24,7 @@ import LessonPlanRegister from '../components/academics/LessonPlanRegister.jsx'
 import GradesPanel from '../components/academics/GradesPanel.jsx'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { academicsApi } from '../lib/api.js'
+import { Section, Panel as SurfacePanel, Button } from '../components/ui/surface/index.js'
 
 const HUE = '#0D9488'
 const EASE = [0.2, 0.8, 0.2, 1]
@@ -218,16 +219,12 @@ export default function AcademicsPage() {
                   a scores file" with zeros in the hero — a server error reading
                   as an empty school, which invites a duplicate upload. */}
               {error ? (
-                <div className="rounded-2xl border border-danger/25 bg-white p-6">
-                  <p className="text-[13px] font-semibold text-danger">{error}</p>
-                  <button
-                    type="button"
-                    onClick={() => load(query)}
-                    className="mt-3 rounded-xl border border-navy/15 px-4 py-2 text-[12px] font-semibold text-navy"
-                  >
+                <SurfacePanel tone="attention">
+                  <p className="text-small font-semibold text-risk">{error}</p>
+                  <Button variant="secondary" size="sm" onClick={() => load(query)} className="mt-3">
                     Try again
-                  </button>
-                </div>
+                  </Button>
+                </SurfacePanel>
               ) : (
               <AcademicsOverview
                 dashboard={dashboard}
@@ -249,22 +246,21 @@ export default function AcademicsPage() {
               status={status}
               dashboard={dashboard}
               loading={loading}
+              // The dashboard opens with its own KPI strip 200px below — the
+              // header strip would print the same four figures twice.
+              showStats={false}
             />
             <div className="mt-5">
               {/* A failed fetch used to fall through to a fully rendered
                   dashboard of em-dashes, which reads as "we measured this and
                   it is empty" rather than "we could not load it". */}
               {error ? (
-                <div className="rounded-2xl border border-danger/25 bg-white p-6">
-                  <p className="text-[13px] font-semibold text-danger">{error}</p>
-                  <button
-                    type="button"
-                    onClick={() => load(query)}
-                    className="mt-3 rounded-xl border border-navy/15 px-4 py-2 text-[12px] font-semibold text-navy"
-                  >
+                <SurfacePanel tone="attention">
+                  <p className="text-small font-semibold text-risk">{error}</p>
+                  <Button variant="secondary" size="sm" onClick={() => load(query)} className="mt-3">
                     Try again
-                  </button>
-                </div>
+                  </Button>
+                </SurfacePanel>
               ) : loading && !dashboard ? (
                 <p className="text-[13px] text-muted">Loading the comparison…</p>
               ) : (
@@ -292,15 +288,12 @@ export default function AcademicsPage() {
         }
         records={
           <Panel>
-            <div className="space-y-4">
+            <div>
               <GradesPanel schoolId={activeId} canEdit={canEdit} />
-              <section className="rounded-2xl border border-navy/10 bg-white p-5">
-                <p className="font-mono text-[9.5px] font-bold uppercase tracking-[0.18em]" style={{ color: HUE }}>
-                  Lesson plans
-                </p>
-                <h3 className="mb-3 mt-0.5 font-serif text-[19px] font-semibold text-navy">The classroom register</h3>
+              <Section label="Lesson plans">
+                <h3 className="sec-title">The classroom register</h3>
                 <LessonPlanRegister schoolId={activeId} canEdit={canEdit} />
-              </section>
+              </Section>
             </div>
           </Panel>
         }
@@ -311,11 +304,11 @@ export default function AcademicsPage() {
 
 /** Each panel brings its own container — the ModuleTabs contract. */
 function Panel({ children }) {
-  return <div className="mx-auto max-w-6xl px-4 pb-16 pt-5 sm:px-10">{children}</div>
+  return <div className="mx-auto max-w-page px-4 pb-16 sm:px-10">{children}</div>
 }
 
 /** The hero — a live read on the classroom, not a title bar. */
-function AcademicsHero({ schoolName, level, status, dashboard, loading }) {
+function AcademicsHero({ schoolName, level, status, dashboard, loading, showStats = true }) {
   const a = status?.assessments
   const kpi = dashboard?.kpis
   const ctx = dashboard?.context
@@ -350,7 +343,7 @@ function AcademicsHero({ schoolName, level, status, dashboard, loading }) {
             } — grade by grade, subject by subject, against the schools around you.`
           : 'Upload a scores file and this school appears beside every other school in the network.'
       }
-      stats={loading ? stats.map((st) => ({ ...st, v: '·' })) : stats}
+      stats={!showStats ? [] : loading ? stats.map((st) => ({ ...st, v: '·' })) : stats}
     />
   )
 }

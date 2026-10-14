@@ -69,7 +69,7 @@ export default function AcademicsHeatmap({ cells = [], subjects = [], unit = nul
                 <th
                   key={s}
                   scope="col"
-                  className="pb-1 text-center font-mono text-[9.5px] font-bold uppercase tracking-wider text-muted"
+                  className="pb-1 text-center text-[9.5px] font-bold uppercase tracking-wider text-muted"
                 >
                   {label(s)}
                 </th>
@@ -79,7 +79,7 @@ export default function AcademicsHeatmap({ cells = [], subjects = [], unit = nul
           <tbody>
             {grades.map((g) => (
               <tr key={g}>
-                <th scope="row" className="pr-1 text-right font-mono text-[10.5px] font-bold text-muted">
+                <th scope="row" className="pr-1 text-right text-[10.5px] font-bold text-muted">
                   Gr {g}
                 </th>
                 {shown.map((s) => {
@@ -120,9 +120,9 @@ export default function AcademicsHeatmap({ cells = [], subjects = [], unit = nul
                     <td key={s} className="p-0">
                       <HeatCell state={state} step={step} label={aria} tip={tip} height={52} focusColor={HUE}>
                         {state === 'suppressed' ? (
-                          <span className="font-mono text-[12px] font-bold">&lt;5</span>
+                          <span className="text-[12px] font-bold">&lt;5</span>
                         ) : state === 'absent' ? (
-                          <span className="font-mono text-[12px] font-bold">—</span>
+                          <span className="text-[12px] font-bold">—</span>
                         ) : (
                           <span className="flex flex-col items-center leading-none">
                             <span className="text-[15px] font-bold tabular-nums">

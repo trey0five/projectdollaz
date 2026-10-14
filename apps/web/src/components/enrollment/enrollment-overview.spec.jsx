@@ -9,7 +9,10 @@
 // index-spaced axis, and the API's source/provider/withdrawn fields were
 // fetched and rendered nowhere.
 // ─────────────────────────────────────────────────────────────────────────────
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterEach } from 'vitest'
+import { render, cleanup, within } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
+import EnrollmentHero from './EnrollmentHero.jsx'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
@@ -38,9 +41,15 @@ describe('B0 — the module re-hues like every other module', () => {
   })
 })
 
-describe('B1 — the hero ring: one grade, one colour, everywhere', () => {
-  it('ring segments take their colour from demographicColor — the register pills’ own hues', () => {
-    expect(hero).toMatch(/demographicColor\('grade', g\)/)
+describe('B1 — the hero ring: one colour system, identity in the legend', () => {
+  // Premium UI P4 (plan sketch 6): the ring is MONOCHROME — every segment is the
+  // module hue over an ink track, separated by surface gaps — and a grade's
+  // identity is carried by the legend's label + count, never by a hue. The
+  // intent of the original pin survives: ONE colour system on the page (no
+  // four-hue rainbow, no second palette the register would have to match).
+  it('ring segments are the module hue — never a per-grade palette', () => {
+    expect(hero).toMatch(/stroke=\{ENROLL_HUE\}/)
+    expect(hero).not.toMatch(/demographicColor\(/)
   })
 
   it('renders the source chip the API has carried since Phase 2', () => {
@@ -56,10 +65,10 @@ describe('B1 — the hero ring: one grade, one colour, everywhere', () => {
     expect(hero).not.toMatch(/total\s*\/\s*(?:vsPlan|plan)\.planTotal/)
   })
 
-  it('the absorbed KPI pips keep the old row’s honesty: no roster ⇒ em-dash + why', () => {
+  it('the absorbed KPI Stats keep the old row’s honesty: no roster ⇒ em-dash + why', () => {
     expect(hero).toMatch(/needs the student roster/)
-    // And a value only renders through CountUp when it exists.
-    expect(hero).toMatch(/value == null \?/)
+    // And a value only renders as a figure (the Stat's count-up) when it exists.
+    expect(hero).toMatch(/if \(value == null\)/)
   })
 
   it('Withdrawn is rendered — counts.status finally has a reader', () => {
@@ -124,5 +133,35 @@ describe('the vs-plan tiles earn their space', () => {
   it('VsPlanKpi renders only when a plan exists (the hero carries the no-plan door)', () => {
     const matches = page.match(/summary\?\.vsPlan \? <VsPlanKpi summary=\{summary\} \/> : null/g) ?? []
     expect(matches.length).toBe(2)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FERPA — a masked grade carries NO share. The school total is printed unmasked
+// (a school total identifies nobody), so a percentage beside a `<5` grade would
+// let a reader multiply back and bound the withheld count. The legend prints
+// '—' in the share column for a masked grade, exactly as EnrollmentGradeTable
+// drops the share beside a masked count.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('FERPA — the hero legend never prints a share beside a masked grade', () => {
+  afterEach(cleanup)
+
+  it('a <5 grade shows "<5" and "—", never a percentage', () => {
+    // Grade 9 has 3 students (masked); the others are well over the floor.
+    const { container } = render(
+      <MemoryRouter>
+        <EnrollmentHero total={203} byGrade={{ 9: 3, 10: 100, 11: 100 }} asOf="2026-10-14" />
+      </MemoryRouter>,
+    )
+    const list = container.querySelector('[aria-label="Students by grade"]')
+    expect(list).toBeTruthy()
+    const row = [...list.querySelectorAll('li')].find((li) => li.textContent.includes('Grade 9'))
+    expect(row, 'the masked grade is still listed by name').toBeTruthy()
+    expect(row.textContent).toContain('<5')
+    expect(row.textContent).not.toMatch(/\d+%/)
+    expect(within(row).getByTestId('grade-share').textContent).toBe('—')
+    // …and an unmasked grade still carries its share.
+    const ten = [...list.querySelectorAll('li')].find((li) => li.textContent.includes('Grade 10'))
+    expect(ten.textContent).toMatch(/\d+%/)
   })
 })

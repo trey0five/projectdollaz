@@ -35,6 +35,7 @@ import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
 import { Maximize2, TrendingDown, TrendingUp, X } from 'lucide-react'
 import { ChartDefs, INK } from './chartKit.jsx'
+import { Pill } from '../ui/surface/index.js'
 import { useTooltip } from '../analytics/charts/Tooltip.jsx'
 import {
   COH_EASE,
@@ -71,13 +72,7 @@ const gradeName = (g) => (g === 'K' ? 'Kindergarten' : `Grade ${g}`)
 function NetChangeChip({ focus, unit, gap, delay, reduce, big = false }) {
   const { direction, netChange, netChangeUnavailable, startGrade, endGrade } = focus
   const tone =
-    direction === 'gained'
-      ? 'bg-emerald-500/12 text-emerald-700 ring-emerald-500/30'
-      : direction === 'declined'
-        ? 'bg-rose-500/12 text-rose-700 ring-rose-500/30'
-        : direction === 'held'
-          ? 'bg-navy/[0.06] text-navy/60 ring-navy/15'
-          : 'bg-navy/[0.04] text-muted ring-navy/10'
+    direction === 'gained' ? 'good' : direction === 'declined' ? 'risk' : direction === 'held' ? 'neutral' : 'neutral'
   const Icon = direction === 'gained' ? TrendingUp : direction === 'declined' ? TrendingDown : null
 
   const title =
@@ -93,21 +88,21 @@ function NetChangeChip({ focus, unit, gap, delay, reduce, big = false }) {
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.3, ease: COH_EASE, delay }}
       title={title}
-      className={`inline-flex max-w-full items-center gap-1 rounded-full font-bold tabular-nums ring-1 ${tone} ${
-        big ? 'gap-1.5 px-2.5 py-1 text-[12.5px]' : 'px-2 py-[3px] text-[10.5px]'
-      }`}
+      className="inline-flex max-w-full"
     >
-      {Icon ? <Icon size={big ? 13 : 10} strokeWidth={2.6} /> : null}
-      {direction === 'unknown' ? (
-        <span className="truncate font-medium">— not comparable end to end</span>
-      ) : direction === 'held' ? (
-        <>
-          {signed(netChange, unit.decimals)}
-          <span className="truncate font-medium opacity-80"> · within the noise</span>
-        </>
-      ) : (
-        signed(netChange, unit.decimals)
-      )}
+      <Pill variant="status" tone={tone} className={big ? '!h-6 !text-[12px]' : ''}>
+        {Icon ? <Icon size={big ? 12 : 10} strokeWidth={2.6} aria-hidden="true" /> : null}
+        {direction === 'unknown' ? (
+          <span className="truncate font-medium">— not comparable end to end</span>
+        ) : direction === 'held' ? (
+          <>
+            {signed(netChange, unit.decimals)}
+            <span className="truncate font-medium text-ink2"> · within the noise</span>
+          </>
+        ) : (
+          signed(netChange, unit.decimals)
+        )}
+      </Pill>
     </motion.span>
   )
 }
@@ -613,7 +608,7 @@ function CohortExpanded({ panel, unit, gap, schoolName, reduce, onClose, returnF
       <motion.div
         aria-hidden="true"
         onClick={onClose}
-        className="absolute inset-0 bg-navy/50 backdrop-blur-sm"
+        className="absolute inset-0 bg-ink/40"
         initial={reduce ? false : { opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: reduce ? 0 : 0.2, ease: COH_EASE }}
@@ -629,7 +624,7 @@ function CohortExpanded({ panel, unit, gap, schoolName, reduce, onClose, returnF
         // did not re-fit its axis is a string comparison rather than a squint.
         data-coh-ticks={ticks.join(',')}
         data-coh-scale={`${scale.lo},${scale.hi}`}
-        className="relative max-h-[85vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-2xl outline-none"
+        className="panel relative max-h-[85vh] w-full max-w-3xl overflow-y-auto !shadow-float outline-none"
         // Reduced motion gets the fade and nothing else — no scale, no travel.
         initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 10 }}
         animate={reduce ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}
@@ -684,7 +679,7 @@ function CohortExpanded({ panel, unit, gap, schoolName, reduce, onClose, returnF
               Every grade in {panel.label}, with the score and the number of students tested
             </caption>
             <thead>
-              <tr className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted">
+              <tr className="text-micro font-semibold uppercase text-ink2">
                 <th scope="col" className="border-b border-navy/10 py-1.5 pr-3 font-bold">Grade</th>
                 <th scope="col" className="border-b border-navy/10 py-1.5 pr-3 font-bold">School year</th>
                 <th scope="col" className="border-b border-navy/10 py-1.5 pr-3 text-right font-bold">{unit.label}</th>
@@ -809,8 +804,7 @@ export default function CohortTrajectoryPanel({
             open()
           }
         }}
-        className="coh-panel group relative isolate min-w-0 cursor-zoom-in overflow-hidden rounded-2xl bg-white transition-shadow duration-200 hover:shadow-[inset_0_0_0_1px_rgba(13,148,136,0.35),0_18px_40px_-24px_rgba(16,28,61,0.55)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2"
-        style={{ boxShadow: 'inset 0 0 0 1px rgba(16,28,61,0.07), 0 14px 34px -28px rgba(16,28,61,0.5)' }}
+        className="coh-panel group relative isolate min-w-0 cursor-zoom-in overflow-hidden rounded-lg border border-hair bg-white transition-colors duration-200 hover:border-hair/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2"
       >
         <figcaption className="sr-only">
           {panel.label}, {panel.startYear} to {panel.endYear} at {schoolName ?? 'this school'}
@@ -831,7 +825,7 @@ export default function CohortTrajectoryPanel({
             inside a control. */}
         <span
           aria-hidden="true"
-          className="coh-noprint pointer-events-none absolute bottom-1.5 right-1.5 z-10 inline-flex items-center gap-1 rounded-lg bg-white/85 px-1.5 py-1 text-[10px] font-bold text-teal-700 opacity-0 shadow-sm ring-1 ring-navy/10 backdrop-blur-sm transition-opacity duration-200 group-hover:opacity-100 group-focus-visible:opacity-100"
+          className="coh-noprint pointer-events-none absolute bottom-1.5 right-1.5 z-10 inline-flex items-center gap-1 rounded-sm border border-hair bg-white px-1.5 py-1 text-[10px] font-bold text-teal-700 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-visible:opacity-100"
         >
           <Maximize2 size={11} strokeWidth={2.6} />
         </span>

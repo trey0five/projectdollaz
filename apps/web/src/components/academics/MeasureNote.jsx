@@ -229,7 +229,7 @@ function RefChip({ color, name, value, gloss }) {
         className="inline-block w-4 border-t-2 border-dashed"
         style={{ borderColor: color }}
       />
-      <span className="font-mono text-[9px] font-bold uppercase tracking-[0.14em]" style={{ color }}>
+      <span className="text-micro font-semibold uppercase" style={{ color }}>
         {name} {value}
       </span>
       <span className="text-[11px] text-muted">— {gloss}</span>
@@ -302,25 +302,17 @@ export function WhatThisMeasures({
       initial={reduce ? false : { opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: EASE }}
-      className="mb-4 flex items-start gap-2.5 rounded-xl px-3.5 py-3"
-      style={{ background: `${HUE}0A`, boxShadow: `inset 0 0 0 1px ${HUE}26` }}
+      className="mb-4 flex items-start gap-2.5 border-l-2 pl-3"
+      style={{ borderColor: HUE }}
     >
-      <span
-        aria-hidden="true"
-        className="mt-[1px] grid h-5 w-5 shrink-0 place-items-center rounded-md"
-        style={{ background: `${HUE}1F`, color: HUE }}
-      >
-        <Info size={12} strokeWidth={2.4} />
-      </span>
-      <div className="min-w-0 space-y-1.5">
-        <p className="text-[12.5px] leading-snug text-navy/80">{measureSentence(chart, ctx, { example })}</p>
+      <Info size={13} strokeWidth={2.2} className="mt-[3px] shrink-0 text-ink2" aria-hidden="true" />
+      <div className="min-w-0 space-y-1">
+        <p className="max-w-[72ch] text-small leading-snug text-ink">{measureSentence(chart, ctx, { example })}</p>
         <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5">
-          <span className="font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-muted">
-            {scopeOf(ctx, gradeLabel)}
-          </span>
+          <span className="text-micro font-semibold uppercase text-ink2">{scopeOf(ctx, gradeLabel)}</span>
           {chips}
         </div>
-        {note ? <p className="text-[11px] leading-snug text-muted">{note}</p> : null}
+        {note ? <p className="text-[11px] leading-snug text-ink2">{note}</p> : null}
       </div>
     </motion.div>
   )

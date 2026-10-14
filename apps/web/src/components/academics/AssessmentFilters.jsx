@@ -32,15 +32,11 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Check, ChevronDown, EyeOff, RotateCcw, SlidersHorizontal } from 'lucide-react'
 import { subjectLabelOf } from '@finrep/analytics'
 
-const HUE = '#0D9488'
 const EASE = [0.2, 0.8, 0.2, 1]
 
-// THE SELECTED PILL IS DARKER THAN THE BRAND TEAL, ON PURPOSE. White on
-// teal-600 (#0D9488) is 3.7:1 and on teal-500 it is 2.5:1 — the selected
-// option, the one thing on the bar that must be readable at a glance, was the
-// only text on it below AA. teal-700 → teal-800 carries the same hue and puts
-// the label at 5.5:1 at the light end of the gradient. The glow keeps it lit.
-const THUMB = 'linear-gradient(135deg, #0F766E, #115E59)'
+// PREMIUM UI P4: the selected option is the shared `.seg` thumb — flat INK
+// (#101C3D, white text at 15:1), not a teal gradient with a glow. The module
+// hue lives in rules, never in a control's fill.
 
 /**
  * Which controls BITE on which view. Derived by tracing each view's payload:
@@ -119,8 +115,7 @@ export function Segmented({ options, value, onChange, ariaLabel, uid }) {
     <div
       role="radiogroup"
       aria-label={ariaLabel}
-      className="relative inline-flex items-center gap-0.5 rounded-xl p-1"
-      style={{ background: 'rgba(16,28,61,0.05)', boxShadow: 'inset 0 0 0 1px rgba(16,28,61,0.06)' }}
+      className="seg relative"
     >
       {options.map((o) => {
         const on = String(o.value) === String(value)
@@ -140,26 +135,20 @@ export function Segmented({ options, value, onChange, ariaLabel, uid }) {
               aria-disabled={off || undefined}
               title={off ? undefined : o.title}
               onClick={() => !off && onChange(o.value)}
-              className={`relative rounded-lg px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${
-                off && !on ? 'cursor-not-allowed' : ''
-              }`}
+              className={`seg-btn ${on ? '!text-white' : ''} ${off && !on ? 'cursor-not-allowed' : ''}`}
               // NOT `opacity-40` for the disabled state. Fading the whole
               // button also faded the thumb, so a disabled-but-selected option
               // washed out to nothing; and an opacity is invisible to a
               // contrast check, which reads the colour and not the layer. A
               // lighter slate says "not available here" in the colour itself,
               // still above AA, and plainly distinct from the live options.
-              style={{ color: on ? '#FFFFFF' : off ? '#94A3B8' : '#475569' }}
+              style={on ? undefined : off ? { color: '#94A3B8' } : undefined}
             >
               {on ? (
                 <motion.span
                   aria-hidden="true"
                   layoutId={`${uid}-thumb`}
-                  className="absolute inset-0 rounded-lg"
-                  style={{
-                    background: THUMB,
-                    boxShadow: `0 6px 18px -8px ${HUE}`,
-                  }}
+                  className="absolute inset-0 rounded-sm bg-ink"
                   transition={reduce ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 34 }}
                 />
               ) : null}
@@ -213,14 +202,11 @@ export function FilterChip({ label, value, options, onChange, allLabel }) {
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[12.5px] font-semibold transition-all"
-        style={
-          active
-            ? { background: `${HUE}14`, color: '#0f766e', boxShadow: `inset 0 0 0 1px ${HUE}55` }
-            : { background: '#fff', color: '#475569', boxShadow: 'inset 0 0 0 1px rgba(16,28,61,0.12)' }
-        }
+        className={`inline-flex h-8 items-center gap-1.5 rounded-md border bg-white px-2.5 text-small font-semibold transition-colors ${
+          active ? 'border-ink/40 text-ink' : 'border-hair/20 text-ink2 hover:text-ink'
+        }`}
       >
-        <span className="font-mono text-[8.5px] font-bold uppercase tracking-[0.14em] opacity-60">{label}</span>
+        <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-ink2">{label}</span>
         {current?.label ?? allLabel}
         <ChevronDown size={13} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
@@ -233,7 +219,7 @@ export function FilterChip({ label, value, options, onChange, allLabel }) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -4, scale: 0.98 }}
             transition={{ duration: 0.16, ease: EASE }}
-            className="absolute left-0 top-full z-30 mt-1.5 max-h-64 min-w-[168px] overflow-auto rounded-xl border border-navy/10 bg-white py-1 shadow-[0_24px_60px_-24px_rgba(16,28,61,0.5)]"
+            className="pop !p-1"
           >
             {options.map((o) => {
               const on = String(o.value) === String(value)
@@ -247,8 +233,7 @@ export function FilterChip({ label, value, options, onChange, allLabel }) {
                       onChange(o.value)
                       setOpen(false)
                     }}
-                    className="flex w-full items-center justify-between gap-3 px-3 py-1.5 text-left text-[12.5px] text-navy transition-colors hover:bg-navy/[0.04]"
-                    style={on ? { color: '#0f766e', fontWeight: 700 } : undefined}
+                    className={`pop-row w-full justify-between text-left ${on ? 'font-semibold' : ''}`}
                   >
                     {o.label}
                     {on ? <Check size={13} /> : null}
@@ -296,11 +281,7 @@ export default function AssessmentFilters({ ctx, view, onSelect, loading, anonym
 
   return (
     <div
-      className="sticky top-2 z-20 rounded-2xl border border-navy/10 px-4 py-3 backdrop-blur-md"
-      style={{
-        background: 'rgba(255,255,255,0.9)',
-        boxShadow: '0 18px 44px -34px rgba(16,28,61,0.5)',
-      }}
+      className="sticky top-0 z-20 border-b border-hair bg-ground py-2"
     >
       <div className="flex flex-wrap items-center gap-2.5">
         {/* ── The frame: which dataset ── */}
@@ -384,7 +365,7 @@ export default function AssessmentFilters({ ctx, view, onSelect, loading, anonym
           <button
             type="button"
             onClick={clear}
-            className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[12px] font-semibold text-muted transition-colors hover:bg-navy/[0.05] hover:text-navy"
+            className="btn btn-quiet btn-sm"
           >
             <RotateCcw size={12} /> Clear
           </button>
@@ -392,8 +373,7 @@ export default function AssessmentFilters({ ctx, view, onSelect, loading, anonym
 
         {/* ── Presentation, not filtering — so it sits apart ── */}
         <label
-          className="ml-auto inline-flex cursor-pointer items-center gap-2 rounded-xl px-2.5 py-1.5 text-[12px] font-semibold transition-colors"
-          style={anonymous ? { background: `${HUE}14`, color: '#0f766e' } : { color: '#64748b' }}
+          className={`ml-auto inline-flex cursor-pointer items-center gap-2 px-1 py-1.5 text-small font-semibold ${anonymous ? 'text-ink' : 'text-ink2'}`}
           title="Replace every peer school's name with its position, server-side"
         >
           <input
@@ -405,10 +385,10 @@ export default function AssessmentFilters({ ctx, view, onSelect, loading, anonym
           <span
             aria-hidden="true"
             className="relative h-[18px] w-[32px] rounded-full transition-colors"
-            style={{ background: anonymous ? HUE : 'rgba(16,28,61,0.18)' }}
+            style={{ background: anonymous ? '#101C3D' : 'rgba(16,28,61,0.18)' }}
           >
             <motion.span
-              className="absolute top-[2px] h-[14px] w-[14px] rounded-full bg-white shadow-sm"
+              className="absolute top-[2px] h-[14px] w-[14px] rounded-full bg-white"
               animate={{ left: anonymous ? 16 : 2 }}
               transition={{ type: 'spring', stiffness: 500, damping: 34 }}
             />
@@ -418,8 +398,8 @@ export default function AssessmentFilters({ ctx, view, onSelect, loading, anonym
       </div>
 
       {/* ── What you are looking at, in words ── */}
-      <p className="mt-2 flex items-center gap-1.5 text-[11.5px] text-muted">
-        <SlidersHorizontal size={11} style={{ color: HUE }} />
+      <p className="mt-2 flex items-center gap-1.5 text-[12px] text-ink2">
+        <SlidersHorizontal size={11} className="text-ink2" />
         {loading ? (
           <span>Updating…</span>
         ) : (

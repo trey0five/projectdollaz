@@ -36,25 +36,17 @@
 // Accreditation panel, a plain 402 renders the paused-subscription panel, and a
 // viewer sees every act plus the draft plan with no adopt control (the write is
 // owner/accountant, server-enforced — a dead button would be worse than none).
+//
+// PREMIUM UI P4: a light `PageHeader` (eyebrow ACCREDITATION · MOCK VISIT, the
+// print documents and the narration control on the hairline) over the executive
+// summary, then the six acts as `Section`s on the ground. No cards.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { useReducedMotion } from 'framer-motion'
-import {
-  Award,
-  BadgeCheck,
-  ClipboardList,
-  FileText,
-  Landmark,
-  Lightbulb,
-  Pause,
-  Play,
-  Printer,
-  ScanSearch,
-  Sparkles,
-} from 'lucide-react'
+import { Award, BadgeCheck, ClipboardList, FileText, Landmark, Lightbulb, Pause, Play, Printer, ScanSearch } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
 import BackLink from '../components/ui/BackLink.jsx'
+import { PageHeader, Panel, Button, Pill } from '../components/ui/surface/index.js'
 import ExecutiveSummary from '../components/accreditation/ExecutiveSummary.jsx'
 import ActSection from '../components/accreditation/visit/ActSection.jsx'
 import ActArrival from '../components/accreditation/visit/ActArrival.jsx'
@@ -99,15 +91,10 @@ function CenteredPanel({ children }) {
   return (
     <div className="mx-auto max-w-page space-y-4 px-4 py-6 sm:px-10 sm:py-8">
       <BackLink fallback="/accreditation" fallbackLabel="Back to Accreditation" />
-      <div className="card-soft flex flex-col items-center gap-3 px-6 py-14 text-center">
-        <span
-          className="flex h-14 w-14 items-center justify-center rounded-2xl text-white shadow-glow"
-          style={{ background: HUE }}
-        >
-          <BadgeCheck size={26} />
-        </span>
+      <Panel className="text-center">
+        <BadgeCheck size={22} className="mx-auto mb-2 text-ink2" aria-hidden="true" />
         {children}
-      </div>
+      </Panel>
     </div>
   )
 }
@@ -117,20 +104,16 @@ function GatePanel({ notLicensed }) {
     <CenteredPanel>
       {notLicensed ? (
         <>
-          <h2 className="font-serif text-xl font-semibold text-navy">
-            The mock visit rides on Accreditation
-          </h2>
-          <p className="max-w-md text-[15px] text-muted">
+          <h2 className="font-serif text-title font-medium text-ink">The mock visit rides on Accreditation</h2>
+          <p className="mx-auto mt-2 max-w-md text-body text-ink2">
             Add the Accreditation module to rehearse the visit — what a team would commend, what
             they would likely find under each standard, and what we cannot answer for you yet.
           </p>
         </>
       ) : (
         <>
-          <h2 className="font-serif text-xl font-semibold text-navy">Your subscription is paused</h2>
-          <p className="max-w-md text-[15px] text-muted">
-            Resume your plan to run the mock visit.
-          </p>
+          <h2 className="font-serif text-title font-medium text-ink">Your subscription is paused</h2>
+          <p className="mx-auto mt-2 max-w-md text-body text-ink2">Resume your plan to run the mock visit.</p>
         </>
       )}
     </CenteredPanel>
@@ -139,12 +122,9 @@ function GatePanel({ notLicensed }) {
 
 function PrintLink({ to, children }) {
   return (
-    <Link
-      to={to}
-      className="inline-flex items-center gap-1.5 rounded-full border border-rule/70 bg-white px-3.5 py-1.5 text-[12.5px] font-semibold text-navy transition hover:border-[#F59E0B]/60"
-    >
-      <Printer size={13} aria-hidden /> {children}
-    </Link>
+    <Button to={to} variant="secondary" size="sm" icon={<Printer size={13} aria-hidden />}>
+      {children}
+    </Button>
   )
 }
 
@@ -298,9 +278,9 @@ function VisitWorkspace() {
   if (loading && !visit) {
     return (
       <div className="mx-auto max-w-page space-y-3 px-4 py-8 sm:px-10">
-        <div className="h-24 animate-pulse rounded-3xl bg-section" />
-        <div className="h-64 animate-pulse rounded-3xl bg-section" />
-        <div className="h-64 animate-pulse rounded-3xl bg-section" />
+        <div className="h-24 animate-pulse rounded-lg bg-ink/[.04]" />
+        <div className="h-64 animate-pulse rounded-lg bg-ink/[.04]" />
+        <div className="h-64 animate-pulse rounded-lg bg-ink/[.04]" />
       </div>
     )
   }
@@ -308,10 +288,8 @@ function VisitWorkspace() {
   if (!visit) {
     return (
       <CenteredPanel>
-        <h2 className="font-serif text-xl font-semibold text-navy">
-          The mock visit is unavailable right now
-        </h2>
-        <p className="max-w-md text-[15px] text-muted">
+        <h2 className="font-serif text-title font-medium text-ink">The mock visit is unavailable right now</h2>
+        <p className="mx-auto mt-2 max-w-md text-body text-ink2">
           {error || 'Reload to try again. Nothing about your register has changed.'}
         </p>
       </CenteredPanel>
@@ -352,74 +330,47 @@ function VisitWorkspace() {
   }
 
   const asideFor = {
-    findings: findings?.severityCounts ? (
-      <span className="rounded-full border border-rule/60 bg-section px-2.5 py-1 text-[12px] font-semibold text-muted">
-        {findings.severityCounts.total} in all
-      </span>
-    ) : null,
+    findings: findings?.severityCounts ? <Pill variant="count">{findings.severityCounts.total} in all</Pill> : null,
     plan:
       typeof plan?.moreAvailable === 'number' && plan.moreAvailable > 0 ? (
-        <span className="rounded-full border border-rule/60 bg-section px-2.5 py-1 text-[12px] font-semibold text-muted">
-          top {plan.limit ?? planItems.length}
-        </span>
+        <Pill variant="count">top {plan.limit ?? planItems.length}</Pill>
       ) : null,
   }
 
   return (
-    <div className="mx-auto max-w-page space-y-4 px-4 py-6 sm:px-10 sm:py-8">
-      <div className="flex flex-wrap items-center gap-3">
-        <BackLink fallback="/accreditation" fallbackLabel="Back to Accreditation" />
-        <span className="flex-1" />
-        <PrintLink to="/accreditation/board/print">Board one-pager</PrintLink>
-        <PrintLink to="/accreditation/visit/print">Visiting-team preview</PrintLink>
-      </div>
+    <div className="mx-auto max-w-page px-4 pb-12 sm:px-10">
+      <BackLink fallback="/accreditation" fallbackLabel="Back to Accreditation" className="mt-4" />
+
+      {/* ── The header + the executive summary, printed and speakable ─────── */}
+      <PageHeader
+        eyebrow={['Accreditation', 'Mock visit', activeSchool?.name].filter(Boolean).join(' · ')}
+        title="The mock visit"
+        meta={[visit.framework?.name ?? null, arrival?.asOfLine ? String(arrival.asOfLine).replace(/[.\s]+$/, '') : null, 'A rehearsal, not a verdict'].filter(Boolean).join(' · ')}
+        hue="245 158 11"
+        actions={
+          <>
+            {player.supported && summarySegments.length > 0 ? (
+              <Button
+                variant="quiet"
+                onClick={() => (player.playing ? player.pause() : player.play())}
+                icon={player.playing ? <Pause size={13} aria-hidden /> : <Play size={13} aria-hidden />}
+              >
+                {player.playing ? 'Pause' : 'Read it to me'}
+              </Button>
+            ) : null}
+            <PrintLink to="/accreditation/board/print">Board one-pager</PrintLink>
+            <PrintLink to="/accreditation/visit/print">Visiting-team preview</PrintLink>
+          </>
+        }
+      />
 
       {error ? (
-        <p className="rounded-xl border border-danger/30 bg-danger/10 px-4 py-2 text-[13px] font-semibold text-danger">
-          {error}
-        </p>
+        <Panel tone="attention" className="mt-4">
+          <p className="text-small font-semibold text-risk">{error}</p>
+        </Panel>
       ) : null}
 
-      {/* ── The hero + the executive summary, printed and speakable ─────────── */}
-      <header className="rounded-3xl border border-rule/60 bg-white p-4 shadow-sm sm:p-5">
-        <div className="flex flex-wrap items-start gap-3">
-          <span
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white shadow-glow"
-            style={{ background: HUE }}
-            aria-hidden
-          >
-            <Sparkles size={22} />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
-              Accreditation · rehearsal, not a verdict
-            </p>
-            <h1 className="font-serif text-[26px] font-semibold leading-tight text-navy">
-              The mock visit
-            </h1>
-            <p className="mt-1 max-w-[72ch] text-[13px] leading-relaxed text-muted">
-              {visit.framework?.name ? `${visit.framework.name} · ` : ''}
-              {arrival?.asOfLine}
-            </p>
-          </div>
-          {player.supported && summarySegments.length > 0 ? (
-            <button
-              type="button"
-              onClick={() => (player.playing ? player.pause() : player.play())}
-              className="inline-flex items-center gap-1.5 rounded-full border border-rule/70 bg-white px-3.5 py-1.5 text-[12.5px] font-semibold text-navy transition hover:border-[#F59E0B]/60"
-            >
-              {player.playing ? <Pause size={13} aria-hidden /> : <Play size={13} aria-hidden />}
-              {player.playing ? 'Pause' : 'Read it to me'}
-            </button>
-          ) : null}
-        </div>
-
-        <ExecutiveSummary
-          segments={summarySegments}
-          title="The executive summary"
-          className="mt-3 border-t border-rule/50 pt-3"
-        />
-      </header>
+      <ExecutiveSummary segments={summarySegments} title="The executive summary" className="mt-6" />
 
       {/* ── The six acts. All open. Always all six. ─────────────────────────── */}
       {ACTS.map((act, i) => (
@@ -441,8 +392,8 @@ function VisitWorkspace() {
       {/* The disclaimer. The server's one sentence, verbatim, on screen as well as
           on all four print surfaces — the screen is where most readers meet it. */}
       {disclaimer ? (
-        <p className="flex items-start gap-2 rounded-2xl border border-rule/60 bg-section px-4 py-3 text-[12px] leading-relaxed text-muted">
-          <FileText size={14} className="mt-[2px] shrink-0" aria-hidden />
+        <p className="sec-note mt-8 flex items-start gap-2 border-t border-hair pt-3">
+          <FileText size={13} className="mt-[2px] shrink-0" aria-hidden />
           <span>{disclaimer}</span>
         </p>
       ) : null}

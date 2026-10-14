@@ -16,9 +16,11 @@ export default function EvidencePlatformChip({ platform, light = false }) {
       data-testid="evidence-platform-chip"
       title={platform.line ?? platform.name}
       aria-label={platform.line ?? `Filed in ${platform.name}`}
-      className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10.5px] font-semibold ${
-        light ? 'border-rule/70 bg-section text-muted' : 'border-white/20 bg-white/5 text-white/60'
-      }`}
+      className={
+        light
+          ? 'pill'
+          : 'inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/5 px-1.5 py-0.5 text-[10.5px] font-semibold text-white/60'
+      }
     >
       <ExternalLink size={10.5} aria-hidden />
       Filed in {platform.name}

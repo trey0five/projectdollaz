@@ -27,7 +27,9 @@
 //     (not zero) when nothing is rated. A school cannot reach a flattering figure
 //     by dating nothing — it reaches no figure and one sentence.
 //
-// Light surface, amber accent, inside the command center's register card.
+// PREMIUM UI P4: `Section`s on the ground — the health figure and its four
+// counts as a StatStrip, nudges as ruled rows with a 2px mark, the requirement
+// groups as ruled rows (expand in place), flat Buttons. No cards.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -43,24 +45,15 @@ import {
   TriangleAlert,
 } from 'lucide-react'
 import CurrencyChip from './CurrencyChip.jsx'
-import { AMBER_INK, ctaIcon, nudgeTone, whereItLives } from './evidenceMeta.js'
+import { ctaIcon, whereItLives } from './evidenceMeta.js'
 import { formatShortDate } from '../../lib/format.js'
+import { Section, StatStrip, Stat, Button, Pill } from '../ui/surface/index.js'
 
 // ── Small parts ──────────────────────────────────────────────────────────────
 
 function Glyph(props) {
   const Icon = props.icon
   return <Icon size={props.size ?? 13} aria-hidden className={props.className} />
-}
-
-function Stat({ label, value, sub, title }) {
-  return (
-    <div className="rounded-xl border border-rule/60 bg-white px-3 py-2" title={title || undefined}>
-      <p className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted">{label}</p>
-      <p className="mt-0.5 font-serif text-[19px] font-semibold leading-none text-navy">{value}</p>
-      {sub ? <p className="mt-1 text-[11.5px] leading-snug text-muted">{sub}</p> : null}
-    </div>
-  )
 }
 
 function Skeleton({ className = '' }) {
@@ -74,60 +67,40 @@ function Skeleton({ className = '' }) {
 function HealthHeader({ health, counts, framework, printHref }) {
   const pct = health && typeof health.evidenceHealthPct === 'number' ? health.evidenceHealthPct : null
   return (
-    <div className="rounded-2xl border border-[#F59E0B]/25 bg-[#F59E0B]/[0.05] p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
-            <Glyph icon={FileStack} size={12} />
-            Evidence readiness
-            {framework?.name ? (
-              <span className="font-normal normal-case tracking-normal text-muted/80">
-                · {framework.name}
-              </span>
-            ) : null}
-          </p>
-          <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            {pct == null ? (
-              // NEVER 0-as-unknown. Nothing rated means no reading exists, and the
-              // basis sentence below says exactly why.
-              <span className="font-serif text-[22px] font-semibold leading-none text-navy">
-                Not scored yet
-              </span>
-            ) : (
-              <span
-                className="font-serif text-[34px] font-semibold leading-none"
-                style={{ color: AMBER_INK }}
-              >
-                {pct}%
-              </span>
-            )}
-            <span className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted">
-              current
-            </span>
-          </div>
-          {/* THE ANTI-GAMING GUARD, rendered verbatim and never conditionally. */}
-          {health?.basis ? (
-            <p className="mt-1.5 max-w-[70ch] text-[12.5px] leading-relaxed text-muted">
-              {health.basis}
-            </p>
-          ) : null}
-        </div>
-
-        {printHref ? (
-          <Link
-            to={printHref}
-            className="no-print inline-flex shrink-0 items-center gap-1.5 rounded-full border border-rule/70 bg-white px-3.5 py-1.5 text-[13px] font-semibold text-navy transition hover:border-[#F59E0B]/60"
-          >
-            <Glyph icon={Printer} size={14} className="text-[#F59E0B]" />
+    <Section
+      label={
+        <span className="inline-flex items-center gap-1.5">
+          <Glyph icon={FileStack} size={12} />
+          Evidence readiness
+          {framework?.name ? <span className="font-normal normal-case tracking-normal">· {framework.name}</span> : null}
+        </span>
+      }
+      aside={
+        printHref ? (
+          <Button to={printHref} variant="secondary" size="sm" icon={<Glyph icon={Printer} size={13} />} className="no-print">
             Evidence Index
-          </Link>
-        ) : null}
+          </Button>
+        ) : null
+      }
+      className="!mt-0"
+    >
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        {pct == null ? (
+          // NEVER 0-as-unknown. Nothing rated means no reading exists, and the
+          // basis sentence below says exactly why.
+          <span className="sec-title !mb-0">Not scored yet</span>
+        ) : (
+          <span className="font-serif text-display-xl font-medium leading-none text-ink tabular-nums">{pct}%</span>
+        )}
+        <span className="text-micro font-semibold uppercase text-ink2">current</span>
       </div>
+      {/* THE ANTI-GAMING GUARD, rendered verbatim and never conditionally. */}
+      {health?.basis ? <p className="mt-1.5 max-w-[70ch] text-small leading-relaxed text-ink2">{health.basis}</p> : null}
 
       {counts ? (
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <StatStrip cols={4} className="stats-wrap mt-4 grid-cols-2 sm:grid-cols-4">
           {/* ONE POPULATION, ONE DENOMINATOR. These two count ARTIFACTS — the same
-              population `health.basis` counts below — so the card can never print
+              population `health.basis` counts below — so the strip can never print
               two different totals for one quantity. The per-standard row counts
               are the tooltip, not a second headline. */}
           <Stat
@@ -146,9 +119,9 @@ function HealthHeader({ health, counts, framework, printHref }) {
             value={counts.standardsLegacy ?? 0}
             title="These standards keep their existing evidence behaviour, unchanged."
           />
-        </div>
+        </StatStrip>
       ) : null}
-    </div>
+    </Section>
   )
 }
 
@@ -156,15 +129,11 @@ function HealthHeader({ health, counts, framework, printHref }) {
 function NudgeList({ nudges }) {
   if (!nudges?.length) return null
   return (
-    <ul className="space-y-1.5">
+    <ul className="border-t border-hair">
       {nudges.map((n, i) => (
-        <li
-          key={`${n.kind}-${n.tag}-${i}`}
-          className={`flex items-start gap-2 rounded-xl border px-3 py-2 text-[12.5px] leading-relaxed ${nudgeTone(
-            n.severity,
-          )}`}
-        >
-          <Glyph icon={n.severity === 'warn' ? TriangleAlert : Info} size={14} className="mt-[2px] shrink-0" />
+        <li key={`${n.kind}-${n.tag}-${i}`} className="flex items-start gap-2 border-b border-hair py-2 text-small leading-relaxed text-ink">
+          <span className={`mark tone-${n.severity === 'warn' ? 'watch' : 'neutral'} mt-[5px]`} aria-hidden="true" />
+          <Glyph icon={n.severity === 'warn' ? TriangleAlert : Info} size={14} className="mt-[2px] shrink-0 text-ink2" />
           <span className="min-w-0">
             {/* VERBATIM. */}
             {n.message}
@@ -187,27 +156,17 @@ function NudgeList({ nudges }) {
 function CtaPill({ cta, title }) {
   if (!cta) return null
   const icon = ctaIcon(cta.kind)
-  const base =
-    'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[12px] font-semibold transition'
   if (cta.link) {
     return (
-      <Link
-        to={cta.link}
-        className={`${base} border-[#F59E0B]/45 bg-[#F59E0B]/10 text-[#8a5a06] hover:bg-[#F59E0B]/20`}
-      >
-        <Glyph icon={icon} size={12} />
+      <Button to={cta.link} variant="secondary" size="sm" icon={<Glyph icon={icon} size={12} />}>
         {cta.label}
-      </Link>
+      </Button>
     )
   }
   return (
-    <span
-      title={title || undefined}
-      className={`${base} cursor-default border-rule/70 bg-section text-muted`}
-    >
-      <Glyph icon={icon} size={12} />
+    <Button variant="quiet" size="sm" aria-disabled="true" title={title || undefined} icon={<Glyph icon={icon} size={12} />} className="cursor-default">
       {cta.label}
-    </span>
+    </Button>
   )
 }
 
@@ -221,33 +180,19 @@ function ArtifactRow({ artifact }) {
     ? formatShortDate(String(artifact.effectiveDate).slice(0, 10))
     : null
   return (
-    <li className="rounded-lg border border-rule/60 bg-white px-3 py-2">
+    <li className="border-b border-hair py-2">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="flex flex-wrap items-center gap-1.5 text-[13px] font-semibold text-navy">
+          <p className="flex flex-wrap items-center gap-1.5 text-small font-semibold text-ink">
             <span className="min-w-0 break-words">{artifact.label}</span>
-            <span
-              className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.06em] ${
-                auto
-                  ? 'border-[#F59E0B]/45 bg-[#F59E0B]/10 text-[#8a5a06]'
-                  : 'border-navy/20 bg-navy/[0.05] text-navy'
-              }`}
-            >
-              {auto ? 'Auto-linked' : 'Attached'}
-            </span>
-            {artifact.alsoInPortal === true ? (
-              <span className="shrink-0 rounded-md border border-rule/70 bg-section px-1.5 py-0.5 text-[10.5px] font-semibold text-muted">
-                Also in your portal
-              </span>
-            ) : null}
+            <Pill variant="status" tone={auto ? 'hue' : 'neutral'}>{auto ? 'Auto-linked' : 'Attached'}</Pill>
+            {artifact.alsoInPortal === true ? <Pill>Also in your portal</Pill> : null}
           </p>
           {/* The artifact's OWN sentence, verbatim. */}
-          {artifact.message ? (
-            <p className="mt-0.5 text-[12px] leading-relaxed text-muted">{artifact.message}</p>
-          ) : null}
+          {artifact.message ? <p className="mt-0.5 text-[12px] leading-relaxed text-ink2">{artifact.message}</p> : null}
           {/* The frozen auto-link note — "you never entered this". */}
           {auto && artifact.autoLinkedNote ? (
-            <p className="mt-0.5 flex items-start gap-1.5 text-[12px] leading-relaxed text-[#8a5a06]">
+            <p className="mt-0.5 flex items-start gap-1.5 text-[12px] leading-relaxed text-ink2">
               <Glyph icon={Sparkles} size={12} className="mt-[3px] shrink-0" />
               <span>{artifact.autoLinkedNote}</span>
             </p>
@@ -262,14 +207,9 @@ function ArtifactRow({ artifact }) {
             title={artifact.message}
           />
           {/* The document's own date, never an upload date, never a guess. */}
-          {dated ? (
-            <span className="text-[11px] text-muted">covers {dated}</span>
-          ) : null}
+          {dated ? <span className="text-[11px] text-ink2">covers {dated}</span> : null}
           {artifact.link ? (
-            <Link
-              to={artifact.link}
-              className="text-[11.5px] font-semibold text-[#8a5a06] underline underline-offset-2"
-            >
+            <Link to={artifact.link} className="dt-link text-[11.5px]">
               Open
             </Link>
           ) : null}
@@ -290,12 +230,7 @@ function GroupCard({ group, onOpenStandard, reduce }) {
   const notTracked = group.state === 'not_tracked'
 
   return (
-    <motion.li
-      layout={!reduce}
-      className={`rounded-xl border px-3.5 py-3 ${
-        notTracked ? 'border-rule/60 bg-section/60' : 'border-rule/70 bg-white'
-      }`}
-    >
+    <motion.li layout={!reduce} className={`border-b border-hair py-3 ${notTracked ? 'opacity-80' : ''}`}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="flex flex-wrap items-center gap-2">
@@ -305,19 +240,15 @@ function GroupCard({ group, onOpenStandard, reduce }) {
               showDate
               title={group.message}
             />
-            <span className="min-w-0 break-words text-[14px] font-semibold text-navy">
-              {group.label}
-            </span>
+            <span className="min-w-0 break-words text-body font-semibold text-ink">{group.label}</span>
           </p>
           {/* THE SENTENCE. Composed server-side, rendered verbatim, never edited. */}
           {group.message ? (
-            <p className="mt-1 max-w-[80ch] text-[12.5px] leading-relaxed text-muted">
-              {group.message}
-            </p>
+            <p className="mt-1 max-w-[80ch] text-small leading-relaxed text-ink2">{group.message}</p>
           ) : null}
           {/* Visible WITHOUT expanding: this came from another module. */}
           {autoNote ? (
-            <p className="mt-1 flex items-start gap-1.5 text-[12.5px] leading-relaxed text-[#8a5a06]">
+            <p className="mt-1 flex items-start gap-1.5 text-small leading-relaxed text-ink2">
               <Glyph icon={Sparkles} size={13} className="mt-[3px] shrink-0" />
               <span>{autoNote}</span>
             </p>
@@ -327,14 +258,12 @@ function GroupCard({ group, onOpenStandard, reduce }) {
               ONE place — the browser never re-words an honesty sentence, because
               two copies of one sentence are two sentences that can drift. */}
           {group.note ? (
-            <p className="mt-1 max-w-[80ch] rounded-lg border border-rule/60 bg-section px-2.5 py-1.5 text-[12px] leading-relaxed text-muted">
-              {group.note}
-            </p>
+            <p className="mt-1 max-w-[80ch] border-l-2 border-hair pl-2.5 text-[12px] leading-relaxed text-ink2">{group.note}</p>
           ) : null}
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <CtaPill cta={group.cta} title={group.message} />
             <span
-              className="inline-flex items-center gap-1 text-[11.5px] text-muted"
+              className="inline-flex items-center gap-1 text-[11.5px] text-ink2"
               title={`Where this lives: ${whereItLives(group.sourceRegister, group.dataAvailability)}`}
             >
               <Glyph icon={Layers} size={12} />
@@ -343,12 +272,7 @@ function GroupCard({ group, onOpenStandard, reduce }) {
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-          className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-rule/60 px-2 py-1 text-[11.5px] font-semibold text-muted transition hover:border-[#F59E0B]/60 hover:text-navy"
-        >
+        <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="btn btn-quiet btn-sm shrink-0">
           {/* THE PAYOFF LINE: one audit, N standards. */}
           {serves.length} standard{serves.length === 1 ? '' : 's'}
           {open ? <ChevronDown size={13} aria-hidden /> : <ChevronRight size={13} aria-hidden />}
@@ -356,13 +280,11 @@ function GroupCard({ group, onOpenStandard, reduce }) {
       </div>
 
       {open ? (
-        <div className="mt-3 space-y-3 border-t border-rule/50 pt-3">
+        <div className="mt-3 space-y-3 border-t border-hair pt-3">
           <div>
-            <p className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">
-              Serves
-            </p>
+            <p className="mb-1.5 text-micro font-semibold uppercase text-ink2">Serves</p>
             {serves.length === 0 ? (
-              <p className="text-[12px] italic text-muted">No standards in your register.</p>
+              <p className="text-[12px] italic text-ink2">No standards in your register.</p>
             ) : (
               <ul className="flex flex-wrap gap-1.5">
                 {serves.map((s) => (
@@ -380,7 +302,7 @@ function GroupCard({ group, onOpenStandard, reduce }) {
                         type="button"
                         onClick={() => onOpenStandard(s.standardId)}
                         title={s.title}
-                        className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-rule/60 bg-white px-2 py-1 text-[11.5px] font-semibold text-navy transition hover:border-[#F59E0B]/60"
+                        className="pill transition-colors hover:bg-ink/[.03]"
                       >
                         <span className="shrink-0">{s.code}</span>
                         <CurrencyChip state={s.state} size="sm" />
@@ -388,7 +310,7 @@ function GroupCard({ group, onOpenStandard, reduce }) {
                     ) : (
                       <span
                         title={s.title}
-                        className="inline-flex max-w-full cursor-default items-center gap-1.5 rounded-lg border border-rule/60 bg-white px-2 py-1 text-[11.5px] font-semibold text-navy"
+                        className="pill cursor-default"
                       >
                         <span className="shrink-0">{s.code}</span>
                         <CurrencyChip state={s.state} size="sm" />
@@ -401,15 +323,11 @@ function GroupCard({ group, onOpenStandard, reduce }) {
           </div>
 
           <div>
-            <p className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">
-              Artifacts
-            </p>
+            <p className="mb-1.5 text-micro font-semibold uppercase text-ink2">Artifacts</p>
             {artifacts.length === 0 ? (
-              <p className="text-[12px] italic text-muted">
-                Nothing on file for this requirement.
-              </p>
+              <p className="text-[12px] italic text-ink2">Nothing on file for this requirement.</p>
             ) : (
-              <ul className="space-y-1.5">
+              <ul className="border-t border-hair">
                 {artifacts.map((a) => (
                   <ArtifactRow key={a.key} artifact={a} />
                 ))}
@@ -454,39 +372,31 @@ export default function EvidenceReadinessTable({
   // Never blanks the tab, never substitutes a zero — one honest line.
   if (notLicensed || (error && groups.length === 0)) {
     return (
-      <div className="rounded-xl border border-dashed border-rule/60 bg-cream/50 px-6 py-12 text-center">
-        <p className="text-[14px] text-muted">Evidence readiness is unavailable right now.</p>
-      </div>
+      <p className="border-y border-hair px-6 py-12 text-center text-small text-ink2">Evidence readiness is unavailable right now.</p>
     )
   }
 
   return (
-    <div className="space-y-4">
+    <div>
       <HealthHeader health={health} counts={counts} framework={framework} printHref={printHref} />
 
-      {strengths}
+      {strengths ? <div className="mt-6">{strengths}</div> : null}
 
-      <NudgeList nudges={nudges} />
+      {nudges?.length ? (
+        <div className="mt-6">
+          <NudgeList nudges={nudges} />
+        </div>
+      ) : null}
 
       {groups.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-rule/60 bg-cream/50 px-6 py-10 text-center">
-          <p className="font-serif text-[16px] italic text-muted">
-            No required artifacts are defined for your framework.
+        <Section label="What they will ask for">
+          <p className="border-y border-hair px-6 py-10 text-center text-small text-ink2">
+            No required artifacts are defined for your framework. Your standards keep their existing evidence behaviour, unchanged.
           </p>
-          <p className="mx-auto mt-1 max-w-[60ch] text-[12.5px] leading-relaxed text-muted">
-            Your standards keep their existing evidence behaviour, unchanged.
-          </p>
-        </div>
+        </Section>
       ) : (
-        <div>
-          <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
-            <Glyph icon={FileStack} size={12} className="text-[#F59E0B]" />
-            What they will ask for
-            <span className="font-normal normal-case tracking-normal text-muted/80">
-              · grouped by artifact, worst first
-            </span>
-          </p>
-          <ul className="space-y-2">
+        <Section label="What they will ask for" aside="grouped by artifact, worst first">
+          <ul className="border-t border-hair">
             {groups.map((g) => (
               <GroupCard
                 key={g.tag}
@@ -496,7 +406,7 @@ export default function EvidenceReadinessTable({
               />
             ))}
           </ul>
-        </div>
+        </Section>
       )}
     </div>
   )

@@ -62,7 +62,7 @@ function CohortControlBar({ ctx, spanOptions, span, onSpan, onWindow, peersOn, o
   const seriesLabel = (ctx?.availableSeries ?? []).find((s) => s.key === ctx?.series)?.label ?? 'Composite'
 
   return (
-    <div className="coh-controls flex flex-wrap items-center gap-2.5 rounded-2xl border border-navy/10 bg-white px-4 py-3">
+    <div className="coh-controls toolbar gap-2.5">
       {spanOptions.length > 1 ? (
         <FilterChip
           label="Cohort"
@@ -97,7 +97,7 @@ function CohortControlBar({ ctx, spanOptions, span, onSpan, onWindow, peersOn, o
         style={{ background: 'rgba(16,28,61,0.04)' }}
         title="Change this with the Subject chip in the scope bar above"
       >
-        <span className="font-mono text-[8.5px] font-bold uppercase tracking-[0.14em] opacity-60">Measure</span>
+        <span className="text-[8.5px] font-bold uppercase tracking-[0.14em] opacity-60">Measure</span>
         {seriesLabel}
       </span>
 
@@ -241,7 +241,7 @@ function YAxisRail({ ticks, scale, unit, caption, rows }) {
           {ticks.map((t) => (
             <span
               key={t}
-              className="absolute right-1.5 -translate-y-1/2 font-mono text-[9px] font-bold tabular-nums text-muted"
+              className="absolute right-1.5 -translate-y-1/2 text-[9px] font-bold tabular-nums text-muted"
               style={{ top: `${(y(t) / 148) * 100}%` }}
             >
               {Number(t.toFixed(unit.decimals))}
@@ -251,7 +251,7 @@ function YAxisRail({ ticks, scale, unit, caption, rows }) {
       ))}
       {rows.length > 0 ? (
         <span
-          className="absolute left-0 origin-bottom-left whitespace-nowrap font-mono text-[8.5px] font-bold uppercase tracking-[0.14em] text-muted"
+          className="absolute left-0 origin-bottom-left whitespace-nowrap text-[8.5px] font-bold uppercase tracking-[0.14em] text-muted"
           style={{ top: rows[0].top + rows[0].height, transform: 'rotate(-90deg) translateX(2px)' }}
         >
           {caption}
@@ -438,7 +438,7 @@ export default function CohortLongitudinal({ payload, loading = false, error = '
                 breakpoint the grid would be unlabelled lines. Same ticks, same
                 unit — one line instead of a rail. */}
             {ticks.length > 1 ? (
-              <p className="mb-2 font-mono text-[9.5px] font-bold uppercase tracking-[0.14em] text-muted sm:hidden">
+              <p className="mb-2 text-[9.5px] font-bold uppercase tracking-[0.14em] text-muted sm:hidden">
                 {Number(ticks[0].toFixed(unit.decimals))}–{Number(ticks[ticks.length - 1].toFixed(unit.decimals))}{' '}
                 {unit.label}
               </p>
@@ -562,14 +562,14 @@ export default function CohortLongitudinal({ payload, loading = false, error = '
 /** The server says WHY in words; the view never guesses. */
 function EmptyCohorts({ ctx }) {
   return (
-    <div className="rounded-2xl border border-dashed border-navy/20 px-5 py-8 text-center">
+    <div className="border-y border-hair px-5 py-8 text-center">
       <Footprints size={20} className="mx-auto mb-2" style={{ color: COH_HUE }} />
       <p className="mx-auto max-w-lg text-[13px] leading-relaxed text-muted">
         {ctx?.reason ??
           'A cohort needs the same children measured twice — load a second year of results and this fills in.'}
       </p>
       {ctx?.gradeSpan?.gradesOnFile?.length > 0 ? (
-        <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">
+        <p className="mt-2 text-[10px] uppercase tracking-[0.14em] text-muted">
           On file: grades {ctx.gradeSpan.gradesOnFile.join(', ')}
         </p>
       ) : null}
@@ -628,11 +628,11 @@ function HowToRead({ unit, gap, ctx, reduce }) {
       initial={reduce ? false : { opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.45, ease: COH_EASE, delay: 0.1 }}
-      className="grid gap-3 rounded-2xl border border-navy/10 bg-white p-5 sm:grid-cols-3"
+      className="grid gap-x-8 gap-y-3 border-t border-hair pt-4 sm:grid-cols-3"
     >
       {blocks.map((b) => (
         <div key={b.k}>
-          <p className="font-mono text-[9px] font-bold uppercase tracking-[0.16em]" style={{ color: COH_HUE }}>
+          <p className="text-[9px] font-bold uppercase tracking-[0.16em]" style={{ color: COH_HUE }}>
             {b.k}
           </p>
           <p className="mt-1.5 text-[12px] leading-relaxed text-muted">{b.v}</p>

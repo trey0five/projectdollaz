@@ -11,15 +11,16 @@
 // idioms: window.location.assign for OAuth, loading/error on every action.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState } from 'react'
-import { motion } from 'framer-motion'
-import { Plug, Unplug, RefreshCw, CheckCircle2, AlertTriangle, GraduationCap } from 'lucide-react'
+import { Plug, Unplug, RefreshCw, AlertTriangle, GraduationCap } from 'lucide-react'
 import { enrollmentApi, apiErrorMessage } from '../../lib/api.js'
 import { FormError, FormSuccess } from '../auth/fields.jsx'
-import SettingsCard from '../settings/SettingsCard.jsx'
+import { Panel, Button, Pill } from '../ui/surface/index.js'
 import RosterUpload from './RosterUpload.jsx'
 
+// PREMIUM UI P4: the connector is a `Panel` (the one raised surface — it is a
+// form), flat `Button`s, plain fields, the connection state as a status Pill.
 const inputCls =
-  'w-full rounded-lg border-2 border-border bg-white px-4 py-3 text-base text-ink outline-none transition-colors focus:border-gold disabled:cursor-not-allowed disabled:bg-navy/[0.04] disabled:text-muted'
+  'h-9 w-full rounded-md border border-hair/30 bg-white px-3 text-small text-ink outline-none transition-colors focus:border-ink disabled:cursor-not-allowed disabled:bg-ground disabled:text-ink2'
 
 // The live-connection providers offered in the picker (CSV/manual are handled by the
 // dropzone / manual entry, not here). Blackbaud = OAuth; the rest = key/basic.
@@ -153,24 +154,24 @@ export default function EnrollmentConnectCard({ schoolId, canEdit, status, onCha
   }
 
   return (
-    <SettingsCard
-      title="Student information system"
-      description="Connect your SIS to pull enrollment automatically, or upload a roster file anytime."
-    >
+    <Panel title="Student information system">
+      <p className="-mt-1 mb-4 text-small text-ink2">
+        Connect your SIS to pull enrollment automatically, or upload a roster file anytime.
+      </p>
       {status == null ? (
-        <p className="text-[16px] text-muted">Checking connection…</p>
+        <p className="text-small text-ink2">Checking connection…</p>
       ) : (
         <>
           {status.connected ? (
             <>
-              <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-gold/30 bg-gold/10 px-4 py-3 text-[15px] text-navy">
-                <Plug size={15} className="text-gold" />
-                Connected to {PROVIDER_LABEL[status.provider] ?? status.provider}
+              <p className="mb-2 flex flex-wrap items-center gap-2 text-body text-ink">
+                <Pill variant="status" tone="good">Connected</Pill>
+                {PROVIDER_LABEL[status.provider] ?? status.provider}
                 {status.environment ? ` (${status.environment})` : ''}
-              </div>
-              <p className="mb-4 text-[14px] tracking-[0.01em] text-muted">
+              </p>
+              <p className="mb-4 text-small text-ink2">
                 {status.lastSyncedAt ? (
-                  <>Last synced <span className="font-semibold text-navy">{syncRelative(status.lastSyncedAt)}</span></>
+                  <>Last synced <span className="font-semibold text-ink">{syncRelative(status.lastSyncedAt)}</span></>
                 ) : (
                   'Never synced.'
                 )}
@@ -183,76 +184,48 @@ export default function EnrollmentConnectCard({ schoolId, canEdit, status, onCha
               {ok && <div className="mb-3"><FormSuccess>{ok}</FormSuccess></div>}
 
               {canEdit && (
-                <div className="mb-5 flex flex-wrap gap-3">
-                  <motion.button
-                    whileTap={{ scale: 0.98 }}
-                    onClick={doSync}
-                    disabled={syncing || busy}
-                    className="btn-primary inline-flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <RefreshCw size={15} className={syncing ? 'animate-spin' : ''} />
+                <div className="mb-5 flex flex-wrap gap-2">
+                  <Button variant="primary" onClick={doSync} disabled={syncing || busy} icon={<RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />}>
                     {syncing ? 'Syncing…' : 'Sync now'}
-                  </motion.button>
-                  <button
-                    onClick={() => setPendingDisconnect(true)}
-                    disabled={busy || syncing || pendingDisconnect}
-                    className="inline-flex items-center gap-2 rounded-lg border-2 border-border bg-white px-5 py-2.5 text-[15px] font-semibold text-navy transition-all hover:border-danger/40 hover:text-danger disabled:opacity-50"
-                  >
-                    <Unplug size={15} /> Disconnect
-                  </button>
+                  </Button>
+                  <Button variant="secondary" onClick={() => setPendingDisconnect(true)} disabled={busy || syncing || pendingDisconnect} icon={<Unplug size={14} />}>
+                    Disconnect
+                  </Button>
                 </div>
               )}
 
               {pendingDisconnect && (
-                <motion.div
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="mb-5 rounded-lg border-2 border-gold/40 bg-gold/[0.06] px-4 py-3.5"
-                >
-                  <p className="flex items-start gap-2 text-[15px] font-semibold text-navy">
-                    <Unplug size={16} className="mt-0.5 shrink-0 text-gold" /> Disconnect this SIS?
-                  </p>
-                  <p className="mt-1.5 text-[14px] leading-relaxed text-muted">
-                    By default we <span className="font-medium text-navy">keep every roster already
+                <div className="mb-5 border-l-2 border-watch pl-3">
+                  <p className="text-body font-semibold text-ink">Disconnect this SIS?</p>
+                  <p className="mt-1 text-small leading-relaxed text-ink2">
+                    By default we <span className="font-medium text-ink">keep every roster already
                     imported</span> — you just stop syncing. You can also permanently delete the
                     imported roster snapshots.
                   </p>
-                  <div className="mt-3 flex flex-wrap items-center gap-3">
-                    <button
-                      onClick={() => doDisconnect(false)}
-                      disabled={busy}
-                      className="btn-primary inline-flex items-center gap-2 disabled:opacity-50"
-                    >
-                      <Unplug size={15} /> Disconnect (keep data)
-                    </button>
-                    <button
-                      onClick={() => setPendingDisconnect(false)}
-                      disabled={busy}
-                      className="inline-flex items-center gap-2 rounded-lg border-2 border-border bg-white px-5 py-2.5 text-[15px] font-semibold text-navy transition-colors hover:border-navy disabled:opacity-50"
-                    >
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <Button variant="primary" onClick={() => doDisconnect(false)} disabled={busy} icon={<Unplug size={14} />}>
+                      Disconnect (keep data)
+                    </Button>
+                    <Button variant="secondary" onClick={() => setPendingDisconnect(false)} disabled={busy}>
                       Cancel
-                    </button>
-                    <button
-                      onClick={() => doDisconnect(true)}
-                      disabled={busy}
-                      className="ml-auto inline-flex items-center gap-1.5 text-[13.5px] font-semibold text-danger/80 underline-offset-2 transition-colors hover:text-danger hover:underline disabled:opacity-50"
-                    >
-                      <AlertTriangle size={14} /> Disconnect &amp; delete roster data
-                    </button>
+                    </Button>
+                    <Button variant="quiet" onClick={() => doDisconnect(true)} disabled={busy} icon={<AlertTriangle size={14} />} className="ml-auto !text-risk">
+                      Disconnect &amp; delete roster data
+                    </Button>
                   </div>
-                </motion.div>
+                </div>
               )}
             </>
           ) : (
             <>
-              <p className="mb-4 text-[15px] text-muted">
+              <p className="mb-4 text-small text-ink2">
                 Connect a live student information system to pull enrollment on demand, or just upload
                 a roster file below — no connection required.
               </p>
 
               {canEdit && (
-                <div className="mb-5 rounded-lg border border-border bg-section/40 p-4">
-                  <label className="mb-2 block text-[13px] font-semibold uppercase tracking-[0.14em] text-muted">
+                <div className="mb-5">
+                  <label className="mb-2 block text-micro font-semibold uppercase text-ink2">
                     Live connection
                   </label>
                   <select
@@ -271,14 +244,9 @@ export default function EnrollmentConnectCard({ schoolId, canEdit, status, onCha
                   {ok && <div className="mt-3"><FormSuccess>{ok}</FormSuccess></div>}
 
                   {selected.oauth ? (
-                    <motion.button
-                      whileTap={{ scale: 0.98 }}
-                      onClick={connectOAuth}
-                      disabled={busy || !status.configured}
-                      className="btn-primary mt-4 inline-flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:px-8"
-                    >
-                      <Plug size={15} /> {busy ? 'Redirecting…' : `Connect ${selected.label}`}
-                    </motion.button>
+                    <Button variant="primary" onClick={connectOAuth} disabled={busy || !status.configured} icon={<Plug size={14} />} className="mt-4">
+                      {busy ? 'Redirecting…' : `Connect ${selected.label}`}
+                    </Button>
                   ) : status.configured ? (
                     <div className="mt-4 space-y-3">
                       <div className="grid gap-3 sm:grid-cols-2">
@@ -288,42 +256,35 @@ export default function EnrollmentConnectCard({ schoolId, canEdit, status, onCha
                         <input className={inputCls} placeholder="School / org id (optional)" value={keyForm.externalOrgId} onChange={setKey('externalOrgId')} />
                         <input className={inputCls} placeholder="Subscription key (optional)" value={keyForm.subscriptionKey} onChange={setKey('subscriptionKey')} />
                       </div>
-                      <motion.button
-                        whileTap={{ scale: 0.98 }}
-                        onClick={connectKey}
-                        disabled={busy}
-                        className="btn-primary inline-flex items-center gap-2 disabled:opacity-50"
-                      >
-                        <Plug size={15} /> {busy ? 'Saving…' : `Connect ${selected.label}`}
-                      </motion.button>
+                      <Button variant="primary" onClick={connectKey} disabled={busy} icon={<Plug size={14} />}>
+                        {busy ? 'Saving…' : `Connect ${selected.label}`}
+                      </Button>
                     </div>
                   ) : (
-                    <div className="mt-3 rounded-lg border border-border bg-white px-4 py-3 text-[14px] text-muted">
+                    <p className="mt-3 text-small text-ink2">
                       The {selected.label} connector isn&apos;t configured on this server yet. You can
                       still upload a roster file below.
-                    </div>
+                    </p>
                   )}
                 </div>
               )}
 
               {!status.configured && (
-                <div className="mb-5 flex items-center gap-2 rounded-lg border border-border bg-section px-4 py-3 text-[14px] text-muted">
-                  <GraduationCap size={15} className="shrink-0 text-gold" />
+                <p className="mb-5 flex items-center gap-2 text-small text-ink2">
+                  <GraduationCap size={14} className="shrink-0" aria-hidden="true" />
                   No live SIS configured on this server — roster file upload always works.
-                </div>
+                </p>
               )}
             </>
           )}
 
           {/* CSV/ZIP roster upload — ALWAYS available (connected or not). */}
-          <div className="border-t border-border pt-5">
-            <h3 className="mb-2 flex items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.14em] text-muted">
-              <GraduationCap size={14} className="text-gold" /> Roster file
-            </h3>
+          <div className="border-t border-hair pt-5">
+            <h3 className="mb-2 text-micro font-semibold uppercase text-ink2">Roster file</h3>
             <RosterUpload schoolId={schoolId} canEdit={canEdit} onApplied={onChanged} />
           </div>
         </>
       )}
-    </SettingsCard>
+    </Panel>
   )
 }

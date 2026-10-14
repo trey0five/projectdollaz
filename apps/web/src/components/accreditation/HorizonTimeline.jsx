@@ -226,20 +226,23 @@ export default function HorizonTimeline({ findings = [], now = null, loading = f
 
   if (loading && findings.length === 0) {
     return (
-      <section className="kpi-3d rounded-2xl p-4">
+      <section className="sec">
         <div className="h-32 rounded-xl bg-section motion-safe:animate-pulse" aria-hidden />
       </section>
     )
   }
 
   return (
-    <section className="kpi-3d rounded-2xl p-4">
-      <div className="mb-3">
-        <h3 className="flex items-center gap-1.5 font-serif text-[16px] font-semibold text-navy">
-          <CalendarClock size={15} style={{ color: AMBER }} aria-hidden />
+    <section className="sec">
+      <div className="sec-head">
+        <h2 className="sec-label inline-flex items-center gap-1.5">
+          <CalendarClock size={13} aria-hidden />
           The next twenty-four months
-        </h3>
-        <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted">
+        </h2>
+        <span className="sec-rule" aria-hidden="true" />
+      </div>
+      <div className="mb-3">
+        <p className="text-small leading-relaxed text-ink2">
           Stated dates are drawn solid; projections are drawn dashed and labelled &ldquo;at the
           current rate&rdquo;. Likelihood is a word, never a percentage.
         </p>
@@ -249,7 +252,7 @@ export default function HorizonTimeline({ findings = [], now = null, loading = f
         {/* ── LEFT: the axis and its lanes ─────────────────────────────────── */}
         <div className="min-w-0 lg:col-span-2">
           {plotted.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-rule/60 bg-cream/50 px-4 py-8 text-center">
+            <div className="border-y border-hair px-4 py-8 text-center">
               <p className="text-[13px] font-semibold text-navy">
                 No finding carries a date we can stand behind.
               </p>
@@ -293,11 +296,11 @@ export default function HorizonTimeline({ findings = [], now = null, loading = f
               Every open finding carries a date.
             </p>
           ) : (
-            <ul className="mt-2 space-y-2">
+            <ul className="mt-2 border-t border-hair">
               {undated.map((f) => (
                 <li
                   key={f.findingKey ?? f.factKey}
-                  className="rounded-xl border border-rule/50 bg-cream/50 px-3 py-2"
+                  className="border-b border-hair py-2.5"
                 >
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <StandardTags tags={f.standardTags} />

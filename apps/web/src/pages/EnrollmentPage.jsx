@@ -6,11 +6,15 @@
 // a finance-only school direct-navving here gets a friendly "not on your plan"
 // panel (the API 402 → isModuleNotLicensed). React 19 idioms: microtask-deferred
 // fetch effects + a cancelled guard, loading/error/empty on every fetch.
+//
+// PREMIUM UI P4 (plan sketch 6): the dark hero is gone. The page opens with a
+// light `PageHeader` (eyebrow ENROLLMENT · school · school year), then the
+// hero's StatStrip + the by-grade Section, the source Section/Panel, the
+// vs-plan Stats, and the analytics preview Stats — everything on the ground.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
-import { motion } from 'framer-motion'
-import { GraduationCap, RotateCcw, Building2, ArrowRight } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
+import { RotateCcw, Building2, ArrowRight } from 'lucide-react'
 import BillingBanner from '../components/BillingBanner.jsx'
 import ModuleTabs, { ModuleAccent } from '../components/module/ModuleTabs.jsx'
 import { AddDataCta, RecordsCta } from '../components/module/ModuleCtas.jsx'
@@ -30,39 +34,33 @@ import {
 } from '../lib/api.js'
 import VsPlanKpi from '../components/enrollment/VsPlanKpi.jsx'
 import EnrollmentConnectCard from '../components/enrollment/EnrollmentConnectCard.jsx'
-import EnrollmentHero from '../components/enrollment/EnrollmentHero.jsx'
+import EnrollmentHero, { fmtDay } from '../components/enrollment/EnrollmentHero.jsx'
 import RosterSourceCard from '../components/enrollment/RosterSourceCard.jsx'
 import EnrollmentAnalytics from '../components/enrollment/EnrollmentAnalytics.jsx'
 import EnrollmentAnalyticsPreview from '../components/enrollment/EnrollmentAnalyticsPreview.jsx'
 import StudentRegister from '../components/enrollment/StudentRegister.jsx'
+import { PageHeader, Panel, Button } from '../components/ui/surface/index.js'
 
 function GatePanel({ notLicensed }) {
   return (
     <div className="mx-auto max-w-page space-y-4 px-4 py-6 sm:px-10 sm:py-8">
       <BackLink />
-      <div className="card-soft flex flex-col items-center gap-3 px-6 py-14 text-center">
-        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gold-gradient text-navy shadow-glow">
-          <GraduationCap size={26} />
-        </span>
+      <Panel className="text-center">
         {notLicensed ? (
           <>
-            <h2 className="font-serif text-xl font-semibold text-navy">
-              Enrollment isn&apos;t on your plan yet
-            </h2>
-            <p className="max-w-md text-[15px] text-muted">
+            <h2 className="font-serif text-title font-medium text-ink">Enrollment isn&apos;t on your plan yet</h2>
+            <p className="mx-auto mt-2 max-w-md text-body text-ink2">
               Add the Enrollment module to connect your SIS, track headcount by grade, and see actual
               enrollment against your plan — including its tuition and cash impact in your briefing.
             </p>
           </>
         ) : (
           <>
-            <h2 className="font-serif text-xl font-semibold text-navy">Your subscription is paused</h2>
-            <p className="max-w-md text-[15px] text-muted">
-              Resume your plan to manage enrollment.
-            </p>
+            <h2 className="font-serif text-title font-medium text-ink">Your subscription is paused</h2>
+            <p className="mx-auto mt-2 max-w-md text-body text-ink2">Resume your plan to manage enrollment.</p>
           </>
         )}
-      </div>
+      </Panel>
     </div>
   )
 }
@@ -75,6 +73,7 @@ function EnrollmentWorkspace() {
   const [searchParams, setSearchParams] = useSearchParams()
   const canEdit = activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'
   const periodId = periods && periods[0] ? periods[0].id : null
+  const periodLabel = periods && periods[0] ? periods[0].label : null
 
   const [status, setStatus] = useState(null)
   const [summary, setSummary] = useState(null)
@@ -170,7 +169,7 @@ function EnrollmentWorkspace() {
   if (loading && !status) {
     return (
       <div className="mx-auto max-w-page px-4 py-10 sm:px-10">
-        <div className="h-40 animate-pulse rounded-2xl border-2 border-rule/40 bg-white/60" />
+        <div className="h-40 animate-pulse rounded-lg bg-ink/[.04]" />
       </div>
     )
   }
@@ -178,40 +177,42 @@ function EnrollmentWorkspace() {
   if (error) {
     return (
       <div className="mx-auto max-w-page px-4 py-10 sm:px-10">
-        <div className="rounded-2xl border border-danger/30 bg-danger/[0.06] px-6 py-10 text-center">
-          <p className="text-[15px] text-danger">{error}</p>
-          <button
-            onClick={load}
-            className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-gold/60 bg-gold/10 px-4 py-2 text-[15px] font-semibold text-navy transition-all hover:bg-gold/20"
-          >
+        <Panel tone="attention" className="text-center">
+          <p className="text-body text-risk">{error}</p>
+          <Button variant="secondary" onClick={load} className="mt-4">
             Try again
-          </button>
-        </div>
+          </Button>
+        </Panel>
       </div>
     )
   }
 
+  // The page header (plan sketch 6): eyebrow MODULE · SCHOOL · SCHOOL YEAR, the
+  // title in Garamond, a meta line that says where the headline came from, the
+  // Records + Add-data entries on the hairline. ModuleAccent supplies the hue.
+  const sourceWord =
+    summary?.source === 'roster'
+      ? 'Live from your roster'
+      : summary?.provider
+        ? `Synced from ${summary.provider}`
+        : summary?.latest
+          ? 'From your latest reading'
+          : null
   const header = (
-    <motion.header
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="mb-6 flex flex-wrap items-center gap-3"
-    >
-      <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gold-gradient text-navy shadow-glow">
-        <GraduationCap size={24} />
-      </span>
-      <div>
-        <p className="text-[11.5px] font-semibold uppercase tracking-[0.14em] text-muted">
-          Domain · Enrollment intelligence
-        </p>
-        <h1 className="font-serif text-2xl font-bold text-navy sm:text-3xl">Enrollment</h1>
-      </div>
-      {/* On-page Add-data + Records entries (mirror the sidebar tabs). */}
-      <span className="ml-auto flex flex-wrap items-center gap-2">
-        <RecordsCta module="enrollment" />
-        <AddDataCta />
-      </span>
-    </motion.header>
+    <PageHeader
+      eyebrow={['Enrollment', activeSchool?.name, periodLabel].filter(Boolean).join(' · ')}
+      title="Enrollment"
+      meta={
+        [sourceWord, summary?.latest?.observedOn ? `as of ${fmtDay(summary.latest.observedOn) ?? summary.latest.observedOn}` : null].filter(Boolean).join(' · ') ||
+        'Headcount, composition by grade, and actual enrollment against your plan.'
+      }
+      actions={
+        <>
+          <RecordsCta module="enrollment" />
+          <AddDataCta />
+        </>
+      }
+    />
   )
 
   const connectCard = (
@@ -226,40 +227,30 @@ function EnrollmentWorkspace() {
   const supersededValue = supersededManual?.value ?? null
 
   const supersedeBanner = isSuperseded ? (
-    <div className="flex flex-col gap-3 rounded-2xl border border-gold/40 bg-gold/[0.07] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex items-start gap-2.5">
-        <Building2 size={18} className="mt-0.5 shrink-0 text-amber-700" />
-        <div>
-          <p className="text-[15px] font-semibold text-navy">Enrollment replaced by a diocesan import</p>
-          <p className="text-[13.5px] text-muted">
+    <Panel tone="attention" className="panel-watch">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-body font-semibold text-ink">Enrollment replaced by a diocesan import</p>
+          <p className="mt-0.5 text-small text-ink2">
             An imported snapshot superseded the manually-entered figure
             {Number.isFinite(supersededValue) ? ` (was ${Number(supersededValue).toLocaleString('en-US')})` : ''}.
             The manual entry is kept as history — you can restore it.
           </p>
         </div>
+        {canEdit && (
+          <Button variant="secondary" onClick={doRevert} disabled={reverting} icon={<RotateCcw size={14} />} className="shrink-0">
+            {reverting ? 'Restoring…' : 'Restore manual figure'}
+          </Button>
+        )}
       </div>
-      {canEdit && (
-        <button
-          type="button"
-          onClick={doRevert}
-          disabled={reverting}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gold/60 bg-white px-3.5 py-2 text-[14px] font-semibold text-navy transition-all hover:bg-gold/10 disabled:opacity-50"
-        >
-          <RotateCcw size={15} /> {reverting ? 'Restoring…' : 'Restore manual figure'}
-        </button>
-      )}
-    </div>
+    </Panel>
   ) : null
 
   const diocesanLink =
     isMultiSchool && canEdit ? (
-      <Link
-        to="/enrollment/diocesan-import"
-        className="group inline-flex items-center gap-1.5 self-start rounded-lg border border-gold/40 bg-white px-3.5 py-2 text-[14px] font-semibold text-navy transition-all hover:bg-gold/10"
-      >
-        <Building2 size={15} className="text-gold" /> Import all schools from one diocesan file
-        <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
-      </Link>
+      <Button to="/enrollment/diocesan-import" variant="secondary" icon={<Building2 size={14} />} className="self-start">
+        Import all schools from one diocesan file <ArrowRight size={13} aria-hidden="true" />
+      </Button>
     ) : null
 
   // Phase 5 — the school's OWN roster is the system of record when no SIS is
@@ -330,9 +321,9 @@ function EnrollmentWorkspace() {
   // Shared overview extras (both the v2 tab and the flat page render these).
   const mixSection = (
     <>
-      {supersedeBanner}
+      {supersedeBanner ? <div className="mt-6">{supersedeBanner}</div> : null}
       {analysisPointer}
-      {diocesanLink}
+      {diocesanLink ? <div className="mt-6">{diocesanLink}</div> : null}
     </>
   )
 
@@ -349,14 +340,14 @@ function EnrollmentWorkspace() {
       <ModuleTabs
           moduleKey="enrollment"
           overview={
-            <div className="mx-auto max-w-page px-4 py-8 sm:px-10">
+            <div className="mx-auto max-w-page px-4 pb-12 sm:px-10">
               {header}
-              <div className="space-y-6">
+              <div className="mt-2">
                 {enrollmentHero}
                 {rosterSource}
-                {/* The 3-tile vs-plan detail earns its space only when a plan
-                    EXISTS — with none, it repeated the hero's no-plan line
-                    twice more in near-empty cards. The hero carries the door. */}
+                {/* The vs-plan detail earns its space only when a plan EXISTS —
+                    with none, it repeated the hero's no-plan line. The hero
+                    carries the door. */}
                 {summary?.vsPlan ? <VsPlanKpi summary={summary} /> : null}
                 {mixSection}
               </div>
@@ -401,10 +392,10 @@ function EnrollmentWorkspace() {
   }
 
   return (
-    <div className="mx-auto max-w-page px-4 py-8 sm:px-10">
+    <div className="mx-auto max-w-page px-4 pb-12 sm:px-10">
       {header}
 
-      <div className="space-y-6">
+      <div className="mt-2">
         {enrollmentHero}
 
         {rosterSource}
@@ -413,7 +404,7 @@ function EnrollmentWorkspace() {
 
         {mixSection}
 
-        {connectCard}
+        <div className="mt-8">{connectCard}</div>
       </div>
     </div>
   )
@@ -421,7 +412,7 @@ function EnrollmentWorkspace() {
 
 export default function EnrollmentPage() {
   return (
-    <div className="min-h-screen bg-section">
+    <div className="min-h-screen">
       <BillingBanner />
       <EnrollmentWorkspace />
     </div>

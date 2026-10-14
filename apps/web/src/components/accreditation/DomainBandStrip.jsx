@@ -1,8 +1,12 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // DomainBandStrip — Phase E: ten ORDINAL early-warning bands, above the Phase-B
-// rubric grid it must never be confused with.
+// rubric table it must never be confused with.
 //
-// TWO GRIDS, TWO QUESTIONS, DELIBERATELY STACKED AND NEVER BLENDED:
+// PREMIUM UI P4: a `DataTable` (Domain · Band · Facts · Signals read · action)
+// under its own `Section` label, on the ground. One row per domain, the band as
+// a 2px mark + the WORD, the counted facts as text — no cards, no percentages.
+//
+// TWO TABLES, TWO QUESTIONS, DELIBERATELY STACKED AND NEVER BLENDED:
 //   · this strip — what the OPERATING DATA is warning about in each domain, as an
 //     ordinal band counted over DISTINCT FACTS (not findings: one plan end date
 //     that fires two rules darkens one domain once);
@@ -13,12 +17,12 @@
 // us" is a real, common and important state.
 //
 // THE HONESTY RULE, ENFORCED HERE:
-//   · `band === null` means NOT MEASURED. The card renders NO band word, NO
-//     colour, NO zero and NO empty meter — it renders the server's `reason`
+//   · `band === null` means NOT MEASURED. The row renders NO band word, NO
+//     colour, NO zero and NO empty figure — it renders the server's `reason`
 //     verbatim. Grey with a reason, never grey with a number.
 //   · No percentage appears anywhere in this component. There is no external band
 //     for a domain risk percentage, and inventing one would be the same error the
-//     Phase-B grid refuses to make.
+//     Phase-B table refuses to make.
 //   · Fact counts ARE rendered, because they are counted facts rather than a
 //     derived score, and they are the only way a reader can tell an 'elevated'
 //     built from four warnings from one built from a single critical.
@@ -28,19 +32,21 @@
 // strip can never drift into a second set of domain names. An unknown key falls
 // back to the key itself rather than a guessed English word.
 // ─────────────────────────────────────────────────────────────────────────────
-import { motion, useReducedMotion } from 'framer-motion'
+import { useMemo } from 'react'
 import { ShieldQuestion, ArrowRight } from 'lucide-react'
-import { domainIcon, domainHue } from './domainMeta.js'
+import { domainIcon } from './domainMeta.js'
 import { riskBandMeta } from './RiskChip.jsx'
 import { DemoChip } from './ReadinessTrendStrip.jsx'
-
-const AMBER = '#F59E0B'
+import { DataTable, Section } from '../ui/surface/index.js'
 
 /** The glyph, read off props (the house workaround for the render-resolved-component lint). */
 function DomainGlyph(props) {
   const Icon = props.icon
-  return <Icon size={14} className={props.className} style={props.style} aria-hidden />
+  return <Icon size={14} className={props.className} aria-hidden />
 }
+
+/** The band word → the 2px mark's tone. Ordinal, never a number. */
+const BAND_TONE = { clear: 'good', watch: 'watch', elevated: 'watch', high: 'risk', critical: 'risk' }
 
 /** "1 critical · 2 warnings" — counted facts, never a score. */
 function factSummary(facts) {
@@ -52,91 +58,7 @@ function factSummary(facts) {
   return parts.length ? parts.join(' · ') : null
 }
 
-function BandCard({ band, label, index, reduce, onOpen }) {
-  const measured = band.band !== null && band.band !== undefined
-  const meta = riskBandMeta(band.band)
-  const Icon = domainIcon(band.domainKey)
-  const hue = domainHue(band.domainKey)
-  const summary = measured ? factSummary(band.facts) : null
-  // CLICKABLE ONLY WHERE THERE IS SOMETHING TO OPEN. A domain with no open fact
-  // has nothing to resolve, and an unmeasured one has nothing to show at all —
-  // making those look interactive would teach the reader that the affordance
-  // means nothing.
-  const openable = !!onOpen && measured && (band.facts?.critical > 0 || band.facts?.warn > 0)
-
-  const body = (
-    <>
-      {/* The band strip is a 5-up grid: at 1280 each cell gave the label ~53px,
-          so every domain rendered as a stub ("MISSI…", "GOVE…", "ACAD…") and the
-          strip named nothing. The label WRAPS instead (card contract §5.3 — a
-          card title is never truncated; prefer wrapping over shrinking). */}
-      <p className="flex items-start gap-1.5 text-[11.5px] font-semibold uppercase leading-snug tracking-[0.08em] text-muted">
-        <DomainGlyph icon={Icon} className="mt-px shrink-0" style={{ color: hue }} />
-        <span className="min-w-0 hyphens-auto break-words">{label}</span>
-      </p>
-
-      {measured ? (
-        <>
-          <span
-            className={`mt-1.5 inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[12px] font-semibold ${meta.chip}`}
-          >
-            <span
-              aria-hidden
-              className="inline-block h-[6px] w-[6px] rounded-full"
-              style={{ backgroundColor: meta.dot }}
-            />
-            {meta.label}
-          </span>
-          {/* Counted facts, so a reader can see what the band is made of — and
-              how many signals the engine actually read to get there. A green
-              'Clear' resting on two readable signals and one resting on nine are
-              different claims, and the reader is entitled to tell them apart. */}
-          <p className="mt-1 text-[11.5px] leading-snug text-muted">
-            {summary ?? 'No open fact in this domain.'}
-            {typeof band.availableSignalCount === 'number'
-              ? ` · ${band.availableSignalCount} signal${band.availableSignalCount === 1 ? '' : 's'} read`
-              : ''}
-          </p>
-        </>
-      ) : (
-        // NOT MEASURED. No band word, no colour, no number — the server's reason
-        // and nothing else. This is the whole point of the null case.
-        <p className="mt-1.5 text-[12px] leading-relaxed text-muted">{band.reason}</p>
-      )}
-      {openable ? (
-        <span className="mt-1.5 inline-flex items-center gap-1 text-[11.5px] font-semibold text-navy">
-          What to do <ArrowRight size={11} aria-hidden />
-        </span>
-      ) : null}
-    </>
-  )
-
-  return (
-    <motion.li
-      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: reduce ? 0 : Math.min(index, 9) * 0.025 }}
-      // The domain's own hue as a left rail — identity, not status. See
-      // DOMAIN_HUE's note on why the two colour languages stay apart.
-      style={measured ? { borderLeftColor: hue, borderLeftWidth: 3 } : undefined}
-      className={`overflow-hidden rounded-xl border p-3 ${
-        measured ? 'border-rule/60 bg-white' : 'border-dashed border-rule/60 bg-cream/50'
-      }`}
-    >
-      {openable ? (
-        <button
-          type="button"
-          onClick={() => onOpen(band)}
-          className="w-full rounded-lg text-left transition hover:opacity-80"
-        >
-          {body}
-        </button>
-      ) : (
-        body
-      )}
-    </motion.li>
-  )
-}
+const measuredOf = (band) => band.band !== null && band.band !== undefined
 
 export default function DomainBandStrip({
   domainBands = [],
@@ -149,63 +71,123 @@ export default function DomainBandStrip({
   /** (band) => void — opens the resolution panel for that domain. Optional. */
   onOpenDomain = null,
 }) {
-  const reduce = useReducedMotion()
+  const onOpen = onOpenDomain
+  const columns = useMemo(
+    () => [
+      {
+        key: 'domainKey',
+        header: 'Domain',
+        // The domain name WRAPS and hyphenates — a cell, never a stub.
+        render: (band) => (
+          <span className="flex min-w-0 items-start gap-2">
+            <span className="mt-[2px] shrink-0 text-ink2">
+              <DomainGlyph icon={domainIcon(band.domainKey)} />
+            </span>
+            <span className="min-w-0 hyphens-auto whitespace-normal break-words font-semibold text-ink">
+              {labels?.[band.domainKey] ?? band.domainKey}
+            </span>
+          </span>
+        ),
+      },
+      {
+        key: 'band',
+        header: 'Band',
+        render: (band) =>
+          measuredOf(band) ? (
+            <span className="text-ink">{riskBandMeta(band.band).label}</span>
+          ) : (
+            // NOT MEASURED. No band word, no colour, no number — the server's reason
+            // and nothing else. This is the whole point of the null case.
+            <span className="block max-w-[32ch] whitespace-normal text-[12px] leading-snug text-ink2">{band.reason}</span>
+          ),
+      },
+      {
+        key: 'facts',
+        header: 'Facts',
+        // Counted facts, so a reader can see what the band is made of. A green
+        // 'Clear' resting on two readable signals and one resting on nine are
+        // different claims, and the reader is entitled to tell them apart.
+        render: (band) =>
+          measuredOf(band) ? <span className="text-ink2">{factSummary(band.facts) ?? 'No open fact in this domain.'}</span> : null,
+      },
+      {
+        key: 'availableSignalCount',
+        header: 'Signals read',
+        num: true,
+        render: (band) =>
+          measuredOf(band) && typeof band.availableSignalCount === 'number' ? (
+            <span className="text-ink2">{band.availableSignalCount}</span>
+          ) : null,
+      },
+      {
+        key: 'action',
+        header: '',
+        num: true,
+        render: (band) => {
+          const measured = measuredOf(band)
+          // CLICKABLE ONLY WHERE THERE IS SOMETHING TO OPEN. A domain with no open fact
+          // has nothing to resolve, and an unmeasured one has nothing to show at all —
+          // making those look interactive would teach the reader that the affordance
+          // means nothing.
+          const openable = !!onOpen && measured && (band.facts?.critical > 0 || band.facts?.warn > 0)
+          return openable ? (
+            <button type="button" onClick={() => onOpen(band)} className="dt-link dt-actions">
+              What to do <ArrowRight size={12} aria-hidden />
+            </button>
+          ) : null
+        },
+      },
+    ],
+    [labels, onOpen],
+  )
 
-  // Degraded states never blank the rubric grid below — one honest line and move on.
+  // Degraded states never blank the rubric table below — one honest line and move on.
   if (loading && domainBands.length === 0) {
     return (
-      <div className="mb-5 rounded-2xl border border-rule/50 bg-cream/40 p-4">
-        <div className="h-[76px] rounded-xl bg-white/70 motion-safe:animate-pulse" aria-hidden />
-      </div>
+      <Section label="Early-warning bands by domain">
+        <div className="h-[76px] rounded bg-ink/[.04] motion-safe:animate-pulse" aria-hidden />
+      </Section>
     )
   }
 
   if (notLicensed || (domainBands.length === 0 && (error || !loading))) {
     return (
-      <div className="mb-5 rounded-2xl border border-dashed border-rule/60 bg-cream/40 px-4 py-3">
-        <p className="flex items-center gap-2 text-[12.5px] text-muted">
-          <ShieldQuestion size={14} style={{ color: AMBER }} aria-hidden />
+      <Section label="Early-warning bands by domain">
+        <p className="flex items-center gap-2 border-y border-hair py-3 text-small text-ink2">
+          <ShieldQuestion size={14} aria-hidden />
           {error || 'No early-warning bands have been computed for this school yet.'}
         </p>
-      </div>
+      </Section>
     )
   }
 
   return (
-    <section className="mb-5 rounded-2xl border border-rule/50 bg-cream/40 p-4">
-      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="flex flex-wrap items-center gap-2 font-serif text-[16px] font-semibold text-navy">
+    <Section
+      label={
+        <span className="inline-flex items-center gap-2">
           Early-warning bands by domain
           {demoData ? <DemoChip /> : null}
-        </h3>
-        <p className="text-[12px] text-muted">
-          Ordinal, counted over distinct facts — never a score, never a percentage.
-        </p>
-      </div>
-      {/* 5-up only once there is room for it — at 1280 a 5-up cell left the
-          domain name ~53px and the whole strip read as stubs. */}
-      {/* THIS STRIP SITS IN THE PAGE'S NARROW COLUMN, not the full width — at
-          1280 the section is ~571px, so lg:4 gave each cell ~127px and
-          `break-words` shattered "GOVERNANCE" into "GOVERNA/NCE". Stepping the
-          density down keeps whole words: 3-up until 2xl, where there is room
-          for 4. Fewer, readable cards beat more, broken ones. */}
-      <ul className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-3 2xl:grid-cols-4">
-        {domainBands.map((b, i) => (
-          <BandCard
-            key={b.domainKey}
-            band={b}
-            index={i}
-            reduce={reduce}
-            label={labels?.[b.domainKey] ?? b.domainKey}
-            onOpen={onOpenDomain}
-          />
-        ))}
-      </ul>
-      <p className="mt-3 text-[12px] leading-relaxed text-muted">
+        </span>
+      }
+      aside="Ordinal, counted over distinct facts — never a score, never a percentage."
+    >
+      <DataTable
+        columns={columns}
+        rows={domainBands}
+        rowKey="domainKey"
+        // The band's tone as the 2px mark; the WORD is in the Band cell.
+        markOf={(band) => (measuredOf(band) ? (BAND_TONE[band.band] ?? 'neutral') : null)}
+        rowClassName={(band) => (measuredOf(band) ? '' : 'opacity-70')}
+        caption="Early-warning bands by domain"
+        // A phone scrolls the table inside its wrap (with the fade) rather than
+        // shattering the reason sentences into one-word lines.
+        style={{ minWidth: 640 }}
+      />
+      <p className="sec-note">
         These bands answer &ldquo;what are the operating numbers warning about here?&rdquo;. The
-        rubric grid below answers &ldquo;what do your accreditor&apos;s standards say?&rdquo;. They
+        rubric table below answers &ldquo;what do your accreditor&apos;s standards say?&rdquo;. They
         are different questions and are never blended into one figure.
       </p>
-    </section>
+    </Section>
   )
 }

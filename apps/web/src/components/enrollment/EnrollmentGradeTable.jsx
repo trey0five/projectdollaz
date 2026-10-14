@@ -7,6 +7,10 @@
 // counts, shares, plans, gaps and gap percentages are all read straight off the
 // payload the charts were drawn from, so the table and the charts cannot drift.
 //
+// PREMIUM UI P4: a `DataTable` on the ground under a `Section` label — sticky
+// caps head, 36px hairline rows, every numeric column right-aligned and
+// tabular, the School total as a tfoot line. No wrapper card.
+//
 // ── WHY THERE IS NO PER-GRADE "CHANGE" COLUMN ───────────────────────────────
 // The obvious last column is this year's grade 9 minus last year's grade 9. Two
 // separate reasons it is not here:
@@ -23,10 +27,11 @@
 //
 // So the column prints last year's count for that rung and says what it is. The
 // whole-school year-over-year change, which IS computed canonically and IS
-// like-for-like, lives in the hero tiles.
+// like-for-like, lives in the vitals strip.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo } from 'react'
 import { motion } from 'framer-motion'
+import { DataTable, Section } from '../ui/surface/index.js'
 import {
   CELL_MASKED,
   EASE,
@@ -34,6 +39,7 @@ import {
   cellTitle,
   cellToken,
   fmtCount,
+  fmtDate,
   fmtShare,
   gradeLabelOf,
   hasValue,
@@ -43,14 +49,16 @@ import {
 } from './enrollmentAnalyticsKit.jsx'
 
 function GapCell({ gap, gapPct }) {
-  if (cellState(gap) === CELL_MASKED) return <span className="text-amber-700">withheld</span>
-  if (!hasValue(gap)) return <span className="text-muted">—</span>
+  if (cellState(gap) === CELL_MASKED) return <span className="text-ink2">withheld</span>
+  if (!hasValue(gap)) return <span className="text-ink2">—</span>
   const under = gap.value < 0
   const even = gap.value === 0
+  // Colour sits on the GAP as a 2px mark; the figure stays ink.
   return (
-    <span className={even ? 'text-slate-500' : under ? 'font-bold text-red-600' : 'font-bold text-emerald-700'}>
-      {signedCount(gap.value)}
-      {hasValue(gapPct) ? <span className="ml-1.5 font-semibold opacity-70">{signedShare(gapPct.value)}</span> : null}
+    <span className="inline-flex items-center justify-end gap-1.5">
+      {!even ? <span className={`mark tone-${under ? 'risk' : 'good'}`} aria-hidden="true" /> : null}
+      <span className={even ? 'text-ink2' : 'font-semibold text-ink'}>{signedCount(gap.value)}</span>
+      {hasValue(gapPct) ? <span className="text-ink2">{signedShare(gapPct.value)}</span> : null}
     </span>
   )
 }
@@ -75,140 +83,166 @@ export default function EnrollmentGradeTable({ ladder, vsPlan, gradeByYear, minC
   }, [gradeByYear])
 
   const rows = ladder?.rows ?? []
-  if (rows.length === 0) return null
-
   const hasPlan = planByGrade.size > 0
   const hasPrior = priorYear !== null
 
-  return (
-    <motion.section
-      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 10 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: '-40px' }}
-      transition={{ duration: 0.4, ease: EASE }}
-      className="panel p-4 sm:p-5"
-    >
-      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="font-serif text-[16px] font-semibold text-navy sm:text-[17px]">Every grade, in figures</h3>
-        <span className="text-[11px] font-medium tabular-nums text-slate-400">
-          {fmtCount(ladder.total)} students · counted {ladder.observedOn}
-        </span>
-      </div>
+  const columns = useMemo(() => {
+    const cols = [
+      {
+        key: 'grade',
+        header: 'Grade',
+        render: (r) => <span className="font-semibold text-ink">{gradeLabelOf(r.grade)}</span>,
+      },
+      {
+        key: 'students',
+        header: 'Students',
+        num: true,
+        render: (r) => {
+          const masked = cellState(r.count) === CELL_MASKED
+          return (
+            <span className={masked ? 'text-ink2' : 'font-semibold text-ink'} title={cellTitle(r.count, { minCell }) ?? undefined}>
+              {cellToken(r.count)}
+            </span>
+          )
+        },
+      },
+      {
+        key: 'share',
+        header: 'Share',
+        num: true,
+        // The share is dropped whenever the count is — printing it beside a
+        // masked count would give the count back.
+        render: (r) => <span className="text-ink2">{hasValue(r.share) ? fmtShare(r.share.value) : '—'}</span>,
+      },
+    ]
+    if (hasPlan) {
+      cols.push(
+        {
+          key: 'plan',
+          header: 'Plan',
+          num: true,
+          render: (r) => {
+            const p = planByGrade.get(r.grade)
+            return <span className="text-ink2">{p ? cellToken(p.plan) : '—'}</span>
+          },
+        },
+        {
+          key: 'gap',
+          header: 'Gap',
+          num: true,
+          render: (r) => {
+            const p = planByGrade.get(r.grade)
+            return p ? <GapCell gap={p.gap} gapPct={p.gapPct} /> : <span className="text-ink2">—</span>
+          },
+        },
+      )
+    }
+    if (hasPrior) {
+      cols.push({
+        key: 'prior',
+        header: (
+          <span>
+            {schoolYearLabel(priorYear)}
+            <span className="dt-sub normal-case tracking-normal">same grade</span>
+          </span>
+        ),
+        num: true,
+        render: (r) => {
+          const prior = priorByGrade.get(r.grade) ?? null
+          return (
+            <span className="text-ink2" title={prior ? (cellTitle(prior, { minCell }) ?? undefined) : 'Not reported that year.'}>
+              {prior ? cellToken(prior) : '—'}
+            </span>
+          )
+        },
+      })
+    }
+    return cols
+  }, [hasPlan, hasPrior, planByGrade, priorByGrade, priorYear, minCell])
 
-      <div className="-mx-1 overflow-x-auto px-1">
-        <table className="w-full min-w-[520px] border-collapse text-left text-[12.5px]">
-          <caption className="sr-only">
-            Headcount by grade with each grade&apos;s share of the school
-            {hasPlan ? ', the planned headcount, and the gap against it' : ''}
-            {hasPrior ? `, beside the same grade's count in ${schoolYearLabel(priorYear)}` : ''}.
-          </caption>
-          <thead>
-            <tr className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted">
-              <th scope="col" className="border-b border-navy/10 py-1.5 pr-3 font-bold">Grade</th>
-              <th scope="col" className="border-b border-navy/10 py-1.5 pr-3 text-right font-bold">Students</th>
-              <th scope="col" className="border-b border-navy/10 py-1.5 pr-3 text-right font-bold">Share</th>
-              {hasPlan ? (
-                <>
-                  <th scope="col" className="border-b border-navy/10 py-1.5 pr-3 text-right font-bold">Plan</th>
-                  <th scope="col" className="border-b border-navy/10 py-1.5 pr-3 text-right font-bold">Gap</th>
-                </>
-              ) : null}
-              {hasPrior ? (
-                <th scope="col" className="border-b border-navy/10 py-1.5 text-right font-bold">
-                  {schoolYearLabel(priorYear)}
-                  <span className="block font-sans text-[8.5px] normal-case tracking-normal opacity-70">
-                    same grade
-                  </span>
-                </th>
-              ) : null}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => {
-              const p = planByGrade.get(r.grade)
-              const prior = priorByGrade.get(r.grade) ?? null
-              const masked = cellState(r.count) === CELL_MASKED
-              return (
-                <tr key={r.grade} className="align-top">
-                  <td className="border-b border-navy/[0.06] py-1.5 pr-3 font-semibold text-navy">
-                    {gradeLabelOf(r.grade)}
-                  </td>
-                  <td
-                    className={`border-b border-navy/[0.06] py-1.5 pr-3 text-right tabular-nums ${
-                      masked ? 'font-semibold text-amber-700' : 'font-bold text-navy'
-                    }`}
-                    title={cellTitle(r.count, { minCell }) ?? undefined}
-                  >
-                    {cellToken(r.count)}
-                  </td>
-                  <td className="border-b border-navy/[0.06] py-1.5 pr-3 text-right tabular-nums text-muted">
-                    {/* The share is dropped whenever the count is — printing it
-                        beside a masked count would give the count back. */}
-                    {hasValue(r.share) ? fmtShare(r.share.value) : '—'}
-                  </td>
-                  {hasPlan ? (
-                    <>
-                      <td className="border-b border-navy/[0.06] py-1.5 pr-3 text-right tabular-nums text-muted">
-                        {p ? cellToken(p.plan) : '—'}
-                      </td>
-                      <td className="border-b border-navy/[0.06] py-1.5 pr-3 text-right tabular-nums">
-                        {p ? <GapCell gap={p.gap} gapPct={p.gapPct} /> : <span className="text-muted">—</span>}
-                      </td>
-                    </>
-                  ) : null}
-                  {hasPrior ? (
-                    <td
-                      className="border-b border-navy/[0.06] py-1.5 text-right tabular-nums text-muted"
-                      title={prior ? (cellTitle(prior, { minCell }) ?? undefined) : 'Not reported that year.'}
-                    >
-                      {prior ? cellToken(prior) : '—'}
-                    </td>
-                  ) : null}
-                </tr>
-              )
-            })}
-          </tbody>
-          {vsPlan?.totals ? (
-            <tfoot>
-              <tr className="font-bold">
-                <td className="py-2 pr-3 text-navy">School</td>
-                <td className="py-2 pr-3 text-right tabular-nums text-navy">{fmtCount(vsPlan.totals.actual)}</td>
-                <td className="py-2 pr-3 text-right tabular-nums text-muted">100.0%</td>
-                <td className="py-2 pr-3 text-right tabular-nums text-muted">{fmtCount(vsPlan.totals.plan)}</td>
-                <td className="py-2 pr-3 text-right tabular-nums">
-                  <GapCell
-                    gap={{ value: vsPlan.totals.gap, suppressed: false }}
-                    gapPct={{ value: vsPlan.totals.gapPct, suppressed: false }}
-                  />
-                </td>
-                {hasPrior ? <td /> : null}
-              </tr>
-            </tfoot>
-          ) : null}
-        </table>
-      </div>
+  // The School line as a tfoot row — the same columns, never sorted.
+  const footRows = useMemo(() => {
+    if (!vsPlan?.totals) return []
+    return [
+      {
+        grade: '__school__',
+        count: { value: vsPlan.totals.actual, suppressed: false },
+        share: { value: 1, suppressed: false },
+        __total: true,
+      },
+    ]
+  }, [vsPlan])
+
+  // The School line renders through the SAME columns (one definition), with
+  // each cell swapped for its total. Memoized: a fresh columns array per render
+  // would re-key DataTable's sort memo on every paint.
+  const tableColumns = useMemo(() => {
+    if (!vsPlan?.totals) return columns
+    const footColumns = columns.map((c) => {
+    if (c.key === 'grade') return { ...c, render: () => <span className="font-semibold text-ink">School</span> }
+    if (c.key === 'students') return { ...c, render: () => <span className="font-semibold text-ink">{fmtCount(vsPlan.totals.actual)}</span> }
+    if (c.key === 'share') return { ...c, render: () => <span className="text-ink2">100.0%</span> }
+    if (c.key === 'plan') return { ...c, render: () => <span className="text-ink2">{fmtCount(vsPlan.totals.plan)}</span> }
+    if (c.key === 'gap')
+      return {
+        ...c,
+        render: () => (
+          <GapCell
+            gap={{ value: vsPlan.totals.gap, suppressed: false }}
+            gapPct={{ value: vsPlan.totals.gapPct, suppressed: false }}
+          />
+        ),
+      }
+    return { ...c, render: () => null }
+  })
+    return columns.map((c, i) => ({ ...c, render: (r) => (r.__total ? footColumns[i].render(r) : c.render(r)) }))
+  }, [columns, vsPlan])
+
+  if (rows.length === 0) return null
+
+  return (
+    <Section
+      as={motion.section}
+      label="Every grade, in figures"
+      aside={
+        <span className="tabular-nums">
+          {fmtCount(ladder.total)} students · counted {fmtDate(ladder.observedOn) ?? ladder.observedOn}
+        </span>
+      }
+      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: EASE }}
+    >
+      <DataTable
+        caption={`Headcount by grade with each grade's share of the school${hasPlan ? ', the planned headcount, and the gap against it' : ''}${hasPrior ? `, beside the same grade's count in ${schoolYearLabel(priorYear)}` : ''}.`}
+        columns={tableColumns}
+        rows={rows}
+        rowKey="grade"
+        footRows={footRows}
+        empty="No grade-level reading on file."
+      />
 
       <div className="mt-2.5 space-y-1">
         {/* The narrowest rung is a genuine finding — the thin year that becomes
             next year's problem — but it is only nameable when nothing is
             hidden, because the smallest VISIBLE rung is not the smallest rung. */}
         {ladder.narrowestRung ? (
-          <p className="text-[11.5px] leading-snug text-muted">
+          <p className="sec-note">
             Narrowest rung:{' '}
-            <span className="font-semibold text-navy">{gradeLabelOf(ladder.narrowestRung.grade)}</span> at{' '}
-            <span className="font-bold tabular-nums text-navy">{fmtCount(ladder.narrowestRung.count)}</span> students —
+            <span className="font-semibold text-ink">{gradeLabelOf(ladder.narrowestRung.grade)}</span> at{' '}
+            <span className="font-semibold tabular-nums text-ink">{fmtCount(ladder.narrowestRung.count)}</span> students —
             the year that sets the ceiling for the grade above it next year.
           </p>
         ) : ladder.narrowestRungWithheldReason ? (
-          <p className="text-[11.5px] leading-snug text-muted">{ladder.narrowestRungWithheldReason}</p>
+          <p className="sec-note">{ladder.narrowestRungWithheldReason}</p>
         ) : null}
         {hasPrior ? (
-          <p className="text-[11.5px] leading-snug text-muted">
+          <p className="sec-note">
             The last column is the same GRADE a year earlier, not the same children — a rung, refilled. No change is
-            taken across it for that reason; to follow one class as it moves up, read the cohort panels above.
+            taken across it for that reason; to follow one class as it moves up, read the cohort panels.
           </p>
         ) : null}
       </div>
-    </motion.section>
+    </Section>
   )
 }

@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // CycleRail — the six-year cycle as a LINEAR road (F1, the Journey tab).
 //
-// The /strategy Horizon-arc family (navy glass, amber accents) made straight:
+// PREMIUM UI P4: ink on the ground, the driven distance in the module hue —
 // a cycle is a road you drive from one Engagement Review to the next, not a
 // gauge you fill. The rail's geometry is pure presentation — dates from the
 // payload are placed proportionally on an axis, exactly the way the trend
@@ -65,7 +65,7 @@ function StateMark({ x, state }) {
       )
     case 'at_risk':
     case 'overdue': {
-      const color = state === 'overdue' ? '#f87171' : AMBER
+      const color = state === 'overdue' ? '#B91C1C' : AMBER
       return (
         <path
           {...common}
@@ -82,7 +82,7 @@ function StateMark({ x, state }) {
           cy={RAIL_Y}
           r={7}
           fill="none"
-          stroke="#ffffff"
+          stroke="#101C3D"
           strokeOpacity={0.45}
           strokeWidth={2}
           strokeDasharray="3 3"
@@ -96,8 +96,8 @@ function StateMark({ x, state }) {
           cx={x}
           cy={RAIL_Y}
           r={7}
-          fill="#12213f"
-          stroke="#ffffff"
+          fill="#ffffff"
+          stroke="#101C3D"
           strokeOpacity={0.5}
           strokeWidth={2}
         />
@@ -166,7 +166,7 @@ export default function CycleRail({ anchor, today, milestones = [], reduce = fal
         y1={RAIL_Y}
         x2={VB_W - PAD_X}
         y2={RAIL_Y}
-        stroke="#ffffff"
+        stroke="#101C3D"
         strokeOpacity={0.14}
         strokeWidth={5}
         strokeLinecap="round"
@@ -194,7 +194,7 @@ export default function CycleRail({ anchor, today, milestones = [], reduce = fal
         textAnchor="middle"
         fontSize={11.5}
         fontWeight={600}
-        fill="#ffffff"
+        fill="#101C3D"
         fillOpacity={0.7}
       >
         {endLabel(anchor.lastReviewDate)}
@@ -205,7 +205,7 @@ export default function CycleRail({ anchor, today, milestones = [], reduce = fal
         textAnchor="middle"
         fontSize={11.5}
         fontWeight={600}
-        fill="#ffffff"
+        fill="#101C3D"
         fillOpacity={0.7}
       >
         {endLabel(anchor.nextReviewDate)}
@@ -228,7 +228,7 @@ export default function CycleRail({ anchor, today, milestones = [], reduce = fal
                   textAnchor="middle"
                   fontSize={10}
                   fontWeight={600}
-                  fill="#ffffff"
+                  fill="#101C3D"
                   fillOpacity={0.55}
                 >
                   {RAIL_LABEL[m.key] ?? m.label}
@@ -239,7 +239,7 @@ export default function CycleRail({ anchor, today, milestones = [], reduce = fal
                   textAnchor="middle"
                   fontSize={9}
                   fontWeight={700}
-                  fill="#ffffff"
+                  fill="#101C3D"
                   fillOpacity={0.4}
                   style={{ textTransform: 'uppercase', letterSpacing: '0.06em' }}
                 >
@@ -267,7 +267,7 @@ export default function CycleRail({ anchor, today, milestones = [], reduce = fal
             strokeWidth={2}
             strokeDasharray="3 3"
           />
-          <circle cx={todayX} cy={RAIL_Y} r={4.5} fill={AMBER} stroke="#0f1f3d" strokeWidth={2} />
+          <circle cx={todayX} cy={RAIL_Y} r={4.5} fill={AMBER} stroke="#ffffff" strokeWidth={2} />
           <text
             x={todayX}
             y={VB_H - 6}

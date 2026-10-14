@@ -37,20 +37,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import {
-  AlertTriangle,
-  ChevronRight,
-  Download,
-  FileSpreadsheet,
-  Plug,
-  Trash2,
-  Upload,
-} from 'lucide-react'
+import { ChevronRight, Download, FileSpreadsheet, Plug, Trash2, Upload } from 'lucide-react'
 import { enrollmentApi, apiErrorMessage } from '../../lib/api.js'
-import { moduleHue } from '../module/moduleAnatomy.js'
+import { Panel, Button, Section, Pill } from '../ui/surface/index.js'
 import { schoolYearLabel } from './enrollmentAnalyticsKit.jsx'
-
-const ENROLL_HUE = moduleHue('enrollment')
 
 function fmtDay(iso) {
   if (!iso) return null
@@ -84,7 +74,7 @@ function ReceiptRow({ imp, superseded, canEdit, busyId, downloadId, onRemove, on
   const when = fmtDay(imp.createdAt)
   return (
     <li
-      className={`flex flex-wrap items-center gap-x-2.5 gap-y-1 px-3 py-2 ${
+      className={`flex flex-wrap items-center gap-x-2.5 gap-y-1 border-b border-hair py-2 ${
         superseded ? 'opacity-70' : ''
       }`}
       title={
@@ -93,23 +83,15 @@ function ReceiptRow({ imp, superseded, canEdit, busyId, downloadId, onRemove, on
           : undefined
       }
     >
-      <span
-        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-white"
-        style={{ backgroundColor: superseded ? '#9aa5b1' : ENROLL_HUE }}
-        aria-hidden="true"
-      >
-        {imp.kind === 'sync' ? <Plug size={12} /> : <FileSpreadsheet size={12} />}
+      <span className="shrink-0 text-ink2" aria-hidden="true">
+        {imp.kind === 'sync' ? <Plug size={13} /> : <FileSpreadsheet size={13} />}
       </span>
       <div className="min-w-0 flex-1 basis-[14rem]">
-        <p className="break-words text-[13px] font-semibold leading-snug text-navy">
+        <p className="break-words text-small font-semibold leading-snug text-ink">
           {imp.fileName ?? (imp.provider ? `Synced from ${imp.provider}` : 'Live sync')}
-          {superseded ? (
-            <span className="ml-2 align-middle text-[10px] font-bold uppercase tracking-[0.08em] text-muted">
-              superseded
-            </span>
-          ) : null}
+          {superseded ? <Pill className="ml-2 align-middle">superseded</Pill> : null}
         </p>
-        <p className="break-words text-[12px] leading-snug text-muted">
+        <p className="break-words text-[12px] leading-snug text-ink2">
           {when ? `${when} · ` : ''}
           {(imp.totalCounted ?? 0).toLocaleString('en-US')} counted
           {' · '}
@@ -120,12 +102,13 @@ function ReceiptRow({ imp, superseded, canEdit, busyId, downloadId, onRemove, on
         {/* The server's own sentence. Never re-derived here — the old
             panel guessed at this and pointed at unrelated notes. */}
         {wrote === 0 && imp.recordsNote ? (
-          <p className="mt-0.5 break-words text-[12px] leading-snug text-[#7a5e00]">
+          <p className="mt-0.5 flex items-start gap-1.5 break-words text-[12px] leading-snug text-ink2">
+            <span className="mark tone-watch mt-[3px]" aria-hidden="true" />
             {imp.recordsNote}
           </p>
         ) : null}
         {(imp.warnings ?? []).map((w) => (
-          <p key={w} className="mt-0.5 break-words text-[12px] leading-snug text-muted">
+          <p key={w} className="mt-0.5 break-words text-[12px] leading-snug text-ink2">
             {w}
           </p>
         ))}
@@ -135,28 +118,32 @@ function ReceiptRow({ imp, superseded, canEdit, busyId, downloadId, onRemove, on
           that can run imports. The file holds student names; a viewer's rows
           carry no download action and the server refuses them regardless. */}
       {canEdit && imp.originalDocumentId ? (
-        <button
-          type="button"
+        <Button
+          variant="quiet"
+          size="sm"
           disabled={downloadId === imp.id}
           onClick={() => onDownload(imp.id)}
           title="Download the original file exactly as it was imported."
-          className="inline-flex min-h-[30px] shrink-0 items-center gap-1.5 rounded-lg border border-rule/70 px-2.5 text-[12px] font-semibold text-muted transition-colors hover:border-navy hover:text-navy disabled:opacity-40"
+          icon={<Download size={13} />}
+          className="dt-actions shrink-0"
         >
-          <Download size={13} /> Download original
-        </button>
+          Download original
+        </Button>
       ) : null}
       {canEdit ? (
-        <button
-          type="button"
+        <Button
+          variant="quiet"
+          size="sm"
           disabled={busyId === imp.id}
           onClick={() => onRemove(imp.id)}
           // Says what it removes. "Delete import" read as "delete the
           // students" is how a school loses a roster by tidying a list.
           title="Remove this record from the list. Your students are not deleted."
-          className="inline-flex min-h-[30px] shrink-0 items-center gap-1.5 rounded-lg border border-rule/70 px-2.5 text-[12px] font-semibold text-muted transition-colors hover:border-danger hover:text-danger disabled:opacity-40"
+          icon={<Trash2 size={13} />}
+          className="dt-actions shrink-0"
         >
-          <Trash2 size={13} /> Remove entry
-        </button>
+          Remove entry
+        </Button>
       ) : null}
     </li>
   )
@@ -264,74 +251,66 @@ export default function RosterSourceCard({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: 'spring', stiffness: 240, damping: 24 }}
-      className="card-soft p-5 sm:p-6"
     >
       {countedButEmpty ? (
-        <div className="mb-4 flex flex-wrap items-start gap-3 rounded-xl border border-l-4 border-[#e8c96a] border-l-gold bg-[#fff8e6] px-4 py-3.5">
-          <AlertTriangle size={17} className="mt-0.5 shrink-0 text-gold" />
-          <div className="min-w-0 flex-1 basis-[18rem]">
-            <p className="break-words text-[14px] font-semibold leading-snug text-[#7a5e00]">
-              You have a headcount, but no student records.
-            </p>
-            <p className="mt-1 break-words text-[13.5px] leading-snug text-[#7a5e00]">
-              {headcount.toLocaleString('en-US')} students were counted, and the register is
-              empty — so Waitlist, Support flags and New this year have nothing to read. That
-              happens when the file was counted before we started saving per-student rows, or when
-              it carried totals only. Uploading the same file again builds the register.
-            </p>
+        <Panel tone="attention" className="panel-watch mt-6">
+          <div className="flex flex-wrap items-start gap-3">
+            <div className="min-w-0 flex-1 basis-[18rem]">
+              <p className="break-words text-body font-semibold leading-snug text-ink">
+                You have a headcount, but no student records.
+              </p>
+              <p className="mt-1 break-words text-small leading-snug text-ink2">
+                {headcount.toLocaleString('en-US')} students were counted, and the register is
+                empty — so Waitlist, Support flags and New this year have nothing to read. That
+                happens when the file was counted before we started saving per-student rows, or when
+                it carried totals only. Uploading the same file again builds the register.
+              </p>
+            </div>
+            {canEdit && onAddData ? (
+              <Button variant="primary" onClick={onAddData} icon={<Upload size={14} />} className="shrink-0">
+                Upload it again
+              </Button>
+            ) : null}
           </div>
-          {canEdit && onAddData ? (
-            <button
-              type="button"
-              onClick={onAddData}
-              className="inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-xl bg-navy px-4 text-[12.5px] font-semibold uppercase tracking-[0.08em] text-white transition-opacity hover:opacity-90"
-            >
-              <Upload size={14} /> Upload it again
-            </button>
-          ) : null}
-        </div>
+        </Panel>
       ) : null}
 
       {imports != null && imports.length > 0 ? (
-        <>
-          {/* Collapsed by default: provenance is metadata, not a primary surface.
-              One summary line; the grouped history renders only on request. */}
-          <button
-            type="button"
-            onClick={() => setHistoryOpen((v) => !v)}
-            aria-expanded={historyOpen}
-            className="flex w-full flex-wrap items-baseline justify-between gap-2 rounded-xl px-1 py-1 text-left transition-colors hover:bg-navy/[0.03]"
-          >
-            <span className="flex items-baseline gap-2.5">
-              <h3 className="font-serif text-[17px] font-semibold text-navy">Where this came from</h3>
-              <span className="text-[12.5px] text-muted">
-                {imports.length} import{imports.length === 1 ? '' : 's'} across {groups.length} school
-                year{groups.length === 1 ? '' : 's'}
-              </span>
-            </span>
-            <span className="inline-flex items-center gap-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-navy/70">
+        /* Collapsed by default: provenance is metadata, not a primary surface.
+           One summary line; the grouped history renders only on request. */
+        <Section
+          label="Where this came from"
+          aside={
+            <button
+              type="button"
+              onClick={() => setHistoryOpen((v) => !v)}
+              aria-expanded={historyOpen}
+              className="sec-more !mt-0"
+            >
               {historyOpen ? 'Hide history' : 'View history'}
-              <ChevronRight
-                size={13}
-                className={`transition-transform ${historyOpen ? 'rotate-90' : ''}`}
-              />
-            </span>
-          </button>
+              <ChevronRight size={13} className={`transition-transform ${historyOpen ? 'rotate-90' : ''}`} aria-hidden="true" />
+            </button>
+          }
+        >
+          <p className="text-small text-ink2">
+            {imports.length} import{imports.length === 1 ? '' : 's'} across {groups.length} school
+            year{groups.length === 1 ? '' : 's'}
+          </p>
           {historyOpen ? (
-          <div className="mt-3 space-y-3.5">
+          <div className="mt-3 space-y-4">
             {groups.map(({ year, latest, earlier }) => {
               const expanded = expandedYears.has(year)
               return (
                 <section key={year}>
-                  <div className="mb-1.5 flex flex-wrap items-baseline gap-2">
-                    <h4 className="text-[13px] font-bold tabular-nums text-navy">
+                  <div className="mb-1 flex flex-wrap items-baseline gap-2 border-b border-hair pb-1">
+                    <h4 className="text-micro font-semibold uppercase tabular-nums text-ink2">
                       {year ? schoolYearLabel(year) : 'Undated'}
                     </h4>
-                    <span className="text-[11.5px] text-muted">
+                    <span className="text-[11px] text-ink2">
                       {earlier.length + 1} import{earlier.length === 0 ? '' : 's'}
                     </span>
                   </div>
-                  <ul className="divide-y divide-rule/50 rounded-xl border border-rule/60 bg-white">
+                  <ul>
                     <ReceiptRow
                       imp={latest}
                       superseded={false}
@@ -361,11 +340,12 @@ export default function RosterSourceCard({
                           type="button"
                           onClick={() => toggleYear(year)}
                           aria-expanded={expanded}
-                          className="flex w-full items-center gap-1.5 px-3 py-2 text-left text-[12px] font-semibold text-muted transition-colors hover:text-navy"
+                          className="flex w-full items-center gap-1.5 py-2 text-left text-[12px] font-semibold text-ink2 transition-colors hover:text-ink"
                         >
                           <ChevronRight
                             size={13}
                             className={`transition-transform ${expanded ? 'rotate-90' : ''}`}
+                            aria-hidden="true"
                           />
                           {expanded
                             ? `Hide ${earlier.length} earlier import${earlier.length === 1 ? '' : 's'}`
@@ -380,21 +360,17 @@ export default function RosterSourceCard({
           </div>
           ) : null}
           {historyOpen ? (
-          <p className="mt-2.5 break-words text-[12px] leading-snug text-muted">
+          <p className="sec-note">
             Removing an entry clears it from this list and deletes its retained original file — it
             never deletes students. Students are edited and removed in{' '}
-            <span className="font-semibold text-navy">Records</span>. Past files keep the names they
+            <span className="font-semibold text-ink">Records</span>. Past files keep the names they
             were imported with, even after a student is later deleted from the register.
           </p>
           ) : null}
-        </>
+        </Section>
       ) : null}
 
-      {error ? (
-        <p className="mt-3 break-words rounded-lg border border-danger/30 bg-danger/[0.06] px-3 py-2 text-[13px] text-danger">
-          {error}
-        </p>
-      ) : null}
+      {error ? <p className="mt-3 break-words text-small text-risk">{error}</p> : null}
     </motion.div>
   )
 }

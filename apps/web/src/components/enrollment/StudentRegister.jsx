@@ -3,7 +3,10 @@
 // a server-filtered register (DomainCommandCenter register conventions). ALL
 // filtering/sorting/paging is SERVER-side via the frozen query contract
 // (studentFilters.buildStudentParams + sort/dir/page/pageSize); the chip filter
-// bar + debounced search are the shared StudentFilterBar. Row → StudentSlideOver
+// bar + debounced search are the shared StudentFilterBar inside a `Toolbar`.
+// PREMIUM UI P4: the roster is a `DataTable` directly on the ground — sticky
+// caps head, 36px hairline rows, grade as text, status as a 2px mark + word,
+// flags as Pills, no avatars, no wrapper card. Row → StudentSlideOver
 // (view / delete); Edit opens the EntityFormModal-based StudentFormModal (the
 // EDIT path — adding happens on the Add-data tab's RecordFlow / CSV import).
 //
@@ -11,9 +14,9 @@
 // React 19 idioms: microtask-deferred fetch effects + a cancelled guard.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { motion } from 'framer-motion'
-import { AlertTriangle, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, Trash2, UsersRound } from 'lucide-react'
+import { AlertTriangle, ChevronLeft, ChevronRight, Trash2, UsersRound } from 'lucide-react'
 import { enrollmentApi, apiErrorMessage } from '../../lib/api.js'
+import { DataTable, Toolbar, Button, Panel } from '../ui/surface/index.js'
 import EntityFormModal, { Field, Select, fieldInput, fieldTextarea } from '../ui/EntityFormModal.jsx'
 import DatePicker from '../ui/DatePicker.jsx'
 import {
@@ -33,30 +36,9 @@ import StudentFilterBar, {
   GRADE_LABELS,
   buildStudentParams,
 } from './studentFilters.jsx'
-import StudentSlideOver, { StatusPill, FlagBadges } from './StudentSlideOver.jsx'
-import { demographicPillStyle } from '../../lib/demographicColor.js'
+import StudentSlideOver, { StatusPill, FlagBadges, STATUS_TONE } from './StudentSlideOver.jsx'
 
 const ENROLL_HUE = '#0EA5E9'
-
-/**
- * One demographic value as a coloured pill. Falls back to plain text for a value
- * outside the known vocabulary rather than inventing a swatch for it, and to an
- * em-dash for nothing at all — a roster imported from a users.csv carries no
- * demographics, and a blank must stay visibly blank.
- */
-function ValuePill({ dimension, value, label }) {
-  if (value == null || value === '') return <span className="text-muted">—</span>
-  const style = demographicPillStyle(dimension, value)
-  if (!style) return <span className="text-navy">{label ?? value}</span>
-  return (
-    <span
-      className="inline-flex max-w-full items-center rounded-full border px-2.5 py-0.5 text-[12.5px] font-semibold"
-      style={style}
-    >
-      <span className="min-w-0 truncate">{label ?? value}</span>
-    </span>
-  )
-}
 
 /**
  * CLEAR THE WHOLE ROSTER — the confirm.
@@ -81,73 +63,56 @@ function ClearRosterDialog({ total, busy, error, onCancel, onConfirm }) {
   const armed = typed.trim().toUpperCase() === 'DELETE'
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-navy/60 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/40 p-4"
       onClick={busy ? undefined : onCancel}
     >
-      <div
+      <Panel
         role="dialog"
         aria-modal="true"
         aria-labelledby="clear-roster-title"
-        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+        className="w-full max-w-md !shadow-float"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start gap-3">
-          <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-danger/10 text-danger">
-            <AlertTriangle size={20} />
-          </span>
+          <AlertTriangle size={18} className="mt-0.5 shrink-0 text-risk" aria-hidden="true" />
           <div className="min-w-0">
-            <h3 id="clear-roster-title" className="font-serif text-[18px] font-semibold text-navy">
+            <h3 id="clear-roster-title" className="font-serif text-heading font-medium text-ink">
               Delete all {total.toLocaleString('en-US')} student record{total === 1 ? '' : 's'}?
             </h3>
-            <p className="mt-1.5 break-words text-[13.5px] leading-snug text-muted">
+            <p className="mt-1.5 break-words text-small leading-snug text-ink2">
               This removes every student from the register, including any you added by hand. It
               cannot be undone.
             </p>
-            <p className="mt-2 break-words text-[13.5px] leading-snug text-muted">
-              Your enrollment <span className="font-semibold text-navy">headcount stays</span> — it
+            <p className="mt-2 break-words text-small leading-snug text-ink2">
+              Your enrollment <span className="font-semibold text-ink">headcount stays</span> — it
               comes from the snapshot you imported, not from these records, so the Enrollment page
               will still show its total over an empty register.
             </p>
           </div>
         </div>
 
-        <label className="mt-5 block text-[12.5px] font-semibold uppercase tracking-[0.08em] text-muted">
+        <label className="mt-5 block text-micro font-semibold uppercase text-ink2">
           Type DELETE to confirm
           <input
             autoFocus
             value={typed}
             onChange={(e) => setTyped(e.target.value)}
             disabled={busy}
-            className="mt-1.5 w-full rounded-xl border-2 border-border px-3 py-2 text-[14px] font-normal normal-case tracking-normal text-navy outline-none focus:border-navy"
+            className="mt-1.5 h-9 w-full rounded-md border border-hair/30 px-3 text-body font-normal normal-case tracking-normal text-ink outline-none focus:border-ink"
           />
         </label>
 
-        {error ? (
-          <p className="mt-3 break-words rounded-lg border border-danger/30 bg-danger/[0.06] px-3 py-2 text-[13px] text-danger">
-            {error}
-          </p>
-        ) : null}
+        {error ? <p className="mt-3 break-words text-small text-risk">{error}</p> : null}
 
         <div className="mt-5 flex flex-col gap-2 sm:flex-row-reverse">
-          <button
-            type="button"
-            disabled={!armed || busy}
-            onClick={onConfirm}
-            className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-danger px-5 text-[13px] font-semibold uppercase tracking-[0.08em] text-white transition-opacity disabled:opacity-40 sm:w-auto"
-          >
-            <Trash2 size={15} />
+          <Button variant="primary" disabled={!armed || busy} onClick={onConfirm} icon={<Trash2 size={14} />} className="!bg-risk !shadow-none">
             {busy ? 'Deleting…' : 'Delete the roster'}
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={onCancel}
-            className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border-2 border-border px-5 text-[13.5px] font-semibold text-muted transition-colors hover:border-navy hover:text-navy disabled:opacity-40 sm:w-auto"
-          >
+          </Button>
+          <Button variant="secondary" disabled={busy} onClick={onCancel}>
             Keep it
-          </button>
+          </Button>
         </div>
-      </div>
+      </Panel>
     </div>
   )
 }
@@ -339,27 +304,6 @@ function StudentFormModal({ student, onClose, onSave }) {
   )
 }
 
-// ── Sortable header cell ──────────────────────────────────────────────────────
-function Th({ label, sortKey, sort, dir, onSort, className = '' }) {
-  const active = sortKey && sort === sortKey
-  return (
-    <th className={`px-3 py-2 text-left text-[11px] font-bold uppercase tracking-[0.1em] text-muted ${className}`}>
-      {sortKey ? (
-        <button
-          type="button"
-          onClick={() => onSort(sortKey)}
-          className={`inline-flex items-center gap-1 transition-colors hover:text-navy ${active ? 'text-navy' : ''}`}
-        >
-          {label}
-          {active ? (dir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : null}
-        </button>
-      ) : (
-        label
-      )}
-    </th>
-  )
-}
-
 export default function StudentRegister({
   schoolId,
   canEdit,
@@ -434,16 +378,50 @@ export default function StudentRegister({
     setPage(1)
   }, [])
 
-  const onSort = useCallback(
-    (key) => {
-      if (sort === key) setDir((d) => (d === 'asc' ? 'desc' : 'asc'))
-      else {
-        setSort(key)
-        setDir('asc')
-      }
-      setPage(1)
-    },
-    [sort],
+  // DataTable (controlled) hands back { key, dir }; the server does the sorting.
+  const onSort = useCallback((next) => {
+    setSort(next.key)
+    setDir(next.dir)
+    setPage(1)
+  }, [])
+
+  // The page arrives SERVER-sorted; every column's sortValue is a constant so
+  // DataTable's own comparator falls through to the original index and never
+  // re-orders the page ('K' before '1' is the server's call, not localeCompare's).
+  const columns = useMemo(
+    () => [
+      {
+        key: 'lastName',
+        header: 'Name',
+        sortable: true,
+        sortValue: () => 0,
+        render: (s) => (
+          <span className="font-semibold text-ink">
+            {s.lastName}, {s.firstName}
+          </span>
+        ),
+      },
+      { key: 'grade', header: 'Grade', sortable: true, sortValue: () => 0, className: 'dt-nowrap', render: (s) => GRADE_LABELS[s.grade] ?? s.grade ?? '—' },
+      {
+        key: 'birthDate',
+        header: 'Age',
+        num: true,
+        sortable: true,
+        sortValue: () => 0,
+        render: (s) => <span className="text-ink2">{s.age ?? ageFromBirthDate(s.birthDate) ?? '—'}</span>,
+      },
+      { key: 'status', header: 'Status', sortable: true, sortValue: () => 0, render: (s) => <StatusPill status={s.status} /> },
+      { key: 'flags', header: 'Flags', render: (s) => <FlagBadges student={s} /> },
+      {
+        key: 'enrolledOn',
+        header: 'Enrolled on',
+        sortable: true,
+        sortValue: () => 0,
+        className: 'dt-nowrap',
+        render: (s) => <span className="text-ink2">{fmtDay(s.enrolledOn)}</span>,
+      },
+    ],
+    [],
   )
 
   useEffect(() => {
@@ -504,168 +482,88 @@ export default function StudentRegister({
     reload()
   }
 
+  const noFilters = !Object.keys(buildStudentParams(filters)).length
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <span
-            className="flex h-9 w-9 items-center justify-center rounded-xl text-white"
-            style={{ backgroundColor: hue }}
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <p className="text-small text-ink2">
+          <UsersRound size={14} className="mr-1.5 inline-block align-[-2px] text-ink2" aria-hidden="true" />
+          {loading && !data ? 'Loading…' : (
+            <span className="font-semibold tabular-nums text-ink">
+              {total.toLocaleString('en-US')} student{total === 1 ? '' : 's'}
+            </span>
+          )}
+          {/* Edit and delete have always existed, one row-click away, and nothing
+              said so — "there is no way to change a roster" is what an invisible
+              affordance feels like from the outside. */}
+          {total > 0 && canEdit ? <span className="ml-2">Click a student to view, edit or delete them.</span> : null}
+        </p>
+        {canEdit && total > 0 ? (
+          <Button
+            variant="quiet"
+            size="sm"
+            onClick={() => {
+              setClearError('')
+              setClearOpen(true)
+            }}
+            icon={<Trash2 size={13} />}
           >
-            <UsersRound size={18} />
-          </span>
-          <div>
-            <h3 className="font-serif text-lg font-bold text-navy">Student roster</h3>
-            <p className="text-[12.5px] text-muted">
-              {loading && !data ? 'Loading…' : `${total.toLocaleString('en-US')} student${total === 1 ? '' : 's'}`}
-            </p>
-            {/* Edit and delete have always existed, one row-click away, and nothing
-                said so — "there is no way to change a roster" is what an invisible
-                affordance feels like from the outside. */}
-            {total > 0 && canEdit ? (
-              <p className="text-[12px] text-muted">Click a student to view, edit or delete them.</p>
-            ) : null}
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {canEdit && total > 0 ? (
-            <button
-              type="button"
-              onClick={() => {
-                setClearError('')
-                setClearOpen(true)
-              }}
-              className="inline-flex min-h-[36px] items-center gap-1.5 rounded-xl border-2 border-border px-3 py-1.5 text-[12.5px] font-semibold text-muted transition-colors hover:border-danger hover:text-danger"
-            >
-              <Trash2 size={14} /> Clear roster
-            </button>
-          ) : null}
-          <span
-            className="rounded-full border px-3 py-1 text-[12.5px] font-bold"
-            style={{ borderColor: `${hue}55`, backgroundColor: `${hue}12`, color: '#0369A1' }}
-          >
-            {total.toLocaleString('en-US')}
-          </span>
-        </div>
+            Clear roster
+          </Button>
+        ) : null}
       </div>
 
-      <StudentFilterBar filters={filters} onChange={onFilters} hue={hue} facets={facets} />
+      <Toolbar>
+        <div className="min-w-0 flex-1 py-1">
+          <StudentFilterBar filters={filters} onChange={onFilters} hue={hue} facets={facets} />
+        </div>
+      </Toolbar>
 
       {error ? (
-        <div className="rounded-xl border border-danger/30 bg-danger/[0.06] px-4 py-6 text-center">
-          <p className="text-[14px] text-danger">{error}</p>
-          <button
-            type="button"
-            onClick={reload}
-            className="mt-2 text-[13.5px] font-semibold text-navy underline underline-offset-2"
-          >
+        <div className="py-6 text-center">
+          <p className="text-body text-risk">{error}</p>
+          <Button variant="secondary" size="sm" onClick={reload} className="mt-2">
             Try again
-          </button>
+          </Button>
         </div>
       ) : loading && !data ? (
-        <div className="h-48 animate-pulse rounded-xl border border-rule/40 bg-section/60" />
-      ) : items.length === 0 ? (
-        <div className="rounded-xl border-2 border-dashed border-rule/60 bg-cream/50 px-6 py-12 text-center">
-          <p className="font-serif text-[16px] italic text-muted">
-            {total === 0 && !Object.keys(buildStudentParams(filters)).length
-              ? 'No students on the roster yet.'
-              : 'No students match these filters.'}
-          </p>
-          <p className="mx-auto mt-1 max-w-xl break-words text-[13px] leading-snug text-muted">
-            {total === 0 && !Object.keys(buildStudentParams(filters)).length
+        <div className="h-48 animate-pulse rounded-lg bg-ink/[.04]" aria-hidden="true" />
+      ) : (
+        <DataTable
+          columns={columns}
+          rows={items}
+          rowKey="id"
+          sort={{ key: sort, dir }}
+          onSort={onSort}
+          markOf={(s) => STATUS_TONE[s.status] ?? 'neutral'}
+          onRowClick={(s) => setPanelStudent(s)}
+          caption="Student roster"
+          empty={
+            total === 0 && noFilters
               ? // Says the thing that was missing: an enrollment HEADCOUNT does not
                 // put anyone in this register, and a school looking at "436 enrolled"
                 // one tab away has every reason to expect that it does.
-                'Uploading a roster file here creates the student records. A headcount on the ' +
+                'No students on the roster yet. Uploading a roster file here creates the student records. A headcount on the ' +
                 'Enrollment overview does not — if you have a total there but nothing here, ' +
                 'upload that file again from the Add data tab.'
-              : 'Loosen a filter or clear the search.'}
-          </p>
-        </div>
-      ) : (
-        <div className="overflow-x-auto rounded-xl border border-rule/50">
-          <table className="w-full min-w-[640px] border-collapse text-[13.5px]">
-            <thead className="bg-section/70">
-              <tr>
-                <Th label="Name" sortKey="lastName" sort={sort} dir={dir} onSort={onSort} />
-                <Th label="Grade" sortKey="grade" sort={sort} dir={dir} onSort={onSort} />
-                <Th label="Age" sortKey="birthDate" sort={sort} dir={dir} onSort={onSort} />
-                <Th label="Status" sortKey="status" sort={sort} dir={dir} onSort={onSort} />
-                <Th label="Flags" />
-                <Th label="Enrolled on" sortKey="enrolledOn" sort={sort} dir={dir} onSort={onSort} />
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((s, i) => (
-                <motion.tr
-                  key={s.id}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: Math.min(i * 0.02, 0.3) }}
-                  onClick={() => setPanelStudent(s)}
-                  className="cursor-pointer border-t border-rule/40 transition-colors hover:bg-sky-50/60"
-                >
-                  <td className="px-3 py-2.5">
-                    <span className="flex items-center gap-2.5">
-                      <span
-                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[11px] font-bold text-white"
-                        style={{ backgroundColor: hue }}
-                        aria-hidden="true"
-                      >
-                        {`${String(s.firstName ?? '').charAt(0)}${String(s.lastName ?? '').charAt(0)}`.toUpperCase()}
-                      </span>
-                      <span className="font-semibold text-navy">
-                        {s.lastName}, {s.firstName}
-                      </span>
-                    </span>
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <ValuePill dimension="grade" value={s.grade} label={GRADE_LABELS[s.grade] ?? s.grade} />
-                  </td>
-                  <td className="px-3 py-2.5 text-muted">{s.age ?? ageFromBirthDate(s.birthDate) ?? '—'}</td>
-                  <td className="px-3 py-2.5">
-                    <StatusPill status={s.status} />
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <FlagBadges student={s} />
-                  </td>
-                  <td className="px-3 py-2.5 text-muted">{fmtDay(s.enrolledOn)}</td>
-                </motion.tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              : 'No students match these filters. Loosen a filter or clear the search.'
+          }
+        />
       )}
 
       {/* Pagination footer */}
       {total > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-[12.5px] text-muted">
-            Showing <span className="font-semibold text-navy">{from.toLocaleString('en-US')}–{to.toLocaleString('en-US')}</span> of{' '}
-            <span className="font-semibold text-navy">{total.toLocaleString('en-US')}</span>
+          <p className="text-small text-ink2">
+            Showing <span className="font-semibold tabular-nums text-ink">{from.toLocaleString('en-US')}–{to.toLocaleString('en-US')}</span> of{' '}
+            <span className="font-semibold tabular-nums text-ink">{total.toLocaleString('en-US')}</span>
           </p>
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page <= 1 || loading}
-              aria-label="Previous page"
-              className="rounded-lg border border-rule/60 p-1.5 text-muted transition hover:text-navy disabled:opacity-40"
-            >
-              <ChevronLeft size={15} />
-            </button>
-            <span className="px-1 text-[12.5px] font-semibold text-navy">
+          <div className="flex items-center gap-1">
+            <Button variant="quiet" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1 || loading} aria-label="Previous page" icon={<ChevronLeft size={15} />} />
+            <span className="px-1 text-small font-semibold tabular-nums text-ink">
               Page {page} of {pages}
             </span>
-            <button
-              type="button"
-              onClick={() => setPage((p) => Math.min(pages, p + 1))}
-              disabled={page >= pages || loading}
-              aria-label="Next page"
-              className="rounded-lg border border-rule/60 p-1.5 text-muted transition hover:text-navy disabled:opacity-40"
-            >
-              <ChevronRight size={15} />
-            </button>
+            <Button variant="quiet" size="sm" onClick={() => setPage((p) => Math.min(pages, p + 1))} disabled={page >= pages || loading} aria-label="Next page" icon={<ChevronRight size={15} />} />
           </div>
         </div>
       )}

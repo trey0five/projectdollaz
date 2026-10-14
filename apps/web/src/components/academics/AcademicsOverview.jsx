@@ -13,27 +13,20 @@
 //   3. One generic door into an analysis with five distinct views meant every
 //      reader landed on the same one and hunted from there.
 //
-// So: a dark verdict panel carrying the finding (the one place on a white page
-// where the module states its conclusion), a row of doors that each name a real
-// question and carry a live number, and a rail that only speaks when something
-// actually needs doing. Counters moved to the bottom, where inventory belongs.
+// PREMIUM UI P4: the dark "The read" stage and its glass chips are gone. The
+// read is a `Section` lead — the verdict sentence in Garamond, the rank track
+// in ink with one hue segment, the key insight as prose — over a `StatStrip`
+// of the four chips as Stats. The doors are ruled rows under a Section label
+// (a title, a question, a live figure as a Pill, an arrow), not icon tiles.
+// "To finish the picture" is a `Panel tone="attention"` because it carries
+// actions. Inventory is a StatStrip at the foot, where inventory belongs.
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion, useReducedMotion } from 'framer-motion'
-import {
-  Activity,
-  ArrowRight,
-  BarChart3,
-  Building2,
-  ClipboardList,
-  Footprints,
-  Gauge,
-  Sparkles,
-  Upload,
-} from 'lucide-react'
+import { ArrowRight, Upload } from 'lucide-react'
 import { subjectLabelOf } from '@finrep/analytics'
+import { Section, StatStrip, Stat, Pill, Panel, Button } from '../ui/surface/index.js'
 
 const HUE = '#0D9488'
-const INK = '#0A1628'
 const EASE = [0.2, 0.8, 0.2, 1]
 
 const fmt = (v, d = 1) => (v === null || v === undefined ? '—' : Number(v).toFixed(d).replace(/\.0$/, ''))
@@ -49,22 +42,16 @@ const ordinal = (n) => {
   return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`
 }
 
-/** Blend a hex over the ink ground. */
-const glow = (hex, a) => {
-  const h = hex.replace('#', '')
-  const n = parseInt(h.length === 3 ? h.replace(/(.)/g, '$1$1') : h, 16)
-  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`
-}
-
 // ── The verdict ──────────────────────────────────────────────────────────────
 
 /**
- * THE READ. Rank, standing, and the sentence — on the ink ground the module
- * hero already established, so the page's one conclusion is also its one dark
- * surface. The rank track is the point: "2 of 3" is a fact you decode, whereas
- * a lit segment among three says the same thing before you have read anything.
+ * THE READ. Rank, standing, and the sentence — as the page's lead paragraph on
+ * the ground, with a StatStrip under it. The rank track is the point: "2 of 3"
+ * is a fact you decode, whereas a lit segment among three says the same thing
+ * before you have read anything. The track is ink; the school's segment is the
+ * module hue (identity, not status). Status lives in the Stat marks.
  */
-function VerdictPanel({ dashboard, reduce }) {
+function VerdictSection({ dashboard, reduce }) {
   const kpis = dashboard?.kpis
   const ctx = dashboard?.context
   const rank = kpis?.rank?.rank ?? null
@@ -72,8 +59,7 @@ function VerdictPanel({ dashboard, reduce }) {
   const avg = kpis?.average ?? {}
   const standing = avg.standing ?? 'unknown'
 
-  const tone =
-    standing === 'strong' ? '#34D399' : standing === 'below' ? '#FB7185' : '#93C5FD'
+  const tone = standing === 'strong' ? 'good' : standing === 'below' ? 'risk' : 'neutral'
   const verdict =
     standing === 'strong'
       ? 'Ahead of the network'
@@ -87,171 +73,109 @@ function VerdictPanel({ dashboard, reduce }) {
     .sort((a, b) => a.variance - b.variance)[0]
 
   const part = kpis?.participation
-  const chips = [
-    ctx?.testType
-      ? { k: 'Measure', v: `${String(ctx.testType).toUpperCase()} · ${ctx.year}` }
-      : null,
-    weakest ? { k: 'Widest gap', v: `${subjectLabelOf(weakest.subject)} ${signed(weakest.variance, 0)}` } : null,
-    dashboard?.trendDirection && dashboard.trendDirection !== 'unknown'
-      ? { k: 'Trend', v: dashboard.trendDirection, accent: dashboard.trendDirection === 'improving' }
-      : null,
-    part?.rate != null
-      ? { k: 'Participation', v: `${Math.round(part.rate * 100)}%${part.comparable ? ' · fair' : ' · read with care'}` }
-      : null,
-  ].filter(Boolean)
+  const trend = dashboard?.trendDirection && dashboard.trendDirection !== 'unknown' ? dashboard.trendDirection : null
 
   return (
-    <motion.section
-      initial={reduce ? false : { opacity: 0, y: 16 }}
+    <Section
+      as={motion.section}
+      label="The read"
+      aside={ctx?.testType ? `${String(ctx.testType).toUpperCase()} · ${ctx.year}` : null}
+      className="!mt-4"
+      initial={reduce ? false : { opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.55, ease: EASE }}
-      className="relative isolate overflow-hidden rounded-3xl px-6 py-6 text-white sm:px-7"
-      style={{
-        background: INK,
-        boxShadow: `0 30px 80px -44px ${glow(HUE, 0.7)}, inset 0 1px 0 0 rgba(255,255,255,0.06)`,
-      }}
+      transition={{ duration: 0.45, ease: EASE }}
     >
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 -z-10"
-        style={{
-          background: [
-            `radial-gradient(66% 120% at 90% -14%, ${glow(HUE, 0.8)} 0%, ${glow(HUE, 0.28)} 36%, transparent 74%)`,
-            `radial-gradient(52% 92% at 2% 106%, ${glow('#3B82F6', 0.34)} 0%, transparent 72%)`,
-          ].join(', '),
-        }}
-      />
+      <p className="sec-title !mb-2">
+        {rank ? `${ordinal(rank)} of ${of ?? '—'} schools` : 'Not yet ranked'} — {verdict.toLowerCase()}.
+      </p>
 
-      <div className="flex flex-wrap items-start justify-between gap-5">
-        <div className="min-w-0 flex-1">
-          <p
-            className="flex items-center gap-1.5 font-mono text-[9.5px] font-bold uppercase tracking-[0.22em]"
-            style={{ color: glow(HUE, 1) }}
-          >
-            <Sparkles size={11} /> The read
-          </p>
-
-          <div className="mt-2.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <span className="font-serif text-[40px] font-semibold leading-none tabular-nums">
-              {ordinal(rank)}
-            </span>
-            <span className="text-[15px] text-white/60">of {of ?? '—'} schools</span>
-            <span
-              className="rounded-full px-2.5 py-1 text-[11px] font-bold"
-              style={{ background: `${tone}22`, color: tone, boxShadow: `inset 0 0 0 1px ${tone}44` }}
-            >
-              {verdict}
-            </span>
-          </div>
-
-          {/* ── The rank track: position, not arithmetic ── */}
-          {of ? (
-            <div className="mt-4 flex items-center gap-1.5" aria-hidden="true">
-              {Array.from({ length: of }, (_, i) => {
-                const mine = i + 1 === rank
-                return (
-                  <motion.span
-                    key={i}
-                    initial={reduce ? false : { scaleX: 0, opacity: 0 }}
-                    animate={{ scaleX: 1, opacity: 1 }}
-                    transition={{ duration: 0.45, ease: EASE, delay: reduce ? 0 : 0.15 + i * 0.07 }}
-                    className="h-1.5 flex-1 rounded-full"
-                    style={{
-                      transformOrigin: 'left',
-                      background: mine ? tone : 'rgba(255,255,255,0.14)',
-                      boxShadow: mine ? `0 0 16px -1px ${tone}` : 'none',
-                    }}
-                  />
-                )
-              })}
-            </div>
-          ) : null}
-
-          {dashboard?.keyInsight ? (
-            <p className="mt-4 max-w-2xl text-[14px] leading-relaxed text-white/72">{dashboard.keyInsight}</p>
-          ) : null}
-        </div>
-
-        {/* The score itself, and how far it sits from everyone else. */}
-        <div className="shrink-0 text-right">
-          <p className="font-mono text-[8.5px] font-bold uppercase tracking-[0.18em] text-white/45">
-            {avg.label ?? 'Average score'}
-          </p>
-          <p className="font-serif text-[44px] font-semibold leading-none tabular-nums">{fmt(avg.value)}</p>
-          <p className="mt-1 text-[12px] text-white/55">
-            Network {fmt(avg.peer)}{' '}
-            <span style={{ color: tone }} className="font-semibold">
-              {signed(avg.variance)}
-            </span>
-          </p>
-        </div>
-      </div>
-
-      {chips.length > 0 ? (
-        <div className="mt-5 flex flex-wrap gap-2">
-          {chips.map((c, i) => (
-            <motion.span
-              key={c.k}
-              initial={reduce ? false : { opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, ease: EASE, delay: reduce ? 0 : 0.24 + i * 0.06 }}
-              className="rounded-xl px-3 py-1.5 backdrop-blur-sm"
-              style={{
-                background: 'rgba(255,255,255,0.07)',
-                boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.09)',
-              }}
-            >
-              <span className="font-mono text-[8px] font-bold uppercase tracking-[0.16em] text-white/45">
-                {c.k}
-              </span>
-              <span className="ml-2 text-[12.5px] font-semibold capitalize text-white/90">{c.v}</span>
-            </motion.span>
-          ))}
+      {/* ── The rank track: position, not arithmetic ── */}
+      {of ? (
+        <div className="mb-3 flex max-w-md items-center gap-1" aria-hidden="true">
+          {Array.from({ length: of }, (_, i) => {
+            const mine = i + 1 === rank
+            return (
+              <motion.span
+                key={i}
+                initial={reduce ? false : { scaleX: 0, opacity: 0 }}
+                animate={{ scaleX: 1, opacity: 1 }}
+                transition={{ duration: 0.45, ease: EASE, delay: reduce ? 0 : 0.1 + i * 0.06 }}
+                className="h-[2px] flex-1"
+                style={{ transformOrigin: 'left', background: mine ? HUE : 'rgb(16 28 61 / 0.14)' }}
+              />
+            )
+          })}
         </div>
       ) : null}
-    </motion.section>
+
+      {dashboard?.keyInsight ? <p className="max-w-[65ch] text-body leading-relaxed text-ink">{dashboard.keyInsight}</p> : null}
+
+      <StatStrip cols={4} className="stats-wrap mt-4 grid-cols-2 lg:grid-cols-4">
+        <Stat
+          label={avg.label ?? 'Average score'}
+          value={fmt(avg.value)}
+          status={tone === 'neutral' ? null : tone}
+          delta={avg.variance != null ? { text: `${signed(avg.variance)} vs network ${fmt(avg.peer)}`, tone } : null}
+          note={avg.variance == null ? `Network ${fmt(avg.peer)}` : null}
+        />
+        <Stat
+          label="Widest gap"
+          value={weakest ? signed(weakest.variance, 0) : '—'}
+          status={weakest ? (weakest.variance < 0 ? 'risk' : 'good') : null}
+          note={weakest ? subjectLabelOf(weakest.subject) : 'no subject comparison yet'}
+        />
+        <Stat
+          label="Trend"
+          value={trend ? trend.charAt(0).toUpperCase() + trend.slice(1) : '—'}
+          status={trend === 'improving' ? 'good' : trend === 'declining' ? 'risk' : null}
+          className="stat-text"
+        />
+        <Stat
+          label="Participation"
+          value={part?.rate != null ? `${Math.round(part.rate * 100)}%` : '—'}
+          status={part?.rate != null ? (part.comparable ? 'good' : 'watch') : null}
+          note={part?.rate != null ? (part.comparable ? 'comparison is fair' : 'read with care') : null}
+        />
+      </StatStrip>
+    </Section>
   )
 }
 
 // ── The doors ────────────────────────────────────────────────────────────────
 
 /**
- * One card per analysis view, each naming the QUESTION it answers and carrying a
- * live number from the payload. A door labelled with its own finding tells you
- * whether it is worth opening; "Open the full comparison" never could.
+ * One ruled row per analysis view, each naming the QUESTION it answers and
+ * carrying a live figure from the payload. A door labelled with its own finding
+ * tells you whether it is worth opening; "Open the full comparison" never could.
  */
-function ViewCards({ dashboard, onOpen, reduce }) {
+function ViewRows({ dashboard, onOpen }) {
   const kpis = dashboard?.kpis
   const cohorts = dashboard?.availableCohorts ?? []
   const schools = dashboard?.schools ?? []
   const yoy = kpis?.yoy
 
-  const cards = [
+  const rows = [
     {
       key: 'standing',
-      Icon: Gauge,
       title: 'Where this school stands',
       body: 'Every school ranked, the gap by subject, and a grade-by-grade heat map.',
       stat: kpis?.rank?.rank ? `Rank ${kpis.rank.rank} of ${kpis.rank.of}` : null,
     },
     {
       key: 'classroom',
-      Icon: BarChart3,
       title: 'Inside the classroom',
       body: 'Where students actually sit, and who the average is hiding.',
       stat: kpis?.participation?.tested ? `${kpis.participation.tested} scored` : null,
     },
     {
       key: 'time',
-      Icon: Activity,
       title: 'Are we moving?',
       body: 'The multi-year trend, and growth measured against achievement.',
       stat: yoy != null ? `${signed(yoy, 0)} year over year` : null,
-      accent: yoy != null ? yoy >= 0 : null,
+      tone: yoy != null ? (yoy >= 0 ? 'good' : 'risk') : null,
     },
     {
       key: 'cohorts',
-      Icon: Footprints,
       title: 'Follow the same children',
       body: 'One group of students tracked forward, rather than this year’s grade against last year’s.',
       stat: cohorts.length ? `${cohorts.length} cohort${cohorts.length === 1 ? '' : 's'} available` : 'Needs two years',
@@ -259,7 +183,6 @@ function ViewCards({ dashboard, onOpen, reduce }) {
     },
     {
       key: 'network',
-      Icon: ClipboardList,
       title: 'Board-ready',
       body: 'Every school, both years, against the national and network lines — and the table behind it.',
       stat: schools.length ? `${schools.length} schools` : null,
@@ -267,65 +190,28 @@ function ViewCards({ dashboard, onOpen, reduce }) {
   ]
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {cards.map((c, i) => (
-        <motion.button
-          key={c.key}
-          type="button"
-          onClick={() => onOpen(c.key)}
-          initial={reduce ? false : { opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, ease: EASE, delay: reduce ? 0 : 0.05 + i * 0.05 }}
-          whileHover={reduce ? undefined : { y: -3 }}
-          className="group relative isolate overflow-hidden rounded-2xl border border-navy/10 bg-white p-4 text-left transition-shadow hover:shadow-[0_22px_50px_-30px_rgba(16,28,61,0.5)]"
-        >
-          <span
-            aria-hidden="true"
-            className="absolute inset-0 -z-10 opacity-0 transition-opacity group-hover:opacity-100"
-            style={{ background: `radial-gradient(120% 100% at 100% 0%, ${HUE}14 0%, transparent 62%)` }}
-          />
-          <span
-            aria-hidden="true"
-            className="absolute left-0 top-0 h-full w-[3px]"
-            style={{ background: `linear-gradient(180deg, ${HUE} 0%, ${HUE}00 100%)` }}
-          />
-
-          <span className="flex items-start justify-between gap-2">
-            <span
-              className="grid h-9 w-9 place-items-center rounded-xl"
-              style={{ background: `${HUE}1A`, color: HUE, boxShadow: `inset 0 0 0 1px ${HUE}2E` }}
-            >
-              <c.Icon size={16} strokeWidth={2.2} />
+    <ul className="divide-y divide-hair border-y border-hair">
+      {rows.map((r) => (
+        <li key={r.key}>
+          <button
+            type="button"
+            onClick={() => onOpen(r.key)}
+            className="group flex w-full items-center gap-4 py-3 text-left outline-none transition-colors hover:bg-ink/[.03] focus-visible:ring-2 focus-visible:ring-navy-soft/40"
+          >
+            <span className="min-w-0 flex-1">
+              <span className="block text-body font-semibold text-ink">{r.title}</span>
+              <span className="mt-0.5 block text-small leading-snug text-ink2">{r.body}</span>
             </span>
-            <ArrowRight
-              size={15}
-              className="mt-1 text-muted transition-transform group-hover:translate-x-0.5"
-              style={{ color: HUE }}
-            />
-          </span>
-
-          <p className="mt-3 font-serif text-[16.5px] font-semibold leading-tight text-navy">{c.title}</p>
-          <p className="mt-1 text-[12px] leading-snug text-muted">{c.body}</p>
-
-          {c.stat ? (
-            <p
-              className="mt-2.5 font-mono text-[10px] font-bold uppercase tracking-[0.12em]"
-              style={{
-                color: c.muted
-                  ? '#94A3B8'
-                  : c.accent === undefined || c.accent === null
-                    ? HUE
-                    : c.accent
-                      ? '#059669'
-                      : '#E11D48',
-              }}
-            >
-              {c.stat}
-            </p>
-          ) : null}
-        </motion.button>
+            {r.stat ? (
+              <Pill variant={r.tone ? 'status' : 'default'} tone={r.tone ?? undefined} className={r.muted ? 'text-ink2' : ''}>
+                {r.stat}
+              </Pill>
+            ) : null}
+            <ArrowRight size={15} className="shrink-0 text-ink2 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+          </button>
+        </li>
       ))}
-    </div>
+    </ul>
   )
 }
 
@@ -333,9 +219,10 @@ function ViewCards({ dashboard, onOpen, reduce }) {
 
 /**
  * Derived, and SILENT when there is nothing to say. A permanent checklist that
- * always shows three items teaches the reader to stop looking at it.
+ * always shows three items teaches the reader to stop looking at it. A Panel,
+ * because every row can carry an action.
  */
-function NeedsAttention({ dashboard, status, onGoAdd, reduce }) {
+function NeedsAttention({ dashboard, status, onGoAdd }) {
   const years = status?.assessments?.years ?? []
   const part = dashboard?.kpis?.participation
   const items = [
@@ -363,78 +250,48 @@ function NeedsAttention({ dashboard, status, onGoAdd, reduce }) {
   if (items.length === 0) return null
 
   return (
-    <motion.section
-      initial={reduce ? false : { opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.45, ease: EASE, delay: reduce ? 0 : 0.1 }}
-      className="overflow-hidden rounded-2xl border border-navy/10 bg-white"
-    >
-      <header className="border-b border-navy/[0.07] px-5 py-3.5" style={{ background: 'rgba(245,158,11,0.06)' }}>
-        <span className="inline-flex items-center rounded-full bg-amber-500/12 px-2 py-[3px] font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-amber-700">
-          To finish the picture
-        </span>
-      </header>
-      <ul className="divide-y divide-navy/[0.06]">
-        {items.map((it) => (
-          <li key={it.k} className="flex items-center justify-between gap-4 px-5 py-3">
-            <span className="min-w-0">
-              <span className="block text-[13px] font-semibold text-navy">{it.k}</span>
-              <span className="mt-0.5 block text-[12px] leading-snug text-muted">{it.v}</span>
-            </span>
-            {it.cta ? (
-              <button
-                type="button"
-                onClick={onGoAdd}
-                className="shrink-0 rounded-lg border px-3 py-1.5 text-[11.5px] font-semibold text-navy transition-colors hover:bg-navy/[0.03]"
-                style={{ borderColor: `${HUE}55` }}
-              >
-                {it.cta}
-              </button>
-            ) : null}
-          </li>
-        ))}
-      </ul>
-    </motion.section>
+    <Section label="To finish the picture">
+      <Panel tone="attention" className="panel-watch" padded={false}>
+        <ul className="divide-y divide-hair">
+          {items.map((it) => (
+            <li key={it.k} className="flex items-center justify-between gap-4 px-5 py-3">
+              <span className="min-w-0">
+                <span className="block text-small font-semibold text-ink">{it.k}</span>
+                <span className="mt-0.5 block text-small leading-snug text-ink2">{it.v}</span>
+              </span>
+              {it.cta ? (
+                <Button variant="secondary" size="sm" onClick={onGoAdd} className="shrink-0">
+                  {it.cta}
+                </Button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      </Panel>
+    </Section>
   )
 }
 
 // ── Inventory ────────────────────────────────────────────────────────────────
 
 /** What is loaded. Real, but the least urgent thing here — so it sits last. */
-function Inventory({ status, reduce }) {
-  const cards = [
-    {
-      k: 'Assessment results',
-      v: status?.assessments?.rows ?? 0,
-      s: `${status?.assessments?.years?.length ?? 0} year(s) · ${status?.assessments?.tested ?? 0} scored`,
-    },
-    {
-      k: 'Gradebook',
-      v: status?.gradebook?.total ?? 0,
-      s: `${status?.gradebook?.courses ?? 0} course(s)`,
-    },
-    {
-      k: 'Lesson plans',
-      v: status?.lessonPlans?.total ?? 0,
-      s: `${status?.lessonPlans?.byStatus?.draft ?? 0} still in draft`,
-    },
-  ]
+function Inventory({ status }) {
   return (
-    <div className="grid gap-3 sm:grid-cols-3">
-      {cards.map((c, i) => (
-        <motion.div
-          key={c.k}
-          initial={reduce ? false : { opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, ease: EASE, delay: reduce ? 0 : i * 0.05 }}
-          className="rounded-xl border border-navy/10 bg-white px-4 py-3"
-        >
-          <p className="font-mono text-[8.5px] font-bold uppercase tracking-[0.16em] text-muted">{c.k}</p>
-          <p className="mt-0.5 font-serif text-[21px] font-semibold tabular-nums text-navy">{c.v}</p>
-          <p className="text-[11px] text-muted">{c.s}</p>
-        </motion.div>
-      ))}
-    </div>
+    <Section label="On file">
+      <StatStrip cols={3} className="stats-wrap !grid-cols-1 sm:!grid-cols-3">
+        <Stat
+          label="Assessment results"
+          value={status?.assessments?.rows ?? 0}
+          note={`${status?.assessments?.years?.length ?? 0} year(s) · ${status?.assessments?.tested ?? 0} scored`}
+        />
+        <Stat label="Gradebook" value={status?.gradebook?.total ?? 0} note={`${status?.gradebook?.courses ?? 0} course(s)`} />
+        <Stat
+          label="Lesson plans"
+          value={status?.lessonPlans?.total ?? 0}
+          note={`${status?.lessonPlans?.byStatus?.draft ?? 0} still in draft`}
+        />
+      </StatStrip>
+    </Section>
   )
 }
 
@@ -451,72 +308,43 @@ export default function AcademicsOverview({
 }) {
   const reduce = useReducedMotion()
 
-  if (loading) return <p className="text-[13.5px] text-muted">Loading…</p>
+  if (loading) return <p className="text-small text-ink2">Loading…</p>
 
   if (!dashboard || dashboard.empty) {
     return (
-      <div className="rounded-2xl border border-dashed border-navy/20 bg-white p-10 text-center">
-        <Upload size={22} className="mx-auto mb-2" style={{ color: HUE }} />
-        <p className="font-serif text-[19px] font-semibold text-navy">Start with a scores file</p>
-        <p className="mx-auto mt-1.5 max-w-md text-[13.5px] text-muted">
-          A diocesan summary, a publisher export, or a student-level file — the parser handles the title rows and odd
-          column names that come with them.
-        </p>
-        <button
-          type="button"
-          onClick={onGoAdd}
-          className="mt-4 rounded-xl px-4 py-2 text-[12.5px] font-bold uppercase tracking-[0.12em] text-white"
-          style={{ background: HUE }}
-        >
-          Add academic data
-        </button>
-      </div>
+      <Section label="Getting started" className="!mt-4">
+        <div className="border-b border-hair py-8 text-center">
+          <Upload size={20} className="mx-auto mb-2 text-ink2" aria-hidden="true" />
+          <p className="font-serif text-title font-medium text-ink">Start with a scores file</p>
+          <p className="mx-auto mt-1.5 max-w-md text-small text-ink2">
+            A diocesan summary, a publisher export, or a student-level file — the parser handles the title rows and odd
+            column names that come with them.
+          </p>
+          <Button variant="primary" onClick={onGoAdd} className="mt-4">
+            Add academic data
+          </Button>
+        </div>
+      </Section>
     )
   }
 
   return (
-    <div className="space-y-5">
-      <VerdictPanel dashboard={dashboard} reduce={reduce} />
+    <div>
+      <VerdictSection dashboard={dashboard} reduce={reduce} />
 
-      <div>
-        <p className="mb-2.5 font-mono text-[9px] font-bold uppercase tracking-[0.2em]" style={{ color: HUE }}>
-          Open the analysis
-        </p>
-        <ViewCards dashboard={dashboard} onOpen={onOpenView} reduce={reduce} />
-      </div>
+      <Section label="Open the analysis">
+        <ViewRows dashboard={dashboard} onOpen={onOpenView} />
+        {isMultiSchool ? (
+          <a href={networkTo} className="sec-more">
+            The whole network, school by school — the diocesan view, every school on one screen{' '}
+            <ArrowRight size={13} aria-hidden="true" />
+          </a>
+        ) : null}
+      </Section>
 
-      <NeedsAttention dashboard={dashboard} status={status} onGoAdd={onGoAdd} reduce={reduce} />
+      <NeedsAttention dashboard={dashboard} status={status} onGoAdd={onGoAdd} />
 
-      {isMultiSchool ? (
-        <motion.a
-          href={networkTo}
-          initial={reduce ? false : { opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.45, ease: EASE, delay: reduce ? 0 : 0.15 }}
-          className="group flex items-center justify-between gap-4 rounded-2xl border px-5 py-4 transition-shadow hover:shadow-[0_22px_50px_-30px_rgba(16,28,61,0.5)]"
-          style={{ borderColor: `${HUE}44`, background: `${HUE}0A` }}
-        >
-          <span className="flex min-w-0 items-center gap-3">
-            <span
-              className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
-              style={{ background: `${HUE}1A`, color: HUE, boxShadow: `inset 0 0 0 1px ${HUE}2E` }}
-            >
-              <Building2 size={17} strokeWidth={2.2} />
-            </span>
-            <span className="min-w-0">
-              <span className="block font-serif text-[16.5px] font-semibold text-navy">
-                The whole network, school by school
-              </span>
-              <span className="mt-0.5 block text-[12px] leading-snug text-muted">
-                The diocesan view — every school on one screen, without switching between them.
-              </span>
-            </span>
-          </span>
-          <ArrowRight size={16} style={{ color: HUE }} className="shrink-0 transition-transform group-hover:translate-x-0.5" />
-        </motion.a>
-      ) : null}
-
-      <Inventory status={status} reduce={reduce} />
+      <Inventory status={status} />
     </div>
   )
 }

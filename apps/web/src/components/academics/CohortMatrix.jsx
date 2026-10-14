@@ -86,7 +86,7 @@ export default function CohortMatrix({ matrix, onlyKeys = null, unit, gap, schoo
             <tr>
               <th
                 scope="col"
-                className="coh-matrix-stick sticky left-0 z-10 bg-white pr-2 text-left font-mono text-[8.5px] font-bold uppercase tracking-[0.14em] text-muted"
+                className="coh-matrix-stick sticky left-0 z-10 bg-white pr-2 text-left text-[8.5px] font-bold uppercase tracking-[0.14em] text-muted"
               >
                 Cohort
               </th>
@@ -94,7 +94,7 @@ export default function CohortMatrix({ matrix, onlyKeys = null, unit, gap, schoo
                 <th
                   key={s.key}
                   scope="col"
-                  className="px-1 pb-1 text-center font-mono text-[8.5px] font-bold uppercase tracking-[0.14em] text-muted"
+                  className="px-1 pb-1 text-center text-[8.5px] font-bold uppercase tracking-[0.14em] text-muted"
                   style={
                     i === 0 && s.key === TOTAL
                       ? { borderRight: '1px solid rgba(16,28,61,0.12)', color: '#0f766e' }
@@ -156,7 +156,7 @@ export default function CohortMatrix({ matrix, onlyKeys = null, unit, gap, schoo
                     >
                       <HeatCell state={state} step={step} label={aria} tip={tip} height={46} focusColor={COH_HUE}>
                         {blank ? (
-                          <span className="font-mono text-[11px] font-bold">{blank.token}</span>
+                          <span className="text-[11px] font-bold">{blank.token}</span>
                         ) : (
                           <span className="inline-flex items-center gap-1 leading-none">
                             <span className="text-[11px]">{ARROW[cell.direction] ?? '•'}</span>

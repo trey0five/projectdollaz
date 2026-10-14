@@ -30,8 +30,9 @@
 // being invented out of an enrollment total and a guess.
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion } from 'framer-motion'
-import { AlertTriangle, ChevronRight, Info, RefreshCcw } from 'lucide-react'
+import { ChevronRight, Info, RefreshCcw } from 'lucide-react'
 import { EASE, fmtCount } from './enrollmentAnalyticsKit.jsx'
+import { Panel, Button, Section } from '../ui/surface/index.js'
 
 /**
  * BOTH NUMBERS, NAMED — and what to do about them.
@@ -43,39 +44,36 @@ export function ReconciliationStrip({ reconciliation, periodLabel = null, onResy
   if (!reconciliation?.diverged) return null
   const { promoted, currentReading } = reconciliation
   return (
-    <motion.div
+    <Panel
+      as={motion.div}
+      tone="attention"
+      className="panel-watch"
       initial={reduce ? { opacity: 0 } : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: EASE }}
       role="status"
-      className="flex flex-col gap-3 rounded-2xl bg-amber-500/[0.07] px-4 py-3.5 ring-1 ring-amber-500/25 sm:flex-row sm:items-center"
     >
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-amber-500/15 text-amber-700">
-        <AlertTriangle size={17} />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-[13.5px] font-semibold leading-snug text-navy">
-          Two readings are in play, and this page shows both.
-        </p>
-        <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted">
-          The headcount promoted to {periodLabel ?? 'this fiscal year'} is{' '}
-          <span className="font-bold tabular-nums text-navy">{fmtCount(promoted)}</span> — that is the number the
-          tiles, the briefing and your board pack all quote. The reading the grade charts and the vs-plan table are
-          drawn from counts{' '}
-          <span className="font-bold tabular-nums text-navy">{fmtCount(currentReading)}</span>. Your register has moved
-          since the last promote. Re-sync your roster so every surface quotes one number.
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="min-w-0 flex-1">
+          <p className="text-body font-semibold leading-snug text-ink">
+            Two readings are in play, and this page shows both.
+          </p>
+          <p className="mt-0.5 text-small leading-relaxed text-ink2">
+            The headcount promoted to {periodLabel ?? 'this fiscal year'} is{' '}
+            <span className="font-semibold tabular-nums text-ink">{fmtCount(promoted)}</span> — that is the number the
+            tiles, the briefing and your board pack all quote. The reading the grade charts and the vs-plan table are
+            drawn from counts{' '}
+            <span className="font-semibold tabular-nums text-ink">{fmtCount(currentReading)}</span>. Your register has moved
+            since the last promote. Re-sync your roster so every surface quotes one number.
+          </p>
+        </div>
+        {onResync ? (
+          <Button variant="secondary" size="sm" onClick={onResync} icon={<RefreshCcw size={14} />} className="shrink-0 self-start sm:self-auto">
+            Re-sync roster
+          </Button>
+        ) : null}
       </div>
-      {onResync ? (
-        <button
-          type="button"
-          onClick={onResync}
-          className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-lg border border-amber-500/40 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-navy transition-colors hover:bg-amber-500/10 sm:self-auto"
-        >
-          <RefreshCcw size={14} /> Re-sync roster
-        </button>
-      ) : null}
-    </motion.div>
+    </Panel>
   )
 }
 
@@ -92,16 +90,15 @@ export function EnrollmentNotes({ notes = [], reduce = false }) {
   return (
     <motion.aside
       initial={reduce ? { opacity: 0 } : { opacity: 0, y: 8 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: '-40px' }}
+      animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: EASE }}
       aria-label="What to know about these figures"
-      className="panel p-4 sm:p-5"
+      className="border-t border-hair pt-3"
     >
       <details className="group">
-        <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-md text-[10.5px] font-bold uppercase tracking-[0.14em] text-muted outline-none transition-colors hover:text-navy focus-visible:ring-2 focus-visible:ring-sky-500/50 [&::-webkit-details-marker]:hidden">
+        <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-sm text-micro font-semibold uppercase text-ink2 outline-none transition-colors hover:text-ink focus-visible:ring-2 focus-visible:ring-navy-soft/40 [&::-webkit-details-marker]:hidden">
           <Info size={12} /> About these figures
-          <span className="font-medium normal-case tracking-normal text-muted/80">
+          <span className="font-medium normal-case tracking-normal text-ink2">
             · {notes.length} {notes.length === 1 ? 'note' : 'notes'}
           </span>
           <ChevronRight
@@ -112,8 +109,8 @@ export function EnrollmentNotes({ notes = [], reduce = false }) {
         </summary>
         <ul className="mt-2.5 space-y-1.5">
           {notes.map((n) => (
-            <li key={n} className="flex gap-2 text-[12.5px] leading-relaxed text-navy/75">
-              <span aria-hidden="true" className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-navy/25" />
+            <li key={n} className="flex gap-2 text-small leading-relaxed text-ink2">
+              <span aria-hidden="true" className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-ink/25" />
               <span>{n}</span>
             </li>
           ))}
@@ -134,28 +131,27 @@ export function EnrollmentNotes({ notes = [], reduce = false }) {
 export function UnavailableBlock({ unavailable = [], reduce = false }) {
   if (!unavailable.length) return null
   return (
-    <motion.section
+    <Section
+      as={motion.section}
+      label="What this page can't show yet"
       initial={reduce ? { opacity: 0 } : { opacity: 0, y: 10 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: '-40px' }}
+      animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: EASE }}
       aria-label="What this page can't show yet"
-      className="rounded-2xl bg-navy/[0.025] p-4 ring-1 ring-navy/[0.07] sm:p-5"
     >
-      <h3 className="font-serif text-[16px] font-semibold text-navy">What this page can&apos;t show yet</h3>
-      <p className="mt-1 max-w-3xl text-[12.5px] leading-relaxed text-muted">
+      <p className="max-w-3xl text-small leading-relaxed text-ink2">
         These are the figures a diocesan report usually carries that we will not draw, because the data behind them
         does not exist here. Each one is named with the reason rather than left off quietly — an invented denominator
         is worse than a missing chart.
       </p>
-      <dl className="mt-3 grid grid-cols-1 gap-x-6 gap-y-2.5 sm:grid-cols-2">
+      <dl className="mt-3 grid grid-cols-1 gap-x-8 gap-y-0 sm:grid-cols-2">
         {unavailable.map((u) => (
-          <div key={u.key} className="min-w-0">
-            <dt className="text-[12.5px] font-bold text-navy">{u.label}</dt>
-            <dd className="mt-0.5 text-[11.5px] leading-relaxed text-muted">{u.reason}</dd>
+          <div key={u.key} className="min-w-0 border-t border-hair py-2.5">
+            <dt className="text-small font-semibold text-ink">{u.label}</dt>
+            <dd className="mt-0.5 text-[12px] leading-relaxed text-ink2">{u.reason}</dd>
           </div>
         ))}
       </dl>
-    </motion.section>
+    </Section>
   )
 }

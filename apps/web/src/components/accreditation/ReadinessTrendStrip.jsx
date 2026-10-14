@@ -15,14 +15,14 @@
 //   · demoData renders a hard, unmissable DEMO DATA chip
 //   · inline SVG only — no chart library — and the draw-in is motion-safe
 //
-// It lives inside the dark navy readiness hero, so it is styled dark-on-navy in
-// the module's amber hue, matching ProvenancePair directly above it.
+// PREMIUM UI P4: it sits on the ground under the readiness Section — a label
+// row, ink text, the series in the module hue — matching ProvenancePair above it.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useId, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { AlertTriangle, ArrowDownRight, ArrowUpRight, History, Landmark, Minus } from 'lucide-react'
 
-const AMBER = '#fbbf24'
+const AMBER = '#F59E0B'
 
 // ── Geometry (viewBox units; the SVG scales to its container width) ──────────
 const VB_W = 720
@@ -65,13 +65,14 @@ const signed = (n) => (n > 0 ? `+${n}` : String(n))
 // ── Shell ────────────────────────────────────────────────────────────────────
 function Shell({ children, aside = null }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-navy/40 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/50">
+    <div className="sec">
+      <div className="sec-head">
+        <h2 className="sec-label inline-flex items-center gap-1.5">
           <History size={12} aria-hidden />
           Recorded readiness
-        </p>
-        {aside}
+        </h2>
+        <span className="sec-rule" aria-hidden="true" />
+        {aside ? <div className="sec-aside">{aside}</div> : null}
       </div>
       {children}
     </div>
@@ -87,7 +88,8 @@ function Shell({ children, aside = null }) {
  */
 export function DemoChip() {
   return (
-    <span className="inline-flex items-center rounded-full bg-[#F59E0B] px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-navy">
+    <span className="pill pill-status tone-watch uppercase">
+      <i className="pill-mark" aria-hidden="true" />
       Demo data
     </span>
   )
@@ -108,8 +110,8 @@ function SeriesSelector({ series, seriesKey, onSeriesKeyChange }) {
             title={`${s.name} · ${s.leafCount} standards · ${s.pointCount} readings`}
             className={`rounded-full border px-2.5 py-1 text-[11.5px] font-semibold transition ${
               active
-                ? 'border-[#F59E0B] bg-[#F59E0B]/20 text-[#fde68a]'
-                : 'border-white/15 bg-white/5 text-white/60 hover:border-[#F59E0B]/50 hover:text-white'
+                ? 'border-[#F59E0B] bg-ink/[.04] text-ink'
+                : 'border-hair bg-ink/[.04] text-ink2 hover:border-hair hover:text-ink'
             }`}
           >
             {s.accreditor ?? s.name}
@@ -221,7 +223,7 @@ function Chart({ points, breaks, boardMarker, reduce }) {
             y1={Y(v)}
             x2={VB_W - PAD_R}
             y2={Y(v)}
-            stroke="#ffffff"
+            stroke="#101C3D"
             strokeOpacity={0.08}
             strokeWidth={1}
           />
@@ -231,7 +233,7 @@ function Chart({ points, breaks, boardMarker, reduce }) {
             textAnchor="end"
             dominantBaseline="middle"
             fontSize={10}
-            fill="#ffffff"
+            fill="#101C3D"
             fillOpacity={0.4}
           >
             {v}%
@@ -247,12 +249,12 @@ function Chart({ points, breaks, boardMarker, reduce }) {
             y1={PAD_T - 4}
             x2={X(boardX)}
             y2={VB_H - PAD_B}
-            stroke="#ffffff"
+            stroke="#101C3D"
             strokeOpacity={0.45}
             strokeWidth={1.5}
             strokeDasharray="4 4"
           />
-          <circle cx={X(boardX)} cy={PAD_T - 4} r={3} fill="#ffffff" fillOpacity={0.6} />
+          <circle cx={X(boardX)} cy={PAD_T - 4} r={3} fill="#101C3D" fillOpacity={0.6} />
           <title>{`Since ${boardMarker.label ?? 'your last board meeting'} — ${longDate(boardMarker.since)}`}</title>
         </g>
       ) : null}
@@ -371,7 +373,7 @@ function Chart({ points, breaks, boardMarker, reduce }) {
       </circle>
 
       {/* date axis ends */}
-      <text x={PAD_L} y={VB_H - 6} fontSize={10} fill="#ffffff" fillOpacity={0.4}>
+      <text x={PAD_L} y={VB_H - 6} fontSize={10} fill="#101C3D" fillOpacity={0.4}>
         {axisDate(rows[0].date)}
       </text>
       <text
@@ -379,7 +381,7 @@ function Chart({ points, breaks, boardMarker, reduce }) {
         y={VB_H - 6}
         textAnchor="end"
         fontSize={10}
-        fill="#ffffff"
+        fill="#101C3D"
         fillOpacity={0.4}
       >
         {axisDate(last.date)}
@@ -397,8 +399,9 @@ function ChangeChip({ change }) {
   const word = dir === 'improving' ? 'up' : dir === 'declining' ? 'down' : 'level'
   const abs = Math.abs(delta)
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-[#F59E0B]/45 bg-[#F59E0B]/12 px-2.5 py-1 text-[12.5px] font-semibold text-[#fde68a]">
-      <Icon size={13} aria-hidden />
+    <span className={`pill pill-status tone-${dir === 'improving' ? 'good' : dir === 'declining' ? 'risk' : 'neutral'}`}>
+      <i className="pill-mark" aria-hidden="true" />
+      <Icon size={12} aria-hidden />
       {dir === 'flat'
         ? `Level since ${axisDate(change.from)}`
         : `${word[0].toUpperCase()}${word.slice(1)} ${abs} point${abs === 1 ? '' : 's'} since ${axisDate(change.from)}`}
@@ -421,19 +424,19 @@ function DecompositionLine({ decomposition, label = null }) {
   return (
     <div className="mt-2.5">
       {label ? (
-        <p className="mb-1 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-white/40">
+        <p className="mb-1 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-ink2">
           {label}
         </p>
       ) : null}
       {decomposition.narrative ? (
-        <p className="text-[12.5px] leading-relaxed text-white/70">{decomposition.narrative}</p>
+        <p className="text-[12.5px] leading-relaxed text-ink">{decomposition.narrative}</p>
       ) : null}
       {parts.length ? (
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
           {parts.map((p) => (
             <span
               key={p.key}
-              className="rounded-md border border-white/12 bg-white/5 px-1.5 py-0.5 text-[11px] font-semibold text-white/60"
+              className="pill"
             >
               {signed(p.value)} {p.label}
             </span>
@@ -460,7 +463,7 @@ export default function ReadinessTrendStrip({
   if (notLicensed) {
     return (
       <Shell>
-        <p className="mt-2 text-[12.5px] text-white/50">
+        <p className="mt-2 text-[12.5px] text-ink2">
           Recorded readiness comes with the Accreditation module.
         </p>
       </Shell>
@@ -471,8 +474,8 @@ export default function ReadinessTrendStrip({
   if (loading && !trend) {
     return (
       <Shell>
-        <div className="mt-3 h-[54px] rounded-lg bg-white/5 motion-safe:animate-pulse" aria-hidden />
-        <p className="mt-2 text-[12.5px] text-white/45">Loading your recorded readiness…</p>
+        <div className="mt-3 h-[54px] rounded-lg bg-ink/[.04] motion-safe:animate-pulse" aria-hidden />
+        <p className="mt-2 text-[12.5px] text-ink2">Loading your recorded readiness…</p>
       </Shell>
     )
   }
@@ -481,7 +484,7 @@ export default function ReadinessTrendStrip({
   if (error && !trend) {
     return (
       <Shell>
-        <p className="mt-2 text-[12.5px] text-white/50">{error}</p>
+        <p className="mt-2 text-[12.5px] text-ink2">{error}</p>
       </Shell>
     )
   }
@@ -530,10 +533,10 @@ export default function ReadinessTrendStrip({
     if (recorded) {
       return (
         <Shell aside={aside}>
-          <p className="mt-2 text-[13px] font-semibold text-white/75">
+          <p className="mt-2 text-[13px] font-semibold text-ink">
             No readings in this window.
           </p>
-          <p className="mt-1 text-[12.5px] leading-relaxed text-white/50">
+          <p className="mt-1 text-[12.5px] leading-relaxed text-ink2">
             {entry?.lastPointAt
               ? `This series was last recorded on ${longDate(entry.lastPointAt)}`
               : 'This series has recorded readings outside the window shown'}
@@ -548,10 +551,10 @@ export default function ReadinessTrendStrip({
     }
     return (
       <Shell aside={aside}>
-        <p className="mt-2 text-[13px] font-semibold text-white/75">
+        <p className="mt-2 text-[13px] font-semibold text-ink">
           Tracking starts today — earlier readiness was not recorded.
         </p>
-        <p className="mt-1 text-[12.5px] leading-relaxed text-white/50">
+        <p className="mt-1 text-[12.5px] leading-relaxed text-ink2">
           We take one reading a night from here. Readings before today were never taken, so there is
           nothing to fill in behind this — the picture builds forward from your first reading.
         </p>
@@ -586,7 +589,7 @@ export default function ReadinessTrendStrip({
         <ChangeChip change={change} />
         {boardMarker?.available && boardMarker.since ? (
           <span
-            className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-[12px] font-semibold text-white/65"
+            className="pill"
             title={`Your last board meeting with approved minutes: ${longDate(boardMarker.since)}`}
           >
             <Landmark size={12} aria-hidden />
@@ -598,8 +601,8 @@ export default function ReadinessTrendStrip({
       </div>
 
       {withheld && change?.reason ? (
-        <p className="mt-2 flex items-start gap-1.5 text-[12.5px] leading-relaxed text-white/60">
-          <AlertTriangle size={13} className="mt-0.5 shrink-0 text-[#fbbf24]/80" aria-hidden />
+        <p className="mt-2 flex items-start gap-1.5 text-[12.5px] leading-relaxed text-ink2">
+          <AlertTriangle size={13} className="mt-0.5 shrink-0 text-watch" aria-hidden />
           <span>{change.reason}</span>
         </p>
       ) : null}
@@ -612,11 +615,11 @@ export default function ReadinessTrendStrip({
           {breaks.map((b) => (
             <li
               key={`${b.date}-${b.kind}`}
-              className="flex items-start gap-1.5 text-[12px] leading-relaxed text-white/55"
+              className="flex items-start gap-1.5 text-[12px] leading-relaxed text-ink2"
             >
-              <span className="mt-[5px] h-1.5 w-1.5 shrink-0 rotate-45 bg-[#fbbf24]" aria-hidden />
+              <span className="mark tone-watch mt-[3px]" aria-hidden />
               <span>
-                <span className="text-white/70">{axisDate(b.date)}:</span> {b.detail} Readings either
+                <span className="text-ink">{axisDate(b.date)}:</span> {b.detail} Readings either
                 side of this are not comparable.
               </span>
             </li>
@@ -641,7 +644,7 @@ export default function ReadinessTrendStrip({
       />
 
       {/* the honest footer: when tracking began, how much we have, and the caveat */}
-      <p className="mt-3 border-t border-white/10 pt-2.5 text-[11.5px] leading-relaxed text-white/40">
+      <p className="mt-3 border-t border-hair pt-2.5 text-[11.5px] leading-relaxed text-ink2">
         {startsAt ? `Tracking since ${longDate(startsAt)}. ` : null}
         {points.length} reading{points.length === 1 ? '' : 's'} shown
         {selected?.name ? ` · ${selected.name}` : null}
@@ -650,7 +653,7 @@ export default function ReadinessTrendStrip({
           : null}
       </p>
       {trend?.disclaimer ? (
-        <p className="mt-1.5 text-[11px] leading-relaxed text-white/30">{trend.disclaimer}</p>
+        <p className="mt-1.5 text-[11px] leading-relaxed text-ink2">{trend.disclaimer}</p>
       ) : null}
     </Shell>
   )

@@ -36,24 +36,24 @@ function Half(props) {
   const pct = typeof value === 'number' ? Math.min(Math.max(value, 0), 100) : null
   return (
     <div className="min-w-0 flex-1">
-      <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/50">
+      <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-ink2">
         <Icon size={12} aria-hidden />
         {label}
       </p>
-      <p className="mt-0.5 font-serif leading-none text-[#fbbf24]">
+      <p className="mt-0.5 font-serif leading-none text-ink">
         {pct == null ? (
-          <span className="text-[30px] text-white/35" aria-label={`${label} not yet recorded`}>
+          <span className="text-[30px] text-ink2" aria-label={`${label} not yet recorded`}>
             —
           </span>
         ) : (
           <>
             <span className="text-[34px] font-semibold sm:text-[38px]">{pct}</span>
-            <span className="ml-0.5 text-[16px] font-semibold text-[#fbbf24]/70">%</span>
+            <span className="ml-0.5 text-[16px] font-semibold text-ink2">%</span>
           </>
         )}
       </p>
       <div
-        className="mt-2 h-2 overflow-hidden rounded-full bg-white/10"
+        className="mt-2 h-[6px] overflow-hidden rounded-sm bg-ink/[.08]"
         role="progressbar"
         aria-valuenow={pct ?? undefined}
         aria-valuemin={0}
@@ -62,19 +62,19 @@ function Half(props) {
       >
         {pct == null ? null : (
           <motion.div
-            className={`h-full rounded-full ${solid ? '' : 'border border-[#fbbf24]/60'}`}
-            style={
-              solid
-                ? { background: 'linear-gradient(90deg, #fde68a 0%, #fbbf24 55%, #f59e0b 100%)' }
-                : { background: 'rgba(251,191,36,0.22)' }
-            }
+            className="h-full rounded-sm"
+            // FLAT, never a gradient (gold is KYRO-only; the module hue is a
+            // solid mark). Defensible — what attached evidence PROVES — is the
+            // solid hue; Documented — what the school ASSERTS — is ink at a
+            // quarter, so the asserted/proven hierarchy reads in one colour.
+            style={{ background: solid ? '#F59E0B' : 'rgb(16 28 61 / 0.25)' }}
             initial={reduce ? false : { width: 0 }}
             animate={{ width: `${pct}%` }}
             transition={reduce ? { duration: 0 } : { type: 'spring', stiffness: 60, damping: 18 }}
           />
         )}
       </div>
-      <p className="mt-1.5 text-[11.5px] leading-snug text-white/45">{hint}</p>
+      <p className="mt-1.5 text-[11.5px] leading-snug text-ink2">{hint}</p>
     </div>
   )
 }
@@ -94,7 +94,7 @@ export default function ProvenancePair({
   const gap = hasPair ? documentedPct - defensiblePct : null
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-navy/40 p-4">
+    <div className="border-t border-hair pt-4">
       <div className="flex items-start gap-4 sm:gap-6">
         <Half
           label="Documented"
@@ -104,7 +104,7 @@ export default function ProvenancePair({
           solid={false}
           reduce={reduce}
         />
-        <div className="mt-6 h-10 w-px shrink-0 bg-white/12" aria-hidden />
+        <div className="mt-6 h-10 w-px shrink-0 bg-hair/20" aria-hidden />
         <Half
           label="Defensible"
           value={defensiblePct}
@@ -116,14 +116,14 @@ export default function ProvenancePair({
       </div>
 
       {/* The ONE shared caption — the pair is a single statement, never two cards. */}
-      <p className="mt-3 border-t border-white/10 pt-3 text-[12.5px] leading-relaxed text-white/65">
+      <p className="mt-3 border-t border-hair pt-3 text-[12.5px] leading-relaxed text-ink2">
         {leafCount > 0 ? (
           <>
-            <span className="font-semibold text-white/80">
+            <span className="font-semibold text-ink">
               {scoredCount} of {leafCount}
             </span>{' '}
             standards scored,{' '}
-            <span className="font-semibold text-white/80">{coveredCount}</span> evidenced.
+            <span className="font-semibold text-ink">{coveredCount}</span> evidenced.
           </>
         ) : (
           <>No scorable standards in this register yet.</>
@@ -133,7 +133,7 @@ export default function ProvenancePair({
             <>
               {' '}
               The {gap}-point gap is the work list:{' '}
-              <span className="font-semibold text-[#fde68a]">
+              <span className="font-semibold text-ink">
                 {unevidenced} standard{unevidenced === 1 ? '' : 's'}
               </span>{' '}
               carry no evidence an accreditor could read.
@@ -143,7 +143,7 @@ export default function ProvenancePair({
               <>
                 {' '}
                 Your evidence is ahead of your scoring —{' '}
-                <span className="font-semibold text-[#fde68a]">
+                <span className="font-semibold text-ink">
                   {unscored} standard{unscored === 1 ? '' : 's'}
                 </span>{' '}
                 still unscored.

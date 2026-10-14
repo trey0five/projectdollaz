@@ -63,14 +63,11 @@ export function ConfidenceChip({ confidence = null, reduce = false }) {
       transition={reduce ? { duration: 0 } : { duration: 0.35, ease: 'easeOut' }}
       title={caveat}
       aria-label={caveat}
-      className={`inline-flex max-w-full flex-col items-start gap-0.5 rounded-2xl border px-3 py-1 text-[12px] font-semibold ${
-        none
-          ? 'border-white/20 bg-white/[0.06] text-white/70'
-          : 'border-[#F59E0B]/45 bg-[#F59E0B]/12 text-[#fde68a]'
-      }`}
+      className="inline-flex max-w-full flex-col items-start gap-0.5 text-small font-semibold text-ink"
     >
       <span className="inline-flex items-center gap-1.5">
-        <Gauge size={13} aria-hidden />
+        <span className={`mark tone-${none ? 'neutral' : 'watch'}`} aria-hidden="true" />
+        <Gauge size={13} aria-hidden className="text-ink2" />
         {none ? (
           'Domain grid: not scored for this framework'
         ) : (
@@ -81,7 +78,7 @@ export function ConfidenceChip({ confidence = null, reduce = false }) {
         )}
       </span>
       {none && caveat ? (
-        <span className="max-w-[46ch] text-[11.5px] font-normal leading-relaxed text-white/50">
+        <span className="max-w-[46ch] text-[11.5px] font-normal leading-relaxed text-ink2">
           {caveat}
         </span>
       ) : null}

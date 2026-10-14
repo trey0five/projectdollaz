@@ -1,44 +1,39 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// EnrollmentHero — the hero of the Enrollment command center.
+// EnrollmentHero — the head of the Enrollment overview.
 //
-// THE ENROLLMENT RING: a 240° dome arc whose segments ARE the grades — each
-// segment's length is that grade's share of enrollment and its colour is the
-// grade's own golden-angle hue from lib/demographicColor.js, the same hue its
-// pill wears in the register and its bar wears in the charts. One grade, one
-// colour, everywhere. Segments sweep in staggered; the dome holds a giant
-// CountUp headcount with the as-of date and a SOURCE chip ("Live from your
-// roster" / the SIS name — fetched since Phase 2 and rendered nowhere until
-// now). Hovering a legend pill lifts its segment; clicking deep-links to the
-// register filtered to that grade.
+// PREMIUM UI P4 (docs/Premium_UI_Plan.md §2.7 sketch 6): the dark stage is
+// gone. The hero is now two things on the ground:
 //
-// The hero ABSORBS the old KPI row: Waitlist / New this year / Support flags /
-// Withdrawn ride as stat pips under the ring (Withdrawn from `counts.status`,
-// which the API returned and nothing rendered). Their honesty rules are kept
-// verbatim: no roster ⇒ an em-dash and "needs the student roster", never a zero
-// we didn't count. The WHOLE-SCHOOL headline stays unmasked (a school total
-// identifies nobody), but a per-grade pill under MIN_CELL prints `<5` — the old
-// frozen-spec exemption let a 3-student grade show here while Analytics, the
-// grade table and the export all withheld it, and suppression that one screen
-// undoes is not suppression. The arc SPAN still uses the true count: the ring
-// is composition, which is not a disclosure. `<5` masking also governs the
-// demographic BarLists below.
+//   1. a StatStrip — the headcount (count-up), vs plan, and the absorbed KPI
+//      row (Waitlist / New this year / Support flags / Withdrawn) as Stats with
+//      vertical rules, no boxes;
+//   2. a Section "Composition by grade" — a prose "read" column (source, as-of,
+//      the vs-plan sentence or the honest no-plan door, and the grade legend
+//      list) with the 240° ring right-aligned beside it. The ring is MONOCHROME
+//      now: every segment is the module hue over an ink track, separated by 2px
+//      surface gaps; identity is carried by the legend (label + count), hover
+//      lifts a segment, click deep-links to the register filtered to that grade.
 //
-// vs plan: a band-tinted delta chip (healthStatus over the SAME bands the
-// analytics cards use), or the honest "No plan set → set one" link. NEVER a
-// fabricated fraction: the ring shows composition, which is true with or
-// without a plan.
+// The honesty rules are kept verbatim: no roster ⇒ an em-dash and "needs the
+// student roster", never a zero we didn't count. The WHOLE-SCHOOL headline stays
+// unmasked (a school total identifies nobody), but a per-grade count under
+// MIN_CELL prints `<5` — suppression that one screen undoes is not suppression.
+// The arc SPAN still uses the true count: the ring is composition, which is not
+// a disclosure.
 //
-// Reduced motion: static ring at full length, static glows, values immediate.
+// vs plan: a status mark + word (healthStatus over the SAME bands the analytics
+// cards use), or the honest "No plan set → set one" link. NEVER a fabricated
+// fraction: the ring shows composition, which is true with or without a plan.
+//
+// Reduced motion: static ring at full length, values immediate.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
-import { GraduationCap, Hourglass, LifeBuoy, Sparkles, Target, UserRoundMinus } from 'lucide-react'
 import { MIN_CELL, bandsFor, healthStatus } from '@finrep/analytics'
-import { CountUp } from '../ui/briefingFx.jsx'
 import { GRADE_KEYS } from '../../lib/demographicVocab.js'
-import { demographicColor } from '../../lib/demographicColor.js'
 import { moduleHue } from '../module/moduleAnatomy.js'
+import { Section, StatStrip, Stat, Pill } from '../ui/surface/index.js'
 
 const ENROLL_HUE = moduleHue('enrollment')
 
@@ -52,7 +47,7 @@ const CY = 210
 const R = 180
 const START = 210
 const SWEEP = 240
-/** Degrees of breathing room between grade segments. */
+/** Degrees of surface gap between grade segments (the 2px-gap rule, in arc). */
 const PAD_DEG = 1.6
 
 function polar(f, r = R) {
@@ -74,7 +69,7 @@ const GRADE_SHORT = Object.fromEntries(
   GRADE_KEYS.map((g) => [g, /^\d+$/.test(g) ? `Grade ${g}` : g]),
 )
 
-function fmtDay(iso) {
+export function fmtDay(iso) {
   if (!iso) return null
   const d = new Date(`${String(iso).slice(0, 10)}T00:00:00`)
   return Number.isNaN(d.getTime())
@@ -92,34 +87,17 @@ const PROVIDER_LABELS = {
   manual: 'Entered by hand',
 }
 
-/** One stat pip. `value` null ⇒ the honest em-dash + why. */
-function StatPip({ Icon, label, value, needsRoster, reduce }) {
-  return (
-    <div className="flex min-w-0 flex-col items-center gap-0.5 px-3 py-1 sm:px-4">
-      <span className="flex items-center gap-1.5 text-white/55">
-        <Icon size={13} />
-        <span className="text-[10.5px] font-bold uppercase tracking-[0.12em]">{label}</span>
-      </span>
-      {value == null ? (
-        <>
-          <span className="font-serif text-[24px] font-semibold leading-tight text-white/40">—</span>
-          {needsRoster ? (
-            <span className="text-[10px] text-white/40">needs the student roster</span>
-          ) : null}
-        </>
-      ) : typeof value === 'object' && value.suppressed ? (
-        // Server-suppressed small cell (privacy floor): the count never reached
-        // the browser — render the same '<5' vocabulary the roster charts use.
-        <span className="font-serif text-[24px] font-semibold leading-tight text-white tabular-nums sm:text-[27px]">
-          &lt;5
-        </span>
-      ) : (
-        <span className="font-serif text-[24px] font-semibold leading-tight text-white tabular-nums sm:text-[27px]">
-          <CountUp value={value} duration={reduce ? 0 : 800} />
-        </span>
-      )}
-    </div>
-  )
+/** One absorbed-KPI Stat. `value` null ⇒ the honest em-dash + why. */
+function KpiStat({ label, value, needsRoster }) {
+  if (value == null) {
+    return <Stat label={label} value="—" note={needsRoster ? 'needs the student roster' : null} />
+  }
+  if (typeof value === 'object' && value.suppressed) {
+    // Server-suppressed small cell (privacy floor): the count never reached
+    // the browser — render the same '<5' vocabulary the roster charts use.
+    return <Stat label={label} value="<5" note="fewer than 5 — withheld" />
+  }
+  return <Stat label={label} value={value} />
 }
 
 export default function EnrollmentHero({
@@ -152,15 +130,12 @@ export default function EnrollmentHero({
         grade: g,
         count: n,
         // A grade under the floor keeps its true SPAN — the ring is composition
-        // and must stay exact — but its printed COUNT is withheld. Masking one
-        // surface and not another is theatre: an observer just reads the other
-        // screen, so this pill now agrees with Analytics, the grade table and
-        // the export. The ring geometry is not a disclosure; the number is.
+        // and must stay exact — but its printed COUNT is withheld, so this list
+        // agrees with Analytics, the grade table and the export.
         masked: n > 0 && n < MIN_CELL,
         share: span,
         f0: f0 + (entries.length > 1 ? pad / 2 : 0),
         f1: acc - (entries.length > 1 ? pad / 2 : 0),
-        color: demographicColor('grade', g) ?? ENROLL_HUE,
       }
     })
   }, [byGrade])
@@ -175,204 +150,182 @@ export default function EnrollmentHero({
     return { ...vsPlan, status }
   }, [vsPlan])
 
+  const planWord = plan ? (plan.status === 'good' ? 'on plan' : plan.status === 'risk' ? 'behind plan' : 'watch') : null
+  const planDelta = plan
+    ? `${plan.gap >= 0 ? '+' : '−'}${Math.abs(plan.gap).toLocaleString('en-US')} vs plan ${plan.planTotal.toLocaleString('en-US')}`
+    : null
+
   return (
-    <motion.section
-      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.45 }}
-      className="relative overflow-hidden rounded-3xl bg-navy-gradient shadow-navy-glow"
-      aria-label="Enrollment at a glance"
-    >
-      {/* ── Living backdrop: sky hairline + drifting orbs + light sweep ── */}
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div
-          className="absolute inset-x-0 top-0 h-px"
-          style={{ background: `linear-gradient(90deg, transparent, ${ENROLL_HUE}, transparent)` }}
+    <div aria-label="Enrollment at a glance">
+      {/* ── The stat strip: headcount + vs plan + the absorbed KPI row ── */}
+      <StatStrip cols={6} className="stats-wrap grid-cols-2 sm:grid-cols-3 xl:grid-cols-6">
+        <Stat
+          label="Students enrolled"
+          value={total != null ? total : '—'}
+          status={total != null ? 'hue' : null}
+          note={total != null ? (asOfLabel ? `as of ${asOfLabel}` : null) : 'no enrollment recorded yet'}
         />
-        {reduce ? (
-          <>
-            <div className="absolute -left-16 top-6 h-56 w-56 rounded-full bg-sky/10 blur-3xl" />
-            <div className="absolute -right-10 bottom-0 h-64 w-64 rounded-full bg-sky/[0.07] blur-3xl" />
-          </>
-        ) : (
-          <>
-            <motion.span
-              className="absolute -left-16 top-6 h-56 w-56 rounded-full bg-sky/10 blur-3xl"
-              animate={{ x: [0, 46, 0], y: [0, 24, 0] }}
-              transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
-            />
-            <motion.span
-              className="absolute -right-10 bottom-0 h-64 w-64 rounded-full bg-sky/[0.07] blur-3xl"
-              animate={{ x: [0, -38, 0], y: [0, -20, 0] }}
-              transition={{ duration: 21, repeat: Infinity, ease: 'easeInOut' }}
-            />
-          </>
-        )}
-      </div>
+        <Stat
+          label="vs plan"
+          value={plan ? `${plan.gap >= 0 ? '+' : '−'}${Math.abs(plan.gap).toLocaleString('en-US')}` : '—'}
+          status={plan ? plan.status : null}
+          delta={plan ? { text: planWord, tone: plan.status } : null}
+          note={plan ? `plan ${plan.planTotal.toLocaleString('en-US')}` : 'no plan set'}
+        />
+        <KpiStat label="Waitlist" value={kpis?.waitlist ?? null} needsRoster={!kpis} />
+        <KpiStat label="New this year" value={kpis?.newThisYear ?? null} needsRoster={!kpis} />
+        <KpiStat label="Support flags" value={kpis?.flagged ?? null} needsRoster={!kpis} />
+        <KpiStat label="Withdrawn" value={withdrawn} needsRoster={!kpis} />
+      </StatStrip>
 
-      <div className="relative flex flex-col gap-5 p-5 sm:p-7 lg:flex-row lg:items-center lg:gap-8">
-        {/* ── The ring ── */}
-        <div className="relative mx-auto w-full max-w-[430px] shrink-0 lg:mx-0 lg:w-[46%]">
-          <svg viewBox={`0 0 ${VB_W} ${VB_H}`} className="block w-full" aria-hidden="true">
-            <defs>
-              <filter id="enroll-glow" x="-40%" y="-40%" width="180%" height="180%">
-                <feGaussianBlur stdDeviation="7" result="b" />
-                <feMerge>
-                  <feMergeNode in="b" />
-                </feMerge>
-              </filter>
-            </defs>
-            {/* faint full track */}
-            <path
-              d={segPath(0, 1, 180)}
-              fill="none"
-              stroke="rgba(255,255,255,0.10)"
-              strokeWidth="14"
-              strokeLinecap="round"
-            />
-            {segments.map((seg, i) => {
-              const dim = hovered != null && hovered !== seg.grade
-              const d = segPath(seg.f0, seg.f1)
-              return (
-                <g key={seg.grade} opacity={dim ? 0.28 : 1} style={{ transition: 'opacity 200ms' }}>
-                  {/* soft under-glow in the segment's own hue */}
-                  <motion.path
-                    d={d}
-                    fill="none"
-                    stroke={seg.color}
-                    strokeOpacity="0.5"
-                    strokeWidth="14"
-                    filter="url(#enroll-glow)"
-                    initial={reduce ? false : { pathLength: 0 }}
-                    animate={{ pathLength: 1 }}
-                    transition={{ type: 'spring', stiffness: 55, damping: 18, delay: 0.15 + i * 0.12 }}
-                  />
-                  <motion.path
-                    d={d}
-                    fill="none"
-                    stroke={seg.color}
-                    strokeWidth="12"
-                    strokeLinecap="butt"
-                    initial={reduce ? false : { pathLength: 0 }}
-                    animate={{ pathLength: 1 }}
-                    transition={{ type: 'spring', stiffness: 55, damping: 18, delay: 0.15 + i * 0.12 }}
-                  />
-                </g>
-              )
-            })}
-          </svg>
-
-          {/* ── Dome: the headcount ── */}
-          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center pb-8 text-center">
+      {/* ── Composition by grade: the read, with the ring beside it ── */}
+      <Section
+        label="Composition by grade"
+        aside={sourceLabel ? <Pill>{sourceLabel}</Pill> : null}
+      >
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-5 lg:gap-10">
+          {/* The read column */}
+          <div className="min-w-0 lg:col-span-3">
             {total != null ? (
-              <>
-                <span className="font-serif text-[58px] font-semibold leading-none text-white drop-shadow-[0_0_18px_rgba(56,189,248,0.35)] tabular-nums sm:text-[70px]">
-                  <CountUp value={total} duration={reduce ? 0 : 1200} />
-                </span>
-                <span className="mt-1 text-[11px] font-bold uppercase tracking-[0.16em] text-white/50">
-                  students enrolled
-                </span>
-                {asOfLabel ? (
-                  <span className="mt-0.5 text-[11.5px] text-white/45">as of {asOfLabel}</span>
-                ) : null}
-              </>
-            ) : (
-              <>
-                <span className="font-serif text-[44px] font-semibold leading-none text-white/35">—</span>
-                <span className="mt-1 max-w-[220px] text-[12px] leading-snug text-white/50">
-                  No enrollment recorded yet — add a roster or a headcount from Add data.
-                </span>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* ── Narrative rail ── */}
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl text-white shadow-glow" style={{ backgroundColor: ENROLL_HUE }}>
-              <GraduationCap size={18} />
-            </span>
-            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/50">
-              Enrollment · at a glance
-            </p>
-            {sourceLabel ? (
-              <span className="ml-auto rounded-full border border-white/15 bg-white/[0.06] px-2.5 py-0.5 text-[11px] font-semibold text-white/65">
-                {sourceLabel}
-              </span>
-            ) : null}
-          </div>
-
-          {/* vs plan — band-tinted, or the honest no-plan door */}
-          <div className="mt-3">
-            {plan ? (
-              <p className="flex flex-wrap items-baseline gap-x-2 text-[15px] text-white/75">
-                <Target size={14} className="translate-y-[1.5px] text-white/50" />
-                <span className="font-semibold text-white tabular-nums">
-                  {plan.gap >= 0 ? '+' : '−'}
-                  {Math.abs(plan.gap).toLocaleString('en-US')}
-                </span>
-                <span>vs a plan of {plan.planTotal.toLocaleString('en-US')}</span>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.06em] ${
-                    plan.status === 'good'
-                      ? 'bg-emerald-400/15 text-emerald-300'
-                      : plan.status === 'risk'
-                        ? 'bg-red-400/15 text-red-300'
-                        : 'bg-amber-300/15 text-amber-200'
-                  }`}
-                >
-                  {plan.status === 'good' ? 'on plan' : plan.status === 'risk' ? 'behind plan' : 'watch'}
-                </span>
+              <p className="sec-title">
+                {total.toLocaleString('en-US')} students{asOfLabel ? ` as of ${asOfLabel}` : ''}
+                {segments.length ? `, across ${segments.length} grade${segments.length === 1 ? '' : 's'}.` : '.'}
               </p>
             ) : (
-              <p className="text-[13.5px] text-white/55">
+              <p className="sec-title">No enrollment recorded yet.</p>
+            )}
+
+            {/* vs plan — status mark + word, or the honest no-plan door */}
+            {plan ? (
+              <p className="mt-1 flex flex-wrap items-center gap-2 text-body text-ink">
+                <span className={`mark tone-${plan.status}`} aria-hidden="true" />
+                <span className="font-semibold tabular-nums">{planDelta}</span>
+                <span className="text-ink2">· {planWord}</span>
+              </p>
+            ) : (
+              <p className="mt-1 text-body text-ink2">
                 No plan set —{' '}
-                <Link to="/planning" className="font-semibold text-sky underline decoration-sky/40 underline-offset-2 hover:decoration-sky">
+                <Link to="/planning" className="font-semibold text-ink underline decoration-hair underline-offset-2 hover:decoration-ink">
                   set one in Planning
                 </Link>{' '}
                 and this becomes a live vs-plan read.
               </p>
             )}
+
+            {total == null ? (
+              <p className="mt-2 text-small text-ink2">Add a roster or a headcount from Add data and the ring fills in.</p>
+            ) : null}
+
+            {/* Grade legend — a ruled list; hover lifts the segment, click filters the register */}
+            {segments.length > 0 ? (
+              <ul className="mt-4 divide-y divide-hair border-y border-hair" aria-label="Students by grade">
+                {segments.map((seg) => {
+                  const dim = hovered != null && hovered !== seg.grade
+                  const row = (
+                    <>
+                      <span
+                        aria-hidden="true"
+                        className="mark"
+                        style={{ color: ENROLL_HUE, opacity: dim ? 0.3 : 1 }}
+                      />
+                      <span className={`min-w-0 flex-1 text-small font-semibold ${dim ? 'text-ink2' : 'text-ink'}`}>
+                        {GRADE_SHORT[seg.grade]}
+                      </span>
+                      {/* FERPA: a masked grade prints NO share. Beside the unmasked
+                          school total two lines above, a share would bound the
+                          withheld count — the same rule EnrollmentGradeTable keeps. */}
+                      <span className="w-14 text-right text-small text-ink2 tabular-nums" data-testid="grade-share">
+                        {seg.masked ? '—' : `${Math.round(seg.share * 100)}%`}
+                      </span>
+                      <span
+                        className="w-12 text-right text-small font-semibold text-ink tabular-nums"
+                        title={seg.masked ? `Fewer than ${MIN_CELL} students — withheld so no child is identifiable` : undefined}
+                      >
+                        {seg.masked ? `<${MIN_CELL}` : seg.count.toLocaleString('en-US')}
+                      </span>
+                    </>
+                  )
+                  return (
+                    <li key={seg.grade}>
+                      {onGradeClick ? (
+                        <button
+                          type="button"
+                          onMouseEnter={() => setHovered(seg.grade)}
+                          onMouseLeave={() => setHovered(null)}
+                          onFocus={() => setHovered(seg.grade)}
+                          onBlur={() => setHovered(null)}
+                          onClick={() => onGradeClick(seg.grade)}
+                          title={`See ${GRADE_SHORT[seg.grade]} in the register`}
+                          className="flex h-8 w-full items-center gap-3 rounded-sm text-left outline-none transition-colors hover:bg-ink/[.03] focus-visible:ring-2 focus-visible:ring-navy-soft/40"
+                        >
+                          {row}
+                        </button>
+                      ) : (
+                        <div
+                          className="flex h-8 w-full items-center gap-3"
+                          onMouseEnter={() => setHovered(seg.grade)}
+                          onMouseLeave={() => setHovered(null)}
+                        >
+                          {row}
+                        </div>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
+            ) : null}
           </div>
 
-          {/* Grade legend — hover lifts the segment, click filters the register */}
-          {segments.length > 0 ? (
-            <div className="mt-4 flex flex-wrap gap-1.5">
-              {segments.map((seg) => (
-                <button
-                  key={seg.grade}
-                  type="button"
-                  onMouseEnter={() => setHovered(seg.grade)}
-                  onMouseLeave={() => setHovered(null)}
-                  onFocus={() => setHovered(seg.grade)}
-                  onBlur={() => setHovered(null)}
-                  onClick={onGradeClick ? () => onGradeClick(seg.grade) : undefined}
-                  className="group inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/[0.05] py-1 pl-2 pr-2.5 text-[12px] font-semibold text-white/75 outline-none transition-colors hover:border-white/30 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-sky/60"
-                  title={onGradeClick ? `See ${GRADE_SHORT[seg.grade]} in the register` : undefined}
-                >
-                  <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: seg.color }} />
-                  {GRADE_SHORT[seg.grade]}
-                  <span
-                    className="text-white/50 tabular-nums"
-                    title={seg.masked ? `Fewer than ${MIN_CELL} students — withheld so no child is identifiable` : undefined}
-                  >
-                    {seg.masked ? `<${MIN_CELL}` : seg.count.toLocaleString('en-US')}
-                  </span>
-                </button>
-              ))}
-            </div>
-          ) : null}
+          {/* The ring — monochrome: module hue over an ink track */}
+          <div className="relative mx-auto w-full max-w-[400px] lg:col-span-2 lg:mx-0 lg:ml-auto">
+            <svg viewBox={`0 0 ${VB_W} ${VB_H}`} className="block w-full" aria-hidden="true">
+              {/* the track — the full composition, ink at 10% */}
+              <path
+                d={segPath(0, 1, 180)}
+                fill="none"
+                stroke="rgb(16 28 61 / 0.1)"
+                strokeWidth="14"
+                strokeLinecap="round"
+              />
+              {segments.map((seg, i) => {
+                const dim = hovered != null && hovered !== seg.grade
+                return (
+                  <motion.path
+                    key={seg.grade}
+                    d={segPath(seg.f0, seg.f1)}
+                    fill="none"
+                    stroke={ENROLL_HUE}
+                    strokeWidth="14"
+                    strokeLinecap="butt"
+                    initial={reduce ? false : { pathLength: 0 }}
+                    // opacity rides framer's animate (an inline style would be
+                    // overwritten by the motion value) so hover still dims.
+                    animate={{ pathLength: 1, opacity: dim ? 0.28 : 1 }}
+                    transition={{ type: 'spring', stiffness: 55, damping: 18, delay: 0.15 + i * 0.08 }}
+                  />
+                )
+              })}
+            </svg>
 
-          {/* ── The absorbed KPI row ── */}
-          <div className="mt-4 flex flex-wrap items-start divide-x divide-white/10 rounded-2xl border border-white/10 bg-white/[0.04] py-2">
-            <StatPip Icon={Hourglass} label="Waitlist" value={kpis?.waitlist ?? null} needsRoster={!kpis} reduce={reduce} />
-            <StatPip Icon={Sparkles} label="New this year" value={kpis?.newThisYear ?? null} needsRoster={!kpis} reduce={reduce} />
-            <StatPip Icon={LifeBuoy} label="Support flags" value={kpis?.flagged ?? null} needsRoster={!kpis} reduce={reduce} />
-            <StatPip Icon={UserRoundMinus} label="Withdrawn" value={withdrawn} needsRoster={!kpis} reduce={reduce} />
+            {/* ── Dome: the headcount ── */}
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center pb-8 text-center">
+              {total != null ? (
+                <>
+                  <span className="font-serif text-[52px] font-medium leading-none text-ink tabular-nums sm:text-[60px]">
+                    {total.toLocaleString('en-US')}
+                  </span>
+                  <span className="mt-1 text-micro font-semibold uppercase text-ink2">students enrolled</span>
+                </>
+              ) : (
+                <>
+                  <span className="font-serif text-[44px] font-medium leading-none text-ink2">—</span>
+                  <span className="mt-1 max-w-[200px] text-small leading-snug text-ink2">no roster yet</span>
+                </>
+              )}
+            </div>
           </div>
         </div>
-      </div>
-    </motion.section>
+      </Section>
+    </div>
   )
 }

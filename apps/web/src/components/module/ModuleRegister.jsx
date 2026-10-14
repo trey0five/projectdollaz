@@ -8,11 +8,14 @@
 // register sub-tab selection stays the parent's component state (not the URL).
 //
 // DomainCommandCenter is NOT modified; this simply re-presents the register the
-// parent already computed. Hue accents the active sub-tab underline + the New pill.
+// parent already computed. Hue accents the active sub-tab's 2px rule.
+// PREMIUM UI P4: no `.card-soft` wrapper — the register sits on the ground
+// (the table primitive carries its own discipline); `+ New` is a flat Button.
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion, useReducedMotion } from 'framer-motion'
 import { Plus } from 'lucide-react'
 import ModuleOverviewLink from './ModuleOverviewLink.jsx'
+import { Button } from '../ui/surface/index.js'
 
 export default function ModuleRegister({
   moduleKey,
@@ -31,9 +34,9 @@ export default function ModuleRegister({
       {/* Escape hatch home — the sidebar has an Overview row, but a register
           reached from the on-page Records button needs its own way back. */}
       <ModuleOverviewLink module={moduleKey} className="mb-3" />
-      <div className="card-soft flex min-w-0 flex-col p-4 sm:p-5">
+      <div className="flex min-w-0 flex-col">
         {(multi || onNew) && (
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-hair">
             <div className="flex gap-1">
               {multi
                 ? tabs.map((t) => {
@@ -43,8 +46,8 @@ export default function ModuleRegister({
                         key={t.key}
                         type="button"
                         onClick={() => onTabChange?.(t.key)}
-                        className={`relative px-3 py-2 text-[14px] font-semibold outline-none transition-colors focus-visible:ring-2 ${
-                          active ? 'text-navy' : 'text-muted hover:text-navy'
+                        className={`relative px-3 py-2 text-small font-semibold outline-none transition-colors focus-visible:ring-2 ${
+                          active ? 'text-ink' : 'text-ink2 hover:text-ink'
                         }`}
                         style={{ '--tw-ring-color': hue }}
                       >
@@ -52,13 +55,13 @@ export default function ModuleRegister({
                         {active ? (
                           reduce ? (
                             <span
-                              className="absolute inset-x-2 -bottom-[1px] h-[3px] rounded-full"
+                              className="absolute inset-x-2 -bottom-[1px] h-[2px]"
                               style={{ backgroundColor: hue }}
                             />
                           ) : (
                             <motion.span
                               layoutId={`moduleregister-underline-${moduleKey}`}
-                              className="absolute inset-x-2 -bottom-[1px] h-[3px] rounded-full"
+                              className="absolute inset-x-2 -bottom-[1px] h-[2px]"
                               style={{ backgroundColor: hue }}
                             />
                           )
@@ -69,14 +72,9 @@ export default function ModuleRegister({
                 : null}
             </div>
             {onNew ? (
-              <button
-                type="button"
-                onClick={onNew}
-                className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13px] font-semibold text-white shadow-sm transition hover:brightness-105"
-                style={{ backgroundColor: hue }}
-              >
-                <Plus size={15} /> New
-              </button>
+              <Button variant="primary" size="sm" onClick={onNew} icon={<Plus size={14} />} className="mb-2">
+                New
+              </Button>
             ) : null}
           </div>
         )}

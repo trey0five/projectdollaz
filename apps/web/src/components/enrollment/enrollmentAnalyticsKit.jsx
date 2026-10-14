@@ -162,11 +162,10 @@ export function AsOfChip({ asOf, className = '' }) {
           ? `This reading is ${asOf.staleDays} days old and may not reflect today's register.`
           : `Counted on ${fmtDate(asOf.observedOn)}.`
       }
-      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[10.5px] font-bold tabular-nums ring-1 ${
-        stale ? 'bg-amber-500/10 text-amber-700 ring-amber-500/30' : 'bg-navy/[0.04] text-muted ring-navy/10'
-      } ${className}`}
+      className={`pill ${stale ? 'pill-status tone-watch' : ''} ${className}`}
     >
-      <CalendarClock size={11} strokeWidth={2.4} />
+      {stale ? <i className="pill-mark" aria-hidden="true" /> : null}
+      <CalendarClock size={11} strokeWidth={2.4} aria-hidden="true" />
       as of {fmtDate(asOf.observedOn)}
       {stale ? ` · ${asOf.staleDays}d old` : ''}
     </span>
@@ -313,7 +312,7 @@ export function WhatThisMeasures({ children, scope = null, refs = null, note = n
         {(scope || refs) && (
           <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5">
             {scope ? (
-              <span className="font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-muted">{scope}</span>
+              <span className="text-micro font-semibold uppercase text-ink2">{scope}</span>
             ) : null}
             {refs}
           </div>
@@ -338,7 +337,7 @@ export function ChartCaption({ children, scope = null, refs = null }) {
     <div className="mb-3 flex flex-wrap items-center gap-x-3.5 gap-y-1">
       <p className="text-[12px] leading-snug text-muted">{children}</p>
       {scope ? (
-        <span className="font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-muted/80">{scope}</span>
+        <span className="text-micro font-semibold uppercase text-ink2">{scope}</span>
       ) : null}
       {refs}
     </div>
@@ -360,7 +359,7 @@ export function RefChip({ color, name, value, gloss, dashed = true }) {
         className={`inline-block w-4 ${dashed ? 'border-t-2 border-dashed' : 'border-t-[3px]'}`}
         style={{ borderColor: color }}
       />
-      <span className="font-mono text-[9px] font-bold uppercase tracking-[0.14em]" style={{ color }}>
+      <span className="text-micro font-semibold uppercase" style={{ color }}>
         {name}
         {value != null ? ` ${value}` : ''}
       </span>
@@ -377,8 +376,8 @@ export const PLAN_INK = '#B45309'
 /** An empty/CTA strip in the card body — a card that cannot draw says why. */
 export function CardEmpty({ children, cta = null }) {
   return (
-    <div className="rounded-xl border-2 border-dashed border-rule/60 bg-cream/40 px-4 py-8 text-center">
-      <p className="mx-auto max-w-md font-serif text-[14px] italic leading-relaxed text-muted">{children}</p>
+    <div className="border-y border-hair px-4 py-8 text-center">
+      <p className="mx-auto max-w-md text-small leading-relaxed text-ink2">{children}</p>
       {cta ? <div className="mt-3">{cta}</div> : null}
     </div>
   )

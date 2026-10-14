@@ -19,10 +19,12 @@
 // register with one snapshot instead of two, a query that found nothing. Every one
 // names its blocking signal, because "we could not look" and "we looked and it is
 // fine" are different facts and this product never conflates them.
+//
+// PREMIUM UI P4: a `Section` of ruled rows on the ground — rule id and reason as
+// Pills, the unlock as an indented note under a 2px rule. No cards.
 // ─────────────────────────────────────────────────────────────────────────────
 import { KeyRound, ScanSearch } from 'lucide-react'
-
-const AMBER = '#F59E0B'
+import { Section, Pill } from '../ui/surface/index.js'
 
 const REASON_LABEL = {
   signal_not_licensed: 'Module not licensed',
@@ -36,61 +38,56 @@ const REASON_LABEL = {
 }
 
 function ReasonChip({ reason }) {
-  return (
-    <span className="inline-flex items-center rounded-md border border-rule/60 bg-section px-2 py-0.5 text-[11px] font-semibold text-muted">
-      {REASON_LABEL[reason] ?? reason}
-    </span>
-  )
+  return <Pill>{REASON_LABEL[reason] ?? reason}</Pill>
 }
 
 function RuleId({ id }) {
-  return (
-    <span className="rounded-md border border-rule/60 bg-white px-1.5 py-0.5 font-mono text-[10.5px] text-muted">
-      {id}
-    </span>
-  )
+  return <Pill variant="count">{id}</Pill>
 }
 
 /** One row: the rule, why we cannot answer it, and what would unlock it. */
 function HoleRow({ entry, unlock }) {
   return (
-    <li className="rounded-xl border border-rule/50 bg-white px-3 py-2.5">
+    <li className="border-b border-hair py-3">
       <div className="flex flex-wrap items-center gap-2">
         <RuleId id={entry.ruleId} />
-        <span className="min-w-0 flex-1 text-[13.5px] font-semibold text-navy">
-          {entry.title ?? entry.ruleId}
-        </span>
+        <span className="min-w-0 flex-1 text-small font-semibold text-ink">{entry.title ?? entry.ruleId}</span>
         <ReasonChip reason={entry.reason} />
       </div>
 
       {/* The blocking signal, NAMED. Never "insufficient data". */}
       {entry.blockingSignalKey ? (
-        <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
-          <span className="font-semibold text-navy">
-            {entry.blockingSignalLabel ?? entry.blockingSignalKey}
-          </span>
-          <span className="ml-1.5 font-mono text-[10.5px]">{entry.blockingSignalKey}</span>
+        <p className="mt-1.5 text-small leading-relaxed text-ink2">
+          <span className="font-semibold text-ink">{entry.blockingSignalLabel ?? entry.blockingSignalKey}</span>
+          <span className="ml-1.5 text-[11px] text-ink2">{entry.blockingSignalKey}</span>
           {entry.message ? <> — {entry.message}</> : null}
         </p>
       ) : entry.message ? (
-        <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">{entry.message}</p>
+        <p className="mt-1.5 text-small leading-relaxed text-ink2">{entry.message}</p>
       ) : null}
 
       {/* The unlock, verbatim. It is the only sentence on this page that is allowed
           to be about what we would build, and it says what we refuse to proxy. */}
       {unlock ? (
-        <div className="mt-2 rounded-lg border border-[#F59E0B]/30 bg-amber-50/70 px-2.5 py-2">
-          <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-700">
-            <KeyRound size={12} aria-hidden />
+        <div className="mt-2 border-l-2 border-watch pl-3">
+          <p className="flex items-center gap-1.5 text-micro font-semibold uppercase text-ink2">
+            <KeyRound size={11} aria-hidden />
             What would unlock it
           </p>
-          <p className="mt-1 text-[12.5px] font-semibold leading-snug text-navy">{unlock.intake}</p>
-          <p className="mt-1 text-[12.5px] leading-relaxed text-muted">{unlock.copy}</p>
+          <p className="mt-1 text-small font-semibold leading-snug text-ink">{unlock.intake}</p>
+          <p className="mt-1 text-small leading-relaxed text-ink2">{unlock.copy}</p>
         </div>
       ) : null}
     </li>
   )
 }
+
+const LABEL = (
+  <span className="inline-flex items-center gap-1.5">
+    <ScanSearch size={13} aria-hidden />
+    What we cannot answer
+  </span>
+)
 
 export default function NamedHolesPanel({
   /** coverage.namedHoles — the four permanent holes, with their frozen copy. */
@@ -101,9 +98,9 @@ export default function NamedHolesPanel({
 }) {
   if (loading && namedHoles.length === 0 && notEvaluated.length === 0) {
     return (
-      <section className="rounded-2xl border border-rule/50 bg-white p-4">
-        <div className="h-24 rounded-xl bg-section motion-safe:animate-pulse" aria-hidden />
-      </section>
+      <Section label={LABEL}>
+        <div className="h-24 rounded bg-ink/[.04] motion-safe:animate-pulse" aria-hidden />
+      </Section>
     )
   }
 
@@ -118,30 +115,19 @@ export default function NamedHolesPanel({
   }))
 
   // Everything else we could not evaluate on this run — the school's live state.
-  const others = notEvaluated
-    .filter((n) => !holeIds.has(n.ruleId))
-    .map((n) => ({ entry: n, unlock: n.unlock ?? null }))
+  const others = notEvaluated.filter((n) => !holeIds.has(n.ruleId)).map((n) => ({ entry: n, unlock: n.unlock ?? null }))
 
   if (holes.length === 0 && others.length === 0) {
     return (
-      <section className="rounded-2xl border border-rule/50 bg-white p-4">
-        <h3 className="font-serif text-[16px] font-semibold text-navy">
-          What we cannot answer
-        </h3>
-        <p className="mt-1 text-[12.5px] text-muted">
-          Every rule in the catalog was evaluated on this run.
-        </p>
-      </section>
+      <Section label={LABEL}>
+        <p className="text-small text-ink2">Every rule in the catalog was evaluated on this run.</p>
+      </Section>
     )
   }
 
   return (
-    <section className="rounded-2xl border border-rule/50 bg-white p-4">
-      <h3 className="flex items-center gap-1.5 font-serif text-[16px] font-semibold text-navy">
-        <ScanSearch size={15} style={{ color: AMBER }} aria-hidden />
-        What we cannot answer
-      </h3>
-      <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted">
+    <Section label={LABEL}>
+      <p className="max-w-[72ch] text-small leading-relaxed text-ink2">
         A rule we could not evaluate is not a pass and not a fail. Each one below names the signal
         that blocked it, so you know exactly what a visiting team will ask that we cannot answer for
         you today.
@@ -149,10 +135,10 @@ export default function NamedHolesPanel({
 
       {holes.length ? (
         <>
-          <h4 className="mt-4 text-[11.5px] font-semibold uppercase tracking-[0.1em] text-muted">
+          <h4 className="mt-4 border-b border-hair pb-1 text-micro font-semibold uppercase text-ink2">
             Known holes — these will not fire for any school today
           </h4>
-          <ul className="mt-2 space-y-2">
+          <ul>
             {holes.map((h) => (
               <HoleRow key={h.entry.ruleId} entry={h.entry} unlock={h.unlock} />
             ))}
@@ -162,16 +148,14 @@ export default function NamedHolesPanel({
 
       {others.length ? (
         <>
-          <h4 className="mt-4 text-[11.5px] font-semibold uppercase tracking-[0.1em] text-muted">
-            Blocked on this run
-          </h4>
-          <ul className="mt-2 space-y-2">
+          <h4 className="mt-4 border-b border-hair pb-1 text-micro font-semibold uppercase text-ink2">Blocked on this run</h4>
+          <ul>
             {others.map((o) => (
               <HoleRow key={o.entry.ruleId} entry={o.entry} unlock={o.unlock} />
             ))}
           </ul>
         </>
       ) : null}
-    </section>
+    </Section>
   )
 }

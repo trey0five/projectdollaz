@@ -185,7 +185,7 @@ export default function DomainCommandCenter({
             /* Multi-tab domains keep the tabs — ink, a 2px hue rule under the
                active one. A single-entry tab bar is dead chrome: the Section
                label already names the register. */
-            <div role="tablist" aria-label="Registers" className="tabs-ink mb-4">
+            <div role="tablist" aria-label="Registers" className="tabs-ink mb-4 overflow-x-auto">
               {tabs.map((t) => {
                 const active = t.key === activeTab
                 return (
@@ -212,12 +212,6 @@ export default function DomainCommandCenter({
         </div>
       </div>
 
-      {/* ── Footer caption ─────────────────────────────────────────────────── */}
-      <p className="sec-note mt-8">
-        Command center, not a table — a domain lands on its slice of the briefing (the metrics that
-        define its health, the items that need a decision, and one-click actions), with the
-        registers a tab away.
-      </p>
     </div>
   )
 }

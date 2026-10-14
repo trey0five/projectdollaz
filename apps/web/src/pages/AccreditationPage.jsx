@@ -44,6 +44,8 @@ import BillingBanner from '../components/BillingBanner.jsx'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import EntityFormModal, { Field, Select, fieldInput, fieldTextarea } from '../components/ui/EntityFormModal.jsx'
 import DomainCommandCenter from '../components/domain/DomainCommandCenter.jsx'
+import { Panel, Button, Pill } from '../components/ui/surface/index.js'
+import useDtOverflow from '../components/ui/surface/useDtOverflow.js'
 import DomainResolvePanel from '../components/accreditation/DomainResolvePanel.jsx'
 import StandardImprovePanel from '../components/accreditation/StandardImprovePanel.jsx'
 import ModuleTabs, { ModuleAccent } from '../components/module/ModuleTabs.jsx'
@@ -117,18 +119,18 @@ import {
   SEVERITY_TONE,
 } from '../components/accreditation/ruleActions.js'
 
-// ── Light-theme coverage badge (restyled from the old dark pills) ────────────
+// ── Register badges: status Pills (Premium UI P4) — a 2px mark + ink text,
+//    never a tinted chip. `tone` is the mark's colour; the WORD is always printed.
 const COVERAGE_BADGE = {
-  'no-evidence': { label: 'No evidence', cls: 'border-gold/40 bg-gold/10 text-[#7a5e00]' },
-  covered: { label: 'Evidenced', cls: 'border-emerald-300/70 bg-emerald-50 text-emerald-700' },
+  'no-evidence': { label: 'No evidence', tone: 'watch' },
+  covered: { label: 'Evidenced', tone: 'good' },
 }
 
-// ── Light-theme review badge ─────────────────────────────────────────────────
 const REVIEW_BADGE = {
-  overdue: { label: 'Review overdue', cls: 'border-danger/30 bg-danger/10 text-danger' },
-  'due-soon': { label: 'Review approaching', cls: 'border-gold/40 bg-gold/10 text-[#7a5e00]' },
-  current: { label: 'Review current', cls: 'border-emerald-300/70 bg-emerald-50 text-emerald-700' },
-  unknown: { label: 'No review date', cls: 'border-rule/60 bg-section text-muted' },
+  overdue: { label: 'Review overdue', tone: 'risk' },
+  'due-soon': { label: 'Review approaching', tone: 'watch' },
+  current: { label: 'Review current', tone: 'good' },
+  unknown: { label: 'No review date', tone: 'neutral' },
 }
 
 const KIND_ICON = { document: FileText, link: LinkIcon, note: StickyNote }
@@ -142,20 +144,18 @@ const RATING_OPTIONS = [
   { value: 'met', label: 'Met' },
 ]
 const RATING_BADGE = {
-  met: { label: 'Met', cls: 'border-emerald-300/70 bg-emerald-50 text-emerald-700' },
-  partially_met: { label: 'Partially met', cls: 'border-gold/40 bg-gold/10 text-[#7a5e00]' },
-  not_met: { label: 'Not met', cls: 'border-danger/30 bg-danger/10 text-danger' },
-  not_started: { label: 'Not started', cls: 'border-rule/60 bg-section text-muted' },
+  met: { label: 'Met', tone: 'good' },
+  partially_met: { label: 'Partially met', tone: 'watch' },
+  not_met: { label: 'Not met', tone: 'risk' },
+  not_started: { label: 'Not started', tone: 'neutral' },
 }
 
 function RatingBadge({ rating }) {
   const b = RATING_BADGE[rating] ?? RATING_BADGE.not_started
   return (
-    <span
-      className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[12px] font-semibold ${b.cls}`}
-    >
+    <Pill variant="status" tone={b.tone}>
       {b.label}
-    </span>
+    </Pill>
   )
 }
 
@@ -164,54 +164,42 @@ function RollupBadge({ leafSummary }) {
   if (!leafSummary || leafSummary.leafCount === 0) return null
   const { metCount, leafCount, ratingCoveragePct } = leafSummary
   return (
-    <span
-      className="inline-flex items-center rounded-md border border-navy/20 bg-navy/5 px-2 py-0.5 text-[12px] font-semibold text-navy"
-      title={`${metCount} of ${leafCount} indicators met · ${ratingCoveragePct}% weighted`}
-    >
+    <Pill variant="count" title={`${metCount} of ${leafCount} indicators met · ${ratingCoveragePct}% weighted`}>
       {metCount}/{leafCount} met · {ratingCoveragePct}%
-    </span>
+    </Pill>
   )
 }
 
 function CoverageBadge({ coverage, evidenceCount }) {
   const b = COVERAGE_BADGE[coverage] ?? COVERAGE_BADGE['no-evidence']
   return (
-    <span
-      className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[12px] font-semibold ${b.cls}`}
-      title={`${evidenceCount} evidence item${evidenceCount === 1 ? '' : 's'}`}
-    >
+    <Pill variant="status" tone={b.tone} title={`${evidenceCount} evidence item${evidenceCount === 1 ? '' : 's'}`}>
       {b.label}
       {coverage === 'covered' ? ` · ${evidenceCount}` : ''}
-    </span>
+    </Pill>
   )
 }
 
 function ReviewBadge({ status, reviewDate, daysUntilReview }) {
-  if (status === 'unknown') return <span className="text-[12px] text-muted/60">—</span>
+  if (status === 'unknown') return <span className="text-[12px] text-ink2">—</span>
   const b = REVIEW_BADGE[status] ?? REVIEW_BADGE.unknown
   let suffix = ''
   if (status === 'due-soon' && typeof daysUntilReview === 'number') suffix = ` · in ${daysUntilReview}d`
   else if (status === 'overdue' && typeof daysUntilReview === 'number')
     suffix = ` · ${Math.abs(daysUntilReview)}d ago`
   return (
-    <span
-      className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[12px] font-semibold ${b.cls}`}
-      title={reviewDate ? `Review date: ${reviewDate}` : ''}
-    >
+    <Pill variant="status" tone={b.tone} title={reviewDate ? `Review date: ${reviewDate}` : ''}>
       {b.label}
       {suffix}
-    </span>
+    </Pill>
   )
 }
 
-// ── Light-theme register table primitives (shared idiom with Governance) ─────
+// ── The register table primitives — the shared `.dt` discipline (Premium UI
+//    P3/P4): sticky caps head on the ground, 36px hairline rows, numerics right. ─
 function Th({ children, right }) {
   return (
-    <th
-      className={`px-4 py-2.5 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-muted ${
-        right ? 'text-right' : 'text-left'
-      }`}
-    >
+    <th scope="col" className={right ? 'dt-num' : undefined}>
       {children}
     </th>
   )
@@ -226,9 +214,7 @@ function IconAction(props) {
       onClick={onClick}
       aria-label={label}
       title={title ?? label}
-      className={`rounded-lg border border-rule/60 p-1.5 text-muted transition hover:text-navy ${
-        danger ? 'hover:border-danger/50 hover:text-danger' : 'hover:border-gold/60'
-      }`}
+      className={`btn btn-quiet btn-sm !px-1.5 ${danger ? 'hover:!text-risk' : ''}`}
     >
       <ActionIcon size={15} />
     </button>
@@ -236,10 +222,11 @@ function IconAction(props) {
 }
 
 function TableShell({ children, cols }) {
+  const wrapRef = useDtOverflow([children])
   return (
-    <div className="overflow-x-auto rounded-xl border border-rule/50">
-      <table className="w-full text-left text-[14px]">
-        <thead className="bg-cream">
+    <div ref={wrapRef} className="dt-wrap">
+      <table className="dt">
+        <thead>
           <tr>{cols}</tr>
         </thead>
         <tbody>{children}</tbody>
@@ -249,11 +236,7 @@ function TableShell({ children, cols }) {
 }
 
 function StateRow({ children }) {
-  return (
-    <div className="rounded-xl border border-dashed border-rule/60 bg-cream/50 px-6 py-12 text-center">
-      {children}
-    </div>
-  )
+  return <div className="border-y border-hair px-6 py-12 text-center">{children}</div>
 }
 
 // ── Light-theme entitlement / license gate ───────────────────────────────────
@@ -261,34 +244,25 @@ function GatePanel({ notLicensed }) {
   return (
     <div className="mx-auto max-w-page space-y-4 px-4 py-6 sm:px-10 sm:py-8">
       <BackLink />
-      <div className="card-soft flex flex-col items-center gap-3 px-6 py-14 text-center">
-        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gold-gradient text-navy shadow-glow">
-          <BadgeCheck size={26} />
-        </span>
+      <Panel className="text-center">
         {notLicensed ? (
           <>
-            <h2 className="font-serif text-xl font-semibold text-navy">
-              Accreditation isn&apos;t on your plan yet
-            </h2>
-            <p className="max-w-md text-[15px] text-muted">
-              Add the Accreditation module to track your standards and the evidence demonstrating
-              each — and land its slice of the briefing here.
+            <h2 className="font-serif text-title font-medium text-ink">Accreditation isn&apos;t on your plan yet</h2>
+            <p className="mx-auto mt-2 max-w-md text-body text-ink2">
+              Add the Accreditation module to track your standards, attach evidence and watch your readiness build —
+              with every gap named and the fastest path to your target mapped.
             </p>
           </>
         ) : (
           <>
-            <h2 className="font-serif text-xl font-semibold text-navy">Your subscription is paused</h2>
-            <p className="max-w-md text-[15px] text-muted">
-              Resume your plan to manage the accreditation register.
-            </p>
+            <h2 className="font-serif text-title font-medium text-ink">Your subscription is paused</h2>
+            <p className="mx-auto mt-2 max-w-md text-body text-ink2">Resume your plan to manage accreditation.</p>
           </>
         )}
-      </div>
+      </Panel>
     </div>
   )
 }
-
-// ═══════════════════════════ STANDARD MODAL (dark overlay) ══════════════════
 
 const EMPTY_FORM = {
   code: '',
@@ -2795,28 +2769,23 @@ function AccreditationWorkspace() {
   // and never blocking (the register keeps every path it ever had). ───────────
   const upgradeBanner =
     activeCatalogFw?.adopted && activeCatalogFw?.supersededBy ? (
-      <div
-        data-testid="upgrade-banner"
-        className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#F59E0B]/40 bg-amber-50 px-4 py-2.5"
-      >
-        <p className="text-[13px] leading-relaxed text-amber-800">
-          <span className="font-semibold">
-            Rev. {activeCatalogFw.supersededBy.version ?? activeCatalogFw.supersededBy.code}{' '}
-            available.
-          </span>{' '}
-          Your {activeCatalogFw.name} register keeps working exactly as it is — upgrading carries
-          every score and evidence link over.
-        </p>
-        {canEdit ? (
-          <button
-            type="button"
-            onClick={openAdoptModal}
-            className="shrink-0 rounded-full border border-[#F59E0B]/60 bg-white px-3 py-1 text-[12.5px] font-semibold text-amber-800 transition hover:bg-amber-100"
-          >
-            Review upgrade
-          </button>
-        ) : null}
-      </div>
+      <Panel data-testid="upgrade-banner" tone="attention" className="panel-watch">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-small leading-relaxed text-ink">
+            <span className="font-semibold">
+              Rev. {activeCatalogFw.supersededBy.version ?? activeCatalogFw.supersededBy.code}{' '}
+              available.
+            </span>{' '}
+            Your {activeCatalogFw.name} register keeps working exactly as it is — upgrading carries
+            every score and evidence link over.
+          </p>
+          {canEdit ? (
+            <Button variant="secondary" size="sm" onClick={openAdoptModal} className="shrink-0">
+              Review upgrade
+            </Button>
+          ) : null}
+        </div>
+      </Panel>
     ) : null
 
   // The register lens bar — Mine (when anyone owns anything) + the transient
@@ -2825,34 +2794,33 @@ function AccreditationWorkspace() {
     mineCount > 0 || registerFilter ? (
       <div className="flex flex-wrap items-center gap-2">
         {mineCount > 0 ? (
-          <button
-            type="button"
-            data-testid="mine-filter-pill"
-            aria-pressed={registerFilter === 'mine'}
-            onClick={() => setRegisterFilter((cur) => (cur === 'mine' ? null : 'mine'))}
-            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[12.5px] font-semibold transition ${
-              registerFilter === 'mine'
-                ? 'border-navy bg-navy text-white'
-                : 'border-rule/70 bg-white text-muted hover:text-navy'
-            }`}
-          >
-            <UserIcon size={13} aria-hidden /> Mine · {mineCount}
-          </button>
+          <span className="seg">
+            <button
+              type="button"
+              data-testid="mine-filter-pill"
+              aria-pressed={registerFilter === 'mine'}
+              onClick={() => setRegisterFilter((cur) => (cur === 'mine' ? null : 'mine'))}
+              className="seg-btn"
+            >
+              <UserIcon size={13} aria-hidden /> Mine · {mineCount}
+            </button>
+          </span>
         ) : null}
         {registerFilter === 'unbacked' ? (
           <button
             type="button"
             data-testid="unbacked-filter-chip"
             onClick={() => setRegisterFilter(null)}
-            className="inline-flex items-center gap-1.5 rounded-full border border-[#F59E0B]/50 bg-amber-50 px-3 py-1 text-[12.5px] font-semibold text-amber-800"
+            className="pill pill-status tone-watch transition-colors hover:bg-ink/[.03]"
             title="Clear this filter"
           >
+            <i className="pill-mark" aria-hidden="true" />
             Scored, no evidence · {filteredStandards.length}
-            <X size={13} aria-hidden />
+            <X size={12} aria-hidden />
           </button>
         ) : null}
         {registerFilter === 'mine' && filteredStandards.length === 0 ? (
-          <span className="text-[12.5px] text-muted">Nothing is assigned to you yet.</span>
+          <span className="text-small text-ink2">Nothing is assigned to you yet.</span>
         ) : null}
       </div>
     ) : null
@@ -3070,7 +3038,7 @@ function AccreditationWorkspace() {
     <DomainCommandCenter
       showAddData
       moduleKey="accreditation"
-      eyebrow="Domain · Accreditation engine · system of record"
+      eyebrow={['Accreditation', activeSchool?.name].filter(Boolean).join(' · ')}
       title="Accreditation"
       Icon={BadgeCheck}
       attentionCount={attentionItems.list.length}
@@ -3110,12 +3078,9 @@ function AccreditationWorkspace() {
               owner, accountant and viewer alike. Same hued pill vocabulary as the
               Frameworks control beside it, so this page grows no new affordance
               language. */}
-          <Link
-            to="/accreditation/visit"
-            className="inline-flex items-center gap-1.5 rounded-full border border-rule/70 bg-white px-3.5 py-1.5 text-[13px] font-semibold text-navy transition hover:border-[#F59E0B]/60"
-          >
-            <ShieldAlert size={14} className="text-[#F59E0B]" /> Mock visit
-          </Link>
+          <Button to="/accreditation/visit" variant="secondary" icon={<ShieldAlert size={14} />}>
+            Mock visit
+          </Button>
           {/* THE FRAMEWORK SWITCHER. Rendered only for a school that actually
               holds more than one accreditation — for everyone else this page
               gains no new control at all. Not role-gated: choosing which
@@ -3126,7 +3091,7 @@ function AccreditationWorkspace() {
               data-testid="framework-switcher"
               role="group"
               aria-label="Which framework this page is read against"
-              className="inline-flex items-center gap-1 rounded-full border border-rule/70 bg-white p-0.5"
+              className="seg"
             >
               {adoptedFrameworks.map((f) => {
                 const on = f.id === activeFrameworkId
@@ -3137,11 +3102,7 @@ function AccreditationWorkspace() {
                     aria-pressed={on}
                     onClick={() => onSelectFramework(f.id)}
                     title={f.name}
-                    className={
-                      on
-                        ? 'rounded-full bg-navy px-3 py-1 text-[12.5px] font-semibold text-white'
-                        : 'rounded-full px-3 py-1 text-[12.5px] font-semibold text-muted transition hover:text-navy'
-                    }
+                    className="seg-btn"
                   >
                     {switcherLabels.get(f.id) ?? frameworkPillLabel(f)}
                   </button>
@@ -3154,17 +3115,14 @@ function AccreditationWorkspace() {
               only (it writes the profile). The seal LINE it produces renders in
               the hero, server-composed. */}
           {canEdit && activeCatalogFw?.divisions?.length ? (
-            <label
-              data-testid="division-selector"
-              className="inline-flex items-center gap-1.5 rounded-full border border-rule/70 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-muted"
-            >
+            <label data-testid="division-selector" className="inline-flex items-center gap-1.5 text-small font-semibold text-ink2">
               Division:
               <select
                 value={activeCatalogFw.division ?? ''}
                 disabled={divisionBusy}
                 onChange={(e) => onSelectDivision(activeCatalogFw.code, e.target.value)}
                 aria-label="Accreditor division held"
-                className="bg-transparent text-[12.5px] font-semibold text-navy outline-none"
+                className="sel !h-9"
               >
                 <option value="">None</option>
                 {activeCatalogFw.divisions.map((d) => (
@@ -3182,13 +3140,9 @@ function AccreditationWorkspace() {
               nothing for the (many) frameworks without one. */}
           <EvidencePlatformChip platform={activeCatalogFw?.evidencePlatform} light />
           {canEdit && adopted ? (
-            <button
-              type="button"
-              onClick={openAdoptModal}
-              className="inline-flex items-center gap-1.5 rounded-full border border-rule/70 bg-white px-3.5 py-1.5 text-[13px] font-semibold text-navy transition hover:border-[#F59E0B]/60"
-            >
-              <Award size={14} className="text-[#F59E0B]" /> Frameworks
-            </button>
+            <Button variant="secondary" onClick={openAdoptModal} icon={<Award size={14} />}>
+              Frameworks
+            </Button>
           ) : null}
         </>
       }

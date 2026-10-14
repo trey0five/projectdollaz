@@ -88,8 +88,11 @@ function MixCard({ title, rows, sortDesc = true }) {
   const rank = (x) => (x.masked ? 0 : x.value)
   const list = sortDesc ? [...rows].sort((a, b) => rank(b) - rank(a)) : rows
   return (
-    <div className="card-soft min-w-0 p-4 sm:p-5">
-      <h4 className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-muted">{title}</h4>
+    <div className="sec min-w-0 !mt-6">
+      <div className="sec-head">
+        <h4 className="sec-label">{title}</h4>
+        <span className="sec-rule" aria-hidden="true" />
+      </div>
       {rows.length ? (
         <ColumnChart
           rows={list.map((r) => ({
@@ -109,7 +112,7 @@ function MixCard({ title, rows, sortDesc = true }) {
       ) : (
         // An ALL-EMPTY dimension collapses to one honest sentence instead of a
         // near-empty chart — the same vocabulary the filter pickers use.
-        <p className="rounded-lg border border-dashed border-rule/60 bg-cream/40 px-3 py-4 text-center text-[12.5px] italic text-muted">
+        <p className="border-y border-hair px-3 py-4 text-center text-small italic text-ink2">
           Not in your roster data.
         </p>
       )}
@@ -223,47 +226,34 @@ export default function RosterAnalyticsSection({ schoolId }) {
     <motion.section
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="card-soft p-5 sm:p-6"
+      className="min-w-0"
       aria-label="Roster analytics"
     >
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <span
-            className="flex h-9 w-9 items-center justify-center rounded-xl text-white"
-            style={{ backgroundColor: ENROLL_HUE }}
-          >
-            <BarChart3 size={18} />
-          </span>
-          <div>
-            <h3 className="font-serif text-lg font-bold text-navy">Roster analytics</h3>
-            <p className="text-[12.5px] text-muted">
-              Aggregate counts only — cells under 5 show as &lt;5.
-            </p>
-          </div>
-        </div>
+      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
+        <p className="text-small text-ink2">
+          <BarChart3 size={14} className="mr-1.5 inline-block align-[-2px]" aria-hidden="true" />
+          Aggregate counts only — cells under 5 show as &lt;5.
+        </p>
         {(filtered != null || filteredSuppressed) && total != null && (
-          <span
-            className="rounded-full border px-3 py-1 text-[12.5px] font-bold"
-            style={{ borderColor: `${ENROLL_HUE}55`, backgroundColor: `${ENROLL_HUE}12`, color: '#0369A1' }}
-          >
+          <span className="pill pill-count">
             {filteredSuppressed ? formatMinCell(agg.filteredTotal) : filtered.toLocaleString('en-US')} of{' '}
             {total.toLocaleString('en-US')} students
           </span>
         )}
       </div>
 
-      <div className="mb-4">
-        <StudentFilterBar filters={filters} onChange={setFilters} hue={ENROLL_HUE} facets={facets} />
+      <div className="toolbar mb-2">
+        <div className="min-w-0 flex-1 py-1">
+          <StudentFilterBar filters={filters} onChange={setFilters} hue={ENROLL_HUE} facets={facets} />
+        </div>
       </div>
 
       {error ? (
-        <p className="rounded-xl border border-danger/30 bg-danger/[0.06] px-4 py-6 text-center text-[14px] text-danger">
-          {error}
-        </p>
+        <p className="py-6 text-center text-body text-risk">{error}</p>
       ) : loading && !agg ? (
-        <div className="h-44 animate-pulse rounded-xl border border-rule/40 bg-section/60" />
+        <div className="h-44 animate-pulse rounded-lg bg-ink/[.04]" />
       ) : !filteredSuppressed && (filtered ?? 0) === 0 ? (
-        <p className="rounded-xl border-2 border-dashed border-rule/60 bg-cream/50 px-6 py-10 text-center font-serif text-[15px] italic text-muted">
+        <p className="border-y border-hair px-6 py-10 text-center text-small italic text-ink2">
           No students match these filters.
         </p>
       ) : (
@@ -279,40 +269,19 @@ export default function RosterAnalyticsSection({ schoolId }) {
             <MixCard title="Ethnicity" rows={ethnicity} />
           </div>
 
-          {/* Flags strip — icon tiles, hue-lit when >0, quiet at 0. Still stat
-              chips rather than a chart: categorical cells stay masked. */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {flagStrip.map(([k, label, FlagIcon]) => {
+          {/* Flags strip — a Stat strip, hue-marked when >0, quiet at 0. Still
+              stat figures rather than a chart: categorical cells stay masked. */}
+          <div className="stats stats-wrap mt-6 grid-cols-2 sm:grid-cols-4" role="list">
+            {flagStrip.map(([k, label]) => {
               const n = flags[k] ?? 0
               // A server-suppressed flag (`{ suppressed: true }`) is a present-
               // but-small group: lit, shown as '<5' by formatMinCell.
               const lit = isSuppressedCell(n) || Number(n) > 0
               return (
-                <div
-                  key={k}
-                  className={`flex items-center gap-2.5 rounded-xl border px-3.5 py-2.5 transition-colors ${
-                    lit ? 'bg-white' : 'border-rule/50 bg-cream/40'
-                  }`}
-                  style={lit ? { borderColor: `${ENROLL_HUE}55` } : undefined}
-                >
-                  <span
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
-                    style={
-                      lit
-                        ? { backgroundColor: `${ENROLL_HUE}18`, color: ENROLL_HUE }
-                        : { backgroundColor: 'rgba(0,0,0,0.04)', color: '#9aa4b2' }
-                    }
-                  >
-                    <FlagIcon size={15} />
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-muted">
-                      {label}
-                    </p>
-                    <p className={`font-serif text-[20px] font-bold ${lit ? 'text-navy' : 'text-muted'}`}>
-                      {formatMinCell(n)}
-                    </p>
-                  </div>
+                <div key={k} className="stat">
+                  <p className="stat-label">{label}</p>
+                  <span className={`stat-value num ${lit ? '' : 'text-ink2'}`}>{formatMinCell(n)}</span>
+                  {lit ? <span className="stat-mark tone-hue" aria-hidden="true" /> : null}
                 </div>
               )
             })}

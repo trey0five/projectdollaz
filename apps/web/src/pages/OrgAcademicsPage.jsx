@@ -20,7 +20,7 @@ import { useReducedMotion } from 'framer-motion'
 import { Section } from '../components/module/SectionHeader.jsx'
 import ModuleBreadcrumb from '../components/module/ModuleBreadcrumb.jsx'
 import { ModuleAccent } from '../components/module/ModuleTabs.jsx'
-import { ArrowUpDown, Award, BookOpenCheck, ChevronRight, Grid3x3, Network, TrendingDown, Upload } from 'lucide-react'
+import { ArrowUpDown, Award, BookOpenCheck, Grid3x3, Network, Upload } from 'lucide-react'
 import { useScope } from '../context/ScopeContext.jsx'
 import { academicsApi } from '../lib/api.js'
 import { testTypeLabel } from '../lib/academicsVocab.js'
@@ -29,6 +29,7 @@ import OrgAssessmentUpload from '../components/academics/OrgAssessmentUpload.jsx
 import ColumnChart from '../components/analytics/charts/ColumnChart.jsx'
 import { INK } from '../components/academics/chartKit.jsx'
 import { axisUnitOf } from '../components/academics/MeasureNote.jsx'
+import { Toolbar, StatStrip, Stat, Panel, Button } from '../components/ui/surface/index.js'
 
 const HUE = '#0D9488'
 
@@ -152,36 +153,32 @@ export default function OrgAcademicsPage() {
       <OrgAssessmentUpload orgId={orgId} onDone={() => load(query)} />
 
       {error ? (
-        <div className="rounded-2xl border border-danger/25 bg-white p-6">
-          <p className="text-[13px] font-semibold text-danger">{error}</p>
-          <button
-            type="button"
-            onClick={() => load(query)}
-            className="mt-3 rounded-xl border border-navy/15 px-4 py-2 text-[12px] font-semibold text-navy"
-          >
+        <Panel tone="attention">
+          <p className="text-small font-semibold text-risk">{error}</p>
+          <Button variant="secondary" size="sm" onClick={() => load(query)} className="mt-3">
             Try again
-          </button>
-        </div>
+          </Button>
+        </Panel>
       ) : loading && !data ? (
         <p className="text-[13px] text-muted">Loading the network…</p>
       ) : data?.empty ? (
-        <div className="rounded-2xl border border-dashed border-navy/20 bg-white p-10 text-center">
-          <Upload size={22} className="mx-auto mb-2" style={{ color: HUE }} />
-          <p className="font-serif text-[19px] font-semibold text-navy">No results across the network yet</p>
-          <p className="mt-1 text-[12.5px] text-muted">
+        <div className="border-y border-hair py-10 text-center">
+          <Upload size={20} className="mx-auto mb-2 text-ink2" aria-hidden="true" />
+          <p className="font-serif text-title font-medium text-ink">No results across the network yet</p>
+          <p className="mt-1 text-small text-ink2">
             Upload one file covering every school above, or let each school load its own.
           </p>
         </div>
       ) : (
         <>
-          {/* ── Filters ── */}
-          <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-navy/10 bg-white px-4 py-3">
-            <span className="font-mono text-[9.5px] font-bold uppercase tracking-[0.18em] text-muted">View</span>
+          {/* ── Filters — a Toolbar on the ground ── */}
+          <Toolbar aside={loading ? <span className="text-small text-ink2">Updating…</span> : null}>
+            <span className="toolbar-label">View</span>
             <select
               aria-label="Test"
               value={ctx?.testType ?? ''}
               onChange={(e) => select({ testType: e.target.value, schoolYear: null, gradeLevel: null })}
-              className="rounded-lg border border-navy/15 bg-white px-2.5 py-1.5 text-[12.5px] text-navy"
+              className="sel"
             >
               {(ctx?.availableTestTypes ?? []).map((t) => (
                 <option key={t} value={t}>
@@ -193,7 +190,7 @@ export default function OrgAcademicsPage() {
               aria-label="School year"
               value={ctx?.year ?? ''}
               onChange={(e) => select({ schoolYear: Number(e.target.value) })}
-              className="rounded-lg border border-navy/15 bg-white px-2.5 py-1.5 text-[12.5px] text-navy"
+              className="sel"
             >
               {(ctx?.years ?? []).map((y) => (
                 <option key={y} value={y}>
@@ -205,7 +202,7 @@ export default function OrgAcademicsPage() {
               aria-label="Grade"
               value={ctx?.grade ?? 'all'}
               onChange={(e) => select({ gradeLevel: e.target.value })}
-              className="rounded-lg border border-navy/15 bg-white px-2.5 py-1.5 text-[12.5px] text-navy"
+              className="sel"
             >
               <option value="all">All grades</option>
               {(ctx?.grades ?? []).map((g) => (
@@ -214,8 +211,7 @@ export default function OrgAcademicsPage() {
                 </option>
               ))}
             </select>
-            {loading ? <span className="text-[11.5px] text-muted">Updating…</span> : null}
-          </div>
+          </Toolbar>
 
           {/* ── Every school ── */}
           <Section
@@ -239,7 +235,7 @@ export default function OrgAcademicsPage() {
               showValues="selective"
               ariaLabel="Every school in the network, ranked"
             />
-            <p className="mt-2 text-[11px] text-muted">
+            <p className="sec-note">
               A school with fewer than five scored students shows no figure — its cohort is small enough that the
               average would describe the children in it.
             </p>
@@ -251,20 +247,17 @@ export default function OrgAcademicsPage() {
               {(data?.movements ?? []).length === 0 ? (
                 <p className="text-[12.5px] text-muted">A second year of results lights this up.</p>
               ) : (
-                <div className="space-y-1.5">
+                <div className="border-t border-hair">
                   {data.movements.map((m) => {
-                    const tone =
-                      m.direction === 'improved' ? '#059669' : m.direction === 'declined' ? '#e11d48' : '#94a3b8'
+                    const tone = m.direction === 'improved' ? 'good' : m.direction === 'declined' ? 'risk' : 'neutral'
                     return (
-                      <div key={m.schoolId} className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-navy/[0.03]">
-                        <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: tone }} />
-                        <span className="flex-1 truncate text-[12.5px] text-navy">{m.schoolName}</span>
-                        <span className="font-mono text-[11px] tabular-nums text-muted">
+                      <div key={m.schoolId} className="flex h-9 items-center gap-2.5 border-b border-hair text-small">
+                        <span className={`mark tone-${tone}`} aria-hidden="true" />
+                        <span className="min-w-0 flex-1 break-words text-ink">{m.schoolName}</span>
+                        <span className="text-[11px] tabular-nums text-ink2">
                           {fmt(m.prior, 0)} → {fmt(m.current, 0)}
                         </span>
-                        <span className="w-10 text-right text-[12px] font-bold tabular-nums" style={{ color: tone }}>
-                          {signed(m.change, 0)}
-                        </span>
+                        <span className="w-10 text-right font-semibold tabular-nums text-ink">{signed(m.change, 0)}</span>
                       </div>
                     )
                   })}
@@ -299,29 +292,11 @@ export default function OrgAcademicsPage() {
           {/* ── Top, bottom, spread ── */}
           {data?.insights?.top ? (
             <Section eyebrow="At a glance" title="Top, bottom and the spread between" icon={Award} reduce={reduce}>
-              <div className="grid gap-3 sm:grid-cols-3">
-                {[
-                  { k: 'Highest', v: data.insights.top?.schoolName, n: data.insights.top?.value, Icon: Award, color: '#059669' },
-                  {
-                    k: 'Lowest',
-                    v: data.insights.bottom?.schoolName,
-                    n: data.insights.bottom?.value,
-                    Icon: TrendingDown,
-                    color: '#e11d48',
-                  },
-                  { k: 'Spread', v: 'Top to bottom', n: data.insights.spread, Icon: ChevronRight, color: '#64748b' },
-                ].map((c) => (
-                  <div key={c.k} className="rounded-xl border border-navy/10 px-3 py-2.5">
-                    <p className="flex items-center gap-1.5 font-mono text-[9px] font-bold uppercase tracking-wider text-muted">
-                      <c.Icon size={11} style={{ color: c.color }} /> {c.k}
-                    </p>
-                    <p className="mt-0.5 truncate text-[13px] font-semibold text-navy">{c.v ?? '—'}</p>
-                    <p className="font-serif text-[18px] tabular-nums" style={{ color: c.color }}>
-                      {fmt(c.n)}
-                    </p>
-                  </div>
-                ))}
-              </div>
+              <StatStrip cols={3} className="stats-wrap !grid-cols-1 sm:!grid-cols-3">
+                <Stat label="Highest" value={fmt(data.insights.top?.value)} status="good" note={data.insights.top?.schoolName ?? '—'} />
+                <Stat label="Lowest" value={fmt(data.insights.bottom?.value)} status="risk" note={data.insights.bottom?.schoolName ?? '—'} />
+                <Stat label="Spread" value={fmt(data.insights.spread)} note="top to bottom" />
+              </StatStrip>
             </Section>
           ) : null}
         </>

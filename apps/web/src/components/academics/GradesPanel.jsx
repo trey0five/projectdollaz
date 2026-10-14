@@ -6,15 +6,18 @@
 // below are the only surfaces in the module that put a student's name beside a
 // number, and the API answers 403 for anyone but an owner or business manager.
 // The UI says so out loud rather than silently rendering an empty table.
+//
+// PREMIUM UI P4: four `Section`s on the ground (Gradebook · Register · Courses ·
+// Import history); the gradebook summary is a StatStrip, the registers are
+// `DataTable`s, the undo confirm is the one `Panel` (a modal you act on).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { motion } from 'framer-motion'
 import ColumnChart from '../analytics/charts/ColumnChart.jsx'
-import { GraduationCap, Link2, Lock, ScrollText, UserRoundX } from 'lucide-react'
+import { Link2, Lock, UserRoundX } from 'lucide-react'
 import { academicsApi } from '../../lib/api.js'
+import { Section, StatStrip, Stat, DataTable, Pill, Panel, Button } from '../ui/surface/index.js'
 
 const HUE = '#0D9488'
-const EASE = [0.2, 0.8, 0.2, 1]
 
 const fmt = (v, d = 1) => (v === null || v === undefined ? '—' : Number(v).toFixed(d).replace(/\.0$/, ''))
 
@@ -27,44 +30,47 @@ function termCeiling(terms) {
   return Math.max(ceiling, peak)
 }
 
-function Card({ title, eyebrow, children, aside }) {
+function Restricted({ what }) {
   return (
-    <motion.section
-      initial={{ opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.45, ease: EASE }}
-      className="rounded-2xl border border-navy/10 bg-white p-5 shadow-[0_18px_44px_-30px_rgba(16,28,61,0.4)]"
-    >
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div>
-          <p className="font-mono text-[9.5px] font-bold uppercase tracking-[0.18em]" style={{ color: HUE }}>
-            {eyebrow}
-          </p>
-          <h3 className="mt-0.5 font-serif text-[19px] font-semibold text-navy">{title}</h3>
-        </div>
-        {aside}
-      </div>
-      {children}
-    </motion.section>
+    <p className="flex items-start gap-2.5 border-l-2 border-hair pl-3 text-small text-ink2">
+      <Lock size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
+      <span>
+        {what} are visible to owners and business managers only — they show a student&rsquo;s name beside a
+        score. The summaries above are open to everyone.
+      </span>
+    </p>
   )
 }
 
-function Restricted({ what }) {
-  return (
-    <div className="flex items-start gap-2.5 rounded-xl bg-navy/[0.04] px-4 py-3">
-      <Lock size={15} className="mt-0.5 shrink-0 text-muted" />
-      <p className="text-[12.5px] text-muted">
-        {what} are visible to owners and business managers only — they show a student&rsquo;s name beside a
-        score. The summaries above are open to everyone.
-      </p>
-    </div>
-  )
-}
+const RESULT_COLUMNS = [
+  {
+    key: 'displayName',
+    header: 'Student',
+    render: (r) => r.displayName ?? <span className="italic text-ink2">unnamed row</span>,
+  },
+  { key: 'testType', header: 'Test', render: (r) => <span className="uppercase text-ink2">{r.testType}</span> },
+  { key: 'schoolYear', header: 'Year', num: true, render: (r) => <span className="text-ink2">{r.schoolYear}</span> },
+  { key: 'gradeLevel', header: 'Grade', num: true, render: (r) => <span className="text-ink2">{r.gradeLevel ?? '—'}</span> },
+  { key: 'composite', header: 'Score', num: true, render: (r) => <span className="font-semibold text-ink">{r.composite ?? '—'}</span> },
+  {
+    key: 'matchStatus',
+    header: 'Match',
+    render: (r) =>
+      r.matchStatus === 'unmatched' ? (
+        <Pill variant="status" tone="watch">
+          <UserRoundX size={10} aria-hidden="true" /> unmatched
+        </Pill>
+      ) : (
+        <Pill variant="status" tone="good">
+          <Link2 size={10} aria-hidden="true" /> {r.matchStatus}
+        </Pill>
+      ),
+  },
+]
 
 export default function GradesPanel({ schoolId, canEdit }) {
   const [gradebook, setGradebook] = useState(null)
   const [courses, setCourses] = useState([])
-  const [records, setRecords] = useState([])
   const [results, setResults] = useState([])
   const [imports, setImports] = useState([])
   const [unmatchedOnly, setUnmatchedOnly] = useState(false)
@@ -80,7 +86,7 @@ export default function GradesPanel({ schoolId, canEdit }) {
     if (!schoolId) return
     setLoading(true)
     try {
-      const [g, c, r, res, imp] = await Promise.all([
+      const [g, c, , res, imp] = await Promise.all([
         academicsApi.gradebookSummary(schoolId).catch(() => null),
         canEdit ? academicsApi.gradebookCourses(schoolId).catch(() => null) : Promise.resolve(null),
         canEdit ? academicsApi.gradebookRecords(schoolId).catch(() => null) : Promise.resolve(null),
@@ -96,7 +102,6 @@ export default function GradesPanel({ schoolId, canEdit }) {
       ])
       setGradebook(g ? (g.data ?? g) : null)
       setCourses(c ? (c.data ?? c) : [])
-      setRecords(r ? (r.data ?? r) : [])
       // The register now answers with { rows, total, shown, years } so the page
       // can show a year filter and say what it is not showing. Older shapes
       // (a bare array) still render, so a stale client is not a blank screen.
@@ -127,27 +132,56 @@ export default function GradesPanel({ schoolId, canEdit }) {
   }, [load])
 
   const unmatchedCount = useMemo(() => results.filter((r) => r.matchStatus === 'unmatched').length, [results])
+  const shownResults = useMemo(() => results.slice(0, 200), [results])
 
-  if (loading) return <p className="text-[13px] text-muted">Loading…</p>
+  const importColumns = useMemo(
+    () => [
+      { key: 'fileName', header: 'File', render: (imp) => <span className="text-ink">{imp.fileName ?? `${imp.kind} import`}</span> },
+      { key: 'testTypeHint', header: 'Test', render: (imp) => <span className="uppercase text-ink2">{imp.testTypeHint ?? '—'}</span> },
+      { key: 'yearHint', header: 'Year', num: true, render: (imp) => <span className="text-ink2">{imp.yearHint ?? '—'}</span> },
+      {
+        key: 'rows',
+        header: 'Rows',
+        num: true,
+        render: (imp) => (
+          <span className="text-ink2">
+            {imp.resultsCreated > 0 ? `${imp.resultsCreated} student rows` : `${imp.aggregatesUpserted} summary rows`}
+          </span>
+        ),
+      },
+      { key: 'createdAt', header: 'Imported', num: true, className: 'dt-nowrap', render: (imp) => <span className="text-ink2">{String(imp.createdAt).slice(0, 10)}</span> },
+      ...(canEdit
+        ? [
+            {
+              key: 'undo',
+              header: '',
+              num: true,
+              render: (imp) => (
+                <Button variant="quiet" size="sm" disabled={reverting === imp.id} onClick={() => setConfirming(imp)} className="dt-actions">
+                  {reverting === imp.id ? 'Undoing…' : 'Undo'}
+                </Button>
+              ),
+            },
+          ]
+        : []),
+    ],
+    [canEdit, reverting],
+  )
+
+  if (loading) return <p className="text-small text-ink2">Loading…</p>
 
   return (
-    <div className="space-y-4">
+    <div>
       {/* ── Gradebook summary ── */}
-      <Card eyebrow="Gradebook" title="Course marks on file" aside={<GraduationCap size={16} className="text-muted" />}>
+      <Section label="Gradebook" className="!mt-0">
+        <h3 className="sec-title">Course marks on file</h3>
         {gradebook && gradebook.total > 0 ? (
-          <div className="space-y-3">
-            <div className="grid gap-3 sm:grid-cols-3">
-              {[
-                { k: 'Marks', v: gradebook.total },
-                { k: 'Courses', v: gradebook.courses },
-                { k: 'Average', v: fmt(gradebook.average) },
-              ].map((c) => (
-                <div key={c.k} className="rounded-xl border border-navy/10 px-3 py-2.5">
-                  <p className="font-mono text-[9px] font-bold uppercase tracking-wider text-muted">{c.k}</p>
-                  <p className="mt-0.5 font-serif text-[22px] font-semibold tabular-nums text-navy">{c.v}</p>
-                </div>
-              ))}
-            </div>
+          <div className="space-y-4">
+            <StatStrip cols={3} className="stats-wrap !grid-cols-3">
+              <Stat label="Marks" value={gradebook.total} />
+              <Stat label="Courses" value={gradebook.courses} />
+              <Stat label="Average" value={fmt(gradebook.average)} />
+            </StatStrip>
             {(gradebook.byTerm ?? []).length > 0 ? (
               <ColumnChart
                 rows={gradebook.byTerm.map((t) => ({
@@ -166,30 +200,24 @@ export default function GradesPanel({ schoolId, canEdit }) {
             ) : null}
           </div>
         ) : (
-          <p className="text-[12.5px] text-muted">
+          <p className="text-small text-ink2">
             No course marks loaded yet. Upload a gradebook export from the Add data tab and it lands here — live SIS
             grade sync is not available yet, whatever your roster connection.
           </p>
         )}
-      </Card>
+      </Section>
 
       {/* ── Student score register ── */}
-      <Card
-        eyebrow="Register"
-        title="Student results"
+      <Section
+        label="Register"
         aside={
           canEdit && (results.length > 0 || unmatchedOnly || year) ? (
-            <div className="flex items-center gap-3">
+            <>
               {/* PAST YEARS ARE REACHABLE. The register is ordered newest-first
                   and capped, so without this a school's earlier years sat on the
                   server with no way on screen to ask for them. */}
               {years.length > 1 ? (
-                <select
-                  aria-label="School year"
-                  value={year}
-                  onChange={(e) => setYear(e.target.value)}
-                  className="rounded-lg border border-navy/15 bg-white px-2 py-1 text-[11.5px] text-navy"
-                >
+                <select aria-label="School year" value={year} onChange={(e) => setYear(e.target.value)} className="sel !h-7">
                   <option value="">All years</option>
                   {years.map((y) => (
                     <option key={y} value={y}>
@@ -198,18 +226,19 @@ export default function GradesPanel({ schoolId, canEdit }) {
                   ))}
                 </select>
               ) : null}
-              <label className="flex items-center gap-1.5 text-[11.5px] text-muted">
+              <label className="flex items-center gap-1.5 text-small text-ink2">
                 <input type="checkbox" checked={unmatchedOnly} onChange={(e) => setUnmatchedOnly(e.target.checked)} />
                 Unmatched only{unmatchedCount > 0 ? ` (${unmatchedCount})` : ''}
               </label>
-            </div>
+            </>
           ) : null
         }
       >
+        <h3 className="sec-title">Student results</h3>
         {!canEdit ? (
           <Restricted what="Individual results" />
         ) : results.length === 0 && unmatchedOnly ? (
-          <p className="text-[12.5px] text-muted">
+          <p className="text-small text-ink2">
             {/* The claim has to match the filter. "Every result on file is
                 attached" is a statement about the whole school, and saying it
                 while a single year is selected is simply false. */}
@@ -218,64 +247,23 @@ export default function GradesPanel({ schoolId, canEdit }) {
               : 'Nothing unmatched — every result on file is attached to a roster student. Clear the filter above to see them all.'}
           </p>
         ) : results.length === 0 && year ? (
-          <p className="text-[12.5px] text-muted">
+          <p className="text-small text-ink2">
             No student-level results for {year}. Choose another year, or clear the filter to see everything on file.
           </p>
         ) : results.length === 0 ? (
-          <p className="text-[12.5px] text-muted">
+          <p className="text-small text-ink2">
             No student-level results on file. A school-summary file fills the dashboards but carries no individual
             rows; upload a student-level export to populate this register.
           </p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[520px] border-collapse">
-              <thead>
-                <tr className="border-b border-navy/12">
-                  {['Student', 'Test', 'Year', 'Grade', 'Score', 'Match'].map((h, i) => (
-                    <th
-                      key={h}
-                      className={`px-2 py-1.5 font-mono text-[9px] font-bold uppercase tracking-wider text-muted ${
-                        i === 0 ? 'text-left' : 'text-right'
-                      }`}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {results.slice(0, 200).map((r) => (
-                  <tr key={r.id} className="border-b border-navy/[0.07] hover:bg-navy/[0.02]">
-                    <td className="px-2 py-2 text-left text-[12.5px] text-navy">
-                      {r.displayName ?? <span className="italic text-muted">unnamed row</span>}
-                    </td>
-                    <td className="px-2 py-2 text-right font-mono text-[11px] uppercase text-muted">{r.testType}</td>
-                    <td className="px-2 py-2 text-right text-[12px] tabular-nums text-muted">{r.schoolYear}</td>
-                    <td className="px-2 py-2 text-right text-[12px] tabular-nums text-muted">{r.gradeLevel ?? '—'}</td>
-                    <td className="px-2 py-2 text-right text-[12.5px] font-bold tabular-nums text-navy">
-                      {r.composite ?? '—'}
-                    </td>
-                    <td className="px-2 py-2 text-right">
-                      {r.matchStatus === 'unmatched' ? (
-                        <span className="inline-flex items-center gap-1 rounded bg-amber-500/12 px-1.5 py-0.5 text-[10.5px] font-bold text-amber-700">
-                          <UserRoundX size={10} /> unmatched
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 rounded bg-emerald-500/12 px-1.5 py-0.5 text-[10.5px] font-bold text-emerald-700">
-                          <Link2 size={10} /> {r.matchStatus}
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div>
+            <DataTable columns={RESULT_COLUMNS} rows={shownResults} rowKey="id" caption="Student results" />
             {/* SAY WHAT IS NOT SHOWN. The old line reported the length of what
                 the server had already truncated, so "the first 200 of 1000" was
                 the ceiling talking, not the school's actual history. */}
-            {total > Math.min(results.length, 200) ? (
-              <p className="mt-2 text-[11.5px] text-muted">
-                Showing {Math.min(results.length, 200).toLocaleString()} of {total.toLocaleString()}
+            {total > shownResults.length ? (
+              <p className="sec-note">
+                Showing {shownResults.length.toLocaleString()} of {total.toLocaleString()}
                 {year ? ` for ${year}` : ''}.
                 {total > results.length && !year && years.length > 1
                   ? ' Pick a year above to narrow it, or export everything from Settings → Your Data.'
@@ -284,65 +272,39 @@ export default function GradesPanel({ schoolId, canEdit }) {
             ) : null}
           </div>
         )}
-      </Card>
+      </Section>
 
       {/* ── Course register ── */}
       {canEdit && courses.length > 0 ? (
-        <Card eyebrow="Courses" title="Sections on file">
-          <div className="grid gap-2 sm:grid-cols-2">
+        <Section label="Courses">
+          <h3 className="sec-title">Sections on file</h3>
+          <ul className="grid grid-cols-1 gap-x-8 border-t border-hair sm:grid-cols-2">
             {courses.slice(0, 40).map((c) => (
-              <div key={c.id} className="flex items-center gap-2 rounded-lg border border-navy/10 px-3 py-2">
-                <span className="flex-1 truncate text-[12.5px] text-navy">{c.name}</span>
-                {c.subject ? <span className="text-[11px] text-muted">{c.subject}</span> : null}
-                {c.gradeLevel ? <span className="font-mono text-[10.5px] text-muted">Gr {c.gradeLevel}</span> : null}
-              </div>
+              <li key={c.id} className="flex h-9 items-center gap-2 border-b border-hair text-small">
+                <span className="min-w-0 flex-1 break-words text-ink">{c.name}</span>
+                {c.subject ? <span className="text-[11px] text-ink2">{c.subject}</span> : null}
+                {c.gradeLevel ? <span className="text-[11px] text-ink2 tabular-nums">Gr {c.gradeLevel}</span> : null}
+              </li>
             ))}
-          </div>
-        </Card>
+          </ul>
+        </Section>
       ) : null}
 
       {/* ── Provenance ── */}
-      <Card eyebrow="Where this came from" title="Import history" aside={<ScrollText size={16} className="text-muted" />}>
-        {imports.length === 0 ? (
-          <p className="text-[12.5px] text-muted">Nothing imported yet.</p>
-        ) : (
-          <div className="space-y-1.5">
-            {imports.slice(0, 12).map((imp) => (
-              <div key={imp.id} className="flex items-center gap-3 rounded-lg border border-navy/10 px-3 py-2">
-                <span className="flex-1 truncate text-[12.5px] text-navy">
-                  {imp.fileName ?? `${imp.kind} import`}
-                </span>
-                <span className="font-mono text-[10.5px] uppercase text-muted">{imp.testTypeHint ?? '—'}</span>
-                <span className="font-mono text-[10.5px] text-muted">{imp.yearHint ?? '—'}</span>
-                <span className="text-[11px] text-muted">
-                  {imp.resultsCreated > 0 ? `${imp.resultsCreated} student rows` : `${imp.aggregatesUpserted} summary rows`}
-                </span>
-                <span className="font-mono text-[10px] text-muted">{String(imp.createdAt).slice(0, 10)}</span>
-                {canEdit ? (
-                  <button
-                    type="button"
-                    disabled={reverting === imp.id}
-                    onClick={() => setConfirming(imp)}
-                    className="rounded border border-navy/15 px-2 py-0.5 text-[10.5px] text-muted hover:border-danger hover:text-danger disabled:opacity-40"
-                  >
-                    {reverting === imp.id ? 'Undoing…' : 'Undo'}
-                  </button>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
+      <Section label="Where this came from">
+        <h3 className="sec-title">Import history</h3>
+        <DataTable columns={importColumns} rows={imports.slice(0, 12)} rowKey="id" empty="Nothing imported yet." caption="Import history" />
+      </Section>
 
       {/* UNDO DELETES ROWS. It used to fire on the first click with no
           confirmation, no busy state and no error branch, so a rejected DELETE
           became an unhandled rejection and the list simply did not change —
           indistinguishable from an undo that worked. */}
       {confirming ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/40 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
-            <h4 className="font-serif text-[18px] font-semibold text-navy">Undo this import?</h4>
-            <p className="mt-1.5 text-[12.5px] text-muted">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4">
+          <Panel className="w-full max-w-sm !shadow-float" role="dialog" aria-modal="true">
+            <h4 className="font-serif text-heading font-medium text-ink">Undo this import?</h4>
+            <p className="mt-1.5 text-small text-ink2">
               {confirming.fileName ?? `${confirming.kind} import`} — this removes the{' '}
               {confirming.resultsCreated > 0
                 ? `${confirming.resultsCreated} student rows`
@@ -350,15 +312,12 @@ export default function GradesPanel({ schoolId, canEdit }) {
               it added and recomputes the averages built from them. It cannot be undone.
             </p>
             <div className="mt-4 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setConfirming(null)}
-                className="rounded-xl border border-navy/15 px-4 py-2 text-[12px] text-navy"
-              >
+              <Button variant="secondary" onClick={() => setConfirming(null)}>
                 Keep it
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="primary"
+                className="!bg-risk !shadow-none"
                 onClick={async () => {
                   const imp = confirming
                   setConfirming(null)
@@ -373,16 +332,15 @@ export default function GradesPanel({ schoolId, canEdit }) {
                     setReverting(null)
                   }
                 }}
-                className="rounded-xl bg-danger px-4 py-2 text-[12px] font-bold uppercase tracking-[0.12em] text-white"
               >
                 Undo import
-              </button>
+              </Button>
             </div>
-          </div>
+          </Panel>
         </div>
       ) : null}
 
-      {error ? <p className="text-[12.5px] text-danger">{error}</p> : null}
+      {error ? <p className="mt-3 text-small text-risk">{error}</p> : null}
     </div>
   )
 }
