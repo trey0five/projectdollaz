@@ -21,15 +21,51 @@ import type { NormalizedRow } from '@finrep/engine'
 // ── Engine account-number blocks ──────────────────────────────────────────────
 
 /**
- * Engine account-number blocks for QBO P&L accounts WITHOUT an AcctNum. The
- * live sync adds the QBO account id to the base; the export adapter adds a
- * 1-based order within the section (no ids exist in a file). Both are > base,
- * so the bare bases are never assigned.
+ * Engine account-number blocks for QBO P&L accounts WITHOUT an AcctNum. Both
+ * QuickBooks paths number INSIDE the same block but in DISJOINT sub-ranges, so
+ * a school that mixes a live sync with a file export never collides:
+ *
+ *   base + 1    … base + 999    LIVE SYNC   → base + the QBO account id
+ *                                             (qbo.client.ts; ids are small ints)
+ *   base + 1000 … base + 8999   FILE EXPORT → base + syntheticOffset(name)
+ *                                             (a stable hash of the leaf NAME —
+ *                                             no ids exist in a file)
+ *
+ * Both are > base, so the bare bases are never assigned.
  */
 export const QBO_REVENUE_BASE = 40000
 export const QBO_EXPENSE_BASE = 60000
 /** First number of the "no idea what this is" synthetic block. */
 export const QBO_SYNTHETIC_BASE = 90000
+/** Export adapter sub-range inside a P&L block: base + OFFSET … base + OFFSET + SPAN − 1. */
+export const QBO_SYNTHETIC_OFFSET = 1000
+export const QBO_SYNTHETIC_SPAN = 8000
+
+/** 32-bit FNV-1a — tiny, dependency-free, identical in node and the browser. */
+export function fnv1a(s: string): number {
+  let h = 0x811c9dc5
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 0x01000193) >>> 0
+  }
+  return h >>> 0
+}
+
+/** Lower-case letters+digits only — the identity of an unnumbered leaf across re-exports. */
+export function normalizeLeafName(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
+/**
+ * Where an UNNUMBERED export leaf lands inside its P&L block: a hash of the
+ * normalised name, so inserting a row or a zero turning into a value in a later
+ * export does NOT re-key every account after it (a 1-based order would). The
+ * caller skips forward on a collision (same hash, or a number an explicit
+ * account in the file already uses).
+ */
+export function syntheticOffset(name: string): number {
+  return QBO_SYNTHETIC_OFFSET + (fnv1a(normalizeLeafName(name)) % QBO_SYNTHETIC_SPAN)
+}
 
 /**
  * Balance-sheet rows collapse onto the engine's FIXED default-chart numbers
@@ -104,14 +140,16 @@ export function pnlSectionFromGroups(groups: readonly string[]): 'revenue' | 'ex
 
 /**
  * Resolve a balance-sheet row's section from its enclosing groups. Innermost
- * wins (an 'Equity' subsection inside 'LIABILITIES AND EQUITY'). Unknown →
- * undefined (the live path treats it as asset).
+ * wins (an 'Equity' subsection inside 'LIABILITIES AND EQUITY'). Within one
+ * label LIABILITY is tested before EQUITY so a leaf sitting directly under
+ * "LIABILITIES AND EQUITY" (no subsection) is a liability, not equity. Unknown
+ * → undefined (the live path treats it as asset).
  */
 export function bsSectionFromGroups(groups: readonly string[]): 'asset' | 'liability' | 'equity' | undefined {
   for (let i = groups.length - 1; i >= 0; i--) {
     const g = normalizeGroup(groups[i]!)
-    if (g.includes('equity')) return 'equity'
     if (g.includes('liabilit')) return 'liability'
+    if (g.includes('equity')) return 'equity'
     if (g.includes('asset')) return 'asset'
   }
   return undefined

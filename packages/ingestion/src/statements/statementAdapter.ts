@@ -7,25 +7,41 @@
 // shared ./tbConventions.ts the live QBO sync also uses.
 //
 // DETECTION (isStatementExport): a BANNER in the top rows naming the report,
-// OR the STRUCTURAL signature — a section label row with no value (Income /
-// Expenses / ASSETS / LIABILITIES AND EQUITY …) plus a `Total <Name>` subtotal
-// row or a computed row (Net Income / Net Operating Income / Gross Profit /
-// TOTAL LIABILITIES AND EQUITY). A plain trial balance has neither.
+// OR the STRUCTURAL signature — a KNOWN section label row with no value
+// (Income / Expenses / ASSETS / LIABILITIES AND EQUITY …) plus a `Total <Name>`
+// subtotal row or a computed row (Net Income / Net Operating Income / Gross
+// Profit / TOTAL LIABILITIES AND EQUITY). A plain trial balance has neither.
+//
+// THE ONE HARD RULE — a plain trial balance is NEVER hijacked: a statement
+// export never has Debit | Credit columns, so a grid whose header carries BOTH
+// is a trial balance whatever its file name, banner or section rows say
+// (hasDebitCreditHeader → detection false, the filename hint ignored, the
+// adapter returns null). A sectioned TB (group rows + "Total Assets" rows) is
+// already TB-signed; re-signing it would flip every credit.
 //
 // WALK: hierarchy is tracked by a SECTION STACK, not by indentation — QBO's
 // Excel export indents with cell formatting that a grid read loses, so the
 // only reliable signals are "a name row with no value OPENS a section" and
 // "`Total <Name>` CLOSES it". Leading spaces / empty leading cells are
-// tolerated but never required. `Total …`, computed and blank rows are
-// skipped so nothing is double-counted; leaf rows (name + value) are kept.
+// tolerated but never required. `Total <X>` is a subtotal ONLY when X is a
+// section on the stack or a leaf already seen (a parent printed with its own
+// amount) — an account literally named "Total Compensation" is a leaf.
+// Computed and blank rows are skipped so nothing is double-counted; leaf rows
+// (name + value, zero INCLUDED — mapping needs the full chart, exactly as the
+// plain TB keeps its zeros) are kept.
 //
-// ACCOUNT NUMBERS: an explicit Acct column, else a leading number in the name
-// ("40000 Income"), else SYNTHESISED:
-//   · P&L  → QBO_REVENUE_BASE (40000) / QBO_EXPENSE_BASE (60000) + the 1-based
-//     ORDER of the unnumbered leaf within that section block (skipping any
-//     number an explicit account in the same file already uses). Stable across
-//     re-uploads of the same file; every synthesised {acct, name, section} is
-//     recorded in metadata.statement.synthesized so a mapping UI can re-key.
+// ACCOUNT NUMBERS: an explicit Acct column (when one exists a leading number
+// in the name is NOT read — "2026 Annual Fund" is a name), else a leading
+// number in the name ("40000 Income"; a bare year 19xx/20xx is only an account
+// when a `-`/`:` separator follows it), else SYNTHESISED:
+//   · P&L  → QBO_REVENUE_BASE (40000) / QBO_EXPENSE_BASE (60000) +
+//     syntheticOffset(name): +1000 + fnv1a(normalised name) % 8000, skipping
+//     forward on a collision or a number an explicit account already uses.
+//     A hash, not an order, so a later export that inserts a row (or turns a
+//     zero into a value) keeps every other account's number. The live sync
+//     owns base + 1 … + 999 (base + QBO id) — see tbConventions.ts. Every
+//     synthesised {acct, name, section} is recorded in
+//     metadata.statement.synthesized so a mapping UI can re-key.
 //   · BS   → the engine's fixed default-chart number for the row's section
 //     family (BS_ENGINE_ACCT: Bank Accounts → 100, Accounts Receivable → 120,
 //     Prepaid → 125, Fixed Assets → 150 / 170, Other Assets → 140, current
@@ -35,7 +51,10 @@
 // COLUMNS: `Actual` wins (Budget vs Actuals), else `Total` (multi-period),
 // else the single value column; Budget / over Budget / % columns are
 // ignored. `opts.column` picks a named period column ("Jan 2026") instead.
-// Values are natural-positive per section → the TB sign convention applies.
+// A Budget-vs-Actuals-typed report whose chosen column is NOT an Actual column
+// (a "Budget Overview" is budget only) is REFUSED with StatementExportError —
+// a budget must never import as actuals. Values are natural-positive per
+// section → the TB sign convention applies.
 // ─────────────────────────────────────────────────────────────
 import * as XLSX from 'xlsx'
 import type { IngestionAdapter, IngestionResult, NormalizedRow, SheetMetadata } from '../types.js'
@@ -49,11 +68,26 @@ import {
   pnlSectionFromGroups,
   QBO_EXPENSE_BASE,
   QBO_REVENUE_BASE,
+  QBO_SYNTHETIC_OFFSET,
+  QBO_SYNTHETIC_SPAN,
   round2,
   sectionFromAcct,
   sectionSign,
+  syntheticOffset,
   type TbSection,
 } from './tbConventions.js'
+
+/**
+ * A file that IS a statement export but cannot be imported as actuals (a
+ * budget-only "Budget Overview"). Distinct from "not a statement" (null) so
+ * the registry can surface THIS message instead of the plain adapter's.
+ */
+export class StatementExportError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'StatementExportError'
+  }
+}
 
 export type RawGrid = unknown[][]
 
@@ -76,6 +110,8 @@ export interface StatementParseOptions {
    * cells alone, yet the name says exactly what they are.
    */
   typeHint?: StatementType
+  /** Receives per-sheet failures the workbook walkers would otherwise swallow. */
+  onWarning?: (message: string) => void
 }
 
 // ── Cell helpers ──────────────────────────────────────────────────────────────
@@ -84,8 +120,10 @@ const text = (v: unknown): string => (v == null ? '' : String(v)).replace(/ /g,
 
 /**
  * Parse a report money cell. Handles numbers, "1,234.00", "$1,234", "(1,234.00)"
- * (accounting negative), "-1,234", and the "-" / "—" zero placeholder. Returns
- * null for text that is not a number (so names never read as 0).
+ * and "$(1,234.00)" (accounting negative — Excel's accounting format puts the
+ * currency sign OUTSIDE the parens), "-1,234", the EU "1.234,00", and the "-" /
+ * "—" zero placeholder. Returns null for text that is not a number (so names,
+ * "N/A" and "104.17 %" never read as 0).
  */
 export function parseMoney(v: unknown): number | null {
   if (typeof v === 'number') return Number.isFinite(v) ? v : null
@@ -94,14 +132,26 @@ export function parseMoney(v: unknown): number | null {
   if (s === '') return null
   if (/^[-–—]$/.test(s)) return 0
   let neg = false
+  // A leading currency sign sits OUTSIDE the parens / minus in Excel's
+  // accounting format: "$(1,234.00)", "$ -1,234", "-$1,234".
+  s = s.replace(/^(-?)\s*\$\s*/, '$1')
   if (/^\(.*\)$/.test(s)) {
     neg = true
-    s = s.slice(1, -1)
+    s = s.slice(1, -1).trim().replace(/^\$\s*/, '')
   }
-  s = s.replace(/[$,\s]/g, '')
   if (s.startsWith('-')) {
     neg = !neg
     s = s.slice(1)
+  }
+  s = s.replace(/[$\s]/g, '')
+  // EU thousands/decimal — "1.234,00" (last comma AFTER the last dot) or a lone
+  // decimal comma "1234,50" (comma + 1–2 digits at the end) — else US commas.
+  const lastComma = s.lastIndexOf(',')
+  const lastDot = s.lastIndexOf('.')
+  if (lastComma >= 0 && ((lastDot >= 0 && lastComma > lastDot) || (lastDot < 0 && /,\d{1,2}$/.test(s)))) {
+    s = s.replace(/\./g, '').replace(',', '.')
+  } else {
+    s = s.replace(/,/g, '')
   }
   if (!/^\d*\.?\d+$/.test(s)) return null
   const n = parseFloat(s)
@@ -166,12 +216,62 @@ function bannerCells(grid: RawGrid, limit = 10): string[] {
   return out
 }
 
+const DEBIT_HEADER = /^(debits?|dr\.?)$/i
+const CREDIT_HEADER = /^(credits?|cr\.?)$/i
+
+/**
+ * THE trial-balance tell: a header row (top 20 rows) carrying BOTH a Debit and
+ * a Credit column. No QuickBooks statement export has them, so when this is
+ * true the grid is a plain TB whatever its file name, banner or section rows
+ * say — detection is false, the filename hint is ignored, the walk never runs.
+ */
+export function hasDebitCreditHeader(grid: RawGrid, limit = 20): boolean {
+  for (let i = 0; i < Math.min(limit, grid.length); i++) {
+    const r = grid[i]
+    if (!r) continue
+    let debit = false
+    let credit = false
+    for (const c of r) {
+      if (typeof c !== 'string') continue
+      const t = text(c)
+      if (DEBIT_HEADER.test(t)) debit = true
+      else if (CREDIT_HEADER.test(t)) credit = true
+    }
+    if (debit && credit) return true
+  }
+  return false
+}
+
+/** A value-less row whose label is a KNOWN P&L / BS section (Income, Expenses, ASSETS …). */
+export function hasKnownSectionRow(grid: RawGrid): boolean {
+  for (const r of grid) {
+    if (!r) continue
+    const name = firstText(r)
+    if (name === '') continue
+    const hasMoney = r.some((c) => typeof c === 'number' || (typeof c === 'string' && c !== name && isMoneyCell(c)))
+    if (!hasMoney && SECTION_LABELS.has(normalizeGroup(name))) return true
+  }
+  return false
+}
+
+/**
+ * Statement type from a FILE NAME ("CMA Statement of Activity Budget vs
+ * Actuals 6-30-26.xlsx" → 'bva'). QuickBooks names its exports after the
+ * report, and a banner-less export is otherwise indistinguishable from a TB.
+ * Only a HINT: a Debit | Credit grid overrides it (see hasDebitCreditHeader).
+ */
+export function statementTypeFromFileName(fileName: string): StatementType | undefined {
+  return detectStatementType(fileName.replace(/[_.\-]+/g, ' '))
+}
+
 /**
  * Is this grid a QuickBooks statement export? Banner title, OR the structural
- * signature (a value-less section label + a `Total <Name>` / computed row).
+ * signature (a value-less KNOWN section label + a `Total <Name>` / computed
+ * row). Never when the grid has Debit | Credit columns.
  */
 export function isStatementExport(grid: RawGrid): boolean {
   if (!grid || grid.length < 3) return false
+  if (hasDebitCreditHeader(grid)) return false
   if (detectStatementType(bannerCells(grid).join(' ')) !== undefined) return true
   let sectionRows = 0
   let totalRows = 0
@@ -215,15 +315,26 @@ const isAcctHeader = (h: string): boolean =>
 const isDescHeader = (h: string): boolean =>
   /^(description|desc|name|account\s*name|distribution\s+account)$/i.test(h)
 
+/**
+ * Does this row look like the column-header row? Header tokens (Actual / Total
+ * / Acct / Desc …) or period-column labels ("Jul 2025"). A row whose ONLY cell
+ * is a month token ("July 2025 - June 2026") is the banner's period line, not a
+ * header — it must stay in the banner so the period is read from it.
+ */
 function headerCandidate(row: unknown[]): boolean {
-  let tokens = 0
+  let headerTokens = 0
+  let monthTokens = 0
+  let cells = 0
   for (const c of row) {
     const t = text(c)
     if (t === '') continue
     if (typeof c === 'number') return false
-    if (HEADER_TOKEN.test(t) || MONTH_TOKEN.test(t)) tokens++
+    cells++
+    if (HEADER_TOKEN.test(t)) headerTokens++
+    else if (MONTH_TOKEN.test(t)) monthTokens++
   }
-  return tokens > 0
+  if (headerTokens > 0) return true
+  return monthTokens > 0 && cells > 1
 }
 
 /** Index of the first body row: the first row with a money cell beyond the name. */
@@ -250,13 +361,26 @@ function planColumns(grid: RawGrid, column?: string): ColumnPlan {
     if (r && headerCandidate(r)) headerRow = i
   }
 
+  // Body start: after the header row; with NO header row, at the first KNOWN
+  // section row ("Income") above the first money row — so the opening section
+  // is walked and the banner (company / title / period) stays above it.
+  let startRow = headerRow >= 0 ? headerRow + 1 : Math.max(bodyStart, 0)
+  if (headerRow < 0 && bodyStart > 0) {
+    for (let i = 0; i < bodyStart; i++) {
+      const r = grid[i]
+      if (r && SECTION_LABELS.has(normalizeGroup(firstText(r)))) {
+        startRow = i
+        break
+      }
+    }
+  }
   const plan: ColumnPlan = {
     value: -1,
     valueHeader: '',
     acct: -1,
     desc: -1,
     headerRow,
-    startRow: headerRow >= 0 ? headerRow + 1 : Math.max(bodyStart, 0),
+    startRow,
   }
 
   // Money density per column over the body — the no-header fallback and the
@@ -362,28 +486,70 @@ interface Leaf {
   rowIndex: number
 }
 
-const LEADING_ACCT = /^(\d{3,6})\s*[-–:.·]?\s+(.+)$/
+const LEADING_ACCT = /^(\d{3,6})(\s*([-–:.·])?\s+)(.+)$/
+const YEAR_LIKE = /^(19|20)\d\d$/
 
+/**
+ * "40000 Income" → 40000 / "Income". A bare YEAR ("2026 Annual Fund") is a
+ * name, not an account, unless a `-` / `:` separator says otherwise
+ * ("2026 - Fund"). "2025-26 Tuition" never matches (no space after the dash).
+ */
 function splitLeadingAcct(name: string): { acct: number | null; rest: string } {
   const m = name.match(LEADING_ACCT)
   if (!m) return { acct: null, rest: name }
+  const digits = m[1]!
+  const sep = m[3] ?? ''
+  if (YEAR_LIKE.test(digits) && !/^[-–:]$/.test(sep)) return { acct: null, rest: name }
+  const n = parseInt(digits, 10)
+  return Number.isFinite(n) && n > 0 ? { acct: n, rest: m[4]!.trim() } : { acct: null, rest: name }
+}
+
+/** Explicit Acct cell → its LEADING digit run ("4000-10" → 4000, "4000" → 4000), or null. */
+function explicitAcctOf(cell: string): number | null {
+  const m = cell.match(/^\s*(\d+)/)
+  if (!m) return null
   const n = parseInt(m[1]!, 10)
-  return Number.isFinite(n) && n > 0 ? { acct: n, rest: m[2]!.trim() } : { acct: null, rest: name }
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
+/**
+ * Equity lines a BALANCE SHEET prints for the current-year result — QuickBooks
+ * names it "Net Income" for a company and "Net Revenue" / "Net Income (Loss)" /
+ * "Change in Net Assets" for a nonprofit. Kept as the equity row on a BS-only
+ * upload (the sheet balances on its own) and DROPPED again when the BS is
+ * merged with a P&L (the P&L leaves ARE that result).
+ */
+export const BS_RESULT_LABELS: ReadonlySet<string> = new Set([
+  'netincome', 'netincomeloss', 'netrevenue', 'netrevenueloss', 'changeinnetassets', 'netassets',
+])
+
+interface Walk {
+  leaves: Leaf[]
+  warnings: string[]
 }
 
 /**
  * Walk the body rows with a section stack. Emits every leaf (name + value)
  * once; opens a section on a value-less name row; closes on `Total <Name>`
- * (popping back to the matching name — resilient to a stray value-less leaf
- * that never got a Total); skips computed rows.
+ * when Name is a section on the stack (popping back to it — resilient to a
+ * stray value-less leaf that never got a Total) or a leaf already seen (a
+ * parent printed with its own amount, then its children, then `Total Parent`);
+ * any other `Total …` row is an ordinary account. Skips computed rows. A row
+ * whose value cell holds UNPARSEABLE text is a bad leaf (warned), never a
+ * section opener.
  */
-function walkLeaves(grid: RawGrid, plan: ColumnPlan, type: StatementType): Leaf[] {
+function walkLeaves(grid: RawGrid, plan: ColumnPlan, type: StatementType): Walk {
   const leaves: Leaf[] = []
+  const warnings: string[] = []
   const stack: string[] = []
-  const popTo = (label: string): void => {
+  const seenLeaves = new Set<string>()
+  const badLeaves: string[] = []
+  const popTo = (label: string): boolean => {
     const want = normalizeGroup(label)
     const at = stack.map(normalizeGroup).lastIndexOf(want)
-    if (at >= 0) stack.length = at
+    if (at < 0) return false
+    stack.length = at
+    return true
   }
 
   for (let i = plan.startRow; i < grid.length; i++) {
@@ -409,20 +575,33 @@ function walkLeaves(grid: RawGrid, plan: ColumnPlan, type: StatementType): Leaf[
     const valueCell = plan.value >= 0 ? r[plan.value] : undefined
     const value = parseMoney(valueCell)
 
+    // `Total <X>`: a subtotal only when X is a section on the stack or a leaf
+    // already printed; otherwise it is an account that happens to be named
+    // "Total …" ("Total Compensation") and falls through as a leaf.
+    if (TOTAL_ROW.test(rawName)) {
+      const label = rawName.replace(/^total\s+/i, '')
+      if (popTo(label)) continue
+      if (COMPUTED_LABELS.has(key)) continue
+      if (seenLeaves.has(normalizeGroup(label))) continue
+      if (value === null) continue
+    }
     // Computed rows: a P&L's Net Income / Gross Profit / Net Operating Income
     // are derived from the leaves and are NEVER rows. On a BALANCE SHEET the
-    // "Net Income" line inside Equity is the current-year result that makes the
-    // sheet balance — kept as an equity row (dropped again when merged with a
-    // P&L, see mergeStatementResults).
-    if (TOTAL_ROW.test(rawName)) {
-      popTo(rawName.replace(/^total\s+/i, ''))
-      continue
-    }
+    // current-year result line inside Equity (Net Income / Net Revenue /
+    // Change in Net Assets …) is what makes the sheet balance — kept as an
+    // equity row (dropped again when merged with a P&L).
     if (COMPUTED_LABELS.has(key)) {
-      if (!(type === 'bs' && key === 'netincome' && value !== null)) continue
+      if (!(type === 'bs' && BS_RESULT_LABELS.has(key) && value !== null)) continue
     }
 
     if (value === null) {
+      const cellText = text(valueCell)
+      if (cellText !== '') {
+        // A name WITH something in the value column that is not money: a bad
+        // leaf ("N/A", a stray note), never a section opener.
+        badLeaves.push(`${rawName || explicitCell} = "${cellText}"`)
+        continue
+      }
       // A name with no value opens a section (or is a stray label).
       if (rawName !== '' && explicitCell === '') stack.push(rawName)
       continue
@@ -430,18 +609,23 @@ function walkLeaves(grid: RawGrid, plan: ColumnPlan, type: StatementType): Leaf[
 
     let explicitAcct: number | null = null
     let name = rawName
-    if (explicitCell !== '') {
-      const n = parseInt(explicitCell.replace(/[^\d]/g, ''), 10)
-      if (Number.isFinite(n) && n > 0) explicitAcct = n
-    }
-    if (explicitAcct == null) {
+    if (explicitCell !== '') explicitAcct = explicitAcctOf(explicitCell)
+    // A leading number in the NAME is only an account when the export has no
+    // Acct column of its own — with one, "2026 Annual Fund" is just a name.
+    if (explicitAcct == null && plan.acct < 0) {
       const split = splitLeadingAcct(rawName)
       if (split.acct != null) explicitAcct = split.acct
     }
     if (name === '' && explicitCell !== '') name = explicitCell
+    seenLeaves.add(normalizeGroup(name))
     leaves.push({ name, explicitAcct, value, groups: [...stack], rowIndex: i })
   }
-  return leaves
+  if (badLeaves.length) {
+    warnings.push(
+      `${badLeaves.length} row(s) had text instead of an amount in the value column and were skipped: ${badLeaves.slice(0, 5).join(', ')}${badLeaves.length > 5 ? '…' : ''}`,
+    )
+  }
+  return { leaves, warnings }
 }
 
 // ── Section + numbering ───────────────────────────────────────────────────────
@@ -559,12 +743,28 @@ export function parseStatementGrid(
   opts: StatementParseOptions = {},
 ): StatementSheetResult | null {
   if (!grid || grid.length < 3) return null
+  // A Debit | Credit grid is a trial balance, full stop — no banner, file-name
+  // hint or `force` may re-sign it (B1 / B2).
+  if (hasDebitCreditHeader(grid)) return null
   let type = detectStatementType(`${bannerCells(grid).join(' ')} ${sheetName}`) ?? opts.typeHint
   const detected = type !== undefined || isStatementExport(grid)
-  if (!detected && !opts.force) return null
+  // `force` (the registry's "plain adapter found nothing" fallback) still needs
+  // REAL statement evidence — a known section row — before walking a flat
+  // grid; signing by leading digit alone would silently "succeed" on an
+  // unlabeled TB whose real error the caller should see instead (B3).
+  if (!detected && !(opts.force && hasKnownSectionRow(grid))) return null
 
   const plan = planColumns(grid, opts.column)
   if (plan.value < 0) return null
+  // A Budget-vs-Actuals-typed report must be read from an ACTUAL column: the
+  // "Budget Overview" report shares the banner family but is budget only, and
+  // a budget must never import as actuals. (An explicit opts.column is the
+  // caller's deliberate choice and is honoured.)
+  if (type === 'bva' && !opts.column && !/actual/i.test(plan.valueHeader)) {
+    throw new StatementExportError(
+      `Budget vs Actuals export has no Actual column (columns seen: ${(grid[plan.headerRow] ?? []).map((c) => text(c)).filter(Boolean).join(' | ') || 'none'}). A Budget Overview is budget only — export the Budget vs. Actuals report, or the Profit and Loss.`,
+    )
+  }
   // The banner proper: the rows ABOVE the header row (or above the body when
   // there is no header), so header tokens never pollute the title/period text.
   const banner = bannerCells(grid, plan.headerRow >= 0 ? plan.headerRow : plan.startRow)
@@ -580,18 +780,20 @@ export function parseStatementGrid(
   }
   const walkType: StatementType = type === 'bva' ? 'pl' : type
 
-  const leaves = walkLeaves(grid, plan, walkType)
-  const warnings: string[] = []
+  const walk = walkLeaves(grid, plan, walkType)
+  const leaves = walk.leaves
+  const warnings: string[] = [...walk.warnings]
   const taken = new Set<number>()
   for (const l of leaves) if (l.explicitAcct != null) taken.add(l.explicitAcct)
 
   const rows: NormalizedRow[] = []
   const synthesized: StatementMetadata['synthesized'] = []
-  const order: Record<'revenue' | 'expense', number> = { revenue: 0, expense: 0 }
   const skipped: string[] = []
 
   for (const leaf of leaves) {
-    if (leaf.value === 0) continue // zero cells carry no information — drop (as the live sync does)
+    // Zero leaves are KEPT: the plain TB keeps its zeros, mapping needs the
+    // full chart, and dropping them would make the row set depend on the
+    // period's activity.
     const section = sectionOf(leaf, walkType)
     if (!section) {
       skipped.push(leaf.name)
@@ -601,16 +803,25 @@ export function parseStatementGrid(
     if (leaf.explicitAcct != null) {
       acct = leaf.explicitAcct
     } else if (section === 'revenue' || section === 'expense') {
+      // base + a stable hash of the name (see tbConventions: the live sync owns
+      // base + id below +1000). Collisions — same hash, or a number an explicit
+      // account already uses — skip forward within the synthetic sub-range.
       const base = section === 'revenue' ? QBO_REVENUE_BASE : QBO_EXPENSE_BASE
-      acct = base + ++order[section]
-      while (taken.has(acct)) acct = base + ++order[section]
+      const lo = base + QBO_SYNTHETIC_OFFSET
+      let off = syntheticOffset(leaf.name) - QBO_SYNTHETIC_OFFSET
+      acct = lo + off
+      while (taken.has(acct)) {
+        off = (off + 1) % QBO_SYNTHETIC_SPAN
+        acct = lo + off
+      }
       taken.add(acct)
       synthesized.push({ acct, name: leaf.name, section })
     } else {
       acct = bsEngineAcct(leaf, section)
       synthesized.push({ acct, name: leaf.name, section })
     }
-    rows.push({ acct, desc: leaf.name, total: round2(sectionSign(section) * leaf.value) })
+    // `|| 0` normalises the −0 a signed zero would otherwise carry.
+    rows.push({ acct, desc: leaf.name, total: round2(sectionSign(section) * leaf.value) || 0 })
   }
 
   if (rows.length === 0) return null
@@ -665,16 +876,17 @@ export const STATEMENT_PLUG_DESC = 'Balancing adjustment (QuickBooks statement e
 
 /**
  * Combine a P&L result with a Balance Sheet result into ONE full trial balance.
- * The BS's equity "Net Income" row is dropped (the P&L leaves ARE the net
- * income) and the residual — exported on different days, rounding, an
- * interlocation entry — is absorbed by one explicit acct-399 plug row via the
- * shared applyBalancePlug. Period end = the BS "As of" date when both carry one.
+ * The BS's equity result row ("Net Income" / "Net Revenue" / "Change in Net
+ * Assets" — BS_RESULT_LABELS) is dropped (the P&L leaves ARE that result) and
+ * the residual — exported on different days, rounding, an interlocation entry
+ * — is absorbed by one explicit acct-399 plug row via the shared
+ * applyBalancePlug. Period end = the BS "As of" date when both carry one.
  */
 export function mergeStatementResults(
   pl: StatementSheetResult,
   bs: StatementSheetResult,
 ): StatementSheetResult {
-  const bsRows = bs.rows.filter((r) => normalizeGroup(r.desc) !== 'netincome')
+  const bsRows = bs.rows.filter((r) => !BS_RESULT_LABELS.has(normalizeGroup(r.desc)))
   const plugged = applyBalancePlug([...pl.rows, ...bsRows], STATEMENT_PLUG_DESC)
   const rows = plugged.rows
   const net = round2(rows.reduce((s, r) => s + r.total, 0))
@@ -715,11 +927,46 @@ function sheetGrid(wb: XLSX.WorkBook, name: string): RawGrid {
   return XLSX.utils.sheet_to_json(ws, { header: 1, defval: null }) as RawGrid
 }
 
+/** Exactly one P&L-shaped sheet + exactly one Balance Sheet — the pair that merges into a full TB. */
+export function isStatementPair(results: readonly StatementSheetResult[]): boolean {
+  if (results.length !== 2) return false
+  const bss = results.filter((r) => r.metadata.statement.type === 'bs').length
+  return bss === 1
+}
+
+/** Walk every sheet; statement results + the per-sheet failures (never swallowed silently). */
+function walkSheets(
+  wb: XLSX.WorkBook,
+  opts: StatementParseOptions,
+): { found: StatementSheetResult[]; warnings: string[]; refused: StatementExportError[] } {
+  const found: StatementSheetResult[] = []
+  const warnings: string[] = []
+  const refused: StatementExportError[] = []
+  for (const name of wb.SheetNames) {
+    try {
+      const r = parseStatementGrid(sheetGrid(wb, name), name, { ...opts, force: false })
+      if (r) found.push(r)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      if (e instanceof StatementExportError) refused.push(e)
+      warnings.push(`Sheet "${name}" was skipped: ${msg}`)
+    }
+  }
+  for (const w of warnings) opts.onWarning?.(w)
+  return { found, warnings, refused }
+}
+
+const withWarnings = (r: StatementSheetResult, extra: string[]): StatementSheetResult =>
+  extra.length ? { ...r, warnings: [...(r.warnings ?? []), ...extra] } : r
+
 /**
  * Parse an xlsx export. With `opts.sheet` only that sheet is read. Otherwise
  * every sheet is tried: exactly one P&L (or BvA) + one BS → merged into a
- * full TB with a plug; else the first statement sheet. Returns null when no
- * sheet is a statement.
+ * full TB with a plug; else the FIRST statement sheet, with a warning naming
+ * the sheets that were not imported (a workbook of monthly P&L tabs belongs
+ * to the multi-sheet uploader — listStatementSheets). Returns null when no
+ * sheet is a statement; throws StatementExportError when the only statement
+ * sheets were refused (a budget-only report).
  */
 export function parseStatementWorkbook(
   bytes: ArrayBuffer,
@@ -730,39 +977,39 @@ export function parseStatementWorkbook(
   if (opts.sheet && wb.SheetNames.includes(opts.sheet)) {
     return parseStatementGrid(sheetGrid(wb, opts.sheet), opts.sheet, opts)
   }
-  const found: StatementSheetResult[] = []
-  for (const name of wb.SheetNames) {
-    try {
-      const r = parseStatementGrid(sheetGrid(wb, name), name, { ...opts, force: false })
-      if (r) found.push(r)
-    } catch {
-      continue
-    }
-  }
+  const { found, warnings, refused } = walkSheets(wb, opts)
+  if (found.length === 0 && refused.length) throw refused[0]
   if (found.length === 0 && opts.force) {
     const first = wb.SheetNames[0]!
     return parseStatementGrid(sheetGrid(wb, first), first, opts)
   }
   if (found.length === 0) return null
-  const pls = found.filter((r) => r.metadata.statement.type !== 'bs')
-  const bss = found.filter((r) => r.metadata.statement.type === 'bs')
-  if (pls.length === 1 && bss.length === 1) return mergeStatementResults(pls[0]!, bss[0]!)
-  return found[0]!
+  if (isStatementPair(found)) {
+    const pl = found.find((r) => r.metadata.statement.type !== 'bs')!
+    const bs = found.find((r) => r.metadata.statement.type === 'bs')!
+    return withWarnings(mergeStatementResults(pl, bs), warnings)
+  }
+  const first = found[0]!
+  if (found.length > 1) {
+    const others = found.slice(1).map((r) => `"${r.metadata.sheet ?? '?'}"`).join(', ')
+    warnings.push(
+      `Workbook holds ${found.length} statement sheets; only "${first.metadata.sheet ?? '?'}" was imported (not imported: ${others}). Use the multi-year uploader to import each sheet, or export one report per file.`,
+    )
+  }
+  return withWarnings(first, warnings)
 }
 
-/** Every statement sheet in a workbook, one result per sheet (no merging). */
+/**
+ * Every statement sheet in a workbook, one result per sheet (no merging) —
+ * the multi-sheet fan-out the trend uploader and Penny consult BEFORE
+ * listTrialBalanceSheets, so a workbook of monthly Statement-of-Activity tabs
+ * is signed as statements, not read as debit-positive TBs. Honours the same
+ * Debit | Credit rule (a TB sheet is never returned). Per-sheet failures go to
+ * `opts.onWarning`.
+ */
 export function listStatementSheets(bytes: ArrayBuffer, opts: StatementParseOptions = {}): StatementSheetResult[] {
   const wb = XLSX.read(new Uint8Array(bytes), { type: 'array' })
-  const out: StatementSheetResult[] = []
-  for (const name of wb.SheetNames) {
-    try {
-      const r = parseStatementGrid(sheetGrid(wb, name), name, { ...opts, force: false })
-      if (r) out.push(r)
-    } catch {
-      continue
-    }
-  }
-  return out
+  return walkSheets(wb, opts).found
 }
 
 // ── csv entry ─────────────────────────────────────────────────────────────────

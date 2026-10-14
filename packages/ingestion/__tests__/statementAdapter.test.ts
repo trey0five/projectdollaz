@@ -26,11 +26,19 @@ import {
   PLUG_ACCT,
   QBO_REVENUE_BASE,
   QBO_EXPENSE_BASE,
+  QBO_SYNTHETIC_OFFSET,
+  QBO_SYNTHETIC_SPAN,
+  syntheticOffset,
   BS_ENGINE_ACCT,
   sectionSign,
   pnlGroupSign,
   bsGroupSign,
+  bsSectionFromGroups,
 } from '../src/index.js'
+
+/** The export adapter's number for an unnumbered P&L leaf (no collisions in these fixtures). */
+const rev = (name: string): number => QBO_REVENUE_BASE + syntheticOffset(name)
+const exp = (name: string): number => QBO_EXPENSE_BASE + syntheticOffset(name)
 
 const here = dirname(fileURLToPath(import.meta.url))
 const sampleDir = resolve(here, '..', '..', '..', 'sample-data')
@@ -249,18 +257,54 @@ describe('(a) Profit and Loss export (names only)', () => {
     expect(sum(res.rows)).toBe(-196000) // Net Income (credit)
   })
 
-  it('synthesises block-base + 1-based order numbers and records them for re-keying', () => {
-    expect(res.rows.map((r) => r.acct)).toEqual([40001, 40002, 40003, 60001, 60002])
+  it('synthesises block-base + a stable NAME hash (not an order) and records them for re-keying', () => {
+    // base + 1000 + fnv1a(name) % 8000 — the live sync owns base + id (< +1000).
+    expect(res.rows.map((r) => r.acct)).toEqual([rev('Tuition'), rev('Fees'), rev('Interest'), exp('Salaries'), exp('Supplies')])
+    expect(res.rows.map((r) => r.acct)).toEqual([45187, 43064, 46139, 63851, 63038]) // pinned: a hash change re-keys every school
+    for (const r of res.rows) {
+      const base = r.acct < QBO_EXPENSE_BASE ? QBO_REVENUE_BASE : QBO_EXPENSE_BASE
+      expect(r.acct - base).toBeGreaterThanOrEqual(QBO_SYNTHETIC_OFFSET)
+      expect(r.acct - base).toBeLessThan(QBO_SYNTHETIC_OFFSET + QBO_SYNTHETIC_SPAN)
+    }
     expect(res.metadata.statement.synthesized).toEqual([
-      { acct: 40001, name: 'Tuition', section: 'revenue' },
-      { acct: 40002, name: 'Fees', section: 'revenue' },
-      { acct: 40003, name: 'Interest', section: 'revenue' },
-      { acct: 60001, name: 'Salaries', section: 'expense' },
-      { acct: 60002, name: 'Supplies', section: 'expense' },
+      { acct: rev('Tuition'), name: 'Tuition', section: 'revenue' },
+      { acct: rev('Fees'), name: 'Fees', section: 'revenue' },
+      { acct: rev('Interest'), name: 'Interest', section: 'revenue' },
+      { acct: exp('Salaries'), name: 'Salaries', section: 'expense' },
+      { acct: exp('Supplies'), name: 'Supplies', section: 'expense' },
     ])
     // Stable across a re-upload of the same file.
     const again = parseStatementGrid(gridOf(PL_ROWS), 'Profit and Loss')!
     expect(again.rows).toEqual(res.rows)
+  })
+
+  it('keeps a later export’s numbers when a row is inserted or a zero turns into a value', () => {
+    const withZero = PL_ROWS.flatMap((r) => (r[0] === '   Fees' ? [['   Grants', 0], r] : [r]))
+    const later = withZero.map((r) => (r[0] === '   Grants' ? ['   Grants', 5] : r))
+    const a = parseStatementGrid(gridOf(withZero), 'Profit and Loss')!
+    const b = parseStatementGrid(gridOf(later), 'Profit and Loss')!
+    // Zero leaves are KEPT (the plain TB keeps zeros; mapping needs the full chart).
+    expect(a.rows.find((r) => r.desc === 'Grants')).toEqual({ acct: rev('Grants'), desc: 'Grants', total: 0 })
+    expect(b.rows.find((r) => r.desc === 'Grants')!.total).toBe(-5)
+    expect(a.rows.map((r) => [r.desc, r.acct])).toEqual(b.rows.map((r) => [r.desc, r.acct]))
+    expect(b.rows.find((r) => r.desc === 'Tuition')!.acct).toBe(res.rows.find((r) => r.desc === 'Tuition')!.acct)
+  })
+
+  it('skips forward on a hash collision or a number an explicit account already uses', () => {
+    const rows: unknown[][] = [
+      ['Profit and Loss'],
+      ['July 2025 - June 2026'],
+      [],
+      [null, 'Total'],
+      ['Income'],
+      [`${rev('Tuition')} Numbered`, 10], // an explicit account sitting on Tuition's hash
+      ['   Tuition', 20],
+      ['   Tuition', 30], // same name twice → same hash → next free number
+      ['Total Income', 60],
+    ]
+    const r = parseStatementGrid(gridOf(rows), 'P&L')!
+    expect(r.rows.map((x) => x.acct)).toEqual([rev('Tuition'), rev('Tuition') + 1, rev('Tuition') + 2])
+    expect(new Set(r.rows.map((x) => x.acct)).size).toBe(3)
   })
 
   it('reads the period from the banner range and flags the P&L half', () => {
@@ -351,18 +395,41 @@ describe('(c) Budget vs Actuals export', () => {
     expect(res.metadata.statement.partial).toBe('pl')
     expect(res.metadata.statement.column).toBe('Actual')
     expect(res.rows).toEqual([
-      { acct: 40001, desc: 'Tuition', total: -500000 },
-      { acct: 40002, desc: 'Fees', total: -20000 },
-      { acct: 60001, desc: 'Salaries', total: 300000 },
+      { acct: rev('Tuition'), desc: 'Tuition', total: -500000 },
+      { acct: rev('Fees'), desc: 'Fees', total: -20000 },
+      { acct: exp('Salaries'), desc: 'Salaries', total: 300000 },
     ])
     expect(sum(res.rows.filter((r) => r.acct < 60000))).toBe(-520000) // Total Income (Actual)
     expect(sum(res.rows)).toBe(-220000) // Net Income (Actual)
   })
 
-  it('can be pointed at a specific column', () => {
+  it('can be pointed at a specific column (an explicit choice may read the Budget)', () => {
     const res = parseStatementGrid(gridOf(BVA_ROWS), 'Budget vs Actuals', { column: 'Budget' })!
     expect(res.metadata.statement.column).toBe('Budget')
     expect(res.rows.find((r) => r.desc === 'Tuition')!.total).toBe(-480000)
+  })
+
+  it('refuses a budget-only "Budget Overview" (no Actual column) instead of importing the budget as actuals', () => {
+    const overview: unknown[][] = [
+      ['Sample School'],
+      ['Budget Overview: FY2026 Budget - FY26 P&L'],
+      ['July 2025 - June 2026'],
+      [],
+      [null, 'Jul 2025', 'Aug 2025', 'Total'],
+      ['Income'],
+      ['   Tuition', 100, 200, 300],
+      ['Total Income', 100, 200, 300],
+      ['Expenses'],
+      ['   Salaries', 50, 60, 110],
+      ['Total Expenses', 50, 60, 110],
+      ['Net Income', 50, 140, 190],
+    ]
+    expect(() => parseStatementGrid(gridOf(overview), 'Budget Overview')).toThrow(/Budget vs Actuals export has no Actual column/)
+    // …and THAT message is what the facade surfaces (not the plain adapter's).
+    expect(() => ingest('Budget Overview.xlsx', workbook({ Sheet1: overview }))).toThrow(/no Actual column/)
+    // A numbered overview the plain adapter COULD read is refused too — never debit-positive budget rows.
+    const numbered = overview.map((r, i) => (i === 4 ? ['Acct', 'Desc', ...r.slice(1)] : i > 4 && typeof r[1] === 'number' ? [40000 + i, ...r] : [null, ...r]))
+    expect(() => ingest('Budget Overview.xlsx', workbook({ Sheet1: numbered }))).toThrow(/no Actual column/)
   })
 })
 
@@ -373,8 +440,8 @@ describe('multi-period P&L (one column per month + Total)', () => {
     const res = parseStatementGrid(gridOf(PL_MONTHLY_ROWS), 'Profit and Loss')!
     expect(res.metadata.statement.column).toBe('Total')
     expect(res.rows).toEqual([
-      { acct: 40001, desc: 'Tuition', total: -600 },
-      { acct: 60001, desc: 'Salaries', total: 180 },
+      { acct: rev('Tuition'), desc: 'Tuition', total: -600 },
+      { acct: exp('Salaries'), desc: 'Salaries', total: 180 },
     ])
     expect(res.metadata.periodEndDate).toBe('2025-09-30')
   })
@@ -383,8 +450,8 @@ describe('multi-period P&L (one column per month + Total)', () => {
     const res = parseStatementGrid(gridOf(PL_MONTHLY_ROWS), 'Profit and Loss', { column: 'Aug 2025' })!
     expect(res.metadata.statement.column).toBe('Aug 2025')
     expect(res.rows).toEqual([
-      { acct: 40001, desc: 'Tuition', total: -200 },
-      { acct: 60001, desc: 'Salaries', total: 60 },
+      { acct: rev('Tuition'), desc: 'Tuition', total: -200 },
+      { acct: exp('Salaries'), desc: 'Salaries', total: 60 },
     ])
   })
 })
@@ -517,9 +584,9 @@ describe('registry hand-off', () => {
 // ── Classifier ────────────────────────────────────────────────────────────────
 
 describe('classifyRole — statement exports', () => {
-  const now = new Date('2026-10-14T12:00:00Z') // FY2027
+  const now = new Date('2026-03-14T12:00:00Z') // FY2026 — the fixtures' "July 2025 - June 2026"
 
-  it('a Statement of Activity dated in the current / just-closed FY is cy, not "Needs a role"', () => {
+  it('a Statement of Activity dated in the CURRENT FY is cy, not "Needs a role"', () => {
     const res = parseStatementGrid(gridOf(SOA_ROWS), 'Statement of Activity')!
     const c = classifyRole({ fileName: 'Statement of Activity.xlsx', metadata: res.metadata, now })
     expect(c.role).toBe('cy')
@@ -535,6 +602,15 @@ describe('classifyRole — statement exports', () => {
       const res = parseStatementGrid(gridOf(rows as unknown[][]), name)!
       expect(classifyRole({ fileName: name, metadata: res.metadata, now }).role).toBe('cy')
     }
+  })
+
+  it('the JUST-CLOSED FY stays unknown with its explicit date (the batch resolver places it)', () => {
+    const res = parseStatementGrid(gridOf(SOA_ROWS), 'Statement of Activity')!
+    const c = classifyRole({ fileName: 'Statement of Activity.xlsx', metadata: res.metadata, now: new Date('2026-10-14T12:00:00Z') })
+    expect(c.role).toBe('unknown')
+    expect(c.signals.periodEndDate).toBe('2026-06-30')
+    expect(c.signals.periodEndSource).toBe('explicit')
+    expect(c.confidence).toBe(0.5)
   })
 
   it('an old statement is NOT forced to cy (date drives batch resolution)', () => {
@@ -554,9 +630,20 @@ describe('classifyRole — statement exports', () => {
 describe('shared TB conventions', () => {
   it('money parsing handles accounting formats', () => {
     expect(parseMoney('(1,234.00)')).toBe(-1234)
+    expect(parseMoney('$(1,234.00)')).toBe(-1234) // Excel accounting: $ outside the parens
+    expect(parseMoney('($1,234.00)')).toBe(-1234)
     expect(parseMoney('$1,234.50')).toBe(1234.5)
+    expect(parseMoney('$ 1,234')).toBe(1234)
     expect(parseMoney('-1,234')).toBe(-1234)
+    expect(parseMoney('-$1,234')).toBe(-1234)
+    expect(parseMoney('$ -1,234')).toBe(-1234)
+    expect(parseMoney('1.234,00')).toBe(1234) // EU thousands — never 1.234
+    expect(parseMoney('1234,50')).toBe(1234.5)
     expect(parseMoney('-')).toBe(0)
+    expect(parseMoney('—')).toBe(0)
+    expect(parseMoney('N/A')).toBeNull()
+    expect(parseMoney('104.17 %')).toBeNull()
+    expect(parseMoney(new Date('2026-06-30'))).toBeNull()
     expect(parseMoney('Tuition')).toBeNull()
     expect(parseMoney('')).toBeNull()
     expect(parseMoney(12.5)).toBe(12.5)
@@ -581,6 +668,9 @@ describe('shared TB conventions', () => {
     expect(pnlGroupSign(['Mystery'])).toBe(1)
     expect(bsGroupSign(['TotalLiabilitiesAndEquity', 'Equity'])).toBe(-1)
     expect(bsGroupSign(['Assets'])).toBe(1)
+    // A leaf directly under "LIABILITIES AND EQUITY" (no subsection) is a LIABILITY, not equity.
+    expect(bsSectionFromGroups(['LIABILITIES AND EQUITY'])).toBe('liability')
+    expect(bsSectionFromGroups(['LIABILITIES AND EQUITY', 'Equity'])).toBe('equity')
   })
 
   it('applyBalancePlug appends one acct-399 row only when off by more than a cent', () => {

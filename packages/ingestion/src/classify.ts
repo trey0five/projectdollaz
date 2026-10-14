@@ -52,10 +52,14 @@ function fiscalYearOf(year: number, month1to12: number): number {
 
 /**
  * Issue #31: a QuickBooks statement EXPORT (Statement of Activity / Profit and
- * Loss / Budget vs Actuals / Balance Sheet) dated in the CURRENT fiscal year —
- * or the one just closed, which is what a school is reporting on for months
- * after June 30 — is the current-year file. Returns true when that applies.
- * Keyword signals (prior / audited / current) still take precedence.
+ * Loss / Budget vs Actuals / Balance Sheet) dated in the CURRENT fiscal year
+ * is the current-year file. ONLY the current FY: the just-closed FY stays
+ * 'unknown' with its explicit date, so that when a school uploads this year's
+ * and last year's statements together the batch resolver (latest → cy,
+ * earlier → py) places them instead of two files both claiming cy; a LONE
+ * just-closed statement still lands in cy through the resolver's
+ * lone-signal-less default. Keyword signals (prior / audited / current)
+ * still take precedence.
  */
 function statementIsCurrentYear(metadata: SheetMetadata | undefined, now: Date): boolean {
   if (!metadata?.statement || !metadata.periodEndDate) return false
@@ -63,7 +67,7 @@ function statementIsCurrentYear(metadata: SheetMetadata | undefined, now: Date):
   if (!m) return false
   const fy = fiscalYearOf(parseInt(m[1]!, 10), parseInt(m[2]!, 10))
   const fyNow = fiscalYearOf(now.getFullYear(), now.getMonth() + 1)
-  return fy === fyNow || fy === fyNow - 1
+  return fy === fyNow
 }
 
 // ── Keyword scoring helpers ───────────────────────────────────
@@ -140,8 +144,8 @@ export function classifyRole({ fileName, metadata, now }: ClassifyInput): RoleCl
     confidence = 0.6
   } else if (statementCurrent) {
     // A QuickBooks statement export (Statement of Activity / P&L / Budget vs
-    // Actuals / Balance Sheet) dated in the current (or just-closed) fiscal
-    // year IS the current-year file — the card must not say "Needs a role".
+    // Actuals / Balance Sheet) dated in the CURRENT fiscal year IS the
+    // current-year file — the card must not say "Needs a role".
     role = 'cy'
     confidence = 0.7
     reasons.push(

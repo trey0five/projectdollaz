@@ -10,6 +10,9 @@ import { ConfigService } from '@nestjs/config'
 import {
   ingest,
   listTrialBalanceSheets,
+  listStatementSheets,
+  isStatementPair,
+  statementTypeFromFileName,
   type NormalizedRow,
   type SheetCandidate,
   type SheetMetadata,
@@ -215,7 +218,7 @@ export class AssistantFilesService {
       if (att.kind === 'xlsx') {
         let sheets: SheetCandidate[] = []
         try {
-          sheets = this.withBudget(att.name, () => listTrialBalanceSheets(ab))
+          sheets = this.withBudget(att.name, () => this.workbookSheetCandidates(att.name, ab))
         } catch (e) {
           this.logger.warn(
             `attachment sheet-enumeration failed: ${e instanceof Error ? e.message : 'error'}`,
@@ -265,6 +268,27 @@ export class AssistantFilesService {
     }
 
     return { llmContentBlocks, digests, parsed, rawFiles, importCandidates }
+  }
+
+  /**
+   * Every importable sheet of a workbook. QuickBooks STATEMENT exports (a
+   * workbook of monthly Statement-of-Activity tabs) are consulted FIRST and win
+   * when present — the plain TB enumerator would read those tabs with income as
+   * DEBITS. A Debit | Credit sheet is never returned as a statement (the adapter
+   * refuses it), and a P&L + Balance Sheet PAIR yields [] so the single-candidate
+   * `ingest` path below merges it into ONE full trial balance. Mirrors
+   * apps/web/src/lib/trendIntake.js workbookSheetCandidates.
+   */
+  private workbookSheetCandidates(fileName: string, ab: ArrayBuffer): SheetCandidate[] {
+    const statements = listStatementSheets(ab, {
+      typeHint: statementTypeFromFileName(fileName),
+      onWarning: (w) => this.logger.warn(`attachment statement sheet: ${w}`),
+    })
+    if (statements.length > 0) {
+      if (isStatementPair(statements)) return []
+      return statements.map((s) => ({ sheet: s.metadata.sheet ?? '', rows: s.rows, metadata: s.metadata }))
+    }
+    return listTrialBalanceSheets(ab)
   }
 
   /** Run ingest() under a small wall-clock budget so a pathological file can't hang. */
@@ -344,6 +368,11 @@ export class AssistantFilesService {
         `    ${periodDesc}`,
         `    accounts: ${acctCount}  net: ${Math.round(net)}  ${candidate ? 'looksLikeTrialBalance: yes' : 'looksLikeTrialBalance: no (do not import)'}`,
       )
+      if (md?.statement) {
+        lines.push(
+          `    QuickBooks ${this.safeName(md.statement.title)} export (${md.statement.partial === 'bs' ? 'balance sheet only' : md.statement.partial === 'pl' ? 'activity only — no balance-sheet accounts' : 'P&L + balance sheet'}), already signed like a trial balance`,
+        )
+      }
     }
     lines.push(``, `To FILE the whole workbook to Knowledge as-is, call file_document with attachmentId "${baseAttachmentId}".`)
     digests.push(this.wrapDigest(fileName, lines.join('\n')))

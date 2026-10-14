@@ -10,7 +10,14 @@
 // periods → annual trend points. Monthly workbooks route to the Monthly modal;
 // undated files get a manual year picker (never guessed).
 // ─────────────────────────────────────────────────────────────────────────────
-import { ingest, listTrialBalanceSheets, inferPeriod } from '@finrep/ingestion'
+import {
+  ingest,
+  listTrialBalanceSheets,
+  listStatementSheets,
+  isStatementPair,
+  statementTypeFromFileName,
+  inferPeriod,
+} from '@finrep/ingestion'
 import { validateDataset } from '@finrep/engine'
 
 /** Read a File into an ArrayBuffer (shared with the single-intake path). */
@@ -55,14 +62,33 @@ export function toCandidate(sourceName, rows, metadata, sheet) {
 }
 
 /**
- * Expand ONE dropped file into candidates. A multi-sheet .xlsx/.xls (2+ TB-looking
- * sheets) fans out to one candidate per sheet; otherwise a single candidate via
- * `ingest`. A parse failure yields ONE `error` candidate — never aborts the batch.
+ * Every importable sheet of a workbook, as {sheet, rows, metadata}. QuickBooks
+ * STATEMENT exports (a workbook of monthly Statement-of-Activity tabs) are
+ * consulted FIRST and win when present: the plain TB enumerator would read the
+ * same tabs with natural-positive income as DEBITS. A Debit | Credit sheet is
+ * never returned as a statement (hasDebitCreditHeader inside the adapter), and
+ * a P&L + Balance Sheet PAIR yields [] so the single `ingest` path merges it
+ * into ONE full trial balance instead of two half-candidates.
+ */
+export function workbookSheetCandidates(fileName, bytes) {
+  const statements = listStatementSheets(bytes, { typeHint: statementTypeFromFileName(fileName) })
+  if (statements.length > 0) {
+    if (isStatementPair(statements)) return []
+    return statements.map((s) => ({ sheet: s.metadata.sheet, rows: s.rows, metadata: s.metadata }))
+  }
+  return listTrialBalanceSheets(bytes)
+}
+
+/**
+ * Expand ONE dropped file into candidates. A multi-sheet .xlsx/.xls (2+ TB- or
+ * statement-looking sheets) fans out to one candidate per sheet; otherwise a
+ * single candidate via `ingest`. A parse failure yields ONE `error` candidate —
+ * never aborts the batch.
  */
 export async function expandFileToCandidates(fileName, bytes) {
   try {
     if (/\.xlsx?$/i.test(fileName)) {
-      const sheets = listTrialBalanceSheets(bytes)
+      const sheets = workbookSheetCandidates(fileName, bytes)
       if (sheets.length > 1) {
         return sheets.map((s) => toCandidate(fileName, s.rows, s.metadata, s.sheet))
       }

@@ -2,11 +2,15 @@
 // Adapter registry + selection + ingest facade.
 // ─────────────────────────────────────────────────────────────
 import { detectExplicitDate } from './metadata.js'
-import { detectStatementType } from './statements/statementAdapter.js'
 import type { IngestionAdapter, IngestionResult } from './types.js'
 import { excelAdapter } from './adapters/excelAdapter.js'
 import { csvAdapter } from './adapters/csvAdapter.js'
-import { parseStatementExport, statementAdapter } from './statements/statementAdapter.js'
+import {
+  parseStatementExport,
+  statementAdapter,
+  StatementExportError,
+  statementTypeFromFileName,
+} from './statements/statementAdapter.js'
 
 // ORDER (issue #31): the plain trial-balance adapters come FIRST and are
 // selected by extension. The QuickBooks statement-export adapter is last — it
@@ -40,6 +44,17 @@ export function getAdapter(
  *         the WRONG signs (natural-positive income), and only the statement
  *         walk knows to flip them.
  *  3. Otherwise the plain result (or its error) stands.
+ *
+ *  NEVER HIJACK A TRIAL BALANCE: a grid with Debit | Credit columns is a TB
+ *  whatever the file is named — the statement adapter returns null for it
+ *  (hasDebitCreditHeader), so the file-name hint below can only ever promote
+ *  a grid that has NO debit/credit columns. And the `force` walk needs a
+ *  known section row; a flat unlabeled grid surfaces the plain adapter's
+ *  own error instead of a silently re-signed import.
+ *
+ *  A statement that was recognised but REFUSED (a budget-only "Budget
+ *  Overview" has no Actual column) throws StatementExportError out of here —
+ *  that message, not the plain adapter's, is the one the user needs.
  */
 export function ingest(
   fileName: string,
@@ -83,8 +98,11 @@ export function ingest(
 
 /**
  * Run the statement-export adapter. `force` = walk even when detection is
- * negative (the "plain adapter found nothing" fallback); never throws —
- * the plain adapter's own error is the one the caller should see.
+ * negative (the "plain adapter found nothing" fallback — still gated on a
+ * known section row inside the adapter). Swallows every error EXCEPT a
+ * StatementExportError (a recognised statement that must not be imported as
+ * actuals): for anything else the plain adapter's own error is the one the
+ * caller should see.
  */
 function tryStatement(
   fileName: string,
@@ -96,9 +114,11 @@ function tryStatement(
     // The file NAME is part of detection: QuickBooks names its exports after the
     // report ("… Statement of Activity Budget vs Actuals 6-30-26.xlsx"), and a
     // banner-less export is otherwise indistinguishable from a trial balance.
-    const typeHint = detectStatementType(fileName.replace(/[_.\-]+/g, ' '))
+    // It is only a HINT — a Debit | Credit grid ignores it (see the adapter).
+    const typeHint = statementTypeFromFileName(fileName)
     return parseStatementExport(fileName, bytes, { sheet: opts?.sheet, column: opts?.column, force, typeHint })
-  } catch {
+  } catch (e) {
+    if (e instanceof StatementExportError) throw e
     return null
   }
 }
