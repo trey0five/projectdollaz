@@ -8,31 +8,23 @@
 // (module homes, Settings) should keep their explicit "Back to dashboard" links
 // and not use this.
 //
-// Style: a rounded "pill" with a circled arrow that nudges left on hover — far
-// easier to spot than the old muted mini-caps text. BACK_PILL / BackPillBody are
-// exported so the explicit "Back to dashboard" links render identically.
+// PREMIUM UI P2: the pill (hue gradient, circled chip, shadow) is gone. Back is
+// a QUIET TEXT LINK — 13px/600 ink-2, an arrow that nudges left on hover — in
+// the eyebrow grammar of the page header above it. BACK_PILL / BACK_PILL_DARK /
+// BackPillBody keep their names (nine call sites) and now resolve to that link:
+// `.back-link` on light ground, `.back-link.back-link-dark` on the ink stage.
 // ─────────────────────────────────────────────────────────────────────────────
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 
-// The shared fancy back-button styling. Light surfaces (module pages, etc.) use
-// BACK_PILL; dark navy surfaces (Settings, Penny Studio) use BACK_PILL_DARK.
-export const BACK_PILL =
-  'group inline-flex items-center gap-2 rounded-full border back-pill-accent bg-white py-1.5 pl-2 pr-3.5 text-[13px] font-semibold shadow-sm transition-all hover:-translate-x-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy/40'
-export const BACK_PILL_DARK =
-  'group inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 py-1.5 pl-2 pr-3.5 text-[13px] font-semibold text-white shadow-sm backdrop-blur-sm transition-all hover:-translate-x-0.5 hover:border-white/30 hover:bg-white/[0.16] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50'
+export const BACK_PILL = 'back-link'
+export const BACK_PILL_DARK = 'back-link back-link-dark'
 
-// The circled arrow + label shared by every back pill. `tone` matches the pill.
-export function BackPillBody({ label, tone = 'light' }) {
-  const chip =
-    tone === 'dark' ? 'bg-white/15 text-white' : 'back-pill-chip'
+// The arrow + label shared by every back link. `tone` is kept for call sites.
+export function BackPillBody({ label }) {
   return (
     <>
-      <span
-        className={`flex h-[22px] w-[22px] items-center justify-center rounded-full transition-transform group-hover:-translate-x-0.5 ${chip}`}
-      >
-        <ArrowLeft size={13} />
-      </span>
+      <ArrowLeft size={14} aria-hidden="true" />
       {label}
     </>
   )

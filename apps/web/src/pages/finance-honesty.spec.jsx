@@ -121,10 +121,13 @@ describe('categorising changes what the page says', () => {
 
 describe('the celebration is reachable from where people live', () => {
   it('the overview header carries a replay control', () => {
-    expect(page).toMatch(/function FinanceHeader\(\{ onWhatLitUp = null \}\)/)
+    // Premium UI P2: FinanceHeader grew the period selector + insight props the
+    // deleted second hero used to carry, so the signature is multi-line now;
+    // the replay control is still the FIRST prop and still gated on numbers.
+    expect(page).toMatch(/function FinanceHeader\(\{\s*onWhatLitUp = null,/)
     expect(page).toMatch(/onWhatLitUp && \(/)
     expect(page).toMatch(
-      /<FinanceHeader onWhatLitUp=\{statementsHaveNumbers \? \(\) => setRevealSchoolId\(schoolId\) : null\} \/>/,
+      /<FinanceHeader\s+onWhatLitUp=\{statementsHaveNumbers \? \(\) => setRevealSchoolId\(schoolId\) : null\}/,
     )
   })
 

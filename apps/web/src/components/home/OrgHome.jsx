@@ -8,11 +8,13 @@
 // new endpoints — the same org hooks the Budget workspace uses. The fiscal year is
 // derived from the period the caller has selected on Home, so School↔Org stay on
 // one FY as they flip.
+//
+// PREMIUM UI P2: the hero card is the `PageHeader` grammar (eyebrow / Garamond
+// title / meta / the FY select on the hairline) inside a `Page`.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState } from 'react'
-import { motion, useReducedMotion } from 'framer-motion'
-import { Layers } from 'lucide-react'
 import { useOrgBriefing, useOrgMetrics } from '../../hooks/useAnalytics.js'
+import { Page, PageHeader } from '../ui/surface/index.js'
 import OrgBriefing from '../budget/OrgBriefing.jsx'
 import OrgKpiStrip from '../budget/OrgKpiStrip.jsx'
 import OrgSchoolsTable from '../budget/OrgSchoolsTable.jsx'
@@ -35,7 +37,6 @@ export default function OrgHome({
 }) {
   // Org briefing is JwtAuth-only (no 402); its own owner-only "preview as" lens.
   const [previewLens, setPreviewLens] = useState(null)
-  const reduce = useReducedMotion()
 
   const {
     briefing,
@@ -46,54 +47,35 @@ export default function OrgHome({
     error: briefingError,
   } = useOrgBriefing(orgId, fiscalYearStart, previewLens)
 
-  const {
-    metrics,
-    loading: metricsLoading,
-    error: metricsError,
-  } = useOrgMetrics(orgId, fiscalYearStart)
+  const { metrics, loading: metricsLoading, error: metricsError } = useOrgMetrics(orgId, fiscalYearStart)
 
   const fy = fyLabel(fiscalYearStart)
 
   return (
-    <div className="mx-auto max-w-page space-y-5 px-4 py-6 sm:space-y-8 sm:px-10 sm:py-8">
-      {/* Org hero band */}
-      <motion.div
-        initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-        className="card-soft flex flex-col gap-3 px-5 py-5 sm:flex-row sm:items-center sm:gap-5 sm:px-7 sm:py-6"
-      >
-        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gold-gradient text-white shadow-glow">
-          <Layers size={24} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-gold">
-            Organization · consolidated
-          </p>
-          <h1 className="truncate py-0.5 font-serif text-2xl font-semibold leading-[1.35] text-navy sm:text-[28px]">
-            {orgName || 'Organization'}
-          </h1>
-          <p className="text-[13px] text-muted">
-            Rolled up across {orgSchoolCount} schools{fy ? ` · ${fy}` : ''}.
-          </p>
-        </div>
-        {periods.length > 0 && (
-          <label className="flex shrink-0 flex-col gap-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
-            Fiscal year
-            <select
-              value={selectedPeriodId ?? ''}
-              onChange={(e) => onSelectPeriod?.(e.target.value)}
-              className="min-h-[40px] rounded-lg border-2 border-hair bg-white px-3 text-[14px] font-medium normal-case tracking-normal text-navy outline-none ring-gold/40 focus-visible:ring-2"
-            >
-              {periods.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.label || p.periodEndDate || p.id}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-      </motion.div>
+    <Page className="space-y-6 py-2 sm:space-y-8">
+      <PageHeader
+        eyebrow="Organization · consolidated"
+        title={orgName || 'Organization'}
+        meta={`Rolled up across ${orgSchoolCount} schools${fy ? ` · ${fy}` : ''}.`}
+        actions={
+          periods.length > 0 ? (
+            <label className="inline-flex items-center gap-2 text-micro font-semibold uppercase text-ink2">
+              Fiscal year
+              <select
+                value={selectedPeriodId ?? ''}
+                onChange={(e) => onSelectPeriod?.(e.target.value)}
+                className="h-9 rounded-md border border-hair/30 bg-white px-2 text-small font-medium normal-case tracking-normal text-ink outline-none focus-visible:ring-2 focus-visible:ring-navy-soft/40"
+              >
+                {periods.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.label || p.periodEndDate || p.id}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null
+        }
+      />
 
       {/* Consolidated KPI strip (formula-on-Σ, not an average) — the org vitals,
           surfaced ABOVE the triage board. */}
@@ -105,12 +87,7 @@ export default function OrgHome({
 
       {/* Penny narrates the org briefing — the spoken/written cross-school morning
           brief, above the org triage board. */}
-      <PennyMorningBrief
-        scope="org"
-        orgId={orgId}
-        fiscalYearStart={fiscalYearStart}
-        lens={lens}
-      />
+      <PennyMorningBrief scope="org" orgId={orgId} fiscalYearStart={fiscalYearStart} lens={lens} />
 
       {/* The multi-school attention briefing — the org "3 things today". Its
           headline stays attached to the triage board it introduces. */}
@@ -123,6 +100,6 @@ export default function OrgHome({
         availableLenses={availableLenses}
         onLensChange={setPreviewLens}
       />
-    </div>
+    </Page>
   )
 }

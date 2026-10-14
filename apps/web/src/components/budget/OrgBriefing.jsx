@@ -36,15 +36,18 @@ import {
 import { LensIndicator, LensSwitcher } from '../home/LensControls.jsx'
 import { CountUp, WhyText, titleProgress } from '../ui/briefingFx.jsx'
 import { useUiV2 } from '../../context/UiFlagContext.jsx'
+import { Pill } from '../ui/surface/index.js'
 import { resolveBriefingLink } from '../../lib/dataDestinations.js'
 
 // Per-severity theming — folder-tab language shared with HomeBriefing: the tab
 // colour, a faint corner wash, the tab label, and a chip tint for the per-school
 // count pills.
+// Premium UI P2: the glass card is gone — an item is a `Panel` (it is a link you
+// act on) with the severity as a 2px Pill mark and a left rule on critical.
 const SEVERITY = {
-  critical: { label: 'Critical', tab: 'bg-danger', wash: 'rgb(var(--c-danger) / 0.07)', chip: 'bg-danger/10 text-danger' },
-  warn: { label: 'Warning', tab: 'bg-gold', wash: 'rgb(var(--c-glow)/0.09)', chip: 'bg-gold/15 text-gold' },
-  info: { label: 'Review', tab: 'bg-navy-soft', wash: 'rgb(var(--c-navy-soft) / 0.06)', chip: 'bg-navy/10 text-navy' },
+  critical: { label: 'Critical', tone: 'risk', chip: 'bg-danger/10 text-danger' },
+  warn: { label: 'Warning', tone: 'watch', chip: 'bg-gold/15 text-gold' },
+  info: { label: 'Review', tone: 'neutral', chip: 'bg-navy/10 text-navy' },
 }
 
 // Triage-board lanes — one column per severity (decreasing urgency), matching
@@ -54,13 +57,6 @@ const LANES = [
   { key: 'warn', label: 'Warning', bar: 'from-gold to-gold/40', dot: 'bg-gold', text: 'text-gold-dark', empty: 'No warnings.', Icon: AlertTriangle },
   { key: 'info', label: 'To review', bar: 'from-navy-soft to-navy-soft/40', dot: 'bg-navy-soft', text: 'text-navy-soft', empty: 'Nothing to review.', Icon: Eye },
 ]
-
-// The severity-tinted premium card surface (.card-attn in index.css).
-const CARD_ATTN = {
-  critical: 'card-attn card-attn-critical',
-  warn: 'card-attn card-attn-warn',
-  info: 'card-attn card-attn-info',
-}
 
 // Domain eyebrow: a label + an icon that rides inside the gold coin.
 const SOURCE_META = {
@@ -120,39 +116,22 @@ function OrgBriefingItemCard({ item, index, reduce, active = false }) {
     >
       <Link
         to={resolveBriefingLink(item.link, uiV2)}
-        className={`group relative block overflow-hidden rounded-2xl ${CARD_ATTN[item.severity] ?? CARD_ATTN.info} ${active ? 'ring-2 ring-gold shadow-glow' : ''}`}
+        className={`group relative block panel ${item.severity === 'critical' ? 'panel-attention' : ''} ${active ? 'ring-2 ring-navy-soft/50' : ''}`}
       >
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-0"
-          style={{ background: `radial-gradient(130% 95% at 0% 0%, ${sev.wash}, transparent 58%)` }}
-        />
-        <span
-          className={`absolute left-6 top-0 z-10 rounded-b-lg px-3 pb-1.5 pt-1 text-[10px] font-extrabold uppercase tracking-[0.09em] text-white ${sev.tab}`}
-        >
-          {item.severity === 'critical' && !reduce && (
-            <span className="absolute inset-0 rounded-b-lg bg-danger motion-safe:animate-ping" style={{ opacity: 0.35 }} aria-hidden />
-          )}
-          <span className="relative">{sev.label}</span>
-        </span>
-
-        <div className="relative px-5 pb-4 pt-8 sm:px-6">
+        <div className="relative px-5 pb-4 pt-4 sm:px-6">
           <div className="mb-2.5 flex flex-wrap items-center gap-2">
-            {/* Segmented attribution badge — school (navy) fused to domain (gold)
-                so the pair reads as one unit and wraps as one. */}
-            <span
-              className="inline-flex max-w-full items-stretch overflow-hidden rounded-full shadow-[0_1px_5px_rgba(23,42,77,0.18)] ring-1 ring-white/40"
-              title={`${item.schoolName} · ${domain.label}`}
-            >
-              <span className="inline-flex min-w-0 items-center gap-1.5 bg-navy py-1 pl-2.5 pr-2.5 text-[11px] font-semibold leading-4 text-white">
-                <Building2 size={11} className="shrink-0 opacity-80" />
-                <span className="truncate">{item.schoolName}</span>
-              </span>
-              <span className="inline-flex shrink-0 items-center gap-1.5 bg-gold-gradient py-1 pl-2 pr-2.5 text-[10px] font-bold uppercase leading-4 tracking-[0.08em] text-white">
-                <DomainIcon size={11} className="shrink-0 drop-shadow-sm" />
-                {domain.label}
-              </span>
-            </span>
+            <Pill variant="status" tone={sev.tone}>
+              {sev.label}
+            </Pill>
+            {/* Attribution: the school, then the domain — two pills, one voice. */}
+            <Pill title={`${item.schoolName} · ${domain.label}`}>
+              <Building2 size={11} className="shrink-0" aria-hidden="true" />
+              <span className="max-w-[16rem] truncate">{item.schoolName}</span>
+            </Pill>
+            <Pill>
+              <DomainIcon size={11} className="shrink-0" aria-hidden="true" />
+              {domain.label}
+            </Pill>
             {item.dueDate && (
               <span className="ml-auto inline-flex items-center gap-1.5 text-[12px] font-medium text-muted">
                 <Clock size={13} className="opacity-70" />
@@ -174,15 +153,15 @@ function OrgBriefingItemCard({ item, index, reduce, active = false }) {
                   initial={reduce ? { width: `${progress}%` } : { width: 0 }}
                   animate={{ width: `${progress}%` }}
                   transition={{ duration: 0.9, delay: 0.3 + index * 0.05, ease: [0.22, 1, 0.36, 1] }}
-                  className="h-full rounded-full bg-gold-gradient shadow-[0_0_8px_rgb(var(--c-glow)/0.45)]"
+                  className="h-full rounded-full bg-navy-soft"
                 />
               </div>
-              <span className="text-[12px] font-bold tabular-nums text-[#7a5e00]">{progress}%</span>
+              <span className="text-[12px] font-bold tabular-nums text-ink2">{progress}%</span>
             </div>
           )}
-          <span className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-bold uppercase tracking-[0.06em] text-gold">
+          <span className="mt-3 inline-flex items-center gap-1.5 text-small font-semibold text-navy-soft">
             {ctaLabel(item)}
-            <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
+            <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
           </span>
         </div>
       </Link>

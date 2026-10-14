@@ -11,6 +11,7 @@
 // vitals below. Dismiss is client-only (session-scoped).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useMemo, useState } from 'react'
+import { Pill, Button } from '../ui/surface/index.js'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
 import {
@@ -67,17 +68,13 @@ function BriefMeButton() {
 
 // Per-severity theming: the folder tab colour, the faint corner wash, and the tab
 // label. critical→Critical, warn→Warning, info→Review.
-// The severity-tinted premium card surface (.card-attn in index.css).
-const CARD_ATTN = {
-  critical: 'card-attn card-attn-critical',
-  warn: 'card-attn card-attn-warn',
-  info: 'card-attn card-attn-info',
-}
-
+// Premium UI P2: the severity-tinted glass card (.card-attn) is gone. A briefing
+// item is a `Panel` — the one raised surface, because it carries actions — with
+// the severity as a 2px mark (the Pill's) and a left rule on critical items.
 const SEVERITY = {
-  critical: { label: 'Critical', tab: 'bg-danger', wash: 'rgb(var(--c-danger) / 0.07)' },
-  warn: { label: 'Warning', tab: 'bg-gold', wash: 'rgb(var(--c-glow)/0.09)' },
-  info: { label: 'Review', tab: 'bg-navy-soft', wash: 'rgb(var(--c-navy-soft) / 0.06)' },
+  critical: { label: 'Critical', tone: 'risk' },
+  warn: { label: 'Warning', tone: 'watch' },
+  info: { label: 'Review', tone: 'neutral' },
 }
 
 // Triage-board lanes. One column per severity, in decreasing urgency. `bar` is the
@@ -192,32 +189,18 @@ function BriefingItemCard({ item, index, reduce, canEdit, onDismiss, active = fa
       exit={reduce ? { opacity: 0 } : { opacity: 0, x: 40, scale: 0.98 }}
       transition={{ duration: 0.38, delay: reduce ? 0 : index * 0.06, ease: [0.22, 1, 0.36, 1] }}
       whileHover={reduce ? undefined : { y: -3 }}
-      className={`group relative overflow-hidden rounded-2xl ${CARD_ATTN[item.severity] ?? CARD_ATTN.info} ${active ? 'ring-2 ring-gold shadow-glow' : ''}`}
+      className={`group relative panel ${item.severity === 'critical' ? 'panel-attention' : ''} ${active ? 'ring-2 ring-navy-soft/50' : ''}`}
     >
-      {/* Faint severity corner wash */}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-0"
-        style={{ background: `radial-gradient(130% 95% at 0% 0%, ${sev.wash}, transparent 58%)` }}
-      />
-      {/* Folder tab — severity label overlapping the top edge; the critical tab pulses. */}
-      <span
-        className={`absolute left-6 top-0 z-10 rounded-b-lg px-3 pb-1.5 pt-1 text-[10px] font-extrabold uppercase tracking-[0.09em] text-white ${sev.tab}`}
-      >
-        {item.severity === 'critical' && !reduce && (
-          <span className="absolute inset-0 rounded-b-lg bg-danger motion-safe:animate-ping" style={{ opacity: 0.35 }} aria-hidden />
-        )}
-        <span className="relative">{sev.label}</span>
-      </span>
-
-      <div className="relative px-5 pb-4 pt-8 sm:px-6">
-        {/* Eyebrow: domain coin + label, and a due indicator on the right */}
-        <div className="mb-2.5 flex items-center gap-2.5">
-          {/* Domain pill — same gold segment idiom as the org board's fused badge. */}
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-gold-gradient py-1 pl-2 pr-2.5 text-[10px] font-bold uppercase leading-4 tracking-[0.08em] text-white shadow-[0_1px_5px_rgb(var(--c-glow)/0.35)] ring-1 ring-white/40">
-            <DomainIcon size={11} className="shrink-0 drop-shadow-sm" />
+      <div className="relative px-5 pb-4 pt-4 sm:px-6">
+        {/* Eyebrow: severity mark + domain, and a due indicator on the right */}
+        <div className="mb-2.5 flex flex-wrap items-center gap-2">
+          <Pill variant="status" tone={sev.tone}>
+            {sev.label}
+          </Pill>
+          <Pill>
+            <DomainIcon size={11} className="shrink-0" aria-hidden="true" />
             {domain.label}
-          </span>
+          </Pill>
           {item.dueDate && (
             <span className="ml-auto inline-flex items-center gap-1.5 text-[12px] font-medium text-muted">
               <Clock size={13} className="opacity-70" />
@@ -239,41 +222,37 @@ function BriefingItemCard({ item, index, reduce, canEdit, onDismiss, active = fa
                 initial={reduce ? { width: `${progress}%` } : { width: 0 }}
                 animate={{ width: `${progress}%` }}
                 transition={{ duration: 0.9, delay: 0.3 + index * 0.05, ease: [0.22, 1, 0.36, 1] }}
-                className="h-full rounded-full bg-gold-gradient shadow-[0_0_8px_rgb(var(--c-glow)/0.45)]"
+                className="h-full rounded-full bg-navy-soft"
               />
             </div>
-            <span className="text-[12px] font-bold tabular-nums text-[#7a5e00]">{progress}%</span>
+            <span className="text-[12px] font-bold tabular-nums text-ink2">{progress}%</span>
           </div>
         )}
 
         {/* Inline actions */}
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <Link
-            to={item.link}
-            className="group/cta inline-flex items-center gap-1.5 rounded-xl bg-gold-gradient px-3.5 py-2 text-[13px] font-semibold text-white shadow-glow transition-transform hover:-translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 motion-reduce:hover:translate-y-0"
-          >
+          <Button to={item.link} variant="primary" size="sm" className="group/cta">
             {ctaLabel(item)}
-            <ArrowRight size={14} className="transition-transform group-hover/cta:translate-x-0.5" />
-          </Link>
+            <ArrowRight size={14} className="transition-transform group-hover/cta:translate-x-0.5" aria-hidden="true" />
+          </Button>
           {canEdit && (
-            <button
-              type="button"
+            <Button
+              size="sm"
               onClick={createTaskFromItem}
               aria-label={`${taskLabel} for ${item.title}`}
               title="Turn this into an assignable task"
-              className="inline-flex items-center gap-1.5 rounded-xl border border-navy/15 bg-white px-3.5 py-2 text-[13px] font-semibold text-navy/70 transition-colors hover:border-navy/40 hover:text-navy focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50"
+              icon={<ListPlus size={14} />}
             >
-              <ListPlus size={14} />
               {taskLabel}
-            </button>
+            </Button>
           )}
           <button
             type="button"
             onClick={() => onDismiss?.(item.id)}
             aria-label={`Dismiss ${item.title}`}
-            className="ml-auto inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[12.5px] font-semibold text-muted/70 transition-colors hover:bg-section hover:text-navy focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/40"
+            className="btn btn-quiet btn-sm ml-auto"
           >
-            <X size={13} />
+            <X size={13} aria-hidden="true" />
             Dismiss
           </button>
         </div>

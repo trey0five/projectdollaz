@@ -21,7 +21,7 @@ const SIGNAL_META = {
 
 const CAT_RE = /^[[(]?\s*(risk|watch|strength|strong|opportunity|good|ok)\b\s*[\])\-:.–—]*\s*/i
 
-function toSignals(text) {
+export function toSignals(text) {
   if (!text) return []
   let items = text.split(/\n+/).map((s) => s.trim()).filter(Boolean)
   if (items.length <= 1) {

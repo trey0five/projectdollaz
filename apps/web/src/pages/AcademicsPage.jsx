@@ -338,9 +338,7 @@ function AcademicsHero({ schoolName, level, status, dashboard, loading }) {
         <>
           <BookOpen size={12} /> Academics
           {level && level !== 'unknown' ? (
-            <span className="ml-1 rounded-full bg-white/12 px-2 py-0.5 text-[9px] tracking-wide text-white/80">
-              {level}
-            </span>
+            <span className="pill ml-1">{level}</span>
           ) : null}
         </>
       }

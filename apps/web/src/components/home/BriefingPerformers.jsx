@@ -1,33 +1,30 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// BriefingPerformers — the "top-3 performing" cards embedded on the RIGHT of the
-// daily-briefing hero (the reference's Finance / Enrollment / Advancement cards).
+// BriefingPerformers — the "top-3 performing" metrics on the RIGHT of the
+// daily-briefing stage, as IN-STAGE STATS (Premium UI P2: the glass chips are
+// gone; three Stats separated by white hairlines, each with its delta mark and
+// a mini sparkline, each a link into the metric drawer).
 // Self-contained + FAIL-SOFT like HomeVitalsStrip: its own metrics fetch, its own
-// per-metric trend fetch for the mini sparklines, and it renders NOTHING while
+// per-metric trend fetch for the sparklines, and it renders NOTHING while
 // loading, on error, with no period, or when there's nothing genuinely positive
-// to show — so the hero never waits on it and never shows a fabricated win.
+// to show — so the stage never waits on it and never shows a fabricated win.
 //
-// "Performing" is HONEST: a card only appears for a real metric whose real
+// "Performing" is HONEST: a stat only appears for a real metric whose real
 // period-over-period delta improved (deltaTone === 'good'), ranked by relative
 // move; if fewer than three improved we top up with metrics sitting in their
 // healthy band ('good' status). Values, deltas and sparklines are all real.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useMemo, useState } from 'react'
-import { motion, useReducedMotion } from 'framer-motion'
-import { useNavigate } from 'react-router-dom'
 import { useAnalytics } from '../../hooks/useAnalytics.js'
 import { analyticsApi } from '../../lib/api.js'
 import Sparkline from '../analytics/Sparkline.jsx'
-import DeltaChip from '../analytics/DeltaChip.jsx'
-import MetricIcon from '../analytics/MetricIcon.jsx'
-import { metricFormat, formatMetricValue, deltaTone } from '../../lib/metricMeta.js'
+import { StatStrip, Stat } from '../ui/surface/index.js'
+import { metricFormat, formatMetricValue, formatDelta, deltaTone } from '../../lib/metricMeta.js'
 
 // Rank helper: a rough RELATIVE move so metrics in different units compare fairly.
 const relMove = (m) =>
   m.value ? Math.abs(m.periodOverPeriodDelta / m.value) : Math.abs(m.periodOverPeriodDelta)
 
 export default function BriefingPerformers({ schoolId, periodId }) {
-  const reduce = useReducedMotion()
-  const navigate = useNavigate()
   const { metrics, loading, error, notEntitled } = useAnalytics(schoolId, periodId)
   const [trends, setTrends] = useState({})
 
@@ -88,63 +85,29 @@ export default function BriefingPerformers({ schoolId, periodId }) {
   if (!schoolId || !periodId || loading || error || notEntitled || picks.length === 0) return null
 
   return (
-    // Mobile: a horizontal swipe row (scroll-snap) instead of three stacked
-    // cards — one card ≈ one swipe, no vertical scroll cost. sm+: the 3-col grid.
-    <div className="flex w-full min-w-0 snap-x snap-mandatory gap-3 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch] sm:grid sm:grid-cols-3 sm:overflow-visible sm:pb-0 lg:flex-1">
-      {picks.map((m, i) => {
+    <StatStrip cols={picks.length} className="stats-stage w-full lg:flex-1" aria-label="Top performing metrics">
+      {picks.map((m) => {
         const fmt = metricFormat(m.key, m.unit)
         const pts = trends[m.key]?.points
         const hasSpark = pts && pts.filter((p) => p.value != null).length >= 2
+        const deltaText = m.periodOverPeriodDelta != null ? formatDelta(m.periodOverPeriodDelta, fmt) : null
         return (
-          <motion.button
+          <Stat
             key={m.key}
-            type="button"
-            onClick={() => navigate(`/analytics?metric=${m.key}`)}
-            initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: reduce ? 0 : 0.15 + i * 0.08, duration: 0.4 }}
-            whileHover={reduce ? undefined : { y: -3 }}
+            to={`/analytics?metric=${m.key}`}
+            label={m.label}
+            value={formatMetricValue(m.value, fmt)}
+            delta={deltaText ? { text: deltaText, tone: deltaTone(m.periodOverPeriodDelta, m.goodDirection) } : null}
             aria-label={`${m.label} — open in analytics`}
-            className="group flex min-w-[72%] snap-start flex-col gap-2 overflow-hidden rounded-2xl border border-white/12 bg-white/[0.07] p-3.5 text-left outline-none backdrop-blur-sm ring-gold/50 transition-colors hover:border-white/25 hover:bg-white/[0.11] focus-visible:ring-2 sm:min-w-0"
           >
-            {/* The hero pills clipped their metric names at BOTH 1280 and 1500
-                ("Months …", "Tuition …"). The pill is a flex COLUMN, so the
-                label can take a second line without pushing the value — wrap it
-                rather than cut it (card contract §5.3). */}
-            <div className="flex min-w-0 items-start gap-2">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/10 text-white/90">
-                <MetricIcon metricKey={m.key} size={16} />
-              </span>
-              <span className="min-w-0 break-words text-[13px] font-semibold leading-snug text-white/90">
-                {m.label}
-              </span>
-            </div>
-
-            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-              <span className="font-serif text-[19px] font-semibold leading-none text-white">
-                {formatMetricValue(m.value, fmt)}
-              </span>
-              <DeltaChip
-                delta={m.periodOverPeriodDelta}
-                format={fmt}
-                goodDirection={m.goodDirection}
-                onDark
-              />
-            </div>
-
-            <div className="mt-0.5 h-9">
-              {hasSpark ? (
-                <Sparkline points={pts} status={m.status} height={36} />
-              ) : (
-                <span
-                  aria-hidden="true"
-                  className="block h-px w-full translate-y-4 bg-gradient-to-r from-white/25 to-transparent"
-                />
-              )}
-            </div>
-          </motion.button>
+            {hasSpark ? (
+              <div className="mt-2 h-8 opacity-90" aria-hidden="true">
+                <Sparkline points={pts} status={m.status} height={32} stroke="#38BDF8" />
+              </div>
+            ) : null}
+          </Stat>
         )
       })}
-    </div>
+    </StatStrip>
   )
 }

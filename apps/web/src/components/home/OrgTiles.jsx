@@ -1,33 +1,31 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// OrgTiles — the HOME v2 tile dashboard at ORGANIZATION scope. The org twin of
-// HomeTiles: the whole-org briefing band → the SAME module tile grid (chips now
-// count cross-school attention, aggregated from the org briefing), then the
-// consolidated detail that OrgHome always showed (KPI strip + per-school table +
-// the multi-school triage board). The narrated org brief opens as a POPUP
-// (BriefingModal) from the band; the core row is gone (duplicated the top nav).
+// OrgTiles — the HOME v2 dashboard at ORGANIZATION scope. The org twin of
+// HomeTiles: the whole-org briefing stage → three network `Tile`s → the schools
+// as a `DataTable` (crest · school · latest FY · critical · warn · review ·
+// status; a row click swaps the app to that school) → the consolidated detail
+// OrgHome always showed (KPI strip + modules matrix + the triage board). The
+// narrated org brief opens as a POPUP (BriefingModal) from the stage.
+//
+// PREMIUM UI P2 (plan sketch 2): the grid of sixteen school cards is a table
+// now — a diocese reads as a register, sortable, with a 2px status mark per
+// row — and the three "across the network" doors are the one card family
+// that stays (Tile). No ambient wash, no card-in-card.
 //
 // It reuses OrgHome's proven org hooks (useOrgBriefing / useOrgMetrics) and its
 // child components verbatim — nothing new server-side.
-//
-// The consolidated ORGANIZATION VIEW (KPIs / schools / modules / needs
-// attention) renders INLINE below the school tiles, visible on arrival. It spent
-// a while as a popup behind an "Organization view" button on the briefing band,
-// which taught the obvious in retrospect: a consolidation behind a click is a
-// consolidation most people never open, and this page's whole job is that
-// consolidation.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { ArrowRight, BookOpen, LineChart, Landmark } from 'lucide-react'
+import { BookOpen, LineChart, Landmark, CheckCircle2, MinusCircle } from 'lucide-react'
 import { useOrgBriefing, useOrgMetrics } from '../../hooks/useAnalytics.js'
 import { useSchools } from '../../context/SchoolContext.jsx'
 import { useScope } from '../../context/ScopeContext.jsx'
 import { summariseBadges } from '../../hooks/useNavBadges.js'
+import { Page, Section, Tile, DataTable, Pill } from '../ui/surface/index.js'
 import PennyMorningBrief from './PennyMorningBrief.jsx'
 import BriefingBand from './BriefingBand.jsx'
 import BriefingModal from './BriefingModal.jsx'
 import OrgDetailSection from './OrgDetailSection.jsx'
-import SchoolTile from './SchoolTile.jsx'
+import { SchoolMark } from './SchoolTile.jsx'
 import { TILE_SOURCES } from './tileRegistry.jsx'
 import '../../styles/home-tiles.css'
 
@@ -36,6 +34,18 @@ function fyLabel(fiscalYearStart) {
   const start = Number(fiscalYearStart.split('-')[0] || NaN)
   return Number.isFinite(start) ? `FY ${start + 1}` : null
 }
+
+// The row's 2px mark: the worst thing the school's own briefing says.
+function markOf(school, ready) {
+  if (!ready || !school.reported || !school.summary) return null
+  const s = school.summary
+  if ((s.critical ?? 0) > 0) return 'risk'
+  if ((s.warn ?? 0) > 0) return 'watch'
+  if ((s.info ?? 0) > 0) return 'neutral'
+  return 'good'
+}
+
+const num = (v) => (v == null ? null : Number(v))
 
 export default function OrgTiles({
   orgId,
@@ -62,14 +72,10 @@ export default function OrgTiles({
     error: briefingError,
   } = useOrgBriefing(orgId, fiscalYearStart, previewLens)
 
-  const {
-    metrics,
-    loading: metricsLoading,
-    error: metricsError,
-  } = useOrgMetrics(orgId, fiscalYearStart)
+  const { metrics, loading: metricsLoading, error: metricsError } = useOrgMetrics(orgId, fiscalYearStart)
 
-  // Cross-school attention → per-tile chips, via the SAME reducer/map the school
-  // tile home uses (org briefing items carry the identical {source, severity}).
+  // Cross-school attention → the stage summary, via the SAME reducer/map the
+  // school home uses (org briefing items carry the identical {source, severity}).
   const items = useMemo(() => briefing?.items ?? [], [briefing])
   const badges = useMemo(() => summariseBadges(items, TILE_SOURCES), [items])
   const summary = useMemo(
@@ -78,7 +84,7 @@ export default function OrgTiles({
   )
   const chipsReady = !briefingLoading && !briefingError
 
-  // The org's schools (from the briefing rollup) become the tile grid. Selecting
+  // The org's schools (from the briefing rollup) become the register. Selecting
   // one swaps the whole app to that school's view.
   const schools = useMemo(() => briefing?.schools ?? [], [briefing])
   const goToSchool = (schoolId) => {
@@ -90,93 +96,134 @@ export default function OrgTiles({
 
   const fy = fyLabel(fiscalYearStart)
 
+  const columns = useMemo(
+    () => [
+      {
+        key: 'name',
+        header: 'School',
+        sortable: true,
+        // A real button, so the keyboard can open a school (the row click is
+        // the mouse's shortcut to the same thing).
+        render: (s) => (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              goToSchool(s.schoolId)
+            }}
+            aria-label={`Switch to ${s.name}${s.periodLabel ? ` — ${s.periodLabel}` : ''}`}
+            className="inline-flex min-w-0 items-center gap-2.5 rounded-sm text-left font-semibold text-ink outline-none focus-visible:ring-2 focus-visible:ring-navy-soft/40"
+          >
+            <SchoolMark schoolId={s.schoolId} name={s.name} />
+            <span>{s.name}</span>
+          </button>
+        ),
+      },
+      { key: 'periodLabel', header: 'Latest FY', sortable: true, render: (s) => s.periodLabel || '—' },
+      { key: 'critical', header: 'Critical', num: true, sortable: true, sortValue: (s) => num(s.summary?.critical), render: (s) => (s.summary ? s.summary.critical || '—' : '—') },
+      { key: 'warn', header: 'Warn', num: true, sortable: true, sortValue: (s) => num(s.summary?.warn), render: (s) => (s.summary ? s.summary.warn || '—' : '—') },
+      { key: 'info', header: 'Review', num: true, sortable: true, sortValue: (s) => num(s.summary?.info), render: (s) => (s.summary ? s.summary.info || '—' : '—') },
+      {
+        key: 'status',
+        header: 'Status',
+        render: (s) =>
+          s.failed ? (
+            <Pill variant="status" tone="neutral">
+              <MinusCircle size={11} aria-hidden="true" /> Couldn&rsquo;t load
+            </Pill>
+          ) : s.reported ? (
+            <Pill variant="status" tone="good">
+              <CheckCircle2 size={11} aria-hidden="true" /> Reported
+            </Pill>
+          ) : (
+            <Pill variant="status" tone="neutral">
+              <MinusCircle size={11} aria-hidden="true" /> Not yet reported
+            </Pill>
+          ),
+      },
+    ],
+    // Memoised once on purpose: every render() reads its ROW, not component
+    // state, and goToSchool only calls the two context setters (stable for the
+    // component's life) with the row's id — so a stale closure can never point
+    // at a stale school. A fresh array per render would re-sort the table on
+    // every briefing poll.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  )
+
   return (
-    <div className="home-ground mx-auto max-w-page space-y-5 px-4 py-6 sm:space-y-7 sm:px-10 sm:py-8">
-      {/* Org briefing band — the org twin of the school hero. "Across your N
-          schools" reads through BriefingBand's schoolName slot. */}
-      <BriefingBand
-        schoolName={`your ${orgSchoolCount} school${orgSchoolCount === 1 ? '' : 's'}`}
-        summary={summary}
-        badges={chipsReady ? badges : {}}
-        lens={lens}
-        hasPeriod
-        onOpenBrief={setBrief}
-      />
+    <>
+      <Page className="home-page space-y-6 py-6 sm:space-y-8">
+        {/* Org briefing stage — the org twin of the school hero. */}
+        <BriefingBand
+          schoolName={`your ${orgSchoolCount} school${orgSchoolCount === 1 ? '' : 's'}`}
+          summary={summary}
+          badges={chipsReady ? badges : {}}
+          lens={lens}
+          hasPeriod
+          onOpenBrief={setBrief}
+        />
 
-      {/* ── ACROSS THE NETWORK ───────────────────────────────────────────────
-          The org-wide analyses already existed and were reachable from nowhere
-          an org user would look: the academic console only from a link on ONE
-          school's academics overview, the consolidated financials only by
-          switching scope on another page. A superintendent lands here, and
-          "every school at once" is the question they came with — so the doors
-          belong on this page, above the per-school grid. */}
-      <NetworkAnalytics count={orgSchoolCount} />
+        {/* ── ACROSS THE NETWORK ───────────────────────────────────────────────
+            The org-wide analyses already existed and were reachable from nowhere
+            an org user would look. A superintendent lands here, and "every school
+            at once" is the question they came with — so the doors belong on this
+            page, above the per-school register. */}
+        <NetworkAnalytics count={orgSchoolCount} />
 
-      {/* Jump into a school — each tile swaps the whole app to that school's
-          view (setActiveSchool + school scope). One colour per school. */}
-      <section aria-labelledby="org-schools-heading">
-        <div className="mb-3 flex items-baseline justify-between gap-3">
-          <h2 id="org-schools-heading" className="font-serif text-lg font-semibold text-navy">
-            Jump into a school
-          </h2>
-          <p className="text-[13px] text-muted">
-            {schools.length} school{schools.length === 1 ? '' : 's'} · select one to open its dashboard
-          </p>
-        </div>
-        {schools.length > 0 ? (
-          <ul role="list" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {schools.map((school, i) => (
-              <SchoolTile
-                key={school.schoolId}
-                school={school}
-                index={i}
-                ready={chipsReady}
-                onSelect={goToSchool}
-              />
-            ))}
-          </ul>
-        ) : (
-          <div className="card-soft border-dashed px-6 py-10 text-center">
-            <p className="text-[15px] italic text-muted">
-              {briefingLoading ? 'Loading your schools…' : 'No schools in this organization yet.'}
-            </p>
-          </div>
-        )}
-      </section>
+        {/* Jump into a school — each row swaps the whole app to that school's
+            view (setActiveSchool + school scope). */}
+        <Section
+          label="Schools"
+          id="org-schools"
+          aside={
+            <span>
+              {schools.length} school{schools.length === 1 ? '' : 's'}
+              {fy ? ` · ${fy}` : ''} · select one to open its dashboard
+            </span>
+          }
+        >
+          <DataTable
+            columns={columns}
+            rows={schools}
+            rowKey="schoolId"
+            markOf={(s) => markOf(s, chipsReady)}
+            defaultSort={{ key: 'critical', dir: 'desc' }}
+            onRowClick={(s) => goToSchool(s.schoolId)}
+            caption="Schools in your organization"
+            empty={briefingLoading ? 'Loading your schools…' : 'No schools in this organization yet.'}
+          />
+        </Section>
 
-      {/* The consolidated ORGANIZATION VIEW — inline and visible on arrival,
-          directly under the school tiles. Tabbed (KPIs / Schools / Modules /
-          Needs attention) so each section reads on its own. */}
-      <OrgDetailSection
-        orgName={orgName}
-        orgSchoolCount={orgSchoolCount}
-        fy={fy}
-        periods={periods}
-        selectedPeriodId={selectedPeriodId}
-        onSelectPeriod={onSelectPeriod}
-        metrics={metrics}
-        metricsLoading={metricsLoading}
-        metricsError={metricsError}
-        briefing={briefing}
-        briefingLoading={briefingLoading}
-        briefingError={briefingError}
-        lens={lens}
-        callerRole={callerRole}
-        availableLenses={availableLenses}
-        onLensChange={setPreviewLens}
-      />
+        {/* The consolidated ORGANIZATION VIEW — inline and visible on arrival,
+            directly under the register. Sectioned (KPIs / Modules / Needs
+            attention) so each reads on its own. */}
+        <OrgDetailSection
+          orgName={orgName}
+          orgSchoolCount={orgSchoolCount}
+          fy={fy}
+          periods={periods}
+          selectedPeriodId={selectedPeriodId}
+          onSelectPeriod={onSelectPeriod}
+          metrics={metrics}
+          metricsLoading={metricsLoading}
+          metricsError={metricsError}
+          briefing={briefing}
+          briefingLoading={briefingLoading}
+          briefingError={briefingError}
+          lens={lens}
+          callerRole={callerRole}
+          availableLenses={availableLenses}
+          onLensChange={setPreviewLens}
+        />
+      </Page>
 
-      {/* The narrated org brief — a POPUP now. ▶ Play opens with autoNarrate
+      {/* The narrated org brief — a POPUP. ▶ Play opens with autoNarrate
           (the modal dispatches 'penny:narrate' after the brief mounts). */}
-      <BriefingModal
-        open={!!brief}
-        autoNarrate={brief === 'narrate'}
-        onClose={() => setBrief(null)}
-      >
+      <BriefingModal open={!!brief} autoNarrate={brief === 'narrate'} onClose={() => setBrief(null)}>
         <PennyMorningBrief scope="org" orgId={orgId} fiscalYearStart={fiscalYearStart} lens={lens} />
       </BriefingModal>
-
-    </div>
+    </>
   )
 }
 
@@ -200,61 +247,25 @@ function NetworkAnalytics({ count }) {
     {
       to: '/budget?tab=consolidated',
       Icon: Landmark,
-      hue: '#7C3AED',
+      hue: '#0EA5E9',
       title: 'Consolidated statements',
       body: 'The four statements rolled up across every school in the organization.',
     },
   ]
 
   return (
-    <section aria-labelledby="org-network-heading">
-      <div className="mb-3 flex items-baseline justify-between gap-3">
-        <h2 id="org-network-heading" className="font-serif text-lg font-semibold text-navy">
-          Across the network
-        </h2>
-        <p className="text-[13px] text-muted">
-          All {count} school{count === 1 ? '' : 's'} at once — no switching
-        </p>
-      </div>
-
+    <Section
+      label="Across the network"
+      id="org-network"
+      aside={<span>All {count} school{count === 1 ? '' : 's'} at once — no switching</span>}
+    >
       <ul role="list" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {cards.map((c) => (
           <li key={c.to} className="list-none">
-            <Link
-              to={c.to}
-              className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-navy/10 bg-white p-4 transition-shadow hover:shadow-[0_22px_50px_-30px_rgba(16,28,61,0.5)]"
-            >
-              <span
-                aria-hidden="true"
-                className="absolute left-0 top-0 h-full w-[3px]"
-                style={{ background: `linear-gradient(180deg, ${c.hue} 0%, ${c.hue}00 100%)` }}
-              />
-              <span
-                aria-hidden="true"
-                className="absolute inset-0 opacity-0 transition-opacity group-hover:opacity-100"
-                style={{ background: `radial-gradient(120% 100% at 100% 0%, ${c.hue}12 0%, transparent 62%)` }}
-              />
-              <span className="relative flex items-start justify-between gap-2">
-                <span
-                  className="grid h-10 w-10 place-items-center rounded-xl"
-                  style={{ background: `${c.hue}1A`, color: c.hue, boxShadow: `inset 0 0 0 1px ${c.hue}2E` }}
-                >
-                  <c.Icon size={17} strokeWidth={2.2} />
-                </span>
-                <ArrowRight
-                  size={15}
-                  style={{ color: c.hue }}
-                  className="mt-1 transition-transform group-hover:translate-x-0.5"
-                />
-              </span>
-              <span className="relative mt-3 block font-serif text-[16.5px] font-semibold leading-tight text-navy">
-                {c.title}
-              </span>
-              <span className="relative mt-1 block text-[12.5px] leading-snug text-muted">{c.body}</span>
-            </Link>
+            <Tile to={c.to} hue={c.hue} icon={<c.Icon size={22} strokeWidth={2} />} title={c.title} body={c.body} className="h-full" />
           </li>
         ))}
       </ul>
-    </section>
+    </Section>
   )
 }

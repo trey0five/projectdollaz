@@ -111,7 +111,14 @@
   font-weight: 500;
   color: rgb(var(--c-ink));
   font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
+  /* Never break inside a figure ("26.1 / 0"); a phone gets a smaller size. */
+  white-space: nowrap;
+}
+@media (max-width: 639px) {
+  .stat-value {
+    font-size: 24px;
+    line-height: 30px;
+  }
 }
 .stat-unit {
   margin-left: 0.125rem;
@@ -136,6 +143,68 @@
   font-size: 13px;
   line-height: 18px;
   color: rgb(var(--c-ink-2));
+}
+
+/* A Stat that navigates (HomeVitalsStrip → /analytics?metric=…): same geometry,
+   a quiet wash on hover, the primary focus ring. */
+.stat-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  border-radius: var(--r-ctl);
+  transition: background-color 0.15s ease;
+}
+.stat-link:hover {
+  background: rgb(var(--c-ink) / 0.03);
+}
+.stat-link:focus-visible {
+  outline: 2px solid rgb(37 99 235 / 0.5);
+  outline-offset: 2px;
+}
+/* The ONE dark stage (Home briefing band, Studio hero) carries its Stats in
+   white ink; the rules go to white hairlines and the strip loses its bottom
+   rule because the stage's own edge closes it. */
+.stats-stage {
+  border-bottom: 0;
+}
+.stats-stage .stat-label {
+  color: rgb(255 255 255 / 0.6);
+  overflow-wrap: normal;
+}
+.stats-stage .stat-value {
+  color: #ffffff;
+}
+.stats-stage .stat-unit,
+.stats-stage .stat-foot {
+  color: rgb(255 255 255 / 0.65);
+}
+.stats-stage .stat + .stat {
+  border-left-color: rgb(255 255 255 / 0.14);
+}
+.stats-stage .stat-link:hover {
+  background: rgb(255 255 255 / 0.05);
+}
+.stats-stage .stat-link:focus-visible {
+  outline-color: rgb(255 255 255 / 0.6);
+}
+.stats-stage .pill {
+  background: rgb(255 255 255 / 0.08);
+  border-color: rgb(255 255 255 / 0.14);
+  color: #ffffff;
+}
+.stats-stage .pill-status.tone-good .pill-mark { color: #4ade80; }
+.stats-stage .pill-status.tone-watch .pill-mark { color: #fbbf24; }
+.stats-stage .pill-status.tone-risk .pill-mark { color: #f87171; }
+/* On a phone the stage strip stacks: one stat per row, white hairlines between. */
+@media (max-width: 639px) {
+  .stats-stage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .stats-stage .stat + .stat {
+    padding-left: 0;
+    border-left: 0;
+    border-top: 1px solid rgb(255 255 255 / 0.14);
+  }
 }
 
 /* ── Section ──────────────────────────────────────────────────────────────── */
@@ -172,6 +241,18 @@
   font-size: 13px;
   line-height: 18px;
   color: rgb(var(--c-ink-2));
+}
+
+/* An analysis Section may carry a title under its label row (the academics
+   panels: eyebrow "By subject", title "Where the gap actually is"). */
+.sec-title {
+  margin: 0 0 1rem;
+  font-family: var(--font-display);
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 500;
+  color: rgb(var(--c-ink));
+  text-wrap: balance;
 }
 
 /* ── Panel — the ONE raised surface ──────────────────────────────────────── */
@@ -460,6 +541,15 @@
   margin-top: auto;
   padding-top: 0.5rem;
 }
+/* A pill in a tile foot may wrap on a narrow tile instead of clipping. */
+.tile-foot .pill {
+  height: auto;
+  min-height: 20px;
+  padding-block: 2px;
+  white-space: normal;
+  line-height: 14px;
+  text-align: left;
+}
 .tile-arrow {
   display: inline-flex;
   color: rgb(var(--c-module, var(--c-navy-soft)));
@@ -467,6 +557,105 @@
 }
 .tile:hover .tile-arrow {
   transform: translateX(4px);
+}
+/* A tile whose foot holds a REAL control (the "N need attention" button) cannot
+   be a link itself (no nested interactives): it stays a div and a stretched
+   .tile-hit link covers it, with the foot's controls lifted above the hit.
+   Keyboard parity: focusing the hit floods the tile exactly like hover. */
+.tile-hit {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+}
+.tile-hit:focus-visible {
+  outline: 2px solid rgb(37 99 235 / 0.5);
+  outline-offset: -2px;
+}
+.tile:has(.tile-hit:focus-visible)::before {
+  transform: translateY(0);
+}
+.tile:has(.tile-hit:focus-visible) .tile-arrow {
+  transform: translateX(4px);
+}
+.tile-lift {
+  position: relative;
+  z-index: 2;
+}
+/* A locked (upsell) tile: ink dimmed, no flood, the hue stays only in the rule. */
+.tile-locked {
+  cursor: pointer;
+  color: rgb(var(--c-ink-2));
+}
+.tile-locked::before {
+  content: none;
+}
+.tile-locked .tile-title {
+  color: rgb(var(--c-ink-2));
+}
+.tile-locked .tile-icon {
+  color: rgb(var(--c-ink) / 0.35);
+}
+/* A tile may show the module's art at a readable size: the icon slot grows. */
+.tile-icon > svg {
+  width: 28px;
+  height: 28px;
+}
+
+/* ── Back link — the quiet text link that replaced the back pill ─────────── */
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.25rem 0.25rem 0;
+  border-radius: var(--r-ctl);
+  background: transparent;
+  border: 0;
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  color: rgb(var(--c-ink-2));
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.back-link:hover {
+  color: rgb(var(--c-ink));
+}
+.back-link:focus-visible {
+  outline: 2px solid rgb(37 99 235 / 0.5);
+  outline-offset: 2px;
+}
+.back-link > svg {
+  transition: transform 0.2s ease;
+}
+.back-link:hover > svg {
+  transform: translateX(-2px);
+}
+.back-link-dark {
+  color: rgb(255 255 255 / 0.7);
+}
+.back-link-dark:hover {
+  color: #ffffff;
+}
+.back-link-dark:focus-visible {
+  outline-color: rgb(255 255 255 / 0.6);
+}
+
+/* ── Stage — the ONE dark surface (Home briefing band, Studio hero) ───────── */
+/* Ink ground, blue light only (a primary bloom top-right, a sky counter-light
+   bottom-left), blue light only, no glass. */
+.stage {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: var(--r-panel);
+  background:
+    radial-gradient(70% 120% at 88% -10%, rgb(37 99 235 / 0.55) 0%, rgb(37 99 235 / 0.2) 34%, transparent 70%),
+    radial-gradient(56% 96% at 0% 108%, rgb(14 165 233 / 0.3) 0%, transparent 70%),
+    #0a1628;
+  color: #ffffff;
 }
 
 /* ── Button ───────────────────────────────────────────────────────────────── */
@@ -509,14 +698,32 @@
   outline-offset: 2px;
 }
 .btn.btn-primary {
+  height: 36px;
   min-height: 36px;
   padding: 0 0.875rem;
+  gap: 0.375rem;
+  overflow: visible;
   border-radius: 6px;
   background: #2563eb;
   background-image: none;
   color: #ffffff;
   box-shadow: inset 0 0 0 1px #1d4ed8;
   transform: none;
+  /* The legacy rule is uppercase + tracked + 44px with sm: bumps; every one of
+     those is re-declared here at higher specificity so the flat button wins. */
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  transition:
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.btn.btn-primary.btn-sm {
+  height: 28px;
+  min-height: 28px;
+  padding: 0 0.625rem;
+  font-size: 12px;
 }
 .btn.btn-primary::before {
   content: none;
@@ -579,7 +786,10 @@
   .tile-arrow,
   .dt-actions,
   .panel,
-  .btn {
+  .btn,
+  .stat-link,
+  .back-link,
+  .back-link > svg {
     transition: none;
   }
 }

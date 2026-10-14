@@ -14,10 +14,9 @@
 // direct jump rather than a chain of steps, and collapses "how do I go back"
 // into one obvious answer: the crumb to the left.
 //
-// The arrow is kept and bound to the IMMEDIATE parent — the muscle memory of a
-// back control is worth preserving, and now it has exactly one meaning. Where a
-// pill said "Back to dashboard" from three levels deep and silently skipped
-// two, the arrow moves one level and the trail shows what it skipped.
+// PREMIUM UI P2: the trail is now the page header's EYEBROW grammar — 11px caps,
+// ink-2, a quiet arrow bound to the immediate parent (the filled chip is gone
+// with the back pills). It sits on the ground above the PageHeader rule.
 // ─────────────────────────────────────────────────────────────────────────────
 import { Link } from 'react-router-dom'
 import { ArrowLeft, ChevronRight } from 'lucide-react'
@@ -38,24 +37,20 @@ export default function ModuleBreadcrumb({ crumbs = [] }) {
   const parent = trail.length > 1 ? trail[trail.length - 2] : null
 
   const crumbClasses =
-    'rounded-md px-1.5 py-0.5 text-[13px] font-semibold text-muted transition-colors hover:bg-navy/[0.05] hover:text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy/30'
+    'rounded-sm px-1 py-0.5 text-micro font-semibold uppercase text-ink2 transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy-soft/40'
 
   return (
     <nav aria-label="Breadcrumb" className="flex items-center gap-1.5">
-      {parent ? (
-        <BackArrow crumb={parent} />
-      ) : null}
+      {parent ? <BackArrow crumb={parent} /> : null}
 
       <ol className="flex flex-wrap items-center gap-0.5">
         {trail.map((c, i) => {
           const last = i === trail.length - 1
           return (
             <li key={`${c.label}-${i}`} className="flex items-center gap-0.5">
-              {i > 0 ? (
-                <ChevronRight size={13} className="shrink-0 text-navy/25" aria-hidden="true" />
-              ) : null}
+              {i > 0 ? <ChevronRight size={12} className="shrink-0 text-ink/25" aria-hidden="true" /> : null}
               {last ? (
-                <span aria-current="page" className="px-1.5 py-0.5 text-[13px] font-bold text-navy">
+                <span aria-current="page" className="px-1 py-0.5 text-micro font-semibold uppercase text-ink">
                   {c.label}
                 </span>
               ) : c.to ? (
@@ -77,12 +72,7 @@ export default function ModuleBreadcrumb({ crumbs = [] }) {
 
 /** The arrow, bound to the immediate parent — a link or a button to match it. */
 function BackArrow({ crumb }) {
-  // The same filled chip the old back pills carried inside them, so the control
-  // stays recognisable even though the label beside it has become a trail.
-  // back-pill-chip is module-hued via --c-module and already paints its own
-  // foreground white, so the icon needs no colour of its own.
-  const cls =
-    'flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full back-pill-chip transition-transform hover:-translate-x-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy/40'
+  const cls = 'back-link'
   const label = `Back to ${crumb.label}`
   const icon = <ArrowLeft size={14} />
 

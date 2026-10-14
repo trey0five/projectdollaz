@@ -1,0 +1,582 @@
+/* ────────────────────────────────────────────────────────────────────────────
+   module-tile-legacy.css — the pre-P2 `.module-tile` card (18px shell, tinted
+   icon square, watermark, flood + shine) kept ONLY for the surfaces P4 migrates
+   to the `Tile` primitive: WizardChoose, the Finance overview SectionCards and
+   the Reports page. The HOME tiles no longer use any of this (home-tiles.css).
+   Delete this file in P4 once `grep module-tile src` is zero.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+.module-tile {
+  --tile-hue: #2563eb;
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid rgb(16 28 61 / 0.08);
+  /* Not flat white: a soft hue wash from the top-right + a whisper of cool light
+     bottom-left give the card depth. Sits below everything; the flood covers it
+     on hover. */
+  background:
+    radial-gradient(150% 130% at 100% 0%, color-mix(in srgb, var(--tile-hue) 8%, transparent), transparent 52%),
+    radial-gradient(120% 120% at 0% 100%, color-mix(in srgb, var(--tile-hue) 4%, transparent), transparent 46%),
+    #fff;
+  text-align: left;
+  outline: none;
+  /* Card contract §5: the shared inset glass highlight (same top-light layer as
+     .card-soft / .kpi-3d) so the tile reads as a lifted pane, not a flat print.
+     No hue/behavior change — the flood/shine motion layer is untouched. */
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.9),
+    0 1px 2px rgb(16 28 61 / 0.05),
+    0 8px 22px -12px rgb(16 28 61 / 0.12);
+  transition:
+    box-shadow 0.35s ease,
+    border-color 0.35s ease;
+}
+.module-tile:hover,
+
+.module-tile:focus-visible {
+  border-color: color-mix(in srgb, var(--tile-hue) 55%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.9),
+    0 16px 36px -10px color-mix(in srgb, var(--tile-hue) 40%, transparent);
+}
+/* Keyboard ring — the tile hue, offset off the card so it reads on any ground. */
+.module-tile:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--tile-hue) 75%, #101c3d);
+  outline-offset: 3px;
+}
+
+/* Oversized faint icon watermark, tucked into the bottom-right corner — gives
+   each card a branded background design instead of empty white space. Draws in
+   the tile hue via currentColor (like .tile-art), sits at z 0 below the body,
+   and fades out on hover so it never fights the color-flood. */
+.module-tile .tile-watermark {
+  position: absolute;
+  right: -20px;
+  bottom: -26px;
+  z-index: 0;
+  display: block;
+  color: var(--tile-hue);
+  opacity: 0.07;
+  pointer-events: none;
+  transform: rotate(-8deg);
+  transition:
+    opacity 0.4s ease,
+    color 0.35s ease,
+    transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.module-tile .tile-watermark svg {
+  height: 138px;
+  width: 138px;
+}
+/* On hover the hue-flood fills the card, so the watermark flips to WHITE (and
+   stays visible) instead of fading out — it reads as a faint white emboss over
+   the flood. Locked tiles have no flood, so they're excluded (see below). */
+.module-tile:not(.module-tile--locked):hover .tile-watermark,
+
+.module-tile:not(.module-tile--locked):focus-visible .tile-watermark,
+
+.module-tile:not(.module-tile--locked):focus-within .tile-watermark {
+  color: #fff;
+  opacity: 0.18;
+  transform: rotate(-8deg) scale(1.06);
+}
+/* Locked upsell: no flood — keep it quiet + in ink so it reads "dimmed", and
+   don't flip it white on hover (it would vanish on the white card). */
+.module-tile--locked .tile-watermark {
+  color: rgb(16 28 61);
+  opacity: 0.045;
+}
+@media (prefers-reduced-motion: reduce) {
+  .module-tile .tile-watermark {
+    transition: opacity 0.4s ease;
+  }
+  .module-tile:hover .tile-watermark,
+
+  .module-tile:focus-visible .tile-watermark,
+
+  .module-tile:focus-within .tile-watermark {
+    transform: rotate(-8deg);
+  }
+}
+
+/* Content sits above the flood (z 0) and under the shine (z 2). */
+.module-tile .tile-body {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+}
+
+/* Hue-tinted art square; the SVG art inherits the hue via currentColor. */
+.module-tile .tile-art {
+  display: flex;
+  height: 60px;
+  width: 60px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--tile-hue) 11%, transparent);
+  color: var(--tile-hue);
+}
+.module-tile .tile-art svg {
+  height: 38px;
+  width: 38px;
+}
+
+/* Round arrow chip at the flood corner. */
+.module-tile .tile-arrow {
+  display: flex;
+  height: 32px;
+  width: 32px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--tile-hue) 9%, transparent);
+  color: var(--tile-hue);
+}
+
+/* Status chip. Coral (#FF6B5E) = needs-attention ONLY (plan §4); the text tone
+   uses the AA-safe darkened coral, critical fills solid with white text. */
+.module-tile .tile-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 9999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+.module-tile .tile-chip--attention {
+  background: rgb(255 107 94 / 0.14);
+  color: #c2362b;
+}
+.module-tile .tile-chip--critical {
+  background: #ff6b5e;
+  color: #fff;
+}
+.module-tile .tile-chip--clear {
+  background: rgb(16 28 61 / 0.05);
+  color: rgb(16 28 61 / 0.55);
+}
+.module-tile .tile-chip--none {
+  background: rgb(16 28 61 / 0.04);
+  color: rgb(16 28 61 / 0.4);
+}
+
+/* ── Compact MOBILE tiles (<sm): the home map is a 2-col launcher grid, so each
+   tile slims to icon + title + status — the tagline is desktop detail. Cuts the
+   one-column scroll marathon to ~half the height. Scoped to the same component
+   classes; desktop unchanged. ── */
+@media (max-width: 639px) {
+  .module-tile {
+    border-radius: 14px;
+  }
+  .module-tile .tile-body {
+    gap: 7px;
+    padding: 12px;
+  }
+  .module-tile .tile-art {
+    height: 40px;
+    width: 40px;
+    border-radius: 11px;
+  }
+  .module-tile .tile-art svg {
+    height: 25px;
+    width: 25px;
+  }
+  .module-tile .tile-title {
+    font-size: 14.5px !important;
+  }
+  /* The tagline is hidden on phones — the label + status carry the tile. */
+  .module-tile .tile-sub {
+    display: none;
+  }
+  .module-tile .tile-chip {
+    padding: 3px 8px;
+    font-size: 11px;
+  }
+  .module-tile .tile-arrow {
+    height: 26px;
+    width: 26px;
+  }
+  .module-tile .tile-arrow svg {
+    height: 13px;
+    width: 13px;
+  }
+  .module-tile .tile-watermark svg {
+    height: 96px;
+    width: 96px;
+  }
+  .module-tile .tile-add-pill {
+    font-size: 10px;
+    padding: 2px 8px;
+  }
+}
+
+/* ── Motion layer: flood + shine + white flip (skipped under reduced motion) ── */
+@media (prefers-reduced-motion: no-preference) {
+  /* The flood: a hue circle centered on the arrow (bottom-right) corner that
+     scales up from nothing. It's sized RELATIVE to the tile (320% of the tile's
+     width, made square by aspect-ratio) and re-centered on the corner with the
+     50%/50% translate — so its radius (~1.6× the tile width) always clears the
+     far top-left corner on ANY tile shape, narrow home tiles and the wide
+     2-column wizard tiles alike. (The old fixed 120px circle × scale(9) was a
+     constant ~540px radius, which only reached ~half of a wide wizard tile.) */
+  .module-tile::before {
+    content: '';
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    z-index: 0;
+    width: 320%;
+    aspect-ratio: 1;
+    border-radius: 9999px;
+    background: var(--tile-hue);
+    transform: translate(50%, 50%) scale(0);
+    transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: transform;
+  }
+  .module-tile:hover::before,
+
+  .module-tile:focus-visible::before {
+    transform: translate(50%, 50%) scale(1);
+  }
+
+  /* The shine: a skewed translucent bar sweeping across on hover. */
+  .module-tile::after {
+    content: '';
+    position: absolute;
+    top: -30%;
+    bottom: -30%;
+    left: 0;
+    z-index: 2;
+    width: 34%;
+    pointer-events: none;
+    background: linear-gradient(100deg, transparent, rgb(255 255 255 / 0.32), transparent);
+    transform: translateX(-140%) skewX(-18deg);
+    transition: transform 0.7s ease;
+  }
+  .module-tile:hover::after,
+
+  .module-tile:focus-visible::after {
+    transform: translateX(420%) skewX(-18deg);
+  }
+
+  /* Everything flips to white over the flood. */
+  .module-tile .tile-title,
+
+  .module-tile .tile-sub,
+
+  .module-tile .tile-art,
+
+  .module-tile .tile-arrow,
+
+  .module-tile .tile-chip {
+    transition:
+      color 0.3s ease,
+      background-color 0.3s ease;
+  }
+  .module-tile:not(.module-tile--locked):hover .tile-title,
+
+  .module-tile:not(.module-tile--locked):focus-visible .tile-title {
+    color: #fff;
+  }
+  .module-tile:not(.module-tile--locked):hover .tile-sub,
+
+  .module-tile:not(.module-tile--locked):focus-visible .tile-sub {
+    color: rgb(255 255 255 / 0.85);
+  }
+  .module-tile:not(.module-tile--locked):hover .tile-art,
+
+  .module-tile:not(.module-tile--locked):focus-visible .tile-art,
+
+  .module-tile:not(.module-tile--locked):hover .tile-arrow,
+
+  .module-tile:not(.module-tile--locked):focus-visible .tile-arrow {
+    background: rgb(255 255 255 / 0.18);
+    color: #fff;
+  }
+  .module-tile:not(.module-tile--locked):hover .tile-chip,
+
+  .module-tile:not(.module-tile--locked):focus-visible .tile-chip {
+    background: rgb(255 255 255 / 0.2);
+    color: #fff;
+  }
+  .module-tile:hover .tile-chip--critical,
+
+  .module-tile:focus-visible .tile-chip--critical {
+    background: rgb(255 255 255 / 0.92);
+    color: #c2362b;
+  }
+}
+
+/* ── Reduced motion: nothing moves; hover/focus is a static hue accent. ────── */
+@media (prefers-reduced-motion: reduce) {
+  .module-tile {
+    transition: none;
+  }
+  .module-tile:hover,
+
+  .module-tile:focus-visible {
+    box-shadow:
+      inset 0 0 0 2px var(--tile-hue),
+      0 8px 22px -12px rgb(16 28 61 / 0.12);
+  }
+  .module-tile:hover .tile-title,
+
+  .module-tile:focus-visible .tile-title {
+    color: var(--tile-hue);
+  }
+}
+
+/* ── Command-center PANEL tiles (Finance home cards etc.): the module-tile
+   flood on cards with arbitrary body content. A stretched .tile-panel-hit link
+   makes the WHOLE card navigate; the body falls through to it except real
+   links/buttons inside (which stay clickable above the hit). On hover/focus the
+   body text flips white so the hue flood stays readable. ── */
+.module-tile--panel {
+  cursor: pointer;
+}
+.module-tile .tile-panel-hit {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+}
+.module-tile .tile-panel-hit:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--tile-hue) 75%, #101c3d);
+  outline-offset: 3px;
+  border-radius: 18px;
+}
+.module-tile--panel .tile-body {
+  z-index: 2;
+  pointer-events: none;
+}
+.module-tile--panel .tile-body :is(a,
+
+.module-tile button) {
+  pointer-events: auto;
+}
+/* Compact art square for panel headers (the 60px home-tile art is too big). */
+.module-tile--panel .tile-art {
+  height: 36px;
+  width: 36px;
+  border-radius: 10px;
+}
+.module-tile--panel .tile-art svg {
+  height: 18px;
+  width: 18px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  /* Text flips white ONLY when the flood is actually up: on hover, or when the
+     stretched hit link has KEYBOARD focus (:focus-visible — which also floods,
+     below). Plain :focus-within was a bug: clicking an inner button (e.g. Board
+     packet) left the card focused after the flood receded → white-on-white. */
+  .module-tile--panel:hover .tile-body,
+
+  .module-tile--panel:has(.tile-panel-hit:focus-visible) .tile-body,
+
+  .module-tile--panel:hover .tile-body :is(h3,
+
+  .module-tile h4,
+
+  .module-tile p,
+
+  .module-tile dt,
+
+  .module-tile dd,
+
+  .module-tile span,
+
+  .module-tile div,
+
+  .module-tile li,
+
+  .module-tile time),
+
+  .module-tile--panel:has(.tile-panel-hit:focus-visible) .tile-body :is(h3,
+
+  .module-tile h4,
+
+  .module-tile p,
+
+  .module-tile dt,
+
+  .module-tile dd,
+
+  .module-tile span,
+
+  .module-tile div,
+
+  .module-tile li,
+
+  .module-tile time) {
+    color: #fff;
+  }
+  /* Keyboard parity: focusing the stretched hit link floods the card too. */
+  .module-tile:has(.tile-panel-hit:focus-visible)::before {
+    transform: translate(50%, 50%) scale(1);
+  }
+}
+
+/* ── Attention tiles (active tile whose status chip opens the briefing): the
+   WHOLE card still navigates via a stretched .tile-panel-hit link, but the
+   "N need attention" chip stays a real button ABOVE it (opens the brief popup
+   listing the items). Reuses the panel pointer-events mechanic WITHOUT the
+   compact-art override, so the home-tile art keeps its full 60px size. ── */
+.module-tile--hit .tile-body {
+  position: relative;
+  z-index: 2;
+  pointer-events: none;
+}
+.module-tile--hit .tile-body :is(a,
+
+.module-tile button) {
+  pointer-events: auto;
+}
+
+/* ── Locked (upsell) tile: dimmed, no flood/shine, Add-ons pattern. ──────────
+   Structure (a11y — no nested interactives): the card is a DIV; one stretched
+   .tile-locked-hit button covers the whole card and opens the module-pitch
+   popup (info + the add path). The visual body sits under it, inert. */
+.module-tile--locked::before,
+
+.module-tile--locked::after {
+  content: none;
+}
+.module-tile--locked {
+  position: relative;
+  cursor: pointer;
+  background: rgb(255 255 255 / 0.6);
+}
+/* The stretched primary hit — invisible, covers the whole card. */
+.module-tile .tile-locked-hit {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border: none;
+  border-radius: inherit;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+.module-tile .tile-locked-hit:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--tile-hue) 75%, #101c3d);
+  outline-offset: 3px;
+  border-radius: 18px;
+}
+/* Visuals sit under the hit and never intercept clicks. */
+.module-tile--locked .tile-body {
+  position: relative;
+  z-index: 0;
+  pointer-events: none;
+}
+.module-tile--locked .tile-art {
+  background: rgb(16 28 61 / 0.05);
+  color: rgb(16 28 61 / 0.35);
+}
+.module-tile--locked .tile-title {
+  color: rgb(16 28 61 / 0.55);
+}
+.module-tile--locked .tile-sub {
+  color: rgb(16 28 61 / 0.4);
+}
+.module-tile--locked:hover .tile-title,
+
+.module-tile--locked:focus-within .tile-title {
+  color: rgb(16 28 61 / 0.75);
+}
+.module-tile--locked:hover,
+
+.module-tile--locked:focus-within {
+  border-color: color-mix(in srgb, var(--tile-hue) 40%, transparent);
+  box-shadow: 0 10px 24px -12px color-mix(in srgb, var(--tile-hue) 30%, transparent);
+}
+/* The "+ Add" pill keeps the module hue so the upsell still reads branded. */
+.module-tile .tile-add-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1.5px solid color-mix(in srgb, var(--tile-hue) 60%, transparent);
+  border-radius: 9999px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--tile-hue);
+}
+
+/* ── Live stat rows (Finance section cards): a magnitude bar under each figure.
+   At rest the fill wears the tile hue; when the flood is up it flips white and
+   REFILLS from zero (paired with the JS count-up on the numbers) so the card
+   feels like it's re-computing live on hover. ── */
+.module-tile .stat-track {
+  height: 4px;
+  border-radius: 999px;
+  background: rgb(16 28 61 / 0.07);
+  overflow: hidden;
+}
+.module-tile .stat-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--tile-hue, #2563eb);
+  opacity: 0.85;
+  transform-origin: left;
+  transition: background 0.25s ease, opacity 0.25s ease;
+}
+.module-tile .stat-fill--negative {
+  background: #dc2626;
+}
+@keyframes stat-refill {
+  from {
+    transform: scaleX(0);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .module-tile--panel:hover .stat-fill,
+
+  .module-tile--panel:has(.tile-panel-hit:focus-visible) .stat-fill {
+    background: #fff;
+    opacity: 0.95;
+    animation: stat-refill 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .module-tile--panel:hover .stat-track,
+
+  .module-tile--panel:has(.tile-panel-hit:focus-visible) .stat-track {
+    background: rgb(255 255 255 / 0.22);
+  }
+}
+
+/* A LOGO IS NOT A GLYPH.
+   .tile-art is a 60px square, which is right for the module icons it was built
+   for. Real school logos are frequently WORDMARKS — "Cardinal Gibbons High
+   School" set on two lines, a crest beside a name — and squeezing one into a
+   square renders it as an unreadable smudge while the square sits mostly empty.
+   The logo variant is wider and drops the hue wash, because a logo brings its
+   own colour and a tint behind it just muddies whatever the school chose. */
+.module-tile .tile-art--logo {
+  width: 96px;
+  height: 56px;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px rgba(16, 28, 61, 0.08);
+  padding: 6px;
+  overflow: hidden;
+}
+.module-tile .tile-art--logo img {
+  height: 100%;
+  width: 100%;
+  object-fit: contain;
+}

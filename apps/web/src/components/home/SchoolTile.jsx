@@ -1,32 +1,32 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// SchoolTile — one school on the ORG-scope home. The org twin of ModuleTile:
-// same hue-flood-on-hover tile (home-tiles.css), but each tile represents a
-// school in the organization and clicking it SWAPS the app to that school's view
-// (setActiveSchool + setScope('school')). Each school gets its own colour from a
-// rotating palette so they read as distinct at a glance. A status chip surfaces
-// that school's attention level from the org briefing rollup.
+// SchoolTile — one school's identity on the ORG-scope home. Premium UI P2 turned
+// the grid of sixteen school cards into a DataTable (OrgTiles), so this file
+// now owns the two things that survive that move:
+//   • schoolHue(id)  — the school's stable identity colour (also used by the
+//     school's own home stage).
+//   • SchoolMark     — the crest cell: the uploaded logo on a white plate, or a
+//     monogram in the school's hue. Rendered in the table's first column.
+// Each school gets its own colour from a rotating palette so rows read as
+// distinct at a glance; colour follows the school, not its list position.
 // ─────────────────────────────────────────────────────────────────────────────
-import { motion, useReducedMotion } from 'framer-motion'
-import { ArrowRight } from 'lucide-react'
 import { useSchools } from '../../context/SchoolContext.jsx'
 import { monogramOf } from './SchoolCrest.jsx'
 
 // Distinct, validated hues (dataviz categorical light set) — one per school,
-// cycled by index. Colour follows the school, so the grid stays legible.
+// cycled by a hash of the id. No purple in the set (Premium UI P2).
 const SCHOOL_HUES = [
   '#2563eb',
-  '#7c3aed',
   '#0891b2',
   '#e11d48',
   '#d97706',
   '#059669',
-  '#4f46e5',
+  '#0ea5e9',
   '#db2777',
+  '#4f46e5',
 ]
 
 // Stable hue per school ID (a small string hash), so a school reads the SAME
-// colour on its org tile AND on its own home briefing band — not tied to list
-// position.
+// colour on its org row AND on its own home stage — not tied to list position.
 export function schoolHue(schoolId) {
   const str = String(schoolId ?? '')
   let h = 0
@@ -34,78 +34,36 @@ export function schoolHue(schoolId) {
   return SCHOOL_HUES[h % SCHOOL_HUES.length]
 }
 
-// The local `initials` helper is gone: it took the first two words verbatim, so
-// a diocese rendered "ST", "ST", "ST", "ST" down the grid. monogramOf skips the
-// words schools share, which is the only version that tells them apart.
-
-// Attention chip from the org briefing's per-school summary {total,critical,warn,info}.
-function chipFor(school, ready) {
-  if (!ready) return { text: '—', tone: 'none' }
-  if (!school.reported) return { text: 'No statements yet', tone: 'none' }
-  const s = school.summary || {}
-  const critical = s.critical ?? 0
-  const rest = (s.warn ?? 0) + (s.info ?? 0)
-  if (critical > 0) return { text: `${critical} critical`, tone: 'critical' }
-  if (rest > 0) return { text: `${rest} to review`, tone: 'attention' }
-  return { text: 'All clear', tone: 'clear' }
-}
-
-const ENTRANCE = (reduce, index) => ({
-  initial: reduce ? { opacity: 0 } : { opacity: 0, y: 16 },
-  animate: { opacity: 1, y: 0 },
-  transition: { delay: index * 0.04, type: 'spring', stiffness: 240, damping: 24 },
-})
-
-export default function SchoolTile({ school, index = 0, ready = true, onSelect }) {
-  const reduce = useReducedMotion()
-  const hue = schoolHue(school.schoolId)
-  const chip = chipFor(school, ready)
-
-  // The logo comes from the ROSTER, not from this tile's own payload. The org
-  // rollup that feeds these tiles is a briefing summary — putting a base64 logo
-  // for every school on it would bloat a request made on every org page load,
-  // for a picture the client already holds. SchoolContext has the roster.
+/**
+ * The crest cell. The logo comes from the ROSTER, not from the org briefing:
+ * the rollup that feeds the table is a briefing summary — putting a base64 logo
+ * for every school on it would bloat a request made on every org page load,
+ * for a picture the client already holds. SchoolContext has the roster.
+ */
+export function SchoolMark({ schoolId, name, size = 28 }) {
   const { schools: roster } = useSchools()
-  const logo = roster?.find((r) => r.id === school.schoolId)?.logoBase64 ?? null
-
-  return (
-    <motion.li {...ENTRANCE(reduce, index)} whileHover={reduce ? undefined : { y: -4 }} className="list-none">
-      <button
-        type="button"
-        onClick={() => onSelect?.(school.schoolId)}
-        aria-label={`Switch to ${school.name}${school.periodLabel ? ` — ${school.periodLabel}` : ''}`}
-        className="module-tile group w-full text-left"
-        style={{ '--tile-hue': hue }}
+  const logo = roster?.find((r) => r.id === schoolId)?.logoBase64 ?? null
+  const hue = schoolHue(schoolId)
+  if (logo) {
+    return (
+      <span
+        aria-hidden="true"
+        className="inline-flex shrink-0 items-center justify-center overflow-hidden rounded-sm border border-hair bg-white p-0.5"
+        style={{ width: size, height: size }}
       >
-        <div className="tile-body" aria-hidden="true">
-          <div className="flex items-start justify-between gap-3">
-            {/* A school is recognised by its crest long before its name is read,
-                which is the whole point of a grid of sixteen. On a white tile a
-                logo needs no plate — it was drawn for exactly this ground. */}
-            {logo ? (
-              <span className="tile-art tile-art--logo">
-                <img src={logo} alt="" />
-              </span>
-            ) : (
-              <span className="tile-art font-serif text-[19px] font-bold">{monogramOf(school.name)}</span>
-            )}
-            <span className="tile-arrow">
-              <ArrowRight size={16} />
-            </span>
-          </div>
-          <div>
-            <h3 className="tile-title font-serif text-[17px] font-semibold leading-snug text-navy">
-              {school.name}
-            </h3>
-            <p className="tile-sub mt-1 text-[13.5px] leading-relaxed text-muted">
-              {school.periodLabel ? `Latest · ${school.periodLabel}` : 'Open this school’s dashboard'}
-            </p>
-          </div>
-          <div className="mt-auto flex items-center justify-between gap-3 pt-1">
-            <span className={`tile-chip tile-chip--${chip.tone}`}>{chip.text}</span>
-          </div>
-        </div>
-      </button>
-    </motion.li>
+        <img src={logo} alt="" className="h-full w-full object-contain" />
+      </span>
+    )
+  }
+  return (
+    <span
+      aria-hidden="true"
+      className="inline-flex shrink-0 items-center justify-center rounded-sm font-serif text-[12px] font-semibold leading-none text-white"
+      style={{ width: size, height: size, background: hue }}
+    >
+      {monogramOf(name)}
+    </span>
   )
 }
+
+export default SchoolMark

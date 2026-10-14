@@ -7,7 +7,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion, useReducedMotion } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
-import '../../styles/home-tiles.css'
+import '../../styles/module-tile-legacy.css'
 
 export default function WizardChoose({ options, hue, onChoose }) {
   const reduce = useReducedMotion()

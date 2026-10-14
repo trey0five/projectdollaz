@@ -17,6 +17,8 @@ import { usePersistence } from '../context/PersistenceContext.jsx'
 import BoardReportWizard from '../components/reports/board/BoardReportWizard.jsx'
 import MonthlyActualsSection from '../components/monthly/MonthlyActualsSection.jsx'
 import ForecastView from '../components/reports/ForecastView.jsx'
+// The legacy `.module-tile` card until P4 moves this page to `Tile`.
+import '../styles/module-tile-legacy.css'
 
 // Catalog of report types. Phase 1 ships only the Board Report live; the rest are
 // listed as "coming soon" placeholders so the IA reads as a growing hub.

@@ -81,13 +81,14 @@ export function schoolSubtitle({ gradeLow, gradeHigh, schoolType, district, coun
  * @param {object}  props
  * @param {string}  props.name          School name — set over the mark.
  * @param {string} [props.logoBase64]   Full data URL, when the school uploaded one.
- * @param {string} [props.hue]          Identity colour; tints the ground.
  * @param {object} [props.school]       The school record, for the subtitle line.
  */
-export default function SchoolCrest({ name, logoBase64 = null, hue = null, school = null }) {
+export default function SchoolCrest({ name, logoBase64 = null, school = null }) {
   if (!name) return null
   const mark = monogramOf(name)
-  const tint = hue ?? '#8b5cf6'
+  // The stage is ink with BLUE light only (Premium UI P2) — the wash behind the
+  // crest is the primary, never the school's identity colour.
+  const tint = '#2563EB'
   const subtitle = schoolSubtitle(school ?? {})
 
   return (
@@ -99,7 +100,7 @@ export default function SchoolCrest({ name, logoBase64 = null, hue = null, schoo
           in the foreground below, and the ground here is just a soft blurred
           echo of it. The monogram has no such problem — it IS the name — so it
           still bleeds at watermark scale. */}
-      <div className="absolute inset-0 overflow-hidden rounded-r-2xl">
+      <div className="absolute inset-0 overflow-hidden rounded-r-lg">
         {logoBase64 ? (
           <img
             src={logoBase64}
@@ -157,7 +158,7 @@ export default function SchoolCrest({ name, logoBase64 = null, hue = null, schoo
             legible without knowing anything about the mark. */}
         {logoBase64 ? (
           <span
-            className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-2xl bg-white/95 p-1.5"
+            className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-lg bg-white/95 p-1.5"
             style={{ boxShadow: '0 8px 22px rgba(0,0,0,0.30), inset 0 0 0 1px rgba(255,255,255,0.5)' }}
           >
             <img src={logoBase64} alt="" className="h-full w-full object-contain" />
@@ -170,7 +171,7 @@ export default function SchoolCrest({ name, logoBase64 = null, hue = null, schoo
           {name}
         </span>
         {subtitle ? (
-          <span className="mt-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-white/55">
+          <span className="mt-1.5 text-micro font-semibold uppercase text-white/55">
             {subtitle}
           </span>
         ) : null}

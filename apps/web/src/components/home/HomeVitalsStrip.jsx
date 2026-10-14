@@ -1,19 +1,18 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// HomeVitalsStrip — a slim "school vitals" scoreboard under the HOME tile grid.
-// Fills the page with real substance (the four headline KPIs, live) instead of
-// whitespace. Self-contained: its own useAnalytics fetch, FAIL-SOFT — renders
-// nothing while loading, on error, or with no saved period, so the tile map never
-// waits on it. Each stat deep-links to /analytics?metric=<key> (the drawer
-// preselects), mirroring the old HomeVitals behaviour.
+// HomeVitalsStrip — the "school vitals" under the HOME tile grid: the four
+// headline KPIs, live, as a STAT STRIP on the ground (Premium UI P2 — the white
+// card of four tinted boxes is gone; numbers sit between vertical rules with
+// a 2px status mark and count up once). Self-contained: its own useAnalytics
+// fetch, FAIL-SOFT — renders nothing while loading, on error, or with no saved
+// period, so the tile map never waits on it. Each stat deep-links to
+// /analytics?metric=<key> (the drawer preselects).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo } from 'react'
-import { motion, useReducedMotion } from 'framer-motion'
-import { Link, useNavigate } from 'react-router-dom'
-import { Activity, ArrowRight } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { useAnalytics } from '../../hooks/useAnalytics.js'
-import AnimatedMetricValue from '../analytics/AnimatedMetricValue.jsx'
-import StatusDot from '../analytics/StatusDot.jsx'
-import { metricFormat } from '../../lib/metricMeta.js'
+import { Section, StatStrip, Stat } from '../ui/surface/index.js'
+import { metricFormat, isBandedStatus } from '../../lib/metricMeta.js'
 
 const VITAL_KEYS = [
   'operating_margin',
@@ -22,9 +21,10 @@ const VITAL_KEYS = [
   'net_tuition_per_student',
 ]
 
+// Status → the Stat's 2px mark. Only a banded status carries colour.
+const MARK = { good: 'good', watch: 'watch', risk: 'risk' }
+
 export default function HomeVitalsStrip({ schoolId, periodId }) {
-  const reduce = useReducedMotion()
-  const navigate = useNavigate()
   const { metrics, loading, error, notEntitled } = useAnalytics(schoolId, periodId)
 
   const vitals = useMemo(() => {
@@ -38,58 +38,30 @@ export default function HomeVitalsStrip({ schoolId, periodId }) {
   if (!schoolId || !periodId || loading || error || notEntitled || vitals.length === 0) return null
 
   return (
-    <motion.section
+    <Section
+      label="School vitals"
       aria-label="School vitals"
-      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: reduce ? 0 : 0.3, duration: 0.4 }}
-      className="rounded-[18px] border border-navy/10 bg-white p-4 shadow-card sm:p-5"
-    >
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="inline-flex items-center gap-2 text-[12px] font-bold uppercase tracking-[0.14em] text-muted">
-          <Activity size={14} className="text-gold" aria-hidden />
-          School vitals
-        </h2>
-        <Link
-          to="/analytics"
-          className="group inline-flex items-center gap-1 text-[12.5px] font-semibold text-gold transition-colors hover:text-navy"
-        >
+      aside={
+        <Link to="/analytics" className="group inline-flex items-center gap-1 font-semibold text-navy-soft hover:text-ink">
           Open analytics
-          <ArrowRight size={13} className="transition-transform group-hover:translate-x-0.5" />
+          <ArrowRight size={13} className="transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
         </Link>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {vitals.map((m, i) => (
-          <motion.button
-            key={m.key}
-            type="button"
-            onClick={() => navigate(`/analytics?metric=${m.key}`)}
-            initial={reduce ? false : { opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: reduce ? 0 : 0.36 + i * 0.06, duration: 0.3 }}
-            whileHover={reduce ? undefined : { y: -2 }}
+      }
+    >
+      <StatStrip cols={vitals.length} className="vitals-strip">
+        {vitals.map((m) => (
+          <Stat
+            // Re-keyed on the period so the count-up replays when the period changes.
+            key={`${m.key}:${periodId}`}
+            to={`/analytics?metric=${m.key}`}
+            label={m.label}
+            value={m.value}
+            format={metricFormat(m.key, m.unit)}
+            status={isBandedStatus(m.status) ? MARK[m.status] : undefined}
             aria-label={`${m.label} details`}
-            className="rounded-xl border border-navy/5 bg-section/60 px-3.5 py-3 text-left outline-none transition-colors hover:border-gold/40 focus-visible:ring-2 focus-visible:ring-gold/60"
-          >
-            {/* /app is the first screen after login, and these labels were
-                clipped to "MONTHS OF OPERATING…" / "NET TUITION PER STUD…" at
-                1280. The label wraps instead of truncating (card contract §5.3:
-                prefer wrapping over shrinking, never cut a metric name). */}
-            <div className="flex min-w-0 items-start justify-between gap-2">
-              <span className="min-w-0 break-words text-[11px] font-semibold uppercase leading-snug tracking-[0.09em] text-muted">
-                {m.label}
-              </span>
-              <span className="mt-0.5 shrink-0">
-                <StatusDot status={m.status} size={8} />
-              </span>
-            </div>
-            <div className="mt-1.5 font-serif text-[24px] font-semibold leading-none text-navy sm:text-[26px]">
-              <AnimatedMetricValue key={periodId} value={m.value} format={metricFormat(m.key, m.unit)} />
-            </div>
-          </motion.button>
+          />
         ))}
-      </div>
-    </motion.section>
+      </StatStrip>
+    </Section>
   )
 }

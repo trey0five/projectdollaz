@@ -26,6 +26,7 @@ import {
   Scale,
   Sparkles,
   ChevronUp,
+  Activity,
 } from 'lucide-react'
 import { BACK_PILL, BackPillBody } from '../components/ui/BackLink.jsx'
 import { AddDataCta, RecordsCta } from '../components/module/ModuleCtas.jsx'
@@ -49,8 +50,13 @@ import StatusDot from '../components/analytics/StatusDot.jsx'
 import DeltaChip from '../components/analytics/DeltaChip.jsx'
 import EntitlementPausedPanel from '../components/analytics/EntitlementPausedPanel.jsx'
 import { HeadlineSkeleton, MetricCardSkeleton } from '../components/analytics/skeletons.jsx'
-import HomeHero from '../components/home/HomeHero.jsx'
+import { toSignals } from '../components/home/HomeHero.jsx'
+import PeriodSelector from '../components/analytics/PeriodSelector.jsx'
+import { PageHeader, Pill, Button } from '../components/ui/surface/index.js'
+import { formatShortDate } from '../lib/format.js'
 import BoardPacketExportButton from '../components/reports/BoardPacketExportButton.jsx'
+// The legacy `.module-tile` card (SectionCard below) until P3 moves it to `Tile`.
+import '../styles/module-tile-legacy.css'
 
 const VITAL_KEYS = ['operating_margin', 'days_cash_on_hand', 'months_operating_reserve']
 
@@ -73,52 +79,101 @@ function budOf(lines, kind, key) {
   return Number.isFinite(Number(v)) ? Number(v) : null
 }
 
-// ── Page header (mirrors AnalyticsDashboard's PageHeader) ─────────────────────
-function FinanceHeader({ onWhatLitUp = null }) {
-  // Under v2 the ModuleTabs shell already renders the "Back to dashboard" link,
-  // so this header omits its own to avoid a duplicate; v1 (standalone page, no
-  // ModuleTabs) keeps it.
+// ── Page header (Premium UI P2, plan sketch 1): eyebrow FINANCE · SCHOOL · FY,
+// the title in Garamond, a meta line that carries what the second dark hero
+// used to say (the period, the signal count), the period selector + actions on
+// the hairline, a 2px finance-blue rule. The "Command center — Welcome back"
+// stage that repeated the title below it is gone. ─────────────────────────────
+function FinanceHeader({
+  onWhatLitUp = null,
+  schoolName = null,
+  periods = null,
+  selectedPeriodId = null,
+  onSelectPeriod = null,
+  statusLine = null,
+  insightKind = null,
+  billing = null,
+}) {
+  // Under v2 the ModuleTabs shell already renders the breadcrumb, so this header
+  // omits its own back link; v1 (standalone page, no ModuleTabs) keeps it.
   const uiV2 = useUiV2()
+  const period = (periods ?? []).find((p) => p.id === selectedPeriodId) ?? null
+  const signals = statusLine && insightKind ? toSignals(statusLine) : []
+  const eyebrow = ['Finance', schoolName, period?.label].filter(Boolean).join(' · ')
+  const trial =
+    billing?.status === 'trialing'
+      ? typeof billing.daysLeft === 'number'
+        ? `${billing.daysLeft} day${billing.daysLeft === 1 ? '' : 's'} left in trial`
+        : 'Free trial'
+      : null
+  const meta = [
+    period ? `Period end ${formatShortDate(period.periodEndDate)}` : null,
+    signals.length ? `${signals.length} signal${signals.length === 1 ? '' : 's'}` : null,
+    trial,
+  ]
+    .filter(Boolean)
+    .join(' · ')
   return (
-    <div className="mb-6">
+    <div className="mb-2">
       {!uiV2 && (
-        <Link to="/app" className={BACK_PILL}>
+        <Link to="/app" className={`${BACK_PILL} mb-2`}>
           <BackPillBody label="Back to dashboard" />
         </Link>
       )}
-      <div className={`${uiV2 ? '' : 'mt-3 '}flex flex-wrap items-center gap-3`}>
-        <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gold-gradient text-navy shadow-glow">
-          <CircleDollarSign size={22} />
-        </span>
-        <div>
-          <h1 className="font-serif text-2xl font-semibold text-navy sm:text-[28px]">Finance</h1>
-          <p className="text-[15px] text-muted">Your finance command center</p>
-        </div>
-        {/* On-page Add-data + Records entries (mirror the sidebar tabs) — v2 only. */}
-        {uiV2 && (
-          <span className="ml-auto flex flex-wrap items-center gap-2">
+      <PageHeader
+        eyebrow={eyebrow}
+        title="Finance"
+        meta={meta || 'Statements, cash and budget vs. actuals — board-ready.'}
+        hue="37 99 235"
+        actions={
+          <>
+            {periods && periods.length > 0 && onSelectPeriod ? (
+              <PeriodSelector periods={periods} activeId={selectedPeriodId} onSelect={onSelectPeriod} light />
+            ) : null}
             {/* THE REPLAY, ON THE OVERVIEW TOO. The celebration used to be
                 reachable only from the first-run screen — the one place a user
-                leaves and cannot get back to. It is the clearest summary of
-                what their data now powers, so it belongs where they actually
-                live. Rendered only when there is something to show. */}
+                leaves and cannot get back to. Rendered only when there is
+                something to show. */}
             {onWhatLitUp && (
-              <button
-                type="button"
-                onClick={onWhatLitUp}
-                className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border-2 border-border bg-white px-3.5 py-2 text-[12px] font-semibold uppercase tracking-[0.1em] text-muted transition-colors hover:border-navy hover:text-navy"
-              >
-                <Sparkles size={14} /> What lit up
-              </button>
+              <Button variant="quiet" onClick={onWhatLitUp} icon={<Sparkles size={14} />}>
+                What lit up
+              </Button>
             )}
-            <RecordsCta module="finance" />
-            <AddDataCta />
+            {/* On-page Add-data + Records entries (mirror the sidebar tabs) — v2 only. */}
+            {uiV2 && <RecordsCta module="finance" />}
+            {uiV2 && <AddDataCta />}
+          </>
+        }
+      />
+      {/* The read: the AI / smart insight as a ruled signal list under the
+          header — ink on the ground, a 2px semantic mark per line. */}
+      {statusLine ? (
+        <div className="mt-4 flex items-start gap-3">
+          <span className="mt-0.5 shrink-0 text-ink2" aria-hidden="true">
+            {insightKind ? <Sparkles size={14} /> : <Activity size={14} />}
           </span>
-        )}
-      </div>
+          {signals.length ? (
+            <ul className="flex flex-col gap-1.5" aria-label={insightKind === 'llm' ? 'AI insight' : 'Smart insight'}>
+              {signals.map((sg, i) => (
+                <li key={i} className="flex items-start gap-2.5 text-body text-ink">
+                  <Pill variant="status" tone={SIGNAL_TONE[sg.category] ?? 'neutral'} className="mt-0.5 shrink-0">
+                    {SIGNAL_LABEL[sg.category] ?? 'Note'}
+                  </Pill>
+                  <span>{sg.text}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-body text-ink">{statusLine}</p>
+          )}
+        </div>
+      ) : null}
     </div>
   )
 }
+
+const SIGNAL_TONE = { risk: 'risk', watch: 'watch', strength: 'good', neutral: 'neutral' }
+const SIGNAL_LABEL = { risk: 'Risk', watch: 'Watch', strength: 'Strength', neutral: 'Note' }
 
 // ── A reusable section card, styled like the HOME module tiles: the whole card
 // is clickable (a stretched link) and the finance-hue color-flood sweeps in on
@@ -338,7 +393,7 @@ export default function FinancePage() {
   // and the Budget org roll-up tabs, so we never null the schoolId for org mode.
   const schoolId = activeSchool?.id ?? null
   const canEdit = activeSchool?.role === 'owner' || activeSchool?.role === 'accountant'
-  const { billing, loading: billingLoading, entitled, isOwner, hasModule } = useBilling()
+  const { billing, loading: billingLoading, entitled, hasModule } = useBilling()
   const { periods, hydrating, hydratedFiles, activePeriod, hydrationToken } = usePersistence()
 
   const savedPeriods = useMemo(() => (periods || []).filter((p) => p.hasSnapshot), [periods])
@@ -814,9 +869,8 @@ export default function FinancePage() {
   } else {
     overview = (
     <div className="mx-auto max-w-page space-y-5 px-4 py-6 sm:space-y-8 sm:px-10 sm:py-8">
-      <FinanceHeader onWhatLitUp={statementsHaveNumbers ? () => setRevealSchoolId(schoolId) : null} />
-
-      <HomeHero
+      <FinanceHeader
+        onWhatLitUp={statementsHaveNumbers ? () => setRevealSchoolId(schoolId) : null}
         schoolName={activeSchool?.name}
         periods={savedPeriods}
         selectedPeriodId={selectedPeriodId}
@@ -824,7 +878,6 @@ export default function FinancePage() {
         statusLine={statusLine}
         insightKind={insightText ? insightSource : null}
         billing={billing}
-        isOwner={isOwner}
       />
 
       <motion.div

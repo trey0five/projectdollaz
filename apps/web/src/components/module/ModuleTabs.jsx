@@ -91,7 +91,10 @@ export default function ModuleTabs({ moduleKey, overview, addData, records, anal
     // The accent-var override re-themes EVERY v2 accent inside this page (CTAs,
     // underlines, KPI dots, focus rings, the record modal) to the module hue —
     // one scoped style, no per-component prop drilling.
-    <div className="min-h-screen bg-section" style={moduleAccentVars(moduleKey)}>
+    //
+    // PREMIUM UI P2: no `bg-section` wrapper — the page sits on the shell's
+    // ground; the trail is the header's eyebrow grammar (ModuleBreadcrumb).
+    <div className="min-h-screen" style={moduleAccentVars(moduleKey)}>
       {/* Back to the tile dashboard. The module's section nav (Overview · Add
           data · Records · Reports) lives in the LEFT SIDEBAR now. */}
       <div className="mx-auto max-w-page px-4 pt-4 sm:px-10">

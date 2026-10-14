@@ -1,41 +1,37 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// BriefingBand — the HOME v2 hero above the tile map. Two columns on lg+:
+// BriefingBand — the HOME v2 hero above the tile map: THE ONE DARK STAGE the
+// app keeps (Premium UI P2 §2.1 — the other is the Studio hero). Ink #0A1628,
+// blue light only (`.stage` + AuroraFlow), no glass, no purple, no gold except
+// KYRO's own Play control.
 //   LEFT   greeting ("Good evening, {name}.") + "N things that need your
-//          attention" + the actions (▶ Play → onOpenBrief('narrate'); Open Daily
-//          Briefing → onOpenBrief('open')).
-//   RIGHT  the top-3 performing metric cards (BriefingPerformers, self-contained
-//          + fail-soft — renders nothing when there's no genuine win to show).
-// The "alive" feature is AuroraFlow: slow flowing gradient ribbons (no dots /
-// orbs / shimmer). On the frosted-glass path the band tints to the school hue.
+//          attention" + the actions (Open Daily Briefing → onOpenBrief('open');
+//          ▶ Play → onOpenBrief('narrate')).
+//   RIGHT  the top-3 performing metrics as in-stage Stats (BriefingPerformers,
+//          self-contained + fail-soft — renders nothing when there's no genuine
+//          win to show).
 // Empty school (no saved period): the onboarding line + "Add your trial balance →"
 // deep-linking the finance Add-data tab directly (never via the /data redirect).
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion, useReducedMotion } from 'framer-motion'
-import { Link } from 'react-router-dom'
 import { Sparkles, Play, ArrowRight, Database, School, Clock } from 'lucide-react'
 import { LENS_VERB, greeting } from './tileRegistry.jsx'
 import { useAuth } from '../../context/AuthContext.jsx'
+import { Button } from '../ui/surface/index.js'
 import AuroraFlow from './AuroraFlow.jsx'
 import BriefingPerformers from './BriefingPerformers.jsx'
 import SchoolCrest from './SchoolCrest.jsx'
-
-// The hero CTA gradient — echoes the aurora (blue → violet → coral). Kept off the
-// Penny-gold reserve on purpose: gold stays Penny's (the ▶ Play narrate button).
-const CTA_GRADIENT = 'linear-gradient(100deg, #3b6ef5 0%, #8b5cf6 52%, #ff6b5c 100%)'
 
 export default function BriefingBand({
   summary,
   lens,
   hasPeriod,
   onOpenBrief,
-  // School scope (a real saved period) → the top-3 performer cards fetch against
+  // School scope (a real saved period) → the top-3 performer stats fetch against
   // these. Absent (org scope / no period) → BriefingPerformers renders nothing.
   schoolId = null,
   periodId = null,
-  // School scope (from a multi-school org): `hue` is the school's identity colour
-  // and `schoolTitle` its name — the band renders as a frosted-glass panel tinted
-  // in that colour with the name shown.
-  hue = null,
+  // School scope (from a multi-school org): `schoolTitle` is the school's name,
+  // shown in the crest. The stage itself is ink with blue light only.
   schoolTitle = null,
   // The school's uploaded mark, when there is one. Absent → SchoolCrest draws a
   // monogram from the name instead, so the slot is never empty.
@@ -49,77 +45,54 @@ export default function BriefingBand({
   const total = summary?.total ?? 0
   const critical = summary?.critical ?? 0
   const verb = LENS_VERB[lens] ?? 'need attention'
-  const firstName =
-    (user?.first_name || user?.name || '').trim().split(/\s+/)[0] || null
+  const firstName = (user?.first_name || user?.name || '').trim().split(/\s+/)[0] || null
   // A gentle read-time estimate for the written brief (UI affordance, not a claim).
   const readMin = Math.max(2, Math.round(total * 0.8) + 1)
 
-  // Frosted-glass tint from the school hue (mixed against a NEUTRAL dark so warm
-  // hues stay warm). Absent hue → the standard navy-gradient band.
-  const glass = hue
-    ? (pct) => `color-mix(in srgb, ${hue} ${pct}%, rgba(15, 17, 24, 0.9))`
-    : null
-  const sectionStyle = glass
-    ? { background: `linear-gradient(135deg, ${glass(52)} 0%, ${glass(26)} 55%, ${glass(14)} 100%)` }
-    : undefined
+  const headline = (
+    <h1 className="font-serif text-[28px] font-medium leading-[1.15] text-white sm:text-[34px]">
+      {greeting()}
+      {firstName ? <>, {firstName}.</> : '.'}
+    </h1>
+  )
 
   return (
     <motion.section
-      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 14 }}
+      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
+      transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
       aria-label="Daily briefing summary"
-      style={sectionStyle}
-      className={`relative overflow-hidden rounded-2xl p-5 shadow-navy-glow sm:p-6 lg:p-7 ${
-        glass ? 'border border-white/15 backdrop-blur-xl' : 'bg-navy-gradient'
-      }`}
+      className="stage p-5 sm:p-6 lg:p-7"
     >
-      {/* The alive feature: flowing aurora ribbons (replaces dots/orbs/shimmer). */}
+      {/* The alive feature: blue light-streams, settling once. */}
       <AuroraFlow />
 
-      {/* ── Header row: what this is, and whose it is ──────────────────────────
-          A real row rather than a floated box. Floating the crest pulled it out
-          of flow and the performer cards below reflowed around it into a narrow
-          column. Both branches hang under this, so the school's identity reads
-          identically whether the band is full or still onboarding — and the
-          onboarding state is exactly when a reader is most likely to be looking
-          at a school they just switched to. */}
       {/* WHOSE briefing this is — the school's mark as the right-hand ground of
-          the card, divided from the content by a hairline, with the name set
-          over it. A badge with a caption said the same thing on all sixteen
-          schools; a bled mark makes each card look like its own school. */}
-      <SchoolCrest name={schoolTitle} logoBase64={logoBase64} hue={hue} school={school} />
+          the stage, divided from the content by a hairline, with the name set
+          over it. */}
+      <SchoolCrest name={schoolTitle} logoBase64={logoBase64} school={school} />
 
       <div className="relative mb-4">
-        <span className="inline-flex items-center gap-1.5 font-sans text-[12px] font-bold uppercase tracking-[0.18em] text-white/55">
-          <Sparkles size={13} className="text-white/70" /> Daily briefing
+        <span className="inline-flex items-center gap-1.5 text-micro font-semibold uppercase text-white/55">
+          <Sparkles size={12} className="text-white/70" aria-hidden="true" /> Daily briefing
         </span>
       </div>
 
       {hasPeriod ? (
-        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between lg:gap-6 lg:pr-[30%]">
+        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between lg:gap-8 lg:pr-[28%]">
           {/* ── LEFT: greeting + actions ── */}
-          <div className="flex min-w-0 flex-col gap-4 lg:max-w-[46%]">
+          <div className="flex min-w-0 flex-col gap-4 lg:w-[40%] lg:shrink-0">
             {/* Narrow screens hide the crest, so the name still needs saying. */}
             {schoolTitle && (
-              <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[12.5px] font-semibold text-white sm:hidden">
-                <School size={13} className="text-white/70" />
+              <span className="inline-flex w-fit items-center gap-1.5 rounded-sm border border-white/15 px-2 py-0.5 text-small font-semibold text-white sm:hidden">
+                <School size={13} className="text-white/70" aria-hidden="true" />
                 {schoolTitle}
               </span>
             )}
 
             <div>
-              <h1 className="font-serif text-[26px] font-semibold leading-tight text-white sm:text-[32px]">
-                {greeting()}
-                {firstName ? (
-                  <>
-                    , <span className="text-white">{firstName}</span>.
-                  </>
-                ) : (
-                  '.'
-                )}
-              </h1>
-              <p className="mt-1.5 text-[16px] leading-relaxed text-white/80 sm:text-[17px]">
+              {headline}
+              <p className="mt-2 text-body text-white/75">
                 {total === 0 ? (
                   <>You&rsquo;re all caught up — nothing needs a decision right now.</>
                 ) : (
@@ -132,7 +105,7 @@ export default function BriefingBand({
                     {critical > 0 && (
                       <>
                         {' '}·{' '}
-                        <span className="font-semibold text-red-300">{critical} critical</span>
+                        <span className="font-semibold text-coral">{critical} critical</span>
                       </>
                     )}
                     .
@@ -142,64 +115,44 @@ export default function BriefingBand({
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              {/* Primary — open the written brief (aurora gradient, hero CTA). */}
-              <button
-                type="button"
-                onClick={() => onOpenBrief?.('open')}
-                style={{ backgroundImage: CTA_GRADIENT }}
-                className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-[14px] font-semibold text-white shadow-lg shadow-black/20 transition-transform hover:-translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60 motion-reduce:hover:translate-y-0"
-              >
-                <Play size={15} className="fill-current" /> Open Daily Briefing
-              </button>
+              {/* Primary — open the written brief (flat action blue). */}
+              <Button variant="primary" onClick={() => onOpenBrief?.('open')} icon={<Play size={14} className="fill-current" />}>
+                Open Daily Briefing
+              </Button>
 
-              {/* Penny narrates the brief — stays GOLD (Penny's reserve). */}
+              {/* KYRO narrates the brief — stays GOLD (KYRO's reserve). */}
               <button
                 type="button"
                 onClick={() => onOpenBrief?.('narrate')}
                 aria-label="Play — KYRO reads the briefing aloud"
-                className="inline-flex items-center gap-1.5 rounded-full border border-penny/40 bg-penny/10 px-3.5 py-2 text-[13px] font-semibold text-penny-light transition-colors hover:border-penny/70 hover:bg-penny/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60"
+                className="inline-flex h-9 items-center gap-1.5 rounded-md border border-penny/40 px-3 text-small font-semibold text-penny-light transition-colors hover:border-penny/70 hover:bg-penny/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-penny/60"
               >
-                <Sparkles size={13} /> Play
+                <Sparkles size={13} aria-hidden="true" /> Play
               </button>
 
-              <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-white/55">
-                <Clock size={13} /> {readMin} min read
+              <span className="inline-flex items-center gap-1.5 text-small font-medium text-white/55">
+                <Clock size={13} aria-hidden="true" /> {readMin} min read
               </span>
-
             </div>
           </div>
 
-          {/* ── RIGHT: top-3 performing cards (self-contained; may render null) ── */}
+          {/* ── RIGHT: top-3 performing stats (self-contained; may render null) ── */}
           <BriefingPerformers schoolId={schoolId} periodId={periodId} />
         </div>
       ) : (
         // ── Empty / onboarding: no saved period yet ──────────────────────────────
         <div className="relative flex flex-col gap-4 lg:pr-[30%]">
           <div>
-            <h1 className="font-serif text-[26px] font-semibold leading-tight text-white sm:text-[32px]">
-              {greeting()}
-              {firstName ? (
-                <>
-                  , <span className="text-white">{firstName}</span>.
-                </>
-              ) : (
-                '.'
-              )}
-            </h1>
-            <p className="mt-1.5 max-w-xl text-[16px] leading-relaxed text-white/80">
-              Let&rsquo;s get your first numbers on the board. Add a trial balance and
-              we&rsquo;ll turn it into your four financial statements — then every tile below
-              lights up with live status.
+            {headline}
+            <p className="mt-2 max-w-xl text-body text-white/75">
+              Let&rsquo;s get your first numbers on the board. Add a trial balance and we&rsquo;ll turn it into
+              your four financial statements — then every tile below lights up with live status.
             </p>
           </div>
           <div>
-            <Link
-              to="/finance?tab=add&add=tb"
-              style={{ backgroundImage: CTA_GRADIENT }}
-              className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-[14px] font-semibold text-white shadow-lg shadow-black/20 transition-transform hover:-translate-y-px motion-reduce:hover:translate-y-0"
-            >
-              <Database size={15} /> Add your trial balance <ArrowRight size={15} />
-            </Link>
+            <Button variant="primary" to="/finance?tab=add&add=tb" icon={<Database size={15} />}>
+              Add your trial balance <ArrowRight size={15} aria-hidden="true" />
+            </Button>
           </div>
         </div>
       )}

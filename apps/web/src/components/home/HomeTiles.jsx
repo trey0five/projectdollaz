@@ -1,13 +1,18 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // HomeTiles — the HOME v2 tile dashboard (ui.v2 flag ON). The home becomes a
-// map: BriefingBand → module tile grid; the narrated morning brief opens as a
-// POPUP (BriefingModal) from the band's ▶ Play / "Open the briefing". The old
-// core row is gone (it duplicated the global top nav).
+// map: BriefingBand (the ONE dark stage) → module tile grid → the vitals strip;
+// the narrated morning brief opens as a POPUP (BriefingModal) from the stage's
+// ▶ Play / "Open the briefing". The old core row is gone (it duplicated the
+// global top nav).
 //
-// GATES mirror HomeDashboard exactly: org scope renders <OrgHome/> unchanged
+// PREMIUM UI P2: the page is a `Page` (document shell + the one page-in
+// stagger), the tiles are `Tile`s (8px, hairline, 2px hue rule, one-shot
+// flood), the vitals are a `StatStrip` on the ground. No ambient wash.
+//
+// GATES mirror HomeDashboard exactly: org scope renders <OrgTiles/> unchanged
 // (same branch position), entitlement-paused renders the paused panel, loading
 // renders tile-shaped skeletons, and an EMPTY school still renders the tile map
-// (recognition nav on day one) with chips suppressed + the band's onboarding CTA.
+// (recognition nav on day one) with chips suppressed + the stage's onboarding CTA.
 //
 // DATA: one useBriefing(schoolId, latestPeriodId) fetch — the period pinned the
 // SAME way AppShell pins the sidebar-badge period ((periods||[]).find(hasSnapshot))
@@ -27,12 +32,12 @@ import { usePersistence } from '../../context/PersistenceContext.jsx'
 import { useBriefing } from '../../hooks/useBriefing.js'
 import { summariseBadges } from '../../hooks/useNavBadges.js'
 import EntitlementPausedPanel from '../analytics/EntitlementPausedPanel.jsx'
+import { Page } from '../ui/surface/index.js'
 import OrgTiles from './OrgTiles.jsx'
 import PennyMorningBrief from './PennyMorningBrief.jsx'
 import BriefingBand from './BriefingBand.jsx'
 import BriefingModal from './BriefingModal.jsx'
 import ModuleTile from './ModuleTile.jsx'
-import { schoolHue } from './SchoolTile.jsx'
 import PennyTile from './PennyTile.jsx'
 import HomeVitalsStrip from './HomeVitalsStrip.jsx'
 import { HOME_TILES, TILE_SOURCES } from './tileRegistry.jsx'
@@ -49,9 +54,9 @@ function deriveFiscalYearStart(periodEndDate) {
 
 function TileSkeleton() {
   return (
-    <div className="h-[190px] animate-pulse rounded-[18px] border border-navy/5 bg-white/70">
+    <div className="h-[168px] animate-pulse rounded-lg border border-hair bg-white/70">
       <div className="p-5">
-        <div className="h-[60px] w-[60px] rounded-[15px] bg-navy/5" />
+        <div className="h-7 w-7 rounded bg-navy/5" />
         <div className="mt-4 h-4 w-2/5 rounded bg-navy/10" />
         <div className="mt-2 h-3 w-4/5 rounded bg-navy/5" />
       </div>
@@ -63,7 +68,7 @@ export default function HomeTiles() {
   const { activeSchool } = useSchools()
   const { scope, orgId, orgName, hasOrg, isMultiSchool, orgSchoolCount } = useScope()
   const orgMode = scope === 'org' && hasOrg && !!orgId
-  // Org mode parks the per-school hooks (null id → no-op) and renders <OrgHome/>.
+  // Org mode parks the per-school hooks (null id → no-op) and renders <OrgTiles/>.
   const schoolId = orgMode ? null : activeSchool?.id ?? null
   const { loading: billingLoading, entitled, hasModule } = useBilling()
   const { periods, hydrating } = usePersistence()
@@ -78,7 +83,7 @@ export default function HomeTiles() {
   // Morning-brief popup: null (closed) | 'open' | 'narrate' (autoplay on open).
   const [brief, setBrief] = useState(null)
 
-  // OrgHome still owns a period selector — same microtask-deferred default as
+  // OrgTiles still owns a period selector — same microtask-deferred default as
   // HomeDashboard (react-hooks/set-state-in-effect sanctioned pattern).
   const [selectedPeriodId, setSelectedPeriodId] = useState(null)
   useEffect(() => {
@@ -98,7 +103,7 @@ export default function HomeTiles() {
     }
   }, [savedPeriods])
 
-  // ONE briefing fetch for the whole surface (band + tile chips + Tasks count).
+  // ONE briefing fetch for the whole surface (stage + tile chips + Tasks count).
   const {
     summary: briefingSummary,
     items: briefingItems,
@@ -132,23 +137,23 @@ export default function HomeTiles() {
   // ── Entitlement gate (mirror HomeDashboard; 402 from the briefing counts). ──
   if (!billingLoading && (!entitled || notEntitled)) {
     return (
-      <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
+      <Page stagger={false} className="py-6">
         <EntitlementPausedPanel />
-      </div>
+      </Page>
     )
   }
 
   // ── Loading: tile-shaped skeletons. ─────────────────────────────────────────
   if (billingLoading || hydrating) {
     return (
-      <div className="mx-auto max-w-page space-y-5 px-4 py-6 sm:px-10 sm:py-8">
-        <div className="h-40 animate-pulse rounded-2xl bg-navy/10" />
+      <Page stagger={false} className="space-y-6 py-6">
+        <div className="h-40 animate-pulse rounded-lg bg-navy/10" />
         <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <TileSkeleton key={i} />
           ))}
         </div>
-      </div>
+      </Page>
     )
   }
 
@@ -168,60 +173,52 @@ export default function HomeTiles() {
   }).filter(Boolean)
 
   return (
-    <div className="home-ground mx-auto max-w-page space-y-5 px-4 py-6 sm:space-y-7 sm:px-10 sm:py-8">
-      <BriefingBand
-        summary={briefingSummary}
-        lens={briefingLens}
-        hasPeriod={hasPeriod}
-        onOpenBrief={setBrief}
-        // School scope → the top-3 performer cards fetch metrics/trends against
-        // the active school's latest snapshot period.
-        schoolId={schoolId}
-        periodId={latestPeriodId}
-        // In a multi-school org, tint the band as frosted glass in this school's
-        // identity colour (same as its org tile) and show the school name.
-        hue={isMultiSchool ? schoolHue(activeSchool?.id) : null}
-        schoolTitle={isMultiSchool ? activeSchool?.name : null}
-        logoBase64={activeSchool?.logoBase64 ?? null}
-        school={activeSchool ?? null}
-      />
-
-      <nav aria-label="Modules">
-        <ul role="list" className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
-          {tiles.map(({ tile, locked }, i) => (
-            <ModuleTile
-              key={tile.key}
-              tile={tile}
-              badge={badges[tile.key]}
-              ready={chipsReady}
-              locked={locked}
-              index={i}
-              onShowAttention={() => setBrief('open')}
-            />
-          ))}
-          {/* The 8th tile: Penny Studio — always present (core, not a module). */}
-          <PennyTile index={tiles.length} />
-        </ul>
-      </nav>
-
-      {/* Live scoreboard under the map — fills the fold with real numbers.
-          Fail-soft: renders nothing until the period's metrics answer. */}
-      <HomeVitalsStrip schoolId={schoolId} periodId={latestPeriodId} />
-
-      {/* The narrated morning brief — a POPUP now. ▶ Play opens with autoNarrate
-          (the modal dispatches 'penny:narrate' after the brief mounts). */}
-      <BriefingModal
-        open={!!brief}
-        autoNarrate={brief === 'narrate'}
-        onClose={() => setBrief(null)}
-      >
-        <PennyMorningBrief
-          scope="school"
+    <>
+      <Page className="home-page space-y-6 py-6 sm:space-y-8">
+        <BriefingBand
+          summary={briefingSummary}
+          lens={briefingLens}
+          hasPeriod={hasPeriod}
+          onOpenBrief={setBrief}
+          // School scope → the top-3 performer stats fetch metrics/trends against
+          // the active school's latest snapshot period.
           schoolId={schoolId}
           periodId={latestPeriodId}
-          lens={briefingLens}
+          // In a multi-school org, the stage shows the school's crest + name.
+          schoolTitle={isMultiSchool ? activeSchool?.name : null}
+          logoBase64={activeSchool?.logoBase64 ?? null}
+          school={activeSchool ?? null}
         />
+
+        <nav aria-label="Modules">
+          <ul role="list" className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
+            {tiles.map(({ tile, locked }, i) => (
+              <ModuleTile
+                key={tile.key}
+                tile={tile}
+                badge={badges[tile.key]}
+                ready={chipsReady}
+                locked={locked}
+                index={i}
+                onShowAttention={() => setBrief('open')}
+              />
+            ))}
+            {/* The 8th tile: KYRO Studio — always present (core, not a module). */}
+            <PennyTile index={tiles.length} />
+          </ul>
+        </nav>
+
+        {/* Live scoreboard under the map — fills the fold with real numbers.
+            Fail-soft: renders nothing until the period's metrics answer. */}
+        <HomeVitalsStrip schoolId={schoolId} periodId={latestPeriodId} />
+      </Page>
+
+      {/* The narrated morning brief — a POPUP. ▶ Play opens with autoNarrate
+          (the modal dispatches 'penny:narrate' after the brief mounts). Kept
+          OUTSIDE the Page so its fixed overlay never sits under a transform. */}
+      <BriefingModal open={!!brief} autoNarrate={brief === 'narrate'} onClose={() => setBrief(null)}>
+        <PennyMorningBrief scope="school" schoolId={schoolId} periodId={latestPeriodId} lens={briefingLens} />
       </BriefingModal>
-    </div>
+    </>
   )
 }

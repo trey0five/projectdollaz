@@ -6,8 +6,9 @@ import { PALETTE } from '../../lib/metricMeta.js'
 // Status → stroke, matching STATUS_META (good=gold, watch=navy-soft, risk=danger).
 // Absent/neutral status keeps the original gold treatment (backward-compatible for
 // callers that pass only `points`).
+// `good` is the SEMANTIC green (Premium UI P2 — gold is KYRO's alone).
 const STATUS_STROKE = {
-  good: '#b89650',
+  good: '#15803d',
   watch: '#2e508f',
   risk: '#8b1a1a',
   neutral: PALETTE.gold,
@@ -26,6 +27,8 @@ const STATUS_STROKE = {
  *   threshold      numeric band boundary to draw as a dashed reference line
  *   thresholdLabel short caption rendered at the line (e.g. the formatted boundary)
  *   height         chart height in px (default 40; the cards pass a taller value)
+ *   stroke         explicit stroke colour (the ink stage passes sky so the line
+ *                  reads as light, not as a status)
  */
 export default function Sparkline({
   points,
@@ -33,10 +36,11 @@ export default function Sparkline({
   threshold = null,
   thresholdLabel,
   height = 40,
+  stroke = null,
 }) {
   const reduce = useReducedMotion()
   const gid = useId().replace(/:/g, '') // recharts/SVG ids can't contain ':'
-  const color = STATUS_STROKE[status] ?? PALETTE.gold
+  const color = stroke ?? STATUS_STROKE[status] ?? PALETTE.gold
   const data = (points ?? [])
     .filter((p) => p.value != null)
     .map((p) => ({ x: p.periodEndDate, y: p.value }))

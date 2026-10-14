@@ -131,6 +131,21 @@ describe('StatStrip + Stat — numbers on the ground, rules between them', () =>
     const { container } = render(<Stat label="x" value="1" status="purple" />)
     expect(container.querySelector('.stat-mark')).toBeNull()
   })
+
+  // P2: HomeVitalsStrip's stats navigate to the metric drawer, so a Stat may be
+  // a Link — same geometry, `.stat-link` added, children (a sparkline) under the foot.
+  it('Stat with `to` is a Link wearing `.stat.stat-link`; children render after the foot', () => {
+    motionState.reduce = true
+    const { container } = withRouter(
+      <Stat label="Margin" value="4.6%" to="/analytics?metric=operating_margin" note="vs FY26">
+        <svg data-testid="spark" />
+      </Stat>,
+    )
+    const stat = container.querySelector('a.stat.stat-link')
+    expect(stat.getAttribute('href')).toBe('/analytics?metric=operating_margin')
+    expect(stat.querySelector('.stat-foot').textContent).toContain('vs FY26')
+    expect(stat.querySelector('.stat-foot + [data-testid="spark"]')).toBeTruthy()
+  })
 })
 
 describe('Section — label + hairline + aside, no box', () => {
@@ -321,14 +336,25 @@ describe('Tile — the one card family that stays', () => {
     expect(tile.querySelector('.tile-arrow svg')).toBeTruthy()
   })
 
-  it('onClick → a real <button>; no arrow when arrow={false}', () => {
+  it('onClick → a <div> tile covered by a stretched .tile-hit <button>; no arrow when arrow={false}', () => {
     const onClick = vi.fn()
-    const { container } = render(<Tile onClick={onClick} title="Pick" arrow={false} />)
-    const tile = container.querySelector('button.tile')
-    expect(tile.getAttribute('type')).toBe('button')
+    const { container } = render(<Tile onClick={onClick} title="Pick" arrow={false} aria-label="Pick one" />)
+    const tile = container.querySelector('div.tile')
+    const hit = tile.querySelector('button.tile-hit')
+    expect(hit.getAttribute('type')).toBe('button')
+    expect(hit.getAttribute('aria-label')).toBe('Pick one')
     expect(tile.querySelector('.tile-arrow')).toBeNull()
-    fireEvent.click(tile)
+    fireEvent.click(hit)
     expect(onClick).toHaveBeenCalled()
+  })
+
+  // P2: the home tile registry keeps hues as hex; a Tile converts them to the
+  // channel triple --c-module expects, and `locked` dims the tile (no flood).
+  it('accepts a hex hue, and `locked` adds `.tile-locked`', () => {
+    const { container } = render(<Tile id="tile-finance" hue="#2563EB" title="Finance" locked arrow={false} />)
+    const tile = container.querySelector('div.tile.tile-locked')
+    expect(tile.id).toBe('tile-finance')
+    expect(tile.style.getPropertyValue('--c-module')).toBe('37 99 235')
   })
 })
 

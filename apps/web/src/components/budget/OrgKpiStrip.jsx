@@ -1,25 +1,22 @@
 // Organization KPI strip (canonical semantic layer v1) — a MODEST, read-only
 // org-scope KPI band shown above the consolidated statements. Reads the
 // org-metrics endpoint (one call site in api.js / useOrgMetrics) and renders the
-// Tier-1 banded metrics as compact tiles with the SAME status coloring + value
-// formatting the per-school dashboard uses.
+// Tier-1 banded metrics as a STAT STRIP (Premium UI P2 — numbers between
+// vertical rules with a 2px status mark and a delta pill; no boxes) with the
+// SAME status semantics + value formatting the per-school dashboard uses.
 //
 // The moat made visible: each org value is the metric's OWN formula run on the
 // SUM of every reporting school's extensive components (e.g. org operating margin
 // = (Σrev−Σexp)/Σrev), NEVER the average of per-school values. A "based on N of M
-// schools reporting" caption + an "enrollment-weighted" tag on the weighted
+// schools reporting" caption + an "enrollment-weighted" note on the weighted
 // per-pupil metrics make that explicit.
 //
 // Pure presentation over the `metrics` prop; everything derived at render (no
-// effects, no in-render component definitions — React-Compiler safe). Navy/gold
-// theme; no-print; advisory.
-import { motion, useReducedMotion } from 'framer-motion'
-import { Gauge } from 'lucide-react'
-import StatusDot from '../analytics/StatusDot.jsx'
-import DeltaChip from '../analytics/DeltaChip.jsx'
-import { metricFormat, formatMetricValue, isBandedStatus } from '../../lib/metricMeta.js'
+// effects, no in-render component definitions — React-Compiler safe). No-print; advisory.
+import { Section, StatStrip, Stat } from '../ui/surface/index.js'
+import { metricFormat, formatDelta, deltaTone, isBandedStatus } from '../../lib/metricMeta.js'
 
-// The org strip leads with the four Tier-1 banded metrics (status-colored), then a
+// The org strip leads with the four Tier-1 banded metrics (status-marked), then a
 // few key operational/weighted ratios. We deliberately omit the mix donuts here
 // (the consolidated SOA/SFP below already shows the org composition).
 const STRIP_KEYS = [
@@ -45,58 +42,13 @@ const WEIGHTED = {
   aid_per_aided_student: 'aided-count-weighted',
 }
 
-function Tile({ metric, index, reduce }) {
-  const unavailable = !metric.available
-  const showStatus = !unavailable && isBandedStatus(metric.status)
-  const fmt = metricFormat(metric.key, metric.unit)
-  const weightedHint = WEIGHTED[metric.key]
-
-  return (
-    <motion.div
-      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 10 }}
-      animate={reduce ? { opacity: 1 } : { opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.04, type: 'spring', stiffness: 260, damping: 22 }}
-      className="card-vital flex min-w-[8.5rem] flex-1 flex-col gap-1 p-3 sm:p-4"
-    >
-      <div className="flex items-center gap-2">
-        <h3 className="font-sans text-[11.5px] font-semibold uppercase leading-snug tracking-[0.1em] text-muted">
-          {metric.label}
-        </h3>
-        {showStatus && (
-          <span className="ml-auto">
-            <StatusDot status={metric.status} size={9} />
-          </span>
-        )}
-      </div>
-      <p
-        className={`font-serif text-2xl leading-none ${unavailable ? 'text-muted' : 'text-navy'}`}
-      >
-        {unavailable ? '—' : formatMetricValue(metric.value, fmt)}
-      </p>
-      {/* Period-over-period chip: now populated for aggregatable org metrics (was
-          always null pre-slice, so the strip hid it). goodDirection drives the tone;
-          DeltaChip renders nothing for a null delta, so no guard needed here. */}
-      {!unavailable && metric.periodOverPeriodDelta != null && (
-        <DeltaChip
-          delta={metric.periodOverPeriodDelta}
-          format={fmt}
-          goodDirection={metric.goodDirection}
-        />
-      )}
-      {weightedHint && !unavailable && (
-        <p className="text-[10.5px] uppercase tracking-[0.08em] text-muted">{weightedHint}</p>
-      )}
-    </motion.div>
-  )
-}
+const MARK = { good: 'good', watch: 'watch', risk: 'risk' }
 
 export default function OrgKpiStrip({ metrics, loading, error }) {
-  const reduce = useReducedMotion()
-
   if (loading) {
     return (
-      <div className="card-soft mb-4 animate-pulse px-6 py-8 text-center">
-        <p className="font-serif text-sm italic text-muted">Loading organization KPIs…</p>
+      <div className="animate-pulse py-8 text-center">
+        <p className="font-serif text-small italic text-ink2">Loading organization KPIs…</p>
       </div>
     )
   }
@@ -113,23 +65,32 @@ export default function OrgKpiStrip({ metrics, loading, error }) {
   const total = metrics.schoolCount ?? 0
 
   return (
-    <section className="mb-5" aria-label="Organization KPIs">
-      <div className="mb-2 flex items-center gap-2">
-        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gold/15 text-gold">
-          <Gauge size={15} />
-        </span>
-        <h2 className="font-serif text-lg text-navy">Organization KPIs</h2>
-        {total > 0 && (
-          <span className="ml-auto text-[11.5px] uppercase tracking-[0.08em] text-muted">
-            Based on {reported} of {total} schools reporting
-          </span>
-        )}
-      </div>
-      <div className="flex flex-wrap gap-3">
-        {tiles.map((m, i) => (
-          <Tile key={m.key} metric={m} index={i} reduce={reduce} />
-        ))}
-      </div>
-    </section>
+    <Section
+      label="Organization KPIs"
+      aria-label="Organization KPIs"
+      className="mt-0"
+      aside={total > 0 ? <span>Based on {reported} of {total} schools reporting</span> : null}
+    >
+      {/* Four to a row: eight metrics read as two ruled rows, not one squeeze. */}
+      <StatStrip cols={Math.min(4, tiles.length)} className="org-kpi-strip">
+        {tiles.map((m) => {
+          const unavailable = !m.available
+          const fmt = metricFormat(m.key, m.unit)
+          const deltaText =
+            !unavailable && m.periodOverPeriodDelta != null ? formatDelta(m.periodOverPeriodDelta, fmt) : null
+          return (
+            <Stat
+              key={m.key}
+              label={m.label}
+              value={unavailable ? null : m.value}
+              format={unavailable ? undefined : fmt}
+              status={!unavailable && isBandedStatus(m.status) ? MARK[m.status] : undefined}
+              delta={deltaText ? { text: deltaText, tone: deltaTone(m.periodOverPeriodDelta, m.goodDirection) } : null}
+              note={!unavailable ? WEIGHTED[m.key] : undefined}
+            />
+          )
+        })}
+      </StatStrip>
+    </Section>
   )
 }

@@ -134,6 +134,7 @@ export default function OrgAcademicsPage() {
             <BookOpenCheck size={12} /> Academics · network
           </>
         }
+        scope={orgName ?? null}
         title={`${orgName ?? 'Your network'}, school by school.`}
         subtitle={`${ctx ? `${testTypeLabel(ctx.testType)} · ${ctx.year} · ` : ''}every school on one screen, ranked against the network they belong to.`}
         stats={

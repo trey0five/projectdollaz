@@ -3,27 +3,27 @@
 //
 // This content has now lived three lives: inlined under the tile grid, then
 // hidden behind the briefing band's "Organization view" popup, and now inline
-// again UNDER "Jump into a school" — visible on arrival, no click required. The
+// again UNDER the schools register — visible on arrival, no click required. The
 // popup round taught the lesson: a consolidated view behind a button is a view
 // most people never see, and the org page's whole job is this consolidation.
 //
-// The TABS survive from the popup version (Organization KPIs · Schools · Modules
-// · Needs attention) because they were the good part — each section reads on its
-// own instead of stacking into one long scroll.
+// PREMIUM UI P2: no wrapper card. The section is a `Section` label rule with
+// the fiscal-year select as its aside, a segmented `Toolbar` for the views
+// (Organization KPIs · Modules · Needs attention — the Schools table moved up
+// to the register above, so it is no longer repeated here), and the active
+// view directly on the ground.
 //
 // Presentational: OrgTiles owns all the data hooks and passes everything down.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState } from 'react'
-import { motion, useReducedMotion } from 'framer-motion'
-import { Layers, Gauge, School, AlertTriangle, Blocks } from 'lucide-react'
+import { Gauge, AlertTriangle, Blocks } from 'lucide-react'
+import { Section, Toolbar } from '../ui/surface/index.js'
 import OrgKpiStrip from '../budget/OrgKpiStrip.jsx'
-import OrgSchoolsTable from '../budget/OrgSchoolsTable.jsx'
 import OrgBriefing from '../budget/OrgBriefing.jsx'
 import OrgModulesMatrix from './OrgModulesMatrix.jsx'
 
 const TABS = [
   { key: 'kpis', label: 'Organization KPIs', Icon: Gauge },
-  { key: 'schools', label: 'Schools', Icon: School },
   { key: 'modules', label: 'Modules', Icon: Blocks },
   { key: 'attention', label: 'Needs attention', Icon: AlertTriangle },
 ]
@@ -46,93 +46,68 @@ export default function OrgDetailSection({
   availableLenses,
   onLensChange,
 }) {
-  const reduce = useReducedMotion()
   const [tab, setTab] = useState('kpis')
   const attentionTotal = briefing?.summary?.total ?? 0
 
   return (
-    <section aria-label="Organization view" className="card-soft p-5 sm:p-6">
-      {/* ── Header: org identity + fiscal-year picker ─────────────────────────── */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-5">
-        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gold-gradient text-white shadow-glow">
-          <Layers size={24} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-gold">
-            Organization · consolidated
-          </p>
-          <h2 className="truncate py-0.5 font-serif text-xl font-semibold leading-[1.35] text-navy sm:text-2xl">
-            {orgName || 'Organization'}
-          </h2>
-          <p className="text-[13px] text-muted">
-            Rolled up across {orgSchoolCount} schools{fy ? ` · ${fy}` : ''}.
-          </p>
-        </div>
-        {periods.length > 0 && (
-          <label className="flex shrink-0 flex-col gap-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
-            Fiscal year
-            <select
-              value={selectedPeriodId ?? ''}
-              onChange={(e) => onSelectPeriod?.(e.target.value)}
-              className="min-h-[40px] rounded-lg border-2 border-hair bg-white px-3 text-[14px] font-medium normal-case tracking-normal text-navy outline-none ring-gold/40 focus-visible:ring-2"
-            >
-              {periods.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.label || p.periodEndDate || p.id}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-      </div>
-
-      {/* ── Section tabs ──────────────────────────────────────────────────────── */}
-      <div role="tablist" aria-label="Organization view sections" className="mt-5 flex flex-wrap gap-2">
+    <Section
+      label={`${orgName || 'Organization'} · consolidated`}
+      aria-label="Organization view"
+      aside={
+        <>
+          <span>
+            Rolled up across {orgSchoolCount} schools{fy ? ` · ${fy}` : ''}
+          </span>
+          {periods.length > 0 && (
+            <label className="inline-flex items-center gap-2 text-micro font-semibold uppercase text-ink2">
+              Fiscal year
+              <select
+                value={selectedPeriodId ?? ''}
+                onChange={(e) => onSelectPeriod?.(e.target.value)}
+                className="h-8 rounded-sm border border-hair/30 bg-white px-2 text-small font-medium normal-case tracking-normal text-ink outline-none focus-visible:ring-2 focus-visible:ring-navy-soft/40"
+              >
+                {periods.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.label || p.periodEndDate || p.id}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </>
+      }
+    >
+      {/* ── View switch: a segmented control on the ground ─────────────────── */}
+      <Toolbar role="tablist" aria-label="Organization view sections" className="mb-5">
         {TABS.map(({ key, label, Icon }) => {
           const active = key === tab
           return (
             <button
               key={key}
+              type="button"
               role="tab"
               aria-selected={active}
               onClick={() => setTab(key)}
-              className={`relative inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13.5px] font-bold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-gold/60 ${
-                active ? 'text-white' : 'text-navy hover:bg-navy/5'
+              className={`relative inline-flex h-9 items-center gap-2 rounded-md px-3 text-small font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-navy-soft/40 ${
+                active ? 'bg-white text-ink shadow-panel ring-1 ring-hair' : 'text-ink2 hover:text-ink'
               }`}
             >
-              {active &&
-                (reduce ? (
-                  <span aria-hidden className="absolute inset-0 rounded-full bg-gold-gradient shadow-glow" />
-                ) : (
-                  <motion.span
-                    aria-hidden
-                    layoutId="orgdetail-tab-pill"
-                    className="absolute inset-0 rounded-full bg-gold-gradient shadow-glow"
-                    transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-                  />
-                ))}
-              <Icon size={15} className="relative" aria-hidden />
-              <span className="relative">{label}</span>
+              <Icon size={14} aria-hidden="true" className={active ? 'text-navy-soft' : undefined} />
+              <span>{label}</span>
               {key === 'attention' && attentionTotal > 0 ? (
-                <span
-                  className={`relative inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full px-1.5 text-[11.5px] font-extrabold tabular-nums ${
-                    active ? 'bg-white/25 text-white' : 'bg-danger/10 text-danger'
-                  }`}
-                >
+                <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-sm bg-risk/10 px-1.5 text-micro font-bold tabular-nums text-risk">
                   {attentionTotal}
                 </span>
               ) : null}
+              {active ? <span aria-hidden="true" className="absolute inset-x-2 -bottom-[5px] h-[2px] bg-navy-soft" /> : null}
             </button>
           )
         })}
-      </div>
+      </Toolbar>
 
       {/* ── Active section ────────────────────────────────────────────────────── */}
-      <div className="mt-5">
-        {tab === 'kpis' && (
-          <OrgKpiStrip metrics={metrics} loading={metricsLoading} error={metricsError} />
-        )}
-        {tab === 'schools' && <OrgSchoolsTable schools={briefing?.schools || []} />}
+      <div>
+        {tab === 'kpis' && <OrgKpiStrip metrics={metrics} loading={metricsLoading} error={metricsError} />}
         {tab === 'modules' && <OrgModulesMatrix schools={briefing?.schools || []} />}
         {tab === 'attention' && (
           <OrgBriefing
@@ -146,6 +121,6 @@ export default function OrgDetailSection({
           />
         )}
       </div>
-    </section>
+    </Section>
   )
 }

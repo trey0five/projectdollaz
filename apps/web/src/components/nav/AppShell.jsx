@@ -20,6 +20,16 @@
 // getElementById — Penny glides on the desktop layout, and a `hidden lg:flex`
 // desktop link measures 0×0 on mobile so Penny simply parks, exactly as before).
 //
+// PREMIUM UI P2 (docs/Premium_UI_Plan.md §2 — "the ledger"): under ui.v2 the
+// rail is FLAT INK (#0A1628) with a 1px white hairline on its right — no gold
+// border, no navy glow, no gradient. The active row is a 2px rule in the hue
+// (primary blue for the global rows, the module's own hue inside its section);
+// the gold accents are gone from the chrome (gold = KYRO only). The top strip
+// (<lg, the rail is docked on desktop) is sticky and wears glass ONLY once the
+// page has scrolled — the one backdrop-blur the app chrome is allowed. The
+// frozen Penny ids (nav-*) stay on the same desktop elements. v1 (flag off) is
+// untouched: it keeps itemClass/ActiveRail below.
+//
 // HOOKS: the ONLY setState-in-effect is the sanctioned deferred close-on-navigate
 // (Promise.resolve().then) ported from TopBar; Escape/scroll-lock and focus-move
 // are DOM side-effects (listeners / .focus()), not state writes. Active state is
@@ -167,6 +177,18 @@ function ActiveRail({ active }) {
   return <span aria-hidden="true" className="absolute inset-y-1.5 left-0 w-1 rounded-full bg-gold" />
 }
 
+// ── ui.v2 rows (Premium UI P2): ink rail, no gold. ─────────────────────────
+const PRIMARY_HUE = '#2563EB'
+const v2ItemClass = (active) =>
+  `group relative flex min-h-[40px] items-center gap-3 rounded-md px-3 py-2 text-[13.5px] font-medium outline-none ring-white/40 transition-colors focus-visible:ring-2 ${
+    active ? 'bg-white/[0.06] text-white' : 'text-white/65 hover:bg-white/[0.05] hover:text-white'
+  }`
+// The active item = a 2px rule in the hue (the ONE way colour marks state).
+function V2ActiveRule({ active, hue = PRIMARY_HUE }) {
+  if (!active) return null
+  return <span aria-hidden="true" className="absolute inset-y-2.5 left-0 w-[2px] rounded-full" style={{ background: hue }} />
+}
+
 // ui.v2 avatar menu — the header's right-end account entry: a circle with the
 // user's initial opening a small dropdown (Settings → /settings, Sign Out).
 // Replaces the standalone Sign Out button. Esc/outside-click close + focus
@@ -220,7 +242,7 @@ function AvatarMenu() {
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="Account menu"
-        className="flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/[0.08] text-[14px] font-bold text-white outline-none ring-gold/50 transition-colors hover:bg-white/[0.14] focus-visible:ring-2"
+        className="flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/[0.08] text-[14px] font-bold text-white outline-none ring-white/40 transition-colors hover:bg-white/[0.14] focus-visible:ring-2"
       >
         {initial || <UserIcon size={16} />}
       </button>
@@ -233,14 +255,14 @@ function AvatarMenu() {
             animate={{ opacity: 1, y: 0 }}
             exit={reduce ? { opacity: 0 } : { opacity: 0, y: -6 }}
             transition={{ duration: 0.15 }}
-            className="absolute right-0 z-50 mt-2 w-48 overflow-hidden rounded-xl border border-white/15 bg-navy-deep py-1 shadow-2xl"
+            className="absolute right-0 z-50 mt-2 w-48 overflow-hidden rounded-lg border border-white/10 bg-[#0A1628] py-1 shadow-float"
           >
             <Link
               ref={firstItemRef}
               role="menuitem"
               to="/settings"
               onClick={() => setOpen(false)}
-              className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13.5px] text-white/80 outline-none ring-inset ring-gold/50 transition-colors hover:bg-white/[0.08] hover:text-white focus-visible:ring-2"
+              className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13.5px] text-white/80 outline-none ring-inset ring-white/40 transition-colors hover:bg-white/[0.08] hover:text-white focus-visible:ring-2"
             >
               <SettingsIcon size={15} className="shrink-0 text-white/50" />
               Settings
@@ -249,7 +271,7 @@ function AvatarMenu() {
               type="button"
               role="menuitem"
               onClick={logout}
-              className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13.5px] text-white/80 outline-none ring-inset ring-gold/50 transition-colors hover:bg-white/[0.08] hover:text-white focus-visible:ring-2"
+              className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13.5px] text-white/80 outline-none ring-inset ring-white/40 transition-colors hover:bg-white/[0.08] hover:text-white focus-visible:ring-2"
             >
               <LogOut size={15} className="shrink-0 text-white/50" />
               Sign Out
@@ -306,6 +328,17 @@ export default function AppShell({ children }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const hamburgerRef = useRef(null)
   const drawerCloseRef = useRef(null)
+
+  // The top strip's glass: ground at rest, frosted only once the page has
+  // scrolled under it (Premium UI §2.5 — glass lives on the sticky strip alone).
+  // A DOM listener (passive), read once on mount so a reload mid-page is right.
+  const [scrolled, setScrolled] = useState(() => typeof window !== 'undefined' && window.scrollY > 8)
+  useEffect(() => {
+    if (!uiV2) return undefined
+    const onScroll = () => setScrolled(window.scrollY > 8)
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [uiV2])
 
   // Close the drawer on navigation. Deferred to a microtask so it's not a
   // synchronous setState-in-effect (react-hooks/set-state-in-effect); idempotent.
@@ -578,9 +611,9 @@ export default function AppShell({ children }) {
         aria-label={SETTINGS_ITEM.label}
         aria-current={active ? 'page' : undefined}
         title={SETTINGS_ITEM.label}
-        className={itemClass(active)}
+        className={uiV2 ? v2ItemClass(active) : itemClass(active)}
       >
-        <ActiveRail active={active} />
+        {uiV2 ? <V2ActiveRule active={active} /> : <ActiveRail active={active} />}
         <SETTINGS_ITEM.Icon size={17} className="shrink-0" />
         <span>{SETTINGS_ITEM.label}</span>
       </Link>
@@ -605,7 +638,7 @@ export default function AppShell({ children }) {
       to="/"
       aria-label="KYRO — main site home"
       title="Main site home"
-      className="flex w-full items-center justify-center rounded-lg px-1 py-1 outline-none ring-gold/50 transition-opacity hover:opacity-90 focus-visible:ring-2"
+      className="flex w-full items-center justify-center rounded-lg px-1 py-1 outline-none ring-white/40 transition-opacity hover:opacity-90 focus-visible:ring-2"
     >
       <img src="/kyro-lockup.png" alt="KYRO" className="h-24 w-auto object-contain sm:h-28" />
     </Link>
@@ -623,10 +656,10 @@ export default function AppShell({ children }) {
         aria-label={item.label}
         aria-current={active ? 'page' : undefined}
         title={item.label}
-        className={itemClass(active)}
+        className={v2ItemClass(active)}
       >
-        <ActiveRail active={active} />
-        <item.Icon size={17} className={`shrink-0 ${active ? 'text-gold-light' : 'text-white/70'}`} />
+        <V2ActiveRule active={active} />
+        <item.Icon size={17} className={`shrink-0 ${active ? 'text-white' : 'text-white/60'}`} />
         <span>{item.label}</span>
       </Link>
     )
@@ -669,13 +702,13 @@ export default function AppShell({ children }) {
         <div className="flex items-center gap-2 px-2 pb-1">
           <span
             aria-hidden="true"
-            className="h-2 w-2 shrink-0 rounded-full"
+            className="h-[10px] w-[2px] shrink-0 rounded-full"
             style={{ background: hue }}
           />
-          <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/55">
+          <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-white/50">
             {moduleLabel(activeModuleKey)}
           </h2>
-          <span aria-hidden="true" className="h-px flex-1 bg-gradient-to-r from-white/10 to-transparent" />
+          <span aria-hidden="true" className="h-px flex-1 bg-white/10" />
         </div>
         {tabs.map((t) => {
           const TabIcon = MODULE_TAB_ICON[t] ?? LayoutGrid
@@ -687,10 +720,10 @@ export default function AppShell({ children }) {
               to={to}
               aria-label={`${moduleLabel(activeModuleKey)} — ${moduleTabLabel(activeModuleKey, t)}`}
               aria-current={active ? 'page' : undefined}
-              className={itemClass(active)}
+              className={v2ItemClass(active)}
             >
-              <ActiveRail active={active} />
-              <TabIcon size={17} className={`shrink-0 ${active ? 'text-gold-light' : 'text-white/70'}`} />
+              <V2ActiveRule active={active} hue={hue} />
+              <TabIcon size={17} className={`shrink-0 ${active ? 'text-white' : 'text-white/60'}`} />
               <span>{moduleTabLabel(activeModuleKey, t)}</span>
             </Link>
           )
@@ -715,7 +748,7 @@ export default function AppShell({ children }) {
             school⇄org toggle up top, the three global destinations, and a foot
             with Settings + the account menu. Carries the frozen Penny ids. ── */}
         {uiV2 && (
-          <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r-2 border-gold/30 bg-navy-gradient shadow-navy-glow lg:flex">
+          <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-white/10 bg-[#0A1628] lg:flex">
             {/* 1. Logo — centered + prominent, with the tagline beneath it. */}
             <div className="flex shrink-0 flex-col items-center gap-1.5 border-b border-white/10 px-4 py-5">
               {v2RailBrand}
@@ -747,9 +780,9 @@ export default function AppShell({ children }) {
               {user?.isAdmin && (
                 <Link
                   to="/admin"
-                  className="group relative flex min-h-[40px] w-full items-center gap-3 rounded-[10px] px-3 py-2 text-[13.5px] font-medium text-white/70 outline-none ring-gold/50 transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:ring-2"
+                  className="group relative flex min-h-[40px] w-full items-center gap-3 rounded-md px-3 py-2 text-[13.5px] font-medium text-white/65 outline-none ring-white/40 transition-colors hover:bg-white/[0.05] hover:text-white focus-visible:ring-2"
                 >
-                  <ShieldCheck size={17} className="shrink-0 text-white/70 transition-colors group-hover:text-white" />
+                  <ShieldCheck size={17} className="shrink-0 text-white/60 transition-colors group-hover:text-white" />
                   <span>Platform admin</span>
                 </Link>
               )}
@@ -757,9 +790,9 @@ export default function AppShell({ children }) {
               <button
                 type="button"
                 onClick={logout}
-                className="group relative flex min-h-[40px] w-full items-center gap-3 rounded-[10px] px-3 py-2 text-[13.5px] font-medium text-white/70 outline-none ring-gold/50 transition-colors hover:bg-danger/15 hover:text-white focus-visible:ring-2"
+                className="group relative flex min-h-[40px] w-full items-center gap-3 rounded-md px-3 py-2 text-[13.5px] font-medium text-white/65 outline-none ring-white/40 transition-colors hover:bg-risk/20 hover:text-white focus-visible:ring-2"
               >
-                <LogOut size={17} className="shrink-0 text-white/70 transition-colors group-hover:text-danger" />
+                <LogOut size={17} className="shrink-0 text-white/60 transition-colors group-hover:text-white" />
                 <span>Log out</span>
               </button>
               <AvatarMenu />
@@ -769,14 +802,21 @@ export default function AppShell({ children }) {
 
         {/* ── Content column (offset by the fixed rail on lg+, both v1 and v2) ── */}
         <div
-          className={`flex min-w-0 flex-1 flex-col ${uiV2 ? 'lg:pl-64' : 'app-content-offset lg:pl-64'}`}
+          className={`flex min-w-0 flex-1 flex-col ${uiV2 ? 'bg-ground print:bg-white lg:pl-64' : 'app-content-offset lg:pl-64'}`}
         >
           {uiV2 ? (
             /* ── ui.v2: NO desktop top bar (search + avatar removed by request —
                the account lives in the rail foot). A slim MOBILE-ONLY bar carries
                just the hamburger + compact logo so the off-canvas rail stays
                reachable; on lg+ the rail is docked and this bar is hidden. ── */
-            <header className="no-print sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-gold/25 bg-navy-gradient px-3 shadow-navy-glow lg:hidden">
+            /* The strip is INK (the KYRO lockup is a white wordmark and needs the
+               dark ground); glass arrives only once the page has scrolled. */
+            <header
+              data-scrolled={scrolled ? 'true' : 'false'}
+              className={`no-print sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-white/10 px-3 transition-[background-color,box-shadow] duration-200 lg:hidden ${
+                scrolled ? 'bg-[#0A1628]/85 shadow-panel backdrop-blur-md' : 'bg-[#0A1628]'
+              }`}
+            >
               <button
                 ref={hamburgerRef}
                 type="button"
@@ -784,14 +824,14 @@ export default function AppShell({ children }) {
                 aria-label={menuOpen ? 'Close menu' : 'Open menu'}
                 aria-expanded={menuOpen}
                 aria-controls="app-sidebar-drawer"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/15 text-white/80 transition-colors hover:bg-white/[0.06] hover:text-white"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-white/15 text-white/80 outline-none ring-white/40 transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:ring-2"
               >
                 {menuOpen ? <X size={20} /> : <Menu size={20} />}
               </button>
               <Link
                 to="/"
                 aria-label="KYRO — main site home"
-                className="flex items-center rounded-lg outline-none ring-gold/50 transition-opacity hover:opacity-90 focus-visible:ring-2"
+                className="flex items-center rounded-md outline-none ring-white/40 transition-opacity hover:opacity-90 focus-visible:ring-2"
               >
                 <img src="/kyro-lockup.png" alt="KYRO" className="h-9 w-auto object-contain" />
               </Link>
@@ -856,7 +896,9 @@ export default function AppShell({ children }) {
               animate={{ x: 0 }}
               exit={reduce ? { opacity: 0 } : { x: '-100%' }}
               transition={reduce ? { duration: 0 } : { type: 'tween', duration: 0.24 }}
-              className="no-print fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col border-r-2 border-gold/30 bg-navy-gradient shadow-navy-glow lg:hidden"
+              className={`no-print fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col lg:hidden ${
+                uiV2 ? 'border-r border-white/10 bg-[#0A1628] shadow-float' : 'border-r-2 border-gold/30 bg-navy-gradient shadow-navy-glow'
+              }`}
             >
               <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-4 py-3">
                 {uiV2 ? v2RailBrand : brand}
@@ -890,9 +932,9 @@ export default function AppShell({ children }) {
                     <button
                       type="button"
                       onClick={logout}
-                      className="group relative flex min-h-[40px] w-full items-center gap-3 rounded-[10px] px-3 py-2 text-[13.5px] font-medium text-white/70 outline-none ring-gold/50 transition-colors hover:bg-danger/15 hover:text-white focus-visible:ring-2"
+                      className="group relative flex min-h-[40px] w-full items-center gap-3 rounded-md px-3 py-2 text-[13.5px] font-medium text-white/65 outline-none ring-white/40 transition-colors hover:bg-risk/20 hover:text-white focus-visible:ring-2"
                     >
-                      <LogOut size={17} className="shrink-0 text-white/70 transition-colors group-hover:text-danger" />
+                      <LogOut size={17} className="shrink-0 text-white/60 transition-colors group-hover:text-white" />
                       <span>Log out</span>
                     </button>
                     <AvatarMenu />

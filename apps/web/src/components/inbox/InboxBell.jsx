@@ -25,7 +25,7 @@ export default function InboxBell() {
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
         aria-label={pill ? `Inbox, ${unread} unread` : 'Inbox'}
-        className="group relative flex min-h-[40px] w-full items-center gap-3 rounded-[10px] px-3 py-2 text-[13.5px] font-medium text-white/70 outline-none ring-gold/50 transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:ring-2"
+        className="group relative flex min-h-[40px] w-full items-center gap-3 rounded-md px-3 py-2 text-[13.5px] font-medium text-white/70 outline-none ring-white/40 transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:ring-2"
       >
         <InboxIcon size={17} className="shrink-0 text-white/70 transition-colors group-hover:text-white" />
         <span>Inbox</span>

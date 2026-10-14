@@ -1,18 +1,18 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // SectionHeader / Section — the header every analysis panel wears.
 //
-// The version this replaces set the eyebrow and the title in the same white
-// field as the data directly beneath them, at 9.5px and 19px. On a page of
-// fifteen stacked panels that produced a wall with no seams: the reader had to
-// actually READ a title to discover which chart they had scrolled to, which is
-// the one thing a title is supposed to save them from.
+// PREMIUM UI P2 (docs/Premium_UI_Plan.md §2.4): the tinted band with its glyph
+// tile and chip eyebrow is retired. A section is now a LABEL RULE on the
+// ground — 11px caps eyebrow, a hairline running to the aside — with the
+// title in EB Garamond beneath it and the content sitting directly on the
+// page. No border, no fill, no shadow: the seam between two panels is the rule
+// and the whitespace, which is what a ruled document uses too.
 //
-// So the header is a BAND, not a line of text — its own tinted ground, a
-// hairline closing it off from the data, a glyph tile carrying the panel's
-// subject, and the eyebrow promoted to a chip. The scanning eye lands on a
-// repeating shape at the top of each panel and reads a title only when it wants
-// one. The left rail exists for the same reason a newspaper rules its columns:
-// it says where a thing starts.
+// The PROPS ARE UNCHANGED (eyebrow · title · icon · aside · tone · delay ·
+// reduce) so the academics dashboards and the network page need no edits; the
+// icon now draws beside the label in ink-2 and `tone` colours the rule's lead
+// mark (2px) only. The entrance stays one-shot (opacity/rise, reduced-motion
+// gated).
 //
 // Lives in module/ rather than academics/ because the org-scope network page
 // needs the identical chrome — two copies would drift, and the copy that drifts
@@ -20,45 +20,19 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion } from 'framer-motion'
 
-const EASE = [0.2, 0.8, 0.2, 1]
+const EASE = [0.22, 1, 0.36, 1]
 
-export function SectionHeader({ eyebrow, title, icon: Icon, aside, tone = '#0D9488' }) {
+export function SectionHeader({ eyebrow, title, icon: Icon, aside, tone }) {
   return (
-    <header
-      className="relative flex items-start justify-between gap-3 border-b border-navy/[0.07] px-5 py-4"
-      style={{ background: `linear-gradient(180deg, ${tone}12 0%, ${tone}00 100%)` }}
-    >
-      <span
-        aria-hidden="true"
-        className="absolute left-0 top-0 h-full w-[3px]"
-        style={{ background: `linear-gradient(180deg, ${tone} 0%, ${tone}00 100%)` }}
-      />
-
-      <div className="flex min-w-0 items-start gap-3">
-        {Icon ? (
-          <span
-            aria-hidden="true"
-            className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl"
-            style={{ background: `${tone}1A`, color: tone, boxShadow: `inset 0 0 0 1px ${tone}2E` }}
-          >
-            <Icon size={16} strokeWidth={2.2} />
-          </span>
-        ) : null}
-        <div className="min-w-0">
-          {eyebrow ? (
-            <span
-              className="inline-flex items-center rounded-full px-2 py-[3px] font-mono text-[9px] font-bold uppercase tracking-[0.18em]"
-              style={{ background: `${tone}16`, color: tone }}
-            >
-              {eyebrow}
-            </span>
-          ) : null}
-          <h3 className="mt-1.5 font-serif text-[22px] font-semibold leading-tight tracking-[-0.01em] text-navy">
-            {title}
-          </h3>
-        </div>
+    <header className="sec-head-block">
+      <div className="sec-head">
+        {tone ? <span aria-hidden="true" className="h-[10px] w-[2px] shrink-0" style={{ background: tone }} /> : null}
+        {Icon ? <Icon size={13} className="shrink-0 text-ink2" aria-hidden="true" /> : null}
+        {eyebrow ? <h2 className="sec-label">{eyebrow}</h2> : null}
+        <span className="sec-rule" aria-hidden="true" />
+        {aside ? <div className="sec-aside">{aside}</div> : null}
       </div>
-      {aside ? <div className="shrink-0">{aside}</div> : null}
+      {title ? <h3 className="sec-title">{title}</h3> : null}
     </header>
   )
 }
@@ -66,13 +40,13 @@ export function SectionHeader({ eyebrow, title, icon: Icon, aside, tone = '#0D94
 export function Section({ title, eyebrow, children, aside, icon, tone, delay = 0, reduce }) {
   return (
     <motion.section
-      initial={reduce ? false : { opacity: 0, y: 18 }}
+      initial={reduce ? false : { opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, ease: EASE, delay }}
-      className="overflow-hidden rounded-2xl border border-navy/10 bg-white shadow-[0_18px_44px_-30px_rgba(16,28,61,0.4)]"
+      transition={{ duration: 0.4, ease: EASE, delay }}
+      className="sec"
     >
       <SectionHeader eyebrow={eyebrow} title={title} icon={icon} aside={aside} tone={tone} />
-      <div className="p-5">{children}</div>
+      <div>{children}</div>
     </motion.section>
   )
 }

@@ -324,6 +324,13 @@ async function main() {
     try {
       await p.goto(BASE + path, { waitUntil: 'networkidle', timeout: 45000 })
       // Let count-ups / entrance motion finish so the census sees the settled page.
+      // A print document says "Preparing…" while its data loads (several
+      // seconds for the board report); wait for that to clear, then settle.
+      if (isPrint) {
+        await p
+          .waitForFunction(() => !/Preparing|Loading/i.test(document.body.innerText), null, { timeout: 12000 })
+          .catch(() => {})
+      }
       await p.waitForTimeout(isPrint ? 1500 : 2500)
       await p.screenshot({ path: resolve(OUT, `${id}.png`), fullPage: false })
       await p.screenshot({ path: resolve(OUT, `${id}-full.png`), fullPage: true })
