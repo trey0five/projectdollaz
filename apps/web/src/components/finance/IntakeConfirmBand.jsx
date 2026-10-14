@@ -15,6 +15,11 @@
 import { motion, useReducedMotion } from 'framer-motion'
 import { Check, Sparkles } from 'lucide-react'
 import { SLOT_ROLES, ROLE_META } from '../../lib/roleMeta.js'
+import { Button } from '../ui/surface/index.js'
+
+// Premium UI P3: the checkpoint is a `Panel` (the one raised surface — it asks
+// a question and takes an answer), the file receipts are ruled lines, the
+// actions flat Buttons. No gold icon tile, no bevel.
 
 export default function IntakeConfirmBand({
   period,
@@ -45,18 +50,18 @@ export default function IntakeConfirmBand({
       initial={reduce ? { opacity: 0 } : { opacity: 0, y: -8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: 'spring', stiffness: 240, damping: 22 }}
-      className="card-flashy p-5 sm:p-6"
+      className="panel panel-body"
     >
       <div className="flex flex-wrap items-start gap-3">
-        <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gold-gradient text-navy shadow-glow">
+        <span className="mt-0.5 inline-flex shrink-0 text-navy-soft" aria-hidden="true">
           <Sparkles size={19} />
         </span>
         <div className="min-w-0 flex-1 basis-[16rem]">
-          <h3 className="font-serif text-[18px] font-semibold leading-snug text-navy">
+          <h3 className="font-serif text-title text-ink">
             {dataReady ? 'Does this look right?' : 'Saved — but we can’t read it yet'}
           </h3>
-          <p className="mt-1 min-w-0 break-words text-[14px] leading-snug text-muted">
-            Saved to <span className="font-semibold text-navy">{period.label}</span>.{' '}
+          <p className="mt-1 min-w-0 break-words text-small leading-snug text-ink2">
+            Saved to <span className="font-semibold text-ink">{period.label}</span>.{' '}
             {dataReady
               ? 'Check the files below — then we’ll show you everywhere this data just lit up.'
               : 'Your accounts aren’t named in a way we recognise yet, so your statements are still empty. Open a file below and confirm what each account is — we’ve suggested most of them.'}
@@ -64,27 +69,24 @@ export default function IntakeConfirmBand({
         </div>
       </div>
 
-      <ul className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+      <ul className="mt-4 grid grid-cols-1 gap-x-6 sm:grid-cols-3">
         {provided.map((role) => {
           const f = byRole[role]
           const accounts = f.rows?.length ?? 0
           return (
-            <li
-              key={role}
-              className="flex min-w-0 items-start gap-2.5 rounded-xl border border-rule bg-white px-3.5 py-3"
-            >
-              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#e6f5ec] text-[#2f7d51]">
-                <Check size={12} strokeWidth={3} />
+            <li key={role} className="flex min-w-0 items-start gap-2.5 border-t border-hair py-3">
+              <span className="mt-0.5 inline-flex shrink-0 tone-good" aria-hidden="true">
+                <Check size={14} strokeWidth={2.5} />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block break-words text-[13px] font-semibold leading-snug text-navy">
+                <span className="block break-words text-small font-semibold leading-snug text-ink">
                   {ROLE_META[role].plainLabel}
                 </span>
-                <span className="mt-0.5 block break-words text-[12.5px] leading-snug text-muted">
+                <span className="mt-0.5 block break-words text-small leading-snug text-ink2">
                   {f.fileName}
                 </span>
                 {accounts > 0 && (
-                  <span className="mt-0.5 block text-[12px] text-muted tabular-nums">
+                  <span className="mt-0.5 block text-[12px] text-ink2 tabular-nums">
                     {accounts} account{accounts === 1 ? '' : 's'}
                   </span>
                 )}
@@ -97,36 +99,27 @@ export default function IntakeConfirmBand({
       <div className="mt-5 flex flex-col gap-2.5 sm:flex-row-reverse sm:items-center">
         {dataReady ? (
           <>
-            <button
-              type="button"
-              onClick={onConfirm}
-              className="btn-cta inline-flex min-h-[46px] w-full items-center justify-center gap-2 rounded-xl px-6 text-[12.5px] font-semibold uppercase tracking-[0.1em] outline-none focus-visible:ring-2 focus-visible:ring-gold/50 sm:w-auto"
-            >
-              <Sparkles size={15} />
+            <Button variant="primary" onClick={onConfirm} icon={<Sparkles size={15} />} className="w-full sm:w-auto">
               Yes — show me what lit up
-            </button>
-            <button
-              type="button"
-              onClick={onFix}
-              className="inline-flex min-h-[46px] w-full items-center justify-center rounded-xl border-2 border-border px-5 text-[13.5px] font-semibold text-muted outline-none transition-colors hover:border-navy hover:text-navy focus-visible:ring-2 focus-visible:ring-navy/30 sm:w-auto"
-            >
+            </Button>
+            <Button variant="secondary" onClick={onFix} className="w-full sm:w-auto">
               Not quite — let me fix a file
-            </button>
+            </Button>
           </>
         ) : (
           // NO CELEBRATION ON OFFER. There is exactly one useful next step from
           // here, and it is naming the accounts.
-          <button
-            type="button"
+          <Button
+            variant="primary"
             onClick={() => {
               // Open the review panel FIRST, then step out of its way.
               onCategorise?.()
               onFix?.()
             }}
-            className="btn-cta inline-flex min-h-[46px] w-full items-center justify-center gap-2 rounded-xl px-6 text-[12.5px] font-semibold uppercase tracking-[0.1em] outline-none focus-visible:ring-2 focus-visible:ring-gold/50 sm:w-auto"
+            className="w-full sm:w-auto"
           >
             Categorise my accounts
-          </button>
+          </Button>
         )}
       </div>
     </motion.div>

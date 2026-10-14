@@ -8,6 +8,13 @@
 // Presentational: the parent computes every number/item and owns the tables and
 // modals. This component only lays out header + KPI row + two-column body + footer.
 //
+// Premium UI P3: the header is a `PageHeader` (eyebrow / serif title / meta /
+// actions on a hairline), the KPI row a `StatStrip` of `DomainKpiCard` Stats,
+// the register a `Section` on the ground (ink tabs, the +New button in the
+// label row's aside), the rail a `Panel tone="attention"`. Props, the
+// "Needs attention" semantics and every id are unchanged, so the ten domain
+// pages that compose this move for free.
+//
 // Props
 //   eyebrow          string — small uppercase muted eyebrow above the title
 //   title            string — big serif navy page title
@@ -39,21 +46,14 @@ import DomainKpiCard from './DomainKpiCard.jsx'
 import NeedsAttentionPanel from './NeedsAttentionPanel.jsx'
 import BackLink from '../ui/BackLink.jsx'
 import { AddDataCta, RecordsCta } from '../module/ModuleCtas.jsx'
+import { PageHeader, StatStrip, Section, Pill, Button } from '../ui/surface/index.js'
 
 function AttentionPill({ count }) {
   const clear = !count
   return (
-    <span
-      className={`inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[13px] font-semibold ${
-        clear ? 'bg-emerald-50 text-emerald-700' : 'bg-danger/10 text-danger'
-      }`}
-    >
-      <span
-        aria-hidden
-        className={`inline-block h-2 w-2 rounded-full ${clear ? 'bg-emerald-500' : 'bg-danger'}`}
-      />
+    <Pill variant="status" tone={clear ? 'good' : 'risk'}>
       {clear ? 'all clear' : `${count} need${count === 1 ? 's' : ''} a decision`}
-    </span>
+    </Pill>
   )
 }
 
@@ -93,56 +93,51 @@ export default function DomainCommandCenter({
   const reduce = useReducedMotion()
 
   return (
-    <div className="mx-auto max-w-page space-y-6 px-4 py-6 sm:px-10 sm:py-8">
+    <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
       {/* Back to the dashboard — shown for standalone (non-module) domain pages
           like Cash / Tasks / Knowledge that aren't wrapped in ModuleTabs (which
           carries its own back link). */}
-      {showBack ? <BackLink className="-mb-1" /> : null}
-      {/* ── Header row ─────────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-3">
-          {Icon ? (
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold-gradient text-navy shadow-glow">
-              <Icon size={22} />
-            </span>
-          ) : null}
-          <div className="min-w-0">
-            {eyebrow ? (
-              <p className="text-[11.5px] font-semibold uppercase tracking-[0.14em] text-muted">
-                {eyebrow}
-              </p>
+      {showBack ? <BackLink className="mb-2" /> : null}
+      {/* ── Header: eyebrow / title / the attention pill as meta / actions ──── */}
+      <PageHeader
+        eyebrow={eyebrow}
+        title={
+          <span className="inline-flex items-center gap-3">
+            {Icon ? <Icon size={26} strokeWidth={1.75} className="shrink-0 text-navy-soft" aria-hidden="true" /> : null}
+            {title}
+          </span>
+        }
+        actions={
+          <>
+            {headerAside}
+            {showAddData ? (
+              <>
+                <RecordsCta module={moduleKey} />
+                <AddDataCta />
+              </>
             ) : null}
-            <h1 className="font-serif text-2xl font-semibold text-navy sm:text-[30px]">{title}</h1>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          {headerAside}
+          </>
+        }
+      >
+        <div className="pg-meta">
           <AttentionPill count={attentionCount} />
-          {showAddData ? (
-            <>
-              <RecordsCta module={moduleKey} />
-              <AddDataCta />
-            </>
-          ) : null}
         </div>
-      </div>
+      </PageHeader>
 
       {/* ── Optional full-width hero between the header and the KPI row ─────── */}
-      {aboveKpis}
+      {aboveKpis ? <div className="mt-6">{aboveKpis}</div> : null}
 
-      {/* ── KPI card row ──────────────────────────────────────────────────────
-          COLUMN WIDTH IS THE NO-CLIP CONTRACT. A dense row is what actually cut
-          text off: with the sidebar (256px), the page gutters (2×40px) and the
-          card cushion (2×24px), a 6-up grid leaves ~96px of content at 1280 and
-          ~133px at 1500 — narrower than the 30px serif value needs, so
-          `overflow-wrap` broke ordinary words mid-word ("None sched|uled" on
-          /governance, "instructio|nal staff" on /hr, "manageab|le" on
-          /facilities). Six columns are therefore never offered below xl: the
-          dense sets step 3 → 4, which keeps ≥170px of content at every width
-          from 1024 up. Fix the column, not the font (card contract §5.3). ── */}
+      {/* ── KPI strip ────────────────────────────────────────────────────────
+          COLUMN WIDTH IS THE NO-CLIP CONTRACT. A dense strip is what cut text
+          off: six columns at 1280 leave ~96px for a 30px value, so ordinary
+          words broke mid-word ("None sched|uled"). The strip therefore never
+          goes 6-up below xl: the dense sets step 3 → 4 (xl:grid-cols-4), which
+          keeps ≥170px of content at every width from 1024 up. Fix the column,
+          not the font (card contract §5.3). ── */}
       {kpis.length ? (
-        <div
-          className={`grid grid-cols-2 gap-4 ${
+        <StatStrip
+          cols={kpis.length}
+          className={`stats-wrap mt-2 grid-cols-2 ${
             kpis.length >= 6
               ? 'sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4'
               : kpis.length >= 5
@@ -150,21 +145,14 @@ export default function DomainCommandCenter({
                 : 'lg:grid-cols-4'
           }`}
         >
-          {kpis.map((kpi, i) => (
-            <DomainKpiCard
-              key={kpi.label}
-              label={kpi.label}
-              value={kpi.value}
-              sub={kpi.sub}
-              status={kpi.status}
-              index={i}
-            />
+          {kpis.map((kpi) => (
+            <DomainKpiCard key={kpi.label} label={kpi.label} value={kpi.value} sub={kpi.sub} status={kpi.status} />
           ))}
-        </div>
+        </StatStrip>
       ) : null}
 
       {/* ── Optional full-width block between the KPI row and the body ──────── */}
-      {beforeBody}
+      {beforeBody ? <div className="mt-6">{beforeBody}</div> : null}
 
       {/* ── Body: two columns, or a full-width register with the rail beneath ──
           WHY THE OPT-OUT EXISTS. The register lives in two of three columns,
@@ -179,62 +167,43 @@ export default function DomainCommandCenter({
           rather than a squeezed column. Opt-in per page, so every other domain
           keeps the two-column shape it was designed around. */}
       <div className={wideRegister ? 'space-y-6' : 'grid gap-6 lg:grid-cols-3'}>
-        {/* LEFT — the register (tabs + active table). min-w-0 lets a wide register
-            (e.g. Cash & Collections' aging table) scroll inside its own
-            overflow-x-auto instead of pushing the page body horizontally.
-            p-5/sm:p-6 is the content-card cushion scale (card contract §5). */}
-        <div
-          className={`card-soft flex min-w-0 flex-col p-5 sm:p-6 ${
-            wideRegister ? '' : 'lg:col-span-2'
-          }`}
+        {/* LEFT — the register (tabs + active table) ON THE GROUND. min-w-0 lets
+            a wide register (e.g. Cash & Collections' aging table) scroll inside
+            its own overflow-x-auto instead of pushing the page body horizontally. */}
+        <Section
+          className={`min-w-0 ${wideRegister ? '' : 'lg:col-span-2'}`}
+          label={tabs.length <= 1 ? (registerTitle ?? tabs[0]?.label ?? 'Register') : 'Registers'}
+          aside={
+            onNew ? (
+              <Button variant="primary" size="sm" onClick={onNew} icon={<Plus size={14} />}>
+                New
+              </Button>
+            ) : null
+          }
         >
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            {tabs.length <= 1 ? (
-              /* A single-entry tab bar is dead chrome — render a static register
-                 heading instead. Multi-tab domains keep the underlined tabs. */
-              <h2 className="px-1 font-serif text-lg font-semibold text-navy">
-                {registerTitle ?? tabs[0]?.label ?? 'Register'}
-              </h2>
-            ) : (
-              <div className="flex gap-1">
-                {tabs.map((t) => {
-                  const active = t.key === activeTab
-                  return (
-                    <button
-                      key={t.key}
-                      type="button"
-                      onClick={() => onTabChange?.(t.key)}
-                      className={`relative px-3 py-2 text-[14px] font-semibold transition-colors ${
-                        active ? 'text-navy' : 'text-muted hover:text-navy'
-                      }`}
-                    >
-                      {t.label}
-                      {active ? (
-                        <motion.span
-                          layoutId={reduce ? undefined : 'domain-tab-underline'}
-                          className="absolute inset-x-2 -bottom-[1px] h-[3px] rounded-full bg-gold-gradient"
-                        />
-                      ) : null}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-            {onNew ? (
-              <button
-                type="button"
-                onClick={onNew}
-                className="inline-flex items-center gap-1.5 rounded-full btn-cta px-3.5 py-1.5 text-[13px] font-semibold transition"
-              >
-                <Plus size={15} /> New
-              </button>
-            ) : null}
-          </div>
-          {registerTable}
-        </div>
+          {tabs.length > 1 ? (
+            /* Multi-tab domains keep the tabs — ink, a 2px hue rule under the
+               active one. A single-entry tab bar is dead chrome: the Section
+               label already names the register. */
+            <div role="tablist" aria-label="Registers" className="tabs-ink mb-4">
+              {tabs.map((t) => {
+                const active = t.key === activeTab
+                return (
+                  <button key={t.key} type="button" role="tab" aria-selected={active} onClick={() => onTabChange?.(t.key)} className="tab-ink">
+                    {t.label}
+                    {active ? (
+                      <motion.span layoutId={reduce ? undefined : 'domain-tab-underline'} className="tab-ink-rule" aria-hidden="true" />
+                    ) : null}
+                  </button>
+                )
+              })}
+            </div>
+          ) : null}
+          <div className="min-w-0">{registerTable}</div>
+        </Section>
 
         {/* Needs attention — beside the register, or beneath it when wide. */}
-        <div className={wideRegister ? '' : 'lg:col-span-1'}>
+        <div className={wideRegister ? '' : 'mt-8 lg:col-span-1'}>
           <NeedsAttentionPanel
             items={attentionItems}
             moreCount={attentionMoreCount}
@@ -244,7 +213,7 @@ export default function DomainCommandCenter({
       </div>
 
       {/* ── Footer caption ─────────────────────────────────────────────────── */}
-      <p className="text-[12.5px] leading-relaxed text-muted">
+      <p className="sec-note mt-8">
         Command center, not a table — a domain lands on its slice of the briefing (the metrics that
         define its health, the items that need a decision, and one-click actions), with the
         registers a tab away.

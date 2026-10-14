@@ -14,6 +14,13 @@ import { Table2, AlertTriangle, Maximize2, UploadCloud, Trash2, Sparkles, FileSp
 import { fmt } from '../../lib/format.js'
 import { describeBudgetSource } from './budgetSource.js'
 import ReportExpandOverlay from '../reports/ReportExpandOverlay.jsx'
+import { Section, Pill, Button } from '../ui/surface/index.js'
+
+// Premium UI P3: the sheet wears the `.dt` table discipline (sticky 11px-caps
+// head, 36px hairline rows, `.dt-num` right-aligned tabular money) under a
+// Section rule — no card, no navy section bands, no gold total row. Section
+// and subtotal rows are ink weight on a hairline; the Surplus line is the
+// `.dt-foot` 2px rule.
 
 // Source badge for the spread header. Prefers an explicit `source` prop from the
 // parent (which knows the full budget — including driver-built spreads that have
@@ -24,11 +31,11 @@ function renderSourceBadge(source) {
   if (!source || source.kind === 'none') return null
   const Icon = SOURCE_ICONS[source.kind] || FileSpreadsheet
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-gold/40 bg-navy px-2 py-0.5 text-[11px] font-semibold text-gold-light">
-      <Icon size={11} />
+    <Pill>
+      <Icon size={11} aria-hidden="true" />
       {source.label}
       {source.fileName ? ` · ${source.fileName}` : ''}
-    </span>
+    </Pill>
   )
 }
 
@@ -89,11 +96,7 @@ function moneyCell(n, opts = {}) {
   const v = n == null ? null : Number(n)
   const isNeg = v != null && v < 0
   return (
-    <td
-      className={`whitespace-nowrap px-2.5 py-1.5 text-right tabular-nums ${
-        opts.bold ? 'font-semibold text-navy' : 'text-ink'
-      } ${isNeg ? 'text-rose-600' : ''}`}
-    >
+    <td className={`dt-num whitespace-nowrap ${opts.bold ? 'font-semibold text-ink' : 'text-ink'} ${isNeg ? 'tone-risk' : ''}`}>
       {fmt(v)}
     </td>
   )
@@ -162,16 +165,16 @@ function renderAccountRow(a, cols, idx = 0) {
   // rather than a meaningless "0" in the account column. idx keeps the key unique
   // when two label-only rows share the same name.
   return (
-    <tr key={`acct-${a.acct}-${idx}-${a.label}`} className="border-t border-rule/40 hover:bg-gold/[0.04]">
-      <td className="sticky left-0 z-10 whitespace-nowrap bg-white px-2.5 py-1.5 text-[12px] font-semibold tabular-nums text-muted">
+    <tr key={`acct-${a.acct}-${idx}-${a.label}`}>
+      <td className="sticky left-0 z-10 whitespace-nowrap bg-ground text-[12px] font-semibold tabular-nums text-ink2">
         {a.acct ? a.acct : '—'}
       </td>
-      <td className="sticky left-[64px] z-10 max-w-[260px] truncate bg-white px-2.5 py-1.5 text-ink">
+      <td className="sticky left-[64px] z-10 max-w-[260px] truncate bg-ground text-ink">
         {a.label}
         {flagged && (
-          <span className="ml-1.5 rounded bg-amber-100 px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+          <Pill variant="status" tone="watch" className="ml-1.5">
             unmapped
-          </span>
+          </Pill>
         )}
       </td>
       {Array.from({ length: cols }, (_, i) => moneyCell(a.months[i]))}
@@ -182,24 +185,9 @@ function renderAccountRow(a, cols, idx = 0) {
 
 function renderSubtotalRow(label, total, annual, cols, opts = {}) {
   return (
-    <tr
-      key={`sub-${label}`}
-      className={`border-t ${
-        opts.section
-          ? 'border-gold/50 bg-navy/[0.04]'
-          : 'border-rule bg-cream/60'
-      }`}
-    >
-      <td
-        className={`sticky left-0 z-10 px-2.5 py-1.5 ${
-          opts.section ? 'bg-navy/[0.04]' : 'bg-cream/60'
-        }`}
-      />
-      <td
-        className={`sticky left-[64px] z-10 px-2.5 py-1.5 text-[12px] font-semibold uppercase tracking-[0.06em] ${
-          opts.section ? 'bg-navy/[0.04] text-navy' : 'bg-cream/60 text-muted'
-        }`}
-      >
+    <tr key={`sub-${label}`} className={opts.section ? 'dt-section-total' : 'dt-subtotal'}>
+      <td className="sticky left-0 z-10 bg-ground" />
+      <td className={`sticky left-[64px] z-10 bg-ground text-[11px] font-semibold uppercase tracking-[0.06em] ${opts.section ? 'text-ink' : 'text-ink2'}`}>
         {label}
       </td>
       {Array.from({ length: cols }, (_, i) => moneyCell(total[i], { bold: true }))}
@@ -233,11 +221,8 @@ export default function MonthlySpreadGrid({ spread, source, onReimport, onClear 
     const groups = Array.from(sec.groups.values()).sort((a, b) => b.annual - a.annual)
     return (
       <tbody key={`section-${sec.label}`}>
-        <tr className="bg-navy-gradient">
-          <td
-            colSpan={cols + 3}
-            className="sticky left-0 z-10 bg-navy-gradient px-2.5 py-2 text-[12px] font-semibold uppercase tracking-[0.12em] text-gold-light"
-          >
+        <tr className="dt-section">
+          <td colSpan={cols + 3} className="sticky left-0 z-10 bg-ground text-[11px] font-semibold uppercase tracking-[0.08em] text-ink">
             {sec.label}
           </td>
         </tr>
@@ -252,26 +237,17 @@ export default function MonthlySpreadGrid({ spread, source, onReimport, onClear 
   // The full table (accounts × 12 months + annual). Rendered fresh in both the
   // inline card and the full-screen zoom overlay (returns a new tree each call).
   const renderTable = () => (
-    <table className="w-max border-collapse text-[13px]">
+    <table className="dt w-max">
       <thead>
-        <tr className="bg-cream">
-          <th className="sticky left-0 z-20 bg-cream px-2.5 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
-            Acct
-          </th>
-          <th className="sticky left-[64px] z-20 bg-cream px-2.5 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
-            Description
-          </th>
+        <tr>
+          <th className="sticky left-0 z-20">Acct</th>
+          <th className="sticky left-[64px] z-20">Description</th>
           {monthLabels.map((m, i) => (
-            <th
-              key={`${m}-${i}`}
-              className="whitespace-nowrap px-2.5 py-2 text-right text-[11px] font-semibold uppercase tracking-[0.06em] text-muted"
-            >
+            <th key={`${m}-${i}`} className="dt-num whitespace-nowrap">
               {m}
             </th>
           ))}
-          <th className="whitespace-nowrap px-2.5 py-2 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-gold">
-            Annual
-          </th>
+          <th className="dt-num whitespace-nowrap text-ink">Annual</th>
         </tr>
       </thead>
 
@@ -279,111 +255,88 @@ export default function MonthlySpreadGrid({ spread, source, onReimport, onClear 
       {renderSection(sections.expense)}
 
       {/* Surplus / (Deficit) footer — revenue net of expense. */}
-      <tbody>
-        <tr className="border-t-2 border-gold/60 bg-gold/10">
-          <td className="sticky left-0 z-10 bg-gold/10 px-2.5 py-2.5" />
-          <td className="sticky left-[64px] z-10 bg-gold/10 px-2.5 py-2.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-navy">
+      <tfoot>
+        <tr className="dt-foot">
+          <td className="sticky left-0 z-10 bg-ground" />
+          <td className="sticky left-[64px] z-10 bg-ground text-[11px] font-semibold uppercase tracking-[0.08em] text-ink">
             Surplus / (Deficit)
           </td>
           {Array.from({ length: cols }, (_, i) => moneyCell(surplus[i], { bold: true }))}
           {moneyCell(surplusAnnual, { bold: true })}
         </tr>
-      </tbody>
+      </tfoot>
     </table>
   )
 
   return (
     <>
       <motion.div
-        initial={reduce ? { opacity: 0 } : { opacity: 0, y: 10 }}
+        initial={reduce ? { opacity: 0 } : { opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
-        className="card-soft overflow-hidden p-0"
       >
-        <div className="flex items-center justify-between gap-3 border-b border-rule bg-cream/50 px-4 py-3">
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gold/15 text-gold">
-              <Table2 size={17} />
-            </span>
-            <div>
-              <h3 className="font-serif text-base font-semibold text-navy sm:text-lg">Monthly Spread</h3>
-              <p className="flex flex-wrap items-center gap-1.5 text-[12px] text-muted">
-                {spread.accounts.length} accounts ·{' '}
-                {cols === 0 ? 'annual only' : `${cols} months · annual`}
-                {renderSourceBadge(badgeSource)}
-                {cols > 0 && (
-                  <span className="inline-flex items-center gap-1 text-gold">
-                    <Maximize2 size={11} /> full year shown — expand to zoom in
+        <Section
+          label="Monthly spread"
+          className="!mt-0"
+          aside={
+            <>
+              {onReimport && (
+                <Button variant="quiet" size="sm" onClick={onReimport} icon={<UploadCloud size={13} />}>
+                  Replace
+                </Button>
+              )}
+              {onClear &&
+                (clearConfirm ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="text-small font-medium tone-risk">Clear this budget?</span>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => {
+                        setClearConfirm(false)
+                        onClear()
+                      }}
+                    >
+                      Yes, clear
+                    </Button>
+                    <Button variant="secondary" size="sm" onClick={() => setClearConfirm(false)}>
+                      Cancel
+                    </Button>
                   </span>
-                )}
-              </p>
-            </div>
-          </div>
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-            {onReimport && (
-              <button
-                type="button"
-                onClick={onReimport}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-rule bg-white px-3 py-1.5 text-[12px] font-semibold text-navy transition-colors hover:border-gold hover:text-gold"
-              >
-                <UploadCloud size={14} /> Replace
-              </button>
+                ) : (
+                  <Button variant="quiet" size="sm" onClick={() => setClearConfirm(true)} icon={<Trash2 size={13} />}>
+                    Clear
+                  </Button>
+                ))}
+              <Button variant="secondary" size="sm" onClick={() => setExpanded(true)} icon={<Maximize2 size={13} />}>
+                Expand
+              </Button>
+            </>
+          }
+        >
+          <p className="mb-3 flex flex-wrap items-center gap-1.5 text-small text-ink2">
+            <Table2 size={13} aria-hidden="true" />
+            {spread.accounts.length} accounts ·{' '}
+            {cols === 0 ? 'annual only' : `${cols} months · annual`}
+            {renderSourceBadge(badgeSource)}
+            {cols > 0 && (
+              <span className="inline-flex items-center gap-1">
+                <Maximize2 size={11} aria-hidden="true" /> full year shown — expand to zoom in
+              </span>
             )}
-            {onClear &&
-              (clearConfirm ? (
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="text-[12px] font-medium text-rose-700">Clear this budget?</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setClearConfirm(false)
-                      onClear()
-                    }}
-                    className="rounded-lg bg-rose-600 px-2.5 py-1.5 text-[12px] font-semibold text-white transition-colors hover:bg-rose-700"
-                  >
-                    Yes, clear
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setClearConfirm(false)}
-                    className="rounded-lg border border-rule bg-white px-2.5 py-1.5 text-[12px] font-semibold text-navy transition-colors hover:border-gold"
-                  >
-                    Cancel
-                  </button>
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setClearConfirm(true)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-rule bg-white px-3 py-1.5 text-[12px] font-semibold text-navy transition-colors hover:border-rose-400 hover:text-rose-600"
-                >
-                  <Trash2 size={14} /> Clear
-                </button>
-              ))}
-            <button
-              type="button"
-              onClick={() => setExpanded(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-rule bg-white px-3 py-1.5 text-[12px] font-semibold text-navy transition-colors hover:border-gold hover:text-gold"
-            >
-              <Maximize2 size={14} /> Expand
-            </button>
-          </div>
-        </div>
+          </p>
 
-        <div className="px-2 pb-1">
           <FitWidth>{renderTable()}</FitWidth>
-        </div>
 
-        {excluded.accounts.length > 0 && (
-          <div className="border-t border-rule bg-amber-50/60 px-4 py-3">
-            <p className="flex items-center gap-1.5 text-[12px] font-semibold text-amber-700">
-              <AlertTriangle size={13} />
+          {excluded.accounts.length > 0 && (
+            <p className="mt-3 flex items-center gap-1.5 border-l-2 border-watch pl-3 text-small font-semibold text-ink">
+              <AlertTriangle size={13} className="tone-watch" aria-hidden="true" />
               {excluded.accounts.length} account
               {excluded.accounts.length === 1 ? '' : 's'} excluded from totals (unmapped or
               ancillary) — shown for reference, not rolled into the surplus.
             </p>
-          </div>
-        )}
+          )}
+        </Section>
       </motion.div>
 
       {/* Full-screen zoom/pan view (reuses the statements-page lightbox). */}
@@ -392,7 +345,7 @@ export default function MonthlySpreadGrid({ spread, source, onReimport, onClear 
         title="Monthly Spread"
         onClose={() => setExpanded(false)}
       >
-        <div className="inline-block rounded-xl bg-white p-2 shadow-2xl">{renderTable()}</div>
+        <div className="panel inline-block p-2">{renderTable()}</div>
       </ReportExpandOverlay>
     </>
   )
@@ -404,12 +357,12 @@ export default function MonthlySpreadGrid({ spread, source, onReimport, onClear 
 function SpreadGroupFragment({ group, cols }) {
   return (
     <>
-      <tr className="bg-white">
-        <td className="sticky left-0 z-10 bg-white px-2.5 pt-2 pb-0.5" />
-        <td className="sticky left-[64px] z-10 bg-white px-2.5 pt-2 pb-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-gold">
+      <tr className="dt-group">
+        <td className="sticky left-0 z-10 bg-ground" />
+        <td className="sticky left-[64px] z-10 bg-ground text-[11px] font-semibold uppercase tracking-[0.08em] text-ink2">
           {titleizeKey(group.key)}
         </td>
-        <td colSpan={cols + 1} className="bg-white" />
+        <td colSpan={cols + 1} />
       </tr>
       {group.accounts.map((a, idx) => renderAccountRow(a, cols, idx))}
       {renderSubtotalRow(`Subtotal ${titleizeKey(group.key)}`, group.total, group.annual, cols)}

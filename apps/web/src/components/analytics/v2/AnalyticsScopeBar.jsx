@@ -1,30 +1,87 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // AnalyticsScopeBar — the persistent SCOPE axis (whose numbers): My school ·
-// Compare · All schools, plus a school-year picker and a chip row. The ACTIVE
-// scope is unmistakable: a filled action-hue pill (gliding framer-motion layoutId,
-// static under reduced-motion) with white text + icon — the app-wide ModuleTabs
-// stepper-pill pattern. School scope = single-select chips; Compare = multi-select
-// (min 1); All-schools = chips hidden. Chip colour follows the roster INDEX
+// Compare · All schools · Peers, plus the school picker and the school-year
+// picker. Premium UI P3 (plan sketch 4): a `Toolbar` on the ground — a
+// segmented control for the scope (role=tablist, roving tabindex, arrow keys),
+// a `select` for the school in School scope, a "Compare" POPOVER with
+// checkboxes in Compare scope (the 17-chip wall is gone), the FY `select` on
+// the right. The entity swatch beside a school name follows the roster INDEX
 // (schoolColor) so it matches the charts' per-school hue and never shifts on
-// re-sort. A single-school org hides Compare + All schools (handled by the parent
-// passing only ['school']).
+// re-sort. A single-school org hides Compare + All schools (handled by the
+// parent passing only ['school']). The URL model (useAnalyticsNav) is untouched.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useRef } from 'react'
-import { motion, useReducedMotion } from 'framer-motion'
-import { School, ArrowLeftRight, LayoutGrid, Users } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { School, ArrowLeftRight, LayoutGrid, Users, ChevronDown } from 'lucide-react'
 import { schoolColor } from './chartPalette.js'
 import PeerScopeBar from './PeerScopeBar.jsx'
-
-// The v2 action hue — moduleHue() fallback (#2563EB), inline like ModuleTabs
-// (comma'd arbitrary Tailwind classes drop out of the dev JIT).
-const ACTION_HUE = '#2563EB'
-const PILL_STYLE = { background: ACTION_HUE, boxShadow: `0 6px 18px -6px ${ACTION_HUE}cc` }
+import { Toolbar } from '../../ui/surface/index.js'
 
 const SCOPE_META = {
   school: { Icon: School, label: 'My school' },
   compare: { Icon: ArrowLeftRight, label: 'Compare' },
   org: { Icon: LayoutGrid, label: 'All schools' },
   peers: { Icon: Users, label: 'Peers' },
+}
+
+/** The Compare picker: a button that opens a group of checkboxes (min 1 school).
+    Escape / outside click closes it and hands focus back to the trigger. */
+function ComparePicker({ roster, selectedSchools, onToggleSchool, rosterIndex }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  const btnRef = useRef(null)
+  const close = (refocus) => {
+    setOpen(false)
+    if (refocus) btnRef.current?.focus()
+  }
+  useEffect(() => {
+    if (!open) return undefined
+    const onDoc = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
+    }
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        setOpen(false)
+        btnRef.current?.focus()
+      }
+    }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+  const n = selectedSchools.length
+  return (
+    <div ref={ref} className="relative">
+      <button
+        ref={btnRef}
+        type="button"
+        className="btn btn-secondary btn-sm"
+        aria-expanded={open}
+        aria-controls="av2-compare-pop"
+        onClick={() => (open ? close(true) : setOpen(true))}
+      >
+        Compare · {n} {n === 1 ? 'school' : 'schools'}
+        <ChevronDown size={12} aria-hidden="true" />
+      </button>
+      {open ? (
+        <div id="av2-compare-pop" className="pop" role="group" aria-label="Schools to compare">
+          {roster.map((r) => {
+            const idx = rosterIndex(r.id)
+            const on = selectedSchools.includes(r.id)
+            return (
+              <label key={r.id} className="pop-row">
+                <input type="checkbox" checked={on} onChange={() => onToggleSchool(r.id)} />
+                <span className="swatch" style={{ background: schoolColor(idx < 0 ? 0 : idx) }} aria-hidden="true" />
+                <span className="min-w-0 truncate">{r.name}</span>
+              </label>
+            )
+          })}
+        </div>
+      ) : null}
+    </div>
+  )
 }
 
 export default function AnalyticsScopeBar({
@@ -44,7 +101,6 @@ export default function AnalyticsScopeBar({
   dims,
   onDims,
 }) {
-  const reduce = useReducedMotion()
   const rosterIndex = (id) => roster.findIndex((r) => r.id === id)
   const tabRefs = useRef([])
 
@@ -61,112 +117,72 @@ export default function AnalyticsScopeBar({
     tabRefs.current[next]?.focus()
   }
 
+  const activeIdx = rosterIndex(school)
+
   return (
-    <div className="card-soft mb-4 overflow-hidden">
-      {/* Scope buttons + year picker */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-rule/50 px-3 py-2.5 sm:px-4">
-        <div role="tablist" aria-label="Whose numbers" className="av2-chiprow">
+    <div className="mb-2">
+      <Toolbar
+        aria-label="Whose numbers"
+        aside={
+          fyOptions.length > 0 ? (
+            <label className="flex items-center gap-2">
+              <span className="toolbar-label hidden sm:inline">School year</span>
+              <select className="sel" value={fiscalYearStart ?? ''} onChange={(e) => onFy(e.target.value || null)} aria-label="School year">
+                {fyOptions.map((o) => (
+                  <option key={o.label} value={o.start}>
+                    FY{o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null
+        }
+      >
+        <div role="tablist" aria-label="Scope" className="seg">
           {scopes.map((key, i) => {
             const active = key === scope
             const { Icon, label } = SCOPE_META[key]
             return (
-              <motion.button
+              <button
                 key={key}
                 ref={(el) => (tabRefs.current[i] = el)}
+                type="button"
                 role="tab"
                 aria-selected={active}
                 aria-controls="av2-panel"
                 tabIndex={active ? 0 : -1}
                 onClick={() => onScope(key)}
                 onKeyDown={(e) => onScopeKeyDown(e, i)}
-                whileHover={!active && !reduce ? { y: -2 } : undefined}
-                style={{ '--tw-ring-color': ACTION_HUE }}
-                className={`relative flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-[13.5px] font-semibold outline-none transition-colors focus-visible:ring-2 ${
-                  active ? 'text-white' : 'text-navy hover:bg-cream/70'
-                }`}
+                className="seg-btn"
               >
-                {/* Pill UNDER the content via paint order (rendered first + content
-                    lifted with relative) — NEVER -z-10, which drops it behind the
-                    card's opaque background and turns the active tab invisible. */}
-                {active &&
-                  (reduce ? (
-                    <span aria-hidden className="absolute inset-0 rounded-full" style={PILL_STYLE} />
-                  ) : (
-                    <motion.span
-                      aria-hidden
-                      layoutId="av2-scope-pill"
-                      transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-                      className="absolute inset-0 rounded-full"
-                      style={PILL_STYLE}
-                    />
-                  ))}
-                <Icon size={15} aria-hidden className="relative" />
-                <span className="relative">{label}</span>
-              </motion.button>
+                <Icon size={13} aria-hidden="true" />
+                <span>{label}</span>
+              </button>
             )
           })}
         </div>
-        <span className="flex-1" />
-        {fyOptions.length > 0 && (
-          <label className="flex items-center gap-2 text-[12.5px] text-muted">
-            <span className="hidden sm:inline">School year</span>
-            <select
-              value={fiscalYearStart ?? ''}
-              onChange={(e) => onFy(e.target.value || null)}
-              style={{ '--tw-ring-color': ACTION_HUE }}
-              className="rounded-lg border border-rule/60 bg-white px-2.5 py-1.5 text-[13px] font-semibold text-navy outline-none focus-visible:ring-2"
-            >
-              {fyOptions.map((o) => (
-                <option key={o.label} value={o.start}>
-                  FY{o.label}
+
+        {/* School scope: ONE select. Compare: the popover picker. Org + peers: none. */}
+        {scope === 'school' && roster.length > 0 ? (
+          <label className="flex items-center gap-2">
+            <span className="swatch" style={{ background: schoolColor(activeIdx < 0 ? 0 : activeIdx) }} aria-hidden="true" />
+            <select className="sel" value={school ?? ''} onChange={(e) => onSchool(e.target.value)} aria-label="School">
+              {roster.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
                 </option>
               ))}
             </select>
           </label>
-        )}
-      </div>
+        ) : null}
+        {scope === 'compare' && roster.length > 0 ? (
+          <ComparePicker roster={roster} selectedSchools={selectedSchools} onToggleSchool={onToggleSchool} rosterIndex={rosterIndex} />
+        ) : null}
+      </Toolbar>
 
-      {/* Peers scope: the focus-school picker + dimension toggles (not the chips). */}
+      {/* Peers scope: the focus-school picker + dimension toggles. */}
       {scope === 'peers' && (
         <PeerScopeBar roster={roster} focus={focus} onFocus={onFocus} dims={dims} onDims={onDims} />
-      )}
-
-      {/* Chip row — school (single) / compare (multi). All-schools + peers hide it. */}
-      {scope !== 'org' && scope !== 'peers' && roster.length > 0 && (
-        <div className="flex items-center gap-2 px-3 py-2.5 sm:px-4">
-          <span className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
-            {scope === 'compare' ? 'Compare' : 'School'}
-          </span>
-          <div className="av2-chiprow">
-            {roster.map((r) => {
-              const idx = rosterIndex(r.id)
-              const color = schoolColor(idx < 0 ? 0 : idx)
-              const on =
-                scope === 'compare' ? selectedSchools.includes(r.id) : school === r.id
-              return (
-                <button
-                  key={r.id}
-                  type="button"
-                  aria-pressed={on}
-                  onClick={() =>
-                    scope === 'compare' ? onToggleSchool(r.id) : onSchool(r.id)
-                  }
-                  className={`inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-[13px] font-semibold transition-colors ${
-                    on
-                      ? 'border-navy/30 bg-white text-navy shadow-card'
-                      : 'border-rule/60 text-muted hover:border-navy/30 hover:text-navy'
-                  }`}
-                >
-                  <span
-                    className="h-2.5 w-2.5 rounded-full"
-                    style={{ background: on ? color : '#C4CCDF' }}
-                  />
-                  {r.name}
-                </button>
-              )
-            })}
-          </div>
-        </div>
       )}
     </div>
   )

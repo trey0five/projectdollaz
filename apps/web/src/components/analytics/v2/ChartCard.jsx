@@ -1,59 +1,49 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // ChartCard — the frame every analytics-v2 visual lives in (Charts gallery AND
-// the Overview bento). Gives the chart the ONE card chrome (`.av2-card`: white,
-// rounded-2xl, slate hairline ring, soft ambient shadow — analytics-v2.css), its
-// title row + an "as of {periodEnd/FY}" timestamp (trust signal, derived upstream
-// from the active period — never invented here), its cross-link anchor (id =
-// anchorId, the flash target from a scorecard "chart →"), and its "view as table"
-// twin (jumps to the Scorecard and flashes the row for `metricKey`). The chart
-// PRIMITIVE is passed as children; the card owns none of the drawing (dataviz
-// stays in charts/). Hover lift rides framer's whileHover so it never fights the
-// entrance transform. Reduced-motion drops both the enter animation and the lift.
+// the Overview). Premium UI P3: it is a `Section`, not a card — the chart sits
+// ON THE GROUND under a label row (eyebrow `sub` + hairline + the "as of"
+// stamp, the ⓘ methodology popover and the "View as table" twin as the aside)
+// and a 17px heading. It keeps its cross-link anchor (id = anchorId, the flash
+// target from a scorecard "chart →" — `.sec[data-flash]` rings it) and its
+// "view as table" twin (jumps to the Scorecard and flashes the row for
+// `metricKey`). The chart PRIMITIVE is passed as children; this owns none of
+// the drawing (dataviz stays in charts/). Entrance: a one-shot fade on mount
+// (not on scroll — the page is complete at rest, plan §2.5).
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion, useReducedMotion } from 'framer-motion'
 import { Table2 } from 'lucide-react'
 import InfoPopover from '../../ui/InfoPopover.jsx'
+import { Section, Button } from '../../ui/surface/index.js'
 
 // `info` (optional, additive): methodology content rendered behind an ⓘ popover
-// in the header — the progressive-disclosure home for a chart's full "what this
-// measures" text once the body leads with a one-line caption instead. Cards that
-// don't pass it render byte-identically to before the prop existed.
+// in the label row — the progressive-disclosure home for a chart's full "what
+// this measures" text once the body leads with a one-line caption instead.
 export default function ChartCard({ id, metricKey, title, sub, asOf, info, infoLabel, onViewAsTable, delay = 0, className = '', children }) {
   const reduce = useReducedMotion()
+  const aside = (
+    <>
+      {asOf && <span className="whitespace-nowrap tabular-nums">{asOf}</span>}
+      {info && <InfoPopover label={infoLabel ?? 'How to read this chart'}>{info}</InfoPopover>}
+      {metricKey && onViewAsTable && (
+        <Button variant="quiet" size="sm" onClick={() => onViewAsTable(metricKey)} icon={<Table2 size={12} />}>
+          View as table
+        </Button>
+      )}
+    </>
+  )
   return (
-    <motion.div
+    <Section
+      as={motion.section}
       id={id}
-      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12 }}
-      whileInView={reduce ? { opacity: 1 } : { opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: '-40px' }}
-      transition={{ duration: 0.4, delay, ease: 'easeOut' }}
-      whileHover={reduce ? undefined : { y: -2 }}
-      className={`av2-card flex min-w-0 flex-col p-4 sm:p-5 ${className}`}
+      label={sub ?? title}
+      aside={aside}
+      className={`sec-chart !mt-0 min-w-0${className ? ` ${className}` : ''}`}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: reduce ? 0 : 0.4, delay: reduce ? 0 : delay, ease: 'easeOut' }}
     >
-      <div className="mb-2 flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          {sub && (
-            <p className="mb-0.5 text-[10.5px] font-bold uppercase tracking-[0.14em] text-gold">{sub}</p>
-          )}
-          <h4 className="font-serif text-[16px] font-semibold leading-snug text-navy sm:text-[17px]">
-            {title}
-          </h4>
-        </div>
-        <div className="flex shrink-0 items-center gap-2.5">
-          {asOf && <span className="whitespace-nowrap text-[11px] font-medium text-slate-400 tabular-nums">{asOf}</span>}
-          {info && <InfoPopover label={infoLabel ?? 'How to read this chart'}>{info}</InfoPopover>}
-          {metricKey && onViewAsTable && (
-            <button
-              type="button"
-              onClick={() => onViewAsTable(metricKey)}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-rule/60 px-2.5 py-1 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-muted transition-colors hover:border-gold/60 hover:text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/50"
-            >
-              <Table2 size={12} /> View as table
-            </button>
-          )}
-        </div>
-      </div>
-      <div className="min-w-0 flex-1">{children}</div>
-    </motion.div>
+      {sub ? <h4 className="mb-3 text-heading font-semibold text-ink">{title}</h4> : null}
+      <div className="min-w-0">{children}</div>
+    </Section>
   )
 }

@@ -9,14 +9,16 @@
 // @finrep/analytics MetricResult, so Overview tile = Scorecard row = chart center.
 //
 // Cross-link: a Scorecard "chart →" sets pendingFlash + switches to Charts; an
-// effect keyed on (view, pendingFlash) scrolls+flashes the anchored card once it's
-// in the DOM. A chart "view as table" pushes ?view=scorecard&highlight=<key>, which
-// the Scorecard scrolls+flashes then strips. Reduced-motion → instant scroll + a
-// static ring (analytics-v2.css).
+// effect keyed on (view, pendingFlash) scrolls+flashes the anchored chart Section
+// once it's in the DOM. A chart "view as table" pushes ?view=scorecard&highlight=
+// <key>, which the Scorecard scrolls+flashes (the ROW) then strips. Reduced-motion
+// → instant scroll + a static tint (surface.css).
+//
+// Premium UI P3: the page opens with a `PageHeader` (eyebrow ANALYTICS · school ·
+// FY, the title, an as-of meta line) on the ground — no icon tile, no ambient
+// wash; the scope bar is a Toolbar and the view axis ink tabs.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { ChevronRight, BarChart3 } from 'lucide-react'
 import { useReducedMotion } from 'framer-motion'
 import { useScope } from '../../../context/ScopeContext.jsx'
 import { useSchools } from '../../../context/SchoolContext.jsx'
@@ -38,6 +40,7 @@ import ChartsView from './ChartsView.jsx'
 import ScorecardView from './ScorecardView.jsx'
 import PeersView from './PeersView.jsx'
 import BackLink from '../../ui/BackLink.jsx'
+import { PageHeader } from '../../ui/surface/index.js'
 
 const SCHOOL_TREND_KEYS = [
   'operating_margin', 'days_cash_on_hand', 'months_operating_reserve', 'tuition_dependency', 'enrollment_change_yoy',
@@ -270,18 +273,23 @@ export default function AnalyticsV2() {
 
   const canCustomize = isOwner && entitled
 
+  const schoolName = roster.find((r) => r.id === primarySchool)?.name ?? activeSchool?.name ?? null
+  const scopeWord = { school: schoolName, compare: 'Compare', org: 'All schools', peers: 'Peers' }[nav.scope]
+  const eyebrow = ['Analytics', scopeWord, fyLabel ? `FY ${fyLabel}` : null].filter(Boolean).join(' · ')
+  const meta = [isSchool ? schoolAsOf : orgAsOf, scopeWord && !isSchool ? scopeWord : null].filter(Boolean).join(' · ') || null
+
   if (!billingLoading && !entitled) {
     return (
-      <div className="av2-ground mx-auto max-w-page px-4 py-8 sm:px-10">
-        <Shell />
+      <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
+        <Shell eyebrow={eyebrow} meta={meta} />
         <EntitlementPausedPanel />
       </div>
     )
   }
 
   return (
-    <div className="av2-ground mx-auto max-w-page px-4 py-8 sm:px-10">
-      <Shell />
+    <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
+      <Shell eyebrow={eyebrow} meta={meta} />
 
       <AnalyticsScopeBar
         scopes={scopes}
@@ -307,7 +315,7 @@ export default function AnalyticsV2() {
 
       <AnalyticsSubTabs view={nav.view} onView={nav.setView} />
 
-      <div role="tabpanel" id="av2-panel" aria-labelledby={`av2-subtab-${nav.view}`} className="pt-5">
+      <div role="tabpanel" id="av2-panel" aria-labelledby={`av2-subtab-${nav.view}`} className="pt-6">
         {isPeers ? (
           <PeersView peers={peersCtx} view={nav.view} />
         ) : (
@@ -338,24 +346,11 @@ export default function AnalyticsV2() {
   )
 }
 
-function Shell() {
+function Shell({ eyebrow, meta }) {
   return (
-    <div className="mb-4">
-      <BackLink className="mb-3" />
-      <nav aria-label="Breadcrumb" className="mb-2 flex items-center gap-1 text-[12.5px] text-muted">
-        <Link to="/app" className="hover:text-navy">Home</Link>
-        <ChevronRight size={13} />
-        <span className="font-semibold text-navy">Analytics</span>
-      </nav>
-      <div className="flex items-center gap-2.5">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gold-gradient text-white shadow-glow">
-          <BarChart3 size={20} />
-        </span>
-        <div>
-          <h1 className="font-serif text-xl font-semibold text-navy sm:text-2xl">Analytics</h1>
-          <p className="text-[14px] text-muted">One school, any school, or all your schools — the story, the graphs, the metrics.</p>
-        </div>
-      </div>
+    <div className="mb-5">
+      <BackLink className="mb-2" />
+      <PageHeader eyebrow={eyebrow} title="Analytics" meta={meta} hue="37 99 235" />
     </div>
   )
 }

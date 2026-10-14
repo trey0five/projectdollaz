@@ -5,9 +5,12 @@
 //
 // Pure presentation over the `rollup` prop; everything derived at render (no
 // effects, no in-render component definitions — React-Compiler safe).
+// Premium UI P3: the three consolidated figures are a `StatStrip`; the tables
+// are `DataTable`s under Section rules (sticky head, `.dt-num`, a footer line
+// for each category total) — no cards, no icon tiles, no gold total row.
 import { motion } from 'framer-motion'
-import { Building2, CheckCircle2, MinusCircle, Layers } from 'lucide-react'
 import { fmt } from '../../lib/format.js'
+import { Section, StatStrip, Stat, DataTable, Pill } from '../ui/surface/index.js'
 
 function titleizeKey(key) {
   if (!key) return 'Other'
@@ -28,20 +31,35 @@ function categoryRows(consolidated, section) {
     .sort((a, b) => b.value - a.value)
 }
 
+const SCHOOL_COLUMNS = [
+  { key: 'name', header: 'School', sortable: true, render: (s) => <span className="font-semibold text-ink">{s.name}</span> },
+  { key: 'totalRevenue', header: 'Revenue', num: true, sortable: true, render: (s) => fmt(s.totalRevenue) },
+  { key: 'totalExpenses', header: 'Expenditures', num: true, sortable: true, render: (s) => fmt(s.totalExpenses) },
+  {
+    key: 'budget',
+    header: 'Budget',
+    sortable: true,
+    sortValue: (s) => ((s.imported ?? s.hasBudget) ? 0 : 1),
+    render: (s) =>
+      (s.imported ?? s.hasBudget) ? (
+        <Pill variant="status" tone="good">Imported</Pill>
+      ) : (
+        <Pill variant="status" tone="neutral">Pending</Pill>
+      ),
+  },
+]
+
+const CATEGORY_COLUMNS = [
+  { key: 'key', header: 'Category', render: (r) => (r.isTotal ? 'Total' : titleizeKey(r.key)) },
+  { key: 'value', header: 'Amount', num: true, render: (r) => fmt(r.value) },
+]
+
 export default function OrgRollup({ rollup, loading, error }) {
   if (loading) {
-    return (
-      <div className="card-soft animate-pulse px-6 py-14 text-center">
-        <p className="font-serif text-base italic text-muted">Consolidating your organization…</p>
-      </div>
-    )
+    return <p className="sec-note animate-pulse py-12 text-center italic">Consolidating your organization…</p>
   }
   if (error) {
-    return (
-      <div className="card-soft border-dashed px-6 py-12 text-center">
-        <p className="font-serif text-base italic text-muted">{error}</p>
-      </div>
-    )
+    return <p className="sec-note py-12 text-center italic">{error}</p>
   }
   if (!rollup) return null
 
@@ -57,85 +75,25 @@ export default function OrgRollup({ rollup, loading, error }) {
   const revRows = categoryRows(consolidated, 'revenue')
   const expRows = categoryRows(consolidated, 'expense')
 
-  const summaryCard = (label, value, accent) => (
-    <div key={label} className="card-vital p-4 text-center">
-      <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">{label}</div>
-      <div className={`mt-1 font-serif text-xl font-semibold ${accent || 'text-navy'}`}>
-        {value == null ? '—' : fmt(value)}
-      </div>
-    </div>
-  )
-
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      className="space-y-5"
-    >
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {summaryCard('Consolidated revenue', totalRevenue, 'text-emerald-700')}
-        {summaryCard('Consolidated expenditures', totalExpenses, 'text-navy')}
-        {summaryCard(
-          'Surplus / (Deficit)',
-          surplus,
-          surplus != null && surplus < 0 ? 'text-rose-600' : 'text-gold',
-        )}
-      </div>
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+      <StatStrip cols={3}>
+        <Stat label="Consolidated revenue" value={totalRevenue == null ? '—' : fmt(totalRevenue)} />
+        <Stat label="Consolidated expenditures" value={totalExpenses == null ? '—' : fmt(totalExpenses)} />
+        <Stat
+          label="Surplus / (Deficit)"
+          value={surplus == null ? '—' : fmt(surplus)}
+          status={surplus == null ? undefined : surplus < 0 ? 'risk' : 'good'}
+        />
+      </StatStrip>
 
       {/* Per-school totals */}
-      <div className="card-soft overflow-hidden p-0">
-        <div className="flex items-center gap-2.5 border-b border-rule bg-cream/50 px-4 py-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gold/15 text-gold">
-            <Building2 size={17} />
-          </span>
-          <h3 className="font-serif text-base font-semibold text-navy sm:text-lg">
-            Schools in your organization
-          </h3>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-[13px]">
-            <thead>
-              <tr className="bg-cream">
-                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted">School</th>
-                <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-muted">Revenue</th>
-                <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-muted">Expenditures</th>
-                <th className="px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-wide text-muted">Budget</th>
-              </tr>
-            </thead>
-            <tbody>
-              {schools.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="px-3 py-8 text-center font-serif italic text-muted">
-                    No schools found for your organization.
-                  </td>
-                </tr>
-              )}
-              {schools.map((s) => (
-                <tr key={s.schoolId} className="border-t border-rule/50">
-                  <td className="px-3 py-2 font-medium text-ink">{s.name}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-ink">{fmt(s.totalRevenue)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-ink">{fmt(s.totalExpenses)}</td>
-                  <td className="px-3 py-2 text-center">
-                    {s.imported ?? s.hasBudget ? (
-                      <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-emerald-600">
-                        <CheckCircle2 size={14} /> Imported
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-muted">
-                        <MinusCircle size={14} /> Pending
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <Section label="Schools in your organization">
+        <DataTable columns={SCHOOL_COLUMNS} rows={schools} rowKey="schoolId" caption="Schools in your organization" empty="No schools found for your organization." />
+      </Section>
 
       {/* Consolidated category tables */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-x-10 lg:grid-cols-2">
         <CategoryTable title="Consolidated revenue" rows={revRows} />
         <CategoryTable title="Consolidated expenditures" rows={expRows} />
       </div>
@@ -147,36 +105,15 @@ export default function OrgRollup({ rollup, loading, error }) {
 function CategoryTable({ title, rows }) {
   const total = rows.reduce((s, r) => s + r.value, 0)
   return (
-    <div className="card-soft overflow-hidden p-0">
-      <div className="flex items-center gap-2.5 border-b border-rule bg-cream/50 px-4 py-3">
-        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gold/15 text-gold">
-          <Layers size={16} />
-        </span>
-        <h3 className="font-serif text-base font-semibold text-navy">{title}</h3>
-      </div>
-      <table className="w-full border-collapse text-[13px]">
-        <tbody>
-          {rows.length === 0 && (
-            <tr>
-              <td colSpan={2} className="px-4 py-6 text-center font-serif italic text-muted">
-                No data yet.
-              </td>
-            </tr>
-          )}
-          {rows.map((r) => (
-            <tr key={r.key} className="border-t border-rule/50">
-              <td className="px-4 py-2 text-ink">{titleizeKey(r.key)}</td>
-              <td className="px-4 py-2 text-right tabular-nums text-ink">{fmt(r.value)}</td>
-            </tr>
-          ))}
-          {rows.length > 0 && (
-            <tr className="border-t border-gold/50 bg-gold/5">
-              <td className="px-4 py-2 text-[12px] font-semibold uppercase tracking-wide text-navy">Total</td>
-              <td className="px-4 py-2 text-right font-semibold tabular-nums text-navy">{fmt(total)}</td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
+    <Section label={title} className="min-w-0">
+      <DataTable
+        columns={CATEGORY_COLUMNS}
+        rows={rows}
+        rowKey="key"
+        footRows={rows.length > 0 ? [{ key: '__total', value: total, isTotal: true }] : []}
+        caption={title}
+        empty="No data yet."
+      />
+    </Section>
   )
 }

@@ -11,8 +11,8 @@
 // tabs). Structure/gates/skeleton/microtask-deferred-default mirror HomeDashboard
 // and AnalyticsDashboard exactly.
 // ─────────────────────────────────────────────────────────────────────────────
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { animate, motion, useReducedMotion } from 'framer-motion'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { motion, useReducedMotion } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   CircleDollarSign,
@@ -23,7 +23,6 @@ import {
   FileBarChart2,
   ShieldCheck,
   ArrowRight,
-  Scale,
   Sparkles,
   ChevronUp,
   Activity,
@@ -36,27 +35,24 @@ import { useBilling } from '../context/BillingContext.jsx'
 import { usePersistence } from '../context/PersistenceContext.jsx'
 import { useUiV2 } from '../context/UiFlagContext.jsx'
 import ModuleTabs from '../components/module/ModuleTabs.jsx'
-import { moduleHue } from '../components/module/moduleAnatomy.js'
 import AddDataTab from '../components/wizard/AddDataTab.jsx'
 import TrialBalanceModalBody from '../components/datahub/TrialBalanceModalBody.jsx'
 import LightUpReveal from '../components/finance/LightUpReveal.jsx'
 import UploadsSummary from '../components/finance/UploadsSummary.jsx'
 import { useAnalytics, useInsights, useBudget } from '../hooks/useAnalytics.js'
 import { useCompliance } from '../hooks/useCompliance.js'
-import { metricFormat, formatMetricValue } from '../lib/metricMeta.js'
+import { metricFormat, formatMetricValue, deltaTone, formatDelta, isBandedStatus } from '../lib/metricMeta.js'
 import { addDataHref } from '../lib/dataDestinations.js'
 import { fmtDollar } from '../lib/format.js'
-import StatusDot from '../components/analytics/StatusDot.jsx'
-import DeltaChip from '../components/analytics/DeltaChip.jsx'
+import AnimatedMetricValue from '../components/analytics/AnimatedMetricValue.jsx'
+import { MARK, DELTA_TONE } from '../components/analytics/v2/statusStyle.js'
 import EntitlementPausedPanel from '../components/analytics/EntitlementPausedPanel.jsx'
 import { HeadlineSkeleton, MetricCardSkeleton } from '../components/analytics/skeletons.jsx'
 import { toSignals } from '../components/home/HomeHero.jsx'
 import PeriodSelector from '../components/analytics/PeriodSelector.jsx'
-import { PageHeader, Pill, Button } from '../components/ui/surface/index.js'
+import { PageHeader, Pill, Button, Section, Tile, Panel } from '../components/ui/surface/index.js'
 import { formatShortDate } from '../lib/format.js'
 import BoardPacketExportButton from '../components/reports/BoardPacketExportButton.jsx'
-// The legacy `.module-tile` card (SectionCard below) until P3 moves it to `Tile`.
-import '../styles/module-tile-legacy.css'
 
 const VITAL_KEYS = ['operating_margin', 'days_cash_on_hand', 'months_operating_reserve']
 
@@ -175,77 +171,50 @@ function FinanceHeader({
 const SIGNAL_TONE = { risk: 'risk', watch: 'watch', strength: 'good', neutral: 'neutral' }
 const SIGNAL_LABEL = { risk: 'Risk', watch: 'Watch', strength: 'Strength', neutral: 'Note' }
 
-// ── A reusable section card, styled like the HOME module tiles: the whole card
-// is clickable (a stretched link) and the finance-hue color-flood sweeps in on
-// hover (module-tile / module-tile--panel in home-tiles.css). Inner links or
-// buttons in the body stay independently clickable above the stretched hit.
-// Module-scope helper (React-compiler discipline). ──────────────────────────────
-function SectionCard(props) {
+// ── A finance COLUMN (Premium UI P3, plan sketch 1): a `Section` label row, a
+// list of ruled figure lines, and ONE quiet ink link under it — no box, no
+// stretched hit, no uppercase gold. Six of these sit in `.sec-cols` on the
+// ground. Module-scope helper (React-compiler discipline). ───────────────────
+function FinanceColumn(props) {
   const { to, title, viewLabel, children } = props
-  const SectionIcon = props.Icon
-  // Broadcast the flood state so stat rows count up in sync with the CSS refill.
-  const [hovered, setHovered] = useState(false)
+  const ColIcon = props.Icon
   return (
-    <div
-      className="module-tile module-tile--panel"
-      style={{ '--tile-hue': moduleHue('finance') }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
-      <Link to={to} className="tile-panel-hit" aria-label={`Open ${title}`} />
-      <div className="tile-body">
-        <div className="flex items-center gap-2.5">
-          <span className="tile-art">
-            <SectionIcon size={18} />
-          </span>
-          <h3 className="tile-title font-serif text-lg font-semibold text-navy">{title}</h3>
-          <span className="tile-arrow ml-auto">
-            <ArrowRight size={16} />
-          </span>
-        </div>
-        <div className="flex-1">
-          <TileHoverCtx.Provider value={hovered}>{children}</TileHoverCtx.Provider>
-        </div>
-        <span className="inline-flex items-center gap-1 text-[13px] font-bold uppercase tracking-[0.08em] text-gold">
-          {viewLabel} <ArrowRight size={13} />
+    <Section
+      label={
+        <span className="inline-flex items-center gap-1.5">
+          {ColIcon ? <ColIcon size={13} aria-hidden="true" /> : null}
+          {title}
         </span>
-      </div>
-    </div>
+      }
+      className="min-w-0"
+    >
+      {children}
+      <Link to={to} className="sec-more" aria-label={`${viewLabel} — ${title}`}>
+        {viewLabel} <ArrowRight size={13} aria-hidden="true" />
+      </Link>
+    </Section>
   )
 }
 
 // ── ui.v2 Records panel: a link board into the finance sub-registers (Statements,
-// Cash & Collections, Budget). Pure navigation — reuses SectionCard, no new API. ──
+// Cash & Collections, Budget). Pure navigation — `Tile` is the one card family
+// that stays for doors (plan §2.4), no new API. ───────────────────────────────
 function FinanceRecords() {
   return (
     <div className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
       <ModuleOverviewLink module="finance" className="mb-3" />
-      <p className="mb-4 text-[14.5px] text-muted">
+      <p className="mb-4 text-body text-ink2">
         Your finance workspaces — statements, cash, forecast and budget, each one click away.
       </p>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <SectionCard to="/statements" Icon={FileStack} title="Statements" viewLabel="Open statements">
-          <p className="text-[14.5px] text-muted">
-            Your financial statements and every saved period.
-          </p>
-        </SectionCard>
-        <SectionCard to="/cash" Icon={CircleDollarSign} title="Cash & Collections" viewLabel="Open cash">
-          <p className="text-[14.5px] text-muted">
-            Cash position, runway, and collections aging.
-          </p>
-        </SectionCard>
+        <Tile to="/statements" hue="37 99 235" icon={<FileStack size={22} />} title="Statements" body="Your financial statements and every saved period." />
+        <Tile to="/cash" hue="37 99 235" icon={<CircleDollarSign size={22} />} title="Cash & Collections" body="Cash position, runway, and collections aging." />
         {/* The FORWARD view, deliberately its own tile rather than folded into
             Cash & Collections. That page answers "what is outstanding today";
             this one answers "when do we run low" — different questions, and
             burying the second inside the first is how it stops being found. */}
-        <SectionCard to="/cash-flow" Icon={TrendingUp} title="Cash Forecast" viewLabel="Open forecast">
-          <p className="text-[14.5px] text-muted">
-            When cash is projected to run low, by how much, and what is driving it.
-          </p>
-        </SectionCard>
-        <SectionCard to="/budget" Icon={Wallet} title="Budget" viewLabel="Open budget">
-          <p className="text-[14.5px] text-muted">Budget vs. actual and the annual spread.</p>
-        </SectionCard>
+        <Tile to="/cash-flow" hue="37 99 235" icon={<TrendingUp size={22} />} title="Cash Forecast" body="When cash is projected to run low, by how much, and what is driving it." />
+        <Tile to="/budget" hue="37 99 235" icon={<Wallet size={22} />} title="Budget" body="Budget vs. actual and the annual spread." />
       </div>
     </div>
   )
@@ -258,128 +227,66 @@ function FinanceReports({ periodId }) {
     <div className="mx-auto max-w-page space-y-4 px-4 py-6 sm:px-10 sm:py-8">
       <ModuleOverviewLink module="finance" />
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <SectionCard to="/reports" Icon={FileBarChart2} title="Reports workspace" viewLabel="Open Reports">
-          <p className="mb-3 text-[14.5px] text-muted">
-            Export a board-ready finance-committee packet for the selected period, or open the
-            Reports workspace.
-          </p>
-          {periodId && <BoardPacketExportButton periodId={periodId} />}
-        </SectionCard>
-        <div className="card-soft flex flex-col p-4 sm:p-5">
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gold/15 text-gold">
-              <FileStack size={18} />
-            </span>
-            <h3 className="font-serif text-lg font-semibold text-navy">Print documents</h3>
-          </div>
-          <p className="mt-3 flex-1 text-[14.5px] text-muted">
-            Open a print-ready board document in a new tab.
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Link
-              to="/board-packet/print"
-              className="inline-flex items-center gap-1 rounded-lg border border-gold/50 bg-gold/10 px-3 py-1.5 text-[13px] font-semibold text-navy transition hover:bg-gold/20"
-            >
+        <Tile to="/reports" hue="37 99 235" icon={<FileBarChart2 size={22} />} title="Reports workspace" body="Export a board-ready finance-committee packet for the selected period, or open the Reports workspace.">
+          {periodId && (
+            <div className="tile-lift relative z-[2]">
+              <BoardPacketExportButton periodId={periodId} />
+            </div>
+          )}
+        </Tile>
+        <Tile hue="37 99 235" icon={<FileStack size={22} />} title="Print documents" body="Open a print-ready board document in a new tab." arrow={false}>
+          <div className="mt-1 flex flex-wrap gap-2">
+            <Button variant="secondary" size="sm" to="/board-packet/print">
               Board packet <ArrowRight size={13} />
-            </Link>
-            <Link
-              to="/reports/board/print"
-              className="inline-flex items-center gap-1 rounded-lg border border-gold/50 bg-gold/10 px-3 py-1.5 text-[13px] font-semibold text-navy transition hover:bg-gold/20"
-            >
+            </Button>
+            <Button variant="secondary" size="sm" to="/reports/board/print">
               Board report <ArrowRight size={13} />
-            </Link>
+            </Button>
           </div>
-        </div>
+        </Tile>
       </div>
     </div>
   )
 }
 
-// ── Live-on-hover stat machinery for the section cards ────────────────────────
-// TileHoverCtx broadcasts "the flood is up" from SectionCard to its stat rows so
-// the numbers COUNT UP from zero in sync with the CSS bar refill — the card feels
-// like it recomputes live under the cursor. Values at rest are always the real
-// figures (never a fabricated number; nulls stay dashed).
-const TileHoverCtx = createContext(false)
+// ── Figure lines for the columns ─────────────────────────────────────────────
+// Values at rest are always the real figures (never a fabricated number; nulls
+// stay dashed); a numeric figure counts up ONCE on mount (AnimatedMetricValue).
 
-// Rolls the displayed number 0 → amount each time the tile flood comes up.
-function CountUpValue({ amount, format, className = '' }) {
-  const hovered = useContext(TileHoverCtx)
-  const reduce = useReducedMotion()
-  const [display, setDisplay] = useState(amount)
-  const runRef = useRef(null)
-
-  useEffect(() => setDisplay(amount), [amount])
-  useEffect(() => {
-    if (!hovered || amount == null || reduce) return undefined
-    runRef.current?.stop()
-    runRef.current = animate(0, amount, {
-      duration: 0.8,
-      ease: [0.22, 1, 0.36, 1],
-      onUpdate: (v) => setDisplay(v),
-    })
-    return () => runRef.current?.stop()
-  }, [hovered, amount, reduce])
-
-  if (amount == null) return <span className={className}>—</span>
-  const v = format === 'currency' ? Math.round(display ?? amount) : (display ?? amount)
-  return <span className={className}>{formatMetricValue(v, format)}</span>
-}
-
-// A single labeled figure row (Statements card): label + counting value + a
-// hue magnitude bar (pct of the card's largest figure) that refills on hover.
-function FigureRow({ label, amount, format = 'currency', pct = null }) {
+// A single labeled figure line (Statements column): label + tabular value.
+function FigureRow({ label, amount, format = 'currency' }) {
   return (
-    <div className="border-b border-rule/40 py-2 last:border-0">
-      <div className="flex items-baseline justify-between gap-3">
-        <span className="text-[14.5px] text-muted">{label}</span>
-        <CountUpValue
-          amount={amount}
-          format={format}
-          className="tabular-nums text-[15px] font-semibold text-navy"
-        />
-      </div>
-      {pct != null && amount != null ? (
-        <div className="stat-track mt-1.5" aria-hidden>
-          <div
-            className={`stat-fill${amount < 0 ? ' stat-fill--negative' : ''}`}
-            style={{ width: `${Math.max(4, Math.round(pct * 100))}%` }}
-          />
-        </div>
-      ) : null}
+    <div className="fig">
+      <span className="fig-label">{label}</span>
+      <span className="fig-value">
+        {amount == null ? '—' : <AnimatedMetricValue value={format === 'currency' ? Math.round(amount) : amount} format={format} />}
+      </span>
     </div>
   )
 }
 
-// A single Tier-1 vital row (Analytics card): status dot + label + value + delta.
+// A single Tier-1 vital line (Analytics column): status mark + label + value + Δ.
 function VitalRow({ metric }) {
   const available = metric?.available
   const fmt = metric ? metricFormat(metric.key, metric.unit) : 'ratio'
-  // THE FLOOD STATE the SectionCard already broadcasts (it drives the count-up
-  // re-run). The DeltaChip has had an onDark variant all along for exactly this
-  // kind of surface — the two were never connected, so on hover the card turned
-  // solid module-blue while the chip kept its pastel light-surface palette:
-  // emerald-50 on flood blue, unreadable at a glance.
-  const hovered = useContext(TileHoverCtx)
+  const mark = available && isBandedStatus(metric.status) ? MARK[metric.status] : 'neutral'
+  const deltaText = available && metric.periodOverPeriodDelta != null ? formatDelta(metric.periodOverPeriodDelta, fmt) : null
   return (
-    <div className="flex items-center gap-2.5 border-b border-rule/40 py-2 last:border-0">
-      <StatusDot status={available ? metric.status : 'neutral'} />
-      <span className="min-w-0 flex-1 break-words text-[14.5px] text-ink">
-        {metric?.label ?? 'Metric'}
+    <div className="fig">
+      <span className="fig-label min-w-0">
+        <i className={`mark tone-${mark}`} aria-hidden="true" />
+        <span className="min-w-0 break-words">{metric?.label ?? 'Metric'}</span>
       </span>
-      <CountUpValue
-        amount={available ? metric.value : null}
-        format={fmt}
-        className="tabular-nums text-[15px] font-semibold text-navy"
-      />
-      {available && metric.periodOverPeriodDelta != null && (
-        <DeltaChip
-          delta={metric.periodOverPeriodDelta}
-          format={fmt}
-          goodDirection={metric.goodDirection}
-          onDark={hovered}
-        />
-      )}
+      <span className="inline-flex shrink-0 items-center gap-2">
+        {deltaText ? (
+          <Pill variant="status" tone={DELTA_TONE[deltaTone(metric.periodOverPeriodDelta, metric.goodDirection)] ?? 'neutral'}>
+            {deltaText}
+          </Pill>
+        ) : null}
+        <span className="fig-value">
+          {available ? <AnimatedMetricValue value={metric.value} format={fmt} /> : '—'}
+        </span>
+      </span>
     </div>
   )
 }
@@ -678,21 +585,21 @@ export default function FinancePage() {
               initial={reduce ? { opacity: 0 } : { opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ type: 'spring', stiffness: 240, damping: 22 }}
-              className="card-flashy flex flex-wrap items-center justify-between gap-4 p-5 sm:p-6"
+              className="panel panel-body flex flex-wrap items-center justify-between gap-4"
             >
               <div className="flex min-w-0 flex-1 basis-[18rem] items-start gap-3.5">
-                <span className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold-gradient text-navy shadow-glow">
+                <span className="mt-0.5 inline-flex shrink-0 text-navy-soft" aria-hidden="true">
                   <Sparkles size={20} />
                 </span>
                 <div className="min-w-0">
-                  <h2 className="font-serif text-[19px] font-semibold leading-snug text-navy">
+                  <h2 className="font-serif text-title text-ink">
                     {statementsHaveNumbers
                       ? 'Your statements are ready'
                       : 'One step left — tell us what these accounts are'}
                   </h2>
                   {/* A COUNT OF WHAT IS ACTUALLY STORED, not a claim about what
                       it unlocks — the reveal makes that claim, with evidence. */}
-                  <p className="mt-1 min-w-0 break-words text-[14px] leading-snug text-muted">
+                  <p className="mt-1 min-w-0 break-words text-small leading-snug text-ink2">
                     {readyFileCount > 0
                       ? `${readyFileCount} file${readyFileCount === 1 ? '' : 's'} in`
                       : 'Saved'}
@@ -708,14 +615,14 @@ export default function FinancePage() {
                   type="button"
                   hidden={!statementsHaveNumbers}
                   onClick={() => setRevealSchoolId(schoolId)}
-                  className="inline-flex min-h-[42px] shrink-0 items-center gap-1.5 rounded-xl border-2 border-border bg-white px-4 py-2.5 text-[12px] font-semibold uppercase tracking-[0.1em] text-muted transition-colors hover:border-navy hover:text-navy"
+                  className="btn btn-secondary shrink-0"
                 >
                   <Sparkles size={14} /> What lit up
                 </button>
                 <button
                   type="button"
                   onClick={() => setFirstRunSchoolId(null)}
-                  className="btn-cta inline-flex min-h-[42px] shrink-0 items-center gap-1.5 rounded-xl px-5 py-2.5 text-[12px] font-semibold uppercase tracking-[0.1em] outline-none transition-transform focus-visible:ring-2 focus-visible:ring-gold/50"
+                  className="btn btn-primary shrink-0"
                 >
                   See my Finance overview
                   <ArrowRight size={14} />
@@ -723,17 +630,13 @@ export default function FinancePage() {
               </div>
             </motion.div>
           ) : (
-            <div className="card-flashy flex flex-col items-center gap-4 px-6 py-10 text-center">
-              <motion.span
-                className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gold-gradient text-white shadow-glow"
-                animate={reduce ? undefined : { y: [0, -10, 0] }}
-                transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
-              >
-                <CircleDollarSign size={34} />
-              </motion.span>
+            <div className="flex flex-col items-center gap-4 px-6 py-8 text-center">
+              <span className="inline-flex text-navy-soft" aria-hidden="true">
+                <CircleDollarSign size={34} strokeWidth={1.5} />
+              </span>
               <div>
-                <h2 className="font-serif text-2xl font-semibold text-navy">Light up Finance</h2>
-                <p className="mx-auto mt-2 max-w-xl text-[16px] leading-relaxed text-muted">
+                <h2 className="font-serif text-display text-ink">Light up Finance</h2>
+                <p className="mx-auto mt-2 max-w-xl text-body text-ink2">
                   Drop in your trial balance — statements, analytics, budget and board reports
                   all light up from this one upload.
                 </p>
@@ -764,14 +667,14 @@ export default function FinancePage() {
                user has CONFIRMED a save — so the empty state can never lose its
                uploader, which is the whole point of the guard on this branch. The
                doors on UploadsSummary bring it straight back. */
-            <div className="card-soft overflow-hidden">
+            <Panel padded={false} className="overflow-hidden">
               {/* Heading ONLY. The embed renders its own bordered tab band
                   (This year / Add years / QuickBooks) with its own hint line
                   directly underneath, so a second rule + a second subtitle
                   restating the same three options stacked two near-identical
                   headers ~90px apart. One rule, from the embed. */}
               <div className="flex flex-wrap items-center justify-between gap-3 px-5 pt-5 pb-3 sm:px-6">
-                <h3 className="font-serif text-[17px] font-semibold text-navy">
+                <h3 className="text-heading font-semibold text-ink">
                   Add your trial balance
                 </h3>
                 {/* The way back OUT of the apparatus, offered only once there is
@@ -780,7 +683,7 @@ export default function FinancePage() {
                   <button
                     type="button"
                     onClick={() => setCondensedSchoolId(schoolId)}
-                    className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-[12.5px] font-semibold text-muted outline-none transition-colors hover:border-navy hover:text-navy focus-visible:border-navy focus-visible:ring-2 focus-visible:ring-navy/25"
+                    className="btn btn-quiet btn-sm"
                   >
                     <ChevronUp size={14} /> Done for now
                   </button>
@@ -817,11 +720,11 @@ export default function FinancePage() {
                 // celebration when there is nothing to celebrate yet.
                 dataReady={statementsHaveNumbers}
               />
-            </div>
+            </Panel>
           ) : canEdit ? null : (
             /* Viewer/board lens: no upload chrome a viewer can't use. */
-            <div className="card-soft px-6 py-10 text-center">
-              <p className="mx-auto max-w-md text-[15px] leading-relaxed text-muted">
+            <div className="px-6 py-10 text-center">
+              <p className="mx-auto max-w-md text-body text-ink2">
                 A school owner or accountant adds the first trial balance — everything here
                 lights up the moment they do.
               </p>
@@ -833,35 +736,27 @@ export default function FinancePage() {
               under a screen where it already has, is the page arguing with
               itself. The past-tense version is the reveal, with real counts. */}
           {ready ? null : (
-          <div>
-            <p className="mb-3 text-[12px] font-bold uppercase tracking-[0.12em] text-muted">
-              What lights up
-            </p>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <Section label="What lights up">
+            <div className="grid grid-cols-1 gap-x-8 sm:grid-cols-2 xl:grid-cols-5">
               {FIRST_RUN_LIGHTS.map((tile, index) => (
                 <motion.div
                   key={tile.title}
-                  initial={reduce ? { opacity: 0 } : { opacity: 0, y: 14 }}
+                  initial={reduce ? { opacity: 0 } : { opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{
-                    delay: index * 0.05,
-                    type: 'spring',
-                    stiffness: 260,
-                    damping: 24,
-                  }}
-                  className="kpi-3d flex min-w-0 flex-col gap-2 p-4 sm:p-5"
+                  transition={{ delay: index * 0.04, duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+                  className="flex min-w-0 flex-col gap-1.5 border-t border-hair py-3"
                 >
-                  <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gold/15 text-gold">
-                    <tile.Icon size={18} />
+                  <span className="inline-flex items-center gap-2 text-body font-semibold text-ink">
+                    <tile.Icon size={15} className="text-navy-soft" aria-hidden="true" />
+                    {tile.title}
                   </span>
-                  <span className="text-[14.5px] font-semibold text-navy">{tile.title}</span>
-                  <span className="min-w-0 break-words text-[13px] leading-snug text-muted">
+                  <span className="min-w-0 break-words text-small leading-snug text-ink2">
                     {tile.blurb}
                   </span>
                 </motion.div>
               ))}
             </div>
-          </div>
+          </Section>
           )}
         </motion.div>
       </div>
@@ -881,42 +776,20 @@ export default function FinancePage() {
       />
 
       <motion.div
-        initial={reduce ? { opacity: 0 } : { opacity: 0, y: 16 }}
+        initial={reduce ? { opacity: 0 } : { opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-        className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"
+        transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+        className="sec-cols"
       >
-        {/* (1) STATEMENTS — live rows: counting values + hue magnitude bars. */}
-        <SectionCard to="/statements" Icon={FileStack} title="Statements" viewLabel="View statements">
-          {(() => {
-            const maxAbs = Math.max(
-              Math.abs(totalRevenue ?? 0),
-              Math.abs(totalExpense ?? 0),
-              Math.abs(changeInNetAssets ?? 0),
-              1,
-            )
-            const pctOf = (v) => (v == null ? null : Math.abs(v) / maxAbs)
-            return (
-              <>
-                <FigureRow label="Total revenue" amount={totalRevenue} pct={pctOf(totalRevenue)} />
-                <FigureRow label="Total expense" amount={totalExpense} pct={pctOf(totalExpense)} />
-                <FigureRow
-                  label="Change in net assets"
-                  amount={changeInNetAssets}
-                  pct={pctOf(changeInNetAssets)}
-                />
-              </>
-            )
-          })()}
-        </SectionCard>
+        {/* (1) STATEMENTS — ruled figure lines, counting up once. */}
+        <FinanceColumn to="/statements" Icon={FileStack} title="Statements" viewLabel="View statements">
+          <FigureRow label="Total revenue" amount={totalRevenue} />
+          <FigureRow label="Total expense" amount={totalExpense} />
+          <FigureRow label="Change in net assets" amount={changeInNetAssets} />
+        </FinanceColumn>
 
         {/* (2) ANALYTICS — Tier-1 vitals */}
-        <SectionCard
-          to="/analytics"
-          Icon={BarChart3}
-          title="Analytics"
-          viewLabel="View analytics"
-        >
+        <FinanceColumn to="/analytics" Icon={BarChart3} title="Analytics" viewLabel="View analytics">
           {vitalsLoading ? (
             <div className="space-y-2 py-1">
               {VITAL_KEYS.map((k) => (
@@ -926,97 +799,83 @@ export default function FinancePage() {
           ) : (
             VITAL_KEYS.map((k) => <VitalRow key={k} metric={metricsByKey[k]} />)
           )}
-        </SectionCard>
+        </FinanceColumn>
 
-        {/* (3) BUDGET — net variance or link-through */}
-        <SectionCard to="/budget" Icon={Wallet} title="Budget" viewLabel="View budget">
+        {/* (3) BUDGET VS ACTUAL — net variance or link-through */}
+        <FinanceColumn to="/budget" Icon={Wallet} title="Budget vs actual" viewLabel="View budget">
           {budgetSummary.available ? (
-            <div className="flex flex-col gap-2 py-1">
-              <span className="text-[14.5px] text-muted">Net vs. budget</span>
-              <div className="flex items-center gap-2">
-                <Scale size={16} className="text-gold" />
-                <span
-                  className="tabular-nums text-[19px] font-semibold"
-                  style={{ color: budgetSummary.netVar >= 0 ? '#1b7a4b' : '#c0392b' }}
-                >
-                  {budgetSummary.netVar >= 0 ? '+' : '−'}
-                  {fmtDollar(Math.abs(budgetSummary.netVar))}
-                </span>
-                <span className="text-[13px] font-semibold uppercase tracking-[0.06em] text-muted">
-                  {budgetSummary.netVar >= 0 ? 'favorable' : 'unfavorable'}
+            <>
+              <div className="fig">
+                <span className="fig-label">Net vs. budget</span>
+                <span className="inline-flex items-center gap-2">
+                  <Pill variant="status" tone={budgetSummary.netVar >= 0 ? 'good' : 'risk'}>
+                    {budgetSummary.netVar >= 0 ? 'favorable' : 'unfavorable'}
+                  </Pill>
+                  <span className="fig-value">
+                    {budgetSummary.netVar >= 0 ? '+' : '−'}
+                    {fmtDollar(Math.abs(budgetSummary.netVar))}
+                  </span>
                 </span>
               </div>
-              <span className="text-[13px] text-muted">
-                Actual net {fmtDollar(budgetSummary.netAct)} vs. budget{' '}
-                {fmtDollar(budgetSummary.netBud)}
-              </span>
-            </div>
+              <FigureRow label="Actual net" amount={budgetSummary.netAct} />
+              <FigureRow label="Budgeted net" amount={budgetSummary.netBud} />
+            </>
           ) : (
-            <p className="rounded-lg border border-dashed border-gold/40 bg-gold/[0.04] px-3 py-4 text-[14.5px] text-navy">
+            <p className="py-2 text-small text-ink2">
               No budget vs. actual yet for this period. Open Budget to set one up — guided,
               advanced, or import.
             </p>
           )}
-        </SectionCard>
+        </FinanceColumn>
 
         {/* (4) CASH FORECAST — the FORWARD view.
-            Its own tile rather than a line inside Cash & Collections: that page
+            Its own column rather than a line inside Cash & Collections: that page
             answers "what is outstanding today", this one answers "when do we run
             low". Different questions, and folding the second into the first is
             how it stops being found. Description-only, like Reports — the figures
-            need a projection run, and a tile that invented one to look livelier
+            need a projection run, and a column that invented one to look livelier
             would be the exact thing this feature refuses to do. */}
-        <SectionCard
-          to="/cash-flow"
-          Icon={TrendingUp}
-          title="Cash Forecast"
-          viewLabel="Open forecast"
-        >
-          <p className="text-[14.5px] text-muted">
+        <FinanceColumn to="/cash-flow" Icon={TrendingUp} title="Cash Forecast" viewLabel="Open forecast">
+          <p className="py-2 text-small text-ink2">
             When cash is projected to run low, by how much, and how many days&apos; notice you
             have. Built from your payroll calendar, budget phasing and enrollment.
           </p>
-        </SectionCard>
+        </FinanceColumn>
 
         {/* (5) REPORTS — board packet export + link */}
-        <SectionCard to="/reports" Icon={FileBarChart2} title="Reports" viewLabel="Open Reports">
-          <p className="mb-3 text-[14.5px] text-muted">
+        <FinanceColumn to="/reports" Icon={FileBarChart2} title="Reports" viewLabel="Open Reports">
+          <p className="py-2 text-small text-ink2">
             Export a board-ready finance-committee packet for the selected period, or open the
             Reports workspace.
           </p>
-          {selectedPeriodId && <BoardPacketExportButton periodId={selectedPeriodId} />}
-        </SectionCard>
+          {selectedPeriodId && (
+            <div className="pt-1">
+              <BoardPacketExportButton periodId={selectedPeriodId} />
+            </div>
+          )}
+        </FinanceColumn>
 
         {/* (6) READINESS — material / reportable counts */}
-        <SectionCard
-          to="/readiness"
-          Icon={ShieldCheck}
-          title="Readiness"
-          viewLabel="View readiness"
-        >
-          <div className="flex items-center gap-3 py-1">
-            <StatusDot status={readinessTone} size={12} />
-            <div className="flex flex-wrap gap-x-5 gap-y-1">
-              <span className="text-[14.5px] text-ink">
-                <span className="tabular-nums text-[18px] font-semibold text-navy">{material}</span>{' '}
-                material
-              </span>
-              <span className="text-[14.5px] text-ink">
-                <span className="tabular-nums text-[18px] font-semibold text-navy">
-                  {reportable}
-                </span>{' '}
-                reportable
-              </span>
-            </div>
+        <FinanceColumn to="/readiness" Icon={ShieldCheck} title="Readiness" viewLabel="View readiness">
+          <div className="fig">
+            <span className="fig-label">Material findings</span>
+            <span className="inline-flex items-center gap-2">
+              <i className={`mark tone-${readinessTone}`} aria-hidden="true" />
+              <span className="fig-value">{material}</span>
+            </span>
           </div>
-          <p className="mt-2 text-[13px] text-muted">
+          <div className="fig">
+            <span className="fig-label">Reportable items</span>
+            <span className="fig-value">{reportable}</span>
+          </div>
+          <p className="pt-2 text-small text-ink2">
             {material > 0
               ? 'Material findings to address before review.'
               : reportable > 0
                 ? 'Reportable items to review.'
                 : 'On track — no exceptions found.'}
           </p>
-        </SectionCard>
+        </FinanceColumn>
       </motion.div>
     </div>
     )

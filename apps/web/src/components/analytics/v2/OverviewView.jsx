@@ -1,103 +1,48 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// OverviewView — the 30-second story for each scope, now speaking the HOME's
-// visual language. School: the 4 KPI tiles live ON a navy-gradient HERO BAND
-// (the BriefingBand's sibling — same gradient/shadow/hairline idiom) as
-// V2StatTiles (count-up + delta chip + status glow + area sparkline), then a
-// LIGHT ASYMMETRIC BENTO below: revenue-mix donut (1/3) beside the days-cash
-// gradient-area trend (2/3), then the "what changed" callouts. Compare: the
-// liquidity leader/laggard tiles on the same hero + the multi-school days-cash
-// trend. Org (all schools): 4 system KPI tiles on the hero + the per-school
-// revenue bar list. Values are the SAME @finrep/analytics-formatted strings the
-// Scorecard prints (value parity); the motion gallery still lives in Charts.
+// OverviewView — the 30-second story for each scope, in the ledger grammar
+// (Premium UI P3, plan §2 + sketch 4). School: the four KPIs as a `StatStrip`
+// on the ground (count-up once, delta Pill, 2px status mark, sparkline), then
+// the revenue-mix donut (1/3) beside the days-cash trend (2/3) as chart
+// Sections, then "What changed" as a small DataTable. Compare: the liquidity
+// leader / laggard as Stats + the multi-school days-cash trend. Org (all
+// schools): four system Stats + the per-school revenue columns. Values are the
+// SAME @finrep/analytics-formatted strings the Scorecard prints (value parity:
+// Stat count-up = AnimatedMetricValue over the same value + metricFormat); the
+// motion gallery still lives in Charts. No dark band: the one dark stage is the
+// Home briefing (plan §2.1).
 //
 // Each scope is its OWN component so hooks stay unconditional across scope
-// switches. Entrances are staggered fade-ups (once); reduced-motion → opacity.
+// switches.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo, useState } from 'react'
-import { motion, useReducedMotion } from 'framer-motion'
-import { TrendingDown, TrendingUp } from 'lucide-react'
 import { formatMetricValue, deltaTone } from '../../../lib/metricMeta.js'
 import { schoolColor } from './chartPalette.js'
 import LineChart from '../charts/LineChart.jsx'
 import ColumnChart from '../charts/ColumnChart.jsx'
 import FancyDonut from '../charts/FancyDonut.jsx'
 import Legend from '../charts/Legend.jsx'
+import Sparkline from '../charts/Sparkline.jsx'
 import ChartCard from './ChartCard.jsx'
-import V2StatTile from './V2StatTile.jsx'
-import { lightStatus } from './statusStyle.js'
-import { formatMetric, formatMetricDeltaOf, foldMixComponents } from './helpers.js'
+import { lightStatus, DELTA_TONE, MARK } from './statusStyle.js'
+import { formatMetric, formatMetricDeltaOf, foldMixComponents, metricFormat } from './helpers.js'
+import { Section, StatStrip, Stat, DataTable, Pill } from '../../ui/surface/index.js'
 
 const SCHOOL_KPI_KEYS = ['operating_margin', 'days_cash_on_hand', 'months_operating_reserve', 'tuition_dependency']
 
 const money = (v) => formatMetricValue(v, 'currency')
 
-/** The navy hero band the KPI tiles sit on — the home BriefingBand's sibling. */
-function HeroBand({ eyebrow, asOf, children }) {
-  const reduce = useReducedMotion()
-  return (
-    <motion.section
-      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-      aria-label={eyebrow}
-      className="relative overflow-hidden rounded-2xl bg-navy-gradient p-5 shadow-navy-glow sm:p-6"
-    >
-      {/* Quiet decorative glow — static, cheap, reduced-motion safe. */}
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-gold/10 blur-3xl"
-      />
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-px"
-        style={{ background: 'linear-gradient(90deg, transparent, rgba(214,178,92,0.5), transparent)' }}
-      />
-      <div className="relative">
-        <div className="mb-4 flex items-baseline justify-between gap-3">
-          <span className="text-[12px] font-bold uppercase tracking-[0.18em] text-gold/80">{eyebrow}</span>
-          {asOf && <span className="text-[11.5px] font-medium text-white/50 tabular-nums">{asOf}</span>}
-        </div>
-        {children}
-      </div>
-    </motion.section>
-  )
-}
-
-function Callout({ metric, index = 0 }) {
-  const reduce = useReducedMotion()
-  const delta = formatMetricDeltaOf(metric)
-  const up = (metric.periodOverPeriodDelta ?? 0) >= 0
-  const tone = deltaTone(metric.periodOverPeriodDelta, metric.goodDirection)
-  const toneText = tone === 'good' ? 'text-emerald-700' : tone === 'bad' ? 'text-red-600' : 'text-muted'
-  const iconChip =
-    tone === 'bad' ? 'bg-red-500/10 text-red-600' : tone === 'good' ? 'bg-emerald-500/10 text-emerald-700' : 'bg-slate-100 text-slate-500'
-  return (
-    <motion.div
-      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 10 }}
-      whileInView={reduce ? { opacity: 1 } : { opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: '-30px' }}
-      transition={{ duration: 0.35, delay: index * 0.06, ease: 'easeOut' }}
-      className="av2-card flex items-center gap-3 p-3.5"
-    >
-      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${iconChip}`}>
-        {up ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
-      </span>
-      <div className="min-w-0">
-        <p className="flex items-center gap-1.5 truncate text-[13px] font-semibold text-navy">
-          <span
-            aria-hidden="true"
-            className="h-1.5 w-1.5 shrink-0 rounded-full"
-            style={{ background: lightStatus(metric.status).dot }}
-          />
-          {metric.label}
-        </p>
-        <p className="text-[12.5px] text-muted">
-          Now <b className="text-navy tabular-nums">{formatMetric(metric)}</b>
-          {delta && <span className={`ml-1 font-semibold tabular-nums ${toneText}`}>({delta})</span>}
-        </p>
-      </div>
-    </motion.div>
-  )
+/** A MetricResult → the Stat props (value parity: number + canonical format). */
+function statPropsOf(metric) {
+  const deltaText = formatMetricDeltaOf(metric)
+  const tone = DELTA_TONE[deltaTone(metric.periodOverPeriodDelta, metric.goodDirection)] ?? 'neutral'
+  const numeric = typeof metric.value === 'number' && Number.isFinite(metric.value)
+  return {
+    label: metric.label,
+    value: numeric ? metric.value : formatMetric(metric),
+    format: numeric ? metricFormat(metric.key, metric.unit) : undefined,
+    status: MARK[metric.status],
+    delta: deltaText ? { text: deltaText, tone } : null,
+  }
 }
 
 /** Composition as a BAR LIST (the dataviz "magnitude" form) with the total as a
@@ -107,7 +52,7 @@ function Callout({ metric, index = 0 }) {
     never cycle past the fixed slots. */
 function MixBars({ metric, sub = 'Total revenue' }) {
   const parts = metric?.components?.length ? foldMixComponents(metric.components) : null
-  if (!parts) return <p className="py-8 text-center text-[13px] italic text-muted">Revenue mix not available.</p>
+  if (!parts) return <p className="py-8 text-center text-small italic text-ink2">Revenue mix not available.</p>
   const total = parts.reduce((a, p) => a + (Number.isFinite(p.value) ? p.value : 0), 0)
   return (
     <FancyDonut
@@ -144,6 +89,21 @@ function trendSeries(schools, bySchool) {
   return { series, labels }
 }
 
+const CHANGE_COLUMNS = [
+  { key: 'label', header: 'Metric', render: (m) => <span className="font-semibold text-ink">{m.label}</span> },
+  { key: 'now', header: 'Now', num: true, render: (m) => formatMetric(m) },
+  {
+    key: 'change',
+    header: 'Change',
+    num: true,
+    render: (m) => (
+      <Pill variant="status" tone={DELTA_TONE[deltaTone(m.periodOverPeriodDelta, m.goodDirection)] ?? 'neutral'}>
+        {formatMetricDeltaOf(m)}
+      </Pill>
+    ),
+  },
+]
+
 function SchoolOverview({ school }) {
   const m = school.metricsByKey
   const cashTrend = school.sparkTrends?.days_cash_on_hand
@@ -157,30 +117,31 @@ function SchoolOverview({ school }) {
   )
   const kpis = SCHOOL_KPI_KEYS.filter((k) => m[k])
   return (
-    <div className="space-y-6">
-      <HeroBand eyebrow="School vitals" asOf={school.asOf}>
-        <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
-          {kpis.map((k, i) => {
-            const metric = m[k]
-            return (
-              <V2StatTile
-                key={k}
-                index={i}
-                label={metric.label}
-                value={formatMetric(metric)}
-                delta={metric.periodOverPeriodDelta}
-                deltaText={formatMetricDeltaOf(metric)}
-                deltaTone={deltaTone(metric.periodOverPeriodDelta, metric.goodDirection)}
-                status={metric.status}
-                sparkVals={(school.sparkTrends?.[k]?.points ?? []).map((p) => p.value)}
-              />
-            )
-          })}
-        </div>
-      </HeroBand>
+    <div>
+      <Section label="School vitals" aside={school.asOf} className="!mt-0" aria-label="School vitals">
+        {kpis.length ? (
+          <StatStrip cols={kpis.length}>
+            {kpis.map((k) => {
+              const metric = m[k]
+              const spark = (school.sparkTrends?.[k]?.points ?? []).map((p) => p.value).filter((v) => Number.isFinite(v))
+              return (
+                <Stat key={`${k}:${school.periodId}`} {...statPropsOf(metric)}>
+                  {spark.length >= 2 ? (
+                    <div className="mt-2 h-8">
+                      <Sparkline vals={spark} color={lightStatus(metric.status).dot} h={32} fill stretch />
+                    </div>
+                  ) : null}
+                </Stat>
+              )
+            })}
+          </StatStrip>
+        ) : (
+          <p className="py-6 text-small italic text-ink2">No vitals for this period yet.</p>
+        )}
+      </Section>
 
-      {/* Asymmetric bento: donut 1/3 · days-cash gradient area 2/3. */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      {/* Asymmetric split: donut 1/3 · days-cash area 2/3 — both on the ground. */}
+      <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-3">
         <ChartCard title="Where the money comes from" sub="Revenue mix" asOf={school.asOf} delay={0.06}>
           <MixBars metric={m.revenue_mix} />
         </ChartCard>
@@ -193,20 +154,21 @@ function SchoolOverview({ school }) {
               formatter={(v) => Math.round(v).toLocaleString()}
             />
           ) : (
-            <p className="py-8 text-center text-[13px] italic text-muted">Not enough history yet.</p>
+            <p className="py-8 text-center text-small italic text-ink2">Not enough history yet.</p>
           )}
         </ChartCard>
       </div>
 
       {callouts.length > 0 && (
-        <div>
-          <h4 className="mb-2.5 text-[12px] font-bold uppercase tracking-[0.14em] text-slate-400">What changed</h4>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {callouts.map((c, i) => (
-              <Callout key={c.key} metric={c} index={i} />
-            ))}
-          </div>
-        </div>
+        <Section label="What changed" aside="largest moves vs. the prior period">
+          <DataTable
+            columns={CHANGE_COLUMNS}
+            rows={callouts}
+            rowKey="key"
+            markOf={(r) => MARK[r.status] ?? null}
+            caption="What changed since the prior period"
+          />
+        </Section>
       )}
     </div>
   )
@@ -221,40 +183,31 @@ function CompareOverview({ compare }) {
   const best = cashCells.slice().sort((a, b) => b.cell.value - a.cell.value)[0]
   const worst = cashCells.slice().sort((a, b) => a.cell.value - b.cell.value)[0]
   const { series, labels } = trendSeries(schools, compare.trends.bySchool)
+  const leaders = [
+    best && { key: 'best', label: 'Strongest liquidity', cell: best.cell, note: `${best.name} — most days cash` },
+    worst && best !== worst && { key: 'worst', label: 'Watch liquidity', cell: worst.cell, note: `${worst.name} — fewest days cash` },
+  ].filter(Boolean)
   return (
-    <div className="space-y-6">
-      {(best || worst) && (
-        <HeroBand eyebrow="Liquidity leaders" asOf={compare.asOf}>
-          <div className="grid gap-3.5 sm:grid-cols-2">
-            {best && (
-              <V2StatTile
-                index={0}
-                label="Strongest liquidity"
-                value={best.cell.formatted}
-                status={best.cell.status}
-                sub={`${best.name} — most days cash`}
-              />
-            )}
-            {worst && best !== worst && (
-              <V2StatTile
-                index={1}
-                label="Watch liquidity"
-                value={worst.cell.formatted}
-                status={worst.cell.status}
-                sub={`${worst.name} — fewest days cash`}
-              />
-            )}
-          </div>
-        </HeroBand>
+    <div>
+      {leaders.length > 0 && (
+        <Section label="Liquidity leaders" aside={compare.asOf} className="!mt-0">
+          <StatStrip cols={leaders.length}>
+            {leaders.map((l) => (
+              <Stat key={l.key} label={l.label} value={l.cell.formatted ?? '—'} status={MARK[l.cell.status]} note={l.note} />
+            ))}
+          </StatStrip>
+        </Section>
       )}
-      <ChartCard title="Days cash on hand, by school" sub="Every selected school — hover a name to spotlight it" asOf={compare.asOf} delay={0.06}>
-        <Legend items={series.map((s) => ({ id: s.id, label: s.label, color: s.color }))} onSpotlight={setSpotlight} />
-        {series.length ? (
-          <LineChart series={series} labels={labels} spotlightId={spotlight} formatter={(v) => Math.round(v).toLocaleString()} />
-        ) : (
-          <p className="py-8 text-center text-[13px] italic text-muted">No trend history for the selected schools.</p>
-        )}
-      </ChartCard>
+      <div className="mt-8">
+        <ChartCard title="Days cash on hand, by school" sub="Every selected school — hover a name to spotlight it" asOf={compare.asOf} delay={0.06}>
+          <Legend items={series.map((s) => ({ id: s.id, label: s.label, color: s.color }))} onSpotlight={setSpotlight} />
+          {series.length ? (
+            <LineChart series={series} labels={labels} spotlightId={spotlight} formatter={(v) => Math.round(v).toLocaleString()} />
+          ) : (
+            <p className="py-8 text-center text-small italic text-ink2">No trend history for the selected schools.</p>
+          )}
+        </ChartCard>
+      </div>
     </div>
   )
 }
@@ -286,33 +239,27 @@ function OrgOverview({ org }) {
       ...r,
       meta: contribTotal > 0 ? [{ label: 'Share of system', value: `${Math.round((100 * r.value) / contribTotal)}%` }] : [],
     }))
+  const margin = orgByKey.operating_margin
+  const cash = orgByKey.days_cash_on_hand
   return (
-    <div className="space-y-6">
-      <HeroBand eyebrow="System vitals" asOf={org.asOf}>
-        <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
-          <V2StatTile index={0} label="Schools" value={String(om?.schoolCount ?? '—')} sub={`${om?.reportedCount ?? 0} reporting this year`} />
-          <V2StatTile index={1} label="Coverage" value={om ? `${om.reportedCount}/${om.schoolCount}` : '—'} sub="Schools with a saved FY" />
-          <V2StatTile
-            index={2}
-            label="System operating margin"
-            value={orgByKey.operating_margin ? formatMetric(orgByKey.operating_margin) : '—'}
-            status={orgByKey.operating_margin?.status}
-          />
-          <V2StatTile
-            index={3}
-            label="System days cash"
-            value={orgByKey.days_cash_on_hand ? formatMetric(orgByKey.days_cash_on_hand) : '—'}
-            status={orgByKey.days_cash_on_hand?.status}
-          />
-        </div>
-      </HeroBand>
-      <ChartCard title="Who drives the system's revenue" sub="Every reporting school, largest first" asOf={org.asOf} delay={0.06}>
-        {rows.length ? (
-          <ColumnChart rows={rows} formatter={money} ariaLabel="Revenue by school, largest first" showValues="selective" />
-        ) : (
-          <p className="py-8 text-center text-[13px] italic text-muted">No revenue reported yet.</p>
-        )}
-      </ChartCard>
+    <div>
+      <Section label="System vitals" aside={org.asOf} className="!mt-0">
+        <StatStrip cols={4}>
+          <Stat label="Schools" value={om?.schoolCount ?? '—'} note={`${om?.reportedCount ?? 0} reporting this year`} />
+          <Stat label="Coverage" value={om ? `${om.reportedCount}/${om.schoolCount}` : '—'} note="Schools with a saved FY" />
+          <Stat label="System operating margin" value={margin ? formatMetric(margin) : '—'} status={MARK[margin?.status]} />
+          <Stat label="System days cash" value={cash ? formatMetric(cash) : '—'} status={MARK[cash?.status]} />
+        </StatStrip>
+      </Section>
+      <div className="mt-8">
+        <ChartCard title="Who drives the system's revenue" sub="Every reporting school, largest first" asOf={org.asOf} delay={0.06}>
+          {rows.length ? (
+            <ColumnChart rows={rows} formatter={money} ariaLabel="Revenue by school, largest first" showValues="selective" />
+          ) : (
+            <p className="py-8 text-center text-small italic text-ink2">No revenue reported yet.</p>
+          )}
+        </ChartCard>
+      </div>
     </div>
   )
 }

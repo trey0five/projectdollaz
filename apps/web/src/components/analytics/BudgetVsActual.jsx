@@ -7,18 +7,25 @@
 // setup surface (BudgetPage passes its Budget tab); without it, the no-budget
 // CTA falls back to a Link to /budget.
 import { motion, useReducedMotion } from 'framer-motion'
-import { Link } from 'react-router-dom'
-import { Scale, Wallet } from 'lucide-react'
+import { Wallet } from 'lucide-react'
 import { useBudget } from '../../hooks/useAnalytics.js'
 import { fmtDollar } from '../../lib/format.js'
 import BudgetBridge from './BudgetBridge.jsx'
+import { Section, Panel, Button } from '../ui/surface/index.js'
+
+// Premium UI P3: a `.dt` table on the ground under a Section rule (Line ·
+// Budget · Actual · Var %, numerics right-aligned tabular; section heading rows
+// and `.dt-foot`-weight total rows), the variance as a 2px semantic mark + ink
+// text, the no-budget CTA inside the one raised surface (a Panel: it is an
+// action). The mini dual bars are gone — a chart in a cell is noise next to the
+// BudgetBridge below, which already draws the same comparison.
 
 const variancePct = (v, bud) =>
   bud ? `${v >= 0 ? '+' : '−'}${Math.abs((v / bud) * 100).toFixed(1)}%` : '—'
 
-// RAG color for a variance: favorable=green; small miss=amber; big miss=red.
-const ragColor = (favorable, magPct) =>
-  favorable == null ? '#8a93a6' : favorable ? '#1b7a4b' : magPct > 10 ? '#c0392b' : '#b8860b'
+// RAG tone for a variance: favorable=good; small miss=watch; big miss=risk.
+const ragTone = (favorable, magPct) =>
+  favorable == null ? 'neutral' : favorable ? 'good' : magPct > 10 ? 'risk' : 'watch'
 
 // A line's budgeted amount, read directly from the saved budget JSON (null if unset).
 const budOf = (lines, kind, key) => {
@@ -46,39 +53,25 @@ export default function BudgetVsActual({ metrics, onSetUp = null, ...props }) {
 
   const renderLine = ({ kind, key, label, act, favHigher }) => {
     const bud = budOf(lines, kind, key)
-    const variance = bud != null && act != null ? act - bud : null
+    // A variance needs a REAL budget on the line: a $0 budget has nothing to
+    // compare against, so the row prints "—" and carries no mark at all.
+    const variance = bud != null && bud > 0 && act != null ? act - bud : null
     const favorable = variance == null ? null : favHigher ? variance >= 0 : variance <= 0
     const magPct = bud ? Math.abs((variance ?? 0) / bud) * 100 : 0
-    const color = ragColor(favorable, magPct)
-    const scale = Math.max(bud ?? 0, act ?? 0, 1)
+    const tone = ragTone(favorable, magPct)
     return (
-      <tr key={`${kind}-${key}`} className="border-b border-rule/40 align-middle">
-        <td className="py-1.5 pr-2">
-          <div className="text-ink">{label}</div>
-        </td>
-        <td className="px-2 py-1.5 text-right tabular-nums text-muted">
-          {bud != null ? fmtDollar(bud) : '—'}
-        </td>
-        <td className="px-2 py-1.5 text-right tabular-nums text-navy">
-          {act != null ? fmtDollar(act) : '—'}
-          {/* mini dual bar: budget (gold) vs actual (navy) */}
-          {(bud != null || act != null) && (
-            <span className="mt-1 block space-y-0.5">
-              <span className="block h-1 rounded-full bg-gold/40" style={{ width: `${((bud ?? 0) / scale) * 100}%` }} />
-              <span className="block h-1 rounded-full bg-navy/70" style={{ width: `${((act ?? 0) / scale) * 100}%` }} />
-            </span>
-          )}
-        </td>
-        <td className="py-1.5 pl-2 text-right">
+      <tr key={`${kind}-${key}`}>
+        <td className="text-ink">{label}</td>
+        <td className="dt-num text-ink2">{bud != null ? fmtDollar(bud) : '—'}</td>
+        <td className="dt-num text-ink">{act != null ? fmtDollar(act) : '—'}</td>
+        <td className="dt-num">
           {variance != null ? (
             <span className="inline-flex items-center justify-end gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: color }} />
-              <span className="tabular-nums text-[14px]" style={{ color }}>
-                {variancePct(variance, bud)}
-              </span>
+              <i className={`mark tone-${tone}`} aria-hidden="true" />
+              <span className="tabular-nums text-ink">{variancePct(variance, bud)}</span>
             </span>
           ) : (
-            <span className="text-[14px] text-muted">—</span>
+            <span className="text-ink2">—</span>
           )}
         </td>
       </tr>
@@ -86,17 +79,24 @@ export default function BudgetVsActual({ metrics, onSetUp = null, ...props }) {
   }
 
   const totalRow = (label, bud, act, favHigher) => {
-    const variance = bud != null && act != null ? act - bud : null
+    const variance = bud != null && bud !== 0 && act != null ? act - bud : null
     const favorable = variance == null ? null : favHigher ? variance >= 0 : variance <= 0
     const magPct = bud ? Math.abs((variance ?? 0) / bud) * 100 : 0
-    const color = ragColor(favorable, magPct)
+    const tone = ragTone(favorable, magPct)
     return (
-      <tr key={label} className="border-t border-rule font-semibold">
-        <td className="py-1.5 pr-2 text-navy">{label}</td>
-        <td className="px-2 py-1.5 text-right tabular-nums text-navy">{bud != null ? fmtDollar(bud) : '—'}</td>
-        <td className="px-2 py-1.5 text-right tabular-nums text-navy">{act != null ? fmtDollar(act) : '—'}</td>
-        <td className="py-1.5 pl-2 text-right tabular-nums text-[14px]" style={{ color }}>
-          {variance != null ? `${variance >= 0 ? '+' : '−'}${fmtDollar(Math.abs(variance))}` : '—'}
+      <tr key={label} className="dt-section-total">
+        <td className="text-ink">{label}</td>
+        <td className="dt-num text-ink">{bud != null ? fmtDollar(bud) : '—'}</td>
+        <td className="dt-num text-ink">{act != null ? fmtDollar(act) : '—'}</td>
+        <td className="dt-num">
+          {variance != null ? (
+            <span className="inline-flex items-center justify-end gap-1.5">
+              <i className={`mark tone-${tone}`} aria-hidden="true" />
+              <span className="tabular-nums text-ink">{`${variance >= 0 ? '+' : '−'}${fmtDollar(Math.abs(variance))}`}</span>
+            </span>
+          ) : (
+            <span className="text-ink2">—</span>
+          )}
         </td>
       </tr>
     )
@@ -131,66 +131,44 @@ export default function BudgetVsActual({ metrics, onSetUp = null, ...props }) {
   const showBridge = actRevTotal != null && actExpTotal != null && (budRevTotal > 0 || budExpTotal > 0)
 
   return (
-    <motion.div
-      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="card-vital p-3 sm:p-4"
-    >
-      <div className="mb-3 flex items-center gap-2.5">
-        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gold/15 text-gold">
-          <Scale size={18} />
-        </span>
-        <div>
-          <h3 className="font-serif text-lg font-semibold text-navy">Budget vs. actual</h3>
-          <p className="text-[14px] text-muted">
-            Budget comes from your saved budget; actuals come from your statements.
-          </p>
-        </div>
-      </div>
-
+    <motion.div initial={reduce ? { opacity: 0 } : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+      <Section label="Budget vs. actual" aside="budget from your saved budget · actuals from your statements" className="!mt-0">
       {!hasLines ? (
-        <p className="rounded-lg border border-dashed border-border bg-section px-4 py-6 text-center text-[15px] italic text-muted">
+        <p className="py-6 text-center text-body italic text-ink2">
           Category budgeting unlocks once this period has generated statements (it needs the
           revenue &amp; expense breakdown).
         </p>
       ) : noBudget ? (
-        <div className="rounded-lg border border-dashed border-gold/40 bg-gold/[0.04] px-4 py-7 text-center">
-          <span className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-gold/15 text-gold">
+        <Panel className="text-center">
+          <span className="mx-auto mb-2 inline-flex text-navy-soft" aria-hidden="true">
             <Wallet size={20} />
           </span>
-          <p className="text-[15px] text-navy">No budget set up for this period yet.</p>
+          <p className="text-body text-ink">No budget set up for this period yet.</p>
           {onSetUp ? (
-            <button
-              type="button"
-              onClick={onSetUp}
-              className="mt-3 inline-flex items-center gap-1.5 rounded-lg btn-cta px-4 py-2 text-[13px] font-bold uppercase tracking-[0.08em] transition-transform"
-            >
+            <Button variant="primary" onClick={onSetUp} className="mt-3">
               Set up your budget
-            </button>
+            </Button>
           ) : (
-            <Link
-              to="/budget"
-              className="mt-3 inline-flex items-center gap-1.5 rounded-lg btn-cta px-4 py-2 text-[13px] font-bold uppercase tracking-[0.08em] transition-transform"
-            >
+            <Button variant="primary" to="/budget" className="mt-3">
               Set up your budget
-            </Link>
+            </Button>
           )}
-        </div>
+        </Panel>
       ) : (
         <>
-          <div className="overflow-x-auto">
-            <table className="w-full text-[15px]">
+          <div className="dt-wrap">
+            <table className="dt">
               <thead>
-                <tr className="border-b border-rule text-[12px] font-semibold uppercase tracking-[0.08em] text-muted">
-                  <th className="py-2 pr-2 text-left font-semibold">Line</th>
-                  <th className="px-2 py-2 text-right font-semibold">Budget</th>
-                  <th className="px-2 py-2 text-right font-semibold">Actual</th>
-                  <th className="py-2 pl-2 text-right font-semibold">Var %</th>
+                <tr>
+                  <th scope="col">Line</th>
+                  <th scope="col" className="dt-num">Budget</th>
+                  <th scope="col" className="dt-num">Actual</th>
+                  <th scope="col" className="dt-num">Var %</th>
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td colSpan={4} className="pt-2 text-[12px] font-bold uppercase tracking-[0.1em] text-gold">
+                <tr className="dt-section">
+                  <td colSpan={4} className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink">
                     Revenue
                   </td>
                 </tr>
@@ -199,8 +177,8 @@ export default function BudgetVsActual({ metrics, onSetUp = null, ...props }) {
                 )}
                 {totalRow('Total revenue', budRevTotal, actRevTotal, true)}
 
-                <tr>
-                  <td colSpan={4} className="pt-3 text-[12px] font-bold uppercase tracking-[0.1em] text-gold">
+                <tr className="dt-section">
+                  <td colSpan={4} className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink">
                     Expenses
                   </td>
                 </tr>
@@ -214,7 +192,7 @@ export default function BudgetVsActual({ metrics, onSetUp = null, ...props }) {
           </div>
 
           {showBridge && (
-            <div className="mt-4">
+            <div className="mt-6">
               <BudgetBridge
                 budgetNet={netBud}
                 actualNet={netAct}
@@ -225,19 +203,13 @@ export default function BudgetVsActual({ metrics, onSetUp = null, ...props }) {
           )}
 
           {notes.length > 0 && (
-            <div className="mt-3 rounded-lg border border-gold/25 bg-gold/[0.04] p-3">
-              <p className="mb-1.5 text-[12px] font-bold uppercase tracking-[0.1em] text-gold">
-                What moved vs. budget
-              </p>
-              <ul className="space-y-1">
+            <Section label="What moved vs. budget">
+              <ul className="m-0 list-none p-0">
                 {notes.map((n) => (
-                  <li key={n.label} className="flex items-start gap-1.5 text-[14.5px] text-ink">
-                    <span
-                      className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
-                      style={{ backgroundColor: ragColor(n.favorable, Math.abs(n.pct)) }}
-                    />
+                  <li key={n.label} className="flex items-start gap-2 border-b border-hair py-2 text-small text-ink">
+                    <i className={`mark mt-1 tone-${ragTone(n.favorable, Math.abs(n.pct))}`} aria-hidden="true" />
                     <span>
-                      <span className="font-semibold text-navy">{n.label}</span> came in{' '}
+                      <span className="font-semibold text-ink">{n.label}</span> came in{' '}
                       {fmtDollar(Math.abs(n.v))} ({Math.abs(n.pct).toFixed(0)}%){' '}
                       {n.favHigher
                         ? n.v >= 0
@@ -251,10 +223,11 @@ export default function BudgetVsActual({ metrics, onSetUp = null, ...props }) {
                   </li>
                 ))}
               </ul>
-            </div>
+            </Section>
           )}
         </>
       )}
+      </Section>
     </motion.div>
   )
 }

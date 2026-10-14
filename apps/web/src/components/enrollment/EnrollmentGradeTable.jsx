@@ -86,7 +86,7 @@ export default function EnrollmentGradeTable({ ladder, vsPlan, gradeByYear, minC
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: '-40px' }}
       transition={{ duration: 0.4, ease: EASE }}
-      className="av2-card p-4 sm:p-5"
+      className="panel p-4 sm:p-5"
     >
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="font-serif text-[16px] font-semibold text-navy sm:text-[17px]">Every grade, in figures</h3>

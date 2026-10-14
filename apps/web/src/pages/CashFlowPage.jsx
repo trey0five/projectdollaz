@@ -3,10 +3,11 @@
 //
 // V3: real chrome, an editable forecast, and the hero doing the talking.
 //
-// The page now wears the app's sub-page chrome (BackLink → Finance, breadcrumb,
-// finance-blue identity) and splits into two thin tabs: OVERVIEW — the navy
-// hero band whose V2StatTile figures re-count on every rebuild, the honesty
-// system, and the two views (charts + workbook) — and FORECAST INPUTS — every
+// The page wears the ledger chrome (Premium UI P3: BackLink → Finance, a
+// `PageHeader`, no dark band) and splits into two thin tabs: OVERVIEW — the
+// headline figures as a `StatStrip` on the ground (id cf-hero) whose values
+// re-count on every rebuild, the honesty system, and the two views (charts +
+// workbook) inside a Section — and FORECAST INPUTS — every
 // line that feeds the projection, editable: QuickBooks-derived lines behind an
 // include switch (a server-side line ADJUSTMENT; the books are never touched)
 // and the school's own expected items behind a real add/edit modal.
@@ -26,35 +27,32 @@ import {
   AlertTriangle,
   ArrowRight,
   CalendarClock,
-  ChevronRight,
   Info,
   LayoutGrid,
   LineChart,
   Pencil,
   Plus,
   Sparkles,
-  TrendingUp,
   Zap,
 } from 'lucide-react'
 import { workbookRows } from '@finrep/analytics'
 import { formatMetricValue } from '../lib/metricMeta.js'
 import { useSchools } from '../context/SchoolContext.jsx'
 import { useCashFlowProjection } from '../hooks/useCashFlowProjection.js'
-import AuroraFlow from '../components/home/AuroraFlow.jsx'
 import BackLink from '../components/ui/BackLink.jsx'
+import { PageHeader, StatStrip, Stat, Section, Panel, Toolbar, Pill, Button } from '../components/ui/surface/index.js'
 import DatePicker from '../components/ui/DatePicker.jsx'
 import CashRail from '../components/cashflow/CashRail.jsx'
 import CashWorkbook from '../components/cashflow/CashWorkbook.jsx'
 import FlowBars from '../components/cashflow/FlowBars.jsx'
-import CashHeroTile from '../components/cashflow/CashHeroTile.jsx'
 import CashInputsRail from '../components/cashflow/CashInputsRail.jsx'
 import CommitmentModal from '../components/cashflow/CommitmentModal.jsx'
 import CurrencyField from '../components/cashflow/CurrencyField.jsx'
 import Sparkline from '../components/analytics/charts/Sparkline.jsx'
+import { useCountUp } from '../components/analytics/charts/useCountUp.js'
 import { moduleAccentVars } from '../components/module/moduleAnatomy.js'
 import { flashElement } from '../components/analytics/v2/flash.js'
 import { whyLine, potentialActions } from '../components/cashflow/whyLine.js'
-import '../styles/analytics-v2.css'
 
 const money = (v) => formatMetricValue(v == null ? null : v, 'currency')
 const todayIso = () => new Date().toISOString().slice(0, 10)
@@ -68,9 +66,16 @@ const dayBefore = (iso) =>
   new Date(Date.parse(`${iso}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10)
 
 const TIER_META = {
-  high: { label: 'High confidence', cls: 'border-emerald-300/60 bg-emerald-400/15 text-emerald-100' },
-  moderate: { label: 'Moderate confidence', cls: 'border-[#F59E0B]/50 bg-[#F59E0B]/15 text-amber-100' },
-  limited: { label: 'Limited confidence', cls: 'border-white/25 bg-white/10 text-white/75' },
+  high: { label: 'High confidence', tone: 'good' },
+  moderate: { label: 'Moderate confidence', tone: 'watch' },
+  limited: { label: 'Limited confidence', tone: 'neutral' },
+}
+
+// A hero figure that RE-COUNTS on every rebuild (useCountUp keyed by the value
+// string — prev → next, never through $0) and renders dates verbatim.
+function LiveValue({ value, countUp = true }) {
+  const display = useCountUp(value ?? '—', { duration: 600, enabled: countUp })
+  return <>{display}</>
 }
 
 const HORIZONS = [
@@ -154,7 +159,7 @@ function CashTabs({ tab, onTab }) {
     refs.current[next]?.focus()
   }
   return (
-    <div role="tablist" aria-label="Cash forecast sections" className="flex gap-1 border-b border-rule/60">
+    <div role="tablist" aria-label="Cash forecast sections" className="tabs-ink">
       {CASH_TABS.map((t, i) => {
         const active = t.key === tab
         return (
@@ -168,22 +173,15 @@ function CashTabs({ tab, onTab }) {
             tabIndex={active ? 0 : -1}
             onClick={() => onTab(t.key)}
             onKeyDown={(e) => onKeyDown(e, i)}
-            className={`relative flex shrink-0 flex-col items-start gap-0.5 rounded-t-lg border-x border-t px-4 py-2.5 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-gold/50 ${
-              active ? 'border-gold/50 bg-white' : 'border-transparent text-muted hover:bg-cream/60'
-            }`}
+            className="tab-ink"
           >
-            <span className={`text-[14px] font-semibold ${active ? 'text-navy' : 'text-muted'}`}>
-              {t.label}
-            </span>
-            <span className="text-[10.5px] uppercase tracking-wide text-muted/80">{t.caption}</span>
+            <span>{t.label}</span>
+            <span className="tab-ink-cap">{t.caption}</span>
             {active &&
               (reduce ? (
-                <span className="absolute inset-x-3 -bottom-px h-[3px] rounded-full bg-gold" />
+                <span className="tab-ink-rule" aria-hidden="true" />
               ) : (
-                <motion.span
-                  layoutId="cf-tab-underline"
-                  className="absolute inset-x-3 -bottom-px h-[3px] rounded-full bg-gold"
-                />
+                <motion.span layoutId="cf-tab-underline" className="tab-ink-rule" aria-hidden="true" />
               ))}
           </button>
         )
@@ -194,12 +192,11 @@ function CashTabs({ tab, onTab }) {
 
 // ── The ONE operating-cash editor ────────────────────────────────────────────
 // One component, one draft state (lifted to the page): opened by the hero tile's
-// pencil (dark, inline in the hero band) and by the Forecast-inputs summary
+// pencil (inline under the headline strip) and by the Forecast-inputs summary
 // row's pencil (light). Confirming is a REAL build — the same persisted run()
 // path as the Build button, because an explicit opening change belongs in the
 // archive. There is deliberately no second free-standing input anywhere else.
 function OpeningEditor({
-  dark = false,
   openingValue,
   onOpeningChange,
   asOf,
@@ -214,12 +211,8 @@ function OpeningEditor({
 }) {
   const reduce = useReducedMotion()
   const valid = openingValue !== '' && Number.isFinite(Number(openingValue))
-  const labelCls = dark
-    ? 'text-[11px] font-bold uppercase tracking-[0.14em] text-white/60'
-    : 'text-[12px] font-semibold text-muted'
-  const dateCls = dark
-    ? 'w-44 rounded-xl border-2 border-white/15 bg-white/10 px-3 py-2 text-[14px] text-white'
-    : 'w-44 rounded-xl border-2 border-rule/80 bg-white px-3 py-2 text-[14px] text-navy'
+  const labelCls = 'toolbar-label'
+  const dateCls = 'w-44 rounded-md border border-hair/30 bg-white px-3 py-2 text-[14px] text-ink'
   return (
     <motion.div
       initial={reduce ? { opacity: 0 } : { opacity: 0, height: 0 }}
@@ -228,20 +221,16 @@ function OpeningEditor({
       transition={{ duration: 0.28, ease: [0.22, 0.8, 0.2, 1] }}
       className="overflow-hidden"
     >
-      <div
-        className={`mt-3 rounded-2xl p-4 ${
-          dark ? 'border border-white/15 bg-white/[0.06]' : 'border border-rule/60 bg-cream/40'
-        }`}
-      >
+      <Panel className="mt-3">
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1">
             <span className={labelCls}>Available operating cash</span>
             <CurrencyField
               value={openingValue}
               onChange={onOpeningChange}
-              variant={dark ? 'dark' : 'light'}
-              size={dark ? 'lg' : 'sm'}
-              className={dark ? 'w-56' : 'w-48'}
+              variant="light"
+              size="sm"
+              className="w-48"
               aria-label="Available operating cash"
             />
           </label>
@@ -249,46 +238,23 @@ function OpeningEditor({
             <span className={labelCls}>As of</span>
             <DatePicker value={asOf} onChange={onAsOfChange} className={dateCls} />
           </label>
-          <button
-            type="button"
-            onClick={onRebuild}
-            disabled={busy || !valid}
-            className="rounded-lg btn-cta px-4 py-2 text-[14px] font-semibold disabled:opacity-50"
-          >
+          <Button variant="primary" onClick={onRebuild} disabled={busy || !valid}>
             {busy ? 'Rebuilding…' : 'Rebuild forecast'}
-          </button>
-          <button
-            type="button"
-            onClick={onCancel}
-            className={`rounded-lg border px-3.5 py-2 text-[13px] font-semibold transition ${
-              dark
-                ? 'border-white/20 text-white/70 hover:border-white/40 hover:text-white'
-                : 'border-rule/70 text-muted hover:border-gold/60 hover:text-navy'
-            }`}
-          >
+          </Button>
+          <Button variant="secondary" onClick={onCancel}>
             Cancel
-          </button>
+          </Button>
           {qboOffer ? (
-            <button
-              type="button"
-              onClick={onUseQbo}
-              className={`inline-flex items-center gap-1.5 rounded-lg border px-3.5 py-2 text-[13px] font-semibold transition ${
-                dark
-                  ? 'border-emerald-300/40 bg-emerald-400/15 text-emerald-100 hover:bg-emerald-400/25'
-                  : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20'
-              }`}
-            >
-              <Zap size={13} /> Use QuickBooks balance · {fmt(qboOffer.amount)}
-            </button>
+            <Button variant="secondary" onClick={onUseQbo} icon={<Zap size={13} />}>
+              Use QuickBooks balance · {fmt(qboOffer.amount)}
+            </Button>
           ) : null}
         </div>
-        <p className={`mt-2 text-[12px] leading-relaxed ${dark ? 'text-white/50' : 'text-muted'}`}>
+        <p className="mt-2 text-[12px] leading-relaxed text-ink2">
           Rebuilding freezes a new run in the archive — the forecast the school actually built.
         </p>
-        {error ? (
-          <p className={`mt-1.5 text-[13px] ${dark ? 'text-red-300' : 'text-danger'}`}>{error}</p>
-        ) : null}
-      </div>
+        {error ? <p className="mt-1.5 text-[13px] tone-risk">{error}</p> : null}
+      </Panel>
     </motion.div>
   )
 }
@@ -379,6 +345,9 @@ export default function CashFlowPage() {
   const p = cf.projection?.projection ?? null
   const tier = TIER_META[cf.projection?.dataTier ?? 'limited']
   const why = useMemo(() => whyLine(p, money), [p])
+  const omissionTone = (cf.projection?.omissions ?? []).some((o) => /tuition|budget|receipt|revenue/i.test(`${o.key} ${o.message}`))
+    ? 'risk'
+    : 'watch'
   const actions = useMemo(() => potentialActions(p, money), [p])
   const workbook = useMemo(() => (p ? workbookRows(p) : null), [p])
   const sources = cf.projection?.sources ?? null
@@ -467,30 +436,51 @@ export default function CashFlowPage() {
     }
   }
 
-  // ── Chrome — BackLink, breadcrumb, finance-blue identity (Shell pattern) ───
+  // ── Chrome — BackLink + PageHeader (eyebrow FINANCE · CASH FORECAST, the
+  //    confidence / reserve / QuickBooks pills as the meta line) ─────────────
+  const headerMeta = p ? (
+    <span className="inline-flex flex-wrap items-center gap-2">
+      {qboLive ? (
+        <Pill variant="status" tone="good">
+          Live from QuickBooks
+        </Pill>
+      ) : null}
+      <Pill variant="status" tone={tier.tone} title={cf.projection?.dataTierReason}>
+        {tier.label}
+      </Pill>
+      <Pill
+        title={
+          cf.projection?.assumptions.reserveThreshold == null
+            ? 'set one to be told when you would breach it'
+            : 'the balance you said you must hold'
+        }
+      >
+        Reserve ·{' '}
+        {cf.projection?.assumptions.reserveThreshold == null
+          ? 'Not set'
+          : money(cf.projection.assumptions.reserveThreshold)}
+      </Pill>
+    </span>
+  ) : (
+    'When cash runs low, by how much, and why.'
+  )
   const header = (
-    <div className="mb-4">
-      <BackLink fallback="/finance" fallbackLabel="Back to Finance" className="mb-3" />
-      <nav aria-label="Breadcrumb" className="mb-2 flex items-center gap-1 text-[12.5px] text-muted">
-        <Link to="/app" className="hover:text-navy">
-          Home
-        </Link>
-        <ChevronRight size={13} />
-        <Link to="/finance" className="hover:text-navy">
-          Finance
-        </Link>
-        <ChevronRight size={13} />
-        <span className="font-semibold text-navy">Cash forecast</span>
-      </nav>
-      <div className="flex items-center gap-2.5">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#2563EB] text-white shadow-lg shadow-blue-600/25">
-          <TrendingUp size={20} />
-        </span>
-        <div>
-          <h1 className="font-serif text-xl font-semibold text-navy sm:text-2xl">Cash forecast</h1>
-          <p className="text-[14px] text-muted">When cash runs low, by how much, and why.</p>
-        </div>
-      </div>
+    <div className="mb-2">
+      <BackLink fallback="/finance" fallbackLabel="Back to Finance" className="mb-2" />
+      <PageHeader
+        eyebrow={['Finance', activeSchool?.name, 'Cash forecast'].filter(Boolean).join(' · ')}
+        title="Cash forecast"
+        hue="37 99 235"
+        actions={
+          p ? (
+            <Button variant="secondary" onClick={() => openAdd()} icon={<Plus size={14} />}>
+              Add expected item
+            </Button>
+          ) : null
+        }
+      >
+        <div className="pg-meta">{headerMeta}</div>
+      </PageHeader>
     </div>
   )
 
@@ -501,8 +491,8 @@ export default function CashFlowPage() {
         className="mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8"
       >
         {header}
-        <div className="mt-4 rounded-2xl border border-rule/60 bg-cream/40 p-6">
-          <p className="text-[14px] leading-relaxed text-muted">
+        <div className="mt-4 border-t border-hair pt-4">
+          <p className="text-body text-ink2">
             The cash forecast is part of the Finance and Planning modules. Add either to see when
             your cash is projected to run low.
           </p>
@@ -511,287 +501,196 @@ export default function CashFlowPage() {
     )
   }
 
-  // ── The hero band — figures when there is a forecast, the SETUP when not ───
+  // ── The headline — figures as a StatStrip when there is a forecast, the SETUP
+  //    Panel when not. On the ground: the dark band is gone (plan §2.1). ──────
+  const horizonBar = (
+    <Toolbar
+      aria-label="Forecast horizon"
+      aside={
+        p ? (
+          <span className="text-small text-ink2 tabular-nums">as of {p.asOfDate}</span>
+        ) : null
+      }
+    >
+      <span className="toolbar-label">Horizon</span>
+      <div className="seg" role="group" aria-label="Horizon">
+        {HORIZONS.map((h) => (
+          <button key={h.key} type="button" aria-pressed={horizon === h.key} onClick={() => pickHorizon(h.key)} className="seg-btn">
+            {h.label}
+          </button>
+        ))}
+      </div>
+    </Toolbar>
+  )
   const hero = (
     <motion.section
       // Penny walkthrough anchor 'cashFlow.headline' (see
       // apps/web/src/components/penny/guide/targetRegistry.js). The id is the
       // contract; the class list is not.
       id="cf-hero"
-      initial={{ opacity: 0, y: 10 }}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.45 }}
-      className="relative overflow-hidden rounded-3xl bg-navy-gradient px-6 py-6 sm:px-8 sm:py-7"
+      transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+      aria-label="When does cash run low?"
     >
-      <AuroraFlow />
-      <div className="relative">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <h2 className="font-serif text-[24px] font-semibold leading-tight text-white sm:text-[27px]">
-            When does cash run low?
-          </h2>
-          <div className="flex flex-wrap items-center gap-2">
-            {qboLive ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300/50 bg-emerald-400/15 px-3 py-1 text-[12px] font-semibold text-emerald-100">
-                <Zap size={12} /> Live from QuickBooks
-              </span>
-            ) : null}
-            {cf.projection ? (
-              <span
-                className={`rounded-full border px-3 py-1 text-[12px] font-semibold ${tier.cls}`}
-                title={cf.projection.dataTierReason}
-              >
-                {tier.label}
-              </span>
-            ) : null}
-            {cf.projection ? (
-              <span
-                className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[12px] font-semibold text-white/75"
-                title={
-                  cf.projection.assumptions.reserveThreshold == null
-                    ? 'set one to be told when you would breach it'
-                    : 'the balance you said you must hold'
-                }
-              >
-                Reserve ·{' '}
-                {cf.projection.assumptions.reserveThreshold == null
-                  ? 'Not set'
-                  : money(cf.projection.assumptions.reserveThreshold)}
-              </span>
-            ) : null}
-          </div>
-        </div>
-
-        {p ? (
-          <>
-            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-              <CashHeroTile
-                wide
-                index={0}
-                label="Available operating cash"
-                value={money(p.openingCash)}
-                sub={`as of ${p.asOfDate}`}
-                status={p.firstShortfallDate ? 'watch' : 'good'}
-                sparkVals={p.buckets.map((b) => b.closingBalance)}
-                action={
-                  <button
-                    type="button"
-                    aria-label="Edit the opening balance"
-                    aria-expanded={openingEditorOpen}
-                    onClick={() => setOpeningEditorOpen((v) => !v)}
-                    className={`rounded-md p-1 transition hover:bg-white/10 hover:text-white ${
-                      openingEditorOpen ? 'bg-white/15 text-white' : 'text-white/50'
-                    }`}
-                  >
-                    <Pencil size={13} />
-                  </button>
-                }
-                chip={
-                  qboOffer ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setOpeningDraft(String(qboOffer.amount))
-                        // A refinement of the CURRENT forecast, not a build — preview only.
-                        run({ openingCash: qboOffer.amount, openingSource: 'quickbooks', persist: false })
-                      }}
-                      className="inline-flex items-center gap-1 rounded-full border border-emerald-300/40 bg-emerald-400/15 px-2.5 py-0.5 text-[11.5px] font-semibold text-emerald-100 transition hover:bg-emerald-400/25"
-                    >
-                      <Zap size={11} /> Use QuickBooks balance · {money(qboOffer.amount)}
-                    </button>
-                  ) : null
-                }
-              />
-              <CashHeroTile
-                index={1}
-                label="Lowest projected"
-                value={money(p.lowestBalance)}
-                sub={p.lowestDate ? `on ${p.lowestDate}` : 'no movement in this horizon'}
-                status={p.firstShortfallDate ? 'risk' : 'good'}
-              />
-              <CashHeroTile
-                index={2}
-                countUp={false}
-                label="Covered through"
-                value={
-                  p.firstShortfallDate
-                    ? prettyDay(dayBefore(p.firstShortfallDate))
-                    : prettyDay(p.horizonEnd)
-                }
-                sub={
-                  p.firstShortfallDate
-                    ? `${p.daysOfNotice} days' notice`
-                    : p.monthsCashAtLowPoint != null
-                      ? `ends at ${money(p.endingBalance)} · ${p.monthsCashAtLowPoint.toFixed(1)} months' cash at the low`
-                      : `ends at ${money(p.endingBalance)}`
-                }
-                status={p.firstShortfallDate ? 'watch' : 'good'}
-              />
-              {p.firstShortfallDate ? (
-                <CashHeroTile
-                  index={3}
-                  label="Projected gap"
-                  value={money(p.shortfallAmount)}
-                  sub={`first breach ${p.firstShortfallDate}`}
-                  status="risk"
-                />
-              ) : (
-                <CashHeroTile
-                  index={3}
-                  label="Ending balance"
-                  value={money(p.endingBalance)}
-                  sub="stays above the reserve throughout"
-                  status="good"
-                />
-              )}
-            </div>
-
-            {/* The inline opening editor — the tile's pencil expands it HERE,
-                no page jump. Same run() path as Build (a real, persisted run). */}
-            <AnimatePresence initial={false}>
-              {openingEditorOpen ? (
-                <OpeningEditor
-                  dark
-                  openingValue={openingInput}
-                  onOpeningChange={setOpeningDraft}
-                  asOf={asOf}
-                  onAsOfChange={setAsOfDraft}
-                  busy={cf.projecting}
-                  onRebuild={() => {
-                    run()
-                    setOpeningEditorOpen(false)
-                  }}
-                  onCancel={() => setOpeningEditorOpen(false)}
-                  qboOffer={qboOffer}
-                  onUseQbo={() => {
-                    setOpeningDraft(String(qboOffer.amount))
-                    run({ openingCash: qboOffer.amount, openingSource: 'quickbooks' })
-                    setOpeningEditorOpen(false)
-                  }}
-                  fmt={money}
-                  error={cf.error}
-                />
-              ) : null}
-            </AnimatePresence>
-
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-              <div className="inline-flex rounded-full border border-white/15 bg-white/10 p-0.5">
-                {HORIZONS.map((h) => {
-                  const active = horizon === h.key
-                  return (
-                    <motion.button
-                      key={h.key}
-                      type="button"
-                      onClick={() => pickHorizon(h.key)}
-                      whileHover={reduce || active ? undefined : { y: -1 }}
-                      className={`relative rounded-full px-3.5 py-1 text-[12.5px] ${
-                        active
-                          ? 'font-bold text-navy'
-                          : 'font-semibold text-white/65 transition hover:text-white'
-                      }`}
-                    >
-                      {/* The active pill GLIDES between horizons (shared
-                          layoutId) — static under reduced motion. */}
-                      {active ? (
-                        reduce ? (
-                          <span className="absolute inset-0 rounded-full bg-white shadow-sm" />
-                        ) : (
-                          <motion.span
-                            layoutId="cf-horizon-pill"
-                            className="absolute inset-0 rounded-full bg-white shadow-sm"
-                            transition={{ type: 'spring', stiffness: 520, damping: 38 }}
-                          />
-                        )
-                      ) : null}
-                      <span className="relative">{h.label}</span>
-                    </motion.button>
-                  )
-                })}
-              </div>
-              <button
-                type="button"
-                onClick={() => openAdd()}
-                className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-4 py-1.5 text-[13px] font-semibold text-white transition hover:border-white/40 hover:bg-white/[0.16]"
-              >
-                <Plus size={14} /> Add expected item
-              </button>
-            </div>
-          </>
-        ) : cf.loading || (cf.opening?.openingCash != null && !cf.error) ? (
-          /* LOADING / REHYDRATING: a previous build exists (or we don't know
-             yet) — show the shimmer, never the setup screen. The setup below is
-             ONLY for a school that has genuinely never built a forecast. */
-          <div className="mt-5">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-              {[0, 1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className={`h-[132px] rounded-2xl border border-white/10 bg-white/[0.07] ${
-                    reduce ? '' : 'animate-pulse'
-                  } ${i === 0 ? 'sm:col-span-2' : ''}`}
-                />
-              ))}
-            </div>
-            <p className="mt-3 text-[12.5px] font-semibold text-white/55">
-              {cf.loading ? 'Loading…' : 'Rebuilding your last forecast…'}
-            </p>
-          </div>
-        ) : (
-          /* FIRST-RUN: the hero IS the setup. One field, one date, one click. */
-          <div className="mt-4 max-w-2xl">
-            <p className="text-[14px] leading-relaxed text-white/70">
-              Enter what operations can actually spend — or accept the QuickBooks balance — and
-              build the forecast. Commitments, budget phasing, enrollment and your books do the
-              rest.
-            </p>
-            <div className="mt-4 flex flex-wrap items-end gap-3">
-              <label className="flex flex-col gap-1">
-                <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/60">
-                  Available operating cash
-                </span>
-                <CurrencyField
-                  value={openingInput}
-                  onChange={setOpeningDraft}
-                  variant="dark"
-                  size="lg"
-                  className="w-56"
-                  aria-label="Available operating cash"
-                />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/60">
-                  As of
-                </span>
-                <DatePicker
-                  value={asOf}
-                  onChange={setAsOfDraft}
-                  className="w-44 rounded-xl border-2 border-white/15 bg-white/10 px-3 py-2 text-[14px] text-white"
-                />
-              </label>
-              <button
-                type="button"
-                onClick={() => run()}
-                disabled={cf.projecting || !Number.isFinite(Number(openingInput))}
-                className="rounded-lg btn-cta px-4 py-2 text-[14px] font-semibold disabled:opacity-50"
-              >
-                {cf.projecting ? 'Building…' : 'Build forecast'}
-              </button>
-              {qboOffer ? (
+      {p ? (
+        <>
+          {horizonBar}
+          <StatStrip cols={4} className="stats-compact">
+            <Stat
+              label="Available operating cash"
+              value={<LiveValue value={money(p.openingCash)} />}
+              status={p.firstShortfallDate ? 'watch' : 'good'}
+              note={`as of ${p.asOfDate}`}
+            >
+              <div className="mt-2 flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    setOpeningDraft(String(qboOffer.amount))
-                    run({ openingCash: qboOffer.amount, openingSource: 'quickbooks' })
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300/40 bg-emerald-400/15 px-3.5 py-2 text-[13px] font-semibold text-emerald-100 transition hover:bg-emerald-400/25"
+                  aria-label="Edit the opening balance"
+                  aria-expanded={openingEditorOpen}
+                  onClick={() => setOpeningEditorOpen((v) => !v)}
+                  className="btn btn-quiet btn-sm"
                 >
-                  <Zap size={13} /> Use QuickBooks balance · {money(qboOffer.amount)}
+                  <Pencil size={12} /> Edit
                 </button>
-              ) : null}
-            </div>
-            {cf.error ? <p className="mt-2 text-[13px] text-red-300">{cf.error}</p> : null}
+                {qboOffer ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpeningDraft(String(qboOffer.amount))
+                      // A refinement of the CURRENT forecast, not a build — preview only.
+                      run({ openingCash: qboOffer.amount, openingSource: 'quickbooks', persist: false })
+                    }}
+                    className="btn btn-quiet btn-sm"
+                  >
+                    <Zap size={11} /> Use QuickBooks balance · {money(qboOffer.amount)}
+                  </button>
+                ) : null}
+              </div>
+              <div className="mt-2 h-8">
+                <Sparkline vals={p.buckets.map((b) => b.closingBalance)} color="#2563EB" h={32} fill stretch />
+              </div>
+            </Stat>
+            <Stat
+              label="Lowest projected"
+              value={<LiveValue value={money(p.lowestBalance)} />}
+              status={p.firstShortfallDate ? 'risk' : 'good'}
+              note={p.lowestDate ? `on ${p.lowestDate}` : 'no movement in this horizon'}
+            />
+            <Stat
+              label="Covered through"
+              value={
+                <LiveValue
+                  countUp={false}
+                  value={p.firstShortfallDate ? prettyDay(dayBefore(p.firstShortfallDate)) : prettyDay(p.horizonEnd)}
+                />
+              }
+              status={p.firstShortfallDate ? 'watch' : 'good'}
+              note={
+                p.firstShortfallDate
+                  ? `${p.daysOfNotice} days' notice`
+                  : p.monthsCashAtLowPoint != null
+                    ? `ends at ${money(p.endingBalance)} · ${p.monthsCashAtLowPoint.toFixed(1)} months' cash at the low`
+                    : `ends at ${money(p.endingBalance)}`
+              }
+            />
+            {p.firstShortfallDate ? (
+              <Stat label="Projected gap" value={<LiveValue value={money(p.shortfallAmount)} />} status="risk" note={`first breach ${p.firstShortfallDate}`} />
+            ) : (
+              <Stat label="Ending balance" value={<LiveValue value={money(p.endingBalance)} />} status="good" note="stays above the reserve throughout" />
+            )}
+          </StatStrip>
+
+          {/* The inline opening editor — the Stat's pencil expands it HERE,
+              no page jump. Same run() path as Build (a real, persisted run). */}
+          <AnimatePresence initial={false}>
+            {openingEditorOpen ? (
+              <OpeningEditor
+                openingValue={openingInput}
+                onOpeningChange={setOpeningDraft}
+                asOf={asOf}
+                onAsOfChange={setAsOfDraft}
+                busy={cf.projecting}
+                onRebuild={() => {
+                  run()
+                  setOpeningEditorOpen(false)
+                }}
+                onCancel={() => setOpeningEditorOpen(false)}
+                qboOffer={qboOffer}
+                onUseQbo={() => {
+                  setOpeningDraft(String(qboOffer.amount))
+                  run({ openingCash: qboOffer.amount, openingSource: 'quickbooks' })
+                  setOpeningEditorOpen(false)
+                }}
+                fmt={money}
+                error={cf.error}
+              />
+            ) : null}
+          </AnimatePresence>
+        </>
+      ) : cf.loading || (cf.opening?.openingCash != null && !cf.error) ? (
+        /* LOADING / REHYDRATING: a previous build exists (or we don't know
+           yet) — show the shimmer, never the setup screen. The setup below is
+           ONLY for a school that has genuinely never built a forecast. */
+        <div className="mt-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className={`shimmer-bar h-[88px] rounded ${reduce ? '' : 'animate-pulse'}`} />
+            ))}
           </div>
-        )}
-      </div>
+          <p className="mt-3 text-small font-semibold text-ink2">
+            {cf.loading ? 'Loading…' : 'Rebuilding your last forecast…'}
+          </p>
+        </div>
+      ) : (
+        /* FIRST-RUN: the headline IS the setup. One field, one date, one click —
+           inside the one raised surface, because it is a form. */
+        <Panel className="mt-2 max-w-2xl">
+          <h2 className="font-serif text-title text-ink">When does cash run low?</h2>
+          <p className="mt-1 text-body text-ink2">
+            Enter what operations can actually spend — or accept the QuickBooks balance — and
+            build the forecast. Commitments, budget phasing, enrollment and your books do the
+            rest.
+          </p>
+          <div className="mt-4 flex flex-wrap items-end gap-3">
+            <label className="flex flex-col gap-1">
+              <span className="toolbar-label">Available operating cash</span>
+              <CurrencyField
+                value={openingInput}
+                onChange={setOpeningDraft}
+                variant="light"
+                size="lg"
+                className="w-56"
+                aria-label="Available operating cash"
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="toolbar-label">As of</span>
+              <DatePicker
+                value={asOf}
+                onChange={setAsOfDraft}
+                className="w-44 rounded-md border border-hair/30 bg-white px-3 py-2 text-[14px] text-ink"
+              />
+            </label>
+            <Button variant="primary" onClick={() => run()} disabled={cf.projecting || !Number.isFinite(Number(openingInput))}>
+              {cf.projecting ? 'Building…' : 'Build forecast'}
+            </Button>
+            {qboOffer ? (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setOpeningDraft(String(qboOffer.amount))
+                  run({ openingCash: qboOffer.amount, openingSource: 'quickbooks' })
+                }}
+                icon={<Zap size={13} />}
+              >
+                Use QuickBooks balance · {money(qboOffer.amount)}
+              </Button>
+            ) : null}
+          </div>
+          {cf.error ? <p className="mt-2 text-[13px] tone-risk">{cf.error}</p> : null}
+        </Panel>
+      )}
     </motion.section>
   )
 
@@ -799,7 +698,7 @@ export default function CashFlowPage() {
   // The operating cash is stated ONCE: this row just reads it back, and its
   // pencil opens the same OpeningEditor the hero tile uses. No second input.
   const setupStrip = (
-    <section className="rounded-2xl border border-rule/60 bg-white p-5">
+    <Panel as="section">
       {cf.opening?.openingCash != null || lastBuiltOpening != null ? (
         <>
           <div className="flex flex-wrap items-center gap-3">
@@ -819,16 +718,14 @@ export default function CashFlowPage() {
               aria-label="Edit the opening balance"
               aria-expanded={openingEditorOpen}
               onClick={() => setOpeningEditorOpen((v) => !v)}
-              className={`rounded-md border p-1.5 transition hover:border-gold/60 hover:text-navy ${
-                openingEditorOpen ? 'border-gold/60 text-navy' : 'border-rule/70 text-muted'
-              }`}
+              className="btn btn-quiet btn-sm"
             >
-              <Pencil size={13} />
+              <Pencil size={13} /> Edit
             </button>
             {unbuiltOpening ? (
-              <span className="rounded-lg border border-[#F59E0B]/40 bg-[#F59E0B]/10 px-3 py-2 text-[12.5px] font-semibold text-[#8a5a06]">
+              <Pill variant="status" tone="watch">
                 Unbuilt change — press Build forecast to apply.
-              </span>
+              </Pill>
             ) : null}
           </div>
           <AnimatePresence initial={false}>
@@ -857,17 +754,13 @@ export default function CashFlowPage() {
         </>
       ) : (
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-[14px] text-muted">
+          <p className="text-[14px] text-ink2">
             No forecast yet — state your available operating cash on the Overview tab to build
             the first one.
           </p>
-          <button
-            type="button"
-            onClick={() => setTab('overview')}
-            className="rounded-lg btn-cta px-4 py-2 text-[13px] font-semibold"
-          >
+          <Button variant="primary" onClick={() => setTab('overview')}>
             Go to Overview
-          </button>
+          </Button>
         </div>
       )}
 
@@ -892,14 +785,14 @@ export default function CashFlowPage() {
         </p>
       ) : null}
       {cf.opening?.stale ? (
-        <p className="mt-2 flex items-start gap-2 rounded-lg border border-[#F59E0B]/40 bg-[#F59E0B]/10 px-3 py-2 text-[12.5px] leading-relaxed text-[#8a5a06]">
-          <CalendarClock size={14} className="mt-px shrink-0" />
+        <p className="mt-2 flex items-start gap-2 border-l-2 border-watch pl-3 text-[12.5px] leading-relaxed text-ink">
+          <CalendarClock size={14} className="mt-px shrink-0 tone-watch" />
           This balance was last stated {cf.opening.ageDays} days ago. Every week after a stale
           start inherits its drift — restate it before acting on the forecast.
         </p>
       ) : null}
-      {cf.error ? <p className="mt-2 text-[13px] text-danger">{cf.error}</p> : null}
-    </section>
+      {cf.error ? <p className="mt-2 text-[13px] tone-risk">{cf.error}</p> : null}
+    </Panel>
   )
 
   return (
@@ -916,7 +809,7 @@ export default function CashFlowPage() {
           role="tabpanel"
           aria-labelledby="cf-tab-overview"
           tabIndex={0}
-          className="mt-5 space-y-5"
+          className="mt-4 space-y-6"
         >
           {hero}
 
@@ -924,52 +817,53 @@ export default function CashFlowPage() {
             <>
               {/* ── What is not in this forecast ─────────────────────────────── */}
               {cf.projection.omissions?.length > 0 ? (
-                <section className="rounded-2xl border-2 border-[#F59E0B]/40 bg-[#F59E0B]/[0.07] p-5">
-                  <h2 className="flex items-center gap-2 text-[13px] font-semibold uppercase tracking-[0.1em] text-[#8a5a06]">
-                    <AlertTriangle size={15} /> What is not in this forecast
-                  </h2>
-                  <ul className="mt-2 space-y-1.5">
+                <Panel
+                  as="section"
+                  tone="attention"
+                  // The mark follows the WORST omission: a missing receipt
+                  // (tuition, a budget) makes the low point an artefact — risk;
+                  // anything else is a watch. The server sends no severity.
+                  className={omissionTone === 'risk' ? undefined : 'panel-watch'}
+                  title={
+                    <span className="inline-flex items-center gap-2">
+                      <AlertTriangle size={15} className={`tone-${omissionTone}`} aria-hidden="true" /> What is not in this forecast
+                    </span>
+                  }
+                >
+                  <ul className="space-y-1.5">
                     {cf.projection.omissions.map((o) => (
-                      <li key={o.key} className="text-[13.5px] leading-relaxed text-navy/80">
+                      <li key={o.key} className="text-small leading-relaxed text-ink">
                         {o.message}
                       </li>
                     ))}
                   </ul>
-                </section>
+                </Panel>
               ) : null}
 
               {/* ── Why ──────────────────────────────────────────────────────── */}
               {why ? (
-                <section className="rounded-2xl border border-rule/60 bg-cream/40 p-5">
-                  <h2 className="text-[12px] font-semibold uppercase tracking-[0.1em] text-muted">Why</h2>
-                  <p className="mt-1.5 text-[15px] leading-relaxed text-navy">{why}</p>
-                </section>
+                <Section label="Why" as="section">
+                  <p className="text-body text-ink">{why}</p>
+                </Section>
               ) : null}
 
               {/* ── The outlook: two views (horizons live in the hero band) ──── */}
-              <section className="rounded-2xl border border-rule/60 bg-white p-5">
-                <div className="mb-4 flex flex-wrap items-center justify-end gap-3">
-                  <div className="inline-flex rounded-full border border-rule/70 bg-white p-0.5">
+              <Section
+                label="The outlook"
+                as="section"
+                aside={
+                  <div className="seg" role="group" aria-label="Outlook view">
                     {[
                       { key: 'charts', label: 'Charts', Icon: LineChart },
                       { key: 'workbook', label: 'Workbook', Icon: LayoutGrid },
                     ].map(({ key, label, Icon }) => (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => setView(key)}
-                        className={
-                          view === key
-                            ? 'inline-flex items-center gap-1.5 rounded-full bg-navy px-3.5 py-1 text-[12.5px] font-semibold text-white'
-                            : 'inline-flex items-center gap-1.5 rounded-full px-3.5 py-1 text-[12.5px] font-semibold text-muted transition hover:text-navy'
-                        }
-                      >
+                      <button key={key} type="button" aria-pressed={view === key} onClick={() => setView(key)} className="seg-btn">
                         <Icon size={13} /> {label}
                       </button>
                     ))}
                   </div>
-                </div>
-
+                }
+              >
                 <div className="relative">
                   <AnimatePresence mode="wait">
                     {view === 'charts' ? (
@@ -990,9 +884,7 @@ export default function CashFlowPage() {
                           format={money}
                         />
                         <div>
-                          <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-[0.1em] text-muted">
-                            Money in vs money out
-                          </h3>
+                          <h3 className="sec-label mb-2">Money in vs money out</h3>
                           <FlowBars buckets={p.buckets} format={money} />
                         </div>
                       </motion.div>
@@ -1017,14 +909,8 @@ export default function CashFlowPage() {
                   {/* Rebuild shimmer — HONEST loading: the figures underneath are
                       the old projection, so they blur rather than pretend. */}
                   {cf.projecting ? (
-                    <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/60 backdrop-blur-[1px]">
-                      <span
-                        className={`rounded-full border border-rule/70 bg-white px-3.5 py-1.5 text-[12.5px] font-semibold text-muted shadow-sm ${
-                          reduce ? '' : 'animate-pulse'
-                        }`}
-                      >
-                        Rebuilding…
-                      </span>
+                    <div className="absolute inset-0 z-10 flex items-center justify-center bg-ground/70">
+                      <Pill className={reduce ? '' : 'animate-pulse'}>Rebuilding…</Pill>
                     </div>
                   ) : null}
                 </div>
@@ -1033,57 +919,45 @@ export default function CashFlowPage() {
                     sources that actually contributed are shown. */}
                 {activeSources.length > 0 ? (
                   <div className="mt-4 flex flex-wrap items-center gap-2">
-                    <Sparkles size={13} className="text-muted" />
+                    <Sparkles size={13} className="text-ink2" aria-hidden="true" />
                     {activeSources.map(([key, v]) => (
-                      <span
-                        key={key}
-                        className="rounded-full border border-rule/70 bg-section px-2.5 py-0.5 text-[11.5px] font-semibold text-muted"
-                        title={`${v.count} event${v.count === 1 ? '' : 's'} · ${money(v.total)}`}
-                      >
+                      <Pill key={key} variant="count" title={`${v.count} event${v.count === 1 ? '' : 's'} · ${money(v.total)}`}>
                         {SOURCE_LABELS[key] ?? key} · {v.count}
-                      </span>
+                      </Pill>
                     ))}
                   </div>
                 ) : null}
 
                 {cf.projection.committedShare != null ? (
-                  <p className="mt-3 text-[12.5px] leading-relaxed text-muted">
+                  <p className="sec-note">
                     {Math.round(cf.projection.committedShare * 100)}% of the movement in this forecast is
                     committed — dates and amounts you already know. The rest is scheduled, modelled from
                     your history or budget, or an assumption you entered.
                   </p>
                 ) : null}
-              </section>
+              </Section>
 
               {/* ── Potential actions ─────────────────────────────────────────── */}
               {actions.length > 0 ? (
-                <section className="rounded-2xl border border-rule/60 bg-white p-5">
-                  <h2 className="font-serif text-[17px] font-semibold text-navy">Potential actions</h2>
-                  <p className="mt-1 text-[13px] text-muted">
-                    Suggestions, not steps taken for you — every one of these is a decision.
-                  </p>
-                  <ul className="mt-3 space-y-2.5">
+                <Section label="Potential actions" as="section" aside="suggestions, not steps taken for you — every one is a decision">
+                  <ul className="m-0 list-none p-0">
                     {actions.map((a) => (
-                      <li key={a.key} className="rounded-xl border border-rule/60 bg-section/50 p-3.5">
-                        <Link
-                          to={a.to}
-                          className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-navy hover:underline"
-                        >
+                      <li key={a.key} className="border-b border-hair py-3">
+                        <Link to={a.to} className="inline-flex items-center gap-1.5 text-body font-semibold text-ink hover:underline">
                           {a.label} <ArrowRight size={13} />
                         </Link>
-                        <p className="mt-1 text-[13px] leading-relaxed text-muted">{a.detail}</p>
+                        <p className="mt-1 text-small leading-relaxed text-ink2">{a.detail}</p>
                       </li>
                     ))}
                   </ul>
-                </section>
+                </Section>
               ) : null}
 
               {/* ── Compact inputs summary — adding never requires the tab ──── */}
-              <section className="rounded-2xl border border-rule/60 bg-white p-5">
+              <Section label="Forecast inputs" as="section">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <h2 className="font-serif text-[17px] font-semibold text-navy">Forecast inputs</h2>
-                    <p className="mt-1 text-[13px] text-muted">
+                    <p className="text-small text-ink2">
                       {flows != null
                         ? `${adjustableFlows.length} QuickBooks-fed line${
                             adjustableFlows.length === 1 ? '' : 's'
@@ -1096,23 +970,15 @@ export default function CashFlowPage() {
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setTab('inputs')}
-                      className="rounded-lg btn-cta px-4 py-2 text-[13px] font-semibold"
-                    >
+                    <Button variant="primary" onClick={() => setTab('inputs')}>
                       Open forecast inputs
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => openAdd()}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-rule/70 px-4 py-2 text-[13px] font-semibold text-navy transition hover:border-gold/60"
-                    >
-                      <Plus size={13} /> Add expected item
-                    </button>
+                    </Button>
+                    <Button variant="secondary" onClick={() => openAdd()} icon={<Plus size={13} />}>
+                      Add expected item
+                    </Button>
                   </div>
                 </div>
-              </section>
+              </Section>
             </>
           ) : null}
         </div>
@@ -1128,7 +994,7 @@ export default function CashFlowPage() {
 
           {/* Sticky mini-projection — edits visibly redraw WITHOUT leaving the tab. */}
           {p ? (
-            <div className="sticky top-2 z-20 flex items-center gap-4 rounded-2xl border border-rule/60 bg-white/95 px-4 py-2.5 shadow-sm backdrop-blur">
+            <div className="panel sticky top-2 z-20 flex items-center gap-4 px-4 py-2.5">
               <div className="min-w-0 flex-1">
                 <Sparkline
                   vals={p.buckets.map((b) => b.closingBalance)}
@@ -1139,25 +1005,15 @@ export default function CashFlowPage() {
                 />
               </div>
               <div className="shrink-0 text-right">
-                <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-muted">
-                  Lowest projected
-                </p>
-                <p className="text-[15px] font-semibold tabular-nums text-navy">
+                <p className="toolbar-label">Lowest projected</p>
+                <p className="text-body font-semibold tabular-nums text-ink">
                   {money(p.lowestBalance)}
                   {p.lowestDate ? (
-                    <span className="ml-1 text-[12px] font-normal text-muted">on {p.lowestDate}</span>
+                    <span className="ml-1 text-small font-normal text-ink2">on {p.lowestDate}</span>
                   ) : null}
                 </p>
               </div>
-              {cf.projecting ? (
-                <span
-                  className={`shrink-0 rounded-full bg-section px-2.5 py-1 text-[11.5px] font-semibold text-muted ${
-                    reduce ? '' : 'animate-pulse'
-                  }`}
-                >
-                  Rebuilding…
-                </span>
-              ) : null}
+              {cf.projecting ? <Pill className={reduce ? '' : 'animate-pulse'}>Rebuilding…</Pill> : null}
             </div>
           ) : null}
 
@@ -1179,8 +1035,8 @@ export default function CashFlowPage() {
       {/* Data-tier + confidence disclaimer — visible on BOTH tabs; the honesty
           system travels with the forecast, not with the Overview panel. */}
       {p ? (
-        <p className="mt-5 flex items-start gap-2 text-[12.5px] leading-relaxed text-muted">
-          <AlertTriangle size={14} className="mt-px shrink-0" />
+        <p className="mt-5 flex items-start gap-2 text-[12.5px] leading-relaxed text-ink2">
+          <AlertTriangle size={14} className="mt-px shrink-0" aria-hidden="true" />
           <span>
             {cf.projection.dataTierReason} {cf.projection.disclaimer}
           </span>

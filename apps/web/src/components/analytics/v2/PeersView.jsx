@@ -1,31 +1,34 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // PeersView — the peers scope (auto-benchmark ONE school against its comparable
 // peers). Rendered for all three sub-views (Overview · Charts · Scorecard),
-// switched on `view`. Speaks the same visual language as the other scopes: a navy
-// HERO BAND carries the group description + the headline standing (insights[0]),
-// with a subtle chip when the group was BROADENED (relaxed) or fell back to all
-// schools. Every number is a @finrep/analytics-formatted string (value parity).
+// switched on `view`. Premium UI P3: no navy band — the group description + the
+// headline standing (insights[0]) open the panel as a `Section` on the ground,
+// with a status Pill when the group was BROADENED (relaxed) or fell back to all
+// schools; the headline figures are a `StatStrip`; the rails and demographics
+// are chart Sections; the scorecard is a `DataTable` with the peer median as its
+// footer line. Every number is a @finrep/analytics-formatted string (value
+// parity).
 //
 // Degrades gracefully off group.sample / matchTier:
 //   • emptyState (matchTier 'none') → "No comparable peers yet" + a Settings CTA
 //     when the profile is incomplete.
-//   • headtohead / small → PercentileStrip collapses to a ranked-dot list, tiles
-//     carry a "small sample (n=X)" tag.
-//   • rich → full p25/median/p75 strip.
+//   • headtohead / small → the percentile is withheld, Stats carry a
+//     "small sample (n=X)" note.
+//   • rich → rank + median + percentile.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { motion, useReducedMotion } from 'framer-motion'
-import { Users, Sparkles, Info, Settings2 } from 'lucide-react'
-import { metricLabel, formatMetricValue } from '../../../lib/metricMeta.js'
+import { Users, Sparkles, Settings2 } from 'lucide-react'
+import { metricLabel } from '../../../lib/metricMeta.js'
 import { healthStatus } from '@finrep/analytics'
 import { schoolColor } from './chartPalette.js'
-import { lightStatus } from './statusStyle.js'
+import { lightStatus, MARK } from './statusStyle.js'
 import { formatMetric } from './helpers.js'
 import ColumnChart from '../charts/ColumnChart.jsx'
 import HealthRail from '../charts/HealthRail.jsx'
 import { peerCaption } from './peerCaption.js'
 import { TargetBandBar } from '../MetricDrawer.jsx'
+import { Section, StatStrip, Stat, DataTable, Pill, Panel, Button } from '../../ui/surface/index.js'
 
 // The headline metrics of the peer scorecard (contract-frozen order).
 const HEADLINE_KEYS = [
@@ -119,114 +122,77 @@ function enrollmentPoints(data) {
   return pts
 }
 
-// ── The navy hero band (OverviewView's HeroBand sibling) ─────────────────────
-function PeerHero({ data }) {
-  const reduce = useReducedMotion()
+// ── The opening: who is being benchmarked against whom, and the one sentence ─
+function PeerHead({ data }) {
   const { focus, group, insights } = data
-  const tierChip =
+  const tier =
     group.matchTier === 'relaxed'
-      ? { text: `Broadened — comparing against ${group.groupDescription}`, tone: 'amber' }
+      ? { text: `Broadened — comparing against ${group.groupDescription}`, tone: 'watch' }
       : group.matchTier === 'all-schools'
-        ? { text: 'Comparing against all your schools — add county or type to narrow', tone: 'sky' }
+        ? { text: 'Comparing against all your schools — add county or type to narrow', tone: 'neutral' }
         : null
   return (
-    <motion.section
-      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-      className="relative overflow-hidden rounded-2xl bg-navy-gradient p-5 shadow-navy-glow sm:p-6"
+    <Section
+      label={
+        <span className="inline-flex items-center gap-1.5">
+          <Users size={13} aria-hidden="true" /> Peer benchmark
+        </span>
+      }
+      aside={`${group.peerCount} ${group.peerCount === 1 ? 'peer' : 'peers'}`}
+      className="!mt-0"
     >
-      <span aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-gold/10 blur-3xl" />
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-px"
-        style={{ background: 'linear-gradient(90deg, transparent, rgba(214,178,92,0.5), transparent)' }}
-      />
-      <div className="relative">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <span className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-[0.18em] text-gold/80">
-            <Users size={14} /> Peer benchmark
-          </span>
-          <span className="text-[11.5px] font-medium text-white/50">
-            {group.peerCount} {group.peerCount === 1 ? 'peer' : 'peers'}
-          </span>
-        </div>
-        <h3 className="font-serif text-xl font-semibold text-white sm:text-2xl">{focus.schoolName}</h3>
-        <p className="mt-0.5 text-[13.5px] text-white/70">vs. {group.groupDescription}</p>
-        {insights?.[0] && (
-          <p className="mt-3 flex items-start gap-2 text-[15px] font-semibold text-white">
-            <Sparkles size={16} className="mt-0.5 shrink-0 text-gold" />
-            {insights[0]}
-          </p>
-        )}
-        {tierChip && (
-          <p
-            className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-semibold ${
-              // NOT sky-400/sky-200: tailwind.config.js defines `sky` as a FLAT
-              // rgb(var(--c-sky)) string, which replaces Tailwind's whole sky
-              // scale — so every `sky-<number>` utility emits NO CSS and this
-              // chip rendered as dark text on a navy band, invisible.
-              tierChip.tone === 'amber'
-                ? 'bg-amber-400/15 text-amber-200'
-                : 'bg-white/10 text-white/75'
-            }`}
-          >
-            <Info size={13} /> {tierChip.text}
-          </p>
-        )}
-      </div>
-    </motion.section>
+      <h3 className="sec-title !mb-1">{focus.schoolName}</h3>
+      <p className="text-small text-ink2">vs. {group.groupDescription}</p>
+      {insights?.[0] && (
+        <p className="mt-3 flex items-start gap-2 text-body font-semibold text-ink">
+          <Sparkles size={15} className="mt-0.5 shrink-0 text-ink2" aria-hidden="true" />
+          {insights[0]}
+        </p>
+      )}
+      {tier && (
+        <p className="mt-3">
+          <Pill variant="status" tone={tier.tone}>
+            {tier.text}
+          </Pill>
+        </p>
+      )}
+    </Section>
   )
 }
 
-// ── Overview: headline KPI tiles (focus value · peer median · percentile pill) ──
+// ── Overview: headline Stats (focus value · peer median · rank · percentile) ──
 function PeerOverview({ data }) {
-  const tiles = HEADLINE_KEYS.filter((k) => data.focus.metrics?.[k] || data.stats?.[k])
+  const keys = HEADLINE_KEYS.filter((k) => data.focus.metrics?.[k] || data.stats?.[k])
   const small = data.group.sample === 'small' || data.group.sample === 'headtohead'
   return (
-    <div className="space-y-6">
-      <PeerHero data={data} />
-      <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
-        {tiles.map((k, i) => {
-          const fm = data.focus.metrics?.[k]
-          const stat = data.stats?.[k]
-          const st = lightStatus(pctStatus(stat?.percentile))
-          return (
-            <motion.div
-              key={k}
-              initial={{ opacity: 0, y: 10 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: '-30px' }}
-              transition={{ duration: 0.35, delay: i * 0.05 }}
-              className="av2-card p-4"
-            >
-              <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-muted">{metricLabel(k)}</p>
-              <p className="mt-1 text-2xl font-bold text-navy tabular-nums">
-                {fm?.formatted ?? formatMetric({ key: k, value: fm?.value ?? null, unit: fm?.unit })}
-              </p>
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-[12.5px] text-muted">
-                <span>
-                  Peer median <b className="text-navy tabular-nums">{stat?.medianFormatted ?? '—'}</b>
-                </span>
-                {stat && stat.rank != null && (
-                  <span className="text-slate-400">· rank {stat.rank}/{stat.count}</span>
-                )}
-              </div>
-              {stat?.percentile != null && !small && (
-                <span className={`mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] font-semibold ${st.pill}`}>
-                  <span className="h-1.5 w-1.5 rounded-full" style={{ background: st.dot }} />
-                  {pctLabel(stat.percentile)}
-                </span>
-              )}
-              {small && (
-                <span className="mt-2 inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500">
-                  small sample (n={stat?.count ?? data.group.peerCount + 1})
-                </span>
-              )}
-            </motion.div>
-          )
-        })}
-      </div>
+    <div>
+      <PeerHead data={data} />
+      <Section label="Where you stand" aside={small ? `small sample (n=${data.group.peerCount + 1})` : null}>
+        <StatStrip cols={Math.min(keys.length, 5) || 1} className="stats-compact">
+          {keys.map((k) => {
+            const fm = data.focus.metrics?.[k]
+            const stat = data.stats?.[k]
+            const status = pctStatus(stat?.percentile)
+            const note = [
+              `Peer median ${stat?.medianFormatted ?? '—'}`,
+              stat && stat.rank != null ? `rank ${stat.rank}/${stat.count}` : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')
+            const pct = stat?.percentile != null && !small ? pctLabel(stat.percentile) : null
+            return (
+              <Stat
+                key={k}
+                label={metricLabel(k)}
+                value={fm?.formatted ?? formatMetric({ key: k, value: fm?.value ?? null, unit: fm?.unit })}
+                status={MARK[status]}
+                delta={pct ? { text: pct, tone: lightStatus(status).tone } : null}
+                note={note}
+              />
+            )
+          })}
+        </StatStrip>
+      </Section>
     </div>
   )
 }
@@ -238,7 +204,7 @@ function PeerOverview({ data }) {
 // with no domain says nothing — and never answered "is this any good?", which
 // is the question a head of school is actually asking. The rail answers both:
 // health is where the dots stand, comparison is the space between them.
-function RailCard({ data, metricKey }) {
+function RailSection({ data, metricKey }) {
   const stat = data.stats?.[metricKey]
   if (!stat) return null
   const fm = data.focus.metrics?.[metricKey]
@@ -258,25 +224,27 @@ function RailCard({ data, metricKey }) {
   const status = lightStatus(healthStatus(stat.focusValue ?? null, bands ?? undefined, stat.focusValue != null))
 
   return (
-    <div className="av2-card p-4 sm:p-5">
-      <div className="mb-1 flex items-baseline justify-between gap-2">
-        <p className="text-[13.5px] font-semibold text-navy">{metricLabel(metricKey)}</p>
-        <p className="text-[13px] tabular-nums">
-          <b className="text-navy">{stat.focusFormatted ?? '—'}</b>
+    <Section
+      label={metricLabel(metricKey)}
+      className="!mt-0 min-w-0"
+      aside={
+        <span className="inline-flex items-center gap-2 tabular-nums">
+          <b className="text-ink">{stat.focusFormatted ?? '—'}</b>
           {bands && stat.focusValue != null && (
-            <span className={`ml-2 rounded-full px-2 py-0.5 text-[11px] font-semibold ${status.pill}`}>
+            <Pill variant="status" tone={status.tone}>
               {status.label}
-            </span>
+            </Pill>
           )}
-        </p>
-      </div>
+        </span>
+      }
+    >
       <HealthRail
         points={points}
         bands={bands}
         caption={caption}
         ariaLabel={`${metricLabel(metricKey)} — ${caption ?? 'peer comparison'}`}
       />
-    </div>
+    </Section>
   )
 }
 
@@ -308,106 +276,76 @@ function PeerCharts({ data }) {
     prof.district && { label: 'District', value: prof.district },
   ].filter(Boolean)
   return (
-    <div className="space-y-6">
-      <PeerHero data={data} />
-      <div>
-        <h4 className="mb-2.5 text-[12px] font-bold uppercase tracking-[0.14em] text-slate-400">Where you stand</h4>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+    <div>
+      <PeerHead data={data} />
+      <Section label="Where you stand">
+        <div className="grid grid-cols-1 gap-x-10 gap-y-6 lg:grid-cols-2">
           {stripKeys.map((k) => (
-            <RailCard key={k} data={data} metricKey={k} />
+            <RailSection key={k} data={data} metricKey={k} />
           ))}
         </div>
-      </div>
-      <div>
-        <h4 className="mb-2.5 text-[12px] font-bold uppercase tracking-[0.14em] text-slate-400">Demographics</h4>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <div className="av2-card p-4">
-            <p className="mb-2 text-[13px] font-semibold text-navy">Enrollment across the peer group</p>
+      </Section>
+      <Section label="Demographics">
+        <div className="grid grid-cols-1 gap-x-10 gap-y-6 lg:grid-cols-2">
+          <Section label="Enrollment across the peer group" className="!mt-0 min-w-0">
             {enrollRows.length ? (
               <ColumnChart rows={enrollRows} formatter={intFmt} ariaLabel="Enrollment across the peer group" />
             ) : (
-              <p className="py-8 text-center text-[13px] italic text-muted">No enrollment reported yet.</p>
+              <p className="py-8 text-center text-small italic text-ink2">No enrollment reported yet.</p>
             )}
-          </div>
-          <div className="av2-card p-4">
-            <p className="mb-3 text-[13px] font-semibold text-navy">This school's profile</p>
+          </Section>
+          <Section label="This school's profile" className="!mt-0 min-w-0">
             {badges.length ? (
-              <div className="flex flex-wrap gap-2">
+              <dl className="m-0">
                 {badges.map((b) => (
-                  <span key={b.label} className="inline-flex items-center gap-1.5 rounded-full border border-rule/60 px-3 py-1.5 text-[12.5px] font-semibold text-navy">
-                    <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">{b.label}</span>
-                    {b.value}
-                  </span>
+                  <div key={b.label} className="fig">
+                    <dt className="fig-label">{b.label}</dt>
+                    <dd className="fig-value m-0">{b.value}</dd>
+                  </div>
                 ))}
-              </div>
+              </dl>
             ) : (
-              <p className="text-[13px] italic text-muted">
+              <p className="text-small italic text-ink2">
                 No profile set yet.{' '}
-                <Link to="/settings" className="font-semibold text-navy underline">
+                <Link to="/settings" className="font-semibold text-ink underline">
                   Add it in Settings
                 </Link>
                 .
               </p>
             )}
-          </div>
+          </Section>
         </div>
-      </div>
+      </Section>
     </div>
   )
 }
 
-// ── Scorecard: focus + peers × metric columns + a peer-median summary row ─────
+// ── Scorecard: focus + peers × metric columns + a peer-median footer line ─────
 function PeerScorecard({ data }) {
   const cols = HEADLINE_KEYS.filter((k) => data.focus.metrics?.[k] || data.peers.some((p) => p.metrics?.[k]))
-  const rowFor = (school) => (
-    <>
-      <td className="whitespace-nowrap px-3 py-2.5 text-[13px] font-semibold text-navy">{school.name}</td>
-      <td className="whitespace-nowrap px-3 py-2.5 text-[12.5px] text-muted">{school.profile?.sizeBandLabel ?? '—'}</td>
-      {cols.map((k) => (
-        <td key={k} className="whitespace-nowrap px-3 py-2.5 text-right text-[13px] tabular-nums text-navy">
-          {school.metrics?.[k]?.formatted ?? '—'}
-        </td>
-      ))}
-    </>
-  )
+  const columns = [
+    { key: 'name', header: 'School', className: 'dt-nowrap', render: (r) => <span className={r.isFocus ? 'font-semibold text-ink' : 'text-ink'}>{r.name}</span> },
+    { key: 'size', header: 'Size', render: (r) => r.profile?.sizeBandLabel ?? <span className="text-ink2">—</span> },
+    ...cols.map((k) => ({
+      key: k,
+      header: metricLabel(k),
+      num: true,
+      render: (r) => r.metrics?.[k]?.formatted ?? <span className="text-ink2">—</span>,
+    })),
+  ]
+  const rows = [
+    { id: data.focus.schoolId, name: `${data.focus.schoolName} (you)`, profile: data.focus.profile, metrics: data.focus.metrics, isFocus: true },
+    ...data.peers.map((p) => ({ id: p.schoolId, name: p.schoolName, profile: p.profile, metrics: p.metrics })),
+  ]
+  const medianMetrics = {}
+  for (const k of cols) medianMetrics[k] = { formatted: data.stats?.[k]?.medianFormatted ?? '—' }
+  const foot = [{ id: '__median', name: 'Peer median', profile: null, metrics: medianMetrics }]
   return (
-    <div className="space-y-5">
-      <PeerHero data={data} />
-      <div className="av2-card overflow-x-auto">
-        <table className="w-full min-w-[640px] border-collapse text-left">
-          <thead>
-            <tr className="border-b border-rule/60 bg-cream/40">
-              <th className="px-3 py-2.5 text-[11px] font-bold uppercase tracking-[0.1em] text-muted">School</th>
-              <th className="px-3 py-2.5 text-[11px] font-bold uppercase tracking-[0.1em] text-muted">Size</th>
-              {cols.map((k) => (
-                <th key={k} className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-[0.1em] text-muted">
-                  {metricLabel(k)}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            <tr className="border-b border-rule/40 bg-coral/5">
-              {rowFor({ name: `${data.focus.schoolName} (you)`, profile: data.focus.profile, metrics: data.focus.metrics })}
-            </tr>
-            {data.peers.map((p) => (
-              <tr key={p.schoolId} className="border-b border-rule/30">
-                {rowFor({ name: p.schoolName, profile: p.profile, metrics: p.metrics })}
-              </tr>
-            ))}
-            <tr className="bg-cream/50">
-              <td className="px-3 py-2.5 text-[12.5px] font-bold uppercase tracking-[0.08em] text-muted" colSpan={2}>
-                Peer median
-              </td>
-              {cols.map((k) => (
-                <td key={k} className="whitespace-nowrap px-3 py-2.5 text-right text-[13px] font-semibold tabular-nums text-navy">
-                  {data.stats?.[k]?.medianFormatted ?? '—'}
-                </td>
-              ))}
-            </tr>
-          </tbody>
-        </table>
-      </div>
+    <div>
+      <PeerHead data={data} />
+      <Section label="Peer scorecard">
+        <DataTable columns={columns} rows={rows} rowKey="id" footRows={foot} markOf={(r) => (r.isFocus ? 'hue' : null)} caption="Peer scorecard" className="dt-sticky" />
+      </Section>
     </div>
   )
 }
@@ -419,48 +357,47 @@ function PeerScorecard({ data }) {
 // and every sentence here says so. cost_per_pupil ships without a band on
 // purpose — spending levels vary by mission, and inventing a target would be a
 // judgement the product refuses to fake. ─────────────────────────────────────
-function SectorBandTile({ row, metric }) {
+function SectorBandStat({ row, metric }) {
   const label = metric?.label ?? metricLabel(row.key)
   const value = metric?.value ?? row.value
   const formatted = metric ? formatMetric(metric) : value != null ? String(value) : '—'
   return (
-    <div className="av2-card min-w-0 p-4 sm:p-5">
-      <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted">{label}</p>
-      <p className="mt-1 font-serif text-[26px] font-semibold text-navy tabular-nums">{formatted}</p>
+    <Stat label={label} value={formatted} className="min-w-0">
       {row.bands && value != null ? (
         <TargetBandBar metric={{ key: row.key, unit: metric?.unit, value, bands: row.bands }} />
       ) : (
-        <p className="mt-2 text-[12.5px] italic leading-snug text-muted">
+        <p className="mt-2 text-small italic leading-snug text-ink2">
           {value == null
             ? 'No value for this year yet.'
             : 'No sector band — deliberately: spending levels vary by mission.'}
         </p>
       )}
-    </div>
+    </Stat>
   )
 }
 
 function SectorBandFallback({ data }) {
   const byKey = data.focus?.metrics ?? {}
   return (
-    <div className="av2-card p-5 sm:p-6">
-      <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="font-serif text-lg font-semibold text-navy">Your school vs the sector band</h3>
-        <span className="rounded-full border border-rule/60 bg-section px-2.5 py-0.5 text-[11.5px] font-semibold text-muted">
+    <Section
+      label="Your school vs the sector band"
+      aside={
+        <Pill variant="status" tone="neutral">
           Sector default — not a peer group
-        </span>
-      </div>
-      <p className="mb-4 max-w-2xl text-[13.5px] leading-snug text-muted">
+        </Pill>
+      }
+    >
+      <p className="mb-4 max-w-2xl text-small leading-snug text-ink2">
         These are documented private-school sector targets, not your peers&apos; numbers — a
         starting point, not a verdict. Real peer benchmarking unlocks when your organization has
         sibling schools reporting.
       </p>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <StatStrip cols={Math.min(data.benchmark.length, 3) || 1} className="stats-compact">
         {data.benchmark.map((row) => (
-          <SectorBandTile key={row.key} row={row} metric={byKey[row.key]} />
+          <SectorBandStat key={row.key} row={row} metric={byKey[row.key]} />
         ))}
-      </div>
-    </div>
+      </StatStrip>
+    </Section>
   )
 }
 
@@ -476,31 +413,26 @@ function PeerEmpty({ data }) {
   const needsProfile = data.focus && data.focus.profileComplete === false
   const bands = single && Array.isArray(data.benchmark) && data.benchmark.length > 0
   return (
-    <div className="space-y-6">
-      <PeerHero data={data} />
+    <div>
+      <PeerHead data={data} />
       {bands ? (
         // The band comparison IS the surface for a single school — the dead-end
         // card demoted to a footnote beneath it.
         <>
           <SectorBandFallback data={data} />
-          <p className="text-center text-[12.5px] text-muted">{msg}</p>
+          <p className="sec-note text-center">{msg}</p>
         </>
       ) : (
-        <div className="av2-card flex flex-col items-center gap-3 px-6 py-12 text-center">
-          <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-cream text-navy">
-            <Users size={26} />
-          </span>
-          <h3 className="font-serif text-lg font-semibold text-navy">No comparable peers yet</h3>
-          <p className="max-w-md text-[14px] text-muted">{msg}</p>
+        <Section label="No comparable peers yet">
+          <p className="max-w-md text-body text-ink2">{msg}</p>
           {needsProfile && (
-            <Link
-              to="/settings"
-              className="mt-1 inline-flex items-center gap-2 rounded-lg bg-navy px-4 py-2.5 text-[13.5px] font-semibold text-white transition-colors hover:bg-navy/90"
-            >
-              <Settings2 size={15} /> Complete your school profile
-            </Link>
+            <Panel className="mt-4 inline-block">
+              <Button variant="primary" to="/settings" icon={<Settings2 size={15} />}>
+                Complete your school profile
+              </Button>
+            </Panel>
           )}
-        </div>
+        </Section>
       )}
     </div>
   )
@@ -509,10 +441,10 @@ function PeerEmpty({ data }) {
 export default function PeersView({ peers, view }) {
   const data = peers?.data
   if (peers?.loading && !data) {
-    return <div className="av2-card animate-pulse px-6 py-16 text-center text-[14px] text-muted">Finding your peer group…</div>
+    return <p className="sec-note animate-pulse py-12 text-center">Finding your peer group…</p>
   }
   if (!data) {
-    return <div className="av2-card px-6 py-16 text-center text-[14px] italic text-muted">Peer comparison unavailable right now.</div>
+    return <p className="sec-note py-12 text-center italic">Peer comparison unavailable right now.</p>
   }
   if (data.emptyState || data.group?.matchTier === 'none') return <PeerEmpty data={data} />
   if (view === 'charts') return <PeerCharts data={data} />

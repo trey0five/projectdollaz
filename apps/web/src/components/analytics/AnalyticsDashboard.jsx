@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { Link, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, BarChart3, PieChart } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { useSearchParams } from 'react-router-dom'
+import { BarChart3, PieChart } from 'lucide-react'
 import { useSchools } from '../../context/SchoolContext.jsx'
 import { useBilling } from '../../context/BillingContext.jsx'
 import { usePersistence } from '../../context/PersistenceContext.jsx'
@@ -28,6 +28,7 @@ import {
   HeadlineSkeleton,
 } from './skeletons.jsx'
 import BackLink from '../ui/BackLink.jsx'
+import { PageHeader as SurfacePageHeader, Section, Button } from '../ui/surface/index.js'
 
 // Vital metrics shown as large hero tiles — exactly the band-bearing financial
 // health metrics. Hero treatment derives from this set BUT is reconciled against
@@ -95,23 +96,13 @@ const DOMAIN_SECTIONS = [
   { domain: 'finance', title: 'Financial (Other)' },
 ]
 
+// Premium UI P3: the page opens with the surface PageHeader (eyebrow / serif
+// title / meta on a hairline) — no icon tile, no gold.
 function PageHeader() {
   return (
     <div className="mb-5">
-      <BackLink className="mb-4" />
-      <div className="flex items-center gap-2.5">
-        <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gold-gradient text-white shadow-glow">
-          <BarChart3 size={22} />
-        </span>
-        <div>
-          <h1 className="font-serif text-xl font-semibold text-navy sm:text-2xl">
-            Financial Insights
-          </h1>
-          <p className="text-[15px] text-muted">
-            At-a-glance metrics from your saved statements.
-          </p>
-        </div>
-      </div>
+      <BackLink className="mb-2" />
+      <SurfacePageHeader eyebrow="Analytics" title="Financial Insights" meta="At-a-glance metrics from your saved statements." hue="37 99 235" />
     </div>
   )
 }
@@ -365,14 +356,14 @@ export default function AnalyticsDashboard() {
     return (
       <div className="mx-auto max-w-page px-4 py-8 sm:px-10">
         <PageHeader />
-        <div className="card-soft border-dashed px-6 py-14 text-center">
-          <p className="font-serif text-lg italic text-muted">No saved statements yet.</p>
-          <p className="mt-1 text-[15px] text-muted">
+        <div className="px-6 py-14 text-center">
+          <p className="font-serif text-title italic text-ink2">No saved statements yet.</p>
+          <p className="mt-1 text-body text-ink2">
             Generate and save a period on the dashboard to see your insights.
           </p>
-          <Link to="/app" className="btn-primary mt-6">
+          <Button variant="primary" to="/app" className="mt-6">
             Go to dashboard
-          </Link>
+          </Button>
         </div>
       </div>
     )
@@ -472,15 +463,13 @@ export default function AnalyticsDashboard() {
           {flatSectionItems.length > 0 && (
             <div className={dimWhileCustomizing}>
               <MetricSection title="Key Metrics">
-                <div className="bg-page-glow bg-no-repeat">
-                  <MetricGrid
-                    items={flatSectionItems}
-                    metricsByKey={metricsByKey}
-                    trendsByKey={sparkTrends}
-                    periodKey={selectedPeriodId}
-                    onOpen={openDrawer}
-                  />
-                </div>
+                <MetricGrid
+                  items={flatSectionItems}
+                  metricsByKey={metricsByKey}
+                  trendsByKey={sparkTrends}
+                  periodKey={selectedPeriodId}
+                  onOpen={openDrawer}
+                />
               </MetricSection>
             </div>
           )}
@@ -489,7 +478,7 @@ export default function AnalyticsDashboard() {
           {donutKeys.length > 0 && (
             <div className={dimWhileCustomizing}>
               <MetricSection title="Revenue & Expense Mix">
-                <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-2">
+                <div className="grid grid-cols-1 gap-x-10 gap-y-6 lg:grid-cols-2">
                   {donutKeys.includes('revenue_mix') && (
                     <DonutCard
                       title="Revenue Mix"
@@ -535,23 +524,25 @@ export default function AnalyticsDashboard() {
   )
 }
 
+// A mix chart on the ground under its own Section rule; the label row's aside
+// opens the drill-down drawer (the chart primitive itself is not a button).
 function DonutCard({ title, icon, metric, onOpen }) {
-  const reduce = useReducedMotion()
   return (
-    <motion.button
-      type="button"
-      onClick={onOpen}
-      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12 }}
-      animate={reduce ? { opacity: 1 } : { opacity: 1, y: 0 }}
-      className="card-vital w-full p-4 text-left sm:p-5"
-    >
-      <div className="mb-2 flex items-center gap-2.5">
-        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gold/15 text-gold">
-          {icon}
+    <Section
+      label={
+        <span className="inline-flex items-center gap-1.5">
+          <span className="text-navy-soft" aria-hidden="true">{icon}</span>
+          {title}
         </span>
-        <h3 className="font-serif text-base font-semibold text-navy sm:text-lg">{title}</h3>
-      </div>
+      }
+      className="!mt-0 min-w-0"
+      aside={
+        <Button variant="quiet" size="sm" onClick={onOpen}>
+          Details
+        </Button>
+      }
+    >
       <MixDonut metric={metric} />
-    </motion.button>
+    </Section>
   )
 }

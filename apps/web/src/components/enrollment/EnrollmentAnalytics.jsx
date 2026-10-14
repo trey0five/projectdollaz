@@ -136,7 +136,7 @@ function ImpactStrip({ items, reduce }) {
       viewport={{ once: true, margin: '-40px' }}
       transition={{ duration: 0.4 }}
       aria-label="What this means for the budget"
-      className="av2-card overflow-hidden p-0"
+      className="panel overflow-hidden p-0"
     >
       <div className="flex items-center gap-2 border-b border-navy/[0.07] px-4 py-2.5 sm:px-5">
         <span className="grid h-6 w-6 place-items-center rounded-lg bg-emerald-500/12 text-emerald-700">

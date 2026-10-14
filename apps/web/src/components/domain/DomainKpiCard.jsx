@@ -1,80 +1,38 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// DomainKpiCard — one KPI tile for the Domain Command Center. Presentational and
-// domain-agnostic: a label, a status dot, a big serif value, a colored sub-stat
-// line, and a DECORATIVE status-colored gradient "wash" at the foot.
+// DomainKpiCard — one KPI of the Domain Command Center, as a `Stat` (Premium UI
+// P3). Presentational and domain-agnostic: a label, the value, a 2px status mark
+// and a one-line sub-stat whose tone colours ONLY the mark beside it. No box,
+// no wash, no gradient: the StatStrip draws the vertical rules between KPIs.
 //
-// The wash is a stylized motif — NOT data. These domains (Governance, Facilities,
-// Advancement, Accreditation) carry no time-series, so we never draw a fake
-// sparkline; the wash simply re-states the tile's health as a soft flourish.
+// The prop contract is the one every domain page (Governance, Facilities,
+// Advancement, Accreditation, HR, Planning, Tasks, Knowledge, Cash, Strategy)
+// already passes — label · value · sub:{icon,text,tone} · status — so the
+// callers are untouched. These domains carry no time-series, so there is never
+// a fake sparkline here.
+//
+// NO-CLIP CONTRACT (card contract §5): the label and sub line WRAP (min-w-0 +
+// break-words), and `.stat-text` lets a TEXT value ("None scheduled", "3 of 5
+// policies") wrap and hyphenate where a pure figure would never break —
+// nothing in this tile carries `truncate`, and the value never shrinks its font.
 // ─────────────────────────────────────────────────────────────────────────────
-import { motion, useReducedMotion } from 'framer-motion'
-import StatusDot from '../analytics/StatusDot.jsx'
+import { Stat } from '../ui/surface/index.js'
+import { MARK } from '../analytics/v2/statusStyle.js'
 
-// Status → the wash gradient + top-rule color. Mirrors StatusDot's mapping
-// (good=gold, watch=navy-soft, risk=danger) so the dot and wash always agree.
-const WASH = {
-  good: { grad: 'from-gold/[0.14]', rule: 'bg-gold' },
-  watch: { grad: 'from-navy-soft/[0.14]', rule: 'bg-navy-soft' },
-  risk: { grad: 'from-danger/[0.14]', rule: 'bg-danger' },
-  neutral: { grad: 'from-rule/[0.2]', rule: 'bg-rule' },
-}
+// Sub-stat tone → the mark colour beside the sub text (the text stays ink-2).
+const SUB_TONE = { bad: 'tone-risk', good: 'tone-good', neutral: 'tone-neutral' }
 
-// Sub-stat tone → text color (bad=danger red, good=emerald, neutral=gold accent).
-const SUB_TONE = {
-  bad: 'text-danger',
-  good: 'text-emerald-600',
-  neutral: 'text-gold',
-}
-
-export default function DomainKpiCard({ label, value, sub, status = 'neutral', index = 0 }) {
-  const reduce = useReducedMotion()
-  const wash = WASH[status] ?? WASH.neutral
+export default function DomainKpiCard({ label, value, sub, status = 'neutral' }) {
   const SubIcon = sub?.icon
   const toneCls = SUB_TONE[sub?.tone] ?? SUB_TONE.neutral
-
   return (
-    <motion.div
-      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12 }}
-      animate={reduce ? { opacity: 1 } : { opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.05, type: 'spring', stiffness: 260, damping: 22 }}
-      className="kpi-3d relative flex min-w-0 flex-col overflow-hidden rounded-2xl"
-    >
-      {/* Cushion: the p-5/sm:p-6 content scale so no text sits against a border;
-          the extra pb clears the decorative wash. Long labels/values/subs WRAP
-          (min-w-0 + break-words) — never truncate, never shrink the font.
-          `hyphens-auto` pairs with break-words on purpose: break-words is the
-          LAST RESORT for content that cannot fit a line at all (a 20-character
-          figure), but on its own it shatters ordinary English mid-word. With
-          hyphenation the browser prefers a syllable boundary, and the grid
-          step-down in DomainCommandCenter means the case should not arise. */}
-      <div className="flex flex-col gap-3 p-5 pb-6 sm:p-6 sm:pb-8">
-        <div className="flex items-start justify-between gap-2">
-          <h3 className="min-w-0 font-sans text-[12px] font-semibold uppercase leading-snug tracking-[0.1em] text-muted">
-            {label}
-          </h3>
-          <span className="mt-0.5 shrink-0">
-            <StatusDot status={status} size={9} />
-          </span>
+    <Stat label={label} value={value} status={MARK[status]} className="stat-text min-w-0">
+      {sub ? (
+        <div className="stat-foot min-w-0">
+          <i className={`mark ${toneCls}`} aria-hidden="true" />
+          {SubIcon ? <SubIcon size={13} className="shrink-0 text-ink2" aria-hidden="true" /> : null}
+          <span className="min-w-0 break-words hyphens-auto">{sub.text}</span>
         </div>
-
-        <div className="min-w-0 hyphens-auto break-words font-serif text-[26px] font-semibold leading-[1.05] text-navy sm:text-[30px]">
-          {value}
-        </div>
-
-        {sub ? (
-          <div className={`flex items-start gap-1.5 text-[13px] font-semibold ${toneCls}`}>
-            {SubIcon ? <SubIcon size={14} className="mt-0.5 shrink-0" /> : null}
-            <span className="min-w-0 hyphens-auto break-words">{sub.text}</span>
-          </div>
-        ) : null}
-      </div>
-
-      {/* Decorative status wash — a soft gradient flourish with a thin top rule.
-          Not a data sparkline; a stylized health motif. */}
-      <div className="pointer-events-none relative mt-auto h-10 w-full">
-        <div className={`absolute inset-x-0 top-0 h-[2px] ${wash.rule}`} />
-        <div className={`absolute inset-0 bg-gradient-to-t ${wash.grad} to-transparent`} />
-      </div>
-    </motion.div>
+      ) : null}
+    </Stat>
   )
 }

@@ -213,14 +213,16 @@
 }
 .sec-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem 0.75rem;
   margin-bottom: 0.75rem;
   min-height: 1.5rem;
 }
 .sec-label {
   margin: 0;
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
   font-size: 11px;
   line-height: 16px;
   font-weight: 600;
@@ -229,13 +231,16 @@
   color: rgb(var(--c-ink-2));
 }
 .sec-rule {
-  flex: 1 1 auto;
+  flex: 1 1 1rem;
+  min-width: 1rem;
   height: 1px;
   background: rgb(var(--hair) / 0.1);
 }
 .sec-aside {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
   font-size: 13px;
@@ -268,6 +273,9 @@
 }
 .panel-attention {
   border-left: 2px solid rgb(var(--c-risk));
+}
+.panel-attention.panel-watch {
+  border-left-color: rgb(var(--c-watch));
 }
 .panel-body {
   padding: var(--sp-panel);
@@ -348,9 +356,15 @@
 .dt-row-link {
   cursor: pointer;
 }
-.dt-num {
+.dt-num,
+.dt thead th.dt-num {
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+/* A sortable numeric header keeps its chevron on the right edge, flush. */
+.dt thead th.dt-num .dt-sort-btn {
+  justify-content: flex-end;
+  width: 100%;
 }
 /* The 2px status-mark column: a coloured bar, no pill. */
 .dt-mark {
@@ -389,10 +403,15 @@
 .dt-chev {
   width: 10px;
   height: 10px;
-  opacity: 0.35;
+  opacity: 0;
   transition: opacity 0.15s ease, transform 0.15s ease;
 }
-.dt-sort-active .dt-chev {
+.dt-sort:hover .dt-chev,
+.dt-sort-btn:focus-visible .dt-chev {
+  opacity: 0.35;
+}
+.dt-sort-active .dt-chev,
+.dt-sort-active:hover .dt-chev {
   opacity: 1;
 }
 .dt-sort-desc .dt-chev {
@@ -400,12 +419,18 @@
 }
 /* Row-level actions fade in on hover (never a button wall at rest). */
 .dt-actions {
-  opacity: 0;
+  opacity: 0.45;
   transition: opacity 0.15s ease;
 }
 .dt tbody tr:hover .dt-actions,
 .dt tbody tr:focus-within .dt-actions {
   opacity: 1;
+}
+/* No pointer (touch): there is no hover to reveal, so the action is always on. */
+@media (hover: none) {
+  .dt-actions {
+    opacity: 1;
+  }
 }
 /* Empty state = a ruled row, not a dashed card. */
 .dt-empty > td {
@@ -450,7 +475,7 @@
 .pill-status.tone-watch .pill-mark { color: rgb(var(--c-watch)); }
 .pill-status.tone-risk .pill-mark { color: rgb(var(--c-risk)); }
 .pill-status.tone-neutral .pill-mark { color: rgb(var(--c-ink-2)); }
-.pill-status { color: rgb(var(--c-ink)); }
+.pill.pill-status { color: rgb(var(--c-ink)); } /* out-ranks the later .tone-* text rules */
 
 /* ── Toolbar ──────────────────────────────────────────────────────────────── */
 .toolbar {
@@ -762,6 +787,420 @@
   height: 28px;
   padding: 0 0.625rem;
   font-size: 12px;
+}
+
+
+/* ── DataTable additions (P3) ─────────────────────────────────────────────── */
+/* A footer line (roll-up / median / total): ink weight, a 2px rule above. */
+.dt tfoot td {
+  height: var(--row-h);
+  padding: 0 0.75rem;
+  border-top: 2px solid rgb(var(--hair) / 0.18);
+  font-weight: 600;
+  vertical-align: middle;
+}
+.dt tfoot td:first-child { padding-left: 0.25rem; }
+.dt tfoot td:last-child { padding-right: 0.25rem; }
+/* Grouped sheets (the budget spread): a section heading row, a group heading
+   row, a subtotal row on the ground tint, a section total on a 2px rule. */
+.dt tbody tr.dt-section > td {
+  height: 2.5rem;
+  padding-top: 0.75rem;
+  border-bottom: 1px solid rgb(var(--hair) / 0.18);
+}
+.dt tbody tr.dt-group > td {
+  height: 2rem;
+  padding-top: 0.5rem;
+  border-bottom: 0;
+}
+.dt tbody tr.dt-subtotal > td {
+  background: rgb(var(--c-ground));
+}
+.dt tbody tr.dt-section-total > td {
+  border-top: 2px solid rgb(var(--hair) / 0.18);
+  background: rgb(var(--c-ground));
+  font-weight: 600;
+}
+/* A cell that must never wrap (a metric name, a target figure). */
+.dt-nowrap {
+  white-space: nowrap;
+}
+/* A wide leaderboard keeps its first column (the school) pinned while the
+   metric columns scroll beneath it — ground background so rows read through. */
+.dt-sticky .dt thead th:first-child,
+.dt-sticky .dt tbody td:first-child,
+.dt-sticky .dt tfoot td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: rgb(var(--c-ground));
+}
+.dt-sticky .dt thead th:first-child {
+  z-index: 3;
+}
+.dt-sticky .dt tbody tr:hover > td:first-child {
+  background: #eef0f5;
+}
+/* When the table scrolls sideways, a right-edge fade says so; it lifts once
+   the reader reaches the end (DataTable toggles the data attributes). */
+.dt-wrap[data-overflow='x']::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 2.5rem;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgb(var(--c-ground) / 0), rgb(var(--c-ground)));
+  transition: opacity 0.15s ease;
+}
+.dt-wrap[data-overflow='x'][data-at-end='true']::after {
+  opacity: 0;
+}
+/* The secondary line under a cell's main text (a target, a context note). */
+.dt-sub {
+  display: block;
+  font-size: 11px;
+  line-height: 14px;
+  color: rgb(var(--c-ink-2));
+}
+/* A quiet in-row text link / action ("chart →"): ink-2 at rest, ink on hover. */
+.dt-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: rgb(var(--c-ink-2));
+  cursor: pointer;
+  text-decoration: none;
+}
+.dt-link:hover { color: rgb(var(--c-ink)); }
+.dt-link:focus-visible {
+  outline: 2px solid rgb(37 99 235 / 0.5);
+  outline-offset: 2px;
+  border-radius: var(--r-ctl);
+}
+/* The cross-link landing pulse (flash.js) on a ROW: the cells wash primary-blue
+   once and fade (box-shadow cannot ring a <tr>). Reduced motion → a static tint. */
+@keyframes dt-flash-cell {
+  0% { background-color: rgb(37 99 235 / 0.16); }
+  100% { background-color: rgb(37 99 235 / 0); }
+}
+tr[data-flash='on'] > td {
+  animation: dt-flash-cell 1.2s ease-out 1;
+}
+/* …and on a Section (a chart anchor): a 2px primary outline that fades. */
+@keyframes sec-flash-ring {
+  0% { box-shadow: 0 0 0 2px rgb(37 99 235 / 0.55); }
+  100% { box-shadow: 0 0 0 2px rgb(37 99 235 / 0); }
+}
+.sec[data-flash='on'] {
+  animation: sec-flash-ring 1.2s ease-out 1;
+  border-radius: var(--r-panel);
+}
+@media (prefers-reduced-motion: reduce) {
+  tr[data-flash='on'] > td { animation: none; background-color: rgb(37 99 235 / 0.1); }
+  .sec[data-flash='on'] { animation: none; box-shadow: 0 0 0 2px rgb(37 99 235 / 0.45); }
+}
+
+/* ── Section columns (P3, sketch 1): ruled columns of figures on the ground ── */
+.sec-cols {
+  display: grid;
+  gap: 0 2.5rem;
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 768px) { .sec-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1280px) { .sec-cols { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+/* A figure line inside a Section column: label left, tabular value right, a
+   hairline under each. The row itself may be a link (`.fig-link`). */
+.fig {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: var(--row-h);
+  padding: 0.375rem 0;
+  border-bottom: 1px solid rgb(var(--hair) / 0.1);
+  font-size: 13px;
+  line-height: 18px;
+  color: rgb(var(--c-ink-2));
+}
+.fig-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.fig-value {
+  font-weight: 600;
+  color: rgb(var(--c-ink));
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.fig-link {
+  color: inherit;
+  text-decoration: none;
+  transition: background-color 0.15s ease;
+}
+.fig-link:hover { background: rgb(var(--c-ink) / 0.03); }
+/* The quiet trailing link under a column ("View statements →"): ink, not gold. */
+.sec-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.625rem;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  color: rgb(var(--c-ink));
+  text-decoration: none;
+}
+.sec-more > svg { transition: transform 0.2s ease; }
+.sec-more:hover > svg { transform: translateX(3px); }
+.sec-more:focus-visible {
+  outline: 2px solid rgb(37 99 235 / 0.5);
+  outline-offset: 2px;
+  border-radius: var(--r-ctl);
+}
+
+/* ── Segmented control + native select, for a Toolbar (P3) ────────────────── */
+.seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  padding: 2px;
+  border: 1px solid rgb(var(--hair) / 0.14);
+  border-radius: 6px;
+  background: #ffffff;
+  /* On a phone a four-way control scrolls inside itself rather than pushing
+     the page wider (the page body never scrolls sideways). */
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.seg::-webkit-scrollbar {
+  display: none;
+}
+.seg-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  height: 28px;
+  padding: 0 0.625rem;
+  border: 0;
+  border-radius: var(--r-ctl);
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 600;
+  color: rgb(var(--c-ink-2));
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+.seg-btn:hover { color: rgb(var(--c-ink)); }
+.seg-btn[aria-selected='true'],
+.seg-btn[aria-pressed='true'] {
+  background: rgb(var(--c-ink));
+  color: #ffffff;
+}
+.seg-btn:focus-visible {
+  outline: 2px solid rgb(37 99 235 / 0.5);
+  outline-offset: 1px;
+}
+.sel {
+  height: 32px;
+  padding: 0 1.75rem 0 0.625rem;
+  border: 1px solid rgb(var(--hair) / 0.18);
+  border-radius: 6px;
+  background: #ffffff url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path d='M2 3.5l3 3 3-3' fill='none' stroke='%2344506E' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>") no-repeat right 0.625rem center;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  color: rgb(var(--c-ink));
+  appearance: none;
+  -webkit-appearance: none;
+  max-width: 16rem;
+}
+.sel:focus-visible {
+  outline: 2px solid rgb(37 99 235 / 0.5);
+  outline-offset: 1px;
+}
+.toolbar-label {
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgb(var(--c-ink-2));
+}
+/* A popover (the Compare picker): the ONE floating shadow, hairline, white. */
+.pop {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 16rem;
+  max-height: 20rem;
+  overflow: auto;
+  padding: 0.5rem;
+  background: #ffffff;
+  border: 1px solid rgb(var(--hair) / 0.14);
+  border-radius: var(--r-panel);
+  box-shadow: var(--sh-float);
+}
+.pop-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 32px;
+  padding: 0 0.5rem;
+  border-radius: var(--r-ctl);
+  font-size: 13px;
+  color: rgb(var(--c-ink));
+  cursor: pointer;
+}
+.pop-row:hover { background: rgb(var(--c-ink) / 0.04); }
+.pop-row input { accent-color: #2563eb; }
+/* A bare 2px status mark for an inline figure line (no pill around it). */
+.mark {
+  display: inline-block;
+  flex: none;
+  width: 2px;
+  height: 12px;
+  background: currentColor;
+  vertical-align: -1px;
+}
+/* The entity swatch beside a school name (series colour follows the school). */
+.swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--r-ctl);
+  flex: none;
+}
+
+/* ── Ink tabs (P3): the view axis on the ground, a 2px ink rule under the
+      active tab — no gold, no card tabs. ─────────────────────────────────── */
+.tabs-ink {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid rgb(var(--hair) / 0.1);
+}
+.tab-ink {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 0.5rem 0.75rem 0.625rem;
+  border: 0;
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  color: rgb(var(--c-ink-2));
+  cursor: pointer;
+  text-align: left;
+  transition: color 0.15s ease;
+}
+.tab-ink:hover { color: rgb(var(--c-ink)); }
+.tab-ink[aria-selected='true'] { color: rgb(var(--c-ink)); }
+.tab-ink-cap {
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgb(var(--c-ink-2));
+}
+.tab-ink-rule {
+  position: absolute;
+  inset: auto 0.75rem -1px;
+  height: 2px;
+  background: rgb(var(--c-module, 16 28 61));
+}
+.tab-ink:focus-visible {
+  outline: 2px solid rgb(37 99 235 / 0.5);
+  outline-offset: -2px;
+  border-radius: var(--r-ctl);
+}
+
+/* On a phone every strip is two-up (four 90px columns broke "OPERATIN|G"):
+   the same clip trick as .stats-wrap below, so row starts sit flush. The dark
+   stage strip keeps its own one-per-row rule (above). */
+@media (max-width: 639px) {
+  .stats:not(.stats-stage) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-left: calc(-1.25rem - 1px);
+    clip-path: inset(0 0 0 calc(1.25rem + 1px));
+    row-gap: 0.5rem;
+  }
+  .stats:not(.stats-stage) > .stat,
+  .stats:not(.stats-stage) > .stat-cell {
+    padding-left: 1.25rem;
+    border-left: 1px solid rgb(var(--hair) / 0.1);
+  }
+}
+/* A strip that WRAPS to more than one row (the domain KPIs: 5–7 stats): every
+   stat carries the left rule and the strip clips the outermost one away, so the
+   first stat of every row sits flush and no row starts with an indent. */
+.stats-wrap {
+  margin-left: calc(-1.25rem - 1px);
+  clip-path: inset(0 0 0 calc(1.25rem + 1px));
+  row-gap: 0.5rem;
+}
+.stats-wrap .stat {
+  padding-left: 1.25rem;
+  border-left: 1px solid rgb(var(--hair) / 0.1);
+}
+/* A Stat whose value is TEXT, not a figure (the domain KPIs: "None scheduled",
+   "3 of 5 policies"): it wraps and hyphenates instead of overflowing its column. */
+.stat-text .stat-value {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+  font-size: 26px;
+  line-height: 32px;
+}
+/* A compact Stat variant for dense strips (cash forecast, peers): 22px value. */
+.stats-compact .stat-value,
+.stat-compact .stat-value {
+  font-size: 22px;
+  line-height: 28px;
+}
+/* A Stat that is a <button> (the v1 analytics vitals open a drawer): same
+   geometry, the body font for its text, no native button chrome. */
+button.stat {
+  border: 0;
+  background: transparent;
+  font-family: var(--font-body);
+  color: inherit;
+  cursor: pointer;
+}
+/* A strip whose cells WRAP a Stat (MetricGrid's layout-animated cells): the
+   rules move to the cell so the inner Stat keeps no left padding of its own. */
+.stats > .stat-cell + .stat-cell {
+  padding-left: 1.25rem;
+  border-left: 1px solid rgb(var(--hair) / 0.1);
+}
+.stats > .stat-cell > .stat {
+  padding-left: 0;
+  border-left: 0;
+}
+/* The one-line note under a Section label row's content (a caption, a source). */
+.sec-note {
+  margin: 0.75rem 0 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: rgb(var(--c-ink-2));
 }
 
 /* ── Semantic tones (text colour; marks read currentColor) ────────────────── */

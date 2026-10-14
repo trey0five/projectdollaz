@@ -199,6 +199,50 @@ const ROWS = [
 ]
 const cellText = (container, col) => [...container.querySelectorAll(`tbody tr td:nth-child(${col})`)].map((td) => td.textContent)
 
+describe('DataTable — P3 additions: footer rows, row props, row classes', () => {
+  it('footRows render in a <tfoot> under the same columns (mark cell included) and are never sorted', () => {
+    const foot = [
+      { id: 'z', name: 'Zed total', students: 1, fy: '' },
+      { id: 'a', name: 'Alpha total', students: 2, fy: '' },
+    ]
+    const { container } = render(
+      <DataTable columns={COLS} rows={ROWS} footRows={foot} markOf={() => 'good'} sort={{ key: 'name', dir: 'asc' }} />,
+    )
+    const tfoot = container.querySelector('tfoot')
+    expect(tfoot).toBeTruthy()
+    const footRows = [...tfoot.querySelectorAll('tr')]
+    expect(footRows).toHaveLength(2)
+    for (const tr of footRows) {
+      expect(tr.classList.contains('dt-foot')).toBe(true)
+      // mark cell + the three columns, numerics right-aligned
+      expect(tr.children).toHaveLength(COLS.length + 1)
+      expect(tr.children[0].classList.contains('dt-mark')).toBe(true)
+      expect(tr.children[2].classList.contains('dt-num')).toBe(true)
+    }
+    // Body is sorted by name asc; the footer keeps the order it was given.
+    expect(cellText(container, 2)).toEqual(['Archbishop', 'Holy Trinity', 'St. Cecilia'])
+    expect(footRows.map((tr) => tr.children[1].textContent)).toEqual(['Zed total', 'Alpha total'])
+  })
+
+  it('rowProps lands its attributes on the <tr> (the cross-link flash target id)', () => {
+    const { container } = render(<DataTable columns={COLS} rows={ROWS} rowProps={(r) => ({ id: `av2-row-${r.id}`, 'data-kind': 'metric' })} />)
+    const trs = [...container.querySelectorAll('tbody tr')]
+    expect(trs.map((tr) => tr.id)).toEqual(['av2-row-1', 'av2-row-2', 'av2-row-3'])
+    expect(trs[0].getAttribute('data-kind')).toBe('metric')
+  })
+
+  it('rowClassName merges with the dt-row-link class a clickable row carries', () => {
+    const { container } = render(
+      <DataTable columns={COLS} rows={ROWS} onRowClick={() => {}} rowClassName={(r) => (r.students > 400 ? 'is-big' : null)} />,
+    )
+    const trs = [...container.querySelectorAll('tbody tr')]
+    expect(trs[0].classList.contains('dt-row-link')).toBe(true)
+    expect(trs[0].classList.contains('is-big')).toBe(true)
+    expect(trs[2].classList.contains('dt-row-link')).toBe(true)
+    expect(trs[2].classList.contains('is-big')).toBe(false)
+  })
+})
+
 describe('DataTable — sticky head, 36px hairline rows, right-aligned numerics', () => {
   it('emits `.dt` with scope=col headers, `.dt-num` on numeric header + cells, and a 2px mark column', () => {
     const { container } = render(<DataTable columns={COLS} rows={ROWS} markOf={(r) => (r.students > 400 ? 'good' : 'watch')} />)

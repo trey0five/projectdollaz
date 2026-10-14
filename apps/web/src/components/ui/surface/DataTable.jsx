@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 
 // DataTable — the table discipline (Premium UI §2.4): sticky 11px-caps thead on
@@ -14,6 +14,10 @@ import { motion, useReducedMotion } from 'framer-motion'
 //   sort     { key, dir } (controlled) or `defaultSort`; `onSort` is told of
 //            every change either way
 //   empty    text for the ruled empty row; `onRowClick(row)` makes rows links.
+//   rowProps (row) → extra attributes for the <tr> (an `id` for a cross-link
+//            flash target, a data-* hook); `rowClassName(row)` adds classes.
+//   footRows rows rendered in a <tfoot> under the same columns, never sorted
+//            (a roll-up / median / total line); `.dt-foot` styles them.
 export const REVEAL_CAP = 20
 
 const Chevron = () => (
@@ -55,6 +59,9 @@ export default function DataTable({
   onSort,
   empty = 'Nothing to show yet.',
   onRowClick,
+  rowProps,
+  rowClassName,
+  footRows = [],
   caption,
   className = '',
   ...rest
@@ -70,12 +77,35 @@ export default function DataTable({
   }
 
   const sorted = useMemo(() => sortRows(rows, columns, sort), [rows, columns, sort])
+
+  // Sideways scroll is SAID: when the table is wider than its wrap, the wrap
+  // carries data-overflow="x" (surface.css paints a right-edge fade) and
+  // data-at-end flips once the reader has scrolled to the last column.
+  const wrapRef = useRef(null)
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return undefined
+    const measure = () => {
+      const over = el.scrollWidth > el.clientWidth + 1
+      if (over) el.setAttribute('data-overflow', 'x')
+      else el.removeAttribute('data-overflow')
+      el.setAttribute('data-at-end', String(!over || el.scrollLeft + el.clientWidth >= el.scrollWidth - 1))
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    el.addEventListener('scroll', measure, { passive: true })
+    return () => {
+      ro.disconnect()
+      el.removeEventListener('scroll', measure)
+    }
+  }, [sorted, columns])
   const keyOf = typeof rowKey === 'function' ? rowKey : (r, i) => r?.[rowKey] ?? i
   const colSpan = columns.length + (markOf ? 1 : 0)
   const Row = reduce ? 'tr' : motion.tr
 
   return (
-    <div className={`dt-wrap${className ? ` ${className}` : ''}`}>
+    <div ref={wrapRef} className={`dt-wrap${className ? ` ${className}` : ''}`}>
       <table className="dt" {...rest}>
         {caption ? <caption className="sr-only">{caption}</caption> : null}
         <thead>
@@ -122,11 +152,14 @@ export default function DataTable({
                     transition: { duration: 0.24, delay: Math.min(i, REVEAL_CAP) * 0.015 },
                   }
               const tone = markOf ? markOf(row) : null
+              const extra = rowProps ? rowProps(row) : null
+              const rowCls = [onRowClick ? 'dt-row-link' : null, rowClassName ? rowClassName(row) : null].filter(Boolean).join(' ')
               return (
                 <Row
                   key={keyOf(row, i)}
-                  className={onRowClick ? 'dt-row-link' : undefined}
+                  className={rowCls || undefined}
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
+                  {...extra}
                   {...motionProps}
                 >
                   {markOf ? (
@@ -142,6 +175,20 @@ export default function DataTable({
             })
           )}
         </tbody>
+        {footRows.length > 0 ? (
+          <tfoot>
+            {footRows.map((row, i) => (
+              <tr key={keyOf(row, i)} className="dt-foot">
+                {markOf ? <td className="dt-mark" /> : null}
+                {columns.map((c) => (
+                  <td key={c.key} className={[c.num ? 'dt-num' : null, c.className || null].filter(Boolean).join(' ') || undefined}>
+                    {c.render ? c.render(row) : row[c.key]}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tfoot>
+        ) : null}
       </table>
     </div>
   )

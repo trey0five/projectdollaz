@@ -1,14 +1,16 @@
 import { Reorder } from 'framer-motion'
 import CustomizeMetricRow from './CustomizeMetricRow.jsx'
+import { Panel, Pill } from '../ui/surface/index.js'
 
 /**
  * The customize-mode editor: a draggable, reorderable list of metric rows. The
- * working `draft` lives in the parent (AnalyticsDashboard) so Save/Cancel can
- * persist/revert. Reorder.Group drives drag reordering; each row also offers
- * up/down arrows + a visibility toggle + a chart-variant control.
+ * working `draft` lives in the parent (AnalyticsDashboard / Scorecard) so
+ * Save/Cancel can persist/revert. Reorder.Group drives drag reordering; each row
+ * also offers up/down arrows + a visibility toggle + a chart-variant control.
  *
  * Items are keyed by metricKey (stable) and the Reorder value IS the item object,
- * so onReorder hands back the new ordered array directly.
+ * so onReorder hands back the new ordered array directly. Premium UI P3: a
+ * `Panel` (it is a form), a count `Pill`, no gold ring.
  */
 export default function CustomizePanel({ draft, onChange }) {
   const visibleCount = draft.filter((i) => i.visible).length
@@ -27,21 +29,14 @@ export default function CustomizePanel({ draft, onChange }) {
   }
 
   return (
-    <div className="rounded-2xl border border-gold/30 bg-section p-4 shadow-card ring-1 ring-gold/5">
+    <Panel>
       <div className="mb-3 flex items-center justify-between gap-3">
-        <p className="text-[13px] font-semibold uppercase tracking-[0.1em] text-muted">
+        <p className="text-micro font-semibold uppercase text-ink2">
           Drag the handle or use the arrows to reorder · eye to show/hide · chart &amp; wide per metric
         </p>
-        <span className="shrink-0 rounded-full border border-gold/40 bg-gold/10 px-2.5 py-0.5 text-[12px] font-semibold uppercase tracking-[0.06em] text-navy">
-          {visibleCount} shown
-        </span>
+        <Pill variant="count">{visibleCount} shown</Pill>
       </div>
-      <Reorder.Group
-        axis="y"
-        values={draft}
-        onReorder={onChange}
-        className="flex flex-col gap-2"
-      >
+      <Reorder.Group axis="y" values={draft} onReorder={onChange} className="flex flex-col gap-2">
         {draft.map((item, idx) => (
           <CustomizeMetricRow
             key={item.metricKey}
@@ -57,6 +52,6 @@ export default function CustomizePanel({ draft, onChange }) {
           />
         ))}
       </Reorder.Group>
-    </div>
+    </Panel>
   )
 }

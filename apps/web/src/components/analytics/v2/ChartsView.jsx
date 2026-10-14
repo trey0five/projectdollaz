@@ -200,7 +200,7 @@ function SchoolCharts({ school, onCrossToTable }) {
   return (
     <div>
       <QuestionGroup title="How's the money?">
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-x-10 gap-y-8 lg:grid-cols-2">
           <ChartCard id="chart-revmix" metricKey="revenue_mix" title="Where the money comes from" sub="Revenue mix" asOf={asOf} onViewAsTable={onCrossToTable}>
             {BarsFromMix(m.revenue_mix)}
           </ChartCard>
@@ -216,7 +216,7 @@ function SchoolCharts({ school, onCrossToTable }) {
         </div>
       </QuestionGroup>
       <QuestionGroup title="How's enrollment?">
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-x-10 gap-y-8 lg:grid-cols-2">
           <ChartCard id="chart-enrollment" metricKey="enrollment_change_yoy" title="Enrollment change" sub="Year over year" asOf={asOf} onViewAsTable={onCrossToTable}>
             {TrendCard(t.enrollment_change_yoy, schoolColor(2), (v) => `${(v * 100).toFixed(1)}%`)}
           </ChartCard>
@@ -233,7 +233,7 @@ function SchoolCharts({ school, onCrossToTable }) {
       </QuestionGroup>
       {hasHr && (
         <QuestionGroup title="How's staffing?">
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-x-10 gap-y-8 lg:grid-cols-2">
             {/* chart-staffing keeps its historic anchor id — old
                 /analytics?metric=student_teacher_ratio deep links + the Scorecard
                 "chart →" keep landing here. Renders whenever the ratio exists,
@@ -278,7 +278,7 @@ function SchoolCharts({ school, onCrossToTable }) {
       )}
       {hasPlanning && (
         <QuestionGroup title="What's the plan?">
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-x-10 gap-y-8 lg:grid-cols-2">
             <ChartCard id="chart-planvariance" metricKey="forecast_vs_budget_net" title="Forecast vs. budget" sub="Projected FY-end net vs. the plan" asOf={asOf} onViewAsTable={onCrossToTable}>
               {fvb?.value != null ? (
                 <div>
@@ -398,7 +398,7 @@ function CompareCharts({ compare }) {
   )
   return (
     <QuestionGroup title="How do we compare?">
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start">
+      <div className="grid grid-cols-1 gap-x-10 gap-y-8 lg:grid-cols-2 lg:items-start">
         <ChartCard id="chart-ppc" metricKey="cost_per_pupil" title="Per-pupil economics" sub="Cost per pupil vs. net tuition per student" asOf={compare.asOf}>
           {rows.length ? (
             <ColumnChart
@@ -510,7 +510,7 @@ function OrgCharts({ org }) {
   }
   return (
     <div>
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-x-10 gap-y-8 lg:grid-cols-2">
         <ChartCard
           id="chart-cash"
           metricKey="days_cash_on_hand"

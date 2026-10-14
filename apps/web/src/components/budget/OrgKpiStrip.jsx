@@ -15,6 +15,7 @@
 // effects, no in-render component definitions — React-Compiler safe). No-print; advisory.
 import { Section, StatStrip, Stat } from '../ui/surface/index.js'
 import { metricFormat, formatDelta, deltaTone, isBandedStatus } from '../../lib/metricMeta.js'
+import { MARK } from '../analytics/v2/statusStyle.js'
 
 // The org strip leads with the four Tier-1 banded metrics (status-marked), then a
 // few key operational/weighted ratios. We deliberately omit the mix donuts here
@@ -42,7 +43,6 @@ const WEIGHTED = {
   aid_per_aided_student: 'aided-count-weighted',
 }
 
-const MARK = { good: 'good', watch: 'watch', risk: 'risk' }
 
 export default function OrgKpiStrip({ metrics, loading, error }) {
   if (loading) {

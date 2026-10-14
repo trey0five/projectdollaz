@@ -415,7 +415,7 @@ export default function LightUpReveal({
               ref={ctaRef}
               type="button"
               onClick={() => go('/finance')}
-              className="btn-cta inline-flex min-h-[46px] w-full items-center justify-center gap-2 rounded-xl px-6 text-[12.5px] font-semibold uppercase tracking-[0.1em] outline-none focus-visible:ring-2 focus-visible:ring-gold/60 sm:w-auto"
+              className="btn btn-primary w-full sm:w-auto"
             >
               Open my Finance overview
               <ArrowRight size={15} />

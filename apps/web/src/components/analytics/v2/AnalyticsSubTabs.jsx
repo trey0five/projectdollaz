@@ -1,9 +1,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // AnalyticsSubTabs — the content axis (Overview · Charts · Scorecard). Clones
 // ModuleTabs' a11y contract: role=tablist/tab, roving tabindex + arrow-key nav,
-// aria-selected, focus-visible ring, and a sliding gold underline (static under
-// reduced-motion). Each tab shows a label + a one-word "what kind" caption from the
-// mockup ("the story" / "the graphs" / "the metrics").
+// aria-selected, focus-visible ring. Premium UI P3: ink tabs on the ground with
+// a sliding 2px rule in the module hue (static under reduced-motion) — no card
+// tabs, no gold. Each tab shows a label + a one-word "what kind" caption
+// ("the story" / "the graphs" / "the metrics").
 // ─────────────────────────────────────────────────────────────────────────────
 import { useRef } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
@@ -32,11 +33,7 @@ export default function AnalyticsSubTabs({ view, onView }) {
   }
 
   return (
-    <div
-      role="tablist"
-      aria-label="Analytics content"
-      className="av2-chiprow border-b border-rule/60 pb-0"
-    >
+    <div role="tablist" aria-label="Analytics content" className="tabs-ink">
       {VIEWS.map((key, i) => {
         const active = key === view
         const meta = VIEW_META[key]
@@ -51,24 +48,15 @@ export default function AnalyticsSubTabs({ view, onView }) {
             tabIndex={active ? 0 : -1}
             onClick={() => onView(key)}
             onKeyDown={(e) => onKeyDown(e, i)}
-            className={`relative flex shrink-0 flex-col items-start gap-0.5 rounded-t-lg border-x border-t px-4 py-2.5 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-gold/50 ${
-              active
-                ? 'border-gold/50 bg-white'
-                : 'border-transparent text-muted hover:bg-cream/60'
-            }`}
+            className="tab-ink"
           >
-            <span className={`text-[14px] font-semibold ${active ? 'text-navy' : 'text-muted'}`}>
-              {meta.label}
-            </span>
-            <span className="text-[10.5px] uppercase tracking-wide text-muted/80">{meta.caption}</span>
+            <span>{meta.label}</span>
+            <span className="tab-ink-cap">{meta.caption}</span>
             {active &&
               (reduce ? (
-                <span className="absolute inset-x-3 -bottom-px h-[3px] rounded-full bg-gold" />
+                <span className="tab-ink-rule" aria-hidden="true" />
               ) : (
-                <motion.span
-                  layoutId="av2-subtab-underline"
-                  className="absolute inset-x-3 -bottom-px h-[3px] rounded-full bg-gold"
-                />
+                <motion.span layoutId="av2-subtab-underline" className="tab-ink-rule" aria-hidden="true" />
               ))}
           </button>
         )

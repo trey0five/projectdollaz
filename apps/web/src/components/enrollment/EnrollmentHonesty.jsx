@@ -96,7 +96,7 @@ export function EnrollmentNotes({ notes = [], reduce = false }) {
       viewport={{ once: true, margin: '-40px' }}
       transition={{ duration: 0.4, ease: EASE }}
       aria-label="What to know about these figures"
-      className="av2-card p-4 sm:p-5"
+      className="panel p-4 sm:p-5"
     >
       <details className="group">
         <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-md text-[10.5px] font-bold uppercase tracking-[0.14em] text-muted outline-none transition-colors hover:text-navy focus-visible:ring-2 focus-visible:ring-sky-500/50 [&::-webkit-details-marker]:hidden">

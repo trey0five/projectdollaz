@@ -22,34 +22,29 @@
 // these two rows say the same thing in two places and should look like it.
 // ─────────────────────────────────────────────────────────────────────────────
 import { motion, useReducedMotion } from 'framer-motion'
-import { Calendar, Check, FileSpreadsheet, Layers, Minus, Plug } from 'lucide-react'
+import { Check, FileSpreadsheet, Layers, Minus, Plug } from 'lucide-react'
 import { SLOT_ROLES, ROLE_META } from '../../lib/roleMeta.js'
+import { Section, Pill, Button } from '../ui/surface/index.js'
 
+// Premium UI P3: the receipt is a `Section` on the ground (label "Your uploads",
+// the period as the aside), the slots are status Pills (a 2px mark: good when
+// present, neutral when not), the doors flat secondary Buttons. No card.
 function SlotChip({ role, file }) {
   const present = !!file
   const meta = ROLE_META[role]
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] font-semibold ${
-        present ? 'bg-emerald-50 text-emerald-700' : 'bg-section text-muted/70'
-      }`}
-      title={present ? file.fileName || meta.label : 'Not provided'}
-    >
-      {present ? <Check size={12} strokeWidth={3} /> : <Minus size={12} />}
+    <Pill variant="status" tone={present ? 'good' : 'neutral'} title={present ? file.fileName || meta.label : 'Not provided'}>
+      {present ? <Check size={11} strokeWidth={3} aria-hidden="true" /> : <Minus size={11} aria-hidden="true" />}
       {meta.label}
-    </span>
+    </Pill>
   )
 }
 
 function DoorButton({ Icon, label, onClick }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-1.5 text-[13px] font-semibold text-muted outline-none transition-colors hover:border-navy hover:text-navy focus-visible:border-navy focus-visible:ring-2 focus-visible:ring-navy/25"
-    >
-      <Icon size={14} /> {label}
-    </button>
+    <Button variant="secondary" size="sm" onClick={onClick} icon={<Icon size={13} />}>
+      {label}
+    </Button>
   )
 }
 
@@ -70,23 +65,12 @@ export default function UploadsSummary({ period, files = [], canEdit = false, on
       initial={reduce ? { opacity: 0 } : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: 'spring', stiffness: 240, damping: 24 }}
-      className="card-soft p-5 sm:p-6"
     >
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <p className="text-[12px] font-bold uppercase tracking-[0.12em] text-muted">
-          Your uploads
-        </p>
-        {period?.label ? (
-          <span className="inline-flex items-center gap-1.5 text-[13.5px] font-semibold text-navy">
-            <Calendar size={13} className="text-gold" /> {period.label}
-          </span>
-        ) : null}
-      </div>
-
+      <Section label="Your uploads" aside={period?.label ? <span className="font-semibold text-ink">{period.label}</span> : null} className="!mt-0">
       {/* The three slots as STATE, not as instructions. An unfilled slot reads
           "Prior Year —", which is a fact about this school; the pitch for what
           filling it would unlock belongs in the intake, one click away. */}
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {SLOT_ROLES.map((role) => (
           <SlotChip key={role} role={role} file={byRole[role]} />
         ))}
@@ -97,7 +81,7 @@ export default function UploadsSummary({ period, files = [], canEdit = false, on
           {/* Three doors, all leading back into the SAME embed on the tab that
               matches the words. Nothing here navigates away — a user who came to
               add one more year should not lose this screen to find the uploader. */}
-          <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-rule/60 pt-4">
+          <div className="mt-4 flex flex-wrap items-center gap-2">
             <DoorButton
               Icon={FileSpreadsheet}
               label={filled === SLOT_ROLES.length ? 'Manage files' : 'Add another file'}
@@ -108,6 +92,7 @@ export default function UploadsSummary({ period, files = [], canEdit = false, on
           </div>
         </>
       ) : null}
+      </Section>
     </motion.div>
   )
 }

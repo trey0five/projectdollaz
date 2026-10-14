@@ -13,6 +13,7 @@ import { Link } from 'react-router-dom'
 import { useAnalytics } from '../../hooks/useAnalytics.js'
 import { Section, StatStrip, Stat } from '../ui/surface/index.js'
 import { metricFormat, isBandedStatus } from '../../lib/metricMeta.js'
+import { MARK } from '../analytics/v2/statusStyle.js'
 
 const VITAL_KEYS = [
   'operating_margin',
@@ -22,7 +23,6 @@ const VITAL_KEYS = [
 ]
 
 // Status → the Stat's 2px mark. Only a banded status carries colour.
-const MARK = { good: 'good', watch: 'watch', risk: 'risk' }
 
 export default function HomeVitalsStrip({ schoolId, periodId }) {
   const { metrics, loading, error, notEntitled } = useAnalytics(schoolId, periodId)
