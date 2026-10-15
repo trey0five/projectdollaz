@@ -1,18 +1,26 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// HomeTiles — the HOME v2 tile dashboard (ui.v2 flag ON). The home becomes a
-// map: BriefingBand (the ONE dark stage) → module tile grid → the vitals strip;
-// the narrated morning brief opens as a POPUP (BriefingModal) from the stage's
-// ▶ Play / "Open the briefing". The old core row is gone (it duplicated the
-// global top nav).
+// HomeTiles — the HOME v2 tile dashboard (ui.v2 flag ON).
 //
-// PREMIUM UI P2: the page is a `Page` (document shell + the one page-in
-// stagger), the tiles are `Tile`s (8px, hairline, 2px hue rule, one-shot
-// flood), the vitals are a `StatStrip` on the ground. No ambient wash.
+// TWO LOOKS, ONE DATA PATH:
+//   • ORGANIZATION scope renders <OrgTiles/> — the Premium UI org home, untouched.
+//   • SCHOOL scope renders the CLASSIC home the owner asked to keep ("I want to
+//     go back to this look for the school home page"): the gradient daily
+//     briefing band with its aurora + three glass performer cards + the school
+//     crest, the colourful module tiles (tinted icon wells, art watermarks, the
+//     hover colour-flood + shine), the KYRO Studio tile and the "School vitals"
+//     card — exactly as shipped at origin/main 74caaba. The whole school branch
+//     sits under ONE `.home-classic` root; styles/home-classic.css re-declares
+//     the legacy radius/shadow tokens + the v2 Montserrat display face and 17px
+//     body for that subtree only, so nothing leaks into the org home or the new
+//     Tile primitive, and the Premium UI clamp cannot reach in.
 //
-// GATES mirror HomeDashboard exactly: org scope renders <OrgTiles/> unchanged
-// (same branch position), entitlement-paused renders the paused panel, loading
-// renders tile-shaped skeletons, and an EMPTY school still renders the tile map
-// (recognition nav on day one) with chips suppressed + the stage's onboarding CTA.
+// The narrated morning brief opens as a POPUP (BriefingModal) from the band's
+// ▶ Play / "Open the briefing".
+//
+// GATES mirror HomeDashboard exactly: org scope renders <OrgTiles/> (same branch
+// position), entitlement-paused renders the paused panel, loading renders
+// tile-shaped skeletons, and an EMPTY school still renders the tile map
+// (recognition nav on day one) with chips suppressed + the band's onboarding CTA.
 //
 // DATA: one useBriefing(schoolId, latestPeriodId) fetch — the period pinned the
 // SAME way AppShell pins the sidebar-badge period ((periods||[]).find(hasSnapshot))
@@ -32,16 +40,17 @@ import { usePersistence } from '../../context/PersistenceContext.jsx'
 import { useBriefing } from '../../hooks/useBriefing.js'
 import { summariseBadges } from '../../hooks/useNavBadges.js'
 import EntitlementPausedPanel from '../analytics/EntitlementPausedPanel.jsx'
-import { Page } from '../ui/surface/index.js'
 import OrgTiles from './OrgTiles.jsx'
 import PennyMorningBrief from './PennyMorningBrief.jsx'
-import BriefingBand from './BriefingBand.jsx'
+import ClassicBriefingBand from './classic/ClassicBriefingBand.jsx'
+import { classicSchoolHue } from './classic/classicHue.js'
 import BriefingModal from './BriefingModal.jsx'
 import ModuleTile from './ModuleTile.jsx'
 import PennyTile from './PennyTile.jsx'
 import HomeVitalsStrip from './HomeVitalsStrip.jsx'
 import { HOME_TILES, TILE_SOURCES } from './tileRegistry.jsx'
 import '../../styles/home-tiles.css'
+import '../../styles/home-classic.css'
 
 // Jul–Jun fiscal year containing a period end date → its 'YYYY-07' FY key.
 // Mirrors HomeDashboard/BudgetPage so School↔Org resolve the same FY.
@@ -54,9 +63,9 @@ function deriveFiscalYearStart(periodEndDate) {
 
 function TileSkeleton() {
   return (
-    <div className="h-[168px] animate-pulse rounded-lg border border-hair bg-white/70">
+    <div className="h-[190px] animate-pulse rounded-[18px] border border-navy/5 bg-white/70">
       <div className="p-5">
-        <div className="h-7 w-7 rounded bg-navy/5" />
+        <div className="h-[60px] w-[60px] rounded-[15px] bg-navy/5" />
         <div className="mt-4 h-4 w-2/5 rounded bg-navy/10" />
         <div className="mt-2 h-3 w-4/5 rounded bg-navy/5" />
       </div>
@@ -137,23 +146,23 @@ export default function HomeTiles() {
   // ── Entitlement gate (mirror HomeDashboard; 402 from the briefing counts). ──
   if (!billingLoading && (!entitled || notEntitled)) {
     return (
-      <Page stagger={false} className="py-6">
+      <div className="home-classic mx-auto max-w-page px-4 py-6 sm:px-10 sm:py-8">
         <EntitlementPausedPanel />
-      </Page>
+      </div>
     )
   }
 
   // ── Loading: tile-shaped skeletons. ─────────────────────────────────────────
   if (billingLoading || hydrating) {
     return (
-      <Page stagger={false} className="space-y-6 py-6">
-        <div className="h-40 animate-pulse rounded-lg bg-navy/10" />
+      <div className="home-classic mx-auto max-w-page space-y-5 px-4 py-6 sm:px-10 sm:py-8">
+        <div className="h-40 animate-pulse rounded-2xl bg-navy/10" />
         <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <TileSkeleton key={i} />
           ))}
         </div>
-      </Page>
+      </div>
     )
   }
 
@@ -173,52 +182,53 @@ export default function HomeTiles() {
   }).filter(Boolean)
 
   return (
-    <>
-      <Page className="home-page space-y-6 py-6 sm:space-y-8">
-        <BriefingBand
-          summary={briefingSummary}
-          lens={briefingLens}
-          hasPeriod={hasPeriod}
-          onOpenBrief={setBrief}
-          // School scope → the top-3 performer stats fetch metrics/trends against
-          // the active school's latest snapshot period.
-          schoolId={schoolId}
-          periodId={latestPeriodId}
-          // In a multi-school org, the stage shows the school's crest + name.
-          schoolTitle={isMultiSchool ? activeSchool?.name : null}
-          logoBase64={activeSchool?.logoBase64 ?? null}
-          school={activeSchool ?? null}
-        />
+    <div className="home-classic hc-ground mx-auto max-w-page space-y-5 px-4 py-6 sm:space-y-7 sm:px-10 sm:py-8">
+      <ClassicBriefingBand
+        summary={briefingSummary}
+        lens={briefingLens}
+        hasPeriod={hasPeriod}
+        onOpenBrief={setBrief}
+        // School scope → the top-3 performer cards fetch metrics/trends against
+        // the active school's latest snapshot period.
+        schoolId={schoolId}
+        periodId={latestPeriodId}
+        // In a multi-school org, tint the band as frosted glass in this school's
+        // identity colour and show the school name + crest.
+        hue={isMultiSchool ? classicSchoolHue(activeSchool?.id) : null}
+        schoolTitle={isMultiSchool ? activeSchool?.name : null}
+        logoBase64={activeSchool?.logoBase64 ?? null}
+        school={activeSchool ?? null}
+      />
 
-        <nav aria-label="Modules">
-          <ul role="list" className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
-            {tiles.map(({ tile, locked }, i) => (
-              <ModuleTile
-                key={tile.key}
-                tile={tile}
-                badge={badges[tile.key]}
-                ready={chipsReady}
-                locked={locked}
-                index={i}
-                onShowAttention={() => setBrief('open')}
-              />
-            ))}
-            {/* The 8th tile: KYRO Studio — always present (core, not a module). */}
-            <PennyTile index={tiles.length} />
-          </ul>
-        </nav>
+      <nav aria-label="Modules">
+        <ul role="list" className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
+          {tiles.map(({ tile, locked }, i) => (
+            <ModuleTile
+              key={tile.key}
+              tile={tile}
+              badge={badges[tile.key]}
+              ready={chipsReady}
+              locked={locked}
+              index={i}
+              onShowAttention={() => setBrief('open')}
+            />
+          ))}
+          {/* The 8th tile: KYRO Studio — always present (core, not a module). */}
+          <PennyTile index={tiles.length} />
+        </ul>
+      </nav>
 
-        {/* Live scoreboard under the map — fills the fold with real numbers.
-            Fail-soft: renders nothing until the period's metrics answer. */}
-        <HomeVitalsStrip schoolId={schoolId} periodId={latestPeriodId} />
-      </Page>
+      {/* Live scoreboard under the map — fills the fold with real numbers.
+          Fail-soft: renders nothing until the period's metrics answer. */}
+      <HomeVitalsStrip schoolId={schoolId} periodId={latestPeriodId} />
 
       {/* The narrated morning brief — a POPUP. ▶ Play opens with autoNarrate
-          (the modal dispatches 'penny:narrate' after the brief mounts). Kept
-          OUTSIDE the Page so its fixed overlay never sits under a transform. */}
+          (the modal dispatches 'penny:narrate' after the brief mounts). Inside
+          the classic root (as shipped) so it keeps its original geometry; the
+          root carries no transform, so the fixed overlay is never trapped. */}
       <BriefingModal open={!!brief} autoNarrate={brief === 'narrate'} onClose={() => setBrief(null)}>
         <PennyMorningBrief scope="school" schoolId={schoolId} periodId={latestPeriodId} lens={briefingLens} />
       </BriefingModal>
-    </>
+    </div>
   )
 }

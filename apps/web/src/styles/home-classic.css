@@ -1,0 +1,486 @@
+/* ────────────────────────────────────────────────────────────────────────────
+   home-classic.css — the CLASSIC school home (HomeTiles' school branch),
+   restored at the owner's request from origin/main 74caaba.
+
+   SCOPING CONTRACT. Every selector here is prefixed `.home-classic` (the
+   school home's outermost element), the tile classes live in their own `hc-`
+   namespace, and the keyframes are named `classic-*`. Nothing in this file can
+   reach the org home (OrgTiles), the shared Tile primitive (surface.css
+   .tile-*), the legacy .module-tile sheet, or any other page. (A P2 bug was an
+   unscoped legacy class out-ranking the new primitive — this file is built so
+   that cannot happen in either direction.)
+
+   TOKENS. Premium UI P1 routes Tailwind's rounded-* and shadow-* through CSS
+   vars and CLAMPS them under ui.v2 (lg/xl/2xl/3xl → 8px, card/paper/glow → a
+   1px contact shadow), restores EB Garamond as the display face and shrinks the
+   body to 15px/1.5. The classic markup was drawn against the OLD values, so the
+   subtree re-declares them: the legacy literals from the `:root, .ui-v1` block
+   of tokens.css, the v2 Montserrat display face (+ its -0.02em tracking) and the
+   v2 17px/1.65 body measure. Custom properties inherit, so the whole subtree —
+   band, tiles, vitals card, the briefing popup and the module-pitch popup —
+   renders with its original geometry and type.
+
+   MOTION. The hover colour-flood, shine and white flip only run under
+   prefers-reduced-motion: no-preference; reduced motion gets an instant static
+   hue accent. The aurora drift behind the band is framer-motion (JS) and is
+   gated on useReducedMotion in ClassicAuroraFlow. :focus-visible mirrors :hover
+   throughout for keyboard parity.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/* ── Token re-scope: the legacy geometry + the v2 type the classic look used ── */
+.home-classic {
+  --r-ctl: 2px;
+  --r-base: 4px;
+  --r-md: 6px;
+  --r-lg: 8px;
+  --r-xl: 12px;
+  --r-2xl: 16px;
+  --r-3xl: 24px;
+  --sh-card: 0 4px 24px rgba(0, 0, 0, 0.06);
+  --sh-paper: 0 10px 40px rgb(var(--c-shade) / 0.08);
+  --sh-lift: 0 22px 60px rgb(var(--c-shade) / 0.22);
+  --sh-login: 0 30px 90px rgba(0, 0, 0, 0.45);
+  --sh-glow: 0 0 0 1px rgb(var(--c-glow) / 0.45), 0 10px 34px rgb(var(--c-glow) / 0.28);
+  --sh-glow-lg: 0 0 0 1px rgb(var(--c-glow) / 0.5), 0 14px 50px rgb(var(--c-glow) / 0.4);
+  --sh-navy-glow: 0 12px 36px rgb(var(--c-shade) / 0.4);
+}
+html[data-ui='v2'] .home-classic {
+  --font-display: 'Montserrat', system-ui, sans-serif;
+}
+/* The v2 type the classic home was set in. Screen-only, like the rule it
+   restores (print keeps the classic 16px/1.5 + normal tracking). Same
+   specificity shape as the old global rule so explicit tracking utilities are
+   out-ranked exactly as they were. */
+@media screen {
+  html[data-ui='v2'] .home-classic {
+    font-size: 17px;
+    line-height: 1.65;
+  }
+  html[data-ui='v2'] .home-classic .font-serif {
+    letter-spacing: -0.02em;
+  }
+  /* surface.css balances every h1–h3 under v2; the classic headings wrapped
+     greedily, which is what their line breaks were laid out against. */
+  html[data-ui='v2'] .home-classic :is(h1, h2, h3) {
+    text-wrap: wrap;
+  }
+}
+
+/* Ambient ground — a quiet, STATIC blue wash so the wide gutters don't read as
+   dead space. No animation. */
+.home-classic.hc-ground {
+  background:
+    radial-gradient(900px 420px at 15% -5%, rgb(37 99 235 / 0.06), transparent 60%),
+    radial-gradient(700px 380px at 90% 10%, rgb(56 189 248 / 0.05), transparent 55%);
+}
+
+/* ── The module tile. Each tile sets `--tile-hue` inline from tileRegistry;
+   everything hue-ish below derives from that one variable. ── */
+.home-classic .hc-tile {
+  --tile-hue: #2563eb;
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid rgb(16 28 61 / 0.08);
+  /* Not flat white: a soft hue wash from the top-right + a whisper of cool light
+     bottom-left give the card depth. The flood covers it on hover. */
+  background:
+    radial-gradient(150% 130% at 100% 0%, color-mix(in srgb, var(--tile-hue) 8%, transparent), transparent 52%),
+    radial-gradient(120% 120% at 0% 100%, color-mix(in srgb, var(--tile-hue) 4%, transparent), transparent 46%),
+    #fff;
+  text-align: left;
+  outline: none;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.9),
+    0 1px 2px rgb(16 28 61 / 0.05),
+    0 8px 22px -12px rgb(16 28 61 / 0.12);
+  transition:
+    box-shadow 0.35s ease,
+    border-color 0.35s ease;
+}
+.home-classic .hc-tile:hover,
+.home-classic .hc-tile:focus-visible {
+  border-color: color-mix(in srgb, var(--tile-hue) 55%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.9),
+    0 16px 36px -10px color-mix(in srgb, var(--tile-hue) 40%, transparent);
+}
+/* Keyboard ring — the tile hue, offset off the card so it reads on any ground. */
+.home-classic .hc-tile:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--tile-hue) 75%, #101c3d);
+  outline-offset: 3px;
+}
+
+/* Oversized faint icon watermark in the bottom-right corner. Draws in the tile
+   hue via currentColor, sits at z 0 below the body. */
+.home-classic .hc-watermark {
+  position: absolute;
+  right: -20px;
+  bottom: -26px;
+  z-index: 0;
+  display: block;
+  color: var(--tile-hue);
+  opacity: 0.07;
+  pointer-events: none;
+  transform: rotate(-8deg);
+  transition:
+    opacity 0.4s ease,
+    color 0.35s ease,
+    transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.home-classic .hc-watermark svg {
+  height: 138px;
+  width: 138px;
+}
+/* Over the flood the watermark flips to WHITE (a faint emboss). Locked tiles
+   have no flood, so they're excluded. */
+.home-classic .hc-tile:not(.hc-tile--locked):hover .hc-watermark,
+.home-classic .hc-tile:not(.hc-tile--locked):focus-visible .hc-watermark,
+.home-classic .hc-tile:not(.hc-tile--locked):focus-within .hc-watermark {
+  color: #fff;
+  opacity: 0.18;
+  transform: rotate(-8deg) scale(1.06);
+}
+/* Locked upsell: quiet ink watermark, never flipped white. */
+.home-classic .hc-tile--locked .hc-watermark {
+  color: rgb(16 28 61);
+  opacity: 0.045;
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-classic .hc-watermark {
+    transition: opacity 0.4s ease;
+  }
+  .home-classic .hc-tile:hover .hc-watermark,
+  .home-classic .hc-tile:focus-visible .hc-watermark,
+  .home-classic .hc-tile:focus-within .hc-watermark {
+    transform: rotate(-8deg);
+  }
+}
+
+/* Content sits above the flood (z 0) and under the shine (z 2). */
+.home-classic .hc-body {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+}
+
+/* Hue-tinted art well; the SVG art inherits the hue via currentColor. */
+.home-classic .hc-art {
+  display: flex;
+  height: 60px;
+  width: 60px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--tile-hue) 11%, transparent);
+  color: var(--tile-hue);
+}
+.home-classic .hc-art svg {
+  height: 38px;
+  width: 38px;
+}
+
+/* Round arrow chip at the flood corner. */
+.home-classic .hc-arrow {
+  display: flex;
+  height: 32px;
+  width: 32px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--tile-hue) 9%, transparent);
+  color: var(--tile-hue);
+}
+
+/* Status chip. Coral = needs-attention ONLY; critical fills solid. */
+.home-classic .hc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 9999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+.home-classic .hc-chip--attention {
+  background: rgb(255 107 94 / 0.14);
+  color: #c2362b;
+}
+.home-classic .hc-chip--critical {
+  background: #ff6b5e;
+  color: #fff;
+}
+.home-classic .hc-chip--clear {
+  background: rgb(16 28 61 / 0.05);
+  color: rgb(16 28 61 / 0.55);
+}
+.home-classic .hc-chip--none {
+  background: rgb(16 28 61 / 0.04);
+  color: rgb(16 28 61 / 0.4);
+}
+
+/* ── Compact MOBILE tiles (<sm): a 2-col launcher grid — icon + title + status;
+   the tagline is desktop detail. ── */
+@media (max-width: 639px) {
+  .home-classic .hc-tile {
+    border-radius: 14px;
+  }
+  .home-classic .hc-body {
+    gap: 7px;
+    padding: 12px;
+  }
+  .home-classic .hc-art {
+    height: 40px;
+    width: 40px;
+    border-radius: 11px;
+  }
+  .home-classic .hc-art svg {
+    height: 25px;
+    width: 25px;
+  }
+  .home-classic .hc-title {
+    font-size: 14.5px !important;
+  }
+  .home-classic .hc-sub {
+    display: none;
+  }
+  .home-classic .hc-chip {
+    padding: 3px 8px;
+    font-size: 11px;
+  }
+  .home-classic .hc-arrow {
+    height: 26px;
+    width: 26px;
+  }
+  .home-classic .hc-arrow svg {
+    height: 13px;
+    width: 13px;
+  }
+  .home-classic .hc-watermark svg {
+    height: 96px;
+    width: 96px;
+  }
+  .home-classic .hc-add-pill {
+    font-size: 10px;
+    padding: 2px 8px;
+  }
+}
+
+/* ── Motion layer: flood + shine + white flip (skipped under reduced motion) ── */
+@media (prefers-reduced-motion: no-preference) {
+  /* The flood: a hue circle centred on the arrow (bottom-right) corner that
+     scales up from nothing; sized relative to the tile (320% of its width) so it
+     always clears the far top-left corner. Compositor-only transform. */
+  .home-classic .hc-tile::before {
+    content: '';
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    z-index: 0;
+    width: 320%;
+    aspect-ratio: 1;
+    border-radius: 9999px;
+    background: var(--tile-hue);
+    transform: translate(50%, 50%) scale(0);
+    transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: transform;
+  }
+  .home-classic .hc-tile:hover::before,
+  .home-classic .hc-tile:focus-visible::before,
+  .home-classic .hc-tile:has(.hc-hit:focus-visible)::before {
+    transform: translate(50%, 50%) scale(1);
+  }
+
+  /* The shine: a skewed translucent bar sweeping across on hover. */
+  .home-classic .hc-tile::after {
+    content: '';
+    position: absolute;
+    top: -30%;
+    bottom: -30%;
+    left: 0;
+    z-index: 2;
+    width: 34%;
+    pointer-events: none;
+    background: linear-gradient(100deg, transparent, rgb(255 255 255 / 0.32), transparent);
+    transform: translateX(-140%) skewX(-18deg);
+    transition: transform 0.7s ease;
+  }
+  .home-classic .hc-tile:hover::after,
+  .home-classic .hc-tile:focus-visible::after {
+    transform: translateX(420%) skewX(-18deg);
+  }
+
+  /* Everything flips to white over the flood. */
+  .home-classic .hc-tile .hc-title,
+  .home-classic .hc-tile .hc-sub,
+  .home-classic .hc-tile .hc-art,
+  .home-classic .hc-tile .hc-arrow,
+  .home-classic .hc-tile .hc-chip {
+    transition:
+      color 0.3s ease,
+      background-color 0.3s ease;
+  }
+  .home-classic .hc-tile:not(.hc-tile--locked):hover .hc-title,
+  .home-classic .hc-tile:not(.hc-tile--locked):focus-visible .hc-title {
+    color: #fff;
+  }
+  .home-classic .hc-tile:not(.hc-tile--locked):hover .hc-sub,
+  .home-classic .hc-tile:not(.hc-tile--locked):focus-visible .hc-sub {
+    color: rgb(255 255 255 / 0.85);
+  }
+  .home-classic .hc-tile:not(.hc-tile--locked):hover .hc-art,
+  .home-classic .hc-tile:not(.hc-tile--locked):focus-visible .hc-art,
+  .home-classic .hc-tile:not(.hc-tile--locked):hover .hc-arrow,
+  .home-classic .hc-tile:not(.hc-tile--locked):focus-visible .hc-arrow {
+    background: rgb(255 255 255 / 0.18);
+    color: #fff;
+  }
+  .home-classic .hc-tile:not(.hc-tile--locked):hover .hc-chip,
+  .home-classic .hc-tile:not(.hc-tile--locked):focus-visible .hc-chip {
+    background: rgb(255 255 255 / 0.2);
+    color: #fff;
+  }
+  .home-classic .hc-tile:hover .hc-chip--critical,
+  .home-classic .hc-tile:focus-visible .hc-chip--critical {
+    background: rgb(255 255 255 / 0.92);
+    color: #c2362b;
+  }
+  /* Keyboard parity for the stretched-link tiles: focusing .hc-hit floods the
+     card (above), so its ink flips white exactly as on hover. */
+  .home-classic .hc-tile--hit:has(.hc-hit:focus-visible) .hc-title {
+    color: #fff;
+  }
+  .home-classic .hc-tile--hit:has(.hc-hit:focus-visible) .hc-sub {
+    color: rgb(255 255 255 / 0.85);
+  }
+  .home-classic .hc-tile--hit:has(.hc-hit:focus-visible) :is(.hc-art, .hc-arrow) {
+    background: rgb(255 255 255 / 0.18);
+    color: #fff;
+  }
+  .home-classic .hc-tile--hit:has(.hc-hit:focus-visible) .hc-watermark {
+    color: #fff;
+    opacity: 0.18;
+  }
+  /* Every chip, the critical one included, matches its hover look. */
+  .home-classic .hc-tile--hit:has(.hc-hit:focus-visible) .hc-chip {
+    background: rgb(255 255 255 / 0.2);
+    color: #fff;
+  }
+}
+
+/* ── Reduced motion: nothing moves; hover/focus is a static hue accent. ────── */
+@media (prefers-reduced-motion: reduce) {
+  .home-classic .hc-tile {
+    transition: none;
+  }
+  .home-classic .hc-tile:hover,
+  .home-classic .hc-tile:focus-visible {
+    box-shadow:
+      inset 0 0 0 2px var(--tile-hue),
+      0 8px 22px -12px rgb(16 28 61 / 0.12);
+  }
+  .home-classic .hc-tile:hover .hc-title,
+  .home-classic .hc-tile:focus-visible .hc-title {
+    color: var(--tile-hue);
+  }
+}
+
+/* ── Active tile whose status chip opens the briefing: the WHOLE card
+   navigates via a stretched .hc-hit link, but the "N need attention" chip stays
+   a real button ABOVE it (no nested interactives). ── */
+.home-classic .hc-hit {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+}
+.home-classic .hc-hit:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--tile-hue) 75%, #101c3d);
+  outline-offset: 3px;
+  border-radius: 18px;
+}
+.home-classic .hc-tile--hit .hc-body {
+  position: relative;
+  z-index: 2;
+  pointer-events: none;
+}
+.home-classic .hc-tile--hit .hc-body :is(a, button) {
+  pointer-events: auto;
+}
+
+/* ── Locked (upsell) tile: dimmed, no flood/shine, Add-ons pattern. One
+   stretched .hc-locked-hit button covers the card and opens the module-pitch
+   popup; the visual body sits under it, inert. ── */
+.home-classic .hc-tile--locked::before,
+.home-classic .hc-tile--locked::after {
+  content: none;
+}
+.home-classic .hc-tile--locked {
+  position: relative;
+  cursor: pointer;
+  background: rgb(255 255 255 / 0.6);
+}
+.home-classic .hc-locked-hit {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border: none;
+  border-radius: inherit;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+.home-classic .hc-locked-hit:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--tile-hue) 75%, #101c3d);
+  outline-offset: 3px;
+  border-radius: 18px;
+}
+.home-classic .hc-tile--locked .hc-body {
+  position: relative;
+  z-index: 0;
+  pointer-events: none;
+}
+.home-classic .hc-tile--locked .hc-art {
+  background: rgb(16 28 61 / 0.05);
+  color: rgb(16 28 61 / 0.35);
+}
+.home-classic .hc-tile--locked .hc-title {
+  color: rgb(16 28 61 / 0.55);
+}
+.home-classic .hc-tile--locked .hc-sub {
+  color: rgb(16 28 61 / 0.4);
+}
+.home-classic .hc-tile--locked:hover .hc-title,
+.home-classic .hc-tile--locked:focus-within .hc-title {
+  color: rgb(16 28 61 / 0.75);
+}
+.home-classic .hc-tile--locked:hover,
+.home-classic .hc-tile--locked:focus-within {
+  border-color: color-mix(in srgb, var(--tile-hue) 40%, transparent);
+  box-shadow: 0 10px 24px -12px color-mix(in srgb, var(--tile-hue) 30%, transparent);
+}
+/* The "+ Add" pill keeps the module hue so the upsell still reads branded. */
+.home-classic .hc-add-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1.5px solid color-mix(in srgb, var(--tile-hue) 60%, transparent);
+  border-radius: 9999px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--tile-hue);
+}
