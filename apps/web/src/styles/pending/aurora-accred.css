@@ -11,7 +11,7 @@
 /* ── The readiness dial on the band ───────────────────────────────────────── */
 .acc-dial {
   margin: 0;
-  width: 300px;
+  width: 350px;
   max-width: 100%;
 }
 .acc-dial svg {
@@ -20,6 +20,33 @@
   height: auto;
   overflow: visible;
   font-family: var(--font-body);
+}
+.acc-dial-cap {
+  margin-top: 0.35rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  font-size: 13px;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.9);
+  text-align: center;
+}
+.acc-dial-cap b {
+  font-weight: 700;
+  color: #fff;
+}
+.acc-dial-key {
+  display: inline-block;
+  width: 18px;
+  height: 5px;
+  border-radius: 3px;
+  background: #fde68a;
+}
+.acc-dial-togo {
+  color: #fde68a;
+  font-weight: 600;
 }
 .acc-dial-num {
   font-variant-numeric: tabular-nums;
@@ -39,7 +66,7 @@
     width: 100%;
   }
   .acc-dial {
-    width: 260px;
+    width: 300px;
   }
 }
 @media (max-width: 639px) {
